@@ -111,12 +111,73 @@ namespace Bc250Mon
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Committed;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Limit;
     }
+    // BC250_ESCAPE_HWMON, ABI 1, 200 bytes (driver/kmd/bc250kmd_escape.h; test_telemetry.py keeps the two
+    // layouts equal). What the board's own Nuvoton hardware monitor says about the case fan: the tachometers,
+    // the duty read-back and the chip's own temperatures. A published snapshot, so no port access and no BAR
+    // access happen in this escape; the fan itself still follows the BIOS curve (docs/design/fan.md).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HwmonSnapshot
+    {
+        public uint Magic, Command, Status, Version;
+        public uint NtStatus, AbiVersion, Op, Flags;
+        public uint BasePort;
+        public uint CustomerId;
+        public uint EcVersion;
+        public uint EcBuild;
+        public uint FanPresentMask;
+        public uint DutyPresentMask;
+        public uint ModeMask;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public uint[] Rpm;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public uint[] DutyPermille;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public int[] TemperatureMc;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] TemperatureSource;
+        public uint AgeMs;
+        public ulong Samples, Errors, Retries;
+        public ulong Generation;
+        public uint Reason;
+        public uint Reserved;
+
+        public const uint FlagValid = 1, FlagMonitoring = 2, FlagFresh = 4, FlagGated = 8,
+                          FlagIdPinned = 16, FlagDutyProven = 32, FlagStopped = 64;
+        public const uint SourceApu = 0x46;         // AMD TSI at SMBus 0x98: the APU die
+    }
+    // Reading the snapshot above. Kept out of the structure so that its layout stays a plain mirror.
+    public static class Hwmon
+    {
+        public static bool Has(HwmonSnapshot h, uint flag) { return (h.Flags & flag) != 0; }
+        // A reading means online AND inside the freshness window. Anything else is "no reading", never a guess.
+        public static bool Reading(HwmonSnapshot h)
+        { return Has(h, HwmonSnapshot.FlagValid) && Has(h, HwmonSnapshot.FlagFresh); }
+        // The board has five tachometer channels and one fan on them, so the speed is the fastest that turns.
+        public static uint Rpm(HwmonSnapshot h)
+        {
+            uint best = 0;
+            if (h.Rpm != null) foreach (uint r in h.Rpm) if (r > best) best = r;
+            return best;
+        }
+        // The duty READ-BACK, highest channel, as a percentage. Only meaningful with FlagDutyProven.
+        public static uint DutyPercent(HwmonSnapshot h)
+        {
+            uint best = 0;
+            if (h.DutyPermille != null) foreach (uint d in h.DutyPermille) if (d > best) best = d;
+            return (best + 5) / 10;
+        }
+        // The chip's own reading of the APU die: an independent second measurement of what the SMU calls Tctl.
+        public static double? ApuC(HwmonSnapshot h)
+        {
+            if (h.TemperatureSource == null || h.TemperatureMc == null) return null;
+            for (int i = 0; i < h.TemperatureSource.Length && i < h.TemperatureMc.Length; i++)
+                if (h.TemperatureSource[i] == HwmonSnapshot.SourceApu) return h.TemperatureMc[i] / 1000.0;
+            return null;
+        }
+    }
     // What TelemetryProvider reads; Driver is the real one, the host test brings its own.
     public interface ITelemetrySource
     {
         DpmSnapshot ReadDpm();
         VideoMemorySnapshot ReadVideoMemory();
         ClockSnapshot ReadClock();
+        HwmonSnapshot ReadHwmon();
     }
     // What OperatingPointProvider reads. All three are adapter-owned software snapshots answered with
     // NoAdapterSynchronization alone, so none idles GPU scheduling or touches a BAR.
@@ -144,6 +205,10 @@ namespace Bc250Mon
         // The control application's own interop read. READ only; there is no write operation at all.
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Interop(out InteropSnapshot data, uint bytes);
+        // Added to bc250control.dll with KMD 0.7.208.1. A DLL older than that has no such export and the first
+        // call throws EntryPointNotFoundException, which the fan row reports instead of going blind.
+        [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Hwmon(out HwmonSnapshot data, uint bytes);
 
         internal static void ValidateStartHealthReply(int transport, StartHealthSnapshot data, uint op,
             ulong expectedGeneration, ulong expectedEpoch)
@@ -230,6 +295,20 @@ namespace Bc250Mon
             VideoMemorySnapshot data;
             int status = Bc250VideoMemory(null, out data, 264);
             if (status < 0) throw new InvalidOperationException("segment statistics unavailable (0x" + status.ToString("X8") + ")");
+            return data;
+        }
+        // BC250_ESCAPE_RUN_HWMON op READ (bc250kmd_cli.c, Bc250Hwmon): the board's hardware monitor as the
+        // sampler last published it. READ is the only operation there is, and it touches no port.
+        public HwmonSnapshot ReadHwmon()
+        {
+            HwmonSnapshot data;
+            uint bytes = (uint)Marshal.SizeOf(typeof(HwmonSnapshot));
+            if (bytes != 200) throw new InvalidOperationException("KMD hardware monitor layout mismatch");
+            int status = Bc250Hwmon(out data, bytes);
+            if (status < 0)
+                throw new InvalidOperationException("KMD fan snapshot unavailable (0x" + status.ToString("X8") + ")");
+            if (data.Magic != 0x30353242 || data.Command != 27 || data.AbiVersion != 1 || data.Op != 0)
+                throw new InvalidOperationException("KMD fan reply mismatch");
             return data;
         }
         public static double MillivoltsFromVid(uint vid) { return 1550.0 - vid * 1000.0 / 160.0; }

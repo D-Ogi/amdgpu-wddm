@@ -50,11 +50,23 @@ static partial class UnitTests
             int width = type.EndsWith("long long") ? 8 : type.EndsWith("char") ? 1 : 4;
             foreach (var raw in t.Groups["names"].Value.Split(','))
             {
-                var n = Regex.Match(raw.Trim(), @"^(?<id>\w+)(\[(?<count>\d+)\])?$");
+                var n = Regex.Match(raw.Trim(), @"^(?<id>\w+)(\[(?<count>\w+)\])?$");
                 if (!n.Success) return offsets;
+                int count = 1;
+                if (n.Groups["count"].Success)
+                {
+                    string c = n.Groups["count"].Value;
+                    // An array length may be a #define of the same header, as BC250_ESCAPE_HWMON's slots are.
+                    if (!int.TryParse(c, out count))
+                    {
+                        var d = Regex.Match(header, @"#define " + c + @"\s+(\d+)u?\b");
+                        if (!d.Success) throw new Exception("array length " + c + " is not a #define of the header");
+                        count = int.Parse(d.Groups[1].Value);
+                    }
+                }
                 at = (at + width - 1) / width * width;
                 offsets[n.Groups["id"].Value] = at;
-                at += width * (n.Groups["count"].Success ? int.Parse(n.Groups["count"].Value) : 1);
+                at += width * count;
             }
         }
         size = (at + 7) / 8 * 8;
@@ -112,6 +124,43 @@ static partial class UnitTests
         Check(KmdReply.CompositionText(KmdReply.ParseInterop(b)).StartsWith("CPU (the driver closed"), "interop closed by the driver");
         Put(b, io["Flags"], 0u);
         Check(KmdReply.CompositionText(KmdReply.ParseInterop(b)).StartsWith("Not decided"), "interop not decided");
+
+        // The fan reply (BC250_ESCAPE_RUN_HWMON). KmdReply.ParseHwmon reads it by word index, so every offset this
+        // app uses comes from the header here: a field inserted upstream shows a wrong fan speed, not an error.
+        var fan = Layout(header, "BC250_ESCAPE_HWMON", out size);
+        Equal(KmdReply.HwmonBytes, size, "fan size from the header");
+        b = new byte[KmdReply.HwmonBytes];
+        Put(b, fan["Magic"], KmdReply.Magic); Put(b, fan["Command"], 27u); Put(b, fan["AbiVersion"], 1u);
+        Put(b, fan["Version"], 0x000700D0u);
+        Put(b, fan["Flags"], HwmonState.FlagValid | HwmonState.FlagFresh | HwmonState.FlagMonitoring | HwmonState.FlagDutyProven);
+        Put(b, fan["BasePort"], 0x0A20u); Put(b, fan["CustomerId"], 0x0E2Cu); Put(b, fan["EcVersion"], 0x0100u);
+        Put(b, fan["EcBuild"], (21u << 16) | (7u << 8) | 28u);
+        Put(b, fan["FanPresentMask"], 0x1Fu); Put(b, fan["DutyPresentMask"], 0x1Fu); Put(b, fan["ModeMask"], 0u);
+        Put(b, fan["Rpm"] + 4, 1589u);                      // channel 1: the one fan unit A has
+        Put(b, fan["DutyPermille"] + 4, 961u);              // 245 of 255
+        Put(b, fan["TemperatureMc"], unchecked((uint)83000)); Put(b, fan["TemperatureSource"], 0x46u);
+        Put(b, fan["TemperatureMc"] + 4, unchecked((uint)59500)); Put(b, fan["TemperatureSource"] + 4, 0x08u);
+        Put(b, fan["AgeMs"], 420u); Put(b, fan["Samples"], 3600UL); Put(b, fan["Errors"], 2UL);
+        Put(b, fan["Retries"], 5UL); Put(b, fan["Generation"], 77UL); Put(b, fan["Reason"], 0u);
+        var f = KmdReply.ParseHwmon(b);
+        Check(f.Reading, "fan: valid and fresh is a reading");
+        Equal(1589u, f.FastestRpm, "fan: the fastest channel that turns");
+        Equal(96u, f.DutyPercent, "fan: 961 permille is 96 %");
+        Equal(83000, f.ApuMc.Value, "fan: the APU over the chip's own SB-TSI link");
+        Equal(0x0A20u, f.BasePort, "fan: base port"); Equal(0x0E2Cu, f.CustomerId, "fan: customer id");
+        Equal(0x0100u, f.EcVersion, "fan: EC version"); Equal(420u, f.AgeMs, "fan: age");
+        Equal(3600UL, f.Samples, "fan: samples"); Equal(2UL, f.Errors, "fan: errors");
+        Equal(5UL, f.Retries, "fan: retries"); Equal(77UL, f.Generation, "fan: generation");
+        Check(f.Has(HwmonState.FlagDutyProven) && !f.Has(HwmonState.FlagStopped), "fan: flags");
+        Put(b, fan["Flags"], HwmonState.FlagValid | HwmonState.FlagDutyProven);
+        Check(!KmdReply.ParseHwmon(b).Reading, "fan: a stale sample is not a reading");
+        Put(b, fan["Flags"], HwmonState.FlagGated); Put(b, fan["Reason"], 1u);
+        Check(!KmdReply.ParseHwmon(b).Reading && KmdReply.ParseHwmon(b).Reason == 1, "fan: the closed gate says why");
+        Put(b, fan["AbiVersion"], 2u);
+        Throws<FormatException>(() => KmdReply.ParseHwmon(b), "fan ABI 2 refused");
+        Put(b, fan["AbiVersion"], 1u); Put(b, fan["Command"], 23u);
+        Throws<FormatException>(() => KmdReply.ParseHwmon(b), "fan wrong command refused");
+        Throws<FormatException>(() => KmdReply.ParseHwmon(new byte[KmdReply.HwmonBytes - 1]), "fan short reply refused");
 
         var sh = Layout(header, "BC250_ESCAPE_START_HEALTH", out size);
         Equal(KmdReply.StartHealthBytes, size, "start health size from the header");

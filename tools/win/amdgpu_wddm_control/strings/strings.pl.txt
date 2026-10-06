@@ -159,7 +159,10 @@ perf.memory.value|mt|eaf124e2|{0} GB z {1} GB
 perf.power|mt-safe|848e9656|Pobór mocy
 perf.power.explain|mt|2fb99c60|Sterownik nie potrafi jeszcze odczytać poboru mocy. Ta funkcja pojawi się później.
 perf.fan|mt-safe|e27be641|Wentylator
-perf.fan.explain|mt|a79a4ea7|Płyta sama steruje wentylatorem (ustawienie wentylatora w BIOS). Sterownik nie potrafi go jeszcze odczytać.
+perf.fan.explain|mt|18194645|Płyta sama kręci wentylatorem (ustawienie wentylatora w BIOS). Sterownik odczytuje obroty i pokazuje je tutaj.
+perf.fan.value|mt-safe|863e80e6|{0} obr./min ({1} %)
+perf.fan.rpm-only|mt-safe|c140fb3e|{0} obr./min
+perf.fan.stopped|mt|95e3cf4e|Nie kręci się
 # ---- shader caches (F-CACHE) ----
 cache.d3d12|mt-safe|f4642299|Pamięć podręczna shaderów DirectX 12
 cache.d3d12.present|mt|15118fb9|Zajęte: {0}, liczba programów: {1}. Dzięki temu kolejne uruchomienia gier są szybsze.
@@ -267,7 +270,7 @@ search.display.identify.terms|mt|6a71b05e|identyfikuj|który ekran|który monito
 search.display.scale|mt-safe|1cf201de|Skala, układ i orientacja
 search.display.scale.terms|mt|f73bb0e2|DPI|skala|skalowanie|powiększenie|rozmiar tekstu|orientacja|obrót|układ
 search.perf.sensors|mt-safe|a8451874|Temperatura i obciążenie
-search.perf.sensors.terms|mt|d3085e12|temperatura|temp|użycie|obciążenie|czujniki|VRAM|pamięć|moc|pobór mocy|wentylator|waty
+search.perf.sensors.terms|mt|b467ff5a|temperatura|temp|użycie|obciążenie|czujniki|VRAM|pamięć|moc|pobór mocy|wentylator|obroty|rpm|waty
 search.perf.cache|mt-safe|d7b57389|Pamięć podręczna shaderów
 search.perf.cache.terms|mt|6c23151c|cache|pamięć podręczna|shader|shadery|przycinanie|zacinanie|stutter|kompilacja
 search.driver.version|mt-safe|04cb4284|Wersja sterownika
@@ -624,7 +627,7 @@ help.setting.mode|mt|16a81243|Wybór rozdzielczości i częstotliwości odświe�
 help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Dostępne później.
 help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Dostępne później.
 help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Dostępne później.
-help.setting.fan|mt|bfae721d|Wentylatorem steruje oprogramowanie układowe płyty. Sterowanie z tej aplikacji pojawi się później.
+help.setting.fan|mt|0fda8087|Wentylatorem kręci oprogramowanie układowe płyty. Ta aplikacja pokazuje obroty. Sterowanie z tej aplikacji pojawi się później.
 help.setting.voltage|mt|9c28b6e1|Napięcie układu. Dostępne później.
 help.setting.fps-counter|mt|929ada50|Pokazuje liczbę klatek na sekundę. Dostępne później.
 help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Dostępne później.

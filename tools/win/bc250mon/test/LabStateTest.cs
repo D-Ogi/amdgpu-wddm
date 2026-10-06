@@ -50,12 +50,23 @@ sealed class FakeDpmSource : ITelemetrySource
     }
     public ClockSnapshot ReadClock() { return Clock; }
     public VideoMemorySnapshot ReadVideoMemory() { return Vram; }
+    // The gate is closed by every install, so that is what this source answers: no fan reading, and no note.
+    public HwmonSnapshot ReadHwmon() { return LabStateTest.ClosedGateFan(); }
 }
 
 static class LabStateTest
 {
     static int checks, failures;
     static void Check(bool value, string name) { checks++; if (!value) { failures++; Console.WriteLine("FAIL " + name); } }
+
+    internal static HwmonSnapshot ClosedGateFan()
+    {
+        return new HwmonSnapshot
+        {
+            Magic = 0x30353242, Command = 27, AbiVersion = 1, Op = 0, Flags = HwmonSnapshot.FlagGated, Reason = 1,
+            Rpm = new uint[8], DutyPermille = new uint[8], TemperatureMc = new int[4], TemperatureSource = new uint[4],
+        };
+    }
 
     static readonly DateTime Now = new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
 

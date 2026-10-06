@@ -47,6 +47,47 @@ namespace AmdgpuWddmControl
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
+    // BC250_ESCAPE_HWMON (driver/kmd/hwmon.c, docs/design/fan.md): what the board's own hardware monitor says
+    // about the case fan. Read only, and only the chip's own numbers: the fan still follows the BIOS curve.
+    // Reading means the reader is online AND the sample is fresh; everything else is "No reading", never a guess.
+    public sealed class HwmonState
+    {
+        public uint Version, Flags, Reason, BasePort, CustomerId, EcVersion, EcBuild;
+        public uint FanPresentMask, DutyPresentMask, ModeMask, AgeMs;
+        public uint[] Rpm = new uint[8];
+        public uint[] DutyPermille = new uint[8];
+        public int[] TemperatureMc = new int[4];
+        public uint[] TemperatureSource = new uint[4];
+        public ulong Samples, Errors, Retries, Generation;
+
+        public const uint FlagValid = 1, FlagMonitoring = 2, FlagFresh = 4, FlagGated = 8,
+            FlagIdPinned = 16, FlagDutyProven = 32, FlagStopped = 64;
+        public const uint SourceApu = 0x46;         // AMD TSI at SMBus 0x98: the APU die
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+        public bool Reading { get { return Has(FlagValid) && Has(FlagFresh); } }
+
+        // The board has five tachometer channels and one fan, so the reading is the fastest channel that turns.
+        public uint FastestRpm
+        {
+            get { uint best = 0; foreach (var r in Rpm) if (r > best) best = r; return best; }
+        }
+        // The duty READ-BACK, highest channel, as a percentage. Shown only with FlagDutyProven.
+        public uint DutyPercent
+        {
+            get { uint best = 0; foreach (var d in DutyPermille) if (d > best) best = d; return (best + 5) / 10; }
+        }
+        // The chip's own reading of the APU, which is an independent second measurement of Tctl. Support report only.
+        public int? ApuMc
+        {
+            get
+            {
+                for (int i = 0; i < TemperatureSource.Length; i++)
+                    if (TemperatureSource[i] == SourceApu) return TemperatureMc[i];
+                return null;
+            }
+        }
+    }
+
     public sealed class VideoMemoryState
     {
         public uint Segments;
@@ -69,7 +110,8 @@ namespace AmdgpuWddmControl
     {
         public const uint Magic = 0x30353242;   // "B250"
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
-        public const uint CmdCuMode = 22;
+        public const uint CmdCuMode = 22, CmdHwmon = 27;
+        public const int HwmonBytes = 200;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
         public const uint CmdStartHealth = 21, CmdDpm = 23, CmdInterop = 25, CmdGetLog = 12;
@@ -130,6 +172,23 @@ namespace AmdgpuWddmControl
                 Version = U(b, 3), Flags = U(b, 7), Requested = U(b, 8), Applied = U(b, 9), Reason = U(b, 10),
                 ActiveCus = U(b, 11), DisableMask = U(b, 12), PciId = U(b, 13), Generation = Q(b, 160),
             };
+        }
+
+        public static HwmonState ParseHwmon(byte[] b)
+        {
+            Head(b, HwmonBytes, CmdHwmon);
+            if (U(b, 5) != 1) throw new FormatException("hardware monitor ABI " + U(b, 5) + ", 1 expected");
+            var h = new HwmonState
+            {
+                Version = U(b, 3), Flags = U(b, 7), BasePort = U(b, 8), CustomerId = U(b, 9),
+                EcVersion = U(b, 10), EcBuild = U(b, 11), FanPresentMask = U(b, 12), DutyPresentMask = U(b, 13),
+                ModeMask = U(b, 14), AgeMs = U(b, 39),
+                Samples = Q(b, 160), Errors = Q(b, 168), Retries = Q(b, 176), Generation = Q(b, 184),
+                Reason = U(b, 48),
+            };
+            for (int i = 0; i < 8; i++) { h.Rpm[i] = U(b, 15 + i); h.DutyPermille[i] = U(b, 23 + i); }
+            for (int i = 0; i < 4; i++) { h.TemperatureMc[i] = (int)U(b, 31 + i); h.TemperatureSource[i] = U(b, 35 + i); }
+            return h;
         }
 
         public static VideoMemoryState ParseVideoMemory(byte[] b)

@@ -160,7 +160,10 @@ perf.memory.value|src|-|{0} GB of {1} GB
 perf.power|src|-|Power
 perf.power.explain|src|-|The driver cannot read the power use yet. This comes later.
 perf.fan|src|-|Fan
-perf.fan.explain|src|-|The board controls the fan by itself (the BIOS fan setting). The driver cannot read it yet.
+perf.fan.explain|src|-|The board turns the fan by itself (the BIOS fan setting). The driver reads the speed and shows it here.
+perf.fan.value|src|-|{0} rpm ({1} %)
+perf.fan.rpm-only|src|-|{0} rpm
+perf.fan.stopped|src|-|Not turning
 
 # ---- shader caches (F-CACHE) ----
 cache.d3d12|src|-|DirectX 12 shader cache
@@ -273,7 +276,7 @@ search.display.identify.terms|src|-|identify|which screen|monitor number
 search.display.scale|src|-|Scale, layout and orientation
 search.display.scale.terms|src|-|DPI|zoom|text size|orientation|rotation|layout
 search.perf.sensors|src|-|Temperature and load
-search.perf.sensors.terms|src|-|temperature|temp|usage|load|sensors|VRAM|memory|power|fan|watts
+search.perf.sensors.terms|src|-|temperature|temp|usage|load|sensors|VRAM|memory|power|fan|rpm|watts
 search.perf.cache|src|-|Shader cache
 search.perf.cache.terms|src|-|cache|shader|stutter|compile
 search.driver.version|src|-|Driver version
@@ -642,7 +645,7 @@ help.setting.mode|src|-|Choose the resolution and refresh rate from this app. Co
 help.setting.hdr|src|-|High dynamic range: brighter highlights and more colours. Coming later.
 help.setting.vrr|src|-|The monitor follows the game's frame rate for smoother motion. Coming later.
 help.setting.power|src|-|The most power the chip may use. Coming later.
-help.setting.fan|src|-|The board's firmware controls the fan. Control from this app comes later.
+help.setting.fan|src|-|The board's firmware turns the fan. This app shows the speed. Control from this app comes later.
 help.setting.voltage|src|-|The chip's voltage. Coming later.
 help.setting.fps-counter|src|-|Shows the frame rate. Coming later.
 help.setting.cache-clear|src|-|Deletes the shader cache. Coming later.

@@ -166,8 +166,12 @@ def format_telemetry(t):
     def value(key):
         v = t.get(key)
         return "n/a" if v is None else v
+    # fan_rpm is the fastest tachometer that turns, fan_duty_pct the duty read-back where a lab trial has proved
+    # it, and fan_stopped the one state that needs an eye on it: a duty output runs and nothing turns.
     line = (f"tctl_c={value('temperatureC')} load_pct={value('loadPercent')} gfx_mhz={value('gfxMHz')} "
-            f"vram_used_mb={value('vramUsedMB')} vram_total_mb={value('vramTotalMB')} age_s={value('ageSeconds')}")
+            f"vram_used_mb={value('vramUsedMB')} vram_total_mb={value('vramTotalMB')} "
+            f"fan_rpm={value('fanRpm')} fan_duty_pct={value('fanDutyPercent')} "
+            f"fan_stopped={1 if t.get('fanStopped') else 0} age_s={value('ageSeconds')}")
     return line + (f"\n# {t['note']}" if t.get("note") else "")
 
 

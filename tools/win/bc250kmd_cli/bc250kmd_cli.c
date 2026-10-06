@@ -622,6 +622,37 @@ BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
     return 0;
 }
 
+// The board's hardware monitor (BC250_ESCAPE_RUN_HWMON, KMD 0.7.208.1 and later): the fan speed, the duty
+// read-back, the fan mode mask and the chip's own temperature channels, as the governor thread published them a
+// second ago at most. Adapter-owned software snapshot, so NoAdapterSynchronization alone, like the DPM read: no
+// port access on this path, no BAR access, no scheduler idle, so a sampler may call it while a game runs.
+//
+// No ABI fallback loop and no size negotiation: the escape was born at ABI 1 with one size. A driver older than
+// 0.7.208.1 does not know command 27 and answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which the check below maps
+// to 0xC00000BB (STATUS_NOT_SUPPORTED), the same answer the other snapshots give for a driver that is too old.
+BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char HwmonAbiSizeCheck[(sizeof(BC250_ESCAPE_HWMON) == 200) ? 1 : -1];
+    (void)sizeof(HwmonAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_HWMON;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_HWMON_ABI;
+    data->Op = BC250_HWMON_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_HWMON ||
+        data->AbiVersion != BC250_HWMON_ABI || data->Op != BC250_HWMON_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
 // The CU mode snapshot (READ, any caller) and the boot-guard confirmation of a pending 40 CU start (CONFIRM, an
 // administrator with the Generation of a READ of this start). Both are adapter-owned software state answered with
 // NoAdapterSynchronization alone (bc250kmd_escape.h), like the DPM read: no BAR access, no scheduler idle.
@@ -844,6 +875,75 @@ BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, U
     return 0;
 }
 
+// ---- fan: the board's hardware monitor (BC250_ESCAPE_RUN_HWMON, docs/design/fan.md) ----------------------------
+//
+// One line per sample, in the same key=value shape the lab samplers already parse. The fan speed is the fastest
+// tachometer that turns, because the chip exposes five channels on this board and only one of them has a fan on
+// it; fan= names which one, counted from 1 as the Linux labels count. duty_pct is the duty READ-BACK, and
+// duty_proven=0 says that no lab trial has yet shown that duty follow the fan that turns. tsi_c is the chip's own
+// reading of the APU over SB-TSI, an independent second measurement of the temperature the SMU reports as Tctl;
+// board_c is the first board thermistor.
+static const char *HwmonReasonName(unsigned long reason)
+{
+    static const char *const names[] = { "ok", "gated", "base", "identity", "monitoring", "customer",
+                                         "no-thread", "port" };
+    return reason < ARRAYSIZE(names) ? names[reason] : "?";
+}
+
+static void HwmonLine(const BC250_ESCAPE_HWMON *h)
+{
+    unsigned long i, fan = 0, rpm = 0, duty = 0, turning = 0, present = 0;
+    long tsi = 0, board = 0;
+    int haveTsi = 0, haveBoard = 0;
+
+    for (i = 0; i < BC250_HWMON_FAN_SLOTS; i++) {
+        if (h->FanPresentMask & (1u << i)) present++;
+        if (h->Rpm[i] > rpm) { rpm = h->Rpm[i]; fan = i; }
+        if (h->Rpm[i] != 0) turning++;
+        if (h->DutyPermille[i] > duty) duty = h->DutyPermille[i];
+    }
+    for (i = 0; i < BC250_HWMON_TEMP_SLOTS; i++) {
+        if (h->TemperatureSource[i] == 0) continue;
+        if (h->TemperatureSource[i] == BC250_HWMON_SOURCE_APU) { tsi = h->TemperatureMc[i]; haveTsi = 1; }
+        else if (!haveBoard) { board = h->TemperatureMc[i]; haveBoard = 1; }
+    }
+    printf("fan fan=%lu rpm=%lu turning=%lu/%lu duty_pct=%lu duty_proven=%d mode=0x%02lX ", fan + 1, rpm,
+           turning, present, (duty + 5) / 10, (h->Flags & BC250_HWMON_FLAG_DUTY_PROVEN) ? 1 : 0, h->ModeMask);
+    if (haveTsi) printf("tsi_c=%.1f ", tsi / 1000.0); else printf("tsi_c=n/a ");
+    if (haveBoard) printf("board_c=%.1f ", board / 1000.0); else printf("board_c=n/a ");
+    printf("age_ms=%lu fresh=%d valid=%d stopped=%d reason=%s samples=%llu errors=%llu retries=%llu\n",
+           h->AgeMs, (h->Flags & BC250_HWMON_FLAG_FRESH) ? 1 : 0, (h->Flags & BC250_HWMON_FLAG_VALID) ? 1 : 0,
+           (h->Flags & BC250_HWMON_FLAG_STOPPED) ? 1 : 0, HwmonReasonName(h->Reason),
+           h->Samples, h->Errors, h->Retries);
+}
+
+// "fan [count [interval ms]]". The interval has a floor of one second, because the chip caches its registers for
+// about that long and the driver samples at exactly that rate: a faster poll returns the same snapshot and only
+// spends escapes.
+static int Fan(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_HWMON h;
+    unsigned long count = 1, interval = 1000, i;
+    LONG status;
+
+    if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
+    if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
+    if (count == 0) count = 1;
+    if (interval < 1000) interval = 1000;
+    for (i = 0; i < count; i++) {
+        if (i) Sleep(interval);
+        status = Bc250Hwmon(&h, sizeof(h));
+        if (status < 0) { PrintStatus("fan", status); return 1; }
+        if (i == 0)
+            printf("driver 0x%08lX, base 0x%04lX, ec %lu.%lu build %02lu/%02lu/%02lu, customer 0x%04lX, "
+                   "fans 0x%02lX duties 0x%02lX, generation %llu\n", h.Version, h.BasePort, h.EcVersion >> 8,
+                   h.EcVersion & 0xFF, (h.EcBuild >> 8) & 0xFF, h.EcBuild & 0xFF, (h.EcBuild >> 16) & 0xFF,
+                   h.CustomerId, h.FanPresentMask, h.DutyPresentMask, h.Generation);
+        HwmonLine(&h);
+    }
+    return 0;
+}
+
 // "telemetry [count [interval ms]]": what the monitor's GPU line is made of, one line per sample.
 // "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
 static int Telemetry(int argc, wchar_t **argv)
@@ -865,6 +965,16 @@ static int Telemetry(int argc, wchar_t **argv)
                    (d.Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "(stale)", d.ObservedMHz,
                    (d.Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d.BusyPermille / 10.0, d.BusyAvgPermille / 10.0,
                    (d.Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d.SubmitBusyPermille / 10.0);
+        {
+            // The board's hardware monitor, one line per sample, so the lab samplers pick the fan up with no new
+            // process and no new session. A driver before 0.7.208.1 answers 0xC00000BB; that is reported once and
+            // does not fail the sampler, because the fan reading is information and not the measurement this
+            // command exists for.
+            BC250_ESCAPE_HWMON h;
+            LONG fanStatus = Bc250Hwmon(&h, sizeof(h));
+            if (fanStatus < 0) { if (i == 0) PrintStatus("fan", fanStatus); }
+            else HwmonLine(&h);
+        }
         status = Bc250VideoMemory(NULL, &m, sizeof(m));
         failed |= status < 0;
         if (status < 0) PrintStatus("vram", status);
@@ -2415,6 +2525,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli log [from] | log summary [from | only]   (only: the summary's own lines, for a poller)\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
+                        "       bc250kmd_cli fan [count [interval ms]]    (the board's hardware monitor, docs/design/fan.md)\n"
                         "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
                         "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
                         "       bc250kmd_cli journal follow SECONDS [MS]  (one process printing new records every MS, default 1000)\n"
@@ -2450,6 +2561,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
+    if (!_wcsicmp(argv[1], L"fan") && argc <= 4) return Fan(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
     if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
         return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);

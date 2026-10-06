@@ -195,7 +195,7 @@ namespace AmdgpuWddmControl
             var p = Frame("performance", width);
             var now = new CardPanel(Strings.T("perf.now.title"), width);
             Mark("perf.sensors", now);
-            foreach (var row in Sensors.Rows(_snap.Dpm, _vram))
+            foreach (var row in Sensors.Rows(_snap.Dpm, _vram, _fan))
             {
                 var r = row;
                 int keyWidth = Math.Min(Theme.S(210), now.Inner / 3);
@@ -228,7 +228,7 @@ namespace AmdgpuWddmControl
         void RefreshLiveLabels()
         {
             if (_page == "performance")
-                foreach (var row in Sensors.Rows(_snap.Dpm, _vram))
+                foreach (var row in Sensors.Rows(_snap.Dpm, _vram, _fan))
                 {
                     Label l;
                     if (!_live.TryGetValue("perf." + row.Id, out l)) continue;
