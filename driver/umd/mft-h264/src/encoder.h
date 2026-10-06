@@ -38,7 +38,12 @@ struct EncoderConfig {
     uint32_t qpInit = 26;
     uint32_t qpMin = 14;
     uint32_t qpMax = 46;
-    bool lowLatency = true;
+    // CODECAPI_AVLowLatencyMode, and it is also what the transform's pipeline depth follows: off means
+    // a picture may be recorded while the one before it is still being coded, which costs one input
+    // period before the first access unit comes out and roughly doubles the throughput. Off by default,
+    // as the inbox encoders report it, because the common client is a recorder to which a frame of
+    // delivery delay means nothing. A client that sets it gets a strictly serial encoder.
+    bool lowLatency = false;
     bool deblocking = false;              // false emits disable_deblocking_filter_idc 1
     // VUI colour description, clause E.2.1 code points, written into the SPS as given. The transform
     // fills these from the input media type; nothing in the encoder converts between colour spaces,

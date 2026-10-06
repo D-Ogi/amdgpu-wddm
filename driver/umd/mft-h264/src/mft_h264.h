@@ -184,6 +184,41 @@ private:
     HRESULT SampleToFrame(IMFSample* sample, GpuFrameInput* frame, FrameLock* lock);
     HRESULT QueueNeedInput();
 
+    // A picture the GPU still holds. The input sample is kept until the picture is retired, which is
+    // what MFT_INPUT_STREAM_HOLDS_BUFFERS declares to the client: a texture sample read in place is
+    // read by a dispatch that runs after ProcessInput has returned, so the client's allocator must not
+    // recycle it yet. The timestamps travel with it because the output sample carries them and by then
+    // the input sample of the picture being retired is no longer the one ProcessInput was given.
+    struct InFlight {
+        ComPtr<IMFSample> input;
+        LONGLONG time = 0;
+        bool haveTime = false;
+        LONGLONG duration = 0;
+    };
+
+    // The client's Direct3D device lock, for as long as our dispatches run on its device. The
+    // documented contract for a D3D11-aware MFT, and the outer lock of the two: taken before the
+    // object's own critical section on every path, never the other way round.
+    struct DeviceLease {
+        ComPtr<IMFDXGIDeviceManager> manager;
+        HANDLE handle = nullptr;
+        bool locked = false;
+        ~DeviceLease();
+        void Take(IMFDXGIDeviceManager* m);
+    };
+
+    // Turns one retired picture into the output sample the client collects, and queues its
+    // METransformHaveOutput. m_bitstream holds the access unit; `held` is the picture's input record.
+    HRESULT EmitRetired(const InFlight& held, const FrameStats& stats);
+
+    // Retires every picture the GPU still holds. `emit` turns each one into an output sample, which is
+    // what a drain does; without it the results are thrown away, which is what a flush does. Caller
+    // holds the device lease and the critical section.
+    HRESULT FinishPending(bool emit);
+
+    // Puts the configured pipeline depth into force, if the pipeline is empty.
+    void ApplyPipelineDepth();
+
     LONG m_refCount = 1;
     mutable CRITICAL_SECTION m_lock = {};
     bool m_lockInit = false;
@@ -208,7 +243,12 @@ private:
     ComPtr<IMFMediaType> m_inputType;
     ComPtr<IMFMediaType> m_outputType;
     ComPtr<IMFDXGIDeviceManager> m_deviceManager;
-    ComPtr<IMFSample> m_pendingOutput;
+    // Access units coded and not yet collected by ProcessOutput, oldest first, one queued
+    // METransformHaveOutput each. In the ordinary flow there is at most one; a drain can leave as many
+    // as the pipeline was deep.
+    std::vector<ComPtr<IMFSample>> m_outputs;
+    // Pictures submitted to the GPU and not yet retired, oldest first.
+    std::vector<InFlight> m_inFlight;
 
     GUID m_inputSubtype = GUID_NULL;
     EncoderConfig m_cfg;
@@ -218,6 +258,8 @@ private:
     std::vector<uint8_t> m_bitstream;
     std::vector<uint8_t> m_repack;   // only used for bottom-up (negative pitch) system memory input
     LONGLONG m_lastDuration = 0;
+    // BC250_MFT_DEPTH: -1 not read yet, 0 not set, else the depth it names.
+    int m_depthOverride = -1;
 };
 
 } // namespace bc250h264

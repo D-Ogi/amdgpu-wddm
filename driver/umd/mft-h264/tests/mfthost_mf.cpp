@@ -582,6 +582,10 @@ struct MftRun {
     uint32_t keyFrames = 0;
     uint64_t bytes = 0;
     bool drained = false;
+    // How many pictures the transform asked for before it produced its first access unit. One is the
+    // serial shape; more means it recorded a picture's GPU work while it still owed an output for an
+    // earlier one, which is the only thing a client can see of the pipeline from the outside.
+    uint32_t needBeforeFirstOutput = 0;
 };
 
 } // namespace
@@ -1031,6 +1035,30 @@ int RunMft(const Options& o)
         }
         VariantClear(&v);
     }
+    // Low latency back off, which is where the default is and where the streaming part of this case
+    // runs. The setting is not decoration: it is what the transform's pipeline depth follows, so the
+    // loop below feeds a transform that records one picture's GPU work while it is still coding the
+    // slice of the one before it, and the drain has a picture to flush. The serial shape is what the
+    // same transform does with low latency on, and the sweep covers that side.
+    {
+        VARIANT v;
+        VariantInit(&v);
+        v.vt = VT_BOOL;
+        v.boolVal = VARIANT_FALSE;
+        HRESULT sh = codec->SetValue(&CODECAPI_AVEncCommonLowLatency, &v);
+        VARIANT back;
+        VariantInit(&back);
+        if (SUCCEEDED(sh)) {
+            sh = codec->GetValue(&CODECAPI_AVEncCommonLowLatency, &back);
+        }
+        if (FAILED(sh) || back.vt != VT_BOOL || back.boolVal != VARIANT_FALSE) {
+            Say("FAIL clearing AVEncCommonLowLatency returned 0x%08lX vt %u value %ld",
+                static_cast<unsigned long>(sh), back.vt, static_cast<long>(back.lVal));
+            ++settingFailures;
+        }
+        VariantClear(&back);
+        VariantClear(&v);
+    }
     // CABAC has to be refused honestly, not silently accepted.
     {
         VARIANT v;
@@ -1322,6 +1350,9 @@ int RunMft(const Options& o)
             }
         } else if (type == METransformHaveOutput) {
             ++run.haveOutputEvents;
+            if (run.haveOutputEvents == 1) {
+                run.needBeforeFirstOutput = run.needInputEvents;
+            }
             MFT_OUTPUT_DATA_BUFFER buf = {};
             DWORD status = 0;
             hr = mft->ProcessOutput(0, 1, &buf, &status);
@@ -1405,6 +1436,7 @@ int RunMft(const Options& o)
     // undecodable from its own start.
     if (run.drained) {
         bool restartFed = false, restartKey = false, restartParams = false, restartOut = false;
+        bool restartDrained = false;
         HRESULT rh = mft->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
         while (SUCCEEDED(rh) && !restartOut) {
             ComPtr<IMFMediaEvent> ev;
@@ -1414,7 +1446,15 @@ int RunMft(const Options& o)
             }
             MediaEventType type = MEUnknown;
             ev->GetType(&type);
-            if (type == METransformNeedInput && !restartFed) {
+            // One picture, then a drain, because one picture need not produce an access unit: the
+            // transform holds a picture back unless the client asked for low latency, and a client
+            // that wants the one it fed has to close the segment. Which is what a client does anyway,
+            // and waiting for an output instead of draining is how this loop used to hang.
+            if (type == METransformNeedInput && restartFed && !restartDrained) {
+                restartDrained = true;
+                mft->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+                rh = mft->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+            } else if (type == METransformNeedInput && !restartFed) {
                 ComPtr<IMFMediaBuffer> buffer;
                 ComPtr<IMFSample> sample;
                 rh = pattern.Draw(0);
@@ -1455,6 +1495,11 @@ int RunMft(const Options& o)
                     b->Unlock();
                 }
                 restartOut = true;
+            } else if (type == METransformDrainComplete) {
+                // The drain cannot have left an access unit behind: its METransformHaveOutput is
+                // queued before it. Reaching this with no output means the segment produced none, and
+                // the check below says so rather than this loop waiting for one that will not come.
+                break;
             } else if (type == MEError) {
                 break;
             }
@@ -1529,6 +1574,9 @@ int RunMft(const Options& o)
     Say("fed %u pictures, %u NeedInput, %u HaveOutput, %u outputs, %u key frames, drain %s",
         fed, run.needInputEvents, run.haveOutputEvents, run.outputs, run.keyFrames,
         run.drained ? "complete" : "NOT SIGNALLED");
+    Say("the transform asked for %u pictures before its first access unit, so it %s",
+        run.needBeforeFirstOutput,
+        (run.needBeforeFirstOutput > 1) ? "pipelines" : "codes one picture at a time");
     Say("%llu bytes, %.0f bit/s, %.2f ms per picture through the transform interface",
         static_cast<unsigned long long>(run.bytes),
         (run.bytes * 8.0 * o.fps) / (run.outputs ? run.outputs : 1),
@@ -1554,6 +1602,14 @@ int RunMft(const Options& o)
     }
     if (run.keyFrames == 0) {
         Say("FAIL no output sample was marked as a clean point");
+        rc = 1;
+    }
+    // With low latency cleared the transform is meant to hold a picture back, so a run that produced
+    // its first access unit from the first input alone did not pipeline and this case stopped covering
+    // the drain path that flushes one.
+    if (run.needBeforeFirstOutput < 2) {
+        Say("FAIL the transform produced its first access unit without asking for a second picture, "
+            "with low latency cleared");
         rc = 1;
     }
     if (settingFailures != 0 || moduleLockFailures != 0) {
@@ -1908,12 +1964,45 @@ int RunSinkWriter(const Options& o)
     const std::wstring path = o.outDir + L"\\mfthost-sinkwriter.mp4";
     DeleteFileW(path.c_str());
 
+    // A Direct3D 11 device for the writer to pass on, which is what a recording client gives it. Our
+    // transform creates a device only on the BC-250 adapter and answers DXGI_ERROR_NOT_FOUND on any
+    // other machine, by design, so without a device manager this case fails at the first WriteSample
+    // on every development PC - which is how it failed, 0x887A0002 at BeginWriting, until this was
+    // added. MF_SINK_WRITER_D3D_MANAGER is the writer's own name for the manager it forwards to the
+    // transforms in its chain through MFT_MESSAGE_SET_D3D_MANAGER.
+    ComPtr<ID3D11Device> device;
+    hr = CreateTestDevice(&device);
+    if (FAILED(hr)) {
+        SayHr("CreateTestDevice", hr);
+        UnregisterLocal();
+        return 2;
+    }
+    ComPtr<ID3D10Multithread> mt;
+    if (SUCCEEDED(device->QueryInterface(__uuidof(ID3D10Multithread),
+                                         reinterpret_cast<void**>(&mt)))) {
+        // Required of a device behind a device manager: the writer's own worker thread and ours both
+        // reach this device.
+        mt->SetMultithreadProtected(TRUE);
+    }
+    ComPtr<IMFDXGIDeviceManager> manager;
+    UINT token = 0;
+    hr = MFCreateDXGIDeviceManager(&token, &manager);
+    if (SUCCEEDED(hr)) {
+        hr = manager->ResetDevice(device.Get(), token);
+    }
+    if (FAILED(hr)) {
+        SayHr("MFCreateDXGIDeviceManager/ResetDevice", hr);
+        UnregisterLocal();
+        return 2;
+    }
+
     ComPtr<IMFAttributes> attrs;
     hr = MFCreateAttributes(&attrs, 4);
     if (SUCCEEDED(hr)) {
         hr = attrs->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, o.noHwTransforms ? 0u : 1u);
     }
     if (SUCCEEDED(hr)) { hr = attrs->SetUINT32(MF_SINK_WRITER_DISABLE_THROTTLING, 1); }
+    if (SUCCEEDED(hr)) { hr = attrs->SetUnknown(MF_SINK_WRITER_D3D_MANAGER, manager.Get()); }
     if (FAILED(hr)) {
         SayHr("MFCreateAttributes", hr);
         UnregisterLocal();
@@ -2034,7 +2123,19 @@ int RunSinkWriter(const Options& o)
     if (after - before == 0) {
         Say("the sink writer chose a different encoder: our transform encoded nothing. The file is "
             "still valid H.264, but this run says nothing about our MFT.");
-        rc = 1;
+        // On a machine without a BC-250 that outcome is the designed one and not a defect, so the case
+        // says what it could not test instead of failing for good. Both ways out are closed here: with
+        // the device manager above the platform prefers the hardware encoder of the adapter the client
+        // handed over, which is not ours, and without it our transform is chosen and then answers
+        // DXGI_ERROR_NOT_FOUND, because it creates a device on the BC-250 adapter and on no other. On
+        // unit A the two agree, because there the client's adapter is the one our transform wants.
+        if (!HaveBc250Adapter()) {
+            Say("no BC-250 in this machine, so no sink writer chain can reach our transform: this "
+                "case is not applicable here and is not counted as a failure");
+            rc = 0;
+        } else {
+            rc = 1;
+        }
     } else if (static_cast<uint32_t>(after - before) != frames) {
         Say("our transform encoded %ld of %u pictures", after - before, frames);
     }

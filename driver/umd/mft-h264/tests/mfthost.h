@@ -58,6 +58,11 @@ double NowMs();
 // Prefers 1002:13FE and takes the first hardware adapter when the BC-250 is not in the computer.
 HRESULT CreateTestDevice(ID3D11Device** device);
 
+// True when the BC-250 (1002:13FE) is one of this machine's DXGI adapters. Several cases turn on it,
+// because the shipped transform creates a device on that adapter and on no other: without it no Media
+// Foundation chain can reach our encoder, and a case that needs one says so instead of failing.
+bool HaveBc250Adapter();
+
 // A picture in I420, visible size, tightly packed. The deterministic CPU twin of testpattern.hlsl:
 // not pixel identical to it (the shader works in float and in BGR), but the same kind of content.
 struct Picture {

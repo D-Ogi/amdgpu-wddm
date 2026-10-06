@@ -94,6 +94,25 @@ double PlanePsnr(const uint8_t* a, const uint8_t* b, size_t count)
 
 // ---------------------------------------------------------------- the test's own device
 
+bool HaveBc250Adapter()
+{
+    ComPtr<IDXGIFactory> factory;
+    if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory)))) {
+        return false;
+    }
+    for (UINT i = 0;; ++i) {
+        ComPtr<IDXGIAdapter> a;
+        if (factory->EnumAdapters(i, &a) != S_OK) {
+            return false;
+        }
+        DXGI_ADAPTER_DESC ad = {};
+        a->GetDesc(&ad);
+        if (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) {
+            return true;
+        }
+    }
+}
+
 HRESULT CreateTestDevice(ID3D11Device** device)
 {
     if (device == nullptr) {
@@ -834,24 +853,7 @@ void SelfTestFrameSizes()
 void SelfTestAdapterChoice()
 {
     printf("adapter choice\n");
-    ComPtr<IDXGIFactory> factory;
-    if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory)))) {
-        printf("  no DXGI on this machine: not checked\n");
-        return;
-    }
-    bool haveBc250 = false;
-    for (UINT i = 0;; ++i) {
-        ComPtr<IDXGIAdapter> a;
-        if (factory->EnumAdapters(i, &a) != S_OK) {
-            break;
-        }
-        DXGI_ADAPTER_DESC ad = {};
-        a->GetDesc(&ad);
-        if (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) {
-            haveBc250 = true;
-        }
-    }
-    if (haveBc250) {
+    if (HaveBc250Adapter()) {
         printf("  the BC-250 is in this machine: the refusal case needs a machine without it\n");
         return;
     }
