@@ -27,6 +27,7 @@ enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocat
 struct FreeReport {
     FreeStage stage{};
     bool surface{};
+    bool adopted{};                             // an opened shared surface: borrowed, so no deallocate callback
     bool owner_expired{};                       // a linear primary outside its resource's own DDI
     // The import this free() named, for the trace that has to meet the kernel's paging journal by address
     // (instrumentation item 5 of the trial 245 report), and what the quarantine held when it returned.
@@ -140,6 +141,12 @@ public:
     // A retirement point of the quarantine outside allocate() and free(): releases what the policy admits.
     void retire_held() noexcept {drain(false);}
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;
+    // BD-075: the open half. The allocation already exists, so this call makes no allocate callback: it maps
+    // the handle the runtime opened, makes it resident, waits for the address, checks the alignment and imports
+    // it into the engine's VkDevice, exactly as allocate() does after its callback. The record it leaves is
+    // borrowed: free() releases the import and the mapping and makes no deallocate callback, because the runtime
+    // destroys the allocation itself when the opened resource goes.
+    HRESULT adopt(const engine_ddi::AdoptRequest*,engine_ddi::ImportedMemory*) noexcept;
     const ImportReport& last_report() const noexcept {return report_;}
     const FreeReport& last_free_report() const noexcept {return free_report_;}
     HRESULT free(const engine_ddi::ImportedMemory*) noexcept;

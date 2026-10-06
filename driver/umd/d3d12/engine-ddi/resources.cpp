@@ -6,6 +6,7 @@
 #include "replay.h"
 #include "format-list.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
+#include "../../../contract/bc250_shared_surface.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -205,10 +206,15 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
                                               reinterpret_cast<void**>(out));
 }
 
-// ---- The linear primary (engine ABI 1.3 V13) ----------------------------------------------------------------------
-// A committed texture on a heap with D3D12DDI_HEAP_FLAG_PRIMARY is what the desktop compositor opens and reads by
-// row pitch, so its image has linear tiling. Only the PRIMARY flags select this: the heap's at the create and the
-// optimization flag at CheckResourceAllocationInfo. No description becomes linear by its shape.
+// ---- The linear surface: the primary and the shared resource (engine ABI 1.3 V13) ---------------------------------
+// A committed texture a reader outside the engine opens and reads by row pitch has linear tiling. There are two of
+// them and they are selected in two different ways, never by the description's shape:
+//   - the primary, which the desktop compositor opens: the heap's D3D12DDI_HEAP_FLAG_PRIMARY at the create and the
+//     PRIMARY optimization flag at CheckResourceAllocationInfo say so;
+//   - the shared resource (BD-075), which another process or the D3D11 shell opens: nothing in the DDI says so, and
+//     the runtime's refusal of the ordinary allocation shape is what says so, after the fact. See the retry in
+//     create_heap_and_resource and engine-ddi.h, kMemoryShareable.
+// No description becomes linear by its shape alone, which is what keeps every ordinary committed texture tiled.
 struct LinearSurface {
     BC250_VKD3D_LINEAR_IMAGE_INFO info;
     uint64_t backing_size;
@@ -217,16 +223,16 @@ struct LinearSurface {
 inline constexpr uint32_t kLinearMaxEdge = 8192;
 inline constexpr uint64_t kLinearPage = 4096;
 
-// The storage formats a linear primary may have: the rows of the surface format table the compositor may open
-// (driver/contract/amdgpu_wddm_surface_format.h), which the shell and the kernel driver admit by the same table.
+// The storage formats a linear surface may have: the rows of the surface format table the compositor and the other
+// shell may open (driver/contract/amdgpu_wddm_surface_format.h), which every component admits by the same table.
 const AMDGPU_WDDM_SURFACE_FORMAT* composed_format(DXGI_FORMAT f) noexcept {
     return amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(f)),
                                      AMDGPU_WDDM_SURFACE_COMPOSED);
 }
 
-// The descriptions the linear primary exists for. The engine's image has the format's own compatibility list, so
+// The descriptions a linear surface exists for. The engine's image has the format's own compatibility list, so
 // castable formats beyond the format and its sRGB sibling, where the format has one, are not these.
-bool linear_primary_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
+bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
     const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || !row) return false;
     const auto sibling = static_cast<DXGI_FORMAT>(row->dxgi_srgb);
@@ -245,6 +251,25 @@ bool linear_primary_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CR
     return true;
 }
 
+// The shareable envelope (BD-075): the descriptions whose create may be retried as a shared surface, and nothing
+// wider. Being inside it is permission to retry after the runtime has refused the ordinary shape; it never makes a
+// create linear by itself, and attempt 2 is strictly more constrained than attempt 1, so a request that failed the
+// first for a size or an alignment reason fails the second as well.
+//   - the heap is a GPU-only L1 heap without PRIMARY and without COHERENT_SYSTEMWIDE: a shared surface is nobody's
+//     primary, and a CPU-visible or system-wide coherent shared heap needs its own contract;
+//   - the resource is one of the shapes a linear surface exists for (linear_surface_shape), so a 3D texture, a mip
+//     chain, an array, MSAA, a block-compressed or typeless format and a buffer are all outside it;
+//   - the resource may ask for a render target, a shader resource, an unordered access view and simultaneous
+//     access, and nothing else (linear_surface_shape already refuses depth-stencil, cross-adapter, the two video
+//     reference-only flags and a raytracing acceleration structure).
+bool shared_surface_shape(const D3D12DDIARG_CREATEHEAP_0001& heap, const D3D12_RESOURCE_DESC1& desc,
+                          const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
+    if (heap.Flags & (D3D12DDI_HEAP_FLAG_PRIMARY | D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE)) return false;
+    if (heap.CPUPageProperty != D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE) return false;
+    if (heap.MemoryPool != D3D12DDI_MEMORY_POOL_L1) return false;
+    return linear_surface_shape(desc, in);
+}
+
 // The description the engine is asked about and creates: the linear request is the call, not the layout field.
 D3D12_RESOURCE_DESC1 linear_desc(D3D12_RESOURCE_DESC1 desc) noexcept {
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -254,7 +279,7 @@ D3D12_RESOURCE_DESC1 linear_desc(D3D12_RESOURCE_DESC1 desc) noexcept {
 
 // What the engine's linear image of desc needs, before any memory exists, and the size of the backing: enough for
 // the image's memory requirement and for a reader that takes pitch * (height rounded up to 4) bytes.
-HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
+HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
     *out = LinearSurface{};
     const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
     if (!c->funcs.QueryLinearImage || !row) return E_NOTIMPL;
@@ -263,7 +288,7 @@ HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
     info.Size = sizeof(info);
     const HRESULT hr = c->funcs.QueryLinearImage(c->device, &d, &info);
     if (FAILED(hr)) {
-        log_line("linear primary: the engine has no linear image for format %d, %llux%u: %08lx",
+        log_line("linear surface: the engine has no linear image for format %d, %llux%u: %08lx",
                  static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,
                  static_cast<unsigned long>(hr));
         return hr;
@@ -274,7 +299,7 @@ HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
         info.RowPitch < width4 * row->bytes_per_pixel || !info.MemorySize || !info.MemoryAlignment || !info.MemoryTypeBits ||
         info.MemoryAlignment > UINT32_MAX || (info.MemoryAlignment & (info.MemoryAlignment - 1)) ||
         info.LayoutSize > info.MemorySize) {
-        log_line("linear primary: layout not usable (offset %llu, pitch %llu, layout %llu, memory %llu, alignment "
+        log_line("linear surface: layout not usable (offset %llu, pitch %llu, layout %llu, memory %llu, alignment "
                  "%llu, types %08x)",
                  static_cast<unsigned long long>(info.Offset), static_cast<unsigned long long>(info.RowPitch),
                  static_cast<unsigned long long>(info.LayoutSize), static_cast<unsigned long long>(info.MemorySize),
@@ -292,14 +317,12 @@ HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
 
 // The linear image at offset 0 of the backing. The bound image must be the one the query described: the memory was
 // sized, typed and described to the shell from that answer.
-HRESULT place_linear(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BARRIER_LAYOUT layout,
-                     const D3D12DDI_CLEAR_VALUES* clear, const LinearSurface& surface, ID3D12Resource** out) noexcept {
+HRESULT place_linear_at(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& desc, D3D12_RESOURCE_STATES state,
+                        const D3D12DDI_CLEAR_VALUES* clear, const LinearSurface& surface,
+                        ID3D12Resource** out) noexcept {
     *out = nullptr;
     if (!c->funcs.CreateLinearPlacedResource) return E_NOTIMPL;
     const D3D12_RESOURCE_DESC1 d = linear_desc(desc);
-    D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
-    const HRESULT legacy = initial_layout(desc, &layout, &state);
-    if (FAILED(legacy)) return legacy;
     // A barrier layout has no state form here. The engine keeps a linear image in one Vulkan layout whatever
     // the initial state, so COMMON stands for it.
     BC250_VKD3D_LINEAR_IMAGE_INFO bound{};
@@ -314,7 +337,7 @@ HRESULT place_linear(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& d
     if (bound.Offset != q.Offset || bound.RowPitch != q.RowPitch || bound.LayoutSize != q.LayoutSize ||
         bound.MemorySize != q.MemorySize || bound.MemoryAlignment != q.MemoryAlignment ||
         bound.MemoryTypeBits != q.MemoryTypeBits) {
-        log_line("linear primary: the bound image differs from the query (pitch %llu/%llu, layout %llu/%llu, memory "
+        log_line("linear surface: the bound image differs from the query (pitch %llu/%llu, layout %llu/%llu, memory "
                  "%llu/%llu)",
                  static_cast<unsigned long long>(bound.RowPitch), static_cast<unsigned long long>(q.RowPitch),
                  static_cast<unsigned long long>(bound.LayoutSize), static_cast<unsigned long long>(q.LayoutSize),
@@ -324,6 +347,16 @@ HRESULT place_linear(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& d
     }
     *out = engine;
     return S_OK;
+}
+
+// The create's form: the initial state comes from the DDI's barrier layout.
+HRESULT place_linear(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BARRIER_LAYOUT layout,
+                     const D3D12DDI_CLEAR_VALUES* clear, const LinearSurface& surface, ID3D12Resource** out) noexcept {
+    *out = nullptr;
+    D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+    const HRESULT legacy = initial_layout(desc, &layout, &state);
+    if (FAILED(legacy)) return legacy;
+    return place_linear_at(c, b, desc, state, clear, surface, out);
 }
 
 // The engine's reserved (tiled) resource: no memory until UpdateTileMappings maps heap tiles into it (tiles.cpp).
@@ -436,7 +469,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         }
         if (!base->backing) return E_INVALIDARG;        // a reserved resource names no heap memory
         if (base->backing->linear) {
-            log_line("placed: the base is a linear primary, its memory holds that image alone");
+            log_line("placed: the base is a linear surface, its memory holds that image alone");
             return E_INVALIDARG;
         }
         const uint64_t offset = base->offset + res_desc->ReuseBufferGPUVA.BaseAddress.UMD.Offset;
@@ -457,19 +490,24 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     uint64_t need = 0, align = 0;
     LinearSurface surface{};
     // The linear primary: a failure of the query fails the create, no other tiling takes its place.
-    const bool linear = res_desc && c->mode == MemoryMode::RuntimeBacked &&
-                        (sized.Flags & D3D12DDI_HEAP_FLAG_PRIMARY) &&
-                        sized.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE &&
-                        linear_primary_shape(desc, *res_desc);
+    bool linear = res_desc && c->mode == MemoryMode::RuntimeBacked &&
+                  (sized.Flags & D3D12DDI_HEAP_FLAG_PRIMARY) &&
+                  sized.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE &&
+                  linear_surface_shape(desc, *res_desc);
+    // BD-075: this description may be a shared resource's, so the first attempt below may be retried as one. The
+    // engine is not asked anything yet and the create is unchanged: a shape outside the envelope, and every shape
+    // whose first attempt succeeds, never reaches the retry.
+    const bool shareable = res_desc && !linear && c->mode == MemoryMode::RuntimeBacked &&
+                           shared_surface_shape(sized, desc, *res_desc);
     if (res_desc) {
         if (!(sized.Flags & category_of(desc))) return E_INVALIDARG;
         if (linear) {
-            const HRESULT query = query_linear_primary(c, desc, &surface);
+            const HRESULT query = query_linear_surface(c, desc, &surface);
             if (FAILED(query)) return query;
             need = surface.backing_size;
             align = surface.info.MemoryAlignment;
             if (sized.ByteSize != kSizeOfResource && sized.ByteSize < need)
-                log_line("linear primary: the heap has %llu bytes, the surface needs %llu",
+                log_line("linear surface: the heap has %llu bytes, the surface needs %llu",
                          static_cast<unsigned long long>(sized.ByteSize), static_cast<unsigned long long>(need));
         } else {
             // A heap alignment below the default is the small placement alignment the resource was granted: its
@@ -496,7 +534,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             // The heap is the surface: as large as the memory asked of the shell, whatever the runtime gave
             // beyond it, and with the default heap alignment, whatever alignment the runtime handed back.
             if (sized.ByteSize != need || sized.Alignment)
-                log_line("linear primary: heap of %llu bytes aligned to %llu becomes %llu bytes, default alignment",
+                log_line("linear surface: heap of %llu bytes aligned to %llu becomes %llu bytes, default alignment",
                          static_cast<unsigned long long>(sized.ByteSize),
                          static_cast<unsigned long long>(sized.Alignment), static_cast<unsigned long long>(need));
             sized.ByteSize = need;
@@ -506,42 +544,78 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         log_line("heap: ByteSize left to a resource, but the heap has none");
         return E_INVALIDARG;
     }
-    D3D12_HEAP_DESC hd{};
-    HRESULT hr = heap_desc_of(sized, hd);
-    if (FAILED(hr)) return hr;
-    if (linear) {
-        // The heap holds this one image at offset 0 and nothing beside it: the engine is told the image's
-        // category alone, whatever else the runtime's flags allow. The shell still sees the runtime's.
+    // The heap holds its one linear image at offset 0 and nothing beside it: the engine is told the image's
+    // category alone, whatever else the runtime's flags allow. The shell still sees the runtime's. A shared create
+    // calls this after its retry, so the lambda exists instead of a second copy of the three lines.
+    const auto narrow_heap_to_image = [&](D3D12_HEAP_DESC& hd) noexcept {
         const uint32_t category = category_of(desc);
         hd.Flags = D3D12_HEAP_FLAG_NONE;
         if (category != D3D12DDI_HEAP_FLAG_BUFFERS) hd.Flags |= D3D12_HEAP_FLAG_DENY_BUFFERS;
         if (category != D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES) hd.Flags |= D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
         if (category != D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES) hd.Flags |= D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
-    }
+    };
+    D3D12_HEAP_DESC hd{};
+    HRESULT hr = heap_desc_of(sized, hd);
+    if (FAILED(hr)) return hr;
+    if (linear) narrow_heap_to_image(hd);
 
     ID3D12Heap* heap = nullptr;
     ImportedMemory memory{};
     bool imported = false;
     if (c->mode == MemoryMode::RuntimeBacked) {
         if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
-        MemoryRequest request{};
-        request.size = sizeof(MemoryRequest);
-        request.flags = (res_desc ? kMemoryDedicated : 0u) |
-                        ((heap_desc->Flags & D3D12DDI_HEAP_FLAG_PRIMARY) ? kMemoryPrimary : 0u);
-        request.rt_owner = rt;
-        request.heap = heap_desc;
-        request.resource = res_desc;
-        request.byte_size = heap_desc->ByteSize;
-        request.alignment = std::max<uint64_t>(align, heap_desc->Alignment);
-        request.memory_type_bits = 0;                   // engine-ddi.h, MemoryRequest: the engine checks the type
-        if (linear) {
-            request.flags |= kMemoryLinearSurface;
-            request.alignment = align;
-            request.memory_type_bits = surface.info.MemoryTypeBits;
-            request.surface_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
-            request.surface_layout_size = surface.info.LayoutSize;
+        // One request, filled from the heap description as it stands and from the surface when there is one.
+        const auto build_request = [&](bool share) noexcept {
+            MemoryRequest request{};
+            request.size = sizeof(MemoryRequest);
+            request.flags = (res_desc ? kMemoryDedicated : 0u) |
+                            ((sized.Flags & D3D12DDI_HEAP_FLAG_PRIMARY) ? kMemoryPrimary : 0u) |
+                            (share ? kMemoryShareable : 0u);
+            request.rt_owner = rt;
+            request.heap = heap_desc;
+            request.resource = res_desc;
+            request.byte_size = sized.ByteSize;
+            request.alignment = std::max<uint64_t>(align, sized.Alignment);
+            request.memory_type_bits = 0;               // engine-ddi.h, MemoryRequest: the engine checks the type
+            if (linear) {
+                request.flags |= kMemoryLinearSurface;
+                request.alignment = align;
+                request.memory_type_bits = surface.info.MemoryTypeBits;
+                request.surface_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
+                request.surface_layout_size = surface.info.LayoutSize;
+            }
+            return request;
+        };
+        hr = import_memory(c, build_request(shareable), &memory);
+        if (hr == kShareRequired) {
+            // BD-075, attempt 2. The runtime refused the ordinary allocation shape for this resource, which is
+            // what a shared create does and what nothing else that reaches this path does. Nothing was allocated.
+            // The surface is asked of the engine only now, so an ordinary create pays no query at all.
+            const HRESULT query = query_linear_surface(c, desc, &surface);
+            if (FAILED(query)) {
+                log_line("shared surface: the runtime refused the ordinary shape and the engine has no linear image "
+                         "for this description: %08lx",
+                         static_cast<unsigned long>(query));
+                return query;
+            }
+            linear = true;
+            need = surface.backing_size;
+            align = surface.info.MemoryAlignment;
+            // The runtime sized the heap from the tiled answer, so its ByteSize is not compared with the linear
+            // need: the heap becomes the surface, exactly as a linear primary's does.
+            log_line("shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear "
+                     "surface (heap of %llu bytes aligned to %llu becomes %llu bytes, default alignment, pitch %llu)",
+                     static_cast<unsigned long long>(sized.ByteSize),
+                     static_cast<unsigned long long>(sized.Alignment), static_cast<unsigned long long>(need),
+                     static_cast<unsigned long long>(surface.info.RowPitch));
+            sized.ByteSize = need;
+            sized.Alignment = 0;
+            hd = D3D12_HEAP_DESC{};
+            hr = heap_desc_of(sized, hd);
+            if (FAILED(hr)) return hr;
+            narrow_heap_to_image(hd);
+            hr = import_memory(c, build_request(true), &memory);
         }
-        hr = import_memory(c, request, &memory);
         if (FAILED(hr)) {
             log_line("heap: the shell's memory request failed: %08lx", static_cast<unsigned long>(hr));
             return hr;
@@ -656,15 +730,19 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
 }
 
 // ---- D64, D65: OpenSharedHandle of a heap or a resource ----------------------------------------------------------
-// Not implemented: a D3D12 resource of this driver publishes no description a second driver could decode, and the
-// shell has no entry point that adopts an allocation the runtime opened instead of allocating one
-// (heap-import.h, RuntimeHeapImports). What the two slots do is refuse without losing the device, and name
-// everything the runtime handed over, because that is what an implementation has to decode: the allocation
-// handles, the per-allocation private data (the kernel driver's LB7A record for a surface this driver's D3D11
-// shell created) and the per-resource private data (its E26R record). docs/d3d12-shared-resources.md holds the
-// plan; SLOTS.md keeps the two slots at P4.
-// Calc answers the private sizes an implemented open would construct, the same records a create builds, so that
-// a later implementation needs no second ABI step and a runtime that calls Calc and then Open sees one shape.
+// BD-075. An opened shared resource is the same thing a shared create makes: a linear 2D image of a COMPOSED
+// format at offset 0 of memory a reader outside the engine reads by row pitch. What differs is the ownership of the
+// allocation: the runtime opened it, so the shell adopts it (ShellHooks::adopt_memory) and never deallocates it.
+// D3D12DDIARG_OPENHEAP_0003 carries no resource description at all, so the two private-data records are the only
+// source there is, and they are decoded by the one reader in driver/contract/bc250_shared_surface.h that the D3D11
+// shell uses as well. The runtime keeps its own copy of the description for the application's GetDesc; this code
+// has to agree with it, not supply it.
+// Still refused, each with E_OUTOFMEMORY and a line naming the step that declined: a shared heap with no resource
+// (nothing to place and no description to decode), a placed resource on such a heap, anything but exactly one
+// allocation, a record the shared decoder declines, and a record whose pitch or size this engine's linear image of
+// the same description disagrees with.
+// Calc answers the private sizes the open constructs, the same records a create builds, so a runtime that calls
+// Calc and then Open sees one shape.
 D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_opened_heap_and_resource(D3D12DDI_HDEVICE,
                                                                        const D3D12DDIARG_OPENHEAP_0003*,
                                                                        D3D12DDI_HPROTECTEDRESOURCESESSION_0030) {
@@ -685,24 +763,168 @@ uint32_t blob_version(const void* data, UINT bytes) noexcept {
     return version;
 }
 
+// The D3D12 description of a decoded shared surface: the record's own geometry, one mip, one slice, one sample, an
+// unknown layout (the linear request is the call, not the field), and the resource flags the record's D3D11 bind
+// flags mean. Without the shader-resource bind flag the image denies shader resources, which is what the creator
+// asked for.
+D3D12_RESOURCE_DESC1 opened_desc(const BC250_SHARED_SURFACE& surface) noexcept {
+    D3D12_RESOURCE_DESC1 desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment = 0;
+    desc.Width = surface.Width;
+    desc.Height = surface.Height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = static_cast<DXGI_FORMAT>(surface.DxgiFormat);
+    desc.SampleDesc = {1, 0};
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    if (surface.BindFlags & BC250_SHARED_BIND_RENDER_TARGET) desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    if (surface.BindFlags & BC250_SHARED_BIND_UNORDERED_ACCESS)
+        desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    if (!(surface.BindFlags & BC250_SHARED_BIND_SHADER_RESOURCE))
+        desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    return desc;
+}
+
+// The open itself. On a refusal nothing is constructed, nothing of the runtime's is kept, and *why names the step
+// that declined for the caller's one log line.
+HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* args, D3D12DDI_HHEAP hheap,
+                            D3D12DDI_HRTRESOURCE rt, D3D12DDI_HRESOURCE hres, const char** why) noexcept {
+    *why = "arguments";
+    if (!c || !args || !hheap.pDrvPrivate || !hres.pDrvPrivate) return E_INVALIDARG;
+    if (c->mode != MemoryMode::RuntimeBacked) return E_NOTIMPL;
+    if (args->NumAllocations != 1 || !args->pOpenAllocationInfo) return E_INVALIDARG;
+    const D3DDDI_OPENALLOCATIONINFO& first = args->pOpenAllocationInfo[0];
+    if (!first.hAllocation) return E_INVALIDARG;
+    if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
+
+    *why = "record";
+    BC250_SHARED_SURFACE shared{};
+    switch (Bc250SharedSurfaceDecode(args->pPrivateDriverData, args->PrivateDriverDataSize, first.pPrivateDriverData,
+                                     first.PrivateDriverDataSize, &shared)) {
+    case BC250_SHARED_SURFACE_OK:
+        break;
+    case BC250_SHARED_SURFACE_FORMAT:
+        *why = "record format";
+        return E_NOTIMPL;
+    default:
+        return E_INVALIDARG;
+    }
+
+    *why = "engine image";
+    const D3D12_RESOURCE_DESC1 desc = opened_desc(shared);
+    LinearSurface surface{};
+    HRESULT hr = query_linear_surface(c, desc, &surface);
+    if (FAILED(hr)) return hr;
+    // The layout agreement, checked and not assumed: two drivers that compute different addresses from the same
+    // bytes produce silent corruption, which is worse than a refusal. Both sides run the same RADV on the same
+    // part, so a divergence is a bug and says so on one line instead of showing wrong pixels.
+    *why = "layout agreement";
+    if (surface.info.RowPitch != shared.Pitch || surface.backing_size > shared.Size) {
+        log_line("shared open: the engine's linear image of this description has pitch %llu and needs %llu bytes; the "
+                 "record says pitch %lu and %llu bytes",
+                 static_cast<unsigned long long>(surface.info.RowPitch),
+                 static_cast<unsigned long long>(surface.backing_size), shared.Pitch,
+                 static_cast<unsigned long long>(shared.Size));
+        return E_INVALIDARG;
+    }
+
+    *why = "adopt";
+    AdoptRequest adopt{};
+    adopt.size = sizeof(adopt);
+    adopt.flags = kMemoryDedicated | kMemoryShareable | kMemoryLinearSurface;
+    adopt.rt_owner = rt;
+    adopt.allocation = first.hAllocation;
+    adopt.memory_type_bits = surface.info.MemoryTypeBits;
+    adopt.byte_size = surface.backing_size;
+    adopt.alignment = surface.info.MemoryAlignment;
+    ImportedMemory memory{};
+    hr = adopt_memory(c, adopt, &memory);
+    if (FAILED(hr)) return hr;
+
+    // From here on the import is engine-ddi's and goes back through the release sequence on every path.
+    *why = "engine heap";
+    D3D12DDIARG_CREATEHEAP_0001 heap_desc{};
+    heap_desc.ByteSize = surface.backing_size;
+    heap_desc.Alignment = 0;
+    heap_desc.CPUPageProperty = D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+    heap_desc.MemoryPool = D3D12DDI_MEMORY_POOL_L1;
+    heap_desc.Flags = static_cast<D3D12DDI_HEAP_FLAGS>(category_of(desc));
+    heap_desc.CreationNodeMask = 1;
+    heap_desc.VisibleNodeMask = 1;
+    D3D12_HEAP_DESC hd{};
+    hr = heap_desc_of(heap_desc, hd);
+    ID3D12Heap* heap = nullptr;
+    if (SUCCEEDED(hr)) hr = engine_heap_from_memory(c, hd, memory, &heap);
+    if (FAILED(hr)) {
+        log_line("shared open: the engine refused the heap over the adopted memory: %08lx (%llu bytes, type %u)",
+                 static_cast<unsigned long>(hr), static_cast<unsigned long long>(memory.byte_size),
+                 memory.memory_type_index);
+        ReleasePayload payload{{nullptr, nullptr}, true, memory, 0};
+        run_release(c->hooks, payload);
+        return hr;
+    }
+
+    Backing* b = new_backing(c, heap_desc, heap);
+    if (!b) {
+        ReleasePayload payload{{heap, nullptr}, true, memory, 0};
+        run_release(c->hooks, payload);
+        return E_OUTOFMEMORY;
+    }
+    b->imported = true;
+    b->memory = memory;
+    b->dedicated = true;
+    b->linear = true;
+    b->adopted = true;
+
+    *why = "engine image placement";
+    ID3D12Resource* engine = nullptr;
+    hr = place_linear_at(c, b, desc, static_cast<D3D12_RESOURCE_STATES>(args->InitialResourceState), nullptr, surface,
+                         &engine);
+    if (FAILED(hr)) {
+        backing_release(b);
+        return hr;
+    }
+    heap->AddRef();
+    new (hheap.pDrvPrivate) HeapRecord{{Tag::Heap, 0, heap, c}, b};
+    c->live.fetch_add(1);
+    auto* record = static_cast<ResourceRecord*>(hres.pDrvPrivate);
+    construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Opened, desc.Format);
+    record->linear_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
+    record->linear_size = surface.backing_size;
+    // No render-target initialisation: the surface already holds its creator's content, and a discard here would
+    // throw away the very pixels the application opened it for.
+    *why = "";
+    return S_OK;
+}
+
 HRESULT APIENTRY open_heap_and_resource(D3D12DDI_HDEVICE device, const D3D12DDIARG_OPENHEAP_0003* args,
                                         D3D12DDI_HHEAP hheap, D3D12DDI_HRTRESOURCE rt,
                                         D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
     DeviceContext* c = resolve(device);
-    (void)rt;
-    (void)session;
-    const HRESULT hr = c && args ? E_NOTIMPL : E_INVALIDARG;
+    const char* why = "device";
+    HRESULT hr = c ? S_OK : E_INVALIDARG;
+    if (SUCCEEDED(hr) && session.pDrvPrivate) {
+        why = "protected resource session";
+        hr = E_NOTIMPL;
+    }
+    if (SUCCEEDED(hr)) {
+        c->retire_at_resource();
+        hr = open_shared_surface(c, args, hheap, rt, hres, &why);
+    }
+    if (SUCCEEDED(hr)) return hr;
     // Same rule as the create slot: the open of a shared handle fails, the device lives (BD-075).
     const HRESULT admitted = admitted_create_failure(hr);
     const UINT count = args ? args->NumAllocations : 0u;
     const D3DDDI_OPENALLOCATIONINFO* first =
         args && args->pOpenAllocationInfo && count ? &args->pOpenAllocationInfo[0] : nullptr;
-    log_refusal("OpenHeapAndResource: %08lx reported as %08lx, no shared open is implemented; %u allocation(s), "
+    log_refusal("OpenHeapAndResource: %08lx reported as %08lx, declined at %s; %u allocation(s), "
                 "kernel resource %s, "
                 "resource private data %u bytes (magic 0x%08x, version %u), first allocation private data %u bytes "
                 "(magic 0x%08x, version %u), allocation handle %s, initial state 0x%x, heap handle %s, "
                 "resource handle %s",
-                static_cast<unsigned long>(hr), static_cast<unsigned long>(admitted), count,
+                static_cast<unsigned long>(hr), static_cast<unsigned long>(admitted), why, count,
                 args && args->hKMResource.handle ? "given" : "none", args ? args->PrivateDriverDataSize : 0u,
                 blob_magic(args ? args->pPrivateDriverData : nullptr, args ? args->PrivateDriverDataSize : 0u),
                 blob_version(args ? args->pPrivateDriverData : nullptr, args ? args->PrivateDriverDataSize : 0u),
@@ -819,7 +1041,7 @@ HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RE
 HRESULT linear_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
                                D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
     LinearSurface surface{};
-    const HRESULT hr = query_linear_primary(c, desc, &surface);
+    const HRESULT hr = query_linear_surface(c, desc, &surface);
     if (FAILED(hr)) return hr;
     out->ResourceDataSize = surface.backing_size;
     out->ResourceDataAlignment = static_cast<UINT32>(
@@ -863,7 +1085,7 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     HRESULT hr = to_api_desc(*in, desc);
     if (SUCCEEDED(hr)) {
         if (c->mode == MemoryMode::RuntimeBacked && (optimization & D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY) &&
-            linear_primary_shape(desc, *in)) {
+            linear_surface_shape(desc, *in)) {
             hr = linear_allocation_info(c, desc, out);
         } else {
             desc.Alignment = alignment_restriction;
@@ -1521,7 +1743,12 @@ void backing_release(Backing* b) noexcept {
     if (b->refs.fetch_sub(1) != 1) return;
     DeviceContext* c = b->device;
     PendingRelease* node = b->release_node;
-    node->payload = ReleasePayload{{b->retained, b->heap}, b->imported, b->memory, b->id, b->linear};  // resource first
+    // in_ddi: a linear surface's memory, and borrowed memory of either kind (BD-075), is released inside the destroy
+    // that ends it. For an adopted allocation that is not a preference but the contract: the runtime destroys the
+    // allocation as soon as pfnDestroyHeapAndResource returns, so a release recorded for later would unmap a handle
+    // that is no longer ours.
+    node->payload = ReleasePayload{{b->retained, b->heap}, b->imported, b->memory, b->id,
+                                   b->linear || b->adopted};                    // resource first
     delete b;
     c->release(node);
 }
@@ -1544,6 +1771,32 @@ HRESULT import_memory(DeviceContext* c, const MemoryRequest& request, ImportedMe
     HRESULT hr = c->hooks.allocate_memory(c->hooks.shell, &request, &m);
     if (FAILED(hr)) return hr;                          // on failure engine-ddi owns nothing
     hr = validate_import(request, m);
+    if (FAILED(hr)) {
+        ReleasePayload payload{{nullptr, nullptr}, true, m, 0};
+        run_release(c->hooks, payload);                 // exactly once; a failure is reported there
+        return hr;
+    }
+    *out = m;
+    return S_OK;
+}
+
+// BD-075: the borrowed memory of an opened shared resource. The validation is the import's, written against a
+// MemoryRequest, so the adopt request is translated into the three fields it reads; the handle itself must be the
+// one the runtime opened, because the shell made no allocation of its own.
+HRESULT adopt_memory(DeviceContext* c, const AdoptRequest& request, ImportedMemory* out) noexcept {
+    *out = ImportedMemory{};
+    if (!c->hooks.adopt_memory) return E_NOTIMPL;       // the shell serves no shared open
+    ImportedMemory m{};
+    HRESULT hr = c->hooks.adopt_memory(c->hooks.shell, &request, &m);
+    if (FAILED(hr)) return hr;                          // on failure engine-ddi owns nothing
+    MemoryRequest checked{};
+    checked.size = sizeof(checked);
+    checked.flags = request.flags;
+    checked.byte_size = request.byte_size;
+    checked.alignment = request.alignment;
+    checked.memory_type_bits = request.memory_type_bits;
+    hr = validate_import(checked, m);
+    if (SUCCEEDED(hr) && m.allocation != request.allocation) hr = E_INVALIDARG;
     if (FAILED(hr)) {
         ReleasePayload payload{{nullptr, nullptr}, true, m, 0};
         run_release(c->hooks, payload);                 // exactly once; a failure is reported there

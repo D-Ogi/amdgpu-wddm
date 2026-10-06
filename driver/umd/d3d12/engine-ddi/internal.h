@@ -355,7 +355,10 @@ struct Backing {
     D3D12DDIARG_CREATEHEAP_0001 desc;
     bool imported;
     bool dedicated;
-    bool linear;                                // the memory of one linear primary: nothing else is placed on it
+    bool linear;                                // the memory of one linear surface: nothing else is placed on it
+    bool adopted;                               // BD-075: the allocation was opened by the runtime, not allocated
+                                                //   here. The release frees the import and the address mapping and
+                                                //   makes no deallocation callback (heap-import.h).
     ImportedMemory memory;
     uint64_t id;
     PendingRelease* release_node;               // allocated with the backing, handed to the release sequence
@@ -370,6 +373,10 @@ void backing_release(Backing* backing) noexcept;
 // the validation error. validate_import is the check alone.
 HRESULT validate_import(const MemoryRequest& request, const ImportedMemory& memory) noexcept;
 HRESULT import_memory(DeviceContext* context, const MemoryRequest& request, ImportedMemory* out) noexcept;
+// BD-075: the same for an allocation the runtime opened (ShellHooks::adopt_memory). The validation is the import's,
+// against the request's byte size, alignment and memory types; a validation failure hands the memory straight back
+// through run_release. E_NOTIMPL when the shell serves no shared open.
+HRESULT adopt_memory(DeviceContext* context, const AdoptRequest& request, ImportedMemory* out) noexcept;
 
 struct HeapRecord {
     RecordHeader h;                             // engine: the ID3D12Heap, own reference
@@ -377,7 +384,10 @@ struct HeapRecord {
 };
 
 // Reserved: a tiled resource with no heap memory of its own (tiles.cpp maps heaps into it); backing is null.
-enum class ResourceKind : uint32_t { Committed = 1, Placed = 2, Reserved = 3 };
+// Opened (BD-075): a shared surface another process or another API created, over an allocation the runtime opened.
+// It behaves as Committed everywhere except that it is never queued for render-target initialisation - the surface
+// already holds its creator's content - and that it is never a Present source of this device.
+enum class ResourceKind : uint32_t { Committed = 1, Placed = 2, Reserved = 3, Opened = 4 };
 struct ResourceRecord {
     RecordHeader h;                             // engine: the ID3D12Resource
     Backing* backing;                           // one reference; null for a reserved resource

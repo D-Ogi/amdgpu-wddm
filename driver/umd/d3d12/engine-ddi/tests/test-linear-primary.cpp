@@ -155,7 +155,8 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
     checkf(hr == S_OK && presented, "linear primary %ux%u: present_allocation gives its allocation (hr %08lx)",
            s.width, s.height, static_cast<unsigned long>(hr));
     hr = create_placed_buffer(env, device, target, 0, 4096, beside);
-    checkf(hr == E_INVALIDARG, "linear primary %ux%u: a buffer placed on the primary's memory: E_INVALIDARG (hr %08lx)",
+    // A refused create reports E_OUTOFMEMORY and keeps its real reason in the log (BD-075).
+    checkf(hr == E_OUTOFMEMORY, "linear primary %ux%u: a buffer placed on the primary's memory is refused (hr %08lx)",
            s.width, s.height, static_cast<unsigned long>(hr));
 
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 existing{};
@@ -298,8 +299,13 @@ void test_linear_primary(Env& env) {
         const uint32_t before = m.allocations;
         hr = create_target(env, device, Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM, 1, false}, plain);
         const uint32_t plain_flags = m.last_flags;
-        checkf(hr == S_OK && m.allocations == before + 1 && plain_flags == engine_ddi::kMemoryDedicated &&
-                   !m.last_row_pitch && !m.last_layout_size,
+        // Without the PRIMARY flag this description is an ordinary committed texture, and the allocation asked for
+        // is the ordinary one. It is also inside the shareable envelope (BD-075), so the request says that the
+        // runtime may yet refuse it as a shared resource's: kMemoryShareable changes nothing about the allocation
+        // and is the only way the shell can tell that refusal from any other E_INVALIDARG.
+        const uint32_t plain_want = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable;
+        checkf(hr == S_OK && m.allocations == before + 1 && plain_flags == plain_want && !m.last_row_pitch &&
+                   !m.last_layout_size,
                "linear primary: the same description without the PRIMARY flag asks for ordinary memory (hr %08lx, "
                "flags %x)",
                static_cast<unsigned long>(hr), plain_flags);
@@ -323,8 +329,8 @@ void test_linear_primary(Env& env) {
         Shape cramped{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM};
         cramped.heap_bytes = 4096;
         hr = create_target(env, device, cramped, tight);
-        checkf(hr == E_INVALIDARG && m.allocations == requests,
-               "linear primary: a heap of 4096 bytes for the 256x256 primary: E_INVALIDARG, no memory request "
+        checkf(hr == E_OUTOFMEMORY && m.allocations == requests,
+               "linear primary: a heap of 4096 bytes for the 256x256 primary: refused, no memory request "
                "(hr %08lx)",
                static_cast<unsigned long>(hr));
     }

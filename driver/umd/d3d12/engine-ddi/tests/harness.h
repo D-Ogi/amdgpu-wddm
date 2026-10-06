@@ -73,9 +73,11 @@ struct Device {
 };
 // A device context over env.engine (or over engine, when given) with the recorder hooks: EnginePrivateTest mode,
 // or RuntimeBacked with the given memory hooks (their shell argument is &device.shell).
+// adopt_memory comes last, after engine, so that the calls written before r5 keep their argument order.
 HRESULT open_device(Env& env, Device& device,
                     decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory = nullptr,
-                    decltype(engine_ddi::ShellHooks::free_memory) free_memory = nullptr, ID3D12Device* engine = nullptr);
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory = nullptr, ID3D12Device* engine = nullptr,
+                    decltype(engine_ddi::ShellHooks::adopt_memory) adopt_memory = nullptr);
 
 // Engine ABI 1.2 r4 V12: a second engine device from the same PRIVATE create info, with a device context over it
 // while first is live; the two report different VkInstances through GetVulkanHandles.
@@ -176,10 +178,28 @@ struct StubMemory {
     uint64_t last_layout_size = 0;
     uint32_t frees = 0;
     D3DKMT_HANDLE next_allocation = 0x40000000u;
+    // BD-075. refuse_shareable plays the D3D12 runtime's refusal of a shared resource's ordinary allocation shape:
+    // the real shell answers kShareRequired when its allocate callback returns E_INVALIDARG for a request that
+    // carried kMemoryShareable, and this stub answers it directly. share_required counts those answers.
+    bool refuse_shareable = false;
+    uint32_t share_required = 0;
+    D3DKMT_HANDLE last_allocation = 0;          // the handle the latest allocate or adopt handed back
+    // stub_adopt: the borrowed memory of an opened shared surface. The stub has no kernel allocation to share, so it
+    // allocates a stand-in of the asked size and type and reports the handle it was given, which is what the open
+    // path checks. Sharing of actual content is the lab's cell, not the harness's.
+    uint32_t adoptions = 0;
+    uint32_t adopt_refusals = 0;                // adopt requests the stub refused (refuse_adopt)
+    bool refuse_adopt = false;
+    D3DKMT_HANDLE last_adopt_handle = 0;        // the allocation the latest adopt request named
+    uint32_t last_adopt_flags = 0;
+    uint64_t last_adopt_byte_size = 0;
+    uint64_t last_adopt_alignment = 0;
+    uint32_t last_adopt_type_bits = 0;
 };
 bool load_stub(Env& env, StubMemory& m);
 HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* request, engine_ddi::ImportedMemory* out);
 HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory);
+HRESULT APIENTRY stub_adopt(void* shell, const engine_ddi::AdoptRequest* request, engine_ddi::ImportedMemory* out);
 
 // ---- Round trips ---------------------------------------------------------------------------------------------------
 void test_copy(Env& env, Device& device);
@@ -200,6 +220,9 @@ void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
 void test_small_placement(Env& env);
 void test_linear_primary(Env& env);
+// BD-075: the shared surface. The create's retry after the runtime's refusal, and the open of the record it wrote.
+void test_shared_create(Env& env);
+void test_shared_open(Env& env);
 void test_raytracing(Env& env);
 void test_raytracing_pipeline(Env& env);
 // GetCaps 1002 and the shell's memory architecture policy, on query_adapter_caps with the harness's create info.

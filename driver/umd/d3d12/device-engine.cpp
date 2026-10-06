@@ -191,6 +191,26 @@ class DeviceEngine final {
         ddi_trace_end("shellAllocateMemory",trace,hr);
         return hr;
     }
+    // BD-075: the open half. The span is what the lab's trace acceptance looks for, because the proof that an
+    // open borrowed its memory is the absence of an allocate callback inside this span.
+    static HRESULT APIENTRY adopt(void* shell,const engine_ddi::AdoptRequest* request,engine_ddi::ImportedMemory* memory) {
+        const auto trace=ddi_trace_begin("shellAdoptMemory");
+        auto& device=*static_cast<Device*>(shell);
+        const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->adopt(request,memory):E_UNEXPECTED;
+        if(trace && ddi_trace_enabled() && request && device.engine && device.engine->imports_){
+            const auto& r=device.engine->imports_->last_report();
+            amdgpu_wddm_log::print("{\"event\":\"shell-memory-adopt\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
+                "\"memory_type_bits\":%u,\"stage\":%u,\"memory_type\":%u,\"held\":%llu,\"address_alignment\":%llu,"
+                "\"address\":%llu,\"status\":\"%08lx\"}\n",
+                request->flags,static_cast<unsigned long long>(request->byte_size),
+                static_cast<unsigned long long>(request->alignment),request->memory_type_bits,
+                static_cast<unsigned>(r.stage),r.memory_type,static_cast<unsigned long long>(r.bytes),
+                static_cast<unsigned long long>(r.alignment),static_cast<unsigned long long>(r.address),
+                static_cast<unsigned long>(hr));
+        }
+        ddi_trace_end("shellAdoptMemory",trace,hr);
+        return hr;
+    }
     static HRESULT APIENTRY free(void* shell,const engine_ddi::ImportedMemory* memory) {
         const auto trace=ddi_trace_begin("shellFreeMemory");
         auto& device=*static_cast<Device*>(shell);
@@ -301,7 +321,8 @@ public:
         context.memory_mode=engine_ddi::MemoryMode::RuntimeBacked;
         context.ddi_interface=D3D12DDI_INTERFACE_VERSION_R8;context.ddi_version=D3D12DDI_BUILD_VERSION_0092<<16;
         context.engine_device=engine_;context.engine_funcs=&access_.functions;
-        context.hooks={sizeof(context.hooks),&device_,report_error,report_list_error,is_lost,bind_list,allocate,free};
+        context.hooks={sizeof(context.hooks),&device_,report_error,report_list_error,is_lost,bind_list,allocate,free,
+                       adopt};
         result=engine_ddi::create_device_context(&context,&context_);stage("DeviceContext",result);
         if(result!=S_OK)return result;
         // The engine-ddi half of the release gate (M15.8, F1): two-phase retirement, on unless the
