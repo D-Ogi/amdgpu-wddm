@@ -225,16 +225,73 @@ NAMED += TSC_REGISTERS
 # Keep the timing inputs observable through READ_REG for pre-deployment control.
 EXTRA_READS += [("DMU", name) for name in DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_V_BLANK_START_END"]]
 
+# ---- DP audio (dpaudio.c): step 0 observation and step 1 endpoint presence ----------------------------------------
+# Step 0, read only, and on the READ_REG list as well so that `bc250kmd_cli read <name>` shows each one: the codec's
+# root and function parameters, the audio straps, the DCCG audio DTOs, and for each of the two stream encoders the
+# DIG/DP/AFMT/HPD state that says which encoder drives the monitor and what the firmware left in its audio path.
+# Linux read the same registers on unit A at the same regcalc offsets (facts M820, evidence/linux/2026-10-07-L1007-
+# dp-audio); none of them is on the read-side-effect list of facts M25. Linux's dce_audio.c, dcn10_stream_encoder.c
+# and dcn10_link_encoder.c (v6.18) read or write every one of them.
+AUDIO_READ_REGISTERS = (
+    ["mmAZALIA_F0_CODEC_ROOT_PARAMETER_VENDOR_AND_DEVICE_ID", "mmAZALIA_F0_CODEC_ROOT_PARAMETER_REVISION_ID",
+     "mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_SUPPORTED_SIZE_RATES", "mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_STREAM_FORMATS",
+     "mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES", "mmDC_PINSTRAPS",
+     "mmDCCG_AUDIO_DTO_SOURCE", "mmDCCG_AUDIO_DTO0_PHASE", "mmDCCG_AUDIO_DTO0_MODULE",
+     "mmDCCG_AUDIO_DTO1_PHASE", "mmDCCG_AUDIO_DTO1_MODULE"] +
+    [f"mm{r.format(n=n)}" for n in range(2) for r in (
+        "DIG{n}_DIG_FE_CNTL", "DIG{n}_DIG_BE_CNTL", "DP{n}_DP_VID_STREAM_CNTL", "DP{n}_DP_SEC_CNTL",
+        "DP{n}_DP_SEC_AUD_N", "DP{n}_DP_SEC_AUD_M_READBACK", "DP{n}_DP_SEC_TIMESTAMP", "DIG{n}_AFMT_CNTL",
+        "DIG{n}_AFMT_AUDIO_SRC_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL2",
+        "DIG{n}_AFMT_STATUS", "HPD{n}_DC_HPD_INT_STATUS")])
+EXTRA_READS += [("DMU", name) for name in AUDIO_READ_REGISTERS]
+# The two Azalia endpoints' INDEX/DATA pairs (dce_audio.c:55-84 write_indirect_azalia_reg / read_indirect_azalia_reg).
+# Not on the READ_REG list: what DATA returns depends on what INDEX holds, so only dpaudio.c reaches them, and only
+# for the indices below. The INDEX write of an indirect READ selects a configuration register and changes nothing
+# else; it is on the audio write table for that purpose. A DATA write is admitted only for AUDIO_IX_WRITE.
+AUDIO_ENDPOINT_PAIRS = [(f"mmAZF0ENDPOINT{e}_AZALIA_F0_CODEC_ENDPOINT_INDEX",
+                         f"mmAZF0ENDPOINT{e}_AZALIA_F0_CODEC_ENDPOINT_DATA") for e in range(2)]
+# Step 1's two direct writes, both from dce_aud_hw_init (dce_audio.c:1260-1295): the rate capabilities and the
+# CLKSTOP/EPSS bits of the codec's function group. Both are on AUDIO_READ_REGISTERS, so each write is verifiable.
+AUDIO_DIRECT_WRITES = ["mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_SUPPORTED_SIZE_RATES",
+                       "mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES"]
+# Indirect indices, by their ENDPOINT0 name in dcn_2_0_1_offset.h (regcalc: `lookup ix...`); the ENDPOINT1 name must
+# carry the same number, which main() checks. Read: the configuration and status registers dpaudio.c observes. The
+# interrupt-status indices (AUDIO_ENABLED_INT_STATUS and its neighbours) are left out: whether a read clears them is
+# not known. Write: exactly the registers dce_aud_hw_init, dce_aud_az_configure, dce_aud_az_enable and
+# dce_aud_az_disable write. ACP_DATA, which dce_aud_az_configure also writes through dce_11_0_d.h (index 0x27), has no
+# index in the DCN 2.0.1 header, so it is on neither list (test_regcalc.py pins its absence).
+_AZ = "ixAZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_"
+AUDIO_IX_WRITE = ([_AZ + "CHANNEL_SPEAKER"] + [f"{_AZ}AUDIO_DESCRIPTOR{i}" for i in range(14)] +
+                  [_AZ + r for r in ("RESPONSE_LIPSYNC", "RESPONSE_HBR")] + [f"{_AZ}SINK_INFO{i}" for i in range(9)] +
+                  [_AZ + "HOT_PLUG_CONTROL"])
+AUDIO_IX_READ = AUDIO_IX_WRITE + [_AZ + r for r in ("UNSOLICITED_RESPONSE", "RESPONSE_PIN_SENSE", "WIDGET_CONTROL",
+                                                    "RESPONSE_CONFIGURATION_DEFAULT")]
+
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
 
 
-def offset(maps, ip, name):
+def regmap(maps, ip):
     if ip not in maps:
         header = next((h for i, h, _ in SPEC if i == ip), None) or EXTRA_HEADERS.get(ip)
         if header is None:
             sys.exit(f"no header known for IP {ip} (neither gen_probes.SPEC nor gen_regs.EXTRA_HEADERS)")
         maps[ip] = RegMap(ip=ip, reg_header=HDR_DIR / header)
-    return maps[ip].byte_offset(name)
+    return maps[ip]
+
+
+def offset(maps, ip, name):
+    return regmap(maps, ip).byte_offset(name)
+
+
+def az_index(maps, name):
+    """The indirect index of an ENDPOINT0 ix name; the ENDPOINT1 name must define the same number."""
+    rm = regmap(maps, "DMU")
+    other = name.replace("ixAZF0ENDPOINT0_", "ixAZF0ENDPOINT1_")
+    if name not in rm.ix or other not in rm.ix:
+        sys.exit(f"{name}: no such indirect index for both endpoints in the DMU header")
+    if rm.index(name) != rm.index(other):
+        sys.exit(f"{name}: endpoint 0 has 0x{rm.index(name):X}, endpoint 1 0x{rm.index(other):X}")
+    return rm.index(name)
 
 
 def main():
@@ -251,8 +308,20 @@ def main():
 
     out = ["// Generated by gen_regs.py from the vendored amdgpu headers through tools/regcalc. Do not edit.",
            "#pragma once", ""]
-    for ip, name in dict.fromkeys(NAMED + EXTRA_READS):
+    audio_pairs = [("DMU", reg) for pair in AUDIO_ENDPOINT_PAIRS for reg in pair]
+    for ip, name in dict.fromkeys(NAMED + EXTRA_READS + audio_pairs):
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
+    # DP audio: the Azalia endpoint's indirect indices (dpaudio.c), by name, from dcn_2_0_1_offset.h's ix defines.
+    out += ["", "// Azalia endpoint indirect indices (ixAZF0ENDPOINTn_AZALIA_F0_CODEC_PIN_CONTROL_*, the same for n = 0, 1):",
+            "// the value written into AZF0ENDPOINTn_AZALIA_F0_CODEC_ENDPOINT_INDEX, never a BAR5 offset."]
+    for name in AUDIO_IX_READ:
+        out.append(f"#define BC250_AZ_IX_{name[len(_AZ):]} 0x{az_index(maps, name):04X}ul")
+    # The READ_REG names that are not in tools/win/bc250rd/reglist.txt, for `bc250kmd_cli read <name>`: X(ip, name,
+    # offset), the name without its mm prefix. reglist.txt's own names stay with bc250rd.
+    out += ["", "// The named positive controls of the READ_REG list (EXTRA_READS), for bc250kmd_cli's `read <name>`.",
+            "#define BC250_REG_READ_NAMES(X) \\"]
+    out += [f"    X(\"{ip}\", \"{name[2:]}\", 0x{offset(maps, ip, name):05X}ul) \\" for ip, name in dict.fromkeys(EXTRA_READS)]
+    out += ["    /* end */", ""]
     # Not gated like the tables below: bc250kmd_escape.h's BC250_DCN_REG_COUNT (the escape struct's fixed array)
     # is checked against this one at compile time in dcn.c, which does not define BC250_REGS_WITH_TABLES.
     out.append(f"#define BC250_DCN_REG_INFO_COUNT {len(DCN_REGISTERS)}")
@@ -338,6 +407,45 @@ def main():
         if offset(maps, ip, name) not in reads and offset(maps, ip, name) not in sequenced and offset(maps, ip, name) not in dcn_allow:
             sys.exit(f"{ip}.{name} is used by the driver but neither on the read list, a sequence's table nor the DCN table")
     out += ["#endif", ""]
+
+    # DP audio: dpaudio.c's own tables, in a block of their own so that only dpaudio.c compiles them (mmio.c's
+    # BC250_REGS_WITH_TABLES block above is unchanged by this feature).
+    audio_read = sorted({offset(maps, "DMU", n) for n in AUDIO_READ_REGISTERS} |
+                        {offset(maps, ip, n) for ip, n in audio_pairs})
+    audio_write = sorted({offset(maps, ip, n) for ip, n in audio_pairs} |
+                         {offset(maps, "DMU", n) for n in AUDIO_DIRECT_WRITES})
+    if len(audio_read) != len(AUDIO_READ_REGISTERS) + len(audio_pairs):
+        sys.exit("AUDIO_READ_REGISTERS and the endpoint pairs have two names for one offset")
+    for off in audio_write:
+        if off not in audio_read:
+            sys.exit(f"audio write: 0x{off:05X} is not on the audio read table - a write must be verifiable")
+    if audio_read[-1] >= BAR5_LENGTH:
+        sys.exit(f"audio: 0x{audio_read[-1]:X} is beyond BAR5")
+    ix_read = sorted({az_index(maps, n) for n in AUDIO_IX_READ})
+    ix_write = sorted({az_index(maps, n) for n in AUDIO_IX_WRITE})
+    if len(ix_read) != len(AUDIO_IX_READ) or len(ix_write) != len(AUDIO_IX_WRITE):
+        sys.exit("AUDIO_IX_READ or AUDIO_IX_WRITE has two names for one index")
+    if not set(ix_write) <= set(ix_read):
+        sys.exit("an indirect index is writable but not readable: a write must be verifiable")
+    out += ["// DP audio (dpaudio.c): direct reads (AUDIO_READ_REGISTERS and the endpoint INDEX/DATA pairs), direct writes",
+            "// (the pairs and dce_aud_hw_init's two function-group registers), and the indirect indices dpaudio.c may",
+            "// read and write through a pair. Sorted, unique. For dpaudio.c alone.",
+            "#ifdef BC250_REGS_WITH_AUDIO_TABLES",
+            f"#define BC250_MMIO_AUDIO_ALLOW_COUNT {len(audio_read)}",
+            "static const unsigned long g_MmioAudioAllow[BC250_MMIO_AUDIO_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in audio_read[i:i + 10]) + "," for i in range(0, len(audio_read), 10)]
+    out += ["};", f"#define BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT {len(audio_write)}",
+            "static const unsigned long g_MmioAudioWriteAllow[BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in audio_write) + ","]
+    out += ["};", f"#define BC250_AZ_IX_READ_ALLOW_COUNT {len(ix_read)}",
+            "static const unsigned long g_AzIxReadAllow[BC250_AZ_IX_READ_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:04X}" for o in ix_read[i:i + 10]) + "," for i in range(0, len(ix_read), 10)]
+    out += ["};", f"#define BC250_AZ_IX_WRITE_ALLOW_COUNT {len(ix_write)}",
+            "static const unsigned long g_AzIxWriteAllow[BC250_AZ_IX_WRITE_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:04X}" for o in ix_write[i:i + 10]) + "," for i in range(0, len(ix_write), 10)]
+    out += ["};", "#endif", ""]
+    summary.append(f"{len(audio_read)} audio reads, {len(audio_write)} audio writes, "
+                   f"{len(ix_read)}/{len(ix_write)} Azalia indices read/write")
     (HERE / "regs.generated.h").write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes)
           + "; " + ", ".join(summary))

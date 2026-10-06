@@ -17,6 +17,7 @@
 //   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.213)
 //                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
+//   bc250kmd_cli dpaudio [state]      the DP audio check table (step 0 reads) and the record of the last start
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
 // private escape. That failure is a measurement too, so every step prints its own NTSTATUS instead of one
@@ -47,6 +48,8 @@
 #include <wchar.h>
 
 #include "../../../driver/kmd/bc250kmd_escape.h"     // shared with the driver, never copied
+#include "../../../driver/kmd/regs.generated.h"      // `read <name>`: the named READ_REG offsets, from gen_regs.py
+#include "../../../third_party/linux-amdgpu/dcn_2_0_1_sh_mask.h"  // `dpaudio`: field masks to decode the reply
 
 #define BC250_DEFAULT_HWID L"PCI\\VEN_1002&DEV_13FE"
 #define BC250_SERVICE_KEY  L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd"
@@ -1356,6 +1359,59 @@ static int VideoMemory(const WCHAR *wantedId)
     return 0;
 }
 
+// `read <name>`: a register of the driver's named READ_REG list (gen_regs.py EXTRA_READS, BC250_REG_READ_NAMES), so
+// that an operator never types an offset. Accepted forms: NAME, mmNAME, IP.NAME and IP:NAME, any case. A text that
+// is a hex number (with or without 0x) is an offset, as before.
+static const struct { const char *Ip, *Name; unsigned long Offset; } g_RegNames[] = {
+#define BC250_REG_NAME_ROW(ip, name, offset) { ip, name, offset },
+    BC250_REG_READ_NAMES(BC250_REG_NAME_ROW)
+#undef BC250_REG_NAME_ROW
+};
+
+static int IsHexText(const WCHAR *text)
+{
+    if (text[0] == L'0' && (text[1] == L'x' || text[1] == L'X')) text += 2;
+    if (!*text) return 0;
+    for (; *text; text++) if (!iswxdigit(*text)) return 0;
+    return 1;
+}
+
+static int RegisterByName(const WCHAR *text, unsigned long *offset)
+{
+    char name[128], ip[16] = "";
+    const char *bare;
+    size_t i, n = wcslen(text);
+    char *dot;
+
+    if (n == 0 || n >= sizeof(name)) return 0;
+    for (i = 0; i <= n; i++) {
+        if (text[i] > 0x7E) return 0;
+        name[i] = (char)text[i];
+    }
+    bare = name;
+    dot = strpbrk(name, ".:");
+    if (dot) {
+        if ((size_t)(dot - name) >= sizeof(ip)) return 0;
+        memcpy(ip, name, (size_t)(dot - name));
+        ip[dot - name] = 0;
+        bare = dot + 1;
+    }
+    if ((bare[0] == 'm' || bare[0] == 'M') && (bare[1] == 'm' || bare[1] == 'M')) {
+        // mmNAME is regcalc's spelling; a register whose own name starts with MM keeps its prefix (the second try).
+        for (i = 0; i < sizeof(g_RegNames) / sizeof(g_RegNames[0]); i++)
+            if (!_stricmp(g_RegNames[i].Name, bare + 2) && (!ip[0] || !_stricmp(g_RegNames[i].Ip, ip))) {
+                *offset = g_RegNames[i].Offset;
+                return 1;
+            }
+    }
+    for (i = 0; i < sizeof(g_RegNames) / sizeof(g_RegNames[0]); i++)
+        if (!_stricmp(g_RegNames[i].Name, bare) && (!ip[0] || !_stricmp(g_RegNames[i].Ip, ip))) {
+            *offset = g_RegNames[i].Offset;
+            return 1;
+        }
+    return 0;
+}
+
 static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
 {
     BC250_ESCAPE data;
@@ -1365,8 +1421,17 @@ static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
     memset(&data, 0, sizeof(data));
     data.Magic = BC250_ESCAPE_MAGIC;
     data.Command = write ? BC250_ESCAPE_WRITE_REG : BC250_ESCAPE_READ_REG;
-    data.RegOffset = wcstoul(offsetText, &end, 16);
-    if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    if (!write && !IsHexText(offsetText)) {
+        if (!RegisterByName(offsetText, &data.RegOffset)) {
+            fprintf(stderr, "%ls is neither a hex offset nor a name on the driver's named read list"
+                            " (gen_regs.py EXTRA_READS)\n", offsetText);
+            return 2;
+        }
+        printf("%ls = 0x%05lX\n", offsetText, data.RegOffset);
+    } else {
+        data.RegOffset = wcstoul(offsetText, &end, 16);
+        if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    }
     if (write) {
         data.RegValue = wcstoul(valueText, &end, 16);
         if (*end) { fprintf(stderr, "value %ls is not a hex number\n", valueText); return 2; }
@@ -3324,6 +3389,195 @@ static int Interop(void)
 
 // ---- ---------------------------------------------------------------------------------------------------------
 
+// ---- dpaudio: DisplayPort audio, steps 0 and 1 (BC250_ESCAPE_RUN_DPAUDIO, driver/kmd/dpaudio.c) -------------------
+//
+// "bc250kmd_cli dpaudio" reads the step 0 registers now (OBSERVE) and prints the check table, the decision a start
+// would take over them (the driver's own Bc250DpAudioDecide, not a copy of it here), the raw slots and the record
+// of the last start. "bc250kmd_cli dpaudio state" prints the record alone and reads no register. Expected values
+// are unit A's under Linux (facts M819, M820, evidence/linux/2026-10-07-L1007-dp-audio).
+
+static const char *const g_DpAudioSlot[] = {
+#define BC250_DPAUDIO_SLOT_NAME(n) #n,
+    BC250_DPAUDIO_OBS_LIST(BC250_DPAUDIO_SLOT_NAME)
+#undef BC250_DPAUDIO_SLOT_NAME
+};
+static const char *const g_DpAudioReason[] = {
+#define BC250_DPAUDIO_REASON_NAME(n, t) t,
+    BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_NAME)
+#undef BC250_DPAUDIO_REASON_NAME
+};
+static const char *const g_DpAudioState[] = { "idle", "enabled", "refused", "failed", "stopped", "path-off" };
+
+static const char *DpAudioReasonText(unsigned long reason)
+{
+    return reason < BC250_DPAUDIO_REASON_COUNT ? g_DpAudioReason[reason] : "unknown reason";
+}
+
+static void DpAudioNotes(unsigned long notes, char *text, size_t size)
+{
+    _snprintf_s(text, size, _TRUNCATE, "%s%s%s%s%s", notes ? "" : "none",
+                (notes & BC250_DPAUDIO_NOTE_HPD_LOW) ? " hpd-sense-low" : "",
+                (notes & BC250_DPAUDIO_NOTE_INHERITED) ? " audio-enabled-inherited" : "",
+                (notes & BC250_DPAUDIO_NOTE_REVISION) ? " codec-revision-differs" : "",
+                (notes & BC250_DPAUDIO_NOTE_UNSOLICITED) ? " unsolicited-enabled" : "");
+}
+
+#define DPA(slot) d->Regs[BC250_DPAUDIO_OBS_##slot]
+#define DPA_OK(slot) ((d->ValidMask >> BC250_DPAUDIO_OBS_##slot) & 1ull)
+#define FIELD(v, mask, shift) (((v) & (mask)) >> (shift))
+
+static void DpAudioCheck(const char *what, int valid, unsigned long value, const char *expected, int pass, const char *detail)
+{
+    if (!valid) { printf("  %-28s %-10s %-12s NOT READ\n", what, "-", expected); return; }
+    printf("  %-28s 0x%08lX %-12s %-4s %s\n", what, value, expected, pass ? "ok" : "DIFF", detail);
+}
+
+static void DpAudioPrintObserve(const BC250_ESCAPE_DPAUDIO *d)
+{
+    char detail[160], notes[96];
+    unsigned long n, read = 0;
+
+    for (n = 0; n < BC250_DPAUDIO_OBS_COUNT; n++) read += (unsigned long)((d->ValidMask >> n) & 1ull);
+    printf("check table (now / unit A under Linux, M819 M820):\n");
+    DpAudioCheck("codec vendor/device", DPA_OK(CODEC_VENDOR_DEVICE), DPA(CODEC_VENDOR_DEVICE), "0x1002AA01",
+                 DPA(CODEC_VENDOR_DEVICE) == 0x1002AA01ul, "start refuses on a difference");
+    DpAudioCheck("codec revision", DPA_OK(CODEC_REVISION), DPA(CODEC_REVISION), "0x00100700",
+                 DPA(CODEC_REVISION) == 0x00100700ul, "a note only");
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DC_PINSTRAPS_AUDIO %lu (0 = no audio endpoint)",
+                FIELD(DPA(DC_PINSTRAPS), DC_PINSTRAPS__DC_PINSTRAPS_AUDIO_MASK, DC_PINSTRAPS__DC_PINSTRAPS_AUDIO__SHIFT));
+    DpAudioCheck("DC_PINSTRAPS", DPA_OK(DC_PINSTRAPS), DPA(DC_PINSTRAPS), "AUDIO != 0",
+                 (DPA(DC_PINSTRAPS) & DC_PINSTRAPS__DC_PINSTRAPS_AUDIO_MASK) != 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DP_VID_STREAM_ENABLE %lu",
+                FIELD(DPA(DP0_VID_STREAM_CNTL), DP0_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK,
+                      DP0_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE__SHIFT));
+    DpAudioCheck("DP0_VID_STREAM_CNTL", DPA_OK(DP0_VID_STREAM_CNTL), DPA(DP0_VID_STREAM_CNTL), "enable 1",
+                 (DPA(DP0_VID_STREAM_CNTL) & DP0_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK) != 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DP_VID_STREAM_ENABLE %lu",
+                FIELD(DPA(DP1_VID_STREAM_CNTL), DP1_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK,
+                      DP1_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE__SHIFT));
+    DpAudioCheck("DP1_VID_STREAM_CNTL", DPA_OK(DP1_VID_STREAM_CNTL), DPA(DP1_VID_STREAM_CNTL), "enable 0",
+                 (DPA(DP1_VID_STREAM_CNTL) & DP1_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK) == 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "FE_SOURCE_SELECT 0x%02lX, DIG_MODE %lu (0 = DP SST)",
+                FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT_MASK, DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT),
+                FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_MODE_MASK, DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT));
+    DpAudioCheck("DIG0_BE_CNTL", DPA_OK(DIG0_BE_CNTL), DPA(DIG0_BE_CNTL), "FE 1 mode 0",
+                 FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT_MASK, DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT) == 1 &&
+                 FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_MODE_MASK, DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT) == 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "FE_SOURCE_SELECT 0x%02lX, DIG_MODE %lu",
+                FIELD(DPA(DIG1_BE_CNTL), DIG1_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT_MASK, DIG1_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT),
+                FIELD(DPA(DIG1_BE_CNTL), DIG1_DIG_BE_CNTL__DIG_MODE_MASK, DIG1_DIG_BE_CNTL__DIG_MODE__SHIFT));
+    DpAudioCheck("DIG1_BE_CNTL", DPA_OK(DIG1_BE_CNTL), DPA(DIG1_BE_CNTL), "(unused)", 1, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DC_HPD_SENSE %lu (a note only)",
+                FIELD(DPA(HPD0_INT_STATUS), HPD0_DC_HPD_INT_STATUS__DC_HPD_SENSE_MASK, HPD0_DC_HPD_INT_STATUS__DC_HPD_SENSE__SHIFT));
+    DpAudioCheck("HPD0_DC_HPD_INT_STATUS", DPA_OK(HPD0_INT_STATUS), DPA(HPD0_INT_STATUS), "sense 1",
+                 (DPA(HPD0_INT_STATUS) & HPD0_DC_HPD_INT_STATUS__DC_HPD_SENSE_MASK) != 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DC_HPD_SENSE %lu",
+                FIELD(DPA(HPD1_INT_STATUS), HPD1_DC_HPD_INT_STATUS__DC_HPD_SENSE_MASK, HPD1_DC_HPD_INT_STATUS__DC_HPD_SENSE__SHIFT));
+    DpAudioCheck("HPD1_DC_HPD_INT_STATUS", DPA_OK(HPD1_INT_STATUS), DPA(HPD1_INT_STATUS), "(unused)", 1, detail);
+    for (n = 0; n < 2; n++) {
+        unsigned long ep = n ? BC250_DPAUDIO_OBS_EP1_CONFIG_DEFAULT : BC250_DPAUDIO_OBS_EP0_CONFIG_DEFAULT;
+        unsigned long hp = n ? BC250_DPAUDIO_OBS_EP1_HOT_PLUG_CONTROL : BC250_DPAUDIO_OBS_EP0_HOT_PLUG_CONTROL;
+        char what[40];
+
+        _snprintf_s(what, sizeof(what), _TRUNCATE, "endpoint %lu CONFIG_DEFAULT", n);
+        DpAudioCheck(what, (int)((d->ValidMask >> ep) & 1ull), d->Regs[ep], "0x185600F0", d->Regs[ep] == 0x185600F0ul,
+                     "start refuses on a difference");
+        _snprintf_s(what, sizeof(what), _TRUNCATE, "endpoint %lu HOT_PLUG_CONTROL", n);
+        _snprintf_s(detail, sizeof(detail), _TRUNCATE, "AUDIO_ENABLED %lu, CLOCK_GATING_DISABLE %lu",
+                    FIELD(d->Regs[hp], AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__AUDIO_ENABLED_MASK,
+                          AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__AUDIO_ENABLED__SHIFT),
+                    FIELD(d->Regs[hp], AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__CLOCK_GATING_DISABLE_MASK,
+                          AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__CLOCK_GATING_DISABLE__SHIFT));
+        DpAudioCheck(what, (int)((d->ValidMask >> hp) & 1ull), d->Regs[hp], "(state)", 1, detail);
+    }
+    printf("stream half (step 2 writes these; read only here):\n");
+    for (n = 0; n < 2; n++) {
+        unsigned long sec = n ? DPA(DP1_SEC_CNTL) : DPA(DP0_SEC_CNTL);
+        unsigned long afmt = n ? DPA(DIG1_AFMT_CNTL) : DPA(DIG0_AFMT_CNTL);
+        unsigned long pkt = n ? DPA(DIG1_AFMT_AUDIO_PACKET_CONTROL) : DPA(DIG0_AFMT_AUDIO_PACKET_CONTROL);
+        printf("  DP%lu_SEC_CNTL 0x%08lX: stream %lu asp %lu atp %lu aip %lu; AUD_N 0x%08lX M_READBACK 0x%08lX\n", n, sec,
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_STREAM_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_STREAM_ENABLE__SHIFT),
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_ASP_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_ASP_ENABLE__SHIFT),
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_ATP_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_ATP_ENABLE__SHIFT),
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_AIP_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_AIP_ENABLE__SHIFT),
+               n ? DPA(DP1_SEC_AUD_N) : DPA(DP0_SEC_AUD_N), n ? DPA(DP1_SEC_AUD_M_READBACK) : DPA(DP0_SEC_AUD_M_READBACK));
+        printf("  DIG%lu_AFMT_CNTL 0x%08lX: audio clock en %lu on %lu; SRC_CONTROL 0x%08lX PACKET_CONTROL 0x%08lX"
+               " (sample send %lu)\n", n, afmt,
+               FIELD(afmt, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN_MASK, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN__SHIFT),
+               FIELD(afmt, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_ON_MASK, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_ON__SHIFT),
+               n ? DPA(DIG1_AFMT_AUDIO_SRC_CONTROL) : DPA(DIG0_AFMT_AUDIO_SRC_CONTROL), pkt,
+               FIELD(pkt, DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND_MASK,
+                     DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND__SHIFT));
+    }
+    printf("  DCCG_AUDIO_DTO_SOURCE 0x%08lX (DTO_SEL %lu); DTO0 %lu/%lu; DTO1 %lu/%lu (Linux DP: DTO1 module 5988740)\n",
+           DPA(DTO_SOURCE), FIELD(DPA(DTO_SOURCE), DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL_MASK,
+                                  DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL__SHIFT),
+           DPA(DTO0_PHASE), DPA(DTO0_MODULE), DPA(DTO1_PHASE), DPA(DTO1_MODULE));
+    DpAudioNotes(d->ObsNotes, notes, sizeof(notes));
+    printf("decision now (the driver's Bc250DpAudioDecide over these reads): %s; stream DP%lu, endpoint %lu, notes %s\n",
+           DpAudioReasonText(d->ObsReason), d->ObsStream, d->ObsEndpoint, notes);
+    printf("raw slots (%lu of %u read):\n", read, (unsigned)BC250_DPAUDIO_OBS_COUNT);
+    for (n = 0; n < BC250_DPAUDIO_OBS_COUNT; n++) {
+        if ((d->ValidMask >> n) & 1ull) printf("  R %-34s %08lX\n", g_DpAudioSlot[n], d->Regs[n]);
+        else printf("  R %-34s not read\n", g_DpAudioSlot[n]);
+    }
+}
+
+static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d)
+{
+    char notes[96], sw[2][16];
+    unsigned long i;
+    const unsigned long sws[2] = { d->SwitchEnable, d->SwitchEndpoint };
+
+    for (i = 0; i < 2; i++) {
+        if (sws[i] == BC250_DPAUDIO_NO_SWITCH) strcpy_s(sw[i], sizeof(sw[i]), "not read yet");
+        else _snprintf_s(sw[i], sizeof(sw[i]), _TRUNCATE, "%lu", sws[i]);
+    }
+    DpAudioNotes(d->Notes, notes, sizeof(notes));
+    printf("record of the last start:\n");
+    printf("  state %s, reason: %s\n", d->State < sizeof(g_DpAudioState) / sizeof(g_DpAudioState[0]) ?
+           g_DpAudioState[d->State] : "?", DpAudioReasonText(d->Reason));
+    printf("  stream DP%lu, endpoint %lu, notes %s\n", d->Stream, d->Endpoint, notes);
+    printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s (default 1)\n", sw[0], sw[1]);
+    printf("  codec 0x%08lX, config default 0x%08lX, HOT_PLUG_CONTROL 0x%08lX -> 0x%08lX, last NTSTATUS 0x%08lX\n",
+           d->CodecId, d->ConfigDefault, d->HotPlugBefore, d->HotPlugAfter, d->LastStatus);
+    printf("  starts %lu resumes %lu stops %lu refusals %lu failures %lu path-on %lu path-off %lu\n",
+           d->Starts, d->Resumes, d->Stops, d->Refusals, d->Failures, d->PathOn, d->PathOff);
+    printf("  accesses: indirect reads %lu, indirect writes %lu, direct writes %lu, refused by the tables %lu\n",
+           d->IndirectReads, d->IndirectWrites, d->DirectWrites, d->AccessRefusals);
+}
+
+static int DpAudio(int argc, WCHAR **argv)
+{
+    static BC250_ESCAPE_DPAUDIO d;
+    unsigned long op = BC250_DPAUDIO_OP_OBSERVE;
+    NTSTATUS status;
+
+    if (argc == 3 && !_wcsicmp(argv[2], L"state")) op = BC250_DPAUDIO_OP_STATE;
+    else if (argc != 2) { fprintf(stderr, "usage: bc250kmd_cli dpaudio [state]\n"); return 2; }
+    memset(&d, 0, sizeof(d));
+    d.Magic = BC250_ESCAPE_MAGIC;
+    d.Command = BC250_ESCAPE_RUN_DPAUDIO;
+    d.AbiVersion = BC250_DPAUDIO_ABI;
+    d.Op = op;
+    if (SendEscape(BC250_DEFAULT_HWID, &d, sizeof(d), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (d.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (d.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND || d.Command != BC250_ESCAPE_RUN_DPAUDIO) {
+        printf("refused: this driver build has no DP audio command\n");
+        return 3;
+    }
+    printf("dpaudio %s: %s, NTSTATUS 0x%08lX %s, driver 0x%08lX, mmio %s\n", op == BC250_DPAUDIO_OP_STATE ? "state" : "observe",
+           d.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", d.NtStatus, StatusName((NTSTATUS)d.NtStatus),
+           d.Version, (d.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "not mapped (EnableMmio)");
+    if (op == BC250_DPAUDIO_OP_OBSERVE && d.ValidMask) DpAudioPrintObserve(&d);
+    if (d.AbiVersion == BC250_DPAUDIO_ABI) DpAudioPrintState(&d);
+    return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+#undef DPA
+#undef DPA_OK
+#undef FIELD
+
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
@@ -3332,7 +3586,8 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
                         "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
-                        "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
+                        "       bc250kmd_cli read <hex offset | name> | write <hex offset> <hex value>\n"
+                        "       bc250kmd_cli dpaudio [state]              (DP audio check table and record, dpaudio.c)\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
                         "       bc250kmd_cli vtable <hex offset>          (one page table page, nonzero entries)\n"
@@ -3383,6 +3638,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     if (!_wcsicmp(argv[1], L"dcn")) return Dcn();
+    if (!_wcsicmp(argv[1], L"dpaudio") && argc <= 3) return DpAudio(argc, argv);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3 && !_wcsicmp(argv[2], L"restore")) return DcnFlip(NULL, NULL, NULL, 1);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3) return DcnFlip(argv[2], NULL, NULL, 0);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);

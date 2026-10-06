@@ -53,6 +53,10 @@ KEY_REGISTERS = [
 _SEG_RE = re.compile(r"^#define\s+(\w+?)_BASE__INST(\d)_SEG(\d)\s+(0x[0-9A-Fa-f]+|\d+)\s*$")
 _REG_RE = re.compile(r"^#define\s+(mm\w+)\s+(0x[0-9A-Fa-f]+)\s*$")
 _IDX_RE = re.compile(r"^#define\s+(mm\w+)_BASE_IDX\s+(\d+)\s*$")
+# Indirect indices: AMD's ix<NAME> defines, an index into a block's own INDEX/DATA register pair (for example the
+# Azalia endpoint's AZF0ENDPOINTn_AZALIA_F0_CODEC_ENDPOINT_INDEX/_DATA in dcn_2_0_1_offset.h). They are not BAR5
+# offsets and have no segment: the value is what the driver writes into the INDEX register.
+_IX_RE = re.compile(r"^#define\s+(ix\w+)\s+(0x[0-9A-Fa-f]+)\s*$")
 
 
 def parse_ip_bases(path):
@@ -80,11 +84,26 @@ def parse_registers(path):
     return {n: (o, idxs[n]) for n, o in offs.items() if n in idxs}
 
 
+def parse_indices(path):
+    """{ixNAME: index} from *_offset.h: the indirect register indices the header defines (may be empty)"""
+    found = {}
+    for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+        m = _IX_RE.match(line)
+        if m:
+            found[m.group(1)] = int(m.group(2), 16)
+    return found
+
+
 class RegMap:
     def __init__(self, ip="GC", inst=0, ip_header=DEFAULT_IP_HEADER, reg_header=DEFAULT_REG_HEADER):
         self.ip, self.inst = ip, inst
         self.segs = parse_ip_bases(ip_header)[ip][inst]
         self.regs = parse_registers(reg_header)
+        self.ix = parse_indices(reg_header)
+
+    def index(self, name):
+        """The indirect index of an ix name: what goes into the block's INDEX register, never a BAR5 offset."""
+        return self.ix[name]
 
     def byte_offset(self, name):
         mm, idx = self.regs[name]
@@ -99,13 +118,20 @@ class RegMap:
 
 
 def _norm(name):
-    return name if name.startswith("mm") else "mm" + name
+    return name if name.startswith(("mm", "ix")) else "mm" + name
 
 
 def cmd_lookup(rm, names):
     rc = 0
     for raw in names:
         name = _norm(raw)
+        if name.startswith("ix"):
+            if name not in rm.ix:
+                print(f"{name}: NOT FOUND in header (no such indirect index for {rm.ip})")
+                rc = 1
+                continue
+            print(f"{name}: indirect index 0x{rm.ix[name]:04X} (written to the block's INDEX register, not a BAR5 offset)")
+            continue
         if name not in rm.regs:
             print(f"{name}: NOT FOUND in header (this register does not exist for {rm.ip})")
             rc = 1
@@ -128,6 +154,8 @@ def cmd_grep(rm, pattern):
     rx = re.compile(pattern, re.IGNORECASE)
     for name in sorted(n for n in rm.regs if rx.search(n)):
         print(f"{name}: BAR5+0x{rm.byte_offset(name):05X}")
+    for name in sorted(n for n in rm.ix if rx.search(n)):
+        print(f"{name}: indirect index 0x{rm.ix[name]:04X}")
     return 0
 
 

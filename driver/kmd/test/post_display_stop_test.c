@@ -93,6 +93,10 @@ static void HwmonStop(int*h){(void)h;CHECK(model.dpm==1 && model.smu==0);hwmonSt
 #define BC250_FAN_REASON_STOP 2u
 static unsigned fanStops;
 static void FanStop(BC250_DEVICE*d,unsigned r){(void)d;CHECK(r==BC250_FAN_REASON_STOP && model.dpm==1 && model.smu==0 && hwmonStops==fanStops);fanStops++;}
+static unsigned dpaudioStops;
+/* DP audio: AUDIO_ENABLED goes to 0 while BAR5 and the display block are still ours, before the SMU owner goes
+   offline and before WddmStop/DcnStop restore the surface. */
+static void DpAudioStop(BC250_DEVICE*d){(void)d;CHECK(model.dpm==1 && model.smu==0 && model.restores==0);dpaudioStops++;}
 static void SmuOwnerStop(int*s){(void)s;model.smu++;}
 static unsigned interopStops;
 /* KMD181: the interop session marker goes after WddmStop (DDI devices are gone), registry only. */
@@ -129,7 +133,7 @@ int main(void)
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
     /* Three pool blocks: the one object, the object index's buckets (KMD 0.7.192) and the adapter state. */
     CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1 && cpuStops==1);
-    CHECK(hwmonStops==1 && fanStops==1);
+    CHECK(hwmonStops==1 && fanStops==1 && dpaudioStops==1);
     /* The list owns every object, the index only points into it: the objects go first, the index after the last
        of them, the adapter state last of all (WddmStop's drain). */
     CHECK(freedOrder[0]==&o && freedOrder[1]==buckets && freedOrder[2]==&w);
