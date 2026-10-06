@@ -35,7 +35,18 @@ Write-Info "install root: $root"
 $lab = @(Get-LabInstallPaths)
 if ($lab.Count -and -not $Force) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine (-Force removes the release anyway)"; exit 2 }
 if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', ')) is present; -Force given: the release is removed, those folders stay" }
-if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) { Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0 }
+if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) {
+    # No installation, but an earlier release (or an uninstaller older than this one) can have left per-user data.
+    $userData = @(Get-OurUserDataDirs)
+    if ($userData.Count) {
+        Write-Step 'Per-user data'
+        Invoke-Change "remove the per-user data an earlier release left (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
+            foreach ($d in $userData) { Remove-PathOrSchedule $d }
+        } | Out-Null
+        Write-Host 'No amdgpu-wddm installation found; the per-user data of an earlier release is removed.' -ForegroundColor Green; exit 0
+    }
+    Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0
+}
 if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
 
 Write-Step 'Scheduled task, RunOnce entry, shortcut'
