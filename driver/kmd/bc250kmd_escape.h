@@ -38,7 +38,19 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
-#define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
+#define BC250_KMD_VERSION 0x000700D6u       // revision 214 (INF 0.7.214.1, on 213.1): the VMID pool
+                                            // (kmd/vmid-pool, gfx.c, vmid_pool.h,
+                                            // docs/design/gfx-submit-root-serialization.md). Each page-table
+                                            // root gets a VMID of its own from VMIDs 1 and 3..15, so a job of
+                                            // another process no longer waits for the ring to drain. No escape
+                                            // grows or changes its layout. One field changes its meaning, and
+                                            // that is why this word moves: Valid of a BC250_PJ_GFX_SUBMIT
+                                            // journal record is the VMID of the IB from this revision, and 0 in
+                                            // the records of earlier drivers, whose WDDM jobs all ran at VMID 1.
+                                            // EnableVmidPool 1 is the default (INF and release installer), 0 is
+                                            // its bisect switch, and a start with it at 0 behaves as 0.7.213.1.
+                                            //
+                                            // Revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
                                             // the respin. Seven revisions were written apart on seven branches,
                                             // each taking the next free number for itself: 209 (the DirectFlip
                                             // handshake), 208 again (the fan reader), 210 twice (the ring-gap
