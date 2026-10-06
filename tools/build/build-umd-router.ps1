@@ -1,6 +1,11 @@
-# Builds bc250d3d_router.dll (driver/umd/router: the desktop route and the AppRouter application policy) and its
-# host-test binaries: five UMD doubles (fake-*.dll) and test-router.exe. test-umd-router.ps1 runs the host gate on
-# the output.
+# Builds bc250d3d_router.dll (driver/umd/router: the desktop route, the AppRouter application policy and the
+# M15.14 D3D11_1 front) and its host-test binaries: five UMD doubles (fake-*.dll) and test-router.exe.
+# test-umd-router.ps1 runs the host gate on the output.
+#
+# The front (front-adapter.cpp, front-device.cpp, front-dxgi.cpp) is compiled into the DLL and into
+# test-router.exe, so the host gate drives the production table fills and the production DirectFlip rule and not
+# a copy of them. The DLL half is built without /EHsc and without /std:c++17, as the router always was: the front
+# must stay C++14-safe and must not need exceptions.
 #
 #   pwsh tools\build\build-umd-router.ps1 [-OutputDir <dir>] [-VsInstall <dir>]
 #
@@ -23,6 +28,9 @@ $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0
 if (-not (Test-Path -LiteralPath "$wdk\um\d3d10umddi.h")) { throw "WDK headers not found under $wdk" }
 $obj = Join-Path $OutputDir 'obj'
 New-Item -ItemType Directory -Force $obj | Out-Null
+# The host gate's objects go in their own directory: the front sources are compiled twice, once for the DLL and
+# once for the exe, with different switches, and one /Fo directory for both would mix the two.
+New-Item -ItemType Directory -Force (Join-Path $obj 'host') | Out-Null
 
 $saved = Save-ProcessEnvironment
 try {
@@ -32,7 +40,8 @@ try {
     Write-Host "Visual Studio: $install, cl $(Get-ClVersion)"
     Push-Location $OutputDir
     try {
-        & cl.exe /nologo /O2 /MD /W4 /WX /Zi /LD "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" "/Fe:$OutputDir\bc250d3d_router.dll" /link /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
+        $front = @("$src\front-adapter.cpp", "$src\front-device.cpp", "$src\front-dxgi.cpp")
+        & cl.exe /nologo /O2 /MD /W4 /WX /Zi /LD "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front "/Fe:$OutputDir\bc250d3d_router.dll" /link /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
         if ($LASTEXITCODE -ne 0) { throw 'router build failed' }
         # The doubles: one source, a tag per role (cpu, hosted, app), one without OpenAdapter10_2, one that fails.
         $doubles = @(
@@ -46,7 +55,7 @@ try {
             & cl.exe /nologo /O2 /MD /W4 /WX /LD @defines "/Fo$obj\$name.obj" "$src\tests\fake-umd.cpp" "/Fe:$OutputDir\$name.dll"
             if ($LASTEXITCODE -ne 0) { throw "$name build failed" }
         }
-        & cl.exe /nologo /O2 /MD /W4 /WX /EHsc /std:c++17 "/I$contract" "/Fo$obj\test-router.obj" "$src\tests\test-router.cpp" "/Fe:$OutputDir\test-router.exe"
+        & cl.exe /nologo /O2 /MD /W4 /WX /EHsc /std:c++17 "/I$contract" "/Fo$obj\host\" "$src\tests\test-router.cpp" @front "/Fe:$OutputDir\test-router.exe"
         if ($LASTEXITCODE -ne 0) { throw 'test-router build failed' }
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }
