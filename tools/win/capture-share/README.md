@@ -76,6 +76,14 @@ milliseconds, and a side that got ahead of its synchronisation makes the run a m
 `mismatch` with `gate=violated`. A run of the `f` cells or of the `s` cells with `--sync fence` that passes with
 this switch proves that the gate measures nothing.
 
+### The format of the shared texture
+
+`--format` names it: `bgra8` (the default), `rgba8`, `bgra8-srgb` or `rgba8-srgb`. The two sRGB values ask for a
+view of the same storage, which the shared-surface wire format admits as its sibling format. BD-075 added them,
+because the D3D12 driver matched the storage format alone and refused the view. No cell could reach that refusal
+while `--format` had two values. The image oracles compare the bytes, so an sRGB run compares the same
+numbers as its linear twin.
+
 ## Build
 
 ```powershell
@@ -93,13 +101,14 @@ projection that the `wgc` cell needs. The compiler comes from the installed Visu
 pwsh -NoProfile -File tools\win\capture-share\host-validate.ps1
 ```
 
-The script runs the 32 headless checks and compares each verdict with the expected one. It runs the self-test, the
-harness cell, both controls, the oracle check, every keyed-mutex, shared-texture and fence cell, four negative
-controls with `--inject skip-wait`, and the interlock check that `dda` and `wgc` refuse to start without
-`--interactive-ok`. It opens no window. It writes `<Out>\<stamp>\summary.txt` with one line for each run.
+The script runs the 34 headless checks and compares each verdict with the expected one. It runs the self-test, the
+harness cell, both controls, the oracle check, every keyed-mutex, shared-texture and fence cell, the two sRGB
+cells, four negative controls with `--inject skip-wait`, and the interlock check that `dda` and `wgc` refuse to
+start without `--interactive-ok`. It opens no window. It writes `<Out>\<stamp>\summary.txt` with one line for
+each run.
 
-A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01. That result proves
-the client and the oracles. It says nothing about unit A.
+A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01, and all 34 on
+2026-10-06. That result proves the client and the oracles. It says nothing about unit A.
 
 ## Run it on the lab
 

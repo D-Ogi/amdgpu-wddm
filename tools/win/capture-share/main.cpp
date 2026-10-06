@@ -39,7 +39,7 @@ static const char *Usage =
     "  --json <file>          verdict as JSON (default result.json)\n"
     "  --stderr <file>        relaunch with stdout/stderr redirected to <file> (UMD diagnostics)\n"
     "  --size <W>x<H>         texture/window size (default 256x256)\n"
-    "  --format bgra8|rgba8   (default bgra8)\n"
+    "  --format <name>        bgra8 (default), rgba8, bgra8-srgb, rgba8-srgb\n"
     "  --adapter auto|<index> (default: the first hardware adapter)\n"
     "  --peer-exe <path>      executable of the peer (default: this one; relative to this one's folder)\n"
     "  --sync cpu|fence       s-cells: CPU waits (default) or a shared fence\n"
@@ -121,9 +121,14 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             g_opt.w = w;
             g_opt.h = h;
         } else if (a == L"--format") {
+            // The sRGB views share the storage row of their format on the shared-surface wire, so a shared
+            // cell may ask for one. Every image here is compared as raw storage bytes, which an sRGB view does
+            // not change: both sides write and read the same bytes through the same format.
             if (!wcscmp(v, L"bgra8")) g_opt.format = DXGI_FORMAT_B8G8R8A8_UNORM;
             else if (!wcscmp(v, L"rgba8")) g_opt.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            else return error = "--format must be bgra8 or rgba8", false;
+            else if (!wcscmp(v, L"bgra8-srgb")) g_opt.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            else if (!wcscmp(v, L"rgba8-srgb")) g_opt.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            else return error = "--format must be bgra8, rgba8, bgra8-srgb or rgba8-srgb", false;
         } else if (a == L"--adapter") {
             g_opt.adapter = v;
         } else if (a == L"--peer-exe") {

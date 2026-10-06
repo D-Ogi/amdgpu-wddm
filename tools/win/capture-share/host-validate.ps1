@@ -54,6 +54,10 @@ $runs = @(
     @('f11to12', 'pass', '--cell f11to12'),
     @('f12to12', 'pass', '--cell f12to12'),
     @('s12to11-rgba8', 'pass', '--cell s12to11 --format rgba8 --sync fence'),
+    # The sRGB views of the two 8-bit rows, both directions. The shared-surface wire has always admitted them and
+    # the D3D12 shell used to refuse them, which no cell could reach while --format had two values (BD-075 review).
+    @('s12to11-srgb', 'pass', '--cell s12to11 --format bgra8-srgb --sync fence'),
+    @('s11to12-srgb', 'pass', '--cell s11to12 --format rgba8-srgb --sync fence'),
     @('s12to12-simultaneous', 'pass', '--cell s12to12 --simultaneous --sync fence'),
     @('km12to11-stderr', 'pass', '--cell km12to11 --stderr {dir}\km12to11-stderr-err.txt'),
     @('ipc-stderr', 'pass', '--cell ipc --stderr {dir}\ipc-stderr-err.txt'),

@@ -812,6 +812,19 @@ static std::wstring HexW(ULONG_PTR v)
     return t;
 }
 
+// The --format token for a format, so that the peer is asked for exactly what this process has. One table, used
+// by the relaunch below; the parser in main.cpp is its other half. It used to be a two-way choice that sent every
+// format but RGBA8 to the peer as "bgra8", which would have silently downgraded an sRGB cell.
+static std::wstring FormatOption(DXGI_FORMAT f)
+{
+    switch (f) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return L"rgba8";
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: return L"bgra8-srgb";
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return L"rgba8-srgb";
+    default: return L"bgra8";
+    }
+}
+
 static std::wstring PeerExePath()
 {
     std::wstring p = g_opt.peerExe.empty() ? g_opt.self : g_opt.peerExe;
@@ -824,7 +837,7 @@ static std::wstring PeerArgs()
 {
     std::wstring a = L"--role peer --cell " + Widen(g_opt.cell);
     a += L" --size " + std::to_wstring(g_opt.w) + L"x" + std::to_wstring(g_opt.h);
-    a += g_opt.format == DXGI_FORMAT_R8G8B8A8_UNORM ? L" --format rgba8" : L" --format bgra8";
+    a += L" --format " + FormatOption(g_opt.format);
     a += g_opt.syncFence ? L" --sync fence" : L" --sync cpu";
     a += g_opt.kmt ? L" --handle kmt" : L" --handle nt";
     a += L" --delay-copies " + std::to_wstring(g_opt.delayCopies) + L" --delay-size " + std::to_wstring(g_opt.delaySize);
