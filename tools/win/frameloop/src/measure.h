@@ -103,6 +103,7 @@ struct VblankFit {
     double origin_qpc{};       // the QPC of refresh 0, extrapolated
     double hz{};
     double residual_us{};      // the largest distance of a sample from the fitted line
+    unsigned outliers{};       // samples dropped as a whole number of refreshes off their count (see below)
 };
 
 // A fit needs this many distinct refresh counts. Below it a line through frame statistics says nothing.
@@ -113,17 +114,9 @@ inline constexpr double kVblankHzMin = 20.0;
 inline constexpr double kVblankHzMax = 400.0;
 inline constexpr double kVblankResidualMaxUs = 1000.0;
 
-inline VblankFit fit_vblank(std::vector<VblankSample> samples, Qpc qpc_frequency) {
-    VblankFit fit{};
-    if (qpc_frequency <= 0) { return fit; }
-    std::sort(samples.begin(), samples.end(),
-              [](const VblankSample& a, const VblankSample& b) { return a.refresh < b.refresh; });
-    samples.erase(std::unique(samples.begin(), samples.end(),
-                              [](const VblankSample& a, const VblankSample& b) { return a.refresh == b.refresh; }),
-                  samples.end());
-    fit.samples = static_cast<unsigned>(samples.size());
-    if (fit.samples < kVblankSamplesMin) { return fit; }
-    // The counts are centred before the sums, so the squares stay small however long the machine has been up.
+// Least squares of QPC over refresh count. The counts are centred before the sums, so the squares stay small
+// however long the machine has been up. False when the samples do not make a rising line.
+inline bool fit_vblank_line(const std::vector<VblankSample>& samples, long double& period, long double& origin) {
     long double sum_n = 0.0L, sum_t = 0.0L;
     for (const VblankSample& s : samples) {
         sum_n += static_cast<long double>(s.refresh);
@@ -137,16 +130,60 @@ inline VblankFit fit_vblank(std::vector<VblankSample> samples, Qpc qpc_frequency
         covariance += dn * (static_cast<long double>(s.qpc) - mean_t);
         variance += dn * dn;
     }
-    if (!(variance > 0.0L) || !(covariance > 0.0L)) { return fit; }
-    const long double period = covariance / variance;
+    if (!(variance > 0.0L) || !(covariance > 0.0L)) { return false; }
+    period = covariance / variance;
+    origin = mean_t - period * mean_n;
+    return true;
+}
+
+inline long double vblank_off(const VblankSample& s, long double period, long double origin) {
+    const long double fitted = origin + period * static_cast<long double>(s.refresh);
+    const long double at = static_cast<long double>(s.qpc);
+    return fitted > at ? fitted - at : at - fitted;
+}
+
+// GetFrameStatistics now and then pairs a SyncQPCTime with the refresh count of the vblank next to it: the sample
+// then sits a whole period off the line (16.6 ms at 60 Hz), which refused the grid of two arms of the C45 set
+// 184120Z although 1180 other samples sat within 120 us. Such a sample is dropped and the line fitted again, but
+// only when it is within the residual band of a whole number of periods off, and only up to 1 % of the samples:
+// a sample off by anything else, or more of them, still means these are not one display's grid.
+inline VblankFit fit_vblank(std::vector<VblankSample> samples, Qpc qpc_frequency) {
+    VblankFit fit{};
+    if (qpc_frequency <= 0) { return fit; }
+    std::sort(samples.begin(), samples.end(),
+              [](const VblankSample& a, const VblankSample& b) { return a.refresh < b.refresh; });
+    samples.erase(std::unique(samples.begin(), samples.end(),
+                              [](const VblankSample& a, const VblankSample& b) { return a.refresh == b.refresh; }),
+                  samples.end());
+    fit.samples = static_cast<unsigned>(samples.size());
+    if (fit.samples < kVblankSamplesMin) { return fit; }
+    long double period = 0.0L, origin = 0.0L;
+    if (!fit_vblank_line(samples, period, origin)) { return fit; }
+    const long double band = static_cast<long double>(kVblankResidualMaxUs) * 1e-6L *
+                             static_cast<long double>(qpc_frequency);
+    std::vector<VblankSample> kept;
+    kept.reserve(samples.size());
+    unsigned whole_period_off = 0;
+    bool other_off = false;
+    for (const VblankSample& s : samples) {
+        const long double off = vblank_off(s, period, origin);
+        if (off <= band) { kept.push_back(s); continue; }
+        const long double periods = std::floor(off / period + 0.5L);
+        if (periods >= 1.0L && std::fabs(off - periods * period) <= band) { ++whole_period_off; }
+        else { other_off = true; }
+    }
+    const unsigned allowed = fit.samples / 100 > 1 ? fit.samples / 100 : 1;
+    if (whole_period_off && !other_off && whole_period_off <= allowed && kept.size() >= kVblankSamplesMin &&
+        fit_vblank_line(kept, period, origin)) {
+        fit.outliers = whole_period_off;
+        samples.swap(kept);
+    }
     fit.period_qpc = static_cast<double>(period);
-    fit.origin_qpc = static_cast<double>(mean_t - period * mean_n);
+    fit.origin_qpc = static_cast<double>(origin);
     fit.hz = static_cast<double>(static_cast<long double>(qpc_frequency) / period);
     long double worst = 0.0L;
     for (const VblankSample& s : samples) {
-        const long double fitted = (mean_t - period * mean_n) + period * static_cast<long double>(s.refresh);
-        const long double off = fitted > static_cast<long double>(s.qpc) ? fitted - static_cast<long double>(s.qpc)
-                                                                        : static_cast<long double>(s.qpc) - fitted;
+        const long double off = vblank_off(s, period, origin);
         if (off > worst) { worst = off; }
     }
     fit.residual_us = 1e6 * static_cast<double>(worst) / static_cast<double>(qpc_frequency);
