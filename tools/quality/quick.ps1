@@ -73,6 +73,31 @@ try {
  CheckIf 'firmware-metadata' "$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu" `
    { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_firmware_metadata.ps1" -Root $Workspace -Out "$Out\firmware-metadata" -Kits "$Workspace\toolchain\nuget" }
  Check 'interop-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_interop_policy.ps1" -Root $Workspace -Out "$Out\interop-policy" -Kits "$Workspace\toolchain\nuget" }
+ # The router and its M15.14 D3D11_1 front. This gate builds the router and its host-test binaries and runs the
+ # suites that need nothing from the lab: the route policy, the two table fills with their completeness counts,
+ # the DirectFlip rule with one refusal per clause, and the E26R and LB7A decoders. A null entry in the front's
+ # published table is a call into address zero inside dwm.exe, so "every slot is filled" belongs in the gate
+ # that runs on every change and not only in a gate somebody remembers to run.
+ Check 'router-front' {
+     $env:BC250_ROOT=$Workspace
+     $build=Join-Path $Out 'router-front'
+     & pwsh -NoProfile -File "$repo\tools\build\build-umd-router.ps1" -OutputDir $build
+     if($LASTEXITCODE -ne 0){ exit 1 }
+     foreach($suite in @('policy','front-tables','front-rule','front-record')){
+         & "$build\test-router.exe" child $suite $build
+         if($LASTEXITCODE -ne 0){ exit 1 }
+     }
+ }
+ # The rest of the router's host gate drives the real hosted UMD, the real CPU UMD and a DXVK shell package,
+ # which are not in the repository. Name them with these three variables and the whole gate runs here too;
+ # without them the pure suites above are what runs, and this line says so instead of passing quietly.
+ $routerHosted=if($env:BC250_ROUTER_HOSTED_UMD){$env:BC250_ROUTER_HOSTED_UMD}else{Join-Path $Out 'set-BC250_ROUTER_HOSTED_UMD-BC250_ROUTER_CPU_UMD-BC250_ROUTER_APP_PACKAGE'}
+ CheckIf 'router-stack' $routerHosted {
+     $env:BC250_ROOT=$Workspace
+     & pwsh -NoProfile -File "$repo\tools\build\test-umd-router.ps1" -HostedUmd $routerHosted `
+       -CpuUmd $env:BC250_ROUTER_CPU_UMD -AppPackage $env:BC250_ROUTER_APP_PACKAGE `
+       -Build (Join-Path $Out 'router-front') -OutputDir (Join-Path $Out 'router-stack')
+ }
  Check 'escape-abi' { & python -m unittest discover -s "$repo\tools\win\bc250kmd_cli" }
  Check 'allocation-identity' { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }
  Check 'object-index' { & python "$repo\tools\quality\object_index.py" --out "$Out\object-index" }
