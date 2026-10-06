@@ -154,7 +154,12 @@ static bool KeyedParent(Side &s)
     // write - passes. With this wait the handover cannot race the submission, so a pass says the memory path is
     // sound and the ordering of the runtime's own release against our ExecuteCommandLists is the defect, and a
     // poison read says the write itself is not reaching the reader. It is a measurement, never a fix.
-    if (g_opt.creatorFinish && !s.Finish()) return FailA(s);
+    // Its own stage: a hang or a failure inside this wait must not be reported as write-a, in the one cell whose
+    // whole purpose is to tell the write and the wait apart (BD-075 review, 2026-10-06).
+    if (g_opt.creatorFinish) {
+        SetStage("finish-a");
+        if (!s.Finish()) return FailA(s);
+    }
     SetStage("release-3");
     if (!s.Release(3)) return FailA(s);
     if (!PeerStep("ACQUIRED", m, "peer-acquire-3")) return false;

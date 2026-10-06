@@ -212,6 +212,10 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
         return error = "--handle kmt applies to km11 and s11to11 only (D3D12 opens NT handles only)", false;
     if (g_opt.skipWait && cell->kind != Kind::Fence && !(cell->kind == Kind::Shared && g_opt.syncFence))
         return error = "--inject skip-wait applies to the f-cells and to the s-cells with --sync fence", false;
+    // Only KeyedParent honours it, so every other cell would accept the flag and measure nothing while its name
+    // in a trial's log said otherwise (BD-075 review, 2026-10-06).
+    if (g_opt.creatorFinish && cell->kind != Kind::Keyed)
+        return error = "--creator-finish applies to the keyed-mutex cells only (km11, km12to11, km11to12)", false;
     if ((cell->kind == Kind::Dda || cell->kind == Kind::Wgc) && !g_opt.interactiveOk)
         return error = "cell " + g_opt.cell + " shows a window and reads the screen: run it only in the lab's interactive "
                                               "session, with --interactive-ok",
