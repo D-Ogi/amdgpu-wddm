@@ -152,6 +152,15 @@ a counter that moved there would report the increment's headline result on a mac
 ever reached HUBP0. `scanout_requests` counts candidates whose creator had asked for scan-out, so it
 separates "user mode never asked" from "the kernel driver refused".
 
+`scanout_requests` is itself counted inside `SetVidPnSourceAddress`, which is why a zero in it says less
+than it looks. It separates "the kernel driver refused this candidate" from "nothing asked at this DDI".
+It cannot separate "user mode never marked its buffers" from "the request never reached this DDI at all",
+and on this driver the second is the usual case: the compositor decides whether a chain is flipped, so a
+client whose buffers carry the SCANOUT bit still produces `scanout_requests` 0 when DWM composes it. The
+create-time counters answer that half (`type0 creates asked/not by record ...` in the summary): they are
+taken in `CreateAllocation`, before any flip, and they say what record each type-0 allocation arrived
+with and whether it asked.
+
 `admit_gated` counts the candidates the switch above refused, so a run with no scan-out flip tells a
 closed switch from a rule that said no.
 
@@ -168,6 +177,55 @@ allocation is a candidate; `AddressAllowed` decides which address may be written
 HUBP0 is not recoverable on this part - there is no working GPU reset (facts M53) - so the second
 refusal stays behind the first on purpose, and neither is allowed to assume the other.
 
+## The DirectFlip handshake, kernel half (increment 2, 0.7.209.1)
+
+The compositor's user-mode driver may only answer `CheckDirectFlipSupport` TRUE about a surface the
+display core can actually read, and it must decide that from the same words and the same arithmetic that
+placed the surface. Increment 2 is that shared derivation and the channel that carries the start's answer.
+There is no separate `docs/design/direct-flip-handshake.md`: the handshake is the user-mode face of the
+admission rule described above, and a second note would be a second place for the same rule to rot.
+
+**One derivation.** `WddmGdiRecordPolicy` (`driver/kmd/gdi_private.h`) turns a type-0 allocation's own
+E26R record into its placement. `CreateAllocation` calls it once per call, before it builds anything, and
+places every type-0 allocation of that call with the result. `WddmGdiScannable` says whether the display
+core can read a surface placed that way - not in the aperture, and `AccessedPhysically`, which is what
+asks VidMm for the contiguous physical pages a plane is programmed with.
+
+**Two directions of failure.** The placement derivation is fail-safe for the kernel driver: a call with
+no record at all succeeds and yields the plain VRAM placement a standard allocation must get. Read as
+"can the display core read this", that same answer is fail-open - it says yes about a record it could not
+read. A user-mode caller therefore asks `WddmGdiRecordScannable`, which requires an E26R v3 record of
+exactly 64 bytes with the SCANOUT bit and refuses everything else.
+
+**The channel.** `bc250_scanout_caps` is an optional trailer of the `DXGKQAITYPE_UMDRIVERPRIVATE` reply,
+after the adapter identity trailer and by the same version-skew rule: 24 bytes at offset 1496, so a
+reader must query at least 1520 bytes. It carries one flag - this start will admit a client scan-out flip
+- and the POST geometry, which is the only video present source mode `display.c` offers and therefore the
+only geometry `Bc250ScanoutAdmit` admits. The shell applies the geometry instead of inferring it from the
+compositor's own chain being the desktop's size.
+
+**What the flag means and what closes it.** `EnableDirectFlipHandshake` (REG_DWORD, `Parameters`, default
+0) is ANDed at `WddmStart` with `EnableScanoutAdmit` and with every other start-latched fact the flip path
+needs: `VidPnFlipEnabled`, mapped MMIO, VRAM, page-aligned VRAM bases, a non-empty POST geometry. The
+invariant is that a closed kernel path can never leave the shell agreeing to a flip this driver will
+refuse. The dangerous one is `EnableVidPnFlip`: with it closed, `SetVidPnSourceAddress` skips
+`DcnFlipSourceAddress`, still publishes and still returns success, so a TRUE answer would stop DWM
+composing while HUBP0 keeps the last composed frame - the game runs, every counter says success, and the
+screen is frozen. With the switch off nothing is written into the trailer at all, not even a header with
+flags 0, so "absent" and "off" are one state on the wire and a reader that forgets the flag cannot act on
+a closed switch.
+
+**What the kernel driver does not do with it.** Nothing. The admission reads `scanout_admit.h` and
+`AddressAllowed` and never this flag, so a stale or wrong TRUE in user mode cannot widen what may be
+programmed. That is deliberate: the handshake buys a copy the OS no longer makes, and nothing else.
+
+**Witnesses.** Three sets, all in `log summary` rather than only in the start-time guard-log lines,
+because those lines have a lifetime budget of eight and the compositor's own primaries spend it at boot:
+type-0 creates by the record they arrived with, the OS's own `DXGK_SETVIDPNSOURCEADDRESS_FLAGS` per bit,
+and the Presents carrying `RedirectedFlip`. The flag bits are read as bitfields and never as transcribed
+masks - the WDK header's trailing comments give `0x00000010` twice and are shifted by one bit from
+`FlipStereoPreferRight` on, which would turn "the OS did enter independent flip" into its opposite.
+
 ## What is still missing
 
 - **The mode list.** `display.c` offers the inherited POST mode only, so a game that asks for 1080p
@@ -175,11 +233,14 @@ refusal stays behind the first on purpose, and neither is allowed to assume the 
 - **Multi-plane overlay.** There is no `DxgkDdiCheckMultiPlaneOverlaySupport` and no plane path, so the
   "DWM composes again when a window overlaps" half of M15.14 is handled by the OS falling back to
   composition, not by a driver plane.
-- **The desktop UMD.** `CheckDirectFlipSupport` is absent from the compositor's own UMD, so DWM will not
-  agree to a direct flip of its surfaces whatever the kernel driver admits. A borderless chain's flip is
-  DWM's decision; an exclusive-fullscreen chain is the one shape a trial can reach without it, which is
-  why the trial's own client offers `-FlipFullscreen` and why a verdict of "the request stopped in user
-  mode" must name DWM as the layer, not the shell.
+- **The desktop UMD's answer.** The compositor's user-mode driver has a `CheckDirectFlipSupport` entry
+  since M15.14 increment 1 (`driver/umd/dxvk/ddi-direct-flip.h`), and it answers FALSE for every pair:
+  the rule requires both surfaces to carry the SCANOUT bit in their own resource record, and no shell
+  writes that bit yet. So DWM will not agree to a direct flip of its surfaces whatever the kernel driver
+  admits. A borderless chain's flip is DWM's decision; an exclusive-fullscreen chain is the one shape a
+  trial can reach without it, which is why the trial's own client offers `-FlipFullscreen` and why a
+  verdict of "the request stopped in user mode" must name DWM as the layer, not the shell.
+  Increment 2 publishes the kernel half of the handshake (below) and changes no answer.
 - **The composed fallback on the CPU desktop route.** A scan-out surface is VRAM-resident and not CPU
   visible. The record still shares it, so the compositor may open it, but the CPU compositor route
   (llvmpipe, the KMD-swap fallback) composes by reading the surface with the CPU and has no mapping to
@@ -187,8 +248,13 @@ refusal stays behind the first on purpose, and neither is allowed to assume the 
   and the fallback holds. M15.14's second sentence ("DWM composes again when a window overlaps") is
   therefore route-dependent for the chains this mode enables, and the overlap case is not yet measured
   on either route. Until it is, scan-out stays a selected mode that the operator turns on.
-- **A producer for BC2A version 3.** Only the E26R bit has one today: both shells set it and no ICD or
-  winsys patch writes `BC250_UMD_A_SCANOUT`. The named user of the BC2A half is the Mesa/RADV winsys
+- **A producer for the E26R scan-out record.** Neither shell writes one yet. The D3D11 shell's
+  `convert_runtime_resource` builds a 64-byte v3 record with the access word `PRIMARY` only, never
+  `SCANOUT`; the D3D12 shell's `prepare_surface` builds its own 16-byte record (v1 or v2) and the
+  compositor's opener takes nothing but v3 at exactly 64 bytes, so a D3D12 swap-chain buffer cannot be
+  opened into the compositor's device at all. Both halves are M15.14 increment 2 parts 4 and 5 and neither
+  is written; until they are, every arm of a trial reproduces "nothing asked".
+- **A producer for BC2A version 3.** No ICD or winsys patch writes `BC250_UMD_A_SCANOUT`. The named user of the BC2A half is the Mesa/RADV winsys
   (`driver/icd/mesa-wddm2-bc250.patch`), where an engine-allocated primary would ask the same question
   through the same words; the kernel side is in and host-tested so that the winsys change is a patch and
   not a contract negotiation. If that route is dropped, the BC2A half goes with it rather than staying

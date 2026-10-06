@@ -5,9 +5,13 @@
 #include "bc250_psp.h"
 #include "../umd_caps.h"
 #include "../../contract/bc250_umd_firmware.h"
+// M15.14 increment 2: the branch now writes a second optional trailer, so the extracted case block needs
+// its contract as well. BOOLEAN is the driver's; here it is the one field of the wddm stub below.
+#include "../../contract/bc250_scanout_caps.h"
 typedef long NTSTATUS;
 typedef unsigned long ULONG;
 typedef unsigned char* PUCHAR;
+typedef unsigned char BOOLEAN;
 #define STATUS_SUCCESS 0L
 #define STATUS_DEVICE_NOT_READY (-1L)
 #define STATUS_INVALID_DEVICE_STATE (-2L)
@@ -31,8 +35,18 @@ typedef struct {int Loaded,PowerSuspended;struct bc250_umd_firmware Firmware;str
 typedef struct {PUCHAR Data[BC250_FILE_COUNT];ULONG Size[BC250_FILE_COUNT];} BC250_PSP_FILES;
 typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     struct {struct {unsigned int LowPart; int HighPart;} AdapterLuid;} StartInfo;
+    // M15.14 increment 2: the POST mode the scan-out caps trailer publishes. The real member is
+    // DXGK_DISPLAY_INFORMATION, of which this branch reads the two geometry fields.
+    struct {ULONG Width,Height;} Post;
 } BC250_DEVICE;
 typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
+// The adapter's WDDM table, of which the extracted branch reads one start-latched byte: whether this
+// start publishes the DirectFlip handshake. WddmStart computes it from the operator's switch ANDed with
+// every start-latched fact the flip path needs; here it is set directly, which is what lets the test
+// drive both answers of the branch.
+typedef struct {BOOLEAN DirectFlipHandshake;} BC250_WDDM;
+static BC250_WDDM wddmStorage;
+static BC250_WDDM* wddm=&wddmStorage;
 static NTSTATUS SmuReadFirmwareVersion(int* smu,ULONG* version)
 {(void)smu;smuReads++;*version=smuReady?testSmuVersion:0;return smuReady?STATUS_SUCCESS:STATUS_DEVICE_NOT_READY;}
 // cumode.c: the CU fields follow this start's registers. The branch must hand it the whole template,
@@ -136,6 +150,55 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_DEVICE_NOT_READY);
         for(i=0;i<sizeof(extended);i++) CHECK(extended[i]==0xA5);
         smuReady=1;
+    }
+    // M15.14 increment 2: the scan-out caps trailer, in the order its three rules can go wrong. This is
+    // the only host coverage of the branch, and the first two of these were real defects: the trailer was
+    // written with flags 0 while the switch was off, and it needed 1520 bytes while both shells queried
+    // 1496, so nothing could ever read it.
+    {
+        unsigned char extended[BC250_SCANOUT_CAPS_TOTAL+8];
+        struct bc250_scanout_caps scanout;
+        struct bc250_adapter_identity identity;
+        QUERY extendedQuery={extended,sizeof(extended)};
+        unsigned int length,j;
+        d.Post.Width=1920;d.Post.Height=1200;
+        // (1) With the switch off nothing is written here at all, at any buffer size: a start with the
+        // handshake closed is byte for byte the revision before it, and a reader that keys on the magic
+        // and forgets the flag has nothing to act on.
+        wddm->DirectFlipHandshake=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));
+        for(j=BC250_ADAPTER_CAPS_BYTES;j<sizeof(extended);j++) CHECK(extended[j]==0xA5);
+        // (2) With it on, and a buffer that holds the whole trailer: every header field, the flag, the
+        // POST geometry, the identity trailer before it untouched, the caller's bytes after it untouched.
+        wddm->DirectFlipHandshake=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && scanout.version==BC250_SCANOUT_CAPS_VERSION &&
+              scanout.size==sizeof(scanout) && scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(scanout.post_width==1920 && scanout.post_height==1200);
+        memcpy(&identity,extended+BC250_ADAPTER_IDENTITY_OFFSET,sizeof(identity));
+        CHECK(identity.magic==BC250_ADAPTER_IDENTITY_MAGIC && identity.size==sizeof(identity));
+        CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));
+        for(j=BC250_SCANOUT_CAPS_TOTAL;j<sizeof(extended);j++) CHECK(extended[j]==0xA5);
+        // (3) Never a partial trailer. One byte short of the whole of it writes none of it, so the
+        // 1496-byte query both shells make today sees nothing - which is exactly how the trailer came to
+        // be unreachable. Asserted for every length from the identity trailer's end up to the scan-out
+        // trailer's, with the switch still on.
+        for(length=BC250_ADAPTER_CAPS_BYTES;length<BC250_SCANOUT_CAPS_TOTAL;length++) {
+            memset(extended,0xA5,sizeof(extended));
+            extendedQuery.OutputDataSize=length;
+            CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+            CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));
+            for(j=BC250_ADAPTER_CAPS_BYTES;j<sizeof(extended);j++) CHECK(extended[j]==0xA5);
+        }
+        // A geometry of zero never reaches a reader: WddmStart refuses to publish the flag without a POST
+        // mode, so the branch is asked only with one. Kept here as the state the rest of the test wants.
+        extendedQuery.OutputDataSize=sizeof(extended);
+        wddm->DirectFlipHandshake=0;
+        d.Post.Width=0;d.Post.Height=0;
     }
     // A failed/absent owner never substitutes the historic firmware value.
     smuReady=0;memset(out,0xA5,sizeof(out));memcpy(expected,out,sizeof(out));

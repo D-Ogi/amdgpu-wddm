@@ -28,11 +28,31 @@ typedef struct { LONGLONG QuadPart; } PHYSICAL_ADDRESS;
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define BC250_WDDM_SEGMENT_VRAM 1u
 #define GuardLog(...) ((void)0)
+// DXGK_SETVIDPNSOURCEADDRESS_FLAGS, in the DECLARATION ORDER of the WDK's shared/d3dkmddi.h (10.0.26100,
+// around line 6213). The order is the ABI and the trailing comments in that header are not: they give
+// 0x00000010 for both FlipStereoTemporaryMono and FlipStereoPreferRight and are shifted by one bit from
+// there on, while Reserved:23 after nine named bits fixes the layout. The driver therefore reads these as
+// bitfields and never as transcribed masks, and FlipFlagBits() below asserts what this copy comes out as,
+// so a transcription error in this fixture cannot pass either.
 typedef struct {
     HANDLE hAllocation;
     unsigned VidPnSourceId, PrimarySegment;
     PHYSICAL_ADDRESS PrimaryAddress;
-    struct { unsigned Value; } Flags;
+    union {
+        struct {
+            unsigned ModeChange:1;
+            unsigned FlipImmediate:1;
+            unsigned FlipOnNextVSync:1;
+            unsigned FlipStereo:1;
+            unsigned FlipStereoTemporaryMono:1;
+            unsigned FlipStereoPreferRight:1;
+            unsigned SharedPrimaryTransition:1;
+            unsigned IndependentFlipExclusive:1;
+            unsigned MoveFlip:1;
+            unsigned Reserved:23;
+        };
+        unsigned Value;
+    } Flags;
 } DXGKARG_SETVIDPNSOURCEADDRESS;
 typedef struct {
     unsigned InterruptType;
@@ -46,6 +66,8 @@ typedef struct {
     unsigned PrimarySegment;
     volatile LONG Flips, FlipsAboveDispatch, VSyncReports;
     volatile LONG ScanoutFlips, ScanoutRequests, ScanoutAdmits[BC250_SCANOUT_STATUSES], ScanoutNotes, ScanoutTeardowns;
+    /* M15.14 increment 2: the OS's own flip mode, per bit, for every accepted address call. */
+    volatile LONG ScanoutFlipFlags[4];
     volatile LONGLONG ScanoutObject;
     BOOLEAN ScanoutAdmitGate;       /* EnableScanoutAdmit, absent = on (WddmStart) */
     int VSyncEnabled;
@@ -75,7 +97,10 @@ typedef unsigned long long ULONG_PTR;
 #define D3DDDIFMT_A8R8G8B8 21
 #define D3DDDIFMT_X8R8G8B8 22
 #define D3DDDIFMT_A8B8G8R8 32
-typedef struct {ULONG Magic; int UmdAlloc; struct {ULONG Width,Height,Pitch,Format;ULONGLONG Size;} Allocation;
+/* Serial: adapter-unique, nonzero, never reused (wddm.c, WddmNewObject under the lock). The teardown record
+ * holds it instead of the object's address, so a value that outlived its object cannot match a later object
+ * allocated where the old one was. */
+typedef struct {ULONG Magic; ULONGLONG Serial; int UmdAlloc; struct {ULONG Width,Height,Pitch,Format;ULONGLONG Size;} Allocation;
     int ScanoutRequested; ULONG ScanoutWidth,ScanoutHeight,ScanoutPitch,ScanoutFormat; ULONGLONG UmdBytes;
     ULONGLONG UmdRequestedVa,UmdGemFlags; ULONG CreatorProcessId,UmdBlobVersion;} BC250_WDDM_OBJECT;
 static BC250_WDDM_OBJECT* WddmObject(HANDLE h,ULONG magic){BC250_WDDM_OBJECT *a=h;return a && a->Magic==magic?a:NULL;}
@@ -168,6 +193,66 @@ static void StartHealthCompleted(BC250_DEVICE *d,ULONG sequence)
     if(sequence && sequence!=healthSequence){healthSequence=sequence;healthCompletions++;}
 }
 /* ACTUAL_SOURCE */
+/* M15.14 increment 2: the kernel-side witness of the OS's flip mode. Two things are asserted, because the
+ * counters were declared and written by nothing at all before this, and because the one way to get them
+ * wrong is to copy a number out of the WDK header's trailing comments.
+ *   First, that the four named bits of DXGK_SETVIDPNSOURCEADDRESS_FLAGS land where the declaration order
+ * puts them, not where those comments say: SharedPrimaryTransition is 0x40 and IndependentFlipExclusive is
+ * 0x80. An analyser or a lab predicate reading 0x20 and 0x40 would call a run that did enter independent
+ * flip a run that never did.
+ *   Second, that the driver counts every accepted address call, admitted or refused, and does not obey any
+ * of the bits. A refusal arriving after the OS has taken a SharedPrimaryTransition is the shape that blanks
+ * the output (the OS does not fall back to composition seamlessly), so that case must be visible. */
+static void FlipFlagBits(void)
+{
+    BC250_WDDM w={0};BC250_DEVICE d={0};
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    BC250_WDDM_OBJECT allocation={BC250_WDDM_MAGIC_ALLOCATION};
+    unsigned written;
+
+    request.Flags.Value=0;request.Flags.ModeChange=1;CHECK(request.Flags.Value==0x00000001u);
+    request.Flags.Value=0;request.Flags.FlipImmediate=1;CHECK(request.Flags.Value==0x00000002u);
+    request.Flags.Value=0;request.Flags.FlipOnNextVSync=1;CHECK(request.Flags.Value==0x00000004u);
+    request.Flags.Value=0;request.Flags.FlipStereo=1;CHECK(request.Flags.Value==0x00000008u);
+    request.Flags.Value=0;request.Flags.FlipStereoTemporaryMono=1;CHECK(request.Flags.Value==0x00000010u);
+    request.Flags.Value=0;request.Flags.FlipStereoPreferRight=1;CHECK(request.Flags.Value==0x00000020u);
+    request.Flags.Value=0;request.Flags.SharedPrimaryTransition=1;CHECK(request.Flags.Value==0x00000040u);
+    request.Flags.Value=0;request.Flags.IndependentFlipExclusive=1;CHECK(request.Flags.Value==0x00000080u);
+    request.Flags.Value=0;request.Flags.MoveFlip=1;CHECK(request.Flags.Value==0x00000100u);
+
+    d.Post.Width=1366;d.Post.Height=768;d.Post.Pitch=5632;w.PrimaryPitch=5632;
+    d.Wddm=&w;d.VidPnFlipEnabled=1;w.VSyncEnabled=1;w.ScanoutAdmitGate=TRUE;
+    w.PrimaryAddress.QuadPart=0x1000;w.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+    irq=0;hardware_result=STATUS_SUCCESS;hardware=0;programmed=displayed=0x1000;
+    /* The compositor's own primary, with the two bits that say the OS entered DirectFlip and then
+     * independent flip. Both are counted and neither changes the answer. */
+    request.hAllocation=NULL;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+    request.PrimaryAddress.QuadPart=0x2000;
+    request.Flags.Value=0;request.Flags.SharedPrimaryTransition=1;request.Flags.IndependentFlipExclusive=1;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(w.ScanoutFlipFlags[0]==0 && w.ScanoutFlipFlags[1]==0);
+    CHECK(w.ScanoutFlipFlags[2]==1 && w.ScanoutFlipFlags[3]==1);
+    request.PrimaryAddress.QuadPart=0x3000;
+    request.Flags.Value=0;request.Flags.ModeChange=1;request.Flags.FlipImmediate=1;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(w.ScanoutFlipFlags[0]==1 && w.ScanoutFlipFlags[1]==1);
+    CHECK(w.ScanoutFlipFlags[2]==1 && w.ScanoutFlipFlags[3]==1);
+    /* A refused candidate still counts its flags: the OS has already transitioned, and that is exactly the
+     * run an operator has to be able to see. Nothing was programmed. */
+    allocation.UmdAlloc=1;allocation.ScanoutRequested=1;allocation.UmdBytes=4096;
+    allocation.ScanoutWidth=1;allocation.ScanoutHeight=1;allocation.ScanoutPitch=4;
+    allocation.ScanoutFormat=D3DDDIFMT_A8R8G8B8;
+    written=hardware;
+    request.hAllocation=&allocation;request.PrimaryAddress.QuadPart=0x4000;
+    request.Flags.Value=0;request.Flags.SharedPrimaryTransition=1;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+    CHECK(w.ScanoutFlipFlags[2]==2 && hardware==written && w.ScanoutFlips==0);
+    /* A call refused before the transaction is not counted twice: VidPnSourceId != 0 never gets that far. */
+    request.VidPnSourceId=1;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+    CHECK(w.ScanoutFlipFlags[2]==2);
+    request.VidPnSourceId=0;
+}
 int main(void)
 {
     int level;
@@ -321,7 +406,7 @@ int main(void)
                     LONG notes;
                     LONGLONG record=w.ScanoutObject;   // a refusal must leave the teardown record alone
                     hardware_result=STATUS_SUCCESS;
-                    good.Magic=BC250_WDDM_MAGIC_ALLOCATION;good.UmdAlloc=1;good.ScanoutRequested=1;
+                    good.Magic=BC250_WDDM_MAGIC_ALLOCATION;good.Serial=0x9001;good.UmdAlloc=1;good.ScanoutRequested=1;
                     good.ScanoutWidth=1366;good.ScanoutHeight=768;good.ScanoutPitch=5632;
                     good.ScanoutFormat=D3DDDIFMT_A8R8G8B8;good.UmdBytes=5632ull*768;
                     request.hAllocation=&good;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
@@ -335,7 +420,25 @@ int main(void)
                     d.VramMcBase=0;
                     // Admitted, programmed, and recorded as the surface the plane is reading.
                     CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
-                    CHECK(w.ScanoutFlips==2 && w.ScanoutObject==(LONGLONG)(ULONG_PTR)&good);
+                    CHECK(w.ScanoutFlips==2 && w.ScanoutObject==(LONGLONG)good.Serial);
+                    {   // P5.4. The base a scan-out create asks VidMm for and the base this clause admits
+                        // are one number, asserted here through the actual DDI and not only over the pure
+                        // header: a create that asked for the wrong alignment would still pass the header
+                        // test. One step of the alignment every other allocation keeps (64 bytes) above an
+                        // admitted base is refused, and that refusal is the one that blanks the output when
+                        // it arrives after SharedPrimaryTransition.
+                        LONG refusals=w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT];
+                        LONG admitted=w.ScanoutFlips;
+                        request.PrimaryAddress.QuadPart=(LONGLONG)Bc250ScanoutCreateAlignment(1)*7;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutFlips==admitted+1 && w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==refusals);
+                        request.PrimaryAddress.QuadPart+=(LONGLONG)Bc250ScanoutCreateAlignment(0);
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                        CHECK(w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==refusals+1 && w.ScanoutFlips==admitted+1);
+                        request.PrimaryAddress.QuadPart=0xC000;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutFlips==admitted+2 && w.ScanoutObject==(LONGLONG)good.Serial);
+                    }
                     {   // With the flip gate closed this DDI still succeeds and still publishes, and
                         // no scan-out flip is counted: nothing was written to the display hardware,
                         // and a counter that moved here would report the whole increment's result on
@@ -346,7 +449,7 @@ int main(void)
                         CHECK(w.ScanoutFlips==gated && hardware==gatedHardware && w.ScanoutObject==0);
                         d.VidPnFlipEnabled=1;request.PrimaryAddress.QuadPart=0xC000;
                         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
-                        CHECK(w.ScanoutFlips==gated+1 && w.ScanoutObject==(LONGLONG)(ULONG_PTR)&good);
+                        CHECK(w.ScanoutFlips==gated+1 && w.ScanoutObject==(LONGLONG)good.Serial);
                     }
                     // Freeing the surface the plane is reading restores the firmware surface before
                     // the object goes: an application swap-chain buffer has no lifetime tie to the
@@ -386,7 +489,7 @@ int main(void)
                         w.PrimaryNeedsRestore=FALSE;request.PrimaryAddress.QuadPart=0xC000;
                         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
                         scanned=w.ScanoutObject;
-                        CHECK(scanned==(LONGLONG)(ULONG_PTR)&good);
+                        CHECK(scanned==(LONGLONG)good.Serial);
                         request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0xF000;
                         hardware_result=STATUS_IO_TIMEOUT;
                         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT);
@@ -415,6 +518,21 @@ int main(void)
                         request.PrimaryAddress.QuadPart=0xC000;
                         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
                         CHECK(w.ScanoutObject==scanned);
+                        // The record names the object's serial and not its address. The same storage with a
+                        // new serial is what a freed object and the next allocation at its address look
+                        // like, and it must not match: a pointer record would have matched and taken the
+                        // plane back to the firmware surface for a buffer nobody destroyed.
+                        good.Serial=0x9002;
+                        list[0]=&good;freed=journaled=restores=0;
+                        CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
+                        CHECK(restores==0 && freed==1 && w.ScanoutObject==scanned);
+                        // A serial of 0 is the record's own "nothing is being scanned out" and must never
+                        // match either, whatever the record holds.
+                        good.Serial=0;
+                        list[0]=&good;freed=journaled=restores=0;
+                        CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
+                        CHECK(restores==0 && freed==1 && w.ScanoutObject==scanned);
+                        good.Serial=0x9001;
                         list[0]=&good;freed=journaled=restores=0;
                         CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
                         CHECK(restores==1 && w.ScanoutObject==0);
@@ -433,6 +551,7 @@ int main(void)
         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS && !w.PrimaryNeedsRestore);
         CHECK(hardware==before+2); // identical OS address still reprograms lost hardware
     }
+    FlipFlagBits();
     printf("vidpn publication: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
 }

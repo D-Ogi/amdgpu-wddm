@@ -14,6 +14,11 @@
 #define BC250_SURFACE_RESOURCE_CPU_READ 0x2ul
 #define BC250_SURFACE_RESOURCE_SCANOUT 0x4ul
 #define BC250_SURFACE_RESOURCE_ACCESS_MASK 0x7ul
+// The only video present source display.c offers and the only one SetVidPnSourceAddress accepts
+// (wddm.c). Every flip-eligible primary names it. A mode list is the change that must come first if
+// this ever stops being 0, and the DirectFlip rule refuses anything else until then
+// (ref/ddi-display/d3d10umddi.md: both allocations of a direct flip share one VidPnSourceId).
+#define BC250_SCANOUT_VIDPN_SOURCE 0ul
 typedef struct _BC250_SURFACE_RESOURCE_PRIVATE {
     unsigned long Magic, Version, Shared, Access;
     // D3D11_TEXTURE2D_DESC1, serialized explicitly. Format is DXGI_FORMAT.
@@ -55,5 +60,23 @@ static __inline int Bc250SurfaceResourceScanout(const void* Data, unsigned int B
     if (!Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached)) return 0;
     if (!Data || Bytes<4*sizeof(unsigned long) || words[0]!=BC250_SURFACE_RESOURCE_MAGIC) return 0;
     return (words[3]&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
+}
+
+// M15.14 increment 2: the record's own version and access words, for a driver that logs what the
+// creator asked for and for a reader that must tell a v1 record from a v3 one. Both are 0 for a record
+// with no E26R magic and the access word is 0 for v1, which has none. Shape only, and only for a record
+// this parser has already admitted: 0 means the record was refused and nothing was written.
+static __inline int Bc250SurfaceResourceIntent(const void* Data, unsigned int Bytes,
+    unsigned long* Version, unsigned long* Access)
+{
+    const unsigned long* words=(const unsigned long*)Data;
+    int shared=0,cached=0;
+    if (!Version || !Access) return 0;
+    *Version=0; *Access=0;
+    if (!Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached)) return 0;
+    if (!Data || Bytes<3*sizeof(unsigned long) || words[0]!=BC250_SURFACE_RESOURCE_MAGIC) return 1;
+    *Version=words[1];
+    if (Bytes>=4*sizeof(unsigned long)) *Access=words[3];
+    return 1;
 }
 #endif

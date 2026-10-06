@@ -15,6 +15,13 @@ function Check([string]$name,[scriptblock]$action) {
     $script:results+=@{name=$name;status='PASS';seconds=$watch.Elapsed.TotalSeconds}
     Write-Host "$name PASS $([Math]::Round($watch.Elapsed.TotalSeconds,2))s"
 }
+# A gate whose inputs are not in the repository. It runs whenever they are present, so that nobody has to
+# remember it, and records why it did not when they are absent - never silently.
+function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
+    if(Test-Path -LiteralPath $needs){ Check $name $action; return }
+    $script:results+=@{name=$name;status='SKIP';reason="missing input: $needs"}
+    Write-Host "$name SKIP (missing input: $needs)"
+}
 try {
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
@@ -56,6 +63,13 @@ try {
  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Workspace\toolchain\nuget" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Workspace\toolchain\nuget" }
  Check 'umd-caps' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_caps.ps1" -Out "$Out\umd-caps" -Kits "$Workspace\toolchain\nuget" }
+ # The only host coverage of the DXGKQAITYPE_UMDRIVERPRIVATE branch itself: the firmware section, the
+ # adapter identity trailer and the M15.14 scan-out caps trailer, all extracted from wddm.c by text. It was
+ # outside this list because it reads the AMD firmware blobs, which are not in the repository - and that is
+ # how an edit to that branch could break the test while every gate here stayed green. It now runs wherever
+ # the blobs are and says so when they are not.
+ CheckIf 'firmware-metadata' "$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu" `
+   { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_firmware_metadata.ps1" -Root $Workspace -Out "$Out\firmware-metadata" -Kits "$Workspace\toolchain\nuget" }
  Check 'interop-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_interop_policy.ps1" -Root $Workspace -Out "$Out\interop-policy" -Kits "$Workspace\toolchain\nuget" }
  Check 'escape-abi' { & python -m unittest discover -s "$repo\tools\win\bc250kmd_cli" }
  Check 'allocation-identity' { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }

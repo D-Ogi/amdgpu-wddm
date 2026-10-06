@@ -49,6 +49,10 @@
 #define BC250_SCANOUT_GATED 9           // the operator closed the EnableScanoutAdmit gate for this start
 #define BC250_SCANOUT_STATUSES 10
 
+// The address granularity the plane's register expresses, and therefore the only base a requesting
+// candidate may be flipped from (the ALIGNMENT clause below).
+#define BC250_SCANOUT_ADDRESS_ALIGNMENT 4096ul
+
 typedef struct _BC250_SCANOUT_CANDIDATE {
     int UmdAlloc;                       // the object came in as a BC2A blob
     int ScanoutRequested;               // its creator asked for scan-out and described the surface
@@ -86,7 +90,8 @@ static __inline int Bc250ScanoutAdmit(const BC250_SCANOUT_CANDIDATE* Candidate,
         // The plane's address field is a 4 KiB page number on this generation; VidMm gives an
         // application allocation page granularity anyway, so a misaligned address means the candidate
         // is not the allocation's base and nothing here describes what the plane would read.
-        if (Candidate->Address & 0xFFFull) return BC250_SCANOUT_ALIGNMENT;
+        if (Candidate->Address & (unsigned long long)(BC250_SCANOUT_ADDRESS_ALIGNMENT - 1ul))
+            return BC250_SCANOUT_ALIGNMENT;
         // Residency. Segment 1's descriptor is the only one with Flags.DirectFlip (wddm.c); the
         // aperture is system memory reached through the GART, which the display core does not read.
         // PrimarySegment is dxgkrnl's own answer to where the allocation is, not a hope of the UMD's.
@@ -95,6 +100,37 @@ static __inline int Bc250ScanoutAdmit(const BC250_SCANOUT_CANDIDATE* Candidate,
     *Pitch = Candidate->Pitch;
     *Bytes = bytes;
     return BC250_SCANOUT_ADMIT_OK;
+}
+
+// The base alignment a CreateAllocation must ask VidMm for, as a function of the one intent that needs
+// more than the 64 bytes both Microsoft reference drivers ask for. A surface that asked for scan-out is
+// refused at flip time unless its address is page aligned (the ALIGNMENT clause above), and VidMm's
+// granularity for such an allocation is not promised anywhere we hold: the measured b18r1 arm got 4096
+// (ETW ulAlignment of the client's three presented buffers), which is luck and not a contract. Asking
+// for it instead is the whole fix, because the refusal it prevents is not a safe no: the OS takes
+// SharedPrimaryTransition before this flip and does not seamlessly fall back to composition
+// (ref/ddi-display/d3dkmddi.md:12793), so a refused transition flip blanks the output.
+//   Nothing else changes: an allocation that never asked for scan-out keeps the 64 bytes exactly, and the
+// flip clause is unchanged - this makes the clause satisfiable by construction rather than by luck.
+static __inline unsigned long Bc250ScanoutCreateAlignment(int ScanoutRequested)
+{
+    return ScanoutRequested ? BC250_SCANOUT_ADDRESS_ALIGNMENT : 64ul;
+}
+
+// The same rule for the other create path. A BC2A blob (an application allocation) carries the
+// granularity its winsys asked for, and the kernel driver honours a power-of-two request from 64 bytes
+// to 1 MiB; a request outside that, or none at all, gets 4 KiB. That default is why the measured b18r1
+// arm scanned out at all, and it is one UMD change away from 64 bytes, after which the flip clause
+// above refuses the surface and the transition flip blanks the output. So a blob that asked for
+// scan-out may not be given less than the clause demands, whatever it requested. Nothing else moves:
+// a blob that asked for no scan-out keeps the granularity it asked for, up or down.
+static __inline unsigned long Bc250ScanoutBlobAlignment(int ScanoutRequested, unsigned long long Requested)
+{
+    unsigned long align = BC250_SCANOUT_ADDRESS_ALIGNMENT;
+    if (Requested >= 64ull && Requested <= 0x100000ull && (Requested & (Requested - 1ull)) == 0ull)
+        align = (unsigned long)Requested;
+    if (ScanoutRequested && align < Bc250ScanoutCreateAlignment(1)) align = Bc250ScanoutCreateAlignment(1);
+    return align;
 }
 
 // BC250_SCANOUT_GATED is the one status this header does not decide: wddm.c answers it for a requesting

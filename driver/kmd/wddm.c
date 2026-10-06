@@ -163,6 +163,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
+#include "../contract/bc250_scanout_caps.h"  // the trailer that publishes this start's scan-out answer
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
@@ -255,6 +256,19 @@ typedef struct _BC250_PAGING_JOB {
     const UCHAR* Data;
 } BC250_PAGING_JOB;
 C_ASSERT(sizeof(BC250_PAGING_JOB)<=PAGING_PRIVATE_JOB_BYTES);
+
+// M15.14 increment 2: the E26R resource record a CreateAllocation arrived with, as a counter index.
+// Bc250SurfaceResourcePolicy admits version 1, 2 and 3 only, and reports version 0 for a call that
+// carried no record at all - which is every standard allocation, the compositor's own primary included.
+// OTHER exists so that the index stays in bounds whatever the parser one day admits.
+#define BC250_WDDM_RECORD_NONE 0u
+#define BC250_WDDM_RECORD_V3 3u
+#define BC250_WDDM_RECORD_OTHER 4u
+#define BC250_WDDM_RECORD_KINDS 5u
+static __inline ULONG WddmRecordKind(unsigned long Version)
+{
+    return Version <= BC250_WDDM_RECORD_V3 ? (ULONG)Version : BC250_WDDM_RECORD_OTHER;
+}
 
 typedef struct _BC250_WDDM {
     BC250_DEVICE* Device;
@@ -480,15 +494,57 @@ typedef struct _BC250_WDDM {
     volatile LONG ScanoutAdmits[BC250_SCANOUT_STATUSES];
     volatile LONG ScanoutNotes;                 // guard-log budget of the scan-out flip lines, its own
     volatile LONG ScanoutTeardowns;             // and of the teardown lines, which a flip must not crowd out
+    // M15.14 increment 2. ScanoutRequests is a SetVidPnSourceAddress-time counter, so a zero there cannot
+    // tell "user mode never marked its buffers" from "the request never reached this DDI". This is the
+    // create-time answer: every type-0 allocation this driver placed, by the resource record it arrived
+    // with and by whether that record asked for scan-out ([...][0] asked, [...][1] did not).
+    //   The record kind is the first index because the one input of the handshake that no document
+    // establishes is what record the compositor's own output primaries carry, and a standard primary
+    // (D3DKMDT_STANDARDALLOCATION_PRIMARY) carries none at all: it reaches CreateAllocation as a 32-byte
+    // LB7A blob with no resource private data, so a counter kept only for records with the PRIMARY bit
+    // would be silent for exactly the surface DWM flips today. BC250_WDDM_RECORD_NONE is therefore a
+    // bucket of its own, and ScanoutCreatePrimaries says how many of all of them did carry PRIMARY.
+    volatile LONG ScanoutCreates[BC250_WDDM_RECORD_KINDS][2];
+    volatile LONG ScanoutCreatePrimaries;       // of those, the records that carried the PRIMARY bit
+    volatile LONG ScanoutCreateResources;       // and those created as part of a resource group (hResource)
+    volatile LONG ScanoutCreateNotes;           // the create-time lines' own guard-log budget
+    // DXGK_SETVIDPNSOURCEADDRESS_FLAGS of every address call this DDI accepted, per bit:
+    // [0] ModeChange, [1] FlipImmediate, [2] SharedPrimaryTransition, [3] IndependentFlipExclusive.
+    // The last two are the kernel-side witness that the OS really entered DirectFlip and then independent
+    // flip; they are counted for every accepted call, admitted or refused, because the flags describe the
+    // video present source's mode and not the allocation, and because a refusal that arrives after the OS
+    // has taken a SharedPrimaryTransition is the one shape that blanks the screen.
+    //   Counted by reading the bitfields, never a transcribed mask: the trailing comments of
+    // DXGK_SETVIDPNSOURCEADDRESS_FLAGS in d3dkmddi.h give 0x00000010 for both FlipStereoTemporaryMono and
+    // FlipStereoPreferRight and are shifted by one bit from there on (Reserved:23 after nine named bits
+    // fixes the real layout at SharedPrimaryTransition 0x40 and IndependentFlipExclusive 0x80), so a
+    // number copied out of those comments would make a run that did enter independent flip report that it
+    // never did. The raw Flags.Value goes into the scan-out flip line for the same reason.
+    // They are observed and never obeyed: refusing a flip for a flag is the hazard, because the OS does
+    // not fall back to composition seamlessly after a SharedPrimaryTransition.
+    volatile LONG ScanoutFlipFlags[4];
+    volatile LONG RedirectedPresents;           // DxgkDdiPresent calls carrying Flags.RedirectedFlip
+    // The operator's switch for the handshake, read once at WddmStart (EnableDirectFlipHandshake, absent
+    // = off) and ANDed with ScanoutAdmitGate. It is published to the compositor's user-mode driver in the
+    // bc250_scanout_caps trailer and nowhere else: the kernel driver's own admission does not read it, so
+    // a closed switch can never leave the shell agreeing to a flip this driver would refuse.
+    BOOLEAN DirectFlipHandshake;
     // The operator's switch for M15.14, read once at WddmStart (EnableScanoutAdmit, absent = on). Closed, a
     // candidate that asks for scan-out is refused with BC250_SCANOUT_GATED and every other candidate keeps the
     // four checks it had in 0.7.205.1, so this start behaves as that revision did. It exists because the b18
     // train carries three changes at once and a lab failure must be attributable to one of them without a
     // rebuild (scratch/train/TRAIN-b18.md rule 4).
     BOOLEAN ScanoutAdmitGate;
-    // The application allocation the plane is reading, as a value, never dereferenced: DestroyAllocation
-    // compares the handle it is about to free against it and restores the firmware surface on a match,
-    // because nothing else ties an application swap-chain buffer's lifetime to the video present source.
+    // The application allocation the plane is reading, as its BC250_WDDM_OBJECT::Serial and never as its
+    // address: DestroyAllocation compares the serial of the allocation it is about to free against it and
+    // restores the firmware surface on a match, because nothing else ties an application swap-chain
+    // buffer's lifetime to the video present source.
+    //   The serial and not the pointer, because this value outlives the object it names in one path: a
+    // programming sequence that failed puts the previous flip's value back (see
+    // Bc250WddmSetVidPnSourceAddress), and a destroy may already have freed that object. A pointer would
+    // then be a stale address that the next object allocated at the same address would match, which would
+    // take the plane back to the firmware surface for a buffer nobody destroyed. A serial is
+    // adapter-unique, nonzero and never reused, so the compare can only ever match the object it means.
     volatile LONG64 ScanoutObject;
 } BC250_WDDM;
 
@@ -2097,6 +2153,39 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                  admit[BC250_SCANOUT_SIZE], admit[BC250_SCANOUT_SEGMENT], admit[BC250_SCANOUT_ALIGNMENT],
                  admit[BC250_SCANOUT_GATED]);
     }
+    // M15.14 increment 2, the create-time and flip-mode witnesses. They are in the summary and not only in
+    // the start-time guard-log lines because the per-create lines have a lifetime budget of
+    // BC250_WDDM_LOG_CALLS: the compositor's own primaries spend it at boot, so a client started minutes
+    // later writes none and "no line" cannot be told from "budget spent" or from "no such create". A
+    // counter the trial cannot read is a counter the trial does not have - that was the unreadable verdict
+    // of the first increment - so these are printed where `bc250kmd_cli log summary` returns them.
+    //   Three lines, by BD-070's rule: what records arrived, what they were, and what the OS asked for.
+    // Each record kind is printed as asked/not-asked, in BC250_WDDM_RECORD_* order.
+    {
+        LONG kind[BC250_WDDM_RECORD_KINDS][2];
+        LONG flipFlags[4];
+        ULONG slot;
+
+        for (slot = 0; slot < BC250_WDDM_RECORD_KINDS; slot++) {
+            kind[slot][0] = Wddm->ScanoutCreates[slot][0];
+            kind[slot][1] = Wddm->ScanoutCreates[slot][1];
+        }
+        for (slot = 0; slot < 4; slot++) flipFlags[slot] = Wddm->ScanoutFlipFlags[slot];
+        GuardLog("wddm summary: type0 creates asked/not by record none %ld/%ld v1 %ld/%ld v2 %ld/%ld v3 %ld/%ld",
+                 kind[0][0], kind[0][1], kind[1][0], kind[1][1], kind[2][0], kind[2][1],
+                 kind[3][0], kind[3][1]);
+        GuardLog("wddm summary: type0 creates other %ld/%ld, PRIMARY records %ld, in a resource group %ld",
+                 kind[BC250_WDDM_RECORD_OTHER][0], kind[BC250_WDDM_RECORD_OTHER][1],
+                 Wddm->ScanoutCreatePrimaries, Wddm->ScanoutCreateResources);
+        GuardLog("wddm summary: flip flags mode/immediate/shared-transition/independent %ld/%ld/%ld/%ld, redirected presents %ld",
+                 flipFlags[0], flipFlags[1], flipFlags[2], flipFlags[3], Wddm->RedirectedPresents);
+    }
+    // The published answer of this start, in the summary and not only in the start-time line: the log ring
+    // holds minutes, and a trial that reads the counters an hour after boot would otherwise have to guess
+    // whether the compositor was ever offered the flip at all. Without this, "no candidate reached the
+    // driver" cannot be told from "nobody was asked", which is the one distinction the whole handshake is
+    // about. It is a state, so it is printed as a word, not as a count.
+    GuardLog("wddm summary: DirectFlip handshake %s", Wddm->DirectFlipHandshake ? "on" : "off");
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
@@ -2354,6 +2443,45 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // switch from a refusal.
     wddm->ScanoutAdmitGate = (GuardReadSetting(L"EnableScanoutAdmit", 1) != 0);
     GuardLog("wddm: scan-out admission %s", wddm->ScanoutAdmitGate ? "on" : "off (0.7.205.1 behaviour)");
+    // M15.14 increment 2, read once for this start: whether the bc250_scanout_caps trailer tells the
+    // compositor's user-mode driver that a client scan-out flip will be admitted. Absent = off, because
+    // the one process whose answer changes is the compositor itself and a wrong TRUE costs a copy the OS
+    // no longer makes.
+    //   The invariant this publishes is "a closed kernel path can never leave the shell agreeing to a flip
+    // this driver will refuse", so every start-latched fact the flip path needs is ANDed in, not only
+    // EnableScanoutAdmit. All of them are known here: MmioStart, VramStart and AcquirePostDisplayOwnership
+    // all run before WddmStart (pnp.c).
+    //   - VidPnFlipEnabled (EnableMmio && EnableDcnWrite && EnableVidPnFlip, mmio.c). This is the dangerous
+    //     one. With it closed, SetVidPnSourceAddress skips DcnFlipSourceAddress altogether, still publishes
+    //     and still returns STATUS_SUCCESS: an operator who closes the flip gate to recover a display fault
+    //     and leaves this switch on would have DWM stop composing on a TRUE answer while HUBP0 keeps the
+    //     last composed frame, so the screen freezes while the game runs and every counter says success.
+    //   - VramEnabled and a mapped Mmio: DcnFlipSourceAddress then returns STATUS_ACCESS_DENIED or
+    //     STATUS_DEVICE_NOT_READY, so the flip fails after the OS has taken the SharedPrimaryTransition it
+    //     does not fall back from seamlessly (ref/ddi-display/d3dkmddi.md:12793) - a blank output.
+    //   - page-aligned VRAM bases: the flip path refuses every requesting candidate with
+    //     BC250_SCANOUT_ALIGNMENT on a board that breaks this, and the shell cannot see that.
+    //   - a POST geometry at all: the trailer's own payload. Publishing 0x0 would be publishing nothing.
+    // Logged for the same reason as the gate above, and with the reason, because a run that sees no flip
+    // must be able to tell a closed switch from a refusal - and now from a closed flip gate as well.
+    {
+        const BOOLEAN aligned =
+            ((Device->VramMcBase | (ULONGLONG)Device->VramPhysical.QuadPart) & 0xFFFull) == 0;
+        const BOOLEAN pathOpen = (BOOLEAN)(wddm->ScanoutAdmitGate && Device->VidPnFlipEnabled &&
+            Device->VramEnabled && Device->Mmio != NULL && aligned &&
+            Device->Post.Width != 0 && Device->Post.Height != 0);
+        const BOOLEAN asked = (BOOLEAN)(GuardReadSetting(L"EnableDirectFlipHandshake", 0) != 0);
+        wddm->DirectFlipHandshake = (BOOLEAN)(asked && pathOpen);
+        GuardLog("wddm: DirectFlip handshake %s", wddm->DirectFlipHandshake ? "on" : "off (no client flip offered)");
+        // The inputs on their own line: one line holding all of them and the verdict text does not fit
+        // BC250_LOG_TEXT, and a truncated line is how BD-070 lost the scan-out refusal counts. The POST
+        // geometry itself is already logged by pnp.c before this; here it is only present or absent.
+        GuardLog("wddm: DirectFlip handshake inputs: asked %u gate %u flip %u vram %u mmio %u aligned %u post %u",
+                 (ULONG)(asked ? 1 : 0), (ULONG)(wddm->ScanoutAdmitGate ? 1 : 0),
+                 (ULONG)(Device->VidPnFlipEnabled ? 1 : 0), (ULONG)(Device->VramEnabled ? 1 : 0),
+                 (ULONG)(Device->Mmio != NULL ? 1 : 0), (ULONG)(aligned ? 1 : 0),
+                 (ULONG)(Device->Post.Width != 0 && Device->Post.Height != 0 ? 1 : 0));
+    }
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
     // ADR 0008 stage D (docs/design/paging-node.md). Read once, like EnableGpuSubmit's own read in gfx.c: node 1's
@@ -3082,6 +3210,29 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_ADAPTER_IDENTITY_OFFSET,
                           &identity,sizeof(identity));
         }
+        // M15.14 increment 2: the second optional trailer, by the same rule. Two start-latched facts the
+        // compositor's user-mode driver must have before it may answer CheckDirectFlipSupport TRUE: the
+        // operator's switch (ANDed at WddmStart with the kernel gate and with every start-latched fact
+        // the flip path needs) and the POST geometry, which is the only video present source mode this
+        // driver offers and therefore the only geometry Bc250ScanoutAdmit admits. A reader that queried
+        // the shorter buffer gets exactly what it got before, and a shell against a driver without this
+        // trailer reads zeros and refuses.
+        //   Nothing is written at all while the handshake is off, not even a header with flags 0: a start
+        // with the switch closed is then byte for byte 0.7.207.1 for every buffer size, and a reader that
+        // keys on the magic and forgets the flag cannot act on a closed switch or read a live geometry
+        // out of a start that offers no flip.
+        if (wddm != NULL && wddm->DirectFlipHandshake &&
+            QueryAdapterInfo->OutputDataSize >= BC250_SCANOUT_CAPS_TOTAL) {
+            struct bc250_scanout_caps scanout = {0};
+            scanout.magic = BC250_SCANOUT_CAPS_MAGIC;
+            scanout.version = BC250_SCANOUT_CAPS_VERSION;
+            scanout.size = sizeof(scanout);
+            scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+            scanout.post_width = (unsigned int)device->Post.Width;
+            scanout.post_height = (unsigned int)device->Post.Height;
+            RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
+                          &scanout,sizeof(scanout));
+        }
         break;
     }
     default:
@@ -3534,6 +3685,16 @@ typedef struct _BC250_CREATE_CALL {
     BC250_WDDM* Wddm;
     DXGKARG_CREATEALLOCATION* Args;
     BOOLEAN SharedCpu, CachedCpu, Scanout;
+    // The type-0 placement this call's resource record earns, derived once per call by the function the
+    // compositor's user-mode driver calls as well (WddmGdiRecordPolicy), before the loop builds anything.
+    // The record is resource-level: deriving it inside the per-allocation loop parsed the same bytes three
+    // times per allocation and - worse - put a refusal after the allocation object existed and its handle
+    // was published, which Bc250CreateRun's rollback does not undo for the failing index (gdi_admission.h:
+    // "on a failure nothing is left behind"). SharedCpu, CachedCpu and Scanout above are the same record's
+    // answers and stay for the callers that only need the three bits; RecordVersion and RecordAccess are
+    // for the create-time witness, which must be able to name what the creator actually asked for.
+    BC250_GDI_ALLOCATION_POLICY RecordPolicy;
+    unsigned long RecordVersion, RecordAccess;
 } BC250_CREATE_CALL;
 
 static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Slot)
@@ -3592,9 +3753,12 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         object->ScanoutPitch = view.scanout_pitch;
         object->ScanoutFormat = view.scanout_format;
         segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
-        align = 4096;
-        if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
-            align = (UINT)view.alignment;
+        // M15.14: the winsys's own granularity, except that a blob which asked for scan-out never gets
+        // less than the flip clause's page (Bc250ScanoutBlobAlignment) - the BC2A half of the same
+        // 0.7.209.1 rule the type-0 path below follows. Without it a UMD that asks for 64 bytes here
+        // gets 64 bytes for a scan-out surface too, and the flip of it is refused after the OS has taken
+        // SharedPrimaryTransition: a blank output, not a fallback to composition.
+        align = (UINT)Bc250ScanoutBlobAlignment(view.scanout ? 1 : 0, view.alignment);
         info->hAllocation = object;
         info->Size = (SIZE_T)ROUND_TO_PAGES((SIZE_T)view.bytes);
         info->Alignment = align;
@@ -3646,8 +3810,11 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     info->hAllocation = object;
     info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
     // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
-    // reference drivers do (Alignment 64 is theirs too).
-    info->Alignment = 64;
+    // reference drivers do (Alignment 64 is theirs too). A surface that asked for scan-out asks for the
+    // page alignment its own flip clause demands instead (Bc250ScanoutCreateAlignment): the clause refuses
+    // any other base, and that refusal arrives after the OS has taken SharedPrimaryTransition, which it
+    // does not fall back from. Nothing else moves - 64 bytes for every other allocation, as before.
+    info->Alignment = Bc250ScanoutCreateAlignment(object->ScanoutRequested ? 1 : 0);
     info->HintedBank.Value = 0;
     info->MaximumRenamingListLength = 0;
     info->pAllocationUsageHint = NULL;
@@ -3663,7 +3830,15 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     // bits move together in WddmGdiScanoutPolicy: AccessedPhysically is derived from Aperture, so
     // clearing Aperture here and not re-deriving it would declare a VRAM surface VidMm need not back
     // contiguously - which is exactly the surface the display core must not be given.
-    if (object->ScanoutRequested) WddmGdiScanoutPolicy(&policy);
+    //   Since 0.7.209.1 the whole type-0 placement is one call of WddmGdiRecordPolicy, which the
+    // compositor's user-mode driver calls as well: the shell may only answer CheckDirectFlipSupport TRUE
+    // about a surface the display core can read, and it must derive that from the same record and the
+    // same arithmetic that place the allocation here. The call is made once per CreateAllocation, in
+    // Bc250WddmCreateAllocation, before any object exists - a record the derivation refuses fails the
+    // whole DDI there, not here, so no refusal can leave an allocation object and a published
+    // hAllocation behind. The values are the ones Bc250Lb7aAdmit computed above for a type-0 blob, and
+    // the gdi-admission gate asserts that equality for every record shape.
+    if (!gdiType) policy = call->RecordPolicy;
     info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
     info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
     info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
@@ -3674,6 +3849,33 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
     info->FlagsWddm2.Cached = policy.Cached;
     info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
+    // M15.14 increment 2, the create-time answer. ScanoutRequests is counted at flip time, so a zero
+    // there cannot tell "the client never marked its buffers" from "the request never reached
+    // SetVidPnSourceAddress".
+    //   Every type-0 allocation is bucketed, not only the records that carry the PRIMARY bit. A standard
+    // primary - the surface DWM flips today - arrives here as a 32-byte LB7A blob with no resource
+    // private data at all, so its record version and access word are both 0 and a counter kept for
+    // PRIMARY records only would be silent for it. A silent counter would then read as "DWM's primaries
+    // carry no PRIMARY record" when it equally means "DWM's front buffer is not a resource of our shell",
+    // and those two have opposite consequences for the handshake: in the second, the compositor never
+    // opens the client's buffer and the handshake can never be asked about the pair.
+    //   The log line adds what the buckets cannot carry: the geometry, the placement bits, and whether
+    // this create was part of a resource group, which is what separates a shell resource from a bare
+    // standard allocation. Its budget is the create lines' own.
+    if (!gdiType && wddm != NULL) {
+        const BOOLEAN primary = (BOOLEAN)((call->RecordAccess & BC250_SURFACE_RESOURCE_PRIMARY) != 0);
+        InterlockedIncrement(&wddm->ScanoutCreates[WddmRecordKind(call->RecordVersion)]
+                                                  [object->ScanoutRequested ? 0 : 1]);
+        if (primary) InterlockedIncrement(&wddm->ScanoutCreatePrimaries);
+        if (pCreateAllocation->Flags.Resource || pCreateAllocation->hResource != NULL)
+            InterlockedIncrement(&wddm->ScanoutCreateResources);
+        if (InterlockedIncrement(&wddm->ScanoutCreateNotes) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: type0 create req%u v%lu acc0x%lX res%u %lux%lu pitch%lu fmt%lu place0x%lX",
+                     (ULONG)(object->ScanoutRequested ? 1 : 0), call->RecordVersion, call->RecordAccess,
+                     (ULONG)(pCreateAllocation->Flags.Resource || pCreateAllocation->hResource != NULL ? 1 : 0),
+                     object->Allocation.Width, object->Allocation.Height, object->Allocation.Pitch,
+                     object->Allocation.Format, WddmGdiPolicyBits(&policy));
+    }
     return BC250_CREATE_STEP_ADMITTED;
 }
 
@@ -3722,6 +3924,22 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
     call.SharedCpu = sharedCpu;
     call.CachedCpu = cachedCpu;
     call.Scanout = scanout;
+    // M15.14 increment 2: the record is resource-level, so it is read once here, before the loop builds
+    // anything, and not per allocation. Both calls can only fail on a record WddmSurfaceResourcePolicy
+    // has already refused above - WddmGdiAllocationPolicy admits type 0 unconditionally - so this is
+    // unreachable today; it is a refusal of the whole DDI rather than an assertion because the one wrong
+    // way to fail is the way the loop used to: after an allocation object exists and its handle has been
+    // published, which Bc250CreateRun's rollback does not undo for the failing index.
+    RtlZeroMemory(&call.RecordPolicy, sizeof(call.RecordPolicy));
+    call.RecordVersion = 0; call.RecordAccess = 0;
+    if (!WddmGdiRecordPolicy(pCreateAllocation->pPrivateDriverData, pCreateAllocation->PrivateDriverDataSize,
+                             &call.RecordPolicy) ||
+        !Bc250SurfaceResourceIntent(pCreateAllocation->pPrivateDriverData,
+                                    pCreateAllocation->PrivateDriverDataSize,
+                                    &call.RecordVersion, &call.RecordAccess)) {
+        if (wddm != NULL) BC250_ADMISSION_COUNT(&wddm->StdAlloc.CreateCalls[BC250_CREATE_RESOURCE_DATA]);
+        return STATUS_INVALID_PARAMETER;
+    }
     outcome = Bc250CreateRun(wddm != NULL ? &wddm->StdAlloc : NULL, &g_WddmCreateOps, &call,
                              pCreateAllocation->NumAllocations);
     if (outcome == BC250_CREATE_NO_MEMORY) return STATUS_INSUFFICIENT_RESOURCES;
@@ -3757,9 +3975,14 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
         // M53). The firmware surface goes back first, and only then is the object freed. Compare and
         // clear in one step: a flip on another processor either wins the record, in which case it owns
         // the restore, or finds it already taken away.
-        if (object != NULL && wddm != NULL &&
-            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, (LONG64)(ULONG_PTR)object) ==
-            (LONG64)(ULONG_PTR)object) {
+        //   The record holds the object's serial, so the nonzero test is part of the comparison and not a
+        // formality: 0 is the record's own "no application surface is being scanned out", and an object
+        // whose serial were 0 would match that and take the plane back to the firmware surface for a
+        // buffer the plane never held. WddmNewObject gives every object a nonzero serial under the lock,
+        // which is what makes that unreachable; the test says so rather than relying on it.
+        if (object != NULL && wddm != NULL && object->Serial != 0 &&
+            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, (LONG64)object->Serial) ==
+            (LONG64)object->Serial) {
             NTSTATUS restored = DcnRestorePostDisplay(device);
             wddm->PrimaryNeedsRestore = TRUE;      // the next flip is a change, whatever address it carries
             InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, 0);
@@ -6054,6 +6277,12 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
     if (context) WddmObservePresent(context,pPresent);
     if (context) WddmInteropUse(context,pPresent);
+    // M15.14 increment 2: DXGK_PRESENTFLAGS.RedirectedFlip is the OS saying this present belongs to a
+    // chain it is flipping through the compositor rather than composing. It is the one witness here that
+    // the flip model is in use at all, counted and never obeyed, and read as a bitfield so no transcribed
+    // mask can be wrong about it.
+    if (context != NULL && pPresent->Flags.RedirectedFlip)
+        InterlockedIncrement(&((BC250_WDDM*)context->Device->Wddm)->RedirectedPresents);
 
     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
     // software packet below; its pixels are copied only at SubmitCommandVirtual.
@@ -6194,6 +6423,18 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, (LONG)(generation + 1u),
                                              (LONG)generation) != generation)
             return STATUS_DEVICE_BUSY;
+        // M15.14 increment 2, the kernel-side witness of the OS's flip mode. Counted here, inside the
+        // transaction, so each accepted call counts exactly once - a call refused above with
+        // STATUS_DEVICE_BUSY will be retried - and for every call, admitted or refused: these flags
+        // describe the video present source's mode, not this allocation, and a refusal that arrives after
+        // the OS has taken SharedPrimaryTransition is the shape that blanks the output. The bitfields are
+        // read, never a mask: the trailing comments of DXGK_SETVIDPNSOURCEADDRESS_FLAGS repeat 0x10 twice
+        // and are shifted by a bit from FlipStereoPreferRight on, so a transcribed number would report a
+        // run that did enter independent flip as a run that never did. Interlocked and legal at DIRQL.
+        if (pSetVidPnSourceAddress->Flags.ModeChange) InterlockedIncrement(&wddm->ScanoutFlipFlags[0]);
+        if (pSetVidPnSourceAddress->Flags.FlipImmediate) InterlockedIncrement(&wddm->ScanoutFlipFlags[1]);
+        if (pSetVidPnSourceAddress->Flags.SharedPrimaryTransition) InterlockedIncrement(&wddm->ScanoutFlipFlags[2]);
+        if (pSetVidPnSourceAddress->Flags.IndependentFlipExclusive) InterlockedIncrement(&wddm->ScanoutFlipFlags[3]);
         // A NULL allocation preserves current private properties; initially POST.
         pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:device->Post.Pitch;
         if (!DcnSurfaceBytes(device->Post.Width,device->Post.Height,pitch,&bytes)) status=STATUS_INVALID_PARAMETER;
@@ -6271,7 +6512,8 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             // and no way back on a part with no GPU reset (facts M53). The other order costs nothing: a
             // record taken for a buffer the plane has not reached yet only restores the firmware surface
             // early, which the next flip undoes.
-            LONG64 previous=InterlockedExchange64(&wddm->ScanoutObject,(LONG64)(ULONG_PTR)scanoutObject);
+            const LONG64 record=(LONG64)(scanoutObject?scanoutObject->Serial:0ull);
+            LONG64 previous=InterlockedExchange64(&wddm->ScanoutObject,record);
             status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,bytes,
                                        scanout?&physical:NULL);
             written=NT_SUCCESS(status);
@@ -6279,7 +6521,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             // object the previous flip left there - unless a destroy has taken the record away meanwhile, in
             // which case that destroy owns the restore and the record must stay empty.
             if (!written)
-                InterlockedCompareExchange64(&wddm->ScanoutObject,previous,(LONG64)(ULONG_PTR)scanoutObject);
+                InterlockedCompareExchange64(&wddm->ScanoutObject,previous,record);
         }
         if (NT_SUCCESS(status))
         {
@@ -6301,9 +6543,15 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                     // The address the plane was given, so that the display side of an ETW capture
                     // (DxgKrnl VSyncInterrupt's ScannedPhysicalAddress) can be matched to this
                     // allocation rather than to the compositor's own primary.
+                    // The raw Flags word rides along: it is the one place a reader can see which bits the
+                    // OS actually set on a flip this driver programmed, without trusting the shifted
+                    // trailing comments of DXGK_SETVIDPNSOURCEADDRESS_FLAGS in d3dkmddi.h. The refusal
+                    // line is deliberately left as it is - its worst case is already baselined over the
+                    // log line's width (BD-070), and the flags of a refused flip are in the summary.
                     if (InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
-                        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu",
-                                 (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,physical,pitch,bytes);
+                        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu flags 0x%08X",
+                                 (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,physical,pitch,bytes,
+                                 pSetVidPnSourceAddress->Flags.Value);
                 }
                 // The teardown record follows the plane: an application surface while one is being
                 // scanned out, nothing while the compositor's own primary is. A flip the hardware was
