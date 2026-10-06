@@ -2757,10 +2757,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  (ULONG)(Device->Mmio != NULL ? 1 : 0), (ULONG)(aligned ? 1 : 0),
                  (ULONG)(Device->Post.Width != 0 && Device->Post.Height != 0 ? 1 : 0));
     }
-    // C50, read once for this start: absent = on, because the DDI text requires the pairing and the hop it
-    // removes is pure latency. The value 0 restores 0.7.208.1's behaviour exactly, so the lab can run both
-    // shapes in one session and read the ring-gap histogram for each.
-    wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
+    // C50, read once for this start: absent = OFF. The train rule is that a release start behaves as the last
+    // validated one did, and the last validated one is 0.7.208.1, which does not pair the notification here. The
+    // DDI text asks for the pairing and the hop it removes is pure latency, so the value is worth having; it is
+    // an arm the lab sets to 1 and prices against the same session's 0, not a change the release makes by itself.
+    // The value 0 is 0.7.208.1's behaviour exactly, which is what makes that pair readable.
+    wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 0) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
              wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
     // C48/C49: the ring-gap accounting, always on. One frequency read for both nodes; the counter and the
