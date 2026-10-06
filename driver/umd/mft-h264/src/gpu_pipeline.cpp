@@ -563,8 +563,6 @@ void GpuEncoder::Shutdown()
     m_slotRead = 0;
     m_inFlight = 0;
     m_planeStaging.Reset();
-    m_ownNv12.Reset();
-    m_ownBgra.Reset();
     m_cb.Reset();
     m_marks.clear();
     m_markStage.clear();
@@ -637,8 +635,8 @@ HRESULT GpuEncoder::UploadPlanar(const GpuFrameInput& in)
     return S_OK;
 }
 
-HRESULT GpuEncoder::ShaderReadableTexture(ID3D11Texture2D* src, bool nv12, uint32_t slice,
-                                          ID3D11Texture2D** out)
+HRESULT GpuEncoder::ShaderReadableTexture(Slot& slot, ID3D11Texture2D* src, bool nv12,
+                                          uint32_t slice, ID3D11Texture2D** out)
 {
     D3D11_TEXTURE2D_DESC sd = {};
     src->GetDesc(&sd);
@@ -654,7 +652,7 @@ HRESULT GpuEncoder::ShaderReadableTexture(ID3D11Texture2D* src, bool nv12, uint3
         *out = src;
         return S_OK;
     }
-    ComPtr<ID3D11Texture2D>& own = nv12 ? m_ownNv12 : m_ownBgra;
+    ComPtr<ID3D11Texture2D>& own = nv12 ? slot.ownNv12 : slot.ownBgra;
     if (!own) {
         D3D11_TEXTURE2D_DESC td = {};
         td.Width = m_visW;
@@ -689,12 +687,14 @@ HRESULT GpuEncoder::ShaderReadableTexture(ID3D11Texture2D* src, bool nv12, uint3
     return S_OK;
 }
 
-HRESULT GpuEncoder::UploadBgraSystem(const uint8_t* rgb, uint32_t pitch, ID3D11Texture2D** out)
+HRESULT GpuEncoder::UploadBgraSystem(Slot& slot, const uint8_t* rgb, uint32_t pitch,
+                                     ID3D11Texture2D** out)
 {
     if (rgb == nullptr) {
         return E_POINTER;
     }
-    if (!m_ownBgra) {
+    ComPtr<ID3D11Texture2D>& own = slot.ownBgra;
+    if (!own) {
         D3D11_TEXTURE2D_DESC td = {};
         td.Width = m_visW;
         td.Height = m_visH;
@@ -704,13 +704,13 @@ HRESULT GpuEncoder::UploadBgraSystem(const uint8_t* rgb, uint32_t pitch, ID3D11T
         td.SampleDesc.Count = 1;
         td.Usage = D3D11_USAGE_DEFAULT;
         td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        HRESULT hr = m_device->CreateTexture2D(&td, nullptr, &m_ownBgra);
+        HRESULT hr = m_device->CreateTexture2D(&td, nullptr, &own);
         if (FAILED(hr)) {
             return hr;
         }
     }
-    m_ctx->UpdateSubresource(m_ownBgra.Get(), 0, nullptr, rgb, pitch, 0);
-    *out = m_ownBgra.Get();
+    m_ctx->UpdateSubresource(own.Get(), 0, nullptr, rgb, pitch, 0);
+    *out = own.Get();
     return S_OK;
 }
 
@@ -730,6 +730,29 @@ HRESULT GpuEncoder::Submit(const GpuFrameInput& in, const GpuFrameParams& p)
     m_ctx->End(slot.tsBegin.Get());
     BeginStageTiming();
     slot.written = m_cur;
+
+    // Every early return below leaves the device as Submit found it. The slot is not advanced on a
+    // failure, so the next Submit reuses it, and an interval left open would make that Begin a debug
+    // layer error on a query already begun; the compute bindings would stay bound to buffers the
+    // caller is free to release. The disjoint interval is closed, the end timestamp is written so the
+    // slot keeps three readable queries, and the bindings are dropped.
+    struct Abandon {
+        GpuEncoder* self;
+        Slot* slot;
+        bool armed = true;
+        ~Abandon()
+        {
+            if (!armed) {
+                return;
+            }
+            ID3D11UnorderedAccessView* none[6] = {};
+            ID3D11ShaderResourceView* noSrv[13] = {};
+            self->m_ctx->CSSetUnorderedAccessViews(0, 6, none, nullptr);
+            self->m_ctx->CSSetShaderResources(0, 13, noSrv);
+            self->m_ctx->End(slot->tsEnd.Get());
+            self->m_ctx->End(slot->tsDisjoint.Get());
+        }
+    } abandon{ this, &slot };
 
     // ---- import --------------------------------------------------------------------------------
     UpdateConstants(p, 0, 0);
@@ -754,8 +777,8 @@ HRESULT GpuEncoder::Submit(const GpuFrameInput& in, const GpuFrameParams& p)
         } else if (in.kind == InputKind::TextureBGRA || in.kind == InputKind::BgraSys) {
             ID3D11Texture2D* tex = nullptr;
             HRESULT hr = (in.kind == InputKind::BgraSys)
-                             ? UploadBgraSystem(in.rgb, in.pitchRgb, &tex)
-                             : ShaderReadableTexture(in.texture, false, in.slice, &tex);
+                             ? UploadBgraSystem(slot, in.rgb, in.pitchRgb, &tex)
+                             : ShaderReadableTexture(slot, in.texture, false, in.slice, &tex);
             if (FAILED(hr)) {
                 return hr;
             }
@@ -773,7 +796,7 @@ HRESULT GpuEncoder::Submit(const GpuFrameInput& in, const GpuFrameParams& p)
             m_ctx->CSSetShader(m_csImportBGRA.Get(), nullptr, 0);
         } else {
             ID3D11Texture2D* tex = nullptr;
-            HRESULT hr = ShaderReadableTexture(in.texture, true, in.slice, &tex);
+            HRESULT hr = ShaderReadableTexture(slot, in.texture, true, in.slice, &tex);
             if (FAILED(hr)) {
                 return hr;
             }
@@ -905,6 +928,7 @@ HRESULT GpuEncoder::Submit(const GpuFrameInput& in, const GpuFrameParams& p)
 
     m_ctx->End(slot.tsEnd.Get());
     m_ctx->End(slot.tsDisjoint.Get());
+    abandon.armed = false;
 
     // ---- capture the result ----------------------------------------------------------------------
     //
@@ -942,6 +966,22 @@ HRESULT GpuEncoder::Collect(std::vector<uint32_t>& levels, std::vector<MbInfo>& 
     if (m_inFlight == 0) {
         return E_NOT_VALID_STATE;
     }
+    // The slot is given back on every exit path, a failed Map included. A Collect that returned
+    // without advancing the ring left the slot counted as in flight for ever, and the caller had
+    // already taken the picture off its own list, so the two counts never agreed again: at a depth of
+    // two the next two Submit calls filled the ring and every picture after that was refused with
+    // E_NOT_VALID_STATE, which no flush could clear because the flush drains the caller's list and the
+    // caller's list was one short. A device removal is recoverable; an encoder object that can never
+    // encode again is not.
+    struct ReleaseSlot {
+        GpuEncoder* self;
+        ~ReleaseSlot()
+        {
+            self->m_slotRead = (self->m_slotRead + 1u) % self->m_depth;
+            --self->m_inFlight;
+        }
+    } releaseSlot{ this };
+
     Slot& slot = m_slots[m_slotRead];
     m_lastWritten = slot.written;
     m_lastRecordMs = slot.recordMs;
@@ -1001,11 +1041,11 @@ HRESULT GpuEncoder::Collect(std::vector<uint32_t>& levels, std::vector<MbInfo>& 
         CollectStageTiming(dj);
     }
     m_lastQueryWaitMs = NowMs() - query0;
-    m_slotRead = (m_slotRead + 1u) % m_depth;
-    --m_inFlight;
+    // One less than m_inFlight: the slot is given back by releaseSlot when this function returns.
     MftTrace("gpu picture: record %.3f ms, readback %.3f ms (map wait %.3f), query wait %.3f ms, "
              "gpu %.3f ms (valid %d), %u still in flight\n", m_lastRecordMs, m_lastReadbackMs,
-             m_lastMapWaitMs, m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0, m_inFlight);
+             m_lastMapWaitMs, m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0,
+             m_inFlight - 1u);
     return S_OK;
 }
 
@@ -1047,6 +1087,13 @@ HRESULT GpuEncoder::ReadPlanes(Plane* y, Plane* cb, Plane* cr, std::vector<uint8
 HRESULT GpuEncoder::ReadReconstruction(std::vector<uint8_t>& y, std::vector<uint8_t>& cb,
                                        std::vector<uint8_t>& cr)
 {
+    // There are two reconstruction buffers, which is enough for the collected picture's own
+    // reconstruction to still be intact at a depth of 2 and not above it: at a depth of 3 picture k+2
+    // is submitted before picture k is collected and overwrites the buffer m_lastWritten names, so this
+    // would hand back another picture's samples with no error. Refused instead.
+    if (m_depth > 2) {
+        return E_NOT_VALID_STATE;
+    }
     // m_lastWritten, not m_cur: a caller reads the reconstruction after a picture was collected, and
     // Submit has already moved m_cur on to the buffer the next picture writes.
     Plane* p = m_rec[m_lastWritten];

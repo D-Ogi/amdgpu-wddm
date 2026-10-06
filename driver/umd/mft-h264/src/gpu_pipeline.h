@@ -142,6 +142,10 @@ struct GpuStageProfile {
 // a deeper pipeline only adds latency, and every slot costs one levels and one macroblock-info staging
 // buffer (3.4 MB together at 1080p).
 enum : uint32_t { kMaxPipelineDepth = 4 };
+// What the transform runs unless a client asked for low latency or BC250_MFT_DEPTH says otherwise. The
+// test reads it too, so that the pipelined speed row of --compare is the speed of the shipped shape and
+// not of a number the test chose for itself.
+enum : uint32_t { kShippedPipelineDepth = 2 };
 
 class GpuEncoder {
 public:
@@ -194,10 +198,12 @@ public:
 
     // The reconstruction of the picture just collected, in coded (padded) dimensions. Test and
     // diagnostic use only; the encoder itself never moves the reconstruction to the CPU. At a pipeline
-    // depth above one it still returns the collected picture's reconstruction, which is sound as long
-    // as the depth is 2: picture k wrote one of the two reconstruction buffers and picture k+2 is the
-    // next to overwrite it, and k is collected before k+2 is submitted. Reading it does wait for every
-    // picture submitted so far, so it costs the pipeline.
+    // depth of 2 it still returns the collected picture's reconstruction: picture k wrote one of the
+    // two reconstruction buffers and picture k+2 is the next to overwrite it, and k is collected
+    // before k+2 is submitted. Above 2 that no longer holds - picture k+2 is submitted while k is
+    // still uncollected and overwrites the buffer this would read - so it is refused with
+    // E_NOT_VALID_STATE rather than answering with another picture's samples. Reading it does wait for
+    // every picture submitted so far, so it costs the pipeline.
     HRESULT ReadReconstruction(std::vector<uint8_t>& y, std::vector<uint8_t>& cb,
                                std::vector<uint8_t>& cr);
     // The source picture as the import pass produced it, in coded dimensions. Used for PSNR. The
@@ -249,6 +255,14 @@ private:
         ComPtr<ID3D11Query> tsDisjoint;
         ComPtr<ID3D11Query> tsBegin;
         ComPtr<ID3D11Query> tsEnd;
+        // The private texture an input that cannot be read in place is copied into, created on first
+        // use and one per slot. One shared texture would undo the pipeline for exactly the input
+        // shapes that need the copy - an array slice, a multisampled or non-shader-bindable texture,
+        // BGRA in system memory - because the next picture's copy into it cannot start until this
+        // picture's import dispatch has finished reading it, and D3D11's own hazard tracking would
+        // enforce that wait. One per slot costs 8 MB of BGRA or 3 MB of NV12 at 1080p per slot.
+        ComPtr<ID3D11Texture2D> ownNv12;
+        ComPtr<ID3D11Texture2D> ownBgra;
         double recordMs = 0.0;
         uint32_t written = 0;   // the m_rec index this picture's reconstruction went to
     };
@@ -263,9 +277,12 @@ private:
     HRESULT UploadPlanar(const GpuFrameInput& in);
     // Returns a texture the compute pass can read: the client's own if it is a shader bindable,
     // single slice texture, else a private copy of the same format holding the wanted array slice.
-    HRESULT ShaderReadableTexture(ID3D11Texture2D* src, bool nv12, uint32_t slice,
+    // The copy goes into the submitting slot's own texture, so that one picture's copy never waits
+    // for the picture before it to stop reading.
+    HRESULT ShaderReadableTexture(Slot& slot, ID3D11Texture2D* src, bool nv12, uint32_t slice,
                                   ID3D11Texture2D** out);
-    HRESULT UploadBgraSystem(const uint8_t* rgb, uint32_t pitch, ID3D11Texture2D** out);
+    HRESULT UploadBgraSystem(Slot& slot, const uint8_t* rgb, uint32_t pitch,
+                             ID3D11Texture2D** out);
     HRESULT ReadPlanes(Plane* y, Plane* cb, Plane* cr, std::vector<uint8_t>& oy,
                        std::vector<uint8_t>& ocb, std::vector<uint8_t>& ocr);
     // Reads one query to completion. ID3D11DeviceContext::GetData answers S_FALSE while the query
@@ -312,8 +329,6 @@ private:
     uint32_t m_slotRead = 0;
     uint32_t m_inFlight = 0;
     ComPtr<ID3D11Buffer> m_planeStaging;
-    ComPtr<ID3D11Texture2D> m_ownNv12;
-    ComPtr<ID3D11Texture2D> m_ownBgra;
     // The stage marks: one timestamp query per mark, grown once and reused for every picture after.
     std::vector<ComPtr<ID3D11Query>> m_marks;
     std::vector<uint32_t> m_markStage;    // which stage the dispatch before mark i belongs to
