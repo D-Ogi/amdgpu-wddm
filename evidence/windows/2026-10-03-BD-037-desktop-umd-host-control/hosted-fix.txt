@@ -1,0 +1,14 @@
+recipe P:\bc-250\scratch\m14\dcomp-a8\wt\tools\build\build-mesa.ps1 SHA256 34D8C3CCFC08C7AD1FDDAA38262B15C3D2EE5A2C92B5B97DA697ECD71F400A23
+source P:\bc-250\scratch\bd037\zink-src at e7d475450b61dc9d7a2aab21933bbed50b0e0e1d, status lines: 5
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+ninja: Entering directory `P:\bc-250\scratch\bd037\build-zink'
+[1/4] Compiling C++ object src/gallium/targets/d3d10umd/bc250_ensure_surface_test.exe.p/bc250_ensure_surface_test.cpp.obj
+[2/4] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[3/4] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[4/4] Linking target src/gallium/targets/d3d10umd/bc250_ensure_surface_test.exe
+test P:\bc-250\scratch\bd037\build-zink\src\gallium\targets\d3d10umd\bc250_ensure_surface_test.exe SHA256 91D8369099152B97AEC009E53C10E93DCBE862389A16008A1722F4C7F5378F1F
+ensure retry, hosted branch: 3 failed steps retried
+ensure retry, CPU branch: 4 failed steps retried
+PASS: 0 failures
+test exit 0
