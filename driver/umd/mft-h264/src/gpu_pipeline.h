@@ -93,6 +93,14 @@ struct GpuFrameParams {
     int32_t betaOffsetDiv2 = 0;
 };
 
+// How the deblocking wavefront is driven. Rows is the default: one dispatch of heightMb thread
+// groups, each walking its macroblock row and waiting on the row above through the rwProgress
+// counters (cs_deblock.hlsl, CSDeblockRows). Waves is the earlier shape, one dispatch per value of
+// t = mbx + 2 * mby, which needs no assumption about thread group residency. Serial is one macroblock
+// per dispatch in raster order, which is clause 8.7 read literally and tells a schedule defect from a
+// filter defect. BC250_MFT_DEBLOCK=wavefront and BC250_MFT_SERIAL_DEBLOCK select the other two.
+enum class DeblockMode : uint32_t { Rows = 0, Waves = 1, Serial = 2 };
+
 // The stages of one picture's GPU work, in the order the command stream holds them. GpuStageMode is
 // the macroblock pass: on an I picture the anti-diagonal sweep of cs_mb's intra entry point, one
 // dispatch per anti-diagonal, and on a P picture one dispatch of its inter entry point.
@@ -226,6 +234,7 @@ private:
     ComPtr<ID3D11ComputeShader> m_csEncodeIntra;
     ComPtr<ID3D11ComputeShader> m_csEncodeInter;
     ComPtr<ID3D11ComputeShader> m_csDeblock;
+    ComPtr<ID3D11ComputeShader> m_csDeblockRows;
     ComPtr<ID3D11Buffer> m_cb;
 
     Plane m_src[3];
@@ -233,6 +242,10 @@ private:
     Plane m_upload[3];
     Plane m_levels;
     Plane m_mbinfo;
+    // One word per macroblock row plus a leading sentinel, for the single-dispatch deblocking
+    // wavefront. Reset from m_progressReset before every deblocking pass.
+    Plane m_progress;
+    std::vector<uint32_t> m_progressReset;
     ComPtr<ID3D11Buffer> m_levelsStaging;
     ComPtr<ID3D11Buffer> m_mbinfoStaging;
     ComPtr<ID3D11Buffer> m_planeStaging;
@@ -247,6 +260,7 @@ private:
     std::vector<uint32_t> m_markGroups;   // its thread groups
     uint32_t m_markCount = 0;
     uint32_t m_stageLevel = 0;
+    DeblockMode m_deblockMode = DeblockMode::Rows;
     GpuStageProfile m_profile;
 
     uint32_t m_visW = 0, m_visH = 0;

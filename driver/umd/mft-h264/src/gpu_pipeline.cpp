@@ -14,6 +14,7 @@
 #include "gen/cs_encode_intra.h"
 #include "gen/cs_encode_inter.h"
 #include "gen/cs_deblock.h"
+#include "gen/cs_deblock_rows.h"
 
 namespace bc250h264 {
 
@@ -309,6 +310,7 @@ HRESULT GpuEncoder::CompileShaders()
         { g_CSEncodeIntra, sizeof(g_CSEncodeIntra), &m_csEncodeIntra },
         { g_CSEncodeInter, sizeof(g_CSEncodeInter), &m_csEncodeInter },
         { g_CSDeblock, sizeof(g_CSDeblock), &m_csDeblock },
+        { g_CSDeblockRows, sizeof(g_CSDeblockRows), &m_csDeblockRows },
     };
     for (const Entry& e : entries) {
         HRESULT hr = m_device->CreateComputeShader(e.code, e.size, nullptr, e.out);
@@ -417,6 +419,14 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     if (FAILED(hr)) { return hr; }
     hr = CreateRawBuffer(MbCount() * kMbInfoWords * 4u, true, &m_mbinfo);
     if (FAILED(hr)) { return hr; }
+    // The deblocking row counters: word 0 is the sentinel for the row above row 0 and holds widthMb,
+    // so that row never waits, and word mby+1 counts the filtered macroblocks of row mby. Written from
+    // the CPU before every deblocking pass with UpdateSubresource, which is a few hundred bytes and
+    // needs nothing of the device beyond what the import path already uses.
+    hr = CreateRawBuffer((m_heightMb + 1u) * 4u, true, &m_progress);
+    if (FAILED(hr)) { return hr; }
+    m_progressReset.assign(m_progress.bytes / 4u, 0u);
+    m_progressReset[0] = m_widthMb;
     hr = CreateStaging(m_levels.bytes, &m_levelsStaging);
     if (FAILED(hr)) { return hr; }
     hr = CreateStaging(m_mbinfo.bytes, &m_mbinfoStaging);
@@ -447,6 +457,19 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
             m_stageLevel = (buf[0] == '2') ? 2u : 1u;
         }
     }
+    // How the deblocking wavefront is driven; see DeblockMode. Read once, for the same reason.
+    // BC250_MFT_SERIAL_DEBLOCK wins over BC250_MFT_DEBLOCK, because it is the narrower diagnostic.
+    m_deblockMode = DeblockMode::Rows;
+    {
+        char buf[16] = {};
+        if (GetEnvironmentVariableA("BC250_MFT_DEBLOCK", buf, sizeof(buf)) > 0 &&
+            (buf[0] == 'w' || buf[0] == 'W')) {
+            m_deblockMode = DeblockMode::Waves;
+        }
+        if (GetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr, 0) != 0) {
+            m_deblockMode = DeblockMode::Serial;
+        }
+    }
 
     // The reconstruction textures are created without initial data, so their first contents are
     // whatever Direct3D leaves there. Nothing reads them before they are written: the first picture
@@ -467,6 +490,7 @@ void GpuEncoder::Shutdown()
     m_csEncodeIntra.Reset();
     m_csEncodeInter.Reset();
     m_csDeblock.Reset();
+    m_csDeblockRows.Reset();
     for (int i = 0; i < 3; ++i) {
         m_src[i] = Plane();
         m_upload[i] = Plane();
@@ -476,6 +500,8 @@ void GpuEncoder::Shutdown()
     }
     m_levels = Plane();
     m_mbinfo = Plane();
+    m_progress = Plane();
+    m_progressReset.clear();
     m_levelsStaging.Reset();
     m_mbinfoStaging.Reset();
     m_planeStaging.Reset();
@@ -636,7 +662,8 @@ HRESULT GpuEncoder::UploadBgraSystem(const uint8_t* rgb, uint32_t pitch, ID3D11T
 HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p,
                                 std::vector<uint32_t>& levels, std::vector<MbInfo>& info)
 {
-    ID3D11UnorderedAccessView* nullUavs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+    // Six slots: u0..u2 reconstruction, u3 levels, u4 macroblock info, u5 the deblocking row counters.
+    ID3D11UnorderedAccessView* nullUavs[6] = {};
     ID3D11ShaderResourceView* nullSrvs[13] = {};
 
     const double record0 = NowMs();
@@ -758,20 +785,35 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
 
         // ---- deblocking ------------------------------------------------------------------------
         if (p.deblockIdc != 1u) {
+            // The counters the single-dispatch wavefront waits on, reset before the pass. Recorded in
+            // the command stream, so it executes before the dispatch, and done before the UAV is bound
+            // so that the runtime does not have to unbind it.
+            if (m_deblockMode == DeblockMode::Rows) {
+                m_ctx->UpdateSubresource(m_progress.buffer.Get(), 0, nullptr,
+                                         m_progressReset.data(), 0, 0);
+            }
             ID3D11ShaderResourceView* mb[1] = { m_mbinfo.srv.Get() };
-            ID3D11UnorderedAccessView* duav[5] = {
+            ID3D11UnorderedAccessView* duav[6] = {
                 m_rec[m_cur][0].uav.Get(), m_rec[m_cur][1].uav.Get(), m_rec[m_cur][2].uav.Get(),
-                nullptr, nullptr
+                nullptr, nullptr, m_progress.uav.Get()
             };
-            m_ctx->CSSetUnorderedAccessViews(0, 5, duav, nullptr);
+            m_ctx->CSSetUnorderedAccessViews(0, 6, duav, nullptr);
             m_ctx->CSSetShaderResources(12, 1, mb);
             // t = mbx + 2 * mby, see the header of cs_deblock.hlsl: the filter writes into its left
             // and above neighbours, so the anti-diagonal of the intra pass is not a legal order here.
-            // One wave holds the macroblock rows mby with 0 <= t - 2*mby <= widthMb - 1.
-            // Diagnostic: one macroblock per dispatch, in raster order, which is clause 8.7 read
-            // literally. Only for telling a wavefront defect from a filter or bS defect; it costs one
-            // dispatch per macroblock (2400 for 640x480).
-            if (GetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr, 0) != 0) {
+            // CSDeblockRows walks that schedule inside one dispatch, one thread group per macroblock
+            // row, which is what this stage costs on a GPU where the launch is the cost. The two other
+            // modes keep the dispatch boundary as the synchronisation: Waves is one dispatch per value
+            // of t, holding the macroblock rows mby with 0 <= t - 2*mby <= widthMb - 1, and Serial is
+            // one macroblock per dispatch in raster order, which is clause 8.7 read literally and is
+            // only for telling a schedule defect from a filter or bS defect (2400 dispatches at
+            // 640x480).
+            if (m_deblockMode == DeblockMode::Rows) {
+                UpdateConstants(p, 0, 0);
+                m_ctx->CSSetShader(m_csDeblockRows.Get(), nullptr, 0);
+                m_ctx->Dispatch(m_heightMb, 1, 1);
+                CountDispatch(GpuStageDeblock, m_heightMb);
+            } else if (m_deblockMode == DeblockMode::Serial) {
                 for (uint32_t my = 0; my < m_heightMb; ++my) {
                     for (uint32_t mx = 0; mx < m_widthMb; ++mx) {
                         UpdateConstants(p, mx + 2u * my, my);
@@ -798,7 +840,7 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
             MarkStageEnd(GpuStageDeblock);
         }
 
-        m_ctx->CSSetUnorderedAccessViews(0, 5, nullUavs, nullptr);
+        m_ctx->CSSetUnorderedAccessViews(0, 6, nullUavs, nullptr);
         m_ctx->CSSetShaderResources(0, 13, nullSrvs);
     }
 

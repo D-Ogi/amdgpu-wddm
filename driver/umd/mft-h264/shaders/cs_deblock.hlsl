@@ -26,6 +26,11 @@
 // pass runs after the whole picture is reconstructed, and its output is both the output picture and the
 // reference for the next picture.
 
+// The reconstruction views of this pass are globallycoherent and one more slot carries the row
+// progress counters: CSDeblockRows below runs the whole wavefront inside one dispatch, so a thread
+// group reads samples another group of the same dispatch wrote and no dispatch boundary separates
+// the two. See h264_common.hlsli.
+#define BC250_DEBLOCK_PASS
 #include "h264_common.hlsli"
 
 // Table 8-16.
@@ -167,18 +172,11 @@ void FilterEdge(inout int s[8], uint bS, int alpha, int beta, int tc0, bool chro
     }
 }
 
-[numthreads(32, 1, 1)]
-void CSDeblock(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
+// One macroblock of clause 8.7, in place on the reconstruction. Every caller below has first
+// established that the dependency set {(mbx-1,mby), (mbx,mby-1), (mbx+1,mby-1)} is already
+// filtered and visible to this group.
+void DeblockMacroblock(uint mbx, uint mby, uint tid)
 {
-    // gDiagonal is t = mbx + 2 * mby and gDiagonalBase the first macroblock row on that wave.
-    const uint mby = gDiagonalBase + gid.x;
-    if (mby >= gHeightMb || mby * 2u > gDiagonal) {
-        return;
-    }
-    const uint mbx = gDiagonal - mby * 2u;
-    if (mbx >= gWidthMb) {
-        return;
-    }
     const int x0 = int(mbx * 16u);
     const int y0 = int(mby * 16u);
     const int cx0 = int(mbx * 8u);
@@ -309,20 +307,20 @@ void CSDeblock(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
     // these samples, so writing an unmodified byte back with its own value is safe.
     const uint lumaRows = 19u;        // ly from -3 to 15
     const uint lumaWords = 5u;
+    // A guarded store rather than a `continue`: a thread-strided loop that leaves its body early is
+    // varying flow control to fxc, and the compiler then refuses the next thread sync it meets, which
+    // is the one CSDeblockRows places between two macroblocks of the same group (error X3663). The
+    // stores are the same ones.
     for (i = tid; i < lumaRows * lumaWords; i += 32u) {
         const int ly = int(i / lumaWords) - 3;
         const int wx = int(i % lumaWords) * 4 - 4;     // -4, 0, 4, 8, 12
-        if (!haveA && ly < 0) {
-            continue;
+        if ((haveA || ly >= 0) && (haveL || wx >= 0)) {
+            const uint packed = PackBytes(uint(gL[(ly + 4) * 20 + wx + 4 + 0]),
+                                          uint(gL[(ly + 4) * 20 + wx + 4 + 1]),
+                                          uint(gL[(ly + 4) * 20 + wx + 4 + 2]),
+                                          uint(gL[(ly + 4) * 20 + wx + 4 + 3]));
+            rwY.Store(uint(y0 + ly) * gPadW + uint(x0 + wx), packed);
         }
-        if (!haveL && wx < 0) {
-            continue;
-        }
-        const uint packed = PackBytes(uint(gL[(ly + 4) * 20 + wx + 4 + 0]),
-                                      uint(gL[(ly + 4) * 20 + wx + 4 + 1]),
-                                      uint(gL[(ly + 4) * 20 + wx + 4 + 2]),
-                                      uint(gL[(ly + 4) * 20 + wx + 4 + 3]));
-        rwY.Store(uint(y0 + ly) * gPadW + uint(x0 + wx), packed);
     }
     const uint chromaRows = 11u;      // ly from -3 to 7
     const uint chromaWords = 3u;      // -4, 0, 4
@@ -331,21 +329,104 @@ void CSDeblock(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
         const uint k = i % (chromaRows * chromaWords);
         const int ly = int(k / chromaWords) - 3;
         const int wx = int(k % chromaWords) * 4 - 4;
-        if (!haveA && ly < 0) {
-            continue;
+        if ((haveA || ly >= 0) && (haveL || wx >= 0)) {
+            const uint packed = PackBytes(uint(gC[comp][(ly + 4) * 12 + wx + 4 + 0]),
+                                          uint(gC[comp][(ly + 4) * 12 + wx + 4 + 1]),
+                                          uint(gC[comp][(ly + 4) * 12 + wx + 4 + 2]),
+                                          uint(gC[comp][(ly + 4) * 12 + wx + 4 + 3]));
+            const uint addr = uint(cy0 + ly) * (gPadW >> 1u) + uint(cx0 + wx);
+            if (comp == 0u) {
+                rwCb.Store(addr, packed);
+            } else {
+                rwCr.Store(addr, packed);
+            }
         }
-        if (!haveL && wx < 0) {
-            continue;
-        }
-        const uint packed = PackBytes(uint(gC[comp][(ly + 4) * 12 + wx + 4 + 0]),
-                                      uint(gC[comp][(ly + 4) * 12 + wx + 4 + 1]),
-                                      uint(gC[comp][(ly + 4) * 12 + wx + 4 + 2]),
-                                      uint(gC[comp][(ly + 4) * 12 + wx + 4 + 3]));
-        const uint addr = uint(cy0 + ly) * (gPadW >> 1u) + uint(cx0 + wx);
-        if (comp == 0u) {
-            rwCb.Store(addr, packed);
-        } else {
-            rwCr.Store(addr, packed);
+    }
+}
+
+// The wavefront as a sequence of dispatches, one per value of t = mbx + 2 * mby: gDiagonal carries t
+// and gDiagonalBase the first macroblock row on that wave. Kept because a dispatch boundary needs no
+// assumption about thread group residency, which makes this the fallback of
+// BC250_MFT_DEBLOCK=wavefront and the shape BC250_MFT_SERIAL_DEBLOCK drives one macroblock at a time.
+[numthreads(32, 1, 1)]
+void CSDeblock(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
+{
+    const uint mby = gDiagonalBase + gid.x;
+    if (mby >= gHeightMb || mby * 2u > gDiagonal) {
+        return;
+    }
+    const uint mbx = gDiagonal - mby * 2u;
+    if (mbx >= gWidthMb) {
+        return;
+    }
+    DeblockMacroblock(mbx, mby, tid);
+}
+
+// The same wavefront inside one dispatch. One thread group per macroblock row, Dispatch(heightMb,1,1),
+// each group walking its row from left to right and waiting for the row above to be two macroblocks
+// ahead. The order is the same t = mbx + 2 * mby schedule: group mby filters macroblock mbx at step
+// 2 * mby + mbx + 1, so the critical path is 2 * heightMb + widthMb - 2 macroblocks, which is exactly
+// what the dispatch sequence also was. What goes away is the launch cost, and on this encoder the
+// launch cost was the whole cost: a least squares fit over the 254 dispatches of a 1080p picture gives
+// 9.8 us of fixed cost and a slope of zero against the thread group count, so a wave of 60
+// macroblocks cost what a wave of 1 macroblock cost.
+//
+// rwProgress[mby + 1] is how many macroblocks of row mby are filtered and visible to other groups.
+// rwProgress[0] stands for the row above row 0 and the host presets it to widthMb, so row 0 never
+// waits and the wait needs no special case. The device memory barrier before the filtering is the
+// acquire that pairs with the release barrier after it: without the first one a group could read a
+// stale cache line of the row above, and without the second one it could publish a count for samples
+// that are still in its own cache.
+//
+// Forward progress rests on all heightMb groups being resident at once: a group that spins while the
+// group above it has not been scheduled would never finish. That is 68 groups at 1080p and 256 at the
+// 4096 line bound of IsCodableFrameSize, each one wave of 32 threads holding 2.75 KB of groupshared
+// memory, which every part this encoder runs on holds many times over. BC250_MFT_DEBLOCK=wavefront is
+// the way out if a scheduler ever disagrees.
+[numthreads(32, 1, 1)]
+void CSDeblockRows(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
+{
+    const uint mby = gid.x;
+    if (mby >= gHeightMb) {
+        return;
+    }
+    for (uint mbx = 0; mbx < gWidthMb; ++mbx) {
+        const uint need = min(mbx + 2u, gWidthMb);
+        // The wait, and the two things about it that are not free choices.
+        //
+        // It is an atomic, not a Load. A plain Load of this globallycoherent buffer read a stale
+        // value: with the Load form, 1080p produced 0 of 60 pictures bit exact while the same build
+        // with BC250_MFT_DEBLOCK=wavefront produced 60 of 60, and the first differing sample was
+        // always row 13 of a macroblock in column 0, which is the sample the next row's top edge
+        // rewrites. The pattern fits a cache line that still held the previous picture's counters, so
+        // the first Load answered "the row above is finished" and no group ever waited. An
+        // InterlockedAdd of zero returns the same number and is performed where the counters live, and
+        // with it the same cases are 60 of 60 bit exact. Reading counters with an atomic costs about
+        // 0.7 ms per 1080p picture against the broken Load form, which is the price of the guarantee.
+        //
+        // Every lane waits, not lane 0 followed by a group sync. fxc 10.1 removes a thread sync that
+        // follows a loop gated on the thread index, silently and at every optimisation level: with
+        // `if (tid == 0) { spin }` then GroupMemoryBarrierWithGroupSync(), the generated assembly held
+        // no sync at that point at all and thirty-one lanes read the row above without waiting. It
+        // keeps a plain DeviceMemoryBarrier() there, and it keeps the release barrier below, so those
+        // two are the ones this code is allowed to rely on. The assembly is worth checking after any
+        // change here: fxc /Fc and look for sync_uglobal and sync_uglobal_g_t.
+        //
+        // [allow_uav_condition] is required: without it fxc refuses a loop whose exit condition reads
+        // an unordered access view.
+        uint seen = 0u;
+        [allow_uav_condition]
+        do {
+            rwProgress.InterlockedAdd(mby * 4u, 0u, seen);
+        } while (seen < need);
+        // The acquire: the samples of the row above are read after the counter that announced them.
+        DeviceMemoryBarrier();
+        DeblockMacroblock(mbx, mby, tid);
+        // The release: every lane's stores are complete and globally visible, and every lane has
+        // finished reading the groupshared window, before lane 0 publishes the count.
+        AllMemoryBarrierWithGroupSync();
+        if (tid == 0u) {
+            rwProgress.Store((mby + 1u) * 4u, mbx + 1u);
         }
     }
 }
