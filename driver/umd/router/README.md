@@ -9,12 +9,12 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   `driver/umd/dxvk`) or to the CPU UMD, by the `AppRouter` policy (`cpu`, `allowlist`, `gpu-default`, with `Allow`
   and `Deny` lists). The sign-in and consent processes always stay on the CPU UMD. In `gpu-default` mode (the
   installer's default since 2026-10-04) Windows components - images below the Windows directory and packaged apps
-  under `WindowsApps\Microsoft*` - also stay on the CPU UMD unless `Allow` names them (BD-061: on the GPU UMD Notepad
-  loops on `OpenAdapter` without a window, Calculator and Task Manager show blank content; lab, 2026-10-04; the cause
-  is not established). The second rule matches a directory name, not a publisher, so a packaged game below such a
-  directory needs an `Allow` entry. Image and Windows directory are compared as final resolved paths
-  (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions do not bypass the test; an image or directory
-  that cannot be resolved also stays on the CPU UMD unless `Allow` names it (reason `app-component-unknown`);
+  under `WindowsApps\Microsoft*` - take the GPU UMD like any other image since train b20. Until then they stayed on
+  the CPU UMD, at FL 10_0 (BD-088), because Notepad, Calculator and Task Manager failed on the GPU UMD (BD-061, fixed
+  by the shared A8, FP16 and RGB10A2 surfaces of the D3D11 shell and verified on b20). Image and Windows directory
+  are compared as final resolved paths (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions read as
+  one form; an image or directory that cannot be resolved stays on the CPU UMD unless `Allow` names it (reason
+  `app-component-unknown`);
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
 
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's

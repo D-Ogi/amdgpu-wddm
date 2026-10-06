@@ -112,13 +112,14 @@ static void PolicyTests()
               c.exe ? c.exe : L"(null)", (int)c.mode, c.e102, c.gpu, AppReasonName(d.reason));
     }
 
-    // Windows components (gpu-default only; Allow overrides; Deny and the protected list still win).
+    // Windows components take the GPU UMD under gpu-default since train b20 (BD-061 verified, BD-088); Deny and the
+    // protected list still win.
     const wchar_t allowDx[] = L"dxdiag.exe\0";
-    // Unknown (an unresolvable image or Windows directory) is treated like Yes: CPU unless Allow names the image.
+    // Unknown (an unresolvable image or Windows directory) stays on the CPU UMD unless Allow names the image.
     const Component Y = Component::Yes, N = Component::No, U = Component::Unknown;
     struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; AppRoute route; AppReason reason; };
     const CompCase comp[] = {
-        {L"notepad.exe", Gd, allowDx, nullptr, Y, AppRoute::Cpu, AppReason::WindowsComponent},
+        {L"notepad.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
         {L"dxdiag.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
         {L"game.exe", Gd, allowDx, nullptr, N, AppRoute::Gpu, AppReason::Default},
         {L"witcher3.exe", Gd, allowDx, deny, N, AppRoute::Cpu, AppReason::Denied},

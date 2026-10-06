@@ -83,7 +83,6 @@ enum class AppReason {
     Protected,    // a logon or secure-desktop process (built-in list below), never routed to the GPU UMD
     Denied,       // listed in Deny (both modes; Deny wins over Allow)
     NotAllowed,   // allowlist mode and not listed in Allow
-    WindowsComponent, // gpu-default mode, a Windows component (IsWindowsComponentPath) and not listed in Allow
     ComponentUnknown, // gpu-default mode, the image or the Windows directory could not be resolved, not in Allow
     D3d10Entry,   // OpenAdapter10 (the D3D10.0 runtime): the application GPU UMD exports OpenAdapter10_2 only
     GpuUmdUnset,  // GpuUmdPath absent, not a REG_SZ or not an absolute path
@@ -119,11 +118,12 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 
 // Windows components: images below the Windows directory (System32, SystemApps, ImmersiveControlPanel and the
 // rest) and packaged apps below "<anything>\WindowsApps\Microsoft*". The second rule is a compatibility heuristic
-// on the directory name, not a publisher check: a packaged game in such a directory needs an Allow entry. On the
-// lab (2026-10-04) Notepad looped on OpenAdapter without a window and Calculator and Task Manager showed blank
-// content on the application GPU UMD (BD-061; the cause is not established, DirectComposition content is one
-// hypothesis). In gpu-default mode such images stay on the CPU UMD unless Allow names them. The router passes
-// final resolved paths (router-identity.h), so "\\?\", 8.3 and junction spellings reach this test as one form.
+// on the directory name, not a publisher check. Until train b20, gpu-default kept such images on the CPU UMD (FL
+// 10_0, BD-088) because Notepad, Calculator and Task Manager failed on the application GPU UMD (BD-061,
+// 2026-10-04). The shared A8/FP16/RGB10A2 surfaces of the D3D11 shell fixed that (verified on b20), so a component
+// now takes the GPU UMD like any other image; only an image whose path cannot be resolved (Component::Unknown)
+// stays on the CPU UMD. The router passes final resolved paths (router-identity.h), so "\\?\", 8.3 and junction
+// spellings reach this test as one form.
 // Prefix tests are case-insensitive and end at a path separator, so "C:\Windows2" or "C:\Windows.old" do not match.
 inline bool HasDirPrefix(const wchar_t *path, const wchar_t *dir)
 {
@@ -167,8 +167,8 @@ inline AppDecision DecideApp(const AppInputs &in)
     if (IsProtectedApp(in.exe_base)) return {AppRoute::Cpu, AppReason::Protected};
     if (InList(in.exe_base, in.deny)) return {AppRoute::Cpu, AppReason::Denied};
     if (in.mode == AppMode::Allowlist && !InList(in.exe_base, in.allow)) return {AppRoute::Cpu, AppReason::NotAllowed};
-    if (in.mode == AppMode::GpuDefault && in.component != Component::No && !InList(in.exe_base, in.allow))
-        return {AppRoute::Cpu, in.component == Component::Yes ? AppReason::WindowsComponent : AppReason::ComponentUnknown};
+    if (in.mode == AppMode::GpuDefault && in.component == Component::Unknown && !InList(in.exe_base, in.allow))
+        return {AppRoute::Cpu, AppReason::ComponentUnknown};
     if (!in.entry_10_2) return {AppRoute::Cpu, AppReason::D3d10Entry};
     if (!in.gpu_umd_set) return {AppRoute::Cpu, AppReason::GpuUmdUnset};
     return {AppRoute::Gpu, in.mode == AppMode::Allowlist ? AppReason::Allowed : AppReason::Default};
@@ -194,7 +194,6 @@ inline const char *AppReasonName(AppReason r)
     case AppReason::Protected: return "app-protected";
     case AppReason::Denied: return "app-denied";
     case AppReason::NotAllowed: return "app-not-allowed";
-    case AppReason::WindowsComponent: return "app-windows-component";
     case AppReason::ComponentUnknown: return "app-component-unknown";
     case AppReason::D3d10Entry: return "app-d3d10-entry";
     case AppReason::GpuUmdUnset: return "app-gpu-umd-unset";
