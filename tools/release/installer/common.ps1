@@ -871,6 +871,82 @@ function Get-RepairSetDriverVersion([string]$Version) {
     if (-not (Test-Path -LiteralPath $m)) { return $null }
     try { return [string](Get-Content -LiteralPath $m -Raw | ConvertFrom-Json).kmd_version } catch { return $null }
 }
+# Our Vulkan ICD registrations in both views of the registry: the value names that name a folder of ours. The
+# installer writes one name per view, the full path of radeon_icd.json under the install root; an older release of
+# ours wrote the same name under its own install root. Nothing of another vendor carries our release name.
+function Get-OurVulkanIcdValues {
+    $r = @()
+    foreach ($key in @($script:KhronosKey, $script:KhronosKeyWow)) {
+        $item = Get-Item -LiteralPath $key -ErrorAction SilentlyContinue
+        if (-not $item) { continue }
+        foreach ($n in @($item.GetValueNames())) {
+            if ($n -and ($n -like "*$($script:ReleaseName)*") -and ($n -like '*radeon_icd.json')) { $r += [pscustomobject]@{ key = $key; name = $n } }
+        }
+    }
+    return $r
+}
+# Our scheduled tasks. The installer registers one ('amdgpu-wddm start confirm'); the sweep takes any task of ours,
+# so a task that an older release named differently goes with it.
+function Get-OurScheduledTasks {
+    try { return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -like "$($script:ReleaseName)*" } | ForEach-Object { $_.TaskName }) } catch { return @() }
+}
+# Our test certificates in the two machine stores, by subject: the certificate of this release and of any older one.
+function Get-OurCertificates {
+    $r = @()
+    foreach ($store in 'Root', 'TrustedPublisher') {
+        try { $r += @(Get-ChildItem "Cert:\LocalMachine\$store" -ErrorAction Stop | Where-Object { $_.Subject -like "*$($script:ReleaseName)*" } | ForEach-Object { [pscustomobject]@{ store = $store; thumbprint = $_.Thumbprint; subject = $_.Subject } }) } catch { }
+    }
+    return $r
+}
+# What of this release is on the computer. uninstall.ps1 prints it as its last step, so that a tester (and the host
+# tests) can read in one place whether anything of ours is left; the control application's support report reads the
+# same items. Every probe reads only and never throws. One row per item:
+#   item    a short name
+#   present $true when something of ours is there
+#   detail  what was found, or why nothing could be read
+#   kept    $true when the uninstaller leaves it on purpose (then present is not a leftover)
+function Get-ReleaseFootprint {
+    param([string]$InstallRoot, $State, [string[]]$MftKeys = @())
+    $rows = New-Object System.Collections.ArrayList
+    function Add-Row([string]$Item, [bool]$Present, [string]$Detail, [bool]$Kept = $false) { [void]$rows.Add([pscustomobject]@{ item = $Item; present = $Present; detail = $Detail; kept = $Kept }) }
+    $probe = {
+        param([string]$Item, [scriptblock]$Read, [bool]$Kept = $false)
+        try { $x = & $Read; Add-Row $Item ([bool]$x.present) ([string]$x.detail) $Kept }
+        catch { Add-Row $Item $false "not read: $($_.Exception.Message)" $Kept }
+    }
+    & $probe 'install root' { $p = (Test-Path -LiteralPath $InstallRoot); @{ present = $p; detail = "$InstallRoot$(if ($p) { ' is there' } else { ' is gone' })" } }
+    foreach ($d in 'System32', 'SysWOW64') {
+        $dir = Join-Path $env:windir $d
+        & $probe "$d stub" {
+            $stub = Join-Path $dir 'bc250umd.dll'
+            $old = @(Get-ChildItem -LiteralPath $dir -File -Filter 'bc250umd.dll.old-*' -ErrorAction SilentlyContinue).Count
+            $p = (Test-Path -LiteralPath $stub) -or ($old -gt 0)
+            @{ present = $p; detail = "$stub$(if (Test-Path -LiteralPath $stub) { ' is there' } else { ' is gone' })$(if ($old) { ", $old old copy/copies" } else { '' })" }
+        }
+    }
+    & $probe 'driver store' { $pk = @(Get-OurDriverPackages); @{ present = ($pk.Count -gt 0); detail = $(if ($pk.Count) { "$($pk.Count) package(s) of bc250kmd.inf: $($pk -join ', ')" } else { 'no package of ours' }) } }
+    & $probe 'driver service' { $k = (Split-Path $script:ParametersKey); $p = (Test-Path -LiteralPath $k); @{ present = $p; detail = "$k$(if ($p) { ' is there' } else { ' is gone' })" } }
+    & $probe 'policy keys' {
+        $found = @(@($script:SoftwareKey, "HKLM:\SOFTWARE\WOW6432Node\$($script:ReleaseName)") | Where-Object { Test-Path -LiteralPath $_ })
+        @{ present = ($found.Count -gt 0); detail = $(if ($found.Count) { $found -join ', ' } else { "$($script:SoftwareKey) is gone" }) }
+    }
+    & $probe 'Vulkan registration' { $v = @(Get-OurVulkanIcdValues); @{ present = ($v.Count -gt 0); detail = $(if ($v.Count) { @($v | ForEach-Object { "$($_.key) '$($_.name)'" }) -join ', ' } else { 'no entry of ours in either view' }) } }
+    & $probe 'H.264 encoder keys' { @{ present = (@($MftKeys).Count -gt 0); detail = $(if (@($MftKeys).Count) { @($MftKeys) -join ', ' } else { 'no key of ours' }) } }
+    & $probe 'scheduled task' { $t = @(Get-OurScheduledTasks); @{ present = ($t.Count -gt 0); detail = $(if ($t.Count) { $t -join ', ' } else { 'no task of ours' }) } }
+    & $probe 'RunOnce entry' { $p = [bool](Get-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue); @{ present = $p; detail = "$($script:RunOnceKey) $($script:RunOnceName)$(if ($p) { ' is there' } else { ' is gone' })" } }
+    & $probe 'Start menu' {
+        $lnks = @(@('amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') | ForEach-Object { Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$_" } | Where-Object { Test-Path -LiteralPath $_ })
+        @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
+    }
+    & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
+    & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
+    # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
+    # application's own files (the tester's setting backups and action log).
+    $fwKept = [bool]($State -and $State.firmware_dir_existed)
+    & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
+    & $probe 'control application data' { $d = Join-Path (Split-Path $script:StateDir) 'control'; $p = (Test-Path -LiteralPath $d); @{ present = $p; detail = "$d$(if ($p) { ' is there (the tester''s setting backups and action log)' } else { ' is gone' })" } } $true
+    return $rows.ToArray()
+}
 
 # MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT): delete a file that a running process (DWM) still has mapped.
 function Remove-FileAtReboot([string]$Path) {
