@@ -91,9 +91,17 @@ picture's commands and how long it then waited in the one blocking `Map`.
 Two more switches pick an implementation rather than a measurement, both read once in
 `GpuEncoder::Initialize`: `BC250_MFT_DEBLOCK=waves` drives the deblocking filter as one dispatch per
 wavefront of clause 8.7 instead of one dispatch for the whole picture, and `BC250_MFT_SERIAL_DEBLOCK`
-drives it one macroblock row at a time, which is the narrowest shape and wins over the other. All three
-produce the same bytes. They exist so that a lab machine on which the single dispatch misbehaves can be
-bisected without a rebuild.
+drives it one **macroblock** at a time in raster order, which is clause 8.7 read literally, is the
+narrowest shape and wins over the other. All three produce the same bytes, which `sweep.ps1` holds them
+to. They exist so that a lab machine on which the single dispatch misbehaves can be bisected without a
+rebuild; `mfthost.exe --deblock-mode rows|waves|serial` picks the same three from the command line, which
+is what the sweep's two schedule cases use.
+
+The single dispatch is the default, and the thing it rests on is worth stating: every macroblock row is
+one thread group, and a group waits on a counter the group above it publishes, so all `heightMb` groups
+have to be resident at once. Direct3D promises no such thing. The wait is therefore bounded; when the
+bound expires the group filters anyway, which gives a wrong picture that every `--encode` and sweep case
+catches against the inbox decoder, instead of a spinning GPU that unit A cannot preempt its way out of.
 
 ### Pictures in flight
 
@@ -103,6 +111,20 @@ unit, so the entropy coding of one picture on the CPU overlaps the next picture'
 the blocking `Map` no longer stands in the middle of every picture. The depth is two unless the client
 asked for `CODECAPI_AVLowLatencyMode`, which gets one, because the frame of delivery delay a depth of
 two costs is the thing such a client asked not to have. `BC250_MFT_DEPTH` overrides both.
+
+That setting is honoured in the middle of a segment, not only at the next flush, which is when a
+conferencing client sends it. The slot ring can only be resized while it is empty, so the transform
+writes out the picture it still holds first: the picture in flight and the new one leave as two access
+units of one `ProcessInput`, and every picture after them as one of its own. `--mft` checks exactly that
+count, and it is the one check that fails if the setting is accepted and then not applied.
+
+Each slot owns the staging buffers the picture's result is copied into, its timestamp queries, and the
+private texture an input that cannot be read in place is copied into. That last one is per slot for the
+same reason as the others: one shared texture would make the next picture's copy wait for this picture's
+import dispatch to stop reading it, which is the whole of the pipeline undone, and for exactly the input
+shapes that need the copy - an array slice, a multisampled or non-shader-bindable texture, BGRA in system
+memory. The two reconstruction buffers are shared, which is why `GpuEncoder::ReadReconstruction` refuses
+above a depth of 2: above that, the picture it would read has already been overwritten.
 
 The input stream therefore declares `MFT_INPUT_STREAM_HOLDS_BUFFERS`: a picture still in the GPU keeps
 the client's sample until the transform retires it.
@@ -114,10 +136,11 @@ two byte sequences are equal. At a rate controlled setting they are not equal by
 encoder chooses the quantiser of a picture before it knows the byte count of the picture before it. The
 pipelined pass therefore refuses a rate controlled setting instead of pretending to compare.
 
-`sweep.ps1` is the conformance sweep: 68 cases from 64x48 to 1920x1080, every qp from 6 to 51 with
+`sweep.ps1` is the conformance sweep: 76 cases from 64x48 to 1920x1080, every qp from 6 to 51 with
 deblocking on, visible sizes that are not a whole number of macroblocks, GPU-sourced input, NV12 in
-system memory on a wider stride, CBR and still mode. Each case requires bit exactness against the
-inbox decoder.
+system memory on a wider stride, CBR and still mode. Six of them run the pipeline (`--depth 2`), one of
+those with fewer pictures than the pipeline is deep, and two pin the other two deblocking schedules to
+the same bytes. Each case requires bit exactness against the inbox decoder.
 
 ## Measured on the development PC, 2026-10-06
 
@@ -125,24 +148,31 @@ The same machine and the same caveat as the section below: an **NVIDIA GeForce R
 BC-250 in the computer, so these figures rank revisions of this component against each other and say
 nothing about unit A. 60 pictures, qp 26, deblocking on, the first ten pictures outside the averages
 (`--timing-skip 10`), one retained run of the gate set. The binaries:
-`amdgpu_wddm_mft_h264.dll` 507904 bytes, SHA-256
-`462D52F2C9C5F30FAACF430E1174033748D661BD2F00B3187ABFF03FF5BBABED`, `mfthost.exe` 637952 bytes,
-`6C68B81AE2A154D973B2646F4CDC6B326E5218E65A85C0110E3A0DCE522C1885`, `mftreg.exe` 431616 bytes,
-`C3FDAD9CD9E7C3B5AA45D940B9F17B79002B4353331F8F534110DFFCDBB857D3`, MSVC 14.44.35207, SDK
-10.0.26100.0.
+`amdgpu_wddm_mft_h264.dll` 510464 bytes, SHA-256
+`D3E29E6ED32446BC61ABD3A7AFC46CB3F4C03D1E029A384CC693FA4C0C9872CA`, `mfthost.exe` 656896 bytes,
+`E316E891191A6EA10A73D0483EC307249AE0054E6E89E7E558842A17B3521D18`, `mftreg.exe` 431616 bytes,
+`4E9A43966056D3805FDA188A43FF4C6A259059A5DB0D94433D204EC49AD81A95`, MSVC 14.44.35207, SDK
+10.0.26100.0. Two clean builds into two empty directories gave those three hashes.
 
 | | 720p ms/picture | GPU busy | pictures/s | 1080p ms/picture | GPU busy | pictures/s |
 |---|---|---|---|---|---|---|
 | before this work | 5.95 | 4.17 | 168.0 | 10.65 | 7.50 | 93.9 |
-| the three changes, serially | 2.47 | 1.20 | 404.1 | 4.72 | 2.00 | 211.9 |
-| and with two pictures in flight | **1.10** | 1.24 | **910.1** | **2.27** | 1.99 | **440.7** |
+| the changes, serially | 2.49 | 1.18 | 402.3 | 4.76 | 2.00 | 210.1 |
+| and with two pictures in flight | **1.11** | 1.25 | **899.1** | **2.30** | 2.08 | **434.9** |
 
-The GPU is busy with our dispatches for 1.24 ms of a 720p picture and 1.99 ms of a 1080p one, and the
-thread's own 1.10 and 2.27 ms are now below that, which is what a pipeline is for: the CPU half of one
-picture runs inside the GPU half of the next. Where the five-fold change came from: the sub-pel motion
-search reads its reference window from group shared memory instead of the texture (the largest single
-step), the deblocking filter runs the whole picture in one dispatch instead of one per wavefront, and
-the pipeline overlaps the two halves.
+Where the five-fold change came from: the sub-pel motion search reads its reference window from group
+shared memory instead of the texture (the largest single step), the deblocking filter runs the whole
+picture in one dispatch instead of one per wavefront, and the pipeline overlaps the two halves.
+
+The ms/picture column is the time the encoder held the thread, which starts after the picture exists;
+the test's own picture generation (0.80 ms at 720p, 1.62 ms at 1080p) is reported separately and is not
+in it. That is why the pipelined figure can be smaller than the GPU figure beside it: the GPU runs during
+that time as well. A pipeline brings the thread's own cost down towards the GPU's, never below the GPU's
+share of the wall clock, and the honest reading of 1.11 against 1.25 is that this encoder is GPU bound on
+this machine at 720p with the CPU half fully hidden. Both columns are divided by the same pictures: the
+iterations that did one submit and one retire, which is what a steady-state pipeline iteration is. A
+priming iteration (submit, no retire) and a draining one (retire, no submit) cost something else and are
+left out of both.
 
 Rate control, at the rate the client asked for against the rate it got, 60 pictures of the synthetic
 pattern, ours beside the inbox software encoder on the same source:
@@ -154,16 +184,29 @@ pattern, ours beside the inbox software encoder on the same source:
 | 1080p 16 Mbit/s | 16219100 | 101.4 % | 14293772 | 89.3 % |
 | 1080p 20 Mbit/s | 19801480 | 99.0 % | 15045852 | 75.2 % |
 
+Those byte counts are measurements, not gates. The rate controller reads a quantiser out of the content
+through `pow` and `log2`, and the C runtime dispatches both on the CPU: a one-bit difference near a
+rounding boundary moves one picture's quantiser by one and the step clamp carries it on. The byte counts
+of a constant bit rate run are therefore pinned with a tolerance and not to the exact byte, which the
+fixed-quantiser cases are, because nothing in their decision path is floating point.
+
 Quality against the inbox encoder is the open gap. At a quantiser that matches our byte count to the
 inbox encoder's within 1 %, our luma is 0.3 to 1.1 dB behind it and our chroma 1.7 to 3.6 dB behind
 (24 pictures at 720p 6 and 12 Mbit/s and at 1080p 16 Mbit/s). Picture by picture the shape of the gap
 says where it comes from: on the intra picture we are 1.4 dB behind on luma and 3 dB **ahead** on
 chroma, and from there every predicted picture loses a little more, down to 3.1 dB behind on luma by
-picture 34 of a 60 picture group. That is prediction, not quantisation: this encoder has one 16x16
+picture 34 of a 60 picture group. In the 60 picture constant bit rate runs the chroma gap reaches
+-8.47 dB on Cb and -9.45 dB on Cr at picture 30, with means of -3.82 and -4.98 dB; the decoder oracle
+rules out any drift between our reconstruction and a conformant decoder's, so that is allocation and
+prediction. That is prediction, not quantisation: this encoder has one 16x16
 motion vector per macroblock and no intra macroblock in a P picture, so a region a single vector cannot
 follow has nowhere to go but a coarse residual, and the error carries into the pictures predicted from
 it. Sub-macroblock partitions and intra macroblocks in P pictures are the two things that would close
 it, in that order.
+
+What the chroma gap is **not**: a chroma quantiser offset. `--chroma-qp-offset` was swept, and -6 did
+reach parity on Cb while costing 2.1 dB of luma. Spending luma to buy chroma moves the gap, it does not
+close it, so the shipped offset stays 0 and the next person does not have to re-run that sweep.
 
 ## Measured on the development PC, 2026-10-05 (the revision before the pipeline)
 
@@ -224,9 +267,18 @@ SDK 10.0.26100.0. Two clean builds into two empty directories gave those three h
 
 - Nothing has run on unit A. On unit A the eight `cs_5_0` shaders go through our D3D11 UMD compute
   path (DXBC to SPIR-V through dxbc-spirv), which this component has never exercised.
-- Throughput on unit A is unknown and is the real risk: 1.24 ms of GPU per 720p picture and 1.99 ms
+- Throughput on unit A is unknown and is the real risk: 1.18 ms of GPU per 720p picture and 2.00 ms
   per 1080p picture on a 4090, against the 24 or 40 compute units of the BC-250 (the CU mode of
-  `docs/design/cu-mode.md`) inside a 300 W board that is also rendering.
+  `docs/design/cu-mode.md`) inside a 300 W board that is also rendering. What the lab result should be
+  read against, written down before the trial: the pipeline is not where unit A's win can come from. The
+  halves measured on unit A on 2026-10-06 were 22 to 24 ms of GPU against 3.5 ms of CPU, so overlapping
+  them removes about a tenth. The case rests on the two shader changes, which took GPU busy from 4.17 to
+  1.19 ms at 720p and from 7.50 to 2.00 ms at 1080p on a 4090, a factor of 3.5 to 3.75. Scaling unit A's
+  22 to 24 ms by that gives roughly 6 to 7 ms at 720p and 11 to 12 ms at 1080p: inside the 16.7 ms a
+  1080p60 recording needs, and above an 8 ms GPU budget. And that extrapolation is optimistic for one
+  named reason: the sub-pel change raised `cs_me`'s group shared memory from 1552 bytes to about 9.8 KB
+  per 32-thread group, which on a 64 KB compute unit caps six groups where the 4090's larger shared
+  memory hides the cost.
 - Quality is 0.3 to 1.1 dB of luma and 1.7 to 3.6 dB of chroma behind the inbox software encoder at a
   matched byte count, and the gap grows across a group of pictures. The named causes are the 16x16
   only motion partition and the absence of intra macroblocks in a P picture.
