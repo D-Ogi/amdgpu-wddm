@@ -98,6 +98,24 @@ namespace AmdgpuWddmControl
             public ulong ExpectedGeneration;
         }
 
+        // Added with the case fan control (RUN_FAN). An older DLL throws EntryPointNotFoundException (the card then says
+        // the application and the driver do not match); an older driver answers 0xC00000BB.
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Fan(ref FanRequest request, [Out] byte[] data, uint bytes);
+
+        // BC250_FAN_REQUEST of tools/win/bc250kmd_cli/bc250kmd_cli.c, 104 bytes. Size says which fields the DLL may read.
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        public struct FanRequest
+        {
+            public uint Size, Op, Profile, Points;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public uint[] CurveC;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public uint[] CurvePct;
+            public uint FixedPct, LeaseMs, Store, Reserved;
+            public ulong ExpectedGeneration;
+        }
+
+        public const uint FanOpRead = 0, FanOpBoard = 1, FanOpCurve = 2, FanOpFixed = 3, FanOpRenew = 4;
+
         public const uint CurveOpRead = 0, CurveOpSet = 1, CurveOpKeep = 2, CurveOpCancel = 3, CurveOpReset = 4;
         public const uint CpuOpRead = 0, CpuOpReadback = 1, CpuOpSet = 2, CpuOpKeep = 3, CpuOpCancel = 4,
             CpuOpReset = 5, CpuOpCores = 6, CpuOpSearchBegin = 7, CpuOpSearchStep = 8;
@@ -201,6 +219,30 @@ namespace AmdgpuWddmControl
             request.Size = (uint)Marshal.SizeOf(typeof(CpuRequest));
             var r = request;
             return Call(KmdReply.CpuBytes, b => Bc250Cpu(ref r, b, (uint)b.Length), KmdReply.ParseCpu);
+        }
+
+        // The case fan control. READ is open to every caller; a write needs an administrator and the Generation of a
+        // READ of the same start. Every operation is a software escape: the driver applies a write at its next step.
+        public static KmdResult<FanState> Fan()
+        {
+            var r = NewFanRequest(FanOpRead);
+            return Call(KmdReply.FanBytes, b => Bc250Fan(ref r, b, (uint)b.Length), KmdReply.ParseFan);
+        }
+
+        public static FanRequest NewFanRequest(uint op)
+        {
+            return new FanRequest
+            {
+                Size = (uint)Marshal.SizeOf(typeof(FanRequest)), Op = op,
+                CurveC = new uint[KmdReply.FanCurveSlots], CurvePct = new uint[KmdReply.FanCurveSlots],
+            };
+        }
+
+        public static KmdResult<FanState> FanRequestOp(FanRequest request)
+        {
+            request.Size = (uint)Marshal.SizeOf(typeof(FanRequest));
+            var r = request;
+            return Call(KmdReply.FanBytes, b => Bc250Fan(ref r, b, (uint)b.Length), KmdReply.ParseFan);
         }
 
         public static KmdResult<VideoMemoryState> VideoMemory()

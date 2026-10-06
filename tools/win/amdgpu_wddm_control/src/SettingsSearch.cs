@@ -30,14 +30,14 @@ namespace AmdgpuWddmControl
             E("graphics.tuning", "graphics"), E("graphics.cpu-tuning", "graphics"), E("graphics.cpu-cores", "graphics"),
             E("games.rt", "games"), E("games.present", "games"), E("games.cpu", "games"), E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.identify", "display"), E("display.scale", "display"),
-            E("perf.sensors", "performance"), E("perf.cache", "performance"),
+            E("perf.sensors", "performance"), E("perf.fan", "performance"), E("perf.cache", "performance"),
             E("driver.version", "driver"), E("driver.update", "driver"),
             E("settings.language", "settings"), E("settings.update-start", "settings"), E("settings.recent", "settings"), E("settings.nagi", "settings"),
             E("settings.tips", "settings"), E("settings.animations", "settings"), E("settings.support", "settings"), E("settings.data", "settings"),
             E("help.repair", "help"), E("help.report", "help"), E("help.restart", "help"), E("help.guides", "help"),
             L("later.vsync", "graphics"), L("later.fps", "graphics"), L("later.sharpen", "graphics"), L("later.aa", "graphics"), L("later.af", "graphics"),
             L("later.scaling", "display"), L("later.mode", "display"), L("later.hdr", "display"), L("later.vrr", "display"),
-            L("later.power", "performance"), L("later.fan", "performance"), L("later.fps-counter", "performance"),
+            L("later.power", "performance"), L("later.fps-counter", "performance"),
             L("later.cache-clear", "performance"),
         };
 

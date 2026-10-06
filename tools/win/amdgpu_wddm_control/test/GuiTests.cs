@@ -523,8 +523,9 @@ static partial class UnitTests
             foreach (Match m in Regex.Matches(text, @"\bKmd\.(\w+)\(([^)]*)\)"))
                 // Hwmon joined the list with the fan reader, Curve and Cpu with the Tuner: each reply is a
                 // published snapshot answered with NoAdapterSynchronization alone, so none of them idles GPU
-                // scheduling, and the fan reply touches no port of its own.
-                Check(new[] { "Dpm", "Interop", "StartHealth", "CuMode", "VideoMemory", "Hwmon", "Curve", "Cpu" }.Contains(m.Groups[1].Value) && m.Groups[2].Value.Trim().Length == 0,
+                // scheduling, and the fan reply touches no port of its own. Fan (the fan control's READ) is the same
+                // kind of snapshot; its writes go through the elevated helper like every other change.
+                Check(new[] { "Dpm", "Interop", "StartHealth", "CuMode", "VideoMemory", "Hwmon", "Curve", "Cpu", "Fan" }.Contains(m.Groups[1].Value) && m.Groups[2].Value.Trim().Length == 0,
                     "G-SRC: " + f + " calls only Level-One reads: " + m.Value);
             Check(!Regex.IsMatch(text, @"Registry\.LocalMachine[^;]*(SetValue|DeleteValue|CreateSubKey|DeleteSubKey)|OpenSubKey\([^)]*,\s*true\)"), "G-SRC: " + f + " writes no HKLM value itself");
             Check(!text.Contains("Process.GetProcessesByName(\"dwm\")") && !Regex.IsMatch(text, @"(?i)""dwm(\.exe)?""\s*\)\s*\.\s*Kill"), "G-SRC: " + f + " does not touch DWM");

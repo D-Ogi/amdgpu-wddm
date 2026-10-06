@@ -26,6 +26,8 @@ namespace AmdgpuWddmControl
         public uint WindowMs;                   // curve-trial, cpu-trial: 0 = the driver's own window
         public uint? MaxMHz, UvSteps, TempC;    // cpu-trial: what it carries, each one optional
         public uint CoreMask;                   // core-mask
+        public uint FanProfile;                 // fan-curve: enum bc250_fan_profile (FanState.Profile*)
+        public uint[] FanC, FanPct;             // fan-curve with the custom profile: the points
     }
 
     public static class TunerPlan

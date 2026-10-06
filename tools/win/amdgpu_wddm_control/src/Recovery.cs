@@ -61,6 +61,8 @@ namespace AmdgpuWddmControl
         // countdown runs in the driver and the window only reports what it reads.
         public CurveState Curve { get; set; }
         public CpuState Cpu { get; set; }
+        // The case fan control of this start (null: the read failed or the driver has none).
+        public FanState Fan { get; set; }
         // A setter run of this boot could not flush or verify its writes (cu-unflushed.json): no next-start prediction.
         public bool CuNotDurable { get; set; }
         // Per-game switches: image -> Experiment as stored ("" for a key without the value), and the release's
@@ -157,6 +159,8 @@ namespace AmdgpuWddmControl
                 if (Tune.UvSteps != null) w.Append(", undervolt " + Tune.UvSteps.Value + " steps");
                 if (Tune.TempC != null) w.Append(", cap " + Tune.TempC.Value + " C");
                 if (Tune.CoreMask != 0) w.Append(", cores " + CpuTuning.CoresFor(Tune.CoreMask));
+                if (Tune.Kind == "fan-curve") w.Append(", fan profile " + FanCurves.NameOf(Tune.FanProfile) +
+                    (Tune.FanC != null ? ", curve " + FanCurves.CurveText(Tune.FanC, Tune.FanPct) : ""));
                 w.AppendLine();
             }
             if (Cu != null)
@@ -328,7 +332,9 @@ namespace AmdgpuWddmControl
             "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo",
             // The tuning page. Only cpu-enable and cpu-disable write a value; the other ten send one escape each.
             "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
-            "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask" };
+            "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask",
+            // The case fan card of the Performance page: one escape each, and the driver stores the choice.
+            "fan-auto", "fan-curve" };
 
         public static bool Allowed(string path, string name)
         {
@@ -1069,6 +1075,8 @@ namespace AmdgpuWddmControl
                     // the standard settings back, so this action carries those steps as well.
                     var left = TunerPlan.StandardSteps(s, p);
                     if (left != null) p.Notes.Add(left);
+                    left = FanPlan.StandardSteps(s, p);
+                    if (left != null) p.Notes.Add(left);
                     // The CU part goes through the same setter as "Standard (24)" (WU-042, WU-055).
                     var cu = CuMode.Plan(s.StoredCu(), CuMode.Stock);
                     if (!cu.Refused) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
@@ -1183,6 +1191,14 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case "fan-auto":
+                case "fan-curve":
+                {
+                    var why = FanPlan.Fill(action, s, more, p);
+                    if (why != null) return Refuse(p, why);
+                    break;
+                }
+
                 case "game-undo":
                 case "game-redo":
                 {
@@ -1217,6 +1233,8 @@ namespace AmdgpuWddmControl
             // clock, undervolt steps, temperature cap and core count.
             public string Curve;
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
+            // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".
+            public string FanProfile, FanCurve;
         }
 
         static bool SameSet(string a, string b)

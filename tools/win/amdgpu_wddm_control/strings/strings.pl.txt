@@ -159,7 +159,7 @@ perf.memory.value|mt|eaf124e2|{0} GB z {1} GB
 perf.power|mt-safe|848e9656|Pobór mocy
 perf.power.explain|mt|2fb99c60|Sterownik nie potrafi jeszcze odczytać poboru mocy. Ta funkcja pojawi się później.
 perf.fan|mt-safe|e27be641|Wentylator
-perf.fan.explain|mt|18194645|Płyta sama kręci wentylatorem (ustawienie wentylatora w BIOS). Sterownik odczytuje obroty i pokazuje je tutaj.
+perf.fan.explain|mt|730cb123|Obroty wentylatora obudowy. Kto steruje wentylatorem i według jakiej krzywej, wybierasz w karcie Wentylator obudowy poniżej.
 perf.fan.value|mt-safe|863e80e6|{0} obr./min ({1} %)
 perf.fan.rpm-only|mt-safe|c140fb3e|{0} obr./min
 perf.fan.stopped|mt|95e3cf4e|Nie kręci się
@@ -321,8 +321,8 @@ search.later.vrr|mt-safe|2939546a|Zmienna częstotliwość odświeżania
 search.later.vrr.terms|mt|685a6f1e|VRR|FreeSync|G-Sync|adaptive sync|adaptacyjna synchronizacja
 search.later.power|mt-safe|fba85679|Limit mocy
 search.later.power.terms|mt|db72d2b0|limit mocy|pobór mocy|moc|waty|TDP
-search.later.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
-search.later.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
+search.perf.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
+search.perf.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
 search.later.fps-counter|mt-safe|8e4f7029|Wyświetlanie liczby klatek
 search.later.fps-counter.terms|mt|40353cf6|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę
 search.later.cache-clear|mt-safe|6b923412|Wyczyść pamięć podręczną shaderów
@@ -625,7 +625,7 @@ help.setting.mode|mt|16a81243|Wybór rozdzielczości i częstotliwości odświe�
 help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Dostępne później.
 help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Dostępne później.
 help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Dostępne później.
-help.setting.fan|mt|0fda8087|Wentylatorem kręci oprogramowanie układowe płyty. Ta aplikacja pokazuje obroty. Sterowanie z tej aplikacji pojawi się później.
+help.setting.fan|mt|e5088079|Wybiera, kto steruje wentylatorem obudowy. Automatycznie zostawia to ustawieniu płyty w BIOS. Krzywa sterownika kręci wentylatorem nieco szybciej niż standardowe ustawienie płyty, gdy układ jest gorący. Cicho jest wolniej poniżej 80 °C, Wydajność szybciej w całym zakresie. Od 87 °C wentylator zawsze pracuje na pełnych obrotach.
 help.setting.fps-counter|mt|929ada50|Pokazuje liczbę klatek na sekundę. Dostępne później.
 help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Dostępne później.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -748,3 +748,50 @@ tuner.curve.preview.standard|mt|0c38511f|przy każdej prędkości wraca standard
 tuner.note.curve-risk|mt|28bb65b2|Mniejsze napięcie sprawia, że układ graficzny jest przy tej samej prędkości chłodniejszy i cichszy. Zbyt niskie objawia się zawieszeniem gry lub obrazu, a nie komunikatem; po zakończeniu testu ustawienie wraca samo.
 tuner.note.cpu-risk|mt|0e0c4e70|Te wartości procesora pochodzą z płyt innych osób. Zbyt wysoka prędkość lub zbyt niskie napięcie objawia się zawieszeniem komputera. Aplikacja tylko obniża napięcie i po każdej zmianie odczytuje je ponownie.
 tuner.note.cores-risk|mt|8be50b28|Osiem rdzeni daje więcej ciepła i pobiera więcej mocy niż sześć. Nikt nie przetestował dwóch dodatkowych rdzeni na tej płycie.
+
+# ---- case fan control (docs/design/fan.md Part B) ----
+perf.fan.title|mt|5c8d61f3|Wentylator obudowy
+perf.fan.intro|mt|c2b24af1|Wentylator obudowy może działać według krzywej sterownika albo według własnego ustawienia wentylatora płyty w BIOS. Twój wybór zostaje zapisany i jest używany przy każdym uruchomieniu.
+perf.fan.no-control|mt|fd9e9d33|Ten sterownik nie umie sterować wentylatorem. Płyta steruje nim według ustawienia w BIOS.
+perf.fan.speed|mt|c372fee9|Obroty
+perf.fan.who|mt|74669b7c|Kto steruje
+perf.fan.state.curve|mt|0d3840dd|Sterownik, według krzywej poniżej
+perf.fan.state.board|mt|6cc6995a|Płyta, według ustawienia wentylatora w BIOS
+perf.fan.state.held-back|mt|59f5a3c5|Na razie płyta: odczyt temperatury był niepewny. Sterownik przejmie wentylator z powrotem, gdy odczyty się ustabilizują.
+perf.fan.state.fixed|mt|4f18369a|Sterownik, ze stałymi obrotami na czas krótkiego testu
+perf.fan.state.emergency|mt|c7b823af|Sterownik, pełne obroty: układ ma 87 °C lub więcej
+perf.fan.state.doubt|mt|660c9278|Sterownik, pełne obroty: odczyt temperatury jest niepewny
+perf.fan.state.fault|mt|66ca68ee|Płyta: układ wentylatora nie przyjął zmiany, więc sterownik przestał sterować do następnego uruchomienia
+perf.fan.state.paused|mt|fd766292|Płyta, gdy układ graficzny śpi
+perf.fan.gate.setting|mt|c8ff005e|Sterowanie wentylatorem jest wyłączone w ustawieniach sterownika. Wentylatorem steruje płyta.
+perf.fan.gate.reader|mt|05e4ec56|Sterownik nie może odczytać układu wentylatora w tym komputerze. Wentylatorem steruje płyta.
+perf.fan.gate.chip|mt|7fdd9fb9|Sterownik nie zna układu wentylatora tej płyty. Wentylatorem steruje płyta.
+perf.fan.choice|mt|490e9e7b|Zachowanie wentylatora
+perf.fan.choice.board|mt|0660c6e8|Automatycznie (płyta)
+perf.fan.choice.standard|mt|97831670|Krzywa sterownika
+perf.fan.choice.quiet|mt|c0ebb7d6|Cicho
+perf.fan.choice.performance|mt|442aded8|Wydajność
+perf.fan.choice.custom|mt|3cc21987|Moja krzywa
+perf.fan.curve|mt|2a45c073|Krzywa
+perf.fan.curve.help|mt|138f20b5|Każdy wiersz to temperatura i obroty wentylatora w tej temperaturze. Między dwoma wierszami obroty zmieniają się liniowo. Zmień wartość, aby utworzyć własną krzywą.
+perf.fan.point|mt|d145e24e|Punkt {0}
+perf.fan.point.temp|mt|be391872|Temperatura punktu {0}
+perf.fan.point.speed|mt|b36cbfd1|Obroty punktu {0}
+perf.fan.point.value|mt|2395e526|{0} °C {1} %
+perf.fan.add|mt|d6d9d451|Dodaj punkt
+perf.fan.remove|mt|a6ebf703|Usuń ostatni punkt
+perf.fan.reset|mt|b03f57c8|Przywróć krzywą
+perf.fan.apply|mt|b2919965|Użyj tego
+perf.fan.note|mt|238b862b|Od 87 °C wentylator zawsze pracuje na pełnych obrotach, niezależnie od krzywej.
+perf.fan.error.points|mt|51203614|Krzywa musi mieć od {0} do {1} punktów.
+perf.fan.error.temperature|mt|13cdba76|Punkt {0}: temperatura musi wynosić od {1} do {2} °C i być wyższa niż w poprzednim punkcie.
+perf.fan.error.duty|mt|1542faac|Punkt {0}: obroty muszą wynosić od {1} do {2} % i nie mogą być niższe niż w poprzednim punkcie.
+perf.fan.refuse.no-read|mt|04a57b48|Sterownik nie odpowiedział w sprawie wentylatora. Spróbuj ponownie za chwilę.
+perf.fan.refuse.off|mt|7d6ac4d6|Sterownik nie steruje wentylatorem w tym komputerze.
+perf.fan.refuse.same|mt|c47d1c73|To ustawienie wentylatora jest już używane.
+perf.fan.refuse.bad-curve|mt|ee0a1378|Ta krzywa wentylatora jest nieprawidłowa.
+plan.line.fan-board|mt|2372fc6a|Wentylatorem steruje własne ustawienie płyty, teraz i przy każdym uruchomieniu.
+plan.line.fan-curve|mt|8917f825|Sterownik steruje wentylatorem według krzywej „{0}”, teraz i przy każdym uruchomieniu.
+plan.line.fan-points|mt|787b6e90|Obroty wentylatora: {0}
+plan.title.fan-auto|mt|16d8024e|Niech wentylatorem steruje płyta
+plan.title.fan-curve|mt|df6aeaec|Użyj krzywej wentylatora

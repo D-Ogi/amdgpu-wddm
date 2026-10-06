@@ -48,7 +48,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs' |
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'FanPlan.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
@@ -210,11 +210,14 @@ if (-not $NoSmoke) {
         # processor surface open it also turns processor tuning off. The tuning steps of a machine that has
         # settings stored are gated by the host tests (TunerStandardSteps); this snapshot has none stored.
         'reset-defaults' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
+        # The fan card (docs/design/fan.md Part B): the driver runs the standard curve with nothing stored.
+        'fan-auto'    = @(0, 'tuning request fan-board', 'takes effect: at once', 'undo: no')
+        'fan-curve'   = @(0, 'tuning request fan-curve, fan profile quiet', 'takes effect: at once')
     }
     foreach ($e in $tune.GetEnumerator()) {
         $extra = @(switch ($e.Key) { 'tune-trial' { '--curve', '820,830,850,870,889,909,925,942,958,974,990' }
             'reset-defaults' { '--games', 'keep' }
-            'cpu-trial' { '--cpu-uv', '8' } 'core-mask' { '--cores', '8' } })
+            'cpu-trial' { '--cpu-uv', '8' } 'core-mask' { '--cores', '8' } 'fan-curve' { '--fan-profile', 'quiet' } })
         $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $tuned)) "tune-$($e.Key)"
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
@@ -227,11 +230,14 @@ if (-not $NoSmoke) {
     if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The curve breaks rule Depth at 1200 MHz.')) { throw "a curve under the floor must be refused (exit $($r.Code)): $($r.Text)" }
     $r = Invoke-DryRun @('--action', 'core-mask', '--cores', '7', '--dry-run', '--snapshot', $tuned) 'tune-bad-cores'
     if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The core count must be 6 or 8.')) { throw "7 cores must be refused (exit $($r.Code)): $($r.Text)" }
-    foreach ($bad in @(@('tune-trial'), @('tune-trial', '--curve', '820,840'), @('cpu-trial', '--cores', '8'), @('core-mask', '--curve', '820,840,860,880,899,919,935,952,968,984,1000'))) {
+    $r = Invoke-DryRun @('--action', 'fan-curve', '--fan-profile', 'custom', '--fan-curve', '40:30,30:60', '--dry-run', '--snapshot', $tuned) 'fan-falling'
+    if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The fan curve breaks rule Temperature at point 2.')) { throw "a fan curve that falls back must be refused (exit $($r.Code)): $($r.Text)" }
+    foreach ($bad in @(@('tune-trial'), @('tune-trial', '--curve', '820,840'), @('cpu-trial', '--cores', '8'), @('core-mask', '--curve', '820,840,860,880,899,919,935,952,968,984,1000'),
+            @('fan-curve'), @('fan-auto', '--fan-profile', 'quiet'), @('fan-curve', '--fan-profile', 'quiet', '--fan-curve', '40:30,80:100'), @('fan-curve', '--fan-profile', 'custom'))) {
         $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $tuned)) ('usage-tune-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }
-    Write-Host "  tuning dry runs: $($tune.Count) plans, 2 refusals, 4 usage errors"
+    Write-Host "  tuning dry runs: $($tune.Count) plans, 3 refusals, 8 usage errors"
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'

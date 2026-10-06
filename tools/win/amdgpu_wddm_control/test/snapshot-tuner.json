@@ -37,6 +37,13 @@
     "SearchStep": 0, "SearchBest": 0, "SearchFail": 0, "SearchTested": 0,
     "Reads": 2, "Writes": 0, "Refusals": 0, "Reverts": 0, "Generation": 5
   },
+  "Fan": {
+    "Version": 458949, "Flags": 3, "Mode": 1, "State": 2, "Reason": 0, "DoubtReason": 0, "Profile": 1, "Points": 5,
+    "CurveC": [40, 60, 70, 80, 85, 0, 0, 0], "CurvePct": [50, 70, 82, 95, 100, 0, 0, 0],
+    "FixedPct": 0, "LeaseMs": 0, "TargetPct": 70, "AppliedPct": 70, "WrittenRaw": 179, "ReadbackRaw": 179,
+    "GuardMc": 60500, "Rpm": 1180, "Channel": 1, "SavedMode": 224, "SavedTarget": 128, "Error": 0,
+    "StoredMode": 0, "StoredProfile": 0, "Gate": 0, "Takeovers": 1, "Handbacks": 0, "Writes": 3, "Generation": 5
+  },
   "DwmRoute": "gpu",
   "DwmRouteDetail": "bc250d3d_router.dll, amdgpu_wddm_radv.dll",
   "GpuDesktopModules": true,
