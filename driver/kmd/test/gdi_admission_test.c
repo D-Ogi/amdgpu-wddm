@@ -587,7 +587,27 @@ static void RecordDerivation(void)
     Bc250ScanoutRecordInit(NULL, 1, 1, 0);
     CHECK((built.BindFlags & ~(0x20ul | 0x8ul | 0x80ul)) == 0);
 
-    // (g) NULL outputs are refused rather than written through.
+    // (g) The two sides of a DirectFlip pair, which are not symmetric (0.7.209.1). The compositor's own
+    // front buffer is a record it wrote itself: not shared, never asking for scan-out, and already placed
+    // where the display core reads it - that is what WddmGdiCreatedScannable answers. The application's
+    // buffer in the compositor's device is an opened shared record, and there the SCANOUT bit is the whole
+    // question - WddmGdiRecordScannable. A rule that asked WddmGdiRecordScannable of both sides would
+    // refuse every pair the OS can pass, because no compositor primary ever sets the bit.
+    bytes = Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 0, BC250_SURFACE_RESOURCE_PRIMARY, v3);
+    CHECK(WddmGdiCreatedScannable(w, bytes));           // the compositor's own primary: readable as created
+    CHECK(!WddmGdiRecordScannable(w, bytes));           // and it never asked, which is not a refusal here
+    bytes = Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1, BC250_SURFACE_RESOURCE_PRIMARY, v3);
+    CHECK(!WddmGdiCreatedScannable(w, bytes));          // shared and not asking: the aperture, unreadable
+    bytes = Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+                   BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT, v3);
+    CHECK(WddmGdiCreatedScannable(w, bytes) && WddmGdiRecordScannable(w, bytes));
+    // Both refuse every record they could not read, which is what keeps the user-mode answer fail-safe.
+    CHECK(!WddmGdiCreatedScannable(NULL, 0) && !WddmGdiCreatedScannable(w, v2));
+    memset(w, 0, sizeof(w));
+    CHECK(!WddmGdiCreatedScannable(w, v3) && !WddmGdiRecordScannable(w, v3));
+    CHECK(WddmGdiCreatedScannable(&built, (unsigned int)sizeof(built)));
+
+    // (h) NULL outputs are refused rather than written through.
     CHECK(!WddmGdiRecordPolicy(w, v3, NULL));
     CHECK(!WddmGdiScannable(NULL) && WddmGdiPolicyBits(NULL) == 0);
     CHECK(!Bc250SurfaceResourceIntent(w, v3, NULL, &access));
