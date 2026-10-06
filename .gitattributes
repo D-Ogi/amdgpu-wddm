@@ -29,5 +29,9 @@ tools/win/wsi-dxgi/*.cpp -text
 # recorded 171 stage manifest and refuse a difference. Line-ending normalization would break every hash.
 tools/win/kmd-deploy/template/kmd168-transition/** -text
 
+# The present-mode test fixture is one second of a real xperf dumper text, kept byte for byte with
+# its CRLF endings: it is evidence of the shapes this driver produces.
+tools/win/etw/testdata/*.txt -text
+
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary
