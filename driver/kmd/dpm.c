@@ -204,7 +204,7 @@ static void DpmLogTuneChange(const char* What, const struct bc250_dpm_tune* Old,
 
 // The governor's own values (Gov.tune) next to the telemetry, while they are not the defaults, and in the summary.
 static void DpmLogTune(const char* What, const struct bc250_dpm_tune* T, ULONG Serial, ULONG Applied, ULONG FloorTicks,
-                       ULONG SoftReleases, ULONG ZoneSteps, ULONG ZoneTicks, LONG ZoneLeadMc)
+                       ULONG SoftReleases, const BC250_DPM_SNAP* Snap)
 {
     GuardLog("dpm: %s up %lu target %lu down %lu permille, hold %lu ms, floor %lu MHz, serial %lu applied %lu, "
              "floor ticks %lu", What, T->up_permille, T->target_permille, T->down_permille, T->down_hold_ms,
@@ -217,8 +217,12 @@ static void DpmLogTune(const char* What, const struct bc250_dpm_tune* T, ULONG S
     if (T->zone_delta_mc) {
         GuardLog("dpm: %s zone: at %d mC (delta %lu) step %lu ms, no raise from %d mC", What, bc250_dpm_zone_mc(T),
                  T->zone_delta_mc, T->zone_step_ms, bc250_dpm_warm_mc(T));
-        GuardLog("dpm: %s zone lead: %lu ms over %lu ms, now %+d mC, %lu steps in %lu ticks", What, T->zone_lead_ms,
-                 (ULONG)BC250_DPM_ZONE_SLOPE_MS, ZoneLeadMc, ZoneSteps, ZoneTicks);
+        GuardLog("dpm: %s zone lead: %lu ms over %lu ms, now %+d mC, %lu ticks with none", What, T->zone_lead_ms,
+                 (ULONG)BC250_DPM_ZONE_SLOPE_MS, Snap->ZoneLeadMc, Snap->ZoneLeadGaps);
+        // "slope none" is not "lead 0": the first says the ring could not measure the die's rise at all, so every soft
+        // threshold read the raw sensor, which is not what the zone's numbers were chosen for (0.7.213 review).
+        GuardLog("dpm: %s zone: %lu steps, %lu ticks, %lu idle holds, slope %s", What, Snap->ZoneSteps,
+                 Snap->ZoneTicks, Snap->ZoneIdleHolds, Snap->ZoneLeadOk ? "measured" : "none");
     } else
         GuardLog("dpm: %s zone: off (DpmThermalZone 0): the hot cap at %d mC is the only thermal rule, no raise "
                  "from %d mC", What, (int)BC250_DPM_HOT_MC, bc250_dpm_warm_mc(T));
@@ -465,6 +469,9 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.ZoneSteps = g->zone_steps;
     snap.ZoneTicks = g->zone_ticks;
     snap.ZoneLeadMc = g->zone_lead_mc;
+    snap.ZoneLeadOk = g->zone_lead_ok ? TRUE : FALSE;
+    snap.ZoneLeadGaps = g->zone_lead_gaps;
+    snap.ZoneIdleHolds = g->zone_idle_holds;
     // The idle point only while this start governs the clock: a fixed-lab start never configures the state, and
     // a start that gave up after SMU failures no longer steps the governor, so neither may name a point that
     // nothing would apply (0.7.207, review). The flag below follows the same rule.
@@ -881,7 +888,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         bc250_dpm_tune_default(&defaults);
         if (!TuneEqual(&S->Gov.tune, &defaults) || serial != S->TuneTaken)
             DpmLogTune("tune", &S->Gov.tune, serial, S->TuneTaken, S->Gov.floor_ticks, S->Gov.soft_releases,
-                       S->Gov.zone_steps, S->Gov.zone_ticks, S->Gov.zone_lead_mc);
+                       &snap);
     }
 }
 
@@ -1372,8 +1379,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     HwmonLogLine(Device, "summary");
     DpmLogCurveLine("summary", &snap);
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
-    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases, snap.ZoneSteps,
-               snap.ZoneTicks, snap.ZoneLeadMc);
+    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases, &snap);
 }
 
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.

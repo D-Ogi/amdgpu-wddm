@@ -540,37 +540,79 @@ static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input 
 
 /* ---- the soft zone's lead (0.7.213, BD-087) ---------------------------------------------------------- */
 
-/* The lead in mC: the rise of the last BC250_DPM_ZONE_SLOPE_MS, scaled to lead_ms. 0 for a falling or flat die, for a
- * ring that is not full yet, and with the lead turned off - every one of those cases reads the raw sensor, which is the
- * conservative direction for the release rules and the only honest one for the step-down rules.
+/* The lead in mC: the least-squares slope of the ring's readings over the span the ring really covers, scaled to
+ * lead_ms, with BC250_DPM_ZONE_SLOPE_MIN_MC as a deadband under it and BC250_DPM_ZONE_LEAD_MAX_MC as a cap over it. 0
+ * for a falling or flat die, for a ring that is not full yet, for a ring whose span has grown past
+ * BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS, and with the lead turned off - every one of those cases reads the raw sensor, which
+ * is the conservative direction for the release rules and the only honest one for the step-down rules. *available says
+ * whether the ring could measure a slope at all, so a start whose sensor keeps failing can be told from a flat die
+ * (0.7.213 safety review, finding 6).
  *
- * The oldest slot of a full ring is slope_head, the slot about to be overwritten. Ages come from unsigned differences
- * of a wrapping millisecond clock, so they stay exact over a start of any length; rise x lead_ms needs 64 bits because
- * a reading that jumps the whole sensor range would overflow 32 (70000 mC x 60000 ms). */
-static int zone_lead_mc(const struct bc250_dpm_governor *g, int now_mc, unsigned int lead_ms)
+ * Why the fit and not the difference of the two ends: the header's SLOPE_MIN_MC comment has the measurements. Both
+ * estimators were replayed on the 21 recorded sessions; the fit averages the noise of twenty readings instead of two,
+ * and the cap is what bounds the worst case either way.
+ *
+ * The oldest slot of a full ring is slope_head, the slot about to be overwritten, and the newest is the one before it.
+ * Ages come from unsigned differences of a wrapping millisecond clock, so they stay exact over a start of any length.
+ * The arithmetic is 64-bit and bounded: x is each slot's age relative to the oldest, at most SLOPE_MAX_SPAN_MS (1e4),
+ * and y is a reading, at most 1e5 mC in magnitude, so den <= n^2 span^2 = 4e10, |num| <= n^2 span |y| = 4e11, and
+ * num x lead_ms with lead_ms at most BC250_DPM_TUNE_MAX_ZONE_LEAD_MS (6e4) is 2.4e16 at worst - over two decimal orders
+ * inside a signed 64-bit integer. */
+static int zone_lead_mc(const struct bc250_dpm_governor *g, unsigned int lead_ms, int *available)
 {
-	unsigned int age;
-	int rise;
+	long long sx = 0, sy = 0, sxy = 0, sxx = 0, num, den, lead, rise;
+	unsigned int i, base, span, newest;
 
+	*available = 0;
 	if (!lead_ms || g->slope_count < BC250_DPM_ZONE_SLOPE_SLOTS) return 0;
-	age = g->zone_now_ms - g->slope_at_ms[g->slope_head];
-	if (!age) return 0;
-	rise = now_mc - g->slope_mc[g->slope_head];
-	if (rise <= 0) return 0;
-	return (int)((long long)rise * (long long)lead_ms / (long long)age);
+	base = g->slope_at_ms[g->slope_head];
+	newest = (g->slope_head + BC250_DPM_ZONE_SLOPE_SLOTS - 1u) % BC250_DPM_ZONE_SLOPE_SLOTS;
+	span = g->slope_at_ms[newest] - base;
+	/* The span the fit runs over, and the age of the whole ring measured to now. Both have to be inside
+	 * SLOPE_MAX_SPAN_MS: the first refuses a ring widened by skipped slots, the second a ring that is complete and
+	 * narrow but old, which is what a sensor that failed for ten seconds leaves behind. */
+	if (!span || span > BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS) return 0;
+	if (g->zone_now_ms - base > BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS) return 0;
+	for (i = 0; i < BC250_DPM_ZONE_SLOPE_SLOTS; i++) {
+		long long x = (long long)(unsigned int)(g->slope_at_ms[i] - base);
+		long long y = (long long)g->slope_mc[i];
+		sx += x;
+		sy += y;
+		sxy += x * y;
+		sxx += x * x;
+	}
+	den = (long long)BC250_DPM_ZONE_SLOPE_SLOTS * sxx - sx * sx;
+	if (den <= 0) return 0;			/* every slot at one instant: no span to fit over */
+	num = (long long)BC250_DPM_ZONE_SLOPE_SLOTS * sxy - sx * sy;
+	*available = 1;
+	if (num <= 0) return 0;			/* flat or falling: read the sensor itself */
+	rise = num * (long long)span / den;	/* the deadband is on the rise over the window, not on the lead */
+	if (rise < BC250_DPM_ZONE_SLOPE_MIN_MC) return 0;
+	lead = num * (long long)lead_ms / den;
+	return lead > BC250_DPM_ZONE_LEAD_MAX_MC ? BC250_DPM_ZONE_LEAD_MAX_MC : (int)lead;
 }
 
-/* One reading into the ring, at most one per slot. A tick without a reading empties it: the next lead waits for a whole
- * fresh window, because a slope measured across a gap would be a guess about what happened in the gap. */
+/* One reading into the ring, at most one per slot.
+ *
+ * A tick whose dt_ms had to be clamped (a stall, a resume, a DpmPause) empties the ring: zone_now_ms advanced by the
+ * clamp and not by the time that really passed, so every age in the ring is now short and the fit above would read a
+ * slope several times the real one (0.7.213 safety review, finding 3: a 30 s stall reported a lead of 48 C and put a
+ * 78 C die in the zone). The next lead waits for a whole fresh window.
+ *
+ * A tick that brings no reading only skips its slot. Emptying the ring there disabled the lead for a whole 5 s window
+ * after every single failed SmuReadTemperature, and an intermittent sensor would have turned the zone off for good
+ * while the log showed nothing but a lead of 0 (finding 6). The slots that are there still carry real readings at real
+ * times, the fit divides by the span it measures, and SLOPE_MAX_SPAN_MS refuses a ring that has grown stale. */
 static void zone_slope_sample(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in, unsigned int dt)
 {
 	g->zone_now_ms += dt;			/* wraps; only differences of it are ever read */
-	if (!in->temperature_valid) {
+	if (in->dt_ms > BC250_DPM_MAX_DT_MS) {
 		g->slope_count = 0;
 		g->slope_head = 0;
 		g->slope_push_ms = 0;
 		return;
 	}
+	if (!in->temperature_valid) return;
 	g->slope_push_ms += dt;
 	if (g->slope_push_ms < BC250_DPM_ZONE_SLOPE_SLOT_MS && g->slope_count) return;
 	g->slope_push_ms = 0;
@@ -578,6 +620,15 @@ static void zone_slope_sample(struct bc250_dpm_governor *g, const struct bc250_d
 	g->slope_at_ms[g->slope_head] = g->zone_now_ms;
 	g->slope_head = (g->slope_head + 1u) % BC250_DPM_ZONE_SLOPE_SLOTS;
 	if (g->slope_count < BC250_DPM_ZONE_SLOPE_SLOTS) g->slope_count++;
+}
+
+/* Does the zone act this tick (0.7.213 safety review, finding 2)? Only while the GPU is doing work: the header's
+ * BC250_DPM_ZONE_WORK_PERMILLE comment has the argument, and the short of it is that an idle GPU is not the heat the
+ * zone can take out, while a cap left at the thermal floor is heat the next burst of work cannot use. g->idle is the
+ * previous tick's state of the idle state, which is one tick of lag on a rule about three seconds of quiet. */
+static int zone_may_act(const struct bc250_dpm_governor *g)
+{
+	return !g->idle && g->zone_quiet_ms < BC250_DPM_ZONE_QUIET_MS;
 }
 
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
@@ -594,12 +645,21 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	/* The reading the soft rules are judged on (0.7.213): this tick's, or its straight-line extrapolation over
 	 * zone_lead_ms when the die is rising, whichever is higher. HOT_MC and CRITICAL_MC below read in->temperature_mc
 	 * itself. The lead is computed before this tick's reading enters the ring, so it measures a whole window. */
-	int lead_mc = in->temperature_valid ? zone_lead_mc(g, in->temperature_mc, t->zone_lead_ms) : 0;
+	int lead_ok = 0;
+	int lead_mc = in->temperature_valid ? zone_lead_mc(g, t->zone_lead_ms, &lead_ok) : 0;
 	int teff = in->temperature_mc + lead_mc;
 
 	g->zone_lead_mc = lead_mc;
+	g->zone_lead_ok = lead_ok;
+	if (t->zone_delta_mc && t->zone_lead_ms && !lead_ok) g->zone_lead_gaps++;
 	zone_slope_sample(g, in, dt);
 	g->avg_permille = (g->avg_permille * 3u + busy + 2u) / 4u;
+	/* How long the GPU has had nothing to do, for the zone's own gate (zone_may_act). The three signals are the ones
+	 * the idle state reads, and the share has to beat a single desktop frame of a 25 ms tick. */
+	if (in->ring_busy || busy >= BC250_DPM_ZONE_WORK_PERMILLE ||
+	    in->sdma_permille >= BC250_DPM_ZONE_WORK_PERMILLE)
+		g->zone_quiet_ms = 0;
+	else g->zone_quiet_ms = add_ms(g->zone_quiet_ms, dt);
 
 	/* Thermal first: it bounds whatever the load asks for. cap_ms is the time since the cap last moved the clock's
 	 * bound (a step down or a raise; the hot entry's clamp to the running clock lowers nothing and does not count):
@@ -626,6 +686,11 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		g->release_ms = 0;
 		g->soft_ms = 0;
 		g->zone_ms = 0;
+		/* A reading at or above CRITICAL_MC is inside the zone by definition, so the episode holds and no later
+		 * tick clamps the cap to a clock a lull left. A missing reading says nothing about the die: the episode
+		 * ends, and the clamp a later episode makes can lower nothing anyway, because this branch has already
+		 * taken the cap to the lab floor or below. */
+		g->zone = in->temperature_valid;
 		thermal = in->temperature_valid ? BC250_DPM_THROTTLE_THERMAL_HARD : BC250_DPM_THROTTLE_SENSOR;
 	} else if (in->temperature_mc >= BC250_DPM_HOT_MC) {
 		if (!g->hot) {
@@ -666,32 +731,45 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		g->release_ms = 0;
 		g->soft_ms = 0;
 		g->zone_ms = 0;
+		g->zone = 1;			/* above HOT_MC is inside the zone: the episode holds under it */
 		thermal = BC250_DPM_THROTTLE_THERMAL_SOFT;
-	} else if (t->zone_delta_mc && teff >= bc250_dpm_zone_mc(t)) {
-		/* The soft zone (0.7.213, BD-087, after session 436): the same shape as the hot branch, at a lower threshold,
-		 * on its own timer, and on the lead reading. The cap first comes down to the clock the GPU is running at, then
-		 * one level per zone_step_ms for as long as the zone holds. Unlike the hot branch there is no entry/continue
-		 * split: the clamp is written every tick, because the zone is where the load is still free to raise the clock
-		 * under the cap and the cap has to follow it down again. The first step is therefore a whole zone_step_ms
-		 * after entry, which is what the search scored (scratch/thermal-zone/sim).
+	} else if (t->zone_delta_mc && teff >= bc250_dpm_zone_mc(t) && zone_may_act(g)) {
+		/* The soft zone (0.7.213, BD-087, after session 436): the hot branch's shape at a lower threshold, on its own
+		 * timer, and on the lead reading. Entry and continue are split as they are there, and for a stronger reason
+		 * (0.7.213 safety review, finding 1).
+		 *
+		 * At entry the cap comes down once to the clock the GPU is running at, which lowers no clock. After that the
+		 * zone steps the CAP, one level per zone_step_ms, and never looks at cur again. A clamp written every tick
+		 * followed the load instead of the die: one lull inside the zone drops cur to the lab floor, the cap followed
+		 * it to 1000 and then stepped to 800, and nothing between the two thresholds raises the cap again, so the
+		 * lull cost the rest of the load every level it had won.
+		 *
+		 * The episode ends under the soft-release threshold, not under the zone's own (see the else branch). Entering
+		 * again at every excursion over 86.0 C would clamp the cap to whatever clock the lull had left, which is the
+		 * same defect by another path.
 		 *
 		 * The step is measured from a clock a load could run at, never from under the cap's own bottom, for the same
-		 * reason as the hot branch (0.7.207): the idle point is not a load level. */
+		 * reason as the hot branch (0.7.207): the idle point is not a load level.
+		 *
+		 * cap_ms is left alone, by both the clamp and the step: it spaces the hot branch's own first step, and a zone
+		 * step 100 ms before the die crossed 87 C used to defer that step by a whole hot step (finding 7). The zone
+		 * keeps its time in zone_ms; the backstop keeps its own. */
 		unsigned int base = cur > thermal_floor(g) ? cur : thermal_floor(g);
 		g->hot = 0;
 		g->hot_ms = 0;
 		g->zone_ticks++;
-		if (g->thermal_cap > base) {
-			g->thermal_cap = base;
-			g->cap_ms = 0;
-		}
-		g->zone_ms += dt;
-		if (g->zone_ms >= t->zone_step_ms) {
+		if (!g->zone) {
+			g->zone = 1;
 			g->zone_ms = 0;
-			if (g->thermal_cap > thermal_floor(g)) {
-				g->thermal_cap--;
-				g->cap_ms = 0;
-				g->zone_steps++;
+			if (g->thermal_cap > base) g->thermal_cap = base;
+		} else {
+			g->zone_ms += dt;
+			if (g->zone_ms >= t->zone_step_ms) {
+				g->zone_ms = 0;
+				if (g->thermal_cap > thermal_floor(g)) {
+					g->thermal_cap--;
+					g->zone_steps++;
+				}
 			}
 		}
 		g->release_ms = 0;
@@ -700,7 +778,17 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	} else {
 		g->hot = 0;
 		g->hot_ms = 0;
-		g->zone_ms = 0;
+		/* The zone's episode ends where the cap may rise again (bc250_dpm_warm_mc), not at the zone's own threshold:
+		 * between the two the cap holds, and the episode holds with it, so an excursion back over the threshold
+		 * continues the same episode instead of clamping the cap to the clock a lull left (finding 1). The step timer
+		 * keeps its value across the hold band - a reading that dips under the threshold for one tick must neither
+		 * advance it nor start it again - and only an ended episode clears it.
+		 * A tick in which the zone's threshold is met but the GPU is idle lands here too (zone_may_act): the cap
+		 * holds, which is what the zone would do with nothing to take out. */
+		if (!t->zone_delta_mc || teff < bc250_dpm_warm_mc(t)) {
+			g->zone = 0;
+			g->zone_ms = 0;
+		} else if (t->zone_delta_mc && teff >= bc250_dpm_zone_mc(t)) g->zone_idle_holds++;
 		/* The release rules read the lead temperature too (0.7.213): a cap that rises while the die is already climbing
 		 * towards the zone is the one thing the search found no threshold can repair afterwards. */
 		if (teff < BC250_DPM_RELEASE_MC && g->thermal_cap < g->max_level) {

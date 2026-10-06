@@ -208,25 +208,71 @@ enum bc250_dpm_throttle {
  * shipped governor's 1131 MHz, which peaks 89.0 C and loses four of the traces. On 436 it peaks 85.9 C instead of
  * 88.9 C and does not stop.
  *
+ * Those are the numbers of a search whose plant has no sensor noise in it, and the lead they were scored with had no
+ * cap on it. The safety review of this change measured what the recorded noise does to such a lead (LEAD_MAX_MC below)
+ * and the thresholds were scored again with it, by replaying the same 21 sessions through this code over the same plant
+ * with each session's own recorded noise added to the die (scratch/thermal-zone/review-dpm, validation.txt). What ships
+ * is that second set of numbers: peak 87.3 C, 9.4 s at or above 87 C in some two hours of play, no runner stop on any
+ * trace, mean 1048 MHz, and 436 at 85.4 C with no reading at 87 C. The figures of the paragraph above stand as what the
+ * search found on a noise-free plant, not as a claim about the driver.
+ *
  * ZONE_MC is HOT_MC - ZONE_DELTA_MC = 86.0 C. It is not "87 C minus a margin": the overshoot the controller allows
  * grows with the clock it is allowed to reach, which is why a cooler die wants a LOWER threshold, not a higher one. */
 #define BC250_DPM_ZONE_DELTA_MC		1000u	/* HOT_MC - this = 86.0 C: the zone's step-down threshold; 0: no zone */
-#define BC250_DPM_ZONE_STEP_MS		3000u	/* one level off the cap per this, while in the zone */
+/* One level off the cap per this, while in the zone. The noise-free search picked 3000 ms, with a lead that had no cap
+ * on it; the safety review's cap (BC250_DPM_ZONE_LEAD_MAX_MC) means the zone acts at a raw 84.0 C instead of the 78 to
+ * 83 C that the noise itself was producing, so it has less warning and has to step faster. 1500 ms is where both
+ * validations come out clean: on the fitted plant every arm of test_zone436 stays under 87 C with no runner stop, and
+ * over the 21 recorded sessions replayed closed-loop with their own sensor noise the die peaks at 87.3 C with 9.4 s at
+ * or above 87 C in some two hours of play and no stop, against 89.3 C, 149.3 s and five stops for the 0.7.212 rules, for
+ * a mean clock of 1048 MHz against 1099 (scratch/thermal-zone/review-dpm). */
+#define BC250_DPM_ZONE_STEP_MS		1500u
 /* The lead. Every threshold of the zone and of the soft release is judged on Tctl plus the slope of the last
  * ZONE_SLOPE_MS seconds times this, when that is higher than Tctl itself. It is the whole gain of the search: at
  * identical thresholds, turning it off gives peak 87.58 C and 47.5 s at or above 87 C over the 21 traces, and turning
  * it on gives 86.71 C and no second at all, for 2.7 % of the mean clock. A plain threshold, however low, cannot do
- * this - it is the 25 s lag that beats it. In the driver it is one subtraction, one multiply and a short ring of past
- * readings (bc250_dpm_governor::slope_mc). HOT_MC and CRITICAL_MC keep reading the raw sensor: the backstop must never
- * be a guess. */
+ * this - it is the 25 s lag that beats it. In the driver it is a least-squares fit over a short ring of past readings
+ * (bc250_dpm_governor::slope_mc), a deadband, and a cap: SLOPE_MIN_MC and LEAD_MAX_MC below say why each of the three
+ * is there. The fit's span is whatever the ring really covers, never a figure assumed from the slot spacing, because a
+ * skipped slot widens it. HOT_MC and CRITICAL_MC keep reading the raw sensor: the backstop must never be a guess. */
 #define BC250_DPM_ZONE_LEAD_MS		15000u	/* 0: no lead, every threshold on the raw reading */
 #define BC250_DPM_ZONE_SLOPE_MS		5000u	/* the window the slope is measured over; fixed, not a tune field */
-/* The ring the slope is measured over: one reading per slot, a slot every SLOPE_SLOT_MS. With 20 slots the oldest
- * reading is 4.75 to 5.0 s old, which is SLOPE_MS within one slot, and the slope divides by the age it measures, so
- * the estimate is exact whatever the governor's real tick period turned out to be. 20 slots is 160 bytes of the
- * governor; a per-tick ring at BC250_DPM_TICK_MS would be ten times that for no better slope. */
+/* The ring the slope is measured over: one reading per slot, a slot every SLOPE_SLOT_MS. With 20 slots a full ring
+ * spans 4.75 to 5.0 s, which is SLOPE_MS within one slot, and the fit below divides by the span it measures, so the
+ * estimate is exact whatever the governor's real tick period turned out to be. 20 slots is 160 bytes of the governor;
+ * a per-tick ring at BC250_DPM_TICK_MS would be ten times that for no better slope. A tick that brings no reading
+ * skips its slot and the span grows, so the span is checked against SLOPE_MAX_SPAN_MS instead of assumed. */
 #define BC250_DPM_ZONE_SLOPE_SLOTS	20u
 #define BC250_DPM_ZONE_SLOPE_SLOT_MS	(BC250_DPM_ZONE_SLOPE_MS / BC250_DPM_ZONE_SLOPE_SLOTS)
+/* The widest ring the lead is taken from. A reading that fails now and then skips its slot instead of emptying the
+ * ring (0.7.213 review), so the span may exceed SLOPE_MS; past this the readings are too old to extrapolate from and
+ * the lead reports unavailable. Twice the window: a slope over 10 s still says something about a die whose time
+ * constant is 25 s. */
+#define BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS (2u * BC250_DPM_ZONE_SLOPE_MS)
+/* The deadband and the cap on the lead (0.7.213 safety review, finding 4). The slope is the least-squares fit over the
+ * ring, not the difference of its two ends, because both ends carry the full noise of one reading each: replayed on the
+ * recorded sessions' thermally flat segments the two-point estimator reported a lead of up to 7.8 C, which moved the
+ * zone's 86.0 C threshold down to a raw 78 C.
+ *   The deadband is on the fitted rise over the ring's own span: under it the die counts as flat and there is no lead at
+ *   all. 200 mC over 5 s is 0.04 C/s, well under the 0.12 to 0.15 C/s of session 436, so it costs no signal.
+ *   The cap is what makes the bound provable, and the fit alone does not: the recorded 1 s samples jump by up to 1 C on
+ *   a die whose time constant is 25 s, and no estimator over a 5 s window can tell one such jump from the start of a
+ *   real rise. With the lead capped the zone cannot engage below bc250_dpm_zone_mc() minus the cap, a raw 84.0 C at the
+ *   default threshold. It costs almost nothing: over the 21 recorded sessions the median lead on a rising die is 1.2 to
+ *   1.5 C, and 436's own rise carries 1.8 to 2.25 C, so the signal sits at or under the cap already. */
+#define BC250_DPM_ZONE_SLOPE_MIN_MC	200	/* the fitted rise over the ring's span must reach this */
+#define BC250_DPM_ZONE_LEAD_MAX_MC	2000	/* and the lead itself never exceeds this */
+/* The zone acts only while the GPU is doing work (0.7.213 safety review, finding 2). An idle GPU is not the heat source
+ * the zone addresses: the clock is already at the idle point or the lab floor, a cap stepped down to 800 MHz lowers
+ * nothing, and the cap then stays there until the die falls under the soft-release threshold, so the first work of the
+ * next burst runs at 800 MHz on a die the CPU was heating. Refusing to act costs no safety, because from the
+ * soft-release threshold up the clock gate already refuses every raise: a GPU that gets work at 86 C cannot go above the
+ * lab floor whatever the cap says.
+ * "Work" is the GFX ring, the graphics engine or the paging engine; the share has to beat a single desktop frame, which
+ * is 1000 / BC250_DPM_TICK_MS = 40 permille of its own tick, and QUIET_MS without any of the three is the idle state's
+ * own definition of an idle GPU (BC250_DPM_IDLE_HOLD_MS). */
+#define BC250_DPM_ZONE_WORK_PERMILLE	50u
+#define BC250_DPM_ZONE_QUIET_MS		BC250_DPM_IDLE_HOLD_MS
 /* The idle state (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
  * 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). While the GPU has no work the
  * governor holds the idle point, below the lab floor, at the floor's own 820 mV. The three settings are the
@@ -425,11 +471,22 @@ struct bc250_dpm_governor {
 	unsigned int	zone_ms;		/* time in the zone since its last step down */
 	unsigned int	zone_steps;		/* cap lowerings by the zone */
 	unsigned int	zone_ticks;		/* steps spent in the zone */
+	int		zone;			/* inside a zone episode: entered at the zone's threshold, left under the
+						 * soft-release threshold, so the cap is clamped to the running clock once
+						 * per episode and never follows a load lull (0.7.213 review) */
 	int		zone_lead_mc;		/* the lead of the last step, 0 without one (the log and the escape print it) */
+	int		zone_lead_ok;		/* the ring could measure a slope in the last step (the log prints it): 0
+						 * means every soft threshold read the raw sensor, which the zone's own
+						 * numbers were not chosen for */
+	unsigned int	zone_lead_gaps;		/* steps in which the lead was wanted and unavailable */
+	unsigned int	zone_quiet_ms;		/* since the GPU last had work, saturating: the zone acts only under
+						 * BC250_DPM_ZONE_QUIET_MS of it */
+	unsigned int	zone_idle_holds;	/* steps in which the zone's threshold was met and the GPU was idle */
 	/* The slope ring the lead is measured from: one reading per BC250_DPM_ZONE_SLOPE_SLOT_MS. slope_at_ms and
 	 * zone_now_ms are the governor's own millisecond clock and WRAP on purpose - only unsigned differences of them
-	 * are ever read, which stay exact across the wrap, so no saturation can turn an age into a zero. The ring is
-	 * emptied whenever a tick brings no reading: a slope across a gap in the readings is a guess. */
+	 * are ever read, which stay exact across the wrap, so no saturation can turn an age into a zero. A tick whose
+	 * dt_ms had to be clamped empties the ring: zone_now_ms then advanced by less than the time that really passed,
+	 * so every age in the ring is wrong. A tick that brings no reading skips its slot and keeps the window. */
 	int		slope_mc[BC250_DPM_ZONE_SLOPE_SLOTS];
 	unsigned int	slope_at_ms[BC250_DPM_ZONE_SLOPE_SLOTS];
 	unsigned int	slope_head;		/* the next slot to write, and the oldest one once the ring is full */
