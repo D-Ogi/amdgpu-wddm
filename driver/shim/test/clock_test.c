@@ -215,6 +215,11 @@ int main(void){
  }
  positive(1000,116,2000,1000); // the ceiling from the floor: VID 88 staged before the clock
  positive(2000,88,1000,820);   // and back
+ // 0.7.210, the undervolt band: a curve asks for a voltage under the table's line at the same clock, and the
+ // transaction is the same one, with the staging rule unchanged (down after the clock, up before it).
+ positive(1000,116,2000,bc250_clock_floor_mv(2000));
+ positive(2000,88,1500,bc250_clock_floor_mv(1500));
+ positive(1500,bc250_clock_vid(bc250_clock_floor_mv(1500)),1500,bc250_clock_min_mv(1500));
  {struct backend b={0};struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.fail_begin=1;
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==-71);CHECK(!r.ready && !b.end_count && !b.count && !b.temp_count);
  }
@@ -229,8 +234,12 @@ int main(void){
   CHECK(bc250_clock_prepare(&c,900,819,&r)==BC250_CLOCK_INVALID);
   CHECK(bc250_clock_prepare(&c,1000,1001,&r)==BC250_CLOCK_INVALID);   // above the ceiling voltage
   CHECK(bc250_clock_prepare(&c,1000,819,&r)==BC250_CLOCK_INVALID);    // below the table
-  CHECK(bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_INVALID);    // the old lab ceiling is below the table
-  CHECK(bc250_clock_prepare(&c,2000,999,&r)==BC250_CLOCK_INVALID);
+  // 0.7.210: from the lab floor up, a point may stand BC250_CURVE_UNDERVOLT_MV under the table's line, so these
+  // two are a millivolt deeper than the band admits at their clock (bc250_clock_floor_mv).
+  CHECK(bc250_clock_prepare(&c,1500,bc250_clock_floor_mv(1500)-1u,&r)==BC250_CLOCK_INVALID);
+  CHECK(bc250_clock_prepare(&c,2000,bc250_clock_floor_mv(2000)-1u,&r)==BC250_CLOCK_INVALID);
+  CHECK(bc250_clock_floor_mv(1500)==bc250_clock_min_mv(1500)-BC250_CURVE_UNDERVOLT_MV);
+  CHECK(bc250_clock_floor_mv(1000)==BC250_CLOCK_FLOOR_MV && bc250_clock_floor_mv(500)==BC250_CLOCK_FLOOR_MV);
   CHECK(!b.begin_count && !b.count && !r.ready);
   c.end=NULL;CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_INVALID);CHECK(!b.begin_count);
  }

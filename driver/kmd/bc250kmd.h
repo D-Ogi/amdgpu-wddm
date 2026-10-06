@@ -72,6 +72,7 @@
 #include "progress.h"
 #include "cumode.h"
 #include "dpm.h"
+#include "cpu.h"
 #include "interop.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
@@ -154,6 +155,7 @@ typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_STATE StartHealth;
     BC250_CU_MODE_STATE CuMode;        // cumode.c: 24 or 40 CUs, the boot guard, what the caps report
     BC250_DPM_STATE Dpm;               // dpm.c: the load-driven clock governor, its guard and telemetry
+    BC250_CPU_STATE Cpu;               // cpu.c: the CPU clock limit, undervolt, temperature cap and core mask
     BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
@@ -353,6 +355,7 @@ void CuModePatchCaps(BC250_DEVICE* Device, _Inout_updates_bytes_(Bytes) PVOID Ca
 // dpm.c
 struct _BC250_ESCAPE_DPM;
 struct _BC250_ESCAPE_DPM_TUNE;
+struct _BC250_ESCAPE_DPM_CURVE;
 void DpmInitialize(BC250_DEVICE* Device);
 void DpmStart(BC250_DEVICE* Device);
 void DpmStop(BC250_DEVICE* Device);
@@ -364,6 +367,19 @@ void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
+// The operator's V/F curve and its trial (0.7.210, docs/design/tuner.md, ADR 0020).
+void DpmCurveRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_CURVE* Data, ULONG Size, BOOLEAN Admin,
+                     ULONG EscapeFlags);
+
+// cpu.c: the CPU surface (0.7.210), the firmware's queue 3 and the core-enable mask
+struct _BC250_ESCAPE_CPU;
+void CpuInitialize(BC250_DEVICE* Device);
+void CpuStart(BC250_DEVICE* Device);
+void CpuStop(BC250_DEVICE* Device);
+void CpuPause(BC250_DEVICE* Device);
+NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+void CpuLogSummary(BC250_DEVICE* Device);
+void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 
 // interop.c
 struct _BC250_ESCAPE_INTEROP;

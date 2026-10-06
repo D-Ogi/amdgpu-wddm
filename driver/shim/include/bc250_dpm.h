@@ -379,6 +379,63 @@ unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g);
  * counts as an exit, and the next entry needs a whole quiet window again. The setting itself stays. */
 void bc250_dpm_idle_leave(struct bc250_dpm_governor *g);
 
+/* ---- the operator's V/F curve and its trial (0.7.210) ---------------------------------------- */
+
+/* The curve the governor's levels are applied with, and the trial that lets an operator try one without putting
+ * it on disk. Pure policy: the caller (driver/kmd/dpm.c) owns the lock, the time source, the registry and the
+ * one SMU transaction. docs/design/tuner.md and ADR 0020 are the design; the host test drives this struct
+ * directly, so the whole lifecycle is tested with no kernel in the loop.
+ *
+ * Three curves live here:
+ *   stored     what the registry holds, and what every revert goes back to. The start reads it.
+ *   active     what the governor applies now. Equal to stored outside a trial.
+ *   candidate  the curve under trial.
+ *
+ * A SET stores a candidate, makes it active, starts the window and raises apply. The caller re-applies the
+ * current level once at its next tick, which is the only way a curve reaches the hardware. A KEEP inside the
+ * window makes the candidate the stored curve and tells the caller to persist it. A CANCEL, the deadline, a
+ * stop or a power transition put the stored curve back and raise apply again. Nothing here writes to disk, so a
+ * killed tool, a hung tool, a lost remote session and a bugcheck all end at the stored curve. */
+#define BC250_DPM_CURVE_TRIAL_MS	25000u	/* the release default: the reference Control Center's own 25 s */
+#define BC250_DPM_CURVE_TRIAL_MIN_MS	10000u
+#define BC250_DPM_CURVE_TRIAL_MAX_MS	180000u	/* the three-minute lab bound */
+
+struct bc250_dpm_curve_state {
+	struct bc250_clock_curve stored, active, candidate;
+	int		trial;			/* a candidate is on trial */
+	unsigned int	trial_ms, elapsed_ms;	/* the window, and how much of it has passed */
+	unsigned int	serial;			/* one more for every SET: the caller's "apply" bookkeeping */
+	unsigned int	applied;		/* the serial the governor has applied */
+	unsigned int	sets, keeps, cancels, reverts;
+	int		apply;			/* the caller must re-apply the current level once */
+};
+
+/* The start's curve: stored and active both become *stored (the default line when it is 0). */
+void bc250_dpm_curve_init(struct bc250_dpm_curve_state *s, const struct bc250_clock_curve *stored);
+/* A checked candidate becomes active and starts a window of trial_ms (clamped to MIN..MAX_MS); a refused one
+ * changes nothing. *level (optional) names the level a refusal broke. A second SET replaces the first candidate
+ * and restarts the window; the revert target stays the stored curve, never the first candidate. */
+enum bc250_clock_curve_error bc250_dpm_curve_set(struct bc250_dpm_curve_state *s, const struct bc250_clock_curve *c,
+						 unsigned int trial_ms, unsigned int *level);
+/* 1 when a trial was kept: the candidate is now stored and the caller must persist it. 0 when none ran. */
+int bc250_dpm_curve_keep(struct bc250_dpm_curve_state *s);
+/* 1 when a trial was ended and the stored curve put back (apply raised). 0 when none ran. */
+int bc250_dpm_curve_cancel(struct bc250_dpm_curve_state *s);
+/* The table's own line becomes stored and active, any trial ends. 1 when something changed, so the caller knows
+ * whether to delete the registry values. */
+int bc250_dpm_curve_reset(struct bc250_dpm_curve_state *s);
+/* One tick's worth of the window. 1 when the deadline passed and the stored curve was put back. */
+int bc250_dpm_curve_tick(struct bc250_dpm_curve_state *s, unsigned int dt_ms);
+/* 1 once after every change of the active curve: the caller re-applies the current level through its checked
+ * transaction. Clears the flag and records the serial as applied. */
+int bc250_dpm_curve_take(struct bc250_dpm_curve_state *s);
+/* The active curve's voltage and VID at a level of the whole table (below BC250_CURVE_FIRST_LEVEL: the table's
+ * own, where no curve may act). Every reader of the voltage column goes through these two. */
+unsigned int bc250_dpm_curve_level_mv(const struct bc250_dpm_curve_state *s, unsigned int level);
+unsigned int bc250_dpm_curve_level_vid(const struct bc250_dpm_curve_state *s, unsigned int level);
+/* What is left of the window, 0 outside a trial. */
+unsigned int bc250_dpm_curve_remaining_ms(const struct bc250_dpm_curve_state *s);
+
 /* ---- the session marker ---------------------------------------------------------------------- */
 
 /* DpmSession is written (and flushed) when the governor first goes above the floor (a thermal-only level

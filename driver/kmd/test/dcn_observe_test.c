@@ -45,6 +45,9 @@ static void CuModeRequest(BC250_DEVICE*d,BC250_ESCAPE_CU_MODE*p,BOOLEAN a,ULONG 
 static void DpmRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void DpmTuneRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_TUNE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void InteropRequest(BC250_DEVICE*d,BC250_ESCAPE_INTEROP*p,ULONG f){(void)d;(void)p;(void)f;others++;}
+/* The two surfaces of 0.7.210: the V/F curve answers with the software snapshots, the CPU surface past the gate. */
+static void DpmCurveRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_CURVE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
+static void CpuRequest(BC250_DEVICE*d,BC250_ESCAPE_CPU*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
 static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)

@@ -69,8 +69,18 @@ static void test_table(void)
 		CHECK(bc250_clock_min_mv(p->mhz) == p->mv);
 		CHECK(bc250_clock_point_allowed(p->mhz, p->mv));
 		CHECK(bc250_clock_point_allowed(p->mhz, BC250_CLOCK_CEILING_MV));
-		CHECK(!bc250_clock_point_allowed(p->mhz, p->mv - 1u));
 		CHECK(!bc250_clock_point_allowed(p->mhz, BC250_CLOCK_CEILING_MV + 1u));
+		/* The undervolt band of 0.7.210: from the lab floor up, a point may stand BC250_CURVE_UNDERVOLT_MV
+		 * under the table's line but never under BC250_CLOCK_FLOOR_MV, and the floor itself and every point
+		 * below it have nothing left to give. */
+		CHECK(bc250_clock_floor_mv(p->mhz) ==
+		      (i <= BC250_DPM_FLOOR_LEVEL ? BC250_CLOCK_FLOOR_MV
+						  : (p->mv > BC250_CLOCK_FLOOR_MV + BC250_CURVE_UNDERVOLT_MV
+						     ? p->mv - BC250_CURVE_UNDERVOLT_MV : BC250_CLOCK_FLOOR_MV)));
+		CHECK(bc250_clock_point_allowed(p->mhz, bc250_clock_floor_mv(p->mhz)));
+		CHECK(!bc250_clock_point_allowed(p->mhz, bc250_clock_floor_mv(p->mhz) - 1u));
+		if (i <= BC250_DPM_FLOOR_LEVEL) CHECK(!bc250_clock_point_allowed(p->mhz, p->mv - 1u));
+		else CHECK(bc250_clock_point_allowed(p->mhz, p->mv - 1u));
 	}
 	/* The shape of the table is checked at compile time (dpm_table_is_16_levels below). */
 	CHECK(bc250_dpm_level_mhz(BC250_DPM_THERMAL_FLOOR_LEVEL) == 800u);
@@ -544,6 +554,149 @@ static int ref_raise(const struct bc250_dpm_tune *t)
 			if (t->down_permille * bc250_clock_points[next].mhz > busy * bc250_clock_points[l].mhz) return 0;
 		}
 	return 1;
+}
+
+/* ---- the operator's V/F curve and its trial (0.7.210) ------------------------------------------- */
+
+/* The default curve is the table's own line, so a start that nobody tuned behaves exactly as 0.7.207 did; a
+ * candidate is checked whole, and a trial ends by itself. */
+static void test_curve(void)
+{
+	struct bc250_clock_curve line, c;
+	struct bc250_dpm_curve_state s;
+	unsigned int i, level = 99u;
+
+	bc250_clock_curve_default(&line);
+	for (i = 0; i < BC250_CURVE_POINTS; i++)
+		CHECK(line.mv[i] == bc250_clock_points[BC250_CURVE_FIRST_LEVEL + i].mv);
+	CHECK(bc250_clock_curve_is_default(&line));
+	CHECK(bc250_clock_curve_check(&line, &level) == BC250_CLOCK_CURVE_OK);
+	/* Below the first level the curve has no say: the table's own voltage, as every point under the lab floor
+	 * is the floor's 820 mV. Above the table the last point answers, as bc250_dpm_level_mhz does. */
+	for (i = 0; i < BC250_CLOCK_LEVELS; i++)
+		CHECK(bc250_clock_curve_mv(&line, i) == bc250_clock_points[i].mv);
+	CHECK(bc250_clock_curve_mv(&line, 99u) == bc250_clock_points[BC250_CLOCK_LEVELS - 1].mv);
+	CHECK(bc250_clock_curve_checksum(&line) == bc250_clock_curve_checksum(&line));
+
+	/* A real undervolt: every editable point at its own floor. It passes, and it is not the default. */
+	c = line;
+	for (i = 0; i < BC250_CURVE_POINTS; i++)
+		c.mv[i] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + i));
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(!bc250_clock_curve_is_default(&c));
+	CHECK(bc250_clock_curve_checksum(&c) != bc250_clock_curve_checksum(&line));
+	CHECK(c.mv[0] == BC250_CLOCK_FLOOR_MV);
+
+	/* Every refusal, one at a time, with the level it happened at. */
+	c = line; c.mv[0] = BC250_CLOCK_FLOOR_MV + 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_FLOOR && level == BC250_CURVE_FIRST_LEVEL);
+	c = line; c.mv[0] = BC250_CLOCK_FLOOR_MV - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) != BC250_CLOCK_CURVE_OK);
+	c = line; c.mv[BC250_CURVE_POINTS - 1] = BC250_CLOCK_CEILING_MV + 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_RANGE &&
+	      level == BC250_CLOCK_LEVELS - 1u);
+	c = line; c.mv[BC250_CURVE_POINTS - 1] = BC250_CLOCK_FLOOR_MV - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_RANGE);
+	/* Deeper than the band admits at that clock. */
+	c = line; c.mv[5] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + 5u)) - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_DEPTH &&
+	      level == BC250_CURVE_FIRST_LEVEL + 5u);
+	/* A falling voltage with a rising clock: the one shape the governor's own transitions could not carry. */
+	c = line; c.mv[3] = c.mv[2] - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_ORDER &&
+	      level == BC250_CURVE_FIRST_LEVEL + 3u);
+	CHECK(bc250_clock_curve_check(NULL, &level) == BC250_CLOCK_CURVE_NULL);
+	/* A flat step is legal: two neighbours at the same voltage is what the table itself does below the floor,
+	 * and an operator who flattens the top of the line is not asking for anything new. */
+	c = line; c.mv[BC250_CURVE_POINTS - 2] = c.mv[BC250_CURVE_POINTS - 1];
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_OK);
+	/* The whole line at the lab point is not a curve, it is a 155 mV undervolt at 2000 MHz: the band refuses it
+	 * at the first level where the line is further away than BC250_CURVE_UNDERVOLT_MV. */
+	c = line;
+	for (i = 1; i < BC250_CURVE_POINTS; i++) c.mv[i] = c.mv[0];
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_DEPTH);
+	CHECK(level > BC250_CURVE_FIRST_LEVEL && level <= BC250_DPM_TOP_LEVEL);
+
+	/* The trial's whole life. Nothing here writes to disk: that is the caller's, and only on a keep. */
+	bc250_dpm_curve_init(&s, NULL);
+	CHECK(bc250_clock_curve_is_default(&s.stored) && bc250_clock_curve_is_default(&s.active));
+	CHECK(!s.trial && !s.apply && s.serial == 0 && bc250_dpm_curve_remaining_ms(&s) == 0);
+	CHECK(bc250_dpm_curve_level_mv(&s, BC250_CURVE_FIRST_LEVEL) == BC250_CLOCK_FLOOR_MV);
+	CHECK(bc250_dpm_curve_level_vid(&s, BC250_CURVE_FIRST_LEVEL) == bc250_clock_vid(BC250_CLOCK_FLOOR_MV));
+	/* Nothing on trial: a keep and a cancel both have nothing to do, and neither invents a change. */
+	CHECK(!bc250_dpm_curve_keep(&s) && !bc250_dpm_curve_cancel(&s) && s.serial == 0);
+	CHECK(!bc250_dpm_curve_reset(&s) && s.serial == 0);
+
+	/* A candidate: active at once, a window of its own, and one forced re-apply owed to the governor. */
+	c = line;
+	for (i = 0; i < BC250_CURVE_POINTS; i++)
+		c.mv[i] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + i));
+	CHECK(bc250_dpm_curve_set(&s, &c, 20000u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial && s.serial == 1 && s.sets == 1 && s.trial_ms == 20000u);
+	CHECK(bc250_dpm_curve_remaining_ms(&s) == 20000u);
+	CHECK(bc250_dpm_curve_level_mv(&s, BC250_DPM_TOP_LEVEL) == c.mv[BC250_CURVE_POINTS - 1]);
+	/* Under the lab floor the candidate changes nothing at all. */
+	CHECK(bc250_dpm_curve_level_mv(&s, BC250_DPM_IDLE_LEVEL) == BC250_CLOCK_FLOOR_MV);
+	CHECK(bc250_dpm_curve_take(&s) && s.applied == s.serial);
+	CHECK(!bc250_dpm_curve_take(&s));               /* once per change, not once per tick */
+	/* The window runs out and the stored curve comes back by itself, with a re-apply owed again. */
+	for (i = 0; i < 19u; i++) CHECK(!bc250_dpm_curve_tick(&s, 1000u));
+	CHECK(bc250_dpm_curve_remaining_ms(&s) == 1000u);
+	CHECK(bc250_dpm_curve_tick(&s, 1000u));
+	CHECK(!s.trial && s.reverts == 1 && s.serial == 2 && bc250_clock_curve_is_default(&s.active));
+	CHECK(bc250_dpm_curve_take(&s) && s.applied == 2u);
+	CHECK(!bc250_dpm_curve_tick(&s, 100000u));      /* no window, no revert, no serial */
+	CHECK(s.serial == 2u);
+
+	/* A keep inside the window: the candidate becomes the stored curve and the hardware needs nothing. */
+	CHECK(bc250_dpm_curve_set(&s, &c, 0u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MIN_MS);      /* 0 is clamped up, not taken literally */
+	CHECK(bc250_dpm_curve_take(&s));
+	CHECK(bc250_dpm_curve_keep(&s) && !s.trial && s.keeps == 1);
+	CHECK(!bc250_dpm_curve_take(&s));               /* a keep changes no voltage: nothing to re-apply */
+	for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.stored.mv[i] == c.mv[i] && s.active.mv[i] == c.mv[i]);
+	CHECK(!bc250_clock_curve_is_default(&s.stored));
+	CHECK(!bc250_dpm_curve_tick(&s, 1000000u));     /* a kept curve has no deadline */
+
+	/* A second trial on top of a kept curve, then a cancel: the revert target is the kept curve and never
+	 * the first candidate. */
+	{
+		struct bc250_clock_curve deeper = line;
+		unsigned int serial = s.serial;
+		deeper.mv[BC250_CURVE_POINTS - 1] = BC250_CLOCK_CEILING_MV - 1u;
+		CHECK(bc250_dpm_curve_set(&s, &line, 30000u, &level) == BC250_CLOCK_CURVE_OK);
+		CHECK(s.serial == serial + 1u && s.trial);
+		CHECK(bc250_dpm_curve_set(&s, &deeper, 30000u, &level) == BC250_CLOCK_CURVE_OK);
+		CHECK(s.serial == serial + 2u && s.trial_ms == 30000u && bc250_dpm_curve_remaining_ms(&s) == 30000u);
+		CHECK(bc250_dpm_curve_cancel(&s) && s.cancels == 1);
+		for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.active.mv[i] == c.mv[i]);
+		CHECK(bc250_dpm_curve_take(&s));
+	}
+	/* A candidate the checks refuse never becomes active and never moves the serial. */
+	{
+		struct bc250_clock_curve bad = c;
+		unsigned int serial = s.serial;
+		bad.mv[0] = BC250_CLOCK_FLOOR_MV + 10u;
+		CHECK(bc250_dpm_curve_set(&s, &bad, 20000u, &level) == BC250_CLOCK_CURVE_FLOOR);
+		CHECK(s.serial == serial && !s.trial && s.active.mv[0] == c.mv[0]);
+	}
+	/* The window is bounded at both ends, whatever a caller asks for. */
+	CHECK(bc250_dpm_curve_set(&s, &line, 1u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MIN_MS);
+	CHECK(bc250_dpm_curve_set(&s, &line, 10u * 60u * 1000u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MAX_MS);
+	/* The reset ends a trial too, and leaves the table's own line stored. */
+	CHECK(bc250_dpm_curve_reset(&s));
+	CHECK(!s.trial && bc250_clock_curve_is_default(&s.stored) && bc250_clock_curve_is_default(&s.active));
+	CHECK(bc250_dpm_curve_take(&s));
+	CHECK(!bc250_dpm_curve_reset(&s));              /* already the line: nothing to change, nothing to apply */
+
+	/* A start that reads a stored curve runs it from its first level change, with nothing owed. */
+	bc250_dpm_curve_init(&s, &c);
+	for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.active.mv[i] == c.mv[i] && s.stored.mv[i] == c.mv[i]);
+	CHECK(!s.apply && !s.trial && s.serial == 0);
+	CHECK(bc250_dpm_curve_level_vid(&s, BC250_DPM_TOP_LEVEL) ==
+	      bc250_clock_vid(c.mv[BC250_CURVE_POINTS - 1]));
 }
 
 static void test_tune_check(void)
@@ -1840,6 +1993,7 @@ int main(void)
 	test_session();
 	test_busy_source();
 	test_idle();
+	test_curve();
 	test_tune_check();
 	test_tune_no_oscillation();
 	test_floor();

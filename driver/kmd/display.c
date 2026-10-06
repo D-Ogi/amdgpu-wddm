@@ -154,6 +154,7 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     case BC250_ESCAPE_RUN_START_HEALTH:
     case BC250_ESCAPE_OBSERVE_DCN:
     case BC250_ESCAPE_RUN_CLOCK:
+    case BC250_ESCAPE_RUN_CPU:      // the operator's own surface, like RUN_CLOCK: one mailbox sequence, bounded
     case BC250_ESCAPE_GET_INFO:
     case BC250_ESCAPE_READ_REG:
     case BC250_ESCAPE_GET_MEMORY:
@@ -354,6 +355,13 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
+    // The operator's V/F curve (0.7.210): software state like the tuning above, so the same flags and the same
+    // argument (DpmCurveRequest, dpm.c). One exact size, because the structure has one ABI.
+    if (command == BC250_ESCAPE_RUN_DPM_CURVE) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM_CURVE)) return STATUS_INVALID_PARAMETER;
+        DpmCurveRequest(device,(BC250_ESCAPE_DPM_CURVE*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
     // Interop switches: the start's decision and the session marker, software state as well (interop.c).
     if (data->Command == BC250_ESCAPE_RUN_INTEROP) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_INTEROP)) return STATUS_INVALID_PARAMETER;
@@ -364,8 +372,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     // software reads above support NoAdapterSynchronization. Other diagnostics
     // rely on OS Level Two/Three exclusion and must not enter a
     // powered-down/partially restored subsystem.
-    if (data->Command!=BC250_ESCAPE_RUN_CLOCK &&
-        (Escape->Flags.NoAdapterSynchronization ||
+    // RUN_CPU (0.7.210) is admitted with NoAdapterSynchronization as well, because its READ operation is adapter-owned
+    // software state and CpuRequest refuses that flag for every operation that touches the mailbox. The power-phase
+    // half below still applies to it: a CPU message during a retained power transition is exactly what must not run.
+    if ((data->Command!=BC250_ESCAPE_RUN_CLOCK && data->Command!=BC250_ESCAPE_RUN_CPU &&
+         Escape->Flags.NoAdapterSynchronization) ||
+        (data->Command!=BC250_ESCAPE_RUN_CLOCK &&
          InterlockedCompareExchange(&device->RetainedPowerPhase,0,0)!=0)) {
         data->Status=BC250_ESCAPE_STATUS_REFUSED;
         return STATUS_DEVICE_NOT_READY;
@@ -378,6 +390,14 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     if (data->Command == BC250_ESCAPE_OBSERVE_DCN) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DCN_OBSERVE)) return STATUS_INVALID_PARAMETER;
         DcnObserve(device,(BC250_ESCAPE_DCN_OBSERVE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS; // typed operation status is in the reply
+    }
+    // The CPU surface (0.7.210): its write operations send mailbox messages on the firmware's queue 3, so it sits
+    // here, past the Level Two gate, and not with the software snapshots above. CpuRequest itself admits READ with
+    // NoAdapterSynchronization only and every other operation with HardwareAccess only (cpu.c).
+    if (data->Command == BC250_ESCAPE_RUN_CPU) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_CPU)) return STATUS_INVALID_PARAMETER;
+        CpuRequest(device,(BC250_ESCAPE_CPU*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS; // typed operation status is in the reply
     }
     if (data->Command == BC250_ESCAPE_RUN_CLOCK) {

@@ -37,12 +37,23 @@ static int OwnerHeld(void* context)
     BC250_SMU_OWNER* owner=context;
     return owner->Caller==PsGetCurrentThread() && owner->Online && owner->Registers;
 }
+// The six mailbox offsets of the two queues, by name, and nothing else. Queue 3's three (0.7.210) come from the
+// firmware's own queue descriptor table through bc250_cpu_queue3(); all three are already in the escape read
+// allowlist (regs.generated.h), so the lab could read them before any message was ever sent.
+static int MailboxOffsetAllowed(unsigned offset,int write)
+{
+    struct bc250_cpu_queue cpu;
+    bc250_cpu_queue3(&cpu);
+    if(offset==BC250_SMU_mmMP1_SMN_C2PMSG_90 || offset==BC250_SMU_mmMP1_SMN_C2PMSG_82 ||
+       offset==cpu.resp_reg || offset==cpu.param_reg)return 1;
+    // The two command registers are write-only to this driver: nothing reads them back.
+    return write && (offset==BC250_SMU_mmMP1_SMN_C2PMSG_66 || offset==cpu.msg_reg);
+}
 static int MailboxRead(void* context,unsigned offset,unsigned* value)
 {
     BC250_SMU_OWNER* owner=context;
     if(!OwnerHeld(owner))return -1;
-    if(offset!=BC250_SMU_mmMP1_SMN_C2PMSG_90 &&
-       offset!=BC250_SMU_mmMP1_SMN_C2PMSG_82)return -22;
+    if(!MailboxOffsetAllowed(offset,0))return -22;
     *value=READ_REGISTER_ULONG((PULONG)&owner->Registers[offset/sizeof(ULONG)]);
     return 0;
 }
@@ -50,9 +61,7 @@ static int MailboxWrite(void* context,unsigned offset,unsigned value)
 {
     BC250_SMU_OWNER* owner=context;
     if(!OwnerHeld(owner))return -1;
-    if(offset!=BC250_SMU_mmMP1_SMN_C2PMSG_66 &&
-       offset!=BC250_SMU_mmMP1_SMN_C2PMSG_82 &&
-       offset!=BC250_SMU_mmMP1_SMN_C2PMSG_90)return -22;
+    if(!MailboxOffsetAllowed(offset,1))return -22;
     WRITE_REGISTER_ULONG((PULONG)&owner->Registers[offset/sizeof(ULONG)],value);
     return 0;
 }
@@ -96,10 +105,69 @@ static int Message(void* context,unsigned message,unsigned parameter,unsigned* v
     struct bc250_smu_report report;
     int result;
     // The allowlist of docs/hardware.md, enforced here and not only reviewed: nothing else reaches the mailbox.
+    // This is the GFX clock domain, so it consults the clock list alone: a clock transaction can never send a CPU
+    // message, and CpuDomainMessage below can never send a clock message (0.7.210, ADR 0020).
     if(!bc250_clock_message_allowed(message))return -22;
     result=bc250_smu_message_locked(&owner->Transport,message,parameter,&report);
     if(!result)*value=report.value;
     return result;
+}
+
+// ---- the CPU domain (0.7.210) ---------------------------------------------------------------------------------
+static NTSTATUS ResultStatus(int result);
+// One message of the CPU domain, with the owner lock already held by the caller. Both lists are consulted: the
+// message against the queue and the direction, then its argument against its own form.
+static int CpuDomainMessage(BC250_SMU_OWNER* owner,unsigned queue,unsigned message,unsigned parameter,int write,
+                           unsigned* value,unsigned* response)
+{
+    struct bc250_smu_report report;
+    int result;
+    if(!bc250_cpu_message_allowed(queue,message,write))return -22;
+    if(!bc250_cpu_argument_allowed(queue,message,parameter))return -22;
+    if(queue==BC250_CPU_QUEUE_CPU && !owner->CpuOnline)return -19;
+    result=bc250_smu_message_locked(queue==BC250_CPU_QUEUE_CPU?&owner->CpuTransport:&owner->Transport,
+                                    message,parameter,&report);
+    if(response)*response=report.response;
+    if(!result && value)*value=report.value;
+    return result;
+}
+
+BOOLEAN SmuCpuBegin(BC250_SMU_OWNER* owner)
+{
+    return InterlockedCompareExchange(&owner->CpuBusy,1,0)==0;
+}
+
+void SmuCpuEnd(BC250_SMU_OWNER* owner)
+{
+    InterlockedExchange(&owner->CpuBusy,0);
+}
+
+NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
+                       ULONG busyPermille,ULONG* value,LONG* temperatureMc,ULONG* firmwareStatus)
+{
+    int degrees=0,result;
+    unsigned read=0,response=0;
+    if(value)*value=0;
+    if(temperatureMc)*temperatureMc=0;
+    if(firmwareStatus)*firmwareStatus=0;
+    if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return STATUS_INVALID_DEVICE_STATE;
+    // "No mailbox traffic during sustained compute" (docs/design/rejected-options.md). The caller passes the
+    // governor's own share, so a combined CPU and GPU test applies its values first and loads second.
+    if(busyPermille>=BC250_CPU_GPU_BUSY_PERMILLE)return STATUS_DEVICE_BUSY;
+    result=OwnerBegin(owner);
+    if(result)return ResultStatus(result);
+    // Before every message, not once per sequence: a sequence is several hundred milliseconds long and the part
+    // can cross 87 C inside one.
+    result=Temperature(owner,&degrees);
+    if(!result) {
+        if(temperatureMc)*temperatureMc=degrees;
+        if(degrees>=BC250_CLOCK_HOT_MC)result=BC250_CLOCK_TOO_HOT;
+        else result=CpuDomainMessage(owner,queue,message,parameter,write?1:0,&read,&response);
+    }
+    OwnerEnd(owner);
+    if(firmwareStatus)*firmwareStatus=response;
+    if(!result && value)*value=read;
+    return ResultStatus(result);
 }
 static NTSTATUS ResultStatus(int result)
 {
@@ -140,6 +208,17 @@ NTSTATUS SmuOwnerStart(BC250_SMU_OWNER* owner,volatile ULONG* registers)
         if(!result)InterlockedExchange64(&owner->FirmwareSnapshot,
             (LONG64)((1ull<<32)|(ULONGLONG)version));
         else {owner->Online=FALSE;owner->Registers=NULL;}
+        if(!result) {
+            // The second transport instance, over the same mapping and the same owner lock (0.7.210). It sends
+            // nothing here: a queue that has never been spoken to on this part is proven by driver/kmd/cpu.c's
+            // read stage, not by an init. already_active=1 for the same reason as queue 0: the BIOS owns the
+            // image, so the previous response is checked and drained before the first write.
+            struct bc250_cpu_queue q;
+            bc250_cpu_queue3(&q);
+            owner->CpuOnline=bc250_smu_init_queue(&owner->CpuTransport,&io,20000,1,
+                                                  q.msg_reg,q.param_reg,q.resp_reg)==0;
+            InterlockedExchange(&owner->CpuBusy,0);
+        }
     }
     OwnerUnlock(owner);
     return ResultStatus(result);
@@ -149,6 +228,7 @@ void SmuOwnerStop(BC250_SMU_OWNER* owner)
     NT_ASSERT(KeGetCurrentIrql()==PASSIVE_LEVEL);
     OwnerLock(owner); // waits for the entire outstanding clock transaction
     owner->Online=FALSE;
+    owner->CpuOnline=FALSE;
     owner->Registers=NULL;
     OwnerUnlock(owner);
 }

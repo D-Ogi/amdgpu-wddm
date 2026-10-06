@@ -27,6 +27,10 @@ typedef struct _BC250_DPM_SNAP {
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
     ULONG IdleEntries, IdleExits, IdleRefusals;
     ULONGLONG IdleMs;                       // time held at the idle point
+    // 0.7.210, the operator's V/F curve. CurrentMv above already comes from the active curve; these three are
+    // what the telemetry line and the escape's flags need. Serial counts changes of the active curve, Applied is
+    // the serial the governor has put into the hardware.
+    ULONG CurveSerial, CurveApplied, CurveTrialRemainingMs;
 } BC250_DPM_SNAP;
 
 typedef struct _BC250_DPM_STATE {
@@ -61,6 +65,14 @@ typedef struct _BC250_DPM_STATE {
     // thread under SnapLock at the start of a governing tick, reset to the defaults by DpmStart. Never persisted.
     struct bc250_dpm_tune Tune;             // under SnapLock
     ULONG TuneSerial;                       // under SnapLock: one more for every change
+    // The operator's V/F curve and its trial (0.7.210, docs/design/tuner.md, ADR 0020). Under SnapLock, always:
+    // the escape writes a candidate there, the governor thread runs the window and takes the forced re-apply at
+    // the start of every tick, and every reader of the voltage column (DpmApply, DpmResyncLevel, the 1000 ms
+    // readback, DpmPublish) goes through DpmLevelMv/DpmLevelVid, which take the lock. Nothing here is persisted
+    // until a KEEP: a killed tool, a hung tool and a bugcheck all end at the stored curve.
+    struct bc250_dpm_curve_state Curve;     // under SnapLock
+    ULONG CurveTrialMs;                     // DpmCurveTrialMs of this start, the window a SET gets by default
+    BOOLEAN CurvePending, CurveConfirmed;    // the guard's marks of this start's stored curve
 } BC250_DPM_STATE;
 
 // The submit path (gfx.c SubmitIbLocked, after the IB is committed): the ring went, or stays, busy.

@@ -468,6 +468,46 @@ start, without a restart and without the registry:
   its own line (`dpm: tune (thermal): hot step 500->2000 ms, soft release delta 0->1500 mC step 3000->3000 ms,
   serial 4`), and every `dpm: tune` line is followed by a `thermal:` line with the soft raises so far.
 
+## The operator's V/F curve (0.7.210)
+
+The table above gives one voltage per clock. From 0.7.210 the operator can lower that voltage. The full design,
+the refusal table and the lab plan are in [tuner.md](tuner.md); this section is what the governor does with it.
+
+- The curve holds 11 voltages, for levels 5 to 15 (1000 to 2000 MHz). The levels under the lab floor keep the
+  table's line, because they already run at the floor voltage of 820 mV.
+- A value is admitted between `bc250_clock_floor_mv(MHz)` (the table's line less `BC250_CURVE_UNDERVOLT_MV`,
+  25 mV, and never under 820 mV) and 1000 mV. Level 5 stays at 820 mV, and the curve must not fall as the clock
+  rises, in millivolts or in the VID they encode to. `bc250_clock_curve_check` names the broken rule (range,
+  depth, order, floor) and the level that broke it; the table's own line is a legal curve.
+- `bc250_clock_prepare` admits the whole band, so one gate serves the governor, the escape SET and the curve.
+  The clock readback still compares the VID against the **active** curve (`DpmLevelVid`), not against the table.
+- The governor takes a new curve at its next 25 ms tick. The level the load asks for does not change, so the
+  tick re-applies the same level with the new voltage (`DpmApply(..., "curve")`); without that forced apply a
+  curve change would wait for the next level change.
+- Every voltage reader goes through `DpmLevelMv`/`DpmLevelVid` under the snapshot lock, so a curve change can
+  never tear the 11 values that `DpmApply`, `DpmResyncLevel`, the 1000 ms readback and `DpmPublish` read.
+
+| Value | Meaning |
+|---|---|
+| `DpmCurve1000` ... `DpmCurve2000` | the stored curve, one value per level, in mV. An absent value means the table's own line at that clock; a curve that breaks a rule is refused as a whole, never half-applied |
+| `DpmCurveTrialMs` | the trial window, 10000 to 180000 ms; absent = 25000 (`BC250_DPM_CURVE_TRIAL_MS`) |
+| `DpmCurvePending`, `DpmCurveConfirmed` | guard marks: the Fletcher-16 checksum of the curve that ran, and of the curve a healthy start confirmed |
+| `DpmCurveLastReason` | 0 none, 1 the stored curve runs, 2 refused, 3 unconfirmed, 4 the pending mark is not durable, 5 this start governs no clock |
+
+The guard is the `DpmPending` pattern applied to the curve alone. A start with a stored curve writes
+`DpmCurvePending` before it applies anything; start health (or `dpm confirm`) writes `DpmCurveConfirmed` and
+deletes the pending mark. A start that finds `DpmCurvePending` runs the table's own line and says so. So a curve
+that the machine does not survive costs the curve and not the machine, and the driver still starts.
+
+- `bc250kmd_cli dpm curve [set <mV>... | offset <mV> | preset mild|medium|deep | keep | cancel | reset]`. A SET
+  starts a trial: the kernel owns the deadline and the revert, and nothing reaches the registry before `keep`.
+  `cancel` brings the stored curve back at once, and so do a stop, a pause and a power transition.
+- Escape `BC250_ESCAPE_RUN_DPM_CURVE` (28, `BC250_ESCAPE_DPM_CURVE`, ABI 1, 360 bytes). Writes need an
+  administrator, the generation of the start the caller read, and a governing DPM start.
+- The log gets the curve as a line of its own: `dpm: curve (stored) 820 835 ... 975 mV`, the trial's
+  remaining milliseconds next to every telemetry line, and `dpm: curve (trial over, stored curve back) ...` when
+  the kernel reverts it.
+
 ## Telemetry
 
 - `bc250kmd_cli dpm [count [interval ms]]`: mode, requested mode, reason, the thresholds and floor in force with their

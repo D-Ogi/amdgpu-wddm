@@ -63,6 +63,21 @@
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
+// The operator's V/F curve (0.7.210): 11 named values, one per level from the lab floor up, plus the boot guard's
+// two marks over the curve's checksum and the default trial window. An absent value means the table's own line at
+// that clock, so a machine that nobody tuned has none of these.
+#define DPM_SETTING_CURVE_PENDING L"DpmCurvePending"
+#define DPM_SETTING_CURVE_CONFIRMED L"DpmCurveConfirmed"
+#define DPM_SETTING_CURVE_TRIAL L"DpmCurveTrialMs"
+#define DPM_SETTING_CURVE_REASON L"DpmCurveLastReason"
+// What DpmCurveLastReason says about this start's curve (docs/design/tuner.md). The tools read it when the
+// adapter is gone, which is exactly the case this guard exists for.
+#define DPM_CURVE_REASON_NONE 0u            // no stored curve: the table's own line
+#define DPM_CURVE_REASON_OK 1u              // the stored curve runs this start
+#define DPM_CURVE_REASON_REFUSED 2u         // the stored values broke a rule of bc250_clock_curve_check
+#define DPM_CURVE_REASON_UNCONFIRMED 3u     // an earlier start ran the curve and never became healthy
+#define DPM_CURVE_REASON_REGISTRY 4u        // the pending mark would not reach the disk
+#define DPM_CURVE_REASON_NOT_GOVERNING 5u   // this start applies no level, so no curve acts
 
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 192);        // ABI 2 (0.7.207); the ABI 1 prefix is 160 bytes
 C_ASSERT(BC250_DPM_ABI1_SIZE == 160);
@@ -73,6 +88,20 @@ C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_S
 C_ASSERT(BC250_DPM_TUNE_COUNT == 8);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
+C_ASSERT(sizeof(BC250_ESCAPE_DPM_CURVE) == 360);  // ABI 1 (0.7.210); one size, so the dispatch has one test
+C_ASSERT(BC250_DPM_CURVE_POINTS == BC250_CURVE_POINTS);
+C_ASSERT(BC250_CURVE_FIRST_LEVEL == BC250_DPM_FLOOR_LEVEL);
+C_ASSERT(BC250_CURVE_FIRST_LEVEL + BC250_CURVE_POINTS == BC250_CLOCK_LEVELS);
+C_ASSERT(BC250_CLOCK_CURVE_ERROR_COUNT == 6);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_CURVE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
+         FIELD_OFFSET(BC250_ESCAPE_DPM_CURVE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
+
+// One registry value per editable level. The names carry the clock, so an operator reading the key sees what each
+// one is; the order of this table is the order of the curve vector.
+static const PCWSTR g_CurveSetting[BC250_CURVE_POINTS] = {
+    L"DpmCurve1000", L"DpmCurve1100", L"DpmCurve1200", L"DpmCurve1300", L"DpmCurve1400", L"DpmCurve1500",
+    L"DpmCurve1600", L"DpmCurve1700", L"DpmCurve1800", L"DpmCurve1900", L"DpmCurve2000"
+};
 
 static const char* const g_Throttle[BC250_DPM_THROTTLE_COUNT] = {
     "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed", "thermal-warm",
@@ -98,6 +127,10 @@ void DpmInitialize(BC250_DEVICE* Device)
     s->Decision.reason = BC250_DPM_REASON_NOT_RUN;
     s->Snap.Reason = BC250_DPM_REASON_NOT_RUN;
     bc250_dpm_tune_default(&s->Tune);
+    // The table's own line, so that a read before the first start (and a start that never governs) reports the
+    // voltage of the table and not a zero.
+    bc250_dpm_curve_init(&s->Curve, NULL);
+    s->CurveTrialMs = BC250_DPM_CURVE_TRIAL_MS;
 }
 
 // ---- runtime tuning (0.7.185, BC250_ESCAPE_RUN_DPM_TUNE) ----------------------------------------------------------
@@ -194,6 +227,95 @@ static void DeleteLogged(PCWSTR Name)
 {
     NTSTATUS status = GuardDeleteSetting(Name);
     if (!NT_SUCCESS(status)) GuardLog("dpm: deleting %ws failed 0x%08X", Name, status);
+}
+
+// ---- the operator's V/F curve (0.7.210, docs/design/tuner.md, ADR 0020) --------------------------------------
+// The policy and the trial are driver/shim/bc250_dpm.c; this part is the lock around them, the registry under
+// them and the one forced re-apply that puts a new curve into the hardware.
+//
+// Every reader of the voltage column goes through these two, and both take SnapLock: the escape may replace the
+// active curve at any moment, and a torn read of 11 values would ask the firmware for a voltage nobody chose.
+// One spin lock per clock transition is nothing next to the transaction itself.
+static ULONG DpmLevelMv(BC250_DPM_STATE* S, ULONG Level)
+{
+    KIRQL irql;
+    ULONG mv;
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    mv = bc250_dpm_curve_level_mv(&S->Curve, Level);
+    KeReleaseSpinLock(&S->SnapLock, irql);
+    return mv;
+}
+
+static ULONG DpmLevelVid(BC250_DPM_STATE* S, ULONG Level)
+{
+    KIRQL irql;
+    ULONG vid;
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    vid = bc250_dpm_curve_level_vid(&S->Curve, Level);
+    KeReleaseSpinLock(&S->SnapLock, irql);
+    return vid;
+}
+
+// A curve as one log line: the millivolts from 1000 MHz up, and how far they are from the table's line. Kept
+// inside BC250_LOG_TEXT (160 bytes): 11 values of three digits plus separators is about 60 characters.
+static void DpmLogCurve(const char* What, const struct bc250_clock_curve* Curve)
+{
+    GuardLog("dpm: curve (%s) %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu mV%s", What,
+             Curve->mv[0], Curve->mv[1], Curve->mv[2], Curve->mv[3], Curve->mv[4], Curve->mv[5], Curve->mv[6],
+             Curve->mv[7], Curve->mv[8], Curve->mv[9], Curve->mv[10],
+             bc250_clock_curve_is_default(Curve) ? " (the table's own line)" : "");
+}
+
+// The stored curve of this start: 11 values, each absent meaning the table's line at that clock. A value that is
+// not a whole millivolt, or a curve that breaks one of the rules, is refused as a whole: a half-applied curve is
+// worse than none, and the operator's own typo is not something to interpolate around. PASSIVE_LEVEL, under Lock.
+static void DpmReadCurve(BC250_DPM_STATE* S, struct bc250_clock_curve* Curve, BOOLEAN* Any, BOOLEAN* Refused)
+{
+    unsigned int i, level = 0;
+    enum bc250_clock_curve_error error;
+    UNREFERENCED_PARAMETER(S);
+    bc250_clock_curve_default(Curve);
+    *Any = FALSE;
+    *Refused = FALSE;
+    for (i = 0; i < BC250_CURVE_POINTS; i++) {
+        unsigned int mv = 0;
+        if (!QueryPresent(g_CurveSetting[i], &mv)) continue;
+        *Any = TRUE;
+        Curve->mv[i] = mv;
+    }
+    if (!*Any) return;
+    error = bc250_clock_curve_check(Curve, &level);
+    if (error == BC250_CLOCK_CURVE_OK) return;
+    GuardLog("dpm: the stored curve is refused (error %d at %lu MHz): the table's own line runs this start",
+             (int)error, bc250_dpm_level_mhz(level));
+    bc250_clock_curve_default(Curve);
+    *Refused = TRUE;
+}
+
+// 11 writes, each flushed. TRUE when every one of them reached the disk: a curve half on disk is a curve the next
+// start would refuse as a whole (DpmReadCurve), which is safe but says nothing useful, so the caller is told.
+static BOOLEAN DpmStoreCurve(const struct bc250_clock_curve* Curve)
+{
+    unsigned int i;
+    BOOLEAN all = TRUE;
+    for (i = 0; i < BC250_CURVE_POINTS; i++) {
+        NTSTATUS status = GuardStoreSetting(g_CurveSetting[i], Curve->mv[i]);
+        if (!NT_SUCCESS(status)) {
+            GuardLog("dpm: writing %ws = %lu failed 0x%08X", g_CurveSetting[i], Curve->mv[i], status);
+            all = FALSE;
+        }
+    }
+    return all;
+}
+
+static void DpmDeleteCurve(void)
+{
+    unsigned int i;
+    for (i = 0; i < BC250_CURVE_POINTS; i++) {
+        NTSTATUS status = GuardDeleteSetting(g_CurveSetting[i]);
+        if (!NT_SUCCESS(status) && status != STATUS_OBJECT_NAME_NOT_FOUND)
+            GuardLog("dpm: deleting %ws failed 0x%08X", g_CurveSetting[i], status);
+    }
 }
 
 // The automatic fallback: DpmMode back to fixed-lab, durably, so that the next start does not try again.
@@ -327,6 +449,14 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     }
     UNREFERENCED_PARAMETER(Device);
     KeAcquireSpinLock(&S->SnapLock, &irql);
+    // The curve's own three fields and the voltage it asks for at the level the governor committed (0.7.210).
+    // CurrentMv was set from the table above; this is the value that actually reached the hardware.
+    snap.CurrentMv = bc250_dpm_curve_level_mv(&S->Curve, g->level);
+    snap.CurveSerial = S->Curve.serial;
+    snap.CurveApplied = S->Curve.applied;
+    snap.CurveTrialRemainingMs = bc250_dpm_curve_remaining_ms(&S->Curve);
+    if (!bc250_clock_curve_is_default(&S->Curve.active)) snap.Flags |= BC250_DPM_FLAG_CURVE;
+    if (S->Curve.trial) snap.Flags |= BC250_DPM_FLAG_CURVE_TRIAL;
     S->Snap = snap;
     KeReleaseSpinLock(&S->SnapLock, irql);
 }
@@ -357,12 +487,27 @@ static void DpmLogIdleLine(const char* What, const BC250_DPM_SNAP* P)
              P->IdleHoldMs, P->IdleBusyPermille, P->IdleEntries, P->IdleExits, P->IdleRefusals, P->IdleMs);
 }
 
+// The curve's state beside the telemetry, only while it is not the table's own line or a trial runs, so a start
+// that nobody tuned logs exactly what 0.7.207 logged (0.7.210).
+static void DpmLogCurveLine(const char* What, const BC250_DPM_SNAP* P)
+{
+    if (!(P->Flags & (BC250_DPM_FLAG_CURVE | BC250_DPM_FLAG_CURVE_TRIAL))) return;
+    GuardLog("dpm: %s curve serial %lu applied %lu, %lu mV at %lu MHz%s%s", What, P->CurveSerial, P->CurveApplied,
+             P->CurrentMv, P->CurrentMHz, (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL) ? ", on trial, " : "",
+             (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL) ? "see the next line for what is left" : "");
+    if (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL)
+        GuardLog("dpm: %s curve trial: %lu ms left before the stored curve comes back", What,
+                 P->CurveTrialRemainingMs);
+}
+
 // The one place a level reaches the hardware. TRUE when the hardware is at Level now.
 static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, ULONG Level, const char* Why)
 {
     struct bc250_clock_report report;
     ULONG from = bc250_dpm_level_mhz(S->Gov.level);
-    NTSTATUS status = SmuSetPoint(&Device->Smu, bc250_dpm_level_mhz(Level), bc250_dpm_level_mv(Level), &report);
+    // The voltage comes from the active curve (0.7.210), which is the table's own line until an operator sets
+    // one. DpmLevelMv takes SnapLock, so the value cannot be half of an old curve and half of a new one.
+    NTSTATUS status = SmuSetPoint(&Device->Smu, bc250_dpm_level_mhz(Level), DpmLevelMv(S, Level), &report);
     if (NT_SUCCESS(status) && report.ready) {
         bc250_dpm_commit(&S->Gov, Level);
         S->ErrorsInRow = 0;
@@ -454,7 +599,10 @@ static void DpmResyncLevel(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T
         T->ObservedVid = vid;
         T->ClockAt = KeQueryInterruptTime();
         level = bc250_dpm_level_of(mhz);
-        if (level >= 0 && vid == bc250_clock_points[level].vid) {
+        // Against the ACTIVE curve, not the table (0.7.210). With a curve set, the table's own VID is not what the
+        // hardware was asked for, and comparing against it would read every level as "not a table point" and drop
+        // the clock to the floor at the first readback after a curve change.
+        if (level >= 0 && vid == DpmLevelVid(S, (ULONG)level)) {
             S->Gov.level = (ULONG)level;
             return;
         }
@@ -525,6 +673,18 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         struct bc250_dpm_input in;
         ULONG target;
         enum bc250_dpm_session_action action;
+        // The curve's window and its forced re-apply (0.7.210). Both under SnapLock, because the escape writes
+        // the same state: the tick is where a trial's deadline is noticed and where a changed curve reaches the
+        // hardware. The revert is therefore the kernel's own act and survives a killed or hung tool.
+        BOOLEAN curveReverted, curveTake;
+        struct bc250_clock_curve curveNow;
+        KIRQL curveIrql;
+        KeAcquireSpinLock(&S->SnapLock, &curveIrql);
+        curveReverted = bc250_dpm_curve_tick(&S->Curve, dtMs) ? TRUE : FALSE;
+        curveTake = bc250_dpm_curve_take(&S->Curve) ? TRUE : FALSE;
+        curveNow = S->Curve.active;
+        KeReleaseSpinLock(&S->SnapLock, curveIrql);
+        if (curveReverted) DpmLogCurve("trial over, stored curve back", &curveNow);
         in.busy_permille = T->Permille;
         in.temperature_mc = T->TemperatureMc;
         in.temperature_valid = T->TemperatureValid;
@@ -564,9 +724,18 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
             }
         }
         T->Target = target;
-        if (target != S->Gov.level && !DpmApply(Device, S, T, target, "load") &&
-            S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
-            DpmGiveUp(Device, S, T);
+        if (target != S->Gov.level) {
+            // The level changes, so the transaction carries the new curve's voltage anyway.
+            if (!DpmApply(Device, S, T, target, curveTake ? "load, curve" : "load") &&
+                S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
+                DpmGiveUp(Device, S, T);
+        } else if (curveTake) {
+            // The level does not change, so without this the new voltage would reach the hardware at the next
+            // level change, which can be minutes away. One re-apply of the same clock: the settle loop does not
+            // run, and only the forced voltage identifier moves.
+            if (!DpmApply(Device, S, T, target, "curve") && S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
+                DpmGiveUp(Device, S, T);
+        }
     } else {
         // Fixed-lab: the same average, for the telemetry, and nothing else.
         S->Gov.avg_permille = (S->Gov.avg_permille * 3u + T->Permille + 2u) / 4u;
@@ -580,10 +749,11 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
             T->ObservedMHz = mhz;
             T->ObservedVid = vid;
             T->ClockAt = KeQueryInterruptTime();
+            // Against the active curve, for the same reason as DpmResyncLevel (0.7.210).
             if (governing && Governing(S) &&
-                (mhz != bc250_dpm_level_mhz(S->Gov.level) || vid != bc250_clock_points[S->Gov.level].vid)) {
-                GuardLog("dpm: readback %lu MHz VID %lu is not the committed %lu MHz VID %u: resync", mhz, vid,
-                         bc250_dpm_level_mhz(S->Gov.level), bc250_clock_points[S->Gov.level].vid);
+                (mhz != bc250_dpm_level_mhz(S->Gov.level) || vid != DpmLevelVid(S, S->Gov.level))) {
+                GuardLog("dpm: readback %lu MHz VID %lu is not the committed %lu MHz VID %lu: resync", mhz, vid,
+                         bc250_dpm_level_mhz(S->Gov.level), DpmLevelVid(S, S->Gov.level));
                 InterlockedExchange(&S->Resync, 1);
             }
         }
@@ -601,6 +771,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         KeReleaseSpinLock(&S->SnapLock, irql);
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
+        DpmLogCurveLine("telemetry", &snap);
         // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
         bc250_dpm_tune_default(&defaults);
         if (!TuneEqual(&S->Gov.tune, &defaults) || serial != S->TuneTaken)
@@ -663,6 +834,81 @@ static void DpmConfigureIdle(BC250_DPM_STATE* S, BOOLEAN Dpm)
              bc250_dpm_idle_mhz(&S->Gov) ? "on" : (mhz == 0 ? "off by setting" : "off"), (int)error);
 }
 
+// This start's V/F curve, with the same two-mark guard as DPM itself (docs/design/tuner.md, ADR 0020). A curve
+// is on disk only after a KEEP, so what is read here once ran a whole trial window on this machine; the guard
+// covers what a trial cannot see, which is a curve that is stable for 25 s and not stable for an hour, or one
+// that survives the desktop and not the next game. A start that finds the pending mark of an earlier start drops
+// the curve from the disk and runs the table's own line: one bad KEEP costs the curve, never the machine.
+// A start that does not govern never applies a level, so it leaves the state at the table's line.
+// PASSIVE_LEVEL, under Lock, before the governor thread exists.
+static void DpmInstallCurve(BC250_DPM_STATE* S, const struct bc250_clock_curve* Curve)
+{
+    KIRQL irql;
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    bc250_dpm_curve_init(&S->Curve, Curve);
+    KeReleaseSpinLock(&S->SnapLock, irql);
+}
+
+static void DpmConfigureCurve(BC250_DPM_STATE* S, BOOLEAN Dpm)
+{
+    struct bc250_clock_curve curve;
+    unsigned int trial = 0, pending = 0, confirmed = 0, sum;
+    BOOLEAN any = FALSE, refused = FALSE, pendingPresent, trialPresent;
+
+    bc250_clock_curve_default(&curve);
+    DpmInstallCurve(S, NULL);
+    S->CurvePending = S->CurveConfirmed = FALSE;
+    trialPresent = QueryPresent(DPM_SETTING_CURVE_TRIAL, &trial);
+    if (!trialPresent) trial = BC250_DPM_CURVE_TRIAL_MS;
+    if (trial < BC250_DPM_CURVE_TRIAL_MIN_MS) trial = BC250_DPM_CURVE_TRIAL_MIN_MS;
+    if (trial > BC250_DPM_CURVE_TRIAL_MAX_MS) trial = BC250_DPM_CURVE_TRIAL_MAX_MS;
+    S->CurveTrialMs = trial;
+    if (!Dpm) {
+        // The clock never leaves the floor here, and the floor's own voltage is not a curve's to change.
+        GuardLog("dpm: curve off: this start does not govern the clock (reason %lu); trial window %lu ms",
+                 S->Decision.reason, S->CurveTrialMs);
+        StoreLogged(DPM_SETTING_CURVE_REASON, DPM_CURVE_REASON_NOT_GOVERNING);
+        return;
+    }
+    pendingPresent = QueryPresent(DPM_SETTING_CURVE_PENDING, &pending);
+    (void)QueryPresent(DPM_SETTING_CURVE_CONFIRMED, &confirmed);
+    DpmReadCurve(S, &curve, &any, &refused);
+    if (any && pendingPresent) {
+        GuardLog("dpm: the stored curve (mark 0x%04X) ran a start that never became healthy: the curve is "
+                 "deleted and the table's own line runs", pending);
+        any = FALSE;
+    } else if (refused) {
+        any = FALSE;
+    }
+    if (!any) {
+        ULONG reason = pendingPresent ? DPM_CURVE_REASON_UNCONFIRMED
+                                      : (refused ? DPM_CURVE_REASON_REFUSED : DPM_CURVE_REASON_NONE);
+        // Nothing stored and nothing marked is the state of a machine nobody tuned: write no reason and leave
+        // the key as it was, so a start on such a machine touches none of these values.
+        if (pendingPresent || refused) {
+            DpmDeleteCurve();
+            DeleteLogged(DPM_SETTING_CURVE_PENDING);
+            DeleteLogged(DPM_SETTING_CURVE_CONFIRMED);
+            StoreLogged(DPM_SETTING_CURVE_REASON, reason);
+        }
+        return;
+    }
+    sum = bc250_clock_curve_checksum(&curve);
+    // Durable before the first transaction that carries the curve, or the table's own line instead.
+    if (!NT_SUCCESS(GuardStoreSetting(DPM_SETTING_CURVE_PENDING, sum))) {
+        GuardLog("dpm: the curve's pending mark is not durable: the table's own line runs this start");
+        StoreLogged(DPM_SETTING_CURVE_REASON, DPM_CURVE_REASON_REGISTRY);
+        return;
+    }
+    S->CurvePending = TRUE;
+    S->CurveConfirmed = FALSE;
+    DpmInstallCurve(S, &curve);
+    StoreLogged(DPM_SETTING_CURVE_REASON, DPM_CURVE_REASON_OK);
+    DpmLogCurve("stored", &curve);
+    GuardLog("dpm: the stored curve runs this start: mark 0x%04X, earlier mark 0x%04X, trial window %lu ms",
+             sum, confirmed, S->CurveTrialMs);
+}
+
 // StartDevice, last, after the start that set the floor (SmuPrepareClock) succeeded. PASSIVE_LEVEL.
 void DpmStart(BC250_DEVICE* Device)
 {
@@ -710,6 +956,7 @@ void DpmStart(BC250_DEVICE* Device)
     if (!Device->FullWddm) {
         d->reason = BC250_DPM_REASON_NOT_RUN;
         bc250_dpm_init(&s->Gov, BC250_DPM_FLOOR_LEVEL);
+        DpmInstallCurve(s, NULL);       // the table's own line: nothing here applies a level
         DpmPublish(Device, s, NULL, FALSE);
         DpmUnlock(s);
         return;
@@ -750,6 +997,7 @@ void DpmStart(BC250_DEVICE* Device)
     }
     bc250_dpm_init(&s->Gov, d->max_level);
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
+    DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
     GuardLog("dpm: DpmMode %lu%s DpmMaxMHz %lu%s -> %s, ceiling %lu MHz, reason %lu%s%s", r.mode,
              r.mode_present ? "" : " (absent)", r.max_mhz, r.max_present ? "" : " (absent)",
              d->mode == BC250_DPM_MODE_DPM ? "DPM" : "fixed-lab", d->max_mhz, d->reason,
@@ -808,6 +1056,17 @@ void DpmStop(BC250_DEVICE* Device)
     s->Thread = NULL;
     s->Created = FALSE;
     RtlZeroMemory(&tick, sizeof(tick));
+    // A trial never outlives the start that began it: the stored curve goes back before the floor apply below,
+    // so the clock this driver leaves behind carries a voltage somebody kept, not one somebody was trying.
+    {
+        BOOLEAN reverted;
+        KIRQL irql;
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        reverted = bc250_dpm_curve_cancel(&s->Curve) ? TRUE : FALSE;
+        (void)bc250_dpm_curve_take(&s->Curve);
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        if (reverted) GuardLog("dpm: the curve trial ended with the stop; the stored curve is back");
+    }
     // The lab floor, from above or from a point below it (a thermal-only one since 0.7.205, the idle point
     // since 0.7.207): the clock gate admits a request up to the floor that does not raise the voltage however
     // hot the part is, so the hardware does not keep an untested clock after the driver has given up ownership.
@@ -830,11 +1089,18 @@ void DpmStop(BC250_DEVICE* Device)
                            BC250_DPM_FLAG_IDLE);
         if (s->Session.marked) s->Snap.Flags |= BC250_DPM_FLAG_SESSION;
         s->Snap.CurrentMHz = bc250_dpm_level_mhz(s->Gov.level);
-        s->Snap.CurrentMv = bc250_dpm_level_mv(s->Gov.level);
+        // The active curve's voltage, which the cancel above has already put back to the stored one. The lock is
+        // ours here, so this is the policy call and not DpmLevelMv.
+        s->Snap.CurrentMv = bc250_dpm_curve_level_mv(&s->Curve, s->Gov.level);
+        s->Snap.Flags &= ~BC250_DPM_FLAG_CURVE_TRIAL;
+        s->Snap.CurveSerial = s->Curve.serial;
+        s->Snap.CurveApplied = s->Curve.applied;
+        s->Snap.CurveTrialRemainingMs = 0;
         snap = s->Snap;
         KeReleaseSpinLock(&s->SnapLock, irql);
         DpmLogLine("stopped", &snap);
         DpmLogIdleLine("stopped", &snap);
+        DpmLogCurveLine("stopped", &snap);
     }
     DpmUnlock(s);
 }
@@ -850,6 +1116,17 @@ void DpmPause(BC250_DEVICE* Device)
     KeFlushQueuedDpcs();                // a sampler callback that read Paused as 0 has finished its reads
     KeWaitForSingleObject(&s->TickLock, Executive, KernelMode, FALSE, NULL);
     RtlZeroMemory(&tick, sizeof(tick));
+    // As at a stop: a trial does not cross a power transition. The operator's window is seconds and the machine
+    // may stay in D3 for hours, so a resume with a candidate still active would be a trial nobody watches.
+    {
+        BOOLEAN reverted;
+        KIRQL irql;
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        reverted = bc250_dpm_curve_cancel(&s->Curve) ? TRUE : FALSE;
+        (void)bc250_dpm_curve_take(&s->Curve);
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        if (reverted) GuardLog("dpm: the curve trial ended with the power transition; the stored curve is back");
+    }
     // As in DpmStop: the floor is reachable from every point below it at any temperature, so D3 is entered at
     // the lab point and the resume transaction (power.c, SmuPrepareClock) finds the clock it expects.
     if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL)
@@ -894,6 +1171,25 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
         }
         GuardLog("dpm: request 0x%08X confirmed by %s: 0x%08X", s->Decision.encoded, Why, status);
     }
+    // The stored curve of this start, the same two steps in the same order (0.7.210). Its own failure costs the
+    // curve at the next start and never this confirmation, so the result is logged and not returned.
+    if (s->CurvePending) {
+        struct bc250_clock_curve stored;
+        unsigned int sum;
+        KIRQL irql;
+        NTSTATUS curveStatus;
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        stored = s->Curve.stored;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        sum = bc250_clock_curve_checksum(&stored);
+        curveStatus = GuardDeleteSetting(DPM_SETTING_CURVE_PENDING);
+        if (NT_SUCCESS(curveStatus)) {
+            s->CurvePending = FALSE;
+            curveStatus = GuardStoreSetting(DPM_SETTING_CURVE_CONFIRMED, sum);
+            if (NT_SUCCESS(curveStatus)) s->CurveConfirmed = TRUE;
+        }
+        GuardLog("dpm: the stored curve (mark 0x%04X) confirmed by %s: 0x%08X", sum, Why, curveStatus);
+    }
     DpmUnlock(s);
     return status;
 }
@@ -913,6 +1209,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
+    DpmLogCurveLine("summary", &snap);
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
     DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases);
 }
@@ -1176,6 +1473,185 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
     Data->Applied = applied;
     Data->FloorTicks = floorTicks;
     Data->Error = (ULONG)error;
+    Data->NtStatus = (ULONG)status;
+    Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+// BC250_ESCAPE_RUN_DPM_CURVE (0.7.210). Software state only, like RUN_DPM_TUNE, so NoAdapterSynchronization=1 for
+// every operation and no HardwareAccess: a new curve reaches the SMU through the governor's next tick and its
+// checked transaction (DpmApply -> SmuSetPoint), never from this thread. What makes that safe is the argument of
+// DpmTuneRequest above, with one addition: the governor reads the voltage column at every level change, so the
+// escape writes the curve under SnapLock and the thread copies nothing - DpmLevelMv and DpmLevelVid take the same
+// lock, and a torn read of 11 values could ask the firmware for a voltage nobody chose.
+//
+// The trial is the kernel's, not the tool's: a SET starts a window of its own, and the only ways out are a KEEP
+// inside it, a CANCEL, the deadline, a stop and a power transition. A tool that is killed, hung or disconnected in
+// the middle of a trial changes nothing about that. Nothing reaches the registry before a KEEP.
+void DpmCurveRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_CURVE* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    D3DDDI_ESCAPEFLAGS expectedFlags = {0};
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+    const ULONG op = Data->Op;
+    const BOOLEAN write = op != BC250_DPM_CURVE_OP_READ;
+    const ULONGLONG expected = Data->ExpectedGeneration;
+    const ULONG trialIn = Data->TrialMs;
+    struct bc250_clock_curve candidate, active, stored, defaults;
+    enum bc250_clock_curve_error error = BC250_CLOCK_CURVE_OK;
+    unsigned int errorLevel = 0, i;
+    BC250_DPM_SNAP snap;
+    ULONG trialMs = 0, remaining, serial, applied, sets, keeps, cancels, reverts, level;
+    BOOLEAN onTrial, kept = FALSE, persisted = FALSE;
+    KIRQL irql;
+
+    RtlZeroMemory(&candidate, sizeof(candidate));
+    RtlZeroMemory(&stored, sizeof(stored));
+    for (i = 0; i < BC250_CURVE_POINTS; i++) candidate.mv[i] = Data->CandidateMv[i];
+    bc250_clock_curve_default(&defaults);
+    expectedFlags.NoAdapterSynchronization = 1;
+    Data->Version = BC250_KMD_VERSION;
+    Data->Status = BC250_ESCAPE_STATUS_REFUSED;
+    Data->NtStatus = (ULONG)status;
+    RtlZeroMemory(Data->CandidateMv, sizeof(Data->CandidateMv));
+    Data->Flags = Data->Error = Data->ErrorLevel = 0;
+    Data->TrialMs = Data->TrialRemainingMs = Data->Serial = Data->Applied = 0;
+    if (Data->AbiVersion != BC250_DPM_CURVE_ABI || Size != sizeof(BC250_ESCAPE_DPM_CURVE) ||
+        op > BC250_DPM_CURVE_OP_RESET || Data->Reserved[0] || Data->Reserved[1] ||
+        EscapeFlags != expectedFlags.Value) return;
+    if (write && !Admin) {
+        Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+        Data->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
+        return;
+    }
+    if (!ExAcquireRundownProtection(&Device->StartHealth.Readers)) {
+        Data->NtStatus = (ULONG)STATUS_DELETE_PENDING;
+        return;
+    }
+    status = STATUS_SUCCESS;
+    if (write) {
+        DpmLock(s);
+        if (expected != s->Generation) status = STATUS_RETRY;
+        // RESET is also the way out of a curve that a start refused, so it does not need a governing start: it
+        // deletes the registry values and leaves the table's own line behind. Every other write acts on a trial,
+        // which only a running governor can carry.
+        else if (op != BC250_DPM_CURVE_OP_RESET &&
+                 (!s->Created || s->Decision.mode != BC250_DPM_MODE_DPM || s->GaveUp))
+            status = STATUS_INVALID_DEVICE_STATE;
+        else if (op == BC250_DPM_CURVE_OP_SET) {
+            ULONG asked = trialIn ? trialIn : s->CurveTrialMs;
+            KeAcquireSpinLock(&s->SnapLock, &irql);
+            error = bc250_dpm_curve_set(&s->Curve, &candidate, asked, &errorLevel);
+            asked = s->Curve.trial_ms;
+            KeReleaseSpinLock(&s->SnapLock, irql);
+            if (error != BC250_CLOCK_CURVE_OK) status = STATUS_INVALID_PARAMETER;
+            else {
+                DpmLogCurve("on trial", &candidate);
+                GuardLog("dpm: the curve trial runs for %lu ms; the stored curve comes back by itself", asked);
+            }
+        } else if (op == BC250_DPM_CURVE_OP_KEEP) {
+            KeAcquireSpinLock(&s->SnapLock, &irql);
+            kept = bc250_dpm_curve_keep(&s->Curve) ? TRUE : FALSE;
+            stored = s->Curve.stored;
+            KeReleaseSpinLock(&s->SnapLock, irql);
+            if (!kept) status = STATUS_INVALID_DEVICE_STATE;     // nothing was on trial
+            else {
+                // The disk now, in the guard's order: the values, then the pending mark away, then the new mark.
+                // A crash between the values and the marks leaves a curve whose mark is the old one, and the next
+                // start drops it: one reconfirmation at worst, never a curve nobody chose. The next start marks
+                // this curve pending again by itself (DpmConfigureCurve), so a boot it does not survive still
+                // costs the curve and not the machine.
+                unsigned int sum = bc250_clock_curve_checksum(&stored);
+                persisted = DpmStoreCurve(&stored);
+                DeleteLogged(DPM_SETTING_CURVE_PENDING);
+                s->CurvePending = FALSE;
+                StoreLogged(DPM_SETTING_CURVE_CONFIRMED, sum);
+                StoreLogged(DPM_SETTING_CURVE_REASON, DPM_CURVE_REASON_OK);
+                s->CurveConfirmed = TRUE;
+                DpmLogCurve("kept", &stored);
+                GuardLog("dpm: the curve is kept, mark 0x%04X, on disk %s", sum,
+                         persisted ? "complete" : "INCOMPLETE (the next start refuses it as a whole)");
+                if (!persisted) status = STATUS_UNSUCCESSFUL;
+            }
+        } else if (op == BC250_DPM_CURVE_OP_CANCEL) {
+            BOOLEAN reverted;
+            KeAcquireSpinLock(&s->SnapLock, &irql);
+            reverted = bc250_dpm_curve_cancel(&s->Curve) ? TRUE : FALSE;
+            stored = s->Curve.stored;
+            KeReleaseSpinLock(&s->SnapLock, irql);
+            if (!reverted) status = STATUS_INVALID_DEVICE_STATE;
+            else DpmLogCurve("trial cancelled, the stored curve is back", &stored);
+        } else {
+            BOOLEAN changed;
+            KeAcquireSpinLock(&s->SnapLock, &irql);
+            changed = bc250_dpm_curve_reset(&s->Curve) ? TRUE : FALSE;
+            KeReleaseSpinLock(&s->SnapLock, irql);
+            DpmDeleteCurve();
+            DeleteLogged(DPM_SETTING_CURVE_PENDING);
+            DeleteLogged(DPM_SETTING_CURVE_CONFIRMED);
+            StoreLogged(DPM_SETTING_CURVE_REASON, DPM_CURVE_REASON_NONE);
+            s->CurvePending = s->CurveConfirmed = FALSE;
+            GuardLog("dpm: the curve is the table's own line again%s", changed ? "" : " (it already was)");
+        }
+        if (!NT_SUCCESS(status))
+            GuardLog("dpm: curve op %lu refused 0x%08X (error %d at level %lu)", op, status, (int)error,
+                     (ULONG)errorLevel);
+        DpmUnlock(s);
+    }
+    // The reply: the three curves, the grid they live on, and where the governor is inside them.
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    active = s->Curve.active;
+    stored = s->Curve.stored;
+    candidate = s->Curve.candidate;
+    onTrial = s->Curve.trial ? TRUE : FALSE;
+    trialMs = s->Curve.trial ? s->Curve.trial_ms : s->CurveTrialMs;
+    remaining = bc250_dpm_curve_remaining_ms(&s->Curve);
+    serial = s->Curve.serial;
+    applied = s->Curve.applied;
+    sets = s->Curve.sets;
+    keeps = s->Curve.keeps;
+    cancels = s->Curve.cancels;
+    reverts = s->Curve.reverts;
+    level = s->Gov.level;
+    snap = s->Snap;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    ExReleaseRundownProtection(&Device->StartHealth.Readers);
+    for (i = 0; i < BC250_CURVE_POINTS; i++) {
+        Data->CandidateMv[i] = onTrial ? candidate.mv[i] : 0;
+        Data->ActiveMv[i] = active.mv[i];
+        Data->StoredMv[i] = stored.mv[i];
+        Data->DefaultMv[i] = defaults.mv[i];
+        Data->FloorMv[i] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + i));
+    }
+    Data->FirstMHz = bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL);
+    Data->StepMHz = BC250_CLOCK_STEP_MHZ;
+    Data->Points = BC250_CURVE_POINTS;
+    Data->TrialMs = trialMs;
+    Data->TrialRemainingMs = remaining;
+    Data->Serial = serial;
+    Data->Applied = applied;
+    Data->Error = (ULONG)error;
+    Data->ErrorLevel = errorLevel;
+    Data->Level = level;
+    Data->LevelMHz = bc250_dpm_level_mhz(level);
+    Data->LevelMv = bc250_clock_curve_mv(&active, level);
+    Data->ObservedMHz = snap.ObservedMHz;
+    Data->ObservedVid = snap.ObservedVid;
+    Data->TemperatureMc = snap.TemperatureMc;
+    Data->CeilingMHz = snap.MaxMHz;
+    Data->Mode = snap.Mode;
+    Data->Sets = sets;
+    Data->Keeps = keeps;
+    Data->Cancels = cancels;
+    Data->Reverts = reverts;
+    Data->Generation = snap.Generation;
+    Data->Flags = (Device->FullWddm ? BC250_DPM_CURVE_FLAG_VALID : 0) |
+                  (onTrial ? BC250_DPM_CURVE_FLAG_ON_TRIAL : 0) |
+                  (bc250_clock_curve_is_default(&stored) ? 0 : BC250_DPM_CURVE_FLAG_STORED) |
+                  (s->CurvePending ? BC250_DPM_CURVE_FLAG_PENDING : 0) |
+                  (s->CurveConfirmed ? BC250_DPM_CURVE_FLAG_CONFIRMED : 0) |
+                  (bc250_clock_curve_is_default(&active) ? BC250_DPM_CURVE_FLAG_DEFAULT : 0) |
+                  ((snap.Flags & BC250_DPM_FLAG_GOVERNING) ? BC250_DPM_CURVE_FLAG_GOVERNING : 0) |
+                  (applied == serial ? BC250_DPM_CURVE_FLAG_APPLIED : 0);
     Data->NtStatus = (ULONG)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
