@@ -2,8 +2,9 @@
  *
  * What this test is for: the reader writes three bytes to read one, on a port range that has no arbiter, on a
  * chip that also holds a duty register. So the three things that must never drift are the access sequence, the
- * allowlist and the refusal of every write. All three are checked here, against the real
- * driver/shim/bc250_hwmon.c, not a copy of it.
+ * read allowlist and the write allowlist, which admits exactly the three registers of the fan control (M803).
+ * All three are checked here, against the real driver/shim/bc250_hwmon.c, not a copy of it. The fan control
+ * itself is tested in fan_test.c.
  *
  *   pwsh driver\shim\test\run_hwmon.ps1
  */
@@ -73,11 +74,12 @@ static void allowlist(void)
 	CHECK(bc250_hwmon_read_allowed(BC250_HWMON_REG_MODE));
 	CHECK(bc250_hwmon_read_allowed(BC250_HWMON_REG_ENGINE));
 
-	/* The write-side registers of this chip. Refused for read as well, because a reader has no reason to
-	 * look at them and because the next mistake would be to write one. */
-	CHECK(!bc250_hwmon_read_allowed(BC250_HWMON_REG_FAN_CTRL));
+	/* The write-side registers of this chip. The handshake reads the configuration request, and the takeover
+	 * saves and verifies the duty target of the one fan it drives; the targets of the other outputs stay
+	 * unreadable, because nothing has a reason to look at them. */
+	CHECK(bc250_hwmon_read_allowed(BC250_HWMON_REG_FAN_CTRL));
 	for (i = 0; i < BC250_HWMON_FAN_MAX; i++)
-		CHECK(!bc250_hwmon_read_allowed(BC250_HWMON_REG_DUTY_WRITE(i)));
+		CHECK(bc250_hwmon_read_allowed(BC250_HWMON_REG_DUTY_WRITE(i)) == (i == BC250_FAN_CHANNEL));
 	/* 0x1BB..0x1BF are the source assignments of monitor channels 27 to 31, so reading them is ordinary: the
 	 * identity walk reads all 32. nct6687d WRITES 0x61..0x65 into them at init and calls it "enable SIO
 	 * voltage", which re-assigns four channels of a chip the BIOS owns. That write is what is refused, and
@@ -93,21 +95,63 @@ static void allowlist(void)
 	CHECK(!bc250_hwmon_read_allowed(0x10000u));
 	CHECK(!bc250_hwmon_read_allowed(0xFFFFFFFFu));
 
-	/* No register at all may be written, the admitted ones included. */
+	/* The write allowlist is exactly three registers of the whole 16-bit space: the configuration request,
+	 * the mode mask and the duty target of fan 1 (M803). */
+	{
+		unsigned int reg, admitted = 0;
+
+		for (reg = 0; reg <= 0xFFFFu; reg++)
+			if (bc250_hwmon_write_allowed(reg))
+				admitted++;
+		CHECK(admitted == 3u);
+	}
+	CHECK(bc250_hwmon_write_allowed(BC250_HWMON_REG_FAN_CTRL));
+	CHECK(bc250_hwmon_write_allowed(BC250_HWMON_REG_MODE));
+	CHECK(bc250_hwmon_write_allowed(BC250_HWMON_REG_DUTY_WRITE(BC250_FAN_CHANNEL)));
+	{
+		/* The three addresses M803 wrote, held by value: a header change that moves one fails here. */
+		static const unsigned int m803[3] = { 0x0A01u, 0x0A00u, 0x0A29u };
+
+		CHECK(BC250_HWMON_REG_FAN_CTRL == m803[0] && BC250_HWMON_REG_MODE == m803[1] &&
+		      BC250_HWMON_REG_DUTY_WRITE(BC250_FAN_CHANNEL) == m803[2]);
+	}
+	/* Everything a future mistake would reach for stays refused. */
 	CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_CFG));
-	CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_FAN_CTRL));
-	CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_DUTY_WRITE(0)));
-	CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_MODE));
+	for (i = 0; i < BC250_HWMON_FAN_MAX; i++)
+		if (i != BC250_FAN_CHANNEL)
+			CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_DUTY_WRITE(i)));
+	CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_ENGINE));
+	CHECK(!bc250_hwmon_write_allowed(BC250_HWMON_REG_BEEP));
+	CHECK(!bc250_hwmon_write_allowed(0x330u) && !bc250_hwmon_write_allowed(0x350u));
+	CHECK(!bc250_hwmon_write_allowed(0x370u) && !bc250_hwmon_write_allowed(0x3B8u));
 	CHECK(!bc250_hwmon_write_allowed(0u));
+	CHECK(!bc250_hwmon_write_allowed(0x10A01u));
 
 	/* A refused register touches no port at all. */
 	ec_unit_a(&ec);
 	ec_io(&io, &ec);
-	CHECK(bc250_hwmon_read8(&io, BC250_HWMON_REG_FAN_CTRL, &value) == BC250_HWMON_REFUSED);
+	CHECK(bc250_hwmon_read8(&io, BC250_HWMON_REG_DUTY_WRITE(0), &value) == BC250_HWMON_REFUSED);
 	CHECK(bc250_hwmon_read8(&io, BC250_HWMON_REG_DUTY_WRITE(3), &value) == BC250_HWMON_REFUSED);
 	CHECK(bc250_hwmon_read16(&io, 0x10000u, &value) == BC250_HWMON_REFUSED);
 	CHECK(value == 0);
 	CHECK(ec.writes_latch == 0 && ec.reads == 0 && ec.holds == 0);
+
+	/* The read transport has no data-port writer, so even an admitted register cannot be written through it:
+	 * the sampler can never write the chip. A refused register or a value wider than a byte touches no port
+	 * through the write transport either. */
+	CHECK(bc250_hwmon_write8(&io, BC250_HWMON_REG_MODE, 0xE2u) == BC250_HWMON_REFUSED);
+	ec_io_write(&io, &ec);
+	CHECK(bc250_hwmon_write8(&io, BC250_HWMON_REG_CFG, 0x80u) == BC250_HWMON_REFUSED);
+	CHECK(bc250_hwmon_write8(&io, BC250_HWMON_REG_DUTY_WRITE(0), 0xFFu) == BC250_HWMON_REFUSED);
+	CHECK(bc250_hwmon_write8(&io, BC250_HWMON_REG_MODE, 0x1E2u) == BC250_HWMON_REFUSED);
+	CHECK(ec.writes_latch == 0 && ec.writes_data == 0 && ec.holds == 0);
+
+	/* One admitted write is the read's latch sequence with the data port written instead of read, in one hold. */
+	CHECK(bc250_hwmon_write8(&io, BC250_HWMON_REG_MODE, 0xE2u) == 0);
+	CHECK(ec.writes_latch == 3 && ec.writes_data == 1 && ec.reads == 0 && ec.writes_other == 0);
+	CHECK(ec.holds == 1 && ec.max_accesses_in_hold == 4 && ec.sequence_errors == 0);
+	CHECK(ec_peek8(&ec, BC250_HWMON_REG_MODE) == 0xE2u);
+	CHECK(ec.logged == 1 && ec.log[0].reg == BC250_HWMON_REG_MODE && ec.log[0].value == 0xE2u);
 }
 
 /* ---- the base port ------------------------------------------------------------------------------------- */

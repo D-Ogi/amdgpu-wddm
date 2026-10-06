@@ -6,6 +6,9 @@
 #   hwmon_native_test.c  the binding (driver/kmd/hwmon.c, compiled here against hwmon_native_mock.h): the
 #                        registry gate, the start that never fails, the identity refusals, the sampler's retry
 #                        and give-up rules, the published snapshot, the ageing and the escape.
+#   fan_test.c           the fan control (driver/shim/bc250_fan.c, Part B): the write allowlist and the handshake
+#                        order against the M803 engine model, the restore record, every exit path, doubt, the
+#                        slope rule, the emergency, the lease and the chip's refusals.
 #
 # The second one compiles the shipping file itself, with only the Windows kernel primitives replaced, so it
 # tests the driver and not a copy of it. Both assert that the EC model saw no write outside the page and the
@@ -39,8 +42,9 @@ $sdklib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
 $objPolicy = Join-Path $Out 'obj-policy'
 $objNative = Join-Path $Out 'obj-native'
 $objKern = Join-Path $Out 'obj-kernel'
-New-Item -ItemType Directory -Force $Out, $objPolicy, $objNative, $objKern | Out-Null
-Remove-Item "$objPolicy\*.obj", "$objNative\*.obj", "$objKern\*.obj" -Force -ErrorAction SilentlyContinue
+$objFan = Join-Path $Out 'obj-fan'
+New-Item -ItemType Directory -Force $Out, $objPolicy, $objNative, $objKern, $objFan | Out-Null
+Remove-Item "$objPolicy\*.obj", "$objNative\*.obj", "$objKern\*.obj", "$objFan\*.obj" -Force -ErrorAction SilentlyContinue
 
 function Invoke-Tool([string]$exe, [string[]]$argv) {
     & $exe @argv | ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$|^Generating Code|^Generowanie') { Write-Host "  $_" } }
@@ -57,15 +61,22 @@ $incUser = @("/I$shim\include",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 
+$fan = Join-Path $shim 'bc250_fan.c'
+
+# /wd4505: the model helpers that only one of the tests uses.
 Write-Host 'compile (policy, user mode)'
-Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS') +
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS', '/wd4505') +
     $incUser + @("/Fo$objPolicy\", "/Fd$objPolicy\cl.pdb", $policy, (Join-Path $here 'hwmon_test.c')))
 
-Write-Host 'compile (policy, kernel flags)'
+Write-Host 'compile (fan control, user mode)'
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS', '/wd4505') +
+    $incUser + @("/Fo$objFan\", "/Fd$objFan\cl.pdb", $policy, $fan, (Join-Path $here 'fan_test.c')))
+
+Write-Host 'compile (policy and fan control, kernel flags)'
 Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zp8', '/TC',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DBC250_SHIM_KERNEL', '/wd4201', '/wd4214',
     "/I$shim\include", "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt",
-    "/I$wdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\shared", "/Fo$objKern\", $policy))
+    "/I$wdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\shared", "/Fo$objKern\", $policy, $fan))
 
 # The shipping binding, with its one kernel include swapped for the mock. Nothing else in the file is touched,
 # and the generated copy is read back into the compiler so a diff of it is the whole difference under test.
@@ -90,13 +101,14 @@ Invoke-Tool (Join-Path $bin 'link.exe') ($link +
     @("/OUT:$Out\hwmon_test.exe", "/PDB:$Out\hwmon_test.pdb") + (Get-ChildItem "$objPolicy\*.obj").FullName)
 Invoke-Tool (Join-Path $bin 'link.exe') ($link +
     @("/OUT:$Out\hwmon_native_test.exe", "/PDB:$Out\hwmon_native_test.pdb") + (Get-ChildItem "$objNative\*.obj").FullName)
+Invoke-Tool (Join-Path $bin 'link.exe') ($link +
+    @("/OUT:$Out\fan_test.exe", "/PDB:$Out\fan_test.pdb") + (Get-ChildItem "$objFan\*.obj").FullName)
 
 Write-Host 'run'
-& "$Out\hwmon_test.exe"
-$code = $LASTEXITCODE
-if ($code -eq 0) {
-    & "$Out\hwmon_native_test.exe"
-    $code = $LASTEXITCODE
+$code = 0
+foreach ($test in 'hwmon_test', 'hwmon_native_test', 'fan_test') {
+    & "$Out\$test.exe"
+    if ($LASTEXITCODE -ne 0) { $code = $LASTEXITCODE; break }
 }
 Write-Host "hardware monitor host tests exit code $code"
 exit $code

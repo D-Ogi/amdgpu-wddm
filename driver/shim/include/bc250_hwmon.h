@@ -19,18 +19,23 @@
  * A 16-bit read is two such reads, high byte at reg and low byte at reg + 1, inside one lock hold
  * (the index latch must not move between them).
  *
- * THESE ARE THE ONLY WRITES THIS READER ISSUES. They go to the hardware monitor's page and index
- * ports, never to a configuration, control, limit or duty register. There is no write function in
- * this module at all, and bc250_hwmon_write_allowed() answers "no" for every register, so a future
- * duty write cannot arrive by accident. The host test (test/hwmon_test.c) asserts that the mock EC
- * saw no write outside the page and index ports.
+ * The READ path writes only the hardware monitor's page and index ports, never a configuration,
+ * control, limit or duty register. The host test (test/hwmon_test.c) asserts that the mock EC saw no
+ * write outside the page and index ports for every read.
+ *
+ * The WRITE path (Part B, docs/design/fan.md, driver/shim/bc250_fan.c) is one function,
+ * bc250_hwmon_write8(), and it writes exactly three EC registers: the fan configuration request at
+ * 0x0A01, the manual-mode mask at 0x0A00 and the duty target of the one fan that turns, 0x0A28 + 1.
+ * bc250_hwmon_write_allowed() is that list as code. The write needs a data-port writer in the io
+ * vtable (out8_data). The sampler's transport has none, so a read can never become a write. The
+ * register meanings and the handshake are measured on unit A (fact M803).
  *
  * Register facts come from Linux mainline drivers/hwmon/nct6683.c (GPL-2.0, facts only, no code
  * taken), which binds on this chip and read live values at E01, and - where a row says so - from
  * the out-of-tree nct6687d, which is MSI-centred and therefore an inference for this board. Every
  * inferred register is marked UNPROVEN below and needs one lab readback before anything depends on
- * it. Nothing in Part A depends on an UNPROVEN register for a decision; the two are read, published
- * and logged only.
+ * it. M803 (unit A, 2026-10-06) measured the mode mask, the engine status, the configuration request
+ * and the duty target of fan index 1, so those four are no longer UNPROVEN for that one channel.
  */
 #ifndef BC250_HWMON_H
 #define BC250_HWMON_H
@@ -82,15 +87,36 @@
 #define BC250_HWMON_REG_BUILD_DAY	0x606u
 #define BC250_HWMON_REG_VERSION_HI	0x608u
 #define BC250_HWMON_REG_VERSION_LO	0x609u
-#define BC250_HWMON_REG_MODE		0x0A00u	/* UNPROVEN: one bit per channel, set = manual. nct6687d only */
-#define BC250_HWMON_REG_ENGINE		0x0CF8u	/* UNPROVEN: fan engine status. nct6687d only; logged, never used */
+#define BC250_HWMON_REG_MODE		0x0A00u	/* one bit per channel, set = manual. Measured for bit 1 (M803) */
+#define BC250_HWMON_REG_ENGINE		0x0CF8u	/* fan engine status. The handshake bits below are measured (M803) */
 
-/* The write-side registers, named so that a mistake is visible in review and in the host test.
- * bc250_hwmon_write_allowed() refuses every register, these included. */
-#define BC250_HWMON_REG_FAN_CTRL	0x0A01u		/* fan configuration control */
-#define BC250_HWMON_REG_DUTY_WRITE(i)	(0x0A28u + (i))	/* duty write */
+/* The write-side registers. bc250_hwmon_write_allowed() admits FAN_CTRL, MODE and DUTY_WRITE(BC250_FAN_CHANNEL)
+ * and nothing else. The other names are here so that a mistake is visible in review and in the host test. */
+#define BC250_HWMON_REG_FAN_CTRL	0x0A01u		/* fan configuration request */
+#define BC250_HWMON_REG_DUTY_WRITE(i)	(0x0A28u + (i))	/* duty target of output i, 0..255 */
 #define BC250_HWMON_REG_SIO_VOLTAGE	0x01BBu		/* nct6687d re-assigns 0x1BB..0x1BF at init: never */
 #define BC250_HWMON_REG_BEEP		0x00E0u
+
+/* The one fan the write path drives: duty output and tachometer index 1 (Linux fan2). M803 measured that it is
+ * the only fan that turns on unit A, and that its duty read-back follows the written target. The other four
+ * outputs exist and are never written. */
+#define BC250_FAN_CHANNEL		1u
+
+/* The configuration handshake, measured on unit A (M803, the nct6687d sequence). FAN_CTRL takes REQUEST to open a
+ * configuration phase and DONE to close it. nct6687d closes with 0x00 on an NCT6683 only, where that value is
+ * reported to clear the mode mask and every duty target. It is never ours: this chip is an NCT6686D. */
+#define BC250_HWMON_FAN_CFG_REQUEST	0x80u
+#define BC250_HWMON_FAN_CFG_DONE	0x40u
+/* ENGINE bits. At rest unit A reads 0x60 (CHECK_DONE and LOCK). An open moves it to 0x08 (PHASE) within one 1 ms
+ * poll. A close sets CHECK_DONE and LOCK again within three or four polls. INVALID never set on unit A. */
+#define BC250_HWMON_ENGINE_PHASE	0x08u
+#define BC250_HWMON_ENGINE_INVALID	0x10u
+#define BC250_HWMON_ENGINE_CHECK_DONE	0x20u
+#define BC250_HWMON_ENGINE_LOCK		0x40u
+/* What unit A reads at rest with the EC curve in charge (M803): the mode mask 0xE0 (bits 0 to 4 clear) and every
+ * duty target 128. The restore writes these when the saved record cannot be trusted. */
+#define BC250_HWMON_MODE_REST		0xE0u
+#define BC250_HWMON_TARGET_REST		128u
 
 /* Monitor source codes measured on unit A through the Linux labels (E01 sensors-all.txt).
  * A source below 0x60 is a temperature, 0x60 and above a voltage. */
@@ -157,6 +183,11 @@ struct bc250_hwmon_io {
 	void		(*pause)(void *context);	/* the ISA pause after each access */
 	void		(*lock)(void *context);
 	void		(*unlock)(void *context);
+	/* The write path only. Null in the sampler's transport, so a read can never write the data port:
+	 * bc250_hwmon_write8() refuses without it. delay_us waits between two handshake polls. It may be null (no
+	 * wait), which the host test uses. */
+	void		(*out8_data)(void *context, unsigned char value);
+	void		(*delay_us)(void *context, unsigned int us);
 };
 
 /* What the chip is, read once at start from the EC window alone. */
@@ -204,8 +235,8 @@ int bc250_hwmon_base_allowed(unsigned int base);
 /* The read allowlist, as code. Everything outside it is refused, a page above 0xFF included. */
 int bc250_hwmon_read_allowed(unsigned int reg);
 
-/* Always 0, for every register. There is no write path; this exists so the host test can state the
- * rule and so a reviewer sees one answer for the whole chip. */
+/* The write allowlist, as code: BC250_HWMON_REG_FAN_CTRL, BC250_HWMON_REG_MODE and
+ * BC250_HWMON_REG_DUTY_WRITE(BC250_FAN_CHANNEL). Every other register is refused. */
 int bc250_hwmon_write_allowed(unsigned int reg);
 
 /* One register, through the four- (or eight-) access sequence, inside one lock hold. Zero on
@@ -213,6 +244,10 @@ int bc250_hwmon_write_allowed(unsigned int reg);
 #define BC250_HWMON_REFUSED (-22)
 int bc250_hwmon_read8(const struct bc250_hwmon_io *io, unsigned int reg, unsigned int *value);
 int bc250_hwmon_read16(const struct bc250_hwmon_io *io, unsigned int reg, unsigned int *value);
+/* One register written: unlock, page, index, then the data port, inside one lock hold. BC250_HWMON_REFUSED when
+ * the register is outside the write allowlist, the value is not a byte or the transport has no out8_data. No port
+ * is touched then. */
+int bc250_hwmon_write8(const struct bc250_hwmon_io *io, unsigned int reg, unsigned int value);
 
 /* The chip identity, the channel map and the two UNPROVEN registers, all read once. Zero when the
  * chip answered plausibly; otherwise the reason is in id->reason and the caller must not sample.
