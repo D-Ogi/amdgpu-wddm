@@ -1191,8 +1191,10 @@ if ($mftAction -eq 'register') {
 # Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 0 composes the desktop on the GPU route (zink);
 # 1 is the kill switch to the CPU route (tester.1 to tester.8 shipped 1 until BD-058 was fixed). RequireKmdSwitches 1
 # keeps the GPU route gated: when the KMD's effective interop switches are off, the router takes the CPU route by
-# itself. AppRouter Mode gpu-default: D3D10.1/D3D11 applications run on the GPU UMD, except Deny, the sign-in
-# processes and Windows components (blank or missing windows on the GPU UMD, BD-061; cause not established).
+# itself. AppRouter Mode gpu-default: D3D10.1/D3D11 applications, Windows components included since b20 (BD-061
+# verified, BD-088), run on the GPU UMD, except Deny and the sign-in processes. Allow and Deny ship empty since b20:
+# Allow dxdiag.exe only lifted the old component rule, and Deny witcher3.exe kept two RADV builds out of one process,
+# which the D3D11 and D3D12 paths no longer have (one ICD).
 # The *Wow paths are what the x86 router (32-bit processes) loads; the policy values are shared (BD-064).
 Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') })
 Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') })
@@ -1201,6 +1203,20 @@ foreach ($app in ConvertTo-PairList $regDefaults.defaults.d3d12_applications) {
     $prevApp = $null
     if ($applied.d3d12_applications -and $applied.d3d12_applications.PSObject.Properties[$app.Name]) { $prevApp = $applied.d3d12_applications.($app.Name) }
     Invoke-RegistryDefaults "$($script:SoftwareKey)\D3D12\Applications\$($app.Name)" $app.Value $prevApp
+}
+# A profile an older release shipped and this one does not (b20 drops witcher3.exe: present-noprimary forfeits the
+# scanout route of M15.14 and the pair gains nothing under the GPU compositor, K115) goes, when its Experiment is still
+# the one that release wrote. A profile the tester changed stays, and so does every profile of the tester's own.
+foreach ($old in ConvertTo-PairList $applied.d3d12_applications) {
+    if (@(ConvertTo-PairList $regDefaults.defaults.d3d12_applications | Where-Object { $_.Name -ieq $old.Name }).Count) { continue }
+    $k = "$($script:SoftwareKey)\D3D12\Applications\$($old.Name)"
+    if (-not (Test-Path -LiteralPath $k)) { continue }
+    $now = (Get-ItemProperty -LiteralPath $k -ErrorAction SilentlyContinue).Experiment
+    if (Test-RegistryValueSame $now $old.Value.Experiment) {
+        Invoke-Change "$k`: remove the profile of an older release (this release ships none for $($old.Name))" { Remove-Item -LiteralPath $k -Recurse -Force } | Out-Null
+    } else {
+        Write-Info "$k`: kept, its Experiment '$now' is not what the older release wrote"
+    }
 }
 Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallDir, InstallRoot, InstalledUtc, AppliedDefaults (this package's defaults)" {
     $k = "$($script:SoftwareKey)\Release"

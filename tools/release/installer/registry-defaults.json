@@ -37,14 +37,10 @@
     },
     "app_router": {
       "Mode": "gpu-default",
-      "Allow": ["dxdiag.exe"],
-      "Deny": ["witcher3.exe"]
+      "Allow": [],
+      "Deny": []
     },
-    "d3d12_applications": {
-      "witcher3.exe": {
-        "Experiment": "present-noprimary,present-cached"
-      }
-    }
+    "d3d12_applications": {}
   },
   "legacy_applied": {
     "parameters": {

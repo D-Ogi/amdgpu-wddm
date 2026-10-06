@@ -158,7 +158,7 @@ $d = Get-Decision $plan 'Mode'
 Check (($d.decision -eq 'update') -and ($d.value -eq 'gpu-default') -and $d.write) "Mode allowlist as tester.1 to tester.11 wrote it -> gpu-default: $($d.decision)"
 $plan = Get-RegistryDefaultPlan -Defaults $next.app_router -Previous $legacy.app_router -Current @{ Mode = 'cpu' }
 Check ((Get-Decision $plan 'Mode').decision -eq 'kept') 'Mode cpu (the tester''s kill switch) kept'
-$plan = Get-RegistryDefaultPlan -Defaults $table.defaults.app_router -Previous $legacy.app_router -Current @{ Allow = [string[]]@('DXDIAG.EXE') }
+$plan = Get-RegistryDefaultPlan -Defaults $legacy.app_router -Previous $legacy.app_router -Current @{ Allow = [string[]]@('DXDIAG.EXE') }
 Check ((Get-Decision $plan 'Allow').decision -eq 'same') 'Allow compares without case'
 
 'command line and installer-owned values'
@@ -206,7 +206,8 @@ try {
     $again = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current (Read-RegistryValues $sub2)
     Check (@($again | Where-Object { $_.decision -ne 'same' }).Count -eq 0) 'parameters: second run unchanged'
     New-ItemProperty -LiteralPath $sub -Name Allow -Value ([string[]]@('dxdiag.exe', 'game.exe')) -PropertyType MultiString -Force | Out-Null
-    $p3 = Get-RegistryDefaultPlan -Defaults $next.app_router -Previous $legacy.app_router -Current (Read-RegistryValues $sub)
+    # The release before the upgrade is this table, which wrote the values above (empty Allow and Deny since b20).
+    $p3 = Get-RegistryDefaultPlan -Defaults $next.app_router -Previous $table.defaults.app_router -Current (Read-RegistryValues $sub)
     Write-RegistryPlan $sub $p3
     $v = (Get-Item -LiteralPath $sub).GetValue('Allow')
     Check (($v -join ',') -eq 'dxdiag.exe,game.exe') "upgrade keeps the tester's Allow: $($v -join ',')"
