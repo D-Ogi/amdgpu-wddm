@@ -1,0 +1,48 @@
+out=C:\BC250\m9\llama-b19-20261006T184432Z
+start_utc=2026-10-06T18:44:32
+boot=2026-10-06T20:41:42
+driver_version=0.7.208.100
+icd_hash=CF3948D6
+overlay_summary_paused=True
+
+  Id StartTime           
+  -- ---------           
+1952 10/6/2026 8:42:24 PM
+
+
+
+driver 0x000700D0, requested dpm, reason none, generation 321613466, ticks 4418, uptime 138339 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default)
+idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 8 exits 7 refusals 0, 93484 ms at the point
+20:44:32.901 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  66.2 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+
+end_utc=2026-10-06T18:44:57
+stories15M exit=0
+stories15M icd_loaded=C:\Program Files\amdgpu-wddm\vulkan\vulkan_radeon.dll
+
+n_prompt n_gen       avg_ts   stddev_ts
+-------- -----       ------   ---------
+     512     0 45702.238224 5294.221909
+       0   128   952.914169    6.518300
+
+
+
+tinyllama exit=0
+tinyllama icd_loaded=C:\Program Files\amdgpu-wddm\vulkan\vulkan_radeon.dll
+
+n_prompt n_gen      avg_ts stddev_ts
+-------- -----      ------ ---------
+     512     0 1812.603804  5.028982
+       0   128  202.091415  0.964932
+
+
+
+dpm_samples=25 gfx_mhz min/avg/max=500/820/1000
+tctl max=68.5 busy_pct avg=13.9
+
+  Id StartTime            Responding
+  -- ---------            ----------
+1952 10/6/2026 8:42:24 PM       True
+
+
+
+

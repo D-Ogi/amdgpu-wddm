@@ -6,12 +6,19 @@ Table, with each fact's status: [`../games.md`](../games.md). Edge types: `super
 
 ## Corrections and support
 
-None in this area.
+```mermaid
+flowchart LR
+  M274["M274"]
+  M816["M816"]
+  M816 ==>|supersedes| M274
+  classDef other stroke-dasharray:4 3
+```
 
 ## References
 
 ```mermaid
 flowchart LR
+  M52["M52<br/>hardware"]
   M274["M274"]
   M321["M321"]
   M380["M380"]
@@ -26,6 +33,7 @@ flowchart LR
   M789["M789<br/>hardware"]
   M792["M792<br/>d3d"]
   M807["M807<br/>hardware"]
+  M816["M816"]
   M789 --> M776
   M807 --> M776
   M792 --> M571
@@ -35,7 +43,9 @@ flowchart LR
   M415 --> M412
   M573 --> M571
   M610 --> M607
+  M816 --> M52
+  M816 --> M415
   classDef other stroke-dasharray:4 3
-  class M412,M789,M792,M807 other
+  class M52,M412,M789,M792,M807 other
 ```
 

@@ -1,0 +1,27 @@
+driver 0x000700D0, requested dpm, reason none, generation 321613466, ticks 3269, uptime 102256 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default)
+idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 7 exits 6 refusals 0, 70753 ms at the point
+20:43:56.814 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  66.5 C busy   0.0% avg   0.3% want 1000 cap 1000 max 1000 throttle idle confirmed  up 6 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:43:57.819 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  66.5 C busy  10.0% avg   2.7% want 1000 cap 1000 max 1000 throttle idle confirmed  up 6 down 7 thermal 0 err 0  src grbm submit   9.9% sdma  33.3%
+20:43:58.831 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  66.8 C busy  40.0% avg  11.5% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit  43.4% sdma   0.0%
+20:43:59.846 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  66.8 C busy   0.0% avg   1.1% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:00.855 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  66.8 C busy   3.3% avg   2.0% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   3.2% sdma   0.0%
+20:44:01.870 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  66.9 C busy 100.0% avg  83.1% want 1300 cap 1000 max 1000 throttle max-setting confirmed  up 7 down 7 thermal 0 err 0  src grbm submit 100.0% sdma   0.0%
+20:44:02.877 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  67.6 C busy 100.0% avg  99.7% want 1300 cap 1000 max 1000 throttle max-setting confirmed  up 7 down 7 thermal 0 err 0  src grbm submit 100.0% sdma   0.0%
+20:44:03.885 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.0 C busy  90.3% avg  88.0% want 1200 cap 1000 max 1000 throttle max-setting confirmed  up 7 down 7 thermal 0 err 0  src grbm submit  93.3% sdma   0.0%
+20:44:04.891 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.0 C busy  86.7% avg  86.8% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit  86.6% sdma   0.0%
+20:44:05.907 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.0 C busy   0.0% avg   0.4% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:06.917 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  67.9 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:07.925 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.1 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:08.937 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.0 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:09.949 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.0 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:10.962 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  67.9 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:11.974 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.8 C busy   0.0% avg   0.4% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:12.987 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.8 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:13.999 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.6 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:15.012 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.5 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:16.024 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.4 C busy   0.0% avg   0.3% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:17.034 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.4 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:18.047 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.2 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:19.060 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.1 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:20.072 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.1 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+20:44:21.085 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.0 C busy   0.0% avg   0.2% want 1000 cap 1000 max 1000 throttle idle confirmed  up 7 down 8 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
