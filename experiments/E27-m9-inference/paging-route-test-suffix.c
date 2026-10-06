@@ -91,23 +91,59 @@ static void case_kmd_flush(void)
  ring.funcs=bc250_sdma_ring_funcs();ring.max_dw=1024;
  hub->vmhub_funcs=&funcs;hub->vm_inv_eng0_req=TEST_REQ_ID;hub->vm_inv_eng0_ack=TEST_ACK_ID;
  test_expected_vmid=1;memset(buf,0xCC,sizeof(buf));
- status=GfxPagingBuildFlush(&dev,1,buf,0,sizeof(buf),&written,&unsupported);
+ /* EnableVmidPool 0 (gfx={0}): VMID 1 whatever the root, the single-VMID driver's packet exactly. */
+ status=GfxPagingBuildFlush(&dev,0x7000ull,buf,0,sizeof(buf),&written,&unsupported);
  check(status==STATUS_SUCCESS && written==15 && unsupported==BC250PagingSupported,"actual KMD flush builds VMID1 packet");
  check(buf[12]==2 && buf[13]==2 && all_pattern(buf+15,17,0xCCCCCCCCu),"actual KMD flush targets app VMID not GART");
  for(offset=0;offset<=4096;offset+=4) {
   unsigned cap=PagingStreamCapacity(64,offset,65536,1024,ring.funcs->align_mask,bc250_sdma_fence_size(&ring,AMDGPU_FENCE_FLAG_INT));
   memset(buf,0xCC,sizeof(buf));
-  status=GfxPagingBuildFlush(&dev,1,buf,offset,64,&written,&unsupported);
+  status=GfxPagingBuildFlush(&dev,0x7000ull,buf,offset,64,&written,&unsupported);
   check(cap>=16 ? status==STATUS_SUCCESS && written==15 : status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER && written==0,"flush accounts for earlier DMA commands and outer fence");
   if(cap<16)check(all_pattern(buf,32,0xCCCCCCCCu),"insufficient flush publishes no partial packet");
  }
  gfx.PagingReady=0;written=123;
- check(GfxPagingBuildFlush(&dev,1,buf,0,128,&written,&unsupported)==STATUS_DEVICE_NOT_READY && !written && unsupported==BC250PagingNotReady,"not-ready remains explicit helper failure");
+ memset(buf,0xCC,sizeof(buf));
+ status=GfxPagingBuildFlush(&dev,0,buf,0,sizeof(buf),&written,&unsupported);
+ check(status==STATUS_SUCCESS && written==15 && buf[12]==2 && buf[13]==2,"gate 0: an unresolved root still flushes VMID 1 alone");
+ check(gfx.VmidFlushes==0 && gfx.VmidFlushVmids==0,"gate 0: the pool counters stay untouched");
+ check(GfxPagingBuildFlush(&dev,0x7000ull,buf,0,128,&written,&unsupported)==STATUS_DEVICE_NOT_READY && !written && unsupported==BC250PagingNotReady,"not-ready remains explicit helper failure");
  dev.Gfx=NULL;
- check(GfxPagingBuildFlush(&dev,1,buf,0,128,&written,&unsupported)==STATUS_DEVICE_NOT_READY && !written,"missing engine refuses flush");
- check(GfxPagingBuildFlush(&dev,0,buf,0,128,&written,&unsupported)==STATUS_INVALID_PARAMETER,"application flush refuses GART VMID");
- check(GfxPagingBuildFlush(&dev,16,buf,0,128,&written,&unsupported)==STATUS_INVALID_PARAMETER,"invalid VMID rejected");
- check(GfxPagingBuildFlush(&dev,1,buf,1,128,&written,&unsupported)==STATUS_INVALID_PARAMETER,"unaligned DMA offset rejected");
+ check(GfxPagingBuildFlush(&dev,0x7000ull,buf,0,128,&written,&unsupported)==STATUS_DEVICE_NOT_READY && !written,"missing engine refuses flush");
+ check(GfxPagingBuildFlush(&dev,0x7000ull,buf,1,128,&written,&unsupported)==STATUS_INVALID_PARAMETER,"unaligned DMA offset rejected");
+ dev.Gfx=&gfx;gfx.PagingReady=1;
+ /* KMD214, EnableVmidPool 1: the fan-out. Pool {1,3,4}; VMID 3 holds the root, VMID 5 (IB_AT, outside the pool)
+  * holds it too, VMID 6 holds another root. Expected: every holder of any root and every member, ascending. */
+ {
+  u32 big[128];unsigned k;
+  static const unsigned expect[]={1,3,4,5,6};
+  memset(&gfx.Vmid,0,sizeof(gfx.Vmid));
+  gfx.VmidPoolGate=1;gfx.VmidMembers=(1u<<1)|(1u<<3)|(1u<<4);
+  gfx.Vmid.Root[3]=0x7000ull;gfx.Vmid.Root[5]=0x7000ull;gfx.Vmid.Root[6]=0x9000ull;
+  test_expected_vmid=TEST_ANY_VMID;test_seen_count=0;memset(big,0xCC,sizeof(big));
+  status=GfxPagingBuildFlush(&dev,0x7000ull,big,0,sizeof(big),&written,&unsupported);
+  check(status==STATUS_SUCCESS && written==5*15 && test_seen_count==5,"pool: FLUSH_TLB invalidates five VMIDs back to back");
+  for(k=0;k<5 && k<test_seen_count;k++)
+   check(test_seen_vmids[k]==expect[k] && big[15*k+12]==(1u<<expect[k]) && big[15*k+13]==(1u<<expect[k]),"pool: each packet requests and acknowledges its own VMID");
+  check(all_pattern(big+75,128-75,0xCCCCCCCCu),"pool: nothing written past the fan-out");
+  check(gfx.VmidFlushes==1 && gfx.VmidFlushVmids==5,"pool: the counters count the flush and its VMIDs");
+  /* The recycle race the superset closes: the root is on no VMID when built (VMID 3 recycled to 0x9000), and the
+   * buffer must still cover every VMID it could be claimed on before SDMA runs it: all members. */
+  gfx.Vmid.Root[3]=0x9000ull;gfx.Vmid.Root[5]=0;test_seen_count=0;
+  status=GfxPagingBuildFlush(&dev,0x7000ull,big,0,sizeof(big),&written,&unsupported);
+  check(status==STATUS_SUCCESS && written==4*15 && test_seen_count==4 && test_seen_vmids[0]==1 && test_seen_vmids[1]==3 &&
+        test_seen_vmids[2]==4 && test_seen_vmids[3]==6,"pool: a root held by no VMID still flushes every member and every holder");
+  /* All or nothing: room for one packet (16 dwords) and not two. */
+  test_seen_count=0;
+  status=GfxPagingBuildFlush(&dev,0x7000ull,big,0,64,&written,&unsupported);
+  check(status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER && written==0,"pool: a fan-out that does not fit publishes nothing");
+  check(gfx.VmidFlushes==2 && gfx.VmidFlushVmids==9,"pool: an INSUFFICIENT build is not counted");
+  /* Nothing held and no member (cannot happen: VMID 1 is always a member) still flushes VMID 1. */
+  memset(&gfx.Vmid,0,sizeof(gfx.Vmid));gfx.VmidMembers=0;test_seen_count=0;
+  status=GfxPagingBuildFlush(&dev,0,big,0,sizeof(big),&written,&unsupported);
+  check(status==STATUS_SUCCESS && written==15 && test_seen_count==1 && test_seen_vmids[0]==1,"pool: an empty set falls back to VMID 1");
+  gfx.VmidPoolGate=0;gfx.VmidMembers=0;test_expected_vmid=1;
+ }
  check(!flush_lock_depth && !flush_region_depth,"all flush exits balance lifetime lock/region");
  test_expected_vmid=0;memset(hub,0,sizeof(*hub));
 }

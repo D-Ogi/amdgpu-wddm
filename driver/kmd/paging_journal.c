@@ -132,12 +132,12 @@ void PagingJournalDestroy(ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG By
 // submission rate this is the journal's busiest writer by far: docs/design/paging-journal.md, section "Write
 // rate and ring coverage", has the measured share and what it costs the ring's time window.
 void PagingJournalGfxSubmit(ULONG Seq, ULONG Fence, ULONGLONG Ib1, ULONGLONG Root, ULONGLONG Context, ULONG Node,
-                            ULONG Process, ULONG ContextFlags)
+                            ULONG Process, ULONG ContextFlags, ULONG Vmid)
 {
     BC250_PAGING_JOURNAL_RECORD r;
 
     RtlZeroMemory(&r, sizeof(r));
-    Bc250PjGfxSubmit(&r, Seq, Fence, Ib1, Root, Context, Node, Process, ContextFlags);
+    Bc250PjGfxSubmit(&r, Seq, Fence, Ib1, Root, Context, Node, Process, ContextFlags, Vmid);
     PagingJournalCommit(&r);
 }
 

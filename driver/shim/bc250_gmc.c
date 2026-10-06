@@ -240,8 +240,9 @@ int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32
  * lock at PASSIVE_LEVEL and never changes the root of a VMID whose last job has not retired (the
  * VMID pool, driver/kmd/vmid_pool.h; a job of the same root may still run while its VMID is
  * invalidated again). Two register writes plus one poll are a great deal less to be wrong about
- * than a packet sequence nothing has replayed. If an on-ring flush is ever added, PACKET3_PFP_SYNC_ME (nvd.h:322) belongs
- * with it on a gfx-type ring - upstream emits it there and only there.
+ * than a packet sequence nothing has replayed. If an on-ring flush is ever added,
+ * PACKET3_PFP_SYNC_ME (nvd.h:322) belongs with it on a gfx-type ring - upstream emits it there and
+ * only there.
  *
  * The value: amdgpu_gmc_pd_addr() is the page directory's physical address with AMDGPU_PTE_VALID
  * and nothing else on this part (shim.c:57-80), so the caller passes the address and this adds the

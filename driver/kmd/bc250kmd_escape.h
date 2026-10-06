@@ -1481,7 +1481,8 @@ typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 5244
                                                 // IB1 GPU address, Offset the context's root page table,
                                                 // Allocation the KMD context object as a value, Level the
                                                 // scheduler node, Index the process that created the context,
-                                                // Count BC250_PJ_CTX_*. Valid and Dma unused.
+                                                // Count BC250_PJ_CTX_*, Valid the VMID the IB ran at
+                                                // (from 0.7.214.1; 0 before, when it was always 1). Dma unused.
 #define BC250_PJ_FLAG_REPEAT 1u                 // UPDATE: DXGK_UPDATEPAGETABLEFLAGS.Repeat (one entry for the whole range)
 #define BC250_PJ_FLAG_INITIAL 2u                // UPDATE: .InitialUpdate
 #define BC250_PJ_FLAG_EVICTION 4u               // UPDATE: .NotifyEviction, VidMm evicts the allocation

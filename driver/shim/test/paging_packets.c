@@ -322,9 +322,16 @@ static void case_write_ptes(void)
 enum { TEST_REQ_ID = 0x40, TEST_ACK_ID = 0x44 };
 static unsigned int test_request_calls;
 static unsigned int test_expected_vmid;
+/* KMD214: TEST_ANY_VMID accepts every VMID and records the order (the FLUSH_TLB fan-out of the VMID pool). */
+#define TEST_ANY_VMID 0xFFFFFFFFu
+static unsigned int test_seen_vmids[16], test_seen_count;
 static u32 test_invalidate_req(unsigned int vmid, u32 type)
 {
-	check(vmid==test_expected_vmid && type==0,"invalidate uses selected VMID and flush type0");
+	if (test_expected_vmid == TEST_ANY_VMID) {
+		check(vmid < 16 && type == 0, "fan-out invalidates a VMID with flush type0");
+		if (test_seen_count < 16) test_seen_vmids[test_seen_count++] = vmid;
+	} else
+		check(vmid==test_expected_vmid && type==0,"invalidate uses selected VMID and flush type0");
 	test_request_calls++;
 	return 0x13570000u | (1u << vmid); /* opaque encoder witness, not a hardware request constant */
 }

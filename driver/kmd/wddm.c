@@ -8,6 +8,7 @@
 // ResetFromTimeout currently fails because hardware quiescence is not proven.
 // See docs/research/m9-dma-contract-audit.md for remaining contract gaps.
 #include "bc250kmd.h"
+#include "vmid_pool.h"
 #include "startup.h"
 #include "bc250_gfx.h"
 #include "dcn_translate.h"
@@ -984,7 +985,8 @@ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT No
 
 // ---- stage C: the hardware path --------------------------------------------------------------------------------
 
-#define BC250_WDDM_VMID 1u                  // the one hardware VMID, re-pointed at the submitter's root by gfx.c
+// KMD214: no fixed VMID any more. WDDM submits at BC250_VMID_AUTO (vmid_pool.h) and gfx.c chooses: VMID 1 with
+// EnableVmidPool 0, else a VMID per root from the pool. The VMID a job ran at comes back from GfxSubmitIb.
 #define BC250_WDDM_SUBMIT_TIMEOUT_MS 500    // an M6 dispatch takes 28 us (facts M57); the TDR default is 2 s
 
 // A completion that did not come from the hardware. While a hardware submission is in flight ON THAT NODE it
@@ -1110,6 +1112,8 @@ static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT
              BC250_GCVM_FAULT_RW(status), BC250_GCVM_FAULT_PERMISSIONS(status),
              BC250_GCVM_FAULT_WALKER_ERROR(status), BC250_GCVM_FAULT_MORE(status),
              BC250_GCVM_FAULT_MAPPING(status), page, refused);
+    // KMD214: the latch names a VMID; with the pool that is not always the timed-out job's. Who held it.
+    if (status != 0) GfxVmidReport(Device, "wddm: timeout latch", BC250_GCVM_FAULT_VMID(status));
 }
 
 // ---- C48/C49: the two edges of a node's busy state ---------------------------------------------------------
@@ -1213,7 +1217,7 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     BC250_WDDM* wddm;
     BOOLEAN timedOut = FALSE;
     UINT fence = 0, node = 0;
-    ULONG seq = 0, process = 0, contextFlags = 0;
+    ULONG seq = 0, process = 0, contextFlags = 0, vmid = 0;
     ULONGLONG context = 0;
     KIRQL irql;
 
@@ -1234,6 +1238,7 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
         context = head->Context;            // KMD193: read under the lock, logged outside it
         process = head->ProcessId;
         contextFlags = head->ContextFlags;
+        vmid = head->Vmid;
         wddm->WatchdogFaulted[node] = TRUE;
         wddm->DeferredValid = FALSE;
         // Preserve HwPending: timeout is not a hardware completion.
@@ -1248,10 +1253,14 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
              (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
     // KMD193: who the job belonged to, then what the hardware held. Both once per timeout; the identity comes
     // out of the queue entry, which keeps it from the submit (bsod-245 items 2 and 4).
-    GuardLog("wddm: timeout seq %lu fence %u node %u ctx 0x%llX pid %lu ctxflags 0x%lX", seq, fence, node,
-             context, process, contextFlags);
+    // KMD214: and the VMID it ran at, with that VMID's tenants (the pool may have recycled it since).
+    GuardLog("wddm: timeout seq %lu fence %u node %u vmid %lu ctx 0x%llX pid %lu ctxflags 0x%lX", seq, fence, node,
+             vmid, context, process, contextFlags);
     if (InterlockedIncrement(&wddm->FaultSnapshots) <= BC250_WDDM_LOG_CALLS)
+    {
+        GfxVmidReport(device, "wddm: timeout job", vmid);
         WddmTimeoutSnapshot(device, seq, fence, node);
+    }
     // No DMA_COMPLETED or preemption notification is synthesized here.
 }
 
@@ -1267,7 +1276,7 @@ static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
 static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
                                   ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
 {
-    ULONG seq = 0;
+    ULONG seq = 0, vmid = 0;
     NTSTATUS status;
     KIRQL irql;
     BC250_GFX_COMPLETION job;
@@ -1289,7 +1298,7 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     job.Epoch = 0; //151 baseline has adapter-lifetime ownership, no recovery ledger
     KeReleaseSpinLock(&Wddm->Lock, irql);
     if (!allowed) { ExReleaseFastMutex(&Wddm->GfxSubmitMutex); return FALSE; }
-    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &identity, &seq);
+    status = GfxSubmitIb(Device, BC250_VMID_AUTO, Context->RootPhysical, GpuVa, Bytes, &identity, &seq, &vmid);
     if (!NT_SUCCESS(status))
     {
         ExReleaseFastMutex(&Wddm->GfxSubmitMutex);
@@ -1304,6 +1313,7 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     job.Context = identity.Context;
     job.ProcessId = identity.ProcessId;
     job.ContextFlags = identity.ContextFlags;
+    job.Vmid = vmid;
     job.Deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     // A software-only fence between two HW jobs belongs to the older tail,
@@ -1318,15 +1328,16 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     ExReleaseFastMutex(&Wddm->GfxSubmitMutex);
     if (InterlockedIncrement(&Wddm->HwSubmitted) <= BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: fence %u on the gfx ring: sequence %u, vmid %u, root 0x%llX, va 0x%llX, %u bytes", FenceId,
-                 seq, (ULONG)BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes);
+                 seq, vmid, Context->RootPhysical, GpuVa, Bytes);
     WddmGpuFence(Device);
     return TRUE;
 }
 
 // ---- KMD196: the held submission ------------------------------------------------------------------------------
 //
-// One IB at a time, and only jobs sharing VMID 1's current root (gfx.c SubmitIbLocked): a submission that
-// arrives while another process's job is on the ring is refused and has to wait for that job's fence. Both
+// gfx.c SubmitIbLocked never changes the root of a VMID whose job has not retired. With EnableVmidPool 0 every job
+// runs at VMID 1, so a submission that arrives while another process's job is on the ring is refused and has to
+// wait for that job's fence; with the pool (KMD214) it is refused only when no VMID of the pool is free. Both
 // waiters below - the UMD one and the GPU Present one - use this state and these two calls, so there is one
 // definition of what "held" means, one deadline and one set of counters.
 //
@@ -2362,6 +2373,18 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // D5: a quiet log must never be read as a quiet ring, so the lines HotSubmitLog left out are counted here.
     GuardLog("wddm profile: hot submit log lines left out: %lu (HotSubmitLog off)",
              GfxHotSubmitLinesSkipped(Wddm->Device));
+    // KMD214: the VMID pool. RuleRefusals must be 0: a refusal is a root change of a VMID with a live job that
+    // the rule check caught. Busy is the old wait, now only when no VMID of the pool is free.
+    {
+        BC250_GFX_VMID_COUNTERS vmid;
+        GfxVmidCounters(Wddm->Device, &vmid);
+        GuardLog("wddm summary: VMID pool %s, members 0x%04lX, excluded 0x%04lX", vmid.Gate ? "on" : "off",
+                 (ULONG)vmid.Members, (ULONG)vmid.Excluded);
+        GuardLog("wddm summary: VMID pool: %lu claims, %lu reuses, %lu busy, %lu rule refusals", vmid.Claims,
+                 vmid.Reuses, vmid.Busy, vmid.RuleRefusals);
+        GuardLog("wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations", vmid.Flushes,
+                 vmid.FlushVmids);
+    }
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
              Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
@@ -5341,16 +5364,20 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
         record[0]=0; // invalidate stale contents before emitting a new record
         if (dmaFree > PagingPrivateQueuedDirectCapacity(privateFree)) dmaFree=PagingPrivateQueuedDirectCapacity(privateFree);
-        // Flush all addresses in the single WDDM application VMID, including
-        // when the requested root is not currently bound. No root rewrite.
+        // FLUSH_TLB: flush all addresses of every VMID that can hold the requested root, including when the root
+        // is not bound now (gfx.c GfxPagingBuildFlush; VMID 1 alone with EnableVmidPool 0). No root rewrite.
         if (update)
             pagingStatus = GfxPagingBuildUpdate((BC250_DEVICE*)hAdapter,&pBuildPagingBuffer->UpdatePageTable,
                 (PUCHAR)record+PAGING_PRIVATE_HEADER_BYTES,pBuildPagingBuffer->DmaBufferWriteOffset,
                 dmaFree,startByte,&written,&nextByte,&unsupported);
         else
-            pagingStatus = GfxPagingBuildFlush((BC250_DEVICE*)hAdapter,BC250_WDDM_VMID,
+        {
+            ULONGLONG root = 0;
+            if (!VidMmRootPhysical(&pBuildPagingBuffer->FlushTlb.RootPageTableAddress,&root)) root = 0;
+            pagingStatus = GfxPagingBuildFlush((BC250_DEVICE*)hAdapter,root,
                 (PUCHAR)record+PAGING_PRIVATE_HEADER_BYTES,pBuildPagingBuffer->DmaBufferWriteOffset,
                 dmaFree,&written,&unsupported);
+        }
         if (written != 0)
         {
             if (!NT_SUCCESS(WddmPublishPagingRecord(pBuildPagingBuffer,written,update,startByte,nextByte)))
@@ -5789,7 +5816,7 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     // Stage C. An empty DMA buffer (every Present of stage A's inert DDI) has nothing to run; one with bytes in it
     // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root.
     // A refused nonempty command remains outstanding for recovery; only empty work completes in software.
-    // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a fixed VMID, and it stays
+    // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a VMID gfx.c chooses, and it stays
     // node 0's alone - node 1 has its own arm above, its own ring (SDMA0, no VMID) and its own failure counters.
     if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
         device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&

@@ -18,7 +18,7 @@
 #define FALSE 0
 #define BC250_WDDM_LOG_CALLS 8
 #define BC250_WDDM_SUBMIT_TIMEOUT_MS 500
-#define BC250_WDDM_VMID 1
+#define BC250_VMID_AUTO 0xFFFFFFFEu   /* vmid_pool.h: the WDDM path lets gfx.c choose (KMD214) */
 #define STATUS_DEVICE_BUSY (-1)
 #define NT_SUCCESS(x) ((x)>=0)
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
@@ -129,10 +129,18 @@ static unsigned int ringGapEdges, ringGapBusy;
 static void WddmRingGapEdgeLocked(BC250_WDDM* w,UINT node,BOOLEAN busy)
 { (void)w; CHECK(node==BC250_WDDM_NODE_3D); ++ringGapEdges; if(busy) ++ringGapBusy; }
 static BC250_GFX_SUBMIT_IDENTITY last_identity;
+/* KMD214: wddm.c asks for BC250_VMID_AUTO and keeps the VMID gfx.c chose; the model chooses 3 + seq % 5. */
+static ULONG ModelVmid(ULONG seq) { return 3u + seq % 5u; }
 static NTSTATUS GfxSubmitIb(BC250_DEVICE* d,ULONG v,ULONGLONG root,ULONGLONG va,ULONG bytes,
-                            const BC250_GFX_SUBMIT_IDENTITY* id,ULONG* s)
-{ (void)d; (void)v; (void)root; (void)va; (void)bytes; CHECK(id!=0); if(id) last_identity=*id;
-  if(refuse || (root_wait && completed != mock_seq))return STATUS_DEVICE_BUSY; *s=++mock_seq; ++dispatches; return 0; }
+                            const BC250_GFX_SUBMIT_IDENTITY* id,ULONG* s,ULONG* used)
+{ (void)d; (void)root; (void)va; (void)bytes; CHECK(id!=0); CHECK(v==BC250_VMID_AUTO); if(id) last_identity=*id;
+  if(used) *used=0;
+  if(refuse || (root_wait && completed != mock_seq))return STATUS_DEVICE_BUSY; *s=++mock_seq; ++dispatches;
+  if(used) *used=ModelVmid(*s); return 0; }
+/* KMD214: the timeout report names the job's VMID and asks gfx.c who held it. */
+static unsigned int vmidReports; static ULONG lastReportedVmid;
+static void GfxVmidReport(const BC250_DEVICE* d,const char* who,ULONG vmid)
+{ (void)d; (void)who; ++vmidReports; lastReportedVmid=vmid; }
 /* The timeout register snapshot is defined above the extracted region in wddm.c: modeled, and counted. */
 static unsigned int snapshots;
 static void WddmTimeoutSnapshot(const BC250_DEVICE* d,ULONG seq,UINT fence,UINT node)
@@ -158,6 +166,8 @@ int main(void)
     CHECK(w.GfxPending.Items[w.GfxPending.Head].ProcessId==4242);
     CHECK(w.GfxPending.Items[w.GfxPending.Head].ContextFlags==BC250_PJ_CTX_UMD);
     CHECK(w.GfxPending.Items[w.GfxPending.Head].Context==last_identity.Context);
+    { unsigned k; for(k=0;k<w.GfxPending.Count;k++){ const BC250_GFX_COMPLETION* j=&w.GfxPending.Items[(w.GfxPending.Head+k)%BC250_GFX_PENDING_MAX];
+      CHECK(j->Vmid==ModelVmid(j->Seq)); } }
     CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,8,0));
     CHECK(dispatches==7 && reported==0 && ledger==0);
     completed=2; WddmGpuFence(&d); // coalesced interrupt must retire both 1 and 2
@@ -180,6 +190,7 @@ int main(void)
     mock_now+=5000000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
     CHECK(failures==1 && reported==9 && w.HwPending && w.WatchdogFaulted[0]);
     CHECK(snapshots==1);    /* KMD193: one register snapshot per timeout, no more */
+    CHECK(vmidReports==1 && lastReportedVmid==ModelVmid(mock_seq));   /* KMD214: the timed-out job's VMID */
     CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,11,0));
     CHECK(reported==9);
     // Recovery epoch mismatch may not retire stale hardware work.
