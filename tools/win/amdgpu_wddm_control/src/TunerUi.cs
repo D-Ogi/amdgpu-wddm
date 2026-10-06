@@ -18,6 +18,7 @@ namespace AmdgpuWddmControl
         uint[] _mv = Tuner.Table(), _line = Tuner.Table(), _floor = Tuner.Floors();
         int _selected;
         bool _drag;
+        Tuner.ChangeGate _gate;                     // holds the two events while a drag or a key press runs
         public event EventHandler Changed;          // a knot moved
         public event EventHandler Picked;           // the selection moved
 
@@ -62,8 +63,15 @@ namespace AmdgpuWddmControl
                 _selected = v;
                 Describe();
                 Invalidate();
-                if (Picked != null) Picked(this, EventArgs.Empty);
+                Fire(_gate.Mark(false));
             }
+        }
+
+        // The page may dispose this control inside its handler, so Fire is always the last thing a handler does.
+        void Fire(Tuner.Raise r)
+        {
+            if (r == Tuner.Raise.Changed) { if (Changed != null) Changed(this, EventArgs.Empty); }
+            else if (r == Tuner.Raise.Picked) { if (Picked != null) Picked(this, EventArgs.Empty); }
         }
 
         void Describe()
@@ -106,7 +114,7 @@ namespace AmdgpuWddmControl
             _mv[index] = v;
             Describe();
             Invalidate();
-            if (Changed != null) Changed(this, EventArgs.Empty);
+            Fire(_gate.Mark(true));
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -156,10 +164,11 @@ namespace AmdgpuWddmControl
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            _gate.Hold();
+            _drag = true;
             Focus();
             var r = Plot();
             Selected = NearestIndex(r, e.X);
-            _drag = true;
             Set(_selected, MvAt(r, e.Y));
             base.OnMouseDown(e);
         }
@@ -170,7 +179,22 @@ namespace AmdgpuWddmControl
             base.OnMouseMove(e);
         }
 
-        protected override void OnMouseUp(MouseEventArgs e) { _drag = false; base.OnMouseUp(e); }
+        // The drag ends here and the page hears about it once. A lost capture (another window took the mouse) ends
+        // the drag the same way, so the gate never stays shut.
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            _drag = false;
+            base.OnMouseUp(e);
+            Fire(_gate.Release());
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            bool ended = _drag && !Capture;
+            _drag = _drag && Capture;
+            base.OnMouseCaptureChanged(e);
+            if (ended) Fire(_gate.Release());
+        }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
         protected override bool IsInputKey(Keys key) { return true; }
@@ -178,6 +202,7 @@ namespace AmdgpuWddmControl
         protected override void OnKeyDown(KeyEventArgs e)
         {
             int step = e.Control ? 5 : 1;
+            _gate.Hold();
             switch (e.KeyCode)
             {
                 case Keys.Left: Selected = _selected - 1; break;
@@ -186,9 +211,10 @@ namespace AmdgpuWddmControl
                 case Keys.Up: Set(_selected, _mv[_selected] + (uint)step); break;
                 case Keys.Home: Set(_selected, _line[_selected]); break;
                 case Keys.End: Set(_selected, _floor[_selected]); break;
-                default: base.OnKeyDown(e); return;
+                default: _gate.Release(); base.OnKeyDown(e); return;
             }
             e.Handled = true;
+            Fire(_gate.Release());
         }
     }
 

@@ -99,6 +99,41 @@ namespace AmdgpuWddmControl
             return mv;
         }
 
+        // What a control has to tell the page after an input handler ends.
+        public enum Raise { None = 0, Picked = 1, Changed = 2 }
+
+        // The page rebuilds itself when a knot moves, which disposes the control that moved it. A control therefore
+        // holds its events while a mouse drag or a key press runs, and reports once, at the end, when nothing of the
+        // control is touched any more. A moved knot outranks a moved selection, because the page reads both.
+        public struct ChangeGate
+        {
+            bool _hold, _moved, _picked;
+
+            public bool Held { get { return _hold; } }
+
+            // An input handler starts. Everything it records waits for Release.
+            public void Hold() { _hold = true; }
+
+            // A knot moved (moved = true) or the selection moved (false). Returns what to report now, which is
+            // nothing while a handler holds the gate.
+            public Raise Mark(bool moved)
+            {
+                if (moved) _moved = true; else _picked = true;
+                return _hold ? Raise.None : Take();
+            }
+
+            // The handler ended: one report stands for everything inside it, and a second call reports nothing.
+            public Raise Release() { _hold = false; return Take(); }
+
+            Raise Take()
+            {
+                Raise r = _moved ? Raise.Changed : _picked ? Raise.Picked : Raise.None;
+                _moved = false;
+                _picked = false;
+                return r;
+            }
+        }
+
         // Which preset a curve is, or null when it is none of them (an edited curve).
         public static string PresetOf(uint[] mv, uint[] table, uint[] floor)
         {

@@ -67,6 +67,7 @@ static partial class UnitTests
         TunerModel();
         TunerCpuModel();
         TunerPlans();
+        TunerInputGate(root);
         TunerDesignDoc(root);
     }
 
@@ -385,6 +386,60 @@ static partial class UnitTests
             Refused(TunePlan("tune-keep", s), "No curve trial is running", lang + ": a keep without a trial");
         }
         Strings.Language = saved;
+    }
+
+    // The chart lives on the page it rebuilds. A knot that reported every pixel of a drag would dispose the control
+    // in the middle of its own mouse handler, so the gate holds the report until the handler ends. These checks are
+    // the pure half; the source checks below keep the control using it the only safe way.
+    static void TunerInputGate(string root)
+    {
+        var g = new Tuner.ChangeGate();
+        Check(!g.Held, "gate: open before a handler");
+        Check(g.Mark(true) == Tuner.Raise.Changed, "gate: a change outside a handler reports at once");
+        Check(g.Release() == Tuner.Raise.None, "gate: nothing is left over");
+
+        g = new Tuner.ChangeGate();
+        g.Hold();
+        Check(g.Held, "gate: a handler holds it");
+        Check(g.Mark(false) == Tuner.Raise.None, "gate: the selection waits");
+        for (int i = 0; i < 40; i++) Check(g.Mark(true) == Tuner.Raise.None, "gate: drag pixel " + i + " waits");
+        Check(g.Release() == Tuner.Raise.Changed, "gate: the drag reports once, at the end");
+        Check(!g.Held, "gate: open again after the drag");
+        Check(g.Release() == Tuner.Raise.None, "gate: a second release reports nothing");
+
+        g = new Tuner.ChangeGate();
+        g.Hold();
+        g.Mark(false);
+        Check(g.Release() == Tuner.Raise.Picked, "gate: a key that only moves the selection reports Picked");
+        g.Hold();
+        g.Mark(false);
+        g.Mark(true);
+        Check(g.Release() == Tuner.Raise.Changed, "gate: a moved knot outranks a moved selection");
+
+        var src = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\TunerUi.cs");
+        Check(File.Exists(src), "src/TunerUi.cs exists");
+        if (!File.Exists(src)) return;
+        var text = File.ReadAllText(src);
+        Check(Regex.Matches(text, @"Changed\(this,").Count == 1, "TunerUi.cs raises Changed in one place only");
+        Check(Regex.Matches(text, @"Picked\(this,").Count == 1, "TunerUi.cs raises Picked in one place only");
+        foreach (var handler in new[] { "OnMouseDown", "OnMouseMove" })
+            Check(!Body(text, handler).Contains("Fire("), "TunerUi.cs " + handler + " reports nothing while the drag runs");
+        foreach (var handler in new[] { "OnMouseUp", "OnMouseCaptureChanged" })
+        {
+            var body = Body(text, handler);
+            int fire = body.IndexOf("Fire(", StringComparison.Ordinal), rest = body.IndexOf("base.", StringComparison.Ordinal);
+            Check(fire > 0 && rest > 0 && fire > rest, "TunerUi.cs " + handler + " reports after the control is done with itself");
+        }
+        var keys = Body(text, "OnKeyDown");
+        Check(keys.IndexOf("Fire(", StringComparison.Ordinal) > keys.IndexOf("e.Handled", StringComparison.Ordinal),
+            "TunerUi.cs OnKeyDown reports after it has taken the key");
+    }
+
+    // The text of one method, from its signature to the line that closes it at the same indentation.
+    static string Body(string text, string name)
+    {
+        var m = Regex.Match(text, @"(?m)^(?<pad>[ ]+)[\w ]*\b" + name + @"\(.*?\n(?<body>(.|\n)*?)^\k<pad>\}");
+        return m.Success ? m.Groups["body"].Value : "";
     }
 
     // The design document is the contract this page implements: it has to name the numbers the code uses.
