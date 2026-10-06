@@ -92,7 +92,7 @@
       "source": "scratch/train/b20-build/umd-fix/art-umd-zink-x64/bc250d3d_zink.dll",
       "sha256": "D9C4DF680A96CF6A2F9AF65CB6C477CB068C4DB4DA07E3C0B00BFB3A28C64D4B",
       "size": 15220224,
-      "role": "hosted zink D3D11 UMD for DWM on the GPU (mesa fork amdgpu-wddm/b19-hosted-umd 7eb7861d). The surface setup resumes after a failed step instead of leaking it (BD-037). The composed-surface table accepts one-byte pixels (A8). The shader parser reads past the extended operand token (the minimum-precision hint) that the Direct3D 11.1 front of route C passes on, and the adapter sets the CRT error mode to stderr, so a failed assertion ends the process instead of a message box that nobody sees (BD-088, the b20 logon hang)"
+      "role": "hosted zink D3D11 UMD for DWM on the GPU (mesa fork amdgpu-wddm/b19-hosted-umd 7eb7861d). The surface setup resumes after a failed step instead of leaking it (BD-037). The composed-surface table accepts one-byte pixels (A8). The shader parser reads past the extended operand token (the minimum-precision hint) that the Direct3D 11.1 front of route C passes on, and the adapter sets the CRT error mode to stderr, so a failed assertion ends the process instead of a message box that nobody sees (the b20 logon hang)"
     },
     {
       "component": "desktop-umd",
