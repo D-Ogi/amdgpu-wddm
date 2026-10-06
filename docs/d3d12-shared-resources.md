@@ -229,7 +229,7 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 
 | Test | What it pins |
 |---|---|
-| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: 49 checks over the encoder, both decoders, the kernel driver's parser, every single-field refusal and every composed row |
+| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: 44 named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal, the last of which covers all 5 COMPOSED rows and their 7 format round trips |
 | `driver/umd/d3d12/allocation-request-test.cpp` | what the create publishes, field by field, and that `prepare_surface` still writes the primary's v1 record |
 | `driver/umd/d3d12/heap-import-test.cpp` | the shell half: the shareable envelope, `kShareRequired` only from the runtime's refusal, the shared surface's records and refusals, and the borrowed lifetime of an adopted allocation |
 | `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, the geometry the engine measured, a texel-exact render and read-back of the created surface |
