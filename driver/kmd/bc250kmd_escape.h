@@ -132,7 +132,8 @@
                                             // idle. "The GPU must not wait" now has a number in every
                                             // workload, game or client, from the log summary alone.
                                             //
-                                            // It also changes one thing, behind NotifyDpcInReport (default 1):
+                                            // It also changes one thing, behind NotifyDpcInReport (default 0 in
+                                            // this driver; written as default 1 on c48/notifydpc-in-report):
                                             // the report pass calls DxgkCbNotifyDpc itself, and the
                                             // DxgkCbQueueDpc whose only job was to bring that call about is
                                             // then not made - one dxgkrnl device DPC per completion fewer.
