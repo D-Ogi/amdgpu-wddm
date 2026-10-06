@@ -1639,7 +1639,25 @@ struct EncodeResult {
     double psnrCr = 0.0;
     uint32_t pictures = 0;
     std::vector<uint8_t> stream;
+    // Per decoded picture, in output order. A mean over a group of pictures hides which one is behind:
+    // the first picture of a stream is intra coded and the rest are predicted from it, and an encoder
+    // can be level with another one on the I picture and lose a dB on every P picture after it, or the
+    // other way round. The comparison prints both halves separately because of that.
+    std::vector<double> perY, perCb, perCr;
 };
+
+// The mean of a range of a per-picture series, [from, to).
+double MeanOf(const std::vector<double>& v, size_t from, size_t to)
+{
+    if (from >= to || to > v.size()) {
+        return 0.0;
+    }
+    double s = 0.0;
+    for (size_t i = from; i < to; ++i) {
+        s += v[i];
+    }
+    return s / static_cast<double>(to - from);
+}
 
 // Runs the inbox H264 Encoder MFT over a sequence of NV12 pictures. Synchronous model.
 HRESULT RunInboxEncoder(const Options& o, const std::vector<std::vector<uint8_t>>& nv12,
@@ -1811,10 +1829,19 @@ HRESULT MeasureAgainstSource(const Options& o, const std::vector<Picture>& sourc
     std::vector<Picture>& pics = dec.Pictures();
     const size_t n = (pics.size() < sources.size()) ? pics.size() : sources.size();
     double sy = 0.0, sc = 0.0, sr = 0.0;
+    r->perY.clear();
+    r->perCb.clear();
+    r->perCr.clear();
     for (size_t i = 0; i < n; ++i) {
-        sy += PlanePsnr(sources[i].y.data(), pics[i].y.data(), sources[i].y.size());
-        sc += PlanePsnr(sources[i].cb.data(), pics[i].cb.data(), sources[i].cb.size());
-        sr += PlanePsnr(sources[i].cr.data(), pics[i].cr.data(), sources[i].cr.size());
+        const double y = PlanePsnr(sources[i].y.data(), pics[i].y.data(), sources[i].y.size());
+        const double cb = PlanePsnr(sources[i].cb.data(), pics[i].cb.data(), sources[i].cb.size());
+        const double cr = PlanePsnr(sources[i].cr.data(), pics[i].cr.data(), sources[i].cr.size());
+        r->perY.push_back(y);
+        r->perCb.push_back(cb);
+        r->perCr.push_back(cr);
+        sy += y;
+        sc += cb;
+        sr += cr;
     }
     if (n != 0) {
         r->psnrY = sy / n;
@@ -1843,6 +1870,7 @@ int RunCompare(const Options& o)
 
     // Ours, through the encoder core, CBR at the same bitrate.
     EncodeResult ours;
+    std::vector<uint32_t> ourQp, ourBytes, ourSkipped;
     {
         EncoderConfig cfg;
         cfg.width = o.width;
@@ -1853,6 +1881,26 @@ int RunCompare(const Options& o)
         cfg.meanBitRate = o.bitrate;
         cfg.rateControl = RateControl::Cbr;
         cfg.deblocking = o.deblock;
+        cfg.chromaQpIndexOffset = o.chromaQpOffset;
+        cfg.lambdaScale = o.lambdaScale;
+        cfg.skipBiasScale = o.skipBiasScale;
+        cfg.rcGainScale = o.rcGainScale;
+        // Said only when a dial stands somewhere other than where the encoder itself ships it, so that
+        // the line in the output means "this run is a measurement, not the shipped encoder".
+        const EncoderConfig shipped;
+        if (o.chromaQpOffset != shipped.chromaQpIndexOffset || o.lambdaScale != shipped.lambdaScale ||
+            o.skipBiasScale != shipped.skipBiasScale || o.rcGainScale != shipped.rcGainScale) {
+            printf("  dials: chroma_qp_index_offset %d, lambda %u %%, skip bias %u %%, rc gain %u %%\n",
+                   o.chromaQpOffset, o.lambdaScale, o.skipBiasScale, o.rcGainScale);
+        }
+        if (o.oursQp != 0) {
+            // --ours-qp: our column at a fixed quantiser, the inbox column still at the nominal rate.
+            cfg.rateControl = RateControl::Quality;
+            cfg.qpInit = o.oursQp;
+            cfg.qpMin = o.oursQp;
+            cfg.qpMax = o.oursQp;
+            printf("  our column runs at a fixed quantiser %u, not at the nominal rate\n", o.oursQp);
+        }
         // The test's own device (mfthost.h): the transform creates one on the BC-250 adapter alone.
         ComPtr<ID3D11Device> device;
         HRESULT hr = CreateTestDevice(&device);
@@ -1887,6 +1935,13 @@ int RunCompare(const Options& o)
             }
             ours.stream.insert(ours.stream.end(), frame.begin(), frame.end());
             ours.bytes += st.bytes;
+            // What the rate control did with this picture. Printed next to the per-picture PSNR,
+            // because a quality dip in the middle of a constant bit rate run has two possible causes -
+            // a harder picture, or a quantiser our own controller pushed up - and only the quantiser
+            // trace tells them apart.
+            ourQp.push_back(st.qp);
+            ourBytes.push_back(st.bytes);
+            ourSkipped.push_back(st.skippedMbs);
         }
         ours.ms = NowMs() - t0;
         ours.ok = true;
@@ -1931,6 +1986,48 @@ int RunCompare(const Options& o)
     printf("  %-28s %14.2f %14.2f\n", "PSNR Cb (dB)", ours.psnrCb, inbox.psnrCb);
     printf("  %-28s %14.2f %14.2f\n", "PSNR Cr (dB)", ours.psnrCr, inbox.psnrCr);
     printf("  %-28s %14u %14u\n", "pictures decoded", ours.pictures, inbox.pictures);
+
+    // Where the gap is. The first picture of the stream is the only intra coded one at the default
+    // group size, so splitting it off separates "how well do we code a picture from nothing" from "how
+    // well do we predict", and the two have different causes and different dials.
+    if (!ours.perY.empty() && !inbox.perY.empty()) {
+        const size_t n = (ours.perY.size() < inbox.perY.size()) ? ours.perY.size()
+                                                                : inbox.perY.size();
+        struct Row { const char* name; const std::vector<double>* a; const std::vector<double>* b; };
+        const Row rows[3] = { { "Y", &ours.perY, &inbox.perY },
+                              { "Cb", &ours.perCb, &inbox.perCb },
+                              { "Cr", &ours.perCr, &inbox.perCr } };
+        printf("\n  the gap picture by picture, in dB, ours minus inbox\n");
+        printf("    %-6s %10s %10s %10s %10s\n", "plane", "picture 0", "the rest", "worst", "at");
+        for (const Row& row : rows) {
+            double worst = 0.0;
+            size_t at = 0;
+            bool any = false;
+            for (size_t i = 0; i < n; ++i) {
+                const double d = (*row.a)[i] - (*row.b)[i];
+                if (!any || d < worst) {
+                    worst = d;
+                    at = i;
+                    any = true;
+                }
+            }
+            printf("    %-6s %10.2f %10.2f %10.2f %10zu\n", row.name,
+                   (*row.a)[0] - (*row.b)[0],
+                   MeanOf(*row.a, 1, n) - MeanOf(*row.b, 1, n), worst, at);
+        }
+        if (o.verbose) {
+            printf("    %5s %4s %8s %6s %7s %7s %7s %9s %7s %7s %7s\n", "pic", "qp", "bytes", "skip",
+                   "ourY", "ourCb", "ourCr", "inboxY", "inCb", "inCr", "dY");
+            for (size_t i = 0; i < n; ++i) {
+                printf("    %5zu %4u %8u %6u %7.2f %7.2f %7.2f %9.2f %7.2f %7.2f %7.2f\n", i,
+                       (i < ourQp.size()) ? ourQp[i] : 0u,
+                       (i < ourBytes.size()) ? ourBytes[i] : 0u,
+                       (i < ourSkipped.size()) ? ourSkipped[i] : 0u,
+                       ours.perY[i], ours.perCb[i], ours.perCr[i], inbox.perY[i], inbox.perCb[i],
+                       inbox.perCr[i], ours.perY[i] - inbox.perY[i]);
+            }
+        }
+    }
     printf("\n");
 
     int rc = 0;

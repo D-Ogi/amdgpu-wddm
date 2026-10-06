@@ -42,6 +42,21 @@ struct Options {
     // to the serial one. That identity is what carries the oracle's verdict over to the pipeline, and it
     // holds only at a fixed quantiser, so the pipelined pass refuses a rate controlled setting.
     uint32_t depth = 1;
+    // --ours-qp N: in --compare, run our column at a fixed quantiser instead of the constant bit rate
+    // the inbox column runs at. The two columns then no longer meet at the same rate, which is the
+    // point: sweeping N until our byte count matches the inbox's reads the coding efficiency gap on its
+    // own, with our rate control taken out of the measurement. Zero leaves the comparison as it was.
+    uint32_t oursQp = 0;
+    // The four encoder dials a quality sweep turns, at their shipped values by default:
+    // --chroma-qp-offset N (PPS chroma_qp_index_offset), --lambda-scale N and --skip-bias-scale N (per
+    // cent of the quantiser-derived motion weights) and --rc-gain N (the constant bit rate controller's
+    // gain). Every one of them changes the bitstream, so a case that moves one is a measurement and not
+    // one of the pinned gates. The selftest checks these four against EncoderConfig's own defaults, so
+    // that a default changed in the encoder cannot leave the test measuring the previous setting.
+    int32_t chromaQpOffset = 0;
+    uint32_t lambdaScale = 300;
+    uint32_t skipBiasScale = 0;
+    uint32_t rcGainScale = 100;   // --rc-gain N: the CBR controller's gain, per cent
     int32_t probeX = -1;            // --probe X Y: print this Cb column of every picture
     int32_t probeY = -1;
     RateControl rc = RateControl::Quality;

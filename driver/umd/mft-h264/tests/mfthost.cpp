@@ -868,6 +868,27 @@ void SelfTestAdapterChoice()
     printf("  no BC-250 in this machine: the transform refuses to pick another adapter\n");
 }
 
+// The dials of a quality measurement default to what the encoder itself ships, so that a run without
+// --lambda-scale and company measures the shipped encoder. Nothing in the compiler ties the two sets of
+// defaults together, so this case does: a default moved in EncoderConfig and not here would otherwise
+// quietly turn every unflagged run into a measurement of the previous setting.
+void SelfTestDialDefaults()
+{
+    printf("dial defaults\n");
+    const EncoderConfig def;
+    const Options o;
+    if (o.lambdaScale != def.lambdaScale || o.skipBiasScale != def.skipBiasScale ||
+        o.rcGainScale != def.rcGainScale || o.chromaQpOffset != def.chromaQpIndexOffset) {
+        Fail("the test's dial defaults (lambda %u, skip bias %u, rc gain %u, chroma qp offset %d) are "
+             "not the encoder's (%u, %u, %u, %d)",
+             o.lambdaScale, o.skipBiasScale, o.rcGainScale, o.chromaQpOffset,
+             def.lambdaScale, def.skipBiasScale, def.rcGainScale, def.chromaQpIndexOffset);
+    } else {
+        printf("  lambda %u %%, skip bias %u %%, rc gain %u %%, chroma qp offset %d: the encoder's own\n",
+               o.lambdaScale, o.skipBiasScale, o.rcGainScale, o.chromaQpOffset);
+    }
+}
+
 } // namespace
 
 int RunSelfTest()
@@ -878,6 +899,7 @@ int RunSelfTest()
     SelfTestEmulationPrevention();
     SelfTestParameterSets();
     SelfTestFrameSizes();
+    SelfTestDialDefaults();
     SelfTestAdapterChoice();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
     return (g_failures == 0) ? 0 : 1;
@@ -1312,6 +1334,10 @@ int RunEncode(const Options& o)
     cfg.qpMin = o.qp;
     cfg.qpMax = o.qp;
     cfg.deblocking = o.deblock;
+    cfg.chromaQpIndexOffset = o.chromaQpOffset;
+    cfg.lambdaScale = o.lambdaScale;
+    cfg.skipBiasScale = o.skipBiasScale;
+    cfg.rcGainScale = o.rcGainScale;
 
     // The test's own device, as a Media Foundation client gives one: the transform itself takes the
     // BC-250 adapter only (gpu_pipeline.cpp), and this test also runs on a development PC.
@@ -1762,12 +1788,23 @@ uint32_t ArgU(int argc, wchar_t** argv, int i, uint32_t fallback)
     return static_cast<uint32_t>(_wtoi(argv[i + 1]));
 }
 
+int32_t ArgI(int argc, wchar_t** argv, int i, int32_t fallback)
+{
+    if (i + 1 >= argc) {
+        return fallback;
+    }
+    return static_cast<int32_t>(_wtoi(argv[i + 1]));
+}
+
 void Usage()
 {
     printf("usage: mfthost.exe [--selftest|--encode|--mft|--compare|--sinkwriter|--all]\n");
     printf("                   [--width N] [--height N] [--frames N] [--qp N] [--bitrate N]\n");
     printf("                   [--gop N] [--fps N] [--deblock] [--gpu-source] [--still] [--cbr]\n");
-    printf("                   [--timing-skip N] [--depth N] [--verbose] [--out <directory>]\n");
+    printf("                   [--timing-skip N] [--depth N] [--ours-qp N] [--verbose]\n");
+    printf("                   [--chroma-qp-offset N] [--lambda-scale N] [--skip-bias-scale N]\n");
+    printf("                   [--rc-gain N]\n");
+    printf("                   [--out <directory>]\n");
 }
 
 } // namespace
@@ -1834,6 +1871,16 @@ int wmain(int argc, wchar_t** argv)
             o.timingSkip = ArgU(argc, argv, i, o.timingSkip); ++i;
         } else if (wcscmp(a, L"--depth") == 0) {
             o.depth = ArgU(argc, argv, i, o.depth); ++i;
+        } else if (wcscmp(a, L"--ours-qp") == 0) {
+            o.oursQp = ArgU(argc, argv, i, o.oursQp); ++i;
+        } else if (wcscmp(a, L"--chroma-qp-offset") == 0) {
+            o.chromaQpOffset = ArgI(argc, argv, i, o.chromaQpOffset); ++i;
+        } else if (wcscmp(a, L"--lambda-scale") == 0) {
+            o.lambdaScale = ArgU(argc, argv, i, o.lambdaScale); ++i;
+        } else if (wcscmp(a, L"--skip-bias-scale") == 0) {
+            o.skipBiasScale = ArgU(argc, argv, i, o.skipBiasScale); ++i;
+        } else if (wcscmp(a, L"--rc-gain") == 0) {
+            o.rcGainScale = ArgU(argc, argv, i, o.rcGainScale); ++i;
         } else if (wcscmp(a, L"--verbose") == 0) {
             o.verbose = true;
         } else if (wcscmp(a, L"--out") == 0 && i + 1 < argc) {

@@ -25,6 +25,20 @@ enum class RateControl : uint32_t {
 // 64x48 ramp: 28.6 dB at qp 0 against 71.0 dB at qp 10.
 enum : uint32_t { kQpFloor = 6 };
 
+// The constant bit rate controller, see Encoder::UpdateRateControl. kRcGain is quantiser steps per
+// frame of bits in the leaky bucket, and kRcBufferFrames the bucket's range in frames of budget, which
+// is the quantiser range the gain can reach. kRcComplexityWeight is how much of a picture's own
+// complexity goes into the running estimate the open loop part reads the quantiser from: one would
+// follow every picture exactly and hunt on content that varies picture to picture. kRcMaxStep bounds
+// how far one picture's quantiser may move from the one before it.
+const double kRcGain = 1.0;
+const double kRcComplexityWeight = 0.5;
+// How far the bucket may stand from empty before the gain acts at all, in frames of budget. A key
+// frame alone is worth about two of them, so this is the room a group of pictures needs for its own
+// key frame without the P pictures after it paying for it.
+const double kRcDeadBandFrames = 2.0;
+enum : uint32_t { kRcBufferFrames = 16, kRcMaxStep = 4 };
+
 struct EncoderConfig {
     uint32_t width = 1280;
     uint32_t height = 720;
@@ -37,6 +51,12 @@ struct EncoderConfig {
     uint32_t quality = 70;                // 0..100, used by RateControl::Quality
     uint32_t qpInit = 26;
     uint32_t qpMin = 14;
+    // Short of the standard's 51 on purpose. Above about 46 this encoder's bits are no longer the
+    // residual but the per-macroblock overhead of a P picture that cannot skip - one 16x16 vector and a
+    // coded block pattern for every macroblock - so the quantiser buys almost no rate there and pays for
+    // it in quality. Measured at 720p30 and 3 Mbit/s on the synthetic pattern, a rate this content
+    // cannot reach either way: a ceiling of 46 delivered 153 % of the asked rate, 51 delivered 146 % and
+    // 2.6 dB less luma, and the inbox encoder delivered 181 % on the same source.
     uint32_t qpMax = 46;
     // CODECAPI_AVLowLatencyMode, and it is also what the transform's pipeline depth follows: off means
     // a picture may be recorded while the one before it is still being coded, which costs one input
@@ -45,6 +65,39 @@ struct EncoderConfig {
     // delivery delay means nothing. A client that sets it gets a strictly serial encoder.
     bool lowLatency = false;
     bool deblocking = false;              // false emits disable_deblocking_filter_idc 1
+    // chroma_qp_index_offset of the PPS, clause 7.4.2.2: the chroma quantiser is Table 8-15 of
+    // qpY plus this, so a negative value spends more bits on chroma. Range -12 to 12. Settled before
+    // the parameter sets are built and never changed afterwards, like pic_init_qp, because a client's
+    // container already holds the published sequence and picture parameter sets.
+    int32_t chromaQpIndexOffset = 0;
+    // The two motion search weights, as a percentage of the quantiser-derived value SubmitFrame
+    // computes. lambdaScale weights the motion vector's own cost against the residual it saves, and
+    // skipBiasScale the slack for snapping a vector to zero. They are here so that a sweep can rank
+    // candidates without a rebuild per candidate; nothing in the bitstream carries either, so a client
+    // may change them between pictures.
+    //
+    // The defaults are measured, not chosen: against the inbox H.264 encoder on the same source, at a
+    // quantiser that matches our byte count to its own, three times the lambda and no zero-vector bias
+    // won at every operating point tried on the development PC (24 pictures, deblocking on):
+    //
+    //   point       dials      dY      dCb     dCr
+    //   720p 6M     1.0, 1.0   -2.26   -3.37   -4.64
+    //   720p 6M     3.0, 0     -1.06   -2.94   -3.53
+    //   720p 12M    1.0, 1.0   -1.25   -3.23   -3.93
+    //   720p 12M    3.0, 0     -0.30   -1.73   -3.18
+    //   1080p 16M   1.0, 1.0   -2.02   -3.56   -4.71
+    //   1080p 16M   3.0, 0     -0.60   -3.11   -3.63
+    //
+    // Four and six times the lambda were within 0.1 dB of three at the same rate, so the ranking is flat
+    // above three and the lowest of the three is the default. The zero-vector bias is a search shortcut
+    // this encoder does not need: with one 16x16 vector per macroblock, snapping a near match to zero
+    // costs more in residual than the vector it saves.
+    uint32_t lambdaScale = 300;
+    uint32_t skipBiasScale = 0;
+    // The constant bit rate controller's gain, in hundredths of a quantiser step per frame of bits in
+    // the leaky bucket. It sets how fast the loop finds the quantiser the content needs: too low and a
+    // stream spends its first seconds above the asked-for rate, too high and the quantiser hunts.
+    uint32_t rcGainScale = 100;
     // VUI colour description, clause E.2.1 code points, written into the SPS as given. The transform
     // fills these from the input media type; nothing in the encoder converts between colour spaces,
     // so these describe the samples the client hands over. The default is the BT.709 studio-range
@@ -165,7 +218,10 @@ private:
     };
 
     uint32_t ClampQp(int32_t qp) const;
-    void UpdateRateControl(uint32_t frameBytes, bool wasKeyFrame);
+    // Called once per retired picture with what that picture cost, the quantiser it was coded at and
+    // whether it was a key frame, because at a pipeline depth above one the picture being accounted for
+    // is not the one whose quantiser m_qp now holds.
+    void UpdateRateControl(uint32_t frameBytes, uint32_t frameQp, bool idr);
 
     EncoderConfig m_cfg;
     GpuEncoder m_gpu;
@@ -183,6 +239,8 @@ private:
     uint32_t m_idrPicId = 0;
     uint32_t m_qp = 26;
     int64_t m_virtualBuffer = 0;
+    // Bits times the quantiser step of the P pictures coded so far; zero before the first of them.
+    double m_complexity = 0.0;
     bool m_initialized = false;
 };
 
