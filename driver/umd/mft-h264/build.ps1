@@ -63,7 +63,8 @@ $shaders = @(
     @{ File = 'cs_me.hlsl';      Entry = 'CSMotionEstimate'; Header = 'cs_motion.h' },
     @{ File = 'cs_mb.hlsl';      Entry = 'CSEncodeIntra';    Header = 'cs_encode_intra.h' },
     @{ File = 'cs_mb.hlsl';      Entry = 'CSEncodeInter';    Header = 'cs_encode_inter.h' },
-    @{ File = 'cs_deblock.hlsl'; Entry = 'CSDeblock';        Header = 'cs_deblock.h' }
+    @{ File = 'cs_deblock.hlsl'; Entry = 'CSDeblock';        Header = 'cs_deblock.h' },
+    @{ File = 'cs_deblock.hlsl'; Entry = 'CSDeblockRows';    Header = 'cs_deblock_rows.h' }
 )
 
 foreach ($s in $shaders) {

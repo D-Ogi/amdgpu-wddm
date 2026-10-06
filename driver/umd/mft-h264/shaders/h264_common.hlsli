@@ -60,9 +60,24 @@ ByteAddressBuffer bufRefCb   : register(t10);
 ByteAddressBuffer bufRefCr   : register(t11);
 ByteAddressBuffer bufMbInfoRO : register(t12);
 
+// The deblocking pass asks for the three reconstruction views to be globallycoherent and brings one
+// more slot with it: its single-dispatch wavefront has thread groups that read samples another group
+// of the same dispatch has written, which the dispatch boundary no longer separates. Every other pass
+// keeps the plain views, because a coherent view costs a cache bypass on every access and no other
+// pass has a cross-group dependency. cs_deblock.hlsl defines BC250_DEBLOCK_PASS before this include.
+#ifdef BC250_DEBLOCK_PASS
+globallycoherent RWByteAddressBuffer rwY  : register(u0);
+globallycoherent RWByteAddressBuffer rwCb : register(u1);
+globallycoherent RWByteAddressBuffer rwCr : register(u2);
+// One word per macroblock row, plus a leading sentinel: rwProgress[mby + 1] counts the macroblocks of
+// row mby that are filtered and visible, and rwProgress[0] stands for the row above row 0 and is
+// preset to gWidthMb so that row 0 never waits. See CSDeblockRows.
+globallycoherent RWByteAddressBuffer rwProgress : register(u5);
+#else
 RWByteAddressBuffer rwY       : register(u0);
 RWByteAddressBuffer rwCb      : register(u1);
 RWByteAddressBuffer rwCr      : register(u2);
+#endif
 RWByteAddressBuffer rwLevels  : register(u3);
 RWByteAddressBuffer rwMbInfo  : register(u4);
 

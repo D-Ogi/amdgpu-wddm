@@ -94,6 +94,25 @@ double PlanePsnr(const uint8_t* a, const uint8_t* b, size_t count)
 
 // ---------------------------------------------------------------- the test's own device
 
+bool HaveBc250Adapter()
+{
+    ComPtr<IDXGIFactory> factory;
+    if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory)))) {
+        return false;
+    }
+    for (UINT i = 0;; ++i) {
+        ComPtr<IDXGIAdapter> a;
+        if (factory->EnumAdapters(i, &a) != S_OK) {
+            return false;
+        }
+        DXGI_ADAPTER_DESC ad = {};
+        a->GetDesc(&ad);
+        if (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) {
+            return true;
+        }
+    }
+}
+
 HRESULT CreateTestDevice(ID3D11Device** device)
 {
     if (device == nullptr) {
@@ -834,24 +853,7 @@ void SelfTestFrameSizes()
 void SelfTestAdapterChoice()
 {
     printf("adapter choice\n");
-    ComPtr<IDXGIFactory> factory;
-    if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory)))) {
-        printf("  no DXGI on this machine: not checked\n");
-        return;
-    }
-    bool haveBc250 = false;
-    for (UINT i = 0;; ++i) {
-        ComPtr<IDXGIAdapter> a;
-        if (factory->EnumAdapters(i, &a) != S_OK) {
-            break;
-        }
-        DXGI_ADAPTER_DESC ad = {};
-        a->GetDesc(&ad);
-        if (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) {
-            haveBc250 = true;
-        }
-    }
-    if (haveBc250) {
+    if (HaveBc250Adapter()) {
         printf("  the BC-250 is in this machine: the refusal case needs a machine without it\n");
         return;
     }
@@ -866,6 +868,27 @@ void SelfTestAdapterChoice()
     printf("  no BC-250 in this machine: the transform refuses to pick another adapter\n");
 }
 
+// The dials of a quality measurement default to what the encoder itself ships, so that a run without
+// --lambda-scale and company measures the shipped encoder. Nothing in the compiler ties the two sets of
+// defaults together, so this case does: a default moved in EncoderConfig and not here would otherwise
+// quietly turn every unflagged run into a measurement of the previous setting.
+void SelfTestDialDefaults()
+{
+    printf("dial defaults\n");
+    const EncoderConfig def;
+    const Options o;
+    if (o.lambdaScale != def.lambdaScale || o.skipBiasScale != def.skipBiasScale ||
+        o.rcGainScale != def.rcGainScale || o.chromaQpOffset != def.chromaQpIndexOffset) {
+        Fail("the test's dial defaults (lambda %u, skip bias %u, rc gain %u, chroma qp offset %d) are "
+             "not the encoder's (%u, %u, %u, %d)",
+             o.lambdaScale, o.skipBiasScale, o.rcGainScale, o.chromaQpOffset,
+             def.lambdaScale, def.skipBiasScale, def.rcGainScale, def.chromaQpIndexOffset);
+    } else {
+        printf("  lambda %u %%, skip bias %u %%, rc gain %u %%, chroma qp offset %d: the encoder's own\n",
+               o.lambdaScale, o.skipBiasScale, o.rcGainScale, o.chromaQpOffset);
+    }
+}
+
 } // namespace
 
 int RunSelfTest()
@@ -876,6 +899,7 @@ int RunSelfTest()
     SelfTestEmulationPrevention();
     SelfTestParameterSets();
     SelfTestFrameSizes();
+    SelfTestDialDefaults();
     SelfTestAdapterChoice();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
     return (g_failures == 0) ? 0 : 1;
@@ -1032,6 +1056,263 @@ bool FirstDifference(const uint8_t* a, const uint8_t* b, uint32_t w, uint32_t h,
     return false;
 }
 
+// The per-stage GPU profile of the run, from GpuStageProfile. Prints nothing when
+// BC250_MFT_STAGE_TIMING was unset, which is the normal case: no picture then carries a profile.
+// Key and non-key pictures are reported apart because they run different shaders.
+void PrintStageProfile(const uint32_t pictures[2], const uint32_t dispatches[2][GpuStageCount],
+                      const double ms[2][GpuStageCount], const double totalMs[2],
+                      const std::vector<GpuStageStep> steps[2])
+{
+    if (pictures[0] == 0 && pictures[1] == 0) {
+        return;
+    }
+    printf("  GPU stages per picture, from the device's timestamps between the dispatches\n");
+    printf("    %-7s %-9s %10s %9s %10s %8s\n", "picture", "stage", "dispatches", "ms", "ms/disp",
+           "share");
+    for (int k = 0; k < 2; ++k) {
+        if (pictures[k] == 0) {
+            continue;
+        }
+        const double n = static_cast<double>(pictures[k]);
+        for (uint32_t s = 0; s < GpuStageCount; ++s) {
+            if (dispatches[k][s] == 0) {
+                continue;
+            }
+            printf("    %-7s %-9s %10.1f %9.3f %10.4f %7.1f %%\n", (k == 0) ? "I" : "P",
+                   GpuStageName(s), static_cast<double>(dispatches[k][s]) / n, ms[k][s] / n,
+                   ms[k][s] / static_cast<double>(dispatches[k][s]),
+                   100.0 * ms[k][s] / ((totalMs[k] > 0.0) ? totalMs[k] : 1.0));
+        }
+        printf("    %-7s %-9s %10s %9.3f   over %u picture(s)\n", (k == 0) ? "I" : "P", "all", "",
+               totalMs[k] / n, pictures[k]);
+    }
+    for (int k = 0; k < 2; ++k) {
+        if (steps[k].empty()) {
+            continue;
+        }
+        printf("  every dispatch of the first %s picture, %zu of them\n", (k == 0) ? "I" : "P",
+               steps[k].size());
+        printf("    %5s %-9s %8s %9s %10s\n", "step", "stage", "groups", "ms", "us/group");
+        for (size_t i = 0; i < steps[k].size(); ++i) {
+            const GpuStageStep& s = steps[k][i];
+            printf("    %5zu %-9s %8u %9.4f %10.3f\n", i, GpuStageName(s.stage), s.groups, s.ms,
+                   (s.groups != 0) ? (1000.0 * s.ms / static_cast<double>(s.groups)) : 0.0);
+        }
+    }
+}
+
+// The input side of --encode: one GpuFrameInput per picture index, from whichever source the options
+// name. Both passes of the case use it, so the pipelined pass feeds byte for byte the same pictures as
+// the pass that checked them against the decoder.
+class EncodeSource {
+public:
+    HRESULT Initialize(const Options& o, ID3D11Device* device)
+    {
+        m_o = &o;
+        m_src.Allocate(o.width, o.height);
+        if (o.gpuSource) {
+            return m_pattern.Initialize(device, o.width, o.height);
+        }
+        return S_OK;
+    }
+
+    HRESULT Frame(uint32_t frame, GpuFrameInput* in)
+    {
+        const Options& o = *m_o;
+        *in = GpuFrameInput();
+        if (o.gpuSource) {
+            HRESULT hr = m_pattern.Draw(frame);
+            if (FAILED(hr)) {
+                return hr;
+            }
+            in->kind = InputKind::TextureBGRA;
+            in->texture = m_pattern.Texture();
+            return S_OK;
+        }
+        // --still repeats one picture so that every P macroblock after the first key frame has a zero
+        // residual and a zero motion vector: that is the only way to exercise P_Skip and mb_skip_run,
+        // and it is also what a desktop capture looks like most of the time.
+        MakeSyntheticPicture(m_src, o.still ? 0u : frame);
+        if (o.nv12sys) {
+            // NV12 on a stride wider than the picture: the luma plane, then one plane of interleaved
+            // Cb,Cr pairs at half the vertical resolution. Both the plane order and the stride are what
+            // a wrong import would get wrong, and the reconstruction check and the ReadSource check in
+            // the first pass both see it.
+            const uint32_t pitch = o.width + 64u;
+            m_nv12y.assign(static_cast<size_t>(pitch) * o.height, 0x55);
+            m_nv12c.assign(static_cast<size_t>(pitch) * (o.height / 2u), 0x55);
+            for (uint32_t yy = 0; yy < o.height; ++yy) {
+                memcpy(&m_nv12y[static_cast<size_t>(yy) * pitch],
+                       &m_src.y[static_cast<size_t>(yy) * o.width], o.width);
+            }
+            for (uint32_t yy = 0; yy < o.height / 2u; ++yy) {
+                uint8_t* dst = &m_nv12c[static_cast<size_t>(yy) * pitch];
+                const uint8_t* cb = &m_src.cb[static_cast<size_t>(yy) * (o.width / 2u)];
+                const uint8_t* cr = &m_src.cr[static_cast<size_t>(yy) * (o.width / 2u)];
+                for (uint32_t xx = 0; xx < o.width / 2u; ++xx) {
+                    dst[xx * 2u] = cb[xx];
+                    dst[xx * 2u + 1u] = cr[xx];
+                }
+            }
+            in->kind = InputKind::Nv12Sys;
+            in->planeY = m_nv12y.data();
+            in->planeCb = m_nv12c.data();
+            in->pitchY = pitch;
+            in->pitchC = pitch;
+        } else {
+            in->kind = InputKind::Planar8;
+            in->planeY = m_src.y.data();
+            in->planeCb = m_src.cb.data();
+            in->planeCr = m_src.cr.data();
+            in->pitchY = o.width;
+            in->pitchC = o.width / 2u;
+        }
+        return S_OK;
+    }
+
+    // The picture Frame() last produced, for the import oracle.
+    const Picture& Cpu() const { return m_src; }
+
+private:
+    const Options* m_o = nullptr;
+    Picture m_src;
+    Pattern m_pattern;
+    std::vector<uint8_t> m_nv12y, m_nv12c;
+};
+
+// The pipelined pass of --encode: the same pictures again, with o.depth of them in the GPU's hands at
+// once, and the bytes have to come out identical to the serial pass. Returns 0 on success.
+//
+// Identity is the whole argument. The serial pass proved its stream against the inbox decoder sample
+// for sample; if the pipelined stream is the same bytes, it decodes to the same pictures. It holds
+// only at a fixed quantiser, because the rate control feeds the byte count of a retired picture back
+// into the quantiser of the next one to be submitted and at depth N that is N pictures later - which is
+// why this pass refuses to run at anything but RateControl::Quality.
+int PipelinedPass(const Options& o, const EncoderConfig& cfgIn, ID3D11Device* device,
+                  const std::vector<uint8_t>& reference)
+{
+    printf("  pipelined pass: depth %u, the same %u pictures\n", o.depth, o.frames);
+    if (cfgIn.rateControl != RateControl::Quality) {
+        printf("  FAIL --depth needs a fixed quantiser: the byte identity gate does not hold under "
+               "rate control\n");
+        return 1;
+    }
+    Encoder enc;
+    HRESULT hr = enc.Initialize(device, cfgIn);
+    if (FAILED(hr)) {
+        printf("  Encoder::Initialize failed 0x%08lX\n", static_cast<unsigned long>(hr));
+        return 2;
+    }
+    hr = enc.SetPipelineDepth(o.depth);
+    if (FAILED(hr)) {
+        printf("  SetPipelineDepth(%u) failed 0x%08lX\n", o.depth, static_cast<unsigned long>(hr));
+        return 2;
+    }
+    if (enc.PipelineDepth() != o.depth) {
+        printf("  the encoder clamped the depth to %u (BC250_MFT_STAGE_TIMING times one picture at a "
+               "time)\n", enc.PipelineDepth());
+    }
+    EncodeSource source;
+    hr = source.Initialize(o, enc.Gpu().Device());
+    if (FAILED(hr)) {
+        printf("  the picture source would not start: 0x%08lX\n", static_cast<unsigned long>(hr));
+        return 2;
+    }
+
+    const uint32_t depth = enc.PipelineDepth();
+    std::vector<uint8_t> stream, frame;
+    double totalGpuMs = 0.0, totalCpuMs = 0.0;
+    double totalRecordMs = 0.0, totalMapWaitMs = 0.0, totalReadbackMs = 0.0;
+    uint32_t retired = 0, timed = 0;
+    double encMs = 0.0, genMs = 0.0;
+    // The loop is the pipeline: submit until the GPU holds `depth` pictures, then retire the oldest
+    // before submitting the next, and once the pictures run out keep retiring until it is empty.
+    //
+    // encMs is the clock this measures: the time the encoder held the thread, which is every
+    // SubmitFrame plus every RetireFrame. It is the same quantity the serial pass divides, which starts
+    // its clock after the picture has been made, and that matters here because making a 1080p picture
+    // on the CPU costs about 1.6 ms - more than the encoder's own CPU half - and counting it would make
+    // the pipeline look 40 % worse than it is. It is reported on its own line instead of hidden. The GPU
+    // runs during that time too, which is why the per-picture GPU figure can be larger than this one.
+    //
+    // Counted are the iterations that did both a submit and a retire, which is what a steady-state
+    // pipeline iteration is. A priming iteration submits without retiring and a draining one retires
+    // without submitting, so all three have different costs, and the earlier version mixed them: it
+    // divided a window of 51 retires and 50 submits by 51 while dividing the per-picture figures of 50
+    // pictures by 50, which understated the cost of a picture by about one submit in fifty.
+    for (uint32_t i = 0; i < o.frames + depth - 1u; ++i) {
+        bool submitted = false;
+        double iterEncMs = 0.0, iterGenMs = 0.0;
+        if (i < o.frames) {
+            GpuFrameInput in;
+            const double gen0 = NowMs();
+            hr = source.Frame(i, &in);
+            iterGenMs = NowMs() - gen0;
+            if (FAILED(hr)) {
+                printf("  the picture source failed at %u: 0x%08lX\n", i,
+                       static_cast<unsigned long>(hr));
+                return 2;
+            }
+            const double sub0 = NowMs();
+            hr = enc.SubmitFrame(in, false);
+            iterEncMs += NowMs() - sub0;
+            if (FAILED(hr)) {
+                printf("  SubmitFrame(%u) failed 0x%08lX\n", i, static_cast<unsigned long>(hr));
+                return 2;
+            }
+            submitted = true;
+        }
+        // enc.Pending() > 0 first: with --frames below --depth the pipeline never fills, so the drain
+        // half of the loop would otherwise ask for one retirement more than there are pictures and a
+        // healthy encoder would report E_NOT_VALID_STATE.
+        if (enc.Pending() > 0 && (enc.Pending() >= depth || i >= o.frames)) {
+            FrameStats st;
+            const double ret0 = NowMs();
+            hr = enc.RetireFrame(frame, &st);
+            iterEncMs += NowMs() - ret0;
+            if (FAILED(hr)) {
+                printf("  RetireFrame failed 0x%08lX\n", static_cast<unsigned long>(hr));
+                return 2;
+            }
+            stream.insert(stream.end(), frame.begin(), frame.end());
+            ++retired;
+            if (submitted && i >= o.timingSkip) {
+                ++timed;
+                encMs += iterEncMs;
+                genMs += iterGenMs;
+                totalGpuMs += st.gpuMs;
+                totalCpuMs += st.cpuMs;
+                totalRecordMs += st.recordMs;
+                totalMapWaitMs += st.mapWaitMs;
+                totalReadbackMs += st.readbackMs;
+            }
+        }
+    }
+    const uint32_t n = timed ? timed : 1u;
+    printf("    %zu bytes against %zu serial, %s\n", stream.size(), reference.size(),
+           (stream == reference) ? "byte identical" : "DIFFERENT");
+    printf("    %.2f ms per picture, %.2f ms of it on the GPU, %.1f pictures per second\n",
+           encMs / n, totalGpuMs / n, (encMs > 0.0) ? (1000.0 * n / encMs) : 0.0);
+    printf("    per picture: record %.2f ms, map wait %.2f ms, readback %.2f ms, cpu %.2f ms\n",
+           totalRecordMs / n, totalMapWaitMs / n, totalReadbackMs / n, totalCpuMs / n);
+    printf("    %u pictures retired, %u of them timed; the test spent %.2f ms a picture making them, "
+           "which the clock above leaves out\n", retired, timed, genMs / n);
+    if (retired != o.frames) {
+        printf("  FAIL the pipeline retired %u pictures of %u\n", retired, o.frames);
+        return 1;
+    }
+    if (stream != reference) {
+        size_t at = 0;
+        while (at < stream.size() && at < reference.size() && stream[at] == reference[at]) {
+            ++at;
+        }
+        printf("  FAIL the pipelined stream differs from the serial one, first at byte %zu\n", at);
+        return 1;
+    }
+    enc.Shutdown();
+    return 0;
+}
+
 } // namespace
 
 int RunEncode(const Options& o)
@@ -1054,6 +1335,10 @@ int RunEncode(const Options& o)
     cfg.qpMin = o.qp;
     cfg.qpMax = o.qp;
     cfg.deblocking = o.deblock;
+    cfg.chromaQpIndexOffset = o.chromaQpOffset;
+    cfg.lambdaScale = o.lambdaScale;
+    cfg.skipBiasScale = o.skipBiasScale;
+    cfg.rcGainScale = o.rcGainScale;
 
     // The test's own device, as a Media Foundation client gives one: the transform itself takes the
     // BC-250 adapter only (gpu_pipeline.cpp), and this test also runs on a development PC.
@@ -1075,13 +1360,11 @@ int RunEncode(const Options& o)
     const uint32_t padH = enc.Gpu().PadH();
     printf("  %ux%u macroblocks, coded %ux%u, level %u\n", wmb, hmb, padW, padH, enc.Sps().levelIdc);
 
-    Pattern pattern;
-    if (o.gpuSource) {
-        hr = pattern.Initialize(enc.Gpu().Device(), o.width, o.height);
-        if (FAILED(hr)) {
-            printf("  Pattern::Initialize failed 0x%08lX\n", static_cast<unsigned long>(hr));
-            return 2;
-        }
+    EncodeSource source;
+    hr = source.Initialize(o, enc.Gpu().Device());
+    if (FAILED(hr)) {
+        printf("  the picture source would not start: 0x%08lX\n", static_cast<unsigned long>(hr));
+        return 2;
     }
 
     H264Decoder dec;
@@ -1092,9 +1375,6 @@ int RunEncode(const Options& o)
         return 2;
     }
 
-    Picture src;
-    src.Allocate(o.width, o.height);
-    std::vector<uint8_t> nv12y, nv12c;
     std::vector<uint8_t> stream, frame;
     std::vector<uint8_t> recY, recCb, recCr, srcY, srcCb, srcCr;
     std::vector<std::vector<uint8_t>> recHistoryY, recHistoryCb, recHistoryCr;
@@ -1103,6 +1383,16 @@ int RunEncode(const Options& o)
     // inside it, and the CPU half split into entropy coding and byte stream assembly.
     double totalGpuWallMs = 0.0, totalReadbackMs = 0.0, totalCpuMs = 0.0;
     double totalCavlcMs = 0.0, totalNalMs = 0.0;
+    double totalRecordMs = 0.0, totalMapWaitMs = 0.0;
+    // Per-stage GPU time, kept apart for key and non-key pictures because the two run different
+    // shaders: an I picture sweeps cs_mb's intra entry point along the anti-diagonals, a P picture
+    // runs cs_me once and cs_mb's inter entry point once. Filled only with BC250_MFT_STAGE_TIMING
+    // set; see GpuStageProfile.
+    double stageMs[2][GpuStageCount] = {};
+    double stageTotalMs[2] = {};
+    uint32_t stageDispatches[2][GpuStageCount] = {};
+    uint32_t stagePictures[2] = {};
+    std::vector<GpuStageStep> firstSteps[2];
     uint64_t totalBytes = 0;
     uint32_t keyFrames = 0, skipTotal = 0, nnzBad = 0;
     uint32_t timingBad = 0;
@@ -1110,54 +1400,13 @@ int RunEncode(const Options& o)
 
     for (uint32_t i = 0; i < o.frames; ++i) {
         GpuFrameInput in;
-        if (o.gpuSource) {
-            hr = pattern.Draw(i);
-            if (FAILED(hr)) {
-                printf("  Pattern::Draw failed 0x%08lX\n", static_cast<unsigned long>(hr));
-                return 2;
-            }
-            in.kind = InputKind::TextureBGRA;
-            in.texture = pattern.Texture();
-        } else {
-            // --still repeats one picture so that every P macroblock after the first key frame has a
-            // zero residual and a zero motion vector: that is the only way to exercise P_Skip and
-            // mb_skip_run, and it is also what a desktop capture looks like most of the time.
-            MakeSyntheticPicture(src, o.still ? 0u : i);
-            if (o.nv12sys) {
-                // NV12 on a stride wider than the picture: the luma plane, then one plane of
-                // interleaved Cb,Cr pairs at half the vertical resolution. Both the plane order and
-                // the stride are what a wrong import would get wrong, and the reconstruction check
-                // and the ReadSource check below both see it.
-                const uint32_t pitch = o.width + 64u;
-                nv12y.assign(static_cast<size_t>(pitch) * o.height, 0x55);
-                nv12c.assign(static_cast<size_t>(pitch) * (o.height / 2u), 0x55);
-                for (uint32_t yy = 0; yy < o.height; ++yy) {
-                    memcpy(&nv12y[static_cast<size_t>(yy) * pitch],
-                           &src.y[static_cast<size_t>(yy) * o.width], o.width);
-                }
-                for (uint32_t yy = 0; yy < o.height / 2u; ++yy) {
-                    uint8_t* dst = &nv12c[static_cast<size_t>(yy) * pitch];
-                    const uint8_t* cb = &src.cb[static_cast<size_t>(yy) * (o.width / 2u)];
-                    const uint8_t* cr = &src.cr[static_cast<size_t>(yy) * (o.width / 2u)];
-                    for (uint32_t xx = 0; xx < o.width / 2u; ++xx) {
-                        dst[xx * 2u] = cb[xx];
-                        dst[xx * 2u + 1u] = cr[xx];
-                    }
-                }
-                in.kind = InputKind::Nv12Sys;
-                in.planeY = nv12y.data();
-                in.planeCb = nv12c.data();
-                in.pitchY = pitch;
-                in.pitchC = pitch;
-            } else {
-                in.kind = InputKind::Planar8;
-                in.planeY = src.y.data();
-                in.planeCb = src.cb.data();
-                in.planeCr = src.cr.data();
-                in.pitchY = o.width;
-                in.pitchC = o.width / 2;
-            }
+        hr = source.Frame(i, &in);
+        if (FAILED(hr)) {
+            printf("  the picture source failed at %u: 0x%08lX\n", i,
+                   static_cast<unsigned long>(hr));
+            return 2;
         }
+        const Picture& src = source.Cpu();
 
         FrameStats st;
         const double t0 = NowMs();
@@ -1167,15 +1416,38 @@ int RunEncode(const Options& o)
             printf("  EncodeFrame(%u) failed 0x%08lX\n", i, static_cast<unsigned long>(hr));
             return 2;
         }
-        totalMs += t1 - t0;
-        totalGpuMs += st.gpuMs;
-        totalGpuWallMs += st.gpuWallMs;
-        totalReadbackMs += st.readbackMs;
-        totalCpuMs += st.cpuMs;
-        totalCavlcMs += st.cavlcMs;
-        totalNalMs += st.nalMs;
+        // Every correctness check below sees every picture; only the timing averages skip the first
+        // o.timingSkip of them. The byte count is a property of the stream, not of the clock, so it
+        // stays whole.
+        const bool timed = (i >= o.timingSkip);
+        if (timed) {
+            totalMs += t1 - t0;
+            totalGpuMs += st.gpuMs;
+            totalGpuWallMs += st.gpuWallMs;
+            totalReadbackMs += st.readbackMs;
+            totalCpuMs += st.cpuMs;
+            totalCavlcMs += st.cavlcMs;
+            totalNalMs += st.nalMs;
+            totalRecordMs += st.recordMs;
+            totalMapWaitMs += st.mapWaitMs;
+        }
         totalBytes += st.bytes;
         skipTotal += st.skippedMbs;
+        {
+            const GpuStageProfile& pr = enc.Gpu().LastStageProfile();
+            if (pr.valid && timed) {
+                const int k = st.keyFrame ? 0 : 1;
+                ++stagePictures[k];
+                stageTotalMs[k] += pr.totalMs;
+                for (uint32_t s = 0; s < GpuStageCount; ++s) {
+                    stageMs[k][s] += pr.ms[s];
+                    stageDispatches[k][s] += pr.dispatches[s];
+                }
+                if (firstSteps[k].empty()) {
+                    firstSteps[k] = pr.steps;
+                }
+            }
+        }
         // The profile has to be of this picture. A GPU time read from a query that had not retired
         // used to leave the previous picture's figure in place, which is how a profile can show a
         // picture that cost nothing; a missing measurement now says so instead. The bounds are the
@@ -1433,6 +1705,10 @@ int RunEncode(const Options& o)
         }
     }
 
+    // The divisor of every millisecond figure below: the pictures whose cost was accumulated, which
+    // is o.frames unless --timing-skip left the first few out. Clamped to 1 so that a case with
+    // --timing-skip at or above its picture count prints zeros instead of dividing by zero.
+    const uint32_t timedFrames = (o.frames > o.timingSkip) ? (o.frames - o.timingSkip) : 1u;
     const double bitrate = (totalBytes * 8.0 * o.fps) / static_cast<double>(o.frames);
     printf("  %u of %u pictures bit exact against the inbox decoder\n", exact, o.frames);
     printf("  nnz agreement GPU vs CPU: %s (%u disagreements)\n", (nnzBad == 0) ? "exact" : "FAIL",
@@ -1441,23 +1717,40 @@ int RunEncode(const Options& o)
            o.frames * wmb * hmb);
     printf("  %llu bytes, %.0f bit/s at %u Hz, mean PSNR(Y) %.2f dB\n",
            static_cast<unsigned long long>(totalBytes), bitrate, o.fps, psnrSum / o.frames);
+    if (o.timingSkip != 0) {
+        printf("  timing over %u of %u pictures (the first %u are encoded and checked, not timed)\n",
+               timedFrames, o.frames, o.timingSkip);
+    }
     printf("  %.2f ms per picture total, %.2f ms of it on the GPU, %.1f pictures per second\n",
-           totalMs / o.frames, totalGpuMs / o.frames, 1000.0 * o.frames / totalMs);
+           totalMs / timedFrames, totalGpuMs / timedFrames, 1000.0 * timedFrames / totalMs);
     // The stages, per picture. The GPU stage is wall clock around the dispatches, so it contains the
     // wait for the GPU: readback is that wait plus the transfer. The CPU half is entropy coding plus
     // byte stream assembly, and what the two do not account for is the little that lies between
     // them. Every figure is of this run; nothing is carried over from another.
     printf("  per picture: gpu stage %.2f ms (gpu busy %.2f, readback %.2f), cpu %.2f ms "
            "(cavlc %.2f, nal %.2f)\n",
-           totalGpuWallMs / o.frames, totalGpuMs / o.frames, totalReadbackMs / o.frames,
-           totalCpuMs / o.frames, totalCavlcMs / o.frames, totalNalMs / o.frames);
+           totalGpuWallMs / timedFrames, totalGpuMs / timedFrames, totalReadbackMs / timedFrames,
+           totalCpuMs / timedFrames, totalCavlcMs / timedFrames, totalNalMs / timedFrames);
+    printf("  per picture: command recording %.2f ms, map wait %.2f ms, readback transfer %.2f ms\n",
+           totalRecordMs / timedFrames, totalMapWaitMs / timedFrames,
+           (totalReadbackMs - totalMapWaitMs) / timedFrames);
     printf("  per picture profile accounted for every picture: %s\n",
            (timingBad == 0) ? "yes" : "FAIL");
+    PrintStageProfile(stagePictures, stageDispatches, stageMs, stageTotalMs, firstSteps);
     printf("  stream written to %ls\n", path.c_str());
 
     dec.Shutdown();
+    int rc = (exact == o.frames && nnzBad == 0 && importBad == 0 && timingBad == 0) ? 0 : 1;
+    // The pipelined pass, if one was asked for, runs on the same device with its own encoder, so the
+    // serial encoder's buffers go first.
     enc.Shutdown();
-    return (exact == o.frames && nnzBad == 0 && importBad == 0 && timingBad == 0) ? 0 : 1;
+    if (o.depth > 1) {
+        const int pipe = PipelinedPass(o, cfg, device.Get(), stream);
+        if (pipe != 0) {
+            rc = (rc != 0) ? rc : pipe;
+        }
+    }
+    return rc;
 }
 
 } // namespace test
@@ -1496,12 +1789,24 @@ uint32_t ArgU(int argc, wchar_t** argv, int i, uint32_t fallback)
     return static_cast<uint32_t>(_wtoi(argv[i + 1]));
 }
 
+int32_t ArgI(int argc, wchar_t** argv, int i, int32_t fallback)
+{
+    if (i + 1 >= argc) {
+        return fallback;
+    }
+    return static_cast<int32_t>(_wtoi(argv[i + 1]));
+}
+
 void Usage()
 {
     printf("usage: mfthost.exe [--selftest|--encode|--mft|--compare|--sinkwriter|--all]\n");
     printf("                   [--width N] [--height N] [--frames N] [--qp N] [--bitrate N]\n");
     printf("                   [--gop N] [--fps N] [--deblock] [--gpu-source] [--still] [--cbr]\n");
-    printf("                   [--verbose] [--out <directory>]\n");
+    printf("                   [--timing-skip N] [--depth N] [--deblock-mode rows|waves|serial]\n");
+    printf("                   [--ours-qp N] [--verbose]\n");
+    printf("                   [--chroma-qp-offset N] [--lambda-scale N] [--skip-bias-scale N]\n");
+    printf("                   [--rc-gain N]\n");
+    printf("                   [--out <directory>]\n");
 }
 
 } // namespace
@@ -1564,6 +1869,38 @@ int wmain(int argc, wchar_t** argv)
             o.still = true;
         } else if (wcscmp(a, L"--cbr") == 0) {
             o.rc = RateControl::Cbr;
+        } else if (wcscmp(a, L"--timing-skip") == 0) {
+            o.timingSkip = ArgU(argc, argv, i, o.timingSkip); ++i;
+        } else if (wcscmp(a, L"--depth") == 0) {
+            o.depth = ArgU(argc, argv, i, o.depth); ++i;
+        } else if (wcscmp(a, L"--deblock-mode") == 0 && i + 1 < argc) {
+            // The same three shapes BC250_MFT_DEBLOCK and BC250_MFT_SERIAL_DEBLOCK pick, as an argument,
+            // so a sweep case can hold one without the caller having to set and clear an environment
+            // variable around it. GpuEncoder reads the environment in Initialize, so this writes it.
+            const wchar_t* m = argv[i + 1];
+            ++i;
+            if (wcscmp(m, L"waves") == 0 || wcscmp(m, L"wavefront") == 0) {
+                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "waves");
+                SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+            } else if (wcscmp(m, L"serial") == 0) {
+                SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", "1");
+            } else if (wcscmp(m, L"rows") == 0) {
+                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+                SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+            } else {
+                wprintf(L"--deblock-mode takes rows, waves or serial\n");
+                return 2;
+            }
+        } else if (wcscmp(a, L"--ours-qp") == 0) {
+            o.oursQp = ArgU(argc, argv, i, o.oursQp); ++i;
+        } else if (wcscmp(a, L"--chroma-qp-offset") == 0) {
+            o.chromaQpOffset = ArgI(argc, argv, i, o.chromaQpOffset); ++i;
+        } else if (wcscmp(a, L"--lambda-scale") == 0) {
+            o.lambdaScale = ArgU(argc, argv, i, o.lambdaScale); ++i;
+        } else if (wcscmp(a, L"--skip-bias-scale") == 0) {
+            o.skipBiasScale = ArgU(argc, argv, i, o.skipBiasScale); ++i;
+        } else if (wcscmp(a, L"--rc-gain") == 0) {
+            o.rcGainScale = ArgU(argc, argv, i, o.rcGainScale); ++i;
         } else if (wcscmp(a, L"--verbose") == 0) {
             o.verbose = true;
         } else if (wcscmp(a, L"--out") == 0 && i + 1 < argc) {
