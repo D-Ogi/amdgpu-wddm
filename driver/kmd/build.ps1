@@ -24,6 +24,7 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [string]$CertSubject = 'CN=BC-250 lab test signing',
     [switch]$ExportCommandsOnly,
+    [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
     [string]$QualityWorkspace = ''
 )
 
@@ -117,10 +118,17 @@ foreach($group in $groups) {
 }
 $commands | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Out 'compile_commands.json') -Encoding utf8
 if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation or deployment'; return }
-& python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
-if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
-& (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
-if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
+# -CompileOnly is the compiler as a gate: the same three cl.exe calls and the same link as a real package build,
+# with no quality gates, no identity manifest, no catalog and no signature. It exists because the quality gate
+# itself only EXPORTED these commands (quick.ps1 'kmd-commands' -ExportCommandsOnly), so a C error in
+# driver/kmd or driver/shim reached nobody until somebody built a package. Running the gates here as well would
+# be a loop: quick.ps1 is what calls this switch.
+if(-not $CompileOnly) {
+    & python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
+    if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
+    & (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
+    if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
+}
 
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
@@ -139,6 +147,13 @@ Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 Write-Host 'stack budget'
 & python (Join-Path $repo 'tools\win\stackbudget.py') "$pkg\bc250kmd.sys" '--map' "$Out\bc250kmd.map"
 if ($LASTEXITCODE -ne 0) { throw 'stack budget: a function allocates too much stack for a kernel thread (see above)' }
+
+if($CompileOnly) {
+    # The unsigned bytes, so that a gate run can be compared with the package build of the same tree by hand.
+    '  {0}  bc250kmd.unsigned.sys' -f (Get-FileHash (Join-Path $Out 'bc250kmd.unsigned.sys') -Algorithm SHA256).Hash
+    Write-Host 'compiled and linked; no catalog, no signature, no deployment'
+    return
+}
 
 Copy-Item (Join-Path $here 'bc250kmd.inf') $pkg -Force
 Write-Host 'catalog'
