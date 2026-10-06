@@ -359,6 +359,16 @@ static void AppBase(const wchar_t *mode, const wchar_t *gpu = L"app\\amdgpu_wddm
 static std::string AppLog() { return ReadAll(RouteLog(Layout + L"\\applogs")); }
 static bool Has(const std::string &log, const char *text) { return log.find(text) != std::string::npos; }
 
+// A handle as the front and the doubles print it, with printf's %p. The width is the pointer width of the
+// build: 16 hex digits for x64, 8 for x86. An expected line must be composed, never written out, or the gate
+// reads a 64-bit tree only (the x86 router gate failed front-on on exactly that).
+static std::string Ptr(UINT_PTR value)
+{
+    char text[32];
+    sprintf_s(text, "%p", (void *)value);
+    return text;
+}
+
 // Common router key: fake CPU UMD, hosted UMD from the router's own directory (no HostedUmdPath).
 static void RouterBase(bool clientIsSelf)
 {
@@ -1613,7 +1623,8 @@ static void Child(const std::string &s)
                                              std::to_wstring(GetCurrentProcessId()) + L".log");
         CHECK(Has(frontLog, "check_direct_flip call=1") && Has(frontLog, "answer=0") && Has(frontLog, "rule=gated"),
               "the front log has no CheckDirectFlipSupport line for an unrecorded surface: %s", frontLog.c_str());
-        CHECK(Has(frontLog, "rule=gated client=0000000040000000 recorded=0"),
+        const std::string gatedClient = "rule=gated client=" + Ptr(0x40000000) + " recorded=0";
+        CHECK(Has(frontLog, gatedClient.c_str()),
               "the line does not say that the front had no record for the surface: %s", frontLog.c_str());
         CHECK(Has(frontLog, "rule=handle"), "no line names a null or duplicated handle: %s", frontLog.c_str());
         // The DXGI side. At D3D11_1 the runtime holds pfnBlt1 and prefers it for a stretch, a convert or a
@@ -1666,9 +1677,11 @@ static void Child(const std::string &s)
         device.pfnClearView(create.hDrvDevice, D3D10DDI_HT_RENDERTARGETVIEW, (void *)(UINT_PTR)0x50000000, color,
                             &rect, 1);
         const std::string cleared = record();
-        CHECK(strstr(cleared.c_str(), "clear-rtv view=0000000050000000") != nullptr, "ClearView did not forward: %s",
+        const std::string clearRtv = "clear-rtv view=" + Ptr(0x50000000);
+        const std::string clearDsv = "clear-dsv view=" + Ptr(0x50000100) + " flags=1";
+        CHECK(strstr(cleared.c_str(), clearRtv.c_str()) != nullptr, "ClearView did not forward: %s",
               cleared.c_str());
-        CHECK(strstr(cleared.c_str(), "clear-dsv view=0000000050000100 flags=1") != nullptr,
+        CHECK(strstr(cleared.c_str(), clearDsv.c_str()) != nullptr,
               "ClearView on a depth-stencil view did not forward: %s", cleared.c_str());
         size_t rtvs = 0;
         for (size_t at = cleared.find("clear-rtv"); at != std::string::npos; at = cleared.find("clear-rtv", at + 1))
