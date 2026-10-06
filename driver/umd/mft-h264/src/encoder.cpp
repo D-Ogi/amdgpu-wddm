@@ -248,6 +248,8 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
         stats->gpuTimingValid = m_gpu.LastGpuTimingValid();
         stats->gpuWallMs = tGpu - t0;
         stats->readbackMs = m_gpu.LastReadbackMilliseconds();
+        stats->recordMs = m_gpu.LastRecordMilliseconds();
+        stats->mapWaitMs = m_gpu.LastMapWaitMilliseconds();
         // The CPU half, and the two stages it is made of. They are measured, not apportioned: the
         // CAVLC stage ends where the last RBSP bit is written, the NAL stage covers the emulation
         // prevention scan and the framing, and cpuMs is the two of them plus whatever lies between.

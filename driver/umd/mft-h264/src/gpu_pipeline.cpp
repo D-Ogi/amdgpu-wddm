@@ -57,7 +57,24 @@ double NowMs()
 // reported as absent instead of holding the encode thread.
 constexpr double kQueryWaitMs = 1000.0;
 
+// How many stage marks one picture may place. A 1080p I picture needs 443 of them (1 import, 187
+// anti-diagonals, 255 deblocking waves); BC250_MFT_SERIAL_DEBLOCK, which dispatches one macroblock
+// at a time, needs far more and is told that its tail is untimed rather than allowed to allocate
+// without a bound.
+constexpr uint32_t kMaxStageMarks = 4096;
+
 } // namespace
+
+const char* GpuStageName(uint32_t stage)
+{
+    switch (stage) {
+    case GpuStageImport:  return "import";
+    case GpuStageMotion:  return "motion";
+    case GpuStageMode:    return "mode";
+    case GpuStageDeblock: return "deblock";
+    default:              return "?";
+    }
+}
 
 int MftTraceOn()
 {
@@ -117,6 +134,99 @@ HRESULT GpuEncoder::WaitForQuery(ID3D11Asynchronous* query, void* data, uint32_t
         // this loop is the rare path, and the encode thread may be a real-time one.
         Sleep(0);
     }
+}
+
+bool GpuEncoder::PlaceMark(uint32_t stage, uint32_t groups)
+{
+    if (m_markCount >= kMaxStageMarks) {
+        ++m_profile.marksDropped;
+        return false;
+    }
+    if (m_marks.size() <= m_markCount) {
+        D3D11_QUERY_DESC qd = {};
+        qd.Query = D3D11_QUERY_TIMESTAMP;
+        ComPtr<ID3D11Query> q;
+        if (FAILED(m_device->CreateQuery(&qd, &q))) {
+            ++m_profile.marksDropped;
+            return false;
+        }
+        m_marks.push_back(static_cast<ComPtr<ID3D11Query>&&>(q));
+        m_markStage.push_back(0);
+        m_markGroups.push_back(0);
+    }
+    m_markStage[m_markCount] = stage;
+    m_markGroups[m_markCount] = groups;
+    m_ctx->End(m_marks[m_markCount].Get());
+    ++m_markCount;
+    return true;
+}
+
+void GpuEncoder::BeginStageTiming()
+{
+    m_markCount = 0;
+    m_profile = GpuStageProfile();
+    m_profile.level = m_stageLevel;
+    if (m_stageLevel == 0) {
+        return;
+    }
+    // Mark 0 belongs to no dispatch, so it carries GpuStageCount and is never counted into a stage.
+    PlaceMark(GpuStageCount, 0);
+}
+
+void GpuEncoder::CountDispatch(uint32_t stage, uint32_t groups)
+{
+    if (m_stageLevel == 0) {
+        return;
+    }
+    ++m_profile.dispatches[stage];
+    m_profile.groups[stage] += groups;
+    if (m_stageLevel >= 2) {
+        PlaceMark(stage, groups);
+    }
+}
+
+void GpuEncoder::MarkStageEnd(uint32_t stage)
+{
+    if (m_stageLevel != 1 || m_profile.dispatches[stage] == 0) {
+        return;
+    }
+    PlaceMark(stage, m_profile.groups[stage]);
+}
+
+void GpuEncoder::CollectStageTiming(const D3D11_QUERY_DATA_TIMESTAMP_DISJOINT& dj)
+{
+    if (m_stageLevel == 0 || m_markCount < 2 || dj.Disjoint || dj.Frequency == 0) {
+        return;
+    }
+    std::vector<UINT64> ts(m_markCount, 0);
+    for (uint32_t i = 0; i < m_markCount; ++i) {
+        if (WaitForQuery(m_marks[i].Get(), &ts[i], sizeof(UINT64)) != S_OK) {
+            return;
+        }
+        if (i != 0 && ts[i] < ts[i - 1]) {
+            return;   // a clock that went backwards measures nothing; report no profile instead.
+        }
+    }
+    const double scale = 1000.0 / static_cast<double>(dj.Frequency);
+    if (m_stageLevel >= 2) {
+        m_profile.steps.reserve(m_markCount - 1u);
+    }
+    for (uint32_t i = 1; i < m_markCount; ++i) {
+        const double ms = static_cast<double>(ts[i] - ts[i - 1]) * scale;
+        const uint32_t stage = m_markStage[i];
+        if (stage < GpuStageCount) {
+            m_profile.ms[stage] += ms;
+        }
+        if (m_stageLevel >= 2) {
+            GpuStageStep s;
+            s.stage = stage;
+            s.groups = m_markGroups[i];
+            s.ms = ms;
+            m_profile.steps.push_back(s);
+        }
+    }
+    m_profile.totalMs = static_cast<double>(ts[m_markCount - 1] - ts[0]) * scale;
+    m_profile.valid = true;
 }
 
 HRESULT GpuEncoder::CreateRawBuffer(uint32_t bytes, bool uav, Plane* out)
@@ -329,6 +439,15 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     m_device->CreateQuery(&qd, &m_tsBegin);
     m_device->CreateQuery(&qd, &m_tsEnd);
 
+    // Per-stage GPU timing, read once here so that the encode path only tests an integer.
+    m_stageLevel = 0;
+    {
+        char buf[8] = {};
+        if (GetEnvironmentVariableA("BC250_MFT_STAGE_TIMING", buf, sizeof(buf)) > 0) {
+            m_stageLevel = (buf[0] == '2') ? 2u : 1u;
+        }
+    }
+
     // The reconstruction textures are created without initial data, so their first contents are
     // whatever Direct3D leaves there. Nothing reads them before they are written: the first picture
     // of every stream is an IDR (Encoder::EncodeFrame, and the transform arms a key frame at every
@@ -366,13 +485,20 @@ void GpuEncoder::Shutdown()
     m_tsDisjoint.Reset();
     m_tsBegin.Reset();
     m_tsEnd.Reset();
+    m_marks.clear();
+    m_markStage.clear();
+    m_markGroups.clear();
+    m_markCount = 0;
     m_ctx.Reset();
     m_device.Reset();
     // The last picture's measurements belong to the device that produced them.
     m_lastQueryWaitMs = 0.0;
     m_lastGpuMs = 0.0;
     m_lastReadbackMs = 0.0;
+    m_lastRecordMs = 0.0;
+    m_lastMapWaitMs = 0.0;
     m_lastGpuMsValid = false;
+    m_profile = GpuStageProfile();
 }
 
 void GpuEncoder::UpdateConstants(const GpuFrameParams& p, uint32_t diagonal, uint32_t diagonalBase)
@@ -513,8 +639,10 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
     ID3D11UnorderedAccessView* nullUavs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
     ID3D11ShaderResourceView* nullSrvs[13] = {};
 
+    const double record0 = NowMs();
     m_ctx->Begin(m_tsDisjoint.Get());
     m_ctx->End(m_tsBegin.Get());
+    BeginStageTiming();
     m_lastWritten = m_cur;
 
     // ---- import --------------------------------------------------------------------------------
@@ -583,7 +711,11 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
             m_ctx->CSSetShaderResources(0, 2, srvs);
             m_ctx->CSSetShader(m_csImportNV12.Get(), nullptr, 0);
         }
-        m_ctx->Dispatch(kDivUp(kDivUp(m_padW, 8u), 8u), kDivUp(kDivUp(m_padH, 2u), 8u), 1);
+        const uint32_t gx = kDivUp(kDivUp(m_padW, 8u), 8u);
+        const uint32_t gy = kDivUp(kDivUp(m_padH, 2u), 8u);
+        m_ctx->Dispatch(gx, gy, 1);
+        CountDispatch(GpuStageImport, gx * gy);
+        MarkStageEnd(GpuStageImport);
         m_ctx->CSSetUnorderedAccessViews(0, 3, nullUavs, nullptr);
         m_ctx->CSSetShaderResources(0, 13, nullSrvs);
     }
@@ -610,12 +742,18 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
                 UpdateConstants(p, d, base);
                 m_ctx->CSSetShader(m_csEncodeIntra.Get(), nullptr, 0);
                 m_ctx->Dispatch(last - base + 1u, 1, 1);
+                CountDispatch(GpuStageMode, last - base + 1u);
             }
+            MarkStageEnd(GpuStageMode);
         } else {
             m_ctx->CSSetShader(m_csMotion.Get(), nullptr, 0);
             m_ctx->Dispatch(m_widthMb, m_heightMb, 1);
+            CountDispatch(GpuStageMotion, m_widthMb * m_heightMb);
+            MarkStageEnd(GpuStageMotion);
             m_ctx->CSSetShader(m_csEncodeInter.Get(), nullptr, 0);
             m_ctx->Dispatch(m_widthMb, m_heightMb, 1);
+            CountDispatch(GpuStageMode, m_widthMb * m_heightMb);
+            MarkStageEnd(GpuStageMode);
         }
 
         // ---- deblocking ------------------------------------------------------------------------
@@ -639,6 +777,7 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
                         UpdateConstants(p, mx + 2u * my, my);
                         m_ctx->CSSetShader(m_csDeblock.Get(), nullptr, 0);
                         m_ctx->Dispatch(1, 1, 1);
+                        CountDispatch(GpuStageDeblock, 1);
                     }
                 }
             } else {
@@ -653,8 +792,10 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
                     UpdateConstants(p, t, first);
                     m_ctx->CSSetShader(m_csDeblock.Get(), nullptr, 0);
                     m_ctx->Dispatch(lastRow - first + 1u, 1, 1);
+                    CountDispatch(GpuStageDeblock, lastRow - first + 1u);
                 }
             }
+            MarkStageEnd(GpuStageDeblock);
         }
 
         m_ctx->CSSetUnorderedAccessViews(0, 5, nullUavs, nullptr);
@@ -663,6 +804,7 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
 
     m_ctx->End(m_tsEnd.Get());
     m_ctx->End(m_tsDisjoint.Get());
+    m_lastRecordMs = NowMs() - record0;
 
     // ---- read back the levels and the macroblock info -------------------------------------------
     //
@@ -678,7 +820,12 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
     levels.resize(static_cast<size_t>(MbCount()) * kLevelsWordsPerMb);
     info.resize(MbCount());
     D3D11_MAPPED_SUBRESOURCE m = {};
+    // The one blocking call of the picture: everything queued above has to have executed before the
+    // levels are readable, so this is the CPU's wait for the GPU and the rest of the stage is
+    // transfer. Timed on its own because the two are what an overlapped pipeline would separate.
+    const double map0 = NowMs();
     HRESULT hr = m_ctx->Map(m_levelsStaging.Get(), 0, D3D11_MAP_READ, 0, &m);
+    m_lastMapWaitMs = NowMs() - map0;
     if (FAILED(hr)) {
         return hr;
     }
@@ -704,16 +851,21 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
     const double query0 = NowMs();
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj = {};
     UINT64 gpu0 = 0, gpu1 = 0;
-    if (WaitForQuery(m_tsDisjoint.Get(), &dj, sizeof(dj)) == S_OK &&
+    const bool haveDisjoint = (WaitForQuery(m_tsDisjoint.Get(), &dj, sizeof(dj)) == S_OK);
+    if (haveDisjoint &&
         WaitForQuery(m_tsBegin.Get(), &gpu0, sizeof(gpu0)) == S_OK &&
         WaitForQuery(m_tsEnd.Get(), &gpu1, sizeof(gpu1)) == S_OK &&
         !dj.Disjoint && dj.Frequency != 0 && gpu1 >= gpu0) {
         m_lastGpuMs = 1000.0 * static_cast<double>(gpu1 - gpu0) / static_cast<double>(dj.Frequency);
         m_lastGpuMsValid = true;
     }
+    if (haveDisjoint) {
+        CollectStageTiming(dj);
+    }
     m_lastQueryWaitMs = NowMs() - query0;
-    MftTrace("gpu picture: readback %.3f ms, query wait %.3f ms, gpu %.3f ms (valid %d)\n",
-             m_lastReadbackMs, m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0);
+    MftTrace("gpu picture: record %.3f ms, readback %.3f ms (map wait %.3f), query wait %.3f ms, "
+             "gpu %.3f ms (valid %d)\n", m_lastRecordMs, m_lastReadbackMs, m_lastMapWaitMs,
+             m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0);
     return S_OK;
 }
 

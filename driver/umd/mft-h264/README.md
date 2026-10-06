@@ -78,6 +78,16 @@ what it reconstructs is by definition what a conformant decoder reconstructs.
 | `--compare` | our quality, size and speed against the inbox software `H264 Encoder MFT` on the same source at the same settings |
 | `--sinkwriter` | an ordinary `MFCreateSinkWriterFromURL` pipeline to `.mp4` picks the transform up and the file plays |
 
+### Where the GPU time goes
+
+`BC250_MFT_STAGE_TIMING` in the environment turns on per-stage GPU timing, off by default and read
+once in `GpuEncoder::Initialize`. `1` places one timestamp query per stage of the picture (import,
+motion, mode, deblock); `2` places one after every dispatch, which `--encode` then prints dispatch by
+dispatch with its thread group count. Every mark is one more query inside the command stream, so
+level 2 reports a total above the same picture's uninstrumented cost: it says where the time goes, it
+does not quote a throughput. `--encode` also reports, always, how long the thread spent recording the
+picture's commands and how long it then waited in the one blocking `Map`.
+
 `sweep.ps1` is the conformance sweep: 68 cases from 64x48 to 1920x1080, every qp from 6 to 51 with
 deblocking on, visible sizes that are not a whole number of macroblocks, GPU-sourced input, NV12 in
 system memory on a wider stride, CBR and still mode. Each case requires bit exactness against the

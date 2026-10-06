@@ -93,6 +93,42 @@ struct GpuFrameParams {
     int32_t betaOffsetDiv2 = 0;
 };
 
+// The stages of one picture's GPU work, in the order the command stream holds them. GpuStageMode is
+// the macroblock pass: on an I picture the anti-diagonal sweep of cs_mb's intra entry point, one
+// dispatch per anti-diagonal, and on a P picture one dispatch of its inter entry point.
+enum : uint32_t {
+    GpuStageImport = 0,
+    GpuStageMotion = 1,
+    GpuStageMode = 2,
+    GpuStageDeblock = 3,
+    GpuStageCount = 4
+};
+const char* GpuStageName(uint32_t stage);
+
+// One dispatch of the picture with the GPU time between the timestamp before it and the one after
+// it. Filled only at BC250_MFT_STAGE_TIMING=2.
+struct GpuStageStep {
+    uint32_t stage = 0;
+    uint32_t groups = 0;   // thread groups, which is macroblocks for cs_mb and cs_deblock
+    double ms = 0.0;
+};
+
+// Where one picture's GPU time went. Off unless BC250_MFT_STAGE_TIMING is set in the environment:
+// "1" times the four stages, "2" also times every dispatch. Every mark is one more timestamp query
+// inside the command stream, and a 1080p I picture holds about 440 dispatches, so level 2 reports a
+// total above the same picture's uninstrumented cost. It says where the time goes; it does not quote
+// a throughput.
+struct GpuStageProfile {
+    bool valid = false;
+    uint32_t level = 0;
+    uint32_t dispatches[GpuStageCount] = {};
+    uint32_t groups[GpuStageCount] = {};
+    double ms[GpuStageCount] = {};
+    double totalMs = 0.0;        // the first mark to the last one
+    uint32_t marksDropped = 0;   // dispatches past the mark budget, which are not timed
+    std::vector<GpuStageStep> steps;
+};
+
 class GpuEncoder {
 public:
     // device may be null, in which case a device is created on the preferred adapter.
@@ -132,6 +168,18 @@ public:
     // How long the last picture's timestamp queries took to retire after the readback. Part of the
     // GPU stage, and the price of a per-picture GPU measurement.
     double LastQueryWaitMilliseconds() const { return m_lastQueryWaitMs; }
+    // Wall clock the calling thread spent recording the last picture's commands: the input upload,
+    // every constant buffer Map and every Dispatch call, up to the closing timestamp. A 1080p I
+    // picture records 443 dispatches, so this is a cost of its own, and in the present
+    // one-picture-at-a-time shape it is serial with the GPU rather than overlapped with it.
+    double LastRecordMilliseconds() const { return m_lastRecordMs; }
+    // The blocking Map on the levels staging buffer, which is where the CPU waits for the whole
+    // picture to finish. The rest of the readback stage is the two copies and the two memcpy calls,
+    // so LastReadbackMilliseconds() minus this is the transfer, and this is the wait.
+    double LastMapWaitMilliseconds() const { return m_lastMapWaitMs; }
+    // Where the last picture's GPU time went, stage by stage; see GpuStageProfile. Valid only with
+    // BC250_MFT_STAGE_TIMING set in the environment when Initialize ran.
+    const GpuStageProfile& LastStageProfile() const { return m_profile; }
 
 private:
     struct Plane {
@@ -158,6 +206,16 @@ private:
     // has not retired, so a single call can leave the caller with nothing; this waits, with a bound.
     HRESULT WaitForQuery(ID3D11Asynchronous* query, void* data, uint32_t bytes);
 
+    // The stage profile, all four no-ops at BC250_MFT_STAGE_TIMING unset. BeginStageTiming starts a
+    // picture, CountDispatch follows every Dispatch, MarkStageEnd closes a stage at level 1 (at
+    // level 2 the last dispatch's own mark already closes it), and CollectStageTiming reads the
+    // timestamps once the picture has retired.
+    void BeginStageTiming();
+    void CountDispatch(uint32_t stage, uint32_t groups);
+    void MarkStageEnd(uint32_t stage);
+    void CollectStageTiming(const D3D11_QUERY_DATA_TIMESTAMP_DISJOINT& dj);
+    bool PlaceMark(uint32_t stage, uint32_t groups);
+
     ComPtr<ID3D11Device> m_device;
     ComPtr<ID3D11DeviceContext> m_ctx;
     ComPtr<ID3D11ComputeShader> m_csImportNV12;
@@ -183,6 +241,13 @@ private:
     ComPtr<ID3D11Query> m_tsDisjoint;
     ComPtr<ID3D11Query> m_tsBegin;
     ComPtr<ID3D11Query> m_tsEnd;
+    // The stage marks: one timestamp query per mark, grown once and reused for every picture after.
+    std::vector<ComPtr<ID3D11Query>> m_marks;
+    std::vector<uint32_t> m_markStage;    // which stage the dispatch before mark i belongs to
+    std::vector<uint32_t> m_markGroups;   // its thread groups
+    uint32_t m_markCount = 0;
+    uint32_t m_stageLevel = 0;
+    GpuStageProfile m_profile;
 
     uint32_t m_visW = 0, m_visH = 0;
     uint32_t m_padW = 0, m_padH = 0;
@@ -192,6 +257,8 @@ private:
     double m_lastGpuMs = 0.0;
     double m_lastReadbackMs = 0.0;
     double m_lastQueryWaitMs = 0.0;
+    double m_lastRecordMs = 0.0;
+    double m_lastMapWaitMs = 0.0;
     bool m_lastGpuMsValid = false;
 };
 

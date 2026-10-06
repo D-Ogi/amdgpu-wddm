@@ -1032,6 +1032,51 @@ bool FirstDifference(const uint8_t* a, const uint8_t* b, uint32_t w, uint32_t h,
     return false;
 }
 
+// The per-stage GPU profile of the run, from GpuStageProfile. Prints nothing when
+// BC250_MFT_STAGE_TIMING was unset, which is the normal case: no picture then carries a profile.
+// Key and non-key pictures are reported apart because they run different shaders.
+void PrintStageProfile(const uint32_t pictures[2], const uint32_t dispatches[2][GpuStageCount],
+                      const double ms[2][GpuStageCount], const double totalMs[2],
+                      const std::vector<GpuStageStep> steps[2])
+{
+    if (pictures[0] == 0 && pictures[1] == 0) {
+        return;
+    }
+    printf("  GPU stages per picture, from the device's timestamps between the dispatches\n");
+    printf("    %-7s %-9s %10s %9s %10s %8s\n", "picture", "stage", "dispatches", "ms", "ms/disp",
+           "share");
+    for (int k = 0; k < 2; ++k) {
+        if (pictures[k] == 0) {
+            continue;
+        }
+        const double n = static_cast<double>(pictures[k]);
+        for (uint32_t s = 0; s < GpuStageCount; ++s) {
+            if (dispatches[k][s] == 0) {
+                continue;
+            }
+            printf("    %-7s %-9s %10.1f %9.3f %10.4f %7.1f %%\n", (k == 0) ? "I" : "P",
+                   GpuStageName(s), static_cast<double>(dispatches[k][s]) / n, ms[k][s] / n,
+                   ms[k][s] / static_cast<double>(dispatches[k][s]),
+                   100.0 * ms[k][s] / ((totalMs[k] > 0.0) ? totalMs[k] : 1.0));
+        }
+        printf("    %-7s %-9s %10s %9.3f   over %u picture(s)\n", (k == 0) ? "I" : "P", "all", "",
+               totalMs[k] / n, pictures[k]);
+    }
+    for (int k = 0; k < 2; ++k) {
+        if (steps[k].empty()) {
+            continue;
+        }
+        printf("  every dispatch of the first %s picture, %zu of them\n", (k == 0) ? "I" : "P",
+               steps[k].size());
+        printf("    %5s %-9s %8s %9s %10s\n", "step", "stage", "groups", "ms", "us/group");
+        for (size_t i = 0; i < steps[k].size(); ++i) {
+            const GpuStageStep& s = steps[k][i];
+            printf("    %5zu %-9s %8u %9.4f %10.3f\n", i, GpuStageName(s.stage), s.groups, s.ms,
+                   (s.groups != 0) ? (1000.0 * s.ms / static_cast<double>(s.groups)) : 0.0);
+        }
+    }
+}
+
 } // namespace
 
 int RunEncode(const Options& o)
@@ -1103,6 +1148,16 @@ int RunEncode(const Options& o)
     // inside it, and the CPU half split into entropy coding and byte stream assembly.
     double totalGpuWallMs = 0.0, totalReadbackMs = 0.0, totalCpuMs = 0.0;
     double totalCavlcMs = 0.0, totalNalMs = 0.0;
+    double totalRecordMs = 0.0, totalMapWaitMs = 0.0;
+    // Per-stage GPU time, kept apart for key and non-key pictures because the two run different
+    // shaders: an I picture sweeps cs_mb's intra entry point along the anti-diagonals, a P picture
+    // runs cs_me once and cs_mb's inter entry point once. Filled only with BC250_MFT_STAGE_TIMING
+    // set; see GpuStageProfile.
+    double stageMs[2][GpuStageCount] = {};
+    double stageTotalMs[2] = {};
+    uint32_t stageDispatches[2][GpuStageCount] = {};
+    uint32_t stagePictures[2] = {};
+    std::vector<GpuStageStep> firstSteps[2];
     uint64_t totalBytes = 0;
     uint32_t keyFrames = 0, skipTotal = 0, nnzBad = 0;
     uint32_t timingBad = 0;
@@ -1174,8 +1229,25 @@ int RunEncode(const Options& o)
         totalCpuMs += st.cpuMs;
         totalCavlcMs += st.cavlcMs;
         totalNalMs += st.nalMs;
+        totalRecordMs += st.recordMs;
+        totalMapWaitMs += st.mapWaitMs;
         totalBytes += st.bytes;
         skipTotal += st.skippedMbs;
+        {
+            const GpuStageProfile& pr = enc.Gpu().LastStageProfile();
+            if (pr.valid) {
+                const int k = st.keyFrame ? 0 : 1;
+                ++stagePictures[k];
+                stageTotalMs[k] += pr.totalMs;
+                for (uint32_t s = 0; s < GpuStageCount; ++s) {
+                    stageMs[k][s] += pr.ms[s];
+                    stageDispatches[k][s] += pr.dispatches[s];
+                }
+                if (firstSteps[k].empty()) {
+                    firstSteps[k] = pr.steps;
+                }
+            }
+        }
         // The profile has to be of this picture. A GPU time read from a query that had not retired
         // used to leave the previous picture's figure in place, which is how a profile can show a
         // picture that cost nothing; a missing measurement now says so instead. The bounds are the
@@ -1451,8 +1523,12 @@ int RunEncode(const Options& o)
            "(cavlc %.2f, nal %.2f)\n",
            totalGpuWallMs / o.frames, totalGpuMs / o.frames, totalReadbackMs / o.frames,
            totalCpuMs / o.frames, totalCavlcMs / o.frames, totalNalMs / o.frames);
+    printf("  per picture: command recording %.2f ms, map wait %.2f ms, readback transfer %.2f ms\n",
+           totalRecordMs / o.frames, totalMapWaitMs / o.frames,
+           (totalReadbackMs - totalMapWaitMs) / o.frames);
     printf("  per picture profile accounted for every picture: %s\n",
            (timingBad == 0) ? "yes" : "FAIL");
+    PrintStageProfile(stagePictures, stageDispatches, stageMs, stageTotalMs, firstSteps);
     printf("  stream written to %ls\n", path.c_str());
 
     dec.Shutdown();

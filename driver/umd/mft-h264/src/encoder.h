@@ -67,6 +67,11 @@ struct FrameStats {
     // The part of gpuWallMs spent moving the levels and the macroblock info to the CPU, which is
     // where the thread waits for the GPU (GpuEncoder::LastReadbackMilliseconds).
     double readbackMs = 0.0;
+    // The two halves of the GPU stage that an overlapped pipeline would separate: recordMs is the
+    // thread issuing the picture's commands, mapWaitMs the one blocking Map that waits for all of
+    // them to finish. readbackMs minus mapWaitMs is the transfer itself.
+    double recordMs = 0.0;
+    double mapWaitMs = 0.0;
     // The CPU half, after the GPU stage: cpuMs is the whole of it, cavlcMs the entropy coding of the
     // slice (clause 9.2 CAVLC plus the slice header) and nalMs the byte stream assembly, which is
     // the emulation prevention scan of clause 7.4.1.1 plus the NAL and parameter set framing.
