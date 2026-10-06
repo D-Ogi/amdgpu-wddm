@@ -799,15 +799,77 @@ function Get-DeviceServiceName {
 function Get-LabInstallPaths {
     @('C:\BC250\m15', 'C:\BC250\m14', 'C:\BC250\m10' | Where-Object { Test-Path -LiteralPath $_ })
 }
-# Our driver packages in the driver store (pnputil /enum-drivers), by original name.
-function Get-OurDriverPackages {
-    $out = (Invoke-Native pnputil.exe @('/enum-drivers')).text
-    $blocks = $out -split "(\r?\n){2,}"
+# Our driver packages in the driver store (pnputil /enum-drivers), one row each: the published name (oem<n>.inf) and
+# the version of the package's DriverVer line, which pnputil prints as "<date> <version>". The version is $null when
+# this reading cannot take it from the block, as on a Windows that prints the labels in another language.
+function Get-OurDriverPackageList {
+    return (Get-OurDriverPackageRows (Invoke-Native pnputil.exe @('/enum-drivers')).text)
+}
+# Pure: the same rows from the text of pnputil /enum-drivers.
+function Get-OurDriverPackageRows([string]$Text) {
+    $blocks = $Text -split "(\r?\n){2,}"
     $r = @()
     foreach ($b in $blocks) {
-        if ($b -match '(?im)^\s*Original Name:\s*bc250kmd\.inf\s*$' -and $b -match '(?im)^\s*Published Name:\s*(oem\d+\.inf)\s*$') { $r += $Matches[1] }
+        if ($b -notmatch '(?im)^\s*Original Name:\s*bc250kmd\.inf\s*$') { continue }
+        $published = $null
+        if ($b -match '(?im)^\s*Published Name:\s*(oem\d+\.inf)\s*$') { $published = $Matches[1] }
+        if (-not $published) { continue }
+        $version = $null
+        if ($b -match '(?im)^\s*Driver Version:\s*\S+\s+(\d+(?:\.\d+){1,3})\s*$') { $version = $Matches[1] }
+        $r += [pscustomobject]@{ published = $published; version = $version }
     }
     return $r
+}
+# The same, by published name only (uninstall.ps1, the preflight of the uninstaller).
+function Get-OurDriverPackages {
+    return @(@(Get-OurDriverPackageList) | ForEach-Object { $_.published })
+}
+# The driver-store package (oem<n>.inf) that a device uses now. $null when neither reading gives one.
+function Get-DeviceDriverPackage {
+    param([Parameter(Mandatory)][string]$InstanceId)
+    try {
+        $d = (Get-PnpDeviceProperty -InstanceId $InstanceId -KeyName 'DEVPKEY_Device_DriverInfPath' -ErrorAction Stop).Data
+        if ($d) { return [string]$d }
+    } catch { }
+    try {
+        $d = @(Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($InstanceId -replace '\\', '\\')'" -ErrorAction Stop) | Select-Object -First 1
+        if ($d -and $d.InfName) { return [string]$d.InfName }
+    } catch { }
+    return $null
+}
+# Pure: which of our driver-store packages an install removes (BD-089). Every release adds one bc250kmd.inf package,
+# Windows binds the newest and the older ones stay in the store. Kept: the package the GPU is bound to now, and the
+# package of the previous repair set, which a rollback installs again. Removed: every other package of ours.
+# Nothing at all is removed when the bound package is not known, when it is not one of ours, or when a package of ours
+# carries no version this reading could parse: the rollback target cannot be told apart then, and a driver store that
+# grows is the smaller problem. $PreviousVersion is the DriverVer of the previous repair set ($null when there is none,
+# and then the newest of the other packages is the release before this one).
+function Get-DriverStoreRemovePlan {
+    param($Packages, [string]$BoundPublished, [string]$PreviousVersion)
+    $all = @(@($Packages) | Where-Object { $_ -and $_.published })
+    $names = @($all | ForEach-Object { $_.published })
+    if (-not $BoundPublished) { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = 'the driver package that the GPU uses cannot be read' } }
+    if ($names -notcontains $BoundPublished) { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = "the driver package of the GPU ($BoundPublished) is not one of ours" } }
+    $others = @($all | Where-Object { $_.published -ne $BoundPublished })
+    $unknown = @($others | Where-Object { -not $_.version -or -not ($_.version -as [version]) })
+    if ($unknown.Count) { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = "$($unknown.Count) package(s) of ours carry no version this reading understands ($(@($unknown | ForEach-Object { $_.published }) -join ', '))" } }
+    $rollback = @()
+    if ($PreviousVersion) { $rollback = @($others | Where-Object { $_.version -eq $PreviousVersion }) }
+    $why = $null
+    if ($PreviousVersion -and -not $rollback.Count) { $why = "the previous repair set ($PreviousVersion) has no package in the store" }
+    if (-not $rollback.Count -and $others.Count) {
+        $rollback = @(@($others | Sort-Object { [version]$_.version } -Descending)[0])
+        if (-not $PreviousVersion) { $why = 'no previous repair set is recorded: the newest of the other packages is kept for a rollback' }
+    }
+    $keep = @($BoundPublished) + @($rollback | ForEach-Object { $_.published })
+    return [pscustomobject]@{ keep = @($keep | Select-Object -Unique); remove = @($others | Where-Object { $keep -notcontains $_.published } | ForEach-Object { $_.published }); previous = @($rollback | ForEach-Object { $_.published })[0]; why = $why }
+}
+# The DriverVer that a kept repair set installs: its own manifest.json. $null when the set or its manifest is gone.
+function Get-RepairSetDriverVersion([string]$Version) {
+    if (-not $Version) { return $null }
+    $m = Join-Path (Get-ClosureDir $Version) 'manifest.json'
+    if (-not (Test-Path -LiteralPath $m)) { return $null }
+    try { return [string](Get-Content -LiteralPath $m -Raw | ConvertFrom-Json).kmd_version } catch { return $null }
 }
 
 # MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT): delete a file that a running process (DWM) still has mapped.
@@ -888,6 +950,88 @@ function Remove-PathOrSchedule([string]$Path) {
         }
     }
     if ($pending) { Write-Info "$pending file(s) in use: removal scheduled for the next restart" }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# What an older release left behind (BD-089). <InstallRoot>\manifest.json is the manifest of the release installed
+# there, because the installer copies it with the payload. The files of that release are therefore known by name and
+# by SHA256, and an install over it can take away what it installed and this package does not install any more.
+# Only a file that the previous manifest names is ever removed: the install root also holds files that are not ours
+# (a tester's own copy, a lab kit), and a sweep by wildcard would take them too.
+
+# Pure: where one file of a package lands on the computer, or $null when the installer copies it nowhere under the
+# install root. The driver package goes into the driver store, the certificate into two certificate stores, the GPU
+# firmware into its own folder, and install.cmd, the documents and the setup window's own folder are read from the
+# package and never copied.
+function Get-InstalledPathOfPackageFile {
+    param([Parameter(Mandatory)][string]$PackagePath, [Parameter(Mandatory)][string]$InstallRoot,
+        [string]$SystemDir = (Join-Path $env:windir 'System32'), [string]$SysWowDir = (Join-Path $env:windir 'SysWOW64'))
+    $p = ([string]$PackagePath) -replace '/', '\'
+    $p = $p.TrimStart('\')
+    if (-not $p) { return $null }
+    if ($p -match '\.\.') { return $null }
+    if ($p -match '^payload\\system32\\(.+)$') { return (Join-Path $SystemDir $Matches[1]) }
+    if ($p -match '^payload\\syswow64\\(.+)$') { return (Join-Path $SysWowDir $Matches[1]) }
+    if ($p -match '^payload\\(kmd|cert|firmware)\\') { return $null }
+    if ($p -match '^payload\\(.+\\.+)$') { return (Join-Path $InstallRoot $Matches[1]) }
+    if ($p -match '^(installer|licenses)\\(.+)$') { return (Join-Path $InstallRoot $p) }
+    if ($p -ieq 'THIRD-PARTY.md') { return (Join-Path $InstallRoot 'licenses\THIRD-PARTY.md') }
+    if ($p -ieq 'uninstall.cmd' -or $p -ieq 'verify.cmd' -or $p -ieq 'manifest.json') { return (Join-Path $InstallRoot $p) }
+    return $null
+}
+# Pure: every file of a manifest that the installer copies, as a map from the lower-case installed path to the row
+# (path as it is written, the package path, the SHA256 the manifest records).
+function Get-ManifestInstallMap {
+    param([Parameter(Mandatory)]$Manifest, [Parameter(Mandatory)][string]$InstallRoot,
+        [string]$SystemDir = (Join-Path $env:windir 'System32'), [string]$SysWowDir = (Join-Path $env:windir 'SysWOW64'))
+    $map = New-Object Collections.Specialized.OrderedDictionary
+    foreach ($f in @($Manifest.files)) {
+        if (-not $f -or -not $f.path) { continue }
+        $dest = Get-InstalledPathOfPackageFile -PackagePath ([string]$f.path) -InstallRoot $InstallRoot -SystemDir $SystemDir -SysWowDir $SysWowDir
+        if (-not $dest) { continue }
+        $key = $dest.ToLowerInvariant()
+        if ($map.Contains($key)) { continue }
+        $map.Add($key, [pscustomobject]@{ path = $dest; package_path = ([string]$f.path); sha256 = ([string]$f.sha256).ToUpperInvariant() })
+    }
+    return $map
+}
+# Pure: the files that the previous release installed and this package does not install. One row per file: the
+# installed path, the SHA256 that the previous manifest recorded for it, and the version that installed it. A row is
+# returned only for a path under the install root, System32 or SysWOW64, so that a manifest cannot name a file
+# anywhere else on the computer.
+function Get-OrphanFilePlan {
+    param([Parameter(Mandatory)]$PreviousManifest, [Parameter(Mandatory)]$NewManifest, [Parameter(Mandatory)][string]$InstallRoot,
+        [string]$SystemDir = (Join-Path $env:windir 'System32'), [string]$SysWowDir = (Join-Path $env:windir 'SysWOW64'))
+    $from = [string]$PreviousManifest.version
+    $old = Get-ManifestInstallMap -Manifest $PreviousManifest -InstallRoot $InstallRoot -SystemDir $SystemDir -SysWowDir $SysWowDir
+    $new = Get-ManifestInstallMap -Manifest $NewManifest -InstallRoot $InstallRoot -SystemDir $SystemDir -SysWowDir $SysWowDir
+    $roots = @($InstallRoot, $SystemDir, $SysWowDir) | Where-Object { $_ } | ForEach-Object { ([IO.Path]::GetFullPath($_).TrimEnd('\') + '\').ToLowerInvariant() }
+    $rows = @()
+    foreach ($key in @($old.Keys)) {
+        if ($new.Contains($key)) { continue }
+        $row = $old[$key]
+        $full = ([IO.Path]::GetFullPath($row.path)).ToLowerInvariant()
+        if (-not @($roots | Where-Object { $full.StartsWith($_) }).Count) { continue }
+        $rows += [pscustomobject]@{ path = $row.path; package_path = $row.package_path; sha256 = $row.sha256; from_version = $from }
+    }
+    return $rows
+}
+# The rows of Get-OrphanFilePlan against the computer. state: 'remove' when the file is there with the SHA256 that the
+# previous manifest recorded, 'changed' when its bytes are other ones (somebody replaced it after that install: it is
+# kept and reported), 'absent' when it is not there any more. Reads only.
+function Resolve-OrphanFilePlan {
+    param($Plan)
+    $rows = @()
+    foreach ($row in @($Plan)) {
+        $state = 'absent'
+        $have = $null
+        if (Test-Path -LiteralPath $row.path -PathType Leaf) {
+            try { $have = Get-Sha256 $row.path } catch { $have = $null }
+            if ($have -and $row.sha256 -and $have -eq $row.sha256) { $state = 'remove' } else { $state = 'changed' }
+        }
+        $rows += [pscustomobject]@{ path = $row.path; package_path = $row.package_path; sha256 = $row.sha256; from_version = $row.from_version; state = $state; sha256_now = $have }
+    }
+    return $rows
 }
 
 # ---------------------------------------------------------------------------------------------------------------
