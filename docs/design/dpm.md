@@ -344,10 +344,18 @@ to reach, not the one it reads:
   the graphics engine or the paging engine for `BC250_DPM_ZONE_QUIET_MS` (3 s). An idle GPU is not the heat the zone
   can take out, and a cap left at 800 MHz is heat the next burst of work cannot use. It costs no safety: from the
   soft-release threshold up the clock gate refuses every raise, so a GPU that gets work at 86 C cannot go above the lab
-  floor whatever the cap says. The driver log counts these ticks as `idle holds`.
+  floor whatever the cap says. The driver log counts these ticks as `idle holds`. The quiet timer starts saturated and
+  saturates again on a tick whose `dt_ms` had to be clamped, so neither the governor's first ticks nor a resume is a
+  window in which the zone acts on a GPU that has had no work: counted from zero, those windows took a level off the
+  cap on a die the CPU was holding at 86 C, and with the clock `DpmResyncLevel` reads from an idle SMU they took the
+  cap straight to 800 MHz.
 - The band. Between the soft-release threshold and the zone threshold the cap holds.
 - The release. Below the soft-release threshold (83.0 C, `BC250_DPM_HOT_MC - soft_delta_mc`, held for
-  `soft_step_ms` 4000 ms) the cap goes up one level. Below 82 C the release of 0.7.195 applies as before.
+  `soft_step_ms` 4000 ms) the cap goes up one level. Below 82 C the release of 0.7.195 keeps its own threshold and its
+  own 1 s step, but it reads `teff` as well, so a cap under the ceiling on a die that is already climbing rises one
+  level later than it did in 0.7.212. Only `BC250_DPM_HOT_MC`, `BC250_DPM_CRITICAL_MC` and the thermal ramp read the
+  raw sensor. The search found that a cap rising while the die climbs towards the zone is the one thing no threshold
+  repairs afterwards, which is why the way up reads the lead too.
 - The clock. The warm zone starts at the soft-release threshold, so the clock stops going up at 83.0 C.
 - The backstop. The hot cap at 87 C and the critical rule at 90 C are unchanged, and both read the raw sensor, not
   `teff`. The thermal ramp also reads the raw sensor.

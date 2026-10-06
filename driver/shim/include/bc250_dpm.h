@@ -270,7 +270,9 @@ enum bc250_dpm_throttle {
  * lab floor whatever the cap says.
  * "Work" is the GFX ring, the graphics engine or the paging engine; the share has to beat a single desktop frame, which
  * is 1000 / BC250_DPM_TICK_MS = 40 permille of its own tick, and QUIET_MS without any of the three is the idle state's
- * own definition of an idle GPU (BC250_DPM_IDLE_HOLD_MS). */
+ * own definition of an idle GPU (BC250_DPM_IDLE_HOLD_MS). The gate holds from the governor's first tick and across a
+ * stall: zone_quiet_ms starts saturated and saturates again on a clamped tick with no work, because a window counted
+ * from a start or from a resume is a window in which the zone acts on a GPU nobody has given work to. */
 #define BC250_DPM_ZONE_WORK_PERMILLE	50u
 #define BC250_DPM_ZONE_QUIET_MS		BC250_DPM_IDLE_HOLD_MS
 /* The idle state (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
@@ -480,7 +482,10 @@ struct bc250_dpm_governor {
 						 * numbers were not chosen for */
 	unsigned int	zone_lead_gaps;		/* steps in which the lead was wanted and unavailable */
 	unsigned int	zone_quiet_ms;		/* since the GPU last had work, saturating: the zone acts only under
-						 * BC250_DPM_ZONE_QUIET_MS of it */
+						 * BC250_DPM_ZONE_QUIET_MS of it. It starts saturated (a governor that has
+						 * seen no tick has seen no work) and saturates again on a clamped tick that
+						 * brought no work, so no start and no resume gives the zone a window on a
+						 * GPU nobody has given work to (0.7.213 safety review, second round) */
 	unsigned int	zone_idle_holds;	/* steps in which the zone's threshold was met and the GPU was idle */
 	/* The slope ring the lead is measured from: one reading per BC250_DPM_ZONE_SLOPE_SLOT_MS. slope_at_ms and
 	 * zone_now_ms are the governor's own millisecond clock and WRAP on purpose - only unsigned differences of them

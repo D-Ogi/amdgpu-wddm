@@ -243,6 +243,12 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->level = BC250_DPM_FLOOR_LEVEL;
 	g->cap_ms = BC250_DPM_CAP_MS_MAX;	/* no change yet: the first hot tick steps at once */
 	g->raise_ms = BC250_DPM_CAP_MS_MAX;	/* no raise yet: the first one is not held */
+	/* A governor that has seen no tick has seen no work, so the soft zone's gate (zone_may_act) starts closed and the
+	 * first tick that carries work opens it. Starting this at 0 said "work just now" and gave the zone the whole
+	 * QUIET_MS window at every start: on a die the CPU holds at 86 C that window took the cap down a level, and with
+	 * the clock DpmResyncLevel read from an idle SMU it took the cap straight to the thermal floor, which is the
+	 * symptom of the safety review's finding 2 by another path (0.7.213 safety review, second round). */
+	g->zone_quiet_ms = BC250_DPM_CAP_MS_MAX;
 	g->subfloor_ok = 1;			/* until the hardware refuses a point under the lab floor */
 	/* The idle state is off until a caller configures it (bc250_dpm_idle_config), so a governor built here
 	 * and stepped behaves exactly as 0.7.205. The values below are only what the state would run with. */
@@ -555,9 +561,10 @@ static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input 
  * The oldest slot of a full ring is slope_head, the slot about to be overwritten, and the newest is the one before it.
  * Ages come from unsigned differences of a wrapping millisecond clock, so they stay exact over a start of any length.
  * The arithmetic is 64-bit and bounded: x is each slot's age relative to the oldest, at most SLOPE_MAX_SPAN_MS (1e4),
- * and y is a reading, at most 1e5 mC in magnitude, so den <= n^2 span^2 = 4e10, |num| <= n^2 span |y| = 4e11, and
- * num x lead_ms with lead_ms at most BC250_DPM_TUNE_MAX_ZONE_LEAD_MS (6e4) is 2.4e16 at worst - over two decimal orders
- * inside a signed 64-bit integer. */
+ * and y is a reading, which the SMU path bounds at 2047 x 125 = 255875 mC with 49000 subtracted on the other range
+ * (driver/kmd/smu.c), so |y| <= 2.6e5. Then den <= n^2 span^2 = 4e10, |num| <= 2 n^2 span |y| = 2.1e12, num x span is
+ * 2.1e16, and num x lead_ms with lead_ms at most BC250_DPM_TUNE_MAX_ZONE_LEAD_MS (6e4) is 1.3e17 at worst - some
+ * seventy times inside a signed 64-bit integer. */
 static int zone_lead_mc(const struct bc250_dpm_governor *g, unsigned int lead_ms, int *available)
 {
 	long long sx = 0, sy = 0, sxy = 0, sxx = 0, num, den, lead, rise;
@@ -625,7 +632,10 @@ static void zone_slope_sample(struct bc250_dpm_governor *g, const struct bc250_d
 /* Does the zone act this tick (0.7.213 safety review, finding 2)? Only while the GPU is doing work: the header's
  * BC250_DPM_ZONE_WORK_PERMILLE comment has the argument, and the short of it is that an idle GPU is not the heat the
  * zone can take out, while a cap left at the thermal floor is heat the next burst of work cannot use. g->idle is the
- * previous tick's state of the idle state, which is one tick of lag on a rule about three seconds of quiet. */
+ * previous tick's state of the idle state, which is one tick of lag on a rule about three seconds of quiet.
+ *
+ * The quiet timer starts saturated (bc250_dpm_init) and saturates again on a clamped tick that brought no work, so
+ * neither a fresh governor nor a resume has a window in which the zone acts on a GPU that nobody has given work to. */
 static int zone_may_act(const struct bc250_dpm_governor *g)
 {
 	return !g->idle && g->zone_quiet_ms < BC250_DPM_ZONE_QUIET_MS;
@@ -655,15 +665,26 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	zone_slope_sample(g, in, dt);
 	g->avg_permille = (g->avg_permille * 3u + busy + 2u) / 4u;
 	/* How long the GPU has had nothing to do, for the zone's own gate (zone_may_act). The three signals are the ones
-	 * the idle state reads, and the share has to beat a single desktop frame of a 25 ms tick. */
+	 * the idle state reads, and the share has to beat a single desktop frame of a 25 ms tick.
+	 *
+	 * A tick whose dt_ms had to be clamped is counted as a whole quiet window, not as the clamp: the time that really
+	 * passed is unknown and at least BC250_DPM_MAX_DT_MS, and this tick's own signals are the only ones that say
+	 * anything about it. Adding the clamp instead let a 60 s stall with no work buy the zone a step on the far side
+	 * (0.7.213 safety review, second round), the same way the clamp inflated the lead in finding 3. Work in the stalled tick
+	 * itself still says the GPU is busy and clears the timer. */
 	if (in->ring_busy || busy >= BC250_DPM_ZONE_WORK_PERMILLE ||
 	    in->sdma_permille >= BC250_DPM_ZONE_WORK_PERMILLE)
 		g->zone_quiet_ms = 0;
+	else if (in->dt_ms > BC250_DPM_MAX_DT_MS) g->zone_quiet_ms = BC250_DPM_CAP_MS_MAX;
 	else g->zone_quiet_ms = add_ms(g->zone_quiet_ms, dt);
 
 	/* Thermal first: it bounds whatever the load asks for. cap_ms is the time since the cap last moved the clock's
-	 * bound (a step down or a raise; the hot entry's clamp to the running clock lowers nothing and does not count):
-	 * the spacing of a re-entry's step is measured from it. */
+	 * bound, and the spacing of a hot re-entry's step is measured from it. Two changes deliberately leave it running:
+	 * the hot entry's clamp to the running clock, which lowers nothing, and the soft zone's own step down, which does
+	 * lower the bound but keeps its time in zone_ms instead - cap_ms spaces the first step of the 87 C backstop, and a
+	 * zone step 100 ms before the die crossed 87 C used to defer that step by a whole hot step (0.7.213 safety review,
+	 * finding 7). So cap_ms measures the changes the hot, critical and release rules make, not every change of
+	 * thermal_cap. */
 	g->cap_ms = g->cap_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->cap_ms + dt;
 	g->raise_ms = g->raise_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->raise_ms + dt;
 	if (!in->temperature_valid || in->temperature_mc >= BC250_DPM_CRITICAL_MC) {

@@ -1761,15 +1761,16 @@ static void test_zone_dip(void)
 static void test_zone_idle(void)
 {
 	struct bc250_dpm_governor g;
-	unsigned int i, grace = BC250_DPM_ZONE_QUIET_MS / BC250_DPM_ZONE_STEP_MS;
+	unsigned int i;
 
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
 	g.level = L(5);
 	g.thermal_cap = L(5);
 	for (i = 0; i < 4000u; i++) run_mc(&g, 0, 86000, 25);		/* 100 s, the ring empty, 0 permille busy */
-	/* Only the three seconds before the GPU counts as quiet are the zone's, and they are bounded by its own step. */
-	CHECK(g.idle == 1 && g.zone_steps <= grace && g.thermal_cap >= L(5) - grace);
+	/* Not one step, and not one in the first three seconds either: the quiet timer starts saturated, so a governor
+	 * that has seen no work has no window at all (test_zone_quiet_gate has that case on its own). */
+	CHECK(g.idle == 1 && g.zone_steps == 0 && g.zone_ticks == 0 && g.thermal_cap == L(5));
 	CHECK(g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL && g.zone_idle_holds > 3000u);
 	CHECK(bc250_dpm_level_mhz(g.level) == 500u && g.throttle == BC250_DPM_THROTTLE_IDLE);
 	/* Work comes back while the die is still at 86 C. The clock leaves the idle point for the lab floor and no raise
@@ -1783,7 +1784,7 @@ static void test_zone_idle(void)
 	g.level = L(5);
 	g.thermal_cap = L(5);
 	for (i = 0; i < 4000u; i++) run_mc(&g, 0, 86000, 25);
-	CHECK(g.idle == 0 && g.zone_steps <= grace && g.thermal_cap >= L(5) - grace);
+	CHECK(g.idle == 0 && g.zone_steps == 0 && g.zone_ticks == 0 && g.thermal_cap == L(5));
 	CHECK(g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL);
 }
 
@@ -1811,6 +1812,70 @@ static void test_zone_idle_rise(void)
 	/* And the zone did meet its threshold on the way: 86.0 C with the lead at its cap is 84.0 C of sensor, so the
 	 * last two degrees of the ramp are ticks the zone would have acted on. */
 	CHECK(g.zone_idle_holds > 0u && g.zone_ticks == 0u);
+}
+
+/* The two edges of the zone's work gate: the governor's first ticks, and the far side of a tick whose dt_ms had to be
+ * clamped (0.7.213 safety review, second round). A quiet timer counted from zero read "work just now" in both
+ * places, so the zone acted on a GPU that nobody had given work to - the symptom of finding 2 by another path. On a die
+ * the CPU holds at 86 C the start window took a level off the cap, and with the clock DpmResyncLevel reads from an idle
+ * SMU (500 MHz, under the thermal floor) the entry clamp took the cap straight to 800 MHz and held it there through the
+ * whole 83 to 86 C band. A 60 s stall with no work bought the same credit again. */
+static void test_zone_quiet_gate(void)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int ceiling = (unsigned int)bc250_dpm_level_of(1500);
+	unsigned int i, cap0;
+
+	/* A hot die at the first tick this governor ever takes, with no work on either engine. */
+	bc250_dpm_init(&g, ceiling);
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	CHECK(g.zone_quiet_ms >= BC250_DPM_ZONE_QUIET_MS);	/* no tick yet, so no work yet */
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);	/* 5 s at 86.0 C: twice the quiet window */
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == ceiling && g.zone_idle_holds > 0u);
+	for (i = 0; i < 2400u; i++) run_mc(&g, 0, 84000, 25);	/* and a minute in the hold band changes nothing */
+	CHECK(g.thermal_cap == ceiling);
+	/* So the first burst of work runs at the lab floor, which is what the die at 86 C admits, and not under it. */
+	for (i = 0; i < 40u; i++) run_busy_mc(&g, 1000, 84000, 25);
+	CHECK(g.level == BC250_DPM_FLOOR_LEVEL && g.thermal_cap == ceiling && g.zone_quiet_ms == 0);
+
+	/* The worst case of the same window: DpmResyncLevel read 500 MHz from the SMU, so cur is under the thermal floor
+	 * and an entry clamp to the running clock would take the cap to the thermal floor in one tick. */
+	bc250_dpm_init(&g, ceiling);
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	g.level = 0u;						/* what DpmResyncLevel writes after reading 500 MHz */
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == ceiling);
+	for (i = 0; i < 2400u; i++) run_mc(&g, 0, 84000, 25);
+	for (i = 0; i < 40u; i++) run_busy_mc(&g, 1000, 84000, 25);
+	CHECK(g.level == BC250_DPM_FLOOR_LEVEL && g.thermal_cap == ceiling);
+
+	/* A stall of a minute in which the GPU had no work: the clamped tick counts as a whole quiet window, not as the
+	 * clamp, so the far side of it is no window for the zone either. */
+	bc250_dpm_init(&g, ceiling);
+	g.level = ceiling;
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 70000, 25);
+	CHECK(g.zone_quiet_ms == 0);
+	cap0 = g.thermal_cap;
+	{
+		struct bc250_dpm_input in = tick(0, 0, 60000);	/* one clamped tick, 60 s, nothing on either engine */
+		in.temperature_mc = 86000;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+	}
+	CHECK(g.zone_quiet_ms >= BC250_DPM_ZONE_QUIET_MS && g.zone_ticks == 0);
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == cap0);
+
+	/* Work in the stalled tick itself still says the GPU is busy: the gate is about work, not about the stall. */
+	bc250_dpm_init(&g, ceiling);
+	g.level = ceiling;
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 70000, 25);
+	{
+		struct bc250_dpm_input in = tick(1000, 0, 60000);
+		in.temperature_mc = 86000;
+		in.ring_busy = 1;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+	}
+	CHECK(g.zone_quiet_ms == 0 && g.zone_ticks == 1u && g.zone == 1);
 }
 
 /* A tick whose dt_ms had to be clamped (0.7.213 safety review, finding 3). The governor's own clock advances by
@@ -2776,6 +2841,7 @@ int main(void)
 	test_zone_dip();
 	test_zone_idle();
 	test_zone_idle_rise();
+	test_zone_quiet_gate();
 	test_zone_stall();
 	test_zone_lead_bound();
 	test_zone_sensor_gap();
