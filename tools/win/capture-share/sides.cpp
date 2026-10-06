@@ -218,8 +218,18 @@ bool Side11::OpenShared(HANDLE h, bool keyed)
     LogTexture11("opened", shared.Get());
     D3D11_TEXTURE2D_DESC d = {};
     shared->GetDesc(&d);
-    if (d.Width != g_opt.w || d.Height != g_opt.h || d.Format != g_opt.format)
-        Log("OPENED description differs from the creator's %ux%u %s", g_opt.w, g_opt.h, FormatText(g_opt.format).c_str());
+    // The same hard refusal Side12::OpenShared makes, and for the same reason: every content oracle of every cell
+    // is a raw byte comparison, so an opener handed a different format than the creator asked for passes all three
+    // while holding another view of the same bytes. BD-075 round 2 (2026-10-06): the CPU D3D11 route takes the
+    // opened format from the LB7A storage column alone (Mesa d3d10umd OpenResource) and never reads the E26R
+    // record, so a B8G8R8A8_UNORM_SRGB surface opens as B8G8R8A8_UNORM. That used to be one Log line nothing
+    // scored, which would have let row s12to11-srgb report "sRGB shared surfaces work cross-API" while the sRGB
+    // view was dropped. A format a route cannot carry is the route's finding, not a passing row.
+    if (d.Width != g_opt.w || d.Height != g_opt.h || d.Format != g_opt.format) {
+        Log("OPENED description %ux%u %s differs from the creator's %ux%u %s", d.Width, d.Height,
+            FormatText(d.Format).c_str(), g_opt.w, g_opt.h, FormatText(g_opt.format).c_str());
+        return Err("opened-description-differs", E_UNEXPECTED);
+    }
     if (keyed) {
         hr = shared.As(&mutex);
         if (FAILED(hr)) return Err("QueryInterface(IDXGIKeyedMutex)", hr);
@@ -617,8 +627,11 @@ bool Side12::OpenShared(HANDLE h, bool keyed)
     if (FAILED(hr)) return Err("ID3D12Device::OpenSharedHandle(resource)", hr);
     LogResource12("opened", shared.Get());
     const D3D12_RESOURCE_DESC d = shared->GetDesc();
-    if (d.Width != g_opt.w || d.Height != g_opt.h || d.Format != g_opt.format)
+    if (d.Width != g_opt.w || d.Height != g_opt.h || d.Format != g_opt.format) {
+        Log("OPENED description %llux%u %s differs from the creator's %ux%u %s", (unsigned long long)d.Width, d.Height,
+            FormatText(d.Format).c_str(), g_opt.w, g_opt.h, FormatText(g_opt.format).c_str());
         return Err("opened-description-differs", E_UNEXPECTED);
+    }
     return Removed("OpenSharedHandle(removed)");
 }
 
