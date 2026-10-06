@@ -28,6 +28,14 @@ struct Options {
     bool noHwTransforms = false;    // --no-hw-transforms: clear MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS
     bool still = false;             // repeat picture 0 so that P_Skip and mb_skip_run are exercised
     bool verbose = false;
+    // --timing-skip N: the first N pictures stay in the stream, in the decoder oracle and in every
+    // correctness check, and leave the timing averages. Two reasons, both measured: the first picture
+    // of a run is an I picture and runs other shaders than the P pictures after it, and a GPU whose
+    // clock is at its idle point ramps during the first pictures of a short run. On unit A the DPM
+    // idles at 500 MHz of 1500, so a six-picture case can report twice the cost of the same work in a
+    // longer one. The count stays in the output next to the averages, so a reader sees what was left
+    // out rather than having to trust a round number.
+    uint32_t timingSkip = 0;
     int32_t probeX = -1;            // --probe X Y: print this Cb column of every picture
     int32_t probeY = -1;
     RateControl rc = RateControl::Quality;

@@ -1696,8 +1696,13 @@ HRESULT RunInboxEncoder(const Options& o, const std::vector<std::vector<uint8_t>
         }
     };
 
-    const double t0 = NowMs();
+    // The clock starts after the pictures --timing-skip excludes, exactly as our own loop in
+    // RunCompare does, so the two columns of the table measure the same set of pictures.
+    double t0 = NowMs();
     for (uint32_t i = 0; i < nv12.size(); ++i) {
+        if (i == o.timingSkip) {
+            t0 = NowMs();
+        }
         ComPtr<IMFSample> s;
         hr = MakeMemorySample(nv12[i].data(), nv12[i].size(), static_cast<int64_t>(i) * duration,
                               duration, &s);
@@ -1806,8 +1811,11 @@ int RunCompare(const Options& o)
             return 2;
         }
         std::vector<uint8_t> frame;
-        const double t0 = NowMs();
+        double t0 = NowMs();
         for (uint32_t i = 0; i < o.frames; ++i) {
+            if (i == o.timingSkip) {
+                t0 = NowMs();
+            }
             GpuFrameInput in;
             in.kind = InputKind::Planar8;
             in.planeY = sources[i].y.data();
@@ -1847,15 +1855,22 @@ int RunCompare(const Options& o)
         }
     }
 
+    // The byte and PSNR rows are over every picture; the two time rows are over the pictures both
+    // encoders were timed on, which --timing-skip may have shortened.
+    const uint32_t timedFrames = (o.frames > o.timingSkip) ? (o.frames - o.timingSkip) : 1u;
     printf("\n");
     printf("  %-28s %14s %14s\n", "", "ours", "inbox H264");
     printf("  %-28s %14llu %14llu\n", "bytes", static_cast<unsigned long long>(ours.bytes),
            static_cast<unsigned long long>(inbox.bytes));
     printf("  %-28s %14.0f %14.0f\n", "bit/s at the nominal rate",
            (ours.bytes * 8.0 * o.fps) / o.frames, (inbox.bytes * 8.0 * o.fps) / o.frames);
-    printf("  %-28s %14.2f %14.2f\n", "ms per picture", ours.ms / o.frames, inbox.ms / o.frames);
-    printf("  %-28s %14.1f %14.1f\n", "pictures per second", 1000.0 * o.frames / ours.ms,
-           inbox.ms > 0.0 ? 1000.0 * o.frames / inbox.ms : 0.0);
+    if (o.timingSkip != 0) {
+        printf("  %-28s %14u %14u\n", "pictures timed", timedFrames, timedFrames);
+    }
+    printf("  %-28s %14.2f %14.2f\n", "ms per picture", ours.ms / timedFrames,
+           inbox.ms / timedFrames);
+    printf("  %-28s %14.1f %14.1f\n", "pictures per second", 1000.0 * timedFrames / ours.ms,
+           inbox.ms > 0.0 ? 1000.0 * timedFrames / inbox.ms : 0.0);
     printf("  %-28s %14.2f %14.2f\n", "PSNR Y (dB)", ours.psnrY, inbox.psnrY);
     printf("  %-28s %14.2f %14.2f\n", "PSNR Cb (dB)", ours.psnrCb, inbox.psnrCb);
     printf("  %-28s %14.2f %14.2f\n", "PSNR Cr (dB)", ours.psnrCr, inbox.psnrCr);

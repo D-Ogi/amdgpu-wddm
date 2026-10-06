@@ -1222,20 +1222,26 @@ int RunEncode(const Options& o)
             printf("  EncodeFrame(%u) failed 0x%08lX\n", i, static_cast<unsigned long>(hr));
             return 2;
         }
-        totalMs += t1 - t0;
-        totalGpuMs += st.gpuMs;
-        totalGpuWallMs += st.gpuWallMs;
-        totalReadbackMs += st.readbackMs;
-        totalCpuMs += st.cpuMs;
-        totalCavlcMs += st.cavlcMs;
-        totalNalMs += st.nalMs;
-        totalRecordMs += st.recordMs;
-        totalMapWaitMs += st.mapWaitMs;
+        // Every correctness check below sees every picture; only the timing averages skip the first
+        // o.timingSkip of them. The byte count is a property of the stream, not of the clock, so it
+        // stays whole.
+        const bool timed = (i >= o.timingSkip);
+        if (timed) {
+            totalMs += t1 - t0;
+            totalGpuMs += st.gpuMs;
+            totalGpuWallMs += st.gpuWallMs;
+            totalReadbackMs += st.readbackMs;
+            totalCpuMs += st.cpuMs;
+            totalCavlcMs += st.cavlcMs;
+            totalNalMs += st.nalMs;
+            totalRecordMs += st.recordMs;
+            totalMapWaitMs += st.mapWaitMs;
+        }
         totalBytes += st.bytes;
         skipTotal += st.skippedMbs;
         {
             const GpuStageProfile& pr = enc.Gpu().LastStageProfile();
-            if (pr.valid) {
+            if (pr.valid && timed) {
                 const int k = st.keyFrame ? 0 : 1;
                 ++stagePictures[k];
                 stageTotalMs[k] += pr.totalMs;
@@ -1505,6 +1511,10 @@ int RunEncode(const Options& o)
         }
     }
 
+    // The divisor of every millisecond figure below: the pictures whose cost was accumulated, which
+    // is o.frames unless --timing-skip left the first few out. Clamped to 1 so that a case with
+    // --timing-skip at or above its picture count prints zeros instead of dividing by zero.
+    const uint32_t timedFrames = (o.frames > o.timingSkip) ? (o.frames - o.timingSkip) : 1u;
     const double bitrate = (totalBytes * 8.0 * o.fps) / static_cast<double>(o.frames);
     printf("  %u of %u pictures bit exact against the inbox decoder\n", exact, o.frames);
     printf("  nnz agreement GPU vs CPU: %s (%u disagreements)\n", (nnzBad == 0) ? "exact" : "FAIL",
@@ -1513,19 +1523,23 @@ int RunEncode(const Options& o)
            o.frames * wmb * hmb);
     printf("  %llu bytes, %.0f bit/s at %u Hz, mean PSNR(Y) %.2f dB\n",
            static_cast<unsigned long long>(totalBytes), bitrate, o.fps, psnrSum / o.frames);
+    if (o.timingSkip != 0) {
+        printf("  timing over %u of %u pictures (the first %u are encoded and checked, not timed)\n",
+               timedFrames, o.frames, o.timingSkip);
+    }
     printf("  %.2f ms per picture total, %.2f ms of it on the GPU, %.1f pictures per second\n",
-           totalMs / o.frames, totalGpuMs / o.frames, 1000.0 * o.frames / totalMs);
+           totalMs / timedFrames, totalGpuMs / timedFrames, 1000.0 * timedFrames / totalMs);
     // The stages, per picture. The GPU stage is wall clock around the dispatches, so it contains the
     // wait for the GPU: readback is that wait plus the transfer. The CPU half is entropy coding plus
     // byte stream assembly, and what the two do not account for is the little that lies between
     // them. Every figure is of this run; nothing is carried over from another.
     printf("  per picture: gpu stage %.2f ms (gpu busy %.2f, readback %.2f), cpu %.2f ms "
            "(cavlc %.2f, nal %.2f)\n",
-           totalGpuWallMs / o.frames, totalGpuMs / o.frames, totalReadbackMs / o.frames,
-           totalCpuMs / o.frames, totalCavlcMs / o.frames, totalNalMs / o.frames);
+           totalGpuWallMs / timedFrames, totalGpuMs / timedFrames, totalReadbackMs / timedFrames,
+           totalCpuMs / timedFrames, totalCavlcMs / timedFrames, totalNalMs / timedFrames);
     printf("  per picture: command recording %.2f ms, map wait %.2f ms, readback transfer %.2f ms\n",
-           totalRecordMs / o.frames, totalMapWaitMs / o.frames,
-           (totalReadbackMs - totalMapWaitMs) / o.frames);
+           totalRecordMs / timedFrames, totalMapWaitMs / timedFrames,
+           (totalReadbackMs - totalMapWaitMs) / timedFrames);
     printf("  per picture profile accounted for every picture: %s\n",
            (timingBad == 0) ? "yes" : "FAIL");
     PrintStageProfile(stagePictures, stageDispatches, stageMs, stageTotalMs, firstSteps);
@@ -1577,7 +1591,7 @@ void Usage()
     printf("usage: mfthost.exe [--selftest|--encode|--mft|--compare|--sinkwriter|--all]\n");
     printf("                   [--width N] [--height N] [--frames N] [--qp N] [--bitrate N]\n");
     printf("                   [--gop N] [--fps N] [--deblock] [--gpu-source] [--still] [--cbr]\n");
-    printf("                   [--verbose] [--out <directory>]\n");
+    printf("                   [--timing-skip N] [--verbose] [--out <directory>]\n");
 }
 
 } // namespace
@@ -1640,6 +1654,8 @@ int wmain(int argc, wchar_t** argv)
             o.still = true;
         } else if (wcscmp(a, L"--cbr") == 0) {
             o.rc = RateControl::Cbr;
+        } else if (wcscmp(a, L"--timing-skip") == 0) {
+            o.timingSkip = ArgU(argc, argv, i, o.timingSkip); ++i;
         } else if (wcscmp(a, L"--verbose") == 0) {
             o.verbose = true;
         } else if (wcscmp(a, L"--out") == 0 && i + 1 < argc) {
