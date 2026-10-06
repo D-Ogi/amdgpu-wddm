@@ -628,3 +628,113 @@ help.setting.fan|mt|bfae721d|ファンはボードのファームウェアが制
 help.setting.voltage|mt|9c28b6e1|チップの電圧です。今後対応予定です。
 help.setting.fps-counter|mt|929ada50|フレーム レートを表示します。今後対応予定です。
 help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。
+# ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
+graphics.tuning.title|mt|e6d2df01|詳細な調整
+graphics.tuning.show|mt|ad38683b|詳細な調整を表示
+graphics.tuning.intro|mt|783ada66|グラフィックスの電圧を少し下げると、温度と騒音が下がります。変更はまずテストとして動き、保持しなければ自動で元に戻ります。
+graphics.tuning.preset|mt|5691a71e|既成の設定
+graphics.tuning.preset.standard|mt|ef669154|標準
+graphics.tuning.preset.mild|mt|96124817|控えめ
+graphics.tuning.preset.medium|mt|8e588cd1|中程度
+graphics.tuning.preset.deep|mt|7038852d|許容される最低値
+graphics.tuning.point|mt|65d8ea4f|{0} MHz
+graphics.tuning.lower|mt|635c004b|電圧を下げる
+graphics.tuning.raise|mt|d6d822c0|電圧を上げる
+graphics.tuning.apply|mt|238cd174|この設定をテスト
+graphics.tuning.keep|mt|fdce5da2|保持する
+graphics.tuning.stop|mt|e8c445ee|元の設定に戻す
+graphics.tuning.reset|mt|71803214|標準の電圧
+graphics.tuning.running|mt|020767b3|テスト中です。{0}
+graphics.tuning.saved|mt|ff1402a2|この設定は保存され、起動ごとに使われます。
+graphics.tuning.unsaved|mt|d55611e8|テストが終わる前に保持してください。終わると自動で元に戻ります。
+graphics.tuning.chart|mt|1cab2722|各速度の電圧
+graphics.tuning.chart.help|mt|ec985b16|点をクリックしてから「電圧を下げる」または「電圧を上げる」を使います。灰色の線が標準、下の線がドライバーが許す最低の電圧です。
+graphics.tuning.need-auto|mt|ca6c9300|自動クロックを有効にし、Windows を再起動してから戻ってください。
+graphics.tuning.table|mt|510c2545|速度、電圧、標準との差
+graphics.cpu.title|mt|54aac653|プロセッサ
+graphics.cpu.intro|mt|a63ab108|これらのプロセッサ設定は他の人のボードから得たもので、このボードで測定した人はいません。そのため変更はまずテストとして動きます。
+graphics.cpu.off|mt|f1b24044|プロセッサの調整は無効です。
+graphics.cpu.enable|mt|0bb17eb3|プロセッサの調整を有効にする
+graphics.cpu.disable|mt|3cfe43a7|プロセッサの調整を無効にする
+graphics.cpu.readback|mt|82efaa57|今すぐプロセッサを読み取る
+graphics.cpu.need-readback|mt|0cc411d5|変更する前に一度プロセッサを読み取ってください。
+graphics.cpu.voltage.label|mt|76e2487b|現在の電圧
+graphics.cpu.count.label|mt|36912b92|Windows が見ているプロセッサ数
+graphics.cpu.cap.label|mt|17954fca|有効な温度上限
+graphics.cpu.clock.label|mt|f57ec9fb|最高速度
+graphics.cpu.uv.label|mt|c6848a6c|電圧を下げる段数
+graphics.cpu.temp.label|mt|caaccd53|設定する温度上限
+graphics.cpu.apply|mt|4b907b31|これらの設定をテスト
+graphics.cpu.cores.title|mt|22777135|プロセッサコア
+graphics.cpu.cores.6|mt|00842292|6 コア（標準）
+graphics.cpu.cores.8|mt|b977c4a8|8 コア
+graphics.cpu.cores.apply|mt|1797bc97|このコア数を使う
+graphics.cpu.cores.note|mt|39ab5add|このボードは 8 コアのうち 6 コアが有効な状態で出荷されます。8 コアには Windows の再起動が必要で、残りの 2 コアをこのボードで試した人はいません。
+tuner.curve.delta.line|mt|fe6d3468|標準
+tuner.curve.delta.under|mt|513a58af|{0} mV 低い
+tuner.curve.delta.over|mt|90207f8b|{0} mV 高い
+tuner.curve.error.range|mt|38116870|{0} MHz の電圧はドライバーが受け付ける範囲外です。
+tuner.curve.error.depth|mt|9fbad56a|{0} MHz の電圧はドライバーが許す値より低いです。
+tuner.curve.error.order|mt|3e359e98|{0} MHz の電圧が、その下の速度より低くなっています。
+tuner.curve.error.floor|mt|89adac7a|最も低い速度は標準の電圧のままです。
+tuner.curve.error.none|mt|d7c2b02e|電圧の設定が指定されていません。
+tuner.trial.left|mt|eb5d98aa|残り {0} 秒
+tuner.cpu.voltage|mt|0c0a06a5|{0} mV
+tuner.cpu.voltage.high|mt|14f68a9d|{0} mV、このアプリが許す値より高い
+tuner.cpu.uv.none|mt|fe6d3468|標準
+tuner.cpu.uv.steps|mt|0f215681|{0} 段低い
+tuner.curve.summary|mt|497bd2e7|{0} 個の速度が変わり、最大の差は {2} MHz で {1} mV 低くなります
+tuner.curve.summary.line|mt|a850a56c|すべての速度で標準の電圧
+tuner.curve.preview.revert|mt|dd7a9c60|保持しなければ {0} 秒後に元の設定へ自動で戻ります
+tuner.curve.preview.keep|mt|3632b9d0|テスト中の設定が保存され、起動ごとに使われます
+tuner.cpu.preview.clock|mt|4888e4e0|プロセッサの最高速度 {0} MHz
+tuner.cpu.preview.uv|mt|b1e8e5b2|プロセッサの電圧を {0} 段下げる
+tuner.cpu.preview.temp|mt|f4c256f3|プロセッサの温度上限 {0} C
+tuner.cpu.preview.keep|mt|9ac1dfb1|テスト中のプロセッサ設定が保存されます
+tuner.cpu.preview.readback|mt|7dd25675|プロセッサの電圧、速度、温度上限を読み取る
+tuner.refuse.not-running|mt|a8b8ef18|ドライバーが動いていないため、調整するものがありません。
+tuner.refuse.no-read|mt|a2f4958b|ドライバーが応答しませんでした。少し待ってからやり直してください。
+tuner.refuse.not-valid|mt|402bcee3|この起動では調整できません。Windows を再起動してからやり直してください。
+tuner.refuse.not-governing|mt|9a470d35|まず自動クロックを有効にし、Windows を再起動してください。
+tuner.refuse.bad-values|mt|a416480c|これらの電圧はドライバーが受け付ける設定ではありません。
+tuner.refuse.same|mt|ff58de1c|この設定はすでに使われています。
+tuner.refuse.bad-window|mt|5eb5edb4|テストの長さがドライバーの受け付ける範囲外です。
+tuner.refuse.no-trial|mt|0a23efc0|テストが動いていないため、保持も停止もできません。
+tuner.refuse.already-default|mt|9f0d673e|標準の電圧はすでに使われています。
+tuner.refuse.cpu-off|mt|b88471b0|プロセッサの調整は無効です。有効にして Windows を再起動してください。
+tuner.refuse.cpu-busy|mt|9f5b8dd2|プロセッサは別の変更で使用中です。少し待ってからやり直してください。
+tuner.refuse.cpu-not-proven|mt|0cc411d5|変更する前に一度プロセッサを読み取ってください。
+tuner.refuse.cpu-nothing|mt|ed6c4b52|変更する項目が選ばれていません。
+tuner.refuse.cpu-bad-clock|mt|effa04de|速度は {0} から {1} MHz の間でなければなりません。
+tuner.refuse.cpu-bad-uv|mt|d56317ef|電圧の段数は {0} 以下でなければなりません。
+tuner.refuse.cpu-bad-temp|mt|d14fa1e3|温度上限は {0} から {1} C の間でなければなりません。
+tuner.refuse.cpu-bad-cores|mt|52c699a3|そのコア数はこのボードが受け付けません。
+tuner.refuse.cpu-cores-already|mt|dc4921d6|そのコア数はすでに選ばれています。
+tuner.refuse.cpu-already-standard|mt|3160dc03|プロセッサはすでに標準の設定です。
+tuner.refuse.cpu-enable-already|mt|53af5ab8|プロセッサの調整はすでに有効です。
+tuner.refuse.cpu-disable-already|mt|68d82f85|プロセッサの調整はすでに無効です。
+plan.title.tune-trial|mt|5fa23224|電圧設定をテストする
+plan.title.tune-keep|mt|a3b10e8e|電圧設定を保持する
+plan.title.tune-stop|mt|2933136c|元の電圧に戻す
+plan.title.tune-reset|mt|71803214|標準の電圧
+plan.title.cpu-enable|mt|0bb17eb3|プロセッサの調整を有効にする
+plan.title.cpu-disable|mt|3cfe43a7|プロセッサの調整を無効にする
+plan.title.cpu-readback|mt|615fdee1|プロセッサを読み取る
+plan.title.cpu-trial|mt|15a8535d|プロセッサ設定をテストする
+plan.title.cpu-keep|mt|14e57d83|プロセッサ設定を保持する
+plan.title.cpu-stop|mt|d7e78a7b|元のプロセッサ設定に戻す
+plan.title.cpu-reset|mt|4bd614fa|標準のプロセッサ設定
+plan.title.core-mask|mt|39d71947|コア数を変更する
+search.graphics.tuning|mt|e6d2df01|詳細な調整
+search.graphics.tuning.terms|mt|2b970752|電圧|アンダーボルト|カーブ|冷却|静音
+search.graphics.cpu-tuning|mt|447b1d50|プロセッサの調整
+search.graphics.cpu-tuning.terms|mt|7f92368b|プロセッサ|速度|ブースト|アンダーボルト
+search.graphics.cpu-cores|mt|22777135|プロセッサコア
+search.graphics.cpu-cores.terms|mt|71b97e69|コア|8 コア|解除
+help.setting.tuning|mt|c9f195b3|各速度でグラフィックスの電圧を数ミリボルト下げます。同じ速度でも消費電力と発熱が減ります。電圧が低すぎるとゲームや画面が固まる形で現れるため、変更はすべて自動で元に戻るテストとして動きます。
+help.setting.cpu-cores|mt|5510f0aa|このボードは 8 コアのうち 6 コアが有効な状態で出荷されます。8 コアには Windows の再起動が必要です。その後 Windows が正しく起動しない場合、ドライバーが自動で 6 コアに戻します。
+help.setting.cpu-tuning|mt|30000aff|プロセッサの最高速度、わずかな電圧の引き下げ、温度上限です。これらの数値は他の人のボードから得たものです。電圧を自由にしたままプロセッサの速度を上げて壊れたボードがあるため、このアプリは下げるだけで、必ず電圧を読み戻します。
+plan.line.cpu-tune-on|mt|c3793e19|プロセッサの調整: 有効。
+plan.line.cpu-tune-off|mt|14ef42b2|プロセッサの調整: 無効。
+tuner.cpu.preview.stop|mt|f3995948|プロセッサはテスト前の設定に戻ります
+tuner.cpu.preview.reset|mt|c3cf92af|プロセッサは標準の設定に戻ります

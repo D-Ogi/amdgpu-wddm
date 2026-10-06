@@ -39,6 +39,10 @@ static partial class UnitTests
         var m = Regex.Match(header, @"typedef struct _" + name + @"\s*\{(?<body>.*?)\}\s*" + name + ";", RegexOptions.Singleline);
         if (!m.Success) throw new Exception("struct " + name + " not found in the header");
         var body = Regex.Replace(m.Groups["body"].Value, @"//[^\n]*", "");
+        // An array length written as one of the header's own defines (BC250_DPM_CURVE_POINTS, BC250_CPU_CORE_SLOTS):
+        // resolved from the same header, so the walk does not stop at the first such field.
+        foreach (Match d in Regex.Matches(header, @"#define (?<id>BC250_\w+) (?<n>\d+)u?\b"))
+            body = body.Replace("[" + d.Groups["id"].Value + "]", "[" + d.Groups["n"].Value + "]");
         var offsets = new Dictionary<string, int>();
         int at = 0;
         size = -1;
@@ -1040,6 +1044,7 @@ static partial class UnitTests
         NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
+        TunerTests(args[0], header);
         DriverCardTests();
         UpdateTests(args[0]);
         GuiTests(args[0]);

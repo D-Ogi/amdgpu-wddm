@@ -82,6 +82,10 @@ namespace AmdgpuWddmControl
             var dpm = Kmd.Dpm();
             s.Interop = interop.Value; s.Health = health.Value; s.Dpm = dpm.Value;
             s.Cu = Kmd.CuMode().Value;
+            // The tuning surfaces. Both are software reads of this start; a trial's countdown runs in the driver, so
+            // every reading is fresh by construction and the window never keeps a timer of its own.
+            s.Curve = Kmd.Curve().Value;
+            s.Cpu = Kmd.Cpu().Value;
             if (s.Interop == null && s.Health == null && s.Dpm == null) s.DriverError = dpm.Error ?? interop.Error ?? "no answer";
 
             string installDir = "";
@@ -616,6 +620,12 @@ namespace AmdgpuWddmControl
                 else if (a == "--games" && (args[i + 1] == "keep" || args[i + 1] == "reset")) o.More.Games = args[++i];
                 else if (a == "--image" && Profiles.IsValidImage(args[i + 1])) o.More.Image = args[++i];
                 else if (a == "--value" && (args[i + 1].Length == 0 || Profiles.IsValidValue(args[i + 1]))) o.More.Value = args[++i];
+                else if (a == "--curve" && TunerPlan.ParseCurve(args[i + 1]) != null) o.More.Curve = args[++i];
+                else if (a == "--window" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Window = n; i++; }
+                else if (a == "--cpu-clock" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.CpuClock = n; i++; }
+                else if (a == "--cpu-uv" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.CpuUv = n; i++; }
+                else if (a == "--cpu-temp" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.CpuTemp = n; i++; }
+                else if (a == "--cores" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Cores = n; i++; }
                 else return null;
             }
             // set-clocks says what happens to both values ("unset" removes one); no other action takes a mode.
@@ -626,6 +636,11 @@ namespace AmdgpuWddmControl
             if (o.More.Games != null && o.Action != "reset-defaults") return null;
             if ((o.More.Image != null) != o.Action.StartsWith("game-", StringComparison.Ordinal)) return null;
             if ((o.More.Value != null) != (o.Action == "game-profile")) return null;
+            // Each tuning option belongs to one action, so a stray value never travels with a different request.
+            if ((o.More.Curve != null) != (o.Action == "tune-trial")) return null;
+            if (o.More.Window != null && o.Action != "tune-trial" && o.Action != "cpu-trial") return null;
+            if ((o.More.CpuClock != null || o.More.CpuUv != null || o.More.CpuTemp != null) && o.Action != "cpu-trial") return null;
+            if ((o.More.Cores != null) != (o.Action == "core-mask")) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
             if (o.RunId == null) o.RunId = Guid.NewGuid().ToString("N").Substring(0, 12);
             return o;
@@ -640,6 +655,8 @@ namespace AmdgpuWddmControl
                 Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
                 Console.Error.WriteLine("       --action cu-mode --cu 24|40 ...   --action reset-defaults [--games keep|reset] ...");
                 Console.Error.WriteLine("       --action game-profile --image <name.exe> --value <switches or \"\"> ...   --action game-undo|game-redo --image <name.exe> ...");
+                Console.Error.WriteLine("       --action tune-trial --curve <11 values in mV> [--window ms] ...   --action tune-keep|tune-stop|tune-reset ...");
+                Console.Error.WriteLine("       --action cpu-trial [--cpu-clock MHz] [--cpu-uv steps] [--cpu-temp C] [--window ms] ...   --action core-mask --cores 6|8 ...");
                 Console.Error.WriteLine("       --action " + Recovery.OperatorEscape + " --accept-bd060   (operator escape for a desktop that does not respond; see README)");
                 return Usage;
             }
@@ -726,7 +743,11 @@ namespace AmdgpuWddmControl
             catch (Exception e) { Fail("cannot prepare " + RecoveryProbe.ControlDirectory + ": " + e.Message); return Failed; }
             Log("start " + o.Action + (o.Mode != null ? " mode " + o.Mode : "") + (o.Ceiling != null ? " ceiling " + o.Ceiling : "") +
                 (o.More.Cu != null ? " cu " + o.More.Cu : "") + (o.More.Games != null ? " games " + o.More.Games : "") + (o.More.Image != null ? " image " + o.More.Image : "") +
-                (o.More.Value != null ? " value \"" + o.More.Value + "\"" : "") + ", " + Program.ProductName + " " + Program.VersionText);
+                (o.More.Value != null ? " value \"" + o.More.Value + "\"" : "") +
+                (o.More.Curve != null ? " curve " + o.More.Curve : "") + (o.More.Window != null ? " window " + o.More.Window : "") +
+                (o.More.CpuClock != null ? " cpu-clock " + o.More.CpuClock : "") + (o.More.CpuUv != null ? " cpu-uv " + o.More.CpuUv : "") +
+                (o.More.CpuTemp != null ? " cpu-temp " + o.More.CpuTemp : "") + (o.More.Cores != null ? " cores " + o.More.Cores : "") +
+                ", " + Program.ProductName + " " + Program.VersionText);
             try
             {
                 var s = RecoveryProbe.Read(o.Action == Recovery.OperatorEscape ? "escape" : "helper");
@@ -734,6 +755,7 @@ namespace AmdgpuWddmControl
                 if (plan.Refused) { Log("result: refused: " + plan.Refusal); return Refused; }
                 if (plan.RestartCompositor) return StopCompositor(s);
                 if (plan.CuConfirm) return ConfirmCu();
+                if (plan.Tune != null) return RunTune(plan);
                 var backup = Backup(o, plan, s);
                 Log("backup " + backup.File);
 
@@ -927,6 +949,135 @@ namespace AmdgpuWddmControl
             Log("CU read back: " + (r.ReadBack != null ? r.ReadBack.ToString() : "unknown") + (r.FlushFailed ? " (the flush failed: not durable)" : ""));
             Log("result: failed: " + text + " Error: " + r.Error);
             return false;
+        }
+
+        // ---- the tuning page (docs/design/tuner.md) -----------------------------------------------------------------
+        // These runs write no registry value and take no backup. Each one reads the surface, sends with the Generation
+        // of that read, and reads what came back, so the log carries what the driver did and not what was asked for.
+        // The driver owns the trial window and the revert: a helper that exits, a crash and a power cut all end with
+        // the stored values back.
+        static int RunTune(ActionPlan plan)
+        {
+            return plan.Tune.Kind.StartsWith("curve-", StringComparison.Ordinal) ? RunCurve(plan) : RunCpu(plan);
+        }
+
+        static string CurveLine(CurveState c)
+        {
+            return "flags " + c.Flags + ", mode " + c.Mode + ", trial " + c.TrialRemainingMs + " ms left of " + c.TrialMs +
+                ", active " + TunerPlan.CurveText(c.Active) + ", stored " + (c.Has(CurveState.FlagStored) ? TunerPlan.CurveText(c.Stored) : "none") +
+                ", level " + c.Level + " (" + c.LevelMHz + " MHz, " + c.LevelMv + " mV), observed " + c.ObservedMHz + " MHz vid " + c.ObservedVid +
+                ", last reason " + c.Error + " at level " + c.ErrorLevel + ", sets " + c.Sets + " keeps " + c.Keeps + " cancels " + c.Cancels + " reverts " + c.Reverts;
+        }
+
+        static string CpuLine(CpuState u)
+        {
+            return "flags " + u.Flags + ", applied " + u.AppliedMaxMHz + " MHz/" + u.AppliedUvSteps + " steps/" + u.AppliedTempC + " C" +
+                ", stored " + u.StoredMaxMHz + "/" + u.StoredUvSteps + "/" + u.StoredTempC +
+                ", baseline " + u.BaselineMaxMHz + "/" + u.BaselineUvSteps + "/" + u.BaselineTempC +
+                ", voltage " + u.VoltageMv + " mV, cap " + u.CapC + " C, cores " + u.Cores + "/" + u.Threads +
+                ", mask " + u.CoreMask + " stored " + u.CoreMaskStored + ", trial " + u.TrialRemainingMs + " ms left" +
+                ", last queue " + u.LastQueue + " message " + u.LastMessage + " status " + u.LastStatus +
+                ", reads " + u.Reads + " writes " + u.Writes + " refusals " + u.Refusals + " reverts " + u.Reverts;
+        }
+
+        static int RunCurve(ActionPlan plan)
+        {
+            var t = plan.Tune;
+            var before = Kmd.Curve();
+            if (before.Value == null) { Log("result: failed: no voltage-curve reading: " + before.Error); return Failed; }
+            Log("curve before: " + CurveLine(before.Value));
+            KmdResult<CurveState> sent;
+            switch (t.Kind)
+            {
+                case "curve-trial":
+                    Log("curve trial: " + TunerPlan.CurveText(t.Mv) + ", window " + t.WindowMs + " ms, generation " + before.Value.Generation);
+                    sent = Kmd.CurveTrial(before.Value.Generation, t.Mv, t.WindowMs);
+                    break;
+                case "curve-keep": sent = Kmd.CurveOp(Kmd.CurveOpKeep, before.Value.Generation); break;
+                case "curve-stop": sent = Kmd.CurveOp(Kmd.CurveOpCancel, before.Value.Generation); break;
+                default: sent = Kmd.CurveOp(Kmd.CurveOpReset, before.Value.Generation); break;
+            }
+            if (sent.Value == null) { Log("result: failed: the driver did not take the voltage change: " + sent.Error); return Failed; }
+            Log("curve after: " + CurveLine(sent.Value));
+            var c = sent.Value;
+            string wrong = null;
+            switch (t.Kind)
+            {
+                case "curve-trial":
+                    if (!c.Has(CurveState.FlagOnTrial)) wrong = "no trial is running after the request";
+                    else if (TunerPlan.CurveText(c.Candidate) != TunerPlan.CurveText(t.Mv)) wrong = "the driver put another curve on trial: " + TunerPlan.CurveText(c.Candidate);
+                    break;
+                case "curve-keep":
+                    if (c.Has(CurveState.FlagOnTrial) || !c.Has(CurveState.FlagStored)) wrong = "the curve was not stored";
+                    break;
+                case "curve-stop":
+                    if (c.Has(CurveState.FlagOnTrial)) wrong = "the trial is still running";
+                    break;
+                default:
+                    if (c.Has(CurveState.FlagStored) || c.Has(CurveState.FlagOnTrial)) wrong = "a stored curve is still there";
+                    break;
+            }
+            if (wrong != null) { Log("result: failed: " + wrong + " (last reason " + c.Error + ")"); return Failed; }
+            Log("result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
+            return Done;
+        }
+
+        static int RunCpu(ActionPlan plan)
+        {
+            var t = plan.Tune;
+            var before = Kmd.Cpu();
+            if (before.Value == null) { Log("result: failed: no processor reading: " + before.Error); return Failed; }
+            Log("processor before: " + CpuLine(before.Value));
+            var r = new Kmd.CpuRequest { ExpectedGeneration = before.Value.Generation };
+            switch (t.Kind)
+            {
+                case "cpu-readback": r.Op = Kmd.CpuOpReadback; break;
+                case "cpu-trial":
+                    r.Op = Kmd.CpuOpSet;
+                    r.TrialMs = t.WindowMs;
+                    if (t.MaxMHz != null) { r.Given |= CpuState.GivenMax; r.MaxMHz = t.MaxMHz.Value; }
+                    if (t.UvSteps != null) { r.Given |= CpuState.GivenUv; r.UvSteps = t.UvSteps.Value; }
+                    if (t.TempC != null) { r.Given |= CpuState.GivenTemp; r.TempC = t.TempC.Value; }
+                    Log("processor trial: given " + r.Given + ", " + r.MaxMHz + " MHz, " + r.UvSteps + " steps, " + r.TempC +
+                        " C, window " + r.TrialMs + " ms, generation " + r.ExpectedGeneration);
+                    break;
+                case "cpu-keep": r.Op = Kmd.CpuOpKeep; break;
+                case "cpu-stop": r.Op = Kmd.CpuOpCancel; break;
+                case "core-mask": r.Op = Kmd.CpuOpCores; r.CoreMask = t.CoreMask; break;
+                default: r.Op = Kmd.CpuOpReset; break;
+            }
+            var sent = Kmd.CpuRequestOp(r);
+            if (sent.Value == null) { Log("result: failed: the driver did not take the processor request: " + sent.Error); return Failed; }
+            Log("processor after: " + CpuLine(sent.Value));
+            var u = sent.Value;
+            string wrong = null;
+            switch (t.Kind)
+            {
+                case "cpu-readback":
+                    // The readback is what admits every later write: without an answer from the processor's own queue
+                    // nothing else on this card may run (docs/design/tuner.md).
+                    if (!u.Has(CpuState.FlagQueue3Proven)) wrong = "the processor did not answer its getters";
+                    break;
+                case "cpu-trial":
+                    if (!u.Has(CpuState.FlagOnTrial)) wrong = "no trial is running after the request";
+                    break;
+                case "cpu-keep":
+                    if (u.Has(CpuState.FlagOnTrial) || !u.Has(CpuState.FlagStored)) wrong = "the processor settings were not stored";
+                    break;
+                case "cpu-stop":
+                    if (u.Has(CpuState.FlagOnTrial)) wrong = "the trial is still running";
+                    break;
+                case "core-mask":
+                    if (u.CoreMaskStored != t.CoreMask) wrong = "the core count was not written";
+                    break;
+                default:
+                    if (u.Has(CpuState.FlagStored) || u.Has(CpuState.FlagOnTrial)) wrong = "stored processor settings are still there";
+                    break;
+            }
+            if (wrong != null) { Log("result: failed: " + wrong + " (reason " + u.Error + ")"); return Failed; }
+            Log(plan.OfferRestart ? "result: written, pending until the next restart of Windows: " + plan.Change
+                : "result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
+            return Done;
         }
 
         // cu-unflushed.json (plan 497 decision 1): written when a flush or the verifying read of this run failed, so

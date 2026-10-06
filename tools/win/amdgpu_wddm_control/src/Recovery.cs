@@ -57,6 +57,10 @@ namespace AmdgpuWddmControl
         // REG_DWORD (Parameters lists DWORDs only), so that such a value is unreadable, never absent.
         public CuModeState Cu { get; set; }
         public List<string> CuBadValues { get; set; }
+        // The tuning surfaces of this start (null: the read failed). Both are read on every poll, because a trial's
+        // countdown runs in the driver and the window only reports what it reads.
+        public CurveState Curve { get; set; }
+        public CpuState Cpu { get; set; }
         // A setter run of this boot could not flush or verify its writes (cu-unflushed.json): no next-start prediction.
         public bool CuNotDurable { get; set; }
         // Per-game switches: image -> Experiment as stored ("" for a key without the value), and the release's
@@ -104,6 +108,9 @@ namespace AmdgpuWddmControl
     public sealed class ActionPlan
     {
         public string Action, Refusal, Title, Change, Effect;
+        // The same refusal in the window's language. Refusal is English for the log and the support report; this one
+        // is what the dialog shows. Null: PlainPlan.Refusal maps the English sentence as before.
+        public string PlainRefusal;
         public readonly List<RegWrite> Writes = new List<RegWrite>();
         public readonly List<string> Notes = new List<string>();
         public bool ConfirmStart, OfferRestart, RestartCompositor, Undoable = true;
@@ -111,6 +118,9 @@ namespace AmdgpuWddmControl
         // The CU setter's steps (section 7 S1-S6), run after Writes, never restored; CuConfirm: the CU CONFIRM escape.
         public CuSetterPlan Cu;
         public bool CuConfirm;
+        // The tuning request of this plan (the voltage curve or the processor). It writes no registry value: the
+        // helper sends one escape and the driver owns the trial window and the revert (docs/design/tuner.md).
+        public TuneRequest Tune;
         // Per-game switches: image -> new Experiment value, "" = remove the game's key. Backed up and undoable per game.
         public readonly SortedDictionary<string, string> GameWrites = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         // What the dialog shows (in the window's language): one line per change, then the notes.
@@ -129,6 +139,17 @@ namespace AmdgpuWddmControl
             foreach (var g in GameWrites)
                 w.AppendLine("  " + (g.Value.Length == 0 ? "delete HKLM\\" + Profiles.RegistryPath + "\\" + g.Key
                     : "set HKLM\\" + Profiles.RegistryPath + "\\" + g.Key + " " + Profiles.ValueName + " = \"" + g.Value + "\" (String)"));
+            if (Tune != null)
+            {
+                w.Append("  tuning request " + Tune.Kind);
+                if (Tune.Mv != null) w.Append(", curve " + TunerPlan.CurveText(Tune.Mv));
+                if (Tune.WindowMs != 0) w.Append(", window " + Tune.WindowMs + " ms");
+                if (Tune.MaxMHz != null) w.Append(", clock " + Tune.MaxMHz.Value + " MHz");
+                if (Tune.UvSteps != null) w.Append(", undervolt " + Tune.UvSteps.Value + " steps");
+                if (Tune.TempC != null) w.Append(", cap " + Tune.TempC.Value + " C");
+                if (Tune.CoreMask != 0) w.Append(", cores " + CpuTuning.CoresFor(Tune.CoreMask));
+                w.AppendLine();
+            }
             if (Cu != null)
             {
                 w.AppendLine("  CU setter, target " + Cu.Target + ", stored before: " + Cu.Before + "; backup for diagnosis only, never restored");
@@ -286,7 +307,7 @@ namespace AmdgpuWddmControl
 
         // The only values an action or an undo may write. Never: the temperature limits, firmware paths, the other
         // KMD service values, BIOS or firmware settings, test signing.
-        public static readonly string[] ParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz" };
+        public static readonly string[] ParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune" };
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
         public static readonly string[] DefaultParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "DpmMode", "DpmMaxMHz" };
@@ -295,7 +316,10 @@ namespace AmdgpuWddmControl
         public const string OperatorEscape = "restart-compositor";
 
         public static readonly string[] Actions = { "reopen-gpu-path", "desktop-gpu", "desktop-cpu", "confirm-start", "enable-dpm", "set-clocks", "reset-defaults", "undo",
-            "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo" };
+            "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo",
+            // The tuning page. Only cpu-enable and cpu-disable write a value; the other ten send one escape each.
+            "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
+            "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask" };
 
         public static bool Allowed(string path, string name)
         {
@@ -1121,6 +1145,24 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case "tune-trial":
+                case "tune-keep":
+                case "tune-stop":
+                case "tune-reset":
+                case "cpu-enable":
+                case "cpu-disable":
+                case "cpu-readback":
+                case "cpu-trial":
+                case "cpu-keep":
+                case "cpu-stop":
+                case "cpu-reset":
+                case "core-mask":
+                {
+                    var why = TunerPlan.Fill(action, s, more, p);
+                    if (why != null) return Refuse(p, why);
+                    break;
+                }
+
                 case "game-undo":
                 case "game-redo":
                 {
@@ -1151,6 +1193,10 @@ namespace AmdgpuWddmControl
         {
             public uint? Cu;
             public string Games, Image, Value;
+            // The tuning page: the curve as 11 values ("820,840,..."), the trial window in ms, and the processor's
+            // clock, undervolt steps, temperature cap and core count.
+            public string Curve;
+            public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
         }
 
         static bool SameSet(string a, string b)

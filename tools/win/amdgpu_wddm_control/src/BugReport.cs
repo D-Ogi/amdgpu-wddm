@@ -101,6 +101,14 @@ namespace AmdgpuWddmControl
             w.AppendLine(interop.Value == null ? "interop: " + interop.Error :
                 string.Format("interop: flags 0x{0:X} requested {1} effective {2} reason {3} closed_reason {4} users {5} ({6})", interop.Value.Flags, interop.Value.Requested,
                     interop.Value.Effective, interop.Value.Reason, interop.Value.ClosedReason, interop.Value.Users, KmdReply.CompositionText(interop.Value)));
+            // The tuning surfaces: what the operator set, what is on trial and what the chip answered. A support
+            // report of a machine that hangs under load has to say whether a curve or a processor setting was in
+            // force, so these lines come before any guessing (docs/design/tuner.md).
+            var curve = Kmd.Curve();
+            var cpu = Kmd.Cpu();
+            if (curve.Value == null) w.AppendLine("voltage curve: " + curve.Error);
+            if (cpu.Value == null) w.AppendLine("processor tuning: " + cpu.Error);
+            foreach (var line in MainForm.TuningReport(curve.Value, cpu.Value)) w.AppendLine(line);
             var vram = Kmd.VideoMemory();
             w.AppendLine(vram.Value == null ? "video memory: " + vram.Error :
                 string.Format("video memory: segments {0} local resident {1} committed {2} limit {3} aperture resident {4} limit {5} dedicated {6}", vram.Value.Segments,
@@ -236,6 +244,9 @@ namespace AmdgpuWddmControl
         {
             "bc250kmd", "Display", "Microsoft-Windows-DxgKrnl", "Microsoft-Windows-Dwm-Core",
             "Microsoft-Windows-WER-SystemErrorReporting", "Microsoft-Windows-Kernel-Power", "Microsoft-Windows-Kernel-PnP",
+            // An undervolt that is one step too deep shows up here, as a corrected or uncorrected machine check, and
+            // nowhere else: the driver never sees it.
+            "Microsoft-Windows-WHEA-Logger",
         };
 
         // System: the providers above. Application: crash records (Application Error, Windows Error Reporting) that

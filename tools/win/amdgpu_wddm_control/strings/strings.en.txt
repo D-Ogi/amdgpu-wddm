@@ -646,3 +646,113 @@ help.setting.fan|src|-|The board's firmware controls the fan. Control from this 
 help.setting.voltage|src|-|The chip's voltage. Coming later.
 help.setting.fps-counter|src|-|Shows the frame rate. Coming later.
 help.setting.cache-clear|src|-|Deletes the shader cache. Coming later.
+# ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
+graphics.tuning.title|src|-|Advanced tuning
+graphics.tuning.show|src|-|Show advanced tuning
+graphics.tuning.intro|src|-|Lower the graphics voltage a little to run cooler and quieter. Every change runs as a test first and goes back by itself unless you keep it.
+graphics.tuning.preset|src|-|Ready-made settings
+graphics.tuning.preset.standard|src|-|Standard
+graphics.tuning.preset.mild|src|-|Gentle
+graphics.tuning.preset.medium|src|-|Medium
+graphics.tuning.preset.deep|src|-|As low as allowed
+graphics.tuning.point|src|-|{0} MHz
+graphics.tuning.lower|src|-|Less voltage
+graphics.tuning.raise|src|-|More voltage
+graphics.tuning.apply|src|-|Test this setting
+graphics.tuning.keep|src|-|Keep it
+graphics.tuning.stop|src|-|Back to the old setting
+graphics.tuning.reset|src|-|Standard voltage
+graphics.tuning.running|src|-|A test is running. {0}
+graphics.tuning.saved|src|-|This setting is saved and used at every start.
+graphics.tuning.unsaved|src|-|Keep this setting before the test ends, or it goes back by itself.
+graphics.tuning.chart|src|-|Voltage at each speed
+graphics.tuning.chart.help|src|-|Click a point, then use Less voltage or More voltage. The grey line is standard, the lower line is as low as this driver allows.
+graphics.tuning.need-auto|src|-|Turn automatic clocks on, restart Windows, then come back here.
+graphics.tuning.table|src|-|Speed, voltage, and the difference from standard
+graphics.cpu.title|src|-|Processor
+graphics.cpu.intro|src|-|These processor settings come from other people’s boards and nobody has measured them on this one, so each change runs as a test first.
+graphics.cpu.off|src|-|Processor tuning is off.
+graphics.cpu.enable|src|-|Turn processor tuning on
+graphics.cpu.disable|src|-|Turn processor tuning off
+graphics.cpu.readback|src|-|Read the processor now
+graphics.cpu.need-readback|src|-|Read the processor once before changing anything.
+graphics.cpu.voltage.label|src|-|Voltage now
+graphics.cpu.count.label|src|-|Processors Windows sees
+graphics.cpu.cap.label|src|-|Temperature limit in force
+graphics.cpu.clock.label|src|-|Highest speed
+graphics.cpu.uv.label|src|-|Voltage steps lower
+graphics.cpu.temp.label|src|-|Temperature limit to set
+graphics.cpu.apply|src|-|Test these settings
+graphics.cpu.cores.title|src|-|Processor cores
+graphics.cpu.cores.6|src|-|6 cores (standard)
+graphics.cpu.cores.8|src|-|8 cores
+graphics.cpu.cores.apply|src|-|Use this number of cores
+graphics.cpu.cores.note|src|-|The board ships with six of its eight cores on. Eight cores need a restart of Windows, and nobody has tested the other two on this board.
+tuner.curve.delta.line|src|-|standard
+tuner.curve.delta.under|src|-|{0} mV less
+tuner.curve.delta.over|src|-|{0} mV more
+tuner.curve.error.range|src|-|The voltage at {0} MHz is outside what the driver takes.
+tuner.curve.error.depth|src|-|The voltage at {0} MHz is lower than the driver allows.
+tuner.curve.error.order|src|-|The voltage at {0} MHz is lower than at the speed below it.
+tuner.curve.error.floor|src|-|The lowest speed keeps its standard voltage.
+tuner.curve.error.none|src|-|No voltage setting was given.
+tuner.trial.left|src|-|{0} s left
+tuner.cpu.voltage|src|-|{0} mV
+tuner.cpu.voltage.high|src|-|{0} mV, higher than this app allows
+tuner.cpu.uv.none|src|-|standard
+tuner.cpu.uv.steps|src|-|{0} steps lower
+tuner.curve.summary|src|-|{0} speeds change, the largest step is {1} mV less at {2} MHz
+tuner.curve.summary.line|src|-|the standard voltage at every speed
+tuner.curve.preview.revert|src|-|the old setting comes back by itself after {0} s unless you keep it
+tuner.curve.preview.keep|src|-|the setting under test is saved and used at every start
+tuner.cpu.preview.clock|src|-|highest processor speed {0} MHz
+tuner.cpu.preview.uv|src|-|processor voltage {0} steps lower
+tuner.cpu.preview.temp|src|-|processor temperature limit {0} C
+tuner.cpu.preview.keep|src|-|the processor settings under test are saved
+tuner.cpu.preview.readback|src|-|read the processor’s voltage, speed and temperature limit
+tuner.refuse.not-running|src|-|The driver is not running, so there is nothing to tune.
+tuner.refuse.no-read|src|-|The driver did not answer. Try again in a moment.
+tuner.refuse.not-valid|src|-|This start of the driver cannot tune. Restart Windows and try again.
+tuner.refuse.not-governing|src|-|Turn automatic clocks on first, then restart Windows.
+tuner.refuse.bad-values|src|-|These voltages are not a setting the driver takes.
+tuner.refuse.same|src|-|This setting is in use already.
+tuner.refuse.bad-window|src|-|The length of the test is outside what the driver takes.
+tuner.refuse.no-trial|src|-|No test is running, so there is nothing to keep or stop.
+tuner.refuse.already-default|src|-|The standard voltage is in use already.
+tuner.refuse.cpu-off|src|-|Processor tuning is off. Turn it on and restart Windows.
+tuner.refuse.cpu-busy|src|-|The processor is busy with another change. Try again in a moment.
+tuner.refuse.cpu-not-proven|src|-|Read the processor once before changing anything.
+tuner.refuse.cpu-nothing|src|-|Nothing was chosen to change.
+tuner.refuse.cpu-bad-clock|src|-|The speed must be between {0} and {1} MHz.
+tuner.refuse.cpu-bad-uv|src|-|The number of voltage steps must be {0} or fewer.
+tuner.refuse.cpu-bad-temp|src|-|The temperature limit must be between {0} and {1} C.
+tuner.refuse.cpu-bad-cores|src|-|That number of cores is not one this board takes.
+tuner.refuse.cpu-cores-already|src|-|That number of cores is chosen already.
+tuner.refuse.cpu-already-standard|src|-|The processor already has its standard settings.
+tuner.refuse.cpu-enable-already|src|-|Processor tuning is on already.
+tuner.refuse.cpu-disable-already|src|-|Processor tuning is off already.
+plan.title.tune-trial|src|-|Test a voltage setting
+plan.title.tune-keep|src|-|Keep the voltage setting
+plan.title.tune-stop|src|-|Back to the old voltage
+plan.title.tune-reset|src|-|Standard voltage
+plan.title.cpu-enable|src|-|Turn processor tuning on
+plan.title.cpu-disable|src|-|Turn processor tuning off
+plan.title.cpu-readback|src|-|Read the processor
+plan.title.cpu-trial|src|-|Test processor settings
+plan.title.cpu-keep|src|-|Keep the processor settings
+plan.title.cpu-stop|src|-|Back to the old processor settings
+plan.title.cpu-reset|src|-|Standard processor settings
+plan.title.core-mask|src|-|Change the number of cores
+search.graphics.tuning|src|-|Advanced tuning
+search.graphics.tuning.terms|src|-|voltage|undervolt|curve|cooler|quieter
+search.graphics.cpu-tuning|src|-|Processor tuning
+search.graphics.cpu-tuning.terms|src|-|processor|speed|boost|undervolt
+search.graphics.cpu-cores|src|-|Processor cores
+search.graphics.cpu-cores.terms|src|-|cores|eight cores|unlock
+help.setting.tuning|src|-|Lowers the graphics voltage by a few millivolts at each speed. The same speed then needs less power and makes less heat. A voltage that is too low shows up as a game or the screen freezing, so every change runs as a test that comes back by itself.
+help.setting.cpu-cores|src|-|The board ships with six of its eight cores on. Eight cores need a restart of Windows. If Windows then does not start properly, the driver puts six back by itself.
+help.setting.cpu-tuning|src|-|The processor’s highest speed, a small voltage reduction and the temperature limit. These numbers come from other people’s boards. One board was damaged by raising the processor speed with the voltage left free, so this app only lowers and always reads the voltage back.
+plan.line.cpu-tune-on|src|-|Processor tuning: on.
+plan.line.cpu-tune-off|src|-|Processor tuning: off.
+tuner.cpu.preview.stop|src|-|the processor goes back to the settings it had before the test
+tuner.cpu.preview.reset|src|-|the processor goes back to its standard settings

@@ -32,6 +32,7 @@ namespace AmdgpuWddmControl
                 case "DwmForceCpu": return w.Delete || w.Number == 0 ? "plan.line.route-gpu" : "plan.line.route-cpu";
                 case "DpmMode": return !w.Delete && w.Number == 1 ? "plan.line.auto-on" : "plan.line.auto-off";
                 case "DpmMaxMHz": return w.Delete ? "plan.line.ceiling-default" : "plan.line.ceiling";
+                case "CpuTune": return w.Delete || w.Number == 0 ? "plan.line.cpu-tune-off" : "plan.line.cpu-tune-on";
                 default: return null;
             }
         }
@@ -79,6 +80,7 @@ namespace AmdgpuWddmControl
         // A refusal in plain words. The plan's own sentence goes to the log and the support report.
         public static string Refusal(ActionPlan p)
         {
+            if (p.PlainRefusal != null) return p.PlainRefusal;      // the tuning page refuses in both languages at once
             var r = p.Refusal ?? "";
             if (r.Contains("not installed")) return Strings.T("plan.refuse.not-installed");
             if (r.Contains("driver is not running")) return Strings.T("plan.refuse.not-running");
