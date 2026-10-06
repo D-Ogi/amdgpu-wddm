@@ -66,7 +66,8 @@ def load_bos(path):
         if len(parts) == 6:
             bos.append({"label": parts[0], "va": int(parts[1], 16), "size": int(parts[2], 16),
                         "domain": parts[3], "flags": int(parts[4], 16),
-                        "word": int(parts[5], 16)})
+                        # A PRT row has no buffer, so e17_vm.py writes "-" for its word.
+                        "word": None if parts[5] == "-" else int(parts[5], 16)})
     return bos
 
 
