@@ -1,0 +1,44 @@
+## System Information
+         Operating System: Windows 11 Pro 64-bit (10.0, Build 22631) (22621.ni_release.220506-1250)
+          DirectX Version: DirectX 12
+           DxDiag Version: 10.00.22621.3527 64bit Unicode
+## DirectX Debug Levels
+Direct3D:    0/4 (retail)
+DirectDraw:  0/4 (retail)
+## DirectShow
+## Display Devices
+           Card name: BC-250 GPU (amdgpu-wddm)
+        Manufacturer: amdgpu-wddm
+           Chip type: AMD BC-250 (gfx1013)
+      Display Memory: 12107 MB
+    Dedicated Memory: 8151 MB
+       Shared Memory: 3956 MB
+        Current Mode: Unknown
+         HDR Support: Unknown
+ Display Color Space: Unknown
+         Driver Name: bc250umd.dll,C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll,C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll,C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+ Driver File Version: Unknown (Unknown)
+      Driver Version: 0.7.199.100
+         DDI Version: 12
+      Feature Levels: 12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1
+        Driver Model: WDDM 2.0
+ Hardware Scheduling: DriverSupportState:AlwaysOff Enabled:False
+ Graphics Preemption: DMA
+  Compute Preemption: DMA
+            Miracast: Not Supported
+      Detachable GPU: No
+      Power P-states: Not Supported
+      Virtualization: Not Supported
+          Block List: DISABLE_HWSCH
+  Catalog Attributes: N/A
+   Driver Attributes: Final Retail
+         DXVA2 Modes: Unknown
+        D3D9 Overlay: Unknown
+             DXVA-HD: Unknown
+## Sound Devices
+## Disk & DVD
+## System Devices
+## DirectShow
+## DirectShow
+## EVR
+## Diagnostics

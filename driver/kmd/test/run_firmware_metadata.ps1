@@ -15,7 +15,10 @@ $repo = Resolve-Path (Join-Path $here '..\..\..')
 $shim = Join-Path $repo 'driver\shim'
 $imports = Join-Path $repo 'driver\amdgpu-import'
 $amdhdr = Join-Path $repo 'third_party\linux-amdgpu'
+# Compiler temporaries stay off drive C:. The directory must exist: cl given a TEMP that does not reports
+# D8050, "cannot load the command line into the debug record", and names no path at all.
 $env:TEMP="$Root\scratch\tmp";$env:TMP=$env:TEMP
+New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1

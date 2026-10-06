@@ -13,6 +13,7 @@
 //   bc250kmd_cli telemetry | vram     what the monitor's GPU line shows (bc250control.dll exports the same reads)
 //   bc250kmd_cli dpm [n [ms]]       the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
+//                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
@@ -532,6 +533,8 @@ static int Clock(int argc,wchar_t** argv)
 // tools/win/bc250mon/test_telemetry.py compares it with the header of the KMD that ships it.
 #define BC250_ESCAPE_RUN_DPM 23u
 #define BC250_DPM_ABI 1u
+#define BC250_DPM_ABI_1 1u
+#define BC250_DPM_ABI1_SIZE 160u
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_FLAG_TEMPERATURE 128u
 #define BC250_DPM_FLAG_CLOCK 256u
@@ -586,25 +589,63 @@ static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
 }
 
 // READ only: the overlay has no business confirming a DPM start. Never idles the scheduler, never reads a BAR.
+//
+// The caller's buffer decides the ABI, and that is what keeps the deployed callers working. bc250mon's
+// Driver.cs and the control DLL's Native.cs both pass 160 bytes, the ABI 1 layout, and they were built
+// against a header in which that was the whole structure. RUN_DPM grew to 192 bytes in 0.7.207 (the idle
+// state), so a check against sizeof(BC250_ESCAPE_DPM) alone would refuse every one of those calls and a
+// compile-time assertion on that size would stop the DLL being built at all. The driver takes either size
+// with its own AbiVersion (driver/kmd/display.c), so this function asks with the ABI of the size it was
+// given and never writes past it. A rebuilt caller that passes 192 gets the idle fields as well.
 BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
 {
     NTSTATUS status;
-    typedef char DpmAbiSizeCheck[(sizeof(BC250_ESCAPE_DPM) == 160) ? 1 : -1];
+    unsigned long abi;
+    typedef char DpmAbiSizeCheck[(BC250_DPM_ABI1_SIZE == 160 && sizeof(BC250_ESCAPE_DPM) >= 160) ? 1 : -1];
     (void)sizeof(DpmAbiSizeCheck);
-    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
-    memset(data, 0, sizeof(*data));
+    if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data))) return (LONG)0xC000000D;
+    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : BC250_DPM_ABI;
+    memset(data, 0, bytes);
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_DPM;
     data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-    data->AbiVersion = BC250_DPM_ABI;
+    data->AbiVersion = abi;
     data->Op = BC250_DPM_OP_READ;
-    status = TelemetryEscape(data, sizeof(*data));
+    status = TelemetryEscape(data, bytes);
     if (!NT_SUCCESS(status)) return status;         // a KMD before 0.7.175 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_DPM ||
-        data->AbiVersion != BC250_DPM_ABI || data->Op != BC250_DPM_OP_READ)
+        data->AbiVersion != abi || data->Op != BC250_DPM_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// The CU mode snapshot (READ, any caller) and the boot-guard confirmation of a pending 40 CU start (CONFIRM, an
+// administrator with the Generation of a READ of this start). Both are adapter-owned software state answered with
+// NoAdapterSynchronization alone (bc250kmd_escape.h), like the DPM read: no BAR access, no scheduler idle.
+BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration, BC250_ESCAPE_CU_MODE *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char CuModeAbiSizeCheck[(sizeof(BC250_ESCAPE_CU_MODE) == 184) ? 1 : -1];
+    (void)sizeof(CuModeAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || (op != BC250_CU_MODE_OP_READ && op != BC250_CU_MODE_OP_CONFIRM))
+        return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_CU_MODE;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_CU_MODE_ABI;
+    data->Op = op;
+    data->ExpectedGeneration = op == BC250_CU_MODE_OP_CONFIRM ? expectedGeneration : 0;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_CU_MODE ||
+        data->AbiVersion != BC250_CU_MODE_ABI || data->Op != op)
         return (LONG)0xC000000D;
     return 0;
 }
@@ -749,6 +790,58 @@ static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *d
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query)
 {
     return D3DKMTQueryStatistics(query);
+}
+
+// ---- the control application's reads (tools/win/amdgpu_wddm_control) ------------------------------------------
+
+// The GPU DWM interop decision of this start (driver/kmd/interop.c): software state, open to every caller. The control
+// application (tools/win/amdgpu_wddm_control) shows from it whether the desktop composes through the GPU path.
+BC250_CONTROL_API LONG WINAPI Bc250Interop(BC250_ESCAPE_INTEROP *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char InteropAbiSizeCheck[(sizeof(BC250_ESCAPE_INTEROP) == 104) ? 1 : -1];
+    (void)sizeof(InteropAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_INTEROP;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_INTEROP_ABI;
+    data->Op = BC250_INTEROP_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_INTEROP ||
+        data->AbiVersion != BC250_INTEROP_ABI || data->Op != BC250_INTEROP_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// One page of the driver log ring from sequence `from` on, GET_LOG with NoAdapterSynchronization alone: answered by
+// 0.7.184.1 and later without the adapter lock, so a bug report taken while a game runs does not stall it (BD-054).
+// No HardwareAccess fallback and no LOG_SUMMARY here: both take the adapter lock. An older driver refuses with
+// STATUS_DEVICE_NOT_READY, and the caller says so.
+BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char LogAbiSizeCheck[(sizeof(BC250_ESCAPE_LOG) == 60 + 64 * 168) ? 1 : -1];
+    (void)sizeof(LogAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || from == BC250_LOG_FROM_SUMMARY) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_GET_LOG;
+    data->From = from;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_GET_LOG ||
+        data->Returned > BC250_LOG_MAX_LINES)
+        return (LONG)0xC000000D;
+    return 0;
 }
 
 // "telemetry [count [interval ms]]": what the monitor's GPU line is made of, one line per sample.
@@ -1282,7 +1375,11 @@ static int Dcn(void)
     printf("             DCHUBP_CNTL 0x%08lX / 0x000F1002\n", d.Hubp0Cntl);
     printf("otg0         OTG_CONTROL 0x%08lX / 0x80011311, master enable %s / ENABLED\n", d.Otg0Control,
            d.Otg0MasterEnable ? "ENABLED" : "off");
-    printf("             h_total %lu / 2079, v_total %lu / 1234\n", d.Otg0HTotal, d.Otg0VTotal);
+    // Both registers hold the total minus one, as display_timing.h reads them: print the field with the
+    // Linux reference next to it, then the mode it means. The bare name "h_total" on the field value put a
+    // 2079 by 1234 mode into a write-up once (E54).
+    printf("             OTG_H_TOTAL field %lu / 2079, OTG_V_TOTAL field %lu / 1234 (h_total %lu, v_total %lu)\n",
+           d.Otg0HTotal, d.Otg0VTotal, d.Otg0HTotal + 1, d.Otg0VTotal + 1);
     printf("             vblank interrupt enable (GLOBAL_SYNC_STATUS bit 12) %s (no Linux reference for this bit alone)\n",
            d.Otg0VblankIntEnabled ? "on" : "off");
     printf("             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) %s (docs/design/vsync-interrupt-route.md: latches\n"
@@ -1584,6 +1681,12 @@ static int Confirm(void)
 //
 // "log summary" asks the WDDM table to write its call counters into the ring first, which is what stage A is run
 // for; with the gate closed that is one line saying the table is not running.
+//
+// "log summary only" starts at the first line the summary itself wrote (BC250_LOG_FROM_SUMMARY): the summary and
+// whatever the driver logged after it, two or three pages instead of the whole ring. It is the form for a caller
+// that polls, such as the overlay. The last line counts the escapes of each kind, so that a poller can see that
+// only the summary took the adapter lock (BD-054: a CLI from before 0.7.184.1 sent every page with HardwareAccess,
+// and the overlay's poll of it stalled a running game for 280-420 ms every 5 s).
 
 static int Log(const WCHAR *fromText, int summary)
 {
@@ -1593,11 +1696,14 @@ static int Log(const WCHAR *fromText, int summary)
     NTSTATUS status;
     WCHAR *end;
 
-    if (fromText != NULL) {
+    if (fromText != NULL && summary && !_wcsicmp(fromText, L"only")) {
+        from = BC250_LOG_FROM_SUMMARY;
+    } else if (fromText != NULL) {
         from = wcstoul(fromText, &end, 10);
         // wcstoul takes "-1" and returns 0xFFFFFFFF, which is BC250_LOG_FROM_SUMMARY: a sentinel is not a number to type.
         if (*end || fromText[0] == L'-' || from == BC250_LOG_FROM_SUMMARY) {
-            fprintf(stderr, "log [from], where from is a decimal sequence number, not %ls\n", fromText);
+            fprintf(stderr, "log [from] | log summary [from | only], where from is a decimal sequence number, not %ls\n",
+                    fromText);
             return 2;
         }
     }
@@ -1632,6 +1738,8 @@ static int Log(const WCHAR *fromText, int summary)
                    log.Lines[i].Milliseconds % 1000, log.Lines[i].Text);
             printed++;
         }
+        // The sentinel is no position to compare with: the driver answers the sequence it actually read from.
+        if (from == BC250_LOG_FROM_SUMMARY) from = log.From;
         if (log.Returned == 0 || log.Next <= from) break;   // the end, or a driver that is not moving on
         from = log.Next;
         // A driver that keeps logging while we read would keep us here: the ring is 1024 lines, so anything past
@@ -1639,6 +1747,8 @@ static int Log(const WCHAR *fromText, int summary)
         if (printed > 4 * log.RingLines) { printf("             stopped at %lu lines; ask again from %lu\n", printed, from); break; }
     }
     printf("             %lu lines printed\n", printed);
+    printf("             escapes: %lu without adapter synchronization, %lu with HardwareAccess\n",
+           g_SoftReads, g_HardReads);
     return 0;
 }
 
@@ -1873,18 +1983,27 @@ static int Journal(const WCHAR *fromText)
 static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
                                            "registry", "no-smu", "not-run", "smu-error" };
 static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-hard", "sensor", "max-setting",
-                                             "stable", "smu", "fixed" };
+                                             "stable", "smu", "fixed", "thermal-warm", "thermal-ramp", "idle" };
+
+static unsigned long g_DpmAbi = BC250_DPM_ABI;   // BC250_DPM_ABI_1 after a driver refused ABI 2 (0.7.207)
 
 static int DpmQuery(BC250_ESCAPE_DPM *d, unsigned long op, unsigned long long generation)
 {
     NTSTATUS status;
-    memset(d, 0, sizeof(*d));
-    d->Magic = BC250_ESCAPE_MAGIC;
-    d->Command = BC250_ESCAPE_RUN_DPM;
-    d->AbiVersion = BC250_DPM_ABI;
-    d->Op = op;
-    d->ExpectedGeneration = generation;
-    if (SendEscapeFlags(BC250_DEFAULT_HWID, d, sizeof(*d), 1, &status)) return 1;
+    unsigned size;
+    for (;;) {
+        memset(d, 0, sizeof(*d));
+        size = g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;
+        d->Magic = BC250_ESCAPE_MAGIC;
+        d->Command = BC250_ESCAPE_RUN_DPM;
+        d->AbiVersion = g_DpmAbi;
+        d->Op = op;
+        d->ExpectedGeneration = generation;
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, d, size, 1, &status)) return 1;
+        if (status != (NTSTATUS)0xC000000Dl || g_DpmAbi != BC250_DPM_ABI) break;
+        // STATUS_INVALID_PARAMETER for 192 bytes: a driver before 0.7.207, which takes ABI 1 alone.
+        g_DpmAbi = BC250_DPM_ABI_1;
+    }
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
     return 0;
 }
@@ -1901,13 +2020,36 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
            (d->Flags & BC250_DPM_FLAG_CLOCK) ? "" : " old",
            d->TemperatureMc / 1000.0, (d->Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "?",
            d->BusyPermille / 10.0, d->BusyAvgPermille / 10.0, d->WantMHz, d->CapMHz, d->MaxMHz,
-           d->Throttle < 8 ? g_DpmThrottle[d->Throttle] : "?",
+           d->Throttle < ARRAYSIZE(g_DpmThrottle) ? g_DpmThrottle[d->Throttle] : "?",
            (d->Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "",
            (d->Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "",
            (d->Flags & BC250_DPM_FLAG_PAUSED) ? " paused" : "",
            (d->Flags & BC250_DPM_FLAG_SESSION) ? " session" : "",
            d->Raises, d->Lowers, d->ThermalEvents, d->Errors,
            (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0, d->SdmaBusyPermille / 10.0);
+}
+
+// The idle state, once under the header (0.7.207): the point in force, the window the GPU must be quiet for,
+// and what the state did so far. A driver before 0.7.207 answers RUN_DPM ABI 1 and has no idle state.
+static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
+{
+    if (d->AbiVersion != BC250_DPM_ABI) {
+        printf("idle: n/a (a driver before 0x000700CF answers RUN_DPM ABI 1)\n");
+        return;
+    }
+    if (d->IdleMHz == 0) {
+        // A start that does not govern never configures the state (the driver says so in its log), so name that
+        // first: without it a fixed-lab start reads as a setting the owner has to look for.
+        if (!(d->Flags & BC250_DPM_FLAG_GOVERNING))
+            printf("idle: off (this start does not govern the clock)\n");
+        else
+            printf("idle: off (DpmIdleMHz 0, a refused setting, or a point the firmware refused; %lu refusals)\n",
+                   d->IdleRefusals);
+        return;
+    }
+    printf("idle: %lu MHz%s after %lu ms under %lu permille busy; entries %lu exits %lu refusals %lu, "
+           "%llu ms at the point\n", d->IdleMHz, (d->Flags & BC250_DPM_FLAG_IDLE) ? " (now)" : "",
+           d->IdleHoldMs, d->IdleBusyPermille, d->IdleEntries, d->IdleExits, d->IdleRefusals, d->IdleMs);
 }
 
 // ---- dpm tune / dpm floor: the governor's thresholds and a runtime floor (BC250_ESCAPE_RUN_DPM_TUNE, 0.7.185.1) ----
@@ -2175,6 +2317,7 @@ static int Dpm(int argc, WCHAR **argv)
                 TunePrintState(&t);
             } else printf("; tune n/a (driver before 0x000700B9)");
             printf("\n");
+            DpmPrintIdle(&d);
         }
         DpmPrint(&d);
     }
@@ -2269,7 +2412,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli sdmaib [bytes]               (VMID0 indirect SDMA copy/fill control)\n"
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
-                        "       bc250kmd_cli log [from] | log summary [from]\n"
+                        "       bc250kmd_cli log [from] | log summary [from | only]   (only: the summary's own lines, for a poller)\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
                         "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"

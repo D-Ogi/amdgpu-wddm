@@ -160,6 +160,21 @@ for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/m
 `amdgpu-wddm/icd-v3-0004b`, dec624fe "radv: Exclude the C runtime the build does not use, by b_vscrt"): before it,
 the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120).
 
+#### Host gate after every pull of the Mesa fork
+
+Run both RADV host tests on the new build before the ICD goes to the lab. They need no GPU and no lab unit:
+
+```
+pwsh tools\build\build-radv-queue-tests.ps1 -Source <tree> -Build <dir> -OutputDir <new dir>
+pwsh tools\build\build-radv-unorm10-export-test.ps1 -Source <tree> -Build <dir> -OutputDir <new dir>
+```
+
+The queue tests gate the hosted queue winsys (BD-045, BD-046). The 10-bit UNORM export test gates the rounding
+of BD-049, which every 10-bit Present measurement caveat depends on; its negative control must fail. A pull that
+loses either patch shows up here instead of in a game. Last recorded run of the export test:
+[evidence/windows/2026-10-03-BD-049-unorm10-export-oracle](../evidence/windows/2026-10-03-BD-049-unorm10-export-oracle/RESULT.md),
+57 760 299 checks, 0 failures.
+
 ### Desktop D3D10 UMD on llvmpipe (`-Config llvmpipe-umd -Llvm <LLVM build>`)
 
 ```
@@ -285,6 +300,13 @@ pwsh driver\kmd\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget -Out <BC250_ROOT>\s
 - **Build.** `cl` and `link` run directly, without project files: MSVC through `vswhere`, headers and
   libraries from the NuGet kits (`-KitVersion 10.0.26100.0`). The fast quality gates in `tools/quality` run
   first and a kernel stack-budget check (`tools/win/stackbudget.py`) runs last.
+- **Log line width.** The gate `guardlog-width` measures every `GuardLog` format against the 159 characters a
+  log line holds (`BC250_LOG_TEXT`, 160 bytes with the terminator) and fails on a new format over it. It reads
+  the `.c`, `.inc` and `.h` files directly under `driver/kmd`. Run it alone with
+  `python tools/quality/guardlog_width.py`. `--list-over` prints the over-width formats as baseline lines, and
+  `--prune` removes the baseline lines that no longer apply and tightens the widths of the lines that stay.
+  `tools/quality/guardlog_width_baseline.txt` is the ratchet of the formats that were already too long, and
+  `driver/kmd/README.md` says why a truncated line costs evidence.
 - **Output.** `<Out>\package\{bc250kmd.sys, bc250kmd.inf, bc250kmd.cat, bc250-lab-test.cer}`. `-UmdStub` adds
   a second package with the stub UMD from `driver/umd-stub/build.ps1`; the script header explains both.
 - **Signing.** A self-signed code-signing certificate `CN=BC-250 lab test signing` in `Cert:\CurrentUser\My`,

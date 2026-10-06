@@ -118,11 +118,19 @@ Nothing waits on the CPU: both phases read the queues' state words and fences at
   itself), Reset, ExecuteBundle, ExecuteCommandLists and destroy, and before it is recorded on another ring or
   directly. Every ring's replay before the destroy of any object an entry can name, a command pool's reset or
   destroy, and SetPipelineStackSize. Each drain kind is counted with its wait time in the `replay` summary lines.
+- A worker runs at its owner thread's priority; a drain that waits past its spin lifts it one level above the
+  waiting thread until the last such wait ends (the waiter is blocked on the worker's calls).
+- Diagnostics: a summary at close 64 and then at the first Close 10 s after the last (calls, waits and time per
+  drain kind; waits of 1, 10 and 50 ms or more and the longest per kind; the longest stretch a wait saw without
+  the worker finishing an entry, with that entry's rva; workers found asleep; priority lifts), and one key=value
+  `replay long-wait:` line per ring wait of 20 ms or more (kind, waiter and worker levels, bytes behind and run,
+  the worker's CPU time during the wait, its stuck stretch). The optional `log` hook gets every replay line too;
+  the shell writes them to a file with the `replay-log` experiment (`../replay-log.h`).
 - The worker calls no hook and makes no context operation. The shell's `worker` hook runs it in a scope that
   admits only the runtime callbacks recording needs; `drained`, on a DDI thread after a drain, reports a device
   removal a worker saw.
-- `replay-test.exe` checks exactness against direct recording, order, every drain, backpressure, teardown and
-  multithreaded recording with destroys; the harness's `--deferred-replay` run repeats every harness check with
+- `replay-test.exe` checks exactness against direct recording, order, every drain, backpressure, teardown,
+  multithreaded recording with destroys, the worker's priority and the diagnostics through the log hook; the harness's `--deferred-replay` run repeats every harness check with
   the policy on.
 
 **Shaders.**

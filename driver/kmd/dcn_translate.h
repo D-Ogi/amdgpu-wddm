@@ -29,8 +29,9 @@ int DcnAddressFits(unsigned long long Physical, unsigned long long VramBase, uns
 // Linear 32-bit scanout geometry; pitch is in bytes, extent includes row padding.
 int DcnSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pitch,
                     unsigned long long* Bytes);
-// The same for a linear surface of 4- or 8-byte pixels (a composed swap-chain buffer, FP16 at 8 bytes): the pitch
-// is a whole number of pixels and holds the row. Scan-out keeps DcnSurfaceBytes, whose 4 bytes are the plane's.
+// The same for a linear surface of 1-, 4- or 8-byte pixels (a composed surface: an A8 atlas at 1 byte, a swap-chain
+// buffer at 4, FP16 at 8): the pitch is a whole number of pixels and holds the row. Scan-out keeps DcnSurfaceBytes,
+// whose 4 bytes are the plane's.
 int DcnLinearSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pitch,
                           unsigned long BytesPerPixel, unsigned long long* Bytes);
 unsigned long DcnPrimaryPitch(unsigned long Width);

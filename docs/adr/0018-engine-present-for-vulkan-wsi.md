@@ -66,6 +66,10 @@ still there.
 
 - ADR 0011 (present is a flip), ADR 0013 (node layout), ADR 0015 (superseded).
 - Facts M114, M475, M545, M576, M577, M580.
+- A DXGI composition swap chain is a second candidate transport for point 1, and it survives the app-local
+  DXVK and vkd3d-proton DLLs that our games ship: facts [M792](../facts/d3d.md#m792),
+  [M793](../facts/d3d.md#m793) and [M794](../facts/d3d.md#m794), measured on the development PC
+  (`evidence/windows/2026-09-28-E56-dxgi-shadowing-dev-pc/`). Nothing there measures our own driver.
 - `evidence/windows/2026-09-27-E43-witcher3-dx12-present-log/RESULT.md`.
 - Mesa fork `amdgpu-wddm/radv-wddm2-kmt-enum` c34ab7cd: `src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c`,
   `src/vulkan/wsi/wsi_common_win32.cpp`; `driver/kmd/wddm.c` `Bc250WddmPresent`.

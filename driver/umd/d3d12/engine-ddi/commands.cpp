@@ -71,10 +71,11 @@ void APIENTRY reset_pool(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDPOOL_0040 h) 
         c->report(E_INVALIDARG);
         return;
     }
-    // By API no list recording into the pool's allocators is open here, and every Close drained its list, so none of
-    // the pool's calls is pending: the replay of other pools' lists goes on. A list still open into this pool (an
-    // application error) keeps the drain of every ring, as before.
+    // By API no list recording into the pool's allocators is open here, so the pool's pending calls end with its
+    // lists' Close entries: the reset waits for the last of them on each ring, and the replay of other pools' lists
+    // goes on. A list still open into this pool (an application error) keeps the drain of every ring, as before.
     if (p->open_lists.load(std::memory_order_acquire)) drain_all(c, Drain::Pool);
+    else drain_closes(c, p->closing);
     for (ID3D12CommandAllocator* a : p->allocators) {
         if (!a) continue;
         HRESULT hr = a->Reset();
@@ -185,19 +186,37 @@ void APIENTRY destroy_list(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDLIST h) {
     c->live.fetch_sub(1);
 }
 
-// With replay on, the list's pending calls run first, so the engine's Close result is the list's.
+// With replay on, Close is the list's last entry and the worker makes the engine Close: the calling thread no longer
+// waits for the list's calls (306: 0.41 ms per frame of the main thread in that drain, 0.09 in the engine Close). The
+// list counts as closed at once. An engine Close that fails there leaves its result in close_hr, and the list's next
+// drain (ExecuteCommandLists, Reset, ExecuteBundle) reports it on that API thread: the runtime learns it there, not
+// from the Close. The engine Close reaches the list's allocator, so the pool keeps where the entry ends (closing) for
+// its reset and for a Reset into it. Made here (policy off, a thread without a ring), the Close reports its own
+// failure, and a list whose Close failed stays what it was.
 void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     CommandListRecord* l = list_of(h, "CloseCommandList");
     if (!l) return;
-    drain_list(l, Drain::Close);
-    HRESULT hr = l->list()->Close();
-    // A list whose Close failed is not a closed list: it stays what it was.
+    record(l, [hr = &l->close_hr](ID3D12GraphicsCommandList* e) noexcept {
+        const HRESULT result = e->Close();
+        if (FAILED(result)) hr->store(result, std::memory_order_relaxed);
+    });
+    // With the policy off, a tail left from before it was turned off names nothing (the teardown replayed it).
+    Replay* replay = l->h.device->replay;
+    const uint64_t tail = replay ? l->replay_tail.load(std::memory_order_relaxed) : 0;
+    const HRESULT hr = FAILED(l->close_hr.load(std::memory_order_relaxed))
+                           ? l->close_hr.exchange(S_OK, std::memory_order_relaxed) : S_OK;
     if (FAILED(hr)) {
         l->h.device->report_list(l->rt, hr);
-    } else {
-        l->recording = false;
-        if (l->pool) leave_pool(l);
+        if (!tail) return;
     }
+    l->recording = false;
+    if (tail) {
+        // The list is complete: its worker need not wait for a later publish to replay it.
+        wake_for(replay, tail);
+        if (auto* p = l->pool ? record_of<CommandPoolRecord>(l->pool, Tag::CommandPool, l->h.device) : nullptr)
+            p->closing[(tail >> 56) - 1].store(tail & kReplayPositionMask, std::memory_order_relaxed);
+    }
+    if (l->pool) leave_pool(l);
 }
 
 void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMANDLIST_0040* args) {
@@ -213,6 +232,7 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
         c->report_list(l->rt, E_INVALIDARG);
         return;
     }
+    drain_closes(c, p->closing);                // another list's pending Close still reaches the allocator
     ID3D12CommandAllocator*& a = p->allocators[l->type];
     if (!a) {
         HRESULT hr = c->device->CreateCommandAllocator(l->type, __uuidof(ID3D12CommandAllocator),
@@ -229,6 +249,7 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
         return;
     }
     if (l->pool) leave_pool(l);                 // a Reset without a Close: the list leaves its earlier pool
+    l->root_signatures[0] = l->root_signatures[1] = nullptr;   // the engine's Reset unbound them
     l->recording = true;
     l->pool = p;
     p->open_lists.fetch_add(1, std::memory_order_release);
@@ -322,14 +343,52 @@ void APIENTRY execute_bundle(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HCOMMANDLIST hbun
 // markers is not established here, and nothing reaches the engine.
 void APIENTRY set_marker(D3D12DDI_HCOMMANDLIST h, UINT64) { (void)list_of(h, "SetMarker"); }
 
-// Seen once, in the state the runtime writes into a list it has just reset. There the engine's Reset has
-// already cleared every root binding, so nothing is left to do. The engine has no call that clears the
-// arguments of a list in use: a null signature unbinds the signature and keeps the arguments. Whether the
-// runtime ever asks for that is not known; until it is, the slot changes nothing and says so once.
+// BD-046. The runtime has no ClearState DDI: for CreateCommandList, Reset and the API's ClearState it calls the
+// individual state DDIs, and this one "to clear root arguments to 0" (DirectX-Specs d3d/CPUEfficiency.md). On a
+// just-reset list nothing is bound and nothing is done. Mid-list (ClearState) the signatures stay bound and every
+// argument of each bound signature is set to zero through the engine's own calls, in parameter order: constants to
+// 0, root descriptors to VA 0 (a null descriptor in the engine), tables to handle 0. Otherwise the arguments set
+// before the ClearState stay, and a root descriptor keeps naming a buffer the application may destroy after it.
 void APIENTRY clear_root_arguments(D3D12DDI_HCOMMANDLIST h) {
-    if (!list_of(h, "ClearRootArguments")) return;
-    static std::atomic<bool> once{false};
-    if (!once.exchange(true)) log_line("ClearRootArguments: no engine operation, root state left as it is");
+    using List = ID3D12GraphicsCommandList;
+    CommandListRecord* l = list_of(h, "ClearRootArguments");
+    if (!l) return;
+    static constexpr UINT kZeros[D3D12_MAX_ROOT_COST] = {};
+    for (int graphics = 0; graphics < 2; ++graphics) {
+        const auto* r = record_of<RootSignatureRecord>(l->root_signatures[graphics], Tag::RootSignature, l->h.device);
+        if (!r) continue;
+        for (UINT i = 0; i < r->shapes; ++i) {
+            const RootParameterShape p = r->shape()[i];
+            switch (p.type) {
+            case D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS: {
+                const UINT n = p.constants < D3D12_MAX_ROOT_COST ? p.constants : D3D12_MAX_ROOT_COST;
+                if (graphics)
+                    record(l, [=](List* e, const UINT* d) { e->SetGraphicsRoot32BitConstants(i, n, d, 0); }, in(kZeros, n));
+                else
+                    record(l, [=](List* e, const UINT* d) { e->SetComputeRoot32BitConstants(i, n, d, 0); }, in(kZeros, n));
+                break;
+            }
+            case D3D12DDI_ROOT_PARAMETER_TYPE_CBV:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootConstantBufferView(i, 0); });
+                else record(l, [=](List* e) { e->SetComputeRootConstantBufferView(i, 0); });
+                break;
+            case D3D12DDI_ROOT_PARAMETER_TYPE_SRV:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootShaderResourceView(i, 0); });
+                else record(l, [=](List* e) { e->SetComputeRootShaderResourceView(i, 0); });
+                break;
+            case D3D12DDI_ROOT_PARAMETER_TYPE_UAV:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootUnorderedAccessView(i, 0); });
+                else record(l, [=](List* e) { e->SetComputeRootUnorderedAccessView(i, 0); });
+                break;
+            case D3D12DDI_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootDescriptorTable(i, D3D12_GPU_DESCRIPTOR_HANDLE{0}); });
+                else record(l, [=](List* e) { e->SetComputeRootDescriptorTable(i, D3D12_GPU_DESCRIPTOR_HANDLE{0}); });
+                break;
+            default:
+                break;
+            }
+        }
+    }
 }
 
 // DDI 0092 names this slot, but the alpha factor travels as the fourth component of OMSetBlendFactor

@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "id": "rottr",
+  "title": "Rise of the Tomb Raider",
+  "app_id": 391220,
+  "api": "d3d12",
+  "apis": {
+    "d3d12": {
+      "selection": "the default (owner, 2026-10-01: D3D12 wherever a game offers it): the game's own DirectX 12 option (added in patch 5, build 1.0.638.6), registry value EnableDX12, 0 by the game's default. smoke\\rottr-settings.ps1 -SetDx12 1 turns it on before the session (it prints the previous value) and -SetDx12 <that value> puts it back after; the runtime refuses a session whose EnableDX12 does not match (registry). In DirectX 12 mode the game still opens a D3D11 probe device at startup, so ROTTR.exe has to be on the router's allowlist (app_router): off it the probe went to the CPU UMD (FL 10_0) and the game died within 1 s on a NULL read in its own code, before any D3D12 module loaded (rottr5, 2026-10-01, crashpad 3092a488); on it the game ran on D3D12 and rendered the benchmark correctly (rottr6: amdgpu_wddm_d3d12 0CE9D4F8, vkd3d 15E3E24E and radv B4D82C4E of the registered triplet, plus app-route-icdmt's D3D11 UMD for the probe). The registered triplet carries the static-CRT ICD B4D82C4E since 2026-10-01; its predecessor 2A13235D imports MSVCP140 (the 825e4a49 class)",
+      "arguments": "",
+      "router": "allow",
+      "witness": {"module": "amdgpu_wddm_d3d12.dll", "sha256": "staged"},
+      "registry": [{"key": "Software\\Crystal Dynamics\\Rise of the Tomb Raider", "name": "EnableDX12", "value": 1, "default": 0}],
+      "world_after_confirm_s": 60
+    },
+    "d3d11": {
+      "selection": "a variant (SESSION_API=d3d11): the game's DirectX 12 option off (EnableDX12 0, the game's own default; lab smoke 2026-10-01); ROTTR.exe on the router's allowlist for the session with GpuUmdPath in the static-CRT root C:\\BC250\\m14\\app-route-icdmt (shell 7E9F1692, engine 7D28D8F5, ICD B4D82C4E; app_router), on which rottr4 (2026-10-01) ran the whole benchmark without a fault. The deployed root app-route-001 (shell E748418C) carries ICD D672813F, which imports MSVCP140 and crashed in the game's copy (825e4a49)",
+      "arguments": "",
+      "router": "allow",
+      "witness": {"module": "amdgpu_wddm_d3d11.dll", "sha256": "release"},
+      "registry": [{"key": "Software\\Crystal Dynamics\\Rise of the Tomb Raider", "name": "EnableDX12", "value": 0, "default": 0}]
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "Rise of the Tomb Raider",
+    "launch_entry": "0: ROTTR.exe, type default, no arguments; entries 1, 2, 4 and 5 need DLC 437290, entry 6 (ROTTR.exe -nolauncher -vr, type vr) needs DLC 505540 (appinfo cache of 2026-09-30)",
+    "arguments": "-nolauncher",
+    "require_state_flags": 4,
+    "wait_seconds": 90,
+    "eula": "391220_eula_0"
+  },
+  "executable": {"directory": "", "image": "ROTTR.exe", "direct_arguments": "-nolauncher"},
+  "processes": {
+    "main": "ROTTR",
+    "launch_chain": ["ROTTR"],
+    "renderers": ["ROTTR"],
+    "end_at_cleanup": ["ROTTR", "cdb"],
+    "survivors": ["ROTTR", "cdb"],
+    "writers": ["ROTTR", "cdb"],
+    "counters": ["ROTTR"],
+    "etw": ["ROTTR"]
+  },
+  "router_images": ["ROTTR.exe"],
+  "readiness": {"mode": "generic", "control_after_window_seconds": 10, "min_jobs": 50},
+  "modules": ["d3d12.dll", "d3d12core.dll", "dxgi.dll", "d3d11.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll",
+              "amdgpu_wddm_radv.dll", "bc250d3d.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll",
+              "bc250umd.dll", "vulkan-1.dll", "msvcp140.dll"],
+  "settings": {"policy": "untouched"},
+  "saves": "",
+  "events_filter": "ROTTR|amdgpu_wddm|d3d12|d3d11|dxgi",
+  "app_router": {
+    "required": "Both APIs: ROTTR.exe on the Allow list in Mode allowlist (HKLM\\SOFTWARE\\amdgpu-wddm\\AppRouter) and GpuUmdPath at the d3d11 witness, the static-CRT root app-route-icdmt (for D3D12 the game's D3D11 probe device needs it: rottr5 and rottr6 of 2026-10-01); otherwise the session refuses before the launch",
+    "check": "(cd bc250-win && python tools/win/target.py ps ../scratch/m15/icd-mt/lab/policy-read.ps1)",
+    "add": "(cd bc250-win && python tools/win/target.py ps ../scratch/m14/offer-hint/lab/hint-policy.ps1 -Allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe,ROTTR.exe -Root 'C:\\BC250\\m14\\app-route-icdmt')",
+    "remove": "python scratch/m15/app-route/approute.py policy allowlist --allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe",
+    "kill_switch": "python scratch/m15/app-route/approute.py policy cpu",
+    "rules": "--allow/-Allow replace the whole list: name every current entry (the four of STATE.md since 04:47Z, dxdiag.exe included; check first). The add is the lead's command of rottr6 (2026-10-01): hint-policy.ps1 admits the root with its own app-stage.ps1, then the root's app-policy.ps1 writes GpuUmdPath = <Root>\\gpu\\<shell> with the root's manifest hash checked. The remove (approute.py) returns to the deployed root app-route-001 (receipts app-policy-9 and app-policy-10). The router decides at the process's OpenAdapter, so the policy is set before the session and removed after the game has ended."
+  },
+  "app_profile": {
+    "image": "",
+    "experiment": "",
+    "proposal": "none: no ray tracing in this game (raytracing-tier not needed); the present and engine levers stay off until a first session shows the default path."
+  },
+  "session": {"default_seconds": 1200, "entry": "run-game.sh N rottr [SECONDS]"},
+  "notes": [
+    "-nolauncher: Nixxes, 'skips the launcher and goes directly into the game' (Steam discussion 451852571443443970). Without it ROTTR.exe opens its own settings launcher first. Lab smoke 2026-10-01: Steam starts ROTTR.exe (64-bit) directly, no launcher process; the router's first OpenAdapter10_2 at launch + 3.0 s, more at + 20.8 s and + 21.7 s (the device recreated for the game window).",
+    "Start (lab smoke and rottr4, 2026-10-01): fullscreen 1920x1200, black for the first ~40 s (not a G4 image fault), then logos that two held Enters skip (rottr4: hold:1C:300 twice; the smoke used hold:1C:500), then about 25 s of loading to the main menu, a 3D scene. The very first start also showed the Square Enix terms (ToS/EULA), accepted by the owner by hand.",
+    "Input (lab smoke, rottr4): mouse hover registers, but a menu item activates only with Enter: a click on the item, then Enter held at least 300 ms.",
+    "Benchmark (rottr4, coordinates as fractions of the 1920x1200 screen): START BENCHMARK is on the main menu (clickat:0.170:0.503, hold:1C:300; the smoke went through Options > Graphics > Run Benchmark); its load took about 3 min; the results dialog's OK (hold:1C:300) returns to the main menu after about 25 s. Quit: QUIT GAME (clickat:0.140:0.424, hold:1C:400), then a Yes/No dialog with No preselected: Yes is clickat:0.407:0.545, hold:1C:300. rottr4 took 18 min (20:20-20:38Z).",
+    "rottr4 (2026-10-01, D3D11 variant on the static-CRT root app-route-icdmt; preset HIGH, 1920x1200 borderless fullscreen, FXAA, VSync off, DX12 off): Mountain Peak 3.05 fps (min 0.09, max 60.67), Syria 1.27, Geothermal Valley 9.76, overall 2.68, no fault; GPU busy about 0 %, the stalls are inline shader compiles (K110/K111 in scratch\\m15\\offgpu\\KNOWLEDGE.md).",
+    "D3D12 (2026-10-01): rottr5 (20:50:55Z, ROTTR.exe off the allowlist) died within 1 s in its own code on the CPU UMD's D3D11 probe device (crashpad 3092a488; modules d3d11, d3d12, dxgi, bc250d3d only); rottr6 (ROTTR.exe on the allowlist, root app-route-icdmt) ran on D3D12 and rendered the benchmark correctly.",
+    "World mark of the benchmark (270, 2026-10-01, D3D12 VERY HIGH with the switches of the Witcher 3 application profile): shots of the running scenes capture black, and loading screens with tips sit between the menu and the benchmark in both directions, so a shot cannot place note:world. In 270's game log (command times, shot sizes: 4627-byte shots at 0.33 are black) the first black scene frame came 46 and 56 s after the two START BENCHMARK confirms and the results about 150 and 135 s after them: note:world+60 sent with the confirm (apis.d3d12.world_after_confirm_s) puts a 60 s window inside the scenes. The D3D11 variant's load took about 3 min in rottr4 and 4.5 min in the smoke: there N follows the load seen.",
+    "Smoke (2026-10-01) on the app-route-throttle quartet (shell 7E9F1692, engine 7D28D8F5, ICD D672813F r5): the benchmark's load took about 4.5 min, CPU-bound (inline ACO compiles on the game thread), and its first frame hit a GPU SQC instruction-fetch fault at an unmapped ICD 32-bit-heap VA, then 0x116 (scratch\\m15\\game-recon\\bsod-rottr1).",
+    "Graphics settings live in the registry: HKU\\<bc250's SID>\\Software\\Crystal Dynamics\\Rise of the Tomb Raider, created by the first start (smoke\\rottr-settings.ps1 lists them; the DirectX 12 option is EnableDX12, in a subkey). The runner changes nothing there; the runtime reads EnableDX12 before the launch (apis.<api>.registry).",
+    "Patch 7: the Steam overlay is disabled under DirectX 12.",
+    "The install folder ships its own msvcp140.dll (crashpad report 825e4a49 of the 2026-10-01 smoke); a DLL that imports MSVCP140 by name gets that copy in ROTTR.exe. The msvcp140.dll module note shows which copy a process loaded."
+  ]
+}

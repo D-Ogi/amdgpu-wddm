@@ -35,7 +35,150 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C6u       // revision 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
+#define BC250_KMD_VERSION 0x000700D0u       // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
+                                            // guard log that did not fit a log line are two lines each.
+                                            // BC250_LOG_TEXT is 160 bytes and RtlStringCchVPrintfA truncates
+                                            // without a word, so 0.7.207.1 printed "wddm summary: scan-out ...
+                                            // format/geometry/pitch/size/segment/alignment/gated 0/0/" and lost
+                                            // every scan-out refusal count (BD-070). The scan-out summary, the
+                                            // VidPn flip summary, the blit destination summary, the object
+                                            // created/destroyed summary and the vidmm PTE encoding summary now
+                                            // write two lines each, every one of them inside the line. For the
+                                            // scan-out, the VidPn flip and the blit destination summaries the
+                                            // first line keeps word for word the text its parser reads, so the
+                                            // scan-out trial and the overlay read what they always read. The
+                                            // other two pairs needed their reader changed: runcompare takes the
+                                            // object pair as a block of two lines, and monfence's run-lab.ps1
+                                            // keys the vidmm counters by level and segment. No escape struct, no
+                                            // journal record layout, no counter
+                                            // and no gate changed, and BC250_LOG_TEXT itself is untouched: the
+                                            // constant moves because packagecheck VRS010 matches it against the
+                                            // INF revision, and because 0.7.207.1 is installed on the lab and
+                                            // Windows keeps the driver it has when the version ties. The new
+                                            // gate guardlog-width (tools/quality/quick.ps1) measures every
+                                            // GuardLog format against the 159 characters a line holds.
+                                            //
+                                            // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
+                                            // carries three changes that were written apart as 0.7.195.1,
+                                            // 0.7.206.1 and 0.7.206.2. None of those three revisions was
+                                            // ever deployed. The train keeps all three and takes the next
+                                            // number.
+                                            //
+                                            // (a) M15.14, the first revision in which an application's own
+                                            // swap-chain buffer can be scanned out. SetVidPnSourceAddress no
+                                            // longer refuses every UMD allocation outright; the rule is
+                                            // scanout_admit.h (format, POST geometry, pitch, size,
+                                            // 4 KiB address, residency in the DirectFlip segment),
+                                            // host-tested through each refusal, and dcn.c's
+                                            // AddressAllowed is unchanged behind it. A surface asks for
+                                            // scan-out through BC2A v3 (UMD_BLOB_A_SCANOUT and four
+                                            // appended geometry words, inside the existing 192-byte
+                                            // wire size) or through the E26R access bit SCANOUT, which
+                                            // also places the allocation in the local segment. The new
+                                            // counters ride the existing LOG_SUMMARY ring, so no
+                                            // escape struct and no escape ABI changed for this change.
+                                            // The admitted buffer is recorded before the plane is
+                                            // programmed, so that DestroyAllocation restores the
+                                            // firmware surface for the buffer the plane really holds.
+                                            // EnableScanoutAdmit 0 (absent = on, the INF writes no
+                                            // value) refuses every requesting candidate with the
+                                            // status "gated" and leaves this start as 0.7.205.1 was.
+                                            //
+                                            // (b) An idle GPU runs at
+                                            // 500 MHz (owner decision 2026-10-05: "jak lab nie pracuje,
+                                            // to ustawiaj mu zegar gpu na 500 MHz" - when the lab does
+                                            // not work, set its GPU clock to 500 MHz). The clock table
+                                            // reaches down to 500 MHz at the lab floor's 820 mV /
+                                            // VID 116: 16 levels, index 0 = 500 MHz (the idle point),
+                                            // index 3 = 800 MHz (BC250_DPM_THERMAL_FLOOR_LEVEL),
+                                            // index 5 = 1000 MHz (BC250_DPM_FLOOR_LEVEL). 700 and
+                                            // 600 MHz keep the 100 MHz grid whole and no rule selects
+                                            // them. The governor holds the idle point after
+                                            // DpmIdleHoldMs (3000) with the mean busy share of the
+                                            // graphics engine and the paging node under
+                                            // DpmIdleBusyPermille (2) and no work on the GFX ring, and
+                                            // leaves it for the lab floor at the first tick with work
+                                            // again; DpmIdleMHz 0 turns the whole state off. A thermal
+                                            // limit, a runtime floor, SetStablePowerState, a missing
+                                            // sensor and a hot part all keep the state out, and a start
+                                            // that does not govern never configures it. A refused
+                                            // idle point falls back to 800 MHz, then off, like the
+                                            // sub-floor, and does not count towards the SMU give-up
+                                            // limit. RUN_DPM is ABI 2 (192 bytes) and appends the
+                                            // state's setting and counters; the driver still takes the
+                                            // 160-byte ABI 1 request. RUN_DPM_TUNE is unchanged
+                                            // (ABI 2, 152 bytes), and a runtime tune floor still has
+                                            // to be 1000 MHz or more.
+                                            //
+                                            // (c) Composed A8 surfaces (M14.1). The shared table's A8 row
+                                            // (D3DDDIFMT_A8) carries COMPOSED at 1 byte a pixel and
+                                            // DcnLinearSurfaceBytes takes 1-byte pixels, so a type-0 LB7A A8
+                                            // surface (the shared atlases DirectComposition creates, Task
+                                            // Manager's 32x32 A8 render target) is created and opened. GDI
+                                            // types keep their own set; Present Blt and scan-out still refuse
+                                            // A8. No escape struct or journal layout changed for this change
+                                            // either. The change was written as revision 195 on 0.7.194.1 and
+                                            // was never deployed, so it rides the train too.
+                                            //
+                                            // revision 205 (INF 0.7.205.1, on 204): the clock table gains
+                                            // two thermal-only points below the lab floor, 900 and
+                                            // 800 MHz, both at the floor's 820 mV / VID 116 (owner
+                                            // decision 2026-10-05: a clock under 1000 MHz is allowed
+                                            // when Tctl reaches 87 C). 13 levels, index 0 = 800 MHz,
+                                            // BC250_DPM_FLOOR_LEVEL = 2 = 1000 MHz. The load still
+                                            // never asks below 1000 MHz; only the thermal cap goes
+                                            // lower (one level per hot step from 87 C, 800 MHz at once
+                                            // at 90 C). A missing sensor, SetStablePowerState, the
+                                            // fixed mode, stop, power down and giving up stay at
+                                            // 1000 MHz. The power tables publish no level below
+                                            // 1000 MHz (facts M47) although unit A's firmware accepts
+                                            // 800 and 900 MHz (facts M785), so a refused sub-floor
+                                            // transition is logged ("sub-floor refused"),
+                                            // does not count towards the SMU
+                                            // give-up limit, and stops the cap at 1000 MHz for the
+                                            // rest of that start. Every escape carries MHz, not a
+                                            // level index: no struct and no ABI changed (RUN_DPM
+                                            // ABI 1, RUN_DPM_TUNE ABI 2). A runtime tune floor still
+                                            // has to be 1000 MHz or more.
+                                            // 204 (INF 0.7.204.1, on 203): the DPM warm zone
+                                            // (no raise) starts at 87 C, the hot limit, instead of
+                                            // 85 C (owner, 2026-10-04). The thermal ramp's interval
+                                            // runs from 1 s at 70 C to 4 s at 87 C. At 87 C and above
+                                            // the hot cap lowers one level per hot step and the warm
+                                            // rule refuses every raise. No escape struct changed.
+                                            // 203 (INF 0.7.203.1, on 202): the DPM governor's
+                                            // thermal ramp (BC250_DPM_RAMP_KNEE_MC, session 367). From
+                                            // 70 C up to the 85 C warm zone a raise goes one level at
+                                            // most, at least 1 s (70 C) to 4 s (85 C) after the last
+                                            // raise; lowering and the thermal limits are unchanged. The
+                                            // dpm log lines count the cut or held raises ("ramp N"),
+                                            // throttle 9 is thermal-ramp. No escape struct changed.
+                                            // 202 (INF 0.7.202.1, on 201): BD-065 diagnostics.
+                                            // A GPU Present whose allocation snapshot is refused is
+                                            // counted by the first failing check (owner, unbound,
+                                            // BC2A, format, ...) and the first 16 are logged with both
+                                            // descriptors. Behaviour and status codes unchanged. No
+                                            // escape struct changed.
+                                            // 201 (INF 0.7.201.1, on 200): the full table offers
+                                            // VidPN source modes in A8B8G8R8, A2B10G10R10 and
+                                            // A16B16G16R16F beside A8R8G8B8 (display_modes.h), so DXGI
+                                            // can list modes for those formats (3DMark, session
+                                            // native-caps349); the scan-out stays 8-bit. Registry value
+                                            // OfferComposedSourceModes 0 turns them off. No escape
+                                            // struct changed.
+                                            // 200 (INF 0.7.200.1, on 199): the DPM governor
+                                            // refuses a raise of clock or voltage from 85 C up to the
+                                            // 87 C hot limit (BC250_DPM_WARM_MC, session 344); the dpm
+                                            // log lines count the refused steps ("warm N"), throttle 8
+                                            // is thermal-warm. No escape struct changed.
+                                            // 199 (INF 0.7.199.1, on 198): the standard-allocation
+                                            // size query leaves the public Pitch alone, the fill publishes it
+                                            // (d3dkmddi.md:32953); the wddm summary counts standard
+                                            // allocation requests and answers by kind and GDI type, LB7A
+                                            // create (created/refused/rolled back) and open outcomes, and
+                                            // CreateAllocation calls by final outcome (BD-060, gdi_admission.h).
+                                            // No escape struct changed.
+                                            // 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
                                             // ends the GPU DWM interop session, so a clean restart no
                                             // longer reads as a dead boot (BD-059): \Callback\PowerState
                                             // and the adapter's D3 for a system action unmark, S0 marks
@@ -189,7 +332,23 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // the share of GRBM_STATUS.GUI_ACTIVE samples when FLAG_HW_BUSY is set, else the GFX ring's submit-to-fence share;
 // SubmitBusyPermille is the latter always, SdmaBusyPermille the share of SDMA0 not-idle samples (the paging node).
 // Both were Reserved (zero) in 0.7.175-176: a caller still sends them as zero, so the ABI stays 1.
-#define BC250_DPM_ABI 1u
+// Throttle 8 (thermal-warm, a raise refused from 85 C, from 87 C since 0.7.204) is new in 0.7.200, throttle 9 (thermal-ramp, a raise cut to
+// one level or held from 70 C) in 0.7.203; the layout and the ABI stay. A tool built before them shows the number
+// it does not know as "?". Since 0.7.205 CurrentMHz, CapMHz, TargetMHz and ObservedMHz may read 900 or 800 MHz,
+// the clock table's two thermal-only points below the lab floor; WantMHz (the load's demand) never does, and
+// MaxMHz stays 1000..2000. Still no level index on the wire, so the layout and the ABI are unchanged.
+// ABI 2 (0.7.207, the idle state) appends the state's setting and counters: IdleMHz (the point in force, 0 when
+// the state is off for this start), IdleHoldMs and IdleBusyPermille (the window the GPU must be quiet for and
+// the busy share it still admits), IdleEntries, IdleExits, IdleRefusals and IdleMs (time at the point).
+// FLAG_IDLE says the clock is at the idle point now, and throttle 10 (idle) names it; both reach an ABI 1
+// caller too, which shows the flag as a number it does not know. CurrentMHz, CapMHz, TargetMHz and ObservedMHz
+// may now read 500 MHz. The driver takes both sizes: AbiVersion 1 with the first BC250_DPM_ABI1_SIZE bytes (the
+// 0.7.205 layout, unchanged) and AbiVersion 2 with all 192. A size that is not its AbiVersion's is refused
+// before any state is read. A driver before 0.7.207 fails the 192-byte escape itself with
+// STATUS_INVALID_PARAMETER: a tool asks with ABI 2 and repeats with ABI 1 on that answer.
+#define BC250_DPM_ABI 2u
+#define BC250_DPM_ABI_1 1u
+#define BC250_DPM_ABI1_SIZE 160u             // the ABI 1 prefix of BC250_ESCAPE_DPM
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_OP_CONFIRM 1u
 #define BC250_DPM_FLAG_RUNNING 1u            // the governor thread runs (fixed-lab too: it samples and logs)
@@ -202,6 +361,7 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_TEMPERATURE 128u      // TemperatureMc is this tick's reading
 #define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
 #define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
+#define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.207)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -218,7 +378,12 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long long ExpectedGeneration;  // in, CONFIRM
     unsigned long SubmitBusyPermille;       // out; in: zero
     unsigned long SdmaBusyPermille;         // out; in: zero
-} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+    // ABI 2 from here (BC250_DPM_ABI1_SIZE bytes above). All out.
+    unsigned long IdleMHz;                  // the idle point in force, 0 when the state is off for this start
+    unsigned long IdleHoldMs, IdleBusyPermille;      // DpmIdleHoldMs and DpmIdleBusyPermille in force
+    unsigned long IdleEntries, IdleExits, IdleRefusals;
+    unsigned long long IdleMs;              // time the governor held the idle point
+} BC250_ESCAPE_DPM; // 192 bytes on Windows, ABI 2 (the first 160 are ABI 1)
 
 // DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
 // thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state
@@ -230,8 +395,9 @@ typedef struct _BC250_ESCAPE_DPM {
 // up). Nothing is persisted: every device start begins with the defaults. A refused write leaves the values as they
 // were and names the reason in Error (enum bc250_dpm_tune_error, driver/shim/include/bc250_dpm.h): ranges, the order
 // down < target < up, invariant 1 (a one-step lowering never lands at or above up), invariant 2 (a raise never lands
-// below down), the hold, the floor. FloorMHz in: a clock of the table up to the start's ceiling (MaxMHz), 0 or 1000 for
-// no runtime floor; out: 0 when there is none. Every accepted change is logged in the driver log with its old and new
+// below down), the hold, the floor. FloorMHz in: a clock of the table from 1000 MHz up to the start's ceiling (MaxMHz),
+// 0 or 1000 for no runtime floor; out: 0 when there is none. The thermal-only points below 1000 MHz (0.7.205) are the
+// thermal cap's alone, so 800 and 900 are refused here with error 6 (floor). Every accepted change is logged in the driver log with its old and new
 // values. Serial counts the changes since the driver loaded; Applied is the serial the governor thread runs with.
 // The 160-byte RUN_DPM structure and BC250_DPM_ABI are unchanged.
 // ABI 2 (0.7.197.1, BD-055) appends the thermal cap's timing: the hot step, the soft-release delta below HOT (0: off)
@@ -791,8 +957,8 @@ typedef struct _BC250_ESCAPE_FENCE {
 
 // As `From` with BC250_ESCAPE_LOG_SUMMARY: start at the first line this summary itself wrote, so that asking for
 // a summary does not reprint the whole run. The driver answers the real number in SummaryFrom either way.
-// bc250kmd_cli does not send it (its `log summary` prints the whole ring, which is what an evidence file wants);
-// it is here for a caller that polls.
+// `bc250kmd_cli log summary` does not send it (it prints the whole ring, which is what an evidence file wants);
+// `log summary only` does, for a caller that polls (the overlay, BD-054).
 //
 // BC250_ESCAPE_LOG_SUMMARY is refused (REFUSED, STATUS_INVALID_DEVICE_REQUEST) unless D3DKMT_ESCAPE.Flags has
 // HardwareAccess set and NoAdapterSynchronization clear: the summary reads state that a device stop frees, and

@@ -1,11 +1,24 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-image-memory.h"
+#include "diagnostics.h"
 namespace bc250::umd {
 namespace {
 HRESULT status(VkResult result) {
     if (result==VK_ERROR_OUT_OF_HOST_MEMORY || result==VK_ERROR_OUT_OF_DEVICE_MEMORY) return E_OUTOFMEMORY;
     if (result==VK_ERROR_DEVICE_LOST) return D3DDDIERR_DEVICEREMOVED;
     return E_FAIL;
+}
+// Bytes of one texel of the engine's image for each composed row of the surface format table.
+// DXVK stores A8_UNORM as A8_UNORM_KHR, or as R8_UNORM with a swizzle where the device lacks it.
+VkDeviceSize texel_bytes(VkFormat format) {
+    switch (format) {
+    case VK_FORMAT_R8_UNORM: case VK_FORMAT_A8_UNORM_KHR: return 1;
+    case VK_FORMAT_R8G8B8A8_UNORM: case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return 4;
+    case VK_FORMAT_R16G16B16A16_SFLOAT: return 8;
+    default: return 0;
+    }
 }
 }
 HRESULT import_runtime_image_memory(RuntimeDevice &runtime,VkDevice device,VkImage image,
@@ -18,7 +31,10 @@ HRESULT import_runtime_image_memory(RuntimeDevice &runtime,VkDevice device,VkIma
         properties.memoryTypeCount>VK_MAX_MEMORY_TYPES) return E_INVALIDARG;
     VkMemoryRequirements requirements{}; vk.requirements(device,image,&requirements);
     if (!requirements.size || requirements.size>source.size || !requirements.alignment ||
-        source.va%requirements.alignment) return E_INVALIDARG;
+        source.va%requirements.alignment) {
+        surface_diagnostic("memory-requirements",E_INVALIDARG,0,0,0,requirements.size,source.size,requirements.alignment);
+        return E_INVALIDARG;
+    }
     UINT memoryType=properties.memoryTypeCount;
     for (UINT i=0;i<properties.memoryTypeCount;++i) {
         if ((requirements.memoryTypeBits & (1u<<i)) &&
@@ -47,14 +63,12 @@ HRESULT create_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,const
         info.sType!=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO) return E_INVALIDARG;
     if (info.imageType!=VK_IMAGE_TYPE_2D || info.extent.depth!=1 || info.mipLevels!=1 || info.arrayLayers!=1 ||
         info.samples!=VK_SAMPLE_COUNT_1_BIT || info.tiling!=VK_IMAGE_TILING_LINEAR) return E_NOTIMPL;
-    // This path is for the 32-bit color surfaces used by the desktop. Depth,
+    // This path is for the color surfaces the compositor opens. Depth,
     // compressed and multiplanar formats need different aspect/row rules.
-    switch (info.format) {
-    case VK_FORMAT_R8G8B8A8_UNORM: case VK_FORMAT_R8G8B8A8_SRGB:
-    case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_B8G8R8A8_SRGB: break;
-    default: return E_NOTIMPL;
-    }
-    if (rowBytes!=VkDeviceSize(info.extent.width)*4) return E_INVALIDARG;
+    // The caller's row comes from the LB7A format; the engine's texel must match it.
+    const VkDeviceSize texel=texel_bytes(info.format);
+    if (!texel) return E_NOTIMPL;
+    if (rowBytes!=VkDeviceSize(info.extent.width)*texel) return E_INVALIDARG;
     // Division avoids overflow in (height-1)*pitch + rowBytes.
     if (rowBytes>source.size || VkDeviceSize(info.extent.height-1)>(source.size-rowBytes)/pitch) return E_INVALIDARG;
     RuntimeImage created{};
@@ -69,7 +83,14 @@ HRESULT create_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,const
     if (!layout.offset && layout.rowPitch==pitch && layout.size && layout.size<=source.size &&
         rowBytes<=layout.size && VkDeviceSize(info.extent.height-1)<=(layout.size-rowBytes)/pitch)
         hr=import_runtime_image_memory(runtime,device,created.image,vk.memory,properties,source,created.memory);
-    if (FAILED(hr)) { vk.destroy(device,created.image,nullptr); return hr; }
+    if (FAILED(hr)) {
+        // Measured layout against the runtime storage: offset, row pitch, size; then pitch, storage, row bytes.
+        surface_diagnostic("image-layout",hr,unsigned(info.format),info.extent.width,info.extent.height,
+            layout.offset,layout.rowPitch,layout.size);
+        surface_diagnostic("image-storage",hr,unsigned(info.format),info.extent.width,info.extent.height,
+            pitch,source.size,rowBytes);
+        vk.destroy(device,created.image,nullptr); return hr;
+    }
     out=created; return S_OK;
 }
 void destroy_runtime_image(VkDevice device,const RuntimeImageDispatch &vk,RuntimeImage &image) {

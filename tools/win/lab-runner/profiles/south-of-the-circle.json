@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "id": "south-of-the-circle",
+  "title": "South of the Circle",
+  "app_id": 1811040,
+  "api": "d3d11",
+  "apis": {
+    "d3d12": {
+      "selection": "game default, no switch (owner 2026-10-04); -force-d3d12 would force it",
+      "arguments": "",
+      "router": "unchecked",
+      "witness": {
+        "module": "amdgpu_wddm_d3d12.dll",
+        "sha256": "staged"
+      }
+    },
+    "d3d11": {
+      "selection": "game default, no switch (owner 2026-10-04); -force-d3d11 would force it",
+      "arguments": "",
+      "router": "allow",
+      "witness": {
+        "module": "amdgpu_wddm_d3d11.dll",
+        "sha256": "release"
+      }
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "South of the Circle",
+    "launch_entry": "SouthOfTheCircle.exe (installed 2026-10-04)",
+    "arguments": "",
+    "require_state_flags": 4,
+    "wait_seconds": 90,
+    "eula": ""
+  },
+  "executable": {
+    "directory": "",
+    "image": "SouthOfTheCircle.exe",
+    "direct_arguments": ""
+  },
+  "processes": {
+    "main": "SouthOfTheCircle",
+    "launch_chain": [
+      "SouthOfTheCircle"
+    ],
+    "renderers": [
+      "SouthOfTheCircle"
+    ],
+    "end_at_cleanup": [
+      "SouthOfTheCircle",
+      "UnityCrashHandler64",
+      "cdb"
+    ],
+    "survivors": [
+      "SouthOfTheCircle",
+      "UnityCrashHandler64",
+      "cdb"
+    ],
+    "writers": [
+      "SouthOfTheCircle",
+      "cdb"
+    ],
+    "counters": [
+      "SouthOfTheCircle"
+    ],
+    "etw": [
+      "SouthOfTheCircle"
+    ]
+  },
+  "router_images": [
+    "SouthOfTheCircle.exe"
+  ],
+  "readiness": {
+    "mode": "generic",
+    "control_after_window_seconds": 10,
+    "min_jobs": 50
+  },
+  "modules": [
+    "d3d11.dll",
+    "dxgi.dll",
+    "d3d12.dll",
+    "d3d12core.dll",
+    "bc250d3d_router.dll",
+    "amdgpu_wddm_d3d11.dll",
+    "amdgpu_wddm_d3d12.dll",
+    "amdgpu_wddm_dxvk.dll",
+    "amdgpu_wddm_vkd3d.dll",
+    "amdgpu_wddm_radv.dll",
+    "bc250d3d.dll",
+    "bc250umd.dll",
+    "vulkan-1.dll",
+    "unityplayer.dll"
+  ],
+  "settings": {
+    "policy": "untouched"
+  },
+  "saves": "",
+  "events_filter": "SouthOfTheCircle|amdgpu_wddm|bc250d3d|d3d11|d3d12|dxgi|Unity",
+  "app_profile": {
+    "image": "",
+    "experiment": "",
+    "proposal": "none: first sessions without D3D12 experiments"
+  },
+  "session": {
+    "default_seconds": 600,
+    "entry": "run-game.sh N south-of-the-circle [SECONDS]"
+  },
+  "notes": [
+    "Unity; store lists DX11",
+    "Unity writes Player.log under %USERPROFILE%\\AppData\\LocalLow\\<company>\\<product>."
+  ]
+}

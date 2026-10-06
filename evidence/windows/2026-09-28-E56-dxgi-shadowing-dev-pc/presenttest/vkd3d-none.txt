@@ -1,0 +1,6 @@
+mode vkd3d-none (scenario vkd3d, policy none)
+os 10.0.26200
+stage S01 game-loads
+  game LoadLibraryW("dxgi.dll") -> APPDIR\dxgi.dll, LoadLibraryW("d3d12.dll") -> APPDIR\d3d12.dll
+RESULT mode=vkd3d-none route=skipped
+main returns; process teardown follows

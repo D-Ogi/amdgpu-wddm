@@ -24,9 +24,6 @@ private:
     bc250_host_queue_binding binding_{};
     bc250_host_policy policy_{};
 
-    bool valid() const noexcept {
-        return real_ && host_.adapter_luid && host_.identity && host_.dispatch;
-    }
     static VKAPI_ATTR VkResult VKAPI_CALL create(const VkInstanceCreateInfo* info,
             const VkAllocationCallbacks* allocator, VkInstance* out) {
         if(out) *out=VK_NULL_HANDLE;
@@ -96,14 +93,24 @@ public:
     HostedInstanceBootstrap& operator=(const HostedInstanceBootstrap&)=delete;
     ~HostedInstanceBootstrap()=default; // The owner must inspect closed() before releasing the ICD/storage.
 
+    // Whether the owner holds everything a scope hands out. Only the constructor sets what it reads, so the
+    // answer holds for the owner's life.
+    bool valid() const noexcept {
+        return real_ && host_.adapter_luid && host_.identity && host_.dispatch;
+    }
     class Scope final {
         HostedInstanceBootstrap* owner_{};
         HostedInstanceBootstrap* previous_{};
-    public:
-        explicit Scope(HostedInstanceBootstrap& owner) noexcept {
-            if(!owner.valid() || (current_ && current_!=&owner)) return;
+        void enter(HostedInstanceBootstrap& owner) noexcept {
+            if(current_ && current_!=&owner) return;
             owner_=&owner;previous_=current_;current_=&owner;
         }
+    public:
+        // For an owner whose valid() its binder checked once (RecordingScope, device-engine.h): an entry
+        // that comes thousands of times a frame does not read the owner's fields again.
+        struct Checked {};
+        explicit Scope(HostedInstanceBootstrap& owner) noexcept {if(owner.valid())enter(owner);}
+        Scope(HostedInstanceBootstrap& owner,Checked) noexcept {enter(owner);}
         Scope(const Scope&)=delete;
         Scope& operator=(const Scope&)=delete;
         ~Scope(){if(owner_)current_=previous_;}

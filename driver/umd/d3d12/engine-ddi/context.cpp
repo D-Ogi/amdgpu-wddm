@@ -23,6 +23,11 @@ bool debugger_lines() noexcept {
     return on;
 }
 std::atomic<int> debugger_budget{1024};
+// log_refusal writes its debugger line whatever the switches say, so that capture-share and any attached
+// debugger record a declined object without a trace build. A refused create is survivable since BD-075, so an
+// application may now probe by creating and tolerating the failure in a loop; each line costs a
+// raised-and-swallowed exception and the DBWIN mutex, so the lines are bounded like log_line's.
+std::atomic<int> refusal_budget{4096};
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
 std::atomic<LogObserver> log_observer{nullptr};
 std::atomic<void*> log_observer_user{nullptr};
@@ -52,12 +57,13 @@ void log_refusal(const char* format, ...) noexcept {
     vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     amdgpu_wddm_log::print("engine-ddi: %s\n", text);
-    char line[540];
-    std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s\n", text);
-    OutputDebugStringA(line);
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     if (const LogObserver observer = log_observer.load()) observer(text, log_observer_user.load());
 #endif
+    if (refusal_budget.fetch_sub(1, std::memory_order_relaxed) <= 0) return;
+    char line[540];
+    std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s\n", text);
+    OutputDebugStringA(line);
 }
 
 // ---- Release sequence ------------------------------------------------------------------------------------------

@@ -1,0 +1,34 @@
+recipe P:\bc-250\scratch\m14\dcomp-a8\wt\tools\build\build-mesa.ps1 SHA256 34D8C3CCFC08C7AD1FDDAA38262B15C3D2EE5A2C92B5B97DA697ECD71F400A23
+source P:\bc-250\scratch\bd037\cpu-src at a95aeb2f4e7e40d838b8077f66c40bd0dc827c8d, status lines: 3
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+ninja: Entering directory `P:\bc-250\scratch\bd037\build-cpu'
+[1/6] Generating src/git_sha1.h with a custom command
+[2/4] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[3/4] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[4/4] Linking target src/gallium/targets/d3d10umd/bc250_surface_format_test.exe
+   Trwa tworzenie biblioteki src\gallium\targets\d3d10umd\bc250_surface_format_test.lib i obiektu src\gallium\targets\d3d10umd\bc250_surface_format_test.exp
+
+test P:\bc-250\scratch\bd037\build-cpu\src\gallium\targets\d3d10umd\bc250_surface_format_test.exe SHA256 E599409085DEC9D3CFACC7042B05CB3A99B04E50139CD6AC1D56D1CC37B090E1
+screen: llvmpipe (LLVM 23.1.2, 256 bits)
+table: 5 COMPOSED rows of 6, pass
+format 21 -> b8g8r8a8_unorm: 4355/4355 pixels exact, max channel diff 0, alpha mismatches 0
+format 32 -> r8g8b8a8_unorm: 4355/4355 pixels exact, max channel diff 0, alpha mismatches 0
+format 31 -> r10g10b10a2_unorm: 4355/4355 pixels exact, max channel diff 0, alpha mismatches 0
+format 113 -> r16g16b16a16_float: 4355/4355 pixels exact, max channel diff 0, 1430 texels with red outside [0, 1], pitch 768
+format 28 -> a8_unorm: 4355/4355 pixels exact, pitch 256
+open refusals: 8 cases, X8R8G8B8 open
+create shared: 5 cases
+shadow: write-combined surface sampled through a cached copy, 7 copies, strides 320/512
+FAIL TestEnsureRetry:848: resource_from_handle retried: 1 allocations, 2 maps, VA 1d0000000 then 1e0000000
+FAIL TestEnsureRetry:852: resource_from_handle retried: 2 MakeResident, 2 Lock2, 2 held
+FAIL TestEnsureRetry:855: resource_from_handle: destroy leaves 1 Lock2 held
+FAIL TestEnsureRetry:848: MakeResident retried: 1 allocations, 2 maps, VA 1f0000000 then 200000000
+FAIL TestEnsureRetry:839: paging fence wait (5 s): fence 0 kept, want 2
+FAIL TestEnsureRetry:848: paging fence wait (5 s) retried: 1 allocations, 2 maps, VA 210000000 then 220000000
+FAIL TestEnsureRetry:852: paging fence wait (5 s) retried: 2 MakeResident, 1 Lock2, 1 held
+FAIL TestEnsureRetry:848: Lock2 retried: 1 allocations, 2 maps, VA 230000000 then 240000000
+FAIL TestEnsureRetry:852: Lock2 retried: 2 MakeResident, 2 Lock2, 1 held
+ensure retry: 4 failed steps retried
+FAIL: 9 failures
+test exit 1

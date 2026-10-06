@@ -126,11 +126,11 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     hr=engine_ddi::query_adapter_caps(&funcs,&info,&owner.caps);
     if(SUCCEEDED(hr) && (!scope.completed() || queue_calls))return E_UNEXPECTED;
     if(SUCCEEDED(hr))hr=apply_memory_policy(adapter,owner);
-    // Lab diagnostic: the raytracing tier is reported for a measurement of the acceleration structure, state
-    // object and DispatchRays slots, while AddToStateObject, existing collections and indirect dispatch refuse.
-    if(SUCCEEDED(hr) && ddi_experiment("raytracing-tier")){
-        hr=engine_ddi::set_diagnostic_raytracing_tier(owner.caps,true);
-        amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier result=%08lx\n",static_cast<unsigned long>(hr));
+    // The raytracing tier the engine computed is what the adapter reports; engine-ddi clamps it to 1_1 and
+    // answers NOT_SUPPORTED below that. raytracing-tier-off takes it back to NOT_SUPPORTED for a bisect.
+    if(SUCCEEDED(hr) && ddi_experiment_off("raytracing-tier")){
+        hr=engine_ddi::set_raytracing_tier_reporting(owner.caps,false);
+        amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier-off result=%08lx\n",static_cast<unsigned long>(hr));
         amdgpu_wddm_log::flush();
     }
     if(SUCCEEDED(hr))owner.access={funcs,get};

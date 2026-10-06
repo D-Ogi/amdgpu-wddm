@@ -1,29 +1,32 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface.h"
+#include "runtime-surface-format.h"
+#include "diagnostics.h"
 namespace bc250::umd {
-static bool matching_format(UINT format,DXGI_FORMAT dxgi) {
-    switch (dxgi) {
-    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-        return format==D3DDDIFMT_A8B8G8R8;
-    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-        return format==D3DDDIFMT_A8R8G8B8;
-    default: return false;
-    }
-}
 HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
     const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
     if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
     if (!runtime.domain.entered() || !queue.queue || !queue.sync || !queue.cpu ||
         desc.Width!=request.surface.Width || desc.Height!=request.surface.Height ||
         desc.MipLevels!=1 || desc.ArraySize!=1 || desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality ||
-        !matching_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
+        !runtime_surface_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
+    out.primary=request.primary; out.vidpn_source=request.vidpn_source;
+    out.scanout=(request.texture.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
     out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
     out.phase=SurfacePhase::failed;
     HRESULT hr=allocate_runtime_surface(runtime,request,out.allocation);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) {
+        surface_diagnostic("allocate",hr,request.surface.Format,request.surface.Width,request.surface.Height,
+            request.surface.Pitch,request.surface.Size,(request.primary ? 1ull : 0ull)<<32|request.vidpn_source);
+        return hr;
+    }
     hr=map_runtime_surface(runtime,queue,out.allocation.allocation,out.bytes,out.mapping);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) {
+        surface_diagnostic("map",hr,request.surface.Format,request.surface.Width,request.surface.Height,
+            request.surface.Pitch,request.surface.Size,0);
+        return hr;
+    }
     out.phase=SurfacePhase::paging;
     return S_FALSE; // Even completed paging still needs an image and texture.
 }
@@ -31,10 +34,11 @@ HRESULT adopt_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
     RuntimeSurfaceAllocation &allocation,const BC250_WDDM_ALLOCATION_PRIVATE &metadata,
     const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
     if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    const auto *row=runtime_surface_format(metadata.Format,desc.Format);
     if (!runtime.domain.entered() || !runtime.hDevice || !queue.queue || !queue.sync || !queue.cpu ||
-        !allocation.allocation || !allocation.runtime_resource || !WddmSurfaceGeometry(&metadata,0,4) ||
+        !allocation.allocation || !allocation.runtime_resource || !row || !runtime_surface_geometry(metadata,row->bytes_per_pixel) ||
         desc.Width!=metadata.Width || desc.Height!=metadata.Height || desc.MipLevels!=1 || desc.ArraySize!=1 ||
-        desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality || !matching_format(metadata.Format,desc.Format))
+        desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality)
         return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
     out.pitch=metadata.Pitch; out.bytes=metadata.Size;
@@ -59,7 +63,11 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     imported.size=surface.bytes;
     hr=create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,
         imported,surface.pitch,surface.texture);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) {
+        surface_diagnostic("texture",hr,UINT(surface.desc.Format),surface.desc.Width,surface.desc.Height,
+            surface.pitch,surface.bytes,surface.desc.BindFlags);
+        return hr;
+    }
     surface.phase=SurfacePhase::ready;
     return S_OK;
 }

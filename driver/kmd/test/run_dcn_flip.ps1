@@ -1,6 +1,6 @@
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\dcn-flip",[string]$Source='')
 $ErrorActionPreference='Stop'
-$repo="$Root\bc250-win"
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd\dcn.c"}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1

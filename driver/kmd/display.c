@@ -4,6 +4,7 @@
 #include "bc250kmd_escape.h"
 #include "paging_journal.h"
 #include "display_timing.h"
+#include "display_modes.h"
 
 static ULONG g_Presents;
 
@@ -339,8 +340,9 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     }
     // DPM: the governor's published snapshot, software state as well (dpm.c).
     if (data->Command == BC250_ESCAPE_RUN_DPM) {
-        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM)) return STATUS_INVALID_PARAMETER;
-        DpmRequest(device,(BC250_ESCAPE_DPM*)data,CallerIsAdmin(),Escape->Flags.Value);
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM) &&
+            Escape->PrivateDriverDataSize != BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
+        DpmRequest(device,(BC250_ESCAPE_DPM*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
     // DPM runtime tuning (0.7.185): thresholds and floor the governor thread takes at its next tick; software state,
@@ -592,19 +594,27 @@ static NTSTATUS OfferSourceMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK
     const DXGK_VIDPNSOURCEMODESET_INTERFACE* set = NULL;
     D3DKMDT_VIDPN_SOURCE_MODE* mode = NULL;
     NTSTATUS status;
+    unsigned long formats[BC250_SOURCE_MODE_MAX], count, i;
 
+    // One mode per pixel format of display_modes.h, all of the inherited geometry: the scan-out format first,
+    // then (full table only) the formats the UMDs compose, so that DXGI lists modes for them too.
+    count = Bc250SourceModeFormats(Device->ComposedSourceModes, formats, BC250_SOURCE_MODE_MAX);
+    if (count == 0 || count > BC250_SOURCE_MODE_MAX) return STATUS_GRAPHICS_INVALID_PIXELFORMAT;
     status = VidPn->pfnCreateNewSourceModeSet(hVidPn, SourceId, &hSet, &set);
     if (!NT_SUCCESS(status)) return status;
 
-    status = set->pfnCreateNewModeInfo(hSet, &mode);
-    if (NT_SUCCESS(status))
+    for (i = 0; i < count && NT_SUCCESS(status); ++i)
     {
+        const ULONG stride = Bc250SourceModeStride(formats[i], Device->Post.Pitch);
+        if (stride == 0) { status = STATUS_GRAPHICS_INVALID_STRIDE; break; }
+        status = set->pfnCreateNewModeInfo(hSet, &mode);
+        if (!NT_SUCCESS(status)) break;
         mode->Type = D3DKMDT_RMT_GRAPHICS;
         mode->Format.Graphics.PrimSurfSize.cx = Device->Post.Width;
         mode->Format.Graphics.PrimSurfSize.cy = Device->Post.Height;
         mode->Format.Graphics.VisibleRegionSize = mode->Format.Graphics.PrimSurfSize;
-        mode->Format.Graphics.Stride = Device->Post.Pitch;
-        mode->Format.Graphics.PixelFormat = D3DDDIFMT_A8R8G8B8;
+        mode->Format.Graphics.Stride = stride;
+        mode->Format.Graphics.PixelFormat = (D3DDDIFORMAT)formats[i];
         mode->Format.Graphics.ColorBasis = D3DKMDT_CB_SCRGB;
         mode->Format.Graphics.PixelValueAccessMode = D3DKMDT_PVAM_DIRECT;
         status = set->pfnAddMode(hSet, mode);
@@ -711,8 +721,19 @@ NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUP
     status = topology->pfnGetNumPaths(hTopology, &paths);
     if (!NT_SUCCESS(status)) return status;
 
-    // One source, one target: zero or one path. Modes are constrained in EnumVidPnCofuncModality.
+    // One source, one target: zero or one path. Modes are constrained in EnumVidPnCofuncModality; a pinned
+    // source mode must also have a format of display_modes.h, the set CommitVidPn accepts.
     IsSupportedVidPn->IsVidPnSupported = (paths <= 1);
+    if (paths == 1)
+    {
+        D3DKMDT_VIDPN_SOURCE_MODE mode;
+        BOOLEAN pinned;
+        // A VidPN whose source mode set cannot be read is judged by its topology alone, as before 0.7.201.
+        if (NT_SUCCESS(SourceModeIsPinned(vidpn, IsSupportedVidPn->hDesiredVidPn, 0, &pinned, &mode)) &&
+            pinned && mode.Type == D3DKMDT_RMT_GRAPHICS &&
+            !Bc250SourceModeAdmitted(device->ComposedSourceModes, (unsigned long)mode.Format.Graphics.PixelFormat))
+            IsSupportedVidPn->IsVidPnSupported = FALSE;
+    }
     return STATUS_SUCCESS;
 }
 
@@ -905,11 +926,21 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
     if (!pinned) return STATUS_SUCCESS;     // a path without a pinned source mode: nothing to show, not an error
                                             // (STATUS_GRAPHICS_MODE_NOT_PINNED has success severity anyway)
 
-    // The only mode we can show is the one already on the wire. Accept exactly that.
+    // The only geometry we can show is the one already on the wire, in a format that display_modes.h offers.
+    // A composed format leaves the plane as it is (8-bit, the firmware's): the UMDs compose such buffers, and
+    // SetVidPnSourceAddress refuses them. Each change of the committed format is logged once.
     if (mode.Type != D3DKMDT_RMT_GRAPHICS ||
         mode.Format.Graphics.PrimSurfSize.cx != device->Post.Width ||
-        mode.Format.Graphics.PrimSurfSize.cy != device->Post.Height)
+        mode.Format.Graphics.PrimSurfSize.cy != device->Post.Height ||
+        !Bc250SourceModeAdmitted(device->ComposedSourceModes, (unsigned long)mode.Format.Graphics.PixelFormat))
         return STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE;
+    if (device->CommittedSourceFormat != (ULONG)mode.Format.Graphics.PixelFormat)
+    {
+        device->CommittedSourceFormat = (ULONG)mode.Format.Graphics.PixelFormat;
+        GuardLog("display: CommitVidPn source %ux%u format %u stride %u",
+                 (UINT)mode.Format.Graphics.PrimSurfSize.cx, (UINT)mode.Format.Graphics.PrimSurfSize.cy,
+                 (UINT)mode.Format.Graphics.PixelFormat, (UINT)mode.Format.Graphics.Stride);
+    }
     device->ModeActive = TRUE;
     return STATUS_SUCCESS;
 }

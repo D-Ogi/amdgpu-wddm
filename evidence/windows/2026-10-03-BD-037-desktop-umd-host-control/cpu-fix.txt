@@ -1,0 +1,25 @@
+recipe P:\bc-250\scratch\m14\dcomp-a8\wt\tools\build\build-mesa.ps1 SHA256 34D8C3CCFC08C7AD1FDDAA38262B15C3D2EE5A2C92B5B97DA697ECD71F400A23
+source P:\bc-250\scratch\bd037\cpu-src at a95aeb2f4e7e40d838b8077f66c40bd0dc827c8d, status lines: 3
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+ninja: Entering directory `P:\bc-250\scratch\bd037\build-cpu'
+[1/6] Generating src/git_sha1.h with a custom command
+[2/4] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[3/4] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[4/4] Linking target src/gallium/targets/d3d10umd/bc250_surface_format_test.exe
+   Trwa tworzenie biblioteki src\gallium\targets\d3d10umd\bc250_surface_format_test.lib i obiektu src\gallium\targets\d3d10umd\bc250_surface_format_test.exp
+
+test P:\bc-250\scratch\bd037\build-cpu\src\gallium\targets\d3d10umd\bc250_surface_format_test.exe SHA256 849C666C17CF9828BF447E98B8851B61936632A6F4165D78884171FCDD928D07
+screen: llvmpipe (LLVM 23.1.2, 256 bits)
+table: 5 COMPOSED rows of 6, pass
+format 21 -> b8g8r8a8_unorm: 4355/4355 pixels exact, max channel diff 0, alpha mismatches 0
+format 32 -> r8g8b8a8_unorm: 4355/4355 pixels exact, max channel diff 0, alpha mismatches 0
+format 31 -> r10g10b10a2_unorm: 4355/4355 pixels exact, max channel diff 0, alpha mismatches 0
+format 113 -> r16g16b16a16_float: 4355/4355 pixels exact, max channel diff 0, 1430 texels with red outside [0, 1], pitch 768
+format 28 -> a8_unorm: 4355/4355 pixels exact, pitch 256
+open refusals: 8 cases, X8R8G8B8 open
+create shared: 5 cases
+shadow: write-combined surface sampled through a cached copy, 7 copies, strides 320/512
+ensure retry: 4 failed steps retried
+PASS: 0 failures
+test exit 0

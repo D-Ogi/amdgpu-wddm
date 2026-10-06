@@ -74,7 +74,13 @@ Composition validates the requested size and index before publishing the table.
 trampolines for the 122 core slots and 70 slots in each command-list table;
 original functions are immutable after publication, and refills must match.
 Queue and extended-feature calls use the same entry policy. Reserved queue
-fields are not treated as callable slots.
+fields are not treated as callable slots. A trampoline refuses on its own when a
+handle resolves to nothing, when it cannot enter the owner's scope, or when the
+call throws; for a slot of the AllowOutOfMemory category (`allow_out_of_memory`,
+today `pfnCreateHeapAndResource` and `pfnOpenHeapAndResource`) such a refusal is
+clamped to a code the runtime admits, because the runtime cannot tell a
+trampoline's refusal from the driver's own and removes the device for any other
+one (BD-075).
 
 `DeviceEngineScope` serializes device entry and supplies both runtime callback
 authority and hosted instance dispatch on the calling thread. Nested calls for
@@ -82,15 +88,22 @@ the same owner are allowed. A different device cannot inherit that authority,
 and engine workers do not acquire it merely by holding a pointer. Command-list
 entries resolve their owning shell through the engine context.
 
-The `deferred-replay` experiment (`AMDGPU_WDDM_D3D12_EXPERIMENT`, off by default,
-read once per device) turns on engine-ddi's deferred command-list replay
+Deferred command-list replay is on by default and read once per device; the
+experiment `deferred-replay-off` (`AMDGPU_WDDM_D3D12_EXPERIMENT`, see
+[ddi-trace.h](ddi-trace.h) for every default and its off switch) takes it back.
+On, it uses engine-ddi's deferred command-list replay
 ([engine-ddi/README.md](engine-ddi/README.md)) with 8 rings of 4 MiB. Its worker
 threads are the one kind of engine-ddi thread that enters a device's runtime
 domain, together with `HostedDispatch::WorkerScope`: the engine's recording may
 allocate, map, lock and wait on the CPU there, while every context, submission,
 GPU-side sync and queue operation is refused with the failure note
 `replay-worker-op:<op>`. A removal a worker finds marks the device lost at once
-and is reported to the runtime from the next drain on a DDI thread.
+and is reported to the runtime from the next drain on a DDI thread. With the
+`replay-log` experiment as well, engine-ddi's replay lines (summaries every 10 s,
+long waits) also go to `amdgpu_wddm-replay-<image>-<pid>-<device>.log` in the
+application profile's `LogDirectory` (REG_SZ next to `Experiment`) or the
+temporary directory ([replay-log.h](replay-log.h)): a game started by Steam has no
+stderr anyone reads.
 
 ## Queues and fences
 
@@ -120,6 +133,28 @@ GPU-only VRAM, write-combined GTT or cached GTT, preserving the supplied runtime
 resource or heap owner. Size rounding and alignment are checked. Primary,
 shared/coherent-systemwide and texture requests outside this buffer path are
 refused.
+
+Every refusal taken before anything is allocated names its admission check in
+`ImportReport::refusal` and writes one line through `ddi_refusal` (`ddi-trace.h`),
+with the request flags, the heap flags, the bits of them this shell has no use
+for, and the resource description. A caller reads the same facts from
+`last_report()`; the line exists so that a lab log, and `tools/win/capture-share`,
+which copies the debugger channel into its cell log, carry them.
+
+## Shared resources
+
+Not implemented, in either direction. `CreateCommittedResource` with
+`D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource` and
+`ID3D12Device::OpenSharedHandle` of a resource all fail. They fail with
+`E_OUTOFMEMORY`, one of the two failures a creation DDI may report (the other is
+`D3DDDIERR_DEVICEREMOVED`), so the application loses the resource and keeps its
+device - at every layer that can refuse the call, the thunk included (BD-075;
+`engine_ddi::admitted_create_failure`, `native12::ddi_admitted_create_failure`).
+Shared fences work in every direction, because the D3D12 DDI has no fence sharing
+in it: the kernel object is the runtime's and the driver only consumes two GPU
+addresses. The plan for shared resources, what each half needs and why the
+runtime still reports `SharedResourceCompatibilityTier` 2, is in
+[docs/d3d12-shared-resources.md](../../../docs/d3d12-shared-resources.md).
 
 A separate KT paging queue maps the allocation. The importer waits at most two
 seconds for a pending map and requires a completed, aligned GPU VA before

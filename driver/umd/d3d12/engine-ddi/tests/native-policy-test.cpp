@@ -90,6 +90,53 @@ int main() {
           "core table: shell slots left untouched");
     check(all_filled(lists[0]) && all_filled(lists[1]), "list tables: all 70 slots non-null");
 
+    // BD-075: the create and the open of a heap and resource may only report E_OUTOFMEMORY, so that a refusal
+    // costs the application its object and not its device.
+    using engine_ddi::admitted_create_failure;
+    check(admitted_create_failure(S_OK) == S_OK && admitted_create_failure(S_FALSE) == S_FALSE,
+          "admitted failure: a success is passed through");
+    check(admitted_create_failure(E_OUTOFMEMORY) == E_OUTOFMEMORY &&
+              admitted_create_failure(engine_ddi::kDriverDeviceRemoved) == engine_ddi::kDriverDeviceRemoved,
+          "admitted failure: out of memory and D3DDDIERR_DEVICEREMOVED are passed through");
+    // The two names of a lost device are not interchangeable here. DXGI_ERROR_DEVICE_REMOVED is what the API
+    // shows the application and what create_heap_and_resource answers for a lost context (and heap-import for
+    // VK_ERROR_DEVICE_LOST), but it is not in the AllowOutOfMemory list, so reporting it from a create slot is
+    // the BD-075 signature over again, with DRIVER_INTERNAL_ERROR hiding the real reason.
+    check(admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED) == engine_ddi::kDriverDeviceRemoved &&
+              admitted_create_failure(DXGI_ERROR_DEVICE_RESET) == engine_ddi::kDriverDeviceRemoved &&
+              admitted_create_failure(DXGI_ERROR_DEVICE_HUNG) == engine_ddi::kDriverDeviceRemoved,
+          "admitted failure: the DXGI device codes become D3DDDIERR_DEVICEREMOVED");
+    check(admitted_create_failure(E_NOTIMPL) == E_OUTOFMEMORY &&
+              admitted_create_failure(E_INVALIDARG) == E_OUTOFMEMORY &&
+              admitted_create_failure(E_UNEXPECTED) == E_OUTOFMEMORY &&
+              admitted_create_failure(E_FAIL) == E_OUTOFMEMORY,
+          "admitted failure: every other failure becomes E_OUTOFMEMORY");
+
+    // D64 and D65 are this module's slots now, not fail-safes. The device handle resolves to nothing here, so
+    // the open refuses at its first argument check; a fail-safe would answer E_NOTIMPL and remove the device.
+    const D3D12DDI_HDEVICE no_device{};
+    const D3D12DDI_HHEAP no_heap{};
+    const D3D12DDI_HRTRESOURCE no_rt{};
+    const D3D12DDI_HRESOURCE no_resource{};
+    const D3D12DDI_HPROTECTEDRESOURCESESSION_0030 no_session{};
+    D3DDDI_OPENALLOCATIONINFO allocation{};
+    D3D12DDIARG_OPENHEAP_0003 open{};
+    open.NumAllocations = 1;
+    open.pOpenAllocationInfo = &allocation;
+    const D3D12DDI_HEAP_AND_RESOURCE_SIZES created =
+        core.pfnCalcPrivateHeapAndResourceSizes(no_device, nullptr, nullptr, no_session);
+    const D3D12DDI_HEAP_AND_RESOURCE_SIZES opened =
+        core.pfnCalcPrivateOpenedHeapAndResourceSizes(no_device, &open, no_session);
+    check(opened.Heap == created.Heap && opened.Resource == created.Resource && opened.Resource > 64,
+          "opened private sizes: the records a create builds, not a fail-safe's 64 bytes");
+    check(core.pfnOpenHeapAndResource(no_device, &open, no_heap, no_rt, no_session, no_resource) == E_OUTOFMEMORY,
+          "OpenHeapAndResource: refused with E_OUTOFMEMORY, the device survives");
+    check(core.pfnOpenHeapAndResource(no_device, nullptr, no_heap, no_rt, no_session, no_resource) == E_OUTOFMEMORY,
+          "OpenHeapAndResource: a missing argument is refused the same way");
+    check(core.pfnCreateHeapAndResource(no_device, nullptr, no_heap, no_rt, nullptr, nullptr, no_session,
+                                        no_resource) == E_OUTOFMEMORY,
+          "CreateHeapAndResource: an unresolvable device is refused with E_OUTOFMEMORY");
+
     // Retire hand-off (set_retire_policy): the refusals that need no context, and the decision itself.
     engine_ddi::RetirePolicy policy{sizeof(policy), 1, 256, 250};
     check(engine_ddi::set_retire_policy(nullptr, &policy) == E_INVALIDARG, "retire policy: null context refused");

@@ -74,19 +74,28 @@ int main(void)
     BC250_ESCAPE_DPM d;
     BC250_VIDEO_MEMORY m;
 
-    CHECK(sizeof(d) == 160 && sizeof(m) == 264);
-    CHECK(Bc250Dpm(NULL, sizeof(d)) < 0 && Bc250Dpm(&d, 159) < 0 && escapeCalls == 0);
-    CHECK(Bc250Dpm(&d, sizeof(d)) == 0 && escapeCalls == 1 && escapeSize == 160);
-    CHECK(sent.Magic == BC250_ESCAPE_MAGIC && sent.Command == 23 && sent.AbiVersion == 1 && sent.Op == 0);
+    /* The deployed callers pass BC250_DPM_ABI1_SIZE, the layout they were built against; RUN_DPM itself grew
+     * to 192 bytes with the idle state (0.7.207) and the driver takes either size with its own AbiVersion. */
+    CHECK(BC250_DPM_ABI1_SIZE == 160 && sizeof(d) >= 160 && sizeof(m) == 264);
+    CHECK(Bc250Dpm(NULL, BC250_DPM_ABI1_SIZE) < 0 && Bc250Dpm(&d, 159) < 0 && escapeCalls == 0);
+    CHECK(Bc250Dpm(&d, 161) < 0 && escapeCalls == 0);
+    CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == 0 && escapeCalls == 1 && escapeSize == BC250_DPM_ABI1_SIZE);
+    CHECK(sent.Magic == BC250_ESCAPE_MAGIC && sent.Command == 23 && sent.AbiVersion == BC250_DPM_ABI_1 && sent.Op == 0);
     CHECK(sent.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND && sent.SubmitBusyPermille == 0 && sent.SdmaBusyPermille == 0);
     CHECK(sent.ExpectedGeneration == 0 && sent.Flags == 0);
     CHECK(d.TemperatureMc == 67500 && d.ObservedMHz == 1000 && d.BusyAvgPermille == 880);
-    escapeMode = 1; CHECK(Bc250Dpm(&d, sizeof(d)) == (LONG)0xC00000A3);
-    escapeMode = 2; CHECK(Bc250Dpm(&d, sizeof(d)) == (LONG)0xC00000BB);
-    escapeMode = 3; CHECK(Bc250Dpm(&d, sizeof(d)) == (LONG)0xC000000D);
-    escapeMode = 4; CHECK(Bc250Dpm(&d, sizeof(d)) == (LONG)0xC00000A3);
-    escapeMode = 5; CHECK(Bc250Dpm(&d, sizeof(d)) == (LONG)0xC000000D);
-    escapeMode = 6; CHECK(Bc250Dpm(&d, sizeof(d)) == (LONG)0xC000000D);
+    escapeMode = 1; CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == (LONG)0xC00000A3);
+    escapeMode = 2; CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == (LONG)0xC00000BB);
+    escapeMode = 3; CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == (LONG)0xC000000D);
+    escapeMode = 4; CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == (LONG)0xC00000A3);
+    escapeMode = 5; CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == (LONG)0xC000000D);
+    escapeMode = 6; CHECK(Bc250Dpm(&d, BC250_DPM_ABI1_SIZE) == (LONG)0xC000000D);
+    escapeMode = 0;
+    /* A caller rebuilt against this header asks with the whole structure, and then the ABI is 2. */
+    escapeCalls = 0;
+    CHECK(Bc250Dpm(&d, (ULONG)sizeof(d)) == 0 && escapeCalls == 1 && escapeSize == sizeof(d));
+    CHECK(sent.AbiVersion == BC250_DPM_ABI && sent.Command == 23 && sent.Op == 0);
+    escapeMode = 5; CHECK(Bc250Dpm(&d, (ULONG)sizeof(d)) == 0);   /* the fixture answers 2, which is the request */
     escapeMode = 0;
 
     CHECK(Bc250VideoMemory(NULL, NULL, sizeof(m)) < 0 && Bc250VideoMemory(NULL, &m, 263) < 0 && statsCalls == 0);

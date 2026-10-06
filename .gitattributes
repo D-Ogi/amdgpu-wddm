@@ -10,10 +10,26 @@
 *.c    text eol=lf
 *.patch text eol=lf
 *.ps1  text eol=crlf
+*.cmd  text eol=crlf
 # Shell scripts without an extension that run on the diagnostic USB
 tools/diagusb/overlay/** text eol=lf
+# A gate reads this list and a tool rewrites it: one line ending, on every machine
+tools/quality/guardlog_width_baseline.txt text eol=lf
 # Evidence is stored byte for byte, never normalized
 evidence/** -text
+
+# The CTS case lists are hash pinned: batches/manifest.json holds the SHA256 of each batch file, and the
+# runner refuses a batch whose file does not match. Line-ending normalization would break every hash.
+tools/win/cts/batches/** -text
+tools/win/cts/lists/** -text
+
+# The two M16 WSI harness sources are hash pinned: the E56 manifests record the SHA-256 of each source
+# file, and line-ending normalization would break both sums.
+tools/win/wsi-dxgi/*.cpp -text
+
+# The kmd168 transition helpers are hash pinned: check-offline.py and stage.py compare each file with the
+# recorded 171 stage manifest and refuse a difference. Line-ending normalization would break every hash.
+tools/win/kmd-deploy/template/kmd168-transition/** -text
 
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary

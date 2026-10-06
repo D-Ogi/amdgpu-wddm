@@ -14,6 +14,7 @@ workspace root, by default the parent directory of this repository); `_NT_SYMBOL
 | `kdenv.py` | Shared: paths, symbol path, environment, the KDNET key, process checks, output fencing |
 | `kd_server.py` | `start` / `stop` / `restart` / `status` / `firewall` |
 | `kd_cmd.py` | Send commands to the server, or run them one-shot against a dump file |
+| `analyze-kernel-dump.ps1` | One-shot triage of a dump on the lab, through `target.py ps` |
 
 ## A dump file
 
@@ -31,6 +32,62 @@ python tools/win/kd/kd_server.py start --dump $env:BC250_ROOT\scratch\dumps\0921
 python tools/win/kd/kd_cmd.py "kb" "!pool ffff9a83385db060"
 python tools/win/kd/kd_server.py stop
 ```
+
+## A dump file on the lab
+
+`analyze-kernel-dump.ps1` does the same one-shot analysis inside the lab's own Windows. Run it with
+`target.py ps`. The lab keeps its own copy of the debugger under `C:\BC250\tools\kd`.
+
+```
+python tools/win/target.py ps tools/win/kd/analyze-kernel-dump.ps1 -Dump C:\Windows\MEMORY.DMP
+python tools/win/target.py ps tools/win/kd/analyze-kernel-dump.ps1 -Dump C:\BC250\tmp\kmd.dmp -Pdb C:\BC250\tools\kd\pdb -Out C:\BC250\tmp\kd-triage.txt -Extra "!pool;!vm 1"
+```
+
+The script prints a short summary of the bugcheck lines. It leaves the full debugger log on the lab at
+`-Out`, and the exact commands of the run in a `.cmds` file next to that log. Copy the log here with
+`python tools/win/target.py pull <remote log> <local file>`. Add `-NoSymbolServer` when the lab cannot
+reach the public symbol server, because an unreachable server makes every `.reload` wait for a timeout.
+
+`-Extra` takes the extra debugger commands as one string, and each `;` in it starts a new command.
+`target.py ps` runs the script with `powershell -File`, and `-File` cannot bind an array parameter.
+
+The script also checks itself offline. This check starts no debugger and reads no dump:
+
+```
+pwsh -NoProfile -File tools/win/kd/analyze-kernel-dump.ps1 -SelfTest
+```
+
+First lab run, 2026-10-05: a 0x116 minidump from the b18 install (1.6 MB), symbol server only, `kd` exit 0
+in 1.4 s, summary `Bugcheck code 00000116`.
+
+### Why this one runs on the lab
+
+A debugger costs the development PC a lot of nonpaged kernel memory. Two measurements show it:
+
+- One-shot `kd -z` on a dump of about 1 GB grew the nonpaged pool of this PC at 372 to 628 MB/s. The
+  host kill switch stopped all four runs of 2026-09-27.
+- The live KDNET server leaked nonpaged kernel memory at about 0.87 GB/s and hung this PC after about
+  110 s on 2026-09-21. The KDNET section below gives more detail.
+
+For this reason the dump analysis runs on the lab. A dump on the development PC is still possible, but it
+needs the host kill switch and short sequential runs. The lab path also saves a copy of 1 GB or more over
+the network, and it needs no KDNET key.
+
+### The debugger files on the lab
+
+This repository holds no Microsoft binaries. Push the portable WinDbg files from
+`<BC250_ROOT>\toolchain\windbg\x64\amd64\` to `C:\BC250\tools\kd` one time. The analysis needs these
+files:
+
+```
+kd.exe  dbgcore.dll  dbgeng.dll  dbghelp.dll  dbgmodel.dll  msdia140.dll  srcsrv.dll  symsrv.dll
+winext\ext.dll  winxp\kdexts.dll  triage\pooltag.txt  triage\triage.ini
+```
+
+Put the PDB of the deployed kernel driver in `C:\BC250\tools\kd\pdb`. The script adds that directory to
+the symbol path. The public symbol server does not hold our driver, so the debugger takes the PDB from
+there. `-Module` names the driver for `.reload` and `lmvm`, and the script refuses a name that is not a
+plain module name.
 
 ## A live target over KDNET
 
@@ -86,3 +143,10 @@ Verified against the dump `092126-43343-01.dmp`: one-shot `--dump`, and the serv
 (`vertarget`, `lm m nwifi`, `!analyze -v` - symbols downloaded into `<BC250_ROOT>\scratch\symbols`, bucket
 `0x1E_C000001D_nwifi!NwfReadMsg`), `status`, `stop`. The live KDNET path and `--break` / `--go` have not been
 exercised against a target yet.
+
+`analyze-kernel-dump.ps1` passes its offline self-test under PowerShell 7 and under Windows PowerShell
+5.1, which is the shell of an SSH session on the lab. Its refusal paths also pass: a missing dump, a
+missing `kd.exe` and a module name that carries a command each return exit code 2. A full run with a
+stand-in for `kd.exe` in place of the debugger wrote the expected `.cmds` file, kept only the named lines
+in the summary and returned the exit code of the child. No run against a real dump on the lab exists yet,
+so this directory keeps no output of one.

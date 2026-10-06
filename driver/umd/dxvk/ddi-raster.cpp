@@ -82,7 +82,7 @@ void APIENTRY scissors(D3D10DDI_HDEVICE h,UINT count,UINT clear,const D3D10_DDI_
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         constexpr UINT limit=D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
         if (count>limit || clear>limit-count || (count && !input)) {
-            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,E_INVALIDARG); return;
+            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,D3DDDIERR_DEVICEREMOVED); return;
         }
         context.RSSetScissorRects(count,input);
     });
@@ -90,7 +90,7 @@ void APIENTRY scissors(D3D10DDI_HDEVICE h,UINT count,UINT clear,const D3D10_DDI_
 void APIENTRY topology(D3D10DDI_HDEVICE h,D3D10_DDI_PRIMITIVE_TOPOLOGY value) {
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         if (!valid_topology(value)) {
-            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,E_INVALIDARG); return;
+            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,D3DDDIERR_DEVICEREMOVED); return;
         }
         context.IASetPrimitiveTopology(static_cast<D3D11_PRIMITIVE_TOPOLOGY>(value));
     });

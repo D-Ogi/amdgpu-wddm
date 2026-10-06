@@ -10,8 +10,10 @@
 //      the engine list with the same calls and arguments. With the policy on the worker is held until the whole
 //      sequence is recorded, and every array and descriptor the slots were given is overwritten after its call: a
 //      call that kept a pointer instead of a copy would see the overwrite.
-//   3. Drains: Close, where an error latched by a deferred call reaches the runtime from that Close; Reset;
-//      ExecuteBundle; ExecuteCommandLists; the destroy of a list; a pool's reset and destroy; SetPipelineStackSize.
+//   3. Drains: Close, which waits for nothing and is the list's last entry, and whose engine failure reaches the
+//      runtime from the list's next drain; Reset; ExecuteBundle; ExecuteCommandLists; the destroy of a list; a pool's
+//      reset and destroy; a pool's reset and a Reset into it waiting for the pool's pending Close only;
+//      SetPipelineStackSize.
 //      The shell's drained hook runs once per drain a DDI call makes. Here and below, a drain that must wait is made
 //      with the worker held at the list's gate until the drain waits (held, Opener): no check depends on timing.
 //   4. Order across threads: a list recorded by a second thread (Switch) and by a thread without a ring (Direct).
@@ -22,6 +24,9 @@
 //   7. Rings: the cap (a thread beyond it records directly), an exited thread's ring taken over, teardown with
 //      entries pending, every worker joined and every snapshot heap released.
 //   8. Cost on the calling thread, off and on (printed, not a gate), and no allocation while recording.
+//   9. Diagnostics and priority: a worker at its owner's level, lifted one level above a drain that waits for it and
+//      back after; the long wait counted by kind with a line of its own, the held entry as the worker's stuck
+//      stretch, the summary at close 64 and at teardown, all through the policy's log hook.
 #include "internal.h"
 #include "replay.h"
 #include <atomic>
@@ -29,6 +34,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <io.h>
 #include <iterator>
 #include <memory>
@@ -689,8 +695,13 @@ public:
         return S_OK;
     }
     UINT STDMETHODCALLTYPE GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE) override { return kDescriptor; }
+    Thing root_signature;                                   // what CreateRootSignature hands out (BD-046)
     HRESULT STDMETHODCALLTYPE CreateRootSignature(UINT, const void*, SIZE_T, REFIID, void** out) override {
-        return none(out);
+        if (!out) return E_INVALIDARG;
+        root_signature.id = 900;
+        root_signature.AddRef();
+        *out = &root_signature;
+        return S_OK;
     }
     void STDMETHODCALLTYPE CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC*,
                                                    D3D12_CPU_DESCRIPTOR_HANDLE) override {
@@ -842,6 +853,8 @@ public:
 struct Shell {
     std::atomic<uint32_t> device_errors{0}, list_errors{0}, started{0}, ended{0}, drained{0};
     std::atomic<HRESULT> list_error{S_OK};
+    std::mutex lines_lock;
+    std::vector<std::string> lines;                         // the log hook's (section 9)
 };
 void APIENTRY device_error(void* shell, HRESULT) { ++static_cast<Shell*>(shell)->device_errors; }
 void APIENTRY list_error(void* shell, D3D12DDI_HRTCOMMANDLIST, HRESULT hr) {
@@ -858,6 +871,11 @@ void APIENTRY replay_worker(void* shell, ReplayBody body, void* ring) {
     ++s->ended;
 }
 void APIENTRY replay_drained(void* shell) { ++static_cast<Shell*>(shell)->drained; }
+void APIENTRY replay_log(void* shell, const char* line) {
+    auto* s = static_cast<Shell*>(shell);
+    std::lock_guard<std::mutex> hold(s->lines_lock);
+    s->lines.emplace_back(line);
+}
 
 D3D12DDI_DEVICE_FUNCS_CORE_0088 g_core{};
 D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 g_list{};             // the graphics table
@@ -901,9 +919,21 @@ struct Fixture {
     ~Fixture() { off(); }
     Fixture(const Fixture&) = delete;
     Fixture& operator=(const Fixture&) = delete;
-    bool on(uint32_t rings = 8, uint32_t bytes = 4u << 20) {
-        const ReplayPolicy p{sizeof(ReplayPolicy), 1, rings, bytes, &shell, replay_worker, replay_drained};
+    bool on(uint32_t rings = 8, uint32_t bytes = 4u << 20, bool logged = false) {
+        const ReplayPolicy p{sizeof(ReplayPolicy), 1, rings, bytes, &shell, replay_worker, replay_drained,
+                             logged ? replay_log : nullptr};
         return set_replay_policy(&context, &p) == S_OK;
+    }
+    // The first line of the log hook's that starts with prefix and contains every text in also; empty if none.
+    std::string line(const char* prefix, std::initializer_list<const char*> also = {}) {
+        std::lock_guard<std::mutex> hold(shell.lines_lock);
+        for (const std::string& l : shell.lines) {
+            if (l.rfind(prefix, 0) != 0) continue;
+            bool all = true;
+            for (const char* text : also) all = all && l.find(text) != std::string::npos;
+            if (all) return l;
+        }
+        return {};
     }
     bool off() {
         ReplayPolicy p{};
@@ -931,7 +961,13 @@ struct Fixture {
         args.hDrvCommandRecorder.pDrvPrivate = &(p ? p : &pool)->recorder;
         g_list.pfnResetCommandList(l.h, &args);
     }
-    void close(const ListBox& l) { g_list.pfnCloseCommandList(l.h); }
+    // Close, then the list's drain, so that the checks after it read a complete list: with the policy on, the engine
+    // Close is the list's last entry, made by the worker (close_list). The drain is of a kind no DDI call makes, so
+    // the drain counts the checks read stay those of the DDI calls; it reports a failed Close as the next drain would.
+    void close(const ListBox& l) {
+        g_list.pfnCloseCommandList(l.h);
+        drain_list(const_cast<CommandListRecord*>(&l.record), Drain::Teardown);
+    }
     void draws(const ListBox& l, UINT first, UINT count) {
         for (UINT k = 0; k < count; ++k) g_list.pfnDrawInstanced(l.h, first + k, 1, 0, 0);
     }
@@ -1249,7 +1285,8 @@ void sequence(const ListBox& l, Objects& o, Sources& s) {
 // its lock (the worker clears it after its next entry, which the gate would hold).
 class Opener {
 public:
-    Opener(Replay* rp, HANDLE gate) {
+    // parked: run on the opener's thread once the drain waits, before the gate opens.
+    Opener(Replay* rp, HANDLE gate, std::function<void()> parked = {}) : action_(std::move(parked)) {
         for (uint32_t i = 0; i < rp->count.load(); ++i) rp->rings[i]->next_wake.store(UINT64_MAX);
         thread_ = std::thread([this, rp, gate] { run(rp, gate); });
     }
@@ -1269,14 +1306,16 @@ private:
         for (; !parked_ && qpc() < until; Sleep(1))
             for (uint32_t i = 0; i < rp->count.load(); ++i)
                 if (rp->rings[i]->next_wake.load() != UINT64_MAX) parked_ = true;
+        if (parked_ && action_) action_();
         SetEvent(gate);                                 // the last access: the drain cannot end before it
     }
+    std::function<void()> action_;
     bool parked_ = false;
     std::thread thread_;
 };
 // Makes call, which drains, while the worker is held at gate until the drain waits. True if the drain waited.
-template <class F> bool held(Replay* rp, HANDLE gate, F&& call) {
-    Opener open(rp, gate);
+template <class F> bool held(Replay* rp, HANDLE gate, F&& call, std::function<void()> parked = {}) {
+    Opener open(rp, gate, std::move(parked));
     call();
     return open.parked();
 }
@@ -1404,9 +1443,9 @@ int main() {
         }
         check(covered == std::size(kMethods), "exactness: %zu of %zu converted engine methods reached%s", covered,
               std::size(kMethods), missing.c_str());
-        check(held == 1 && b.engine.caller_calls == 2 && !b.engine.gate_timeouts,
-              "exactness: every recorded call ran on the worker after the sequence (engine calls before the gate "
-              "opened %llu: the Reset; on the recording thread %llu: Reset and Close)",
+        check(held == 1 && b.engine.caller_calls == 1 && !b.engine.gate_timeouts,
+              "exactness: every recorded call and the Close ran on the worker after the sequence (engine calls before "
+              "the gate opened %llu: the Reset; on the recording thread %llu: the Reset)",
               ull(held), ull(b.engine.caller_calls));
         check(!a.engine.unexpected && !b.engine.unexpected && !b.engine.crossed && !b.engine.stale &&
                   !f.shell.list_errors && !f.shell.device_errors && !f.device.unexpected,
@@ -1427,26 +1466,31 @@ int main() {
         check(f.on(), "drains: policy on");
         const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         auto hold = [&](ListBox& l) {                               // before the list's Reset, made on this thread
+            drain_all(&f.context, Drain::Teardown);                 // nothing of an earlier list waits at the gate
             ResetEvent(gate);
             l.engine.caller = self;
             l.engine.gate = gate;
         };
 
-        // Close: an error a deferred call latched in the engine list reaches the runtime from the Close itself.
+        // Close: the list's last entry. It returns with the worker still held, the list closed; the engine Close runs
+        // after the list's calls, and the E_OUTOFMEMORY a deferred call latched there reaches the runtime from the
+        // list's next drain, here its Reset.
         ListBox& a = f.list();
         hold(a);
         f.reset(a);
         f.draws(a, 1, 20);
         g_list.pfnOmSetStencilRef(a.h, FakeList::kLatchStencil);
         f.draws(a, 21, 5);
-        const uint64_t ran = a.engine.calls.load();
         const uint32_t errors = f.shell.list_errors.load();
-        const bool closed = held(f.replay(), gate, [&] { f.close(a); });
+        g_list.pfnCloseCommandList(a.h);
+        const bool at_once = a.engine.calls == 1 && !a.record.recording && f.shell.list_errors == errors;
+        const bool reopened = held(f.replay(), gate, [&] { f.reset(a); });
         const std::vector<std::string> a_lines = lines_of(a.engine.log);
-        check(closed && ran == 1 && a.engine.calls == 28 && f.shell.list_errors == errors + 1 &&
-                  f.shell.list_error == E_OUTOFMEMORY && a.record.recording && starts(a_lines.back(), "Close("),
-              "drains: Close waits for the list's 26 calls, runs the engine Close last and reports its E_OUTOFMEMORY "
-              "from the Close; the list stays open");
+        check(at_once && reopened && a.engine.calls == 29 && a_lines.size() == 29 && starts(a_lines[27], "Close(") &&
+                  starts(a_lines[28], "Reset(") && f.shell.list_errors == errors + 1 &&
+                  f.shell.list_error == E_OUTOFMEMORY && a.record.recording,
+              "drains: Close returns before the list's 26 calls run, the list closed; the engine Close runs on the "
+              "worker after them, and its E_OUTOFMEMORY reaches the runtime from the Reset that drains the list");
 
         // Reset of a list that is still recording.
         ListBox& r = f.list();
@@ -1537,6 +1581,38 @@ int main() {
               ull(allocator->calls_at_reset), ull(allocator->calls_at_release));
         f.close(user);
 
+        // With no list of the pool open, its reset and a Reset into it wait for the pool's pending Close only: the
+        // engine Close reaches the allocator.
+        PoolBox pool2;
+        f.make_pool(pool2);
+        ListBox& closer = f.list();
+        hold(closer);
+        f.reset(closer, &pool2);
+        auto* allocator2 = static_cast<FakeAllocator*>(pool2.pool.allocators[D3D12_COMMAND_LIST_TYPE_DIRECT]);
+        allocator2->watched = &closer.engine;
+        f.draws(closer, 1, 20);
+        g_list.pfnCloseCommandList(closer.h);
+        const uint64_t pool_drains = f.calls(Drain::Pool), close_waits = f.waits(Drain::Closes);
+        const bool closes_reset =
+            held(f.replay(), gate, [&] { g_core.pfnResetCommandPool(f.hdevice, {&pool2.pool}); });
+        const bool reset_after_close = allocator2->calls_at_reset == 22 && f.calls(Drain::Pool) == pool_drains &&
+                                       f.waits(Drain::Closes) == close_waits + 1;
+        hold(closer);
+        f.reset(closer, &pool2);
+        f.draws(closer, 1, 20);
+        g_list.pfnCloseCommandList(closer.h);
+        ListBox& next = f.list();
+        next.engine.caller = self;
+        const bool closes_list = held(f.replay(), gate, [&] { f.reset(next, &pool2); });
+        const std::vector<std::string> c_lines = lines_of(closer.engine.log);
+        check(closes_reset && reset_after_close && closes_list && starts(c_lines.back(), "Close(") &&
+                  next.engine.calls == 1 && f.waits(Drain::Closes) == close_waits + 2,
+              "drains: ResetCommandPool with no list of the pool open, and a Reset into the pool, wait for the pool's "
+              "pending Close only (allocator reset after %llu calls, Close waits %llu)",
+              ull(allocator2->calls_at_reset), ull(f.waits(Drain::Closes) - close_waits));
+        f.close(next);
+        g_core.pfnDestroyCommandPool(f.hdevice, {&pool2.pool});
+
         // SetPipelineStackSize: every ring, so the size lands after the calls recorded before it.
         ListBox& rt = f.list();
         hold(rt);
@@ -1553,7 +1629,7 @@ int main() {
 
         uint64_t hooked = 0;
         for (Drain k :
-             {Drain::Close, Drain::Reset, Drain::Bundle, Drain::Ecl, Drain::Destroy, Drain::Pool, Drain::Stack})
+             {Drain::Reset, Drain::Bundle, Drain::Ecl, Drain::Destroy, Drain::Pool, Drain::Closes, Drain::Stack})
             hooked += f.calls(k);
         check(hooked > 0 && f.shell.drained == hooked && !f.calls(Drain::Switch) && !f.calls(Drain::Direct),
               "drains: the drained hook ran once per drain of a DDI call (%llu), never for an encode-side drain",
@@ -1586,11 +1662,12 @@ int main() {
         const bool parked = held(f.replay(), gate, [&] {           // first is alive: second gets a ring of its own
             std::thread([&] { f.draws(w, 31, 30); }).join();
         });
+        // Read before this thread's Close, which is an entry too: it gets this thread a ring and a switch of its own.
+        const bool switched = f.replay()->count == 2 && f.calls(Drain::Switch) == 1 && f.waits(Drain::Switch) == 1;
         SetEvent(release);
         first.join();
         f.close(w);
-        check(parked && !w.engine.disorder && w.engine.calls == 62 && !w.engine.gate_timeouts &&
-                  f.replay()->count == 2 && f.calls(Drain::Switch) == 1 && f.waits(Drain::Switch) == 1,
+        check(parked && switched && !w.engine.disorder && w.engine.calls == 62 && !w.engine.gate_timeouts,
               "switch: a second thread waits for the list's calls on the first thread's ring, and the order holds "
               "(calls %llu, out of order %llu)",
               ull(w.engine.calls), ull(w.engine.disorder));
@@ -1668,7 +1745,7 @@ int main() {
         f.close(big);
         const std::vector<std::string> lines = lines_of(big.engine.log);
         check(parked && lines.size() == 23 && starts(lines[11], "SetGraphicsRoot32BitConstants(0,4096,[") &&
-                  !big.engine.disorder && big.engine.caller_calls == 3 && f.replay()->oversize == 1 &&
+                  !big.engine.disorder && big.engine.caller_calls == 2 && f.replay()->oversize == 1 &&
                   f.calls(Drain::Direct) == 1 && f.waits(Drain::Direct) == 1,
               "oversize: a call over the entry limit is made directly, after the list's calls on the ring");
         check(f.off(), "bounds: policy off");
@@ -1701,7 +1778,7 @@ int main() {
         f.close(w);
         const std::vector<std::string> lines = lines_of(w.engine.log);
         check(parked && lines.size() == 19 && starts(lines[6], "OMSetRenderTargets(2,0,[") &&
-                  starts(lines[12], "ClearRenderTargetView([") && !w.engine.disorder && w.engine.caller_calls == 4 &&
+                  starts(lines[12], "ClearRenderTargetView([") && !w.engine.disorder && w.engine.caller_calls == 3 &&
                   f.replay()->fallbacks == 2 && f.waits(Drain::Direct) == 2 && !f.device.heaps_made,
               "no snapshot heap: the calls that need one wait for the list's calls on the ring and are made directly "
               "(fallbacks %llu)",
@@ -2000,13 +2077,153 @@ int main() {
             }
         }
         std::printf("measure  per call on the recording thread: off %.1f ns; on %.1f ns to record, %.1f ns with "
-                    "the Close drain (%llu calls in render passes); DrawInstanced alone: off %.1f ns, on %.1f ns; "
+                    "the Close and the list's drain (%llu calls in render passes); DrawInstanced alone: off %.1f ns, "
+                    "on %.1f ns; "
                     "waits for room %llu, for snapshot slots %llu\n",
                     record[0], record[1], with_close[1], ull(kCalls), draws[0], draws[1], ull(space), ull(slots));
         check(!allocations[0] && !allocations[1],
               "cost: no allocation while recording (off %llu, on %llu over %llu calls)", ull(allocations[0]),
               ull(allocations[1]), ull(kCalls));
         check(f.off(), "cost: policy off");
+    }
+
+    // BD-046. ClearRootArguments mid-list (the API's ClearState): each bound signature keeps its binding and gets
+    // every argument set to zero, in parameter order, compute before graphics; a signature unbound by a null set is
+    // left alone, and on a just-reset list nothing is bound and nothing happens. The same calls with the replay
+    // policy off and on.
+    {
+        std::string root_lines[2];
+        for (int on = 0; on < 2; ++on) {
+            Fixture f;
+            if (on) check(f.on(), "clear root arguments: policy on");
+            D3D12DDI_DESCRIPTOR_RANGE_0013 range{};
+            range.RangeType = D3D12DDI_DESCRIPTOR_RANGE_TYPE_SRV;
+            range.NumDescriptors = 2;
+            D3D12DDI_ROOT_PARAMETER_0013 params[5]{};
+            params[0].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+            params[0].Constants.Num32BitValues = 4;
+            params[1].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_CBV;
+            params[2].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_SRV;
+            params[2].Descriptor.ShaderRegister = 1;
+            params[3].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_UAV;
+            params[4].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[4].DescriptorTable.NumDescriptorRanges = 1;
+            params[4].DescriptorTable.pDescriptorRanges = &range;
+            D3D12DDI_ROOT_SIGNATURE_0013 desc{};
+            desc.NumParameters = 5;
+            desc.pRootParameters = params;
+            D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013 args{};
+            args.Version = D3D12DDI_ROOT_SIGNATURE_VERSION_1_1;
+            args.pRootSignature_1_1 = &desc;
+            const SIZE_T size = g_core.pfnCalcPrivateRootSignatureSize(f.hdevice, &args);
+            std::vector<uint64_t> storage((size + 7) / 8);
+            const D3D12DDI_HROOTSIGNATURE rs{storage.data()};
+            check(size == sizeof(RootSignatureRecord) + 5 * sizeof(RootParameterShape) &&
+                      g_core.pfnCreateRootSignature(f.hdevice, &args, rs) == S_OK,
+                  "clear root arguments: a signature of five parameters, one of each type, its shapes sized");
+            ListBox& l = f.list();
+            f.reset(l);
+            g_list.pfnClearRootArguments(l.h);                      // just reset: nothing bound
+            const UINT values[4] = {1, 2, 3, 4};
+            g_list.pfnSetComputeRootSignature(l.h, rs);
+            g_list.pfnSetGraphicsRootSignature(l.h, rs);
+            g_list.pfnSetGraphicsRoot32BitConstants(l.h, 0, 4, values, 0);
+            g_list.pfnSetGraphicsRootConstantBufferView(l.h, 1, 0x10000);
+            g_list.pfnSetComputeRootUnorderedAccessView(l.h, 3, 0x20000);
+            g_list.pfnSetComputeRootDescriptorTable(l.h, 4, D3D12DDI_GPU_DESCRIPTOR_HANDLE{0x300});
+            g_list.pfnClearRootArguments(l.h);                      // both bound: both cleared
+            g_list.pfnSetGraphicsRootSignature(l.h, D3D12DDI_HROOTSIGNATURE{nullptr});
+            g_list.pfnClearRootArguments(l.h);                      // graphics unbound: compute only
+            f.close(l);
+            f.reset(l);
+            g_list.pfnClearRootArguments(l.h);                      // the Reset unbound both
+            f.close(l);
+            for (const std::string& line : lines_of(l.engine.log))
+                if (line.find("Root") != std::string::npos) root_lines[on] += line + "\n";
+            g_core.pfnDestroyRootSignature(f.hdevice, rs);
+            if (on) check(f.off(), "clear root arguments: policy off");
+        }
+        auto cleared = [](const char* bind) {
+            const std::string b = bind;
+            return "Set" + b + "Root32BitConstants(0,4,[00000000000000000000000000000000],0,)\n" + "Set" + b +
+                   "RootConstantBufferView(1,0,)\n" + "Set" + b + "RootShaderResourceView(2,0,)\n" + "Set" + b +
+                   "RootUnorderedAccessView(3,0,)\n" + "Set" + b + "RootDescriptorTable(4,0,)\n";
+        };
+        const std::string expected = std::string("SetComputeRootSignature(#900,)\nSetGraphicsRootSignature(#900,)\n") +
+                                     "SetGraphicsRoot32BitConstants(0,4,[01000000020000000300000004000000],0,)\n" +
+                                     "SetGraphicsRootConstantBufferView(1,10000,)\n" +
+                                     "SetComputeRootUnorderedAccessView(3,20000,)\n" +
+                                     "SetComputeRootDescriptorTable(4,300,)\n" + cleared("Compute") + cleared("Graphics") +
+                                     "SetGraphicsRootSignature(0,)\n" + cleared("Compute");
+        check(root_lines[0] == expected, "clear root arguments: every argument zeroed in order, signatures kept%s%s",
+              root_lines[0] == expected ? "" : "; got\n", root_lines[0] == expected ? "" : root_lines[0].c_str());
+        check(root_lines[1] == root_lines[0], "clear root arguments: the same calls with the replay policy on");
+    }
+
+    // 9. Diagnostics and priority. A recording thread at ABOVE_NORMAL; the drain after its Close waits while the
+    //    worker is held at the list's gate, and the opener keeps it there 30 ms after the drain parks. The engine
+    //    Close is the list's last replay entry, so the wait is the fixture's own drain (teardown), not a Close.
+    {
+        Fixture f;
+        check(f.on(8, 4u << 20, true), "diagnostics: policy on with the log hook");
+        ListBox& l = f.list();
+        ListBox& m = f.list();
+        const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        int created = THREAD_PRIORITY_ERROR_RETURN, lifted = THREAD_PRIORITY_ERROR_RETURN;
+        int after = THREAD_PRIORITY_ERROR_RETURN;
+        bool parked = false;
+        std::thread([&] {
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+            l.engine.caller = GetCurrentThreadId();
+            l.engine.gate = gate;
+            f.reset(l);
+            f.draws(l, 1, 10);
+            const HANDLE worker = f.replay()->rings[0]->thread;
+            created = GetThreadPriority(worker);
+            parked = held(f.replay(), gate, [&] { f.close(l); }, [&] {
+                lifted = GetThreadPriority(worker);
+                Sleep(30);
+            });
+            after = GetThreadPriority(worker);
+            // 64 ecl drains: the summary at ecl drain 64.
+            m.engine.caller = GetCurrentThreadId();
+            for (int k = 0; k < 64; ++k) {
+                f.reset(m);
+                f.draws(m, 1, 2);
+                g_list.pfnCloseCommandList(m.h);
+                drain_list(const_cast<CommandListRecord*>(&m.record), Drain::Ecl);
+            }
+        }).join();
+        const Replay* rp = f.replay();
+        const ReplayDrainCounter& held_wait = rp->drains[static_cast<size_t>(Drain::Teardown)];
+        const uint64_t ms = rp->qpf / 1000;
+        check(parked && created == THREAD_PRIORITY_ABOVE_NORMAL && lifted == THREAD_PRIORITY_HIGHEST &&
+                  after == THREAD_PRIORITY_ABOVE_NORMAL && rp->boosts >= 1,
+              "priority: the worker starts at its owner's level (%d), runs one above it while the drain waits (%d) "
+              "and returns after (%d); %llu lifts", created, lifted, after, ull(rp->boosts));
+        check(held_wait.over_1ms >= 1 && held_wait.over_10ms >= 1 && held_wait.longest >= 25 * ms &&
+                  rp->long_waits >= 1 && rp->rings[0]->stuck_longest >= 10 * ms && rp->rings[0]->stuck_run,
+              "diagnostics: the drain's wait counted as 1 and 10 ms or more (%llu, %llu), longest %llu us, %llu long "
+              "waits; the held entry seen as the worker's stuck stretch (%llu us)",
+              ull(held_wait.over_1ms), ull(held_wait.over_10ms), ull(held_wait.longest * 1000000 / rp->qpf),
+              ull(rp->long_waits), ull(rp->rings[0]->stuck_longest * 1000000 / rp->qpf));
+        const std::string wait = f.line("replay long-wait: ", {"kind=teardown", " worker_priority=1/2 ", " asleep=0 "});
+        double entry_ms = 0;
+        const size_t at = wait.find(" stuck_ms=");
+        if (at != std::string::npos) entry_ms = std::atof(wait.c_str() + at + 10);
+        // The stretch is sampled between the waiter's slices (a timer tick each here): at least one tick of the
+        // 30 ms hold.
+        check(!wait.empty() && wait.find(" stuck_rva=0x0") == std::string::npos && entry_ms >= 10.0,
+              "diagnostics: a long-wait line for the drain names the levels and the held entry (%.1f ms): %s", entry_ms,
+              wait.substr(0, 200).c_str());
+        check(!f.line("replay at ecl drain 64: ").empty() &&
+                  !f.line("replay at ecl drain 64 long drains", {" teardown "}).empty() &&
+                  !f.line("replay at ecl drain 64 workers: ", {"base levels 1"}).empty(),
+              "diagnostics: the summary at ecl drain 64 through the hook, with the long drain and the worker's level");
+        check(f.off() && !f.line("replay teardown drains").empty() && !f.line("replay policy: off").empty() &&
+                  !f.line("replay policy: on").empty() && !f.line("replay: ring 0 of 8 for thread ").empty(),
+              "diagnostics: policy off; the policy, ring and teardown lines reached the hook");
+        CloseHandle(gate);
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

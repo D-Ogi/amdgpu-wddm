@@ -150,6 +150,24 @@ adapter is the only one in the machine and nothing can render on it. So it is bu
   `adapter info type 10 ... first at 29`, and line 29 is the type 16 refusal. `tools/runcompare` prints the
   counted-versus-logged difference and refuses to print `first at` for such a type.
 
+  **A log line holds 159 characters of text, and the print truncates without a word.** `GuardLog` writes into
+  `char line[BC250_LOG_TEXT]` (160 bytes, the terminator included) with `RtlStringCchVPrintfA`. A line that
+  needs more loses its last fields, and the reader sees no sign of it. That is how 0.7.207.1 printed
+  `wddm summary: scan-out ... format/geometry/pitch/size/segment/alignment/gated 0/0/` and lost every refusal
+  count (BD-070). A summary line therefore carries the numbers a tool parses first, and a line that does not
+  fit is split into two lines with the same prefix. The gate `guardlog-width` of `tools/quality/quick.ps1`
+  measures every `GuardLog` format in `driver/kmd` at its widest printing and fails on a new line over the
+  limit. It reads the `.c`, `.inc` and `.h` files of that directory, because `wddm.c` includes
+  `wddm_allocation_identity.inc` and that file carries a `GuardLog` call of its own. The formats that were
+  already over the limit when the gate landed are listed in `tools/quality/guardlog_width_baseline.txt`, with
+  the width each had, and that list can only shrink.
+
+  Two lines of a pair are two samples. `WddmSummary` also runs while the adapter runs, because the overlay
+  polls it, so a counter can move between the two `GuardLog` calls. Where a reader adds numbers across the two
+  lines - the scan-out admission counts against the requested count, the object pairs against the live count -
+  the driver copies the counters into locals first and prints both lines from one sample. The other pairs hold
+  no such sum, and they stay what the rest of this summary is: independently sampled counters.
+
 ### Running stage A
 
 Everything below is under `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, all `REG_DWORD`, and every
@@ -249,6 +267,40 @@ package quietly missing that block is byte for byte the run 1 experiment wearing
 32-bit driver" and "it asked and the load failed" would look identical - which is the one distinction run 2
 exists to make. Everything that renders in run 2 (DWM on this x64 build, and the Direct3D 11 attempt from the SSH
 session) is 64-bit. The INF says what it would take to add it.
+
+## VidPN source modes and DXGI display formats (0.7.201)
+
+The miniport offers one geometry for the one source: the mode that the firmware left. It can offer this
+geometry in more than one pixel format. `display_modes.h` gives the list. The list comes from the shared
+surface format table (`driver/contract/amdgpu_wddm_surface_format.h`):
+
+1. `A8R8G8B8`. This is the scan-out format, and it is always first.
+2. With the full table only: `A8B8G8R8`, `A2B10G10R10` and `A16B16G16R16F`. These are the composed rows that
+   DXGI can name (`R8G8B8A8_UNORM`, `R10G10B10A2_UNORM`, `R16G16B16A16_FLOAT`).
+
+A mode of step 2 does not change the scan-out. The display keeps the 8-bit plane.
+`SetVidPnSourceAddress` refuses an allocation without the `SCANOUT_PRIMARY` bit. The UMDs present buffers of
+these formats through composition. `CommitVidPn` and `IsSupportedVidPn` accept a pinned source mode only in
+a format of the list. `CommitVidPn` writes one log line when the committed format changes:
+`display: CommitVidPn source WxH format F stride S`.
+
+Up to 0.7.200.1 the list held `A8R8G8B8` only. 3DMark Steel Nomad then stopped with "Display mode list not
+found for given format" (lab session native-caps349). `tools/win/dxgimodes` shows the KMT and DXGI mode
+lists for each format. Use it to measure the change. To turn step 2 off, set the REG_DWORD
+`OfferComposedSourceModes` to 0 under the service's `Parameters` key and restart the adapter. The INF does
+not write this value, and the default is 1.
+
+## Scan-out admission (M15.14, 0.7.207.1)
+
+`SetVidPnSourceAddress` may program the plane with an application's own swap-chain buffer when the
+buffer's creator asked for scan-out and described it. The rule is `scanout_admit.h`, the design note is
+`docs/design/scanout-admission.md`, and the gates are `scanout-admit` and `vidpn-flip`.
+
+To turn it off, set the REG_DWORD `EnableScanoutAdmit` to 0 under the service's `Parameters` key and
+restart the adapter. A candidate that asks for scan-out is then refused with the status `gated`, every
+other candidate keeps the checks it had in 0.7.205.1, and the start behaves as that revision did. The
+INF does not write this value, and the default is 1. The flip gates `EnableMmio`, `EnableDcnWrite` and
+`EnableVidPnFlip` are a different thing: they remove every hardware flip, DWM's own primary included.
 
 ## Build
 

@@ -25,7 +25,7 @@ BOOL APIENTRY busy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
-        if (!s || !s->object || !owner.engine() || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !s->object || !owner.engine() || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED); return; }
         HRESULT hr=owner.device()->GetDeviceRemovedReason();
         // NoErrors DDI: stop polling a lost device. A subsequent Map reports
         // removal through its allowed error path; FALSE grants no CPU pointer.
@@ -41,7 +41,7 @@ BOOL APIENTRY busy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
 void APIENTRY min_lod(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,FLOAT lod) {
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
-        if (!s || !s->object) { report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,E_INVALIDARG); return; }
+        if (!s || !s->object) { report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,D3DDDIERR_DEVICEREMOVED); return; }
         context.SetResourceMinLOD(s->object,lod);
     });
 }

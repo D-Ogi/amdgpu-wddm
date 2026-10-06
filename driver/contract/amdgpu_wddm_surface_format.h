@@ -19,8 +19,10 @@
  * R8G8B8A8_UNORM is D3DDDIFMT_A8B8G8R8 (32).
  *
  * The policy bits are the only place that says a format is enabled for a stage:
- *   COMPOSED         may be a swap-chain buffer: allocated, opened and sampled by the compositor,
- *                    which converts it to the desktop's format. The monitor's depth does not matter.
+ *   COMPOSED         may be a swap-chain buffer or another shared surface the compositor opens (a
+ *                    DirectComposition surface or atlas): allocated, opened and sampled by the
+ *                    compositor, which converts it to the desktop's format. The monitor's depth does
+ *                    not matter.
  *   SCANOUT_PRIMARY  may be the argument of SetVidPnSourceAddress, i.e. read by the display
  *                    pipeline. Today only the formats of the plane the firmware left.
  * A row without a bit is known and refused with a reason, never mistaken for an unknown format.
@@ -32,6 +34,12 @@
  * A component built against a copy of this table without the bit still refuses the row (the
  * kernel driver up to 0.7.184.1 and the desktop UMDs 4176D1DF and E6B944CF do), so the bit takes
  * effect on a machine only when every component along the path carries it.
+ *
+ * A8 (DXGI A8_UNORM, D3DDDIFMT_A8) is COMPOSED at 1 byte a pixel. DirectComposition and XAML keep
+ * glyph and mask atlases in it and share them with the compositor: Task Manager asks the D3D11
+ * driver for a shared 32x32 A8 render target and recreates its device when that fails (M14.1). It
+ * is never a swap-chain format, so the swap-chain paths do not meet it. The rule above holds: the
+ * kernel driver up to 0.7.194.1 and the desktop UMDs 18BFC610 and 10D9C983 refuse the row.
  */
 #ifndef AMDGPU_WDDM_SURFACE_FORMAT_H
 #define AMDGPU_WDDM_SURFACE_FORMAT_H
@@ -48,12 +56,14 @@ extern "C" {
 #define AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM   24u
 #define AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM      28u
 #define AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM_SRGB 29u
+#define AMDGPU_WDDM_DXGI_A8_UNORM            65u
 #define AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM      87u
 #define AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM_SRGB 91u
 
 /* D3DDDIFORMAT values (d3dukmdt.h). */
 #define AMDGPU_WDDM_D3DDDI_A8R8G8B8      21u
 #define AMDGPU_WDDM_D3DDDI_X8R8G8B8      22u
+#define AMDGPU_WDDM_D3DDDI_A8            28u
 #define AMDGPU_WDDM_D3DDDI_A2B10G10R10   31u
 #define AMDGPU_WDDM_D3DDDI_A8B8G8R8      32u
 #define AMDGPU_WDDM_D3DDDI_A16B16G16R16F 113u
@@ -78,6 +88,7 @@ static inline const AMDGPU_WDDM_SURFACE_FORMAT *amdgpu_wddm_surface_formats(unsi
          AMDGPU_WDDM_SURFACE_COMPOSED, "RGB10A2"},
         {AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT, 0, AMDGPU_WDDM_D3DDDI_A16B16G16R16F, 8,
          AMDGPU_WDDM_SURFACE_COMPOSED, "RGBA16F"},
+        {AMDGPU_WDDM_DXGI_A8_UNORM, 0, AMDGPU_WDDM_D3DDDI_A8, 1, AMDGPU_WDDM_SURFACE_COMPOSED, "A8"},
         {0, 0, AMDGPU_WDDM_D3DDDI_X8R8G8B8, 4, AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY, "X8"},
     };
     *count = (unsigned int)(sizeof(rows) / sizeof(rows[0]));

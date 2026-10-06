@@ -68,16 +68,16 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11_1_DDI_BLEND_DESC *desc,
     if (s) s->object=nullptr;
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!s || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !desc || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         D3D11_BLEND_DESC1 d{};
         HRESULT hr=convert_blend(*desc,d);
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
         hr=owner.device()->CreateBlendState1(&d,&s->object);
         if (FAILED(hr)) {
             if (s->object) { s->object->Release(); s->object=nullptr; }
-            report_ddi_error(owner,hr);
-        } else if (!s->object) report_ddi_error(owner,E_FAIL);
-    });
+            report_ddi_error(owner,hr,DdiErrorClass::out_of_memory);
+        } else if (!s->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory);
+    },DdiErrorClass::out_of_memory);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HBLENDSTATE handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {

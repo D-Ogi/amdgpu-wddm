@@ -1,0 +1,57 @@
+{
+  "note": "Configuration sets for run-frameloop.py. Every run is one one-shot scheduled task in unit A's console session; seconds is the client's own loop length, and the runner refuses a set whose runs plus their task overhead would not fit the 3-minute lab bound. One set is one trial: run them in the order quick, mt-gpu, mt-present, gap, gap-queue.",
+  "ts_hz_note": "--ts-hz 100000000 is an interim measure for BD-056: our KMD answers CalibrateGpuClock with the CPU performance counter (10 MHz) while the command processor writes a 100 MHz counter, so without it every GPU-side number is 10x and the --gpu-ms calibration aims at a tenth of the work it was asked for (trial quick-20261002T225506Z: 12 ms asked, 1.217 ms delivered). REMOVE IT once KMD 0.7.197 answers from GOLDEN_TSC, and confirm by the ratio column staying at 1.00 without it.",
+  "common": ["--buffers", "2", "--present-interval", "0", "--warmup", "10", "--raw-frames", "4000",
+             "--ts-hz", "100000000"],
+  "sets": {
+    "quick": {
+      "what": "First contact: does the client run on our stack, does the GPU work land where it was asked for now that --ts-hz supplies the real counter frequency (BD-056), and what is the idle per frame with and without GPU work.",
+      "runs": [
+        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
+        {"name": "g12-l7", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2"]},
+        {"name": "g0-l7", "seconds": 12, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2"]}
+      ]
+    },
+    "mt-gpu": {
+      "what": "The owner's multithreading question with GPU work per frame (12 ms, GPU-bound, so the idle that remains is the submitted-to-start latency): record threads 1 and 4, one ExecuteCommandLists per list against all 7 in one call.",
+      "runs": [
+        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
+        {"name": "g12-t1-interleaved", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "interleaved"]},
+        {"name": "g12-t1-sequential", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "sequential"]},
+        {"name": "g12-t1-batch", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "batch"]},
+        {"name": "g12-t4-sequential", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "sequential"]},
+        {"name": "g12-t4-batch", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "batch"]}
+      ]
+    },
+    "mt-present": {
+      "what": "The same five configurations without GPU work (0 ms, Present-bound): what the CPU side of a frame costs on our stack, where recording and submission are the whole frame.",
+      "runs": [
+        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
+        {"name": "g0-t1-interleaved", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "interleaved"]},
+        {"name": "g0-t1-sequential", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "sequential"]},
+        {"name": "g0-t1-batch", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "batch"]},
+        {"name": "g0-t4-sequential", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "sequential"]},
+        {"name": "g0-t4-batch", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "batch"]}
+      ]
+    },
+    "gap": {
+      "what": "Is the gap fixed per frame or per unit of work? GPU work 12 against 25 ms, at 7 lists against 1: a latency stays the same in milliseconds while the work changes, a cost per submission scales with the number of lists.",
+      "runs": [
+        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
+        {"name": "g12-l7-lat2", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2"]},
+        {"name": "g12-l1-lat2", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "1", "--latency", "2"]},
+        {"name": "g25-l7-lat2", "seconds": 12, "args": ["--gpu-ms", "25", "--lists", "7", "--latency", "2"]},
+        {"name": "g25-l1-lat2", "seconds": 12, "args": ["--gpu-ms", "25", "--lists", "1", "--latency", "2"]}
+      ]
+    },
+    "gap-queue": {
+      "what": "Does a deeper queue hide the gap? Three frames in flight with three buffers against two, at 7 lists and 1, plus the Present-bound end of the same loop.",
+      "runs": [
+        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
+        {"name": "g12-l7-lat3", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "3", "--buffers", "3"]},
+        {"name": "g12-l1-lat3", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "1", "--latency", "3", "--buffers", "3"]},
+        {"name": "g0-l7-lat2", "seconds": 12, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2"]}
+      ]
+    }
+  }
+}

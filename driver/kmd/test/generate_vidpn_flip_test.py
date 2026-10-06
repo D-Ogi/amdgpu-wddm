@@ -11,6 +11,7 @@ def function(signature):
 body='\n'.join(function(x) for x in (
     'static BOOLEAN WddmReadCompletedPrimary(',
     'static NTSTATUS Bc250WddmSetVidPnSourceAddress(',
+    'static NTSTATUS Bc250WddmDestroyAllocation(',
     'void WddmDcnVsync('))
 fixture=Path(__file__).with_name('vidpn_flip_test.c').read_text()
 assert fixture.count('/* ACTUAL_SOURCE */')==1

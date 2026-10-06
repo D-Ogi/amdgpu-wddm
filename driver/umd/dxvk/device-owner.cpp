@@ -59,7 +59,7 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
 HRESULT DeviceOwner::take_deferred_error(EngineErrorPolicy policy) {
     if (!runtime_.domain.entered() || !engine4_) return E_UNEXPECTED;
     const HRESULT hr=errors_.poll([&]() { return engine4_->TakeDeferredError(); },policy);
-    if (hr==DXGI_ERROR_DEVICE_REMOVED) bridge_.device_lost=true;
+    if (hr==DXGI_ERROR_DEVICE_REMOVED) latch_device_lost(bridge_);
     return hr;
 }
 HRESULT DeviceOwner::prepare_surface_import() {
@@ -117,7 +117,7 @@ HRESULT DeviceOwner::wait_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || closing_ || !owns_surface(surface)) return E_INVALIDARG;
     HRESULT hr=wait_surface_paging(runtime_,surface.queue,surface.mapping);
     if (hr==S_OK) hr=finish_surface(surface);
-    if (hr==D3DDDIERR_DEVICEREMOVED) bridge_.device_lost=true;
+    if (hr==D3DDDIERR_DEVICEREMOVED) latch_device_lost(bridge_);
     return hr;
 }
 HRESULT DeviceOwner::close_surface(RuntimeSurface &surface) {
@@ -157,6 +157,7 @@ HRESULT DeviceOwner::close() {
         hr=close_surface(*surfaces_.back());
         if (hr!=S_OK) return hr;
     }
+    present_shadows_={};
     hr=destroy_surface_paging_queue(runtime_,surface_queue_);
     if (hr!=S_OK) return hr;
     surface_vk_={}; surface_memory_={};

@@ -35,7 +35,7 @@ int DcnLinearSurfaceBytes(unsigned long Width,unsigned long Height,unsigned long
                           unsigned long BytesPerPixel,unsigned long long* Bytes)
 {
     *Bytes=0;
-    if (BytesPerPixel!=4 && BytesPerPixel!=8) return 0;
+    if (BytesPerPixel!=1 && BytesPerPixel!=4 && BytesPerPixel!=8) return 0;
     if (!Width || !Height || !Pitch || (Pitch%BytesPerPixel) ||
         (unsigned long long)Width*BytesPerPixel>Pitch) return 0;
     *Bytes=(unsigned long long)Pitch*Height;

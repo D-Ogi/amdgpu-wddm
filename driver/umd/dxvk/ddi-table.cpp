@@ -22,6 +22,7 @@
 #include "ddi-output.h"
 #include "ddi-srv.h"
 #include "ddi-flush.h"
+#include "ddi-direct-flip.h"
 #include <type_traits>
 namespace bc250::umd {
 namespace {
@@ -35,8 +36,15 @@ void APIENTRY discard(D3D10DDI_HDEVICE,D3D11DDI_HANDLETYPE,void *,const D3D10_DD
 void APIENTRY debug_binary(D3D10DDI_HDEVICE,D3D10DDI_HSHADER,UINT,const void *) {}
 // TEXT_1BIT sampling is not exposed by this D3D11 shell.
 void APIENTRY text_filter(D3D10DDI_HDEVICE,UINT,UINT) {}
-void APIENTRY direct_flip(D3D10DDI_HDEVICE,D3D10DDI_HRESOURCE,D3D10DDI_HRESOURCE,UINT,BOOL *supported) {
-    if(supported)*supported=FALSE;
+// CheckDirectFlipSupport: may the runtime hand the application's back buffer straight to the window's
+// front buffer, with no copy in between. The rule is in ddi-direct-flip.h; here only the handles are
+// resolved. CheckDirectFlipFlags carries IMMEDIATE, which does not enter the rule (see the header).
+void APIENTRY direct_flip(D3D10DDI_HDEVICE,D3D10DDI_HRESOURCE front,D3D10DDI_HRESOURCE back,
+                          UINT,BOOL *supported) {
+    if(!supported)return;
+    auto *a=static_cast<DdiResource *>(front.pDrvPrivate);
+    auto *b=static_cast<DdiResource *>(back.pDrvPrivate);
+    *supported=a&&b&&direct_flip_supported(a->runtime_surface,b->runtime_surface)?TRUE:FALSE;
 }
 // Threading caps do not advertise command lists or deferred contexts. Keep
 // exact typed entries so an unexpected runtime call is diagnosed, not NULL.
@@ -50,7 +58,7 @@ struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
             auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
             if(storage && storage->owner) {
                 RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-                report_ddi_error(*storage->owner,E_FAIL);
+                report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
             }
         }else if constexpr(std::is_same_v<R,HRESULT>)return E_NOTIMPL;
         else return 0;
@@ -59,14 +67,21 @@ struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
 void APIENTRY deferred_sizes(D3D10DDI_HDEVICE,UINT *count,D3D11DDI_HANDLESIZE *) {
     if(count)*count=0;
 }
-void APIENTRY counter(D3D10DDI_HDEVICE h,D3D10DDI_QUERY,D3D10DDI_COUNTER_TYPE *type,UINT *active,
+// No counter of either kind is supported, and CheckCounter has one status for each kind: a
+// runtime-defined (well-known) counter is answered with DXGI_DDI_ERR_UNSUPPORTED, and an identifier
+// outside the device-dependent range this driver advertises (none: CheckCounterInfo reports
+// LastDeviceDependentCounter 0) is a bad argument. handling-errors.md, AllowWKCheckCounterErrors and
+// AllowDDCheckCounterErrors. A check-type entry may never report device removal.
+void APIENTRY counter(D3D10DDI_HDEVICE h,D3D10DDI_QUERY query,D3D10DDI_COUNTER_TYPE *type,UINT *active,
     LPSTR,UINT *name,LPSTR,UINT *units,LPSTR,UINT *description) {
     if(type)*type={};if(active)*active=0;
     if(name)*name=0;if(units)*units=0;if(description)*description=0;
     auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
     if(storage && storage->owner) {
         RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-        report_ddi_error(*storage->owner,E_INVALIDARG);
+        const bool wellKnown=UINT(query)<UINT(D3D10DDI_COUNTER_DEVICE_DEPENDENT_0);
+        report_ddi_error(*storage->owner,wellKnown ? DXGI_DDI_ERR_UNSUPPORTED : E_INVALIDARG,
+            DdiErrorClass::check_unsupported);
     }
 }
 template<auto Bind> void APIENTRY shader_ifaces(D3D10DDI_HDEVICE h,D3D10DDI_HSHADER shader,
@@ -75,7 +90,7 @@ template<auto Bind> void APIENTRY shader_ifaces(D3D10DDI_HDEVICE h,D3D10DDI_HSHA
         auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
         if(storage && storage->owner) {
             RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-            report_ddi_error(*storage->owner,E_NOTIMPL);
+            report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
         }
         return;
     }
@@ -126,9 +141,14 @@ D3D11_1DDI_DEVICEFUNCS make_render_device_table() {
     table.pfnCheckDirectFlipSupport=direct_flip;
     table.pfnCheckCounter=counter;
     table.pfnCheckDeferredContextHandleSizes=deferred_sizes;
-#define IFACES(stage) table.pfn##stage##SetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfn##stage##SetShader>
-    IFACES(Vs);IFACES(Ps);IFACES(Gs);IFACES(Hs);IFACES(Ds);IFACES(Cs);
-#undef IFACES
+    // Written out one entry at a time, not through a token paste: a pasted entry name is invisible to
+    // the DDI error-policy gate, which reads these assignments to find each entry's implementation.
+    table.pfnVsSetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfnVsSetShader>;
+    table.pfnPsSetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfnPsSetShader>;
+    table.pfnGsSetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfnGsSetShader>;
+    table.pfnHsSetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfnHsSetShader>;
+    table.pfnDsSetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfnDsSetShader>;
+    table.pfnCsSetShaderWithIfaces=shader_ifaces<&D3D11_1DDI_DEVICEFUNCS::pfnCsSetShader>;
 #define UNEXPECTED(field) static constexpr char name_##field[]=#field; table.field=Unexpected<decltype(table.field),name_##field>::call
     UNEXPECTED(pfnCommandListExecute);
     UNEXPECTED(pfnCalcDeferredContextHandleSize);

@@ -28,14 +28,23 @@
 // Derived from the G0 Mesa Device.cpp runtime bridge at 71f2e28c1b14.
 // Gallium Device replaced with runtime-only state; entry uses RuntimeDomain.
 #include "runtime-bridge.h"
+#include "ddi-error-policy.h"
 namespace bc250::umd {
+// The device is gone. This is the one report that happens outside a DDI entry's own code: the loss is
+// detected inside the engine's submission path, under whichever entry is running. That entry's page
+// decides whether the runtime accepts device removal here, so the status passes through the entry
+// class that enter_context put on this thread. A capability-check entry accepts no status at all, and
+// then the report waits for the next entry whose page allows it (BD-071 review).
 static HRESULT Bc250HostLost(HostBridge *s)
 {
-   if (!s->device_lost) {
-      s->device_lost=true;
-      s->submission_failed=true;
-      if (s->device->UMCallbacks.pfnSetErrorCb)
-         s->device->UMCallbacks.pfnSetErrorCb(s->device->hRTCoreLayer,D3DDDIERR_DEVICEREMOVED);
+   s->device_lost=true;
+   s->submission_failed=true;
+   if (!s->lost_reported) {
+      const HRESULT reported=ddi_class_status(ddi_entry_class,D3DDDIERR_DEVICEREMOVED);
+      if (reported!=S_OK && s->device->UMCallbacks.pfnSetErrorCb) {
+         s->lost_reported=true;
+         s->device->UMCallbacks.pfnSetErrorCb(s->device->hRTCoreLayer,reported);
+      }
    }
    return D3DDDIERR_DEVICEREMOVED;
 }
@@ -49,7 +58,8 @@ static bool Bc250DeviceLostResult(HRESULT hr)
 
 static HRESULT Bc250HostStatus(HostBridge *s)
 {
-   if (s->device_lost) return D3DDDIERR_DEVICEREMOVED;
+   // A loss already latched still needs its report when a check-type entry swallowed the first one.
+   if (s->device_lost) return s->lost_reported ? D3DDDIERR_DEVICEREMOVED : Bc250HostLost(s);
    for (const auto &p:s->progress) {
       if (!p.cpu_address) continue;
       UINT64 observed=*(const volatile UINT64 *)p.cpu_address;
@@ -337,16 +347,25 @@ HRESULT signal_present(HostBridge &bridge)
 
 HRESULT wait_present_idle(HostBridge &bridge)
 {
+   return wait_present_value(bridge,bridge.present_value);
+}
+
+HRESULT wait_present_value(HostBridge &bridge, UINT64 value)
+{
    auto *s=&bridge;
    auto *device=s->device;
    if (!device || !device->domain.entered()) return E_INVALIDARG;
-   if (!s || !s->present_value) return S_OK;
+   if (!s || !value) return S_OK;
+   // Only a value this bridge has signalled can be waited for.
+   if (value>s->present_value) return E_INVALIDARG;
    if (FAILED(Bc250HostStatus(s))) return D3DDDIERR_DEVICEREMOVED;
+   // BD-065: the Present shadow waits for a Present two frames back, normally retired already.
+   if (s->present_cpu && *(const volatile UINT64 *)s->present_cpu>=value) return Bc250HostStatus(s);
    if (!device->domain.entered() || !device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_INVALIDARG;
    HANDLE event=CreateEventW(NULL,FALSE,FALSE,NULL);
    if (!event) return HRESULT_FROM_WIN32(GetLastError());
    D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait={};
-   wait.ObjectCount=1; wait.ObjectHandleArray=&s->present_sync; wait.FenceValueArray=&s->present_value;
+   wait.ObjectCount=1; wait.ObjectHandleArray=&s->present_sync; wait.FenceValueArray=&value;
    wait.hAsyncEvent=event;
    HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
    if (SUCCEEDED(hr) && WaitForSingleObject(event,10000)!=WAIT_OBJECT_0) hr=DXGI_ERROR_DEVICE_HUNG;

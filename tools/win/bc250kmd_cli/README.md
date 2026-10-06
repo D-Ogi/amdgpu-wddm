@@ -28,10 +28,13 @@ bc250kmd_cli sdmacopy [bytes]                     SDMA copy/fill positive contro
 bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0), assembled from several read-only bands into a BMP
 bc250kmd_cli sdmaib [bytes]                       VMID0 indirect SDMA copy/fill control
 bc250kmd_cli clock read | clock set <MHz> <mV>    one KMD clock sample, or the complete clock policy with readback
-bc250kmd_cli log [from] | log summary [from]      the driver's log ring; plain reads go without adapter synchronization (0.7.184)
+bc250kmd_cli log [from]                           the driver's log ring, 64 lines per escape, without the adapter lock (0.7.184)
+bc250kmd_cli log summary [from | only]            the WDDM counters written into the ring first (one HardwareAccess escape),
+                                                  then the ring; only: just the summary's own lines, the form for a poller
 bc250kmd_cli telemetry [count [interval ms]]      DPM snapshot and segment statistics: what the monitor's GPU line shows
 bc250kmd_cli vram [hardware-id]                   dxgkrnl's segment statistics of any adapter, one line per segment
 bc250kmd_cli dpm [count [interval ms]]            the KMD DPM governor's state, with the thresholds and floor in force (docs/design/dpm.md)
+                                                  the header also carries the idle state: its point, window and counters (0.7.207)
 bc250kmd_cli dpm tune <up> <target> <down> [hold_ms] | dpm tune reset
                                                   governor thresholds (permille) at run time, elevated, not persisted (0.7.185)
 bc250kmd_cli dpm tune thermal <hot_ms> <soft_mC|off> <soft_ms>
@@ -42,6 +45,18 @@ bc250kmd_cli interop                              the GPU DWM interop switches t
 bc250kmd_cli journal [from]                       the paging journal (docs/design/paging-journal.md)
 bc250kmd_cli journal follow SECONDS [MS]          one process, one held adapter, new records every MS (default 1000)
 ```
+
+The last line of `log` counts its escapes: `escapes: N without adapter synchronization, M with HardwareAccess`.
+A `log summary` against 0.7.184.1 or later takes exactly one HardwareAccess escape, the summary itself; every
+page after it goes without adapter synchronization. Each HardwareAccess escape is a Level Two call, so dxgkrnl
+idles the GPU for it and a running game waits: BD-054 was the overlay polling a CLI from before 0.7.184.1, whose
+`log summary` took 16 of them every 5 s (280-420 ms per poll). The overlay reads that line and warns when
+M is above 1, or when the line is missing.
+
+`log_test.c` holds that contract against a fake driver and `build.ps1` runs it before it compiles the tool.
+`mutate-log-test.ps1` is its mutation control: the CLI of KMD 196, paging through `SendEscape`, no sentinel
+fixup and a changed count line must each fail the test. Recorded run of both:
+[evidence/windows/2026-10-03-BD-054-log-poll-controls](../../../evidence/windows/2026-10-03-BD-054-log-poll-controls/RESULT.md).
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage
 or the driver is not installed, `3` the start budget is used up (`stages`) or the driver refused the command
@@ -165,7 +180,16 @@ Two more `bc250control.dll` exports feed the monitor's GPU telemetry line (`tool
   `KMTQAITYPE_GETSEGMENTSIZE` dedicated size. Limits saturate: an aperture may report a commit limit of 2^64-1
   (measured on the development PC's RTX 4090, 2026-09-30).
 
-Both open the adapter per call and close it again. The interface path is looked up once and cached; an absent
+Two more feed the control application (`tools/win/amdgpu_wddm_control/README.md`), on the same cached path and with
+the same `NoAdapterSynchronization`-only flags:
+
+- `Bc250Interop(BC250_ESCAPE_INTEROP*, 104)`: the GPU DWM interop decision of this start (`BC250_ESCAPE_RUN_INTEROP`
+  op READ), open to every caller.
+- `Bc250LogRead(from, BC250_ESCAPE_LOG*, 10812)`: one page of the log ring (`BC250_ESCAPE_GET_LOG`), answered without
+  the adapter lock from 0.7.184.1. No `HardwareAccess` fallback and no `LOG_SUMMARY`: an older driver's refusal is
+  returned as it is.
+
+All of them open the adapter per call and close it again. The interface path is looked up once and cached; an absent
 adapter is looked for again at most every 2 s, since the SetupAPI walk costs ~0.8 ms of CPU against ~6-9 us
 for a cached call (development PC, `vram`). `test-telemetry.ps1`, run by `build.ps1`, tests both exports with
 the D3DKMT calls replaced.

@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "id": "witcher3",
+  "title": "The Witcher 3: Wild Hunt (next-gen, D3D12)",
+  "app_id": 292030,
+  "api": "d3d12",
+  "apis": {
+    "d3d12": {
+      "selection": "bin\\x64_dx12\\witcher3.exe is the D3D12 build; redprelauncher.exe starts it (launcher-configuration.json)",
+      "arguments": "",
+      "router": "unchecked",
+      "witness": {"module": "amdgpu_wddm_d3d12.dll", "sha256": "staged"}
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "The Witcher 3",
+    "launch_entry": "0: redprelauncher.exe, no arguments (appinfo cache of 2026-09-30)",
+    "arguments": "--launcher-skip",
+    "require_state_flags": 4,
+    "wait_seconds": 90
+  },
+  "executable": {"directory": "bin\\x64_dx12", "image": "witcher3.exe", "direct_arguments": ""},
+  "processes": {
+    "main": "witcher3",
+    "launch_chain": ["REDprelauncher", "REDlauncher", "witcher3"],
+    "renderers": ["witcher3"],
+    "end_at_cleanup": ["witcher3", "CrashReporter", "REDprelauncher", "cdb"],
+    "survivors": ["witcher3", "CrashReporter", "cdb"],
+    "writers": ["witcher3", "cdb"],
+    "counters": ["witcher3"],
+    "etw": ["witcher3"]
+  },
+  "readiness": {"mode": "witcher3-menu"},
+  "modules": ["d3d12.dll", "d3d12core.dll", "dxgi.dll", "d3d11.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll",
+              "amdgpu_wddm_radv.dll", "bc250d3d.dll", "bc250umd.dll", "vulkan-1.dll", "vulkan_radeon.dll",
+              "sl.interposer.dll", "libxess.dll", "amd_fidelityfx_dx12.dll"],
+  "settings": {
+    "policy": "backup-restore",
+    "directory": "%USERPROFILE%\\Documents\\The Witcher 3",
+    "files": ["dx12user.settings", "user.settings"]
+  },
+  "saves": "%USERPROFILE%\\Documents\\The Witcher 3\\gamesaves",
+  "events_filter": "witcher3|amdgpu_wddm|d3d12|dxgi",
+  "app_profile": {
+    "image": "witcher3.exe",
+    "experiment": "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff",
+    "state": "registered on the lab since 2026-10-01T14:20Z (STATE.md M15.1); the runner never writes it"
+  },
+  "session": {"default_seconds": 420, "entry": "run-m157.sh N low|high|high-rt [SECONDS] (presets, settings checks); run-game.sh refuses this profile"},
+  "notes": [
+    "Every value here is what game-runtime.ps1, watch.ps1 and kmdlog-stream.ps1 hardcoded before the game runner (native-caps001 templates of 2026-10-01 17:44Z).",
+    "readiness witcher3-menu: the settings-write cue, the E menu pass, the grid transition, the scripted walk without interactive control, and the control channel only after the transition."
+  ]
+}

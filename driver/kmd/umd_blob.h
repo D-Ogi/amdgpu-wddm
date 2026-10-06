@@ -17,6 +17,8 @@
 #define UMD_BLOB_SUBMIT_MAGIC   0x53324342u   // "BC2S"
 
 #define UMD_BLOB_ALLOC_BYTES    192u          // version 1, the whole struct
+#define UMD_BLOB_ALLOC_VERSION_SCANOUT 3u     // the version that put scanout_* in the reserved tail
+#define UMD_BLOB_ALLOC_SCANOUT_AT 148u        // offset of scanout_width; the four words follow it
 #define UMD_BLOB_CONTEXT_V1     64u           // version 1 ended here; node_ordinal starts at this offset
 #define UMD_BLOB_CONTEXT_BYTES  80u           // version 2
 #define UMD_BLOB_SUBMIT_BYTES   576u          // the whole struct, reserved tail included: what CreateContext
@@ -38,6 +40,7 @@
 #define UMD_BLOB_A_EXACT_VA     0x00000001u
 #define UMD_BLOB_A_SPARSE       0x00000002u
 #define UMD_BLOB_A_USERPTR      0x00000004u
+#define UMD_BLOB_A_SCANOUT      0x00000010u
 
 // alloc_size above this does not round up to a page inside 64 bits. Larger is refused, not truncated.
 #define UMD_BLOB_ALLOC_MAX      0xFFFFFFFFFFFFF000ull
@@ -53,6 +56,7 @@
 #define UMD_BLOB_BAD_IP         8
 #define UMD_BLOB_BAD_NODE       9
 #define UMD_BLOB_BAD_IB         10
+#define UMD_BLOB_BAD_SCANOUT    11
 
 // A short fixed string for the guard log. Never NULL.
 const char* UmdBlobStatusText(int status);
@@ -73,6 +77,12 @@ struct umd_alloc_view {
     unsigned long long gem_flags;    // full BC2A cache/access intent, no truncation
     int cache_policy_valid;           // BC2A v2+, v1 retains legacy WC behavior
     int exact_va;
+    // BC2A v3 and UMD_BLOB_A_SCANOUT: the surface the display pipeline would read. This reader
+    // checks the shape only - version, VRAM heap, nonzero geometry, a pitch that covers the rows.
+    // Whether such a surface may reach HUBP0 is scanout_admit.h's decision, against the POST mode
+    // the firmware left and the segment VidMm placed the allocation in.
+    int scanout;
+    unsigned long scanout_width, scanout_height, scanout_pitch, scanout_format;
 };
 
 struct umd_context_view {

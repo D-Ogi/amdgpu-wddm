@@ -45,6 +45,12 @@ static void CheckContract(void)
     CHECK(offsetof(struct bc250_umd_context_private, ring) == 24);
     CHECK(offsetof(struct bc250_umd_context_private, priority) == 28);
     CHECK(offsetof(struct bc250_umd_context_private, node_ordinal) == UMD_BLOB_CONTEXT_V1);
+    CHECK(offsetof(struct bc250_umd_alloc_private, scanout_width) == UMD_BLOB_ALLOC_SCANOUT_AT);
+    CHECK(offsetof(struct bc250_umd_alloc_private, scanout_height) == UMD_BLOB_ALLOC_SCANOUT_AT + 4);
+    CHECK(offsetof(struct bc250_umd_alloc_private, scanout_pitch) == UMD_BLOB_ALLOC_SCANOUT_AT + 8);
+    CHECK(offsetof(struct bc250_umd_alloc_private, scanout_format) == UMD_BLOB_ALLOC_SCANOUT_AT + 12);
+    CHECK(BC250_UMD_A_SCANOUT == UMD_BLOB_A_SCANOUT);
+    CHECK(BC250_UMD_ALLOC_VERSION_SCANOUT == UMD_BLOB_ALLOC_VERSION_SCANOUT);
     CHECK(offsetof(struct bc250_umd_ib, va_start) == 0);
     CHECK(offsetof(struct bc250_umd_ib, ib_bytes) == 8);
     CHECK(offsetof(struct bc250_umd_ib, ip_type) == 12);
@@ -173,6 +179,53 @@ int main(void)
     FillAlloc(&alloc, AMDGPU_GEM_DOMAIN_VRAM);
     alloc.flags = BC250_UMD_A_EXACT_VA;
     CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_VA);
+
+    // M15.14, the scan-out request. The flag is read only at version 3, only out of VRAM, and only
+    // with a geometry whose rows fit in the allocation the same blob asked for; everything else about
+    // whether this surface may reach the display pipeline belongs to scanout_admit.h.
+    {
+        const unsigned long long frame = 1920ull * 4ull * 1200ull;
+        FillAlloc(&alloc, AMDGPU_GEM_DOMAIN_VRAM);
+        alloc.version = BC250_UMD_ALLOC_VERSION_SCANOUT;
+        alloc.alloc_size = frame;
+        alloc.flags = BC250_UMD_A_SCANOUT;
+        alloc.scanout_width = 1920; alloc.scanout_height = 1200;
+        alloc.scanout_pitch = 1920 * 4; alloc.scanout_format = 21;      // D3DDDIFMT_A8R8G8B8
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK);
+        CHECK(av.scanout == 1 && av.scanout_width == 1920 && av.scanout_height == 1200);
+        CHECK(av.scanout_pitch == 1920 * 4 && av.scanout_format == 21);
+        // The flag clear: the words are not read, whatever they hold.
+        alloc.flags = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK);
+        CHECK(av.scanout == 0 && !av.scanout_width && !av.scanout_height && !av.scanout_pitch && !av.scanout_format);
+        // A version 2 producer asking for scan-out is describing nothing: its tail is reserved.
+        alloc.flags = BC250_UMD_A_SCANOUT;
+        alloc.version = BC250_UMD_ALLOC_VERSION_CACHE_POLICY;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        alloc.version = BC250_UMD_ALLOC_VERSION_SCANOUT;
+        // The aperture is not scanned out.
+        alloc.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        alloc.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+        // Each of the four words on its own, and rows that do not fit.
+        alloc.scanout_width = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        alloc.scanout_width = 1920; alloc.scanout_height = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        alloc.scanout_height = 1200; alloc.scanout_pitch = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        alloc.scanout_pitch = 1920 * 4; alloc.scanout_format = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        alloc.scanout_format = 21; alloc.alloc_size = frame - 4096;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_BAD_SCANOUT);
+        CHECK(av.scanout == 0 && av.bytes == 0);
+        alloc.alloc_size = frame;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK);
+        // A later version still reads the same four words at the same offsets.
+        alloc.version = 99;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
+        CHECK(strcmp(UmdBlobStatusText(UMD_BLOB_BAD_SCANOUT), "unknown") != 0);
+    }
 
     // 8. Envelope: wrong magic, a short buffer, version 0, a size word that does not cover v1,
     //    a buffer shorter than the size word, and a later version whose tail this reader ignores.

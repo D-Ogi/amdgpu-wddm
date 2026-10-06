@@ -148,6 +148,139 @@ def dpm_tune_problems(display_source, dpm_source, cli_source):
     return found
 
 
+def dpm_request_problems(display_source, dpm_source, cli_source):
+    """KMD 0.7.207.1 BC250_ESCAPE_RUN_DPM: ABI 2 (192 bytes, the idle state's setting and counters) beside the
+    unchanged ABI 1 prefix (160 bytes). The same discipline RUN_DPM_TUNE has had since 0.7.197: the driver admits
+    exactly the two sizes, pairs each with its own AbiVersion, hands the size on, and touches an ABI 2 field only
+    inside an `if (abi2)` block - an unguarded one writes past the end of a 160-byte request, which is a kernel pool
+    write out of bounds from an escape any caller may send. The CLI asks with ABI 2 and repeats with ABI 1, and
+    prints the ABI 2 fields only when the answer carries them. Returns a list of sentences, empty when all of that
+    holds."""
+    found = []
+    body = function_body(dpm_source, "DpmRequest")
+    if body is None:
+        return ["dpm.c: DpmRequest not found"]
+    if not re.search(r"expectedFlags\.NoAdapterSynchronization\s*=\s*1\s*;", body) or \
+       not re.search(r"EscapeFlags\s*!=\s*expectedFlags\.Value\)\s*return\s*;", body):
+        found.append("dpm.c: DpmRequest does not refuse every flag word but {NoAdapterSynchronization}")
+    if not re.search(r"abi2\s*=\s*abi\s*==\s*BC250_DPM_ABI\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM\)", body) or \
+       not re.search(r"abi1\s*=\s*abi\s*==\s*BC250_DPM_ABI_1\s*&&\s*Size\s*==\s*BC250_DPM_ABI1_SIZE", body) or \
+       not re.search(r"if\s*\(\s*!\(abi1\s*\|\|\s*abi2\)", body):
+        found.append("dpm.c: DpmRequest does not pair AbiVersion with the escape's size")
+    if not re.search(r"if\s*\(\s*confirm\s*&&\s*!Admin\s*\)", body):
+        found.append("dpm.c: DpmRequest does not refuse a non-administrator's CONFIRM")
+    if not re.search(r"ExAcquireRundownProtection\(&Device->StartHealth\.Readers\)", body):
+        found.append("dpm.c: DpmRequest takes no rundown protection on the adapter context")
+    # Every ABI 2 field, in or out, inside an `if (abi2) { ... }` block. The blocks hold no nested braces today.
+    guarded = [m.span() for m in re.finditer(r"if\s*\(abi2\)\s*\{[^{}]*\}", body)]
+    if not guarded:
+        found.append("dpm.c: DpmRequest has no if (abi2) block")
+    for m in re.finditer(r"Data->(IdleMHz|IdleHoldMs|IdleBusyPermille|IdleEntries|IdleExits|IdleRefusals|IdleMs)",
+                         body):
+        if not any(a <= m.start() < b for a, b in guarded):
+            found.append(f"dpm.c: DpmRequest touches Data->{m.group(1)} outside an if (abi2) block")
+            break
+    dispatch = re.search(r"if\s*\(\s*data->Command\s*==\s*BC250_ESCAPE_RUN_DPM\s*\)\s*\{(.*?)\n    \}",
+                         display_source, re.S)
+    if not dispatch:
+        found.append("display.c: no RUN_DPM dispatch")
+    elif not re.search(r"PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM\)\s*&&\s*"
+                       r"Escape->PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI1_SIZE\)", dispatch.group(1)) or \
+            not re.search(r"DpmRequest\(device,[^;]*Escape->PrivateDriverDataSize,", dispatch.group(1)):
+        found.append("display.c: RUN_DPM dispatch without the exact size check or without handing the size on")
+    # The CLI: one request builder, the ABI it asks with, the retry, and the guard before it reads ABI 2 fields.
+    query = function_body(cli_source, "DpmQuery")
+    if query is None:
+        found.append("bc250kmd_cli.c: DpmQuery not found")
+    else:
+        if not re.search(r"size\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI\s*\?\s*\(unsigned\)sizeof\(\*d\)\s*:\s*"
+                         r"BC250_DPM_ABI1_SIZE\s*;", query) or \
+           not re.search(r"g_DpmAbi\s*=\s*BC250_DPM_ABI_1\s*;", query):
+            found.append("bc250kmd_cli.c: DpmQuery does not send each ABI with its own size, or never falls back")
+        if not re.search(r"SendEscapeFlags\(BC250_DEFAULT_HWID,\s*d,\s*size,\s*1,", query):
+            found.append("bc250kmd_cli.c: DpmQuery does not send with NoAdapterSynchronization alone")
+    idle = function_body(cli_source, "DpmPrintIdle")
+    if idle is None:
+        found.append("bc250kmd_cli.c: DpmPrintIdle not found")
+    elif not re.search(r"if\s*\(d->AbiVersion\s*!=\s*BC250_DPM_ABI\)\s*\{", idle):
+        found.append("bc250kmd_cli.c: DpmPrintIdle reads the ABI 2 fields without checking the answer's AbiVersion")
+    # Bc250Dpm, the export bc250mon and the control application call through bc250control.dll. Its callers were
+    # built against the ABI 1 layout and pass 160 bytes, so the ABI it asks with is the one its caller's length
+    # names, and it must zero and send that length and no more. A check against sizeof(BC250_ESCAPE_DPM) alone
+    # would refuse every deployed caller and stop the DLL compiling.
+    export = function_body(cli_source, "Bc250Dpm")
+    if export is None:
+        found.append("bc250kmd_cli.c: Bc250Dpm not found")
+    else:
+        if not re.search(r"bytes\s*!=\s*BC250_DPM_ABI1_SIZE\s*&&\s*bytes\s*!=\s*sizeof\(\*data\)\)+\s*return", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not admit exactly the ABI 1 prefix and the whole structure")
+        if not re.search(r"abi\s*=\s*bytes\s*==\s*BC250_DPM_ABI1_SIZE\s*\?\s*BC250_DPM_ABI_1\s*:\s*BC250_DPM_ABI\s*;", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not pair the caller's length with its AbiVersion")
+        if not re.search(r"memset\(data,\s*0,\s*bytes\)\s*;", export) or \
+           not re.search(r"TelemetryEscape\(data,\s*bytes\)\s*;", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm writes or sends more than the caller's length")
+        if not re.search(r"data->AbiVersion\s*!=\s*abi\s*\|\|", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not check the answer's AbiVersion against the one it asked with")
+    # Exactly two request builders, and each in its own function: the CLI command and the DLL export.
+    builders = re.findall(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", cli_source)
+    in_both = query is not None and export is not None and \
+        re.search(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", query) and \
+        re.search(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", export)
+    if len(builders) != 2 or not in_both:
+        found.append(f"bc250kmd_cli.c: {len(builders)} RUN_DPM requests built, expected two, in DpmQuery and Bc250Dpm")
+    return found
+
+
+class DpmRequestAbiTest(unittest.TestCase):
+    def test_driver_and_cli(self):
+        self.assertEqual(dpm_request_problems(read(DISPLAY), read(DPM), read(CLI)), [])
+
+    def test_negative_controls(self):
+        display, dpm, cli = read(DISPLAY), read(DPM), read(CLI)
+        request_at = dpm.find("void DpmRequest(")
+        self.assertGreater(request_at, 0)
+        mutations = [
+            # An ABI 2 field written for every caller: 32 bytes past a 160-byte request.
+            (display, dpm.replace("    Data->BusyPermille = Data->BusyAvgPermille = 0;\n",
+                                  "    Data->BusyPermille = Data->BusyAvgPermille = 0;\n"
+                                  "    Data->IdleMHz = 0;\n", 1), cli),
+            # The ABI 1 size admitted without its pairing to AbiVersion 1.
+            (display, dpm.replace("abi == BC250_DPM_ABI_1 && Size == BC250_DPM_ABI1_SIZE",
+                                  "abi == BC250_DPM_ABI_1", 1), cli),
+            # The flag word loosened in DpmRequest (DpmTuneRequest keeps the same line below it).
+            (display, dpm[:request_at] + dpm[request_at:].replace("EscapeFlags != expectedFlags.Value) return;",
+                                                                  "FALSE) return;", 1), cli),
+            # The administrator check on CONFIRM dropped.
+            (display, dpm.replace("if (confirm && !Admin)", "if (FALSE)", 1), cli),
+            # The dispatch admitting any size at or above the ABI 1 prefix.
+            (display.replace("Escape->PrivateDriverDataSize != BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;",
+                             "Escape->PrivateDriverDataSize < BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;",
+                             1), dpm, cli),
+            # The CLI asking with ABI 2's size for an ABI 1 request.
+            (display, dpm, cli.replace("size = g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;",
+                                       "size = (unsigned)sizeof(*d);", 1)),
+            # The CLI printing the ABI 2 fields whatever the driver answered.
+            (display, dpm, cli.replace("    if (d->AbiVersion != BC250_DPM_ABI) {", "    if (0) {", 1)),
+            # The export asking with ABI 2 for a 160-byte caller, which reads 32 bytes of its stack.
+            (display, dpm, cli.replace("    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : BC250_DPM_ABI;",
+                                       "    abi = BC250_DPM_ABI;", 1)),
+            # The export zeroing the whole structure in a 160-byte caller's buffer.
+            (display, dpm, cli.replace("    memset(data, 0, bytes);", "    memset(data, 0, sizeof(*data));", 1)),
+            # The export back to one size, which refuses every deployed caller.
+            (display, dpm, cli.replace("if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data)))",
+                                       "if (!data || bytes != sizeof(*data))", 1)),
+            # A third request builder, outside both functions.
+            (display, dpm, cli.replace("static void DpmPrint(const BC250_ESCAPE_DPM *d)",
+                                       "static void DpmStray(BC250_ESCAPE_DPM *d)\n"
+                                       "{\n    d->Command = BC250_ESCAPE_RUN_DPM;\n}\n"
+                                       "static void DpmPrint(const BC250_ESCAPE_DPM *d)", 1)),
+        ]
+        for i, (d, k, c) in enumerate(mutations):
+            with self.subTest(mutation=i):
+                self.assertTrue((d, k, c) != (display, dpm, cli), "mutation did not apply")
+                self.assertTrue(dpm_request_problems(d, k, c))
+
+
 class DpmTuneFlagsTest(unittest.TestCase):
     def test_driver_and_cli(self):
         self.assertEqual(dpm_tune_problems(read(DISPLAY), read(DPM), read(CLI)), [])

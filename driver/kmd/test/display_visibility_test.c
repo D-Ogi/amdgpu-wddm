@@ -14,7 +14,10 @@ typedef int KIRQL;
 typedef int64_t LONGLONG;
 typedef int64_t LONG64;
 typedef struct {LONGLONG QuadPart;} LARGE_INTEGER;
-typedef struct {int Lock,Stopping,VSyncArmed,VSyncTimer,VSyncDpc;long VSyncTicks;} BC250_WDDM;
+typedef struct {int Lock,Stopping,VSyncArmed,VSyncTimer,VSyncDpc;long VSyncTicks;BOOLEAN VSyncEnabled;} BC250_WDDM;
+/* d3dkmddi.h values, SDK 10.0.26100.0: the only two types the DDI answers, plus one it must refuse. */
+typedef enum {DXGK_INTERRUPT_DMA_COMPLETED=1,DXGK_INTERRUPT_CRTC_VSYNC=3,
+              DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY=7} DXGK_INTERRUPT_TYPE;
 typedef struct { unsigned VidPnSourceId;BOOLEAN Visible;} DXGKARG_SETVIDPNSOURCEVISIBILITY;
 typedef struct {struct {unsigned PathPowerTransition,PathPoweredOff;} Flags;} DXGKARG_COMMITVIDPN;
 /* VISIBILITY_EVENT_TYPE */
@@ -49,13 +52,14 @@ typedef struct {
 #define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
+#define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
 #define BC250_DCNFLIP_POLL_MAX_US 50000
 #define BC250_DCNFLIP_POLL_STEP_US 100
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define ALL_CLEAR (OTG0_OTG_GLOBAL_SYNC_STATUS__VSTARTUP_EVENT_CLEAR_MASK | OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_EVENT_CLEAR_MASK | OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_CLEAR_MASK | OTG0_OTG_GLOBAL_SYNC_STATUS__VREADY_EVENT_CLEAR_MASK)
 static unsigned checks,failures;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
-static struct {ULONG sync,blank,dbuf,last_sync;unsigned irq,sync_calls,queues,arms,writes,stalls,hold_blank;NTSTATUS sync_status;} model;
+static struct {ULONG sync,blank,dbuf,last_sync;unsigned irq,sync_calls,queues,arms,writes,stalls,hold_blank,ddi_calls;NTSTATUS sync_status;} model;
 static LONGLONG TestQpc;
 static LONG64 TestInterruptTime;
 static int TestReadFail;
@@ -109,6 +113,17 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
     } else if(reg==BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL)model.dbuf=value;
     else {CHECK(0);return STATUS_INVALID_PARAMETER;}
     return STATUS_SUCCESS;
+}
+/* The DDI entry logs through these two; the log itself is out of scope here, the call count is not. */
+typedef enum {WddmDdiControlInterrupt} BC250_WDDM_DDI;
+static BC250_WDDM* WddmOf(const HANDLE hAdapter)
+{
+    const BC250_DEVICE* device=(const BC250_DEVICE*)hAdapter;
+    return (device!=NULL)?(BC250_WDDM*)device->Wddm:NULL;
+}
+static BOOLEAN WddmFirstCalls(BC250_WDDM* wddm,BC250_WDDM_DDI ddi)
+{
+    (void)ddi;if(wddm==NULL)return FALSE;model.ddi_calls++;return FALSE;
 }
 /* ACTUAL_SOURCE */
 int main(void)
@@ -219,5 +234,19 @@ int main(void)
      CHECK(show->Requested && show->Status==STATUS_IO_TIMEOUT && show->EndQpc-show->BeginQpc==500001);
      CHECK(!hide->Requested && hide->Status==STATUS_SUCCESS && hide->Blanked);
      CHECK(d.VisibilityFailures==4 && d.VisibilityLastTrueStatus==STATUS_IO_TIMEOUT && d.VisibilityLastStatus==STATUS_SUCCESS);}
+    // The ControlInterrupt DDI on the software-timer path: the VSync switch arms the timer on enable and leaves it
+    // armed on disable (the timer keeps its phase, only the report stops), the completed interrupt is accepted and
+    // switches nothing, any other type is refused, and no adapter switches nothing at all.
+    d.VidPnFlipEnabled=FALSE;w.VSyncArmed=0;w.Stopping=0;w.VSyncEnabled=FALSE;arms=model.arms;
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS);
+    CHECK(w.VSyncEnabled && w.VSyncArmed && model.arms==arms+1);
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,FALSE)==STATUS_SUCCESS);
+    CHECK(!w.VSyncEnabled && w.VSyncArmed && model.arms==arms+1);
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_DMA_COMPLETED,FALSE)==STATUS_SUCCESS);
+    CHECK(!w.VSyncEnabled && w.VSyncArmed && model.arms==arms+1);
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY,TRUE)==STATUS_NOT_SUPPORTED);
+    CHECK(!w.VSyncEnabled && model.arms==arms+1);
+    CHECK(Bc250WddmControlInterrupt(NULL,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS);
+    CHECK(model.arms==arms+1 && model.ddi_calls==4);
     printf("display visibility/sync: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

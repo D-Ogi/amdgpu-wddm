@@ -1,10 +1,14 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='')
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='',[string]$MesaSource=$(if ($env:BC250_RADV_SOURCE) { $env:BC250_RADV_SOURCE } else { '' }))
 $ErrorActionPreference='Stop'
-$repo=Join-Path $Root 'bc250-win'
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp'; $env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 if(!$SourceRoot){$SourceRoot=$repo}
-& python "$PSScriptRoot\generate_gfx_pipeline_test.py" "$Out\gfx_pipeline_actual.inc" $SourceRoot
+# The gather half reads RADV's WDDM winsys (radv_wddm2_cs.c), the same tree the fast gate's blob-abi check uses;
+# -KmdOnly (the ring and the KMD submit path, all of it this repository's) reads no Mesa source at all.
+if(!$MesaSource){$MesaSource=Join-Path $Root 'scratch\m12\mesa-current-src'}
+if($KmdOnly){$MesaSource=''}
+& python "$PSScriptRoot\generate_gfx_pipeline_test.py" "$Out\gfx_pipeline_actual.inc" $SourceRoot $MesaSource
 if($LASTEXITCODE -ne 0){throw 'extraction failed'}
 if($IdleOnlyPresent){
     $actual=Get-Content "$Out\gfx_pipeline_actual.inc" -Raw

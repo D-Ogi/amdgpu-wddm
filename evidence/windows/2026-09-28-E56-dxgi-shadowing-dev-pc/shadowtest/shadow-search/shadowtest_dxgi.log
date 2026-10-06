@@ -1,0 +1,22 @@
+warn:  CreateDXGIFactory2: Ignoring flags
+info:  Game: shadowtest.exe
+info:  DXVK: 3.1.1
+info:  Build: x86_64 msvc 19.44.35221
+info:  Vulkan: Found vkGetInstanceProcAddr in vulkan-1.dll @ 0x7ff8a059f130
+info:  Extension providers:
+info:    Platform WSI
+info:    OpenVR
+info:  OpenVR: could not open registry key, status 2
+info:  OpenVR: Failed to locate module
+info:    OpenXR
+info:  Enabled instance extensions:
+info:    VK_KHR_get_surface_capabilities2
+info:    VK_KHR_surface
+info:    VK_KHR_surface_maintenance1
+info:    VK_KHR_win32_surface
+info:  Found device: NVIDIA GeForce RTX 4090 (NVIDIA 595.97.0)
+info:  DXGI: Hiding actual GPU, reporting:
+info:    vendor ID: 0x1002
+info:    device ID: 0x73df
+warn:  DxgiAdapter::QueryInterface: Unknown interface query
+warn:  7abb6563-02bc-47c4-8ef9-acc4795edbcf

@@ -1,0 +1,23 @@
+#version 450
+// gpuload's kernel: two dependent uint32 chains of p.iters steps per invocation, then one store. Integer only, so
+// GlExpected in gpuload_logic.h computes the same word to the bit and the host can check any invocation.
+// The loop is ALU work with no memory traffic: it keeps the shader engines (and GRBM_STATUS.GUI_ACTIVE) busy
+// for as long as the batch runs.
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) writeonly buffer Out { uint v[]; } o;
+
+layout(push_constant) uniform Push { uint iters; uint seed; uint n; } p;
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= p.n) return;
+    uint x = p.seed ^ (i * 0x9E3779B9u);
+    uint y = i + 0x7F4A7C15u;
+    for (uint k = 0u; k < p.iters; k++) {
+        x = x * 1664525u + 1013904223u;
+        y = (y ^ (x >> 13)) * 0x5BD1E995u;
+    }
+    o.v[i] = x ^ y;
+}

@@ -1,0 +1,43 @@
+FAIL check_exports:382: stored == d3d_unorm10(x): NIR, channel 0: 0.600000024 (0x3f19999a) stored as 613, D3D 614 (export 0x38cc)
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 0: 0.600000024 exported -0.5996 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.600000024: export 0x38cc, the operations on the host 0x38cd
+FAIL check_exports:382: stored == d3d_unorm10(x): NIR, channel 1: 0.600000024 (0x3f19999a) stored as 613, D3D 614 (export 0x38cc)
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 1: 0.600000024 exported -0.5996 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0.600000024: export 0x38cc, the operations on the host 0x38cd
+FAIL check_exports:382: stored == d3d_unorm10(x): NIR, channel 2: 0.600000024 (0x3f19999a) stored as 613, D3D 614 (export 0x38cc)
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 2: 0.600000024 exported -0.5996 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: 0.600000024: export 0x38cc, the operations on the host 0x38cd
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0: export 0x0000, the operations on the host 0x0c01
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0: export 0x0000, the operations on the host 0x0c01
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: 0: export 0x0000, the operations on the host 0x0c01
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: -0: export 0x8000, the operations on the host 0x0c01
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: -0: export 0x8000, the operations on the host 0x0c01
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: -0: export 0x8000, the operations on the host 0x0c01
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 0: 0.5 exported -0.5000 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.5: export 0x3800, the operations on the host 0x3801
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 1: 0.5 exported -0.5000 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0.5: export 0x3800, the operations on the host 0x3801
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 2: 0.5 exported -0.5000 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: 0.5: export 0x3800, the operations on the host 0x3801
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.25: export 0x3400, the operations on the host 0x3402
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0.25: export 0x3400, the operations on the host 0x3402
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: 0.25: export 0x3400, the operations on the host 0x3402
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 0: 0.100000001 exported 0.2750 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.100000001: export 0x2e66, the operations on the host 0x2e65
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 1: 0.100000001 exported 0.2750 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0.100000001: export 0x2e66, the operations on the host 0x2e65
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 2: 0.100000001 exported 0.2750 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: 0.100000001: export 0x2e66, the operations on the host 0x2e65
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 0: 0.200000003 exported -0.4500 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.200000003: export 0x3266, the operations on the host 0x326b
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 1: 0.200000003 exported -0.4500 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0.200000003: export 0x3266, the operations on the host 0x326b
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 2: 0.200000003 exported -0.4500 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 2: 0.200000003: export 0x3266, the operations on the host 0x326b
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 0: 0.300000012 exported -0.2998 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.300000012: export 0x34cc, the operations on the host 0x34ce
+FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 1: 0.300000012 exported -0.2998 steps off
+FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 1: 0.300000012: export 0x34cc, the operations on the host 0x34ce
+unorm10 export (no rounding): 1312733 NIR inputs, 1312733 ACO epilog inputs, 57760296 checks, 8786812 failures (key 0, NIR 5131683, ACO 3655129)
+
+--- stderr ---

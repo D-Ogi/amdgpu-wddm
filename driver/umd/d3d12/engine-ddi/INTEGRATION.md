@@ -157,7 +157,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | WriteBufferImmediateQueueFlags | NONE | pfnWriteBufferImmediate is a fail-safe |
 | 1006 | | ViewInstancingTier | NOT_SUPPORTED | pfnSetViewInstanceMask is a fail-safe |
 | 1006 | | RenderPassTier | NOT_SUPPORTED | engine-ddi fills no render pass table; the runtime emulates render passes |
-| 1006 | | RaytracingTier | NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), but only an engine with the fork's fix traces every record up to the count, a collection imported with an export list answers E_NOTIMPL for now, and the runtime's state object description is not yet measured. `set_diagnostic_raytracing_tier` reports the engine's 1_1 or higher as 1_1 for a measurement, never as a default |
+| 1006 | | RaytracingTier | the engine's 1_1 or higher as 1_1, else NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), which the pinned engine traces up to the count (upstream traces the first record alone). Two gaps the tier promises: a collection imported with an export list answers E_NOTIMPL, and the runtime's state object description is not yet measured. `set_raytracing_tier_reporting(caps,false)` takes the answer back to NOT_SUPPORTED (the shell's experiment raytracing-tier-off) |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
 | 1006 | | MeshShaderTier, MeshShaderSupportsFullRangeRenderTargetArrayIndex, MSPrimitivesPipelineStatisticIncludesCulledPrimitives | NOT_SUPPORTED, FALSE, FALSE | pfnDispatchMesh and the mesh shader slots are fail-safes |
 | 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe |
@@ -165,6 +165,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | BackgroundProcessingSupported | FALSE | pfnSetBackgroundProcessingMode is the shell's slot; engine-ddi claims nothing for it |
 | 1006 | | DriverManagedShaderCachePresent | FALSE | engine-ddi keeps no driver-managed shader cache |
 | 1006 | | Deterministic64KBUndefinedSwizzle | FALSE | no engine answer |
+| 1006 | | - | not in the DDI | `D3D12_FEATURE_DATA_D3D12_OPTIONS4::SharedResourceCompatibilityTier` and `D3D12_FEATURE_DATA_DISPLAYABLE::SharedResourceCompatibilityTier` have no DDI field: `SharedResourceCompatibilityTier` appears nowhere in `d3d12umddi.h`, and `D3D12DDI_D3D12_OPTIONS_DATA_0089` does not carry it. The D3D12 runtime synthesises the value from the WDDM/DDI level the driver reports (tier 1 "support is built into WDDM 2.4", `ref/sdk-api-docs` `ne-d3d12-d3d12_shared_resource_compatibility_tier.md`), so a driver that does not implement shared resources cannot withdraw the promise, and the enum has no "unsupported" value to report. On unit A the runtime answers tier 2 while every shared create and open fails (BD-075). What the driver can do honestly is refuse those calls without taking the device with it; `docs/d3d12-shared-resources.md` holds the plan that would make the reported tier true |
 | 1004 SHADER | `D3D12DDI_SHADER_CAPS_0084`, 64, H:10515-10534 | MinPrecision, DoubleOps, ShaderSpecifiedStencilRef, TypedUAVLoadAdditionalFormats, ROVs | MinPrecisionSupport, DoublePrecisionFloatShaderOps, PSSpecifiedStencilRefSupported, TypedUAVLoadAdditionalFormats, ROVsSupported | OPTIONS |
 | 1004 | | WaveOps, WaveLaneCountMin, WaveLaneCountMax, TotalLaneCount, Int64Ops | same values (Int64Ops from Int64ShaderOps) | OPTIONS1 |
 | 1004 | | Native16BitOps | Native16BitShaderOpsSupported | OPTIONS4 |
@@ -302,6 +303,40 @@ GetCustomHeapProperties and the L1 check of `d3d12_device_validate_custom_heap_t
 the same policy it gives `set_memory_architecture_policy`, in the one create info that goes to QueryAdapterCaps and
 CreateDevice (V11). IOCoherent and the serialization tiers need no engine field. An engine-ddi-only alternative
 without an ABI change would be to pass NOT_AVAILABLE L1 heaps to the engine as L0.
+
+## Failures a create or an open DDI may report
+
+`windows-driver-docs` display `handling-errors.md` puts every creation function of a user-mode display driver in
+the AllowOutOfMemory category: the runtime admits `E_OUTOFMEMORY` and `D3DDDIERR_DEVICEREMOVED` and treats any
+other failure as critical, which costs the application its device and sets the removed reason to
+`DXGI_ERROR_DRIVER_INTERNAL_ERROR`. Measured twice on this stack: `E_NOTIMPL` out of
+`pfnCreateCommandSignature` (above) and, in all 13 shared-resource cells of `tools/win/capture-share`,
+`pfnCreateHeapAndResource` and `pfnOpenHeapAndResource` of a shared resource (BD-075, hr `0x887A0005`, removed
+reason `0x887A0020`). That the D3D12 runtime follows the same rule as D3D10/11 stays an INFERENCE from that
+document plus those two measurements.
+
+`engine_ddi::admitted_create_failure` (engine-ddi.h) is therefore the last step of this module's
+`pfnCreateHeapAndResource` and `pfnOpenHeapAndResource`: whatever the refusal decided inside the driver, the slot
+reports `E_OUTOFMEMORY`, and the `log_refusal` line of the same call carries the real HRESULT, the heap and
+resource description and, for a refusal the shell took, the admission check that took it (`heap-import.h`,
+`ImportReport::refusal`). A lost device is the one other admitted answer, and it leaves under the name the runtime
+admits: the clamp turns `DXGI_ERROR_DEVICE_REMOVED`, `_RESET` and `_HUNG` - the names the API shows the
+application, which this module uses for a lost context and for `VK_ERROR_DEVICE_LOST` - into
+`D3DDDIERR_DEVICEREMOVED`.
+
+Two more layers sit above this one and refuse on their own, so each clamps its own refusals:
+
+- the shell's wrapper of `pfnCreateHeapAndResource` (`native-tables.cpp`), because the owner scope around that
+  slot can refuse as well;
+- the DDI thunk (`ddi-entry.h`), which is what the runtime actually calls. It answers `E_INVALIDARG` for a device
+  handle that resolves to nothing, `E_UNEXPECTED` for a scope it could not enter (engine teardown, a nested entry)
+  or a missing original, and `E_FAIL` for an exception that is not `bad_alloc` - all of them refusals of a create
+  DDI as far as the runtime can tell. `CoreBinding::allow_out_of_memory` names the two slots of this category, and
+  `native12::ddi_admitted_create_failure` is the same rule; `native-tables.cpp` `static_assert`s that the two
+  copies answer alike.
+
+Other create slots are not covered yet; the shared-resource plan in `docs/d3d12-shared-resources.md` names the
+audit.
 
 ## Device
 

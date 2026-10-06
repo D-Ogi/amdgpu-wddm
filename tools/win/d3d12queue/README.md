@@ -59,6 +59,89 @@ receipt before publishing the next command.
 | `exit` | Finish the session and release objects whose GPU work has retired |
 | `abort` | Request cancellation at an operation boundary or inside the bounded fence wait |
 
+`build.ps1 -Flip` replaces the `copy` operation with the fullscreen case of M15.14: the one shape in which
+the display hardware may read a buffer the application owns instead of a copy the compositor made. It takes
+output 0's desktop rectangle, opens a borderless `WS_POPUP` window exactly over it, takes the foreground and
+creates a flip-model swap chain of `-FlipBuffers` buffers (2 or 3) at that size in `B8G8R8A8_UNORM`, with
+`FLIP_DISCARD`, `SCALING_NONE` and no multisampling, on the session's queue. With `-FlipFullscreen` it also
+asks for exclusive fullscreen on that output and resizes the buffers; a refusal is traced and the run goes on
+borderless, because a borderless chain is just as eligible for a flip and the mode list is not this
+increment's subject.
+
+`-FlipBuffers` and `-FlipFrames` are compile-time defaults only: the client also reads
+`AMDGPU_WDDM_D3D12_FLIP_BUFFERS` and `AMDGPU_WDDM_D3D12_FLIP_FRAMES` at run time, so one binary serves a
+2-buffer arm, a 3-buffer arm and a longer ETW arm, and comparing two chain depths does not mean comparing two
+executable hashes. The frame default is 600, ten seconds at 60 Hz: an ETW session on this lab has been seen to
+lead by 2 to 7.6 s with no events of any process, so a two-second client can fall entirely inside that lead.
+
+It then presents the frames with `Present(1, 0)`, each cleared to its own colour: every channel is
+0.0 or 1.0, so the clear has no rounding tie and each frame's `B8G8R8A8` word is exact, and the eight
+combinations cycle, so a frame still showing the previous one, or a buffer presented twice, differs in at
+least one channel. Before each Present the back buffer is copied to a READBACK buffer and compared: every
+texel at the first and the last frame, a moving 64-row band in between. The run ends two seconds before the
+session's deadline, on `abort.request`, or when the frames are done. A scope guard owns the window class, the
+window and the fullscreen state from the moment each is taken, so every return path - including the ones that
+return a failure before the first frame - leaves exclusive fullscreen, hides the window and destroys it. A
+black fullscreen window left on the operator's screen until the trial stops the process is a defect, not a
+diagnostic.
+
+The receipt succeeds only if every frame was presented with `S_OK`, every compared texel was exact and no
+frame was lost to the deadline. An occluded present counts as refused and fails the run: a covered
+fullscreen window is a lab condition to fix, not a result. The trace carries DXGI's present statistics
+before and after (`PresentCount`, `PresentRefreshCount`, `SyncRefreshCount`, `GetLastPresentCount`), their
+deltas, the frames per second, and which back-buffer indices the chain handed out.
+
+What this client cannot show is whether the display hardware read those buffers. DXGI's statistics do not
+say, and a successful Present is returned on both paths. The witness is the kernel driver's scan-out
+counters around the run (`bc250kmd_cli log summary`, `scanout-trial.ps1`) together with the operator's
+screenshot. Nothing in the receipt should be read as a claim about DirectFlip.
+
+It opens a fullscreen window and takes the foreground. Run it on the lab, never unannounced elsewhere.
+
+`scanout-trial.ps1` is the lab trial around it. It reads `bc250kmd_cli log summary` before and after the run,
+starts the client, drives the five commands through `controller.ps1`, waits for it to be gone (and stops it if
+it is not, so that no fullscreen window outlives its trial), reads the counters again and writes one JSON
+report with the receipt, the client's present statistics, both counter snapshots and their delta. The counter
+lines it reads are `presents N, flips N of N address calls`, the scan-out admission line and the vidpn flip
+line; a line the running driver does not print is reported as absent, and a delta is taken only for a counter
+both reads carried - an absent counter is never a zero, because the first baseline of this work is a KMD that
+has no scan-out counters at all.
+
+The client runs as a scheduled task of the interactive session (`New-ScheduledTaskPrincipal -LogonType
+Interactive`), not as a child of the SSH session: a session-0 window is on no monitor and is composed by no
+interactive DWM, so no flip of it could be independent and the operator could not see it either. The task's
+name stays clear of the deploy kits' competing-task pattern, the trial removes it afterwards, and it pauses
+the overlay's `log summary` poll for the length of the run (a measured ~300 ms stall every ~5.4 s).
+
+One lab condition the trial cannot remove: the operator's overlay and the taskbar are top-level windows over
+the same rectangle, and a window above the client disqualifies an independent flip even when everything else
+is right. The trial pauses the overlay's summary poll but leaves its window alone, because that window is how
+the owner is told what is happening on their own screen. The client reports it instead: an occluded present
+counts as refused and fails the run, so an arm that was decided by another window says so rather than looking
+like a driver refusal.
+
+`-SelfTest` parses sample counter texts and prints every verdict shape without touching a file, a task or the
+driver. It is the gate for the verdict logic, which is where the review found three defects: an absent counter
+read as a zero, `admit_ok` used as if it were the client's own number, and a scan-out flip counted with the
+flip gate closed.
+
+The trial has two arms. Without `-Experiment` the shell keeps its registered composed-primary path: the
+control arm, in which every frame must present exactly, the scan-out counters must not move at all, and the
+overall flip counters must still move - a quiet arm on a desktop that was not composing proves nothing. With
+`-Experiment scanout-flip-1920x1200` the shell asks for a scan-out primary. The mode names its geometry
+because the kernel driver admits a flip at the POST geometry alone, so a chain of any other size could only
+end in a refusal, after being moved into VRAM with no CPU mapping for nothing; a bare `scanout-flip` is
+refused by the script before anything runs.
+
+The delta then says which of three things happened: flips admitted, candidates refused (with the clause that
+refused them), or no candidate reaching `SetVidPnSourceAddress` at all. The last one does not place the stop
+"in user mode" and leave it there. For a borderless chain the layer is the compositor - DWM decides DirectFlip
+through its own UMD, which has no `CheckDirectFlipSupport` entry - and for an exclusive-fullscreen chain it is
+DXGI or the shell; the verdict says so. An admitted flip is only reported as confirmed when the hardware flip
+counter moved with it, because a scan-out flip is counted when `DcnFlipSourceAddress` succeeded and the flip
+gate can be closed. `admit_ok` appears in no verdict at all: it counts every `SetVidPnSourceAddress` with an
+allocation, the compositor's own primary included, so over a minute its delta is thousands of DWM flips.
+
 `build.ps1 -Sparse` replaces the `copy` operation: a reserved buffer of four tiles is mapped to tiles
 2 to 5 of a heap with the queue's `UpdateTileMappings`, a pattern goes UPLOAD, reserved buffer,
 READBACK, and all 262144 bytes are compared. Only mapped tiles are written and read. The device must

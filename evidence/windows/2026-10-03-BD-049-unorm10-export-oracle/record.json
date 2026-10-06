@@ -1,0 +1,38 @@
+{
+  "source_head": "16354ed2c68fd002627b0e35e813422e72e87a7c",
+  "source_status": "",
+  "inputs": {
+    "P:\\bc-250\\scratch\\bd049\\src-f9dc\\src\\amd\\vulkan\\tests\\radv_unorm10_export_test.c": "EFCA998DD78E4C704C36FB64EBE1F27F9A84EDF0C152EA614EE7B15DDC133F85",
+    "P:\\bc-250\\scratch\\bd049\\build-f9dc\\src\\amd\\vulkan\\vulkan_radeon.dll": "CE05E6B36F4ED467881E961C323ABADDF46C2DA86BC6C1897D29A59704F970AC"
+  },
+  "exe_sha256": "C19C3B36A1EA365C045F6CCE6B29FF48C41ACB6A8C142AB750E159E33CC5B358",
+  "results": {
+    "test": {
+      "exit": 0,
+      "ok": true,
+      "summary": "unorm10 export: 1312733 NIR inputs, 1312733 ACO epilog inputs, 57760299 checks, 0 failures (key 0, NIR 0, ACO 0)",
+      "failures": {
+        "key": 0,
+        "nir": 0,
+        "aco": 0
+      },
+      "first_failures": []
+    },
+    "negative-control": {
+      "exit": 1,
+      "ok": true,
+      "summary": "unorm10 export (no rounding): 1312733 NIR inputs, 1312733 ACO epilog inputs, 57760296 checks, 8786812 failures (key 0, NIR 5131683, ACO 3655129)",
+      "failures": {
+        "key": 0,
+        "nir": 5131683,
+        "aco": 3655129
+      },
+      "first_failures": [
+        "FAIL check_exports:382: stored == d3d_unorm10(x): NIR, channel 0: 0.600000024 (0x3f19999a) stored as 613, D3D 614 (export 0x38cc)",
+        "FAIL check_exports:387: x < 0.0f || x > 1.0f || fabs(steps) <= 0.2501: NIR, channel 0: 0.600000024 exported -0.5996 steps off",
+        "FAIL check_exports:394: h == _mesa_float_to_float16_rtz(host_round_unorm10(x)): NIR, channel 0: 0.600000024: export 0x38cc, the operations on the host 0x38cd",
+        "FAIL check_exports:382: stored == d3d_unorm10(x): NIR, channel 1: 0.600000024 (0x3f19999a) stored as 613, D3D 614 (export 0x38cc)"
+      ]
+    }
+  }
+}

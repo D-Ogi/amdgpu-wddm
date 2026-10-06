@@ -45,9 +45,9 @@ public:
 // trace hooks that read the trace mode on every call; a game makes thousands of recording calls per frame
 // (trial 217: 0.98 ms/frame of the main thread in that bookkeeping). The binding names the engine owner, its
 // runtime domain, its hosted bootstrap and its active flag, all fixed while the engine is open: the device
-// publishes it in Device::recording after the engine opened, only when the experiment is set and the
-// device's trace mode is not the full trace (1; the failures-only mode 2 keeps it, and the fast path notes
-// its refusals), and clears it before the engine closes (device-engine.cpp). A list resolves to
+// publishes it in Device::recording after the engine opened, only when the experiment is set, the bootstrap
+// is valid and the device's trace mode is not the full trace (1; the failures-only mode 2 keeps it, and the
+// fast path notes its refusals), and clears it before the engine closes (device-engine.cpp). A list resolves to
 // its device (EntryOwner, engine_ddi::command_list_shell), so every list of the device shares the binding;
 // a per-list copy would hold the same four pointers. The scope binds the same three thread-local states as
 // DeviceEngineScope, so callbacks, hosted dispatch and device_engine_entered see an entered device exactly as
@@ -69,11 +69,15 @@ public:
         return binding && !DeviceEngineScope::current_ && binding->active->load(std::memory_order_acquire)?
             binding:nullptr;
     }
-    explicit RecordingScope(const RecordingBinding& binding) noexcept
-      :runtime_(*binding.domain),hosted_(*binding.bootstrap),previous_(DeviceEngineScope::current_) {
+    // Inline in every recording thunk, and without valid() of the bootstrap, which the device checked when it
+    // published the binding: out of line and re-reading the bootstrap, the constructor alone cost the main
+    // thread of Witcher 3 LOW 0.15 ms per frame (lab session 300).
+    __forceinline explicit RecordingScope(const RecordingBinding& binding) noexcept
+      :runtime_(*binding.domain),hosted_(*binding.bootstrap,HostedInstanceBootstrap::Scope::Checked{}),
+       previous_(DeviceEngineScope::current_) {
         if(hosted_.entered())DeviceEngineScope::current_=binding.owner;
     }
-    ~RecordingScope() noexcept {if(hosted_.entered())DeviceEngineScope::current_=previous_;}
+    __forceinline ~RecordingScope() noexcept {if(hosted_.entered())DeviceEngineScope::current_=previous_;}
     RecordingScope(const RecordingScope&)=delete;
     RecordingScope& operator=(const RecordingScope&)=delete;
     bool entered() const noexcept {return hosted_.entered();}

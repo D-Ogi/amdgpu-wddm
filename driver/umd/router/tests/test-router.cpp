@@ -187,6 +187,15 @@ static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t HostedKey[] = L"SOFTWARE\\amdgpu-wddm\\HostedUmd";
 static const wchar_t KmdKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
 static const wchar_t AppKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
+// The UMD path values of the router under test and of the other bitness (router.cpp, BD-064): a 32-bit router reads
+// CpuUmdPathWow, HostedUmdPathWow and GpuUmdPathWow and must ignore the 64-bit names, and the other way round.
+#ifdef _WIN64
+static const wchar_t CpuUmdPathName[] = L"CpuUmdPath", HostedUmdPathName[] = L"HostedUmdPath", GpuUmdPathName[] = L"GpuUmdPath";
+static const wchar_t OtherCpuUmdPathName[] = L"CpuUmdPathWow", OtherGpuUmdPathName[] = L"GpuUmdPathWow";
+#else
+static const wchar_t CpuUmdPathName[] = L"CpuUmdPathWow", HostedUmdPathName[] = L"HostedUmdPathWow", GpuUmdPathName[] = L"GpuUmdPathWow";
+static const wchar_t OtherCpuUmdPathName[] = L"CpuUmdPath", OtherGpuUmdPathName[] = L"GpuUmdPath";
+#endif
 
 static void SetSz(const wchar_t *key, const wchar_t *name, const std::wstring &v)
 {
@@ -330,7 +339,7 @@ static void DeleteValue(const wchar_t *key, const wchar_t *name)
 static void AppBase(const wchar_t *mode, const wchar_t *gpu = L"app\\amdgpu_wddm_d3d11.dll")
 {
     if (mode) SetSz(AppKey, L"Mode", mode);
-    if (gpu) SetSz(AppKey, L"GpuUmdPath", Layout + L"\\" + gpu);
+    if (gpu) SetSz(AppKey, GpuUmdPathName, Layout + L"\\" + gpu);
     SetSz(AppKey, L"RouteLogDirectory", Layout + L"\\applogs");
 }
 static std::string AppLog() { return ReadAll(RouteLog(Layout + L"\\applogs")); }
@@ -339,7 +348,7 @@ static bool Has(const std::string &log, const char *text) { return log.find(text
 // Common router key: fake CPU UMD, hosted UMD from the router's own directory (no HostedUmdPath).
 static void RouterBase(bool clientIsSelf)
 {
-    SetSz(RouterKey, L"CpuUmdPath", Layout + L"\\cpu\\bc250d3d.dll");
+    SetSz(RouterKey, CpuUmdPathName, Layout + L"\\cpu\\bc250d3d.dll");
     SetDw(RouterKey, L"DwmForceCpu", 0);
     SetDw(RouterKey, L"RequireKmdSwitches", 1);
     if (clientIsSelf) SetMulti(RouterKey, L"HostedClients", {L"unrelated.exe", ExeBase()});
@@ -532,7 +541,7 @@ static void Child(const std::string &s)
         CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
     } else if (s == "route-hosted-fails") {
         RouterBase(true); Switches(true, true);
-        SetSz(RouterKey, L"HostedUmdPath", Layout + L"\\fail\\fake-fail.dll");
+        SetSz(RouterKey, HostedUmdPathName, Layout + L"\\fail\\fake-fail.dll");
         SetSz(RouterKey, L"RouteLogDirectory", Layout + L"\\routelogs");
         OverrideHklm();
         HMODULE r = LoadAt(L"router\\bc250d3d_router.dll");
@@ -545,19 +554,47 @@ static void Child(const std::string &s)
         CHECK(log.find("route=cpu reason=hosted fallback=1 hosted_hr=80004005 hr=00000000") != std::string::npos, "route log: %s", log.c_str());
     } else if (s == "route-hosted-missing") {
         RouterBase(true); Switches(true, true);
-        SetSz(RouterKey, L"HostedUmdPath", Layout + L"\\absent\\bc250d3d_zink.dll");
+        SetSz(RouterKey, HostedUmdPathName, Layout + L"\\absent\\bc250d3d_zink.dll");
         OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
     } else if (s == "route-hosted-relative") {
         RouterBase(true); Switches(true, true);
-        SetSz(RouterKey, L"HostedUmdPath", L"bc250d3d_zink.dll");
+        SetSz(RouterKey, HostedUmdPathName, L"bc250d3d_zink.dll");
         OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
         CHECK(!Loaded(L"router\\bc250d3d_zink.dll"), "relative HostedUmdPath fell back to the default");
+    } else if (s == "route-other-bitness-paths") {
+        // The other bitness's UMD paths name the failing double: the router must not read them (BD-064).
+        RouterBase(false); Switches(true, true);
+        SetSz(RouterKey, OtherCpuUmdPathName, Layout + L"\\fail\\fake-fail.dll");
+        AppBase(L"gpu-default"); SetSz(AppKey, OtherGpuUmdPathName, Layout + L"\\fail\\fake-fail.dll");
+        OverrideHklm();
+        HMODULE r = LoadAt(L"router\\bc250d3d_router.dll");
+        Opened o = Open(r, "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == AppTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        o = Open(r, "OpenAdapter10");
+        CHECK(o.hr == S_OK && o.tag == CpuTag10, "OpenAdapter10 hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        CHECK(!Loaded(L"fail\\fake-fail.dll"), "the other bitness's UMD path was loaded");
+        std::string log = AppLog();
+        CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") && Has(log, "cpu_source=registry"), "route log: %s", log.c_str());
+#ifndef _WIN64
+    } else if (s == "route-wow-default-cpu-beside-router") {
+        // 32-bit router without CpuUmdPathWow: bc250d3d.dll next to the router (router-wow holds the CPU double).
+        Switches(false, false);
+        SetSz(RouterKey, L"CpuUmdPath", Layout + L"\\fail\\fake-fail.dll");
+        SetSz(AppKey, L"RouteLogDirectory", Layout + L"\\applogs");
+        OverrideHklm();
+        HMODULE r = LoadAt(L"router-wow\\bc250d3d_router.dll");
+        Opened o = Open(r, "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        std::string log = AppLog();
+        CHECK(Has(log, "route=cpu reason=app-mode-cpu fallback=0") && Has(log, "cpu_source=router-directory"), "route log: %s", log.c_str());
+#endif
     } else if (s == "route-default-cpu-path") {
-        // No router key at all: CPU UMD from the compiled default, which does not exist on the host.
+        // No router key at all: CPU UMD from the compiled default, which does not exist on the host (32-bit router:
+        // bc250d3d.dll next to the router, absent from layout\router).
         Switches(false, false); OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND) || o.hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND),
@@ -654,7 +691,7 @@ static void Child(const std::string &s)
     } else if (s == "stack-cpu-real") {
         // Router in front of the deployed CPU UMD build 4176D1DF (<layout>\cpu-real) for a non-client process.
         RouterBase(false); Switches(true, true);
-        SetSz(RouterKey, L"CpuUmdPath", Layout + L"\\cpu-real\\bc250d3d.dll");
+        SetSz(RouterKey, CpuUmdPathName, Layout + L"\\cpu-real\\bc250d3d.dll");
         OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == S_OK && Loaded(L"cpu-real\\bc250d3d.dll") && !Loaded(L"router\\bc250d3d_zink.dll"), "hr=%08lx", o.hr);
@@ -717,10 +754,10 @@ static void Child(const std::string &s)
             AppBase(L"gpu-default", nullptr);
             lines = {"route=cpu reason=app-gpu-umd-unset fallback=0", "gpu_source=absent"};
         } else if (s == "app-gpu-umd-relative") {
-            AppBase(L"gpu-default", nullptr); SetSz(AppKey, L"GpuUmdPath", L"amdgpu_wddm_d3d11.dll");
+            AppBase(L"gpu-default", nullptr); SetSz(AppKey, GpuUmdPathName, L"amdgpu_wddm_d3d11.dll");
             lines = {"route=cpu reason=app-gpu-umd-unset fallback=0", "gpu_source=registry-invalid"};
         } else if (s == "app-gpu-umd-wrong-type") {
-            AppBase(L"gpu-default", nullptr); SetDw(AppKey, L"GpuUmdPath", 1);
+            AppBase(L"gpu-default", nullptr); SetDw(AppKey, GpuUmdPathName, 1);
             lines = {"route=cpu reason=app-gpu-umd-unset fallback=0", "gpu_source=registry-invalid"};
         } else if (s == "app-gpu-fails") {
             // E_UNEXPECTED here would mean the CPU double saw the failed GPU call's scribbles.
@@ -739,7 +776,7 @@ static void Child(const std::string &s)
             lines = {"entry=OpenAdapter10 route=cpu reason=app-d3d10-entry fallback=0"};
         } else if (s == "app-log-dir-fallback") {
             // No AppRouter RouteLogDirectory: the line goes to DesktopRouter's.
-            SetSz(AppKey, L"Mode", L"gpu-default"); SetSz(AppKey, L"GpuUmdPath", Layout + L"\\app\\amdgpu_wddm_d3d11.dll");
+            SetSz(AppKey, L"Mode", L"gpu-default"); SetSz(AppKey, GpuUmdPathName, Layout + L"\\app\\amdgpu_wddm_d3d11.dll");
             expect = AppTag102;
             lines = {"route=gpu reason=app-default fallback=0"};
         } else if (s == "app-mode-toggle") {
@@ -864,7 +901,10 @@ static int RunAll(const std::wstring &out)
         {"route-latched-wrong-type", nullptr, {}},
         {"route-switches-not-required", nullptr, {}}, {"route-require-wrong-type", nullptr, {}},
         {"route-hosted-fails", nullptr, {}}, {"route-hosted-missing", nullptr, {}}, {"route-hosted-relative", nullptr, {}},
-        {"route-default-cpu-path", nullptr, {}},
+        {"route-default-cpu-path", nullptr, {}}, {"route-other-bitness-paths", nullptr, {}},
+#ifndef _WIN64
+        {"route-wow-default-cpu-beside-router", nullptr, {}},
+#endif
         {"route-dwm-name", "dwm\\dwm.exe", {}}, {"route-dwm-name-kill", "dwm\\dwm.exe", {}},
         {"umd-identity", nullptr, {}}, {"umd-openadapter10", nullptr, {}},
         {"umd-no-trailer", nullptr, {}}, {"umd-callback-fails", nullptr, {}}, {"umd-bad-version", nullptr, {}},

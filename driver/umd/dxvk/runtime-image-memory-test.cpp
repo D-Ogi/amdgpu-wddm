@@ -7,7 +7,7 @@
 using namespace bc250::umd;
 namespace {
 int identity; unsigned allocations,bindings,frees;
-VkDeviceMemory memory=reinterpret_cast<VkDeviceMemory>(uintptr_t(7));
+VkDeviceMemory memory=(VkDeviceMemory)(uintptr_t(7));
 VkResult allocationResult=VK_SUCCESS,bindResult=VK_SUCCESS;
 void check(bool b) { if (!b) std::abort(); }
 void VKAPI_CALL requirements(VkDevice,VkImage,VkMemoryRequirements *r) { *r={4096,256,2}; }
@@ -30,7 +30,7 @@ const VkFormat viewFormats[]={VK_FORMAT_R8G8B8A8_UNORM,VK_FORMAT_R8G8B8A8_SRGB};
 const VkImageFormatListCreateInfo formatList{VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,nullptr,2,viewFormats};
 VkResult VKAPI_CALL image_create(VkDevice,const VkImageCreateInfo *info,const VkAllocationCallbacks *,VkImage *out) {
     createdInfo=*info; ++imageCreates; check(info->usage==VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-    *out=reinterpret_cast<VkImage>(uintptr_t(2)); return VK_SUCCESS;
+    *out=(VkImage)(uintptr_t(2)); return VK_SUCCESS;
 }
 void VKAPI_CALL image_destroy(VkDevice,VkImage,const VkAllocationCallbacks *) { ++imageDestroys; }
 void VKAPI_CALL image_layout(VkDevice,VkImage,const VkImageSubresource *sub,VkSubresourceLayout *out) {
@@ -41,8 +41,9 @@ void VKAPI_CALL image_layout(VkDevice,VkImage,const VkImageSubresource *sub,VkSu
 namespace {
 HRESULT textureWait=S_OK,textureWrap=S_OK; ULONG remainingRefs=0;
 unsigned waits=0,releases=0;
+VkFormat describedFormat=VK_FORMAT_R8G8B8A8_UNORM;
 HRESULT describe_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImageCreateInfo *i) {
-    *i={VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO}; i->imageType=VK_IMAGE_TYPE_2D; i->format=VK_FORMAT_R8G8B8A8_UNORM;
+    *i={VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO}; i->imageType=VK_IMAGE_TYPE_2D; i->format=describedFormat;
     i->pNext=&formatList; i->flags=VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
     i->extent={64,16,1}; i->mipLevels=i->arrayLayers=1; i->samples=VK_SAMPLE_COUNT_1_BIT;
     i->usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; i->tiling=VK_IMAGE_TILING_OPTIMAL; return S_OK;
@@ -129,7 +130,7 @@ struct ImportEngine final : IBc250DxvkDevice2 {
 }
 int main() {
     RuntimeDevice runtime; runtime.hDevice=&identity;
-    VkDevice device=reinterpret_cast<VkDevice>(uintptr_t(1)); VkImage image=reinterpret_cast<VkImage>(uintptr_t(2));
+    VkDevice device=reinterpret_cast<VkDevice>(uintptr_t(1)); VkImage image=(VkImage)(uintptr_t(2));
     ImageMemoryDispatch dispatch{requirements,allocate,bind,release};
     VkPhysicalDeviceMemoryProperties properties{}; properties.memoryTypeCount=2; properties.memoryTypes[1].propertyFlags=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     bc250_host_import imported{}; imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=&identity;
@@ -162,8 +163,27 @@ int main() {
     destroy_runtime_image(device,imageDispatch,importedImage);
     info.extent.height=UINT32_MAX; check(createImage()==E_INVALIDARG && imageCreates==3);
     info.extent.height=16; info.tiling=VK_IMAGE_TILING_OPTIMAL; check(createImage()==E_NOTIMPL && imageCreates==3);
+    // Composed formats at their texel size (M14.1): the engine's A8 image (A8_UNORM_KHR, or R8_UNORM
+    // with a swizzle) has 1-byte texels, RGBA16F 8-byte ones. A row of another size is refused.
+    auto createRow=[&](VkDeviceSize pitch,VkDeviceSize rowBytes) {
+        return create_linear_runtime_image(runtime,device,imageDispatch,properties,info,imported,pitch,rowBytes,importedImage);
+    };
+    info.tiling=VK_IMAGE_TILING_LINEAR;
+    for (VkFormat format:{VK_FORMAT_A8_UNORM_KHR,VK_FORMAT_R8_UNORM}) {
+        info.format=format; const unsigned created=imageCreates;
+        check(createRow(256,256)==E_INVALIDARG && imageCreates==created);
+        check(createRow(256,64)==S_OK && importedImage.image && imageCreates==created+1);
+        destroy_runtime_image(device,imageDispatch,importedImage);
+    }
+    info.format=VK_FORMAT_R16G16B16A16_SFLOAT; info.extent.height=8; badPitch=true; // layout pitch 512
+    const unsigned createdBeforeHalf=imageCreates;
+    check(createRow(512,256)==E_INVALIDARG && imageCreates==createdBeforeHalf);
+    check(createRow(512,512)==S_OK && importedImage.image && imageCreates==createdBeforeHalf+1);
+    destroy_runtime_image(device,imageDispatch,importedImage);
+    info.format=VK_FORMAT_R16_SFLOAT; check(createRow(256,128)==E_NOTIMPL && imageCreates==createdBeforeHalf+1);
+    info.format=VK_FORMAT_R8G8B8A8_UNORM; info.extent.height=16; badPitch=false;
     TextureImportDispatch textureDispatch{&identity,describe_texture,wrap_texture,wait_texture,release_texture};
-    D3D11_TEXTURE2D_DESC1 textureDesc{}; textureDesc.Width=64;
+    D3D11_TEXTURE2D_DESC1 textureDesc{}; textureDesc.Width=64; textureDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
     HostBridge bridge{}; bridge.device=&runtime;
     RuntimeTexture texture{};
     auto makeTexture=[&]() { return create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,texture); };
@@ -180,6 +200,15 @@ int main() {
     check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_UNEXPECTED && texture.retained && texture.image.image);
     const unsigned retainedDestroy=imageDestroys;
     check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_UNEXPECTED && imageDestroys==retainedDestroy && releases==2);
+    // An A8 texture's logical row is its width in bytes; a format outside the table never reaches the engine.
+    RuntimeTexture atlas{}; remainingRefs=0;
+    describedFormat=VK_FORMAT_A8_UNORM_KHR; textureDesc.Format=DXGI_FORMAT_A8_UNORM;
+    check(create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,atlas)==S_OK && atlas.texture);
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,atlas)==S_OK && !atlas.image.image && releases==3);
+    textureDesc.Format=DXGI_FORMAT_R16_FLOAT; const unsigned createsBeforeUnknown=imageCreates;
+    check(create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,atlas)==E_NOTIMPL);
+    check(!atlas.texture && !atlas.image.image && imageCreates==createsBeforeUnknown);
+    describedFormat=VK_FORMAT_R8G8B8A8_UNORM; textureDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
     runtime.KTCallbacks.pfnAllocateCb=surface_allocate;
     runtime.KTCallbacks.pfnDeallocate2Cb=surface_deallocate;
     runtime.KTCallbacks.pfnMapGpuVirtualAddressCb=surface_map;
