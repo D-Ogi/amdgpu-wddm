@@ -100,11 +100,13 @@ $rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-In
 $rr.text
 Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-owned: exit $($rr.code)"
 
-Check ($r.text -match 'would: copy payload\\system32\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'stub copy is the safe replacement'
-# BD-064: 32-bit processes get the x86 builds: D3D9/10/11 slots (no x86 D3D12), the x86 Vulkan ICD, the router's Wow paths.
+# D3D9 goes through D3D9On12: the D3D9 slot is empty in both views, and no stub is copied.
+Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
+Check ($r.text -match "would: .+ UserModeDriverName = '' \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot empty (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
+Check ($r.text -notmatch 'UserModeDriverName(Wow)? = bc250umd') 'no slot names the D3D9 stub'
+# BD-064: 32-bit processes get the x86 builds: D3D9 (empty)/10/11 slots (no x86 D3D12), the x86 Vulkan ICD, the router's Wow paths.
 Check ($r.text -match 'would: copy payload\\wow64 -> .+\\wow64 ') 'phase 2 installs the x86 builds (wow64)'
-Check ($r.text -match 'would: copy payload\\syswow64\\bc250umd\.dll -> .+\\SysWOW64\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'the x86 stub goes to SysWOW64 by the safe replacement'
-Check ($r.text -match 'would: .+ UserModeDriverNameWow = bc250umd\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json') 'UserModeDriverNameWow: stub and two x86 routers, no D3D12 slot; VulkanDriverNameWow'
+Check ($r.text -match "would: .+ UserModeDriverNameWow = '' \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json") 'UserModeDriverNameWow: D3D9 slot empty and two x86 routers, no D3D12 slot; VulkanDriverNameWow'
 Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
 Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
 # The H.264 encoder MFT (M15.11, driver/umd/mft-h264/INSTALL.md): manifest.json "mft_h264" says whether this release
@@ -502,7 +504,7 @@ $st = [ordered]@{ schema = 1; phase = 'verified'; package_version = [string]$m.v
 $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
 try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun', '-Yes', '-KeepTestSigning') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
 Check ($r.code -eq 0) "uninstall -DryRun with a state: exit $($r.code)"
-Check (($r.text -match 'would: remove .+\\System32\\bc250umd\.dll') -and ($r.text -match 'would: remove .+\\SysWOW64\\bc250umd\.dll')) 'both stubs removed (neither was there before the install)'
+Check (($r.text -match 'would: remove .+\\System32\\bc250umd\.dll') -and ($r.text -match 'would: remove .+\\SysWOW64\\bc250umd\.dll')) 'both stubs of an earlier release removed (neither was there before the install)'
 Check ($r.text -match "would: remove '[^']+\\wow64\\vulkan\\radeon_icd\.json' from HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers") 'the WOW6432Node Khronos entry removed'
 # The H.264 encoder MFT keys go at every uninstall, whether this release registered the transform or not. On this
 # computer none of them is there, and the step says so instead of naming keys that do not exist.
