@@ -22,6 +22,9 @@
       "EnableGpuPresentBlit": 1,
       "EnableCddDwmInterop": 1,
       "EnableScanoutAdmit": 1,
+      "EnableDirectFlipHandshake": 1,
+      "EnableHwmon": 1,
+      "NotifyDpcInReport": 1,
       "DpmMode": 1,
       "DpmMaxMHz": 1500,
       "DpmIdleMHz": 500,
@@ -29,7 +32,8 @@
     },
     "desktop_router": {
       "DwmForceCpu": 0,
-      "RequireKmdSwitches": 1
+      "RequireKmdSwitches": 1,
+      "DirectFlipFront": 1
     },
     "app_router": {
       "Mode": "gpu-default",

@@ -1269,8 +1269,10 @@ static void Child(const std::string &s)
         Opened o = Open(LoadAt(routerDll), entry10 ? "OpenAdapter10" : "OpenAdapter10_2");
         const std::string log = ReadAll(RouteLog(Layout + L"\\routelogs"));
         // What the one appended column must say for this scenario.
+        // front-absent is "on" from 0.7.213.100-tester.15: the front rides the release, and only the value 0
+        // (front-zero) or a value of another kind (front-wrong-type) puts the shipped router back.
         const char *wantColumn = s == "front-wrong-type" ? "front=invalid"
-                                 : s == "front-zero" || s == "front-absent" ? "front=off"
+                                 : s == "front-zero" ? "front=off"
                                  : entry10 || s == "front-cpu-route" ? "front=unavailable"
                                                                      : "front=on";
         CHECK(Has(log, wantColumn), "route log has no %s: %s", wantColumn, log.c_str());

@@ -167,9 +167,22 @@ static void gate(void)
 {
     BC250_ESCAPE_HWMON h;
 
-    /* No setting at all. This is every machine that installs the driver: the window is shared with whatever
-     * third-party monitor the owner runs, so nothing may touch it until somebody opens the gate by hand. */
+    /* No setting at all. This is every machine that installs 0.7.213: the reader is a finished feature and the
+     * release-train rule puts it on, so an absent value starts it and the chip is identified (hwmon.c rule 3).
+     * The window is still shared with whatever third-party monitor the owner runs, which is what the switch
+     * below exists for. */
     Fresh();
+    HwmonStart(&device);
+    CHECK(device.Hwmon.Enabled && device.Hwmon.Online);
+    CHECK(device.Hwmon.Reason == BC250_HWMON_REASON_OK);
+    CHECK(device.Hwmon.BasePort == BC250_HWMON_BASE_DEFAULT);
+    CHECK(native_log_has("base 0x0A20") && !native_log_has("EnableHwmon 0"));
+    HwmonStop(&device.Hwmon);
+
+    /* Explicitly 0: the bisect switch. No port access of any kind happens, and a machine with it closed behaves
+     * exactly as 0.7.208.1 did. */
+    Fresh();
+    NativeSetSetting(L"EnableHwmon", 0);
     HwmonStart(&device);
     CHECK(!device.Hwmon.Enabled && !device.Hwmon.Online);
     CHECK(native_ec.reads == 0 && native_ec.writes_latch == 0 && native_ec.holds == 0);
@@ -181,19 +194,14 @@ static void gate(void)
     CHECK(h.Flags == BC250_HWMON_FLAG_GATED && h.Reason == BC250_HWMON_REASON_GATED);
     CHECK(h.BasePort == 0 && h.AgeMs == 0 && h.Generation == 7);
 
-    /* The sampler and the log line do nothing while the gate is closed, and HwmonStop says nothing either:
-     * a machine with the gate closed behaves exactly as the revision before this one did. */
+    /* The sampler and the log line do nothing while the gate is closed, and HwmonStop says nothing either. */
     native_lines = 0;
     HwmonSample(&device);
     HwmonLogLine(&device, "telemetry");
     HwmonStop(&device.Hwmon);
     CHECK(native_lines == 0 && native_ec.reads == 0 && native_ec.writes_latch == 0);
 
-    /* Explicitly 0, and an unrelated value. Only 1 opens it. */
-    Fresh();
-    NativeSetSetting(L"EnableHwmon", 0);
-    HwmonStart(&device);
-    CHECK(!device.Hwmon.Enabled && native_ec.writes_latch == 0);
+    /* An unrelated value. Only 1, and an absent value, open it. */
     Fresh();
     NativeSetSetting(L"EnableHwmon", 2);
     HwmonStart(&device);
@@ -407,7 +415,7 @@ static void sampler(void)
     CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) == 0);
     CHECK(NoWriteOutsideTheLatch());
 
-    /* The telemetry lines, the shape an operator reads in the driver log. THREE lines since KMD 0.7.212: one
+    /* The telemetry lines, the shape an operator reads in the driver log. THREE lines since KMD 0.7.213: one
      * line was 332 characters at its widest and BC250_LOG_TEXT holds 159, so it lost its counters without
      * saying so (the guardlog-width gate, BD-070). The reading first, then the two registers nothing decides
      * on with the duty verdict, then the counters. */

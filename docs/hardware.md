@@ -21,7 +21,7 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 ## Limits for our experiments
 
 - GPU clock and voltage: only the points of the DPM table in `docs/design/dpm.md` (500 MHz / 820 mV, the idle point, to 2000 MHz / 1000 mV), which is the written reason for going above 1500 MHz / 900 mV (owner decision 2026-09-30). The default ceiling is 1500 MHz; above it only with an explicit `DpmMaxMHz`. Nothing above 1000 mV. Thermal: from 70 C the DPM governor raises one level at most, 1 s to 4 s after the last raise (thermal ramp, KMD 0.7.203, after session 367). At 87 C or more the DPM governor does not raise the clock or the voltage (warm zone, KMD 0.7.204, owner decision 2026-10-04; at 85 C in KMD 0.7.200-0.7.203, after session 344). At 87 C the thermal cap steps down and the clock gate refuses a raise (owner decision 2026-10-01, was 85 C). At 90 C the clock goes to the thermal floor, 800 MHz (`BC250_DPM_THERMAL_FLOOR_LEVEL`). That is the lowest point the thermal cap uses, and not the lowest point of the table. Only the thermal cap and the idle state may go below 1000 MHz, all at 820 mV. The cap goes to 900 and 800 MHz and never lower (KMD 0.7.205, owner decision 2026-10-05). The clock the part ran at when it went hot does not change that bottom. The idle state goes to 500 MHz while the GPU has no work (KMD 0.7.207, owner decision 2026-10-05). It leaves that point at the first tick with work. `DpmIdleMHz` 0 turns the idle state off. The load never asks below 1000 MHz. The firmware accepts the two sub-floor points. Session 402 held 800 MHz at VID 116 in 49 readbacks and 900 MHz at VID 116 in 4, with no refusal ([M785](facts/hardware.md#m785)). 1000 MHz is only the lowest `sclk` level the tables publish ([M47](facts/hardware.md#m47)) and the bound of the imported Linux path. It is not a measured hardware floor. The KMD still withdraws a sub-floor point or the idle point for the rest of a start if the SMU refuses it.
-- GPU voltage band (KMD 0.7.212.1, the operator's V/F curve, owner decision 2026-10-06): the voltage at a clock may
+- GPU voltage band (KMD 0.7.213.1, the operator's V/F curve, owner decision 2026-10-06): the voltage at a clock may
   go down to the table's line less 25 mV (`BC250_CURVE_UNDERVOLT_MV`), and never under 820 mV, which is the
   voltage the lab point has run at for weeks. `bc250_clock_floor_mv(MHz)` is that bound and every gate uses it.
   The band is one depth for the whole curve, so the deepest admitted undervolt at 2000 MHz is 975 mV, and 1000 mV
@@ -48,17 +48,18 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   curve, and the BIOS "Fan Setting" option selects which curve it uses. The owner keeps that option as it is
   (2026-10-05). The chip sits on the I/O window `0x0A20-0x0A2F` and publishes five tachometer channels, five
   duty outputs and three temperature channels, one of which reads the APU die over SB-TSI independently of
-  the SMU ([M796](facts/hardware.md#m796)). KMD 0.7.212.1 reads it, and only reads it: the driver issues no
+  the SMU ([M796](facts/hardware.md#m796)). KMD 0.7.213.1 reads it, and only reads it: the driver issues no
   write to any register of that chip, and it never touches the Super I/O configuration ports `0x2E`/`0x2F`,
-  which the DSDT drives under an ACPI mutex a kernel driver cannot take. The window has no arbiter, so the
-  reader is off unless `EnableHwmon` is 1, and a measured session needs the preflight check of
+  which the DSDT drives under an ACPI mutex a kernel driver cannot take. `EnableHwmon` is 1 from 0.7.213, so
+  the reader runs by default; `EnableHwmon` 0 takes every port access away again. The window has no arbiter,
+  so a measured session needs the preflight check of
   [`design/fan.md`](design/fan.md). `HwmonBasePort` admits exactly three values: `0x0A20` (the default, also
   selected by 0), `0x0A00` and `0x0A10`, the three windows the DSDT declares on this board. Every other value
   is refused before a port is touched, because this reader writes three latch bytes to read one register, and
   a mistyped base such as `0x0CF8` (the PCI configuration address port) or `0x0CD0` (the FCH power-management
   index pair) would take those writes. Setting the fan duty from the driver is **not implemented** and waits
   for the owner's decision. The same page says what it would need.
-- CPU clock, undervolt and cores (KMD 0.7.212.1, `driver/shim/include/bc250_cpu.h`, ADR 0020). These messages go to
+- CPU clock, undervolt and cores (KMD 0.7.213.1, `driver/shim/include/bc250_cpu.h`, ADR 0020). These messages go to
   the firmware's **queue 3** (`C2PMSG_72`, `C2PMSG_98`, `C2PMSG_96`, the byte offsets `regcalc` computes,
   derived from the queue 0 constants and asserted at compile time), through the same owner lock as the GPU clock.
   The KMD stays the single SMU owner. Every range below is REPORTED by two community projects and measured by

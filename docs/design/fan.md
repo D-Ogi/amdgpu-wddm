@@ -4,9 +4,9 @@ Unit A has one case fan. The board turns it, not our driver. A Nuvoton NCT6686D 
 board holds the fan curve, and the BIOS "Fan Setting" option selects which curve it uses. The owner keeps
 that option as it is (2026-10-05).
 
-Until KMD 0.7.212.1 nothing in Windows could read that chip. The control application showed "The driver
+Until KMD 0.7.213.1 nothing in Windows could read that chip. The control application showed "The driver
 cannot read it yet" in its Fan row, and a lab session record held no fan speed. This page is the design of
-the read path, which KMD 0.7.212.1 adds. The path was written as revision 208 on `fan/read-nct6686` and
+the read path, which KMD 0.7.213.1 adds. The path was written as revision 208 on `fan/read-nct6686` and
 train b20 merged it into the lineage that ships, so the released 0.7.208.1 does not have it.
 
 **Part B, the write path, is NOT implemented.** The last section says what it would be, and why it waits
@@ -68,11 +68,14 @@ register, and both host tests assert that the model of the chip saw no write out
 1. **Read only.** See above. There is no write function in the shim at all, so a duty write cannot arrive
    by accident.
 2. **The Super I/O configuration ports are never touched.** See above.
-3. **The INF closes the gate.** The EC window has no arbiter. Windows gives the range to a `PNP0C02`
-   motherboard-resources node that drives nothing, and a third-party monitor drives the same window through
-   its own kernel helper. Two readers can interleave the latch writes and read each other's register, and no
-   lock of ours can prevent that. So the INF writes `EnableHwmon` 0, the policy checks every sample for
-   plausibility, and a measured session needs the preflight check below.
+3. **The gate is open from 0.7.213, and it still exists.** The reader is finished, so it rides the release on
+   and `EnableHwmon` 0 is the one switch that takes every port access away again (the release-train rule,
+   owner 2026-10-05). The reason the switch exists is unchanged: the EC window has no arbiter. Windows gives
+   the range to a `PNP0C02` motherboard-resources node that drives nothing, and a third-party monitor drives
+   the same window through its own kernel helper. Two readers can interleave the latch writes and read each
+   other's register, and no lock of ours can prevent that. So the policy checks every sample for
+   plausibility, the identity refuses a window that does not answer like this chip, and a measured session
+   needs the preflight check below.
 4. **The start never fails because of this.** `MmioStart` and `HangDetectorStart` set the precedent. A
    refusal sets the reader offline, writes one log line with every value it read, publishes an empty
    snapshot, and the desktop runs. Nobody loses a screen over a fan sensor.
@@ -158,11 +161,12 @@ This is what makes the give-up rule fire on a window that stops answering.
 
 ## The settings
 
-All four are `REG_DWORD` under `Services\bc250kmd\Parameters`. The INF writes the first two as 0.
+All four are `REG_DWORD` under `Services\bc250kmd\Parameters`. From 0.7.213 the INF writes `EnableHwmon` 1
+and `HwmonBasePort` 0; the other two stay absent, because they are values an operator pins.
 
 | Setting | Meaning |
 | --- | --- |
-| `EnableHwmon` | 0 (the default) means no port access happens at all. 1 starts the reader |
+| `EnableHwmon` | 1 (the default from 0.7.213, written by the INF and by the release installer) starts the reader. 0, and any other value, means no port access happens at all: it is this feature's bisect switch |
 | `HwmonBasePort` | the EC base. 0 or absent means the built-in `0x0A20`, measured on unit A. The only other admitted values are `0x0A00` and `0x0A10` |
 | `HwmonExpectId` | the pinned EC customer ID. Absent is stage 1: the driver reads the ID, logs it, and clears `ID_PINNED`. An operator reads the value once from that line and pins it. A value that differs is a refusal, because the reader never guesses which chip answered |
 | `HwmonDutyProven` | 1 after a lab trial has shown the duty read-back follow the fan. It only opens the `DUTY_PROVEN` flag, which is what lets a tool show a percentage |

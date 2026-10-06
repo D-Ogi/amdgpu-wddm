@@ -182,10 +182,10 @@ allocation is a candidate. `AddressAllowed` decides which address may be written
 HUBP0 is not recoverable on this part - there is no working GPU reset (facts M53) - so the second
 refusal stays behind the first on purpose, and neither is allowed to assume the other.
 
-## The DirectFlip handshake, kernel half (increment 2, 0.7.212.1)
+## The DirectFlip handshake, kernel half (increment 2, 0.7.213.1)
 
 The half below was written as revision 209 on `kmd209-iflip2`; train b20 merged it into the lineage that
-ships, so 0.7.212.1 is the first driver that has it and no 0.7.209 was ever released.
+ships, so 0.7.213.1 is the first driver that has it and no 0.7.209 was ever released.
 
 The compositor's user-mode driver may only answer `CheckDirectFlipSupport` TRUE about a surface the
 display core can actually read, and it must decide that from the same words and the same arithmetic that
@@ -216,7 +216,7 @@ only geometry `Bc250ScanoutAdmit` admits. The shell applies the geometry instead
 compositor's own chain being the desktop's size.
 
 **What the flag means and what closes it.** `EnableDirectFlipHandshake` (REG_DWORD, `Parameters`, default
-0) is ANDed at `WddmStart` with `EnableScanoutAdmit` and with every other start-latched fact the flip path
+1 from 0.7.213, and 0 is its bisect switch) is ANDed at `WddmStart` with `EnableScanoutAdmit` and with every other start-latched fact the flip path
 needs: `VidPnFlipEnabled`, mapped MMIO, VRAM, page-aligned VRAM bases, a non-empty POST geometry. The
 invariant is that a closed kernel path can never leave the shell agreeing to a flip this driver will
 refuse. The dangerous one is `EnableVidPnFlip`: with it closed, `SetVidPnSourceAddress` skips
@@ -250,7 +250,8 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
   entry (`driver/umd/dxvk/ddi-direct-flip.h`) is the application's driver, which the compositor never
   loads. M15.14 increment 1 supplies the missing entry: a `D3D11_1DDI_DEVICEFUNCS` front inside
   `bc250d3d_router.dll` which hosts the same Mesa device byte for byte
-  (`driver/umd/router/front-device.cpp`, value `DirectFlipFront` under the router key, absent means off).
+  (`driver/umd/router/front-device.cpp`, value `DirectFlipFront` under the router key, absent means on from
+  0.7.213.100-tester.15 and 0 is its bisect switch).
   That front counts the call, logs both resource records and writes FALSE, because increment 1 publishes
   no caps trailer and the rule's first clause answers `gated`
   (`driver/umd/router/front-direct-flip.h`). So DWM will not agree to a direct flip of its surfaces

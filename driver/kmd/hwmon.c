@@ -26,11 +26,16 @@
 //     driver cannot take an ACPI mutex, and the enter/select/exit sequence has no abort. We do not need them:
 //     the base is a constant on this board and the identity is readable from the EC window alone.
 //
-//  3. THE GATE IS CLOSED BY DEFAULT. The EC window has no arbiter: Windows gives the range to a PNP0C02
+//  3. THE GATE IS OPEN BY DEFAULT FROM 0.7.213, AND IT STILL EXISTS. The reader is a finished feature and the
+//     release-train rule is that a finished feature rides the release on, with one switch to bisect a
+//     regression (owner, 2026-10-05). So EnableHwmon is 1 in the INF and in the release defaults, and
+//     EnableHwmon 0 is the switch that takes every port access of this driver away again. The reason the switch
+//     exists is unchanged: the EC window has no arbiter. Windows gives the range to a PNP0C02
 //     motherboard-resources node that drives nothing, and a third-party monitor drives the same window through
 //     its own kernel helper. Two readers can interleave the latch writes and read each other's register, and
-//     no lock of ours can prevent it. So EnableHwmon is 0 in the INF, every sample is checked for
-//     plausibility, and a measured session needs the preflight check of docs/design/fan.md.
+//     no lock of ours can prevent it. So every sample is checked for plausibility, a window that does not
+//     answer like this chip is refused before anything is believed, and a measured session still needs the
+//     preflight check of docs/design/fan.md.
 //
 //  4. THE START NEVER FAILS BECAUSE OF THIS. MmioStart and HangDetectorStart set the precedent. A refusal sets
 //     Online FALSE, writes one log line with every value it read, publishes an empty snapshot, and the desktop
@@ -40,8 +45,10 @@
 //     running game (BD-054, and the overlay's summary poll cost 300 ms in trial 41). RUN_HWMON copies the
 //     published snapshot under SnapLock and nothing else, so it keeps NoAdapterSynchronization alone.
 //
-// Settings, REG_DWORD under Services\bc250kmd\Parameters, all closed or absent by every install:
-//   EnableHwmon        0 (default) means no port access happens at all. 1 starts the reader.
+// Settings, REG_DWORD under Services\bc250kmd\Parameters. EnableHwmon is 1 by every install from 0.7.213; the
+// rest are absent or 0:
+//   EnableHwmon        1 (the default, and what the INF and the release write) starts the reader. 0, and any
+//                      other value, means no port access happens at all: that is the bisect switch.
 //   HwmonBasePort      the EC base; 0 or absent means the built-in 0x0A20, measured on unit A. The only other
 //                      values this driver admits are 0x0A00 and 0x0A10, the two other windows the DSDT
 //                      reports. Anything else is refused before a port is touched: a registry DWORD may not
@@ -332,7 +339,7 @@ void HwmonStart(BC250_DEVICE* Device)
     owner->Samples = owner->Errors = owner->Retries = owner->Refusals = 0;
     RtlZeroMemory(&owner->Identity, sizeof(owner->Identity));
     RtlZeroMemory(&owner->Last, sizeof(owner->Last));
-    owner->Enabled = GuardReadSetting(HWMON_SETTING_ENABLE, 0) == 1;
+    owner->Enabled = GuardReadSetting(HWMON_SETTING_ENABLE, 1) == 1;
     if (!owner->Enabled) {
         owner->Reason = BC250_HWMON_REASON_GATED;
         owner->BasePort = 0;

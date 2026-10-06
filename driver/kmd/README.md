@@ -302,12 +302,14 @@ other candidate keeps the checks it had in 0.7.205.1, and the start behaves as t
 INF does not write this value, and the default is 1. The flip gates `EnableMmio`, `EnableDcnWrite` and
 `EnableVidPnFlip` are a different thing: they remove every hardware flip, DWM's own primary included.
 
-## DirectFlip handshake (M15.14 increment 2, 0.7.209.1)
+## DirectFlip handshake (M15.14 increment 2, 0.7.213.1)
 
 `EnableDirectFlipHandshake` decides whether this adapter start tells the compositor's user-mode driver
-that a client scan-out flip will be admitted. It is a REG_DWORD under the service's `Parameters` key, the
-INF does not write it, and **the default is 0: off.** The one process whose behaviour changes is the
-compositor, and a wrong "yes" costs a copy the OS no longer makes.
+that a client scan-out flip will be admitted. It is a REG_DWORD under the service's `Parameters` key, and
+from 0.7.213 **the default is 1: on,** written by the INF and by the release installer, with 0 as the one
+switch that puts the trailer away again. The one process whose behaviour changes is the compositor, and a
+wrong "yes" costs a copy the OS no longer makes, which is why the driver ANDs the value with every
+start-latched fact the flip path needs before it publishes anything.
 
 With the value at 1 the `DXGKQAITYPE_UMDRIVERPRIVATE` reply carries the `bc250_scanout_caps` trailer
 (`driver/contract/bc250_scanout_caps.h`): 24 bytes at offset 1496, after the adapter identity trailer,

@@ -27,7 +27,7 @@
  * was there; the context was not ready. What remains here is a real deviation from the contract text with a small
  * measured cost, and an instrument that prices it - no more than that.
  *
- * The fix (gate NotifyDpcInReport, default off: see WddmStart) calls DxgkCbNotifyDpc at the end of the report pass itself, which
+ * The fix (gate NotifyDpcInReport, default on: see WddmStart) calls DxgkCbNotifyDpc at the end of the report pass itself, which
  * is what the contract text describes, and then the DxgkCbQueueDpc whose only job was to bring that call about is
  * not made either: with the gate open a completion costs one notification instead of one notification plus an
  * otherwise empty dxgkrnl DPC. Reports made from a DDI or from a VSync path still queue it, because they have no

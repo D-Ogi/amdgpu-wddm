@@ -192,9 +192,9 @@ therefore the narrowest one that can be true of both surfaces.
 
 | Value | What the route log says | What happens |
 | --- | --- | --- |
-| absent, or 0 | `front=off` | the router that shipped, byte for byte |
+| 0 | `front=off` | the router that shipped, byte for byte: this feature's bisect switch |
 | any other value kind | `front=invalid` | off, and the log says the switch could not be read |
-| any non-zero DWORD | `front=on` | the front is installed over the hosted adapter table |
+| absent, or any non-zero DWORD | `front=on` | the front is installed over the hosted adapter table. Absent means on from 0.7.213.100-tester.15, where the front became a shipped feature |
 | non-zero, front not installed | `front=unavailable` | the D3D10.0 adapter entry, an incomplete hosted table, no free slot, or a route that ended on the CPU UMD |
 
 The value is read at every `OpenAdapter` call, so it is start-latched for `dwm.exe`. A change needs a

@@ -20,7 +20,8 @@
 // answer in increment 2, behind the kernel driver's own caps flag.
 //
 // HOW THE FRONT IS REACHED. `DirectFlipFront`, a REG_DWORD under the router's `DesktopRouter` key.
-// Absent, zero, or any other value kind means off, and off is byte for byte the router that shipped.
+// An absent value means on from 0.7.213.100-tester.15, where the front became a shipped feature. Zero
+// means off, and off is byte for byte the router that shipped; so does any other value kind.
 // The value is read per `OpenAdapter`, so it is start-latched for `dwm.exe`: a change needs a Windows
 // restart, which is also what a new compositor process needs (owner, 2026-10-03, after BD-060).
 //

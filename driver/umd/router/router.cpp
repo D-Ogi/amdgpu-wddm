@@ -20,8 +20,10 @@
 //     RouteLogDirectory   REG_SZ     when set: one line per OpenAdapter call to route-<exe>-<pid>.log there
 //     DirectFlipFront     REG_DWORD  M15.14: non-zero puts the D3D11_1 front (front-adapter.h) in front of the
 //                                    hosted UMD on the desktop route, so that the operating system can ask
-//                                    pfnCheckDirectFlipSupport. Absent or 0 = off, which is the router that
-//                                    shipped, byte for byte; any other value kind = invalid, which is also off
+//                                    pfnCheckDirectFlipSupport. Absent = on from this release, because the
+//                                    front is finished and rides the desktop; 0 = off, which is the router that
+//                                    shipped, byte for byte, and is this feature's bisect switch; any other
+//                                    value kind = invalid, which is also off
 //   HKLM\SOFTWARE\amdgpu-wddm\AppRouter       (applications only; never read for dwm.exe or a HostedClients entry)
 //     Mode                REG_SZ     cpu | allowlist | gpu-default. Absent = cpu (the application kill switch); any
 //                                    other string or value kind = invalid, which routes like cpu
@@ -99,9 +101,11 @@ static const size_t PathChars = 1024;
 static const DWORD ClientsBytes = 4096;
 static const DWORD AppListBytes = 16384;
 
-// The DirectFlipFront request. Off is the router that shipped: no front, no raised DDI, nothing to roll back.
-// A value of another kind is Invalid and is treated as off, because a desktop that cannot read its own switch
-// must keep the route it had.
+// The DirectFlipFront request. An absent value means Requested from this release: the front is a finished
+// feature and rides the desktop on, with the value 0 as the one switch that puts the shipped router back (the
+// release-train rule, owner 2026-10-05). Off is the router that shipped: no front, no raised DDI, nothing to
+// roll back. A value of another kind is Invalid and is still treated as off, because a desktop that cannot read
+// its own switch must take the route that needs nothing of this release.
 enum class Front { Off, Requested, Invalid };
 
 struct Config {
@@ -204,7 +208,7 @@ static void ReadConfig(Config *c)
         }
         c->require_switches = ReadDword(key, L"RequireKmdSwitches", &v) == Dword::Value && v == 0 ? 0 : 1;
         switch (ReadDword(key, L"DirectFlipFront", &v)) {
-        case Dword::Absent: c->front = Front::Off; break;
+        case Dword::Absent: c->front = Front::Requested; break;
         case Dword::Value: c->front = v ? Front::Requested : Front::Off; break;
         case Dword::Other: c->front = Front::Invalid; break;
         }
@@ -371,7 +375,7 @@ static void Report(const Config &c, const wchar_t *exe, const char *entry, const
 }
 
 // What the front column says, and what the words mean:
-//   off          DirectFlipFront is absent or zero. The hosted UMD's own D3D10.0 table reached the runtime.
+//   off          DirectFlipFront is zero. The hosted UMD's own D3D10.0 table reached the runtime.
 //   invalid      the value is of another kind. Treated as off; the word says the switch could not be read.
 //   on           the front is installed over the hosted adapter table and the runtime may offer D3D11_1.
 //   unavailable  the front was asked for and is NOT in the path: the D3D10.0 adapter entry (the front needs

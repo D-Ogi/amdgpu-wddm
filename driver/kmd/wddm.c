@@ -565,7 +565,7 @@ typedef struct _BC250_WDDM {
     volatile LONG ScanoutFlipFlags[4];
     volatile LONG RedirectedPresents;           // DxgkDdiPresent calls carrying Flags.RedirectedFlip
     // The operator's switch for the handshake, read once at WddmStart (EnableDirectFlipHandshake, absent
-    // = off) and ANDed with ScanoutAdmitGate. It is published to the compositor's user-mode driver in the
+    // = on from 0.7.213, and 0 is its bisect switch) and ANDed with ScanoutAdmitGate. It is published to the compositor's user-mode driver in the
     // bc250_scanout_caps trailer and nowhere else: the kernel driver's own admission does not read it, so
     // a closed switch can never leave the shell agreeing to a flip this driver would refuse.
     BOOLEAN DirectFlipHandshake;
@@ -2745,7 +2745,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         const BOOLEAN pathOpen = (BOOLEAN)(wddm->ScanoutAdmitGate && Device->VidPnFlipEnabled &&
             Device->VramEnabled && Device->Mmio != NULL && aligned &&
             Device->Post.Width != 0 && Device->Post.Height != 0);
-        const BOOLEAN asked = (BOOLEAN)(GuardReadSetting(L"EnableDirectFlipHandshake", 0) != 0);
+        const BOOLEAN asked = (BOOLEAN)(GuardReadSetting(L"EnableDirectFlipHandshake", 1) != 0);
         wddm->DirectFlipHandshake = (BOOLEAN)(asked && pathOpen);
         GuardLog("wddm: DirectFlip handshake %s", wddm->DirectFlipHandshake ? "on" : "off (no client flip offered)");
         // The inputs on their own line: one line holding all of them and the verdict text does not fit
@@ -2757,12 +2757,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  (ULONG)(Device->Mmio != NULL ? 1 : 0), (ULONG)(aligned ? 1 : 0),
                  (ULONG)(Device->Post.Width != 0 && Device->Post.Height != 0 ? 1 : 0));
     }
-    // C50, read once for this start: absent = OFF. The train rule is that a release start behaves as the last
-    // validated one did, and the last validated one is 0.7.208.1, which does not pair the notification here. The
-    // DDI text asks for the pairing and the hop it removes is pure latency, so the value is worth having; it is
-    // an arm the lab sets to 1 and prices against the same session's 0, not a change the release makes by itself.
-    // The value 0 is 0.7.208.1's behaviour exactly, which is what makes that pair readable.
-    wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 0) != 0);
+    // C50, read once for this start: absent = ON. The DDI text asks for the pairing (d3dkmddi.md:2392) and the
+    // hop it removes is pure latency, so the finished behaviour rides the release, which is the train rule the
+    // owner set on 2026-10-05. The value 0 is 0.7.208.1 behaviour exactly, which is what makes it the bisect
+    // switch of this feature: one restart with NotifyDpcInReport 0 prices the pairing against the driver that
+    // does not have it, in the same session shape.
+    wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
              wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
     // C48/C49: the ring-gap accounting, always on. One frequency read for both nodes; the counter and the

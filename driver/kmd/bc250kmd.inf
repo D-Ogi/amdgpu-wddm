@@ -137,18 +137,37 @@ HKR, Parameters, EnableHangBugcheck, 0x00010001, 0
 ; write in a PnP stop, so disabled by default. Preserve an explicitly enabled capture across
 ; an upgrade: AddReg may run before the old driver stops. DWORD | NOCLOBBER affects only logging.
 HKR, Parameters, KeepLog,           0x00010003, 0
+; ---- finished features: on by every install, each with one switch to bisect a regression -----------------------
+; The three values below are not gates in the sense of the block above. Each one carries a feature that is
+; written, reviewed and host-tested, and the release-train rule is that such a feature rides the driver on, with
+; one switch an operator closes to get the previous behaviour back (owner, 2026-10-05). Writing 0 into any of
+; them gives the behaviour of 0.7.208.1 for that one feature and nothing else.
+;
 ; The board's own hardware monitor, read only (hwmon.c, docs/design/fan.md): the Nuvoton NCT6686D Super I/O that
-; turns the case fan from the BIOS "Fan Setting" curve. 0 means no x86 port access happens at all. The EC window
-; has no arbiter, so a third-party monitor driving the same ports can corrupt our reads, which is why this is off
-; by default and why a measured session needs the preflight check of the design document. HwmonBasePort 0 means
-; the built-in 0x0A20, measured on unit A; the only other values the driver admits are 0x0A00 and 0x0A10, the two
-; other windows the DSDT reports on this board. Anything else is refused before a port is touched, because this
-; reader writes three latch bytes to read one register, and numbers such as 0x0CF8 (the PCI configuration address
-; port) or 0x0CD0 (the FCH power-management index pair) would take those writes. HwmonExpectId and
-; HwmonDutyProven are absent on purpose: the first pins the chip's customer ID once an operator has read it, the
-; second says a lab trial proved the duty read-back. Closed by every install, like every gate above.
-HKR, Parameters, EnableHwmon,       0x00010001, 0
+; turns the case fan from the BIOS "Fan Setting" curve. 1 starts the reader; 0 means no x86 port access happens
+; at all. The reader never writes a configuration, control, limit or duty register, so the fan stays in the
+; chip's own automatic mode whatever this value is, and a window that does not answer like this chip is refused
+; before any reading is believed. The EC window has no arbiter, so a third-party monitor driving the same ports
+; can corrupt our reads: every sample is checked for plausibility, and a measured session needs the preflight
+; check of the design document. HwmonBasePort 0 means the built-in 0x0A20, measured on unit A; the only other
+; values the driver admits are 0x0A00 and 0x0A10, the two other windows the DSDT reports on this board. Anything
+; else is refused before a port is touched, because this reader writes three latch bytes to read one register,
+; and numbers such as 0x0CF8 (the PCI configuration address port) or 0x0CD0 (the FCH power-management index pair)
+; would take those writes. HwmonExpectId and HwmonDutyProven are absent on purpose: the first pins the chip's
+; customer ID once an operator has read it, the second says a lab trial proved the duty read-back.
+HKR, Parameters, EnableHwmon,       0x00010001, 1
 HKR, Parameters, HwmonBasePort,     0x00010001, 0
+; The DirectFlip handshake, kernel half (wddm.c, docs/design/direct-flip-handshake.md, M15.14). 1 lets this start
+; tell the compositor's user-mode driver, in the scan-out caps trailer, that it will admit a client scan-out flip
+; and at what geometry. The driver ANDs it with every start-latched fact the flip path needs, so an open switch
+; on a start that cannot flip still publishes nothing. 0 makes the trailer absent, which is 0.7.208.1 byte for
+; byte at every buffer size.
+HKR, Parameters, EnableDirectFlipHandshake, 0x00010001, 1
+; The completion report pairs its own DPC-level notification (wddm.c, driver/kmd/notify_pairing.h, C50). 1 calls
+; DxgkCbNotifyDpc at the end of the report pass, which is what the DDI text asks for, and the otherwise empty
+; dxgkrnl DPC is not asked for at all: one DPC per completion fewer, measured at 12 to 20 us each. 0 is
+; 0.7.208.1 exactly, where the notification arrives with the next dxgkrnl DPC.
+HKR, Parameters, NotifyDpcInReport,  0x00010001, 1
 
 [Strings]
 Provider    = "amdgpu-wddm"
