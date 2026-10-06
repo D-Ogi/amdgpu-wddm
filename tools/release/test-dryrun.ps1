@@ -78,7 +78,12 @@ Check ($r.text -match 'would: copy payload\\control') 'phase 2 installs the cont
 Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\licenses') 'phase 2 installs the licence texts'
 Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
 $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
-Check ($r.text -match "DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); CpuUmdPath=") "desktop route DwmForceCpu $dwm from the defaults table"
+# DirectFlipFront is between them from 0.7.213.100-tester.15: the D3D11_1 front of route C is a finished
+# feature, so the installer writes it on, and the value is read from the same defaults table as DwmForceCpu.
+$front = [int]$m.defaults.desktop_router.DirectFlipFront
+Check ($r.text -match ("DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); " +
+                       "DirectFlipFront=$front \(new\); CpuUmdPath=")) `
+      "desktop route DwmForceCpu $dwm and DirectFlipFront $front from the defaults table"
 Check ($r.text -match 'AppRouter: Mode=gpu-default \(new\); Allow=\[dxdiag\.exe\] \(new\)') 'D3D11 gpu-default from the defaults table'
 $tbl = Get-Content -LiteralPath (Join-Path $Package 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
 Check (($m.defaults | ConvertTo-Json -Depth 6 -Compress) -eq ($tbl.defaults | ConvertTo-Json -Depth 6 -Compress)) 'manifest.json defaults = installer\registry-defaults.json defaults (one table)'
