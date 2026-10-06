@@ -145,8 +145,14 @@ namespace Bc250Mon
 
         // One LOG_SUMMARY on the next poll, because a person asked for it: the overlay's action table routes
         // mon.py, the buttons and the HTTP API here (Actions "graphics.summary"). Several requests between two
-        // polls are one summary, and a request pending while the pause marker exists is dropped with it.
-        public void RequestSummary() { Interlocked.Exchange(ref _summaryRequested, 1); }
+        // polls are one summary. Returns false when the pause marker exists, because then the panel reads nothing
+        // at all and the request would be dropped with it: the caller says so instead of promising a summary.
+        public bool RequestSummary()
+        {
+            if (File.Exists(_summaryPausePath)) return false;
+            Interlocked.Exchange(ref _summaryRequested, 1);
+            return true;
+        }
 
         internal void AddKernelSummary(Panel panel)
         {
@@ -165,6 +171,11 @@ namespace Bc250Mon
                     AddEscapeCheck(panel, output, summary ? "1" : "0");
                     AddCounterAge(panel, output, summary);
                 }
+                // A read that failed wrote no summary, so an operator's request is not spent. LOG_SUMMARY under a
+                // running game is the slow case and the subprocess has 5 s, so a timeout here is the likely one:
+                // without this the request is thrown away and the panel keeps the same old counters, with nothing
+                // to tell that apart from a summary that was written.
+                else if (summary) Interlocked.Exchange(ref _summaryRequested, 1);
             }
             else panel.Rows.Add(new Row("KMD counters", output == null ? "paused; no cached snapshot" :
                 "paused; snapshot " + _lastSummaryUtc.ToLocalTime().ToString("HH:mm:ss"), Level.Warn));

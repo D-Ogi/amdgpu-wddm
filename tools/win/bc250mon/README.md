@@ -142,8 +142,12 @@ or when the CLI printed no count (BD-054: a CLI at `C:\BC250\kmd\` from before
 KMD 0.7.184.1 sent all 16 pages of the ring as Level Two calls, a 280-420 ms game
 stall every 5 s). A CLI that predates `log summary only` shows as
 `summary unavailable: ... predates "log summary only"` when a summary is asked for.
-`graphics-summary.pause` in the data directory stops the read altogether, and a
-request pending while that marker exists is dropped with it.
+A read that fails wrote no summary, so the request is not spent: the next poll asks
+again, and the poll that succeeds is the one that consumes it.
+`graphics-summary.pause` in the data directory stops the read altogether, so the
+action refuses a request made while that marker exists and answers
+`no summary: graphics-summary.pause exists, the graphics panel is paused` instead of
+promising a summary nothing will write.
 
 The sampled time makes the observation's age visible. The existing `kmdinfo`
 panel remains available through the API; the overlay omits that duplicate panel

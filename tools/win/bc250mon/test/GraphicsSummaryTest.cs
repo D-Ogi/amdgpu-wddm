@@ -120,8 +120,10 @@ static class GraphicsSummaryTest
             Check(Value(panel,"KMD counters").StartsWith("paused; snapshot "),"cached snapshot visibly stale");
             Check(Value(panel,"KMD poll")==null,"paused poll makes no escape claim");
             panel=Poll(provider);Check(KmdInfoProvider.Calls==before,"successive pause does not call CLI");
-            // A request made while the marker exists is dropped with it, not held until the marker goes.
-            provider.RequestSummary();panel=Poll(provider);
+            // A request made while the marker exists is dropped with it, not held until the marker goes, and the
+            // action is told so rather than promising a summary nothing will write.
+            Check(!provider.RequestSummary(),"a request while paused is refused, not queued");
+            panel=Poll(provider);
             Check(KmdInfoProvider.Calls==before,"a request while paused sends nothing");
             var cold=new GraphicsPipelineProvider(dir);panel=Poll(cold);
             Check(KmdInfoProvider.Calls==before,"cold paused instance also skips CLI");
@@ -146,8 +148,21 @@ static class GraphicsSummaryTest
             KmdInfoProvider.Exit=2;panel=Poll(provider);
             Check(KmdInfoProvider.Calls==before+1 && Value(panel,"KMD live")=="log unavailable: stub-cli did not accept \"log 0\"","a CLI that refuses the page read is named");
             Check(Value(panel,"KMD poll")==null,"failed poll makes no escape claim");
-            provider.RequestSummary();panel=Poll(provider);
+            Check(provider.RequestSummary(),"a request outside the pause is accepted");
+            panel=Poll(provider);
             Check(Value(panel,"KMD live")=="summary unavailable: stub-cli predates \"log summary only\"","a CLI from before \"only\" is still named by the requested summary");
+            // A read that failed wrote no summary, so the request is not spent: the next poll asks again, and the
+            // one that succeeds is the one that consumes it.
+            panel=Poll(provider);
+            Check(KmdInfoProvider.LastArgs=="log summary only","a failed summary read leaves the request pending");
+            KmdInfoProvider.Exit=0;
+            KmdInfoProvider.Output=Ring(KmdInfoProvider.SummaryCounts,"").Replace("12 hardware","99 hardware");
+            panel=Poll(provider);
+            Check(KmdInfoProvider.LastArgs=="log summary only" &&
+                  Value(panel,"KMD counters")=="summary written by this poll, on request","the pending request writes the summary once the read works");
+            KmdInfoProvider.Output=good;
+            panel=Poll(provider);
+            Check(KmdInfoProvider.LastArgs=="log 0","and a written summary is not asked for a second time");
 
             KmdInfoProvider.Exit=1;before=KmdInfoProvider.Calls;panel=Poll(provider);
             Check(KmdInfoProvider.Calls==before+1&&Value(panel,"KMD live")=="log unavailable","normal failure still visible");
