@@ -1,5 +1,5 @@
-// Host test of the monitor's and the application's exports (Bc250Dpm, Bc250VideoMemory, and from 0.7.210
-// Bc250DpmCurve and Bc250Cpu). test-telemetry.ps1 pastes the real block from bc250kmd_cli.c where the marker
+// Host test of the monitor's and the application's exports (Bc250Dpm, Bc250VideoMemory, from 0.7.210
+// Bc250DpmCurve and Bc250Cpu, and Bc250Fan for the case fan control). test-telemetry.ps1 pastes the real block from bc250kmd_cli.c where the marker
 // below stands; the adapter-access helpers below replace the D3DKMT calls, so nothing here opens an
 // adapter or sends an escape. What the two new exports must get right and this test holds them to: the escape
 // flag per operation (a software snapshot for the curve and for a CPU READ, HardwareAccess for a CPU write), the
@@ -22,6 +22,8 @@ static unsigned escapeSize;
 static BC250_ESCAPE_DPM sent;
 static BC250_ESCAPE_DPM_CURVE sentCurve;
 static BC250_ESCAPE_CPU sentCpu;
+static BC250_ESCAPE_FAN sentFan;
+static int fanMode;
 static WCHAR adapterId[64];
 static ULONG segmentCount = 3;
 // The lab layout (driver/kmd/wddm.c WddmQuerySegment4): application local, aperture, table local.
@@ -73,6 +75,21 @@ static NTSTATUS TelemetryCpu(BC250_ESCAPE_CPU *c)
     }
     return 0;
 }
+static NTSTATUS TelemetryFan(BC250_ESCAPE_FAN *f)
+{
+    sentFan = *f;
+    if (fanMode == 1) return (NTSTATUS)0xC00000A3;
+    if (fanMode == 2) return 0;                                 // untouched: UNKNOWN_COMMAND
+    f->Status = BC250_ESCAPE_STATUS_DONE; f->Version = 0x000700D2u;
+    f->Flags = BC250_FAN_FLAG_ENABLED | BC250_FAN_FLAG_CONTROLLING;
+    f->State = 2; f->Rpm = 1180; f->Generation = 77;
+    if (fanMode == 3) { f->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; f->NtStatus = 0xC0000022u; }
+    if (fanMode == 4) { f->Status = BC250_ESCAPE_STATUS_REFUSED; f->NtStatus = 0; }
+    if (fanMode == 5) f->AbiVersion = 2;
+    if (fanMode == 6) f->Op = 9;
+    if (fanMode == 7) { f->Error = 5; f->NtStatus = 0xC000000Du; }
+    return 0;
+}
 // The same shape as the DLL: one function with the flag, and TelemetryEscape as its software-only wrapper, so
 // that the test sees exactly which flag each export asked for.
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
@@ -83,6 +100,7 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
     escapeCalls++; escapeSize = size;
     if (head->Command == BC250_ESCAPE_RUN_DPM_CURVE) return TelemetryCurve(data);
     if (head->Command == BC250_ESCAPE_RUN_CPU) return TelemetryCpu(data);
+    if (head->Command == BC250_ESCAPE_RUN_FAN) return TelemetryFan(data);
     sent = *d;
     if (escapeMode == 1) return (NTSTATUS)0xC00000A3;          // a KMD before the DPM escape
     if (escapeMode == 2) return 0;                             // untouched: UNKNOWN_COMMAND
@@ -273,6 +291,50 @@ int main(void)
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && escapeCalls == 1);
         cpuMode = 0; r.Op = BC250_CPU_OP_READ; escapeCalls = 0;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 0 && escapeCalls == 1);
+    }
+    {
+        /* The fan control (0.7.2xx, RUN_FAN): every operation is a software request, a write carries the generation
+           and its fields, a READ carries none of them, and a malformed request sends nothing. */
+        BC250_FAN_REQUEST r;
+        BC250_ESCAPE_FAN f;
+        memset(&r, 0, sizeof(r));
+        escapeCalls = 0; escapeHardware = -1;
+        CHECK(Bc250Fan(NULL, &f, sizeof(f)) == (LONG)0xC000000D);
+        CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D);     /* Size 0 */
+        r.Size = sizeof(r);
+        CHECK(Bc250Fan(&r, NULL, sizeof(f)) == (LONG)0xC000000D);
+        CHECK(Bc250Fan(&r, &f, 271) == (LONG)0xC000000D);
+        r.Op = 5; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D);
+        r.Op = BC250_FAN_OP_CURVE; r.Points = 9; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D);
+        r.Points = 0; r.Reserved = 1; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D);
+        r.Reserved = 0;
+        CHECK(escapeCalls == 0 && escapeHardware == -1);
+        r.Op = BC250_FAN_OP_READ; r.ExpectedGeneration = 77; r.FixedPct = 40; r.Store = 1;
+        CHECK(Bc250Fan(&r, &f, sizeof(f)) == 0 && escapeCalls == 1 && escapeHardware == 0);
+        CHECK(sentFan.Command == BC250_ESCAPE_RUN_FAN && sentFan.AbiVersion == BC250_FAN_ABI);
+        CHECK(sentFan.Op == BC250_FAN_OP_READ && sentFan.ExpectedGeneration == 0 && sentFan.FixedPct == 0 &&
+              sentFan.Store == 0);
+        CHECK(f.State == 2 && f.Rpm == 1180 && f.Generation == 77);
+        r.Op = BC250_FAN_OP_FIXED; r.FixedPct = 40; r.LeaseMs = 30000; r.Store = 0;
+        CHECK(Bc250Fan(&r, &f, sizeof(f)) == 0 && escapeHardware == 0);
+        CHECK(sentFan.Op == BC250_FAN_OP_FIXED && sentFan.FixedPct == 40 && sentFan.LeaseMs == 30000 &&
+              sentFan.ExpectedGeneration == 77);
+        r.Op = BC250_FAN_OP_CURVE; r.Profile = 0; r.Points = 2; r.CurveC[0] = 40; r.CurvePct[0] = 30;
+        r.CurveC[1] = 80; r.CurvePct[1] = 100; r.CurveC[2] = 90; r.CurvePct[2] = 100; r.LeaseMs = 0; r.Store = 1;
+        CHECK(Bc250Fan(&r, &f, sizeof(f)) == 0 && escapeHardware == 0);
+        CHECK(sentFan.Points == 2 && sentFan.CurveC[1] == 80 && sentFan.CurvePct[1] == 100 && sentFan.Store == 1);
+        CHECK(sentFan.CurveC[2] == 0 && sentFan.CurvePct[2] == 0);    /* nothing past Points travels */
+        r.Op = BC250_FAN_OP_READ;
+        fanMode = 1; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC00000A3);
+        fanMode = 2; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC00000BB);
+        fanMode = 3; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC0000022 && f.Error == 0);
+        fanMode = 4; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC00000A3);
+        fanMode = 5; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D);
+        fanMode = 6; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D);
+        /* A refused write names the rule in Error even though the call fails. */
+        r.Op = BC250_FAN_OP_FIXED; r.FixedPct = 10; r.LeaseMs = 30000;
+        fanMode = 7; CHECK(Bc250Fan(&r, &f, sizeof(f)) == (LONG)0xC000000D && f.Error == 5);
+        fanMode = 0;
     }
     escapeCalls = 0;
     statsMode = 1; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == (LONG)0xC0000001);

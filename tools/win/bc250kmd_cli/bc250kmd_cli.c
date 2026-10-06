@@ -633,6 +633,23 @@ typedef struct _BC250_CPU_REQUEST {
     ULONGLONG ExpectedGeneration;           // every operation but READ
 } BC250_CPU_REQUEST; // 56 bytes on Windows
 
+// What a caller asks the case fan control for (Bc250Fan). Size is sizeof(BC250_FAN_REQUEST), for the same reason as
+// BC250_CPU_REQUEST. tools/win/amdgpu_wddm_control mirrors it in src/Native.cs and its unit tests check the offsets
+// against this text.
+typedef struct _BC250_FAN_REQUEST {
+    ULONG Size;                             // sizeof(BC250_FAN_REQUEST), 104
+    ULONG Op;                               // BC250_FAN_OP_*
+    ULONG Profile;                          // CURVE: enum bc250_fan_profile (0 custom, 1 standard, 2 quiet, 3 performance)
+    ULONG Points;                           // CURVE with the custom profile: 2..8
+    ULONG CurveC[BC250_FAN_CURVE_SLOTS];    // degrees C, rising
+    ULONG CurvePct[BC250_FAN_CURVE_SLOTS];  // duty percent, never falling, 20..100
+    ULONG FixedPct;                         // FIXED: 20..100
+    ULONG LeaseMs;                          // CURVE (0 durable), FIXED and RENEW: 5000..300000
+    ULONG Store;                            // BOARD and a durable CURVE: 1 makes it the choice of every start
+    ULONG Reserved;                         // zero
+    ULONGLONG ExpectedGeneration;           // every operation but READ
+} BC250_FAN_REQUEST; // 104 bytes on Windows
+
 static NTSTATUS TelemetryEscape(void *data, unsigned size);
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
@@ -708,6 +725,51 @@ BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_HWMON ||
         data->AbiVersion != BC250_HWMON_ABI || data->Op != BC250_HWMON_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// The case fan control (BC250_ESCAPE_RUN_FAN, docs/design/fan.md Part B): READ for anybody, and BOARD, CURVE, FIXED
+// and RENEW for an administrator with the Generation of a READ of the same start. Every operation is adapter-owned
+// software state answered with NoAdapterSynchronization alone: a write leaves a request that the governor thread
+// applies at its next step, so no escape of this surface touches a port. A driver that does not know command 30
+// answers UNKNOWN_COMMAND, mapped to 0xC00000BB as for the other snapshots. A refused request returns its NtStatus,
+// and the reply's Error names the rule (enum bc250_fan_error) even then.
+BC250_CONTROL_API LONG WINAPI Bc250Fan(const BC250_FAN_REQUEST *request, BC250_ESCAPE_FAN *data, ULONG bytes)
+{
+    NTSTATUS status;
+    ULONG op, i;
+    typedef char FanAbiSizeCheck[(sizeof(BC250_ESCAPE_FAN) == 272 && sizeof(BC250_FAN_REQUEST) == 104) ? 1 : -1];
+    (void)sizeof(FanAbiSizeCheck);
+    if (!request || !data || bytes != sizeof(*data) || request->Size != sizeof(*request)) return (LONG)0xC000000D;
+    op = request->Op;
+    if (op > BC250_FAN_OP_RENEW || request->Points > BC250_FAN_CURVE_SLOTS || request->Reserved)
+        return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_FAN;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_FAN_ABI;
+    data->Op = op;
+    if (op != BC250_FAN_OP_READ) {
+        data->ExpectedGeneration = request->ExpectedGeneration;
+        data->Profile = request->Profile;
+        data->Points = request->Points;
+        for (i = 0; i < request->Points; i++) {
+            data->CurveC[i] = request->CurveC[i];
+            data->CurvePct[i] = request->CurvePct[i];
+        }
+        data->FixedPct = request->FixedPct;
+        data->LeaseMs = request->LeaseMs;
+        data->Store = request->Store;
+    }
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_FAN ||
+        data->AbiVersion != BC250_FAN_ABI || data->Op != op)
         return (LONG)0xC000000D;
     return 0;
 }
@@ -1101,19 +1163,125 @@ static void HwmonLine(const BC250_ESCAPE_HWMON *h)
            h->Samples, h->Errors, h->Retries, h->Refusals);
 }
 
+// The names of the fan control's enumerations (driver/shim/include/bc250_fan.h), for the "fanctl" line.
+static const char *FanName(unsigned long value, const char *const *names, unsigned long count)
+{
+    return value < count ? names[value] : "?";
+}
+
+static const char *const g_fanStates[] = { "off", "board", "curve", "fixed", "emergency", "doubt", "fault" };
+static const char *const g_fanModes[] = { "board", "curve", "fixed" };
+static const char *const g_fanProfiles[] = { "custom", "standard", "quiet", "performance" };
+static const char *const g_fanReasons[] = { "none", "user", "stop", "power", "unload", "watchdog", "lease",
+                                            "temperature", "reader", "handshake", "readback", "mode", "stopped",
+                                            "disabled", "bugcheck" };
+static const char *const g_fanErrors[] = { "ok", "mode", "profile", "points", "temperature", "duty", "lease" };
+static const char *const g_fanGates[] = { "ok", "setting", "reader", "chip" };
+
+// One line of the fan control's state. The "fan " line above it stays as it was: the lab samplers read it.
+static void FanCtlLine(const BC250_ESCAPE_FAN *f)
+{
+    unsigned long i;
+
+    printf("fanctl state=%s mode=%s profile=%s target_pct=%lu applied_pct=%lu raw=%lu readback=%lu rpm=%lu "
+           "guard_c=%.1f enabled=%d controlling=%d emergency=%d leased=%d lease_ms=%lu fault=%d paused=%d "
+           "held_back=%d gate=%s reason=%s doubt=%s takeovers=%llu handbacks=%llu writes=%llu failures=%llu "
+           "emergencies=%llu lease_expiries=%llu watchdog=%llu curve=",
+           FanName(f->State, g_fanStates, ARRAYSIZE(g_fanStates)), FanName(f->Mode, g_fanModes, ARRAYSIZE(g_fanModes)),
+           FanName(f->Profile, g_fanProfiles, ARRAYSIZE(g_fanProfiles)), f->TargetPct, f->AppliedPct, f->WrittenRaw,
+           f->ReadbackRaw, f->Rpm, f->GuardMc / 1000.0, (f->Flags & BC250_FAN_FLAG_ENABLED) ? 1 : 0,
+           (f->Flags & BC250_FAN_FLAG_CONTROLLING) ? 1 : 0, (f->Flags & BC250_FAN_FLAG_EMERGENCY) ? 1 : 0,
+           (f->Flags & BC250_FAN_FLAG_LEASED) ? 1 : 0, f->LeaseMs, (f->Flags & BC250_FAN_FLAG_FAULT) ? 1 : 0,
+           (f->Flags & BC250_FAN_FLAG_PAUSED) ? 1 : 0, (f->Flags & BC250_FAN_FLAG_HELD_BACK) ? 1 : 0,
+           FanName(f->Gate, g_fanGates, ARRAYSIZE(g_fanGates)), FanName(f->Reason, g_fanReasons, ARRAYSIZE(g_fanReasons)),
+           FanName(f->DoubtReason, g_fanReasons, ARRAYSIZE(g_fanReasons)), f->Takeovers, f->Handbacks, f->Writes,
+           f->Failures, f->Emergencies, f->LeaseExpiries, f->WatchdogFires);
+    for (i = 0; i < f->Points && i < BC250_FAN_CURVE_SLOTS; i++)
+        printf("%s%lu:%lu", i ? "," : "", f->CurveC[i], f->CurvePct[i]);
+    if (f->Points == 0) printf("none");
+    printf(" saved_mode=0x%02lX saved_target=%lu\n", f->SavedMode, f->SavedTarget);
+}
+
+// "fan auto [store]", "fan curve [standard|quiet|performance] [store]", "fan set <pct> <seconds>",
+// "fan renew <seconds>". Each one reads first for the Generation, sends the request and prints the state the driver
+// answered with. The governor thread applies the request at its next step, so a second "fan" a second later shows it
+// in the chip. "store" makes "auto" or a durable curve the choice of every start; a fixed duty is never stored.
+static int FanControl(int argc, WCHAR **argv)
+{
+    BC250_FAN_REQUEST r;
+    BC250_ESCAPE_FAN f;
+    const WCHAR *verb = argv[2];
+    LONG status;
+    int next = 3;
+
+    memset(&r, 0, sizeof(r));
+    r.Size = sizeof(r);
+    r.Op = BC250_FAN_OP_READ;
+    status = Bc250Fan(&r, &f, sizeof(f));
+    if (status < 0) { PrintStatus("fanctl", status); return 1; }
+    r.ExpectedGeneration = f.Generation;
+    if (!_wcsicmp(verb, L"auto")) {
+        r.Op = BC250_FAN_OP_BOARD;
+    } else if (!_wcsicmp(verb, L"curve")) {
+        r.Op = BC250_FAN_OP_CURVE;
+        r.Profile = 1;      // BC250_FAN_PROFILE_STANDARD
+        if (argc > next && _wcsicmp(argv[next], L"store")) {
+            if (!_wcsicmp(argv[next], L"standard")) r.Profile = 1;
+            else if (!_wcsicmp(argv[next], L"quiet")) r.Profile = 2;
+            else if (!_wcsicmp(argv[next], L"performance")) r.Profile = 3;
+            else { fprintf(stderr, "fan curve: standard, quiet or performance\n"); return 2; }
+            next++;
+        }
+    } else if (!_wcsicmp(verb, L"set")) {
+        if (argc != 5) { fprintf(stderr, "usage: fan set <percent 20..100> <seconds 5..300>\n"); return 2; }
+        r.Op = BC250_FAN_OP_FIXED;
+        r.FixedPct = wcstoul(argv[3], NULL, 10);
+        r.LeaseMs = wcstoul(argv[4], NULL, 10) * 1000u;
+        next = 5;
+    } else if (!_wcsicmp(verb, L"renew")) {
+        if (argc != 4) { fprintf(stderr, "usage: fan renew <seconds 5..300>\n"); return 2; }
+        r.Op = BC250_FAN_OP_RENEW;
+        r.LeaseMs = wcstoul(argv[3], NULL, 10) * 1000u;
+        next = 4;
+    } else {
+        fprintf(stderr, "fan: auto [store] | curve [standard|quiet|performance] [store] | set <pct> <s> | renew <s>\n");
+        return 2;
+    }
+    if (argc > next && !_wcsicmp(argv[next], L"store") && (r.Op == BC250_FAN_OP_BOARD || r.Op == BC250_FAN_OP_CURVE)) {
+        r.Store = 1;
+        next++;
+    }
+    if (argc > next) { fprintf(stderr, "fan %ls: unexpected argument %ls\n", verb, argv[next]); return 2; }
+    status = Bc250Fan(&r, &f, sizeof(f));
+    if (status < 0) {
+        PrintStatus("fanctl", status);
+        if (f.Error) fprintf(stderr, "fanctl refused: %s\n", FanName(f.Error, g_fanErrors, ARRAYSIZE(g_fanErrors)));
+        if (f.Gate) fprintf(stderr, "fanctl gate: %s\n", FanName(f.Gate, g_fanGates, ARRAYSIZE(g_fanGates)));
+        return 1;
+    }
+    FanCtlLine(&f);
+    return 0;
+}
+
 // "fan [count [interval ms]]". The interval has a floor of one second, because the chip caches its registers for
 // about that long and the driver samples at exactly that rate: a faster poll returns the same snapshot and only
-// spends escapes.
+// spends escapes. Each sample adds the fan control's state; a driver without it (0xC00000BB) is reported once.
 static int Fan(int argc, WCHAR **argv)
 {
     BC250_ESCAPE_HWMON h;
+    BC250_FAN_REQUEST r;
+    BC250_ESCAPE_FAN f;
     unsigned long count = 1, interval = 1000, i;
     LONG status;
 
+    if (argc >= 3 && !iswdigit(argv[2][0])) return FanControl(argc, argv);
     if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
     if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
     if (count == 0) count = 1;
     if (interval < 1000) interval = 1000;
+    memset(&r, 0, sizeof(r));
+    r.Size = sizeof(r);
+    r.Op = BC250_FAN_OP_READ;
     for (i = 0; i < count; i++) {
         if (i) Sleep(interval);
         status = Bc250Hwmon(&h, sizeof(h));
@@ -1124,6 +1292,9 @@ static int Fan(int argc, WCHAR **argv)
                    h.EcVersion & 0xFF, (h.EcBuild >> 8) & 0xFF, h.EcBuild & 0xFF, (h.EcBuild >> 16) & 0xFF,
                    h.CustomerId, h.FanPresentMask, h.DutyPresentMask, h.Generation);
         HwmonLine(&h);
+        status = Bc250Fan(&r, &f, sizeof(f));
+        if (status < 0) { if (i == 0) PrintStatus("fanctl", status); }
+        else FanCtlLine(&f);
     }
     return 0;
 }
@@ -3178,6 +3349,8 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
                         "       bc250kmd_cli fan [count [interval ms]]    (the board's hardware monitor, docs/design/fan.md)\n"
+                        "       bc250kmd_cli fan auto [store] | fan curve [standard|quiet|performance] [store]\n"
+                        "       bc250kmd_cli fan set <percent> <seconds> | fan renew <seconds>    (admin; the fan control)\n"
                         "       bc250kmd_cli dpm curve [set <mV>... | offset <mV> | preset mild|medium|deep | keep | cancel | reset]\n"
                         "       bc250kmd_cli cpu [readback | set [clock <MHz>] [uv <steps>] [temp <C>] [window <ms>] | keep | cancel | reset]\n"
                         "       bc250kmd_cli cpu cores 6|8 | cpu search [steps] | cpu step   (docs/design/tuner.md)\n"
@@ -3217,7 +3390,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
-    if (!_wcsicmp(argv[1], L"fan") && argc <= 4) return Fan(argc, argv);
+    if (!_wcsicmp(argv[1], L"fan") && argc <= 5) return Fan(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
     if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
         return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);
