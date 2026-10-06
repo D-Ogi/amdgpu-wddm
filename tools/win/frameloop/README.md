@@ -64,8 +64,12 @@ of a back buffer, the clear takes a `float4` and the pixel shader writes a `floa
    slope and the fixed intercept, then up to six refinement rounds.
 2. **Sustained**: up to three short (0.5 s) passes of the *real* frame loop, each correcting the iteration
    count against the GPU busy time the loop actually produced. This matters on a GPU that boosts: on the 4090
-   the isolated fit was 14 % low because the sustained load drops the clock. On the lab, with clocks pinned at
-   the operating point, these rounds should barely move it.
+   the isolated fit was 14 % low because the sustained load drops the clock. The lab boosts too since the KMD
+   DPM shipped (load-driven clock, a 1500 MHz ceiling, a 500 MHz idle state and a thermal step under 1000 MHz),
+   so these rounds do move there, and two arms run back to back are two operating points. Each run therefore
+   records its own: `index.json` carries `point_before` and `point_after` per run (`clock read`: MHz, VID,
+   temperature) and the set carries the `cu_record` from the driver's Parameters key. Read them before any
+   comparison; K178 is the precedent, where every game rate of sessions 347-403 was silently a 24 CU number.
 
 The dispatch shape stays fixed for a whole run (`--groups G`, 64 threads per group); only the iteration count
 is calibrated. `calibration.gpu_busy_error_pct` in the JSON is the measured miss against what was asked, and
@@ -94,6 +98,11 @@ amdgpu_wddm_frameloop [options]
                            sequential or batch, and is capped at --lists)
   --submit MODE            interleaved (default: record a list, submit it, one call each), sequential (record
                            all, then one call each), batch (record all, then all K in one call)
+  --queues N               direct queues the frame's lists are spread over, 1 or 2 (default 1)
+  --handoff MODE           with --queues 2: none (default, the second queue stays idle), per-list (list k on
+                           queue k%2, each waiting on the fence the previous list signalled), per-frame (the
+                           frame's lists on queue frame%2, one crossing a frame)
+  --signal-per-list        Signal the handoff fence after every ExecuteCommandLists, not once per frame
   --size WxH               borderless window of this size instead of the whole output
   --warp | --adapter-luid HI:LO | --adapter-index N   adapter choice (default: first hardware adapter)
   --ts-hz HZ               the frequency the GPU timestamp counter really runs at, 1e6..1e10, used for every
@@ -102,7 +111,12 @@ amdgpu_wddm_frameloop [options]
   --calibrate-every N      GetClockCalibration every N frames, 1..4096 (default 32)
   --warmup N               frames excluded from the distributions, 0..1000 (default 10)
   --raw-frames N           per-frame records written to the JSON, 0..131072 (default 20000)
-  --frame-statistics       also call GetFrameStatistics after each Present
+  --frame-statistics       also call GetFrameStatistics after each Present, which is what the vblank grid
+                           and the phase of every GPU gap are fitted from
+  --vblank-phase-us US     a gap counts as vblank-aligned when it ends this close after a vblank,
+                           10..5000 (default 300); the JSON also reports the uniform share of that window
+  --icd-log PATH           read the winsys knobs and counters back from this ICD log (default: the path
+                           BC250_DEFERRED_LOG names, else the ICD's own path for this process)
   --no-timestamps          run without GPU timestamp queries (CPU numbers only)
   --debug-layer            enable the D3D12 debug layer
   --out PATH               JSON output file (default: no file, stdout summary only)
@@ -156,7 +170,7 @@ deliberately wrong one (ratio 10.0005, `cross_clock_usable` false), and the Pres
 
 ## JSON schema
 
-One object; `"schema": 2`. Every duration is in milliseconds unless the key says `ticks` or `qpc`.
+One object; `"schema": 4`. Every duration is in milliseconds unless the key says `ticks` or `qpc`.
 
 | key | meaning |
 | --- | --- |
@@ -173,6 +187,8 @@ One object; `"schema": 2`. Every duration is in milliseconds unless the key says
 | `summary.cpu_ms` | `frame_interval`, `fence_wait`, `waitable_wait`, `cpu_work`, `record` (wall time of the record phase), `record_cpu_total` (summed over the recording threads), `execute_total`, `signal`, `present`, `frame_cpu_total` |
 | `summary.gpu_ms` | `busy` (sum of list durations), `span_first_to_last_list`, `intra_frame_gap_total`, `intra_frame_gap_each`, `inter_frame_gap`, `idle_per_frame`, `idle_awaiting_submission_per_frame`, `idle_after_submission_per_frame` |
 | `summary.latency_ms` | `submit_to_gpu_start`, `gpu_end_to_wake`, `gpu_end_to_wake_blocking` |
+| `gaps` | where each GPU gap ends against the display's refresh grid (needs `--frame-statistics`): `idle_ms` and `after_submission_ms` (the distributions of every gap and of its part after the submission), then for gaps `>= 1 ms` and `< 1 ms` a `count`, an `aligned` count and an aligned `share`, with `phase_window_us`, `uniform_share` (the share the same window would collect if nothing waited for a vblank), `phase_bracket_ms` and `aligned_share_usable` (below), `frame_statistics_calls` and `frame_statistics_failures`, and the nested `vblank` fit (`fitted`, `samples`, `hz`, `period_ms`, `origin_qpc`, `residual_us`) |
+| `icd` | what the winsys reported in its own log over the same run: `log` (the file read), `header`, `submit_line` (the two lines kept verbatim), then the fields parsed out of them: `self_wait` (the arm of `BC250_SELF_WAIT`), `coalesce`, `wait_self_seen`, `wait_self_dropped`, `wait_self_busy`, `wait_objects`, `wait_dropped`, `wait_map_dropped`, `wait_calls`. Null when no log was found, so an arm whose counters did not move cannot be mistaken for one that ran. `wait_dropped` is the sum of both drops, so only `wait_map_dropped` compares with a log from before `BC250_SELF_WAIT`; a nonzero `wait_self_busy` means one queue's self-signal record had more than one user, and the arm is then not what it says. |
 | `clock_calibration[]` | every `GetClockCalibration` point: `qpc`, `gpu_ticks`, `cpu_ticks`, `cost_ms` |
 | `frames[]` | the raw records, one per line |
 | `result` | `status` PASS/FAIL, `failure`, `failure_where`, `device_removed_reason`, `escape`, `wait_timed_out`, `stop_requested` |
@@ -189,6 +205,12 @@ A raw frame record (all values as measured, nothing reduced):
  "retired": 40, "drained": false, "ts_valid": true, "clock_point": 1,
  "lists": [[<exec_qpc>, <exec_done_qpc>, <gpu_begin_ticks>, <gpu_end_ticks>], ...]}
 ```
+
+With `--frame-statistics` each record also carries `present_count`, `sync_qpc` and `sync_refresh` straight from
+`DXGI_FRAME_STATISTICS`. The `(sync_refresh, sync_qpc)` pairs are the vblank grid: a least-squares line through
+them gives the refresh period and an origin, and that turns any QPC into a phase inside the refresh interval.
+The grid is reported in `gaps.vblank` and is believed only between 20 and 400 Hz and within a 1 ms worst
+residual, so a mode change in the middle of a run disables the shares instead of inventing them.
 
 `wait` is the wait **this** frame performed, which retires frame `retired`; so the wake latency of frame `M`
 is `frames[M+L].wait[1]` against frame `M`'s last `gpu_end`. `clock_point` indexes `clock_calibration[]`:
@@ -222,6 +244,21 @@ an ETW trace or a register timeline taken over the same run.
 - `gpu_end_to_wake` is only meaningful when the loop is GPU-bound. When it is Present-bound the fence has long
   completed before the wait is reached and the value is the CPU's lateness (11.7 ms at `--gpu-ms 0`), not the
   driver's. `gpu_end_to_wake_blocking` keeps only the waits that actually blocked.
+- **An aligned share is read against `gaps.uniform_share`, never against a remembered per cent.** The share is
+  the window over the refresh period (1.8 % for the default 300 us at 60 Hz), so only a share well above it
+  says the gaps end at vblanks. `gaps.vblank.fitted` false means there is no usable grid and every share is
+  null. So does `gaps.aligned_share_usable` false: the phase is taken on a GPU timestamp mapped into QPC, and
+  a fitted origin has an uncertainty of its own (`gaps.phase_bracket_ms`, 0.065-0.102 ms over the 16 lab runs
+  so far). Above half the one-sided phase window that uncertainty alone can move an aligned population out of
+  the window, so the shares are withheld rather than reported as an instrument artefact.
+- **`gaps.frame_statistics_failures` tells a failed call from a grid that did not fit.** A nonzero count means
+  the driver refused `GetFrameStatistics`, which is a different fault from samples that no line fits.
+- **`icd.self_wait` plus its counters are the witness of the arm that ran.** An `elide` run whose
+  `wait_self_dropped` stayed at zero elided nothing, whatever the frame rate did; a `keep` run whose counter
+  moved is not the control it claims to be; a `count` run must see matches and drop none; and any run with
+  `wait_self_busy` above zero had a second user of the record. `run-frameloop.py` checks all of that itself and
+  prints `COMPARISON WITHHELD` with the reason instead of a comparison. Session 322 is why: there the
+  mechanism counters all moved, the kernel wait calls fell to 17, and the frame rate fell 1.7 % (K142).
 - `--frame-latency-waitable N` moves the throttle from the fence wait to the waitable object: on the 4090 the
   fence wait drops from 11.7 ms to 0.006 ms at the same fps, and `gpu_end_to_wake_blocking` then has almost no
   samples. Useful as a control, not as the default.
@@ -290,6 +327,44 @@ it. Two independent axes:
 `cpu_ms.record` is what the frame paid (wall time of the record phase) and `cpu_ms.record_cpu_total` is what
 the machine paid (summed over the threads). With one thread they are equal.
 
+## Two queues and the handoff (the C48 arms)
+
+A third axis, added for the ring-gap class the game sessions show (gaps of at least 4 ms whose end falls within
+300 us after a vblank, sessions 418-420): make a cross-queue dependency explicit and see whether the client
+produces the same class on its own.
+
+- `--queues 2` creates a second direct queue. On its own it changes nothing else: every list still goes to
+  queue 0, which is the control that separates "another queue exists" from "work crosses it".
+- `--handoff per-list` sends list `k` to queue `k%2` and makes each submission wait on a fence the previous
+  submission signalled, so a frame of 7 lists crosses six times (measured: 6.7 waits a frame, because the
+  crossing before the last list is counted too). `per-frame` sends the frame's lists to queue `frame%2`, about
+  one crossing a frame (measured 1.1).
+- `--signal-per-list` keeps one queue and only adds a `Signal` after every `ExecuteCommandLists`: more
+  scheduler-visible events, the same GPU work, no cross-queue dependency. It is the arm that separates "a
+  signal a list" from "a wait a list".
+- **The frame's last list never leaves queue 0.** It clears and draws the back buffer, and a flip-model back
+  buffer may only be written by the queue its swap chain was created with: writing it from the second queue
+  removed the device with `DXGI_ERROR_ACCESS_DENIED` as the removal reason (this PC's 4090, 2026-10-06, arm
+  `e-2q-per-frame` of `src\c48-host-runs.ps1`). The handoff therefore always crosses back into queue 0 before
+  that list, which is also the dependency the arm wants: the draw cannot start before the other queue's
+  dispatches have finished. A handoff over `--submit batch`, over fewer than three lists (per-list) or two
+  lists (per-frame), or without `--queues 2`, is a usage error rather than a mode that silently does nothing.
+
+What the arms are read from: `queue_handoff` in the JSON (`fence_signals`, `fence_waits`, `queues_created`,
+`last_queue`) is the arm's own witness - a handoff whose fence never moved did not run - and
+`summary.gaps.count_ge_4ms`, `per_second_ge_4ms` and `aligned_share_ge_4ms` are the class. The lab set is
+`c48-handoff` in `lab\sets.json` and the pre-registered rule is applied in one place only:
+`<BC250_ROOT>\scratch\m15\etw\c48\c48repro.py` (`--selftest` checks the rule itself on synthetic arms). The
+host matrix
+`src\c48-host-runs.ps1` runs the five arms here and refuses one whose fences did not move.
+
+On this 4090 the arms cost nothing measurable in frame rate (169.0, 168.8, 168.9, 168.6, 168.8 fps for base,
+signal-per-list, 2q-none, 2q-per-list, 2q-per-frame), but `idle_after_submission` p50 rises from 0.106 ms to
+0.840 ms a frame under `per-list` and 0.298 ms under `per-frame`: the crossing does add GPU-side idle after
+submission even on a driver that has no such gap class. No vblank grid fits on this host (every
+`GetFrameStatistics` sample is unusable in a windowed flip chain here), so the aligned shares - and therefore
+the decision - can only come from the lab.
+
 ### Host results, 4090, 1280x720, 8 s, gpu-ms 12, latency 2
 
 | case | threads | submit | fps | record wall | record CPU total | execute total | GPU idle/frame | interval |
@@ -352,7 +427,7 @@ configuration (12.06 / 0.124 / 11.99 / 0.115) within this host's run-to-run nois
 ## Running it on unit A
 
 ```
-python tools/win/frameloop/lab/run-frameloop.py quick|mt-gpu|mt-present|gap|gap-queue [--trial NAME] [--dry-run]
+python tools/win/frameloop/lab/run-frameloop.py quick|mt-gpu|mt-present|gap|gap-queue|self-wait|c48-handoff [--trial NAME] [--dry-run]
 ```
 
 An SSH session on the lab lands in session 0, where a process gets no desktop and can create no window, so a
@@ -384,11 +459,21 @@ lab side asks whether that run's **worst case** (`seconds + 30`) still fits; if 
 skipped rather than overrunning.
 
 The sets are in `lab\sets.json` (`quick` about 53 s, `mt-gpu` and `mt-present` 103 s, `gap` 93 s, `gap-queue`
-73 s, each with 170 s available), one `what` line per set saying what it is for; `--dry-run` prints the plan
-and the commands and touches nothing.
+73 s, `self-wait` 69 s, `c48-handoff` 153 s, each with 170 s available), one `what` line per set saying what
+it is for; `--dry-run` prints the plan and the commands and touches nothing.
+
+A run may also carry **driver knobs of its own**, as an `env` object next to its `args`, and `self-wait` is the
+set that uses it: the same configuration twice, once with `BC250_SELF_WAIT=keep` and once with `elide`, so the
+two arms of the ICD's self-wait elision are one trial. Only `BC250_*` names are accepted, checked here and
+again on the lab, and a value that carries a quote or a `%` is refused; the knobs become `set "NAME=VALUE"`
+lines in that run's wrapper, so they reach the client's process alone and never the desktop's own ICD, which a
+machine-wide cfg file would also move. Each run's knobs are written into its record. The lab side also points
+`BC250_DEFERRED_LOG` at `<run>-icd.log` in the result directory, which is the file the client reads back for
+its `icd` block, so the arm and its counters come home with the trial.
 
 `lab\host-checks.ps1` is the gate for the runner itself, on this machine, with no lab involved: it generates the
-`.cmd` wrapper through `lab\cmd-lines.ps1` and asserts it is exactly four lines of the exact expected shape,
+`.cmd` wrapper through `lab\cmd-lines.ps1` and asserts it is exactly four lines of the exact expected shape
+(plus one `set` line per knob, and nothing but our own knobs),
 runs it through `cmd.exe` to check that the redirection, the log content and the exit code all arrive, refuses
 the two shapes that have already gone wrong, checks that the lab script parses and still uses the generator,
 and checks the four timeouts and the plan fields the two halves share. Both of those wrapper defects were found

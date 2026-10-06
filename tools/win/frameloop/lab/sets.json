@@ -1,57 +1,614 @@
 {
-  "note": "Configuration sets for run-frameloop.py. Every run is one one-shot scheduled task in unit A's console session; seconds is the client's own loop length, and the runner refuses a set whose runs plus their task overhead would not fit the 3-minute lab bound. One set is one trial: run them in the order quick, mt-gpu, mt-present, gap, gap-queue.",
-  "ts_hz_note": "--ts-hz 100000000 is an interim measure for BD-056: our KMD answers CalibrateGpuClock with the CPU performance counter (10 MHz) while the command processor writes a 100 MHz counter, so without it every GPU-side number is 10x and the --gpu-ms calibration aims at a tenth of the work it was asked for (trial quick-20261002T225506Z: 12 ms asked, 1.217 ms delivered). REMOVE IT once KMD 0.7.197 answers from GOLDEN_TSC, and confirm by the ratio column staying at 1.00 without it.",
-  "common": ["--buffers", "2", "--present-interval", "0", "--warmup", "10", "--raw-frames", "4000",
-             "--ts-hz", "100000000"],
-  "sets": {
-    "quick": {
-      "what": "First contact: does the client run on our stack, does the GPU work land where it was asked for now that --ts-hz supplies the real counter frequency (BD-056), and what is the idle per frame with and without GPU work.",
-      "runs": [
-        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
-        {"name": "g12-l7", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2"]},
-        {"name": "g0-l7", "seconds": 12, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2"]}
-      ]
+ "note": "Configuration sets for run-frameloop.py. Every run is one one-shot scheduled task in unit A's console session; seconds is the client's own loop length, and the runner refuses a set whose runs plus their task overhead would not fit the 3-minute lab bound. One set is one trial: run them in the order quick, mt-gpu, mt-present, gap, gap-queue.",
+ "ts_hz_note": "--ts-hz 100000000 is an interim measure for BD-056: our KMD answers CalibrateGpuClock with the CPU performance counter (10 MHz) while the command processor writes a 100 MHz counter, so without it every GPU-side number is 10x and the --gpu-ms calibration aims at a tenth of the work it was asked for (trial quick-20261002T225506Z: 12 ms asked, 1.217 ms delivered). REMOVE IT once KMD 0.7.197 answers from GOLDEN_TSC, and confirm by the ratio column staying at 1.00 without it.",
+ "common": [
+  "--buffers",
+  "2",
+  "--present-interval",
+  "0",
+  "--warmup",
+  "10",
+  "--raw-frames",
+  "4000",
+  "--ts-hz",
+  "100000000"
+ ],
+ "sets": {
+  "quick": {
+   "what": "First contact: does the client run on our stack, does the GPU work land where it was asked for now that --ts-hz supplies the real counter frequency (BD-056), and what is the idle per frame with and without GPU work.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
     },
-    "mt-gpu": {
-      "what": "The owner's multithreading question with GPU work per frame (12 ms, GPU-bound, so the idle that remains is the submitted-to-start latency): record threads 1 and 4, one ExecuteCommandLists per list against all 7 in one call.",
-      "runs": [
-        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
-        {"name": "g12-t1-interleaved", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "interleaved"]},
-        {"name": "g12-t1-sequential", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "sequential"]},
-        {"name": "g12-t1-batch", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "batch"]},
-        {"name": "g12-t4-sequential", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "sequential"]},
-        {"name": "g12-t4-batch", "seconds": 10, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "batch"]}
-      ]
+    {
+     "name": "g12-l7",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2"
+     ]
     },
-    "mt-present": {
-      "what": "The same five configurations without GPU work (0 ms, Present-bound): what the CPU side of a frame costs on our stack, where recording and submission are the whole frame.",
-      "runs": [
-        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
-        {"name": "g0-t1-interleaved", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "interleaved"]},
-        {"name": "g0-t1-sequential", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "sequential"]},
-        {"name": "g0-t1-batch", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "1", "--submit", "batch"]},
-        {"name": "g0-t4-sequential", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "sequential"]},
-        {"name": "g0-t4-batch", "seconds": 10, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2", "--record-threads", "4", "--submit", "batch"]}
-      ]
-    },
-    "gap": {
-      "what": "Is the gap fixed per frame or per unit of work? GPU work 12 against 25 ms, at 7 lists against 1: a latency stays the same in milliseconds while the work changes, a cost per submission scales with the number of lists.",
-      "runs": [
-        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
-        {"name": "g12-l7-lat2", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "2"]},
-        {"name": "g12-l1-lat2", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "1", "--latency", "2"]},
-        {"name": "g25-l7-lat2", "seconds": 12, "args": ["--gpu-ms", "25", "--lists", "7", "--latency", "2"]},
-        {"name": "g25-l1-lat2", "seconds": 12, "args": ["--gpu-ms", "25", "--lists", "1", "--latency", "2"]}
-      ]
-    },
-    "gap-queue": {
-      "what": "Does a deeper queue hide the gap? Three frames in flight with three buffers against two, at 7 lists and 1, plus the Present-bound end of the same loop.",
-      "runs": [
-        {"name": "smoke", "seconds": 5, "args": ["--gpu-ms", "1", "--lists", "1", "--latency", "2"]},
-        {"name": "g12-l7-lat3", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "7", "--latency", "3", "--buffers", "3"]},
-        {"name": "g12-l1-lat3", "seconds": 12, "args": ["--gpu-ms", "12", "--lists", "1", "--latency", "3", "--buffers", "3"]},
-        {"name": "g0-l7-lat2", "seconds": 12, "args": ["--gpu-ms", "0", "--lists", "7", "--latency", "2"]}
-      ]
+    {
+     "name": "g0-l7",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2"
+     ]
     }
+   ]
+  },
+  "mt-gpu": {
+   "what": "The owner's multithreading question with GPU work per frame (12 ms, GPU-bound, so the idle that remains is the submitted-to-start latency): record threads 1 and 4, one ExecuteCommandLists per list against all 7 in one call.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g12-t1-interleaved",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "1",
+      "--submit",
+      "interleaved"
+     ]
+    },
+    {
+     "name": "g12-t1-sequential",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "1",
+      "--submit",
+      "sequential"
+     ]
+    },
+    {
+     "name": "g12-t1-batch",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "1",
+      "--submit",
+      "batch"
+     ]
+    },
+    {
+     "name": "g12-t4-sequential",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "4",
+      "--submit",
+      "sequential"
+     ]
+    },
+    {
+     "name": "g12-t4-batch",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "4",
+      "--submit",
+      "batch"
+     ]
+    }
+   ]
+  },
+  "mt-present": {
+   "what": "The same five configurations without GPU work (0 ms, Present-bound): what the CPU side of a frame costs on our stack, where recording and submission are the whole frame.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g0-t1-interleaved",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "1",
+      "--submit",
+      "interleaved"
+     ]
+    },
+    {
+     "name": "g0-t1-sequential",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "1",
+      "--submit",
+      "sequential"
+     ]
+    },
+    {
+     "name": "g0-t1-batch",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "1",
+      "--submit",
+      "batch"
+     ]
+    },
+    {
+     "name": "g0-t4-sequential",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "4",
+      "--submit",
+      "sequential"
+     ]
+    },
+    {
+     "name": "g0-t4-batch",
+     "seconds": 10,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--record-threads",
+      "4",
+      "--submit",
+      "batch"
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "what": "Is the gap fixed per frame or per unit of work? GPU work 12 against 25 ms, at 7 lists against 1: a latency stays the same in milliseconds while the work changes, a cost per submission scales with the number of lists.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g12-l7-lat2",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g12-l1-lat2",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g25-l7-lat2",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "25",
+      "--lists",
+      "7",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g25-l1-lat2",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "25",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
+    }
+   ]
+  },
+  "gap-queue": {
+   "what": "Does a deeper queue hide the gap? Three frames in flight with three buffers against two, at 7 lists and 1, plus the Present-bound end of the same loop.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ]
+    },
+    {
+     "name": "g12-l7-lat3",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "3",
+      "--buffers",
+      "3"
+     ]
+    },
+    {
+     "name": "g12-l1-lat3",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "1",
+      "--latency",
+      "3",
+      "--buffers",
+      "3"
+     ]
+    },
+    {
+     "name": "g0-l7-lat2",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "0",
+      "--lists",
+      "7",
+      "--latency",
+      "2"
+     ]
+    }
+   ]
+  },
+  "self-wait": {
+   "what": "C45: does dropping the GPU wait that this context already signalled (BC250_SELF_WAIT=elide) remove ring idle, and do the gaps stop ending just after a VSync? PRIOR RESULT, read it first: session 322 already elided same-queue waits in Witcher 3 LOW (ICD artifact2, BC250_WAIT_ELIDE=ring): 16032 waits elided, kernel wait calls down to 17, and the rate FELL 1.7 % (58.6/s against 317's 59.6). K142: W3's self-waits cost about 0.07 ms/frame. A counter of avoided kernel calls is not time. DECISION RULE, fixed before the trial: (1) the arm is void unless icd.wait_self_dropped is above 0 in the elide arm and 0 in both keep arms, and unless gaps.vblank.ok holds; (2) C45 lives only if gaps.after_submission_ms falls by at least 0.5 ms/frame against the mean of the two keep arms AND the two keep arms agree inside 2 % (otherwise the run drifted and says nothing); (3) the count arm must match keep on every number except wait_self_seen, which prices the predicate itself; (4) a game arm follows only after (2) holds, and it is a GPU-only window for the rate plus a separate ETW window for attribution (K143: an ETW kernel session costs W3's main thread about 1.5 ms/frame). The named alternative outcome is 'C45 closes as a second K142'. Arms in order keep, count, elide, keep: the second keep makes thermal drift visible, because the governor runs the last arm warmer than the first.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ],
+     "env": {
+      "BC250_SELF_WAIT": "keep",
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "keep",
+     "seconds": 20,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics"
+     ],
+     "env": {
+      "BC250_SELF_WAIT": "keep",
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "count",
+     "seconds": 20,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics"
+     ],
+     "env": {
+      "BC250_SELF_WAIT": "count",
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "elide",
+     "seconds": 20,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics"
+     ],
+     "env": {
+      "BC250_SELF_WAIT": "elide",
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "keep2",
+     "seconds": 20,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics"
+     ],
+     "env": {
+      "BC250_SELF_WAIT": "keep",
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    }
+   ]
+  },
+  "c48-handoff": {
+   "what": "C48 reproducer: can our own client produce the ring-gap class the game sessions show, by making a cross-queue dependency explicit? THE CLASS, from sessions 418-420 (RotTR D3D12, node 0): gaps of at least 4 ms, 418-605 of them per 105 s window, median 7969-8173 us, 95.4-96.9 % of each gap dispatchable idle, and the end of the gap within 300 us after a VSync. 300 us is 1.8 % of a 59.95 Hz refresh, which is the share a uniform distribution would give and the baseline every measured share is read against. ARMS: a-base is one queue at present interval 0 (the control), c-2q-none creates the second queue and leaves it idle (so 'another queue exists' is separated from 'work crosses it'), d-2q-per-list hands over between every pair of lists (6 crossings a frame at 7 lists), f-2q-per-frame hands over once a frame, g-base2 repeats the control last so thermal drift is visible. Two arms run at present interval 1 and are a PAIR: h-base-vsync1 is one queue and e-2q-per-list-vsync1 is the handoff, and e is read only as the difference against h. Without h the arm could not be read at all: at --gpu-ms 12 against a 16.68 ms refresh, interval 1 leaves about 5 ms of node-0 idle every frame that ends just after the flip, so the rate and the aligned share are produced by Present pacing whatever the handoff does. The frame's last list never leaves queue 0: it writes the back buffer, and another queue writing a flip-model back buffer removed the device with DXGI_ERROR_ACCESS_DENIED on the host (2026-10-06). DECISION RULE, fixed before the trial: (1) an arm is void unless its own queue_handoff block witnesses it - fence_signals at least one per frame in d, e and f, fence_waits at least one per frame in d and e and at least one per two frames in f, exactly 0 in a, c, g and h - and unless gaps.vblank.fitted holds with aligned_share_usable true; (2) an arm REPRODUCES the class when gaps.per_second_ge_4ms is at least 1.0 AND gaps.count_ge_4ms is at least 20 AND gaps.aligned_share_ge_4ms is at least 0.40, against the 1.8 % uniform share - at 12 s the count floor is the binding one, an effective 1.67 gaps a second; (3) every arm is read only against the controls of its OWN present interval, and the one-queue control of that interval must not reproduce the class: if a-base or g-base2 does, the class is not about cross-queue handoff and the client reproduces it on its own at interval 0, which is a better result than any arm; if h-base-vsync1 does, the interval-1 pair measures Present pacing and says nothing about the handoff, which is why h exists; (4) the named alternative outcome is 'no arm reproduces it', and then the KMD candidate is judged on its own ring-gap histogram and this client is not the instrument for the class. NOT IN THIS SET: --signal-per-list (a fence signal after every list on one queue). Nine 12 s runs do not fit the 170 s bound, and a control that removes a false positive (h) is worth more than one that would only refine a positive; the flag stays in the client for a follow-up set. Read the arms with scratch\\m15\\etw\\c48\\c48repro.py, which applies this rule and prints the kernel's ETW view of the same window next to it.",
+   "runs": [
+    {
+     "name": "smoke",
+     "seconds": 5,
+     "args": [
+      "--gpu-ms",
+      "1",
+      "--lists",
+      "1",
+      "--latency",
+      "2"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "a-base",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "c-2q-none",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics",
+      "--queues",
+      "2"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "d-2q-per-list",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics",
+      "--queues",
+      "2",
+      "--handoff",
+      "per-list"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "h-base-vsync1",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics",
+      "--present-interval",
+      "1"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "e-2q-per-list-vsync1",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics",
+      "--queues",
+      "2",
+      "--handoff",
+      "per-list",
+      "--present-interval",
+      "1"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "f-2q-per-frame",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics",
+      "--queues",
+      "2",
+      "--handoff",
+      "per-frame"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    },
+    {
+     "name": "g-base2",
+     "seconds": 12,
+     "args": [
+      "--gpu-ms",
+      "12",
+      "--lists",
+      "7",
+      "--latency",
+      "2",
+      "--frame-statistics"
+     ],
+     "env": {
+      "BC250_DEFERRED_SUMMARY_S": "5"
+     }
+    }
+   ]
   }
+ }
 }
