@@ -185,19 +185,31 @@ int main(){
  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");req.memory_type_bits=0;
  const auto coherent_flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE);
  heap.Flags=coherent_flags;
- auto reject_before_probe=[&](){
+ // Every refusal taken before a probe names the check that took it in the report (BD-075: that name and the
+ // heap flags beside it are what a shared create has to be read off a lab log), and nothing is allocated.
+ auto reject_before_probe=[&](const char* why,uint32_t unimplemented=0){
   const auto old_probes=probes;const auto old_allocation=next_allocation;events.clear();
   assert(owner.allocate(&req,&memory)==E_NOTIMPL && !memory.memory && events.empty());
   assert(probes==old_probes && next_allocation==old_allocation);
+  const auto& report=owner.last_report();
+  assert(report.refusal && !std::strcmp(report.refusal,why) && report.unimplemented_heap_flags==unimplemented);
  };
- heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;reject_before_probe();
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;reject_before_probe("systemwide coherency");
  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
- heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;reject_before_probe();
- heap.MemoryPool=static_cast<D3D12DDI_MEMORY_POOL>(2);reject_before_probe();heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
- heap.CreationNodeMask=2;reject_before_probe();heap.CreationNodeMask=1;
- heap.VisibleNodeMask=2;reject_before_probe();heap.VisibleNodeMask=1;
- heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|0x80000000u);reject_before_probe();
- resource.ResourceType=D3D12DDI_RT_TEXTURE2D;heap.Flags=coherent_flags;reject_before_probe();resource.ResourceType=D3D12DDI_RT_BUFFER;
+ heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;reject_before_probe("systemwide coherency");
+ heap.MemoryPool=static_cast<D3D12DDI_MEMORY_POOL>(2);reject_before_probe("systemwide coherency");
+ heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ heap.CreationNodeMask=2;reject_before_probe("node mask");heap.CreationNodeMask=1;
+ heap.VisibleNodeMask=2;reject_before_probe("node mask");heap.VisibleNodeMask=1;
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|0x80000000u);
+ reject_before_probe("heap flags",0x80000000u);
+ // The shape of a shared create: the heap flag the D3D12 runtime adds is undefined in the DDI, so each
+ // candidate bit is declined by the same check, under its own name, with the bit in the report.
+ for(const uint32_t bit:{0x1u,0x40u}){
+  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|bit);reject_before_probe("heap flags",bit);
+ }
+ resource.ResourceType=D3D12DDI_RT_TEXTURE2D;heap.Flags=coherent_flags;
+ reject_before_probe("texture on this heap");resource.ResourceType=D3D12DDI_RT_BUFFER;
  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
  assert(creates==1 && makes_resident && makes_resident==evictions);
  expected_type=0;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
@@ -211,19 +223,19 @@ int main(){
  resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
  // System-wide coherence alone refuses an otherwise admitted texture.
  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)|unsigned(D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE));
- reject_before_probe();
+ reject_before_probe("texture on this heap");
  // Refused before any probe or allocation: a texture that is not the heap's one resource, a texture on a
  // CPU-visible heap, an unknown resource type, and a heap for buffers that does not allow buffers.
  heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
- req.flags=0;reject_before_probe();req.flags=engine_ddi::kMemoryDedicated;
- heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;reject_before_probe();
- heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;reject_before_probe();
+ req.flags=0;reject_before_probe("texture on this heap");req.flags=engine_ddi::kMemoryDedicated;
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;reject_before_probe("texture on this heap");
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;reject_before_probe("texture on this heap");
  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
- resource.ResourceType=static_cast<D3D12DDI_RESOURCE_TYPE>(0x7f);reject_before_probe();
- resource.ResourceType=D3D12DDI_RT_BUFFER;reject_before_probe();
- req.resource=nullptr;reject_before_probe();req.resource=&resource;
+ resource.ResourceType=static_cast<D3D12DDI_RESOURCE_TYPE>(0x7f);reject_before_probe("resource type");
+ resource.ResourceType=D3D12DDI_RT_BUFFER;reject_before_probe("buffer heap");
+ req.resource=nullptr;reject_before_probe("buffer heap");req.resource=&resource;
  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
- req.flags=engine_ddi::kMemoryPrimary;assert(owner.allocate(&req,&memory)==E_NOTIMPL);req.flags=engine_ddi::kMemoryDedicated;
+ req.flags=engine_ddi::kMemoryPrimary;reject_before_probe("request flags");req.flags=engine_ddi::kMemoryDedicated;
  req.memory_type_bits=2;assert(owner.allocate(&req,&memory)==E_INVALIDARG);req.memory_type_bits=0;
  gpu_address+=4096;events.clear();assert(owner.allocate(&req,&memory)==E_INVALIDARG && events=="AMZEUD" && !memory.memory);gpu_address-=4096;
  events.clear();fail_import=true;assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMZIEUD");fail_import=false;

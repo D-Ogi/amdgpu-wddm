@@ -192,6 +192,23 @@ UINT APIENTRY present_private_size(D3D12DDI_HDEVICE,const D3D12DDIARG_PRESENT_00
 // The two resource DDIs are engine-ddi's, run inside the owner scope of the shell's imports: a linear
 // primary is released by its runtime resource only while that resource's own DDI is running.
 using CoreTable=D3D12DDI_DEVICE_FUNCS_CORE_0088;
+// The AllowOutOfMemory clamp exists twice, once per module: engine_ddi::admitted_create_failure for what the
+// slots themselves decide, native12::ddi_admitted_create_failure for what the DDI thunk refuses above them
+// (BD-075). This translation unit is the one that sees both, so it is where they are held to the same answer -
+// including the device codes, which must come out as D3DDDIERR_DEVICEREMOVED and not as the DXGI name.
+static_assert(engine_ddi::admitted_create_failure(S_OK)==ddi_admitted_create_failure(S_OK));
+static_assert(engine_ddi::admitted_create_failure(E_OUTOFMEMORY)==ddi_admitted_create_failure(E_OUTOFMEMORY));
+static_assert(engine_ddi::admitted_create_failure(E_NOTIMPL)==ddi_admitted_create_failure(E_NOTIMPL));
+static_assert(engine_ddi::admitted_create_failure(E_INVALIDARG)==ddi_admitted_create_failure(E_INVALIDARG));
+static_assert(engine_ddi::admitted_create_failure(E_UNEXPECTED)==ddi_admitted_create_failure(E_UNEXPECTED));
+static_assert(engine_ddi::admitted_create_failure(E_FAIL)==ddi_admitted_create_failure(E_FAIL));
+static_assert(engine_ddi::admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED)==engine_ddi::kDriverDeviceRemoved);
+static_assert(engine_ddi::admitted_create_failure(DXGI_ERROR_DEVICE_RESET)==engine_ddi::kDriverDeviceRemoved);
+static_assert(engine_ddi::admitted_create_failure(DXGI_ERROR_DEVICE_HUNG)==engine_ddi::kDriverDeviceRemoved);
+static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED)==engine_ddi::kDriverDeviceRemoved);
+static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_RESET)==engine_ddi::kDriverDeviceRemoved);
+static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_HUNG)==engine_ddi::kDriverDeviceRemoved);
+static_assert(engine_ddi::kDriverDeviceRemoved==kDdiDriverDeviceRemoved);
 std::atomic<decltype(CoreTable{}.pfnCreateHeapAndResource)> engine_create_resource{};
 std::atomic<decltype(CoreTable{}.pfnDestroyHeapAndResource)> engine_destroy_resource{};
 HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDIARG_CREATEHEAP_0001* heap,
@@ -200,11 +217,16 @@ HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDI
     D3D12DDI_HRESOURCE driver_resource) {
     const auto engine=engine_create_resource.load();
     const auto device=static_cast<Device*>(handle.pDrvPrivate);
-    if(!engine || !device)return E_UNEXPECTED;
+    // Every failure of this slot leaves it as E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED (engine-ddi.h,
+    // admitted_create_failure): a create DDI that reports anything else costs the application its device
+    // (BD-075). The scope's own refusals come through here as well, which is why the clamp sits outside the
+    // scope and not only in engine-ddi. The thunk above this wrapper clamps its own refusals itself
+    // (ddi-entry.h, CoreBinding::allow_out_of_memory), which this wrapper never sees.
+    if(!engine || !device)return engine_ddi::admitted_create_failure(E_UNEXPECTED);
     // A resource DDI entered from inside another one of this device is refused before the engine runs.
-    return create_in_owner_scope(engine_imports(*device),[&]() noexcept {
+    return engine_ddi::admitted_create_failure(create_in_owner_scope(engine_imports(*device),[&]() noexcept {
         return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
-    });
+    }));
 }
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP heap,D3D12DDI_HRESOURCE resource) {
     const auto engine=engine_destroy_resource.load();

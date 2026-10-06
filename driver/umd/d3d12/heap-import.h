@@ -66,6 +66,12 @@ struct ImportReport {
     ImportStage stage{};
     uint32_t memory_type{UINT32_MAX};
     uint64_t bytes{},alignment{},address{};
+    // The admission check that declined this request, as a literal of this module (null: none declined it).
+    // Written for every shape allocate() refuses before it allocates anything, and logged in the same breath
+    // (heap-import.cpp, refuse). BD-075: a shared create reaches exactly one of these, and the log line names
+    // which one and with which heap flags, so one lab run says what the runtime asks for on a shared heap.
+    const char* refusal{};
+    uint32_t unimplemented_heap_flags{};        // the heap-flag bits of the refusal that this shell has no use for
 };
 class RuntimeHeapImports final {
     struct Record;
@@ -106,6 +112,10 @@ class RuntimeHeapImports final {
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
+    // Records the declining check in report_, writes one line naming it and the request's shape, and returns
+    // hr unchanged. Only for a refusal taken before any callback, probe or allocation.
+    static HRESULT refuse(const char* why,HRESULT hr,const engine_ddi::MemoryRequest& request,
+                          uint32_t unimplemented_heap_flags=0) noexcept;
     HRESULT release(Record&) noexcept;
     HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
     HRESULT unlock_for_release(Record&) noexcept;               // a CPU lock the ICD left on it

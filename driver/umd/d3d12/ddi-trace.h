@@ -28,6 +28,25 @@ inline int ddi_trace_mode() noexcept {
 inline bool ddi_trace_enabled() noexcept {return ddi_trace_mode()==1;}
 inline std::atomic<uint64_t> ddi_trace_sequence{};
 inline std::atomic<int32_t> ddi_failure_budget{4096};
+// A refusal the shell decided, written whether or not any switch is on: to the AMDGPU_WDDM_LOG sink when the
+// process named one, and always one line to the debugger channel, as engine-ddi's log_refusal does. The channel
+// costs a raised-and-swallowed exception when nothing listens, and a refusal happens once per declined object,
+// never per frame; capture-share and any attached debugger record the line. One budget bounds both channels, so
+// a process that declines in a loop - which a survivable refusal invites (BD-075) - cannot be slowed by this
+// diagnostic without bound. No handles, no pointers and no resource contents: names and scalars only.
+inline std::atomic<int32_t> ddi_refusal_budget{4096};
+inline void ddi_refusal(_Printf_format_string_ const char* format,...) noexcept {
+    if(ddi_refusal_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
+    char text[600];
+    va_list args;
+    va_start(args,format);
+    std::vsnprintf(text,sizeof(text),format,args);
+    va_end(args);
+    amdgpu_wddm_log::print("amdgpu_wddm_d3d12: %s\n",text);
+    char line[640];
+    std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 %s\n",text);
+    OutputDebugStringA(line);
+}
 inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
     if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);

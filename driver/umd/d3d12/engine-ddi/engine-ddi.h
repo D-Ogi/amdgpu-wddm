@@ -346,6 +346,34 @@ void entry_frame() noexcept;
 // Whether the statistics are on (the shell then times its own entries).
 bool entry_stats_on() noexcept;
 
+// ---- Failures a create or open DDI may report -------------------------------------------------------------------
+// windows-driver-docs display handling-errors.md: a creation function of a user-mode display driver is in the
+// AllowOutOfMemory category. The runtime admits E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED from it and treats
+// every other failure as critical: it logs the driver, removes the device and sets the removed reason to
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR. Measured on this stack for E_NOTIMPL out of pfnCreateCommandSignature
+// (INTEGRATION.md) and for pfnCreateHeapAndResource and pfnOpenHeapAndResource of a shared resource
+// (BD-075: hr 0x887A0005, removed reason 0x887A0020, in all 13 shared-resource cells of capture-share).
+// A refusal must therefore leave the create and open slots as E_OUTOFMEMORY, however the refusal was decided
+// inside the driver: the application then sees a creation that failed, not a device it has to recreate. The real
+// HRESULT is in the log_refusal line of the same call, so the diagnosis is not lost.
+// That the D3D12 runtime applies the same rule as D3D10/11 is an INFERENCE from that document plus the two
+// measurements above; it is what the lab script of BD-075 checks.
+// Two codes are admitted and no third: E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED. A lost device is therefore
+// reported under the name the runtime admits, not under the name the API shows the application:
+// DXGI_ERROR_DEVICE_REMOVED (0x887A0005) is not in the AllowOutOfMemory list, so a create slot that reports it
+// loses the device a second time, with DRIVER_INTERNAL_ERROR over the real reason - the BD-075 signature itself.
+// Both are live paths: create_heap_and_resource answers DXGI_ERROR_DEVICE_REMOVED for a context already lost, and
+// heap-import maps VK_ERROR_DEVICE_LOST to it. The clamp translates the three DXGI device codes instead.
+// native12::ddi_admitted_create_failure (ddi-entry.h) is the same rule for the refusals the DDI thunk itself
+// decides, above this module; native-tables.cpp static_asserts that the two agree.
+inline constexpr HRESULT kDriverDeviceRemoved = static_cast<HRESULT>(0x88760870);  // D3DDDIERR_DEVICEREMOVED
+constexpr HRESULT admitted_create_failure(HRESULT hr) noexcept {
+    if (SUCCEEDED(hr) || hr == E_OUTOFMEMORY || hr == kDriverDeviceRemoved) return hr;
+    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG)
+        return kDriverDeviceRemoved;
+    return E_OUTOFMEMORY;
+}
+
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);
 
