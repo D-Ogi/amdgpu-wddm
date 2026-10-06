@@ -12,11 +12,9 @@ and NOTICE in the package root).
 | File (`payload\`) | Source |
 |---|---|
 | `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `85ac47b6c7fe8fb015e1c9c333b82ee94162cfa7` (branch `train/b19-setup`); the .sys also contains the Linux amdgpu code in the next table |
-| `system32\bc250umd.dll` | amdgpu-wddm `driver/umd-stub` |
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `85ac47b6c7fe8fb015e1c9c333b82ee94162cfa7` (branch `train/b19-setup`, `driver/umd/d3d12`) |
 | `desktop\bc250d3d_router.dll` | amdgpu-wddm `a748e78eedd62745b104dc2ab941ed9b95053c09` (branch `train/b19-wow64-x86`, `driver/umd/router`) |
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `85ac47b6c7fe8fb015e1c9c333b82ee94162cfa7` (branch `train/b19-setup`, `driver/umd/dxvk`) |
-| `syswow64\bc250umd.dll` | amdgpu-wddm `a748e78eedd62745b104dc2ab941ed9b95053c09` (branch `train/b19-wow64-x86`, `driver/umd-stub`), x86 build |
 | `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `a748e78eedd62745b104dc2ab941ed9b95053c09` (branch `train/b19-wow64-x86`, `driver/umd/router`), x86 build. The x86 behaviour of BD-064 is in the commit: the Wow path values, the 64-bit policy view and plain export names |
 | `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `85ac47b6c7fe8fb015e1c9c333b82ee94162cfa7` (branch `train/b19-setup`, `driver/umd/dxvk`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit |
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `3ef45a0f92f71980bdaa053be1d5b64c02f1b103` (branch `train/b19-setup`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |

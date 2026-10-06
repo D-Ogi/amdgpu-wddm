@@ -737,16 +737,54 @@ function Get-VcRuntimeMissing {
     }
     return $missing
 }
-# BD-064: 32-bit processes. UserModeDriverNameWow mirrors the first three slots of UserModeDriverName (D3D9 stub, the
-# D3D10 and D3D11 routers) with the x86 builds; there is no x86 D3D12 UMD, so it has no fourth entry and a 32-bit
-# D3D12 application finds no driver. The x86 router reads the 64-bit policy keys and its own *Wow path values.
-# The x86 builds link the C runtime statically: no x86 Visual C++ runtime is needed.
+# The UserModeDriverName slots of the GPU's software key: D3D9, D3D10, D3D11, D3D12. The D3D9 slot is empty: a D3D9
+# application then gets Microsoft's D3D9On12 layer (d3d9on12.dll), which runs on our D3D12 driver. Windows does not
+# fall back to D3D9On12 when the slot names a UMD that cannot open the adapter: with the stub of the earlier releases
+# (bc250umd.dll, OpenAdapter returns E_NOTIMPL) CreateDeviceEx failed with D3DERR_NOTAVAILABLE, with the empty slot it
+# renders through d3d9on12.dll -> d3d12.dll -> amdgpu_wddm_d3d12.dll (tools/win/d3d9probe, unit A, 2026-10-06).
+function Get-UmdNames([string]$InstallRoot) {
+    $router = Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'
+    return @('', $router, $router, (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
+}
+# One UserModeDriverName value as the log and the dry run print it: an empty slot is ''.
+function Format-UmdNames([string[]]$Names) {
+    return (@($Names | ForEach-Object { if ($_) { $_ } else { "''" } }) -join ' | ')
+}
+# The 64-bit registration as verify checks it; returns the problems found (none: registered).
+function Test-UmdRegistration {
+    param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey)
+    $problems = @()
+    $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
+    $want = Get-UmdNames $InstallRoot
+    if ($null -eq $c.UserModeDriverName) { $problems += 'UserModeDriverName is missing' }
+    else {
+        $have = @($c.UserModeDriverName)
+        if (($have.Count -ne $want.Count) -or (($have -join '|') -ne ($want -join '|'))) { $problems += "UserModeDriverName is $(Format-UmdNames $have), expected $(Format-UmdNames $want)" }
+    }
+    $icd = Join-Path $InstallRoot 'vulkan\radeon_icd.json'
+    if ((@($c.VulkanDriverName) -join '|') -ne $icd) { $problems += "VulkanDriverName is '$(@($c.VulkanDriverName) -join ' | ')'" }
+    return $problems
+}
+# BD-064: 32-bit processes. UserModeDriverNameWow mirrors the first three slots of UserModeDriverName (the empty D3D9
+# slot, the D3D10 and D3D11 routers) with the x86 builds; there is no x86 D3D12 UMD, so it has no fourth entry and a
+# 32-bit D3D12 application finds no driver. The empty D3D9 slot is there for the same layout as the 64-bit value: a
+# 32-bit D3D9 application still gets no device, because D3D9On12 needs a D3D12 UMD of its own bitness. The x86 router
+# reads the 64-bit policy keys and its own *Wow path values. The x86 builds link the C runtime statically: no x86
+# Visual C++ runtime is needed.
 function Get-WowUmdNames([string]$InstallRoot) {
     $router = Join-Path $InstallRoot 'wow64\desktop\bc250d3d_router.dll'
-    return @('bc250umd.dll', $router, $router)
+    return @('', $router, $router)
 }
 function Get-WowFiles([string]$InstallRoot) {
-    return @((Join-Path $env:windir 'SysWOW64\bc250umd.dll')) + @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
+    return @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
+}
+# The D3D9 stub that the releases up to 0.7.213.102-tester.17 installed in System32 and SysWOW64. No slot names it any
+# more; install and uninstall take it away (unless it was there before the first install of ours), and the footprint
+# reports a leftover.
+function Get-LegacyStubPaths {
+    return @(
+        [pscustomobject]@{ path = (Join-Path $env:windir 'System32\bc250umd.dll'); flag = 'stub_existed' }
+        [pscustomobject]@{ path = (Join-Path $env:windir 'SysWOW64\bc250umd.dll'); flag = 'stub_wow_existed' })
 }
 # The machine field of a PE image: 0x14C x86, 0x8664 x64; $null when the file is missing or not a PE image.
 function Get-PeMachine([string]$Path) {
@@ -768,7 +806,11 @@ function Test-WowRegistration {
     $problems = @()
     $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
     $want = Get-WowUmdNames $InstallRoot
-    if ((@($c.UserModeDriverNameWow) -join '|') -ne ($want -join '|')) { $problems += "UserModeDriverNameWow is '$(@($c.UserModeDriverNameWow) -join ' | ')'" }
+    if ($null -eq $c.UserModeDriverNameWow) { $problems += 'UserModeDriverNameWow is missing' }
+    else {
+        $have = @($c.UserModeDriverNameWow)
+        if (($have.Count -ne $want.Count) -or (($have -join '|') -ne ($want -join '|'))) { $problems += "UserModeDriverNameWow is $(Format-UmdNames $have), expected $(Format-UmdNames $want)" }
+    }
     $icd = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
     if ((@($c.VulkanDriverNameWow) -join '|') -ne $icd) { $problems += "VulkanDriverNameWow is '$(@($c.VulkanDriverNameWow) -join ' | ')'" }
     $k = Get-Item -LiteralPath $KhronosKey -ErrorAction SilentlyContinue

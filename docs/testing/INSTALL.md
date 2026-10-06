@@ -127,10 +127,10 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
-| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`, `mft`), `C:\Windows\System32\bc250umd.dll` and its 32-bit copy `C:\Windows\SysWOW64\bc250umd.dll` |
+| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
-| Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
+| Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`; the first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
@@ -156,8 +156,12 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   `witcher3.exe`, which has a Direct3D 12 mode). An entry in the `Allow` list puts a Windows component on the GPU
   (by default `dxdiag.exe`). `Mode` `allowlist` gives the behaviour of the earlier releases: the CPU route for every
   program, and the GPU only for the programs in `Allow`. Use the Direct3D 12 mode of a game if it has one.
+- Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
+  driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
+  `d3d9on12.dll` by itself.
 - 32-bit Direct3D 10/11 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the same
-  routing rules as 64-bit applications. 32-bit Direct3D 12 applications do not have a driver yet.
+  routing rules as 64-bit applications. 32-bit Direct3D 12 applications do not have a driver yet, and therefore
+  32-bit Direct3D 9 applications get no device either: D3D9On12 needs a Direct3D 12 driver of the same bitness.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 - A program that records video can use the H.264 encoder of the GPU through Media Foundation. The encoder works only
   while Windows runs the BC-250 on this driver: if the driver did not start, the encoder refuses, and the program
