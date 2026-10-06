@@ -212,6 +212,8 @@ namespace Bc250Mon
             "fixed",            // FIXED, this start is fixed-lab
             "thermal-warm",     // THERMAL_WARM, a raise refused in the warm zone
             "thermal-ramp",     // THERMAL_RAMP, a raise cut to one level or held
+            "idle",             // IDLE, the idle point holds the clock, or is being left
+            "thermal-zone",     // THERMAL_ZONE, the soft zone stepped the cap down below the hot limit
         };
         public static string CuReasonName(uint reason)
         {
