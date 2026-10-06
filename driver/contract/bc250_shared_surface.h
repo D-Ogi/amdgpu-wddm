@@ -59,6 +59,30 @@ extern "C" {
 #define BC250_SHARED_SURFACE_MALFORMED 1
 #define BC250_SHARED_SURFACE_FORMAT    2
 
+/* Which check a decode decided at. One status covers sixteen checks, and an opener's refusal line
+ * that says only "record" cannot be read: round 1 of BD-075 took a lab pass and a trace to learn
+ * that a cross-API open declines because the other shell wrote a 16-byte E26R v2 record where this
+ * one admits 64-byte v3 (2026-10-06). Every string is a literal of this header, so a caller may
+ * keep the pointer and print it. They are also what docs/d3d12-shared-resources.md lists and what
+ * the lab kit matches, so a name is part of the contract and is not renamed silently. */
+#define BC250_SHARED_SURFACE_WHY_OK                   "record"
+#define BC250_SHARED_SURFACE_WHY_ARGUMENTS            "record arguments"
+#define BC250_SHARED_SURFACE_WHY_LENGTH               "record length"
+#define BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD    "allocation record"
+#define BC250_SHARED_SURFACE_WHY_MAGIC                "record magic"
+#define BC250_SHARED_SURFACE_WHY_VERSION              "record version"
+#define BC250_SHARED_SURFACE_WHY_POLICY               "record policy"
+#define BC250_SHARED_SURFACE_WHY_SHARED               "record shared"
+#define BC250_SHARED_SURFACE_WHY_ACCESS               "record access"
+#define BC250_SHARED_SURFACE_WHY_GEOMETRY             "record geometry"
+#define BC250_SHARED_SURFACE_WHY_EXTENT               "record extent"
+#define BC250_SHARED_SURFACE_WHY_SUBRESOURCES         "record subresources"
+#define BC250_SHARED_SURFACE_WHY_USAGE                "record usage"
+#define BC250_SHARED_SURFACE_WHY_FLAGS                "record flags"
+#define BC250_SHARED_SURFACE_WHY_FORMAT               "record format"
+#define BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT    "allocation format"
+#define BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY  "allocation geometry"
+
 /* One shared surface, in neither API's terms. The first eight fields are the surface itself; the
  * last three are the record's own policy and the one D3D11 field a D3D11 opener still passes on
  * (MiscFlags), so the wrapper below can rebuild its D3D11_TEXTURE2D_DESC1 without reading the wire
@@ -171,65 +195,106 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
 }
 
 /* Decodes the pair a runtime handed an opener, under the opener's own admission policy. Out is
- * written only on success. */
-static __inline int Bc250SharedSurfaceDecodeAdmitted(const void *ResourceData, unsigned int ResourceBytes,
-                                                     const void *AllocationData, unsigned int AllocationBytes,
-                                                     const BC250_SHARED_SURFACE_ADMIT *Admit,
-                                                     BC250_SHARED_SURFACE *Out)
+ * written only on success. Why, when it is given, is set on every path to the check that decided -
+ * one of the BC250_SHARED_SURFACE_WHY_* strings above - so that an opener's refusal line names the
+ * field the producer got wrong instead of the word "record". The cross-API failures of BD-075 round
+ * 1 all declined here, and one shared name for sixteen checks cost a lab pass to tell apart
+ * (2026-10-06). */
+static __inline int Bc250SharedSurfaceDecodeDetail(const void *ResourceData, unsigned int ResourceBytes,
+                                                   const void *AllocationData, unsigned int AllocationBytes,
+                                                   const BC250_SHARED_SURFACE_ADMIT *Admit,
+                                                   BC250_SHARED_SURFACE *Out, const char **Why)
 {
     BC250_WDDM_ALLOCATION_PRIVATE a;
     BC250_SURFACE_RESOURCE_PRIVATE r;
-    const AMDGPU_WDDM_SURFACE_FORMAT *row;
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = 0;
     BC250_SHARED_SURFACE out;
-    int shared = 0, cached = 0;
+    const char *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
+    int shared = 0, cached = 0, status = BC250_SHARED_SURFACE_MALFORMED;
     unsigned int i;
     const unsigned char *src;
     unsigned char *dst;
-    if (!Out || !Admit || !ResourceData || !AllocationData)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (ResourceBytes != (unsigned int)sizeof(r) || AllocationBytes != (unsigned int)sizeof(a))
-        return BC250_SHARED_SURFACE_MALFORMED;
-    /* Byte copies: the blobs are the runtime's memory and need no alignment of ours. */
-    src = (const unsigned char *)AllocationData;
+    /* Zeroed before the one exit this function has: the checks below leave through a single break, and a
+     * compiler that cannot see which of them ran reports every field as possibly uninitialised. 96 bytes. */
     dst = (unsigned char *)&a;
     for (i = 0; i < (unsigned int)sizeof(a); ++i)
-        dst[i] = src[i];
-    src = (const unsigned char *)ResourceData;
+        dst[i] = 0;
     dst = (unsigned char *)&r;
     for (i = 0; i < (unsigned int)sizeof(r); ++i)
-        dst[i] = src[i];
-    if (a.Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || a.Version != 1)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (r.Magic != BC250_SURFACE_RESOURCE_MAGIC || r.Version != BC250_SURFACE_RESOURCE_TEXTURE_VERSION)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    /* The kernel driver's parser decided this record's placement; an opener that admitted a record
-     * the kernel refused would be describing memory nobody placed. */
-    if (!Bc250SurfaceResourcePolicy(&r, ResourceBytes, &shared, &cached))
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Admit->RequireShared && r.Shared != 1)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (r.Access & ~Admit->AccessMask)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (r.Width != a.Width || r.Height != a.Height)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (!r.Width || !r.Height || r.Width > BC250_SHARED_MAX_EDGE || r.Height > BC250_SHARED_MAX_EDGE)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (r.MipLevels != 1 || r.ArraySize != 1 || r.SampleCount != 1 || r.SampleQuality)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (r.Usage != BC250_SHARED_USAGE_DEFAULT || r.CpuAccessFlags ||
-        r.TextureLayout != BC250_SHARED_LAYOUT_UNDEFINED)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if ((r.BindFlags & ~BC250_SHARED_BIND_MASK) || (r.MiscFlags & ~BC250_SHARED_MISC_MASK))
-        return BC250_SHARED_SURFACE_MALFORMED;
-    /* The row the creator took the LB7A format and pitch from; its pixel size bounds the geometry.
-     * A format with no COMPOSED row is "not implemented", which is what both shells report. */
-    row = Bc250SharedSurfaceFormat(r.Format);
-    if (!row)
-        return BC250_SHARED_SURFACE_FORMAT;
-    if (row->d3dddi != a.Format)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (!Bc250SharedSurfaceGeometry(&a, row->bytes_per_pixel))
-        return BC250_SHARED_SURFACE_MALFORMED;
+        dst[i] = 0;
+    for (;;) {
+        if (!Out || !Admit || !ResourceData || !AllocationData)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_LENGTH;
+        if (ResourceBytes != (unsigned int)sizeof(r) || AllocationBytes != (unsigned int)sizeof(a))
+            break;
+        /* Byte copies: the blobs are the runtime's memory and need no alignment of ours. */
+        src = (const unsigned char *)AllocationData;
+        dst = (unsigned char *)&a;
+        for (i = 0; i < (unsigned int)sizeof(a); ++i)
+            dst[i] = src[i];
+        src = (const unsigned char *)ResourceData;
+        dst = (unsigned char *)&r;
+        for (i = 0; i < (unsigned int)sizeof(r); ++i)
+            dst[i] = src[i];
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD;
+        if (a.Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || a.Version != 1)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_MAGIC;
+        if (r.Magic != BC250_SURFACE_RESOURCE_MAGIC)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_VERSION;
+        if (r.Version != BC250_SURFACE_RESOURCE_TEXTURE_VERSION)
+            break;
+        /* The kernel driver's parser decided this record's placement; an opener that admitted a record
+         * the kernel refused would be describing memory nobody placed. */
+        why = BC250_SHARED_SURFACE_WHY_POLICY;
+        if (!Bc250SurfaceResourcePolicy(&r, ResourceBytes, &shared, &cached))
+            break;
+        why = BC250_SHARED_SURFACE_WHY_SHARED;
+        if (Admit->RequireShared && r.Shared != 1)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ACCESS;
+        if (r.Access & ~Admit->AccessMask)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_GEOMETRY;
+        if (r.Width != a.Width || r.Height != a.Height)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_EXTENT;
+        if (!r.Width || !r.Height || r.Width > BC250_SHARED_MAX_EDGE || r.Height > BC250_SHARED_MAX_EDGE)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_SUBRESOURCES;
+        if (r.MipLevels != 1 || r.ArraySize != 1 || r.SampleCount != 1 || r.SampleQuality)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_USAGE;
+        if (r.Usage != BC250_SHARED_USAGE_DEFAULT || r.CpuAccessFlags ||
+            r.TextureLayout != BC250_SHARED_LAYOUT_UNDEFINED)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_FLAGS;
+        if ((r.BindFlags & ~BC250_SHARED_BIND_MASK) || (r.MiscFlags & ~BC250_SHARED_MISC_MASK))
+            break;
+        /* The row the creator took the LB7A format and pitch from; its pixel size bounds the geometry.
+         * A format with no COMPOSED row is "not implemented", which is what both shells report. */
+        why = BC250_SHARED_SURFACE_WHY_FORMAT;
+        row = Bc250SharedSurfaceFormat(r.Format);
+        if (!row) {
+            status = BC250_SHARED_SURFACE_FORMAT;
+            break;
+        }
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT;
+        if (row->d3dddi != a.Format)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY;
+        if (!Bc250SharedSurfaceGeometry(&a, row->bytes_per_pixel))
+            break;
+        status = BC250_SHARED_SURFACE_OK;
+        why = BC250_SHARED_SURFACE_WHY_OK;
+        break;
+    }
+    if (Why)
+        *Why = why;
+    if (status != BC250_SHARED_SURFACE_OK)
+        return status;
     out.Width = a.Width;
     out.Height = a.Height;
     out.Pitch = a.Pitch;
@@ -245,17 +310,34 @@ static __inline int Bc250SharedSurfaceDecodeAdmitted(const void *ResourceData, u
     return BC250_SHARED_SURFACE_OK;
 }
 
+/* The same decode without the detail, for a caller that reports the status alone. */
+static __inline int Bc250SharedSurfaceDecodeAdmitted(const void *ResourceData, unsigned int ResourceBytes,
+                                                     const void *AllocationData, unsigned int AllocationBytes,
+                                                     const BC250_SHARED_SURFACE_ADMIT *Admit,
+                                                     BC250_SHARED_SURFACE *Out)
+{
+    return Bc250SharedSurfaceDecodeDetail(ResourceData, ResourceBytes, AllocationData, AllocationBytes, Admit, Out, 0);
+}
+
 /* The strict form: a shared texture and nothing else. A primary, a cached surface and a record
- * that shares nothing are refused, because a D3D12 opener has no use for any of them. */
-static __inline int Bc250SharedSurfaceDecode(const void *ResourceData, unsigned int ResourceBytes,
-                                             const void *AllocationData, unsigned int AllocationBytes,
-                                             BC250_SHARED_SURFACE *Out)
+ * that shares nothing are refused, because a D3D12 opener has no use for any of them. Why, when it
+ * is given, names the check that decided. */
+static __inline int Bc250SharedSurfaceDecodeWhy(const void *ResourceData, unsigned int ResourceBytes,
+                                                const void *AllocationData, unsigned int AllocationBytes,
+                                                BC250_SHARED_SURFACE *Out, const char **Why)
 {
     BC250_SHARED_SURFACE_ADMIT admit;
     admit.RequireShared = 1;
     admit.AccessMask = 0;
-    return Bc250SharedSurfaceDecodeAdmitted(ResourceData, ResourceBytes, AllocationData, AllocationBytes,
-                                            &admit, Out);
+    return Bc250SharedSurfaceDecodeDetail(ResourceData, ResourceBytes, AllocationData, AllocationBytes, &admit, Out,
+                                          Why);
+}
+
+static __inline int Bc250SharedSurfaceDecode(const void *ResourceData, unsigned int ResourceBytes,
+                                             const void *AllocationData, unsigned int AllocationBytes,
+                                             BC250_SHARED_SURFACE *Out)
+{
+    return Bc250SharedSurfaceDecodeWhy(ResourceData, ResourceBytes, AllocationData, AllocationBytes, Out, 0);
 }
 
 #if defined(__cplusplus)

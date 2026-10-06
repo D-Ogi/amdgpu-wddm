@@ -827,14 +827,16 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     if (!first.hAllocation) return E_INVALIDARG;
     if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
 
-    *why = "record";
+    // The decoder names the check it decided at, and *why is that name: "record" alone covered sixteen checks, and
+    // the three cross-API failures of round 1 all declined here, which took a lab pass and a 1.4 MB trace to tell
+    // apart (BD-075 round 2, 2026-10-06). The strings are the header's literals, so the pointer outlives this call.
+    *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
     BC250_SHARED_SURFACE shared{};
-    switch (Bc250SharedSurfaceDecode(args->pPrivateDriverData, args->PrivateDriverDataSize, first.pPrivateDriverData,
-                                     first.PrivateDriverDataSize, &shared)) {
+    switch (Bc250SharedSurfaceDecodeWhy(args->pPrivateDriverData, args->PrivateDriverDataSize,
+                                        first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why)) {
     case BC250_SHARED_SURFACE_OK:
         break;
     case BC250_SHARED_SURFACE_FORMAT:
-        *why = "record format";
         return E_NOTIMPL;
     default:
         return E_INVALIDARG;

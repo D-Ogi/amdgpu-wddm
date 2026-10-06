@@ -81,6 +81,20 @@ int decode_with(unsigned offset, unsigned long value, BC250_SHARED_SURFACE* out)
     return decode(resource, sizeof(resource), kAllocation, sizeof(kAllocation), out);
 }
 
+// The same, with the check the decode decided at. The string is a literal of the header, so comparing the pointer
+// would pass by accident in one translation unit; the text is compared instead, which is what a log line carries.
+const char* why_with(unsigned offset, unsigned long value) {
+    unsigned char resource[64];
+    BC250_SHARED_SURFACE out;
+    const char* why = 0;
+    std::memcpy(resource, kResource, sizeof(resource));
+    for (unsigned i = 0; i < 4; ++i) resource[offset + i] = static_cast<unsigned char>((value >> (8 * i)) & 0xFF);
+    Bc250SharedSurfaceDecodeWhy(resource, sizeof(resource), kAllocation, sizeof(kAllocation), &out, &why);
+    return why ? why : "(none)";
+}
+
+bool is(const char* got, const char* want) { return got && std::strcmp(got, want) == 0; }
+
 } // namespace
 
 int main() {
@@ -185,6 +199,60 @@ int main() {
               "decode: GENERATE_MIPS is carried through");
         check(decode_with(48, 0, &out) == BC250_SHARED_SURFACE_OK && out.BindFlags == 0,
               "decode: a surface with no bind flag is admitted");
+    }
+
+    // Which check decided, by name. One status for sixteen checks is unreadable in a log: a cross-API open that
+    // declined "at record" cost a lab pass and a 1.4 MB DDI trace before anyone knew that the other shell had
+    // written a 16-byte E26R v2 record (BD-075 round 2, 2026-10-06). These names are what the driver's refusal line
+    // prints and what the lab kit matches, so they are part of the contract.
+    {
+        BC250_SHARED_SURFACE out;
+        const char* why = 0;
+        check(Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), kAllocation, sizeof(kAllocation), &out,
+                                          &why) == BC250_SHARED_SURFACE_OK &&
+                  is(why, BC250_SHARED_SURFACE_WHY_OK),
+              "why: an admitted pair says \"record\"");
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(kResource, 16, kAllocation, sizeof(kAllocation), &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_LENGTH), "why: a 16-byte E26R v2 record is \"record length\"");
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), kAllocation, 31, &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_LENGTH), "why: a short allocation record is \"record length\"");
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(0, sizeof(kResource), kAllocation, sizeof(kAllocation), &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_ARGUMENTS), "why: a null blob is \"record arguments\"");
+        check(is(why_with(4, 2), BC250_SHARED_SURFACE_WHY_VERSION), "why: version 2 in 64 bytes is \"record version\"");
+        check(is(why_with(0, 0x52363246ul), BC250_SHARED_SURFACE_WHY_MAGIC), "why: another magic is \"record magic\"");
+        check(is(why_with(8, 0), BC250_SHARED_SURFACE_WHY_SHARED), "why: Shared 0 is \"record shared\"");
+        check(is(why_with(12, BC250_SURFACE_RESOURCE_CPU_READ), BC250_SHARED_SURFACE_WHY_ACCESS),
+              "why: a CPU_READ intent is \"record access\"");
+        check(is(why_with(16, 255), BC250_SHARED_SURFACE_WHY_GEOMETRY),
+              "why: a width that is not the allocation's is \"record geometry\"");
+        check(is(why_with(24, 2), BC250_SHARED_SURFACE_WHY_SUBRESOURCES), "why: two mips is \"record subresources\"");
+        check(is(why_with(32, 42), BC250_SHARED_SURFACE_WHY_FORMAT), "why: a format with no row is \"record format\"");
+        check(is(why_with(44, 1), BC250_SHARED_SURFACE_WHY_USAGE), "why: a usage of its own is \"record usage\"");
+        check(is(why_with(48, 0x40), BC250_SHARED_SURFACE_WHY_FLAGS),
+              "why: a bind flag outside the mask is \"record flags\"");
+        unsigned char lb7a[32];
+        std::memcpy(lb7a, kAllocation, sizeof(lb7a));
+        lb7a[4] = 2;
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), lb7a, sizeof(lb7a), &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD),
+              "why: an LB7A of another version is \"allocation record\"");
+        std::memcpy(lb7a, kAllocation, sizeof(lb7a));
+        lb7a[20] = 32;                                  // D3DDDIFMT_A8B8G8R8 under a BGRA8 resource record
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), lb7a, sizeof(lb7a), &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT),
+              "why: an LB7A format that is not the row's is \"allocation format\"");
+        std::memcpy(lb7a, kAllocation, sizeof(lb7a));
+        lb7a[16] = 0;                                   // a pitch below one row of pixels
+        lb7a[17] = 0;
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), lb7a, sizeof(lb7a), &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY),
+              "why: a pitch below one row is \"allocation geometry\"");
     }
 
     // The allocation record's geometry, against the row the resource record names: 4 bytes a pixel here.
