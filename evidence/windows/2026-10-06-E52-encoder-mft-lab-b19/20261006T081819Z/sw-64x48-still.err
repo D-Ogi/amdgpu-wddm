@@ -1,0 +1,10 @@
+[mft t05492] client device on adapter 1002:13FE
+[mft t05492] pipeline depth 1
+[mft t05492] gpu picture: record 0.224 ms, readback 2.577 ms (map wait 2.564), query wait 0.021 ms, gpu 0.604 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.045 ms, readback 0.637 ms (map wait 0.632), query wait 0.008 ms, gpu 0.195 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.040 ms, readback 0.416 ms (map wait 0.414), query wait 0.004 ms, gpu 0.190 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.018 ms, readback 0.320 ms (map wait 0.317), query wait 0.004 ms, gpu 0.192 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.015 ms, readback 0.335 ms (map wait 0.332), query wait 0.006 ms, gpu 0.184 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.015 ms, readback 0.305 ms (map wait 0.303), query wait 0.003 ms, gpu 0.184 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.014 ms, readback 0.301 ms (map wait 0.298), query wait 0.005 ms, gpu 0.184 ms (valid 1), 0 still in flight
+[mft t05492] gpu picture: record 0.020 ms, readback 0.313 ms (map wait 0.310), query wait 0.003 ms, gpu 0.185 ms (valid 1), 0 still in flight

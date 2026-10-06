@@ -1,0 +1,110 @@
+[mft t15296] ProcessMessage 0x10000000
+[mft t15296] ProcessMessage 0x2
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 6/1/6, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 1, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 2/2/2, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t15296] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t15296] ProcessMessage 0x10000000
+[mft t15296] client device on adapter 1002:13FE
+[mft t15296] pipeline depth 1
+[mft t15296] pipeline depth 2
+[mft t15296] pipeline depth 2 asked, 2 in force (low latency 0, hr 0x00000000)
+[mft t15296] queue NeedInput
+[mft t15296] ProcessMessage 0x10000003
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] submitted, 1 of 2 in flight, asking for the next picture
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] gpu picture: record 6.684 ms, readback 8.289 ms (map wait 7.340), query wait 0.014 ms, gpu 9.247 ms (valid 1), 1 still in flight
+[mft t15296] queue HaveOutput (84061 bytes, 1 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] gpu picture: record 0.668 ms, readback 0.222 ms (map wait 0.002), query wait 0.007 ms, gpu 1.458 ms (valid 1), 1 still in flight
+[mft t15296] queue HaveOutput (31018 bytes, 1 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] gpu picture: record 0.472 ms, readback 0.227 ms (map wait 0.005), query wait 0.008 ms, gpu 1.437 ms (valid 1), 1 still in flight
+[mft t15296] queue HaveOutput (30119 bytes, 1 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] gpu picture: record 0.447 ms, readback 0.224 ms (map wait 0.002), query wait 0.006 ms, gpu 1.426 ms (valid 1), 1 still in flight
+[mft t15296] queue HaveOutput (22324 bytes, 1 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] gpu picture: record 0.472 ms, readback 0.235 ms (map wait 0.003), query wait 0.008 ms, gpu 1.434 ms (valid 1), 1 still in flight
+[mft t15296] queue HaveOutput (25755 bytes, 1 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessMessage 0x10000002
+[mft t15296] ProcessMessage 0x1
+[mft t15296] gpu picture: record 0.453 ms, readback 0.246 ms (map wait 0.032), query wait 0.010 ms, gpu 1.432 ms (valid 1), 0 still in flight
+[mft t15296] queue HaveOutput (24364 bytes, 1 waiting)
+[mft t15296] queue DrainComplete (1 outputs waiting, finish 0x00000000)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessMessage 0x10000003
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] submitted, 1 of 2 in flight, asking for the next picture
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessMessage 0x10000002
+[mft t15296] ProcessMessage 0x1
+[mft t15296] gpu picture: record 0.582 ms, readback 9.147 ms (map wait 8.925), query wait 0.011 ms, gpu 9.224 ms (valid 1), 0 still in flight
+[mft t15296] queue HaveOutput (71104 bytes, 1 waiting)
+[mft t15296] queue DrainComplete (1 outputs waiting, finish 0x00000000)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] GetEvent -> 0xC00D3E80
+[mft t15296] ProcessMessage 0x10000003
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] GetEvent -> 0xC00D3E80
+[mft t15296] submitted, 1 of 2 in flight, asking for the next picture
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] GetEvent -> 0xC00D3E80
+[mft t15296] pipeline depth 2 -> 1: writing out 1 picture(s) first
+[mft t15296] gpu picture: record 0.620 ms, readback 9.341 ms (map wait 8.983), query wait 0.014 ms, gpu 9.225 ms (valid 1), 0 still in flight
+[mft t15296] queue HaveOutput (65565 bytes, 1 waiting)
+[mft t15296] pipeline depth 1
+[mft t15296] pipeline depth 1 asked, 1 in force (low latency 1, hr 0x00000000)
+[mft t15296] gpu picture: record 0.075 ms, readback 2.232 ms (map wait 1.899), query wait 0.012 ms, gpu 1.450 ms (valid 1), 0 still in flight
+[mft t15296] queue HaveOutput (18019 bytes, 2 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (1 still waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] GetEvent -> 0xC00D3E80
+[mft t15296] gpu picture: record 0.061 ms, readback 2.220 ms (map wait 1.901), query wait 0.012 ms, gpu 1.422 ms (valid 1), 0 still in flight
+[mft t15296] queue HaveOutput (15254 bytes, 1 waiting)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] ProcessOutput delivered a sample (0 still waiting)
+[mft t15296] queue NeedInput
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] GetEvent -> 0xC00D3E80
+[mft t15296] ProcessMessage 0x10000002
+[mft t15296] ProcessMessage 0x1
+[mft t15296] queue DrainComplete (0 outputs waiting, finish 0x00000000)
+[mft t15296] GetEvent -> 0x00000000
+[mft t15296] GetEvent -> 0xC00D3E80
+[mft t15296] ProcessMessage 0x10000001

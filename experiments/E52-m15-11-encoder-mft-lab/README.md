@@ -96,6 +96,11 @@ unit A claim. Stages 4 and 5 are the acceptance oracle the criterion names.
 `docs/01-evidence-rules.md` asks for, the binary hashes, and the before and after `--enum` output of
 every stage that registered anything.
 
+- 2026-10-06: the run on train b19 (release 0.7.208.100-tester.13, binaries from `e52/encoder-perf`
+  at `e4d1f630`), 82 of 82 cases and the three comparison cases against the inbox encoder:
+  `evidence/windows/2026-10-06-E52-encoder-mft-lab-b19/`. The earlier run of the same day, on
+  tester.12 with 75 of 75 cases, is `evidence/windows/2026-10-06-E52-encoder-mft-lab/`.
+
 ## References
 
 - the component: `driver/umd/mft-h264/README.md`, its registration specification `INSTALL.md`

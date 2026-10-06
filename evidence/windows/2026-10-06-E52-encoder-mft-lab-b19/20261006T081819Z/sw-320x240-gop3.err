@@ -1,0 +1,8 @@
+[mft t15080] client device on adapter 1002:13FE
+[mft t15080] pipeline depth 1
+[mft t15080] gpu picture: record 0.253 ms, readback 5.694 ms (map wait 5.539), query wait 0.019 ms, gpu 3.179 ms (valid 1), 0 still in flight
+[mft t15080] gpu picture: record 0.055 ms, readback 1.423 ms (map wait 1.373), query wait 0.009 ms, gpu 0.792 ms (valid 1), 0 still in flight
+[mft t15080] gpu picture: record 0.048 ms, readback 1.080 ms (map wait 1.055), query wait 0.006 ms, gpu 0.793 ms (valid 1), 0 still in flight
+[mft t15080] gpu picture: record 0.039 ms, readback 3.445 ms (map wait 3.411), query wait 0.010 ms, gpu 3.163 ms (valid 1), 0 still in flight
+[mft t15080] gpu picture: record 0.044 ms, readback 0.996 ms (map wait 0.972), query wait 0.005 ms, gpu 0.806 ms (valid 1), 0 still in flight
+[mft t15080] gpu picture: record 0.028 ms, readback 0.968 ms (map wait 0.945), query wait 0.004 ms, gpu 0.804 ms (valid 1), 0 still in flight

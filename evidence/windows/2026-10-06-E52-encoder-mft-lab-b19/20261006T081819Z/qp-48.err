@@ -1,0 +1,5 @@
+[mft t08824] client device on adapter 1002:13FE
+[mft t08824] pipeline depth 1
+[mft t08824] gpu picture: record 0.247 ms, readback 5.679 ms (map wait 5.488), query wait 0.019 ms, gpu 3.194 ms (valid 1), 0 still in flight
+[mft t08824] gpu picture: record 0.050 ms, readback 1.247 ms (map wait 1.205), query wait 0.006 ms, gpu 0.779 ms (valid 1), 0 still in flight
+[mft t08824] gpu picture: record 0.051 ms, readback 1.045 ms (map wait 1.019), query wait 0.006 ms, gpu 0.773 ms (valid 1), 0 still in flight

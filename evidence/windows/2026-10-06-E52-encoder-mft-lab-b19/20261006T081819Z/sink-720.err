@@ -1,0 +1,77 @@
+[mft t10028] BeginGetEvent -> 0x00000000
+[mft t10028] ProcessMessage 0x2
+[mft t10028] parameter sets rebuilt: level 31, colour 2/2/2, range 0, 36 bytes
+[mft t09620] ProcessMessage 0x10000000
+[mft t09620] client device on adapter 1002:13FE
+[mft t09620] pipeline depth 1
+[mft t09620] pipeline depth 2
+[mft t09620] pipeline depth 2 asked, 2 in force (low latency 0, hr 0x00000000)
+[mft t09620] queue NeedInput
+[mft t09620] ProcessMessage 0x10000003
+[mft t12496] EndGetEvent -> 0x00000000 type 601
+[mft t12496] BeginGetEvent -> 0x00000000
+[mft t07824] submitted, 1 of 2 in flight, asking for the next picture
+[mft t07824] queue NeedInput
+[mft t12496] EndGetEvent -> 0x00000000 type 601
+[mft t12496] BeginGetEvent -> 0x00000000
+[mft t07824] gpu picture: record 31.703 ms, readback 6.385 ms (map wait 5.484), query wait 0.010 ms, gpu 9.270 ms (valid 1), 1 still in flight
+[mft t07824] queue HaveOutput (53812 bytes, 1 waiting)
+[mft t12496] EndGetEvent -> 0x00000000 type 602
+[mft t12496] BeginGetEvent -> 0x00000000
+[mft t07824] ProcessOutput delivered a sample (0 still waiting)
+[mft t07824] queue NeedInput
+[mft t12496] EndGetEvent -> 0x00000000 type 601
+[mft t12496] BeginGetEvent -> 0x00000000
+[mft t07824] gpu picture: record 1.219 ms, readback 0.223 ms (map wait 0.002), query wait 0.007 ms, gpu 1.409 ms (valid 1), 1 still in flight
+[mft t07824] queue HaveOutput (33817 bytes, 1 waiting)
+[mft t09620] EndGetEvent -> 0x00000000 type 602
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t12496] ProcessOutput delivered a sample (0 still waiting)
+[mft t12496] queue NeedInput
+[mft t09620] EndGetEvent -> 0x00000000 type 601
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t12496] gpu picture: record 0.500 ms, readback 0.226 ms (map wait 0.002), query wait 0.008 ms, gpu 1.392 ms (valid 1), 1 still in flight
+[mft t12496] queue HaveOutput (30583 bytes, 1 waiting)
+[mft t09620] EndGetEvent -> 0x00000000 type 602
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t07824] ProcessOutput delivered a sample (0 still waiting)
+[mft t07824] queue NeedInput
+[mft t09620] EndGetEvent -> 0x00000000 type 601
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t07824] gpu picture: record 0.641 ms, readback 0.225 ms (map wait 0.002), query wait 0.007 ms, gpu 1.388 ms (valid 1), 1 still in flight
+[mft t07824] queue HaveOutput (24678 bytes, 1 waiting)
+[mft t09620] EndGetEvent -> 0x00000000 type 602
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t12496] ProcessOutput delivered a sample (0 still waiting)
+[mft t12496] queue NeedInput
+[mft t09620] EndGetEvent -> 0x00000000 type 601
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t07824] gpu picture: record 0.478 ms, readback 0.231 ms (map wait 0.002), query wait 0.008 ms, gpu 1.395 ms (valid 1), 1 still in flight
+[mft t07824] queue HaveOutput (26838 bytes, 1 waiting)
+[mft t09620] EndGetEvent -> 0x00000000 type 602
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t07824] ProcessOutput delivered a sample (0 still waiting)
+[mft t07824] queue NeedInput
+[mft t09620] EndGetEvent -> 0x00000000 type 601
+[mft t09620] BeginGetEvent -> 0x00000000
+[mft t12496] ProcessMessage 0x1
+[mft t12496] gpu picture: record 0.465 ms, readback 0.249 ms (map wait 0.031), query wait 0.011 ms, gpu 1.393 ms (valid 1), 0 still in flight
+[mft t12496] queue HaveOutput (27117 bytes, 1 waiting)
+[mft t12496] queue DrainComplete (1 outputs waiting, finish 0x00000000)
+[mft t07824] EndGetEvent -> 0x00000000 type 602
+[mft t07824] BeginGetEvent -> 0x00000000
+[mft t07824] EndGetEvent -> 0x00000000 type 603
+[mft t12496] ProcessOutput delivered a sample (0 still waiting)
+[mft t07824] BeginGetEvent -> 0x00000000
+[mft t12496] ProcessMessage 0x10000003
+[mft t12496] queue NeedInput
+[mft t12496] EndGetEvent -> 0x00000000 type 601
+[mft t12496] BeginGetEvent -> 0x00000000
+[mft t07824] ProcessMessage 0x1
+[mft t07824] queue DrainComplete (0 outputs waiting, finish 0x00000000)
+[mft t12496] EndGetEvent -> 0x00000000 type 603
+[mft t12496] BeginGetEvent -> 0x00000000
+[mft t10028] ProcessMessage 0x0
+[mft t10028] ProcessMessage 0x10000002
+[mft t10028] ProcessMessage 0x10000001
+[mft t10028] ProcessMessage 0x2

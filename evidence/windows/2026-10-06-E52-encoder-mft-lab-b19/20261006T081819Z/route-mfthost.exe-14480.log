@@ -1,0 +1,1 @@
+bc250d3d_router pid=14480 exe=mfthost.exe entry=OpenAdapter10_2 route=gpu reason=app-allowed fallback=0 gpu_hr=00000000 hr=00000000 module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll app_mode=allowlist mode_source=registry gpu_source=registry cpu_source=registry

@@ -1,0 +1,3 @@
+[mft t03740] client device on adapter 1002:13FE
+[mft t03740] pipeline depth 1
+[mft t03740] gpu picture: record 0.217 ms, readback 2.245 ms (map wait 2.234), query wait 0.013 ms, gpu 0.501 ms (valid 1), 0 still in flight

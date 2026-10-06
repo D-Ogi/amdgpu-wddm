@@ -1,0 +1,10 @@
+[mft t08380] client device on adapter 1002:13FE
+[mft t08380] pipeline depth 1
+[mft t08380] gpu picture: record 0.217 ms, readback 2.213 ms (map wait 2.202), query wait 0.012 ms, gpu 0.500 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.045 ms, readback 0.477 ms (map wait 0.474), query wait 0.006 ms, gpu 0.110 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.034 ms, readback 0.346 ms (map wait 0.344), query wait 0.004 ms, gpu 0.110 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.016 ms, readback 0.258 ms (map wait 0.254), query wait 0.005 ms, gpu 0.114 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.020 ms, readback 0.235 ms (map wait 0.233), query wait 0.004 ms, gpu 0.110 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.015 ms, readback 0.258 ms (map wait 0.256), query wait 0.003 ms, gpu 0.113 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.013 ms, readback 0.219 ms (map wait 0.216), query wait 0.005 ms, gpu 0.112 ms (valid 1), 0 still in flight
+[mft t08380] gpu picture: record 0.017 ms, readback 0.240 ms (map wait 0.237), query wait 0.004 ms, gpu 0.115 ms (valid 1), 0 still in flight

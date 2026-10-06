@@ -1,0 +1,432 @@
+E52 encoder MFT on unit A 20261006T081819Z
+release    0.7.208.100-tester.13 at C:\Program Files\amdgpu-wddm
+mfthost    E316E891191A6EA10A73D0483EC307249AE0054E6E89E7E558842A17B3521D18  C:\BC250\tmp\e52\mfthost.exe
+mftreg     4E9A43966056D3805FDA188A43FF4C6A259059A5DB0D94433D204EC49AD81A95  C:\BC250\tmp\e52\mftreg.exe
+mft dll    D3E29E6ED32446BC61ABD3A7AFC46CB3F4C03D1E029A384CC693FA4C0C9872CA  (not pushed; every stage uses MFTRegisterLocal; machine-wide: release-other: 0.7.208.100-tester.13 (b19) 141969A3)
+cu         CuMode 40 applied 40 confirmed 40
+tctl       before 65.1 C (source overlay)
+kmd        before faults 0, timeouts 0; driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 136391, uptime 4270962 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 224 exits 223 refusals 0, 2088832 ms at the point
+bound      per case <= 60 s, whole script <= 165 s (15 s reserved for the epilogue), 82 cases in the table
+out        C:\BC250\tmp\e52\20261006T081819Z
+
+machine wide before: 2 H.264 encoder MFT(s)
+adapter 0  1002:13fe  luid 00000000:00008aca  BC-250 GPU (amdgpu-wddm)
+adapter 1  1414:008c  luid 00000000:00008c40  Microsoft Basic Render Driver
+bc-250     luid 00000000:00008aca
+route A    the installed release registers ITS OWN transform machine wide (release-other: 0.7.208.100-tester.13 (b19) 141969A3); a case
+           that activates that copy instead of its MFTRegisterLocal one runs the release code, not this build
+
+policy before  Allow(MultiString)=[d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe] Deny(MultiString)=[witcher3.exe,composition-control.exe,gpu-window-control.exe] GpuUmdPath(String)=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll GpuUmdPathWow(String)=C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_d3d11.dll Mode(String)=allowlist RouteLogDirectory(String)=C:\BC250\m14\app-route-001\logs
+gpu umd        C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll (on disk: True)
+policy plan    add
+policy now     Allow(MultiString)=[d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe,mfthost.exe] Deny(MultiString)=[witcher3.exe,composition-control.exe,gpu-window-control.exe] GpuUmdPath(String)=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll GpuUmdPathWow(String)=C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_d3d11.dll Mode(String)=allowlist RouteLogDirectory(String)=C:\BC250\tmp\e52\20261006T081819Z
+route witness  armed: C:\BC250\tmp\e52\20261006T081819Z\route-mfthost.exe-<pid>.log must say route=gpu fallback=0
+
+selftest             selftest   ok=1 exact=-       nnz=-       ms=-       gpu=-       pps=-       adapter=-          route=off      t=1.5  s bound=20 s exit=0 
+smoke-320-q26        encode     ok=1 exact=3/3     nnz=exact   ms=10.82   gpu=1.59    pps=92.4    adapter=1002:13fe  route=gpu      t=1.1  s bound=60 s exit=0 
+    per picture: gpu stage 10.60 ms (gpu busy 1.59, readback 9.66), cpu 0.22 ms (cavlc 0.21, nal 0.01)
+    10175 bytes, 814000 bit/s, PSNR(Y) 45.72 dB (recorded 814000 bit/s, 45.72 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+db-waves-320         encode     ok=1 exact=3/3     nnz=exact   ms=3.80    gpu=1.75    pps=263.1   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.46 ms (gpu busy 1.75, readback 2.78), cpu 0.34 ms (cavlc 0.32, nal 0.02)
+    10175 bytes, 814000 bit/s, PSNR(Y) 45.72 dB (recorded 814000 bit/s, 45.72 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+t720-1               encode     ok=1 exact=6/6     nnz=exact   ms=9.84    gpu=4.89    pps=101.7   adapter=1002:13fe  route=gpu      t=0.7  s bound=40 s exit=0 
+    per picture: gpu stage 8.01 ms (gpu busy 4.89, readback 6.17), cpu 1.82 ms (cavlc 1.75, nal 0.07)
+    209758 bytes, 8390320 bit/s, PSNR(Y) 47.23 dB (recorded 8390320 bit/s, 47.23 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+mft-720              mft        ok=1 exact=-       nnz=-       ms=7.82    gpu=-       pps=-       adapter=1002:13fe  route=gpu      t=0.9  s bound=50 s exit=0 
+    MFT_ENUM_ADAPTER_LUID 00000000:00008aca
+    217641 bytes, 8705640 bit/s, PSNR(Y) - dB (recorded 8705640 bit/s)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+sink-720             sinkwriter ok=1 exact=-       nnz=-       ms=-       gpu=-       pps=-       adapter=1002:13fe  route=gpu      t=0.5  s bound=50 s exit=0 
+    197615 bytes, - bit/s, PSNR(Y) - dB
+    note: the development PC wrote 179781 bytes before the transform was restricted to the BC-250 adapter, and cannot write it again: the sink writer chooses the encoder, and on a machine with no BC-250 it chooses another one. The container is the inbox MP4 sink, so a different size here is a note and not a failure
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+t720-60              encode     ok=1 exact=60/60   nnz=exact   ms=6.54    gpu=3.61    pps=153.0   adapter=1002:13fe  route=gpu      t=1.8  s bound=45 s exit=0 
+    per picture: gpu stage 4.77 ms (gpu busy 3.61, readback 4.25), cpu 1.76 ms (cavlc 1.70, nal 0.06)
+    1932665 bytes, 7730660 bit/s, PSNR(Y) 48.19 dB (recorded 7730660 bit/s, 48.19 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+t1080-60             encode     ok=1 exact=60/60   nnz=exact   ms=11.71   gpu=6.53    pps=85.4    adapter=1002:13fe  route=gpu      t=3    s bound=55 s exit=0 
+    per picture: gpu stage 8.17 ms (gpu busy 6.53, readback 7.57), cpu 3.54 ms (cavlc 3.42, nal 0.13)
+    4176036 bytes, 16704144 bit/s, PSNR(Y) 49.32 dB (recorded 16704144 bit/s, 49.32 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+compare-720-60       compare    ok=1 exact=-       nnz=-       ms=-       gpu=-       pps=-       adapter=1002:13fe  route=gpu      t=2    s bound=55 s exit=0 
+    dpm before: driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 136759, uptime 4282395 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+    dpm after:  driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 136821, uptime 4284344 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+                                             ours     inbox H264
+      bit/s at the nominal rate           6168812        6428840
+      ms per picture                         6.46           1.51
+      pictures per second                   154.9          662.1
+      ms per picture, pipelined              2.75      (its own)
+      pictures per second, pipelined          363.3      (its own)
+      our pipelined pass held 2 pictures at once over 50 of 60 pictures; the byte and PSNR rows are the serial pass
+      PSNR Y (dB)                           44.31          45.65
+      PSNR Cb (dB)                          41.57          45.39
+      PSNR Cr (dB)                          40.66          45.60
+      pictures decoded                         60             60
+      the gap picture by picture, in dB, ours minus inbox
+        Y           -1.44      -1.34      -2.88         33
+        Cb           3.06      -3.94      -8.47         30
+        Cr           2.80      -5.06      -9.45         30
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+compare-1080-60      compare    ok=1 exact=-       nnz=-       ms=-       gpu=-       pps=-       adapter=1002:13fe  route=gpu      t=3.1  s bound=55 s exit=0 
+    dpm before: driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 136822, uptime 4284375 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+    dpm after:  driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 136924, uptime 4287558 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+                                             ours     inbox H264
+      bit/s at the nominal rate          12358908       13280112
+      ms per picture                        11.51           2.65
+      pictures per second                    86.9          377.0
+      ms per picture, pipelined              4.55      (its own)
+      pictures per second, pipelined          219.8      (its own)
+      our pipelined pass held 2 pictures at once over 50 of 60 pictures; the byte and PSNR rows are the serial pass
+      PSNR Y (dB)                           43.75          46.06
+      PSNR Cb (dB)                          40.56          45.50
+      PSNR Cr (dB)                          39.16          45.16
+      pictures decoded                         60             60
+      the gap picture by picture, in dB, ours minus inbox
+        Y           -1.81      -2.32      -4.13         19
+        Cb           3.08      -5.07      -7.95         30
+        Cr           2.81      -6.15     -10.67         30
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+t720-2               encode     ok=1 exact=6/6     nnz=exact   ms=9.64    gpu=4.90    pps=103.7   adapter=1002:13fe  route=gpu      t=0.7  s bound=40 s exit=0 
+    per picture: gpu stage 7.84 ms (gpu busy 4.90, readback 6.02), cpu 1.81 ms (cavlc 1.73, nal 0.07)
+    209758 bytes, 8390320 bit/s, PSNR(Y) 47.23 dB (recorded 8390320 bit/s, 47.23 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+t720-3               encode     ok=1 exact=6/6     nnz=exact   ms=9.67    gpu=4.90    pps=103.5   adapter=1002:13fe  route=gpu      t=0.7  s bound=40 s exit=0 
+    per picture: gpu stage 7.82 ms (gpu busy 4.90, readback 6.06), cpu 1.85 ms (cavlc 1.78, nal 0.07)
+    209758 bytes, 8390320 bit/s, PSNR(Y) 47.23 dB (recorded 8390320 bit/s, 47.23 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+t720-d2              encode     ok=1 exact=6/6     nnz=exact   ms=9.59    gpu=4.89    pps=104.2   adapter=1002:13fe  route=gpu      t=0.8  s bound=40 s exit=0 
+    per picture: gpu stage 7.78 ms (gpu busy 4.89, readback 6.01), cpu 1.81 ms (cavlc 1.74, nal 0.07)
+    209758 bytes, 8390320 bit/s, PSNR(Y) 47.23 dB (recorded 8390320 bit/s, 47.23 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+compare-720          compare    ok=1 exact=-       nnz=-       ms=-       gpu=-       pps=-       adapter=1002:13fe  route=gpu      t=0.8  s bound=55 s exit=0 
+    dpm before: driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 136998, uptime 4289810 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+    dpm after:  driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 137025, uptime 4290644 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+                                             ours     inbox H264
+      bit/s at the nominal rate           7887400        7438560
+      ms per picture                        10.04           8.07
+      pictures per second                    99.6          123.9
+      ms per picture, pipelined              6.65      (its own)
+      pictures per second, pipelined          150.5      (its own)
+      our pipelined pass held 2 pictures at once over 5 of 6 pictures; the byte and PSNR rows are the serial pass
+      PSNR Y (dB)                           47.07          45.85
+      PSNR Cb (dB)                          46.19          46.72
+      PSNR Cr (dB)                          45.18          46.53
+      pictures decoded                          6              6
+      the gap picture by picture, in dB, ours minus inbox
+        Y           -1.44       1.76      -1.44          0
+        Cb           3.06      -1.24      -1.86          1
+        Cr           2.80      -2.19      -3.24          5
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-64x48-q6          encode     ok=1 exact=1/1     nnz=exact   ms=3.05    gpu=0.50    pps=327.6   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.00 ms (gpu busy 0.50, readback 2.25), cpu 0.05 ms (cavlc 0.05, nal 0.01)
+    782 bytes, 187680 bit/s, PSNR(Y) 62.51 dB (recorded 187680 bit/s, 62.51 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-64x48-q26         encode     ok=1 exact=1/1     nnz=exact   ms=3.00    gpu=0.50    pps=333.0   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 2.97 ms (gpu busy 0.50, readback 2.23), cpu 0.02 ms (cavlc 0.02, nal 0.00)
+    243 bytes, 58320 bit/s, PSNR(Y) 45.88 dB (recorded 58320 bit/s, 45.88 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-64x48-q51         encode     ok=1 exact=1/1     nnz=exact   ms=3.84    gpu=0.50    pps=260.1   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.82 ms (gpu busy 0.50, readback 2.72), cpu 0.02 ms (cavlc 0.02, nal 0.00)
+    141 bytes, 33840 bit/s, PSNR(Y) 32.45 dB (recorded 33840 bit/s, 32.45 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-64x48-f8-gop8     encode     ok=1 exact=8/8     nnz=exact   ms=0.85    gpu=0.16    pps=1170.0  adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 0.83 ms (gpu busy 0.16, readback 0.53), cpu 0.02 ms (cavlc 0.02, nal 0.00)
+    1867 bytes, 56010 bit/s, PSNR(Y) 48.45 dB (recorded 56010 bit/s, 48.45 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-64x48-f8-db       encode     ok=1 exact=8/8     nnz=exact   ms=0.99    gpu=0.26    pps=1006.5  adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 0.97 ms (gpu busy 0.26, readback 0.66), cpu 0.02 ms (cavlc 0.02, nal 0.00)
+    1976 bytes, 59280 bit/s, PSNR(Y) 50.50 dB (recorded 59280 bit/s, 50.5 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-64x48-still       encode     ok=1 exact=8/8     nnz=exact   ms=0.98    gpu=0.24    pps=1024.9  adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 0.97 ms (gpu busy 0.24, readback 0.65), cpu 0.01 ms (cavlc 0.01, nal 0.00)
+    344 bytes, 10320 bit/s, PSNR(Y) 50.58 dB (recorded 10320 bit/s, 50.58 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-176x144-q40       encode     ok=1 exact=10/10   nnz=exact   ms=1.32    gpu=0.58    pps=756.4   adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 1.26 ms (gpu busy 0.58, readback 0.97), cpu 0.06 ms (cavlc 0.06, nal 0.00)
+    7045 bytes, 169080 bit/s, PSNR(Y) 38.08 dB (recorded 169080 bit/s, 38.08 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-320x240-gop3      encode     ok=1 exact=6/6     nnz=exact   ms=3.08    gpu=1.59    pps=325.0   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 2.74 ms (gpu busy 1.59, readback 2.27), cpu 0.33 ms (cavlc 0.31, nal 0.02)
+    33480 bytes, 1339200 bit/s, PSNR(Y) 49.57 dB (recorded 1339200 bit/s, 49.57 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-320x240-cbr       encode     ok=1 exact=6/6     nnz=exact   ms=2.53    gpu=1.20    pps=394.9   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 2.30 ms (gpu busy 1.20, readback 1.84), cpu 0.23 ms (cavlc 0.21, nal 0.01)
+    19948 bytes, 797920 bit/s, PSNR(Y) 46.52 dB (recorded 797920 bit/s, 46.52 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-352x288-gpusrc    encode     ok=1 exact=4/4     nnz=exact   ms=8.04    gpu=1.61    pps=124.4   adapter=1002:13fe  route=gpu      t=0.6  s bound=20 s exit=0 
+    per picture: gpu stage 7.61 ms (gpu busy 1.61, readback 5.43), cpu 0.42 ms (cavlc 0.41, nal 0.01)
+    15801 bytes, 948060 bit/s, PSNR(Y) 46.03 dB (recorded 948060 bit/s, 46.03 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+sw-352x288-nv12sys   encode     ok=1 exact=4/4     nnz=exact   ms=4.98    gpu=1.61    pps=200.8   adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 4.72 ms (gpu busy 1.61, readback 2.62), cpu 0.26 ms (cavlc 0.24, nal 0.01)
+    16802 bytes, 1008120 bit/s, PSNR(Y) 46.24 dB (recorded 1008120 bit/s, 46.24 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+    [mfthost_amdgpu_wddm_dxvk.log] info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+sw-176x144-nv12sys   encode     ok=1 exact=3/3     nnz=exact   ms=2.04    gpu=0.56    pps=489.1   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 1.97 ms (gpu busy 0.56, readback 1.46), cpu 0.07 ms (cavlc 0.07, nal 0.01)
+    2756 bytes, 220480 bit/s, PSNR(Y) 43.62 dB (recorded 220480 bit/s, 43.62 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-720p-nv12sys      encode     ok=1 exact=3/3     nnz=exact   ms=13.40   gpu=6.21    pps=74.6    adapter=1002:13fe  route=gpu      t=0.6  s bound=40 s exit=0 
+    per picture: gpu stage 11.26 ms (gpu busy 6.21, readback 8.35), cpu 2.14 ms (cavlc 2.04, nal 0.09)
+    117655 bytes, 9412400 bit/s, PSNR(Y) 46.14 dB (recorded 9412400 bit/s, 46.14 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-640x480           encode     ok=1 exact=4/4     nnz=exact   ms=4.17    gpu=1.67    pps=239.9   adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 3.40 ms (gpu busy 1.67, readback 2.75), cpu 0.76 ms (cavlc 0.73, nal 0.03)
+    48658 bytes, 2919480 bit/s, PSNR(Y) 45.91 dB (recorded 2919480 bit/s, 45.91 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-640x480-db        encode     ok=1 exact=4/4     nnz=exact   ms=7.35    gpu=2.96    pps=136.0   adapter=1002:13fe  route=gpu      t=0.6  s bound=20 s exit=0 
+    per picture: gpu stage 6.60 ms (gpu busy 2.96, readback 4.17), cpu 0.75 ms (cavlc 0.72, nal 0.03)
+    49482 bytes, 2968920 bit/s, PSNR(Y) 45.95 dB (recorded 2968920 bit/s, 45.95 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-640x480-q34       encode     ok=1 exact=4/4     nnz=exact   ms=7.21    gpu=2.94    pps=138.7   adapter=1002:13fe  route=gpu      t=0.6  s bound=20 s exit=0 
+    per picture: gpu stage 6.49 ms (gpu busy 2.94, readback 4.20), cpu 0.72 ms (cavlc 0.70, nal 0.02)
+    36455 bytes, 2187300 bit/s, PSNR(Y) 41.10 dB (recorded 2187300 bit/s, 41.1 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-640x480-still     encode     ok=1 exact=6/6     nnz=exact   ms=5.36    gpu=2.38    pps=186.7   adapter=1002:13fe  route=gpu      t=0.6  s bound=20 s exit=0 
+    per picture: gpu stage 5.07 ms (gpu busy 2.38, readback 3.36), cpu 0.28 ms (cavlc 0.27, nal 0.01)
+    16825 bytes, 673000 bit/s, PSNR(Y) 47.56 dB (recorded 673000 bit/s, 47.56 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-640x482           encode     ok=1 exact=3/3     nnz=exact   ms=8.68    gpu=3.41    pps=115.2   adapter=1002:13fe  route=gpu      t=0.6  s bound=40 s exit=0 
+    per picture: gpu stage 7.89 ms (gpu busy 3.41, readback 4.92), cpu 0.79 ms (cavlc 0.76, nal 0.03)
+    40135 bytes, 3210800 bit/s, PSNR(Y) 45.63 dB (recorded 3210800 bit/s, 45.63 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-638x478           encode     ok=1 exact=3/3     nnz=exact   ms=8.47    gpu=3.34    pps=118.0   adapter=1002:13fe  route=gpu      t=0.5  s bound=20 s exit=0 
+    per picture: gpu stage 7.70 ms (gpu busy 3.34, readback 4.81), cpu 0.77 ms (cavlc 0.73, nal 0.03)
+    38679 bytes, 3094320 bit/s, PSNR(Y) 45.58 dB (recorded 3094320 bit/s, 45.58 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-720p-db           encode     ok=1 exact=4/4     nnz=exact   ms=11.38   gpu=5.56    pps=87.9    adapter=1002:13fe  route=gpu      t=0.6  s bound=40 s exit=0 
+    per picture: gpu stage 9.50 ms (gpu busy 5.56, readback 7.11), cpu 1.87 ms (cavlc 1.79, nal 0.08)
+    146999 bytes, 8819940 bit/s, PSNR(Y) 46.63 dB (recorded 8819940 bit/s, 46.63 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-720p-gpusrc       encode     ok=1 exact=4/4     nnz=exact   ms=12.19   gpu=5.55    pps=82.0    adapter=1002:13fe  route=gpu      t=0.6  s bound=40 s exit=0 
+    per picture: gpu stage 9.62 ms (gpu busy 5.55, readback 7.40), cpu 2.57 ms (cavlc 2.48, nal 0.09)
+    158727 bytes, 9523620 bit/s, PSNR(Y) 45.34 dB (recorded 9523620 bit/s, 45.34 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+sw-1080p-q30         encode     ok=1 exact=3/3     nnz=exact   ms=19.29   gpu=10.13   pps=51.8    adapter=1002:13fe  route=gpu      t=0.6  s bound=50 s exit=0 
+    per picture: gpu stage 15.65 ms (gpu busy 10.13, readback 12.70), cpu 3.64 ms (cavlc 3.50, nal 0.14)
+    210008 bytes, 16800640 bit/s, PSNR(Y) 43.76 dB (recorded 16800640 bit/s, 43.76 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-6                 encode     ok=1 exact=3/3     nnz=exact   ms=3.87    gpu=1.53    pps=258.3   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.46 ms (gpu busy 1.53, readback 2.62), cpu 0.41 ms (cavlc 0.38, nal 0.03)
+    26370 bytes, 2109600 bit/s, PSNR(Y) 55.77 dB (recorded 2109600 bit/s, 55.77 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-51                encode     ok=1 exact=3/3     nnz=exact   ms=3.53    gpu=1.58    pps=283.4   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.29 ms (gpu busy 1.58, readback 2.64), cpu 0.23 ms (cavlc 0.23, nal 0.01)
+    4886 bytes, 390880 bit/s, PSNR(Y) 26.36 dB (recorded 390880 bit/s, 26.36 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-16                encode     ok=1 exact=3/3     nnz=exact   ms=3.86    gpu=1.59    pps=259.3   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.52 ms (gpu busy 1.59, readback 2.83), cpu 0.33 ms (cavlc 0.32, nal 0.02)
+    16160 bytes, 1292800 bit/s, PSNR(Y) 55.52 dB (recorded 1292800 bit/s, 55.52 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-26                encode     ok=1 exact=3/3     nnz=exact   ms=3.72    gpu=1.60    pps=268.8   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.60, readback 2.68), cpu 0.34 ms (cavlc 0.32, nal 0.02)
+    10175 bytes, 814000 bit/s, PSNR(Y) 45.72 dB (recorded 814000 bit/s, 45.72 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-34                encode     ok=1 exact=3/3     nnz=exact   ms=3.50    gpu=1.59    pps=285.5   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.26 ms (gpu busy 1.59, readback 2.65), cpu 0.24 ms (cavlc 0.23, nal 0.01)
+    7459 bytes, 596720 bit/s, PSNR(Y) 41.76 dB (recorded 596720 bit/s, 41.76 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-40                encode     ok=1 exact=3/3     nnz=exact   ms=3.51    gpu=1.58    pps=285.1   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.31 ms (gpu busy 1.58, readback 2.67), cpu 0.19 ms (cavlc 0.18, nal 0.01)
+    5945 bytes, 475600 bit/s, PSNR(Y) 36.07 dB (recorded 475600 bit/s, 36.07 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-7                 encode     ok=1 exact=3/3     nnz=exact   ms=3.72    gpu=1.53    pps=269.1   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.28 ms (gpu busy 1.53, readback 2.64), cpu 0.44 ms (cavlc 0.41, nal 0.03)
+    24844 bytes, 1987520 bit/s, PSNR(Y) 58.31 dB (recorded 1987520 bit/s, 58.31 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-8                 encode     ok=1 exact=3/3     nnz=exact   ms=3.50    gpu=1.52    pps=285.6   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.22 ms (gpu busy 1.52, readback 2.65), cpu 0.28 ms (cavlc 0.25, nal 0.03)
+    22723 bytes, 1817840 bit/s, PSNR(Y) 63.83 dB (recorded 1817840 bit/s, 63.83 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-9                 encode     ok=1 exact=3/3     nnz=exact   ms=3.63    gpu=1.53    pps=275.8   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.21 ms (gpu busy 1.53, readback 2.62), cpu 0.41 ms (cavlc 0.39, nal 0.02)
+    23263 bytes, 1861040 bit/s, PSNR(Y) 60.25 dB (recorded 1861040 bit/s, 60.25 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-10                encode     ok=1 exact=3/3     nnz=exact   ms=3.81    gpu=1.52    pps=262.5   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.41 ms (gpu busy 1.52, readback 2.73), cpu 0.40 ms (cavlc 0.37, nal 0.03)
+    21084 bytes, 1686720 bit/s, PSNR(Y) 60.22 dB (recorded 1686720 bit/s, 60.22 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-11                encode     ok=1 exact=3/3     nnz=exact   ms=3.54    gpu=1.52    pps=282.6   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.19 ms (gpu busy 1.52, readback 2.61), cpu 0.34 ms (cavlc 0.32, nal 0.02)
+    20044 bytes, 1603520 bit/s, PSNR(Y) 62.09 dB (recorded 1603520 bit/s, 62.09 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-12                encode     ok=1 exact=3/3     nnz=exact   ms=3.46    gpu=1.52    pps=289.1   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.16 ms (gpu busy 1.52, readback 2.58), cpu 0.29 ms (cavlc 0.27, nal 0.02)
+    19760 bytes, 1580800 bit/s, PSNR(Y) 58.80 dB (recorded 1580800 bit/s, 58.8 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-13                encode     ok=1 exact=3/3     nnz=exact   ms=3.70    gpu=1.53    pps=270.0   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.53, readback 2.68), cpu 0.33 ms (cavlc 0.31, nal 0.02)
+    18626 bytes, 1490080 bit/s, PSNR(Y) 55.28 dB (recorded 1490080 bit/s, 55.28 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-14                encode     ok=1 exact=3/3     nnz=exact   ms=3.81    gpu=1.52    pps=262.3   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.55 ms (gpu busy 1.52, readback 2.88), cpu 0.26 ms (cavlc 0.24, nal 0.02)
+    17580 bytes, 1406400 bit/s, PSNR(Y) 55.42 dB (recorded 1406400 bit/s, 55.42 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-15                encode     ok=1 exact=3/3     nnz=exact   ms=3.65    gpu=1.53    pps=274.2   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.29 ms (gpu busy 1.53, readback 2.67), cpu 0.36 ms (cavlc 0.34, nal 0.02)
+    17499 bytes, 1399920 bit/s, PSNR(Y) 55.42 dB (recorded 1399920 bit/s, 55.42 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-17                encode     ok=1 exact=3/3     nnz=exact   ms=3.75    gpu=1.59    pps=266.9   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.40 ms (gpu busy 1.59, readback 2.72), cpu 0.35 ms (cavlc 0.33, nal 0.02)
+    15685 bytes, 1254800 bit/s, PSNR(Y) 53.67 dB (recorded 1254800 bit/s, 53.67 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-18                encode     ok=1 exact=3/3     nnz=exact   ms=3.75    gpu=1.59    pps=266.7   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.36 ms (gpu busy 1.59, readback 2.72), cpu 0.38 ms (cavlc 0.36, nal 0.02)
+    15611 bytes, 1248880 bit/s, PSNR(Y) 50.83 dB (recorded 1248880 bit/s, 50.83 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-19                encode     ok=1 exact=3/3     nnz=exact   ms=3.70    gpu=1.60    pps=270.3   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.32 ms (gpu busy 1.60, readback 2.69), cpu 0.37 ms (cavlc 0.34, nal 0.03)
+    15057 bytes, 1204560 bit/s, PSNR(Y) 49.22 dB (recorded 1204560 bit/s, 49.22 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-20                encode     ok=1 exact=3/3     nnz=exact   ms=3.64    gpu=1.60    pps=274.9   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.27 ms (gpu busy 1.60, readback 2.67), cpu 0.36 ms (cavlc 0.34, nal 0.02)
+    14326 bytes, 1146080 bit/s, PSNR(Y) 49.55 dB (recorded 1146080 bit/s, 49.55 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-21                encode     ok=1 exact=3/3     nnz=exact   ms=3.76    gpu=1.60    pps=265.7   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.45 ms (gpu busy 1.60, readback 2.77), cpu 0.31 ms (cavlc 0.30, nal 0.01)
+    12908 bytes, 1032640 bit/s, PSNR(Y) 48.41 dB (recorded 1032640 bit/s, 48.41 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-22                encode     ok=1 exact=3/3     nnz=exact   ms=3.64    gpu=1.60    pps=275.0   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.60, readback 2.73), cpu 0.26 ms (cavlc 0.24, nal 0.01)
+    12314 bytes, 985120 bit/s, PSNR(Y) 47.74 dB (recorded 985120 bit/s, 47.74 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-23                encode     ok=1 exact=3/3     nnz=exact   ms=3.76    gpu=1.60    pps=266.2   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.60, readback 2.71), cpu 0.38 ms (cavlc 0.36, nal 0.02)
+    11621 bytes, 929680 bit/s, PSNR(Y) 47.68 dB (recorded 929680 bit/s, 47.68 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-24                encode     ok=1 exact=3/3     nnz=exact   ms=3.63    gpu=1.59    pps=275.7   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.59, readback 2.71), cpu 0.25 ms (cavlc 0.24, nal 0.01)
+    10919 bytes, 873520 bit/s, PSNR(Y) 47.30 dB (recorded 873520 bit/s, 47.3 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-25                encode     ok=1 exact=3/3     nnz=exact   ms=3.55    gpu=1.60    pps=281.4   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.32 ms (gpu busy 1.60, readback 2.68), cpu 0.23 ms (cavlc 0.22, nal 0.01)
+    10571 bytes, 845680 bit/s, PSNR(Y) 48.12 dB (recorded 845680 bit/s, 48.12 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-27                encode     ok=1 exact=3/3     nnz=exact   ms=3.63    gpu=1.59    pps=275.6   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.35 ms (gpu busy 1.59, readback 2.72), cpu 0.27 ms (cavlc 0.26, nal 0.02)
+    9542 bytes, 763360 bit/s, PSNR(Y) 47.16 dB (recorded 763360 bit/s, 47.16 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-28                encode     ok=1 exact=3/3     nnz=exact   ms=3.53    gpu=1.59    pps=283.3   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.27 ms (gpu busy 1.59, readback 2.66), cpu 0.26 ms (cavlc 0.24, nal 0.02)
+    9237 bytes, 738960 bit/s, PSNR(Y) 45.26 dB (recorded 738960 bit/s, 45.26 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-29                encode     ok=1 exact=3/3     nnz=exact   ms=3.56    gpu=1.59    pps=280.8   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.59, readback 2.73), cpu 0.19 ms (cavlc 0.18, nal 0.01)
+    8693 bytes, 695440 bit/s, PSNR(Y) 45.20 dB (recorded 695440 bit/s, 45.2 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-30                encode     ok=1 exact=3/3     nnz=exact   ms=3.53    gpu=1.59    pps=283.7   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.34 ms (gpu busy 1.59, readback 2.71), cpu 0.19 ms (cavlc 0.18, nal 0.01)
+    8841 bytes, 707280 bit/s, PSNR(Y) 43.51 dB (recorded 707280 bit/s, 43.51 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-31                encode     ok=1 exact=3/3     nnz=exact   ms=3.59    gpu=1.59    pps=278.3   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.36 ms (gpu busy 1.59, readback 2.73), cpu 0.23 ms (cavlc 0.22, nal 0.01)
+    8378 bytes, 670240 bit/s, PSNR(Y) 44.06 dB (recorded 670240 bit/s, 44.06 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-32                encode     ok=1 exact=3/3     nnz=exact   ms=3.53    gpu=1.59    pps=283.5   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.29 ms (gpu busy 1.59, readback 2.66), cpu 0.23 ms (cavlc 0.22, nal 0.01)
+    8023 bytes, 641840 bit/s, PSNR(Y) 42.65 dB (recorded 641840 bit/s, 42.65 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-33                encode     ok=1 exact=3/3     nnz=exact   ms=3.64    gpu=1.58    pps=274.6   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.39 ms (gpu busy 1.58, readback 2.73), cpu 0.25 ms (cavlc 0.24, nal 0.01)
+    7512 bytes, 600960 bit/s, PSNR(Y) 42.45 dB (recorded 600960 bit/s, 42.45 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-35                encode     ok=1 exact=3/3     nnz=exact   ms=3.61    gpu=1.58    pps=277.3   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.58, readback 2.70), cpu 0.24 ms (cavlc 0.22, nal 0.01)
+    7107 bytes, 568560 bit/s, PSNR(Y) 40.75 dB (recorded 568560 bit/s, 40.75 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-36                encode     ok=1 exact=3/3     nnz=exact   ms=3.48    gpu=1.58    pps=287.4   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.25 ms (gpu busy 1.58, readback 2.63), cpu 0.23 ms (cavlc 0.22, nal 0.01)
+    6981 bytes, 558480 bit/s, PSNR(Y) 40.03 dB (recorded 558480 bit/s, 40.03 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-37                encode     ok=1 exact=3/3     nnz=exact   ms=3.56    gpu=1.58    pps=281.3   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.33 ms (gpu busy 1.58, readback 2.72), cpu 0.22 ms (cavlc 0.21, nal 0.01)
+    6656 bytes, 532480 bit/s, PSNR(Y) 39.90 dB (recorded 532480 bit/s, 39.9 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-38                encode     ok=1 exact=3/3     nnz=exact   ms=3.53    gpu=1.58    pps=282.9   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.33 ms (gpu busy 1.58, readback 2.73), cpu 0.20 ms (cavlc 0.19, nal 0.01)
+    6580 bytes, 526400 bit/s, PSNR(Y) 37.48 dB (recorded 526400 bit/s, 37.48 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-39                encode     ok=1 exact=3/3     nnz=exact   ms=3.54    gpu=1.58    pps=282.7   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.32 ms (gpu busy 1.58, readback 2.71), cpu 0.22 ms (cavlc 0.21, nal 0.01)
+    6430 bytes, 514400 bit/s, PSNR(Y) 37.54 dB (recorded 514400 bit/s, 37.54 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-41                encode     ok=1 exact=3/3     nnz=exact   ms=3.51    gpu=1.58    pps=285.1   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.27 ms (gpu busy 1.58, readback 2.65), cpu 0.24 ms (cavlc 0.23, nal 0.01)
+    5973 bytes, 477840 bit/s, PSNR(Y) 36.20 dB (recorded 477840 bit/s, 36.2 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-42                encode     ok=1 exact=3/3     nnz=exact   ms=3.46    gpu=1.57    pps=288.9   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.25 ms (gpu busy 1.57, readback 2.65), cpu 0.21 ms (cavlc 0.20, nal 0.01)
+    5604 bytes, 448320 bit/s, PSNR(Y) 33.69 dB (recorded 448320 bit/s, 33.69 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-43                encode     ok=1 exact=3/3     nnz=exact   ms=3.65    gpu=1.58    pps=273.8   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.38 ms (gpu busy 1.58, readback 2.72), cpu 0.27 ms (cavlc 0.26, nal 0.01)
+    5610 bytes, 448800 bit/s, PSNR(Y) 33.78 dB (recorded 448800 bit/s, 33.78 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-44                encode     ok=1 exact=3/3     nnz=exact   ms=3.72    gpu=1.58    pps=268.7   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.58 ms (gpu busy 1.58, readback 2.90), cpu 0.14 ms (cavlc 0.13, nal 0.01)
+    5685 bytes, 454800 bit/s, PSNR(Y) 33.09 dB (recorded 454800 bit/s, 33.09 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-45                encode     ok=1 exact=3/3     nnz=exact   ms=3.57    gpu=1.58    pps=280.0   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.37 ms (gpu busy 1.58, readback 2.67), cpu 0.20 ms (cavlc 0.19, nal 0.01)
+    5418 bytes, 433440 bit/s, PSNR(Y) 31.83 dB (recorded 433440 bit/s, 31.83 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-46                encode     ok=1 exact=3/3     nnz=exact   ms=3.53    gpu=1.58    pps=283.5   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.35 ms (gpu busy 1.58, readback 2.73), cpu 0.17 ms (cavlc 0.17, nal 0.01)
+    5443 bytes, 435440 bit/s, PSNR(Y) 31.64 dB (recorded 435440 bit/s, 31.64 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-47                encode     ok=1 exact=3/3     nnz=exact   ms=3.45    gpu=1.58    pps=290.0   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.25 ms (gpu busy 1.58, readback 2.66), cpu 0.20 ms (cavlc 0.19, nal 0.01)
+    5263 bytes, 421040 bit/s, PSNR(Y) 31.22 dB (recorded 421040 bit/s, 31.22 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-48                encode     ok=1 exact=3/3     nnz=exact   ms=3.51    gpu=1.58    pps=284.9   adapter=1002:13fe  route=gpu      t=0.6  s bound=15 s exit=0 
+    per picture: gpu stage 3.32 ms (gpu busy 1.58, readback 2.66), cpu 0.19 ms (cavlc 0.18, nal 0.01)
+    5055 bytes, 404400 bit/s, PSNR(Y) 30.78 dB (recorded 404400 bit/s, 30.78 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-49                encode     ok=1 exact=3/3     nnz=exact   ms=3.47    gpu=1.58    pps=288.4   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.28 ms (gpu busy 1.58, readback 2.71), cpu 0.19 ms (cavlc 0.18, nal 0.01)
+    5067 bytes, 405360 bit/s, PSNR(Y) 28.69 dB (recorded 405360 bit/s, 28.69 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+qp-50                encode     ok=1 exact=3/3     nnz=exact   ms=3.49    gpu=1.58    pps=286.5   adapter=1002:13fe  route=gpu      t=0.5  s bound=15 s exit=0 
+    per picture: gpu stage 3.29 ms (gpu busy 1.58, readback 2.70), cpu 0.20 ms (cavlc 0.19, nal 0.01)
+    4920 bytes, 393600 bit/s, PSNR(Y) 26.21 dB (recorded 393600 bit/s, 26.21 dB)
+    router: route=gpu reason=app-allowed module=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+
+TOTAL ok=82/82 run, 82 in the table, cases_s=58, elapsed_s=59
+policy     restored (Allow, RouteLogDirectory), readback identical to before
+machine-wide MFT registration: release-other: 0.7.208.100-tester.13 (b19) 141969A3 before and after, not touched by this run
+tctl       after 68.1 C (source overlay)
+kmd        after faults 0, timeouts 0; driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 138294, uptime 4329736 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 224 exits 224 refusals 0, 2092099 ms at the point
+kmd health equal (faults 0 -> 0, timeouts 0 -> 0)
+system log since the start: no TDR (4101/4116/117/141), no bugcheck (41/1001), no WHEA
+
+not run in this trial:
+  texin bgra-plain, bgra-slice: runnable, but mfthost runs the four --texin cases in one process and the NV12
+    pair between them removes the device; the BGRA pair passed on unit A in train b18 (120/120 at 1920x1080)
+  texin nv12-plain, nv12-slice: BD-071, fixed on m14/d3d11-nv12-planes, not installed on b18r1 (-IncludeTexin forces them)
+  compare: nothing is skipped here any more; the owner asked for it on the lab (-IncludeCompare:$false drops it)
+  Game Bar, Windows Camera, Chromium (E52 stages 1 and 5): they need the machine-wide route A registration,
+    which this trial does not write; a separate trial, with --register-global and --unregister-global in it
+
+VERDICT exit=0: every case that ran passed and the lab is as it was

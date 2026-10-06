@@ -1,0 +1,6 @@
+[mft t11232] client device on adapter 1002:13FE
+[mft t11232] pipeline depth 1
+[mft t11232] gpu picture: record 6.500 ms, readback 9.547 ms (map wait 8.919), query wait 0.019 ms, gpu 6.433 ms (valid 1), 0 still in flight
+[mft t11232] gpu picture: record 0.076 ms, readback 2.801 ms (map wait 2.620), query wait 0.011 ms, gpu 1.769 ms (valid 1), 0 still in flight
+[mft t11232] gpu picture: record 0.066 ms, readback 2.353 ms (map wait 2.223), query wait 0.012 ms, gpu 1.784 ms (valid 1), 0 still in flight
+[mft t11232] gpu picture: record 0.069 ms, readback 2.111 ms (map wait 2.016), query wait 0.009 ms, gpu 1.768 ms (valid 1), 0 still in flight

@@ -1,0 +1,5 @@
+[mft t12920] client device on adapter 1002:13FE
+[mft t12920] pipeline depth 1
+[mft t12920] gpu picture: record 0.231 ms, readback 5.690 ms (map wait 5.546), query wait 0.018 ms, gpu 3.187 ms (valid 1), 0 still in flight
+[mft t12920] gpu picture: record 0.052 ms, readback 1.247 ms (map wait 1.205), query wait 0.006 ms, gpu 0.803 ms (valid 1), 0 still in flight
+[mft t12920] gpu picture: record 0.048 ms, readback 1.117 ms (map wait 1.090), query wait 0.007 ms, gpu 0.804 ms (valid 1), 0 still in flight
