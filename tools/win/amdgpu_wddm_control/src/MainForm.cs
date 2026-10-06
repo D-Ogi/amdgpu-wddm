@@ -490,6 +490,7 @@ namespace AmdgpuWddmControl
             var cu = Kmd.CuMode(); if (cu.Value != null) _snap.Cu = cu.Value;
             _vram = Kmd.VideoMemory().Value;
             _fan = Kmd.Hwmon().Value;
+            TickTuning();
             var before = _status == null ? "" : string.Join("|", _status.Items.Select(i => i.Text));
             ComputeStatus();
             var after = string.Join("|", _status.Items.Select(i => i.Text));
@@ -500,10 +501,23 @@ namespace AmdgpuWddmControl
         // Whether the 2 s timer runs (G-PERF): only while the window is visible, not minimised, and on a page with live values.
         public static bool LiveTimerWanted(bool visible, bool minimized, string page) { return Sensors.PollWanted(visible, minimized, page); }
 
+        // The graphics page polls only while a tuning trial runs: the countdown is the driver's, and a page without a
+        // trial has nothing that changes by itself (G-PERF).
+        public static bool LiveTimerWanted(bool visible, bool minimized, string page, bool trial) { return Sensors.PollWanted(visible, minimized, page, trial); }
+
+        bool TuningTrialRunning
+        {
+            get
+            {
+                var c = CurveNow; var u = CpuNow;
+                return (c != null && c.Has(CurveState.FlagOnTrial)) || (u != null && u.Has(CpuState.FlagOnTrial));
+            }
+        }
+
         void UpdateTimer()
         {
             if (_smoke) { _timer.Enabled = false; return; }
-            _timer.Enabled = LiveTimerWanted(Visible, WindowState == FormWindowState.Minimized, _page);
+            _timer.Enabled = LiveTimerWanted(Visible, WindowState == FormWindowState.Minimized, _page, TuningTrialRunning);
         }
 
         public bool TimerRunning { get { return _timer.Enabled; } }

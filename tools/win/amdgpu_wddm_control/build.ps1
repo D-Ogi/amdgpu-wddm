@@ -48,7 +48,8 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs' | ForEach-Object { Join-Path $here "src\$_" }
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs' |
+    ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
 # temp folder. With -Oracle the review oracles (oracle-cu.json, oracle-ver.json, oracle-art.json) in that directory are
@@ -190,6 +191,47 @@ if (-not $NoSmoke) {
         }
         if (-not $r.Text.Contains('dry run: nothing was written')) { throw "dry run $($e.Key): no closing line" }
     }
+    # The tuning page (docs/design/tuner.md): a reading with the curve and the processor surface, so each plan is
+    # formed in full. These actions write no registry value, so the dry run shows the request the helper would send.
+    $tuned = Join-Path $here 'test\snapshot-tuner.json'
+    $tune = [ordered]@{
+        'tune-trial'  = @(0, 'tuning request curve-trial, curve 820,830,850,870,889,909,925,942,958,974,990', 'window 120000 ms', 'undo: no')
+        'tune-keep'   = @(3, 'refused: No curve trial is running.')
+        'tune-stop'   = @(3, 'refused: No curve trial is running.')
+        'tune-reset'  = @(3, 'refused: The default curve is in use already.')
+        'cpu-enable'  = @(3, 'refused: Processor tuning is on already.')
+        'cpu-disable' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
+        'cpu-readback' = @(0, 'tuning request cpu-readback')
+        'cpu-trial'   = @(0, 'tuning request cpu-trial', 'undervolt 8 steps', 'window 120000 ms')
+        'cpu-keep'    = @(3, 'refused: No processor trial is running.')
+        'cpu-reset'   = @(3, 'refused: The processor has its default settings already.')
+        'core-mask'   = @(0, 'tuning request core-mask, cores 8', 'at the next restart of Windows')
+        # WU-042: "Reset driver settings" is the one control that puts the standard settings back, so with the
+        # processor surface open it also turns processor tuning off. The tuning steps of a machine that has
+        # settings stored are gated by the host tests (TunerStandardSteps); this snapshot has none stored.
+        'reset-defaults' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
+    }
+    foreach ($e in $tune.GetEnumerator()) {
+        $extra = @(switch ($e.Key) { 'tune-trial' { '--curve', '820,830,850,870,889,909,925,942,958,974,990' }
+            'reset-defaults' { '--games', 'keep' }
+            'cpu-trial' { '--cpu-uv', '8' } 'core-mask' { '--cores', '8' } })
+        $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $tuned)) "tune-$($e.Key)"
+        if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 1) {
+            if (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
+        }
+    }
+    # A curve under the driver's own floor, a core count this board does not take, and a trial without a curve: the
+    # first two are refusals of the plan, the third is a usage error.
+    $r = Invoke-DryRun @('--action', 'tune-trial', '--curve', '820,820,820,820,820,820,820,820,820,820,820', '--dry-run', '--snapshot', $tuned) 'tune-too-deep'
+    if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The curve breaks rule Depth at 1200 MHz.')) { throw "a curve under the floor must be refused (exit $($r.Code)): $($r.Text)" }
+    $r = Invoke-DryRun @('--action', 'core-mask', '--cores', '7', '--dry-run', '--snapshot', $tuned) 'tune-bad-cores'
+    if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The core count must be 6 or 8.')) { throw "7 cores must be refused (exit $($r.Code)): $($r.Text)" }
+    foreach ($bad in @(@('tune-trial'), @('tune-trial', '--curve', '820,840'), @('cpu-trial', '--cores', '8'), @('core-mask', '--curve', '820,840,860,880,899,919,935,952,968,984,1000'))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $tuned)) ('usage-tune-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
+    Write-Host "  tuning dry runs: $($tune.Count) plans, 2 refusals, 4 usage errors"
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'

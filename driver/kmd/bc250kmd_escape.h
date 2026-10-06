@@ -36,6 +36,8 @@
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
+#define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
+#define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
 #define BC250_KMD_VERSION 0x000700D1u       // revision 209 (INF 0.7.209.1, on 208.1): M15.14 increment 2, the
                                             // DirectFlip handshake's kernel half. One derivation of the type-0
                                             // placement (WddmGdiRecordPolicy) that CreateAllocation uses and the
@@ -135,6 +137,15 @@
                                             // the INF revision, and because Windows keeps the driver it has
                                             // when the version ties. 209 is taken by the independent-flip
                                             // candidate, so this one is 210.
+                                            //
+                                            // the Tuner (written as revision 210 on tuner/vf-cpu and merged into
+                                            // this lineage by train b20): the GPU V/F curve with a kernel-owned
+                                            // trial that reverts, the CPU surface on the firmware's queue 3 (a
+                                            // clock limit, an undervolt and a temperature cap, read-gated and
+                                            // staged), and the 8-core unlock through the AMD-named queue 0
+                                            // message. docs/design/tuner.md and ADR 0020 are the design. Two new
+                                            // escapes, 28 RUN_DPM_CURVE (360 bytes) and 29 RUN_CPU (296 bytes);
+                                            // 27 is the fan reader's, which is in this driver as well.
                                             //
                                             // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
                                             // guard log that did not fit a log line are two lines each.
@@ -463,6 +474,8 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
 #define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
 #define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.207)
+#define BC250_DPM_FLAG_CURVE 2048u           // CurrentMv comes from an operator's V/F curve, not the table (0.7.210)
+#define BC250_DPM_FLAG_CURVE_TRIAL 4096u     // a curve trial runs; RUN_DPM_CURVE says for how much longer (0.7.210)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -616,6 +629,161 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
     unsigned long long Refusals;            // values refused since the start, over every register
 } BC250_ESCAPE_HWMON; // 216 bytes on Windows, ABI 1
+// The operator's GPU V/F curve and its trial (0.7.210.1; driver/kmd/dpm.c, driver/shim/bc250_dpm.c,
+// docs/design/tuner.md, ADR 0020). The clock grid cannot move, so a curve is BC250_DPM_CURVE_POINTS voltages, one
+// per level from FirstMHz (1000) up in StepMHz (100) steps to the table's ceiling (2000). Software state only: the
+// escape stores a candidate under the DPM state's locks and the governor thread applies it at its next tick
+// (25 ms) through the same checked transaction every other level change uses. So every operation takes
+// NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, as RUN_DPM_TUNE, and no operation
+// idles the GPU or stalls a running game (BD-054).
+//
+// READ is open to every caller. SET, KEEP, CANCEL and RESET need an administrator and ExpectedGeneration equal to
+// the Generation a READ of this start returned (STATUS_RETRY otherwise). SET, KEEP and CANCEL also need a running
+// DPM start (STATUS_INVALID_DEVICE_STATE: a fixed-lab start has no governor tick, so nothing could revert a
+// candidate; such a start sits at 1000 MHz, where the curve is the floor's 820 mV anyway).
+//
+// SET is a trial, not a setting: the candidate becomes active, nothing is written to disk, and the governor
+// thread puts the stored curve back when TrialMs passes without a KEEP. The revert is the kernel's own act, so a
+// killed tool, a hung tool, a lost remote session and a bugcheck all end at the stored curve. KEEP inside the
+// window persists the candidate (11 named REG_DWORDs plus the boot guard's two marks) and clears the trial.
+// CANCEL reverts at once. RESET puts the table's own line back and deletes the stored values.
+//
+// A refused candidate leaves everything as it was and names the rule in Error (enum bc250_clock_curve_error,
+// driver/shim/include/bc250_clock.h) and the level in ErrorLevel: a value outside 820..1000 mV, more than
+// BC250_CURVE_UNDERVOLT_MV under the table's line, a voltage that falls as the clock rises, or a first point that
+// is not the lab floor's 820 mV. FloorMv carries the lowest voltage admitted at each level, so a window can draw
+// the band it may not enter without knowing the rule.
+#define BC250_DPM_CURVE_ABI 1u
+#define BC250_DPM_CURVE_POINTS 11u           // levels 5..15 of the clock table: 1000..2000 MHz
+#define BC250_DPM_CURVE_OP_READ 0u
+#define BC250_DPM_CURVE_OP_SET 1u            // in: CandidateMv, TrialMs
+#define BC250_DPM_CURVE_OP_KEEP 2u           // the candidate on trial becomes the stored curve
+#define BC250_DPM_CURVE_OP_CANCEL 3u         // the stored curve comes back now
+#define BC250_DPM_CURVE_OP_RESET 4u          // the table's own line, stored
+#define BC250_DPM_CURVE_FLAG_VALID 1u        // the governor state was read (a full WDDM start)
+#define BC250_DPM_CURVE_FLAG_ON_TRIAL 2u     // a candidate runs; TrialRemainingMs says for how much longer
+#define BC250_DPM_CURVE_FLAG_STORED 4u       // the stored curve is not the table's line (registry values exist)
+#define BC250_DPM_CURVE_FLAG_PENDING 8u      // DpmCurvePending is on disk: a start with this curve was not confirmed
+#define BC250_DPM_CURVE_FLAG_CONFIRMED 16u   // DpmCurveConfirmed matches the stored curve
+#define BC250_DPM_CURVE_FLAG_DEFAULT 32u     // the active curve is the table's own line
+#define BC250_DPM_CURVE_FLAG_GOVERNING 64u   // a DPM start's governor runs and has not given up: writes are taken
+#define BC250_DPM_CURVE_FLAG_APPLIED 128u    // the governor has applied the active curve (Applied == Serial)
+typedef struct _BC250_ESCAPE_DPM_CURVE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long TrialMs;                  // in: SET (10000..180000, 0 = the driver's 25000); out: in force
+    unsigned long TrialRemainingMs;         // out: 0 outside a trial
+    unsigned long Serial, Applied;          // out: changes of the active curve, and what the governor runs
+    unsigned long Error, ErrorLevel;        // out: why a candidate was refused, and at which table level
+    unsigned long FirstMHz, StepMHz, Points;    // out: the grid the five vectors below describe
+    unsigned long CandidateMv[BC250_DPM_CURVE_POINTS];  // in: SET; out: the candidate on trial, else zeros
+    unsigned long ActiveMv[BC250_DPM_CURVE_POINTS];     // out: what the governor applies now
+    unsigned long StoredMv[BC250_DPM_CURVE_POINTS];     // out: what the registry holds (the revert target)
+    unsigned long DefaultMv[BC250_DPM_CURVE_POINTS];    // out: the table's own line
+    unsigned long FloorMv[BC250_DPM_CURVE_POINTS];      // out: the lowest voltage admitted at each level
+    unsigned long Level, LevelMHz, LevelMv;     // out: where the governor is now, and the curve's voltage there
+    unsigned long ObservedMHz, ObservedVid;     // out: the SMU's last readback
+    long TemperatureMc;                         // out
+    unsigned long CeilingMHz, Mode;             // out: this start's DpmMaxMHz and BC250_DPM_MODE_*
+    unsigned long Sets, Keeps, Cancels, Reverts;    // out: the trial's own counters
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: SET, KEEP, CANCEL, RESET
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_DPM_CURVE; // 360 bytes on Windows, ABI 1
+
+// The CPU surface (0.7.210.1; driver/kmd/cpu.c, driver/shim/bc250_cpu.c, docs/design/tuner.md, ADR 0020): a clock
+// limit, an undervolt in firmware curve-scale steps, the firmware's own temperature cap, the readbacks of all
+// three, and the core-enable mask. The transport is the firmware's queue 3, whose three mailbox registers are in
+// the BAR5 aperture the driver already maps; the KMD is still the single SMU owner, with a second allowlist so
+// that a GFX clock transaction can never send a CPU message and a CPU transaction can never send a clock message.
+//
+// Unlike every other escape here, the write operations DO send mailbox messages, so SET, KEEP, CANCEL, RESET and
+// SEARCH_* need HardwareAccess=1 (the Level Two exclusion) and an administrator, exactly as RUN_CLOCK's SET does.
+// READ is adapter-owned software state and takes NoAdapterSynchronization alone; READBACK sends only getters and
+// is a HardwareAccess operation as well.
+//
+// Three rules the driver enforces, and a caller should expect:
+//   - No setter runs until this start's READBACK has answered once (FLAG_QUEUE3_PROVEN). Queue 3 has never been
+//     spoken to on this part, so an inferred fact is measured before a write depends on it.
+//   - No CPU message while the GPU is at or above BC250_CPU_GPU_BUSY_PERMILLE busy. At or above the lab's 87 C
+//     no setter runs either, with two exceptions the driver names itself: a step that lowers the dissipation,
+//     and the way back from a trial. The part must always be returnable to the settings it is known to run at,
+//     and a trial left in the chip because the part was hot is the worse of the two states (0.7.211).
+//     One message per BC250_CPU_MESSAGE_GAP_MS, and the owner lock is released between them so the
+//     governor's 25 ms tick is never held for a whole sequence.
+//   - A SET is a trial. The driver reverts it when TrialMs passes without a KEEP, and nothing reaches the
+//     registry before a KEEP. A revert that the firmware refuses stays owed (FLAG_REVERT_OWED) and the driver
+//     keeps trying; only then is a cold boot the last backstop, because nothing of this surface persists in
+//     the chip.
+//   - SEARCH_STEP and SET judge the sample the caller describes: WheaEvents, ChecksumErrors and Loaded come
+//     from the caller, which is the only side that can count a machine check or know that it was loading the
+//     part. Without Loaded the driver does not judge clock stretching at all, because an idle core sits a
+//     gigahertz under any limit.
+// CpuTune 0 (the release default) refuses every write with STATUS_INVALID_DEVICE_STATE: the CPU surface is opt-in
+// per machine. Error is enum bc250_cpu_error; SearchFail is enum bc250_cpu_fail (driver/shim/include/bc250_cpu.h).
+#define BC250_CPU_ABI 1u
+#define BC250_CPU_CORE_SLOTS 8u
+// What a caller must know to form a request, under names of this header alone: the two core masks the driver
+// admits and the deepest step of the guided search. driver/shim/include/bc250_cpu.h is the authority for all
+// three, and driver/kmd/cpu.c asserts at compile time that these numbers still equal its own.
+#define BC250_CPU_REQUEST_MASK_STOCK 0x77u     // 6 of the 8 cores: the mask this part ships with
+#define BC250_CPU_REQUEST_MASK_FULL 0xFFu      // all eight
+#define BC250_CPU_REQUEST_SEARCH_STEPS 8u      // the deepest undervolt step the search tries
+#define BC250_CPU_OP_READ 0u                 // software state only: what is applied, stored, recorded
+#define BC250_CPU_OP_READBACK 1u             // send the getters of both queues; no setter
+#define BC250_CPU_OP_SET 2u                  // in: Given, MaxMHz, UvSteps, TempC, TrialMs
+#define BC250_CPU_OP_KEEP 3u
+#define BC250_CPU_OP_CANCEL 4u
+#define BC250_CPU_OP_RESET 5u                // the recorded baseline, and the stored values deleted
+#define BC250_CPU_OP_CORES 6u                // in: CoreMask (119 or 255); applies at the next Windows restart
+// The guided undervolt search ("find my setting"). The judgement is the shim's (bc250_cpu_search_next), the load is
+// the caller's: BEGIN records the baseline and applies step 1 as a trial; then the caller loads the CPU for
+// SearchLoadMs and calls STEP, which reads the chip, judges the step just loaded and either applies the next one or
+// stops and puts the baseline back. SearchBest is then the deepest step that passed, and a person presses KEEP.
+// A caller that stops calling loses nothing: the trial window of the step in force ends it.
+#define BC250_CPU_OP_SEARCH_BEGIN 7u         // in: UvSteps (0 = BC250_CPU_SEARCH_MAX_STEPS), TrialMs
+#define BC250_CPU_OP_SEARCH_STEP 8u          // out: SearchStep, SearchBest, SearchFail, SearchTested, Flags
+#define BC250_CPU_GIVEN_MAX 1u               // Given bits: which of the three values a SET carries
+#define BC250_CPU_GIVEN_UV 2u
+#define BC250_CPU_GIVEN_TEMP 4u
+#define BC250_CPU_FLAG_VALID 1u              // a full WDDM start with the SMU owner online
+#define BC250_CPU_FLAG_ON_TRIAL 2u
+#define BC250_CPU_FLAG_STORED 4u             // CpuMaxMHz, CpuUvSteps or CpuTempC exists
+#define BC250_CPU_FLAG_PENDING 8u            // CpuPending is on disk: the last start with these values was not healthy
+#define BC250_CPU_FLAG_CONFIRMED 16u
+#define BC250_CPU_FLAG_QUEUE3_PROVEN 32u     // queue 3 answered a getter in this start: setters are admitted
+#define BC250_CPU_FLAG_TUNE_ON 64u           // CpuTune 1
+#define BC250_CPU_FLAG_SEARCHING 128u
+#define BC250_CPU_FLAG_CORE_PENDING 256u     // CoreMaskPending: a restart now puts the stock mask back
+#define BC250_CPU_FLAG_CORE_CONFIRMED 512u
+#define BC250_CPU_FLAG_BUSY 1024u            // another CPU sequence runs: this request was refused, nothing changed
+#define BC250_CPU_FLAG_REVERT_OWED 2048u     // a revert was refused and is retried: the chip still has the trial
+#define BC250_CPU_FLAG_TEMP_VALID 4096u      // TemperatureMc was read; without this nothing judges the part cold
+typedef struct _BC250_ESCAPE_CPU {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long TrialMs, TrialRemainingMs, Serial, Error;
+    unsigned long Given;                    // in: SET, BC250_CPU_GIVEN_* bits
+    unsigned long MaxMHz, UvSteps, TempC;   // in: SET
+    unsigned long AppliedMaxMHz, AppliedUvSteps, AppliedTempC;      // out: what the driver last sent (cached)
+    unsigned long StoredMaxMHz, StoredUvSteps, StoredTempC;         // out: the registry's values, 0 when absent
+    unsigned long BaselineMaxMHz, BaselineUvSteps, BaselineTempC;   // out: recorded before the first write
+    unsigned long VoltageMv, GpuVoltageMv, CapC, Features;          // out: the queue 3 and queue 0 readbacks
+    unsigned long CoreMHz[BC250_CPU_CORE_SLOTS];        // out: the effective clock per core, 0 for no answer
+    unsigned long PstateMHz[BC250_CPU_CORE_SLOTS];      // out: the clock of each P-state
+    unsigned long Cores, Threads;           // out: what Windows reports, which is all the mask's effect we can see
+    unsigned long CoreMask, CoreMaskStored; // in: CORES; out: the setting in force and on disk
+    unsigned long LastQueue, LastMessage, LastStatus, LastParameter;    // out: the support report only
+    long TemperatureMc;                     // out
+    unsigned long SearchStep, SearchBest, SearchFail, SearchTested;     // out
+    unsigned long Reads, Writes, Refusals, Reverts;                    // out
+    unsigned long RevertRetries, RevertFailures;     // out: an owed revert's attempts, and the refused ones
+    unsigned long WheaEvents, ChecksumErrors;       // in: SET and SEARCH_STEP, from the caller's own counters
+    unsigned long Loaded;                   // in: 1 while the caller loads the CPU over this sample
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: every write
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_CPU; // 296 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

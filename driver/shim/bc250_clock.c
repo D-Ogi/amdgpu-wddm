@@ -63,10 +63,81 @@ unsigned int bc250_clock_min_mv(unsigned int mhz)
         return 0;
     return bc250_clock_points[(mhz-BC250_CLOCK_MIN_MHZ)/BC250_CLOCK_STEP_MHZ].mv;
 }
+unsigned int bc250_clock_floor_mv(unsigned int mhz)
+{
+    unsigned int line=bc250_clock_min_mv(mhz);
+    if(!line)return 0;
+    // The bounded undervolt band of 0.7.210 (owner's direction 2026-10-06). Under the lab floor the line is
+    // already BC250_CLOCK_FLOOR_MV, so the band is empty and this returns the floor.
+    return line>BC250_CLOCK_FLOOR_MV+BC250_CURVE_UNDERVOLT_MV ? line-BC250_CURVE_UNDERVOLT_MV
+                                                              : BC250_CLOCK_FLOOR_MV;
+}
 int bc250_clock_point_allowed(unsigned int mhz,unsigned int mv)
 {
-    unsigned int least=bc250_clock_min_mv(mhz);
+    unsigned int least=bc250_clock_floor_mv(mhz);
     return least && mv>=least && mv<=BC250_CLOCK_CEILING_MV;
+}
+
+// ---- the operator's V/F curve (0.7.210, docs/design/tuner.md, ADR 0020) --------------------------------------
+// The clock grid is fixed, so a curve carries the voltage column alone and only from the lab floor up. The rules
+// below are the whole policy; bc250_dpm.c owns the trial that applies one and reverts it, and driver/kmd/dpm.c
+// owns the one transaction that reaches the hardware.
+
+void bc250_clock_curve_default(struct bc250_clock_curve *curve)
+{
+    unsigned int i;
+    for(i=0;i<BC250_CURVE_POINTS;i++)curve->mv[i]=bc250_clock_points[BC250_CURVE_FIRST_LEVEL+i].mv;
+}
+
+unsigned int bc250_clock_curve_mv(const struct bc250_clock_curve *curve,unsigned int level)
+{
+    if(level>=BC250_CLOCK_LEVELS)level=BC250_CLOCK_LEVELS-1u;
+    if(level<BC250_CURVE_FIRST_LEVEL)return bc250_clock_points[level].mv;
+    return curve->mv[level-BC250_CURVE_FIRST_LEVEL];
+}
+
+enum bc250_clock_curve_error bc250_clock_curve_check(const struct bc250_clock_curve *curve,unsigned int *level)
+{
+    unsigned int i;
+    if(level)*level=BC250_CURVE_FIRST_LEVEL;
+    if(!curve)return BC250_CLOCK_CURVE_NULL;
+    for(i=0;i<BC250_CURVE_POINTS;i++) {
+        unsigned int mv=curve->mv[i];
+        if(level)*level=BC250_CURVE_FIRST_LEVEL+i;
+        if(mv<BC250_CLOCK_FLOOR_MV || mv>BC250_CLOCK_CEILING_MV)return BC250_CLOCK_CURVE_RANGE;
+        // The lab point stays the lab point: 1000 MHz / 820 mV is the one operating point this part has run for
+        // weeks, and it is the floor. It is in the vector so that a later change of the floor has a place to
+        // live, not so that an operator can move it now.
+        if(i==0 && mv!=BC250_CLOCK_FLOOR_MV)return BC250_CLOCK_CURVE_FLOOR;
+        if(mv<bc250_clock_floor_mv(bc250_clock_points[BC250_CURVE_FIRST_LEVEL+i].mhz))return BC250_CLOCK_CURVE_DEPTH;
+        // A curve that dips is a curve with a hole in it: the governor steps one level at a time, and a dip
+        // would make a raise lower the voltage. Two neighbours may round to the same VID, never invert.
+        if(i && (mv<curve->mv[i-1] || bc250_clock_vid(mv)>bc250_clock_vid(curve->mv[i-1])))
+            return BC250_CLOCK_CURVE_ORDER;
+    }
+    if(level)*level=0;
+    return BC250_CLOCK_CURVE_OK;
+}
+
+int bc250_clock_curve_is_default(const struct bc250_clock_curve *curve)
+{
+    struct bc250_clock_curve line;
+    unsigned int i;
+    bc250_clock_curve_default(&line);
+    for(i=0;i<BC250_CURVE_POINTS;i++)if(curve->mv[i]!=line.mv[i])return 0;
+    return 1;
+}
+
+unsigned int bc250_clock_curve_checksum(const struct bc250_clock_curve *curve)
+{
+    // Fletcher-16 over the 11 values, low byte then high byte of each. A well-formed curve has every value at
+    // or above 820, so the sums never both end at zero and the result is never 0 (checked by the host test).
+    unsigned int i,a=0xA5u,b=0x5Au;
+    for(i=0;i<BC250_CURVE_POINTS;i++) {
+        a=(a+(curve->mv[i]&0xFFu))%255u; b=(b+a)%255u;
+        a=(a+((curve->mv[i]>>8)&0xFFu))%255u; b=(b+a)%255u;
+    }
+    return ((b&0xFFu)<<8)|(a&0xFFu);
 }
 int bc250_clock_message_allowed(unsigned int message)
 {

@@ -77,10 +77,15 @@ static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardStage(int s){(void)s;}
 static void GuardLogKeep(void){}
 static unsigned dpmStops;
+static int cpuStopped;          /* within one scenario: CpuStop ran; init clears it */
 /* KMD175: the DPM governor puts the floor back while the SMU owner is still online, before any teardown. */
-static void DpmStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.restores==0);model.dpm++;dpmStops++;}
+static void DpmStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.restores==0 && cpuStopped);model.dpm++;dpmStops++;}
+static unsigned cpuStops;
+/* The CPU trial is reverted while the SMU owner is still online and before the DPM governor stops, so
+ * that a CPU sequence can never run while the governor is putting the floor back. */
+static void CpuStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.restores==0 && !cpuStopped);cpuStopped=1;cpuStops++;}
 static unsigned hwmonStops;
-/* 0.7.208.1: the governor thread is what samples the board's hardware monitor, so the reader closes after
+/* The governor thread is what samples the board's hardware monitor, so the reader closes after
    DpmStop has joined that thread, and before the SMU owner goes offline. */
 static void HwmonStop(int*h){(void)h;CHECK(model.dpm==1 && model.smu==0);hwmonStops++;}
 static void SmuOwnerStop(int*s){(void)s;model.smu++;}
@@ -106,7 +111,7 @@ static void GfxRetireSignal(BC250_DEVICE*d)
 static char buckets[16];
 static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
 {
-    memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;
+    memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;cpuStopped=0;
     memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;
     d->Wddm=w;d->Framebuffer=d;d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;
     d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress=0x470000000ull;
@@ -118,7 +123,7 @@ int main(void)
     init(&d,&w,&o);
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
     /* Three pool blocks: the one object, the object index's buckets (KMD 0.7.192) and the adapter state. */
-    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1);
+    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1 && cpuStops==1);
     CHECK(hwmonStops==1);
     /* The list owns every object, the index only points into it: the objects go first, the index after the last
        of them, the adapter state last of all (WddmStop's drain). */

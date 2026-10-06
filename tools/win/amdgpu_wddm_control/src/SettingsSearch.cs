@@ -27,6 +27,7 @@ namespace AmdgpuWddmControl
         public static readonly SearchEntry[] Index =
         {
             E("graphics.clock-auto", "graphics"), E("graphics.clock-ceiling", "graphics"), E("graphics.cores", "graphics"), E("graphics.reset", "graphics"),
+            E("graphics.tuning", "graphics"), E("graphics.cpu-tuning", "graphics"), E("graphics.cpu-cores", "graphics"),
             E("games.rt", "games"), E("games.present", "games"), E("games.cpu", "games"), E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.identify", "display"), E("display.scale", "display"),
             E("perf.sensors", "performance"), E("perf.cache", "performance"),
@@ -36,7 +37,7 @@ namespace AmdgpuWddmControl
             E("help.repair", "help"), E("help.report", "help"), E("help.restart", "help"), E("help.guides", "help"),
             L("later.vsync", "graphics"), L("later.fps", "graphics"), L("later.sharpen", "graphics"), L("later.aa", "graphics"), L("later.af", "graphics"),
             L("later.scaling", "display"), L("later.mode", "display"), L("later.hdr", "display"), L("later.vrr", "display"),
-            L("later.power", "performance"), L("later.fan", "performance"), L("later.voltage", "performance"), L("later.fps-counter", "performance"),
+            L("later.power", "performance"), L("later.fan", "performance"), L("later.fps-counter", "performance"),
             L("later.cache-clear", "performance"),
         };
 

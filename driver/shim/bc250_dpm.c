@@ -255,6 +255,129 @@ void bc250_dpm_idle_leave(struct bc250_dpm_governor *g)
 	g->idle_acc = 0;
 }
 
+/* ---- the operator's V/F curve and its trial (0.7.210, docs/design/tuner.md, ADR 0020) ------------------- */
+
+void bc250_dpm_curve_init(struct bc250_dpm_curve_state *s, const struct bc250_clock_curve *stored)
+{
+	memset(s, 0, sizeof(*s));
+	if (stored) s->stored = *stored;
+	else bc250_clock_curve_default(&s->stored);
+	s->active = s->stored;
+	/* The start applies the floor itself through the same transaction, so no forced re-apply is owed here. */
+}
+
+enum bc250_clock_curve_error bc250_dpm_curve_set(struct bc250_dpm_curve_state *s, const struct bc250_clock_curve *c,
+						 unsigned int trial_ms, unsigned int *level)
+{
+	enum bc250_clock_curve_error error = bc250_clock_curve_check(c, level);
+	if (error != BC250_CLOCK_CURVE_OK) return error;
+	if (trial_ms < BC250_DPM_CURVE_TRIAL_MIN_MS) trial_ms = BC250_DPM_CURVE_TRIAL_MIN_MS;
+	if (trial_ms > BC250_DPM_CURVE_TRIAL_MAX_MS) trial_ms = BC250_DPM_CURVE_TRIAL_MAX_MS;
+	/* A second SET replaces the candidate and restarts the window. The revert target stays s->stored: a chain
+	 * of trials never leaves a candidate behind as the thing a deadline would fall back to. */
+	s->candidate = *c;
+	s->active = *c;
+	s->trial = 1;
+	s->trial_ms = trial_ms;
+	s->elapsed_ms = 0;
+	s->serial++;
+	s->sets++;
+	s->apply = 1;
+	return BC250_CLOCK_CURVE_OK;
+}
+
+int bc250_dpm_curve_keep(struct bc250_dpm_curve_state *s)
+{
+	if (!s->trial) return 0;
+	/* A curve is kept because it ran, not because it was asked for. Two states look like a running trial and
+	 * are not one: a KEEP in the same governor tick as the SET, where the level has not been re-applied yet,
+	 * and a SET whose apply the clock gate refused as too hot, where the resync drops the level to the floor.
+	 * Both stored a candidate the hardware never carried, and a start that merely resyncs to the floor is a
+	 * healthy start, so no boot guard caught it either (0.7.211). */
+	if (s->applied != s->serial || s->elapsed_ms < BC250_DPM_CURVE_KEEP_MIN_MS) return -1;
+	s->stored = s->candidate;
+	s->trial = 0;
+	s->elapsed_ms = 0;
+	s->keeps++;
+	/* The candidate is already active, so the hardware needs nothing: only the disk does. */
+	return 1;
+}
+
+/* The one revert. Both the deadline and a cancel go through it, so there is exactly one way back. */
+static int curve_revert(struct bc250_dpm_curve_state *s)
+{
+	if (!s->trial) return 0;
+	s->active = s->stored;
+	s->trial = 0;
+	s->elapsed_ms = 0;
+	s->serial++;
+	s->apply = 1;
+	return 1;
+}
+
+int bc250_dpm_curve_cancel(struct bc250_dpm_curve_state *s)
+{
+	if (!curve_revert(s)) return 0;
+	s->cancels++;
+	return 1;
+}
+
+int bc250_dpm_curve_reset(struct bc250_dpm_curve_state *s)
+{
+	struct bc250_clock_curve line;
+	int changed;
+	bc250_clock_curve_default(&line);
+	changed = s->trial || !bc250_clock_curve_is_default(&s->stored) || !bc250_clock_curve_is_default(&s->active);
+	if (s->trial) s->cancels++;
+	s->trial = 0;
+	s->elapsed_ms = 0;
+	s->stored = line;
+	s->active = line;
+	if (changed) {
+		s->serial++;
+		s->apply = 1;
+	}
+	return changed;
+}
+
+int bc250_dpm_curve_tick(struct bc250_dpm_curve_state *s, unsigned int dt_ms)
+{
+	if (!s->trial) return 0;
+	s->elapsed_ms = add_ms(s->elapsed_ms, dt_ms);
+	if (s->elapsed_ms < s->trial_ms) return 0;
+	if (!curve_revert(s)) return 0;
+	s->reverts++;
+	return 1;
+}
+
+int bc250_dpm_curve_take(struct bc250_dpm_curve_state *s)
+{
+	if (!s->apply) return 0;
+	s->apply = 0;
+	return 1;
+}
+
+void bc250_dpm_curve_applied(struct bc250_dpm_curve_state *s, unsigned int serial)
+{
+	if (serial == s->serial) s->applied = serial;
+}
+
+unsigned int bc250_dpm_curve_level_mv(const struct bc250_dpm_curve_state *s, unsigned int level)
+{
+	return bc250_clock_curve_mv(&s->active, level);
+}
+
+unsigned int bc250_dpm_curve_level_vid(const struct bc250_dpm_curve_state *s, unsigned int level)
+{
+	return bc250_clock_vid(bc250_clock_curve_mv(&s->active, level));
+}
+
+unsigned int bc250_dpm_curve_remaining_ms(const struct bc250_dpm_curve_state *s)
+{
+	if (!s->trial) return 0;
+	return s->elapsed_ms >= s->trial_ms ? 0u : s->trial_ms - s->elapsed_ms;
+}
+
 unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g)
 {
 	/* The thermal sub-floor and the idle state stand or fall together below the lab floor: a point the

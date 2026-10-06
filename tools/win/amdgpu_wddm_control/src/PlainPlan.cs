@@ -32,6 +32,7 @@ namespace AmdgpuWddmControl
                 case "DwmForceCpu": return w.Delete || w.Number == 0 ? "plan.line.route-gpu" : "plan.line.route-cpu";
                 case "DpmMode": return !w.Delete && w.Number == 1 ? "plan.line.auto-on" : "plan.line.auto-off";
                 case "DpmMaxMHz": return w.Delete ? "plan.line.ceiling-default" : "plan.line.ceiling";
+                case "CpuTune": return w.Delete || w.Number == 0 ? "plan.line.cpu-tune-off" : "plan.line.cpu-tune-on";
                 default: return null;
             }
         }
@@ -57,7 +58,13 @@ namespace AmdgpuWddmControl
             foreach (var g in p.GameWrites)
                 d.Changes.Add(g.Value.Length == 0 ? Strings.T("plan.game.remove", g.Key) : Strings.T("plan.game.set", g.Key, GroupList(g.Value)));
             if (p.Cu != null) d.Changes.AddRange(p.Cu.Preview);
+            // The tuning actions write no registry value, so Preview is the only description of what they do. The
+            // CU steps are already above (Recovery copies them into Preview as well), hence the duplicate check.
+            foreach (var line in p.Preview) if (!d.Changes.Contains(line)) d.Changes.Add(line);
             if (p.Action == "cu-mode" && p.Cu != null && p.Cu.Target == CuMode.Full) d.Notes.Add(CuMode.EffectText());
+            // WU-042: before a tuning change the person reads what it does to heat, noise and stability. Notes is
+            // English for the log and the support report; PlainNotes is the same risk in the window's language.
+            foreach (var n in p.PlainNotes) if (!d.Notes.Contains(n)) d.Notes.Add(n);
             if (p.CuConfirm) d.Changes.Add(Strings.T("plan.line.cu-confirm"));
             if (p.ConfirmStart) d.Changes.Add(Strings.T("plan.line.confirm-start"));
 
@@ -79,6 +86,7 @@ namespace AmdgpuWddmControl
         // A refusal in plain words. The plan's own sentence goes to the log and the support report.
         public static string Refusal(ActionPlan p)
         {
+            if (p.PlainRefusal != null) return p.PlainRefusal;      // the tuning page refuses in both languages at once
             var r = p.Refusal ?? "";
             if (r.Contains("not installed")) return Strings.T("plan.refuse.not-installed");
             if (r.Contains("driver is not running")) return Strings.T("plan.refuse.not-running");
