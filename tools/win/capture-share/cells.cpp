@@ -66,12 +66,22 @@ static int PeerFailFence(Side &s, int i)
 // The peer's GPU waits end before its watchdog, so that a stuck wait is reported as that wait.
 static ULONGLONG PeerOpDeadline() { return g_opt.deadline > 300 ? g_opt.deadline - 300 : g_opt.deadline; }
 
+// Why a peer's wait ended, when it did not end with the message it waited for. The parent sends DONE as soon as its
+// own side of the cell is over, and it also decides a cell without reaching the peer's next step: a skipped cell
+// (BD-075 round 2) leaves the peer waiting for HANDLES that will never come. That is a normal end of the peer, not a
+// failure of it, so PeerStopped gives 0 there and the row's peer_exit stops reporting a failure in a cell that
+// attempted nothing. Anything else - a timeout, a closed pipe - is still exit 2.
+static bool g_peerParentDone = false;
+
 bool PeerExpect(const char *verb, std::string &msg)
 {
     if (g_ipc.Expect(verb, msg, g_opt.deadline > 200 ? g_opt.deadline - 200 : g_opt.deadline)) return true;
+    g_peerParentDone = msg.compare(0, 4, "DONE") == 0 && (msg.size() == 4 || msg[4] == ' ');
     Log("PEER lost the parent while waiting for %s: %s", verb, msg.c_str());
     return false;
 }
+
+static int PeerStopped() { return g_peerParentDone ? 0 : 2; }
 
 static HANDLE ParseHandle(const std::string &m, const char *key)
 {
@@ -164,7 +174,7 @@ static int KeyedPeer(Side &s)
 {
     std::string m;
     Check c0, ca;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-shared");
     if (!s.OpenShared(ParseHandle(m, "res"), true)) return PeerFail(s);
     g_ipc.Send("OPENED");
@@ -220,14 +230,14 @@ static int SharedCpuPeer(Side &s)
 {
     std::string m;
     Check c0, ca;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-shared");
     if (!s.OpenShared(ParseHandle(m, "res"), false)) return PeerFail(s);
     g_ipc.Send("OPENED");
     SetStage("read-poison");
     if (!ReadCheck(s, "P0", Pattern::Poison, c0)) return PeerFail(s);
     g_ipc.Send("P0 %s", CheckText(c0).c_str());
-    if (!PeerExpect("WROTE_A", m)) return 2;
+    if (!PeerExpect("WROTE_A", m)) return PeerStopped();
     SetStage("read-a");
     if (!ReadCheck(s, "A", Pattern::A, ca)) return PeerFail(s);
     SetStage("write-b");
@@ -296,7 +306,7 @@ static bool FenceParent(Side &s)
 static int FencePeer(Side &s)
 {
     std::string m;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-fences");
     if (!s.OpenFence(0, ParseHandle(m, "fence0")) || !s.OpenFence(1, ParseHandle(m, "fence1"))) return PeerFail(s);
     g_ipc.Send("OPENED");
@@ -306,7 +316,7 @@ static int FencePeer(Side &s)
     SetStage("gpu-past-wait-f0-1");
     if (!s.WaitMark(PeerOpDeadline())) return PeerFailFence(s, 0);
     g_ipc.Send("PASSED1");
-    if (!PeerExpect("SUBMITTED2", m)) return 2;
+    if (!PeerExpect("SUBMITTED2", m)) return PeerStopped();
     SetStage("gate-leg-2");
     Sleep(g_opt.gateMs);
     const UINT64 seen = s.Completed(0);
@@ -367,7 +377,7 @@ static int SharedFencePeer(Side &s)
 {
     std::string m;
     Check c0;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-shared");
     if (!s.OpenShared(ParseHandle(m, "res"), false)) return PeerFail(s);
     SetStage("open-fences");
@@ -388,7 +398,7 @@ static int SharedFencePeer(Side &s)
     SetStage("write-b");
     if (!s.WritePattern(Pattern::B, true)) return PeerFail(s);
     g_ipc.Send("CHECKA %s", CheckText(ca).c_str());
-    if (!PeerExpect("SUBMITTED2", m)) return 2;
+    if (!PeerExpect("SUBMITTED2", m)) return PeerStopped();
     SetStage("gate-fence-2");
     Sleep(g_opt.gateMs);
     const UINT64 seen = s.Completed(0);
@@ -562,7 +572,7 @@ int RunIpcPeer()
         WriteFile(err, probe, (DWORD)(sizeof(probe) - 1), &written, nullptr);
     }
     g_ipc.Send("HELLO route=none fl=- stderr=%s", valid ? "inherited" : "none");
-    if (!PeerExpect("EVENT", m)) return 2;
+    if (!PeerExpect("EVENT", m)) return PeerStopped();
     SetStage("set-event");
     const BOOL ok = SetEvent(ParseHandle(m, "h"));
     g_ipc.Send("SET ok=%u", ok ? 1u : 0u);
