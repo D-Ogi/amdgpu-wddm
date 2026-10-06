@@ -827,9 +827,10 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     if (!first.hAllocation) return E_INVALIDARG;
     if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
 
-    // The decoder names the check it decided at, and *why is that name: "record" alone covered sixteen checks, and
-    // the three cross-API failures of round 1 all declined here, which took a lab pass and a 1.4 MB trace to tell
-    // apart (BD-075 round 2, 2026-10-06). The strings are the header's literals, so the pointer outlives this call.
+    // The decoder names the check it decided at, and *why is that name: "record" alone covered seventeen checks, and
+    // the three cross-API failures of round 1 all declined here. The refusal line below already printed the record's
+    // own length and version, so the name puts the reason first rather than adding information (BD-075 round 2,
+    // 2026-10-06). The strings are the header's literals, so the pointer outlives this call.
     *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
     BC250_SHARED_SURFACE shared{};
     switch (Bc250SharedSurfaceDecodeWhy(args->pPrivateDriverData, args->PrivateDriverDataSize,
@@ -854,8 +855,12 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     HRESULT hr = query_linear_surface(c, desc, &surface);
     if (FAILED(hr)) return hr;
     // The layout agreement, checked and not assumed: two drivers that compute different addresses from the same
-    // bytes produce silent corruption, which is worse than a refusal. Both sides run the same RADV on the same
-    // part, so a divergence is a bug and says so on one line instead of showing wrong pixels.
+    // bytes produce silent corruption, which is worse than a refusal. The producer is usually the same RADV build
+    // on the same part, but it does not have to be - the application router's GpuUmdPath may point at a D3D11
+    // quartet of its own, with another ICD than the installed D3D12 triplet (the lab's gpu11 arm does exactly
+    // that, STATE.md), and a shared surface outlives the build that made it. So this is a cross-build check, not
+    // an assertion about our own code, and a divergence names both numbers on one line instead of showing wrong
+    // pixels (BD-075 review, 2026-10-06).
     *why = "layout agreement";
     if (surface.info.RowPitch != shared.Pitch || surface.backing_size > shared.Size) {
         log_line("shared open: the engine's linear image of this description has pitch %llu and needs %llu bytes; the "
