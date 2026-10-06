@@ -30,6 +30,11 @@ if (-not (Test-Path -LiteralPath (Join-Path $kits 'microsoft.windows.wdk.x64\c')
     throw "no WDK in $kits (BC250_ROOT=$Root): the kernel compile gate cannot run"
 }
 if (-not $Out) { $Out = Join-Path $Root 'scratch\build\release-kmd-compile' }
+# Always from an empty directory, so that the hash this gate prints is the one a package build of the
+# same sources prints. build.ps1 now removes the debug information of an earlier build with its objects
+# (the /Brepro reason is written there), and this gate starts from nothing on top of that, because its
+# -Out is its own scratch and build-release.ps1 hands it the same path on every build.
+if (Test-Path -LiteralPath $Out) { Remove-Item -Recurse -Force -LiteralPath $Out }
 $null = New-Item -ItemType Directory -Force $Out
 $start = Get-Date
 & pwsh -NoProfile -File (Join-Path $repo 'driver\kmd\build.ps1') -Kits $kits -Out $Out -KitVersion $KitVersion -CompileOnly

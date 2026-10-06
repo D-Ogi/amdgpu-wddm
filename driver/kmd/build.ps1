@@ -38,6 +38,18 @@ $bin = Join-Path $msvc.FullName 'bin\Hostx64\x64'
 $pkg = Join-Path $Out 'package'
 $obj = Join-Path $Out 'obj'
 if ((-not $ExportCommandsOnly) -and (Test-Path $obj)) { Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue }
+# The debug information of an earlier build goes with the objects. /Brepro puts a hash of the debug
+# information in the image, and cl appends to an existing cl.pdb instead of writing a fresh one, so a
+# second build into the same directory lays that information out differently and the image changes
+# although no source did. Measured 2026-10-06 on one head: a clean directory gives
+# E440D4D7..., a second build into it 4A294E0D..., a third 698169EC... The package build of the respin
+# removes its whole output directory first, which is why its driver reproduces; a caller that does not
+# would get a different hash from the same sources, and the reproducibility claim of
+# docs/design/reproducible-builds.md would be about the directory instead of the source.
+if (-not $ExportCommandsOnly) {
+    Remove-Item "$obj\cl.pdb", "$obj\*.ilk", "$Out\bc250kmd.pdb", "$Out\bc250kmd.map" `
+        -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory -Force $pkg, $obj | Out-Null
 
 function Invoke-Tool([string]$exe, [string[]]$argv) {
