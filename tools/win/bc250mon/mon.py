@@ -8,6 +8,7 @@ every call goes through SSH; the JSON body travels base64-encoded to stay clear 
     mon.py panel e02 "E02 control read" "registers=5542" "identical=5074:good" "hangs=0:good"
     mon.py unpanel e02
     mon.py action clock.cool            mon.py action clock.set '{"mhz": 1200, "mv": 850}'
+    mon.py action graphics.summary      one KMD log summary for the graphics panel's counters (a Level Two escape)
     mon.py stop?                        exit code 1 if the owner asked to stop
     mon.py telemetry [--format text|json]   the overlay's GPU line: Tctl, load, GFX clock, VRAM (for scripts)
     mon.py windows                      visible top-level windows: handle, process, geometry, title

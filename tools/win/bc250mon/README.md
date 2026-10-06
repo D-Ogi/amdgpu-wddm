@@ -115,24 +115,35 @@ backends also needs runtime backend evidence before assigning a renderer label.
 Unknown hashes are displayed as unknown, without a CPU/GPU claim.
 
 The panel shows DWM PID, UMD module and build, renderer, CPU/GPU draw execution,
-shader interpreter/JIT, and the live KMD version/table. Driver `log summary only`
+shader interpreter/JIT, and the live KMD version/table. The driver's own log ring
 provides hardware flip counts, enabled presentation paths, compute fence counts
 and SDMA paging counts. These counts are cumulative for the device session,
 not utilization percentages or evidence of work during the latest sample.
 Enabled CPU Blt is shown separately from its actual count. Full WDDM and DCN
 scanout do not imply GPU execution of DWM draws.
 
-The summary escape is a Level Two call: dxgkrnl idles the GPU for it, and a
-running game waits (trial 317: 280-420 ms for 16 such escapes, about 20 ms
-each). `log summary only` reads just the summary's own lines, and every page
-after the summary goes without adapter synchronization. The `KMD poll` row
-checks the CLI's escape count line and warns when a poll took more than one
-Level Two escape or the CLI printed no count (BD-054: a CLI at `C:\BC250\kmd\`
-from before KMD 0.7.184.1 sent all 16 pages of the ring as Level Two calls, a
-280-420 ms game stall every 5 s). This overlay needs a `bc250kmd_cli.exe` at
-that path that knows `log summary only`; an older one shows as
-`summary unavailable: ... predates "log summary only"`.
-`graphics-summary.pause` in the data directory stops the poll for an A/B.
+Those counters are written into the ring by a `LOG_SUMMARY` escape, which is a
+Level Two call: dxgkrnl idles the GPU for it, and a running game waits (trial 317:
+280-420 ms for 16 such escapes, about 20 ms each; trial 41: a 300 ms stall every
+5.4 s and about 2 % of the frame rate for this panel's own poll). Nothing asks for
+it on a schedule any more (C55). The 5 s poll sends `log 0` instead: `GET_LOG`
+pages, which the driver answers with `NoAdapterSynchronization` alone. One such poll
+costs up to 16 pages (the ring is 1024 lines, a page is 64), which is more pages than
+a summary read took and no GPU idle at all.
+
+A summary now goes out once per `graphics.summary` action -
+`python mon.py action graphics.summary`, or the same name through the HTTP API - and
+the `KMD counters` row says where the block in the panel came from: `summary written by this poll, on request`, or
+`from the ring's last summary, N s before the newest log line` (amber past ten
+minutes of driver time), or `no summary in the ring` when no counter row is shown
+at all. The `KMD poll` row checks the CLI's escape count line and warns when a
+page read took any Level Two escape, when a requested summary took more than one,
+or when the CLI printed no count (BD-054: a CLI at `C:\BC250\kmd\` from before
+KMD 0.7.184.1 sent all 16 pages of the ring as Level Two calls, a 280-420 ms game
+stall every 5 s). A CLI that predates `log summary only` shows as
+`summary unavailable: ... predates "log summary only"` when a summary is asked for.
+`graphics-summary.pause` in the data directory stops the read altogether, and a
+request pending while that marker exists is dropped with it.
 
 The sampled time makes the observation's age visible. The existing `kmdinfo`
 panel remains available through the API; the overlay omits that duplicate panel
@@ -512,6 +523,7 @@ mon.py log "text" [level]
 mon.py panel e02 "E02 control read" "registers=5542" "identical=5074:good" "hangs=0:good"
 mon.py unpanel e02
 mon.py action clock.cool              mon.py action clock.set '{"mhz": 1200, "mv": 850}'
+mon.py action graphics.summary        one KMD log summary for the graphics panel's counters (a Level Two escape)
 mon.py stop?                          exit code 1 if the owner asked to stop
 mon.py telemetry [--format text|json] tctl_c=67.5 load_pct=n/a gfx_mhz=1000 vram_used_mb=1234 vram_total_mb=2048 age_s=0.4
                                       (a "# note" line follows when a value is n/a; exit code 1 without a sample)
