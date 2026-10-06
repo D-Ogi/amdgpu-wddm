@@ -125,8 +125,11 @@ static ULONG CpuMark(const struct bc250_cpu_settings* S)
 
 static void CpuLogSettings(const char* What, const struct bc250_cpu_settings* S)
 {
-    GuardLog("cpu: %s clock %s%lu MHz, undervolt %s%lu steps, cap %s%lu C", What,
-             S->max_given ? "" : "(not given) ", S->max_given ? S->max_mhz : 0u,
+    // A pair of lines, by the rule of the guardlog-width gate: the three "(not given)" markers make one line
+    // 200 characters at its widest and a log line holds 159, so the cap would be cut off (BD-070).
+    GuardLog("cpu: %s clock %s%lu MHz", What,
+             S->max_given ? "" : "(not given) ", S->max_given ? S->max_mhz : 0u);
+    GuardLog("cpu: %s undervolt %s%lu steps, cap %s%lu C", What,
              S->uv_given ? "" : "(not given) ", S->uv_given ? S->uv_steps : 0u,
              S->temp_given ? "" : "(not given) ", S->temp_given ? S->temp_c : 0u);
 }
@@ -349,10 +352,10 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
             status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, &mv);
             if (!NT_SUCCESS(status)) break;
             if (mv > BC250_CPU_REFUSE_MV || mv < BC250_CPU_PLAUSIBLE_MIN_MV || mv > BC250_CPU_PLAUSIBLE_MAX_MV) {
-                GuardLog("cpu: %s read %lu mV back after the undervolt, outside %lu..%lu with the refusal line "
-                         "at %lu: the steps that raise the voltage are NOT sent", Why, mv,
-                         (ULONG)BC250_CPU_PLAUSIBLE_MIN_MV, (ULONG)BC250_CPU_PLAUSIBLE_MAX_MV,
+                GuardLog("cpu: %s read %lu mV back after the undervolt, outside %lu..%lu (refusal line %lu)",
+                         Why, mv, (ULONG)BC250_CPU_PLAUSIBLE_MIN_MV, (ULONG)BC250_CPU_PLAUSIBLE_MAX_MV,
                          (ULONG)BC250_CPU_REFUSE_MV);
+                GuardLog("cpu: %s the steps that raise the voltage are NOT sent", Why);
                 status = STATUS_DEVICE_CONFIGURATION_ERROR;
                 break;
             }
@@ -374,9 +377,10 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
         // reported bricking ceiling is 1325 mV and nothing here goes near it. A restore has no further way back,
         // so it says that instead of claiming an undo it cannot do.
         if (mv > BC250_CPU_REFUSE_MV || mv < BC250_CPU_PLAUSIBLE_MIN_MV || mv > BC250_CPU_PLAUSIBLE_MAX_MV) {
-            GuardLog("cpu: %s read %lu mV back, outside %lu..%lu with the refusal line at %lu: %s", Why, mv,
+            GuardLog("cpu: %s read %lu mV back, outside %lu..%lu (refusal line %lu)", Why, mv,
                      (ULONG)BC250_CPU_PLAUSIBLE_MIN_MV, (ULONG)BC250_CPU_PLAUSIBLE_MAX_MV,
-                     (ULONG)BC250_CPU_REFUSE_MV,
+                     (ULONG)BC250_CPU_REFUSE_MV);
+            GuardLog("cpu: %s voltage refusal: %s", Why,
                      Restore ? "this WAS the way back, and the next cold boot is the last one"
                              : "the settings before it come back now");
             status = STATUS_DEVICE_CONFIGURATION_ERROR;
@@ -397,9 +401,11 @@ static NTSTATUS CpuRestoreTo(BC250_DEVICE* Device, const struct bc250_cpu_settin
     BC250_CPU_STATE* s = &Device->Cpu;
     struct bc250_cpu_settings back;
     RtlZeroMemory(&back, sizeof(back));
-    if (!bc250_cpu_restore_target(&s->Applied, Before, s->BaselineValid ? &s->Baseline : NULL, &back))
-        GuardLog("cpu: %s cannot name the clock limit to go back to - no P-state answered this start - so the "
-                 "applied limit of %lu MHz STAYS in the chip until a restart", Why, s->Applied.max_mhz);
+    if (!bc250_cpu_restore_target(&s->Applied, Before, s->BaselineValid ? &s->Baseline : NULL, &back)) {
+        GuardLog("cpu: %s cannot name the clock limit to go back to - no P-state answered this start", Why);
+        GuardLog("cpu: %s the applied limit of %lu MHz STAYS in the chip until a restart", Why,
+                 s->Applied.max_mhz);
+    }
     return CpuApply(Device, &back, Why, NULL, TRUE);
 }
 
@@ -681,8 +687,10 @@ void CpuStart(BC250_DEVICE* Device)
     }
     if (NT_SUCCESS(status)) s->Created = TRUE;
     else GuardLog("cpu: the worker thread did NOT start 0x%08X: the surface stays read-only", status);
-    GuardLog("cpu: the surface is on (CpuTune 1%s), trial window %lu ms, %lu processors, core mask 0x%02X%s",
-             s->Lab ? ", CpuLab 1" : "", s->TrialMs, s->Cores, s->CoreMask,
+    // A pair of lines: one is 171 characters at its widest, over the 159 a log line holds (guardlog-width).
+    GuardLog("cpu: the surface is on (CpuTune 1%s), trial window %lu ms",
+             s->Lab ? ", CpuLab 1" : "", s->TrialMs);
+    GuardLog("cpu: the surface sees %lu processors, core mask 0x%02X%s", s->Cores, s->CoreMask,
              s->Created ? "" : " - without a worker thread");
     CpuUnlock(s);
 }
@@ -810,14 +818,19 @@ void CpuLogSummary(BC250_DEVICE* Device)
     snap = s->Snap;
     KeReleaseSpinLock(&s->SnapLock, irql);
     if (!s->Enabled && !snap.Reads && !snap.Writes) return;     // nothing to say on a machine that opted out
-    GuardLog("cpu: summary %s%s%s %lu mV (GPU %lu mV), cap %lu C, cores %lu/%lu, mask 0x%02X",
+    // Four lines, by the rule of the guardlog-width gate: the state and voltages line is 207 characters at its
+    // widest and the counter line 166, and a log line holds 159 (BD-070). Every line begins "cpu: summary", so
+    // a reader takes the block and not one line of it.
+    GuardLog("cpu: summary %s%s%s %lu mV (GPU %lu mV)",
              s->Enabled ? "on" : "off", s->Proven ? ", queue 3 proven" : ", queue 3 silent",
-             s->OnTrial ? ", on trial" : "", snap.VoltageMv, snap.GpuVoltageMv, snap.CapC,
+             s->OnTrial ? ", on trial" : "", snap.VoltageMv, snap.GpuVoltageMv);
+    GuardLog("cpu: summary cap %lu C, cores %lu/%lu, mask 0x%02X", snap.CapC,
              bc250_cpu_mask_cores(s->CoreMask), (ULONG)BC250_CPU_CORES, s->CoreMask);
     CpuLogSettings("summary applied", &s->Applied);
-    GuardLog("cpu: summary reads %lu writes %lu refusals %lu reverts %lu, last queue %lu message 0x%02X "
-             "argument 0x%08X status 0x%08X", snap.Reads, snap.Writes, snap.Refusals, snap.Reverts, snap.LastQueue,
-             snap.LastMessage, snap.LastParameter, snap.LastStatus);
+    GuardLog("cpu: summary reads %lu writes %lu refusals %lu reverts %lu",
+             snap.Reads, snap.Writes, snap.Refusals, snap.Reverts);
+    GuardLog("cpu: summary last queue %lu message 0x%02X argument 0x%08X status 0x%08X",
+             snap.LastQueue, snap.LastMessage, snap.LastParameter, snap.LastStatus);
 }
 
 // ---- the escape ------------------------------------------------------------------------------------------------

@@ -266,13 +266,16 @@ static ULONG DpmLevelVid(BC250_DPM_STATE* S, ULONG Level)
     return vid;
 }
 
-// A curve as one log line: the millivolts from 1000 MHz up, and how far they are from the table's line. Kept
-// inside BC250_LOG_TEXT (160 bytes): 11 values of three digits plus separators is about 60 characters.
+// A curve as a pair of log lines: the millivolts from 1000 MHz up, and whether they are the table's own line.
+// A pair and not one line, by the rule of the guardlog-width gate: 11 values at their widest is 201 characters
+// and BC250_LOG_TEXT holds 159, so one line would silently lose the last clocks (BD-070). Each line names the
+// band of clocks it carries, so neither half can be read as the whole curve.
 static void DpmLogCurve(const char* What, const struct bc250_clock_curve* Curve)
 {
-    GuardLog("dpm: curve (%s) %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu mV%s", What,
-             Curve->mv[0], Curve->mv[1], Curve->mv[2], Curve->mv[3], Curve->mv[4], Curve->mv[5], Curve->mv[6],
-             Curve->mv[7], Curve->mv[8], Curve->mv[9], Curve->mv[10],
+    GuardLog("dpm: curve (%s) 1000-1500 MHz: %lu %lu %lu %lu %lu %lu mV", What,
+             Curve->mv[0], Curve->mv[1], Curve->mv[2], Curve->mv[3], Curve->mv[4], Curve->mv[5]);
+    GuardLog("dpm: curve (%s) 1600-2000 MHz: %lu %lu %lu %lu %lu mV%s", What,
+             Curve->mv[6], Curve->mv[7], Curve->mv[8], Curve->mv[9], Curve->mv[10],
              bc250_clock_curve_is_default(Curve) ? " (the table's own line)" : "");
 }
 
@@ -517,12 +520,15 @@ static void DpmLogIdleLine(const char* What, const BC250_DPM_SNAP* P)
 static void DpmLogCurveLine(const char* What, const BC250_DPM_SNAP* P)
 {
     if (!(P->Flags & (BC250_DPM_FLAG_CURVE | BC250_DPM_FLAG_CURVE_TRIAL))) return;
-    GuardLog("dpm: %s curve serial %lu applied %lu, %lu mV at %lu MHz%s%s", What, P->CurveSerial, P->CurveApplied,
-             P->CurrentMv, P->CurrentMHz, (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL) ? ", on trial, " : "",
-             (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL) ? "see the next line for what is left" : "");
-    if (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL)
+    // The trial marker goes on its own line: one line with both markers is 177 characters at its widest, over
+    // the 159 a log line holds (the guardlog-width gate, BD-070).
+    GuardLog("dpm: %s curve serial %lu applied %lu, %lu mV at %lu MHz", What, P->CurveSerial, P->CurveApplied,
+             P->CurrentMv, P->CurrentMHz);
+    if (P->Flags & BC250_DPM_FLAG_CURVE_TRIAL) {
+        GuardLog("dpm: %s curve on trial", What);
         GuardLog("dpm: %s curve trial: %lu ms left before the stored curve comes back", What,
                  P->CurveTrialRemainingMs);
+    }
 }
 
 // The one place a level reaches the hardware. TRUE when the hardware is at Level now.

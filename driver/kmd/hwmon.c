@@ -263,10 +263,12 @@ void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
         if (owner->LoggedOffline && owner->LoggedReason == reason) return;
         owner->LoggedOffline = TRUE;
         owner->LoggedReason = reason;
-        GuardLog("hwmon: %s no reading, reason %s (base 0x%04lX, ec 0x%04lX build %02lu/%02lu/%02lu, fans 0x%02lX)",
-                 What, HwmonReasonText(reason), snap.BasePort, snap.EcVersion,
-                 (snap.EcBuild >> 8) & 0xFFu, snap.EcBuild & 0xFFu, (snap.EcBuild >> 16) & 0xFFu,
-                 snap.FanPresentMask);
+        // One line, and the host test holds it to one. It carried the firmware build date as well and was 180
+        // characters at its widest, over the 159 BC250_LOG_TEXT holds, so it would have lost the fan mask off
+        // its end without saying so (the guardlog-width gate, BD-070). The date is dropped rather than the line
+        // split: HwmonStart already logs it, with everything else the identity answered.
+        GuardLog("hwmon: %s no reading, reason %s (base 0x%04lX, ec 0x%04lX, fans 0x%02lX)",
+                 What, HwmonReasonText(reason), snap.BasePort, snap.EcVersion, snap.FanPresentMask);
         return;
     }
     owner->LoggedOffline = FALSE;
@@ -280,20 +282,22 @@ void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
         if (snap.DutyPermille[i] > duty) duty = snap.DutyPermille[i];
     for (i = 0; i < BC250_HWMON_TEMP_MAX; i++)
         if (snap.TemperatureSource[i] == BC250_HWMON_SOURCE_APU) { apu = snap.TemperatureMc[i]; haveApu = TRUE; }
-    // "apu n/a" and never "apu 0.0 C": no channel of this map carries the die, or its value was refused. A
+    // Three lines, by the rule of the guardlog-width gate: one line holding all of this is 332 characters at its
+    // widest, and a line BC250_LOG_TEXT truncates loses its last fields without saying so (BD-070). The reading
+    // goes first, then the two registers nothing decides on, then the counters. Each line names What, so a
+    // reader of the ring knows which call wrote it even if another line lands between them.
+    //   "apu n/a" and never "apu 0.0 C": no channel of this map carries the die, or its value was refused. A
     // zero printed as a temperature is the one thing this whole read path refuses to do.
-    if (!haveApu) {
-        GuardLog("hwmon: %s fan%lu %lu rpm (%lu/%lu turn) duty %lu permille%s mode 0x%02lX eng 0x%02lX apu n/a, "
-                 "%llu samples %llu errors %llu refusals",
-                 What, fan + 1u, rpm, turning, present, duty, owner->DutyProven ? "" : " unproven",
-                 snap.ModeMask, snap.Engine, snap.Samples, snap.Errors, snap.Refusals);
-        return;
-    }
-    GuardLog("hwmon: %s fan%lu %lu rpm (%lu/%lu turn) duty %lu permille%s mode 0x%02lX eng 0x%02lX apu %ld.%01ld C, "
-             "%llu samples %llu errors %llu retries %llu refusals",
-             What, fan + 1u, rpm, turning, present, duty, owner->DutyProven ? "" : " unproven",
-             snap.ModeMask, snap.Engine, apu / 1000, (apu < 0 ? -apu : apu) % 1000 / 100,
-             snap.Samples, snap.Errors, snap.Retries, snap.Refusals);
+    GuardLog("hwmon: %s fan%lu %lu rpm (%lu/%lu turn) duty %lu permille, mode 0x%02lX eng 0x%02lX",
+             What, fan + 1u, rpm, turning, present, duty, snap.ModeMask, snap.Engine);
+    if (haveApu)
+        GuardLog("hwmon: %s apu %ld.%01ld C, duty read-back %s",
+                 What, apu / 1000, (apu < 0 ? -apu : apu) % 1000 / 100,
+                 owner->DutyProven ? "proven" : "unproven");
+    else
+        GuardLog("hwmon: %s apu n/a, duty read-back %s", What, owner->DutyProven ? "proven" : "unproven");
+    GuardLog("hwmon: %s %llu samples %llu errors %llu retries %llu refusals",
+             What, snap.Samples, snap.Errors, snap.Retries, snap.Refusals);
 }
 
 // ---- life cycle -----------------------------------------------------------------------------------------
@@ -350,17 +354,20 @@ void HwmonStart(BC250_DEVICE* Device)
     }
     HwmonIo(&ports, owner, &io);
     status = bc250_hwmon_identify(&io, base, &owner->Identity);
-    // One line with every value it read, whatever the answer: this is the line an operator pins the customer
-    // ID from, and the line that says why a refusal happened.
-    GuardLog("hwmon: base 0x%04lX ec %lu.%lu build %02lu/%02lu/%02lu customer 0x%04lX cfg 0x%02lX fans 0x%02lX "
-             "duties 0x%02lX temps %lu volts %lu mode 0x%02lX eng 0x%02lX -> %s",
+    // Every value it read, whatever the answer: this is where an operator pins the customer ID from, and where
+    // a refusal says why. Two lines, by the rule of the guardlog-width gate: one line is 256 characters at its
+    // widest and BC250_LOG_TEXT would cut the verdict off the end. The first line carries the identity and the
+    // verdict, the second the masks and counts, each line naming the base so a reader can pair them.
+    GuardLog("hwmon: base 0x%04lX ec %lu.%lu build %02lu/%02lu/%02lu customer 0x%04lX -> %s",
              base, (ULONG)(owner->Identity.version >> 8), (ULONG)(owner->Identity.version & 0xFFu),
              (ULONG)((owner->Identity.build >> 8) & 0xFFu), (ULONG)(owner->Identity.build & 0xFFu),
              (ULONG)((owner->Identity.build >> 16) & 0xFFu), (ULONG)owner->Identity.customer_id,
-             (ULONG)owner->Identity.cfg, (ULONG)owner->Identity.fan_present,
-             (ULONG)owner->Identity.duty_present, (ULONG)owner->Identity.temperatures,
-             (ULONG)owner->Identity.voltages, (ULONG)owner->Identity.mode_mask, (ULONG)owner->Identity.engine,
              HwmonReasonText(owner->Identity.reason));
+    GuardLog("hwmon: base 0x%04lX cfg 0x%02lX fans 0x%02lX duties 0x%02lX temps %lu volts %lu mode 0x%02lX "
+             "eng 0x%02lX",
+             base, (ULONG)owner->Identity.cfg, (ULONG)owner->Identity.fan_present,
+             (ULONG)owner->Identity.duty_present, (ULONG)owner->Identity.temperatures,
+             (ULONG)owner->Identity.voltages, (ULONG)owner->Identity.mode_mask, (ULONG)owner->Identity.engine);
     if (status != 0) {
         owner->Reason = owner->Identity.reason;
         HwmonPublish(Device, NULL, 0);

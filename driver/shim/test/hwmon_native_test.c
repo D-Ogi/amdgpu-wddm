@@ -407,12 +407,16 @@ static void sampler(void)
     CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) == 0);
     CHECK(NoWriteOutsideTheLatch());
 
-    /* The telemetry line, the shape an operator reads in the driver log. */
+    /* The telemetry lines, the shape an operator reads in the driver log. THREE lines since KMD 0.7.212: one
+     * line was 332 characters at its widest and BC250_LOG_TEXT holds 159, so it lost its counters without
+     * saying so (the guardlog-width gate, BD-070). The reading first, then the two registers nothing decides
+     * on with the duty verdict, then the counters. */
     native_lines = 0;
     HwmonLogLine(&device, "telemetry");
-    CHECK(native_lines == 1);
+    CHECK(native_lines == 3);
     CHECK(native_log_has("fan2 1589 rpm (1/5 turn)") && native_log_has("duty 961 permille"));
     CHECK(native_log_has("apu 83.0 C") && !native_log_has("unproven"));
+    CHECK(native_log_has("duty read-back proven") && native_log_has("samples"));
 
     /* The fan speeds up. The jump rule admits it, because 1589 to 2400 is not a factor of four. */
     ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), 2400);
