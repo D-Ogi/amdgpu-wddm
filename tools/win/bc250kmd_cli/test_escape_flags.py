@@ -18,7 +18,11 @@ RUN_START_HEALTH's CONFIRM and RUN_CPU's KEEP, which write the registry and touc
 NoAdapterSynchronization and keep their old word admitted for one release; RUN_CPU's other writes send mailbox
 messages and stay HardwareAccess. The schedule rule has no exception left: the last one was the overlay's graphics
 panel, which polled `log summary only` every 5 s and now reads the ring with `log 0` and asks for a summary only
-when an operator does (tools/win/bc250mon/src/GraphicsPipelineProvider.cs, docs/design/paging-journal.md). The behavioural half of the RUN_START_HEALTH contract, every operation against
+when an operator does (tools/win/bc250mon/src/GraphicsPipelineProvider.cs, docs/design/paging-journal.md). The client
+half of that move is pinned here as well (LEGACY_RETRIES): a driver up to 0.7.212 refuses the new word, so every
+sender of those two operations sends the request once more with the old word and remembers it for the process, which
+is what keeps a start confirmed and a CPU trial kept while a release defers the device restart (C57). The behavioural
+half of the RUN_START_HEALTH contract, every operation against
 every flag word, is in driver/kmd/test/start_health_test.c, which builds the actual handler.
 
     python -m unittest discover -s tools/win/bc250kmd_cli
@@ -468,6 +472,45 @@ def flag_matrix(contract):
     return matrix
 
 
+# The two operations that moved to NoAdapterSynchronization in 0.7.213 are the two a client must still get through
+# against the loaded 0.7.212 driver, because the installer defers the device restart: start health CONFIRM (the logon
+# task, the overlay, the control application's Recovery action) and CPU KEEP (a trial that would otherwise be lost).
+# A driver up to 0.7.212 answers the new word with Status REFUSED and NtStatus STATUS_INVALID_PARAMETER, which a
+# well-formed request of this release gets from nothing else, so each of the three senders of those two operations
+# must send the request once more with the old HardwareAccess word and must remember the answer for the process.
+# Without this the start-confirm.ps1 fallback writes the boot-loop guard alone and the next start comes up at 24 CU
+# and the floor clock (C57). The first attempt's flag argument is pinned by `senders` above; these patterns pin the
+# fallback, so that deleting it is a test failure and not a silent regression.
+LEGACY_RETRIES = {
+    "Bc250StartHealth": (
+        ("sticky old-word CONFIRM", r"if\(confirm && confirmLegacy\)\s*\{\s*"
+                                    r"if\(SendEscapeFlags\(BC250_DEFAULT_HWID,data,sizeof\(\*data\),0,&status\)\)"),
+        ("refused-CONFIRM resend", r"if\(confirm && NT_SUCCESS\(status\) &&\s*"
+                                   r"data->Status==BC250_ESCAPE_STATUS_REFUSED && data->NtStatus==0xC000000Dul\)\s*\{\s*"
+                                   r"confirmLegacy=1;\s*\*data=request;\s*"
+                                   r"if\(SendEscapeFlags\(BC250_DEFAULT_HWID,data,sizeof\(\*data\),0,&status\)\)"),
+    ),
+    "Bc250Cpu": (
+        ("sticky old-word KEEP", r"if \(op == BC250_CPU_OP_KEEP && keepLegacy\)\s*\{\s*"
+                                 r"status = TelemetryEscapeFlags\(data, sizeof\(\*data\), 1\);"),
+        ("refused-KEEP resend", r"if \(op == BC250_CPU_OP_KEEP && NT_SUCCESS\(status\) &&\s*"
+                                r"data->Status == BC250_ESCAPE_STATUS_REFUSED && "
+                                r"data->NtStatus == 0xC000000Dul\)\s*\{\s*"
+                                r"keepLegacy = 1;\s*\*data = sent;\s*"
+                                r"status = TelemetryEscapeFlags\(data, sizeof\(\*data\), 1\);"),
+    ),
+    "CpuQuery": (
+        ("sticky old-word KEEP", r"if \(op == BC250_CPU_OP_KEEP && keepLegacy\)\s*\{\s*"
+                                 r"if \(SendEscapeFlags\(BC250_DEFAULT_HWID, c, sizeof\(\*c\), 0, &status\)\)"),
+        ("refused-KEEP resend", r"if \(op == BC250_CPU_OP_KEEP && NT_SUCCESS\(status\) &&\s*"
+                                r"c->Status == BC250_ESCAPE_STATUS_REFUSED && "
+                                r"c->NtStatus == 0xC000000Dul\)\s*\{\s*"
+                                r"keepLegacy = 1;\s*\*c = sent;\s*"
+                                r"if \(SendEscapeFlags\(BC250_DEFAULT_HWID, c, sizeof\(\*c\), 0, &status\)\)"),
+    ),
+}
+
+
 def client_flag_problems(display_source, cli_source):
     """display.c's dispatch of the four commands, and the flags bc250kmd_cli.c and bc250control.dll send for them.
     Returns a list of sentences, empty when all of it holds."""
@@ -524,6 +567,9 @@ def client_flag_problems(display_source, cli_source):
         seen = len(re.findall(r"Command\s*=\s*" + command + r"\s*;", cli_source))
         if seen != builders:
             found.append(f"bc250kmd_cli.c: {seen} {command} requests built, expected {builders}")
+        for what, retry in LEGACY_RETRIES.get(name, ()):
+            if not re.search(retry, body, re.S):
+                found.append(f"bc250kmd_cli.c: {name} has no {what} for a driver of 0.7.212 or older")
     return found
 
 
@@ -589,6 +635,25 @@ class FlagContractTest(unittest.TestCase):
             # The CLI sends CPU KEEP with HardwareAccess again.
             (display, cli.replace("op == BC250_CPU_OP_READ || op == BC250_CPU_OP_KEEP,",
                                   "op == BC250_CPU_OP_READ,", 1)),
+            # The three legacy-word fallbacks deleted, one at a time: a client of this release would then leave a
+            # start unconfirmed, or lose a CPU trial, against the still-loaded 0.7.212 driver (C57).
+            (display, cli.replace("            confirmLegacy=1;\n"
+                                  "            *data=request;\n"
+                                  "            if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),0,&status))"
+                                  "return status;\n", "", 1)),
+            (display, cli.replace("            keepLegacy = 1;\n"
+                                  "            *data = sent;\n"
+                                  "            status = TelemetryEscapeFlags(data, sizeof(*data), 1);\n", "", 1)),
+            (display, cli.replace("            keepLegacy = 1;\n"
+                                  "            *c = sent;\n"
+                                  "            if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), 0, &status)) "
+                                  "return 1;\n", "", 1)),
+            # The fallback fires but is forgotten, so every later CONFIRM of the process is refused again.
+            (display, cli.replace("            confirmLegacy=1;\n", "", 1)),
+            # The refusal that triggers the resend widened to any refusal, which would also resend a well-formed
+            # request that the new driver refused for a reason of its own.
+            (display, cli.replace("data->Status==BC250_ESCAPE_STATUS_REFUSED && data->NtStatus==0xC000000Dul",
+                                  "data->Status==BC250_ESCAPE_STATUS_REFUSED", 1)),
             # A second place builds a start-health request, which no flag rule would cover.
             (display, cli.replace("static int StartHealth(int argc,wchar_t** argv)",
                                   "static void HealthStray(BC250_ESCAPE_START_HEALTH* d)\n"
