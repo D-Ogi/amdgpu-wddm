@@ -45,7 +45,7 @@ Each milestone has an exit criterion that is a measurement. A milestone is close
 
 Status 2026-09-21: M0-M5 closed on unit A (facts M1-M33; M3 by experiment E06: our display-only miniport runs the
 lab machine's display, and `D3DKMTEscape` reaches it, which gives M4-M6 their control channel). M2's debugger
-works over KDNET but its host-side server is disabled after it hung the development PC (journal 2026-09-21).
+works over KDNET but its host-side server is disabled after it hung the development PC (2026-09-21).
 M4 by experiments E07-E09: AMD's hub code, imported unmodified and run inside the miniport, programs GART and VM
 context 0 with the same register writes amdgpu made on this unit; acknowledged by the hardware, no fault bit,
 picture undisturbed, reversible. The driver does it on command behind gates; doing it at every start comes

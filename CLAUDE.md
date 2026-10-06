@@ -6,14 +6,14 @@ The previous driver attempt did not fail because of the hardware. It failed beca
 
 1. **No hand-typed register addresses.** A BAR5 offset comes only from `tools/regcalc` (or, in C code, from `SOC15_REG_OFFSET` over the original AMD headers). A literal such as `0x5C3C` in code or docs without an `mm*` name next to it is a bug.
 2. **No register names from memory.** If `regcalc.py lookup NAME` says NOT FOUND, the register does not exist. We do not guess.
-3. **Facts live only in `docs/facts/data/*.yaml`**, the facts graph (one file per area; format in `docs/facts/README.md`), each with a status (`HYPOTHESIS`, `MEASURED`, `CONFIRMED`, `REFUTED`) and a link to a file in `evidence/`. `docs/facts.md` and the pages under `docs/facts/` are generated from it by `tools/facts/gen_facts.py --write` and never edited by hand; `--check` is the gate. The journal and experiment write-ups are not sources of facts. A contradiction with an existing entry is resolved immediately (fix the entry, state why, link the newer fact to it with a `supersedes` or `refutes` edge), never by appending a second version.
+3. **Facts live only in `docs/facts/data/*.yaml`**, the facts graph (one file per area; format in `docs/facts/README.md`), each with a status (`HYPOTHESIS`, `MEASURED`, `CONFIRMED`, `REFUTED`) and a link to a file in `evidence/`. `docs/facts.md` and the pages under `docs/facts/` are generated from it by `tools/facts/gen_facts.py --write` and never edited by hand; `--check` is the gate. Experiment write-ups are not sources of facts. A contradiction with an existing entry is resolved immediately (fix the entry, state why, link the newer fact to it with a `supersedes` or `refutes` edge), never by appending a second version.
 4. **"The write is blocked / the hardware does not allow it" requires the checklist** in `docs/01-evidence-rules.md` (address proven by reading a known value, block out of reset and clocked, GRBM bank selected, compared with Linux on the same unit). The words "impossible", "definitive", "locked" without an evidence ID are banned.
 5. **Positive control first.** Before a measurement means anything, show that the same method returns a known value where we know it from Linux.
 6. **`evidence/` is immutable.** Dumps are never edited. A new measurement is a new file.
 7. **Import AMD code, do not retype it.** Init sequences come from `amdgpu` (MIT) through `driver/shim`. Every deviation from Linux gets a comment stating the reason.
 8. **`<BC250_ROOT>\ref\keshas-driver__WARN-AGENTS-md-is-not-facts\AGENTS.md` and its `docs/` are not sources of facts.** (`BC250_ROOT` is the workspace root, by default the parent directory of this repository.) Take experiment ideas and verified code (SMU mailbox, PSP ring) from there, never addresses or conclusions.
-9. **Missed Linux measurements go to `docs/linux-session-wishlist.md` at once.** Unit A runs Windows now; every boot of the diagnostic stick costs the owner a trip to the machine. Whenever you notice something that would have been easy to capture under Linux, add a row (what, why, date) instead of keeping it in your head or in the journal. Before any Linux session, plan it from that file; after it, move the finished rows to "Done" with their evidence directory.
-10. **No AI agent is named as author or co-author.** Commits and pull requests carry no `Co-Authored-By` trailer for a model, and no document, evidence write-up, journal or experiment note says that an agent wrote or recorded it. The author of this repository's content is the licensor named in `NOTICE`; agents are tools (owner, 2026-09-26).
+9. **Missed Linux measurements go to `docs/linux-session-wishlist.md` at once.** Unit A runs Windows now; every boot of the diagnostic stick costs the owner a trip to the machine. Whenever you notice something that would have been easy to capture under Linux, add a row (what, why, date) instead of keeping it in your head. Before any Linux session, plan it from that file; after it, move the finished rows to "Done" with their evidence directory.
+10. **No AI agent is named as author or co-author.** Commits and pull requests carry no `Co-Authored-By` trailer for a model, and no document, evidence write-up or experiment note says that an agent wrote or recorded it. The author of this repository's content is the licensor named in `NOTICE`; agents are tools (owner, 2026-09-26).
 
 ## Hardware safety
 
@@ -99,7 +99,7 @@ sources and lab evidence; the LLVM guide alone does not prove those properties.
 - Everything in the repo is in English: docs, code, identifiers, commit messages.
 - Plain hyphens `-` in prose, no em dashes.
 - One exception to the English rule, by the owner's wish: a Polish saying or proverb that fits the situation
-  is welcome now and then in journals, READMEs and comments, in Polish with its diacritics, followed by a
+  is welcome now and then in READMEs and comments, in Polish with its diacritics, followed by a
   short English gloss. Dry, slightly dark humour likewise. Let future readers pick up some Polish culture
   along the way. Never in facts (`docs/facts/data/`), evidence files or safety rules, where precision comes first.
 - Small single-topic commits. An experiment result is committed together with its evidence and the facts update (data and regenerated pages).

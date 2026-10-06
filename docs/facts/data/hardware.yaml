@@ -119,7 +119,7 @@ facts:
     date: "2026-09-21"
     date_from: "text"
     claim: "Unit A boots Windows 11 from NVMe; the M.2 link is intermittent with this SSD"
-    detail: "Booted through the fallback loader of a disk the firmware had never seen. Before that, with the SSD installed, root port `00:15.0` showed `LnkSta 0x1100` (no link partner) and the firmware did not list the disk; after one more restart it worked, nothing else changed (journal 2026-09-21)"
+    detail: "Booted through the fallback loader of a disk the firmware had never seen. Before that, with the SSD installed, root port `00:15.0` showed `LnkSta 0x1100` (no link partner) and the firmware did not list the disk; after one more restart it worked, nothing else changed (2026-09-21)"
   - id: M22
     status: MEASURED
     date: "2026-09-21"

@@ -54,7 +54,3 @@ Each experiment lives in `experiments/Exx-name/README.md` and is written before 
 - Include the tool commit and, for the diagnostic USB, the `probes.json` id.
 - Remove only what is private and irrelevant (MAC addresses, Wi-Fi names, serial numbers) and say that you did.
 - Never edit afterwards. A correction is a new file.
-
-## The journal
-
-`journal/YYYY-MM-DD.md` is a lab notebook: what was tried, what was seen, dead ends, moods. It is allowed to be wrong. Nothing becomes a fact by being written there.
