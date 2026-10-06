@@ -16,6 +16,19 @@ code=code.replace('/* ACTUAL_JOB_TYPE */',s[a:b])
 if 'static void WddmRecordFenceLedgerLocked(' in s:
  code=code.replace('/* FENCE_LEDGER_FIELD */','BC250_WDDM_FENCE_LEDGER FenceLedger[2];')
  code+=extract('static void WddmRecordFenceLedgerLocked(')+'\n'
+# C48 (later revisions): node 1's ring-gap edges run inside the drain. Extracted when the source has them, so
+# the harness compiles the actual drain either way, and the instrument is exercised by every drain case here.
+if 'static void WddmRingGapEdgeLocked(' in s:
+ code=code.replace('/* RING_GAP_FIELD */',
+                   'BC250_RING_GAP RingGap[BC250_WDDM_NODE_COUNT_MAX];\n'
+                   ' volatile long long RingGapLastVsyncQpc;\n'
+                   ' LARGE_INTEGER RingGapFrequency;')
+ # One substitution, and it is the harness's own: the driver reads the counter frequency once at WddmStart and
+ # passes NULL here, so in a harness that never runs WddmStart every gap would measure 0 us and the arithmetic
+ # would go unexercised. The stand-in clock reports its frequency through that argument, so hand it the field.
+ edge=extract('static void WddmRingGapEdgeLocked(')
+ assert edge.count('KeQueryPerformanceCounter(NULL)')==1
+ code+=edge.replace('KeQueryPerformanceCounter(NULL)','KeQueryPerformanceCounter(&Wddm->RingGapFrequency)')+'\n'
 # KMD172: the quota requeue is called by the drain and armed on the actual timer.
 code+=extract('static void WddmRequeuePagingDrain(')+'\n'
 code+=extract('void WddmGpuFencePaging(')+'\n'

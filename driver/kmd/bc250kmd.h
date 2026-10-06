@@ -697,6 +697,9 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
+// D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
+// log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
+ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);
 
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. A
 // second, parallel channel to the four above, not a generalization of them: SubmitCommand (the paging buffer's

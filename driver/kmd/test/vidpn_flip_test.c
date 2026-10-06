@@ -136,7 +136,19 @@ static BC250_WDDM *WddmOf(HANDLE h){return ((BC250_DEVICE*)h)->Wddm;}
 static int WddmFirstCalls(BC250_WDDM *w,int call){(void)w;(void)call;return 0;}
 static void WddmVSyncArm(BC250_DEVICE *d,int on){(void)d;CHECK(on && irq<=DISPATCH_LEVEL);++arms;}
 static int WddmStopping(BC250_WDDM *w){(void)w;return 0;}
-static void WddmReport(BC250_DEVICE *d,DXGKARGCB_NOTIFY_INTERRUPT_DATA *data){(void)d;reports++;reported=data->CrtcVsync.PhysicalAddress.QuadPart;}
+/* C48: the vblank time the ring-gap accounting keys on. Counted here, not timed: what the fixture has to
+ * prove is that it is taken for EVERY acknowledged vblank, before any of the deferral paths can return. */
+static int ringGapVsyncs;
+static void WddmRingGapVsync(BC250_WDDM *w){(void)w;++ringGapVsyncs;}
+/* C50: a CRTC_VSYNC report owes the same DPC-level notification as any other, so this path has to count one -
+ * counting only the completion path made the summary's "notifications carried no report" wrong by one a vblank.
+ * The stub insists on the vsync flavour, because the only reports this fixture can produce are vblank ones. */
+static unsigned pairedVsyncReports;
+static void WddmPairingReport(BC250_WDDM *w,BOOLEAN vsync){(void)w;CHECK(vsync);++pairedVsyncReports;}
+/* PairInThisPass must stay FALSE here: WddmDcnVsync has no notification of its own behind it, so the report still
+ * needs the dxgkrnl DPC that WddmReport queues. A TRUE would leave this report unpaired for ever. */
+static BOOLEAN WddmReport(BC250_DEVICE *d,DXGKARGCB_NOTIFY_INTERRUPT_DATA *data,BOOLEAN pairInPass)
+{(void)d;CHECK(!pairInPass);reports++;reported=data->CrtcVsync.PhysicalAddress.QuadPart;return TRUE;}
 static BOOLEAN WddmReadCompletedPrimary(BC250_DEVICE*,BC250_WDDM*,PHYSICAL_ADDRESS*,ULONG*);
 static NTSTATUS Bc250WddmSetVidPnSourceAddress(const HANDLE,const DXGKARG_SETVIDPNSOURCEADDRESS*);
 static NTSTATUS Bc250WddmDestroyAllocation(const HANDLE,const DXGKARG_DESTROYALLOCATION*);
@@ -261,12 +273,13 @@ int main(void)
         DXGKARG_SETVIDPNSOURCEADDRESS request={0};
         PHYSICAL_ADDRESS sample={-1};
         unsigned before;
+        int gapVsyncsBefore;
         d.Post.Width=1366;d.Post.Height=768;d.Post.Pitch=5632;w.PrimaryPitch=5632;
         d.Wddm=&w;d.VidPnFlipEnabled=1;w.VSyncEnabled=1;w.ScanoutAdmitGate=TRUE;
         w.PrimaryAddress.QuadPart=10;w.PrimarySegment=1;
         request.PrimaryAddress.QuadPart=20;request.PrimarySegment=2;
         healthSequence=healthCompletions=0;
-        irq=level?3:0;hardware=arms=reports=0;pending=inject_update=nested_writer=0;
+        irq=level?3:0;hardware=arms=reports=pairedVsyncReports=0;pending=inject_update=nested_writer=0;
         hardware_result=STATUS_IO_TIMEOUT;programmed=displayed=10;
         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT);
         CHECK(w.PrimaryAddress.QuadPart==10 && w.PrimarySegment==1 && w.Flips==0);
@@ -288,16 +301,21 @@ int main(void)
         CHECK(d.DcnVsyncOldBufferReports==2);
         CHECK(healthCompletions==0); // old-buffer fallback is not progress
         // Fallback is also generation-protected, even for an ABA writer.
-        before=reports;pending=1;inject_fallback_update=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
+        before=reports;gapVsyncsBefore=ringGapVsyncs;pending=1;inject_fallback_update=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
         CHECK(reports==before);
+        // C48: the report was refused, the vblank still happened and its time was taken.
+        CHECK(ringGapVsyncs==gapVsyncsBefore+1);
         // Matching address alone cannot override an asserted pending bit.
-        before=reports;displayed=20;pending=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
-        CHECK(reports==before);
+        before=reports;gapVsyncsBefore=ringGapVsyncs;displayed=20;pending=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
+        CHECK(reports==before && ringGapVsyncs==gapVsyncsBefore+1);
         pending=0;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
         CHECK(reports==before+1 && reported==20);
         CHECK(healthCompletions==1);
         d.DcnVsyncAcked=1;WddmDcnVsync(&d);
         CHECK(healthCompletions==1); // repeated completed primary is not progress
+        // C50: every report this fixture made is a vblank one, and every one of them was counted as owing a
+        // notification. A refused vblank (above) counts no report and must not count a pairing either.
+        CHECK(pairedVsyncReports==reports);
         // A whole new transaction during the observation invalidates completion.
         inject_update=1;
         CHECK(!WddmReadCompletedPrimary(&d,&w,&sample,NULL));

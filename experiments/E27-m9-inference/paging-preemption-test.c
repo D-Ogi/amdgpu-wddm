@@ -13,9 +13,15 @@ static BC250_PAGING_JOB *preemptedOne,*preemptedTwo;
 static BOOLEAN WddmStopping(BC250_WDDM* w) {return (BOOLEAN)w->Stopping;}
 static LONG InterlockedExchange(LONG* p,LONG value) {LONG old=*p;*p=value;return old;}
 static int KeInsertQueueDpc(KDPC** d,void* a,void* b) {(void)d;(void)a;(void)b;return 1;}
-static void WddmReport(BC250_DEVICE* d,DXGKARGCB_NOTIFY_INTERRUPT_DATA* data)
+// 0.7.210.1: the report says whether it reached dxgkrnl, and the pass pairs its own DxgkCbNotifyDpc when the
+// NotifyDpcInReport gate is open. reportFails makes the refusal path testable: the pending flag must come back and
+// no fence may advance. PairInThisPass is counted so a pass cannot quietly stop pairing.
+static int reportFails,pairedReports,notifyCalls;
+static BOOLEAN WddmReport(BC250_DEVICE* d,DXGKARGCB_NOTIFY_INTERRUPT_DATA* data,BOOLEAN PairInThisPass)
 {
  check(!lockHeld,"scheduler notification outside queue lock");
+ if(PairInThisPass) pairedReports++;
+ if(reportFails) {reportFails--;return FALSE;}
  events[eventCount++]=*data;
  if(data->InterruptType==DXGK_INTERRUPT_DMA_PREEMPTED) {
   check(!d->Wddm || !((BC250_WDDM*)d->Wddm)->PagingHead,"preempt notification releases private FIFO");
@@ -25,7 +31,10 @@ static void WddmReport(BC250_DEVICE* d,DXGKARGCB_NOTIFY_INTERRUPT_DATA* data)
    replayData=NULL;
   }
  }
+ return TRUE;
 }
+static void WddmPairingReport(BC250_WDDM* w,BOOLEAN vsync){(void)w;check(!vsync,"the report pass reports no vsync");}
+static void WddmNotifyDpcNow(BC250_DEVICE* d,BOOLEAN samePass){(void)d;check(samePass,"the pass pairs its own reports");notifyCalls++;}
 /* ACTUAL_FUNCTIONS */
 static void reset(void);
 static void preemption(void)

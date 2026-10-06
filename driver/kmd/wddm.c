@@ -21,6 +21,8 @@
 #include "paging_private.h"
 #include "paging_drain.h"
 #include "object_index.h"
+#include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
+#include "notify_pairing.h"      // C50: which pass pairs a completion report with DxgkCbNotifyDpc
 #include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
 #include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
 #include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
@@ -55,6 +57,7 @@
 #define BC250_WDDM_NODE_COPY 1u
 #define BC250_WDDM_NODE_COUNT 1u            // gate closed: the value wddm->NodeCount starts at, and the only one C_ASSERT still checks
 #define BC250_WDDM_NODE_COUNT_MAX 2u        // sizes every per-node array below, gate open or closed
+#define BC250_WDDM_REPORT_RETRY_MAX 4L      // passes a completion report may be retried before it is dropped
 
 // The GPU virtual address space stage A declares. Four levels of nine index bits over 4 KB pages is what GFX10's
 // GPUVM does and what M4's page table format (facts M37) is built for, so stage B can keep the numbers; the root
@@ -319,6 +322,16 @@ typedef struct _BC250_WDDM {
     UINT RejectedFence[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN WatchdogFaulted[BC250_WDDM_NODE_COUNT_MAX]; // sticky until adapter state is rebuilt
     volatile LONG CompletionPending[BC250_WDDM_NODE_COUNT_MAX];    // set by the submit, cleared by the DPC
+    // A completion report that did not reach dxgkrnl must not advance LastReportedFence: that value is what a
+    // later preemption report hands back as "the fence you were told about", so advancing it there would name a
+    // fence dxgkrnl never saw completed. The pending flag goes back instead and the pass runs again, at most
+    // BC250_WDDM_REPORT_RETRY_MAX times a node, so a callback that keeps failing cannot spin this DPC for ever.
+    volatile LONG CompletionRetries[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG CompletionsDropped[BC250_WDDM_NODE_COUNT_MAX];
+    // The preemption ack is not retried: its locked part has already released the preempted paging ownership,
+    // and running that release twice is a worse failure than the lost ack, which the watchdog still sees. It is
+    // counted and logged, so "the scheduler waits for a preemption that never came" has a line of its own.
+    volatile LONG PreemptionReportsLost;
     volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value";
                                          // shared across nodes on purpose (design note section 5): a lab
                                          // simplification, not a claim that dxgkrnl only ever sees one node's value
@@ -427,6 +440,33 @@ typedef struct _BC250_WDDM {
     volatile LONG64 SubmitHoldEventWakes;
     volatile LONG64 SubmitHoldTimeoutWakes;
     volatile LONG SubmitHeldHistogram[BC250_WDDM_HOLD_BUCKETS];  // held time by bucket, g_WddmHoldBucketNames
+
+    // C48/C49 (ring_gap.h), always on, no gate: how long each node's ring stood idle, and how much of that idle
+    // ended at a display VSync. Sessions 418-420 needed a 3 GB xperf dump per session to read this; here it costs
+    // two QueryPerformanceCounter reads per packet boundary (about 374 a second at the 187 completions a second
+    // session 418 measured) and four lines a node in the summary. Written under Lock, where both edges already
+    // are, so the gap of a node is never half updated. The VSync time is adapter-wide (one display, one OTG) and
+    // is kept interlocked instead, because the VSync path does not hold Lock. The two stamp counters say which
+    // grid it came from: a hardware vblank or the 16 ms software timer, which are different phase grids, so an
+    // idle-desktop baseline and a game window must not be read against each other without checking them.
+    BC250_RING_GAP RingGap[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG64 RingGapLastVsyncQpc;
+    volatile LONG RingGapVsyncStampsHw;     // vblank times taken from DcnVsyncInterrupt's acknowledged vblank
+    volatile LONG RingGapVsyncStampsTimer;  // vblank times taken from the software timer tick
+    LARGE_INTEGER RingGapFrequency;     // read once in WddmStart, with the counter
+    // C50 (notify_pairing.h): the report and the DPC-level notification dxgkrnl waits for. With NotifyDpcInReport
+    // closed the pairing waits for the next dxgkrnl DPC, a 12 to 20 us hop at 187 completions a second (about
+    // 0.03 ms of a 70 Hz frame); with it open the report pass makes the call itself, which is what the DDI text
+    // asks for, and the otherwise empty dxgkrnl DPC is not asked for at all. The counters price both shapes in the
+    // same run. The 8 ms VSync-ended stalls are NOT this (C48 died on its own clause 1): notify_pairing.h says so
+    // at the top, next to the evidence.
+    BOOLEAN NotifyDpcInReport;
+    BC250_NOTIFY_PAIRING NotifyPairing;
+    // Two DPCs can reach DxgkCbNotifyDpc once the report pass makes the call itself: ours and dxgkrnl's device
+    // DPC, on two processors. Nothing in the DDI text describes that call as re-entrant across processors, so one
+    // of them makes it and the other hands its work to DxgkCbQueueDpc - which is exactly the shape the gate-closed
+    // driver always had, so a contended notification is never a lost one.
+    volatile LONG NotifyDpcBusy;
 
     KTIMER VSyncTimer;
     KDPC VSyncDpc;
@@ -810,7 +850,15 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
 // Stage A runs nothing on the GPU, so every packet is finished before this returns. Raise to interrupt level,
 // report there, then queue the DPC the contract requires ("after the driver calls DXGKCB_NOTIFY_INTERRUPT but
 // before the driver exits its ISR, the driver must queue a DPC"); Bc250DpcRoutine calls DxgkCbNotifyDpc.
-static void WddmReport(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY_INTERRUPT_DATA* Data)
+//
+// C50: PairInThisPass says the caller is itself a DPC and will call DxgkCbNotifyDpc before it returns, so the
+// DxgkCbQueueDpc whose only job is to bring that call about is not made - without this the gate would add a
+// notification per completion instead of moving one earlier. FALSE is the shape of every revision up to 0.7.208.1.
+//
+// Returns TRUE only when the report actually reached dxgkrnl. FALSE means the callback table is incomplete or
+// DxgkCbSynchronizeExecution failed; the caller must then not count a report and must not notify for nothing.
+static BOOLEAN WddmReport(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY_INTERRUPT_DATA* Data,
+                          BOOLEAN PairInThisPass)
 {
     BC250_WDDM_NOTIFY notify;
     BOOLEAN returned = FALSE;
@@ -818,7 +866,7 @@ static void WddmReport(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY
 
     if (Device->Dxgk.DxgkCbSynchronizeExecution == NULL || Device->Dxgk.DxgkCbNotifyInterrupt == NULL ||
         Device->Dxgk.DxgkCbQueueDpc == NULL)
-        return;                         // all three are needed: the report is worthless without the DPC that pairs with it
+        return FALSE;                   // all three are needed: the report is worthless without the DPC that pairs with it
     notify.Device = Device;
     notify.Data = *Data;
     // One message was asked for in the INF and one was granted (facts M38), so the message number is 0.
@@ -835,9 +883,58 @@ static void WddmReport(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY
         if (failures <= 8 || (failures & 0x3FF) == 0)
             GuardLog("wddm: synchronize for interrupt type %u failed 0x%08X (failure %ld)",
                      (ULONG)Data->InterruptType, status, failures);
+        return FALSE;
+    }
+    if (!PairInThisPass) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+    return TRUE;
+}
+
+// The pairing counters, under Lock. They are read-modify-write on plain counters and two DPCs on two processors
+// reach them (ours and dxgkrnl's device DPC), so a lost update would make the summary's "unpaired" line - which
+// says a number above 1 is a correctness question - fire on nothing, or hide a real one. The callbacks themselves
+// stay outside the lock; only the arithmetic is inside it.
+static void WddmPairingReport(_Inout_ BC250_WDDM* Wddm, BOOLEAN Vsync)
+{
+    KIRQL irql;
+
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    if (Vsync) Bc250NotifyPairingVsyncReport(&Wddm->NotifyPairing);
+    else Bc250NotifyPairingReport(&Wddm->NotifyPairing);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+}
+
+// The one place that calls DxgkCbNotifyDpc, which is where dxgkrnl's scheduler looks at what was reported.
+// SamePass says whether the reports this call carries were made in this same DPC: that is true of the report
+// pass with NotifyDpcInReport open, and false of the completion path with it closed, where the pairing waits for
+// the next dxgkrnl DPC (notify_pairing.h has the measured shape and the DDI text behind it).
+//
+// Single flight. Until 0.7.208.1 this call had exactly one caller, dxgkrnl's own device DPC, which cannot run
+// concurrently with itself for one adapter. The report pass is a second KDPC and can run on another processor, and
+// the DDI text ("the display miniport driver's DPC callback routine calls DXGKCB_NOTIFY_DPC") never describes the
+// call as re-entrant across processors. So the second caller does not wait and does not skip: it asks dxgkrnl for
+// its own DPC instead, which is the gate-closed shape, and the pairing arrives one hop later rather than never.
+// No lock is held across the callback - a spinlock held into dxgkrnl would invite a lock-order inversion with
+// whatever the device DPC path holds.
+static void WddmNotifyDpcNow(_Inout_ BC250_DEVICE* Device, BOOLEAN SamePass)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    KIRQL irql;
+
+    if (Device->Dxgk.DxgkCbNotifyDpc == NULL) return;
+    if (wddm == NULL) { Device->Dxgk.DxgkCbNotifyDpc(Device->Dxgk.DeviceHandle); return; }
+    if (InterlockedCompareExchange(&wddm->NotifyDpcBusy, 1, 0) != 0)
+    {
+        KeAcquireSpinLock(&wddm->Lock, &irql);
+        Bc250NotifyPairingContend(&wddm->NotifyPairing);
+        KeReleaseSpinLock(&wddm->Lock, irql);
+        if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
         return;
     }
-    Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    (void)Bc250NotifyPairingNotifyDpc(&wddm->NotifyPairing, SamePass ? 1 : 0);
+    KeReleaseSpinLock(&wddm->Lock, irql);
+    Device->Dxgk.DxgkCbNotifyDpc(Device->Dxgk.DeviceHandle);
+    InterlockedExchange(&wddm->NotifyDpcBusy, 0);
 }
 
 // Queue the one DPC that reports, if the stop has not begun. Both callers are DDIs, so this runs at
@@ -1015,6 +1112,48 @@ static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT
              BC250_GCVM_FAULT_MAPPING(status), page, refused);
 }
 
+// ---- C48/C49: the two edges of a node's busy state ---------------------------------------------------------
+//
+// The owner's goal is that the GPU must not wait. Offline analysis of RotTR sessions 418-420 found the 3D ring
+// idle for a median 8 ms, 418 to 605 times per 105 s, with a dispatchable packet already queued and the gap
+// ending within 300 us of a display VSync: 0.45 to 0.67 ms of every frame, and 59 to 64 % of all ring idle. It
+// took a 3 GB event-trace dump per session to see that. The driver owns both edges of its own ring, so it can
+// say the same number itself, in every workload, from the log summary: ring_gap.h holds the arithmetic and the
+// 300 us definition, this is where the two edges are.
+//
+// Each edge exists in exactly one place, and both already run under Lock:
+//   node 0: WddmGfxHeadLocked below. The gfx completion queue going empty is the ring going idle; a submit
+//           pushing onto an empty queue is the ring going busy. A retirement that leaves other jobs queued is
+//           neither edge, and a second call while the ring is already idle must not restart the clock, which is
+//           what Bc250RingGapOpen refuses.
+//   node 1: the two assignments to PagingHwPending in WddmGpuFencePaging.
+// The gfx ring is node 0's ring; if a packet of another node ever rode it, it would still occupy this ring, and
+// this number is about the ring, not about the bookkeeping node.
+static void WddmRingGapEdgeLocked(_Inout_ BC250_WDDM* Wddm, UINT Node, BOOLEAN Busy)
+{
+    LARGE_INTEGER qpc;
+
+    if (Node >= BC250_WDDM_NODE_COUNT_MAX) return;
+    qpc = KeQueryPerformanceCounter(NULL);       // callable at any IRQL, which is why the edges need nothing else
+    if (Busy)
+        (void)Bc250RingGapClose(&Wddm->RingGap[Node], (ULONGLONG)qpc.QuadPart,
+                                (ULONGLONG)Wddm->RingGapFrequency.QuadPart,
+                                (ULONGLONG)InterlockedCompareExchange64(&Wddm->RingGapLastVsyncQpc, 0, 0));
+    else
+        Bc250RingGapOpen(&Wddm->RingGap[Node], (ULONGLONG)qpc.QuadPart);
+}
+
+// Every vblank this driver acknowledged, whether or not the report that follows it is deferred: a deferred
+// report still means the display reached its blanking interval, and that is what the pacing question is about.
+// Interlocked rather than under Lock, because the VSync paths do not hold it.
+static void WddmRingGapVsync(_Inout_ BC250_WDDM* Wddm)
+{
+    LARGE_INTEGER qpc = KeQueryPerformanceCounter(NULL);
+
+    InterlockedExchange64(&Wddm->RingGapLastVsyncQpc, qpc.QuadPart);
+    InterlockedIncrement(&Wddm->RingGapVsyncStampsHw);   // so a vsync-ended count of 0 can be told from no stamp
+}
+
 // Caller owns Lock. Keep the oldest deadline; appending work must not extend
 // a hung job's watchdog, and an already queued timer DPC must not fault a new head.
 static void WddmGfxHeadLocked(BC250_WDDM* Wddm)
@@ -1022,6 +1161,7 @@ static void WddmGfxHeadLocked(BC250_WDDM* Wddm)
     BC250_GFX_COMPLETION* job = Bc250GfxQueueHead(&Wddm->GfxPending);
     LARGE_INTEGER due;
     ULONGLONG now;
+    WddmRingGapEdgeLocked(Wddm, BC250_WDDM_NODE_3D, job != NULL);
     Wddm->HwPending = job != NULL;
     if (!job) { KeCancelTimer(&Wddm->SubmitTimer); return; }
     Wddm->HwSeq = job->Seq;
@@ -1439,6 +1579,7 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
         if (wddm->PagingHwPending && GfxPagingFenceArrived(Device,wddm->PagingHwSeq)) {
             retired=wddm->PagingHead;
             wddm->PagingHwPending=FALSE;
+            WddmRingGapEdgeLocked(wddm, BC250_WDDM_NODE_COPY, FALSE);   // C48: node 1's ring went idle
             KeCancelTimer(&wddm->PagingSubmitTimer);
             completed=TRUE;
         } else if (!wddm->PagingHwPending && wddm->PagingHead &&
@@ -1455,6 +1596,7 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
                     job->ByteCount,job->VirtualAddress,&seq);
                 if (NT_SUCCESS(status)) {
                     wddm->PagingHwPending=TRUE;
+                    WddmRingGapEdgeLocked(wddm, BC250_WDDM_NODE_COPY, TRUE);  // C48: node 1's ring went busy
                     wddm->PagingHwSeq=seq;
                     wddm->PagingHwFence=job->Fence;
                     PagingJournalStampSeq(job->Fence,seq);
@@ -1630,6 +1772,8 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
     LONG fence;
     KIRQL reportIrql;
     UINT node;
+    BOOLEAN reported = FALSE;       // C50: did this pass publish anything that now owes a DxgkCbNotifyDpc
+    BOOLEAN pairInPass;             // C50: this pass pairs its own reports, so WddmReport need not queue the DPC
 
     UNREFERENCED_PARAMETER(Dpc);
     UNREFERENCED_PARAMETER(Arg1);
@@ -1646,6 +1790,7 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
         return;
     }
     wddm->ReportActive = TRUE;
+    pairInPass = wddm->NotifyDpcInReport;   // read once, so the whole pass has one shape even across a reload
     KeReleaseSpinLock(&wddm->Lock, reportIrql);
 
     // ADR 0008 stage D: both nodes' pending completion/preemption are checked, not only node 0's - the array
@@ -1669,10 +1814,37 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
             data.DmaCompleted.SubmissionFenceId = (UINT)fence;
             data.DmaCompleted.NodeOrdinal = node;
             data.DmaCompleted.EngineOrdinal = 0;
-            WddmReport(device, &data);
-            InterlockedExchange(&wddm->LastCompletedFence, fence);
-            InterlockedExchange(&wddm->LastReportedFence[node], fence);
-            wddm->LastReportedValid[node] = TRUE;
+            if (WddmReport(device, &data, pairInPass))
+            {
+                WddmPairingReport(wddm, FALSE);
+                reported = TRUE;
+                InterlockedExchange(&wddm->LastCompletedFence, fence);
+                InterlockedExchange(&wddm->LastReportedFence[node], fence);
+                wddm->LastReportedValid[node] = TRUE;
+                InterlockedExchange(&wddm->CompletionRetries[node], 0);
+            }
+            else
+            {
+                // The report did not reach dxgkrnl, so the fence it carried is not a fence dxgkrnl was told
+                // about. Nothing advances here; the pending flag goes back and this pass asks for another one.
+                // Bounded, because the failure modes are "the callbacks are gone" and "SynchronizeExecution
+                // keeps failing", and a DPC that requeues itself for ever on either would be worse than a
+                // dropped completion with a line in the log.
+                BOOLEAN retry;
+
+                KeAcquireSpinLock(&wddm->Lock, &irql);
+                retry = (InterlockedIncrement(&wddm->CompletionRetries[node]) <= BC250_WDDM_REPORT_RETRY_MAX);
+                if (retry)
+                {
+                    wddm->CompletionPending[node] = 1;
+                    wddm->ReportAgain = TRUE;
+                }
+                else InterlockedIncrement(&wddm->CompletionsDropped[node]);
+                KeReleaseSpinLock(&wddm->Lock, irql);
+                GuardLog("wddm: completion report node %u fence %ld not delivered, %s (retry %ld of %ld)",
+                         node, fence, retry ? "pending again" : "DROPPED",
+                         wddm->CompletionRetries[node], (LONG)BC250_WDDM_REPORT_RETRY_MAX);
+            }
         }
 
         // DMA-buffer-boundary preemption cannot be acknowledged while that buffer is
@@ -1721,7 +1893,17 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
             data.DmaPreempted.EngineOrdinal = 0;
             GuardLog("wddm: preemption report fence %u node %u last completed %u at DMA boundary",
                      preemptFence, node, lastFence);
-            WddmReport(device, &data);
+            if (WddmReport(device, &data, pairInPass))
+            {
+                WddmPairingReport(wddm, FALSE);
+                reported = TRUE;
+            }
+            else
+            {
+                InterlockedIncrement(&wddm->PreemptionReportsLost);
+                GuardLog("wddm: preemption report fence %u node %u NOT delivered (lost %ld); recovery is the"
+                         " watchdog's", preemptFence, node, wddm->PreemptionReportsLost);
+            }
         }
     }
     KeAcquireSpinLock(&wddm->Lock, &reportIrql);
@@ -1732,6 +1914,27 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
         if (!wddm->Stopping) KeInsertQueueDpc(&wddm->ReportDpc, NULL, NULL);
     }
     KeReleaseSpinLock(&wddm->Lock, reportIrql);
+    // C50, behind NotifyDpcInReport: pair what this pass published with the DPC-level notification here, which is
+    // what the DDI asks for ("The display miniport driver's DPC callback routine calls DXGKCB_NOTIFY_DPC",
+    // d3dkmddi.md:2392; NotifyDpc is a DISPATCH_LEVEL call, :2433, and this is a DPC). Without it the pairing
+    // waits for the dxgkrnl DPC that the DxgkCbQueueDpc inside WddmReport brings about: a 12 to 20 us hop, worth
+    // about 0.03 ms of a 70 Hz frame at the 187 completions a second of session 418. It is not what holds the ring
+    // for 8 ms - notify_pairing.h carries that correction and the evidence for it.
+    //
+    // Three things make the call safe here. It is outside wddm->Lock, so a scheduler that re-enters a DDI of ours
+    // cannot deadlock on it. It is after ReportActive has been cleared, so a report queued from inside the call
+    // runs as an ordinary new pass rather than being folded into this one. And the submit path it can reach runs
+    // at PASSIVE_LEVEL from SubmitCommandVirtual (node 0) or takes no fast mutex at all (node 1), so a
+    // DISPATCH_LEVEL caller here cannot end up acquiring GfxSubmitMutex.
+    //
+    // WddmReport did not queue the dxgkrnl DPC for these reports, so whenever this pass does not make the call
+    // after all - the stop began between the report and here - the DPC is asked for instead. A report that reached
+    // dxgkrnl always gets its pairing from somewhere.
+    if (reported && pairInPass)
+    {
+        if (!WddmStopping(wddm)) WddmNotifyDpcNow(device, TRUE);
+        else if (device->Dxgk.DxgkCbQueueDpc != NULL) device->Dxgk.DxgkCbQueueDpc(device->Dxgk.DeviceHandle);
+    }
 }
 
 static void WddmReportDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
@@ -1778,6 +1981,8 @@ static void WddmVSyncDpcTick(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PV
 
     // The phase is kept whether or not anyone is listening, so that GetScanLine answers the same way either way.
     wddm->VSyncLast = KeQueryPerformanceCounter(&wddm->VSyncFrequency);
+    InterlockedExchange64(&wddm->RingGapLastVsyncQpc, wddm->VSyncLast.QuadPart);   // C48: the software source
+    InterlockedIncrement(&wddm->RingGapVsyncStampsTimer);   // 62.5 Hz, a different grid from the hardware vblank
     InterlockedIncrement(&wddm->VSyncTicks);
     if (!wddm->VSyncEnabled) return;            // ControlInterrupt has not asked for CRTC_VSYNC
 
@@ -1787,7 +1992,9 @@ static void WddmVSyncDpcTick(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PV
     if (!WddmReadCompletedPrimary(device, wddm, &data.CrtcVsync.PhysicalAddress, NULL)) return;
     data.CrtcVsync.PhysicalAdapterMask = 0;     // not in a link, so Flags.ValidPhysicalAdapterMask stays 0 too
     InterlockedIncrement(&wddm->VSyncReports);
-    WddmReport(device, &data);
+    // C50: a CRTC_VSYNC report is a DxgkCbNotifyInterrupt call too, and it owes the same pairing. This one is made
+    // from the timer's own DPC, with no WddmDpc behind it, so WddmReport queues the dxgkrnl DPC that pairs it.
+    if (WddmReport(device, &data, FALSE)) WddmPairingReport(wddm, TRUE);
 }
 
 // Progress record around the tick, outside it so that none of its early returns can skip the exit (hang.c).
@@ -1878,6 +2085,7 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
 
     if (wddm == NULL || !Device->VidPnFlipEnabled) return;
     if (InterlockedExchange(&Device->DcnVsyncAcked, 0) == 0) return;
+    WddmRingGapVsync(wddm);             // C48: the vblank happened, whatever this function decides to report
     if (WddmStopping(wddm) || !wddm->VSyncEnabled) return;
 
     RtlZeroMemory(&data, sizeof(data));
@@ -1925,7 +2133,10 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
     }
     data.CrtcVsync.PhysicalAdapterMask = 0;
     InterlockedIncrement(&wddm->VSyncReports);
-    WddmReport(Device, &data);
+    // C50: counted like any other report. Bc250DpcRoutine calls WddmDpc right after this, so in practice the
+    // pairing happens in this very pass; PairInThisPass stays FALSE because that ordering belongs to pnp.c, not
+    // here, and one extra dxgkrnl DPC a vblank is 62 a second.
+    if (WddmReport(Device, &data, FALSE)) WddmPairingReport(wddm, TRUE);
 }
 
 // ---- the summary -------------------------------------------------------------------------------------------------
@@ -2087,6 +2298,70 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              g_WddmHoldBucketNames[6], Wddm->SubmitHeldHistogram[6],
              g_WddmHoldBucketNames[7], Wddm->SubmitHeldHistogram[7],
              g_WddmHoldBucketNames[8], Wddm->SubmitHeldHistogram[8]);
+    // C48/C49, the number the owner's goal is stated in: how long each ring stood idle, and how much of that
+    // idle ended at a display VSync. The trace this instrument was built from (RotTR 418-420) counted 682 gaps
+    // >= 4 ms per 105 s on node 0, 418 of them VSync-ended, 0.45 ms a frame - near it, NOT the same object:
+    // ring_gap.h says why (the driver cannot see a packet dxgkrnl holds queued, so this is a superset of that
+    // class mixed with application-starved idle, and its edges sit one DPC later). Every counter here is
+    // cumulative since WddmStart, so an A/B is the difference of two reads - except "ns/frame", which is a ratio
+    // of two cumulative counters and must be recomputed from the two vsync-ended/VSyncReports pairs, never
+    // subtracted. "lost" must stay 0: it counts a close with no open gap and a counter that went backwards,
+    // either of which would make the rest of the line fiction.
+    {
+        UINT gapNode;
+        for (gapNode = 0; gapNode < BC250_WDDM_NODE_COUNT_MAX; gapNode++)
+        {
+            const BC250_RING_GAP* gap = &Wddm->RingGap[gapNode];
+            if (gap->Gaps == 0u && gap->Lost == 0u) continue;        // a node that never ran says nothing
+            // Four lines, not one: BC250_LOG_TEXT is 160 bytes and RtlStringCchVPrintfA truncates without a
+            // word, which is how 0.7.207.1 lost every scan-out refusal count (BD-070). The bucket edges are
+            // written into the format instead of passed as %s, so the guardlog-width gate sees the real worst
+            // case of each line (149, 155, 114, 99 characters) rather than 32 characters a name.
+            GuardLog("wddm profile: node %u ring idle %llu us in %lu gaps, worst %llu us, lost %lu, %lu vsyncs",
+                     gapNode, gap->TotalUs, gap->Gaps, gap->MaxUs, gap->Lost, (ULONG)Wddm->VSyncReports);
+            GuardLog("wddm profile: node %u ring >=4ms %lu/%llu us, vsync-ended %lu/%llu us, %llu ns/frame",
+                     gapNode, gap->LongGaps, gap->LongUs, gap->VsyncEndedGaps, gap->VsyncEndedUs,
+                     Bc250RingGapPerFrameNs(gap->VsyncEndedUs, (ULONG)Wddm->VSyncReports));
+            GuardLog("wddm profile: node %u ring gap us <16:%lu 16:%lu 32:%lu 64:%lu 128:%lu",
+                     gapNode, gap->Histogram[0], gap->Histogram[1], gap->Histogram[2], gap->Histogram[3],
+                     gap->Histogram[4]);
+            GuardLog("wddm profile: node %u ring gap us 512:%lu 2k:%lu 4k:%lu 8k+:%lu",
+                     gapNode, gap->Histogram[5], gap->Histogram[6], gap->Histogram[7], gap->Histogram[8]);
+        }
+    }
+    // Which phase grid the vsync-ended class was measured against, and whether any stamp was taken at all: a
+    // vsync-ended count of 0 with no stamp means the instrument saw no vblank, not that no gap ended at one. The
+    // hardware vblank and the 16 ms software timer are different grids, so a baseline and a window that do not
+    // agree here cannot be read against each other.
+    GuardLog("wddm profile: ring gap vblank stamps: %ld hardware, %ld software timer",
+             Wddm->RingGapVsyncStampsHw, Wddm->RingGapVsyncStampsTimer);
+    // C50: where the completion report's DPC-level notification came from. "same pass" is the contract's shape
+    // and is what the gate produces; "deferred" is a report that waited for the next dxgkrnl DPC. "unpaired"
+    // must be 0 or 1 at a summary taken mid-run and 0 at the stop; anything larger means reports are piling up
+    // without a notification, which is a correctness question, not a latency one.
+    GuardLog("wddm profile: notify pairing gate %u, %lu reports: %lu same pass, %lu deferred",
+             Wddm->NotifyDpcInReport, Wddm->NotifyPairing.Reports, Wddm->NotifyPairing.SamePass,
+             Wddm->NotifyPairing.Deferred);
+    GuardLog("wddm profile: notify pairing %lu waiting now (worst %lu), %lu notifications carried no report",
+             Wddm->NotifyPairing.Unpaired, Wddm->NotifyPairing.MaxUnpaired, Wddm->NotifyPairing.IdleNotifies);
+    // The flip path's own reports, on their own counters: a notification that carries one of these is not idle,
+    // and "waiting" above is about the completion path alone. "contended" counts the notifications that found
+    // another processor inside DxgkCbNotifyDpc and asked dxgkrnl for its DPC instead - the gate-closed shape, so
+    // none of them is a lost pairing. A number that is not small says the two DPCs are racing often.
+    GuardLog("wddm profile: notify pairing %lu vsync reports (%lu waiting, worst %lu), %lu contended",
+             Wddm->NotifyPairing.VsyncReports, Wddm->NotifyPairing.VsyncPending,
+             Wddm->NotifyPairing.MaxVsyncPending, Wddm->NotifyPairing.Contended);
+    // Undelivered reports. Every number here should be 0: a dropped completion is a fence dxgkrnl was never told
+    // about, which ends as a scheduler timeout, and a lost preemption ack ends the same way. They are printed
+    // even at 0 so that a TDR in the trail can be read against them instead of being guessed at.
+    GuardLog("wddm profile: reports not delivered: node 0 retried %ld dropped %ld",
+             Wddm->CompletionRetries[BC250_WDDM_NODE_3D], Wddm->CompletionsDropped[BC250_WDDM_NODE_3D]);
+    GuardLog("wddm profile: reports not delivered: node 1 retried %ld dropped %ld, %ld preemption acks lost",
+             Wddm->CompletionRetries[BC250_WDDM_NODE_COPY], Wddm->CompletionsDropped[BC250_WDDM_NODE_COPY],
+             Wddm->PreemptionReportsLost);
+    // D5: a quiet log must never be read as a quiet ring, so the lines HotSubmitLog left out are counted here.
+    GuardLog("wddm profile: hot submit log lines left out: %lu (HotSubmitLog off)",
+             GfxHotSubmitLinesSkipped(Wddm->Device));
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
              Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
@@ -2482,6 +2757,29 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  (ULONG)(Device->Mmio != NULL ? 1 : 0), (ULONG)(aligned ? 1 : 0),
                  (ULONG)(Device->Post.Width != 0 && Device->Post.Height != 0 ? 1 : 0));
     }
+    // C50, read once for this start: absent = on, because the DDI text requires the pairing and the hop it
+    // removes is pure latency. The value 0 restores 0.7.208.1's behaviour exactly, so the lab can run both
+    // shapes in one session and read the ring-gap histogram for each.
+    wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
+    GuardLog("wddm: completion report pairs its own notify dpc: %s",
+             wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
+    // C48/C49: the ring-gap accounting, always on. One frequency read for both nodes; the counter and the
+    // frequency come out of the same call, like the hold histogram's.
+    {
+        UINT ringNode;
+        for (ringNode = 0; ringNode < BC250_WDDM_NODE_COUNT_MAX; ringNode++) Bc250RingGapReset(&wddm->RingGap[ringNode]);
+        wddm->RingGapLastVsyncQpc = 0;
+        wddm->RingGapVsyncStampsHw = wddm->RingGapVsyncStampsTimer = 0;
+        (void)KeQueryPerformanceCounter(&wddm->RingGapFrequency);
+        Bc250NotifyPairingReset(&wddm->NotifyPairing);
+        wddm->NotifyDpcBusy = 0;
+        for (ringNode = 0; ringNode < BC250_WDDM_NODE_COUNT_MAX; ringNode++)
+        {
+            wddm->CompletionRetries[ringNode] = 0;
+            wddm->CompletionsDropped[ringNode] = 0;
+        }
+        wddm->PreemptionReportsLost = 0;
+    }
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
     // ADR 0008 stage D (docs/design/paging-node.md). Read once, like EnableGpuSubmit's own read in gfx.c: node 1's
@@ -2759,7 +3057,11 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
 void WddmDpc(_Inout_ BC250_DEVICE* Device)
 {
     if (Device->Wddm == NULL || Device->Dxgk.DxgkCbNotifyDpc == NULL) return;
-    Device->Dxgk.DxgkCbNotifyDpc(Device->Dxgk.DeviceHandle);
+    // Never the same pass for a completion: Bc250DpcRoutine reads the fence and queues the report DPC, so whatever
+    // of the completion path this call carries was published by an earlier pass. That hop is what NotifyDpcInReport
+    // removes (C50). A CRTC_VSYNC report of this same pass (WddmDcnVsync, just above in Bc250DpcRoutine) is paired
+    // here too; it is counted on its own counters, which carry no same-pass classification.
+    WddmNotifyDpcNow(Device, FALSE);
 }
 
 // ---- the memory segment ----------------------------------------------------------------------------------------
