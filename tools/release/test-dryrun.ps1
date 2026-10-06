@@ -169,7 +169,12 @@ Check ($bad.Count -eq 0) "no installer script stops or restarts DWM, a service o
 $bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
 Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
 $pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, "Invoke-Native pnputil\.exe @\('(/[a-z-]+)'")) { "$($s.name) $($mm.Groups[1].Value)" } })
-Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+# BD-089: the install deletes an older package of ours from the driver store, and it must not touch the device while
+# it does it. The uninstall takes the GPU off our driver on purpose, so there both switches belong.
+Check (($src -match "Invoke-Native pnputil\.exe @\('/delete-driver', \`$oldPackage\)") -and ($src -notmatch "'/delete-driver'[^\r\n]*/uninstall")) 'install.ps1 deletes an older driver package without /uninstall and without /force'
+$unsrc = [IO.File]::ReadAllText((Join-Path $Package 'installer\uninstall.ps1'))
+Check ($unsrc -match "@\('/delete-driver', \`$p, '/uninstall', '/force'\)") 'uninstall.ps1 removes the package of the GPU with /uninstall /force (the GPU goes back to Microsoft Basic Display Adapter)'
 $pos = @('Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile))', "Invoke-Change 'pnputil /add-driver") | ForEach-Object { $src.IndexOf($_) }
 Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1])) 'install.ps1 refuses a package INF without the Reboot directive before pnputil'
 Check ($r.text -match 'would: pnputil /add-driver payload\\kmd\\bc250kmd\.inf /install \(the GPU changes to it at the next restart\)') 'the walk-through shows the driver package for the next restart'
@@ -241,6 +246,61 @@ foreach ($c in $cases) {
 }
 
 Check ($src -notmatch 'New-Item -Path [^\r\n]*-Force') 'install.ps1 never runs New-Item -Force on a registry key (it deletes the key''s values)'
+
+'an install over an older release: the files of that release that this package does not install (BD-089)'
+# The install root of this case is a folder under the work base (the state file names it, as a real installation does).
+# Its manifest.json is the one an older release left there: this package's manifest with two more files. One of them
+# has on disk the bytes that manifest records, the other one was changed after that install and must stay.
+$oldRoot = Join-Path $WorkBase ('install-root-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+$orphan = Join-Path $oldRoot 'desktop\bc250d3d_old.dll'
+$orphanChanged = Join-Path $oldRoot 'tools\old_tool.exe'
+foreach ($p in @($orphan, $orphanChanged)) { [void][IO.Directory]::CreateDirectory((Split-Path $p)) }
+[IO.File]::WriteAllText($orphan, 'the desktop driver of the older release')
+[IO.File]::WriteAllText($orphanChanged, 'a tester put their own file here')
+$someoneElse = Join-Path $oldRoot 'desktop\bc250d3d.dll.b20orig'
+[IO.File]::WriteAllText($someoneElse, 'a file of nobody''s release, next to ours')
+$recorded = Join-Path $WorkBase 'bd089-recorded.bin'
+[IO.File]::WriteAllText($recorded, 'what the older release installed there')
+$recordedSha = (Get-FileHash -LiteralPath $recorded -Algorithm SHA256).Hash
+Remove-Item -LiteralPath $recorded -Force
+$oldVersion = '0.7.197.100-tester.1'
+$oldManifest = $m | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+$oldManifest.version = $oldVersion
+$oldManifest.files = @(@($oldManifest.files) + @(
+        [pscustomobject]@{ path = 'payload/desktop/bc250d3d_old.dll'; sha256 = (Get-FileHash -LiteralPath $orphan -Algorithm SHA256).Hash; size = 1 }
+        [pscustomobject]@{ path = 'payload/tools/old_tool.exe'; sha256 = $recordedSha; size = 1 }))
+[IO.File]::WriteAllText((Join-Path $oldRoot 'manifest.json'), ($oldManifest | ConvertTo-Json -Depth 10))
+$dir = Join-Path $WorkBase ('state-bd089-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+[void][IO.Directory]::CreateDirectory($dir)
+$st = [ordered]@{ schema = 1; phase = 'verified'; package_version = $oldVersion; install_root = $oldRoot; testsigning_set_by_installer = $true; updated_utc = '2026-10-03T00:00:00Z' }
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check ($r.code -eq 0) "install over $oldVersion`: exit $($r.code)"
+Check ($r.text -match ("files of the installed release " + [regex]::Escape($oldVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 2 \(1 to remove, 1 changed after that install and kept, 0 already gone\)")) 'the plan names the count before any change'
+Check ($r.text -match ('to remove in the files stage: ' + [regex]::Escape($orphan))) 'the plan names the file it removes, before the first step'
+Check ($r.text -match ('would: remove ' + [regex]::Escape($orphan) + ': installed by ' + [regex]::Escape($oldVersion))) 'the files stage removes it and names the release that installed it'
+Check ($r.text -match ('kept: ' + [regex]::Escape($orphanChanged) + ' was installed by ' + [regex]::Escape($oldVersion))) 'a file whose bytes are not the ones of that install is kept and reported'
+# Nothing is removed by a wildcard: every removal line names one of the two files of the older manifest.
+$removals = @([regex]::Matches($r.text, '(?m)^\s*\[dry run\] would: remove (.+?): installed by ') | ForEach-Object { $_.Groups[1].Value })
+Check (((@($removals) -join ' | ') -eq $orphan)) "one removal, and only the file the older manifest names: $(@($removals) -join ', ')"
+Check ((Test-Path -LiteralPath $orphan) -and (Test-Path -LiteralPath $orphanChanged) -and (Test-Path -LiteralPath $someoneElse)) 'the dry run removes nothing, the file that belongs to nobody''s release included'
+Check ($r.text -notmatch 'would: pnputil /delete-driver') 'no driver package is deleted while the package the GPU uses cannot be read'
+if ($r.code -ne 0) { $r.text }
+# The same install root with this package's own manifest: a repair must take nothing away.
+[IO.File]::Copy((Join-Path $Package 'manifest.json'), (Join-Path $oldRoot 'manifest.json'), $true)
+$st.package_version = $pkgVersion
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check (($r.code -eq 0) -and ($r.text -match ("files of the installed release " + [regex]::Escape($pkgVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 0")) -and ($r.text -notmatch 'would: remove ')) "a repair of the installed version removes nothing (exit $($r.code))"
+Remove-Item -LiteralPath $dir -Recurse -Force
+Remove-Item -LiteralPath $oldRoot -Recurse -Force
+# The invariants of the removal, in the source: the files stage takes the rows of the plan and nothing else, it reads the
+# SHA256 again before each removal, and no step of an install removes a whole folder of the install root.
+Check (($src -match '(?m)^foreach \(\$row in @\(\$script:OrphanRows \| Where-Object \{ \$_\.state -eq ''remove'' \}\)\) \{') -and ($src -match 'if \(\$now -ne \$row\.sha256\)') -and ($src -match 'Remove-PathOrSchedule \$row\.path')) 'install.ps1 removes only the rows of the plan and checks each SHA256 again before the removal'
+Check (($src -notmatch 'Remove-PathOrSchedule \$InstallRoot') -and ($src -notmatch 'Get-ChildItem[^\r\n]*\$InstallRoot[^\r\n]*-Recurse[^\r\n]*Remove')) 'install.ps1 never removes the install root or sweeps it by wildcard'
+Check ($common -match '(?m)^function Get-OrphanFilePlan \{') 'the orphan plan is a function of common.ps1 (pure, unit-tested in test-engine-units.ps1)'
 
 'verify before and after the restart (test state, phase installed, the boot it was saved in)'
 $thisBoot = $null
@@ -448,6 +508,15 @@ $mftAt = $r.text.IndexOf('would: remove the H.264 encoder MFT registration')
 $rootAt = $r.text.IndexOf('would: remove ' + (Join-Path $env:ProgramFiles 'amdgpu-wddm'))
 Check (($mftAt -gt 0) -and ($rootAt -gt $mftAt)) 'the encoder keys go before the install root, so no COM registration points at a DLL that is gone'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
+# BD-089, the clean slate: every item of ours goes, and the uninstaller ends with the list of what is on the computer.
+Check ($r.text -match "would: unregister our scheduled task\(s\): (none on this computer \(this release registers 'amdgpu-wddm start confirm'\)|[^\r\n]*amdgpu-wddm)") 'every scheduled task of ours is unregistered, not only the one of this release'
+Check ($r.text -match 'would: remove HKLM:\\SOFTWARE\\amdgpu-wddm \(router policy, application profile, release record\), HKLM:\\SOFTWARE\\WOW6432Node\\amdgpu-wddm and HKCU:\\Software\\amdgpu-wddm') 'the policy keys of both registry views and the app preferences of this account go'
+Check ($r.text -match 'would: remove the bc250kmd service entry and its settings in HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd') 'the service key goes with its Parameters, which a next install would otherwise keep as the tester''s own settings'
+Check (($r.text -match 'would: remove certificate [0-9A-F]{40} from LocalMachine Root and TrustedPublisher') -and ($r.text -match 'no other test certificate of ours in Root or TrustedPublisher|would: remove \d+ more test certificate\(s\) of ours')) 'the certificate of this release goes, and so does one of an older release of ours'
+$fpItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'certificates', 'GPU firmware', 'control application data')
+$fpMissing = @($fpItems | Where-Object { $r.text -notmatch ('(?m)^\s*\[(gone|kept|LEFT)\] ' + [regex]::Escape($_) + '\s') })
+Check (($r.text -match '== What is left of this release') -and -not $fpMissing.Count) "the uninstaller ends with the list of what is left, all $($fpItems.Count) items$(if ($fpMissing.Count) { '; missing: ' + ($fpMissing -join ', ') })"
+Check ($r.text -match 'Dry run complete: nothing was changed, so the list above is this computer as it is now \(\d+ item\(s\) of this release\)') 'the dry run says that the list is the computer as it is now'
 if ($r.code -ne 0) { $r.text }
 Remove-Item -LiteralPath $dir -Recurse -Force
 $after = Get-Footprint

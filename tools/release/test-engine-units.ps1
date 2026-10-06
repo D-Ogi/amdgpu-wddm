@@ -195,6 +195,150 @@ $idx = Complete-RepairSet -Manifest $mNew -Closure (Join-Path $pk '0.7.199.100-t
 Check ((-not $idx.previous.manifest_valid) -and (-not $idx.previous.firmware_complete)) 'a set whose manifest names another version or no firmware is not complete'
 $script:StateDir = $saveStateDir
 
+'[BD-089] the files of the installed release that a new one does not install, and our older driver packages'
+$bdRoot = Join-Path $work 'bd089\install-root'
+$bdSys = Join-Path $work 'bd089\system32'
+$bdWow = Join-Path $work 'bd089\syswow64'
+# A manifest of the shape the installer reads from disk: package-relative paths with the SHA256 of each file.
+function New-Bd089Manifest {
+    param([string]$Version, [string[]]$Paths, [hashtable]$Hashes = @{})
+    $files = @($Paths | ForEach-Object { [ordered]@{ path = $_; sha256 = $(if ($Hashes.ContainsKey($_)) { $Hashes[$_] } else { Get-TextSha "content of $_" }); size = 1 } })
+    return ((([ordered]@{ schema = 1; version = $Version; files = $files }) | ConvertTo-Json -Depth 5) | ConvertFrom-Json)
+}
+$mapCases = @(
+    @{ p = 'payload/d3d12/amdgpu_wddm_d3d12.dll'; want = (Join-Path $bdRoot 'd3d12\amdgpu_wddm_d3d12.dll') }
+    @{ p = 'payload/wow64/d3d11/amdgpu_wddm_d3d11.dll'; want = (Join-Path $bdRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') }
+    @{ p = 'payload/mft/amdgpu_wddm_mft_h264.dll'; want = (Join-Path $bdRoot 'mft\amdgpu_wddm_mft_h264.dll') }
+    @{ p = 'payload/control/amdgpu_wddm_control.exe'; want = (Join-Path $bdRoot 'control\amdgpu_wddm_control.exe') }
+    @{ p = 'payload/system32/bc250umd.dll'; want = (Join-Path $bdSys 'bc250umd.dll') }
+    @{ p = 'payload/syswow64/bc250umd.dll'; want = (Join-Path $bdWow 'bc250umd.dll') }
+    @{ p = 'installer/common.ps1'; want = (Join-Path $bdRoot 'installer\common.ps1') }
+    @{ p = 'licenses/zlib-LICENSE.txt'; want = (Join-Path $bdRoot 'licenses\zlib-LICENSE.txt') }
+    @{ p = 'THIRD-PARTY.md'; want = (Join-Path $bdRoot 'licenses\THIRD-PARTY.md') }
+    @{ p = 'verify.cmd'; want = (Join-Path $bdRoot 'verify.cmd') }
+    @{ p = 'uninstall.cmd'; want = (Join-Path $bdRoot 'uninstall.cmd') }
+    @{ p = 'payload/kmd/bc250kmd.sys'; want = $null }                      # the driver store
+    @{ p = 'payload/cert/amdgpu-wddm-release.cer'; want = $null }          # two certificate stores
+    @{ p = 'payload/firmware/cyan_skillfish2_me.bin'; want = $null }       # the firmware folder of the KMD
+    @{ p = 'install.cmd'; want = $null }                                   # read from the package, never copied
+    @{ p = 'INSTALL.md'; want = $null }
+    @{ p = 'setup/amdgpu_wddm_setup.exe'; want = $null }                   # the setup window runs from the package
+    @{ p = 'payload/loose.dll'; want = $null }                             # no payload directory: nothing copies it
+    @{ p = 'payload/d3d12/../../../evil.dll'; want = $null })
+$bad = @()
+foreach ($c in $mapCases) {
+    $got = Get-InstalledPathOfPackageFile -PackagePath $c.p -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow
+    if ([string]$got -ne [string]$c.want) { $bad += "$($c.p) -> $(if ($got) { $got } else { 'nothing' }) (expected $(if ($c.want) { $c.want } else { 'nothing' }))" }
+}
+Check (-not $bad.Count) "$($mapCases.Count) package paths land where install.ps1 copies them$(if ($bad.Count) { ': ' + ($bad -join '; ') })"
+
+$shared = @('payload/d3d12/keep.dll', 'payload/tools/keep.exe', 'installer/common.ps1', 'verify.cmd')
+$prevManifest = New-Bd089Manifest -Version '0.7.212.100-tester.14' -Paths ($shared + @('payload/desktop/old_helper.dll', 'payload/tools/moved.exe', 'payload/kmd/bc250kmd.sys', 'install.cmd', 'payload/d3d12/../../../evil.dll'))
+$newManifest = New-Bd089Manifest -Version '0.7.213.101-tester.16' -Paths ($shared + @('payload/d3d12/moved.exe', 'payload/d3d12/added.dll', 'payload/kmd/bc250kmd.sys', 'install.cmd'))
+$plan = @(Get-OrphanFilePlan -PreviousManifest $prevManifest -NewManifest $newManifest -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow)
+$want = @((Join-Path $bdRoot 'desktop\old_helper.dll'), (Join-Path $bdRoot 'tools\moved.exe'))
+Check (((@($plan | ForEach-Object { $_.path } | Sort-Object) -join ' | ') -eq ((@($want | Sort-Object) -join ' | '))) -and -not @($plan | Where-Object { $_.from_version -ne '0.7.212.100-tester.14' }).Count) "an upgrade removes what the installed release installed and this one does not, the moved file at its old place included, and names the release that installed it: $(@($plan | ForEach-Object { $_.path }) -join ', ')"
+Check (-not @(Get-OrphanFilePlan -PreviousManifest $newManifest -NewManifest $newManifest -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow).Count) 'a reinstall or repair of the same version removes nothing'
+$stubPrev = New-Bd089Manifest -Version '0.7.212.100-tester.14' -Paths @('payload/system32/bc250umd.dll', 'payload/syswow64/bc250umd.dll')
+$stubNew = New-Bd089Manifest -Version '0.7.213.101-tester.16' -Paths @('payload/system32/bc250umd.dll')
+$stubPlan = @(Get-OrphanFilePlan -PreviousManifest $stubPrev -NewManifest $stubNew -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow)
+Check ((@($stubPlan).Count -eq 1) -and ($stubPlan[0].path -eq (Join-Path $bdWow 'bc250umd.dll'))) "a stub that this release no longer ships is a row for its own folder: $(@($stubPlan | ForEach-Object { $_.path }) -join ', ')"
+
+$keptText = 'a tester put their own file here'
+$sameFile = Join-Path $bdRoot 'desktop\old_helper.dll'
+$changedFile = Join-Path $bdRoot 'tools\old_tool.exe'
+Write-Text $sameFile 'the helper of the older release'
+Write-Text $changedFile $keptText
+$hashes = @{ 'payload/desktop/old_helper.dll' = (Get-TextSha 'the helper of the older release'); 'payload/tools/old_tool.exe' = (Get-TextSha 'what the older release installed') }
+$resolvePrev = New-Bd089Manifest -Version '0.7.212.100-tester.14' -Paths @('payload/desktop/old_helper.dll', 'payload/tools/old_tool.exe', 'payload/tools/gone.dll') -Hashes $hashes
+$resolveNew = New-Bd089Manifest -Version '0.7.213.101-tester.16' -Paths @('payload/d3d12/added.dll')
+$rows = @(Resolve-OrphanFilePlan (Get-OrphanFilePlan -PreviousManifest $resolvePrev -NewManifest $resolveNew -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow))
+$states = @{}; foreach ($row in $rows) { $states[$row.path] = $row.state }
+Check ((@($rows).Count -eq 3) -and ($states[$sameFile] -eq 'remove') -and ($states[$changedFile] -eq 'changed') -and ($states[(Join-Path $bdRoot 'tools\gone.dll')] -eq 'absent')) "the file with the recorded SHA256 is removed, the one with other bytes is kept and reported, the one that is gone is absent: $(@($rows | ForEach-Object { "$(Split-Path $_.path -Leaf)=$($_.state)" }) -join ', ')"
+Check (([IO.File]::ReadAllText($changedFile) -eq $keptText) -and (Test-Path -LiteralPath $sameFile)) 'the plan reads only: no file is removed while it is computed'
+
+$pnputil = @"
+Microsoft PnP Utility
+
+Published Name:     oem9.inf
+Original Name:      bc250kmd.inf
+Provider Name:      amdgpu-wddm
+Class Name:         Display adapters
+Driver Version:     10/02/2026 0.7.198.100
+Signer Name:        amdgpu-wddm test
+
+Published Name:     oem12.inf
+Original Name:      bc250kmd.inf
+Provider Name:      amdgpu-wddm
+Class Name:         Display adapters
+Driver Version:     10/04/2026 0.7.208.100
+Signer Name:        amdgpu-wddm test
+
+Published Name:     oem13.inf
+Original Name:      nvidia.inf
+Provider Name:      NVIDIA
+Class Name:         Display adapters
+Driver Version:     09/01/2026 32.0.15.6094
+Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+
+Published Name:     oem15.inf
+Original Name:      bc250kmd.inf
+Provider Name:      amdgpu-wddm
+Class Name:         Display adapters
+Driver Version:     10/06/2026 0.7.213.101
+Signer Name:        amdgpu-wddm test
+"@
+$rowsPnp = @(Get-OurDriverPackageRows $pnputil)
+Check (((@($rowsPnp | ForEach-Object { "$($_.published)=$($_.version)" }) -join ', ') -eq 'oem9.inf=0.7.198.100, oem12.inf=0.7.208.100, oem15.inf=0.7.213.101')) "pnputil /enum-drivers: only our packages, each with its version ($(@($rowsPnp | ForEach-Object { $_.published }) -join ', '))"
+$store = @(
+    [pscustomobject]@{ published = 'oem9.inf'; version = '0.7.198.100' }
+    [pscustomobject]@{ published = 'oem12.inf'; version = '0.7.208.100' }
+    [pscustomobject]@{ published = 'oem15.inf'; version = '0.7.213.101' })
+$sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished 'oem15.inf' -PreviousVersion '0.7.208.100'
+Check (((@($sp.remove) -join ',') -eq 'oem9.inf') -and ((@($sp.keep) -join ',') -eq 'oem15.inf,oem12.inf') -and ($sp.previous -eq 'oem12.inf')) "the bound package and the one of the previous repair set stay, the older one goes (remove: $(@($sp.remove) -join ', '))"
+$sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished 'oem15.inf' -PreviousVersion $null
+Check (((@($sp.remove) -join ',') -eq 'oem9.inf') -and ($sp.previous -eq 'oem12.inf') -and ($sp.why -match 'no previous repair set')) "no record of a previous repair set: the newest of the others is kept ($($sp.why))"
+$sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished 'oem15.inf' -PreviousVersion '0.7.200.100'
+Check (((@($sp.remove) -join ',') -eq 'oem9.inf') -and ($sp.previous -eq 'oem12.inf') -and ($sp.why -match 'has no package in the store')) "a previous repair set without a package in the store: the newest of the others is kept ($($sp.why))"
+$sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished $null -PreviousVersion '0.7.208.100'
+Check ((-not @($sp.remove).Count) -and (@($sp.keep).Count -eq 3) -and ($sp.why -match 'cannot be read')) "the package of the GPU unknown: nothing is removed ($($sp.why))"
+$sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished 'oem3.inf' -PreviousVersion '0.7.208.100'
+Check ((-not @($sp.remove).Count) -and ($sp.why -match 'is not one of ours')) "the GPU on a package that is not ours: nothing is removed ($($sp.why))"
+$sp = Get-DriverStoreRemovePlan -Packages ($store + @([pscustomobject]@{ published = 'oem20.inf'; version = $null })) -BoundPublished 'oem15.inf' -PreviousVersion '0.7.208.100'
+Check ((-not @($sp.remove).Count) -and ($sp.why -match 'oem20\.inf')) "a package of ours without a version this reading understands: nothing is removed ($($sp.why))"
+$sp = Get-DriverStoreRemovePlan -Packages @($store[2]) -BoundPublished 'oem15.inf' -PreviousVersion '0.7.208.100'
+Check ((-not @($sp.remove).Count) -and ((@($sp.keep) -join ',') -eq 'oem15.inf')) 'a first install leaves one package and removes nothing'
+
+'[BD-089] what is left of this release (the list uninstall.ps1 prints at the end)'
+$saveStateDir = $script:StateDir
+$script:StateDir = Join-Path $work 'footprint-state\installer'
+$fpRoot = Join-Path $work 'footprint\install-root'
+$fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
+$items = @($fp | ForEach-Object { $_.item })
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'certificates', 'GPU firmware', 'control application data')
+Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
+Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
+$byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
+Check ((-not $byItem['install root'].present) -and ($byItem['install root'].detail -match 'is gone')) 'an install root that is not there is gone'
+Check ((@($byItem['H.264 encoder keys']).present) -and ($byItem['H.264 encoder keys'].detail -match '\{test\}')) 'the encoder keys come from the caller (uninstall.ps1 reads them with the classes key it uses)'
+Check (($byItem['GPU firmware'].kept) -and ($byItem['control application data'].kept) -and -not @($fp | Where-Object { $_.kept -and $_.item -notin @('GPU firmware', 'control application data') }).Count) 'only the firmware folder that was there before the install and the control data are kept on purpose'
+Write-Text (Join-Path $fpRoot 'manifest.json') '{}'
+Write-Text (Join-Path $script:StateDir 'state.json') '{}'
+$fp2 = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State $null)
+$byItem2 = @{}; foreach ($row in $fp2) { $byItem2[$row.item] = $row }
+Check ($byItem2['install root'].present -and ($byItem2['install root'].detail -match 'is there')) 'an install root that is there is reported as there'
+Check ($byItem2['installer state'].present -and -not $byItem2['installer state'].kept) 'the installer state folder is reported, and it is not a kept item'
+Check (-not $byItem2['GPU firmware'].kept) 'a firmware folder that the install created itself is not a kept item'
+Check (-not @($fp2 | Where-Object { $_.item -eq 'H.264 encoder keys' } | Where-Object { $_.present }).Count) 'no encoder key given: the row says none'
+$script:StateDir = $saveStateDir
+
+$saveStateDir = $script:StateDir
+$script:StateDir = Join-Path $work 'bd089-state'
+Write-Text (Join-Path (Get-ClosureDir '0.7.208.100-tester.13') 'manifest.json') '{ "version": "0.7.208.100-tester.13", "kmd_version": "0.7.208.100" }'
+Write-Text (Join-Path (Get-ClosureDir 'damaged') 'manifest.json') 'not a manifest'
+Check (((Get-RepairSetDriverVersion '0.7.208.100-tester.13') -eq '0.7.208.100') -and ($null -eq (Get-RepairSetDriverVersion 'damaged')) -and ($null -eq (Get-RepairSetDriverVersion '0.7.199.100-tester.11')) -and ($null -eq (Get-RepairSetDriverVersion ''))) 'the driver version of a kept repair set comes from its own manifest; a damaged or missing set has none'
+$script:StateDir = $saveStateDir
+
 '[G-EVT] settings-impact rows from the registry-default plans'
 $plan = Get-RegistryDefaultPlan -Defaults ([pscustomobject]@{ DpmMode = 1; DpmMaxMHz = 1500; EnableFullWddm = 2 }) -Previous ([pscustomobject]@{ DpmMaxMHz = 1400; EnableFullWddm = 2 }) -Current @{ DpmMaxMHz = 1400; EnableFullWddm = 1 } -Explicit @{} -Owned ([ordered]@{ UnconfirmedStarts = 0 })
 $imp = Get-SettingsImpact @(@{ group = 'parameters'; plan = $plan })
