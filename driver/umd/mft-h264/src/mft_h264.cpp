@@ -185,11 +185,38 @@ Bc250H264Mft::Bc250H264Mft()
 
 Bc250H264Mft::~Bc250H264Mft()
 {
-    m_encoder.Shutdown();
+    // The last reference is gone, so no other thread is in this object; the client's device, however,
+    // is still the client's, and taking the encoder down collects whatever the GPU still holds on it.
+    // A client that never calls IMFShutdown::Shutdown - which is not part of IMFTransform, so many do
+    // not - reaches this with pictures in flight, and that is the one teardown path a lease cannot be
+    // skipped on just because the object is dying.
+    ComPtr<IMFDXGIDeviceManager> manager;
+    CaptureDeviceManager(manager);
+    {
+        DeviceLease lease;
+        lease.Take(manager.Get());
+        ResetEncoderLocked();
+    }
     if (m_lockInit) {
         DeleteCriticalSection(&m_lock);
     }
     ModuleUnlock();
+}
+
+void Bc250H264Mft::CaptureDeviceManager(ComPtr<IMFDXGIDeviceManager>& out)
+{
+    if (!m_lockInit) {
+        return;
+    }
+    Lock probe(&m_lock);
+    out.CopyFrom(m_deviceManager.Get());
+}
+
+void Bc250H264Mft::ResetEncoderLocked()
+{
+    m_encoder.Shutdown();
+    m_inFlight.clear();
+    m_encoderReady = false;
 }
 
 HRESULT Bc250H264Mft::Construct()
@@ -481,6 +508,13 @@ HRESULT Bc250H264Mft::SetInputType(DWORD id, IMFMediaType* type, DWORD flags)
     if (m_shutdown) {
         return MF_E_SHUTDOWN;
     }
+    // A format change restarts the encoder, which collects the pictures the GPU still holds on the
+    // client's device: the device lease first, then the critical section, which is the lock order every
+    // other path takes.
+    ComPtr<IMFDXGIDeviceManager> manager;
+    CaptureDeviceManager(manager);
+    DeviceLease lease;
+    lease.Take(manager.Get());
     Lock guard(&m_lock);
 
     if (type == nullptr) {
@@ -489,8 +523,7 @@ HRESULT Bc250H264Mft::SetInputType(DWORD id, IMFMediaType* type, DWORD flags)
         }
         m_inputType.Reset();
         m_inputSubtype = GUID_NULL;
-        m_encoder.Shutdown();
-        m_encoderReady = false;
+        ResetEncoderLocked();
         return S_OK;
     }
 
@@ -561,8 +594,7 @@ HRESULT Bc250H264Mft::SetInputType(DWORD id, IMFMediaType* type, DWORD flags)
     // The sequence header already on the output type was built before this, so it has to follow.
     RefreshOutputParameterSets();
     // A format change restarts the encoder on the next picture.
-    m_encoder.Shutdown();
-    m_encoderReady = false;
+    ResetEncoderLocked();
     return S_OK;
 }
 
@@ -574,6 +606,11 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
     if (m_shutdown) {
         return MF_E_SHUTDOWN;
     }
+    // The device lease first, for the reason SetInputType gives: this restarts the encoder.
+    ComPtr<IMFDXGIDeviceManager> manager;
+    CaptureDeviceManager(manager);
+    DeviceLease lease;
+    lease.Take(manager.Get());
     Lock guard(&m_lock);
 
     if (type == nullptr) {
@@ -581,8 +618,7 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
             return S_OK;
         }
         m_outputType.Reset();
-        m_encoder.Shutdown();
-        m_encoderReady = false;
+        ResetEncoderLocked();
         return S_OK;
     }
 
@@ -642,8 +678,7 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
         m_outputType.Reset();
         return hr;
     }
-    m_encoder.Shutdown();
-    m_encoderReady = false;
+    ResetEncoderLocked();
     return S_OK;
 }
 
@@ -808,13 +843,12 @@ HRESULT Bc250H264Mft::EnsureEncoder()
     return RefreshOutputParameterSets();
 }
 
-// How many pictures the GPU may hold at once, applied whenever the pipeline is empty: at
-// MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, and on the first ProcessInput after a client changed the low
-// latency setting. Two covers the entropy coding of one picture with the GPU work of the next, which is
-// the serialisation worth removing, and costs one input period before the first access unit comes out.
-// A client that asked for low latency gets one, because that frame of delivery delay is the thing it
-// asked not to have. BC250_MFT_DEPTH overrides both, so a lab machine can bisect without a rebuild.
-void Bc250H264Mft::ApplyPipelineDepth()
+// How many pictures the GPU may hold at once. Two covers the entropy coding of one picture with the GPU
+// work of the next, which is the serialisation worth removing, and costs one input period before the
+// first access unit comes out. A client that asked for low latency gets one, because that frame of
+// delivery delay is the thing it asked not to have. BC250_MFT_DEPTH overrides both, so a lab machine can
+// bisect without a rebuild. The environment is read once.
+uint32_t Bc250H264Mft::WantedPipelineDepth()
 {
     if (m_depthOverride < 0) {
         m_depthOverride = 0;
@@ -824,8 +858,17 @@ void Bc250H264Mft::ApplyPipelineDepth()
             m_depthOverride = buf[0] - '0';
         }
     }
-    const uint32_t want = (m_depthOverride > 0) ? static_cast<uint32_t>(m_depthOverride)
-                                                : (m_cfg.lowLatency ? 1u : 2u);
+    return (m_depthOverride > 0) ? static_cast<uint32_t>(m_depthOverride)
+                                 : (m_cfg.lowLatency ? 1u : kShippedPipelineDepth);
+}
+
+// Puts that depth into force. The encoder's slot ring may only be resized while it is empty, so a
+// deeper pipeline is in force from the next picture - ProcessInput calls this before it submits, and at
+// a depth of one the pipeline is always empty there - while a shallower one has to be made room for
+// first, which is what ProcessInput does under the device lease before it calls this.
+void Bc250H264Mft::ApplyPipelineDepth()
+{
+    const uint32_t want = WantedPipelineDepth();
     if (want == m_encoder.PipelineDepth() || m_encoder.Pending() != 0) {
         return;
     }
@@ -992,17 +1035,19 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
         }
     }
 
-    // The three messages that have to finish the pictures the GPU still holds take the client's device
-    // lock first, because collecting one maps a staging buffer on its device and the device lock is the
-    // outer lock of the two. Nothing is in flight at a pipeline depth of one, so this costs a message
-    // that the serial shape did not pay only when the pipeline is deeper than that.
+    // The four messages that have to finish or discard the pictures the GPU still holds take the
+    // client's device lock first, because collecting one maps a staging buffer on its device and the
+    // device lock is the outer lock of the two. Nothing is in flight at a pipeline depth of one, so this
+    // costs a message that the serial shape did not pay only when the pipeline is deeper than that.
+    // SET_D3D_MANAGER is one of them: it takes the encoder down, and the lease it needs is a lease on
+    // the manager being replaced, which is why it is taken here, before the handler resets it.
     ComPtr<IMFDXGIDeviceManager> manager;
     const bool finishes = (message == MFT_MESSAGE_COMMAND_DRAIN ||
                            message == MFT_MESSAGE_COMMAND_FLUSH ||
-                           message == MFT_MESSAGE_NOTIFY_END_STREAMING);
+                           message == MFT_MESSAGE_NOTIFY_END_STREAMING ||
+                           message == MFT_MESSAGE_SET_D3D_MANAGER);
     if (finishes) {
-        Lock probe(&m_lock);
-        manager.CopyFrom(m_deviceManager.Get());
+        CaptureDeviceManager(manager);
     }
     DeviceLease lease;
     if (finishes) {
@@ -1013,10 +1058,11 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
 
     switch (message) {
     case MFT_MESSAGE_SET_D3D_MANAGER: {
+        // The encoder goes down before the manager it runs on is let go of: the lease above is on that
+        // manager, and a Reset first would leave no way to take one.
+        ResetEncoderLocked();
         m_deviceManager.Reset();
-        m_encoder.Shutdown();
-        m_inFlight.clear();
-        m_encoderReady = false;
+        m_drained = false;
         if (param != 0) {
             IUnknown* unk = reinterpret_cast<IUnknown*>(param);
             HRESULT hr = unk->QueryInterface(__uuidof(IMFDXGIDeviceManager),
@@ -1034,6 +1080,7 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
             return hr;
         }
         m_streaming = true;
+        m_drained = false;
         // Every segment opens with a key frame, not only the first one. A client that drains and then
         // sends NOTIFY_START_OF_STREAM again - the documented way to restart after a drain, and what
         // pause and resume in a recording client does - must not get a P slice that references the
@@ -1047,6 +1094,7 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
     case MFT_MESSAGE_NOTIFY_END_STREAMING:
         m_streaming = false;
         m_inputRequested = false;
+        m_drained = false;
         FinishPending(false);
         m_outputs.clear();
         return S_OK;
@@ -1060,6 +1108,7 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
         m_outputs.clear();
         m_forceKeyFrame = true;
         m_inputRequested = false;
+        m_drained = false;
         return S_OK;
     case MFT_MESSAGE_COMMAND_DRAIN: {
         // We hold no reordering queue, so a drain writes out whatever pictures the GPU still holds -
@@ -1069,6 +1118,12 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
         // believe we hold is gone with it. Without this the next START_OF_STREAM finds the credit
         // still taken, queues nothing, and the client waits for a need-input that never comes.
         m_inputRequested = false;
+        // And nothing re-takes it until the segment restarts. At a depth above one a drain always
+        // leaves an access unit for the client to collect, and collecting the last one in ProcessOutput
+        // would otherwise queue a METransformNeedInput behind the METransformDrainComplete below: the
+        // transform asking for a picture of a segment that has ended. Cleared by whatever restarts the
+        // flow of input.
+        m_drained = true;
         const HRESULT hr = FinishPending(true);
         MftTrace("queue DrainComplete (%zu outputs waiting, finish 0x%08lX)\n", m_outputs.size(),
                  static_cast<unsigned long>(hr));
@@ -1131,8 +1186,23 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
     if (FAILED(hr)) {
         return hr;
     }
+    // A client that turns low latency on in the middle of a call asked for the frame of delivery delay
+    // to go away now, not at the next flush: a conferencing client does exactly this. The slot ring can
+    // only be resized while it is empty, so the room is made here, under the device lease, by writing
+    // out every picture the GPU still holds - each one becomes an output sample of its own, exactly as a
+    // drain's do - and then the new depth goes into force below. Raising the depth needs none of this,
+    // because at a depth of one the pipeline is already empty at this point.
+    if (WantedPipelineDepth() < m_encoder.PipelineDepth() && m_encoder.Pending() != 0) {
+        MftTrace("pipeline depth %u -> %u: writing out %u picture(s) first\n",
+                 m_encoder.PipelineDepth(), WantedPipelineDepth(), m_encoder.Pending());
+        hr = FinishPending(true);
+        if (FAILED(hr)) {
+            return hr;
+        }
+    }
     ApplyPipelineDepth();
     m_inputRequested = false;
+    m_drained = false;
 
     DWORD bufferCount = 0;
     hr = sample->GetBufferCount(&bufferCount);
@@ -1211,6 +1281,11 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
     FrameStats stats;
     hr = m_encoder.RetireFrame(m_bitstream, &stats);
     if (FAILED(hr)) {
+        // The picture is gone with the readback that failed, and its input sample goes with it. A
+        // record left behind would hold the client's buffer for ever - MFT_INPUT_STREAM_HOLDS_BUFFERS
+        // says the transform holds one only while the GPU still has it - and the list would grow by one
+        // on every call, because GetInputStatus keeps answering ACCEPT_DATA while no output waits.
+        m_inFlight.erase(m_inFlight.begin());
         return hr;
     }
     const InFlight done = std::move(m_inFlight.front());
@@ -1316,8 +1391,10 @@ HRESULT Bc250H264Mft::ProcessOutput(DWORD flags, DWORD count, MFT_OUTPUT_DATA_BU
     MftTrace("ProcessOutput delivered a sample (%zu still waiting)\n", m_outputs.size());
     // Room for the next picture: ask for it. Only once the last coded access unit has been collected,
     // because ProcessInput refuses while one is waiting; the ones a drain left behind have a queued
-    // METransformHaveOutput of their own, so the client comes back for them without a credit.
-    if (m_streaming && m_outputs.empty()) {
+    // METransformHaveOutput of their own, so the client comes back for them without a credit. And not
+    // at all after a drain: the access units a drain left are collected through here, and a request
+    // queued behind METransformDrainComplete is a request for a picture of a segment that has ended.
+    if (m_streaming && !m_drained && m_outputs.empty()) {
         QueueNeedInput();
     }
     return S_OK;
@@ -1413,6 +1490,12 @@ HRESULT Bc250H264Mft::SetWorkQueueEx(DWORD queueId, LONG basePriority)
 
 HRESULT Bc250H264Mft::Shutdown()
 {
+    // Encoder::Shutdown below collects whatever the GPU still holds, on the client's device, so this
+    // path takes the device lease like every other teardown path: lease first, critical section second.
+    ComPtr<IMFDXGIDeviceManager> manager;
+    CaptureDeviceManager(manager);
+    DeviceLease lease;
+    lease.Take(manager.Get());
     Lock guard(&m_lock);
     if (m_shutdown) {
         return S_OK;
@@ -1420,15 +1503,13 @@ HRESULT Bc250H264Mft::Shutdown()
     m_shutdown = true;
     m_streaming = false;
     m_inputRequested = false;
+    m_drained = false;
     m_outputs.clear();
     if (m_events) {
         m_events->Shutdown();
     }
-    // Encoder::Shutdown collects whatever the GPU still holds, so the input samples held for those
-    // pictures are released after it, not before.
-    m_encoder.Shutdown();
-    m_inFlight.clear();
-    m_encoderReady = false;
+    // The input samples held for the pictures still in the GPU are released with them, inside this.
+    ResetEncoderLocked();
     m_deviceManager.Reset();
     return S_OK;
 }

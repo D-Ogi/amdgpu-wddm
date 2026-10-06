@@ -203,9 +203,18 @@ private:
         ComPtr<IMFDXGIDeviceManager> manager;
         HANDLE handle = nullptr;
         bool locked = false;
+        DeviceLease() = default;
+        // Not copyable: the destructor unlocks the device and closes the handle, so a copy would do
+        // both twice and the second unlock would be against a lock this object no longer holds.
+        DeviceLease(const DeviceLease&) = delete;
+        DeviceLease& operator=(const DeviceLease&) = delete;
         ~DeviceLease();
         void Take(IMFDXGIDeviceManager* m);
     };
+
+    // The client's device manager, read under the critical section and handed back for a lease the
+    // caller then takes before it enters the critical section itself.
+    void CaptureDeviceManager(ComPtr<IMFDXGIDeviceManager>& out);
 
     // Turns one retired picture into the output sample the client collects, and queues its
     // METransformHaveOutput. m_bitstream holds the access unit; `held` is the picture's input record.
@@ -216,7 +225,18 @@ private:
     // holds the device lease and the critical section.
     HRESULT FinishPending(bool emit);
 
-    // Puts the configured pipeline depth into force, if the pipeline is empty.
+    // Takes the encoder down and lets go of the pictures it still held: the input samples of those
+    // pictures with them, because MFT_INPUT_STREAM_HOLDS_BUFFERS says the transform holds a client
+    // buffer only while the GPU still has it. Every path that restarts or destroys the encoder goes
+    // through this one, and all of them hold the client's device lease while they do, because
+    // Encoder::Shutdown collects what the GPU still has and collecting one picture maps a staging
+    // buffer on the client's device. Caller holds the device lease and the critical section.
+    void ResetEncoderLocked();
+
+    // How many pictures the GPU may hold at once, from the configuration and the environment. One for a
+    // client that asked for low latency, two otherwise, and BC250_MFT_DEPTH overrides both.
+    uint32_t WantedPipelineDepth();
+    // Puts the wanted pipeline depth into force, if the pipeline is empty.
     void ApplyPipelineDepth();
 
     LONG m_refCount = 1;
@@ -230,6 +250,14 @@ private:
     // this stops a second credit being issued; a drain or a flush makes the client drop whatever
     // request it still holds, so it is cleared there and the next start of stream re-issues it.
     bool m_inputRequested = false;
+    // True between MFT_MESSAGE_COMMAND_DRAIN and whatever restarts the flow of input: a start of
+    // stream, a begin streaming, a flush, an end of streaming, or a ProcessInput the client sends
+    // anyway. A drain at a pipeline depth above one always leaves an access unit behind, and collecting
+    // it in ProcessOutput would otherwise queue a METransformNeedInput after the
+    // METransformDrainComplete - the transform asking for a picture of a segment that has ended. A
+    // client that drops events on a drain then finds the credit taken at the next start of stream and
+    // waits for a request that is never re-issued.
+    bool m_drained = false;
     // The work queue and base priority the real time client contract handed us,
     // MFASYNC_CALLBACK_QUEUE_UNDEFINED while none was set. Recorded, not used: every stage of the
     // encode runs on the thread that calls ProcessInput, so this transform queues no work item of
