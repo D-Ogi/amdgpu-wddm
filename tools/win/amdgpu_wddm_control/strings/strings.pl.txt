@@ -795,3 +795,48 @@ plan.line.fan-curve|mt|8917f825|Sterownik steruje wentylatorem według krzywej �
 plan.line.fan-points|mt|787b6e90|Obroty wentylatora: {0}
 plan.title.fan-auto|mt|16d8024e|Niech wentylatorem steruje płyta
 plan.title.fan-curve|mt|df6aeaec|Użyj krzywej wentylatora
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|mt|59b507b0|Ukryj zaawansowane dostrajanie
+graphics.tuning.curve.title|mt|e47d7a86|Napięcie grafiki
+graphics.tuning.chart.marks|mt|72154322|Linia przerywana to najwyższa dozwolona teraz prędkość, a pierścień pokazuje, gdzie układ pracuje w tej chwili.
+tuner.end.kept|mt|31ccaced|Ustawienie jest zachowane i używane przy każdym starcie.
+tuner.end.stopped|mt|403b4756|Test jest zatrzymany. Wróciło ustawienie sprzed testu.
+tuner.end.expired|mt|7ef08e16|Test skończył się bez zachowania, więc ustawienie sprzed testu wróciło samo.
+tuner.end.reset.curve|mt|bfc2561a|Przy każdej prędkości wróciło standardowe napięcie.
+tuner.end.reset.cpu|mt|337fc138|Procesor wrócił do standardowych ustawień tego startu.
+tuner.temp|mt|aa6b1ef9|{0} °C
+tuner.curve.in-use|mt|09effe8c|Teraz używane: {0}
+tuner.curve.saved|mt|d626a63e|Zapisane na każdy start: {0}
+tuner.curve.live|mt|648c554d|Teraz: {0} MHz przy {1} mV
+tuner.curve.live.temp|mt|d1468279|Teraz: {0} MHz przy {1} mV, {2}
+tuner.curve.guard.unfinished|mt|a7be7ff4|Twoje ustawienia napięcia nie zostały tym razem użyte, bo ostatni start z nimi się nie zakończył. Używane są ustawienia standardowe.
+tuner.curve.guard.refused|mt|4300b552|Twoje ustawienia napięcia nie zostały tym razem użyte, bo sterownik ich nie przyjął. Używane są ustawienia standardowe.
+tuner.curve.row|mt|b87bbfe9|{0} mV, {1}
+tuner.curve.row.now|mt|05e062ca|{0} mV, {1} (teraz {2} mV)
+tuner.cpu.mhz-list|mt|65d8ea4f|{0} MHz
+tuner.cpu.own|mt|38de4c9d|bez zmian
+tuner.cpu.on-after-restart|mt|12f166fe|Dostrajanie procesora włączy się po następnym ponownym uruchomieniu Windows.
+tuner.cpu.off-after-restart|mt|14faf359|Dostrajanie procesora wyłączy się po następnym ponownym uruchomieniu Windows.
+tuner.cpu.saved|mt|1477534c|Twoje ustawienia procesora są zapisane i używane przy każdym starcie.
+tuner.cpu.standard|mt|8f0b39bc|Procesor pracuje z ustawieniami standardowymi.
+tuner.cpu.guard.unfinished|mt|d96467db|Twoje ustawienia procesora nie zostały tym razem użyte, bo ostatni start z nimi się nie zakończył. Używane są ustawienia standardowe.
+tuner.cpu.guard.refused|mt|fff75ab6|Twoje ustawienia procesora nie zostały tym razem użyte, bo procesor ich nie przyjął. Używane są ustawienia standardowe.
+tuner.cpu.temp.label|mt|9001480f|Temperatura teraz
+tuner.cpu.cores-now.label|mt|3a5e306a|Prędkość każdego rdzenia
+tuner.cpu.steps-now.label|mt|9ef2435f|Stopnie prędkości
+tuner.cpu.in-use.label|mt|8289ad5a|Teraz używane
+tuner.cpu.settings|mt|88193f5c|najwyższa prędkość {0}; napięcie {1}; limit temperatury {2}
+tuner.cpu.saved.label|mt|a7de57fb|Zapisane na każdy start
+tuner.cpu.baseline.label|mt|5d92c4a0|Standard tego startu
+tuner.cpu.baseline.none|mt|62a9af5e|Najpierw odczytaj procesor.
+tuner.summary.curve-trial|mt|64c717a2|Trwa test napięcia grafiki.
+tuner.summary.curve-own|mt|82c1b09b|Używane jest Twoje ustawienie napięcia grafiki.
+tuner.summary.cpu-trial|mt|92b795ab|Trwa test procesora.
+tuner.summary.cpu-own|mt|dea49322|Używane są Twoje ustawienia procesora.
+tuner.summary.standard|mt|f3252110|Używane są ustawienia standardowe.
+tuner.discard|mt|c493ce8f|Odrzuć moje zmiany
+tuner.cpu.readings|mt|1fb1ec0b|Co zgłasza procesor
+tuner.cpu.settings.title|mt|74a883a0|Ustawienia
+tuner.cpu.choose|mt|53eca097|Nowe ustawienia do testu
+tuner.cpu.choose.help|mt|f60a34ae|Oferowane są tylko wartości, które sterownik przyjmuje. Test zmienia tylko wartości, które ustawiłeś; pozostałe zostają bez zmian.

@@ -795,3 +795,48 @@ plan.line.fan-curve|mt|8917f825|지금부터, 그리고 시작할 때마다 드�
 plan.line.fan-points|mt|787b6e90|팬 속도: {0}
 plan.title.fan-auto|mt|16d8024e|팬을 보드에 맡기기
 plan.title.fan-curve|mt|df6aeaec|팬 곡선 사용
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|mt|59b507b0|고급 조정 숨기기
+graphics.tuning.curve.title|mt|e47d7a86|그래픽 전압
+graphics.tuning.chart.marks|mt|72154322|점선은 지금 허용되는 최고 속도이고, 원은 칩이 지금 동작하는 위치를 보여 줍니다.
+tuner.end.kept|mt|31ccaced|설정이 유지되며 시작할 때마다 사용됩니다.
+tuner.end.stopped|mt|403b4756|테스트를 중지했습니다. 테스트 전의 설정으로 돌아왔습니다.
+tuner.end.expired|mt|7ef08e16|유지를 누르지 않은 채 테스트가 끝나서 테스트 전의 설정으로 자동으로 돌아왔습니다.
+tuner.end.reset.curve|mt|bfc2561a|모든 속도에서 표준 전압으로 돌아왔습니다.
+tuner.end.reset.cpu|mt|337fc138|프로세서가 이번 시작의 표준 설정으로 돌아왔습니다.
+tuner.temp|mt|aa6b1ef9|{0} °C
+tuner.curve.in-use|mt|09effe8c|지금 사용 중: {0}
+tuner.curve.saved|mt|d626a63e|시작할 때마다 쓰는 저장된 설정: {0}
+tuner.curve.live|mt|648c554d|지금: {0} MHz, {1} mV
+tuner.curve.live.temp|mt|d1468279|지금: {0} MHz, {1} mV, {2}
+tuner.curve.guard.unfinished|mt|a7be7ff4|지난번 이 전압 설정으로 시작했을 때 시작이 끝나지 않아서 이번에는 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.curve.guard.refused|mt|4300b552|드라이버가 받아들이지 않아서 이번에는 직접 정한 전압 설정을 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.curve.row|mt|b87bbfe9|{0} mV, {1}
+tuner.curve.row.now|mt|05e062ca|{0} mV, {1} (지금 {2} mV)
+tuner.cpu.mhz-list|mt|65d8ea4f|{0} MHz
+tuner.cpu.own|mt|38de4c9d|변경 없음
+tuner.cpu.on-after-restart|mt|12f166fe|프로세서 조정은 다음에 Windows를 다시 시작한 뒤 켜집니다.
+tuner.cpu.off-after-restart|mt|14faf359|프로세서 조정은 다음에 Windows를 다시 시작한 뒤 꺼집니다.
+tuner.cpu.saved|mt|1477534c|프로세서 설정이 저장되어 시작할 때마다 사용됩니다.
+tuner.cpu.standard|mt|8f0b39bc|프로세서가 표준 설정으로 동작합니다.
+tuner.cpu.guard.unfinished|mt|d96467db|지난번 이 프로세서 설정으로 시작했을 때 시작이 끝나지 않아서 이번에는 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.cpu.guard.refused|mt|fff75ab6|프로세서가 받아들이지 않아서 이번에는 직접 정한 프로세서 설정을 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.cpu.temp.label|mt|9001480f|지금 온도
+tuner.cpu.cores-now.label|mt|3a5e306a|코어별 속도
+tuner.cpu.steps-now.label|mt|9ef2435f|속도 단계
+tuner.cpu.in-use.label|mt|8289ad5a|지금 사용 중
+tuner.cpu.settings|mt|88193f5c|최고 속도 {0}, 전압 {1}, 온도 한도 {2}
+tuner.cpu.saved.label|mt|a7de57fb|시작할 때마다 쓰는 설정
+tuner.cpu.baseline.label|mt|5d92c4a0|이번 시작의 표준
+tuner.cpu.baseline.none|mt|62a9af5e|먼저 프로세서를 읽어 주세요.
+tuner.summary.curve-trial|mt|64c717a2|그래픽 전압 테스트가 진행 중입니다.
+tuner.summary.curve-own|mt|82c1b09b|직접 정한 그래픽 전압 설정을 사용 중입니다.
+tuner.summary.cpu-trial|mt|92b795ab|프로세서 테스트가 진행 중입니다.
+tuner.summary.cpu-own|mt|dea49322|직접 정한 프로세서 설정을 사용 중입니다.
+tuner.summary.standard|mt|f3252110|표준 설정을 사용 중입니다.
+tuner.discard|mt|c493ce8f|변경 내용 버리기
+tuner.cpu.readings|mt|1fb1ec0b|프로세서가 알려 주는 값
+tuner.cpu.settings.title|mt|74a883a0|설정
+tuner.cpu.choose|mt|53eca097|테스트할 새 설정
+tuner.cpu.choose.help|mt|f60a34ae|드라이버가 받아들이는 값만 보여 줍니다. 테스트는 직접 바꾼 값만 바꾸고 나머지는 그대로 둡니다.

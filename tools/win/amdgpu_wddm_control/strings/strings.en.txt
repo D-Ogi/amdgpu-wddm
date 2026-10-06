@@ -813,3 +813,48 @@ plan.line.fan-curve|src|-|The driver runs the fan by the curve "{0}", now and at
 plan.line.fan-points|src|-|Fan speeds: {0}
 plan.title.fan-auto|src|-|Let the board run the fan
 plan.title.fan-curve|src|-|Use a fan curve
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|src|-|Hide advanced tuning
+graphics.tuning.curve.title|src|-|Graphics voltage
+graphics.tuning.chart.marks|src|-|The dashed line is the highest speed allowed now, and the ring shows where the chip runs at this moment.
+tuner.end.kept|src|-|The setting is kept and is used at every start.
+tuner.end.stopped|src|-|The test is stopped. The setting from before the test is back.
+tuner.end.expired|src|-|The test ended without Keep, so the setting from before the test came back by itself.
+tuner.end.reset.curve|src|-|The standard voltage is back at every speed.
+tuner.end.reset.cpu|src|-|The processor is back at the standard settings of this start.
+tuner.temp|src|-|{0} °C
+tuner.curve.in-use|src|-|In use now: {0}
+tuner.curve.saved|src|-|Saved for every start: {0}
+tuner.curve.live|src|-|Now: {0} MHz at {1} mV
+tuner.curve.live.temp|src|-|Now: {0} MHz at {1} mV, {2}
+tuner.curve.guard.unfinished|src|-|Your own voltage settings were not used this time, because the last start with them did not finish. The standard settings are in use.
+tuner.curve.guard.refused|src|-|Your own voltage settings were not used this time, because the driver did not accept them. The standard settings are in use.
+tuner.curve.row|src|-|{0} mV, {1}
+tuner.curve.row.now|src|-|{0} mV, {1} (now {2} mV)
+tuner.cpu.mhz-list|src|-|{0} MHz
+tuner.cpu.own|src|-|not changed
+tuner.cpu.on-after-restart|src|-|Processor tuning turns on after the next restart of Windows.
+tuner.cpu.off-after-restart|src|-|Processor tuning turns off after the next restart of Windows.
+tuner.cpu.saved|src|-|Your processor settings are saved and used at every start.
+tuner.cpu.standard|src|-|The processor runs with its standard settings.
+tuner.cpu.guard.unfinished|src|-|Your processor settings were not used this time, because the last start with them did not finish. The standard settings are in use.
+tuner.cpu.guard.refused|src|-|Your processor settings were not used this time, because the processor did not take them. The standard settings are in use.
+tuner.cpu.temp.label|src|-|Temperature now
+tuner.cpu.cores-now.label|src|-|Speed of each core
+tuner.cpu.steps-now.label|src|-|Speed steps
+tuner.cpu.in-use.label|src|-|In use now
+tuner.cpu.settings|src|-|highest speed {0}; voltage {1}; temperature limit {2}
+tuner.cpu.saved.label|src|-|Saved for every start
+tuner.cpu.baseline.label|src|-|Standard of this start
+tuner.cpu.baseline.none|src|-|Read the processor first.
+tuner.summary.curve-trial|src|-|A graphics voltage test is running.
+tuner.summary.curve-own|src|-|Your own graphics voltage setting is in use.
+tuner.summary.cpu-trial|src|-|A processor test is running.
+tuner.summary.cpu-own|src|-|Your own processor settings are in use.
+tuner.summary.standard|src|-|Standard settings are in use.
+tuner.discard|src|-|Discard my changes
+tuner.cpu.readings|src|-|What the processor reports
+tuner.cpu.settings.title|src|-|Settings
+tuner.cpu.choose|src|-|New settings to test
+tuner.cpu.choose.help|src|-|Only values the driver accepts are offered. The test changes only the values you stepped to; the others stay as they are.

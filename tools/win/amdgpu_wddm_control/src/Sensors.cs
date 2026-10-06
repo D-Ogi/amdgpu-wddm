@@ -31,11 +31,12 @@ namespace AmdgpuWddmControl
             return visible && !minimized && (page == "home" || page == "performance");
         }
 
-        // The graphics page has one live value: the countdown of a tuning trial, which the driver keeps. Without a
-        // trial that page polls nothing (G-PERF: no escape every two seconds for a reading nobody looks at).
-        public static bool PollWanted(bool visible, bool minimized, string page, bool tuningTrial)
+        // The graphics page has live values only in its tuning cards: the countdown of a trial, the clock, voltage and
+        // temperature of the curve card. The window passes true while those cards are open or a trial runs; a closed
+        // page polls nothing (G-PERF: no escape every two seconds for a reading nobody looks at).
+        public static bool PollWanted(bool visible, bool minimized, string page, bool tuningLive)
         {
-            return PollWanted(visible, minimized, page) || (visible && !minimized && page == "graphics" && tuningTrial);
+            return PollWanted(visible, minimized, page) || (visible && !minimized && page == "graphics" && tuningLive);
         }
 
         public static List<SensorRow> Rows(DpmState d, VideoMemoryState vram, HwmonState fan)

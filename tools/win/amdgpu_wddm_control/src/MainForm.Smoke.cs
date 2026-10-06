@@ -56,6 +56,34 @@ namespace AmdgpuWddmControl
                     CurveC = new uint[] { 40, 60, 70, 80, 85, 0, 0, 0 }, CurvePct = new uint[] { 50, 70, 82, 95, 100, 0, 0, 0 },
                 };
             }
+            // The tuning cards open and at their widest: a curve test running over a saved curve (every row differs from
+            // the one in force), and processor tuning on with one readback and saved settings. A fixture that brings
+            // its own readings (test/snapshot-tuner.json) keeps them.
+            _tuningOpen = true;
+            if (_snap.Curve == null)
+            {
+                var line = Tuner.Table(); var floor = Tuner.Floors();
+                var trial = Tuner.Preset("medium", line, floor);
+                _snap.Curve = new CurveState
+                {
+                    Version = 0x000700D5, Flags = CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagOnTrial | CurveState.FlagApplied | CurveState.FlagStored,
+                    TrialMs = 120000, TrialRemainingMs = 87000, Serial = 4, Applied = 4, FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = Tuner.Points,
+                    Candidate = trial, Active = (uint[])trial.Clone(), Stored = Tuner.Preset("mild", line, floor), Default = line, Floor = floor,
+                    Level = 5, LevelMHz = 1500, LevelMv = trial[5], CeilingMHz = 1500, Mode = 1, TemperatureMc = 64000, Sets = 2, Keeps = 1, Generation = 5,
+                };
+            }
+            if (_snap.Cpu == null)
+            {
+                _snap.Parameters["CpuTune"] = 1;
+                _snap.Cpu = new CpuState
+                {
+                    Version = 0x000700D5, Flags = CpuState.FlagValid | CpuState.FlagTuneOn | CpuState.FlagQueue3Proven | CpuState.FlagStored | CpuState.FlagTempValid,
+                    AppliedMaxMHz = 3300, AppliedUvSteps = 4, AppliedTempC = 90, StoredMaxMHz = 3300, StoredUvSteps = 4, StoredTempC = 90,
+                    BaselineMaxMHz = 3500, BaselineTempC = 95, VoltageMv = 1012, CapC = 90, TemperatureMc = 61000,
+                    CoreMHz = new uint[] { 3290, 3290, 3280, 3290, 3290, 3280, 0, 0 }, PstateMHz = new uint[] { 3500, 2800, 1600, 0, 0, 0, 0, 0 },
+                    Cores = 6, Threads = 12, CoreMask = CpuTuning.MaskStock, Reads = 3, Writes = 2, Generation = 5,
+                };
+            }
             _fanEditC = new uint[] { 35, 50, 60, 70, 80, 85 };
             _fanEditPct = new uint[] { 30, 40, 55, 70, 90, 100 };
             _fanChoice = "custom";

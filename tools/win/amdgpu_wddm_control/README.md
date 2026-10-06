@@ -12,7 +12,7 @@ goes only into the support report and the Support page (shown when "Show support
 |---|---|
 | Home | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
 | Games | One entry per game file name (recent launches, stored profiles, the release's defaults, added games); per game the D3D12 application profile as grouped check boxes with origin and cost, Apply/Discard, Undo/Redo and "Recommended" |
-| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid), the compute unit choice (section 7 of the plan), Restore defaults (keep or reset the games) with undo; features the driver cannot do yet as "Coming later" |
+| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid), the compute unit choice (section 7 of the plan), "Advanced tuning" (closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count, each change a trial the driver takes back by itself unless kept; `docs/design/tuner.md`), Restore defaults (keep or reset the games) with undo; features the driver cannot do yet as "Coming later" |
 | Display | The monitors Windows reports, Identify, a link to the Windows display settings; mode, scaling, HDR and VRR as "Coming later" |
 | Performance | Live temperature, clock and load (every 2 s, only while shown and not minimized), the shader cache sizes; power, fan and voltage as "No reading" or "Coming later" |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |

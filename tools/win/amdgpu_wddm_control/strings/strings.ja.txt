@@ -795,3 +795,48 @@ plan.line.fan-curve|mt|8917f825|今から、そして起動のたびに、ドラ
 plan.line.fan-points|mt|787b6e90|ファンの速度: {0}
 plan.title.fan-auto|mt|16d8024e|ファンをボードに任せる
 plan.title.fan-curve|mt|df6aeaec|ファン カーブを使う
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|mt|59b507b0|詳細な調整を隠す
+graphics.tuning.curve.title|mt|e47d7a86|グラフィックスの電圧
+graphics.tuning.chart.marks|mt|72154322|破線は現在許可されている最高速度、円はチップが今動いている位置を示します。
+tuner.end.kept|mt|31ccaced|設定は保持され、起動ごとに使われます。
+tuner.end.stopped|mt|403b4756|テストを停止しました。テスト前の設定に戻りました。
+tuner.end.expired|mt|7ef08e16|「保持」が押されないままテストが終わったため、テスト前の設定に自動で戻りました。
+tuner.end.reset.curve|mt|bfc2561a|すべての速度で標準の電圧に戻りました。
+tuner.end.reset.cpu|mt|337fc138|プロセッサはこの起動時の標準設定に戻りました。
+tuner.temp|mt|aa6b1ef9|{0} °C
+tuner.curve.in-use|mt|09effe8c|現在の設定: {0}
+tuner.curve.saved|mt|d626a63e|起動ごとに使う保存済みの設定: {0}
+tuner.curve.live|mt|648c554d|現在: {0} MHz、{1} mV
+tuner.curve.live.temp|mt|d1468279|現在: {0} MHz、{1} mV、{2}
+tuner.curve.guard.unfinished|mt|a7be7ff4|前回この電圧設定で起動したときに起動が完了しなかったため、今回は使われていません。標準の設定を使っています。
+tuner.curve.guard.refused|mt|4300b552|ドライバーが受け付けなかったため、今回はご自身の電圧設定が使われていません。標準の設定を使っています。
+tuner.curve.row|mt|b87bbfe9|{0} mV、{1}
+tuner.curve.row.now|mt|05e062ca|{0} mV、{1}(現在 {2} mV)
+tuner.cpu.mhz-list|mt|65d8ea4f|{0} MHz
+tuner.cpu.own|mt|38de4c9d|変更なし
+tuner.cpu.on-after-restart|mt|12f166fe|プロセッサの調整は、次に Windows を再起動した後に有効になります。
+tuner.cpu.off-after-restart|mt|14faf359|プロセッサの調整は、次に Windows を再起動した後に無効になります。
+tuner.cpu.saved|mt|1477534c|プロセッサの設定は保存され、起動ごとに使われます。
+tuner.cpu.standard|mt|8f0b39bc|プロセッサは標準の設定で動いています。
+tuner.cpu.guard.unfinished|mt|d96467db|前回このプロセッサ設定で起動したときに起動が完了しなかったため、今回は使われていません。標準の設定を使っています。
+tuner.cpu.guard.refused|mt|fff75ab6|プロセッサが受け付けなかったため、今回はご自身のプロセッサ設定が使われていません。標準の設定を使っています。
+tuner.cpu.temp.label|mt|9001480f|現在の温度
+tuner.cpu.cores-now.label|mt|3a5e306a|各コアの速度
+tuner.cpu.steps-now.label|mt|9ef2435f|速度の段階
+tuner.cpu.in-use.label|mt|8289ad5a|現在の設定
+tuner.cpu.settings|mt|88193f5c|最高速度 {0}、電圧 {1}、温度上限 {2}
+tuner.cpu.saved.label|mt|a7de57fb|起動ごとに使う設定
+tuner.cpu.baseline.label|mt|5d92c4a0|この起動時の標準
+tuner.cpu.baseline.none|mt|62a9af5e|先にプロセッサを読み取ってください。
+tuner.summary.curve-trial|mt|64c717a2|グラフィックス電圧のテストを実行中です。
+tuner.summary.curve-own|mt|82c1b09b|ご自身のグラフィックス電圧設定を使っています。
+tuner.summary.cpu-trial|mt|92b795ab|プロセッサのテストを実行中です。
+tuner.summary.cpu-own|mt|dea49322|ご自身のプロセッサ設定を使っています。
+tuner.summary.standard|mt|f3252110|標準の設定を使っています。
+tuner.discard|mt|c493ce8f|変更を破棄
+tuner.cpu.readings|mt|1fb1ec0b|プロセッサからの報告
+tuner.cpu.settings.title|mt|74a883a0|設定
+tuner.cpu.choose|mt|53eca097|テストする新しい設定
+tuner.cpu.choose.help|mt|f60a34ae|ドライバーが受け付ける値だけを表示しています。テストで変わるのは選び直した値だけで、ほかの値はそのままです。

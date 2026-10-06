@@ -1,5 +1,6 @@
-// The tuning cards of the Graphics page: the voltage curve, the processor, and the number of processor cores. The
-// window edits numbers and asks; the driver owns the trial window, the revert and every bound (docs/design/tuner.md).
+// The tuning cards of the Graphics page: the voltage curve, the processor, and the number of processor cores, behind
+// one "Advanced tuning" card that is closed until a person opens it. The window edits numbers and asks; the driver
+// owns the trial window, the revert and every bound (docs/design/tuner.md).
 //
 // Three rules shape this page:
 //   - Nothing is saved by trying it. Every change runs as a trial with a countdown the driver keeps, so a setting
@@ -8,6 +9,7 @@
 //     a driver with other limits moves the chart, and the window does not argue with it.
 //   - The processor numbers are community reports. The card says so, and nothing is sent to the processor's own
 //     mailbox queue until one readback has answered on this start.
+// What each card says and which button works is decided in TunerView.cs, where the host tests reach it.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -23,128 +25,142 @@ namespace AmdgpuWddmControl
         int _curveLevel;
         uint? _cpuClockEdit, _cpuUvEdit, _cpuTempEdit, _coresEdit;
         string _tuneState;              // the trial signature of the last build, so a trial that ended rebuilds the page
+        bool _tuningOpen;               // the person opened "Advanced tuning" (this window only, never stored)
+        readonly TrialWatch _trials = new TrialWatch();
 
         CurveState CurveNow { get { return _snap != null ? _snap.Curve : null; } }
         CpuState CpuNow { get { return _snap != null ? _snap.Cpu : null; } }
 
-        // What the chart shows: the person's edit, else the curve on trial, else the one in force.
-        uint[] CurveShown()
+        // The cards poll the driver while they are open: the clock, voltage and temperature rows change by themselves.
+        bool TuningShown { get { return _page == "graphics" && (_tuningOpen || TunerView.MustShow(CurveNow, CpuNow)); } }
+
+        static string TuneSignature(CurveState c, CpuState u)
         {
-            var c = CurveNow;
-            if (_curveEdit != null) return _curveEdit;
-            if (c == null) return Tuner.Table();
-            if (c.Has(CurveState.FlagOnTrial) && c.Candidate != null && c.Candidate.Length == Tuner.Points && c.Candidate[0] != 0) return (uint[])c.Candidate.Clone();
-            return c.Active != null && c.Active.Length == Tuner.Points && c.Active[0] != 0 ? (uint[])c.Active.Clone() : Tuner.Table();
+            return (c == null ? "-" : c.Flags + ":" + c.Serial + ":" + c.Generation) + "/" + (u == null ? "-" : u.Flags + ":" + u.Serial + ":" + u.Generation);
         }
 
-        static uint[] Reference(uint[] v, uint[] fallback)
+        // A search result or a link inside the tuning cards opens them first, so the anchor exists.
+        static bool TuningAnchor(string anchor)
         {
-            return v != null && v.Length == Tuner.Points && v[0] != 0 ? v : fallback;
+            return anchor != null && (anchor.StartsWith("graphics.tuning", StringComparison.Ordinal) || anchor == "graphics.cpu-tuning" || anchor == "graphics.cpu-cores");
         }
 
         void AddTuning(Control page, int width, bool installed)
         {
-            page.Controls.Add(BuildCurveCard(width, installed));
-            page.Controls.Add(BuildCpuCard(width, installed));
-            page.Controls.Add(BuildCoresCard(width, installed));
             var c = CurveNow; var u = CpuNow;
-            _tuneState = (c == null ? "-" : c.Flags + ":" + c.Serial) + "/" + (u == null ? "-" : u.Flags + ":" + u.Serial);
+            _trials.Observe(c, u);
+            bool must = TunerView.MustShow(c, u);
+            bool open = _tuningOpen || must;
+
+            var head = new CardPanel(Strings.T("graphics.tuning.title"), width);
+            Mark("graphics.tuning", head);
+            head.Add(Ui.Dim(Strings.T("graphics.tuning.intro"), head.Inner));
+            if (!open && installed)
+                foreach (var line in TunerView.Summary(c, u)) head.Add(Ui.Label(line, null, null, head.Inner));
+            var toggle = Ui.Button(Strings.T(open ? "graphics.tuning.hide" : "graphics.tuning.show"), (s, e) => { _tuningOpen = !open; ShowPage(_page, null, false); });
+            // A running trial keeps the cards open: its countdown and its Keep button must stay in sight.
+            toggle.Enabled = !(open && must);
+            head.Add(Ui.WrapRow(head.Inner, toggle, Explain("tuning", Strings.T("graphics.tuning.title"))));
+            page.Controls.Add(head);
+            if (open)
+            {
+                page.Controls.Add(BuildCurveCard(width, installed));
+                page.Controls.Add(BuildCpuCard(width, installed));
+                page.Controls.Add(BuildCoresCard(width, installed));
+            }
+            _tuneState = TuneSignature(c, u);
         }
 
         CardPanel BuildCurveCard(int width, bool installed)
         {
-            var card = new CardPanel(Strings.T("graphics.tuning.title"), width);
-            Mark("graphics.tuning", card);
+            var card = new CardPanel(Strings.T("graphics.tuning.curve.title"), width);
+            Mark("graphics.tuning.curve", card);
             var c = CurveNow;
-            card.Add(Ui.Dim(Strings.T("graphics.tuning.intro"), card.Inner));
-            if (!installed || c == null || !c.Has(CurveState.FlagValid))
+            var v = TunerView.Curve(c, _curveEdit, installed, _snap.P("DpmCurveLastReason"), _trials.Curve);
+            switch (v.Card)
             {
-                card.Add(Ui.Dim(Strings.T(installed ? "perf.no-reading" : "graphics.not-installed"), card.Inner));
-                return card;
+                case TuneCard.NotInstalled: card.Add(Ui.Dim(Strings.T("graphics.not-installed"), card.Inner)); return card;
+                case TuneCard.NoReading: card.Add(Ui.Dim(Strings.T("perf.no-reading"), card.Inner)); return card;
+                case TuneCard.NeedAuto: card.Add(Ui.Label(Strings.T("graphics.tuning.need-auto"), null, Theme.Warn, card.Inner)); return card;
             }
-            if (!c.Has(CurveState.FlagGoverning))
-            {
-                card.Add(Ui.Label(Strings.T("graphics.tuning.need-auto"), null, Theme.Warn, card.Inner));
-                return card;
-            }
-            var line = Reference(c.Default, Tuner.Table());
-            var floor = Reference(c.Floor, Tuner.Floors());
-            var shown = CurveShown();
-            int level;
-            var error = Tuner.Check(shown, floor, out level);
-            bool onTrial = c.Has(CurveState.FlagOnTrial);
-            var active = Reference(c.Active, Tuner.Table());
-            bool changed = shown.Where((v, i) => v != active[i]).Any();
 
-            // What is in force, and whether it outlives this start.
-            card.Add(Ui.Label(onTrial ? Strings.T("graphics.tuning.running", Tuner.Countdown(c.TrialRemainingMs))
-                : c.Has(CurveState.FlagStored) ? Strings.T("graphics.tuning.saved") : TunerPlan.Summary(Reference(c.Active, line), line),
-                Theme.Bold, onTrial ? Theme.Warn : (Color?)null, card.Inner));
-            if (onTrial)
+            // What is in force, where the chip is now, and what every start uses.
+            var status = Ui.Label(v.Status, Theme.Bold, v.StatusWarn ? Theme.Warn : (Color?)null, card.Inner);
+            _live["tuner.curve.status"] = status;
+            card.Add(status);
+            if (v.OnTrial) card.Add(Ui.Label(Strings.T("graphics.tuning.unsaved"), null, Theme.Warn, card.Inner));
+            if (v.Waiting != null) card.Add(Ui.Label(v.Waiting, null, Theme.Dim, card.Inner));
+            if (v.Outcome != null) card.Add(Ui.Label(v.Outcome, Theme.Bold, v.OutcomeGood ? Theme.Good : Theme.Warn, card.Inner));
+            if (v.GuardNote != null) card.Add(Ui.Label(v.GuardNote, null, Theme.Warn, card.Inner));
+            if (v.Live != null)
             {
-                var left = Ui.Label(Strings.T("graphics.tuning.unsaved"), null, Theme.Warn, card.Inner);
-                _live["tuner.curve.countdown"] = left;
-                card.Add(left);
-                if (!c.Has(CurveState.FlagApplied))
-                    card.Add(Ui.Label(Strings.T("graphics.tuning.not-applied"), null, Theme.Dim, card.Inner));
+                var live = Ui.Label(v.Live, null, Theme.Teal, card.Inner);
+                _live["tuner.curve.live"] = live;
+                card.Add(live);
             }
+            card.Add(Ui.Dim(v.Saved, card.Inner));
 
             // The presets: four legal curves by construction, so a person never has to read a chart to use this card.
             var presets = Ui.WrapRow(card.Inner);
-            string chosen = Tuner.PresetOf(shown, line, floor);
             foreach (var name in Tuner.PresetNames)
             {
                 string id = name;
                 var r = Ui.Radio(Strings.T("graphics.tuning.preset." + id));
-                r.Checked = chosen == id;
-                r.CheckedChanged += (s, e) => { if (r.Checked && Tuner.PresetOf(CurveShown(), line, floor) != id) { _curveEdit = Tuner.Preset(id, line, floor); ShowPage(_page, null, false); } };
+                r.Checked = v.Preset == id;
+                r.CheckedChanged += (s, e) =>
+                {
+                    if (!r.Checked || Tuner.PresetOf(TunerView.Shown(CurveNow, _curveEdit), v.Line, v.Floor) == id) return;
+                    _curveEdit = Tuner.Preset(id, v.Line, v.Floor);
+                    _trials.Forget(true, false);
+                    ShowPage(_page, null, false);
+                };
                 presets.Controls.Add(r);
             }
-            presets.Controls.Add(Explain("tuning", Strings.T("graphics.tuning.title")));
             card.Add(Ui.Label(Strings.T("graphics.tuning.preset"), Theme.Bold, null, card.Inner));
             card.Add(presets);
 
             // The chart, the two buttons that move the selected knot, and the table under it (G-A11Y: the table alone
             // is enough to read every value).
             var chart = new CurveChart(card.Inner, Theme.S(170));
-            chart.SetReference(line, floor);
-            chart.Values = shown;
+            chart.SetReference(v.Line, v.Floor);
+            chart.SetMarks(v.NowIndex, c.LevelMv, v.CeilingIndex);
+            chart.Values = v.Shown;
             chart.Selected = _curveLevel;
-            chart.Changed += (s, e) => { _curveEdit = chart.Values; _curveLevel = chart.Selected; ShowPage(_page, null, false); };
+            chart.Changed += (s, e) => { _curveEdit = chart.Values; _curveLevel = chart.Selected; _trials.Forget(true, false); ShowPage(_page, null, false); };
             chart.Picked += (s, e) => { _curveLevel = chart.Selected; ShowPage(_page, null, false); };
             Mark("graphics.tuning.chart", chart);
             card.Add(Ui.Label(Strings.T("graphics.tuning.chart"), Theme.Bold, null, card.Inner));
             card.Add(chart);
             card.Add(Ui.Dim(Strings.T("graphics.tuning.chart.help"), card.Inner));
-            var nudge = Ui.WrapRow(card.Inner,
+            card.Add(Ui.Dim(Strings.T("graphics.tuning.chart.marks"), card.Inner));
+            card.Add(Ui.WrapRow(card.Inner,
                 Ui.Button(Strings.T("graphics.tuning.lower"), (s, e) => Nudge(-5)),
-                Ui.Button(Strings.T("graphics.tuning.raise"), (s, e) => Nudge(5)));
-            card.Add(nudge);
+                Ui.Button(Strings.T("graphics.tuning.raise"), (s, e) => Nudge(5))));
 
             card.Add(Ui.Label(Strings.T("graphics.tuning.table"), Theme.Bold, null, card.Inner));
-            for (int i = 0; i < Tuner.Points; i++)
-                card.Pair(Strings.T("graphics.tuning.point", Tuner.MHzAt(i)), shown[i] + " mV, " + Tuner.DeltaText(shown[i], line[i]),
-                    i == _curveLevel ? Theme.Text : Theme.Dim);
-            if (error != CurveError.Ok)
-                card.Add(Ui.Label(Tuner.ErrorText(error, Tuner.MHzAt(Math.Max(0, level))), Theme.Bold, Theme.Warn, card.Inner));
+            for (int i = 0; i < v.Rows.Count; i++)
+                card.Pair(v.Rows[i].Key, v.Rows[i].Value, v.Rows[i].Warn ? Theme.Warn : i == _curveLevel ? Theme.Text : Theme.Dim);
+            if (v.ErrorText != null)
+                card.Add(Ui.Label(v.ErrorText, Theme.Bold, Theme.Warn, card.Inner));
 
             var row = Ui.WrapRow(card.Inner);
-            var apply = Ui.Button(Strings.T("graphics.tuning.apply"), (s, e) => RunAction("tune-trial",
-                new Recovery.PlanArgs { Curve = TunerPlan.CurveText(CurveShown()), Window = TunerPlan.DefaultWindowMs }), true);
-            apply.Enabled = error == CurveError.Ok && changed;
+            var apply = Ui.Button(Strings.T("graphics.tuning.apply"), (s, e) => RunAction("tune-trial", TunerView.CurveRequest(v), null, null, false, ok => ClearCurveEdit()), true);
+            apply.Enabled = v.ApplyEnabled;
             row.Controls.Add(apply);
-            var keep = Ui.Button(Strings.T("graphics.tuning.keep"), (s, e) => RunAction("tune-keep", null, null, null, false, ok => ClearCurveEdit()));
             // Keeping a curve nobody has run is how a bad curve reaches every later start: the driver stores what
             // the governor applied, so the button waits for the governor to apply it (it does so on its next tick).
-            keep.Enabled = onTrial && c.Has(CurveState.FlagApplied);
+            var keep = Ui.Button(Strings.T("graphics.tuning.keep"), (s, e) => RunAction("tune-keep", null, null, null, false, ok => ClearCurveEdit()));
+            keep.Enabled = v.KeepEnabled;
             row.Controls.Add(keep);
-            var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("tune-stop", null, null, null, false, ok => ClearCurveEdit()));
-            stop.Enabled = onTrial;
+            var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("tune-stop", null, null, null, false, ok => { if (ok) _trials.Did(false, TrialEnd.Stopped); ClearCurveEdit(); }));
+            stop.Enabled = v.StopEnabled;
             row.Controls.Add(stop);
-            var reset = Ui.Button(Strings.T("graphics.tuning.reset"), (s, e) => RunAction("tune-reset", null, null, null, false, ok => ClearCurveEdit()));
-            reset.Enabled = c.Has(CurveState.FlagStored) || onTrial;
+            var reset = Ui.Button(Strings.T("graphics.tuning.reset"), (s, e) => RunAction("tune-reset", null, null, null, false, ok => { if (ok) _trials.Did(false, TrialEnd.Reset); ClearCurveEdit(); }));
+            reset.Enabled = v.ResetEnabled;
             row.Controls.Add(reset);
             card.Add(row);
+            if (_curveEdit != null)
+                card.Add(Ui.WrapRow(card.Inner, Ui.Button(Strings.T("tuner.discard"), (s, e) => ClearCurveEdit())));
             var result = ResultLine(card.Inner);
             if (result != null) card.Add(result);
             return card;
@@ -160,11 +176,12 @@ namespace AmdgpuWddmControl
         {
             var c = CurveNow;
             if (c == null) return;
-            var line = Reference(c.Default, Tuner.Table());
-            var floor = Reference(c.Floor, Tuner.Floors());
-            var mv = CurveShown();
-            mv[_curveLevel] = Tuner.Nudge(mv[_curveLevel], delta, _curveLevel, line, floor);
+            var v = TunerView.Curve(c, _curveEdit, true, null, TrialEnd.None);
+            if (v.Card != TuneCard.Ready) return;
+            var mv = v.Shown;
+            mv[_curveLevel] = Tuner.Nudge(mv[_curveLevel], delta, _curveLevel, v.Line, v.Floor);
             _curveEdit = mv;
+            _trials.Forget(true, false);
             ShowPage(_page, null, false);
         }
 
@@ -173,79 +190,100 @@ namespace AmdgpuWddmControl
             var card = new CardPanel(Strings.T("graphics.cpu.title"), width);
             Mark("graphics.cpu-tuning", card);
             var u = CpuNow;
+            var v = TunerView.Cpu(u, installed, _snap.P("CpuTune"), _snap.P("CpuLastReason"), _cpuClockEdit, _cpuUvEdit, _cpuTempEdit, _trials.Cpu);
             card.Add(Ui.Dim(Strings.T("graphics.cpu.intro"), card.Inner));
-            if (!installed || u == null || !u.Has(CpuState.FlagValid))
+            switch (v.Card)
             {
-                card.Add(Ui.Dim(Strings.T(installed ? "perf.no-reading" : "graphics.not-installed"), card.Inner));
-                return card;
+                case TuneCard.NotInstalled: card.Add(Ui.Dim(Strings.T("graphics.not-installed"), card.Inner)); return card;
+                case TuneCard.NoReading: card.Add(Ui.Dim(Strings.T("perf.no-reading"), card.Inner)); return card;
+                case TuneCard.Off:
+                case TuneCard.OnAfterRestart:
+                    // The one setting of this page that needs a restart: the driver reads it at its start.
+                    card.Add(Ui.Label(v.Status, Theme.Bold, v.Card == TuneCard.OnAfterRestart ? Theme.Warn : Theme.Dim, card.Inner));
+                    var offer = Ui.WrapRow(card.Inner);
+                    if (v.EnableOffered) offer.Controls.Add(Ui.Button(Strings.T("graphics.cpu.enable"), (s, e) => RunAction("cpu-enable"), true));
+                    if (v.Card == TuneCard.OnAfterRestart)
+                        offer.Controls.Add(Ui.Button(Strings.T("status.action.restart"), (s, e) => { if (RestartDialog.Ask(this, Hints.Decide(Hints.Read(_recent)))) RestartWindows(); }, true));
+                    if (v.DisableOffered) offer.Controls.Add(Ui.Button(Strings.T("graphics.cpu.disable"), (s, e) => RunAction("cpu-disable")));
+                    offer.Controls.Add(Explain("cpu-tuning", Strings.T("graphics.cpu.title")));
+                    card.Add(offer);
+                    return card;
             }
-            if (!u.Has(CpuState.FlagTuneOn))
-            {
-                card.Add(Ui.Label(Strings.T("graphics.cpu.off"), null, Theme.Dim, card.Inner));
-                card.Add(Ui.WrapRow(card.Inner,
-                    Ui.Button(Strings.T("graphics.cpu.enable"), (s, e) => RunAction("cpu-enable")),
-                    Explain("cpu-tuning", Strings.T("graphics.cpu.title"))));
-                return card;
-            }
-            bool onTrial = u.Has(CpuState.FlagOnTrial);
+
             // The driver could not put the settings back and keeps trying. The person has to know, because the
             // processor is running a setting nobody chose to keep (0.7.211).
-            if (u.Has(CpuState.FlagRevertOwed))
-                card.Add(Ui.Label(Strings.T("graphics.cpu.revert-owed"), Theme.Bold, Theme.Warn, card.Inner));
-            card.Pair(Strings.T("graphics.cpu.voltage.label"), CpuTuning.VoltageText(u.VoltageMv), u.VoltageMv >= CpuTuning.RefuseMv ? Theme.Warn : (Color?)null);
-            card.Pair(Strings.T("graphics.cpu.count.label"), u.Cores == 0 ? Strings.T("perf.no-reading") : u.Cores + " / " + u.Threads);
-            card.Pair(Strings.T("graphics.cpu.cap.label"), u.CapC == 0 ? Strings.T("perf.no-reading") : u.CapC + " C");
-            if (onTrial)
-            {
-                var left = Ui.Label(Strings.T("graphics.tuning.running", Tuner.Countdown(u.TrialRemainingMs)), Theme.Bold, Theme.Warn, card.Inner);
-                _live["tuner.cpu.countdown"] = left;
-                card.Add(left);
-                card.Add(Ui.Label(Strings.T("graphics.tuning.unsaved"), null, Theme.Warn, card.Inner));
-            }
-            else if (u.Has(CpuState.FlagStored)) card.Add(Ui.Label(Strings.T("graphics.tuning.saved"), Theme.Bold, null, card.Inner));
+            if (v.RevertOwed != null) card.Add(Ui.Label(v.RevertOwed, Theme.Bold, Theme.Warn, card.Inner));
+            var status = Ui.Label(v.Status, Theme.Bold, v.StatusWarn ? Theme.Warn : (Color?)null, card.Inner);
+            _live["tuner.cpu.status"] = status;
+            card.Add(status);
+            if (v.OnTrial) card.Add(Ui.Label(Strings.T("graphics.tuning.unsaved"), null, Theme.Warn, card.Inner));
+            if (v.Outcome != null) card.Add(Ui.Label(v.Outcome, Theme.Bold, v.OutcomeGood ? Theme.Good : Theme.Warn, card.Inner));
+            if (v.GuardNote != null) card.Add(Ui.Label(v.GuardNote, null, Theme.Warn, card.Inner));
+            if (v.AfterRestart != null) card.Add(Ui.Label(v.AfterRestart, null, Theme.Warn, card.Inner));
 
-            var read = Ui.WrapRow(card.Inner,
-                Ui.Button(Strings.T("graphics.cpu.readback"), (s, e) => RunAction("cpu-readback")),
-                Explain("cpu-tuning", Strings.T("graphics.cpu.title")));
-            card.Add(read);
-            bool proven = u.Has(CpuState.FlagQueue3Proven);
-            if (!proven) card.Add(Ui.Label(Strings.T("graphics.cpu.need-readback"), null, Theme.Warn, card.Inner));
+            // Step 1 of the read-first order: what the processor says now.
+            card.Add(Ui.Label(Strings.T("tuner.cpu.readings"), Theme.Bold, null, card.Inner));
+            foreach (var r in v.Readings) card.Pair(r.Key, r.Value, r.Warn ? Theme.Warn : (Color?)null);
+            var read = Ui.Button(Strings.T("graphics.cpu.readback"), (s, e) => RunAction("cpu-readback"), !v.Proven);
+            read.Enabled = v.ReadEnabled;
+            card.Add(Ui.WrapRow(card.Inner, read, Explain("cpu-tuning", Strings.T("graphics.cpu.title"))));
+            if (!v.Proven) card.Add(Ui.Label(Strings.T("graphics.cpu.need-readback"), null, Theme.Warn, card.Inner));
 
-            // The three numbers, each inside the driver's own list, so a step can never leave the admitted band.
-            var clock = new ValuePicker(CpuTuning.ClockChoices(), " MHz", Strings.T("graphics.cpu.clock.label"));
-            clock.Value = _cpuClockEdit ?? (u.AppliedMaxMHz != 0 ? u.AppliedMaxMHz : CpuTuning.MaxMHz);
-            clock.Stepped += (s, e) => _cpuClockEdit = clock.Value;
-            card.Add(Ui.WrapRow(card.Inner, Ui.Label(Strings.T("graphics.cpu.clock.label"), null, Theme.Dim, card.Inner / 2), clock));
+            // Step 2: what is in force, saved, and what this start recorded as standard.
+            card.Add(Ui.Label(Strings.T("tuner.cpu.settings.title"), Theme.Bold, null, card.Inner));
+            foreach (var r in v.InForce) card.Pair(r.Key, r.Value, r.Strong ? Theme.Text : (Color?)null);
 
-            var steps = new ValuePicker(Enumerable.Range(0, (int)CpuTuning.MaxSteps + 1).Select(i => (uint)i).ToArray(), "", Strings.T("graphics.cpu.uv.label"));
-            steps.Value = _cpuUvEdit ?? u.AppliedUvSteps;
-            steps.Stepped += (s, e) => _cpuUvEdit = steps.Value;
-            card.Add(Ui.WrapRow(card.Inner, Ui.Label(Strings.T("graphics.cpu.uv.label"), null, Theme.Dim, card.Inner / 2), steps));
-
-            var temp = new ValuePicker(Enumerable.Range((int)CpuTuning.MinTempC, (int)(CpuTuning.MaxTempC - CpuTuning.MinTempC) + 1).Select(i => (uint)i).ToArray(), " C", Strings.T("graphics.cpu.temp.label"));
-            temp.Value = _cpuTempEdit ?? (u.AppliedTempC != 0 ? u.AppliedTempC : u.CapC != 0 ? u.CapC : CpuTuning.MaxTempC);
-            temp.Stepped += (s, e) => _cpuTempEdit = temp.Value;
-            card.Add(Ui.WrapRow(card.Inner, Ui.Label(Strings.T("graphics.cpu.temp.label"), null, Theme.Dim, card.Inner / 2), temp));
-
+            // Step 3: the three numbers, each inside the driver's own list, so a step can never leave the admitted band.
             var row = Ui.WrapRow(card.Inner);
-            var apply = Ui.Button(Strings.T("graphics.cpu.apply"), (s, e) => RunAction("cpu-trial", new Recovery.PlanArgs
+            var apply = Ui.Button(Strings.T("graphics.cpu.apply"), (s, e) => RunAction("cpu-trial", TunerView.CpuRequest(_cpuClockEdit, _cpuUvEdit, _cpuTempEdit), null, null, false, ok => ClearCpuEdit()), true);
+            apply.Enabled = v.ApplyEnabled;
+            Action edited = () =>
             {
-                CpuClock = _cpuClockEdit, CpuUv = _cpuUvEdit, CpuTemp = _cpuTempEdit, Window = TunerPlan.DefaultWindowMs,
-            }), true);
-            apply.Enabled = proven && (_cpuClockEdit != null || _cpuUvEdit != null || _cpuTempEdit != null);
+                _trials.Forget(false, true);
+                apply.Enabled = TunerView.Cpu(CpuNow, installed, _snap.P("CpuTune"), _snap.P("CpuLastReason"), _cpuClockEdit, _cpuUvEdit, _cpuTempEdit, TrialEnd.None).ApplyEnabled;
+            };
+            card.Add(Ui.Label(Strings.T("tuner.cpu.choose"), Theme.Bold, null, card.Inner));
+            var clock = new ValuePicker(v.ClockChoices, " MHz", Strings.T("graphics.cpu.clock.label"));
+            clock.Value = v.Clock;
+            clock.Stepped += (s, e) => { _cpuClockEdit = clock.Value; edited(); };
+            card.Add(Ui.WrapRow(card.Inner, PickerName(Strings.T("graphics.cpu.clock.label"), card.Inner), clock));
+            var steps = new ValuePicker(v.StepChoices, "", Strings.T("graphics.cpu.uv.label"));
+            steps.Value = v.Steps;
+            steps.Stepped += (s, e) => { _cpuUvEdit = steps.Value; edited(); };
+            card.Add(Ui.WrapRow(card.Inner, PickerName(Strings.T("graphics.cpu.uv.label"), card.Inner), steps));
+            var temp = new ValuePicker(v.TempChoices, " °C", Strings.T("graphics.cpu.temp.label"));
+            temp.Value = v.Temp;
+            temp.Stepped += (s, e) => { _cpuTempEdit = temp.Value; edited(); };
+            card.Add(Ui.WrapRow(card.Inner, PickerName(Strings.T("graphics.cpu.temp.label"), card.Inner), temp));
+            card.Add(Ui.Dim(Strings.T("tuner.cpu.choose.help"), card.Inner));
+
             row.Controls.Add(apply);
             var keep = Ui.Button(Strings.T("graphics.tuning.keep"), (s, e) => RunAction("cpu-keep", null, null, null, false, ok => ClearCpuEdit()));
-            keep.Enabled = onTrial;
+            keep.Enabled = v.KeepEnabled;
             row.Controls.Add(keep);
-            var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("cpu-stop", null, null, null, false, ok => ClearCpuEdit()));
-            stop.Enabled = onTrial;
+            var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("cpu-stop", null, null, null, false, ok => { if (ok) _trials.Did(true, TrialEnd.Stopped); ClearCpuEdit(); }));
+            stop.Enabled = v.StopEnabled;
             row.Controls.Add(stop);
-            var reset = Ui.Button(Strings.T("graphics.cpu.reset"), (s, e) => RunAction("cpu-reset", null, null, null, false, ok => ClearCpuEdit()));
-            reset.Enabled = proven && (u.Has(CpuState.FlagStored) || onTrial || u.AppliedMaxMHz != 0 || u.AppliedUvSteps != 0 || u.AppliedTempC != 0);
+            var reset = Ui.Button(Strings.T("graphics.cpu.reset"), (s, e) => RunAction("cpu-reset", null, null, null, false, ok => { if (ok) _trials.Did(true, TrialEnd.Reset); ClearCpuEdit(); }));
+            reset.Enabled = v.ResetEnabled;
             row.Controls.Add(reset);
-            row.Controls.Add(Ui.Button(Strings.T("graphics.cpu.disable"), (s, e) => RunAction("cpu-disable")));
             card.Add(row);
+            var more = Ui.WrapRow(card.Inner);
+            if (v.Edited) more.Controls.Add(Ui.Button(Strings.T("tuner.discard"), (s, e) => ClearCpuEdit()));
+            if (v.DisableOffered) more.Controls.Add(Ui.Button(Strings.T("graphics.cpu.disable"), (s, e) => RunAction("cpu-disable")));
+            if (v.EnableOffered) more.Controls.Add(Ui.Button(Strings.T("graphics.cpu.enable"), (s, e) => RunAction("cpu-enable")));
+            if (more.Controls.Count > 0) card.Add(more);
             return card;
+        }
+
+        // The name in front of a picker, one width for all three so that the pickers line up in one column.
+        static Label PickerName(string text, int inner)
+        {
+            int w = Math.Min(Theme.S(210), inner / 3);
+            var l = Ui.Label(text, null, Theme.Dim, w);
+            l.MinimumSize = new Size(w, 0);
+            l.Margin = Theme.Pad(0, 12, 0, 0);
+            return l;
         }
 
         void ClearCpuEdit()
@@ -284,17 +322,18 @@ namespace AmdgpuWddmControl
         // trial that ended (or a Keep from another window) changes the signature, and then the page is rebuilt.
         void TickTuning()
         {
-            if (_page != "graphics") return;
+            if (_page != "graphics" || _fixture) return;
             var curve = Kmd.Curve(); if (curve.Value != null) _snap.Curve = curve.Value;
             var cpu = Kmd.Cpu(); if (cpu.Value != null) _snap.Cpu = cpu.Value;
             var c = CurveNow; var u = CpuNow;
-            var now = (c == null ? "-" : c.Flags + ":" + c.Serial) + "/" + (u == null ? "-" : u.Flags + ":" + u.Serial);
-            if (now != _tuneState) { ShowPage(_page, null, false); return; }
+            if (TuneSignature(c, u) != _tuneState) { ShowPage(_page, null, false); return; }
+            _trials.Observe(c, u);
             Label l;
-            if (c != null && c.Has(CurveState.FlagOnTrial) && _live.TryGetValue("tuner.curve.countdown", out l))
-                l.Text = Strings.T("graphics.tuning.running", Tuner.Countdown(c.TrialRemainingMs));
-            if (u != null && u.Has(CpuState.FlagOnTrial) && _live.TryGetValue("tuner.cpu.countdown", out l))
-                l.Text = Strings.T("graphics.tuning.running", Tuner.Countdown(u.TrialRemainingMs));
+            var cv = TunerView.Curve(c, _curveEdit, _snap.DriverInstalled, _snap.P("DpmCurveLastReason"), _trials.Curve);
+            if (cv.Status != null && _live.TryGetValue("tuner.curve.status", out l)) l.Text = cv.Status;
+            if (cv.Live != null && _live.TryGetValue("tuner.curve.live", out l)) l.Text = cv.Live;
+            var uv = TunerView.Cpu(u, _snap.DriverInstalled, _snap.P("CpuTune"), _snap.P("CpuLastReason"), _cpuClockEdit, _cpuUvEdit, _cpuTempEdit, _trials.Cpu);
+            if (uv.Status != null && _live.TryGetValue("tuner.cpu.status", out l)) l.Text = uv.Status;
         }
 
         // The tuning lines of the support report and the status card: what is in force, what is on trial, what is

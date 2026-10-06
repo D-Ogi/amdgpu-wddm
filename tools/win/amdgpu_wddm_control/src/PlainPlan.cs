@@ -109,7 +109,7 @@ namespace AmdgpuWddmControl
             new Regex(@"\b(KMD|UMD|ICD|DWM|DDI|WDDM|SMU|DPM|IOCTL|HKLM|HKCU|HKEY_\w+)\b"),
             new Regex(@"(?i)\b(fence|escapes?|exit code|error code|dxgkrnl|registry)\b"),
             new Regex(@"0x[0-9A-Fa-f]+"),
-            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd)\w*|InteropClosedReason|DwmForceCpu)\b"),
+            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };
 
