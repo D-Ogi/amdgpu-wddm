@@ -1,0 +1,6 @@
+Redacted before the first commit (docs/01-evidence-rules.md). Counts only; the values are kept nowhere.
+
+- out/dmesg.txt: 1 MAC address, 1 USB serial number, 1 UUID
+
+Checked and found clean: every other text file of this directory (no MAC address, USB serial,
+UUID or IPv4 address). The lab network's addresses and host names never appear in these files.

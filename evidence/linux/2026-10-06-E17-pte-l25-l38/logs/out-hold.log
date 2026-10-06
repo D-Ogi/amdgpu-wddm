@@ -1,0 +1,247 @@
+== mapping our buffers at known addresses 15:00:23
+# pid 3827, va base 0x200000000, node /dev/dri/renderD128
+# plan rw       0x0000000200000000     4096 GTT  R|W|X
+# plan ro       0x0000000200001000     4096 GTT  R
+# plan nx       0x0000000200002000     4096 GTT  R|W
+# plan noalloc  0x0000000200003000     4096 GTT  R|W|N
+# plan k64      0x0000000200010000    65536 GTT  R|W
+# plan m2       0x0000000200200000  2097152 GTT  R|W
+# plan vram4k   0x0000000200800000     4096 VRAM R|W
+# plan vram2m   0x0000000200c00000  2097152 VRAM R|W
+# plan far1g    0x0000000240000000     4096 GTT  R|W
+# plan far512g  0x0000008200000000     4096 GTT  R|W
+# plan prt4k    0x0000000201000000     4096 PRT  P
+# plan prt2m    0x0000000201400000  2097152 PRT  P
+# kernel VA range 0x10000..0x800000000000, alignment 4096
+rw       va 0x0000000200000000     4096 bytes GTT  flags 0x000e (R|W|X) handle 1    word 0xe17b0001
+ro       va 0x0000000200001000     4096 bytes GTT  flags 0x0002 (R) handle 2    word 0xe17b0002
+nx       va 0x0000000200002000     4096 bytes GTT  flags 0x0006 (R|W) handle 3    word 0xe17b0003
+noalloc  va 0x0000000200003000     4096 bytes GTT  flags 0x0206 (R|W|N) handle 4    word 0xe17b0004
+k64      va 0x0000000200010000    65536 bytes GTT  flags 0x0006 (R|W) handle 5    word 0xe17b0005
+m2       va 0x0000000200200000  2097152 bytes GTT  flags 0x0006 (R|W) handle 6    word 0xe17b0006
+vram4k   va 0x0000000200800000     4096 bytes VRAM flags 0x0006 (R|W) handle 7    word 0xe17b0007
+vram2m   va 0x0000000200c00000  2097152 bytes VRAM flags 0x0006 (R|W) handle 8    word 0xe17b0008
+far1g    va 0x0000000240000000     4096 bytes GTT  flags 0x0006 (R|W) handle 9    word 0xe17b0009
+far512g  va 0x0000008200000000     4096 bytes GTT  flags 0x0006 (R|W) handle 10   word 0xe17b000a
+prt4k    va 0x0000000201000000     4096 bytes PRT  flags 0x0010 (P) no buffer
+prt2m    va 0x0000000201400000  2097152 bytes PRT  flags 0x0010 (P) no buffer
+# 12 buffers mapped, described in /media/usb/l1006b/out/e17/hold/bos.json and bos.txt
+# client directory: grep 3827 /sys/kernel/debug/dri/client-*/proc_info
+# holding for 240.0 s; the other phases can read this VM now
+== holder pid 3827, drm client 6
+== what amdgpu says the shape of this VM is
+pd_address: 0x46ffe0001
+max_pfn: 0x1000000000
+num_level: 0x3
+block_size: 0x9
+fragment_size: 0x9
+== VM registers while our buffers are mapped (no submission, so no VMID is expected yet)
+GC.GCVM_CONTEXT0_CNTL 0x0a200 007ffe01
+GC.GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32 0x0a3ac 6fe00001
+GC.GCVM_CONTEXT1_CNTL 0x0a204 007ffe07
+GC.GCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32 0x0a3b4 00000000
+GC.GCVM_CONTEXT2_CNTL 0x0a208 007ffe07
+GC.GCVM_CONTEXT2_PAGE_TABLE_BASE_ADDR_LO32 0x0a3bc 00000000
+GC.GCVM_CONTEXT3_CNTL 0x0a20c 007ffe07
+GC.GCVM_CONTEXT3_PAGE_TABLE_BASE_ADDR_LO32 0x0a3c4 00000000
+GC.GCVM_CONTEXT4_CNTL 0x0a210 007ffe07
+GC.GCVM_CONTEXT4_PAGE_TABLE_BASE_ADDR_LO32 0x0a3cc 00000000
+GC.GCVM_CONTEXT5_CNTL 0x0a214 007ffe07
+GC.GCVM_CONTEXT5_PAGE_TABLE_BASE_ADDR_LO32 0x0a3d4 00000000
+GC.GCVM_CONTEXT6_CNTL 0x0a218 007ffe07
+GC.GCVM_CONTEXT6_PAGE_TABLE_BASE_ADDR_LO32 0x0a3dc 00000000
+GC.GCVM_CONTEXT7_CNTL 0x0a21c 007ffe07
+GC.GCVM_CONTEXT7_PAGE_TABLE_BASE_ADDR_LO32 0x0a3e4 00000000
+GC.GCVM_CONTEXT8_CNTL 0x0a220 007ffe07
+GC.GCVM_CONTEXT8_PAGE_TABLE_BASE_ADDR_LO32 0x0a3ec 00000000
+GC.GCVM_CONTEXT9_CNTL 0x0a224 007ffe07
+GC.GCVM_CONTEXT9_PAGE_TABLE_BASE_ADDR_LO32 0x0a3f4 00000000
+== amdgpu_vm_info and amdgpu_gem_info with our buffers in them
+		0x00000007:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x00000008:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x00000009:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x0000000a:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x0000000b:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x0000000c:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+	Evicted BOs:
+	Relocated BOs:
+	Moved BOs:
+	Invalidated BOs:
+	Done BOs:
+		0x00000000:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000001:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000002:      2097152 byte VRAM VISIBLE CPU_ACCESS_REQUIRED VRAM_CLEARED	kernel fence:detached-driver signaled-timeline seq 0 signalled
+
+		0x00000003:         4096 byte VRAM VISIBLE CPU_ACCESS_REQUIRED VRAM_CLEARED	kernel fence:detached-driver signaled-timeline seq 0 signalled
+
+		0x00000004:      2097152 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000005:        65536 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000006:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000007:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000008:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000009:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x0000000a:      2097152 byte GTT pin count 1 CPU_ACCESS_REQUIRED VRAM_CONTIGUOUS
+	Total idle size:               53248	objs:	13
+	Total evicted size:                0	objs:	0
+	Total relocated size:              0	objs:	0
+	Total moved size:                  0	objs:	0
+	Total invalidated size:            0	objs:	0
+	Total done size:             6385664	objs:	11
+13 /media/usb/l1006b/out/e17/hold/gem_info.txt
+== pt_walk: the whole root directory
+# client-6: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3827 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+root[  0] covers 0x0000000000000000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+root[  1] covers 0x0000008000000000: 000000046ffd6001  addr=0x00046ffd6000 VALID
+root[  2] covers 0x0000010000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  3] covers 0x0000018000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  4] covers 0x0000020000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  5] covers 0x0000028000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  6] covers 0x0000030000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  7] covers 0x0000038000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  8] covers 0x0000040000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[  9] covers 0x0000048000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 10] covers 0x0000050000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 11] covers 0x0000058000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 12] covers 0x0000060000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 13] covers 0x0000068000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 14] covers 0x0000070000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 15] covers 0x0000078000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+root[ 16] covers 0x0000080000000000: 0040000000000000  addr=0x000000000000 PDE_PTE
+== pt_walk: every buffer, with its table pages dumped -> /media/usb/l1006b/out/e17/hold/pt
+# client-6: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3827 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+va 0x0000000200000000  pfn 0x200000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffdb000: 000000016db36077  addr=0x00016db36000 VALID SYSTEM SNOOPED EXECUTABLE READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x00016db36000, page size 0x1000
+
+va 0x0000000200001000  pfn 0x200001  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     1 @ vram 0x00046ffdb008: 000000016db3e027  addr=0x00016db3e000 VALID SYSTEM SNOOPED READABLE MTYPE=MTYPE_NC
+  -> system 0x00016db3e000, page size 0x1000
+
+va 0x0000000200002000  pfn 0x200002  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     2 @ vram 0x00046ffdb010: 000000016d562067  addr=0x00016d562000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x00016d562000, page size 0x1000
+
+va 0x0000000200003000  pfn 0x200003  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     3 @ vram 0x00046ffdb018: 0400000107c96067  addr=0x000107c96000 VALID SYSTEM SNOOPED READABLE WRITEABLE NOALLOC MTYPE=MTYPE_NC
+  -> system 0x000107c96000, page size 0x1000
+
+va 0x0000000200010000  pfn 0x200010  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index    16 @ vram 0x00046ffdb080: 000000010f1e0267  addr=0x00010f1e0000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=4 (0x10000 bytes)
+  -> system 0x00010f1e0000, page size 0x10000
+
+va 0x0000000200200000  pfn 0x200200  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     1 @ vram 0x00046ffdc008: 00400001092004e7  addr=0x000109200000 VALID SYSTEM SNOOPED READABLE WRITEABLE PDE_PTE MTYPE=MTYPE_NC FRAG=9 (0x200000 bytes)
+  -> system 0x000109200000, page size 0x200000
+
+va 0x0000000200800000  pfn 0x200800  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     4 @ vram 0x00046ffdc020: 000000046ffd9001  addr=0x00046ffd9000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd9000: 000000046ffda061  addr=0x00046ffda000 VALID READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> vram 0x00046ffda000, page size 0x1000
+
+va 0x0000000200c00000  pfn 0x200c00  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     6 @ vram 0x00046ffdc030: 004000046fc004e1  addr=0x00046fc00000 VALID READABLE WRITEABLE PDE_PTE MTYPE=MTYPE_NC FRAG=9 (0x200000 bytes)
+  -> vram 0x00046fc00000, page size 0x200000
+
+va 0x0000000240000000  pfn 0x240000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     9 @ vram 0x00046ffdd048: 000000046ffd8001  addr=0x00046ffd8000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffd8000: 000000046ffd7001  addr=0x00046ffd7000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd7000: 0000000102ef6067  addr=0x000102ef6000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x000102ef6000, page size 0x1000
+
+va 0x0000008200000000  pfn 0x8200000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     1 @ vram 0x00046ffe0008: 000000046ffd6001  addr=0x00046ffd6000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffd6040: 000000046ffd5001  addr=0x00046ffd5000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffd5000: 000000046ffd4001  addr=0x00046ffd4000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd4000: 00000001096e4067  addr=0x0001096e4000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x0001096e4000, page size 0x1000
+
+va 0x0000000201000000  pfn 0x201000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     8 @ vram 0x00046ffdc040: 000000046ffd3001  addr=0x00046ffd3000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd3000: 0088000000000006  addr=0x000000000000 SYSTEM SNOOPED PRT LOG MTYPE=MTYPE_NC
+  -> system 0x000000000000, page size 0x1000
+
+va 0x0000000201400000  pfn 0x201400  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index    10 @ vram 0x00046ffdc050: 00c8000000000486  addr=0x000000000000 SYSTEM SNOOPED PRT PDE_PTE LOG MTYPE=MTYPE_NC FRAG=9 (0x200000 bytes)
+  -> system 0x000000000000, page size 0x200000
+
+== pt_walk: the positive control - the word each buffer starts with, read back through
+==          the physical address its own PTE names
+# client-6: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3827 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+CONTROL va 0x200000000 -> system 0x00016db36000: read e17b0001, expected e17b0001 - ok
+CONTROL va 0x200001000 -> system 0x00016db3e000: read e17b0002, expected e17b0002 - ok
+CONTROL va 0x200002000 -> system 0x00016d562000: read e17b0003, expected e17b0003 - ok
+CONTROL va 0x200003000 -> system 0x000107c96000: read e17b0004, expected e17b0004 - ok
+CONTROL va 0x200010000 -> system 0x00010f1e0000: read e17b0005, expected e17b0005 - ok
+CONTROL va 0x200200000 -> system 0x000109200000: read e17b0006, expected e17b0006 - ok
+CONTROL va 0x200800000 -> vram 0x00046ffda000: read e17b0007, expected e17b0007 - ok
+CONTROL va 0x200c00000 -> vram 0x00046fc00000: read e17b0008, expected e17b0008 - ok
+CONTROL va 0x240000000 -> system 0x000102ef6000: read e17b0009, expected e17b0009 - ok
+CONTROL va 0x8200000000 -> system 0x0001096e4000: read e17b000a, expected e17b000a - ok
+CONTROL: 10 of 10 passed
+== letting the holder go
+prt4k    va 0x0000000201000000     4096 bytes PRT  flags 0x0010 (P) no buffer
+prt2m    va 0x0000000201400000  2097152 bytes PRT  flags 0x0010 (P) no buffer
+# 12 buffers mapped, described in /media/usb/l1006b/out/e17/hold/bos.json and bos.txt
+# client directory: grep 3827 /sys/kernel/debug/dri/client-*/proc_info
+# holding for 240.0 s; the other phases can read this VM now
+== trace amdgpu-events-hold.txt: 8071 lines; overruns: 0
+== the kernel's own view of the same entries
+111
+         python3-3827    [010] .....   329.874849: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3827    [010] .....   329.874877: amdgpu_vm_set_ptes: pe=f5fffdf000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3827    [010] .....   329.874886: amdgpu_vm_set_ptes: pe=f5fffde000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3827    [010] .....   329.874889: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x14a start:0x0ffffffc00 end:0x0ffffffe00, flags:0x30000000004a7, incr:2097152, dst:
+         python3-3827    [010] .....   329.874889: amdgpu_vm_set_ptes: pe=f5fffdeff0, addr=016d600000, incr=2097152, flags=430000000004a7, count=1, immediate=0
+         python3-3827    [010] .....   329.875074: amdgpu_vm_set_ptes: pe=f5fffdd000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3827    [010] .....   329.875086: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3827    [010] .....   329.875093: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0000000000, incr=0, flags=10, count=512, immediate=0
+         python3-3827    [010] .....   329.875095: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x14a start:0x0000200000 end:0x0000200001, flags:0x77, incr:4096, dst:
+         python3-3827    [010] .....   329.875096: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=016db36000, incr=4096, flags=77, count=1, immediate=0
+         python3-3827    [010] .....   329.875100: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=046ffdb000, incr=0, flags=1, count=1, immediate=0
+         python3-3827    [010] .....   329.875100: amdgpu_vm_set_ptes: pe=f5fffdd040, addr=046ffdc000, incr=0, flags=1, count=1, immediate=0
+         python3-3827    [010] .....   329.875101: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=046ffdd000, incr=0, flags=1, count=1, immediate=0
+         python3-3827    [010] .....   329.875101: amdgpu_vm_set_ptes: pe=f5fffdfff8, addr=046ffde000, incr=0, flags=1, count=1, immediate=0
+         python3-3827    [010] .....   329.875102: amdgpu_vm_set_ptes: pe=f5fffe0ff8, addr=046ffdf000, incr=0, flags=1, count=1, immediate=0
+         python3-3827    [010] .....   329.875171: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x14a start:0x0000200001 end:0x0000200002, flags:0x27, incr:4096, dst:
+         python3-3827    [010] .....   329.875171: amdgpu_vm_set_ptes: pe=f5fffdb008, addr=016db3e000, incr=4096, flags=27, count=1, immediate=0
+         python3-3827    [010] .....   329.875230: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x14a start:0x0000200002 end:0x0000200003, flags:0x67, incr:4096, dst:
+         python3-3827    [010] .....   329.875231: amdgpu_vm_set_ptes: pe=f5fffdb010, addr=016d562000, incr=4096, flags=67, count=1, immediate=0
+         python3-3827    [010] .....   329.875279: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x14a start:0x0000200003 end:0x0000200004, flags:0x400000000000067, incr:4096, dst:
+== temperature
+edge 70.0 C
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+HOLD-DONE

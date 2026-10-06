@@ -721,7 +721,7 @@ try{
   if($odsA -eq '0x0' -or $odsW -eq '0x0'){throw 'Debug output functions not found'}
   $bpA='bp '+$odsA+' ".if (poi(@rcx)==0x52203a3231443344) {'+$onRemoval+'} .else {g}"'
   $bpW='bp '+$odsW+' ".if (poi(@rcx)==0x0031004400330044 & poi(@rcx+8)==0x00520020003a0032) {'+$onRemoval+'} .else {g}"'
-  # Render target life of the game's executable C272B2C2 (offsets from its disassembly, Codex 798/799; the
+  # Render target life of the game's executable C272B2C2 (offsets from its disassembly, review 798/799; the
   # init/cleanup points of 084 were never hit): bulk initializer entry, its resource helper result, the
   # handle store, the pool heap creation (HRESULT unchecked by the game) and the two allocation-info returns.
   $rt=''

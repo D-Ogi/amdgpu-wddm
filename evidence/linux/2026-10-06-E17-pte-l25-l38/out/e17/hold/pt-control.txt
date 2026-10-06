@@ -1,0 +1,14 @@
+# client-6: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3827 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+CONTROL va 0x200000000 -> system 0x00016db36000: read e17b0001, expected e17b0001 - ok
+CONTROL va 0x200001000 -> system 0x00016db3e000: read e17b0002, expected e17b0002 - ok
+CONTROL va 0x200002000 -> system 0x00016d562000: read e17b0003, expected e17b0003 - ok
+CONTROL va 0x200003000 -> system 0x000107c96000: read e17b0004, expected e17b0004 - ok
+CONTROL va 0x200010000 -> system 0x00010f1e0000: read e17b0005, expected e17b0005 - ok
+CONTROL va 0x200200000 -> system 0x000109200000: read e17b0006, expected e17b0006 - ok
+CONTROL va 0x200800000 -> vram 0x00046ffda000: read e17b0007, expected e17b0007 - ok
+CONTROL va 0x200c00000 -> vram 0x00046fc00000: read e17b0008, expected e17b0008 - ok
+CONTROL va 0x240000000 -> system 0x000102ef6000: read e17b0009, expected e17b0009 - ok
+CONTROL va 0x8200000000 -> system 0x0001096e4000: read e17b000a, expected e17b000a - ok
+CONTROL: 10 of 10 passed

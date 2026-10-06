@@ -48,7 +48,7 @@ function Run-Bounded([string]$exe,[string]$arguments,[string]$tag){
  finally{if($p){$p.Dispose()}}
 }
 $timer=[Diagnostics.Stopwatch]::StartNew();$next=-1;$tick=0
-# 101 had 548-765 MB available at the menu and the lab slowed (paging is the hypothesis these lines test; Codex
+# 101 had 548-765 MB available at the menu and the lab slowed (paging is the hypothesis these lines test; review
 # 845). CPU of dwm and the game as percent of the whole
 # machine (all logical processors) over the measured interval, and Memory\Pages Input/sec from one primed counter
 # instance. A changed pid or a failed read gives no sample, never a zero (844).

@@ -1,0 +1,11 @@
+uname rc=0
+cmdline rc=0
+uptime rc=0
+lsmod amdgpu (1 = absent, which is right here) rc=1
+lspci -nn rc=0
+lspci -vvv gpu rc=0
+lspci -vvv ccp rc=0
+m2 root port rc=0
+interrupts rc=0
+sweep_stream pre-driver rc=0
+control GB_ADDR_CONFIG / CC_GC_SHADER_ARRAY_CONFIG rc=0

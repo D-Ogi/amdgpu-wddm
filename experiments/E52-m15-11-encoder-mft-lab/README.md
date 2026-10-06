@@ -96,6 +96,21 @@ unit A claim. Stages 4 and 5 are the acceptance oracle the criterion names.
 `docs/01-evidence-rules.md` asks for, the binary hashes, and the before and after `--enum` output of
 every stage that registered anything.
 
+- 2026-10-06: the run on train b19 (release 0.7.208.100-tester.13, binaries from `e52/encoder-perf`
+  at `e4d1f630`), 82 of 82 cases and the three comparison cases against the inbox encoder:
+  `evidence/windows/2026-10-06-E52-encoder-mft-lab-b19/`. The earlier run of the same day, on
+  tester.12 with 75 of 75 cases, is `evidence/windows/2026-10-06-E52-encoder-mft-lab/`.
+
+## What changes in the facts
+
+- The b19 run is fact M801 in `docs/facts/data/d3d.yaml`: the encoder runs on unit A's GPU, with the
+  case count, the throughput, the T1 and T2 results and the T3 gap.
+- M801 supersedes M774. The survey of 2026-10-01 found the inbox software encoder as the only H.264
+  encoder on unit A. Since release 0.7.207.100-tester.12 the release package registers our transform
+  machine wide, so `MFTEnumEx` reads two. M774 says so in place and keeps its date-bounded claim.
+- Stages 1 and 5 (Game Bar, Windows Camera, Chromium) have no fact yet, because no standard
+  application recorded through the transform yet.
+
 ## References
 
 - the component: `driver/umd/mft-h264/README.md`, its registration specification `INSTALL.md`

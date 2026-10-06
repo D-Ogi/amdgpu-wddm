@@ -1,0 +1,6 @@
+[mft t03944] client device on adapter 1002:13FE
+[mft t03944] pipeline depth 1
+[mft t03944] gpu picture: record 6.825 ms, readback 9.329 ms (map wait 8.759), query wait 0.021 ms, gpu 6.420 ms (valid 1), 0 still in flight
+[mft t03944] gpu picture: record 0.084 ms, readback 2.850 ms (map wait 2.651), query wait 0.011 ms, gpu 1.799 ms (valid 1), 0 still in flight
+[mft t03944] gpu picture: record 0.070 ms, readback 2.295 ms (map wait 2.196), query wait 0.012 ms, gpu 1.804 ms (valid 1), 0 still in flight
+[mft t03944] gpu picture: record 0.069 ms, readback 2.186 ms (map wait 2.066), query wait 0.012 ms, gpu 1.803 ms (valid 1), 0 still in flight

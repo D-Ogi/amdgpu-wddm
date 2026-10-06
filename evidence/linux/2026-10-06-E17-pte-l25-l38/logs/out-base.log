@@ -1,0 +1,55 @@
+== temperature and clocks
+edge 68.0 C
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+== who holds the render node (empty means the GPU is ours alone)
+none
+== VM registers of both hubs, no client running -> /media/usb/l1006b/out/e17/vmregs-base.txt
+MMHUB.MMVM_INVALIDATE_ENG16_REQ 0x69bcc 02f80000
+MMHUB.MMVM_INVALIDATE_ENG16_ACK 0x69c14 00000000
+MMHUB.MMVM_INVALIDATE_ENG16_ADDR_RANGE_LO32 0x69c9c ffffffff
+MMHUB.MMVM_INVALIDATE_ENG16_ADDR_RANGE_HI32 0x69ca0 0000001f
+MMHUB.MMVM_INVALIDATE_ENG17_REQ 0x69bd0 00f80001
+MMHUB.MMVM_INVALIDATE_ENG17_ACK 0x69c18 00000001
+MMHUB.MMVM_INVALIDATE_ENG17_ADDR_RANGE_LO32 0x69ca4 ffffffff
+MMHUB.MMVM_INVALIDATE_ENG17_ADDR_RANGE_HI32 0x69ca8 0000001f
+== amdgpu_vm_info
+== amdgpu_gem_info
+0 /media/usb/l1006b/out/e17/gem_info-base.txt
+== memory managers and totals
+  use_type: 1
+  use_tt: 0
+  size: 8589934592
+  usage: 14614528
+  vis usage:14614528
+default_page_size: 4KiB
+chunk_size: 4KiB, total: 8192MiB, free: 8178MiB, clear_free: 0MiB
+order-21 free:        0 KiB, blocks: 0
+  use_type: 1
+  use_tt: 1
+  size: 4020453376
+  usage: 13185024
+0x0000000000000400-0x0000000000000401: 1: used
+0x0000000000000401-0x0000000000000409: 8: used
+0x0000000000000409-0x0000000000000609: 512: used
+0x0000000000000609-0x0000000000000649: 64: used
+4020453376
+13185024
+0
+8589934592
+14614528
+8589934592
+14614528
+== clients amdgpu knows about right now
+-- client-2 pid: 0 comm: Unset 
+pd_address: 0x46ffe6001 max_pfn: 0x1000000000 num_level: 0x3 block_size: 0x9 fragment_size: 0x9 
+-- client-3 pid: 0 comm: Unset 
+pd_address: 0x46ffe3001 max_pfn: 0x1000000000 num_level: 0x3 block_size: 0x9 fragment_size: 0x9 
+== firmware versions (so the boot can be matched against E13's)
+VCE feature version: 0, firmware version: 0x00000000
+UVD feature version: 0, firmware version: 0x00000000
+MC feature version: 0, firmware version: 0x00000000
+ME feature version: 32, firmware version: 0x00000063
+PFP feature version: 32, firmware version: 0x00000094
+CE feature version: 32, firmware version: 0x00000025

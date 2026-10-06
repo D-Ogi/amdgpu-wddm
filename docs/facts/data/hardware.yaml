@@ -106,8 +106,8 @@ facts:
     date: "2026-09-21"
     date_from: "git"
     claim: "The 468 registers that differ are not a Windows effect"
-    status_text: "MEASURED for the pattern, HYPOTHESIS for the cause"
-    detail: "457 of them differ in 1-5 bits of random-looking values (context registers `PA_*`, `CB_*`, `SPI_*`, `COMPUTE_*`, `GRBM_SCRATCH_REG1-7`, `CP_DMA_WATCH*`): consistent with flops that nothing initializes and that power up slightly differently each time. The rest are clocks/timestamps and three PSP mailbox registers whose values match the earlier Linux session *after* amdgpu, i.e. PSP state that survived a restart. To confirm: a second sweep after a recorded cold start"
+    status_text: "MEASURED for the pattern, the per-power-up cause confirmed by M812 (2026-10-06)"
+    detail: "457 of them differ in 1-5 bits of random-looking values (context registers `PA_*`, `CB_*`, `SPI_*`, `COMPUTE_*`, `GRBM_SCRATCH_REG1-7`, `CP_DMA_WATCH*`): consistent with flops that nothing initializes and that power up slightly differently each time. The rest are clocks/timestamps and three PSP mailbox registers whose values match the earlier Linux session *after* amdgpu, i.e. PSP state that survived a restart. Three sweeps after recorded cold starts confirm the per-power-up cause (M812, 2026-10-06)"
   - id: M20
     status: MEASURED
     date: "2026-09-21"
@@ -667,6 +667,87 @@ facts:
     detail: "`evidence/linux/2026-09-21-E01-recon/sensors-all.txt` (the `nct6686` block) and `ioports.txt` (`0a20-0a2f : pnp 00:04`), one sample about four minutes after boot with the board idle. The driver that bound is Linux mainline `drivers/hwmon/nct6683.c`, which matches this chip. The duty read-back is NOT proved to be the duty this fan runs at: the chip reported 96 % while the fan turned at about half of the 3100 RPM the community reports for full duty. A reading of the fan under a known load has not been taken on Windows yet. The two UNPROVEN registers of `driver/shim/include/bc250_hwmon.h` (the mode mask at `0x0A00`, the engine status at `0x0CF8`) are named by the out-of-tree `nct6687d` alone and were not read here"
     edges:
       - {"type": "uses", "to": "M11"}
+  - id: M803
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The fan controller of unit A, read and written through `/dev/port` under Linux with amdgpu not loaded (2026-10-06, visit 1). The NCT6686D embedded controller at base `0x0A20` carries customer ID `0x162B` (the value that mainline `nct6683` names AMD), build date 2021-07-28 and firmware 1.0. Tachometers and duty outputs 0 to 4 are present, and only fan index 1 turns (1360 to 1396 RPM at rest). At rest all five duty read-backs (`0x160` to `0x164`) read 204, the mode mask `0xA00` reads `0xE0` (bits 0 to 4 clear, so the EC curve runs every channel) and the fan engine status `0xCF8` reads `0x60` (`CFG_CHECK_DONE` and `CFG_LOCK`). One register read through `/dev/port` costs 9.38 us. A write test on fan index 1 works with the `nct6687d` handshake: the open moves the status from `0x60` to `0x08` within one 1 ms poll, the close sets `CFG_CHECK_DONE` and `CFG_LOCK` again, and `CFG_INVALID` never sets. With mode bit 1 set, duty 255 drives the fan to 1699 to 1749 RPM and duty 102 to 771 to 774 RPM. The duty read-back follows the written value within one second. The restore of mode `0xE0` and write target 128 returns the fan to the EC curve (1357 RPM after 3 s)"
+    status_text: "MEASURED (unit A, n = 1 write test, one channel)"
+    detail: "This answers items 1 to 4 and 6 of the A13 lab questions of the fan control design, which is not yet in this repository: the customer ID, whether the duty read-back describes the fan that turns (yes for fan index 1), whether bit 1 of the mode mask is clear under the BIOS Standard Mode (yes), the engine status at rest (`0x60`) and the cost of a port access. Item 5 stays open, because the other four duty channels were not sampled during the write. The 9.38 us include four system calls, so they are an upper bound for the LPC access. Item 7 (the `PNP0C02` resource list) is a Windows question. Register meanings come from mainline `nct6683` and from `nct6687d`. Tctl read 70.4 C during the test. The build date and version agree with the E01 kernel log (M47)"
+    evidence: "[L1006 visit 1, fan controller](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md)"
+    edges:
+      - {"type": "uses", "to": "M47"}
+  - id: M804
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Unit A's video block is listed but not used under amdgpu (kernel 6.18.52, both boots of 2026-10-06). IP discovery hardware id 12 (UVD/VCN) reports version 2.0.3 (major 2, minor 0, revision 3), instance 0, `harvest 0x0` and the base addresses `0x00007800`, `0x00007E00` and `0x02403000`. amdgpu loads no firmware for it (VCN, UVD and VCE firmware version 0 in `amdgpu_firmware_info`), `amdgpu_pm_info` reports `VCN: Powered down`, and the IP block list holds no VCN and no JPEG block, because `amdgpu_discovery.c` adds no block for `IP_VERSION(2, 0, 3)`. The same boot reports SMC firmware 88.6.0 (`0x00580600`) and VBIOS `113-AMDRBN-003`"
+    status_text: "MEASURED (unit A, two boots)"
+    detail: "Wishlist L19. The source lines are `ref/linux-src/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c:2409-2410` at v6.18 (`case IP_VERSION(2, 0, 3): break;`). This measures the presence, version and harvest part of the community report M787 on our unit. The hang part of M787 stays a third-party report, because nothing here attaches to the block. For M15.11 the GPU encoder route stays the compute MFT (M801)"
+    evidence: "[L1006 visit 1](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md)"
+    edges:
+      - {"type": "uses", "to": "M46"}
+      - {"type": "uses", "to": "M801"}
+      - {"type": "supports", "to": "M787"}
+  - id: M806
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Heat on unit A at amdgpu's own clock (2026-10-06, visit 1). 110 s of continuous `vkmembw` copies (10039 batches of eight 256 MiB copies) at a fixed 1500 MHz and 899 to 906 mV drew PPT 80.2 to 85.0 W (median 83.2 W, 62 W before the load). Tctl rose from 71.5 C to 81.5 C, edge from 71 C to 81 C, and the wall from 110.2 W to 170.9 to 174.4 W. No stop rule (Tctl at or above 87 C for 10 s, or 89 C once) fired. 15 s after the load Tctl read 79.75 C"
+    status_text: "MEASURED (unit A, n = 1 run, 110 s)"
+    detail: "A thermal reference for the Windows DPM work: the same board, the BIOS fan curve, and amdgpu's fixed clock. Tctl still rose at the end (0.125 C in the last 10 s), so 81.5 C is not a steady state. The load is a memory copy (M807), so it is not the worst case for the shader array. The wall figures are the smart plug's telemetry as `plug.py` scales it"
+    evidence: "[L1006 visit 1, thermal](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md)"
+    edges:
+      - {"type": "uses", "to": "M807"}
+  - id: M807
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "GPU memory bandwidth on unit A under amdgpu and RADV (Mesa 26.3.0-devel from the reference root, 2026-10-06), measured with the `vkmembw.c` and the SPIR-V of E48 at amdgpu's fixed 1500 MHz. Medians of 20 dispatches over seven runs (local and host placements, with and without warmup, two clients at once, and after 110 s of load): write 445.3 to 445.6 GB/s, copy 396.9 to 397.4 GB/s and read 390.4 to 395.7 GB/s. The best write dispatch reads 449.9 GB/s. A negative control fails both of its checks. Under our Windows driver E48 measured write 369.5 to 375.1, copy 386.1 to 388.8 and read 373.1 to 385.5 GB/s (M776), so Windows writes 16 to 17 % slower and copies and reads 2 to 5 % slower. The Linux write reaches 99 % of the 448 GB/s peak of M789 while amdgpu reports MCLK 450 MHz"
+    status_text: "MEASURED (unit A, Linux side n = 7 runs)"
+    detail: "Wishlist L39. The C file is byte identical to `tools/win/vkmembw/vkmembw.c`, the three SPIR-V headers are byte identical to those of the E48 binary, and a four-function `windows.h` stand-in replaces the Win32 calls. The shader clock differs (Linux 1500 MHz, fixed by amdgpu, see M805; Windows 1000 and 2000 MHz). That is a confound, but E48 found no clock dependence on Windows. One median is an outlier: the host-placement write without warmup reads 399.6 GB/s. The 450 MHz of `pp_dpm_mclk` therefore is not a low memory state under Linux either, which supports M789 with one instrument on both sides. The cause of the Windows write gap is not known"
+    evidence: "[L1006 visit 1, memory bandwidth](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2, L25 and L39](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md), [E48](../evidence/windows/2026-10-01-E48-gpu-memory-bandwidth/README.md)"
+    edges:
+      - {"type": "uses", "to": "M776"}
+      - {"type": "uses", "to": "M805"}
+      - {"type": "supports", "to": "M789"}
+  - id: M812
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The pre-driver register state of unit A changes with every power-up (L1, three recorded cold starts with 30 s without AC, 2026-10-06). Of 5021 registers per sweep, 468, 450 and 472 differ between the pairs of cold starts, and 557 vary across the three: 555 in GC, and `MP0_SMN_C2PMSG_81` read through the MP0 and the MP1 apertures (M814). The differences are small: for each register the largest bit distance between two cold starts has the median 2, and 477 of the 557 differ by at most 3 bits. The widest are timers (`RLC_REFCLOCK_TIMESTAMP_LSB`, `RLC_GPU_CLOCK_32`, `SQ_TIME_LO`). The varying registers are context and dispatch registers that no one initializes before a driver (`CB_BLEND*`, `CB_COLOR*`, `PA_CL_VPORT_*`, `SPI_PS_INPUT_CNTL_*`, `COMPUTE_*`). This confirms the cause that M19 gave as a hypothesis"
+    status_text: "MEASURED (unit A, three cold starts, positive control in every sweep)"
+    detail: "`GB_ADDR_CONFIG = 0x44` and `CC_GC_SHADER_ARRAY_CONFIG = 0xFFF80000` in all five sweeps of the visit. A register is a sweep line with an upper-case name and an 8-digit hex value, compared as a string (`analysis/l1_compare.py`). The stick-side `cmp.sh` of the same visit is not valid: its `awk` compares hex values such as `000000E0` as numbers. A pre-driver sweep therefore never proves a register change by itself: compare two sweeps of the same boot, or a sweep with a known cold or warm history"
+    evidence: "[L1006 visit 3, L1](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M4"}
+      - {"type": "uses", "to": "M5"}
+      - {"type": "supports", "to": "M19"}
+  - id: M813
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "A warm restart of unit A stops the engines but keeps register contents that no reset touches (L2, 2026-10-06). After a warm restart out of Windows with our KMD and after a warm restart from an amdgpu boot, the engine registers read the BIOS handover values of M6, the same as after the cold starts: `CP_ME_CNTL = 0x15000000`, `CP_MEC_CNTL = 0x50000000`, `RLC_CNTL = RLC_STAT = 0`, `SDMA0/1_F32_CNTL = 1`, `GRBM_STATUS = 0x3028`, `CP_RB0_BASE = 0xFEDCBAEF`, `CP_RB0_RPTR = CP_RB0_WPTR = 0`, `MP0_SMN_C2PMSG_64 = 0x80000000`. The boot after Windows still holds a compute dispatch: `COMPUTE_DIM_X/Y/Z = 0x30, 1, 1`, `COMPUTE_NUM_THREAD_X = 0x00400040`, `COMPUTE_PGM_LO = 0x010028C3`, `COMPUTE_PGM_RSRC1 = 0x202C0001`, `COMPUTE_DISPATCH_INITIATOR = 0x2047`. The boot after amdgpu keeps the power-up values of the cold start before it in 166 of the 557 power-up registers of M812"
+    status_text: "MEASURED (unit A, two warm restarts, n = 1 each)"
+    detail: "Of the 557 registers of M812, 385 read 0 after the restart out of Windows and 359 after the restart from amdgpu. These data do not show whether the restart or the driver before it cleared them. 190 registers differ between the two warm boots, 42 of them `COMPUTE_*`, 66 `PA_*` and 55 `SPI_*`. Under Windows only our driver stack drives the GPU, so the dispatch is most likely the last one of the Windows session. Consequence for a driver: after a warm restart, do not read engine or dispatch registers as proof of what the current boot did. The run state of the engines is reset, so an engine needs the same bring-up as after a cold start"
+    evidence: "[L1006 visit 3, L2](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M48"}
+      - {"type": "uses", "to": "M812"}
+      - {"type": "supports", "to": "M6"}
+  - id: M814
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "`MP0_SMN_C2PMSG_81` (SMN `0x58244`) tells a cold start of unit A from a warm restart before any driver loads (2026-10-06): it reads `0x0043xxxx` after each of three cold starts (`0x004314EE`, `0x0043192E`, `0x00431AC5`) and `0x002Bxxxx` after each of two warm restarts (`0x002B3EF6`, `0x002B2155`). A second read later in the same sweep is higher in every boot, so the register most likely counts"
+    status_text: "MEASURED (unit A, three cold starts, two warm restarts)"
+    detail: "The sweeps ran 29 to 38 s after the kernel started. The split can be a different count since the PSP started, not a flag. Use it as a cold or warm marker only together with the uptime of the read. M6 read `0x002AFC44` in a boot of unrecorded history"
+    evidence: "[L1006 visit 3, C2PMSG_81](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M6"}
+      - {"type": "uses", "to": "M812"}
+  - id: M815
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The M.2 link of unit A came up in all five recorded starts of 2026-10-06 (L12: three cold starts with 30 s without AC, two warm restarts). Root port `00:15.0` reads `LnkSta 5 GT/s x2`, equal to its `LnkCap` maximum, with `LnkCtl2` target 5 GT/s, and the NVMe device `03:00.0` and its partitions are present each time. The port has no Advanced Error Reporting capability (its only extended capability is vendor-specific, at `0x100`) and sysfs has no `aer_*` file for it, so there are no AER counters to read"
+    status_text: "MEASURED (unit A, n = 5 starts, no loss)"
+    detail: "The kernel reports that the port limits the SSD to 5 GT/s x2 (the SSD can do 8 GT/s x4). M21's lost link did not occur in these five starts. With no AER, the next loss can only show as `LnkSta` without a link partner or as a missing `03:00.0`"
+    evidence: "[L1006 visit 3, L12](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M21"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

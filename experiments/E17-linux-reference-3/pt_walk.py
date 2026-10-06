@@ -126,6 +126,10 @@ class Memory:
     def read(self, address, size, system):
         fd = self.iomem if system else self.vram
         where = "system" if system else "vram"
+        if not system:
+            # A VRAM entry holds the system physical address (vram_base_offset + offset, M85); the
+            # amdgpu_vram file is indexed by the offset alone (first run on unit A, 2026-10-06).
+            address -= int(os.environ.get("E17_VRAM_BASE", "0"), 0)
         if fd is None:
             return None, f"no amdgpu_iomem to read {where} address {address:#x}"
         try:

@@ -1,0 +1,34 @@
+﻿BD-075 shared-resource trial 20261006T053313Z
+registered C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+accepted   1926DBAF31DD2EA86EF044CE72C7C0C616E3474CA1C12B7F213BF9702789F4B3
+candidate  A08113051B2278A7E77BBA539B9C8ED54FDDAFC6286649A2FCD0CAD8131388B6  C:\BC250\tmp\bd075\amdgpu_wddm_d3d12.dll
+client     FD9A6AAFFC6A9B526E46AE94AD34820EB9D26C16262C5948B4C84AF0902A3B5B  C:\BC250\tmp\bd075\capshare.exe (peer C:\BC250\tmp\bd075\capshare-peer.exe)
+dpm before: driver 0x000700CF, requested dpm, reason none, generation 321340328, ticks 2106191, uptime 66539718 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 4572 exits 4571 refusals 0, 44958001 ms at the point | 07:33:13.971 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.1 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 5485 down 5524 thermal 23 err 0  src grbm submit   0.0% sdma   0.0%
+trace      C:\BC250\tmp\bd075\20261006T053313Z\<cell>.ddi.log, one file per row
+
+install    already
+
+f12to12                expect=pass          result=pass     hr=-          decided_ms=11625  gate=held         checks=A:fences=pass                      route=A:d3d12,B:d3d12      removed=0 exit=0 ok=1 
+    trace retries=0/0 accepted=0 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A  11938 VERDICT cell=f12to12 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=held route=A:d3d12,B:d3d12 fl=A:12_1,B:12_1 checks=A:fences=pass elapsed_ms=11938 decided_ms=11625 note=- peer_exit=0x00000000
+    | A   5203 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5203 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 4: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a 
+s12to12                expect=content       result=pass     hr=-          decided_ms=11265  gate=-            checks=B:P0=pass,B:A=pass,A:B=pass        route=A:d3d12,B:d3d12      removed=0 exit=0 ok=1 
+    trace retries=1/1 accepted=1 opens=1/1 refusals=0 fence_signal=0 fence_wait=0
+    A  11593 VERDICT cell=s12to12 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:d3d12,B:d3d12 fl=A:12_1,B:12_1 checks=B:P0=pass,B:A=pass,A:B=pass elapsed_ms=11593 decided_ms=11265 note=- peer_exit=0x00000000
+    | A  10250 ODS amdgpu_wddm_d3d12 engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 256x256, heap of 262144 bytes aligned to 65536 becomes 262144 bytes, default alignment, pitch 1024) 
+    | A   5187 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5203 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+
+TOTAL ok=2/2 skips=0 cells_s=27
+dpm after: driver 0x000700CF, requested dpm, reason none, generation 321340328, ticks 2107047, uptime 66566663 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 4576 exits 4576 refusals 0, 44966703 ms at the point | 07:33:40.925 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.2 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle none confirmed  up 5490 down 5528 thermal 23 err 0  src grbm submit   0.0% sdma   0.0%
+restore    kept (A0811305 stays registered)
+registered A0811305
+allow      not-needed (this run never read the allowlist)

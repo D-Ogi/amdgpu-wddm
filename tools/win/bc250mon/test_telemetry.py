@@ -90,7 +90,7 @@ class TelemetryAbiTest(unittest.TestCase):
         self.need_reference()
         expected = c_fields(self.reference, 'BC250_ESCAPE_DPM')
         self.assertEqual(expected, cs_fields('DpmSnapshot'))
-        self.assertEqual(size_of(expected), 160)
+        self.assertEqual(size_of(expected), 192)      # ABI 2 (0.7.207); the ABI 1 prefix is 160 bytes
 
     def test_control_dll_dpm_copy(self):
         self.need_reference()
@@ -108,14 +108,17 @@ class TelemetryAbiTest(unittest.TestCase):
 
     def test_protocol_constants(self):
         self.need_reference()
-        for name, value in {'BC250_ESCAPE_RUN_DPM': 23, 'BC250_DPM_ABI': 1, 'BC250_DPM_OP_READ': 0,
+        for name, value in {'BC250_ESCAPE_RUN_DPM': 23, 'BC250_DPM_ABI': 2, 'BC250_DPM_ABI_1': 1,
+                            'BC250_DPM_ABI1_SIZE': 160, 'BC250_DPM_OP_READ': 0,
                             'BC250_DPM_FLAG_RUNNING': 1, 'BC250_DPM_FLAG_TEMPERATURE': 128,
-                            'BC250_DPM_FLAG_CLOCK': 256, 'BC250_DPM_FLAG_HW_BUSY': 512}.items():
+                            'BC250_DPM_FLAG_CLOCK': 256, 'BC250_DPM_FLAG_HW_BUSY': 512,
+                            'BC250_DPM_FLAG_IDLE': 1024}.items():
             found = re.search(r'#define %s\s+(\d+)u' % name, self.reference)
             self.assertIsNotNone(found, name)
             self.assertEqual(int(found.group(1)), value, name)
         managed = DRIVER_CS.read_text() + (HERE / 'src/TelemetryProvider.cs').read_text()
-        for name, value in {'FlagTemperature': 128, 'FlagClock': 256, 'FlagHwBusy': 512, 'FlagRunning': 1}.items():
+        for name, value in {'FlagTemperature': 128, 'FlagClock': 256, 'FlagHwBusy': 512, 'FlagIdle': 1024,
+                            'FlagRunning': 1}.items():
             self.assertRegex(managed, r'\b%s = %d\b' % (name, value))
 
     def test_video_memory_layout(self):
@@ -148,7 +151,8 @@ class TelemetryAbiTest(unittest.TestCase):
 
     def test_sizes_passed_by_the_monitor(self):
         source = DRIVER_CS.read_text()
-        self.assertIn('Bc250Dpm(out data, 160)', source)
+        self.assertIn('Bc250Dpm(out data, 192)', source)         # ABI 2 first
+        self.assertIn('Bc250Dpm(out data, 160)', source)         # the ABI 1 prefix when a caller refuses 192
         self.assertIn('Bc250VideoMemory(null, out data, 264)', source)
         # The fan reply's size is passed by Marshal.SizeOf, so the literal here is the thing that would
         # not move with the struct. 216 is the size test_monitor_hwmon_layout checks above.

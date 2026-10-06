@@ -1,0 +1,12 @@
+[mft t09356] client device on adapter 1002:13FE
+[mft t09356] pipeline depth 1
+[mft t09356] gpu picture: record 0.228 ms, readback 4.172 ms (map wait 4.116), query wait 0.020 ms, gpu 1.812 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.044 ms, readback 0.795 ms (map wait 0.781), query wait 0.005 ms, gpu 0.440 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.043 ms, readback 0.677 ms (map wait 0.669), query wait 0.004 ms, gpu 0.434 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.030 ms, readback 0.598 ms (map wait 0.590), query wait 0.004 ms, gpu 0.436 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.025 ms, readback 0.576 ms (map wait 0.567), query wait 0.004 ms, gpu 0.444 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.022 ms, readback 0.560 ms (map wait 0.552), query wait 0.003 ms, gpu 0.430 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.025 ms, readback 0.569 ms (map wait 0.561), query wait 0.003 ms, gpu 0.441 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.023 ms, readback 0.594 ms (map wait 0.586), query wait 0.003 ms, gpu 0.445 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.033 ms, readback 0.562 ms (map wait 0.554), query wait 0.003 ms, gpu 0.436 ms (valid 1), 0 still in flight
+[mft t09356] gpu picture: record 0.022 ms, readback 0.566 ms (map wait 0.558), query wait 0.004 ms, gpu 0.440 ms (valid 1), 0 still in flight

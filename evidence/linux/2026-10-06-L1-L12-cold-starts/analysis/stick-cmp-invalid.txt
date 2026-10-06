@@ -1,0 +1,5 @@
+== cold1 vs cold2: 0 differ of 6181
+== cold2 vs cold3: 0 differ of 6181
+== cold1 vs cold3: 0 differ of 6181
+== warm-after-windows vs cold1: 0 differ of 6181
+== cold3 vs warm-after-amdgpu: 0 differ of 6181

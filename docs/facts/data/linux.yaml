@@ -157,7 +157,7 @@ facts:
   - id: M91
     status: MEASURED
     date: "2026-09-22"
-    claim: "amdgpu's VM flush on the gfx ring for one RADV client: `amdgpu_vm_flush: ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001` (VMID 1, page directory at VRAM `0x46FFE0000` | 1), SDMA0 flush `id=0 pd_addr=046fe00001` - the same VMID and page-directory address on both rings, consistent with the single process that generated them. Observed only, one client; wishlist L25 stays open for what a second client submitting at the same time shows (VMID reuse, per-VMID assignment)"
+    claim: "amdgpu's VM flush on the gfx ring for one RADV client: `amdgpu_vm_flush: ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001` (VMID 1, page directory at system physical `0x46FFE0000` | 1, VRAM offset `0x1FFFE0000`, corrected 2026-10-06 by M808), SDMA0 flush `id=0 pd_addr=046fe00001` - the same VMID and page-directory address on both rings, consistent with the single process that generated them. Observed only, one client. The two-client half of wishlist L25 is M809 (2026-10-06): one VMID per process, held for the whole run"
     status_text: "MEASURED (n = 1 process)"
     detail: "`evidence/linux/2026-09-22-E21-linux-reference-4/load/vk1-trace.txt`"
   - id: M333
@@ -317,6 +317,52 @@ facts:
     claim: "Explicit OML swap intervals0/1 both fail Zink with SBC0 vs1-3 and both pass RadeonSI using unchanged tests. Zink post-controls pass; no reset. All1080 reference outcomes retained (925pass/149skip/1warn/5fail); exact44079 remainder starts full019 without filtering or oracle changes."
     status_text: "MEASURED (unit A)"
     evidence: "[OML intervals](../evidence/linux/2026-09-26-E33-glx-oml-intervals/RESULT.md)"
+  - id: M805
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The power-management surface that amdgpu offers on unit A (kernel 6.18.52, 2026-10-06). SCLK runs at 1500 MHz and 906 mV with `power_dpm_force_performance_level` at `auto`. `pp_dpm_sclk` lists 1000, 1500 and 2000 MHz, and `pp_od_clk_voltage` gives the range SCLK 1000 to 2000 MHz and VDDC 700 to 1129 mV. `pp_dpm_mclk` and `pp_dpm_fclk` read 450 MHz, `pp_dpm_socclk` 1254 MHz. There is no `pp_features` file, `gpu_busy_percent` answers `Not supported`, and the amdgpu hwmon node has no `power1_cap` (it offers sclk, vddgfx, vddnb, PPT and edge only). VRAM is 8589934592 bytes, all CPU visible, and GTT is 4020457472 bytes (3834 MiB). A request for the manual performance level fails (`Failed to set performance level 2` in the kernel log), and SCLK stays at 1500 MHz. At idle with amdgpu loaded, PPT reads 58 W and the wall about 110 W"
+    status_text: "MEASURED (unit A, two boots)"
+    detail: "Wishlist L10, the part that Linux exposes: no feature mask file, no power cap, and the OD ranges. Still open there: `GetEnabledSmuFeatures` and the fan and thermal limits. `cyan_skillfish_ppt.c` has no `set_performance_level` callback. The writes to `power_dpm_force_performance_level` and `pp_dpm_sclk` answered EINVAL in the operator's shell, which was not saved, so the kernel log line is the record. The wall figure is the smart plug just before the thermal run of M806. This agrees with M90 (no DPM under load) and adds that a user cannot select another level either"
+    evidence: "[L1006 visit 1, collect](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2, L39 follow-up](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md)"
+    edges:
+      - {"type": "uses", "to": "M47"}
+      - {"type": "supports", "to": "M90"}
+  - id: M808
+    status: CONFIRMED
+    date: "2026-10-06"
+    claim: "Page table entries that amdgpu writes on unit A, read back out of VRAM and checked against a positive control and against the tracepoint (E17, 2026-10-06, the first run of the kit). A sparse (PRT) 4 KB mapping is the leaf `0x0088000000000006` (SYSTEM, SNOOPED, PRT bit 51, LOG bit 55, not VALID, address 0). A 2 MB PRT mapping is one PDE_PTE entry at level 2, `0x00c8000000000486`, FRAG 9. `AMDGPU_VM_PAGE_NOALLOC` reaches a GTT leaf as bit 58 (`0x0400000107c96067`). 64 KB is FRAG 4, and 2 MB GTT and VRAM mappings are PDE_PTE entries at level 2 with FRAG 9. Directory entries carry VALID alone, and VM leaves default to MTYPE NC. Hypotheses H1 to H7 all hold: 10 of 10 witness words read back at the address that their own entry names, 45 of 45 walked entries equal the traced `amdgpu_vm_set_ptes` values, a VA at 512 GB goes through root entry 1, and `GCVM_CONTEXT1..15_PAGE_TABLE_BASE_ADDR` stay 0 while nothing is submitted. The page table addresses inside entries are system physical (VRAM offset plus `vram_base_offset` `0x270000000`), while the tracepoint's `pe` is the MC address in the `0xF400000000` window"
+    status_text: "CONFIRMED (unit A, n = 1 run, positive control 10 of 10, tracepoint agrees)"
+    detail: "Wishlist L27. The first run found two defects of the kit, now fixed in `experiments/E17-linux-reference-3`: the PRT rows must carry `AMDGPU_VM_PAGE_PRT` alone (`amdgpu_gem_va_ioctl` returns EINVAL for PRT with R or W), and the walker must subtract the VRAM base before it reads `amdgpu_vram`. For our KMD: a directory entry and a VRAM leaf take the system physical address of the page, the same form as the surface addresses of M85, and `ReserveGpuVirtualAddress` now has a measured encoding. The `AMDGPU_INFO` answers of this boot equal M46 except the usage counters and the sensors. M91's page directory `0x46FFE0000` is this system physical form"
+    evidence: "[E17 on unit A](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md)"
+    edges:
+      - {"type": "uses", "to": "M46"}
+      - {"type": "supports", "to": "M85"}
+      - {"type": "supersedes", "to": "M91", "scope": "partial"}
+  - id: M809
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Two RADV processes that submit on the gfx ring at the same time on unit A (2026-10-06, wishlist L25): amdgpu gives each process its own VMID for the whole run and never re-points it. pasid 9 gets VMID 1 with page directory `0x46ffe0001` in all 190 grabs, and pasid 10 gets VMID 2 with `0x46ffdd001` in all 189 grabs. Each VMID needs a flush once, at its first grab (`needs_flush=1` once, one `amdgpu_vm_flush` per VMID on `gfx_0.0.0`). `GCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR` and `GCVM_CONTEXT2_PAGE_TABLE_BASE_ADDR` hold the two directories in all three register snapshots. Each gfx ring dump holds 8 submissions that alternate between VMID 1 and VMID 2, with no page table base write and no invalidation between them. Both clients pass their checks at 445 GB/s write"
+    status_text: "MEASURED (unit A, n = 1 run, 379 submissions)"
+    detail: "This closes the two-client half of L25 that M91 left open. ADR 0010 point 4 (a VMID held per process instead of re-pointed per packet) is what amdgpu does here. The IH VMID LUT writes of a first submission are not in these ring windows, because the first dump is 2 s after both clients started. The SDMA0 flushes (22) stay on VMID 0 with the kernel directory `0x46fe00001`. The ring dumps, the register snapshots and the decoded gfx rings are in the evidence"
+    evidence: "[L25 on unit A](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md)"
+    edges:
+      - {"type": "uses", "to": "M91"}
+  - id: M810
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Display audio on unit A under Linux (2026-10-06, wishlist L38): `snd_hda_intel` drives the GPU's audio function `01:00.1` (`1002:13ff`) and binds to amdgpu's audio component at the amdgpu load. ALSA card 0 is `HD-Audio Generic` with the HDMI/DP inputs `pcm=3` and `pcm=7` and the codec `ATI R6xx HDMI`. Pin `0x3` reports a valid ELD for a DisplayPort monitor (2-channel LPCM, 32 to 192 kHz, 16, 20 and 24 bit)"
+    status_text: "MEASURED (unit A, n = 1, no sound played)"
+    detail: "Still open in L38: no sound was played, the DCCG audio DTO registers were not read, and the community Vulkan encoder did not run, because the reference root has no `libva` (`libdrm` 2.4.124, `vulkan` 1.4.309 and `glslangValidator` are present). The reference clock half is M788"
+    evidence: "[L38 on unit A](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md)"
+    edges:
+      - {"type": "uses", "to": "M788"}
+  - id: M811
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Every amdgpu load on unit A prints two kernel `WARNING`s from `amdgpu_dm_hpd_init`, in `dal_irq_service_ack` (`irq_service.c:169`) and in `dal_irq_service_set` (`irq_service.c:129`), both for HPD source 3. `Failed to clear hpd(rx) source=N on init` follows for the sources 3, 4, 5, 6, 9, 10, 11 and 12, each with `called for non-implemented irq source`. The lines are in E01 (2026-09-21) and in both boots of 2026-10-06, and the display, the GPU and the clients work after them, so they are benign on this part"
+    status_text: "MEASURED (unit A, three boots)"
+    detail: "Kernel 6.18.52-0-lts. The warnings taint the kernel, so later traces in the same log read `Tainted: G W`. In a session log they are not a sign of a GPU fault"
+    evidence: "[L1006 visit 1](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md), [E01](../evidence/linux/2026-09-21-E01-recon/dmesg-full.txt)"
   - id: S4
     status: HYPOTHESIS
     date: "2026-09-21"

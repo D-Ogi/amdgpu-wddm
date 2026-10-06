@@ -1,0 +1,16 @@
+info:  Game: mfthost.exe
+info:  DXVK: v3.1.1-94-g5611118ef
+info:  Build: x86_64 msvc 19.44.35221
+info:  Extension providers:
+info:    Platform WSI
+info:  Enabled instance extensions:
+info:    VK_KHR_win32_surface
+info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)
+info:  Game: mfthost.exe
+info:  DXVK: v3.1.1-94-g5611118ef
+info:  Build: x86_64 msvc 19.44.35221
+info:  Extension providers:
+info:    Platform WSI
+info:  Enabled instance extensions:
+info:    VK_KHR_win32_surface
+info:  Found device: AMD BC-250 (RADV GFX1013) (radv 26.2.99)

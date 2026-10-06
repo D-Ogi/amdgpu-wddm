@@ -1,0 +1,26 @@
+# pid 3610, va base 0x200000000, node /dev/dri/renderD128
+# plan rw       0x0000000200000000     4096 GTT  R|W|X
+# plan ro       0x0000000200001000     4096 GTT  R
+# plan nx       0x0000000200002000     4096 GTT  R|W
+# plan noalloc  0x0000000200003000     4096 GTT  R|W|N
+# plan k64      0x0000000200010000    65536 GTT  R|W
+# plan m2       0x0000000200200000  2097152 GTT  R|W
+# plan vram4k   0x0000000200800000     4096 VRAM R|W
+# plan vram2m   0x0000000200c00000  2097152 VRAM R|W
+# plan far1g    0x0000000240000000     4096 GTT  R|W
+# plan far512g  0x0000008200000000     4096 GTT  R|W
+# plan prt4k    0x0000000201000000     4096 PRT  R|W|P
+# plan prt2m    0x0000000201400000  2097152 PRT  R|W|P
+# kernel VA range 0x10000..0x800000000000, alignment 4096
+rw       va 0x0000000200000000     4096 bytes GTT  flags 0x000e (R|W|X) handle 1    word 0xe17b0001
+ro       va 0x0000000200001000     4096 bytes GTT  flags 0x0002 (R) handle 2    word 0xe17b0002
+nx       va 0x0000000200002000     4096 bytes GTT  flags 0x0006 (R|W) handle 3    word 0xe17b0003
+noalloc  va 0x0000000200003000     4096 bytes GTT  flags 0x0206 (R|W|N) handle 4    word 0xe17b0004
+k64      va 0x0000000200010000    65536 bytes GTT  flags 0x0006 (R|W) handle 5    word 0xe17b0005
+m2       va 0x0000000200200000  2097152 bytes GTT  flags 0x0006 (R|W) handle 6    word 0xe17b0006
+vram4k   va 0x0000000200800000     4096 bytes VRAM flags 0x0006 (R|W) handle 7    word 0xe17b0007
+vram2m   va 0x0000000200c00000  2097152 bytes VRAM flags 0x0006 (R|W) handle 8    word 0xe17b0008
+far1g    va 0x0000000240000000     4096 bytes GTT  flags 0x0006 (R|W) handle 9    word 0xe17b0009
+far512g  va 0x0000008200000000     4096 bytes GTT  flags 0x0006 (R|W) handle 10   word 0xe17b000a
+FAIL: GEM_VA MAP prt4k: errno 22 (Invalid argument)
+# done, rc 2

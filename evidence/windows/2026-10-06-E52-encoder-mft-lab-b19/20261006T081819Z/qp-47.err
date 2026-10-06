@@ -1,0 +1,5 @@
+[mft t01460] client device on adapter 1002:13FE
+[mft t01460] pipeline depth 1
+[mft t01460] gpu picture: record 0.257 ms, readback 5.653 ms (map wait 5.501), query wait 0.015 ms, gpu 3.190 ms (valid 1), 0 still in flight
+[mft t01460] gpu picture: record 0.050 ms, readback 1.274 ms (map wait 1.229), query wait 0.006 ms, gpu 0.778 ms (valid 1), 0 still in flight
+[mft t01460] gpu picture: record 0.047 ms, readback 1.041 ms (map wait 1.019), query wait 0.006 ms, gpu 0.768 ms (valid 1), 0 still in flight

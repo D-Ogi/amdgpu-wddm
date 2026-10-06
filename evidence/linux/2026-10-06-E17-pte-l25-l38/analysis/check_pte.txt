@@ -1,0 +1,47 @@
+11 table pages, 12 buffers, VM pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+
+The shape of the tables (bc250_pte.h, 'the multi-level table for VMIDs 1..15')
+  CONFIRMED   num_level: amdgpu says 3, the transcription assumed 3
+  CONFIRMED   block_size: amdgpu says 9, the transcription assumed 9
+  CONFIRMED   fragment_size: amdgpu says 9, the transcription assumed 9
+              the VA split this implies: level 0 -> VA[47:39], level 1 -> VA[38:30], level 2 -> VA[29:21], leaf VA[20:12]
+              max_pfn 0x1000000000 = 256 TB of address space
+
+What each buffer's leaf entry carries
+  rw       GTT  level 3 000000016db36077 VALID SYSTEM SNOOPED EXECUTABLE READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=0
+  ro       GTT  level 3 000000016db3e027 VALID SYSTEM SNOOPED READABLE MTYPE=MTYPE_NC FRAG=0
+  nx       GTT  level 3 000000016d562067 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=0
+  noalloc  GTT  level 3 0400000107c96067 VALID SYSTEM SNOOPED READABLE WRITEABLE NOALLOC MTYPE=MTYPE_NC FRAG=0
+  k64      GTT  level 3 000000010f1e0267 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=4
+  m2       GTT  level 2 00400001092004e7 VALID SYSTEM SNOOPED READABLE WRITEABLE PDE_PTE MTYPE=MTYPE_NC FRAG=9
+  vram4k   VRAM level 3 000000046ffda061 VALID READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=0
+  vram2m   VRAM level 2 004000046fc004e1 VALID READABLE WRITEABLE PDE_PTE MTYPE=MTYPE_NC FRAG=9
+  far1g    GTT  level 3 0000000102ef6067 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=0
+  far512g  GTT  level 3 00000001096e4067 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=0
+  prt4k    PRT  level 3 0088000000000006 SYSTEM SNOOPED PRT LOG MTYPE=MTYPE_NC FRAG=0
+  prt2m    PRT  level 2 00c8000000000486 SYSTEM SNOOPED PRT PDE_PTE LOG MTYPE=MTYPE_NC FRAG=9
+
+The directory entries (PDE format: VALID | SYSTEM | SNOOPED and nothing else)
+  CONFIRMED   PDE format: 33 directory entries, none with a permission bit, a non-zero MTYPE field or a block fragment size
+
+The default memory type of a VM leaf entry (transcription says NC, not the GART's UC)
+  CONFIRMED   leaf MTYPE: the plain read/write GTT buffer's entry has MTYPE_NC
+
+The permission bits, which is what DXGK_PTE's ReadOnly and NoExecute become
+  CONFIRMED   ro: AMDGPU_PTE_WRITEABLE: clear, expected clear
+  CONFIRMED   rw: AMDGPU_PTE_EXECUTABLE: set, expected set
+  CONFIRMED   nx: AMDGPU_PTE_EXECUTABLE: clear, expected clear
+  CONFIRMED   noalloc: AMDGPU_PTE_NOALLOC: set, expected set
+
+64 KB pages as AMDGPU_PTE_FRAG(4) - bc250_pte.h calls this correspondence an inference
+  CONFIRMED   64 KB fragment: the 64 KB buffer's leaf entry has FRAG=4 (65536 bytes), the driver assumes FRAG=4 (65536)
+
+2 MB: does a PDB0 entry ever become a page itself (AMDGPU_PDE_PTE)?
+  CONFIRMED   m2: huge page: level 2, PDE_PTE set, FRAG=9 - a 2 MB page in the directory
+  CONFIRMED   vram2m: huge page: level 2, PDE_PTE set, FRAG=9 - a 2 MB page in the directory
+
+VRAM against system memory in a leaf entry
+  CONFIRMED   vram4k: SYSTEM: clear, expected clear
+  CONFIRMED   rw: SYSTEM: set, expected set
+
+14 claims: 14 confirmed, 0 refuted, 0 not covered

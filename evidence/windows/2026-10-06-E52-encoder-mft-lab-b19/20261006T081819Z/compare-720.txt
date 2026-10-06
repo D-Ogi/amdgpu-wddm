@@ -1,0 +1,23 @@
+compare: our encoder against the inbox H264 Encoder MFT, same source, CBR 6000000 bit/s
+
+                                         ours     inbox H264
+  bytes                                197185         185964
+  bit/s at the nominal rate           7887400        7438560
+  ms per picture                        10.04           8.07
+  pictures per second                    99.6          123.9
+  ms per picture, pipelined              6.65      (its own)
+  pictures per second, pipelined          150.5      (its own)
+  our pipelined pass held 2 pictures at once over 5 of 6 pictures; the byte and PSNR rows are the serial pass
+  PSNR Y (dB)                           47.07          45.85
+  PSNR Cb (dB)                          46.19          46.72
+  PSNR Cr (dB)                          45.18          46.53
+  pictures decoded                          6              6
+
+  the gap picture by picture, in dB, ours minus inbox
+    plane   picture 0   the rest      worst         at
+    Y           -1.44       1.76      -1.44          0
+    Cb           3.06      -1.24      -1.86          1
+    Cr           2.80      -2.19      -3.24          5
+
+
+ALL PASS

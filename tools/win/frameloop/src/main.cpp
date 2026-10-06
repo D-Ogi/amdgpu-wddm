@@ -24,7 +24,9 @@
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <cerrno>
 #include <cstring>
+#include <share.h>
 #include <limits>
 #include <string>
 #include <thread>
@@ -70,6 +72,13 @@ const char* const kUsage =
     "                           sequential or batch, and is capped at --lists)\n"
     "  --submit MODE            interleaved (default: record a list, submit it, one call each), sequential\n"
     "                           (record all, then one call each), batch (record all, all K in one call)\n"
+    "  --queues N               direct queues the frame's lists are spread over, 1 or 2 (default 1)\n"
+    "  --handoff MODE           with --queues 2, what crosses the two queues: none (default: both exist, only\n"
+    "                           queue 0 submits), per-list (list k on queue k%2, each waiting on the fence the\n"
+    "                           previous list signalled), per-frame (the frame's lists on queue frame%2, one\n"
+    "                           wait a frame). The last list of a frame always stays on queue 0: it writes the\n"
+    "                           back buffer, which only the swap chain's own queue may write\n"
+    "  --signal-per-list        Signal the handoff fence after every ExecuteCommandLists, not once per frame\n"
     "  --size WxH               borderless window of this size instead of the whole output\n"
     "  --warp | --adapter-luid HI:LO | --adapter-index N   adapter choice (default: first hardware adapter)\n"
     "  --calibrate-every N      GetClockCalibration every N frames, 1..4096 (default 32)\n"
@@ -79,7 +88,12 @@ const char* const kUsage =
     "                           bracketed dispatches (for a driver whose reported clock is wrong)\n"
     "  --warmup N               frames excluded from the distributions, 0..1000 (default 10)\n"
     "  --raw-frames N           per-frame records written to the JSON, 0..131072 (default 20000)\n"
-    "  --frame-statistics       also call GetFrameStatistics after each Present\n"
+    "  --frame-statistics       also call GetFrameStatistics after each Present, which is what the vblank grid\n"
+    "                           and the phase of every GPU gap are fitted from\n"
+    "  --vblank-phase-us US     a gap counts as vblank-aligned when it ends this close after a vblank,\n"
+    "                           10..5000 (default 300); the JSON also reports the uniform share of that window\n"
+    "  --icd-log PATH           read the winsys knobs and counters back from this ICD log (default: the path\n"
+    "                           BC250_DEFERRED_LOG names, else the ICD's own path for this process)\n"
     "  --no-timestamps          run without GPU timestamp queries (CPU numbers only)\n"
     "  --debug-layer            enable the D3D12 debug layer\n"
     "  --out PATH               JSON output file (default: no file, stdout summary only)\n"
@@ -111,6 +125,19 @@ struct Options {
     // it at once, which is what every measurement before this option was taken with; "sequential" records them
     // all and then submits each in its own call; "batch" records them all and submits them in one call.
     enum class Submit { Interleaved, Sequential, Batch } submit = Submit::Interleaved;
+    // How many direct queues the frame's lists are spread over, and what synchronisation crosses them. The
+    // class under investigation is a ring gap that ends just after a vblank while the hardware was free: a
+    // wait that is already satisfied but only retired by the scheduler's next pass would look exactly like
+    // that, so an arm that makes such a dependency explicit is the reproducer and --queues 1 is its control.
+    unsigned queues = 1;
+    // per-list hands over between every pair of lists (K-1 crossings a frame), per-frame once a frame; none
+    // creates the second queue and leaves it idle, which separates "another queue exists" from "work crosses
+    // it". The last list of a frame is never moved, see Client::submit_queue.
+    enum class Handoff { None, PerList, PerFrame } handoff = Handoff::None;
+    // A Signal after every ExecuteCommandLists instead of one per frame. Each signal is a scheduler-visible
+    // event of its own, so this multiplies the chances a wake-up gap has to appear without changing one
+    // instruction of the GPU work.
+    bool signal_per_list = false;
     unsigned calibrate_every = 32;
     // The timestamp frequency to believe instead of the one the driver reports, 0 = believe the driver. An
     // interim lever for BD-056: the BC-250 KMD answers CalibrateGpuClock with the CPU's performance counter
@@ -210,6 +237,16 @@ bool parse_options(int argc, char** argv, Options& o) {
             else if (!std::strcmp(mode, "batch")) { o.submit = Options::Submit::Batch; }
             else { return false; }
         }
+        else if (!std::strcmp(a, "--queues")) { if (!parse_unsigned(next(), 1, 2, o.queues)) { return false; } }
+        else if (!std::strcmp(a, "--handoff")) {
+            const char* mode = next();
+            if (!mode) { return false; }
+            if (!std::strcmp(mode, "none")) { o.handoff = Options::Handoff::None; }
+            else if (!std::strcmp(mode, "per-list")) { o.handoff = Options::Handoff::PerList; }
+            else if (!std::strcmp(mode, "per-frame")) { o.handoff = Options::Handoff::PerFrame; }
+            else { return false; }
+        }
+        else if (!std::strcmp(a, "--signal-per-list")) { o.signal_per_list = true; }
         else if (!std::strcmp(a, "--calibrate-every")) { if (!parse_unsigned(next(), 1, 4096, o.calibrate_every)) { return false; } }
         else if (!std::strcmp(a, "--ts-hz")) {
             // A frequency does not fit the unsigned parser's range, so it is parsed as a double and kept exact:
@@ -220,6 +257,8 @@ bool parse_options(int argc, char** argv, Options& o) {
         }
         else if (!std::strcmp(a, "--warmup")) { if (!parse_unsigned(next(), 0, 1000, o.warmup)) { return false; } }
         else if (!std::strcmp(a, "--raw-frames")) { if (!parse_unsigned(next(), 0, static_cast<unsigned>(kMaxFrames), o.raw_frames)) { return false; } }
+        else if (!std::strcmp(a, "--vblank-phase-us")) { if (!parse_unsigned(next(), 10, 5000, o.vblank_phase_us)) { return false; } }
+        else if (!std::strcmp(a, "--icd-log")) { const char* p = next(); if (!p || !*p) { return false; } o.icd_log = p; }
         else if (!std::strcmp(a, "--gpu-ms")) { if (!parse_double(next(), 0.0, 100.0, o.gpu_ms)) { return false; } }
         else if (!std::strcmp(a, "--cpu-ms")) { if (!parse_double(next(), 0.0, 100.0, o.cpu_ms)) { return false; } }
         else if (!std::strcmp(a, "--size")) { if (!parse_size(next(), o.width, o.height)) { return false; } }
@@ -239,6 +278,16 @@ bool parse_options(int argc, char** argv, Options& o) {
     // Parallel recording cannot interleave with in-order submission: the whole point of interleaving is that
     // list k is submitted before list k+1 is recorded, which serialises the recording again.
     if (o.record_threads > 1 && o.submit == Options::Submit::Interleaved) { return false; }
+    // A handoff needs a second queue to cross, and one ExecuteCommandLists call for the whole frame cannot be
+    // split between two queues at all - including the back-buffer list, which must stay on queue 0, so --submit
+    // batch is refused for every handoff mode and not only for per-list. The list counts follow from the same
+    // rule (Client::submit_queue): per-frame needs one list that is not the last one to move, per-list needs an
+    // odd-indexed one, so two and three lists. Each case is refused rather than silently ignored: an arm that
+    // reported a mode it did not run would be worse than no arm at all.
+    if (o.handoff != Options::Handoff::None && o.queues < 2) { return false; }
+    if (o.handoff != Options::Handoff::None && o.submit == Options::Submit::Batch) { return false; }
+    if (o.handoff == Options::Handoff::PerList && o.lists < 3) { return false; }
+    if (o.handoff == Options::Handoff::PerFrame && o.lists < 2) { return false; }
     for (int i = 1; i < argc; ++i) { o.command_line += (i > 1 ? " " : ""); o.command_line += argv[i]; }
     return true;
 }
@@ -248,6 +297,14 @@ const char* submit_name(Options::Submit submit) {
     case Options::Submit::Sequential: return "sequential";
     case Options::Submit::Batch: return "batch";
     default: return "interleaved";
+    }
+}
+
+const char* handoff_name(Options::Handoff handoff) {
+    switch (handoff) {
+    case Options::Handoff::PerList: return "per-list";
+    case Options::Handoff::PerFrame: return "per-frame";
+    default: return "none";
     }
 }
 
@@ -277,6 +334,7 @@ struct FrameRecord {
     Qpc end_qpc = 0;
     UINT64 present_count = 0;              // GetFrameStatistics, only with --frame-statistics
     Qpc present_sync_qpc = 0;
+    UINT64 sync_refresh = 0;               // SyncRefreshCount: the vblank SyncQPCTime belongs to
     HRESULT present_hr = S_OK;
     unsigned retired = 0;                  // the frame whose fence this frame waited on
     bool retired_valid = false;
@@ -481,10 +539,126 @@ int selftest() {
         expect(!run({"--record-threads", "0", "--submit", "batch"}, bad), "--record-threads 0 refused", failures);
         expect(!run({"--submit", "parallel"}, bad), "--submit parallel refused", failures);
         expect(!run({"--submit"}, bad), "--submit without a value refused", failures);
+        // Queues and the handoff. The refusals matter as much as the acceptances: an arm that asked for a
+        // handoff and silently got none would be reported as a measured mode.
+        Options q{};
+        expect(run({}, q) && q.queues == 1 && q.handoff == Options::Handoff::None && !q.signal_per_list,
+               "defaults: one queue, no handoff, one signal a frame", failures);
+        expect(run({"--queues", "2"}, q) && q.queues == 2 && q.handoff == Options::Handoff::None,
+               "--queues 2 alone is the second-queue control, no handoff", failures);
+        expect(run({"--queues", "2", "--handoff", "per-list"}, q) && q.handoff == Options::Handoff::PerList,
+               "--queues 2 --handoff per-list", failures);
+        expect(run({"--queues", "2", "--handoff", "per-frame"}, q) &&
+               q.handoff == Options::Handoff::PerFrame, "--queues 2 --handoff per-frame", failures);
+        expect(run({"--signal-per-list"}, q) && q.signal_per_list && q.queues == 1,
+               "--signal-per-list on one queue", failures);
+        expect(!run({"--handoff", "per-list"}, bad), "a handoff without a second queue refused", failures);
+        expect(!run({"--queues", "2", "--handoff", "per-list", "--submit", "batch"}, bad) &&
+               !run({"--queues", "2", "--handoff", "per-frame", "--submit", "batch"}, bad),
+               "a handoff with one call a frame refused: that call cannot be split", failures);
+        expect(!run({"--queues", "2", "--handoff", "per-list", "--lists", "2"}, bad) &&
+               run({"--queues", "2", "--handoff", "per-list", "--lists", "3"}, q),
+               "a per-list handoff needs three lists, because the last one never leaves queue 0", failures);
+        expect(!run({"--queues", "2", "--handoff", "per-frame", "--lists", "1"}, bad) &&
+               run({"--queues", "2", "--handoff", "per-frame", "--lists", "2"}, q),
+               "a per-frame handoff needs two lists for the same reason", failures);
+        expect(!run({"--queues", "3"}, bad) && !run({"--queues", "0"}, bad) && !run({"--queues"}, bad),
+               "--queues outside 1..2 and without a value refused", failures);
+        expect(!run({"--queues", "2", "--handoff", "per-pass"}, bad) &&
+               !run({"--queues", "2", "--handoff"}, bad),
+               "--handoff with an unknown mode or no value refused", failures);
+        expect(!std::strcmp(handoff_name(Options::Handoff::None), "none") &&
+               !std::strcmp(handoff_name(Options::Handoff::PerList), "per-list") &&
+               !std::strcmp(handoff_name(Options::Handoff::PerFrame), "per-frame"),
+               "handoff mode names round trip into the JSON", failures);
         expect(!std::strcmp(submit_name(Options::Submit::Interleaved), "interleaved") &&
                !std::strcmp(submit_name(Options::Submit::Sequential), "sequential") &&
                !std::strcmp(submit_name(Options::Submit::Batch), "batch"),
                "submit mode names round trip into the JSON", failures);
+    }
+    // The vblank grid and the phase arithmetic, on synthetic samples: a 60 Hz grid with a known origin is
+    // recovered exactly, a phase inside the interval comes back, too few samples and a grid that is not one
+    // display's are refused, and the uniform share is the window over the period.
+    {
+        const Qpc hz = 10000000;                    // a 10 MHz performance counter, as on this hardware
+        const double period = static_cast<double>(hz) / 60.0;   // 166666.67 ticks
+        const Qpc origin = 1000000000;
+        std::vector<measure::VblankSample> samples;
+        for (unsigned i = 0; i < 40; ++i) {
+            samples.push_back({1000 + i, origin + static_cast<Qpc>(llround(period * (1000 + i)))});
+        }
+        const measure::VblankFit fit = measure::fit_vblank(samples, hz);
+        char text[200]{};
+        sprintf_s(text, "vblank fit: %u samples, %.4f Hz, period %.1f ticks, worst %.2f us off the line",
+                  fit.samples, fit.hz, fit.period_qpc, fit.residual_us);
+        expect(fit.ok && fit.samples == 40 && fit.hz > 59.99 && fit.hz < 60.01 && fit.residual_us < 1.0, text, failures);
+        // 20 us after a vblank reads as 0.020 ms; a quarter of the way through the interval as 4.167 ms.
+        const Qpc vblank_1020 = origin + static_cast<Qpc>(llround(period * 1020.0));
+        const double just_after = measure::vblank_phase_ms(fit, vblank_1020 + 200, hz);
+        const double quarter = measure::vblank_phase_ms(fit, origin + static_cast<Qpc>(llround(period * 1020.25)), hz);
+        sprintf_s(text, "vblank phase: 20 us after a vblank %.4f ms, a quarter of the interval later %.4f ms",
+                  just_after, quarter);
+        expect(just_after > 0.0199 && just_after < 0.0201 && quarter > 4.16 && quarter < 4.17, text, failures);
+        // The boundary is sharp on purpose: 20 us BEFORE a vblank is late in the interval that is ending, not
+        // early in the one that follows, so it reads as nearly a whole period and counts as nothing waited.
+        const double just_before = measure::vblank_phase_ms(fit, vblank_1020 - 200, hz);
+        sprintf_s(text, "20 us before a vblank reads %.4f ms, so it is not aligned", just_before);
+        expect(just_before > 16.64 && just_before < 16.67, text, failures);
+        // Duplicate refresh counts are one sample, which is what a Present that missed a vblank produces.
+        std::vector<measure::VblankSample> duplicates = samples;
+        duplicates.insert(duplicates.end(), samples.begin(), samples.end());
+        expect(measure::fit_vblank(duplicates, hz).samples == 40, "a repeated refresh count counts once", failures);
+        const std::vector<measure::VblankSample> few(samples.begin(), samples.begin() + 7);
+        const measure::VblankFit too_few = measure::fit_vblank(few, hz);
+        expect(!too_few.ok && too_few.samples == 7, "seven samples are too few for a grid", failures);
+        // 2 kHz is outside the believable band, and a sample 3 ms off the line means these are not one grid.
+        std::vector<measure::VblankSample> fast;
+        for (unsigned i = 0; i < 40; ++i) { fast.push_back({i, static_cast<Qpc>(i) * 5000}); }
+        expect(!measure::fit_vblank(fast, hz).ok, "a 2000 Hz grid is refused", failures);
+        std::vector<measure::VblankSample> noisy = samples;
+        noisy[20].qpc += 30000;   // 3 ms
+        const measure::VblankFit bad = measure::fit_vblank(noisy, hz);
+        sprintf_s(text, "a sample %.1f us off the line is refused", bad.residual_us);
+        expect(!bad.ok && bad.residual_us > 1000.0, text, failures);
+        expect(measure::vblank_phase_ms(bad, origin, hz) < 0.0,
+               "without a usable grid the phase is negative, never zero", failures);
+        // A sample paired with the next vblank's count sits one whole period off: dropped, the grid survives.
+        // Two such samples in 40 are more than 1 %, and one 3 ms off stays a refusal (above).
+        std::vector<measure::VblankSample> mislabelled = samples;
+        mislabelled[20].qpc += static_cast<Qpc>(llround(period));
+        const measure::VblankFit one_off = measure::fit_vblank(mislabelled, hz);
+        sprintf_s(text, "one sample a whole period off is dropped: ok %d, outliers %u, worst %.2f us",
+                  one_off.ok ? 1 : 0, one_off.outliers, one_off.residual_us);
+        expect(one_off.ok && one_off.outliers == 1 && one_off.residual_us < 1.0, text, failures);
+        mislabelled[30].qpc += static_cast<Qpc>(llround(period));
+        expect(!measure::fit_vblank(mislabelled, hz).ok, "two whole-period samples in 40 are refused", failures);
+        const double share = measure::vblank_uniform_share(fit, 0.300);
+        sprintf_s(text, "the uniform share of a 300 us window at 60 Hz is %.4f", share);
+        expect(share > 0.0179 && share < 0.0181, text, failures);
+        expect(std::isnan(measure::vblank_uniform_share(bad, 0.300)) &&
+               measure::number(measure::vblank_uniform_share(bad, 0.300)) == "null",
+               "without a grid the uniform share is null in the JSON", failures);
+    }
+    // The options of the vblank classification and of the ICD log.
+    {
+        char exe[] = "frameloop";
+        const auto run = [&](std::vector<const char*> args, Options& o) -> bool {
+            o = Options{};
+            std::vector<char*> argv;
+            argv.push_back(exe);
+            for (const char* a : args) { argv.push_back(const_cast<char*>(a)); }
+            return parse_options(static_cast<int>(argv.size()), argv.data(), o);
+        };
+        Options v{};
+        expect(run({}, v) && v.vblank_phase_us == 300 && v.icd_log.empty(),
+               "defaults: a 300 us vblank window and the ICD's own log path", failures);
+        expect(run({"--vblank-phase-us", "10", "--icd-log", "P:\\x\\icd.log"}, v) && v.vblank_phase_us == 10 &&
+               v.icd_log == "P:\\x\\icd.log", "--vblank-phase-us 10 --icd-log <path>", failures);
+        expect(run({"--vblank-phase-us", "5000"}, v) && v.vblank_phase_us == 5000, "--vblank-phase-us 5000", failures);
+        Options bad2{};
+        expect(!run({"--vblank-phase-us", "9"}, bad2) && !run({"--vblank-phase-us", "5001"}, bad2) &&
+               !run({"--vblank-phase-us"}, bad2) && !run({"--icd-log"}, bad2),
+               "the vblank window refuses 9, 5001 and a missing value; --icd-log needs a path", failures);
     }
     // JSON escaping and number formatting: a Windows path survives, a non-finite value becomes null.
     {
@@ -571,6 +745,7 @@ private:
     HRESULT loop(double seconds);
     double mean_gpu_busy_tail() const;
     void analyse();
+    void read_icd_log();
     bool write_json() const;
     void teardown();
 
@@ -603,6 +778,14 @@ private:
     ComPtr<ID3D12Device> device;
     D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
     ComPtr<ID3D12CommandQueue> queue;
+    // The second direct queue, created only for --queues 2, and the fence a handoff (or --signal-per-list)
+    // uses. Queue 0 stays the swap chain's queue and the one every calibration, timestamp read and frame
+    // fence uses, so a one-queue run is the same run every earlier measurement was taken with.
+    ComPtr<ID3D12CommandQueue> queue_b;
+    ComPtr<ID3D12Fence> handoff_fence;
+    UINT64 handoff_value = 0;
+    size_t handoff_signals = 0, handoff_waits = 0;
+    ID3D12CommandQueue* last_submit_queue = nullptr;
     ComPtr<IDXGISwapChain3> chain;
     HANDLE waitable_handle = nullptr;
     HWND window = nullptr;
@@ -671,6 +854,24 @@ private:
 
     // What GetTimestampFrequency answered, kept next to the frequency actually used (--ts-hz may replace it).
     UINT64 reported_gpu_frequency = 0;
+
+    // The second queue's own clock, measured once and refused rather than assumed. Every gap of a handoff arm is
+    // computed from queue 1's list timestamps and mapped with queue 0's clock point, which is only meaningful if
+    // the two queues share one GPU counter. On this stack they should; nothing in the arm said so, and a silent
+    // second domain would turn every cross-queue gap into fiction instead of into a refusal.
+    UINT64 queue_b_timestamp_frequency = 0;
+    double queue_clock_offset_ms = 0.0;
+    const char* queue_clock_witness = "one queue";
+
+    // The ICD's own log, read back at the end of the run: the header line states which knobs were in force and
+    // where each value came from, and the last periodic submit line states the counters. A measured arm of a
+    // runtime switch is void if its counters did not move, so the arm travels in the JSON with the numbers.
+    std::string icd_log_path, icd_header, icd_submit_line;
+    std::string icd_read = "not read";     // ok, or why the icd block is empty
+    // GetFrameStatistics is the only source of the vblank grid, and a call that fails is silent: without
+    // these two counters "the call failed" and "the grid did not fit the samples" read the same in the
+    // result, and a run with no grid at all cannot be told from a run on a driver that answers.
+    size_t frame_statistics_calls = 0, frame_statistics_failures = 0;
     // Where each phase of the run ended, so that a run's wall time can be accounted for: a trial has to size
     // its own bounds, and "27 s for 5 s of measurement" is a question the client should answer itself.
     struct Mark { const char* phase; Qpc at; };
@@ -712,6 +913,23 @@ private:
     // 200 leaves room for a worse part while still refusing a refit that a loose window would drag away.
     static constexpr double kDriftPpm = 200.0;
     void add_clock_bracket(Qpc submitted_qpc, Qpc woke_qpc, UINT64 gpu_begin, UINT64 gpu_end);
+    // Which queue a submission goes to. With --handoff none every list stays on queue 0 even when a second
+    // queue was created: that arm separates "a second queue exists" from "work crosses it".
+    ID3D12CommandQueue* submit_queue(unsigned list_index, unsigned frame) const {
+        if (!queue_b) { return queue.Get(); }
+        // The frame's last list clears and draws the swap chain's back buffer, and that buffer may only be
+        // written by the queue the swap chain was created with: on this development PC's RTX 4090 a flip-model
+        // back buffer written from the second queue removed the device with DXGI_ERROR_ACCESS_DENIED as the
+        // reason (measured 2026-10-06, arm e-2q-per-frame of src\c48-host-runs.ps1). So that one list stays on
+        // queue 0 in every mode, and the handoff is what crosses back into it - which is also the dependency
+        // the arm wants: the draw cannot start before the other queue's dispatches have finished.
+        if (o.lists && list_index + 1 == o.lists) { return queue.Get(); }
+        if (o.handoff == Options::Handoff::PerList) { return (list_index & 1u) ? queue_b.Get() : queue.Get(); }
+        if (o.handoff == Options::Handoff::PerFrame) { return (frame & 1u) ? queue_b.Get() : queue.Get(); }
+        return queue.Get();
+    }
+    HRESULT submit_lists(unsigned frame, unsigned list_index, ID3D12CommandList* const* lists, unsigned count,
+                         Qpc& begin_qpc, Qpc& end_qpc);
     void reset_clock_bracket() { fit_lower = LLONG_MIN; fit_upper = LLONG_MAX; fit_samples = 0; bracket_count = 0; }
     bool refit_origin(Qpc since, Qpc at);
     bool compute_clock_bracket();
@@ -722,6 +940,28 @@ private:
         measure::Summary interval, fence_wait, waitable_wait, cpu_work, record, record_cpu, execute, signal, present, frame_cpu;
         measure::Summary gpu_busy, intra_gap_total, intra_gap_each, inter_gap, submit_latency, wake_latency, gpu_span;
         measure::Summary idle_total, idle_awaiting_submission, idle_after_submission, wake_blocking;
+        // Every GPU gap on its own, not summed per frame: how long the pipe was idle, and how much of that was
+        // after the next work had been submitted. A scheduler that retires a satisfied wait at a vblank shows up
+        // here as a tail of long gaps whose ends sit just after a vblank.
+        measure::Summary gap_idle, gap_after_submission;
+        measure::VblankFit vblank{};
+        size_t gaps_ge_1ms = 0, gaps_ge_1ms_aligned = 0;
+        size_t gaps_lt_1ms = 0, gaps_lt_1ms_aligned = 0;
+        // The class the ring-gap investigation is about: a gap of at least 4 ms. The 1 ms classes above stay
+        // exactly as they were, because the control share is read from them; this one is counted on top,
+        // through the same phase window, and its rate per second is what a pre-registered rule reads.
+        size_t gaps_ge_4ms = 0, gaps_ge_4ms_aligned = 0;
+        double aligned_share_ge_4ms = std::numeric_limits<double>::quiet_NaN();
+        double gaps_ge_4ms_per_second = 0.0;
+        double aligned_share_ge_1ms = std::numeric_limits<double>::quiet_NaN();
+        double aligned_share_lt_1ms = std::numeric_limits<double>::quiet_NaN();
+        double uniform_share = std::numeric_limits<double>::quiet_NaN();
+        // The phase of a gap's end is taken on a GPU timestamp mapped into QPC. With a fitted origin that
+        // mapping has an uncertainty of its own (clock_fit.bracket_ms), and the alignment window is
+        // one-sided and narrow: a bracket above half the window can move an aligned population out of it
+        // for an instrument reason. The shares are then not reported at all, and this says why.
+        double phase_bracket_ms = 0.0;
+        bool phase_bracket_usable = true;
         double fps = 0.0;
         double seconds = 0.0;
         size_t measured = 0;
@@ -819,6 +1059,14 @@ HRESULT Client::create_device() {
     queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
     hr = device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queue));
     if (FAILED(hr)) { return hr; }
+    if (o.queues > 1) {
+        hr = device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queue_b));
+        if (FAILED(hr)) { return hr; }
+    }
+    if (o.queues > 1 || o.signal_per_list) {
+        hr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&handoff_fence));
+        if (FAILED(hr)) { return hr; }
+    }
     if (!o.no_timestamps) {
         hr = queue->GetTimestampFrequency(&gpu_frequency);
         if (FAILED(hr) || !gpu_frequency) {
@@ -835,6 +1083,46 @@ HRESULT Client::create_device() {
                         static_cast<unsigned long long>(reported_gpu_frequency));
             std::fflush(stdout);
         }
+    }
+    // The cross-queue timestamp domain, witnessed here or the run does not start. Two tests: the queues must
+    // report the same timestamp frequency, and two calibrations taken back to back must agree on how much GPU
+    // time passed between them to better than a millisecond (the two calls are microseconds apart, so a
+    // millisecond is generous against the call cost and tight against a different counter or epoch).
+    if (queue_b && !o.no_timestamps) {
+        UINT64 freq_b = 0;
+        const HRESULT freq_hr = queue_b->GetTimestampFrequency(&freq_b);
+        if (FAILED(freq_hr) || freq_b != reported_gpu_frequency) {
+            std::fprintf(stderr, "frameloop: queue 1 reports %llu Hz against queue 0's %llu Hz (%s): the two"
+                                 " queues are not on one timestamp domain, so no cross-queue gap can be read\n",
+                         static_cast<unsigned long long>(freq_b),
+                         static_cast<unsigned long long>(reported_gpu_frequency), hr_text(freq_hr).c_str());
+            queue_clock_witness = "timestamp frequencies differ";
+            return FAILED(freq_hr) ? freq_hr : E_FAIL;
+        }
+        queue_b_timestamp_frequency = freq_b;
+        UINT64 gpu0 = 0, cpu0 = 0, gpu1 = 0, cpu1 = 0;
+        const HRESULT cal0 = queue->GetClockCalibration(&gpu0, &cpu0);
+        const HRESULT cal1 = queue_b->GetClockCalibration(&gpu1, &cpu1);
+        if (FAILED(cal0) || FAILED(cal1)) {
+            std::fprintf(stderr, "frameloop: GetClockCalibration failed on queue %s (%s): the cross-queue"
+                                 " timestamp domain cannot be witnessed, so the handoff arm would be void\n",
+                         FAILED(cal0) ? "0" : "1", hr_text(FAILED(cal0) ? cal0 : cal1).c_str());
+            queue_clock_witness = "GetClockCalibration failed";
+            return FAILED(cal0) ? cal0 : cal1;
+        }
+        const double gpu_ms = 1000.0 * (static_cast<double>(gpu1) - static_cast<double>(gpu0)) /
+                              static_cast<double>(gpu_frequency);
+        const double cpu_ms = 1000.0 * (static_cast<double>(cpu1) - static_cast<double>(cpu0)) /
+                              static_cast<double>(measure::frequency());
+        queue_clock_offset_ms = gpu_ms - cpu_ms;
+        if (!(queue_clock_offset_ms > -1.0 && queue_clock_offset_ms < 1.0)) {
+            std::fprintf(stderr, "frameloop: the two queues' clock calibrations disagree by %.3f ms: queue 1 is"
+                                 " not on queue 0's GPU counter, so no cross-queue gap can be read\n",
+                         queue_clock_offset_ms);
+            queue_clock_witness = "clock calibrations disagree";
+            return E_FAIL;
+        }
+        queue_clock_witness = "one domain";
     }
     return S_OK;
 }
@@ -1582,6 +1870,33 @@ HRESULT Client::calibrate_sustained() {
     return S_OK;
 }
 
+// One submission: the handoff wait it owes, the call itself, and the signal the next submission will wait
+// on. Everything the arm does to the queues is counted here, so the JSON can state that the arm ran at all -
+// a mode that silently did nothing would otherwise be reported as a measurement.
+HRESULT Client::submit_lists(unsigned frame, unsigned list_index, ID3D12CommandList* const* lists,
+                             unsigned count, Qpc& begin_qpc, Qpc& end_qpc) {
+    ID3D12CommandQueue* q = submit_queue(list_index, frame);
+    // The dependency under test: this submission must not start before the work already on the other queue
+    // has finished. The wait goes in before the call, so by the time the packet reaches the hardware its wait
+    // is satisfied or about to be - the state whose retirement is suspected of waiting for a vblank.
+    if (handoff_fence && o.handoff != Options::Handoff::None && handoff_value && q != last_submit_queue) {
+        const HRESULT hr = q->Wait(handoff_fence.Get(), handoff_value);
+        if (FAILED(hr)) { return hr; }
+        ++handoff_waits;
+    }
+    begin_qpc = measure::now();
+    q->ExecuteCommandLists(count, lists);
+    end_qpc = measure::now();
+    if (handoff_fence && (o.handoff != Options::Handoff::None || o.signal_per_list)) {
+        const HRESULT hr = q->Signal(handoff_fence.Get(), handoff_value + 1);
+        if (FAILED(hr)) { return hr; }
+        ++handoff_value;
+        ++handoff_signals;
+    }
+    last_submit_queue = q;
+    return S_OK;
+}
+
 HRESULT Client::loop(double seconds) {
     frames.clear();
     list_records.clear();
@@ -1660,9 +1975,8 @@ HRESULT Client::loop(double seconds) {
                 if (FAILED(hr)) { failure_where = "command list recording"; failure = hr; break; }
                 ListRecord& l = list_records[record.list_offset + k];
                 ID3D12CommandList* submit[]{frame_slots[slot].lists[k].Get()};
-                l.exec_qpc = measure::now();
-                queue->ExecuteCommandLists(1, submit);
-                l.exec_done_qpc = measure::now();
+                hr = submit_lists(frame, k, submit, 1, l.exec_qpc, l.exec_done_qpc);
+                if (FAILED(hr)) { failure_where = "queue submission"; break; }
                 record.execute_ticks += l.exec_done_qpc - l.exec_qpc;
             }
             record.record_cpu_ticks = record.record_ticks;
@@ -1675,9 +1989,9 @@ HRESULT Client::loop(double seconds) {
                 // truth: one call put all of them on the queue.
                 ID3D12CommandList* batch[64]{};
                 for (unsigned k = 0; k < o.lists; ++k) { batch[k] = frame_slots[slot].lists[k].Get(); }
-                const Qpc exec_begin = measure::now();
-                queue->ExecuteCommandLists(o.lists, batch);
-                const Qpc exec_end = measure::now();
+                Qpc exec_begin = 0, exec_end = 0;
+                hr = submit_lists(frame, 0, batch, o.lists, exec_begin, exec_end);
+                if (FAILED(hr)) { failure_where = "queue submission"; failure = hr; break; }
                 record.execute_ticks = exec_end - exec_begin;
                 for (unsigned k = 0; k < o.lists; ++k) {
                     ListRecord& l = list_records[record.list_offset + k];
@@ -1688,14 +2002,24 @@ HRESULT Client::loop(double seconds) {
                 for (unsigned k = 0; k < o.lists; ++k) {
                     ListRecord& l = list_records[record.list_offset + k];
                     ID3D12CommandList* submit[]{frame_slots[slot].lists[k].Get()};
-                    l.exec_qpc = measure::now();
-                    queue->ExecuteCommandLists(1, submit);
-                    l.exec_done_qpc = measure::now();
+                    hr = submit_lists(frame, k, submit, 1, l.exec_qpc, l.exec_done_qpc);
+                    if (FAILED(hr)) { failure_where = "queue submission"; break; }
                     record.execute_ticks += l.exec_done_qpc - l.exec_qpc;
                 }
+                if (FAILED(hr)) { failure = hr; break; }
             }
         }
 
+        // The swap chain belongs to queue 0, so when the frame's last list ran on the other queue the
+        // presented buffer is only complete after that queue's signal: queue 0 waits for it before the frame
+        // fence and the Present. Without this the arm would be measuring a torn frame, not a wake-up gap.
+        if (handoff_fence && o.handoff != Options::Handoff::None && handoff_value &&
+            last_submit_queue != queue.Get()) {
+            hr = queue->Wait(handoff_fence.Get(), handoff_value);
+            if (FAILED(hr)) { failure_where = "present handoff wait"; failure = hr; break; }
+            ++handoff_waits;
+            last_submit_queue = queue.Get();
+        }
         record.fence_value = next_fence_value++;
         record.signal_begin = measure::now();
         hr = queue->Signal(frame_slots[slot].fence.Get(), record.fence_value);
@@ -1714,9 +2038,13 @@ HRESULT Client::loop(double seconds) {
         }
         if (o.frame_statistics) {
             DXGI_FRAME_STATISTICS stats{};
+            ++frame_statistics_calls;
             if (SUCCEEDED(chain->GetFrameStatistics(&stats))) {
                 record.present_count = stats.PresentCount;
                 record.present_sync_qpc = stats.SyncQPCTime.QuadPart;
+                record.sync_refresh = stats.SyncRefreshCount;
+            } else {
+                ++frame_statistics_failures;
             }
         }
         record.end_qpc = measure::now();
@@ -1769,7 +2097,19 @@ void Client::analyse() {
     std::vector<double> interval, fence_wait, waitable_wait, cpu_work, record, record_cpu, execute, signal, present, frame_cpu;
     std::vector<double> gpu_busy, intra_total, intra_each, inter_gap, submit, wake, wake_blocking, span;
     std::vector<double> idle_total, idle_awaiting, idle_after;
+    std::vector<double> gap_idle, gap_after;
     const auto ms = [&](Qpc ticks) { return measure::qpc_to_ms(ticks, qpc_frequency); };
+    // The vblank grid of this run, fitted from every frame that got statistics (the warm-up frames included:
+    // they are as good for the grid as any, and the grid is not a measurement of the loop).
+    {
+        std::vector<measure::VblankSample> samples;
+        for (const FrameRecord& f : frames) {
+            if (f.present_sync_qpc && f.sync_refresh) { samples.push_back({f.sync_refresh, f.present_sync_qpc}); }
+        }
+        d.vblank = measure::fit_vblank(std::move(samples), qpc_frequency);
+    }
+    const double phase_window_ms = static_cast<double>(o.vblank_phase_us) / 1000.0;
+    d.uniform_share = measure::vblank_uniform_share(d.vblank, phase_window_ms);
     double gpu_busy_total = 0.0;
     size_t gpu_busy_frames = 0;
     for (size_t i = begin; i < end; ++i) {
@@ -1826,6 +2166,25 @@ void Client::analyse() {
                 idle_sum += ms(start_qpc - previous_end_qpc);
                 awaiting_sum += ms(submitted_qpc - previous_end_qpc);
                 after_sum += ms(start_qpc - submitted_qpc);
+                // The same gap once more, on its own, with the phase of its end against the vblank grid. The
+                // length decides which class it belongs to: the long gaps are the ones the investigation is
+                // about, and the short ones are this run's own control for the phase arithmetic.
+                const double gap_ms = ms(start_qpc - previous_end_qpc);
+                gap_idle.push_back(gap_ms);
+                gap_after.push_back(ms(start_qpc - submitted_qpc));
+                const double phase_ms = measure::vblank_phase_ms(d.vblank, start_qpc, qpc_frequency);
+                const bool aligned = phase_ms >= 0.0 && phase_ms <= phase_window_ms;
+                if (gap_ms >= 1.0) {
+                    ++d.gaps_ge_1ms;
+                    if (aligned) { ++d.gaps_ge_1ms_aligned; }
+                } else {
+                    ++d.gaps_lt_1ms;
+                    if (aligned) { ++d.gaps_lt_1ms_aligned; }
+                }
+                if (gap_ms >= 4.0) {
+                    ++d.gaps_ge_4ms;
+                    if (aligned) { ++d.gaps_ge_4ms_aligned; }
+                }
             }
             if (have_previous) {
                 idle_total.push_back(idle_sum);
@@ -1877,7 +2236,28 @@ void Client::analyse() {
     d.idle_total = measure::summarize(idle_total);
     d.idle_awaiting_submission = measure::summarize(idle_awaiting);
     d.idle_after_submission = measure::summarize(idle_after);
+    d.gap_idle = measure::summarize(gap_idle);
+    d.gap_after_submission = measure::summarize(gap_after);
+    // Shares only where the grid is usable AND the clock mapping is tight enough for a one-sided window of
+    // this width; without either the counts are reported and the shares stay null, because a share of zero
+    // would read as "nothing waited for a vblank".
+    d.phase_bracket_ms = clock_fit.applied ? clock_fit.bracket_ms : 0.0;
+    d.phase_bracket_usable = d.phase_bracket_ms <= phase_window_ms / 2.0;
+    if (d.vblank.ok && d.phase_bracket_usable) {
+        if (d.gaps_ge_1ms) {
+            d.aligned_share_ge_1ms = static_cast<double>(d.gaps_ge_1ms_aligned) / static_cast<double>(d.gaps_ge_1ms);
+        }
+        if (d.gaps_lt_1ms) {
+            d.aligned_share_lt_1ms = static_cast<double>(d.gaps_lt_1ms_aligned) / static_cast<double>(d.gaps_lt_1ms);
+        }
+        if (d.gaps_ge_4ms) {
+            d.aligned_share_ge_4ms = static_cast<double>(d.gaps_ge_4ms_aligned) / static_cast<double>(d.gaps_ge_4ms);
+        }
+    }
     if (d.interval.mean > 0.0) { d.fps = 1000.0 / d.interval.mean; }
+    // A rate, not a count: the pre-registered rule for this class is one gap a second, and the arms differ in
+    // length. d.seconds is the measured loop window, so a short arm is not credited with a long one's count.
+    if (d.seconds > 0.0) { d.gaps_ge_4ms_per_second = static_cast<double>(d.gaps_ge_4ms) / d.seconds; }
     // Is the GPU timeline on the same scale as the clock everything else is measured with? The means are used
     // because the accounting identity is per frame and survives averaging, while a p50 of a sum would not.
     d.gpu_accounted_ms = d.gpu_busy.mean + d.idle_total.mean;
@@ -1909,6 +2289,74 @@ void Client::analyse() {
     }
 }
 
+// The ICD log of this process: the header line (every knob with the source of its value) and the last periodic
+// submit line (the counters). Read at the end of the run, so the lines describe the loop that was measured. The
+// winsys writes a periodic line only every BC250_DEFERRED_SUMMARY_S seconds (30 by default) and its final line
+// at winsys teardown, which is after this: a short run therefore wants that knob set to a few seconds. Nothing
+// here fails the run; a missing or unreadable log leaves the fields empty and says why in icd_read, which the
+// lab runner refuses to compare (an instrument that can come back empty must say so, not print null).
+//
+// The ICD holds this log open for writing while the client runs (CreateFileA, GENERIC_WRITE, every share flag).
+// fopen_s opens with _SH_SECURE, which shares read only, so it is refused with a sharing violation for as long
+// as the ICD's handle lives: that was the empty icd block of the two C45 sets on 2026-10-05. _fsopen with
+// _SH_DENYNO shares write as well.
+void Client::read_icd_log() {
+    if (!o.icd_log.empty()) {
+        icd_log_path = o.icd_log;
+    } else {
+        char from_env[512]{};
+        DWORD length = GetEnvironmentVariableA("BC250_DEFERRED_LOG", from_env, sizeof(from_env));
+        if (length && length < sizeof(from_env)) {
+            icd_log_path = from_env;
+        } else {
+            char path[512]{};
+            sprintf_s(path, "C:\\BC250\\tmp\\amdgpu_wddm_radv-deferred-%lu.log",
+                      static_cast<unsigned long>(GetCurrentProcessId()));
+            icd_log_path = path;
+        }
+    }
+    std::FILE* file = _fsopen(icd_log_path.c_str(), "rb", _SH_DENYNO);
+    if (!file) {
+        const DWORD error = GetLastError();
+        char text[96]{};
+        sprintf_s(text, "open failed: errno %d, Win32 %lu", errno, static_cast<unsigned long>(error));
+        icd_read = text;
+        return;
+    }
+    // The last 256 KiB are enough for the newest lines of any run this client can make, and bound the read on a
+    // log that a long session has grown.
+    const long kTail = 256 * 1024;
+    std::fseek(file, 0, SEEK_END);
+    const long size = std::ftell(file);
+    std::fseek(file, size > kTail ? size - kTail : 0, SEEK_SET);
+    std::string text;
+    text.resize(static_cast<size_t>(size > kTail ? kTail : (size > 0 ? size : 0)));
+    const size_t read = text.empty() ? 0 : std::fread(&text[0], 1, text.size(), file);
+    text.resize(read);
+    std::fclose(file);
+    size_t begin = 0;
+    while (begin < text.size()) {
+        size_t end = text.find('\n', begin);
+        if (end == std::string::npos) { end = text.size(); }
+        const std::string line = text.substr(begin, end - begin);
+        // The first partial line of a tail read is skipped by the needles below: both appear whole or not at all.
+        if (line.find("header version=") != std::string::npos) { icd_header = line; }
+        if (line.find(" submit: ") != std::string::npos) { icd_submit_line = line; }
+        begin = end + 1;
+    }
+    icd_read = icd_submit_line.empty() ? (text.empty() ? "empty log" : "no submit line") : "ok";
+}
+
+// One "key=value" field of an ICD log line, or an empty string. The value ends at the next space.
+std::string icd_field(const std::string& line, const char* key) {
+    const std::string needle = std::string(" ") + key + "=";
+    const size_t at = line.find(needle);
+    if (at == std::string::npos) { return std::string(); }
+    const size_t from = at + needle.size();
+    const size_t to = line.find(' ', from);
+    return line.substr(from, to == std::string::npos ? std::string::npos : to - from);
+}
+
 bool Client::write_json() const {
     if (o.out.empty()) { return true; }
     std::FILE* file = nullptr;
@@ -1920,20 +2368,35 @@ bool Client::write_json() const {
     char description[256]{};
     WideCharToMultiByte(CP_UTF8, 0, adapter_desc.Description, -1, description, sizeof(description) - 1, nullptr, nullptr);
     std::fprintf(file, "{\n");
-    std::fprintf(file, "  \"client\": \"amdgpu_wddm_frameloop\",\n  \"schema\": 2,\n");
+    std::fprintf(file, "  \"client\": \"amdgpu_wddm_frameloop\",\n  \"schema\": 4,\n");
     std::fprintf(file, "  \"command_line\": \"%s\",\n", measure::escape(o.command_line).c_str());
     std::fprintf(file, "  \"config\": {\"seconds\": %u, \"gpu_ms\": %s, \"lists\": %u, \"latency\": %u, \"buffers\": %u,\n"
                        "              \"present_interval\": %u, \"tearing_requested\": %s, \"frame_latency_waitable\": %u,\n"
                        "              \"cpu_ms\": %s, \"groups\": %u, \"threads_per_group\": %u, \"calibrate_every\": %u,\n"
                        "              \"warmup\": %u, \"frame_statistics\": %s, \"timestamps\": %s, \"debug_layer\": %s,\n"
                        "              \"record_threads\": %u, \"effective_record_threads\": %u, \"submit\": \"%s\",\n"
-                       "              \"ts_hz\": %llu},\n",
+                       "              \"ts_hz\": %llu, \"vblank_phase_us\": %u,\n"
+                       "              \"queues\": %u, \"handoff\": \"%s\", \"signal_per_list\": %s},\n",
                  o.seconds, measure::number(o.gpu_ms).c_str(), o.lists, o.latency, o.buffers, o.present_interval,
                  o.tearing ? "true" : "false", o.waitable, measure::number(o.cpu_ms).c_str(), o.groups,
                  kThreadsPerGroup, o.calibrate_every, o.warmup, o.frame_statistics ? "true" : "false",
                  o.no_timestamps ? "false" : "true", o.debug_layer ? "true" : "false",
                  o.record_threads, effective_record_threads, submit_name(o.submit),
-                 static_cast<unsigned long long>(o.ts_hz));
+                 static_cast<unsigned long long>(o.ts_hz), o.vblank_phase_us,
+                 o.queues, handoff_name(o.handoff), o.signal_per_list ? "true" : "false");
+    // What the queues really saw. A handoff arm whose fence never moved did not run: these counters are the
+    // arm's own witness, in the same way the ICD counters witness a winsys knob.
+    std::fprintf(file, "  \"queue_handoff\": {\"queues_created\": %u, \"handoff\": \"%s\","
+                       " \"signal_per_list\": %s,\n"
+                       "                     \"fence_signals\": %zu, \"fence_waits\": %zu,"
+                       " \"fence_value\": %llu, \"last_queue\": \"%s\",\n"
+                       "                     \"queue_b_timestamp_frequency\": %llu,"
+                       " \"queue_clock_offset_ms\": %s, \"queue_clock_witness\": \"%s\"},\n",
+                 queue_b ? 2u : 1u, handoff_name(o.handoff), o.signal_per_list ? "true" : "false",
+                 handoff_signals, handoff_waits, static_cast<unsigned long long>(handoff_value),
+                 last_submit_queue == nullptr ? "none" : (last_submit_queue == queue.Get() ? "0" : "1"),
+                 static_cast<unsigned long long>(queue_b_timestamp_frequency),
+                 measure::number(queue_clock_offset_ms, 4).c_str(), queue_clock_witness);
     std::fprintf(file, "  \"host\": {\"qpc_frequency\": %lld, \"first_qpc\": %lld, \"gpu_timestamp_frequency\": %llu,\n"
                        "            \"gpu_timestamp_frequency_reported\": %llu, \"timestamp_frequency_overridden\": %s,\n"
                        "            \"dpi_awareness\": \"%s\", \"clock_points\": %zu, \"clock_drift_ppm\": %s},\n",
@@ -2030,7 +2493,62 @@ bool Client::write_json() const {
     measure::write_summary(file, "submit_to_gpu_start", d.submit_latency, ",");
     measure::write_summary(file, "gpu_end_to_wake", d.wake_latency, ",");
     measure::write_summary(file, "gpu_end_to_wake_blocking", d.wake_blocking, "");
+    // Every GPU gap on its own, and where its end sits in the refresh interval. aligned_share_ge_1ms is the
+    // number a scheduler hypothesis is read from; aligned_share_lt_1ms is the control that must stay near
+    // uniform_share, which is computed from the fitted period and the phase window, never remembered.
+    std::fprintf(file, "    },\n    \"gaps\": {\n");
+    measure::write_summary(file, "idle_ms", d.gap_idle, ",");
+    measure::write_summary(file, "after_submission_ms", d.gap_after_submission, ",");
+    std::fprintf(file, "      \"count_ge_1ms\": %zu, \"vblank_aligned_ge_1ms\": %zu, \"aligned_share_ge_1ms\": %s,\n"
+                       "      \"count_lt_1ms\": %zu, \"vblank_aligned_lt_1ms\": %zu, \"aligned_share_lt_1ms\": %s,\n"
+                       "      \"count_ge_4ms\": %zu, \"vblank_aligned_ge_4ms\": %zu, \"aligned_share_ge_4ms\": %s,\n"
+                       "      \"per_second_ge_4ms\": %s,\n"
+                       "      \"phase_window_us\": %u, \"uniform_share\": %s,\n"
+                       "      \"phase_bracket_ms\": %s, \"aligned_share_usable\": %s,\n"
+                       "      \"frame_statistics_calls\": %zu, \"frame_statistics_failures\": %zu,\n"
+                       "      \"vblank\": {\"fitted\": %s, \"samples\": %u, \"hz\": %s, \"period_ms\": %s,\n"
+                       "                 \"residual_us\": %s, \"origin_qpc\": %s, \"outliers\": %u}\n",
+                 d.gaps_ge_1ms, d.gaps_ge_1ms_aligned, measure::number(d.aligned_share_ge_1ms, 4).c_str(),
+                 d.gaps_lt_1ms, d.gaps_lt_1ms_aligned, measure::number(d.aligned_share_lt_1ms, 4).c_str(),
+                 d.gaps_ge_4ms, d.gaps_ge_4ms_aligned, measure::number(d.aligned_share_ge_4ms, 4).c_str(),
+                 measure::number(d.gaps_ge_4ms_per_second, 3).c_str(),
+                 o.vblank_phase_us, measure::number(d.uniform_share, 4).c_str(),
+                 measure::number(d.phase_bracket_ms, 4).c_str(), d.phase_bracket_usable ? "true" : "false",
+                 frame_statistics_calls, frame_statistics_failures,
+                 d.vblank.ok ? "true" : "false", d.vblank.samples, measure::number(d.vblank.hz, 3).c_str(),
+                 measure::number(d.vblank.hz > 0.0 ? 1000.0 / d.vblank.hz
+                                                   : std::numeric_limits<double>::quiet_NaN(), 4).c_str(),
+                 measure::number(d.vblank.residual_us, 1).c_str(),
+                 measure::number(d.vblank.origin_qpc, 0).c_str(), d.vblank.outliers);
     std::fprintf(file, "    }\n  },\n");
+
+    // The ICD's own witness of the run: which winsys knobs were in force, and the counters that say whether the
+    // arm under test did anything at all.
+    {
+        const std::string self_wait = icd_field(icd_submit_line, "self_wait");
+        const std::string coalesce = icd_field(icd_submit_line, "coalesce");
+        const auto count = [&](const char* key) {
+            const std::string value = icd_field(icd_submit_line, key);
+            if (value.empty()) { return std::string("null"); }
+            for (const char c : value) { if (c < '0' || c > '9') { return std::string("null"); } }
+            return value;
+        };
+        // wait_map_dropped and wait_self_busy travel with the other counters: wait_dropped is the sum of
+        // the two drops, so only wait_map_dropped compares with a log from before BC250_SELF_WAIT, and a
+        // nonzero wait_self_busy means one queue's record had more than one user, which makes the arm
+        // something other than what it says.
+        std::fprintf(file, "  \"icd\": {\"log\": \"%s\", \"read\": \"%s\", \"header\": \"%s\", \"submit_line\": \"%s\",\n"
+                           "          \"self_wait\": \"%s\", \"coalesce\": \"%s\", \"wait_self_seen\": %s,\n"
+                           "          \"wait_self_dropped\": %s, \"wait_self_busy\": %s, \"wait_objects\": %s,\n"
+                           "          \"wait_dropped\": %s, \"wait_map_dropped\": %s, \"wait_calls\": %s},\n",
+                     measure::escape(icd_log_path).c_str(), measure::escape(icd_read).c_str(),
+                     measure::escape(icd_header).c_str(),
+                     measure::escape(icd_submit_line).c_str(), measure::escape(self_wait).c_str(),
+                     measure::escape(coalesce).c_str(), count("wait_self_seen").c_str(),
+                     count("wait_self_dropped").c_str(), count("wait_self_busy").c_str(),
+                     count("wait_objects").c_str(), count("wait_dropped").c_str(),
+                     count("wait_map_dropped").c_str(), count("wait_calls").c_str());
+    }
 
     // Where the wall time went, as the phases ended. `ms` is the phase's own cost, `at_ms` its end since the
     // top of main, so a harness can size a task limit from a run instead of guessing at one.
@@ -2071,8 +2589,9 @@ bool Client::write_json() const {
                      static_cast<unsigned long>(f.present_hr), f.retired_valid ? static_cast<int>(f.retired) : -1,
                      f.drained ? "true" : "false", f.timestamps_valid ? "true" : "false", f.clock_point);
         if (f.waitable_end) { std::fprintf(file, ", \"waitable\": [%lld, %lld]", f.waitable_begin, f.waitable_end); }
-        if (o.frame_statistics) { std::fprintf(file, ", \"present_count\": %llu, \"sync_qpc\": %lld",
-                                              static_cast<unsigned long long>(f.present_count), f.present_sync_qpc); }
+        if (o.frame_statistics) { std::fprintf(file, ", \"present_count\": %llu, \"sync_qpc\": %lld, \"sync_refresh\": %llu",
+                                              static_cast<unsigned long long>(f.present_count), f.present_sync_qpc,
+                                              static_cast<unsigned long long>(f.sync_refresh)); }
         std::fprintf(file, ", \"lists\": [");
         for (unsigned k = 0; k < o.lists; ++k) {
             const ListRecord& l = list_records[f.list_offset + k];
@@ -2141,10 +2660,12 @@ int Client::run() {
         }
     }
     std::printf("frameloop: runtime=System32 adapter=\"%ls\" vendor=%04x device=%04x fl=%x %ux%u %s %u buffers,"
-                " submit %s, %u recording thread%s\n",
+                " submit %s, %u recording thread%s, %u queue%s, handoff %s%s\n",
                 adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
                 static_cast<unsigned>(feature_level), width, height, kBackBufferFormatName, o.buffers,
-                submit_name(o.submit), effective_record_threads, effective_record_threads == 1 ? "" : "s");
+                submit_name(o.submit), effective_record_threads, effective_record_threads == 1 ? "" : "s",
+                queue_b ? 2u : 1u, queue_b ? "s" : "", handoff_name(o.handoff),
+                o.signal_per_list ? ", signal per list" : "");
     std::fflush(stdout);
     take_clock_point();
     HRESULT hr = calibrate();
@@ -2190,6 +2711,7 @@ int Client::run() {
     loop(static_cast<double>(o.seconds));
     mark("loop");
     analyse();
+    read_icd_log();
     teardown();
     mark("teardown");
     g_writing.store(true);
@@ -2232,6 +2754,41 @@ int Client::run() {
     line("submit to gpu start ms", d.submit_latency);
     line("gpu end to cpu wake ms", d.wake_latency);
     line("  wake, blocking waits", d.wake_blocking);
+    line("gpu gap each ms", d.gap_idle);
+    line("  of it: after submit", d.gap_after_submission);
+    if (d.vblank.ok && d.phase_bracket_usable) {
+        std::printf("frameloop: vblank grid %.3f Hz from %u samples (worst %.1f us off the line, clock bracket"
+                    " %.3f ms); gaps >= 1 ms: %zu, %zu ending within %u us after a vblank (%.1f %%, uniform"
+                    " %.1f %%); gaps < 1 ms: %zu, %.1f %% aligned\n",
+                    d.vblank.hz, d.vblank.samples, d.vblank.residual_us, d.phase_bracket_ms, d.gaps_ge_1ms,
+                    d.gaps_ge_1ms_aligned, o.vblank_phase_us, 100.0 * d.aligned_share_ge_1ms,
+                    100.0 * d.uniform_share, d.gaps_lt_1ms, 100.0 * d.aligned_share_lt_1ms);
+        std::printf("frameloop: gaps >= 4 ms: %zu (%.2f/s), %zu ending within %u us after a vblank (%.1f %%,"
+                    " uniform %.1f %%); queues %u handoff %s, fence signals %zu waits %zu\n",
+                    d.gaps_ge_4ms, d.gaps_ge_4ms_per_second, d.gaps_ge_4ms_aligned, o.vblank_phase_us,
+                    100.0 * d.aligned_share_ge_4ms, 100.0 * d.uniform_share, queue_b ? 2u : 1u,
+                    handoff_name(o.handoff), handoff_signals, handoff_waits);
+    } else if (d.vblank.ok) {
+        std::printf("frameloop: vblank grid %.3f Hz, but the clock bracket is %.3f ms against a %u us window:"
+                    " the aligned shares are not reported (they would be an instrument artefact)\n",
+                    d.vblank.hz, d.phase_bracket_ms, o.vblank_phase_us);
+    } else if (o.frame_statistics) {
+        std::printf("frameloop: no vblank grid (%u usable statistics samples of %zu calls, %zu of which failed;"
+                    " %.3f Hz, worst %.1f us off the line): the phase of the gaps is not reported\n",
+                    d.vblank.samples, frame_statistics_calls, frame_statistics_failures, d.vblank.hz,
+                    d.vblank.residual_us);
+    }
+    if (!icd_submit_line.empty()) {
+        std::printf("frameloop: ICD %s self_wait=%s wait_self_seen=%s wait_self_dropped=%s wait_self_busy=%s"
+                    " wait_map_dropped=%s\n",
+                    icd_log_path.c_str(), icd_field(icd_submit_line, "self_wait").c_str(),
+                    icd_field(icd_submit_line, "wait_self_seen").c_str(),
+                    icd_field(icd_submit_line, "wait_self_dropped").c_str(),
+                    icd_field(icd_submit_line, "wait_self_busy").c_str(),
+                    icd_field(icd_submit_line, "wait_map_dropped").c_str());
+    } else {
+        std::printf("frameloop: ICD log %s not read back: %s\n", icd_log_path.c_str(), icd_read.c_str());
+    }
     if (!o.no_timestamps && d.gpu_over_interval > 0.0) {
         std::printf("frameloop: GPU timeline accounts %.3f ms per frame against a %.3f ms interval, ratio %.4f%s\n",
                     d.gpu_accounted_ms, d.interval.mean, d.gpu_over_interval,

@@ -1,0 +1,7 @@
+Redacted before the first commit (docs/01-evidence-rules.md). Counts only; the values are kept nowhere.
+
+- collect/dmesg-after.txt: 1 MAC address, 1 USB serial number
+- collect/dmesg-before.txt: 1 MAC address, 1 USB serial number
+
+Checked and found clean: every other text file of this directory (no MAC address, USB serial,
+UUID or IPv4 address). The lab network's addresses and host names never appear in these files.

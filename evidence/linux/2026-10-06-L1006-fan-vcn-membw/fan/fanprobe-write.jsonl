@@ -1,0 +1,58 @@
+{"kind": "identity", "cust_id": [22, 43], "date": [21, 7, 28], "fw": [1, 0], "hwm_cfg_0x180": 128, "tach_present": [0, 1, 2, 3, 4], "duty_present": [0, 1, 2, 3, 4], "t": 1791297379.498}
+{"kind": "fans", "rpm": [0, 1396, 0, 0, 0], "duty": [204, 204, 204, 204, 204, 0, 0, 0], "a28": [128, 128, 128, 128, 128, 128, 128, 128], "mode": 224, "cmd": 0, "status": 96, "t": 1791297379.498}
+{"kind": "monitors", "src": [[0, 70], [1, 136], [2, 137], [8, 102], [9, 103], [10, 104], [11, 108], [12, 109], [13, 118]], "val": [[0, 17920], [1, 15232], [2, 15232], [8, 12800], [9, 16384], [10, 16128], [11, 22272], [12, 14848], [13, 14080]], "t": 1791297379.499}
+{"kind": "timing", "us_per_register_read": 9.4, "port_ops_per_read": 4, "t": 1791297379.508}
+{"phase": "before", "rpm": 1396, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297379.509}
+{"phase": "before", "rpm": 1395, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297380.509}
+{"phase": "before", "rpm": 1400, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297381.51}
+{"phase": "before", "rpm": 1395, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297382.511}
+{"phase": "before", "rpm": 1395, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297383.511}
+{"step": "open", "status_before": 96, "status_after": 8, "polls": [0, 1], "t": 1791297384.513}
+{"step": "close", "status_before": 8, "status_after": 96, "polls": 3, "invalid": false, "locked": true, "t": 1791297384.516}
+{"step": "saved", "mode": 224, "a28": 128, "t": 1791297384.516}
+{"step": "open", "status_before": 96, "status_after": 8, "polls": [0, 1], "t": 1791297384.517}
+{"step": "set", "duty": 255, "readback": 255, "mode": 226, "t": 1791297384.517}
+{"step": "close", "status_before": 8, "status_after": 96, "polls": 3, "invalid": false, "locked": true, "t": 1791297384.521}
+{"phase": "duty255", "rpm": 1398, "duty": 204, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297384.521}
+{"phase": "duty255", "rpm": 1608, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297385.522}
+{"phase": "duty255", "rpm": 1678, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297386.522}
+{"phase": "duty255", "rpm": 1741, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297387.523}
+{"phase": "duty255", "rpm": 1744, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297388.524}
+{"phase": "duty255", "rpm": 1699, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297389.524}
+{"phase": "duty255", "rpm": 1741, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297390.525}
+{"phase": "duty255", "rpm": 1744, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297391.526}
+{"phase": "duty255", "rpm": 1699, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297392.526}
+{"phase": "duty255", "rpm": 1749, "duty": 255, "a28": 255, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297393.527}
+{"step": "open", "status_before": 96, "status_after": 8, "polls": [0, 1], "t": 1791297394.528}
+{"step": "set", "duty": 102, "readback": 102, "mode": 226, "t": 1791297394.528}
+{"step": "close", "status_before": 8, "status_after": 96, "polls": 3, "invalid": false, "locked": true, "t": 1791297394.531}
+{"phase": "duty102", "rpm": 1749, "duty": 255, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297394.532}
+{"phase": "duty102", "rpm": 1173, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297395.533}
+{"phase": "duty102", "rpm": 875, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297396.533}
+{"phase": "duty102", "rpm": 798, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297397.534}
+{"phase": "duty102", "rpm": 800, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297398.535}
+{"phase": "duty102", "rpm": 795, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297399.535}
+{"phase": "duty102", "rpm": 794, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297400.536}
+{"phase": "duty102", "rpm": 794, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297401.536}
+{"phase": "duty102", "rpm": 794, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297402.537}
+{"phase": "duty102", "rpm": 794, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.25, "t": 1791297403.538}
+{"phase": "duty102", "rpm": 771, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297404.538}
+{"phase": "duty102", "rpm": 773, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297405.539}
+{"phase": "duty102", "rpm": 773, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297406.539}
+{"phase": "duty102", "rpm": 772, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.375, "t": 1791297407.54}
+{"phase": "duty102", "rpm": 774, "duty": 102, "a28": 102, "mode": 226, "status": 96, "cmd": 0, "tctl": 70.5, "t": 1791297408.541}
+{"step": "open", "status_before": 96, "status_after": 8, "polls": [0, 1], "t": 1791297409.542}
+{"step": "restore", "a28": 128, "mode": 224, "t": 1791297409.542}
+{"step": "close", "status_before": 8, "status_after": 96, "polls": 4, "invalid": false, "locked": true, "t": 1791297409.546}
+{"phase": "after", "rpm": 774, "duty": 102, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.5, "t": 1791297409.547}
+{"phase": "after", "rpm": 1232, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.625, "t": 1791297410.548}
+{"phase": "after", "rpm": 1330, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.625, "t": 1791297411.548}
+{"phase": "after", "rpm": 1357, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.75, "t": 1791297412.549}
+{"phase": "after", "rpm": 1360, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.75, "t": 1791297413.549}
+{"phase": "after", "rpm": 1362, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.75, "t": 1791297414.55}
+{"phase": "after", "rpm": 1362, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.875, "t": 1791297415.551}
+{"phase": "after", "rpm": 1362, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.875, "t": 1791297416.551}
+{"phase": "after", "rpm": 1365, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 70.875, "t": 1791297417.552}
+{"phase": "after", "rpm": 1362, "duty": 204, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 71.0, "t": 1791297418.553}
+{"phase": "after", "rpm": 1368, "duty": 207, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 71.0, "t": 1791297419.553}
+{"phase": "after", "rpm": 1379, "duty": 207, "a28": 128, "mode": 224, "status": 96, "cmd": 0, "tctl": 71.0, "t": 1791297420.554}

@@ -370,6 +370,14 @@ namespace Bc250Mon
             cap.Append("cap ").Append(s.CapMHz.ToString(CultureInfo.InvariantCulture))
                .Append(" of ").Append(s.MaxMHz.ToString(CultureInfo.InvariantCulture)).Append(" MHz");
             cap.Append(", throttle ").Append(LabNames.DpmThrottleName(s.Throttle));
+            // The idle state (ABI 2, KMD 0.7.207): the point in force, and "(now)" while the clock sits there, as
+            // the driver's own log line reads. IdleMHz 0 is no idle state for this start, and an ABI 1 snapshot
+            // leaves the field zero, so the old panel text is what an older driver still shows.
+            if (s.IdleMHz != 0)
+            {
+                cap.Append(", idle ").Append(s.IdleMHz.ToString(CultureInfo.InvariantCulture)).Append(" MHz");
+                if ((s.Flags & DpmSnapshot.FlagIdle) != 0) cap.Append(" (now)");
+            }
             // Errors is the cumulative count of failed SMU transitions of this start (dpm.c). The governor gives
             // up only after BC250_DPM_ERROR_LIMIT = 3 failures in a row and resets the counter on every success,
             // so one recovered retry during a game is a statistic, not a stopped governor. Giving up is already

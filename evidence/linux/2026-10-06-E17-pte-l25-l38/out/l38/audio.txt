@@ -1,0 +1,102 @@
+01:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Cyan Skillfish [BC-250] [1002:13fe]
+01:00.1 Audio device [0403]: Advanced Micro Devices, Inc. [AMD/ATI] Device [1002:13ff]
+total 0
+dr-xr-xr-x    5 root     root             0 Oct  6 15:01 .
+dr-xr-xr-x  220 root     root             0 Oct  6 14:54 ..
+lrwxrwxrwx    1 root     root             5 Oct  6 15:01 Generic -> card0
+dr-xr-xr-x    2 root     root             0 Oct  6 15:01 card0
+-r--r--r--    1 root     root             0 Oct  6 15:01 cards
+-r--r--r--    1 root     root             0 Oct  6 15:01 devices
+-r--r--r--    1 root     root             0 Oct  6 15:01 hwdep
+-r--r--r--    1 root     root             0 Oct  6 15:01 modules
+dr-xr-xr-x    2 root     root             0 Oct  6 15:01 oss
+-r--r--r--    1 root     root             0 Oct  6 15:01 pcm
+dr-xr-xr-x    2 root     root             0 Oct  6 15:01 seq
+-r--r--r--    1 root     root             0 Oct  6 15:01 timers
+-r--r--r--    1 root     root             0 Oct  6 15:01 version
+ 0 [Generic        ]: HDA-Intel - HD-Audio Generic
+                      HD-Audio Generic at 0xfe880000 irq 51
+== /proc/asound/card0
+codec#0
+eld#0.0
+eld#0.1
+id
+monitor_present		1
+eld_valid		1
+codec_pin_nid		0x3
+codec_dev_id		0x0
+codec_cvt_nid		0x0
+monitor_name		LEN LT2452pwC
+connection_type		DisplayPort
+eld_version		[0x2] CEA-861D or below
+edid_version		[0x3] CEA-861-B, C or D
+manufacture_id		0xae30
+product_id		0x1144
+port_id			0x0
+support_hdcp		0
+support_ai		0
+audio_sync_delay	0
+speakers		[0x1] FL/FR
+sad_count		1
+sad0_coding_type	[0x1] LPCM
+sad0_channels		2
+sad0_rates		[0x1ee0] 32000 44100 48000 88200 96000 176400 192000
+sad0_bits		[0xe] 16 20 24
+monitor_present		0
+eld_valid		0
+codec_pin_nid		0x5
+codec_dev_id		0x0
+codec_cvt_nid		0x0
+Codec: ATI R6xx HDMI
+Address: 0
+AFG Function Id: 0x1 (unsol 0)
+Vendor Id: 0x1002aa01
+Subsystem Id: 0x00aa0100
+Revision Id: 0x100700
+No Modem Function Group found
+Default PCM:
+    rates [0x70]: 32000 44100 48000
+    bits [0x2]: 16
+    formats [0x1]: PCM
+Default Amp-In caps: N/A
+Default Amp-Out caps: N/A
+State of AFG node 0x01:
+  Power states:  D0 D3 CLKSTOP EPSS
+  Power: setting=D0, actual=D0, Clock-stop-OK
+GPIO: io=0, o=0, i=0, unsolicited=0, wake=0
+Node 0x02 [Audio Output] wcaps 0x221: Stereo Digital Stripe
+  Converter: stream=0, channel=0
+  Digital:
+  Digital category: 0x0
+  IEC Coding Type: 0x0
+Node 0x03 [Pin Complex] wcaps 0x400381: Stereo Digital
+  Pincap 0x00000094: OUT Detect HDMI
+  Pin Default 0x185600f0: [Jack] Digital Out at Int HDMI
+    Conn = Digital, Color = Unknown
+    DefAssociation = 0xf, Sequence = 0x0
+  Pin-ctls: 0x40: OUT
+  Unsolicited: tag=00, enabled=0
+  Connection: 1
+     0x02
+Node 0x04 [Audio Output] wcaps 0x221: Stereo Digital Stripe
+  Converter: stream=0, channel=0
+  Digital:
+[    0.005439] ACPI BIOS Warning (bug): Optional FADT field Pm2ControlBlock has valid Length but zero Address: 0x0000000000000000/0x1 (20250807/tbfadt-611)
+[   14.913969] snd_hda_intel 0000:01:00.1: enabling device (0000 -> 0002)
+[   14.947845] input: HD-Audio Generic HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:08.1/0000:01:00.1/sound/card0/input12
+[   14.947952] input: HD-Audio Generic HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:08.1/0000:01:00.1/sound/card0/input13
+[   42.516724] snd_hda_intel 0000:01:00.1: bound 0000:01:00.0 (ops amdgpu_dm_audio_component_bind_ops [amdgpu])
+[   42.728249] Modules linked in: amdgpu(+) drm_buddy amdxcp drm_panel_backlight_quirks gpu_sched drm_ttm_helper ttm drm_exec i2c_algo_bit drm_suballoc_helper drm_display_helper cec crc16 af_packet apple_mfi_fastcharge serio_raw pcspkr efi_pstore realtek r8169 mdio_devres snd_hda_codec_atihdmi libphy snd_hda_codec_hdmi mdio_bus i2c_piix4 i2c_smbus sp5100_tco k10temp snd_hda_intel snd_hda_codec snd_hda_core snd_intel_dspcfg snd_intel_sdw_acpi snd_hwdep snd_pcm snd_timer snd soundcore joydev input_leds mousedev intel_rapl_msr intel_rapl_common evdev button efivarfs uas hid_apple hid_generic nls_utf8 nls_cp437 vfat fat usbhid hid video wmi ahci libahci libata ohci_pci ohci_hcd xhci_pci xhci_hcd ehci_pci ehci_hcd nvme nvme_core hwmon usb_storage usbcore usb_common sd_mod scsi_mod scsi_common squashfs loop
+[   42.737114] Modules linked in: amdgpu(+) drm_buddy amdxcp drm_panel_backlight_quirks gpu_sched drm_ttm_helper ttm drm_exec i2c_algo_bit drm_suballoc_helper drm_display_helper cec crc16 af_packet apple_mfi_fastcharge serio_raw pcspkr efi_pstore realtek r8169 mdio_devres snd_hda_codec_atihdmi libphy snd_hda_codec_hdmi mdio_bus i2c_piix4 i2c_smbus sp5100_tco k10temp snd_hda_intel snd_hda_codec snd_hda_core snd_intel_dspcfg snd_intel_sdw_acpi snd_hwdep snd_pcm snd_timer snd soundcore joydev input_leds mousedev intel_rapl_msr intel_rapl_common evdev button efivarfs uas hid_apple hid_generic nls_utf8 nls_cp437 vfat fat usbhid hid video wmi ahci libahci libata ohci_pci ohci_hcd xhci_pci xhci_hcd ehci_pci ehci_hcd nvme nvme_core hwmon usb_storage usbcore usb_common sd_mod scsi_mod scsi_common squashfs loop
+snd_hda_codec_atihdmi    16384  1 
+snd_hda_codec_hdmi     61440  1 snd_hda_codec_atihdmi
+snd_hda_intel          61440  0 
+snd_hda_codec         212992  3 snd_hda_codec_atihdmi,snd_hda_codec_hdmi,snd_hda_intel
+snd_hda_core          147456  4 snd_hda_codec_atihdmi,snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec
+snd_intel_dspcfg       49152  1 snd_hda_intel
+snd_intel_sdw_acpi     16384  1 snd_intel_dspcfg
+snd_hwdep              24576  1 snd_hda_codec
+snd_pcm               192512  4 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec,snd_hda_core
+snd_timer              57344  1 snd_pcm
+snd                   155648  6 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec,snd_hwdep,snd_pcm,snd_timer
+soundcore              16384  1 snd

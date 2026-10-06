@@ -12,8 +12,12 @@
 #     task keeps writing to the lab's disk;
 #   - a failed session query is never read as absence (the lesson of the closure receipt);
 #   - the start script and the capture agree on the switches the start script passes (-GpuOnly, -SkipA,
-#     -SecondsB, -WorldLog, -ReserveSeconds, -Process, -PresentMode): a switch the capture does not know would
-#     be accepted by the task and silently ignored;
+#     -SecondsB, -WorldLog, -ReserveSeconds, -Process, -PresentMode, -SchedulerStacks): a switch the capture does
+#     not know would be accepted by the task and silently ignored;
+#   - the scheduler-stack mode (C49) keeps the one thing it must not break: it changes only PerfView's own
+#     collection, leaves the logman -gpu session as the packet-level source, and the start script puts
+#     -ReserveSeconds on the task's line exactly once, because two of them would fail the task with the game
+#     already running;
 #   - the closure receipt keeps its documented exit codes (1 sessions remain, 2 query failed, 3 producer
 #     running, 4 a helper could not be joined) and removes the task only after closure holds.
 #
@@ -72,7 +76,8 @@ Check 'the start script only passes switches the capture knows' {
     # would not be a parameter the task can pass.
     $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $here 'etw-capture.ps1'), [ref]$null, [ref]$null)
     $declared = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
-    foreach ($switch in @('-GpuOnly', '-SkipA', '-SecondsB', '-WorldLog', '-ReserveSeconds', '-Process', '-PresentMode')) {
+    foreach ($switch in @('-GpuOnly', '-SkipA', '-SecondsB', '-WorldLog', '-ReserveSeconds', '-Process',
+                          '-PresentMode', '-SchedulerStacks')) {
         if ($declared -notcontains $switch.Substring(1)) { throw "etw-capture.ps1 has no $switch" }
     }
     # The task's argument line is built on the lines that assign $fps and on the action line, after its -File.
@@ -104,6 +109,53 @@ Check 'the closure receipt keeps its exit codes and removes the task last' {
     $closure = $text.LastIndexOf("'closure established")
     $remove = $text.LastIndexOf('Unregister-ScheduledTask')
     if ($remove -lt 0 -or $closure -lt 0 -or $remove -gt $closure) { throw 'the task is not removed before the closure line' }
+}
+Check 'the scheduler-stack mode changes only the PerfView collection' {
+    $text = Text 'etw-capture.ps1'
+    Needs 'etw-capture.ps1' @('[switch]$SchedulerStacks',
+        'if ($SchedulerStacks -and !$GpuOnly) {',
+        '/StackCompression',
+        '/KernelEvents:Process,Thread,ImageLoad,ContextSwitch,Dispatcher,DeferedProcedureCalls,Interrupt',
+        '/Providers:`"Microsoft-Windows-DxgKrnl:0x88008001:5:@EventIDsToEnable=$ids;@EventIDStacksToEnable=$stackIds`"',
+        "`$ids = '20 238 436 175 176 177 181 17 18 19 22'",
+        "`$stackIds = '20 238 436'")
+    # PerfView 3.2.8's help: /Providers is "a comma separated list of specifications for providers" and
+    # "@EventIDsToEnable - a space separated list of decimal event ID numbers". A comma inside either list would
+    # split the spec into providers named "238", "436" and so on; PerfView would then enable one id and no stack
+    # filter, which is the one thing this mode exists for, and nothing at run time would say so.
+    foreach ($line in @("`$ids = ", "`$stackIds = ")) {
+        $value = $text.Substring($text.IndexOf($line) + $line.Length)
+        $value = $value.Substring(0, $value.IndexOf("`n"))
+        if ($value.Contains(',')) { throw "the event-id list $line is comma separated; PerfView wants spaces" }
+        if ($value -notmatch "^'[0-9 ]+'") { throw "the event-id list $line is not a quoted space-separated list" }
+    }
+    # The spec must reach PerfView as ONE argv element, so it carries its own quotes (neither shell adds them).
+    if ($text -notmatch '\$spec\s*=\s*"/Providers:`"') { throw 'the provider spec is not one quoted element' }
+    # The expensive kernel groups must not come back with the stacks: /Profile cost 1.6 ms a frame on the lab.
+    $at = $text.IndexOf('if ($SchedulerStacks -and !$GpuOnly) {')
+    $block = $text.Substring($at)
+    $end = $block.IndexOf("`n    }")
+    if ($end -lt 0) { throw 'the scheduler-stack branch is not one indented block any more' }
+    $block = $block.Substring(0, $end)
+    foreach ($group in @('Profile', 'DiskIO', 'MemoryHardFaults', '/ThreadTime')) {
+        if ($block.Contains($group)) { throw "the scheduler-stack collection asks for $group again" }
+    }
+    if ($block.Contains('logman')) { throw 'the scheduler-stack branch touches the logman session' }
+    # The packet-level source keeps its own unfiltered provider line, whatever the mode.
+    Needs 'etw-capture.ps1' @("@('-p', 'Microsoft-Windows-DxgKrnl', '0xffffffffffffffff', '5')")
+}
+Check 'the start script passes -ReserveSeconds once and refuses a window the mode cannot use' {
+    $text = Text 'etw-start.ps1'
+    Needs 'etw-start.ps1' @('[switch]$SchedulerStacks',
+        'the staged etw-capture.ps1 has no -SchedulerStacks',
+        '-SchedulerStacks needs the CPU window',
+        '-SchedulerStacks needs -WorldSeconds N')
+    # Exactly one place may put -ReserveSeconds into the task's argument line. Only the lines that build that
+    # line are read, so a comment or a refusal message that spells the switch does not count; two of them on the
+    # line would fail the task as a duplicate parameter, with the game already running.
+    $argLines = @($text -split "`n" | Where-Object { $_ -match '\$fps\s*\+?=' -or $_ -match 'New-ScheduledTaskAction' })
+    $inArgs = ([regex]::Matches(($argLines -join "`n"), '-ReserveSeconds')).Count
+    if ($inArgs -ne 1) { throw "the task line carries -ReserveSeconds $inArgs times, not once" }
 }
 Check 'the capture writes its own notes file next to the trial' {
     Needs 'etw-capture.ps1' @("Join-Path `$Root 'etw-notes.txt'")

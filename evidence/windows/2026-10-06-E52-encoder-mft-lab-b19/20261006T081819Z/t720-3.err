@@ -1,0 +1,8 @@
+[mft t14404] client device on adapter 1002:13FE
+[mft t14404] pipeline depth 1
+[mft t14404] gpu picture: record 6.787 ms, readback 15.077 ms (map wait 14.148), query wait 0.050 ms, gpu 11.448 ms (valid 1), 0 still in flight
+[mft t14404] gpu picture: record 0.126 ms, readback 4.573 ms (map wait 4.350), query wait 0.009 ms, gpu 3.623 ms (valid 1), 0 still in flight
+[mft t14404] gpu picture: record 0.138 ms, readback 4.342 ms (map wait 4.105), query wait 0.014 ms, gpu 3.578 ms (valid 1), 0 still in flight
+[mft t14404] gpu picture: record 0.134 ms, readback 4.058 ms (map wait 3.832), query wait 0.009 ms, gpu 3.590 ms (valid 1), 0 still in flight
+[mft t14404] gpu picture: record 0.158 ms, readback 4.093 ms (map wait 3.849), query wait 0.009 ms, gpu 3.577 ms (valid 1), 0 still in flight
+[mft t14404] gpu picture: record 0.140 ms, readback 4.214 ms (map wait 3.863), query wait 0.017 ms, gpu 3.566 ms (valid 1), 0 still in flight

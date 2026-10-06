@@ -1,0 +1,62 @@
+== output   /media/usb/l1006c/out/cold2/collect
+== scripts  /media/usb/l1006c/e21
+== stamp    20261006T152041Z (UTC; the stick reads the RTC as UTC, so file times inside run two hours ahead)
+== kernel   6.18.52-0-lts
+== steps    pre sweep
+
+== ---- step pre start 15:20:41Z
+== kernel and boot
+Linux bc250diag 6.18.52-0-lts #1-Alpine SMP PREEMPT_DYNAMIC 2026-09-15 05:37:48 x86_64 Linux
+BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=network
+==    WARNING: this is not the bc250.mode=readonly entry - check grub.cfg
+== boot history is the owner's to tell: cold or warm. uptime:
+ 15:20:41 up 0 min,  0 users,  load average: 0.25, 0.07, 0.02
+== amdgpu loaded? (empty is what this step wants)
+==    ! lsmod amdgpu (1 = absent, which is right here) rc=1
+== memory: the whole session lives in RAM
+MemTotal:        7852456 kB
+MemFree:         6923304 kB
+MemAvailable:    7133440 kB
+Buffers:            6212 kB
+tmpfs                     3.7G    306.2M      3.4G   8% /
+== PCI view
+00:00.0 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel Root Complex [1022:13e0]
+00:01.0 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel PCIe Dummy Host Bridge [1022:13e2]
+00:08.0 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel PCIe Dummy Host Bridge [1022:13e2]
+00:08.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Ariel Internal PCIe GPP Bridge 0 to Bus A [1022:13e5]
+00:10.0 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] FCH USB XHCI Controller [1022:7814] (rev 09)
+00:11.0 SATA controller [0106]: Advanced Micro Devices, Inc. [AMD] FCH SATA Controller [AHCI mode] [1022:7801] (rev 40)
+00:12.0 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] FCH USB OHCI Controller [1022:7807] (rev 11)
+00:12.2 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] FCH USB EHCI Controller [1022:7808] (rev 11)
+00:13.0 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] FCH USB OHCI Controller [1022:7807] (rev 11)
+00:13.2 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] FCH USB EHCI Controller [1022:7808] (rev 11)
+00:14.0 SMBus [0c05]: Advanced Micro Devices, Inc. [AMD] FCH SMBus Controller [1022:780b] (rev 16)
+00:14.3 ISA bridge [0601]: Advanced Micro Devices, Inc. [AMD] FCH LPC Bridge [1022:780e] (rev 11)
+00:14.4 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] FCH PCI Bridge [1022:780f] (rev 40)
+00:14.5 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] FCH USB OHCI Controller [1022:7809] (rev 11)
+00:15.0 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Hudson PCI to PCI bridge (PCIE port 0) [1022:43a0]
+00:15.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Hudson PCI to PCI bridge (PCIE port 1) [1022:43a1]
+00:18.0 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel Device 24: Function 0 [1022:13f0]
+00:18.1 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel Device 24: Function 1 [1022:13f1]
+00:18.2 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel Device 24: Function 2 [1022:13f2]
+00:18.3 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Ariel Device 24: Function 3 [1022:13f3]
+== GPU function 0000:01:00.0
+== PSP/CCP function 1022:143e (wishlist L13, already answered - a cheap re-check)
+== M.2 root port 00:15.0 (wishlist L12: only a row if this boot's warm/cold state is recorded)
+		DevSta:	CorrErr- NonFatalErr- FatalErr- UnsupReq- AuxPwr- TransPend-
+		LnkSta:	Speed 5GT/s, Width x2
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+== interrupts
+            CPU0       CPU1       CPU2       CPU3       CPU4       CPU5       CPU6       CPU7       CPU8       CPU9       CPU10      CPU11      
+== ---- step pre rc=0 after 0s
+== ---- step sweep start 15:20:41Z
+== pre-driver sweep, streamed: the last unfinished line is the register that hung us
+==    6315 lines
+# sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:20:41Z
+GC.SDMA0_DEC_START 0x04980 00000000
+== positive control: the two values every later reading is checked against
+GC.CC_GC_SHADER_ARRAY_CONFIG 0x089bc FFF80000
+GC.GB_ADDR_CONFIG 0x098f8 00000044
+== ---- step sweep rc=0 after 21s
+== done. Pull it with:  tar -C /media/usb/l1006c/out/cold2 -cf - collect

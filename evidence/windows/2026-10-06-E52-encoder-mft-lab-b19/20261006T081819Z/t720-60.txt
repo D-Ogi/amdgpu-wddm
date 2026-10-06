@@ -1,0 +1,21 @@
+encode: 1280x720, 60 frames, qp 26, gop 60, deblocking on, source CPU synthetic (I420)
+  80x45 macroblocks, coded 1280x720, level 31
+  import exact: every visible sample of picture 0 reached the GPU unchanged
+  decoder returned 60 of 60 pictures
+  60 of 60 pictures bit exact against the inbox decoder
+  nnz agreement GPU vs CPU: exact (0 disagreements)
+  key frames 1, skipped macroblocks 0 of 216000
+  1932665 bytes, 7730660 bit/s at 30 Hz, mean PSNR(Y) 48.19 dB
+  timing over 50 of 60 pictures (the first 10 are encoded and checked, not timed)
+  6.54 ms per picture total, 3.61 ms of it on the GPU, 153.0 pictures per second
+  per picture: gpu stage 4.77 ms (gpu busy 3.61, readback 4.25), cpu 1.76 ms (cavlc 1.70, nal 0.06)
+  per picture: command recording 0.14 ms, map wait 3.93 ms, readback transfer 0.32 ms
+  per picture profile accounted for every picture: yes
+  stream written to C:\BC250\tmp\e52\20261006T081819Z\t720-60\mfthost-encode.264
+  pipelined pass: depth 2, the same 60 pictures
+    1932665 bytes against 1932665 serial, byte identical
+    2.46 ms per picture, 3.61 ms of it on the GPU, 406.3 pictures per second
+    per picture: record 0.27 ms, map wait 0.00 ms, readback 0.22 ms, cpu 1.66 ms
+    60 pictures retired, 50 of them timed; the test spent 2.14 ms a picture making them, which the clock above leaves out
+
+ALL PASS

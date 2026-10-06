@@ -1,0 +1,21 @@
+>> P:\bc-250\bc250-win\tools\win\bc250mon\mon.py status E52: the H.264 encoder MFT on the GPU, 3 min, no driver change info
+{'ok': True}
+  exit 0
+>> P:\bc-250\bc250-win\tools\win\target.py ps P:\bc-250\scratch\m15\video-encode\lab-e52\lab-e52.ps1
+REFUSED/FAILED: A machine-wide registration of our transform is on this machine and it is not the installed release's own (foreign: C:\Program Files\amdgpu-wddm\mft\amdgpu_wddm_mft_h264.dll is 141969A3, not the pinned D3E29E6E): SOFTWARE\Classes\MediaFoundation\Transforms\A32438F0-0D79-4CA9-A5BF-9F3C80837253 [Registry64] SOFTWARE\Classes\MediaFoundation\Transforms\Categories\F79EAC7D-E545-4387-BDEE-D647D7BDE42A\A32438F0-0D79-4CA9-A5BF-9F3C80837253 [Registry64] SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253} [Registry64]
+policy     not-needed (this run wrote no policy value)
+machine-wide MFT registration: foreign: C:\Program Files\amdgpu-wddm\mft\amdgpu_wddm_mft_h264.dll is 141969A3, not the pinned D3E29E6E before and after, not touched by this run
+tctl       after 65.1 C (source overlay)
+kmd        after faults 0, timeouts 0; driver 0x000700D0, requested dpm, reason none, generation 320562495, ticks 133996, uptime 4195134 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 217 exits 216 refusals 0, 2040338 ms at the point
+kmd health unknown (faults -1 -> 0, timeouts -1 -> 0)
+
+not run in this trial:
+  texin bgra-plain, bgra-slice: runnable, but mfthost runs the four --texin cases in one process and the NV12
+    pair between them removes the device; the BGRA pair passed on unit A in train b18 (120/120 at 1920x1080)
+  texin nv12-plain, nv12-slice: BD-071, fixed on m14/d3d11-nv12-planes, not installed on b18r1 (-IncludeTexin forces them)
+  compare: nothing is skipped here any more; the owner asked for it on the lab (-IncludeCompare:$false drops it)
+  Game Bar, Windows Camera, Chromium (E52 stages 1 and 5): they need the machine-wide route A registration,
+    which this trial does not write; a separate trial, with --register-global and --unregister-global in it
+
+VERDICT exit=1: a case did not pass, or no case ran; a machine-wide MFT registration not from the release (foreign: C:\Program Files\amdgpu-wddm\mft\amdgpu_wddm_mft_h264.dll is 141969A3, not the pinned D3E29E6E); KMD health unknown
+  exit 1

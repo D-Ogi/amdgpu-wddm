@@ -70,6 +70,8 @@ GB = 1024 * 1024 * 1024
 # are exactly what WDDM will ask bc250_pte.c for (ReserveGpuVirtualAddress becomes a sparse
 # mapping, and VidMm sets NoAllocate on entries it does not want cached), so they are the only
 # page table question left that hardware alone can answer.
+# PRT rows carry AMDGPU_VM_PAGE_PRT alone: amdgpu_gem_va_ioctl admits only DELAY_UPDATE|PRT for a
+# sparse mapping and returns EINVAL for PRT with R/W (first run on unit A, 2026-10-06).
 PLAN = [
     ("rw",      0 * PAGE,        PAGE, "GTT",  ("R", "W", "X"), 0xE17B0001),
     ("ro",      1 * PAGE,        PAGE, "GTT",  ("R",),          0xE17B0002),
@@ -81,8 +83,8 @@ PLAN = [
     ("vram2m",  6 * M2,          M2,   "VRAM", ("R", "W"),      0xE17B0008),
     ("far1g",   1 * GB,          PAGE, "GTT",  ("R", "W"),      0xE17B0009),
     ("far512g", 512 * GB,        PAGE, "GTT",  ("R", "W"),      0xE17B000A),
-    ("prt4k",   8 * M2,          PAGE, "PRT",  ("R", "W", "P"), 0),
-    ("prt2m",   10 * M2,         M2,   "PRT",  ("R", "W", "P"), 0),
+    ("prt4k",   8 * M2,          PAGE, "PRT",  ("P",),          0),
+    ("prt2m",   10 * M2,         M2,   "PRT",  ("P",),          0),
 ]
 
 FLAG_NAMES = {"R": "AMDGPU_VM_PAGE_READABLE", "W": "AMDGPU_VM_PAGE_WRITEABLE",

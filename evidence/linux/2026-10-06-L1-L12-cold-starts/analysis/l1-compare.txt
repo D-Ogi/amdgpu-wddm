@@ -1,0 +1,70 @@
+== sweeps
+warm-after-windows  registers 5021  skipped 1160  uptime 29.46  amdgpu_loaded 0  | # sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:15:14Z
+cold1               registers 5021  skipped 1160  uptime 29.35  amdgpu_loaded 0  | # sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:18:25Z
+cold2               registers 5021  skipped 1160  uptime 37.46  amdgpu_loaded 0  | # sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:20:41Z
+cold3               registers 5021  skipped 1160  uptime 37.23  amdgpu_loaded 0  | # sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:22:58Z
+warm-after-amdgpu   registers 5021  skipped 1160  uptime 33.09  amdgpu_loaded 0  | # sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:24:42Z
+
+== registers that differ, pairwise
+cold1 vs cold2: 468
+cold2 vs cold3: 450
+cold1 vs cold3: 472
+cold1 vs warm-after-windows: 690
+cold3 vs warm-after-amdgpu: 506
+warm-after-windows vs warm-after-amdgpu: 190
+
+== registers that vary across the three cold starts: 557
+by block: {'GC': 555, 'MP0': 1, 'MP1': 1}
+outside GC: ['MP0.MP0_SMN_C2PMSG_81', 'MP1.MP0_SMN_C2PMSG_81']
+largest pairwise bit distance per register: median 2, 1 to 3 bits 477, maximum 18
+widest: GC.RLC_REFCLOCK_TIMESTAMP_LSB 18, GC.RLC_GPU_CLOCK_32 18, GC.SQ_TIME_LO 16, GC.PA_SC_CLIPRECT_1_TL 10, MP0.MP0_SMN_C2PMSG_81 8, MP1.MP0_SMN_C2PMSG_81 7
+warm-after-windows: of these 557, 385 read 0, 12 equal cold3, 28 equal one of the cold values
+warm-after-amdgpu: of these 557, 359 read 0, 166 equal cold3, 166 equal one of the cold values
+
+== selected registers
+register                        warm-after-windows  cold1               cold2               cold3               warm-after-amdgpu   
+GC.GB_ADDR_CONFIG               00000044            00000044            00000044            00000044            00000044            
+GC.CC_GC_SHADER_ARRAY_CONFIG    FFF80000            FFF80000            FFF80000            FFF80000            FFF80000            
+GC.CP_ME_CNTL                   15000000            15000000            15000000            15000000            15000000            
+GC.CP_MEC_CNTL                  50000000            50000000            50000000            50000000            50000000            
+GC.RLC_CNTL                     00000000            00000000            00000000            00000000            00000000            
+GC.RLC_STAT                     00000000            00000000            00000000            00000000            00000000            
+GC.SDMA0_F32_CNTL               00000001            00000001            00000001            00000001            00000001            
+GC.SDMA1_F32_CNTL               00000001            00000001            00000001            00000001            00000001            
+GC.SDMA0_STATUS_REG             46DEE557            46DEE557            46DEE557            46DEE557            46DEE557            
+GC.SDMA1_STATUS_REG             46DEE557            46DEE557            46DEE557            46DEE557            46DEE557            
+GC.GRBM_STATUS                  00003028            00003028            00003028            00003028            00003028            
+GC.GRBM_STATUS2                 00000008            00000008            00000008            00000008            00000008            
+GC.GRBM_STATUS_SE0              00000006            00000006            00000006            00000006            00000006            
+GC.CP_RB0_BASE                  FEDCBAEF            FEDCBAEF            FEDCBAEF            FEDCBAEF            FEDCBAEF            
+GC.CP_RB0_RPTR                  00000000            00000000            00000000            00000000            00000000            
+GC.CP_RB0_WPTR                  00000000            00000000            00000000            00000000            00000000            
+MP0.MP0_SMN_C2PMSG_33           80000000            80000000            80000000            80000000            80000000            
+MP0.MP0_SMN_C2PMSG_35           FFFFFFFF            FFFFFFFF            FFFFFFFF            FFFFFFFF            FFFFFFFF            
+MP0.MP0_SMN_C2PMSG_64           80000000            80000000            80000000            80000000            80000000            
+MP0.MP0_SMN_C2PMSG_81           002B3EF6            004314EE            0043192E            00431AC5            002B2155            
+MP1.MP0_SMN_C2PMSG_81           002B3F30            00431529            00431970            00431B10            002B2190            
+GC.COMPUTE_DIM_X                00000030            D99B8C42            59938C43            D99B8E42            D99B8E42            
+GC.COMPUTE_DIM_Y                00000001            1E32E98D            0E32E98D            0E32E98D            0E32E98D            
+GC.COMPUTE_DIM_Z                00000001            D797F9EA            D797F9EA            9797F9EA            9797F9EA            
+GC.COMPUTE_NUM_THREAD_X         00400040            1F79B7BB            5B79B7BB            5FF9B7BB            5FF9B7BB            
+GC.COMPUTE_NUM_THREAD_Y         00010001            33B70DDE            33B709D6            33B709DE            33B709DE            
+GC.COMPUTE_NUM_THREAD_Z         00010001            5F9D79D3            5F9D79D3            5F9D79DB            5F9D79DB            
+GC.COMPUTE_PGM_LO               010028C3            CA0E1F23            CA0E1F23            CA0E1F23            CA0E1F23            
+GC.COMPUTE_PGM_HI               00000000            93BCB7BC            93BCB7BC            93BCB7BC            93BCB7BC            
+GC.COMPUTE_PGM_RSRC1            202C0001            89D9D1BF            89D9D1BF            89D993BF            89D993BF            
+GC.COMPUTE_PGM_RSRC2            0000008C            4B8BA01F            4B8BA41F            4B8BA41F            4B8BA41F            
+GC.COMPUTE_PGM_RSRC3            00000000            4ABABAD3            4A3ABA93            4A3ABA97            4A3ABA97            
+GC.COMPUTE_TMPRING_SIZE         00021500            5B91D6FE            5991D6FE            5991D6FE            5991D6FE            
+GC.COMPUTE_VMID                 29FC8BB1            09FC8BB9            09EC8BB1            09EC8BB1            09EC8BB1            
+GC.COMPUTE_DISPATCH_INITIATOR   00002047            A6BD9D54            A69D9D54            A6BD9D54            A6BD9D54            
+GC.COMPUTE_RESOURCE_LIMITS      01000000            39F6A3FB            39F6A3FB            39F6A3FB            39F6A3FB            
+
+== warm-after-windows vs warm-after-amdgpu: 190, by name prefix: {'PA': 66, 'SPI': 55, 'COMPUTE': 42, 'CP': 10, 'GRBM': 6, 'VGT': 4, 'RLC': 2, 'SQ': 2, 'MP0': 2, 'RMI': 1}
+
+== M.2 root port 00:15.0 (m2-full.txt)
+warm-after-windows  LnkCap 5GT/s x2  LnkSta 5GT/s x2  nvme0 yes  03:00.0 below the port yes  AER capability no  aer_* files none
+cold1               LnkCap 5GT/s x2  LnkSta 5GT/s x2  nvme0 yes  03:00.0 below the port yes  AER capability no  aer_* files none
+cold2               LnkCap 5GT/s x2  LnkSta 5GT/s x2  nvme0 yes  03:00.0 below the port yes  AER capability no  aer_* files none
+cold3               LnkCap 5GT/s x2  LnkSta 5GT/s x2  nvme0 yes  03:00.0 below the port yes  AER capability no  aer_* files none
+warm-after-amdgpu   LnkCap 5GT/s x2  LnkSta 5GT/s x2  nvme0 yes  03:00.0 below the port yes  AER capability no  aer_* files none

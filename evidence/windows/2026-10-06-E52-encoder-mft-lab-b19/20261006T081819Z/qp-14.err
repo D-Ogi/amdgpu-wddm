@@ -1,0 +1,5 @@
+[mft t12640] client device on adapter 1002:13FE
+[mft t12640] pipeline depth 1
+[mft t12640] gpu picture: record 0.370 ms, readback 6.327 ms (map wait 5.980), query wait 0.019 ms, gpu 3.080 ms (valid 1), 0 still in flight
+[mft t12640] gpu picture: record 0.059 ms, readback 1.288 ms (map wait 1.247), query wait 0.006 ms, gpu 0.750 ms (valid 1), 0 still in flight
+[mft t12640] gpu picture: record 0.048 ms, readback 1.026 ms (map wait 0.996), query wait 0.009 ms, gpu 0.744 ms (valid 1), 0 still in flight

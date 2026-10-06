@@ -1,0 +1,73 @@
+== ip_discovery in full (wishlist L19) -> /media/usb/l1006b/out/e17/ip_discovery.txt
+305 /media/usb/l1006b/out/e17/ip_discovery.txt
+== hardware id 12 (UVD/VCN), which is the row L19 was written for
+ip_discovery/die/0/12/0/base_addr 0x00007800 0x00007E00 0x02403000 
+ip_discovery/die/0/12/0/harvest 0x0 
+ip_discovery/die/0/12/0/hw_id 12 
+ip_discovery/die/0/12/0/major 2 
+ip_discovery/die/0/12/0/minor 0 
+ip_discovery/die/0/12/0/num_base_addresses 3 
+ip_discovery/die/0/12/0/num_instance 0 
+ip_discovery/die/0/12/0/revision 3 
+== display state (wishlist L8 leftovers): link rate, lane count, which instances carry the output
+164 /media/usb/l1006b/out/e17/dtn_log.txt
+HUBP:  drq_exp_m  prq_exp_m  mrq_exp_m  crq_exp_m  plane1_ba  L:chunk_s  min_chu_s  meta_ch_s  min_m_c_s  dpte_gr_s  mpte_gr_s  swath_hei  pte_row_h  C:chunk_s  min_chu_s  meta_ch_s  min_m_c_s  dpte_gr_s  mpte_gr_s  swath_hei  pte_row_h
+OTG:  v_bs  v_be  v_ss  v_se  vpol  vmax  vmin  vmax_sel  vmin_sel  h_bs  h_be  h_ss  h_se  hpol  htot  vtot  underflow blank_en
+L_ENC: DPHY_FEC_EN  DPHY_FEC_READY_SHADOW  DPHY_FEC_ACTIVE_STATUS  DP_LINK_TRAINING_COMPLETE
+-- /sys/class/drm/card1-DP-1/ status connected enabled enabled
+-- /sys/class/drm/card1-DP-2/ status disconnected enabled disabled
+== GDS, GWS and OA, which the winsys document lists as open question 6
+simd_count 0
+simd_id_base 0
+max_waves_per_simd 0
+lds_size_in_kb 0
+gds_size_in_kb 0
+num_gws 0
+array_count 0
+simd_arrays_per_engine 0
+cu_per_simd_array 0
+simd_per_cu 0
+simd_count 48
+simd_id_base 2147487744
+== sa_info and fence_info, for the record
+40 /media/usb/l1006b/out/e17/sa_info.txt
+--- ring 0 (gfx_0.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+Last preempted               0x00000000
+Last reset                   0x00000000
+Last both                    0x00000000
+--- ring 1 (comp_1.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 3 (comp_1.2.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 4 (comp_1.3.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 5 (comp_1.0.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 6 (comp_1.1.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 7 (comp_1.2.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 8 (comp_1.3.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 9 (kiq_0.2.1.0) ---
+Last signaled fence          0x00000003
+Last emitted                 0x00000003
+--- ring 10 (sdma0) ---
+Last signaled fence          0x00000022
+Last emitted                 0x00000022
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000

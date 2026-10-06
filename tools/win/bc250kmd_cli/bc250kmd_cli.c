@@ -531,16 +531,17 @@ static int Clock(int argc,wchar_t** argv)
 
 #ifndef BC250_ESCAPE_RUN_DPM
 // Only for a driver/kmd/bc250kmd_escape.h that predates the DPM escape (KMD 0.7.175 and later); this tree's header
-// defines it, so here the block drops out. It is the 0.7.177 definition under the header's own names;
+// defines it, so here the block drops out. It is the 0.7.207 definition under the header's own names;
 // tools/win/bc250mon/test_telemetry.py compares it with the header of the KMD that ships it.
 #define BC250_ESCAPE_RUN_DPM 23u
-#define BC250_DPM_ABI 1u
+#define BC250_DPM_ABI 2u
 #define BC250_DPM_ABI_1 1u
 #define BC250_DPM_ABI1_SIZE 160u
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_FLAG_TEMPERATURE 128u
 #define BC250_DPM_FLAG_CLOCK 256u
 #define BC250_DPM_FLAG_HW_BUSY 512u
+#define BC250_DPM_FLAG_IDLE 1024u
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -557,7 +558,12 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long long ExpectedGeneration;
     unsigned long SubmitBusyPermille;
     unsigned long SdmaBusyPermille;
-} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+    // ABI 2 from here (BC250_DPM_ABI1_SIZE bytes above). All out.
+    unsigned long IdleMHz;
+    unsigned long IdleHoldMs, IdleBusyPermille;
+    unsigned long IdleEntries, IdleExits, IdleRefusals;
+    unsigned long long IdleMs;
+} BC250_ESCAPE_DPM; // 192 bytes on Windows, ABI 2 (the first 160 are ABI 1)
 #endif
 
 // The monitor's digest of dxgkrnl's segment statistics, not a KMD structure. Memory segments are what Task

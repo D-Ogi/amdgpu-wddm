@@ -1,0 +1,16 @@
+Redacted before the first commit (docs/01-evidence-rules.md). Counts only; the values are kept nowhere.
+
+- boots/cold1/boot.txt: 1 UUID
+- boots/cold2/boot.txt: 1 UUID
+- boots/cold3/boot.txt: 1 UUID
+- boots/cold3-amdgpu/dmesg.txt: 1 MAC address, 1 USB serial number
+- boots/warm-after-amdgpu/boot.txt: 1 UUID
+- boots/warm-after-windows/boot.txt: 1 UUID
+- logs/run-cold1.log: 1 UUID
+- logs/run-cold2.log: 1 UUID
+- logs/run-cold3.log: 1 UUID
+- logs/run-warm-after-amdgpu.log: 1 UUID
+- logs/run-warm-after-windows.log: 1 UUID
+
+Checked and found clean: every other text file of this directory (no MAC address, USB serial,
+UUID or IPv4 address). The lab network's addresses and host names never appear in these files.
