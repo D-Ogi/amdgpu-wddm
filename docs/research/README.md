@@ -6,6 +6,15 @@ measurement on our hardware**. What turns out to hold on unit A becomes a fact (
 taken from these notes become ADRs. Since M9 the directory also holds acceptance indexes and audits: they cite facts
 and evidence, they do not replace them, and the deployed state is always workspace `STATE.md`.
 
+Two kinds of note here break the rule above, and each says so in its own first lines. An investigation record
+carries measurements, and its measured rows are facts. A literature survey quotes its sources word for word.
+
+The eight `h264-encoder-literature-*` files are a literature survey of 2026-10-06, landed as delivered. Every
+quotation in them is verbatim and no rewrite may touch one. The four surveys each have an independent re-check
+beside them, the re-check is newer than the survey, and some verdicts are VERIFIED WITH CORRECTIONS that the
+survey text does not carry. Read the check before you act on a quote. These eight files still owe the
+ASD-STE100 pass that the rest of the documentation gets.
+
 | File | For | State |
 |---|---|---|
 | `m6-compute-dispatch.md` | The compute dispatch that closes M6: libdrm's gfx10 memset shader and its 18 PM4 packets | Input to the shim's dispatch emitter; M6 closed |
@@ -18,3 +27,11 @@ and evidence, they do not replace them, and the deployed state is always workspa
 | `bios-analysis-followup.md` | What the BIOS static analysis (workspace `firmware/bios/analysis`) means for the driver, reviewed against facts M430-M435 | Review note, 2026-09-24 |
 | `m13-present-baseline.md` | M13: the working full-WDDM desktop baseline on the CPU renderer and its controls | Status note, checkpoint M406-M412; later steps indexed in workspace `STATE.md` and `facts.md` |
 | `offgpu-frame-cost-c48-c55.md` | M15 off-GPU frame cost: what the long idle gaps of the 3D ring are. Which five explanations died. Why our own overlay poll made the class. The rules that come out of it | Investigation record, 2026-10-06. Its measured rows are facts M797 to M800 |
+| `h264-encoder-literature-motion-estimation.md` | M15.11: what the literature does for GPU motion estimation, against our `cs_me.hlsl`. Ranked levers | Literature survey, 2026-10-06. Check beside it. STE pass owed |
+| `h264-encoder-literature-motion-estimation-check.md` | The independent re-check of that survey, source by source | Check record, newer than the survey |
+| `h264-encoder-literature-mode-decision.md` | M15.11: mode decision and rate-distortion choice on the GPU, against our `cs_mb.hlsl` | Literature survey, 2026-10-06. Check beside it. STE pass owed |
+| `h264-encoder-literature-mode-decision-check.md` | The independent re-check of that survey | Check record, newer than the survey |
+| `h264-encoder-literature-entropy-pipelining.md` | M15.11: entropy coding and how to overlap it with the GPU passes, against our CPU CAVLC | Literature survey, 2026-10-06. Check beside it. STE pass owed |
+| `h264-encoder-literature-entropy-pipelining-check.md` | The independent re-check of that survey | Check record, newer than the survey |
+| `h264-encoder-literature-rate-control.md` | M15.11: rate control and perceptual quality, which is where our measured quality gap against the inbox encoder sits | Literature survey, 2026-10-06. Check beside it. STE pass owed |
+| `h264-encoder-literature-rate-control-check.md` | The independent re-check of that survey | Check record, newer than the survey |

@@ -16,6 +16,11 @@ which the owner accepted on 2026-10-01.
 Output: H.264 Constrained Baseline, one slice per picture, I and P pictures, CAVLC. No CABAC, no
 B pictures, no HEVC.
 
+The literature behind the next steps of this encoder, with ranked levers for each stage, is in four surveys
+under [`docs/research/`](../../../docs/research/README.md): motion estimation, mode decision, entropy
+pipelining and rate control. Each survey has an independent re-check beside it, and the re-check carries
+corrections the survey text does not.
+
 ## Layout
 
 | Path | Contents |
