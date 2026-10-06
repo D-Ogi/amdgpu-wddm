@@ -126,8 +126,10 @@ settings.clock-limit|src|-|Graphics clock limit: {0} MHz
 settings.auto-clock.on|src|-|Automatic graphics clock: on
 settings.auto-clock.off|src|-|Automatic graphics clock: off
 settings.cores|src|-|Graphics cores: {0}
+settings.desktop-path|src|-|Desktop on the graphics chip
 settings.desktop.gpu|src|-|Desktop drawn by the graphics chip
 settings.desktop.cpu|src|-|Desktop drawn by the processor (safe mode)
+settings.desktop.cpu-until-repair|src|-|Desktop drawn by the processor until the driver draws it again
 settings.d3d11.gpu|src|-|Direct3D 11 and 10.1 games and apps drawn by the graphics chip (Windows' own apps and Direct3D 10.0 apps stay on the processor)
 settings.d3d11.listed|src|-|Direct3D 11 games and apps drawn by the processor, except the listed ones
 settings.game|src|-|Recommended settings for {0}
@@ -137,6 +139,8 @@ settings.decision.same|src|-|unchanged
 settings.decision.update|src|-|new recommended value
 settings.decision.kept|src|-|your value is kept
 settings.decision.command|src|-|as you chose for this installation
+settings.decision.reopened|src|-|set back by this repair (the driver had switched it off)
+settings.decision.driver-closed|src|-|switched off by the driver. A repair sets it back
 
 # ---- consents ----
 consent.title|src|-|Before setup starts

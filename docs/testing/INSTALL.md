@@ -144,8 +144,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself; "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again. `DwmForceCpu` 1 keeps the
-  desktop on the CPU route; an upgrade keeps the value you set.
+  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again,
+  and so does `install.cmd -Repair`. `DwmForceCpu` 1 keeps the
+  desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
 - Direct3D 11 applications and games run on the GPU. The value `Mode` in
@@ -182,8 +183,11 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
-  session`, and the desktop runs on the CPU route: open amdgpu-wddm Control, select "Reopen the GPU desktop path" on
-  its Recovery page, then restart Windows. If it closes again, make a bug report.
+  session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
+  and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
+  page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
+  and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
+  bug report instead of repairing a second time.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic

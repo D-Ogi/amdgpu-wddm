@@ -304,6 +304,14 @@ $commandLineParameters = $installInputs.parameters
 $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
+$Repair = [switch](@($installInputs.switches) -contains 'Repair')
+# BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
+# itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
+# keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
+# failed phase (Get-InstallAction): nobody asked for the closure to go, and what made the driver close it may still
+# be there. The run after a restart gets -Repair back from the state, so a repair that waits for the driver package
+# still reopens.
+$script:ReopenClosures = [bool]$Repair
 
 # Verification needs no preflight. It checks the installed release against one manifest, which also names it in the
 # verify report: <install root>\manifest.json, read once (its bytes are hashed and parsed together), whatever package
@@ -490,8 +498,20 @@ function Invoke-Verify {
         $dwmOk = $zink
         $dwmNote = "DwmForceCpu 0, DWM of session $mySession has bc250d3d_zink.dll loaded: $(if ($zink) { 'yes' } else { 'no (CPU route)' })"
     }
-    $ioClosed = ''; if ($io -match 'closed by the driver: (\S+)') { $ioClosed = "; closed by the driver: $($Matches[1])" }
-    if ($io -match 'died in a session') { $ioClosed += '; last boot died in a session' }
+    # BD-069: the driver closed the path itself, so the remedy is a repair install, not a setting the tester has to
+    # find. The repair reads the driver's own record of the closure (InteropClosedReason), so only the line that
+    # proves the record is there gets the remedy. A boot that died with both switches already at 0 leaves no record,
+    # a repair would change nothing, and the reading says so without naming one.
+    $ioClosed = ''; $ioRemedy = ''
+    if ($io -match 'closed by the driver: (\S+)') {
+        $ioClosed = "; closed by the driver: $($Matches[1])"
+        $ioRemedy = '; remedy: run install.cmd -Repair, which opens it again'
+    }
+    if ($io -match 'died in a session') {
+        $ioClosed += '; last boot died in a session'
+        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in amdgpu-wddm Control' }
+    }
+    $ioClosed += $ioRemedy
     Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
 
     # BD-060: a replacement of the session's DWM that was observed against the start-confirm task's record of this
@@ -651,7 +671,7 @@ function Get-InstallSettingsImpact {
         $params = @{}; foreach ($p in $state.parameters_before_install.PSObject.Properties) { $params[$p.Name] = $p.Value }
     }
     $groups = @(
-        @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters) }
+        @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters -Reopen:$script:ReopenClosures) }
         @{ group = 'desktop_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.desktop_router -Previous $prev.applied.desktop_router -Current (Read-RegistryValues "$($script:SoftwareKey)\DesktopRouter")) }
         @{ group = 'app_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.app_router -Previous $prev.applied.app_router -Current (Read-RegistryValues "$($script:SoftwareKey)\AppRouter")) }
     )
@@ -686,8 +706,9 @@ Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $ac
     compatibility = $compat })
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
-    Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command)
-    foreach ($row in @($impact.rows | Where-Object { $_.decision -ne 'same' })) { Write-Log ("   setting {0}\{1}: {2} {3} -> {4}" -f $row.group, $row.name, $row.decision, (Format-RegistryValue $row.current), (Format-RegistryValue $row.value)) }
+    Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line, {5} reopened after the driver closed them, {6} left closed by the driver" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command, $impact.summary.reopened, $impact.summary.driver_closed)
+    foreach ($row in @($impact.rows | Where-Object { $_.decision -ne 'same' })) { Write-Log ("   setting {0}\{1}: {2} {3} -> {4}{5}" -f $row.group, $row.name, $row.decision, (Format-RegistryValue $row.current), (Format-RegistryValue $row.value), $(if ($row.closure) { " ($($row.closure))" } else { '' })) }
+    foreach ($row in @($impact.rows | Where-Object { $_.decision -eq 'driver-closed' })) { Write-Info "$($row.name) stays as the driver left it: $($row.closure). Remedy: run install.cmd -Repair." }
     Write-EngineEvent 'settings-plan' ([ordered]@{ summary = $impact.summary; rows = @($impact.rows) })
 }
 $script:EngineConsents = @($consents)
@@ -1048,10 +1069,10 @@ $record = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name 
 if ($record) { try { $applied = $record | ConvertFrom-Json } catch { Write-Warn2 "Release\AppliedDefaults does not parse: $($_.Exception.Message)" } }
 if (-not $applied) { $applied = $regDefaults.legacy_applied; $appliedSource = 'the defaults of tester.1 to tester.7 (no record)' }
 Write-Info "previous installer defaults: $appliedSource"
-function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @()) {
+function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @(), [switch]$Reopen) {
     $now = Read-RegistryValues $Key
-    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned }
-    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore }
+    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned -Reopen:$Reopen }
+    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore -Reopen:$Reopen }
     Invoke-Change ("${Key}: " + (Format-RegistryPlan $plan)) { Write-RegistryPlan $Key $plan } | Out-Null
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
@@ -1059,7 +1080,7 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 # the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
 # from before pnputil; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
 # pnputil back.
-Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames
+Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames -Reopen:$script:ReopenClosures
 
 # Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.
 $umd = @('bc250umd.dll', (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))

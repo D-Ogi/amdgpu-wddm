@@ -131,7 +131,8 @@ every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 | `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
-| `DpmLastMode`, `DpmLastReason` | what the last start chose and why |
+| `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |
+| `DpmClosedReason` | 0.7.208: the reason the driver itself wrote `DpmMode` 0 (3 UNCONFIRMED, 4 UNCLEAN, 8 SMU_ERROR). `PersistFallback` writes it, a start that reads a `DpmMode` other than 0 deletes it, a start that reads `DpmMode` 0 leaves it alone |
 
 The guard follows the CU-mode pattern. A dpm start with a request not yet confirmed writes `DpmPending` and runs
 dpm; start health reaching ready (or `bc250kmd_cli dpm confirm`, administrator) writes `DpmConfirmed` with the
@@ -139,6 +140,32 @@ request's encoding and deletes the pending mark. A start that finds `DpmPending`
 healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode = 0` and runs fixed-lab, reason
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
+
+`DpmMode` 0 with the reason 3 (UNCONFIRMED), 4 (UNCLEAN) or 8 (SMU_ERROR, `DpmGiveUp`) is therefore the driver's
+own fallback, not a choice of the tester: these three are the reasons `PersistFallback` writes. The tester release
+installer reads it that way (BD-069, `tools/release/installer/common.ps1` `$script:DriverClosures`):
+`install.cmd -Repair` writes `DpmMode` 1 again, and every other install keeps the 0 and names the fallback in its
+report. The installer deletes no guard mark: the start that reads `DpmMode` 1 clears the marks of a request no longer
+made by itself.
+
+From KMD 0.7.208.1 the reason comes from `DpmClosedReason`, which `PersistFallback` writes next to the 0. That record
+outlives its boot: no later start overwrites it, and only a start that reads a `DpmMode` other than 0 deletes it
+(`bc250_dpm_decide`, `clear_closed`), the way `interop.c` handles `InteropClosedReason`. A repair therefore writes
+`DpmMode` 1 and deletes the record, in that order: a write that fails leaves the record where it is, so the next
+install still reads the closure.
+
+Only `PersistFallback` writes that record, so the installer reads any reason in it as the driver's act and names a
+reason the table does not know by its number. A later caller of `PersistFallback` with a new reason therefore stays
+a closure instead of reading as the tester's own setting. The legacy record below holds the reason of any start, so
+there only 3, 4 and 8 count, and a durable record with nothing in it (0) is read through the legacy one.
+
+A driver before 0.7.208.1 leaves `DpmLastReason` alone, so the installer reads that one instead (`legacy_record` in
+the table), with its own limit: `DpmLastReason` holds the fallback only inside the boot that wrote it. Every start
+with the SMU online overwrites it with what that start decided, and a start that reads `DpmMode` 0 decides
+NOT_REQUESTED (1). One start later the installer keeps such a driver's 0 and reports it as the tester's value. The
+control application has the same limit while it reads `DpmLastReason` 3, 4 and 8 on its Recovery page. The way back
+without any record is the automatic-clock box on its Graphics page, which writes `DpmMode` 1 whatever the last
+reason was.
 
 ## Runtime tuning (0.7.185)
 
