@@ -204,6 +204,7 @@ HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* 
 
 struct ResourceRecord;
 struct Replay;                                  // replay.h: deferred command-list replay
+inline constexpr uint32_t kMaxReplayRings = 16;
 
 // The retire policy's decision at a submission's retirement point (set_retire_policy): true leaves the pending
 // releases to the resource DDIs. Never with the hand-off off, nothing pending, the backlog bound reached, or the
@@ -282,6 +283,8 @@ public:
     // Deferred command-list replay (set_replay_policy, replay.h), null when off: written before the context is used
     // on another thread, and at teardown; read by every recording slot.
     Replay* replay = nullptr;
+    // The direct entry (set_direct_entry): the shell admits this context; read by every direct entry.
+    std::atomic<bool> direct{false};
 
     // Every report is logged with thread and time, so it can be placed between the begin and end records
     // of the entry that made it. A reported error can surface to the application at a later call.
@@ -446,9 +449,18 @@ struct DescriptorHeapRecord {
     D3D12_GPU_DESCRIPTOR_HANDLE gpu;
 };
 
+// One root parameter as ClearRootArguments needs it (BD-046): its type, and for 32-bit constants their count.
+struct RootParameterShape {
+    D3D12DDI_ROOT_PARAMETER_TYPE type;
+    UINT constants;
+};
 struct RootSignatureRecord {
     RecordHeader h;                             // engine: ID3D12RootSignature
     UINT parameters;
+    UINT shapes;                                // RootParameterShape entries that follow the record (CalcPrivate-
+                                                // RootSignatureSize sized them): parameters, or 0 without them
+    const RootParameterShape* shape() const noexcept { return reinterpret_cast<const RootParameterShape*>(this + 1); }
+    RootParameterShape* shape() noexcept { return reinterpret_cast<RootParameterShape*>(this + 1); }
 };
 
 // ---- Shaders and graphics state (pipelines.cpp, graphics.cpp). None of these records holds an engine object. ----
@@ -496,6 +508,9 @@ struct CommandPoolRecord {
     RecordHeader h;                             // no engine object; allocators below, one reference each
     ID3D12CommandAllocator* allocators[4];      // by D3D12_COMMAND_LIST_TYPE: DIRECT, BUNDLE, COMPUTE, COPY
     std::atomic<uint32_t> open_lists{0};        // lists between a Reset into this pool and their Close
+    // Replay on, by ring: where the last Close entry of a list of this pool ends. The engine Close reaches the
+    // allocator, so a reset of the pool and a Reset of a list into it wait until the worker has passed it.
+    std::atomic<uint64_t> closing[kMaxReplayRings]{};
 };
 
 struct CommandRecorderRecord {
@@ -513,6 +528,11 @@ struct CommandListRecord {
     void* pool;                                 // while recording: the pool record it was reset into (counted there)
     // Deferred replay (replay.h): the ring and the position where the list's last pending entry ends, 0 if none.
     std::atomic<uint64_t> replay_tail{0};
+    // The root signatures the Set*RootSignature slots bound since the last Reset, [0] compute and [1] graphics: the
+    // runtime's handles, validated again where used. What ClearRootArguments clears (BD-046). Recording thread only.
+    void* root_signatures[2]{};
+    // A failure of an engine Close the worker made, until a drain of the list reports it (close_list).
+    std::atomic<HRESULT> close_hr{S_OK};
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 

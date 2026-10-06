@@ -28,6 +28,7 @@
 #include "ddi-dxgi-table.h"
 #include "adapter-identity.h"
 #include "ddi-adapter.h"
+#include "../recent-launch/recent-launch.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
@@ -1342,6 +1343,8 @@ int main() {
     if(SUCCEEDED(missingModules) || newHandle.owner ||
        std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable)) ||
        std::memcmp(&unchangedDxgi,&originalDxgi,sizeof(unchangedDxgi))) fail(__LINE__);
+    // A failed outer CreateDevice is no launch: the recent-launch note was not taken.
+    if(amdgpu_wddm::recent_launch::noted.load()) fail(__LINE__);
     if(adapterTable.pfnCloseAdapter(adapterArgs.hAdapter)!=S_OK) fail(__LINE__);
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

@@ -89,14 +89,15 @@ static_assert(std::is_same_v<decltype(&engine_ddi::set_release_policy),
 static_assert(std::is_standard_layout_v<engine_ddi::ReleasePolicy> && sizeof(engine_ddi::ReleasePolicy) == 8 &&
                   offsetof(engine_ddi::ReleasePolicy, two_phase) == 4,
               "ReleasePolicy size and offsets");
-// Added within r4, additively: deferred command-list replay. Four uint32_t, then three pointers.
+// Added within r4, additively: deferred command-list replay. Four uint32_t, then four pointers (log: replay-hitch).
 static_assert(std::is_same_v<decltype(&engine_ddi::set_replay_policy),
                              HRESULT (*)(engine_ddi::DeviceContext*, const engine_ddi::ReplayPolicy*) noexcept>,
               "set_replay_policy");
 static_assert(std::is_same_v<engine_ddi::ReplayBody, void (APIENTRY*)(void*)>, "ReplayBody");
-static_assert(std::is_standard_layout_v<engine_ddi::ReplayPolicy> && sizeof(engine_ddi::ReplayPolicy) == 40 &&
+static_assert(std::is_standard_layout_v<engine_ddi::ReplayPolicy> && sizeof(engine_ddi::ReplayPolicy) == 48 &&
                   offsetof(engine_ddi::ReplayPolicy, ring_bytes) == 12 && offsetof(engine_ddi::ReplayPolicy, shell) == 16 &&
-                  offsetof(engine_ddi::ReplayPolicy, worker) == 24 && offsetof(engine_ddi::ReplayPolicy, drained) == 32,
+                  offsetof(engine_ddi::ReplayPolicy, worker) == 24 && offsetof(engine_ddi::ReplayPolicy, drained) == 32 &&
+                  offsetof(engine_ddi::ReplayPolicy, log) == 40,
               "ReplayPolicy size and offsets");
 // Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
 static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,

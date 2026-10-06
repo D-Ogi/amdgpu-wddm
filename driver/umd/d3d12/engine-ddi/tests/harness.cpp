@@ -7,7 +7,13 @@
 //
 // --deferred-replay turns the replay policy on for every device context the run opens (open_device), as the
 // shell's deferred-replay experiment does: the recording slots' engine calls run on replay workers.
+//
+// The direct entry (engine-ddi.h, "Direct entry") is installed over the graphics table's slots as in the driver, and
+// every device context is admitted (as the shell admits one with its recording binding): with --deferred-replay the
+// round trips' value-only calls go through it (without, they all go to the slots). The run has no Present, so the
+// first arm of BC250_ENTRY_PATH holds throughout (a: every call to the slots); BC250_ENTRY_STATS=1 checks the count.
 #include "harness.h"
+#include "entry.h"
 #include <dxgi1_4.h>
 #include <cstdarg>
 #include <cstdio>
@@ -174,6 +180,7 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
     info.hooks.bind_list_table = bind_list_table;
     HRESULT hr = engine_ddi::create_device_context(&info, &device.context);
     device.sd.context = device.context;
+    if (hr == S_OK) engine_ddi::set_direct_entry(device.context, true);
     if (hr == S_OK && g_replay) {
         const engine_ddi::ReplayPolicy policy{sizeof(policy), 1, 8, 4u << 20, &device.shell, replay_worker,
                                               replay_drained};
@@ -540,6 +547,8 @@ int wmain(int argc, wchar_t** argv) {
               engine_ddi::fill_command_list(&env.lists[0], sizeof(env.lists[0]), 0, &fill) == S_OK &&
               engine_ddi::fill_command_list(&env.lists[1], sizeof(env.lists[1]), 1, &fill) == S_OK,
           "core table and both command-list tables filled");
+    const bool direct = engine_ddi::install_direct_list(&env.lists[1], 1);
+    std::printf("info  entry path: direct entries %s\n", direct ? "installed over the graphics table's slots" : "off");
     // wait_queue_idle once took a removed device's UINT64_MAX for completion.
     check(fence_reached(1, 1) && fence_reached(7, 1) && !fence_reached(0, 1) && !fence_reached(UINT64_MAX, 1),
           "wait_queue_idle: a completed value reaches its target only when it is at least the target and not "
@@ -578,6 +587,20 @@ int wmain(int argc, wchar_t** argv) {
     test_raytracing_pipeline(env);
     test_memory_policy(env, create);
     test_disk_cache(env, create, engine_dll);
+    // With the direct arm, replay and the statistics on, the round trips' value-only calls went through the direct
+    // entries (this thread's block counts them); the misses are those record_direct left to the slots.
+    if (direct && g_replay && engine_ddi::entry_direct_arm() && engine_ddi::entry_stats_on()) {
+        const engine_ddi::EntryThread* t = engine_ddi::t_entry;
+        const auto n = [&](engine_ddi::DirectMiss m) {
+            return t ? static_cast<unsigned long long>(t->misses[static_cast<uint32_t>(m)].load()) : 0ull;
+        };
+        checkf(t && t->direct.load() > 1000,
+               "entry path: the direct entries recorded %llu calls on the main thread (misses: record %llu, admission "
+               "%llu, replay %llu, ring %llu, switch %llu, encode %llu)",
+               t ? static_cast<unsigned long long>(t->direct.load()) : 0ull, n(engine_ddi::DirectMiss::Record),
+               n(engine_ddi::DirectMiss::Admission), n(engine_ddi::DirectMiss::Replay), n(engine_ddi::DirectMiss::Ring),
+               n(engine_ddi::DirectMiss::Switch), n(engine_ddi::DirectMiss::Encode));
+    }
     check(env.storage.canaries_intact(), "private storage: every canary behind the driver's size intact");
     checkf(g_binds >= 1 && g_binds >= g_unbinds, "engine services: %ld BindQueue, %ld UnbindQueue", g_binds, g_unbinds);
     env.engine->Release();

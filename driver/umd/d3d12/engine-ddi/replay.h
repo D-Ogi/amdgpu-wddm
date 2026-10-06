@@ -11,11 +11,17 @@
 // on the old ring (Drain::Switch). A ring is one fixed region: no allocation per call, at most rings x ring_bytes
 // per device, the space recycled as the worker advances.
 //
-// Drains make published entries replay before the caller continues: a list's entries (drain_list) before its Close,
-// Reset, ExecuteBundle, ExecuteCommandLists and destroy, a direct call, or a move to another ring; every ring's
-// (drain_all) before the destroy of any object an entry can name, a command pool's reset or destroy, and
+// Close is itself an entry, the list's last (close_list). Drains make published entries replay before the caller
+// continues: a list's entries (drain_list) before its Reset, ExecuteBundle, ExecuteCommandLists and destroy, a direct
+// call, or a move to another ring; a pool's last Close entry on each ring (drain_closes) before the pool's reset and a
+// Reset into it, since the engine Close reaches the allocator; every ring's (drain_all) before the destroy of any
+// object an entry can name, a command pool's destroy (or its reset while a list of it is open), and
 // SetPipelineStackSize, whose value the engine reads at record time. A drain waits as long as it takes (a line every
 // second names what it waits for), and gives up only when the worker thread no longer exists.
+//
+// Priority: a worker runs at its owner thread's level. A drain that waits past its spin lifts the worker one level
+// above the waiting thread until the last such wait ends: the waiter is blocked on the worker's calls, which would
+// otherwise compete at the waiter's own level (or below) with every other thread of the process.
 //
 // Ownership, the rules the code keeps:
 //   R1 Published entries are immutable; the producer writes only free space.
@@ -25,7 +31,8 @@
 //   R3 An engine object named by a pending entry is alive: every destroy that can free one drains first.
 //   R4 The worker makes no context (HCONTEXT) operation and no error, table or removal callback: the shell's worker
 //      hook runs it in a scope that admits only the runtime callbacks recording needs (hosted-dispatch.h).
-//   R5 A lambda calls engine methods only: no hook, no engine-ddi lock, no record write.
+//   R5 A lambda calls engine methods only: no hook, no engine-ddi lock, no record write. The one exception is the
+//      Close entry, which stores a failure into its list's close_hr (atomic; a drain of the list reads it).
 //   R6 No engine-ddi lock is held while a drain waits; the worker takes no lock but its ring's (a leaf).
 // Fields, writer -> readers:
 //   DeviceContext::replay: set_replay_policy, before the device is used on another thread and at teardown -> every
@@ -34,10 +41,15 @@
 //     another thread only under Replay::lock, after its owner thread has exited.
 //   Ring bytes in [done, published): immutable, read by the worker. published: the producer (release). done: the
 //     worker (seq_cst, after the entry's engine call returned). sleeping: the worker; wakers clear it by exchange.
-//     next_wake: waiters under the ring's lock, the worker reads it lock-free.
+//     next_wake: waiters under the ring's lock, the worker reads it lock-free. base_priority, applied_priority,
+//     boosters, stuck_longest, stuck_run: under the ring's lock (the owner at creation and take-over, waiters
+//     around and during a slow wait).
 //   CommandListRecord::replay_tail: the thread recording the list, or a drain of the list; other threads read it
-//     after the application's own ordering (a list is not free-threaded).
+//     after the application's own ordering (a list is not free-threaded). CommandListRecord::close_hr: the worker
+//     (a failed Close), cleared by the drain that reports it. CommandPoolRecord::closing: close_list, read by the
+//     pool's reset and by Reset after the application's ordering (an allocator is not free-threaded either).
 #pragma once
+#include "entry.h"
 #include "internal.h"
 #include <cstring>
 #include <new>
@@ -48,10 +60,9 @@ namespace engine_ddi {
 
 // CommandListRecord::replay_tail: ((ring index + 1) << 56) | the ring position where the list's last entry ended.
 inline constexpr uint64_t kReplayPositionMask = (uint64_t{1} << 56) - 1;
-inline constexpr uint32_t kMaxReplayRings = 16;
 
 enum class Drain : uint32_t {
-    Close, Reset, Bundle, Ecl, Switch, Direct, Destroy, Pool, Stack, Space, Slots, Teardown, Count
+    Reset, Bundle, Ecl, Switch, Direct, Destroy, Pool, Closes, Stack, Space, Slots, Teardown, Count
 };
 
 // The start of every entry. run null: a skip to the end of the ring. size: the entry's bytes, a multiple of 16.
@@ -111,6 +122,17 @@ struct ReplayRing {
     uint64_t tag;                               // (index + 1) << 56
     uint32_t index;
     HANDLE thread;
+    WorkerStats* stats;                         // the worker's times (entry.h), null with the statistics off
+    // The worker's priority (ring lock): the owner's level, the level set now, and the waits that lifted it.
+    int base_priority;
+    int applied_priority;
+    uint32_t boosters;
+    // The longest stretch a slow wait saw without the worker finishing an entry (QPC ticks), and the entry it was
+    // running then (ring lock). The waiters measure it between their 2 ms slices, so it is a lower bound, short by up
+    // to one slice as the timer rounds it (a 15.6 ms tick unless the process raised the timer resolution); the
+    // worker pays nothing for it.
+    uint64_t stuck_longest;
+    void (*stuck_run)(const EntryHeader*) noexcept;
     // The producer: the owner thread, or under Replay::lock the thread that takes the ring over.
     uint64_t write;                             // the end of the last reserved entry
     uint64_t cached_done;                       // a value of done read earlier: done is at least this
@@ -142,6 +164,10 @@ struct ReplayDrainCounter {
     std::atomic<uint64_t> calls{0};
     std::atomic<uint64_t> waits{0};
     std::atomic<uint64_t> qpc{0};               // QueryPerformanceCounter ticks spent waiting
+    std::atomic<uint64_t> over_1ms{0};          // waits of 1 ms or more (a drain_all: its rings' waits together)
+    std::atomic<uint64_t> over_10ms{0};
+    std::atomic<uint64_t> over_50ms{0};
+    std::atomic<uint64_t> longest{0};           // QPC ticks
 };
 
 struct Replay {
@@ -149,8 +175,10 @@ struct Replay {
     ReplayPolicy policy{};
     uint64_t serial = 0;                        // identity for the thread caches, never reused
     uint64_t qpf = 1;                           // QueryPerformanceFrequency
-    uint64_t spin_ticks = 0;                    // the worker's spin before it sleeps
+    uint64_t spin_ticks = 0;                    // the worker's spin before it yields
+    uint64_t yield_ticks = 0;                   // then its yielding before it sleeps
     uint64_t wake_bytes = 0;                    // a publish wakes a sleeping worker once this much is pending
+    uint64_t qpc0 = 0, tsc0 = 0;                // QPC and TSC when the policy went on: thread cycles to time
     SRWLOCK lock = SRWLOCK_INIT;                // the thread lookup: rings, count, ring owners
     ReplayRing* rings[kMaxReplayRings]{};
     std::atomic<uint32_t> count{0};
@@ -161,6 +189,10 @@ struct Replay {
     std::atomic<uint64_t> reclaimed{0};         // rings taken over from an exited thread
     std::atomic<uint64_t> stalls{0};            // stall lines
     std::atomic<uint64_t> ring_failures{0};     // rings that could not be created
+    std::atomic<uint64_t> asleep_waits{0};      // slow waits that found the worker asleep with work behind it
+    std::atomic<uint64_t> boosts{0};            // worker priority lifts by a waiting drain
+    std::atomic<uint64_t> long_waits{0};        // ring waits of kLongWaitMilliseconds or more
+    std::atomic<uint64_t> next_summary{UINT64_MAX};   // QPC of the next timed summary, after the one at close 64
 };
 
 // The calling thread's ring for one Replay: serial names the Replay (0: none), ring is null for a direct thread.
@@ -179,6 +211,7 @@ bool replay_fallback(ReplayRing* ring, CommandListRecord* list, bool oversize) n
 bool replay_snapshot_ready(ReplayRing* ring, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT count) noexcept;
 void replay_snapshot(ReplayRing* ring, const Snap& snap, D3D12_CPU_DESCRIPTOR_HANDLE* out, uint64_t end) noexcept;
 void replay_drain_list(Replay* replay, CommandListRecord* list, Drain kind) noexcept;
+void replay_drain_closes(Replay* replay, const std::atomic<uint64_t>* closing) noexcept;
 void replay_drain_all(Replay* replay, Drain kind) noexcept;
 // Teardown: drains every ring, stops and joins every worker, frees everything; the context's replay is null after.
 void replay_off(DeviceContext* context) noexcept;
@@ -192,9 +225,18 @@ inline ReplayRing* replay_ring(Replay* replay) noexcept {
 inline void drain_list(CommandListRecord* list, Drain kind) noexcept {
     if (Replay* replay = list->h.device->replay) replay_drain_list(replay, list, kind);
 }
+// A pool's last Close entry on each ring (CommandPoolRecord::closing) has replayed.
+inline void drain_closes(DeviceContext* context, const std::atomic<uint64_t>* closing) noexcept {
+    if (Replay* replay = context->replay) replay_drain_closes(replay, closing);
+}
 // Every entry published so far, on every ring of the device.
 inline void drain_all(DeviceContext* context, Drain kind) noexcept {
     if (Replay* replay = context->replay) replay_drain_all(replay, kind);
+}
+// Wakes the worker of the ring that holds an entry ending at tail (a list's replay_tail), if it sleeps.
+inline void wake_for(Replay* replay, uint64_t tail) noexcept {
+    ReplayRing* r = replay->rings[(tail >> 56) - 1];
+    if (r->sleeping.load(std::memory_order_relaxed)) replay_wake(r);
 }
 
 namespace replay_detail {
@@ -336,7 +378,10 @@ inline uint8_t* reserve(ReplayRing* r, size_t size) noexcept {
 }
 
 inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t size) noexcept {
-    r->published.store(end, std::memory_order_release);
+    // seq_cst store and load (an xchg here): the load of sleeping below must not pass the store, or a worker that
+    // stores sleeping and then reads published (seq_cst both) between them misses this entry while this publish
+    // misses its sleep, and the entry waits for the next publish, a drain or the worker's 100 ms timeout.
+    r->published.store(end, std::memory_order_seq_cst);
     l->replay_tail.store(r->tag | end, std::memory_order_relaxed);
     r->entries.store(r->entries.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     r->entry_bytes.store(r->entry_bytes.load(std::memory_order_relaxed) + size, std::memory_order_relaxed);
@@ -344,19 +389,24 @@ inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t si
     // runs its own code longer than the worker's spin, records a few more, and a wake per such burst cost the
     // recording thread a system call each (304: 1.2 ms per frame of the main thread in WakeByAddressSingle).
     // While it sleeps the worker writes nothing, so done is the position it caught up to. Entries below the bound
-    // wait at most until the next drain (every Close drains its list and wakes the worker), the next publish past the
-    // bound or the worker's own timeout: latency, never an entry.
-    if (r->sleeping.load(std::memory_order_relaxed) &&
+    // wait at most until the next Close (it wakes the worker), the next drain, the next publish past the bound or the
+    // worker's own timeout: latency, never an entry.
+    // The load of sleeping is seq_cst against the seq_cst store above. A relaxed load may pass that store. A worker
+    // that stores sleeping and then reads the old published between the two misses this entry, while this publish
+    // misses the sleep.
+    if (r->sleeping.load(std::memory_order_seq_cst) &&
         end - r->done.load(std::memory_order_relaxed) >= r->replay->wake_bytes)
         replay_wake(r);
 }
 
-template <class F, class... A, size_t... I>
+// Direct: the direct entry's encode, which leaves an entry it cannot write to the slot (no fallback drain here; the
+// slot's own record makes it).
+template <bool Direct = false, class F, class... A, size_t... I>
 bool encode(ReplayRing* r, CommandListRecord* l, const F& f, std::index_sequence<I...>, const A&... args) noexcept {
     using L = Layout<F, sizeof...(A)>;
     Plan<sizeof...(A)> p{L::kFixed, {}, false, false};
     (plan(p, I, r, args), ...);
-    if (p.oversize || p.unready) return replay_fallback(r, l, p.oversize);
+    if (p.oversize || p.unready) return Direct ? false : replay_fallback(r, l, p.oversize);
     const size_t size = align_up(p.total, 16);
     uint8_t* e = reserve(r, size);
     const uint64_t end = r->write;
@@ -385,6 +435,51 @@ template <class F, class... A> void record(CommandListRecord* l, const F& f, con
         if (r && replay_detail::encode(r, l, f, std::index_sequence_for<A...>{}, args...)) return;
     }
     f(l->list(), replay_detail::Arg<A>::source(args)...);
+}
+
+// The direct entry (engine-ddi.h, "Entry path"): record()'s deferred half for a call that comes straight from the
+// runtime's table, without the shell's entry. It writes the same entry record() would write (same f, same arguments),
+// and only when that needs nothing but this thread's ring: a live list of a context the shell admits (set_direct_entry,
+// published with the shell's recording binding and cleared with it), deferred replay on, this thread's ring already
+// looked up, the list's pending entries (if any) on that ring, an entry that fits. It makes no engine call, takes no
+// lock, waits only for ring space as record() does (Drain::Space, which calls no hook), and changes nothing when it
+// returns false: the caller then goes to the slot, which validates, reports and records as before.
+template <class F, class... A>
+__forceinline bool record_direct(EntryTimer& timer, D3D12DDI_HCOMMANDLIST h, const F& f, const A&... args) noexcept {
+    static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_destructible_v<F> && alignof(F) <= 16,
+                  "a replay lambda captures plain values only");
+    auto* l = record_of<CommandListRecord>(h.pDrvPrivate, Tag::CommandList);
+    if (!l) {
+        timer.miss(DirectMiss::Record);
+        return false;
+    }
+    DeviceContext* c = l->h.device;
+    if (!c->direct.load(std::memory_order_relaxed)) {
+        timer.miss(DirectMiss::Admission);
+        return false;
+    }
+    Replay* replay = c->replay;
+    if (!replay) {
+        timer.miss(DirectMiss::Replay);
+        return false;
+    }
+    const ReplayThreadCache& cache = t_replay;
+    if (cache.serial != replay->serial || !cache.ring) {
+        timer.miss(DirectMiss::Ring);
+        return false;
+    }
+    ReplayRing* r = cache.ring;
+    const uint64_t tail = l->replay_tail.load(std::memory_order_relaxed);
+    if (tail && (tail & ~kReplayPositionMask) != r->tag) {
+        timer.miss(DirectMiss::Switch);
+        return false;
+    }
+    if (!replay_detail::encode<true>(r, l, f, std::index_sequence_for<A...>{}, args...)) {
+        timer.miss(DirectMiss::Encode);
+        return false;
+    }
+    timer.direct();
+    return true;
 }
 
 } // namespace engine_ddi

@@ -363,13 +363,14 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               o.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation &&
               o.CopyQueueTimestampQueriesSupported && !o.BarycentricsSupported && o.ReservedBufferPlacementSupported,
           "1006 D3D12_OPTIONS, 124 bytes: tiers and flags from OPTIONS, OPTIONS3 and OPTIONS4");
-    check(o.RaytracingTier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED && !o.EnhancedBarriersSupported &&
+    check(o.RaytracingTier == D3D12DDI_RAYTRACING_TIER_1_1 && !o.EnhancedBarriersSupported &&
               o.MeshShaderTier == D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED &&
               o.VariableShadingRateTier == D3D12DDI_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED &&
               o.SamplerFeedbackTier == D3D12DDI_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED &&
               o.RenderPassTier == D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED && !o.DepthBoundsTestSupported &&
               o.WriteBufferImmediateQueueFlags == D3D12DDI_COMMAND_QUEUE_FLAG_NONE && !o.DriverManagedShaderCachePresent,
-          "1006: raytracing 1.1 and enhanced barriers of the engine are not reported while their slots are fail-safes");
+          "1006: the engine's raytracing 1.1 is reported by default, while enhanced barriers and the other "
+          "fail-safe slots are not");
 
     D3D12DDI_SHADER_CAPS_0084 s;
     std::memset(&s, 0xEE, sizeof(s));
@@ -499,36 +500,36 @@ HRESULT apply(engine_ddi::AdapterCaps* caps, const MemoryArchitecturePolicy& p, 
     return hr;
 }
 
-// The diagnostic raytracing tier: the engine's 1_1 as 1_1 while set, nothing else of 1006 changed, never more
-// than the engine says.
-void test_diagnostic_raytracing(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+// The raytracing tier: reported by default, the engine's 1_1 as 1_1, never more than the engine says, and
+// NOT_SUPPORTED once reporting is taken back. Nothing else of 1006 changes either way.
+void test_raytracing_tier_reporting(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     const auto tier_with = [&](D3D12_RAYTRACING_TIER engine, const char* what, D3D12DDI_RAYTRACING_TIER expected) {
         Answers a = fl12_0();
         a.options5.RaytracingTier = engine;
         engine_ddi::AdapterCaps* caps = query_stub(a, info, what);
         if (!caps) return;
-        D3D12DDI_D3D12_OPTIONS_DATA_0089 base{}, on{}, off{};
+        D3D12DDI_D3D12_OPTIONS_DATA_0089 base{}, off{}, on{};
         HRESULT hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, base);
-        const HRESULT hr_on = engine_ddi::set_diagnostic_raytracing_tier(caps, true);
-        if (hr == S_OK) hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, on);
-        const HRESULT hr_off = engine_ddi::set_diagnostic_raytracing_tier(caps, false);
+        const HRESULT hr_off = engine_ddi::set_raytracing_tier_reporting(caps, false);
         if (hr == S_OK) hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, off);
-        D3D12DDI_D3D12_OPTIONS_DATA_0089 rest = on;
+        const HRESULT hr_on = engine_ddi::set_raytracing_tier_reporting(caps, true);
+        if (hr == S_OK) hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, on);
+        D3D12DDI_D3D12_OPTIONS_DATA_0089 rest = base;
         rest.RaytracingTier = D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
-        check(hr == S_OK && hr_on == S_OK && hr_off == S_OK &&
-                  base.RaytracingTier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED && on.RaytracingTier == expected &&
-                  !std::memcmp(&rest, &base, sizeof(base)) && !std::memcmp(&off, &base, sizeof(base)),
-              "diagnostic raytracing tier, %s: 1006 reports %d while set, the rest of 1006 unchanged, and the "
-              "answer without it again after",
-              what, static_cast<int>(expected));
+        check(hr == S_OK && hr_on == S_OK && hr_off == S_OK && base.RaytracingTier == expected &&
+                  off.RaytracingTier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED &&
+                  !std::memcmp(&rest, &off, sizeof(off)) && !std::memcmp(&on, &base, sizeof(base)),
+              "raytracing tier, %s: 1006 reports %d by default, NOT_SUPPORTED once taken back with the rest of "
+              "1006 unchanged, and %d again after",
+              what, static_cast<int>(expected), static_cast<int>(expected));
         engine_ddi::free_adapter_caps(caps);
     };
     tier_with(D3D12_RAYTRACING_TIER_1_1, "engine at 1_1", D3D12DDI_RAYTRACING_TIER_1_1);
     tier_with(static_cast<D3D12_RAYTRACING_TIER>(12), "engine at 1_2", D3D12DDI_RAYTRACING_TIER_1_1);
     tier_with(D3D12_RAYTRACING_TIER_1_0, "engine at 1_0", D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED);
     tier_with(D3D12_RAYTRACING_TIER_NOT_SUPPORTED, "engine without", D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED);
-    check(engine_ddi::set_diagnostic_raytracing_tier(nullptr, true) == E_INVALIDARG,
-          "diagnostic raytracing tier refused: null caps");
+    check(engine_ddi::set_raytracing_tier_reporting(nullptr, true) == E_INVALIDARG,
+          "raytracing tier reporting refused: null caps");
 }
 
 void test_policy_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
@@ -815,7 +816,7 @@ int wmain(int argc, wchar_t** argv) {
         info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         test_stub(info);
         test_policy_stub(info);
-        test_diagnostic_raytracing(info);
+        test_raytracing_tier_reporting(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

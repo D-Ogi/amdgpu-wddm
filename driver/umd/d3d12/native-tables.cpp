@@ -12,6 +12,7 @@
 #include "native-residency-ddi.h"
 #include "present-outputs.h"
 #include "heap-import.h"
+#include "engine-ddi/entry.h"
 #include <atomic>
 #include <cstring>
 #include "stdio-log.h"
@@ -152,6 +153,37 @@ struct EntryPolicy:EntryOwner<Device> {
         else device->lost.store(true);
     }
 };
+// The entry path experiment's timing (engine-ddi.h, "Entry path"; entry.h): with BC250_ENTRY_STATS=1 a timed slot's
+// table entry counts the call, and samples its time, around the shell's own entry. Table tells the two list tables
+// apart, whose entries for one member differ.
+template<engine_ddi::EntryClass C,unsigned Table,class Fn> struct TimedEntry;
+template<engine_ddi::EntryClass C,unsigned Table,class R,class... A> struct TimedEntry<C,Table,R(APIENTRY*)(A...)> {
+    inline static R(APIENTRY* target)(A...)=nullptr;
+    static R APIENTRY call(A... args) noexcept {
+        engine_ddi::EntryTimer timer(C);
+        return target(args...);
+    }
+};
+// A refill of a table passes the same entries again: the target stays the shell's entry.
+template<engine_ddi::EntryClass C,unsigned Table,class Fn> void time_entry(Fn& slot) noexcept {
+    using T=TimedEntry<C,Table,Fn>;
+    if(slot!=&T::call){T::target=slot;slot=&T::call;}
+}
+template<unsigned Table> void time_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t) noexcept {
+#define N12_TIME_LIST(name) time_entry<engine_ddi::EntryClass::name,Table>(t.pfn##name);
+    ENGINE_DDI_ENTRY_TIMED_LIST_CLASSES(N12_TIME_LIST)
+#undef N12_TIME_LIST
+}
+void time_core(D3D12DDI_DEVICE_FUNCS_CORE_0088& t) noexcept {
+#define N12_TIME_CORE(name) time_entry<engine_ddi::EntryClass::name,0>(t.pfn##name);
+    ENGINE_DDI_ENTRY_TIMED_CORE_CLASSES(N12_TIME_CORE)
+#undef N12_TIME_CORE
+}
+void time_queue(D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001& t) noexcept {
+#define N12_TIME_QUEUE(name) time_entry<engine_ddi::EntryClass::name,0>(t.pfn##name);
+    ENGINE_DDI_ENTRY_TIMED_QUEUE_CLASSES(N12_TIME_QUEUE)
+#undef N12_TIME_QUEUE
+}
 engine_ddi::DeviceContext* APIENTRY resolve_engine(D3D12DDI_HDEVICE handle) {
     auto device=static_cast<Device*>(handle.pDrvPrivate);
     return device && device_engine_entered(*device)?engine_context(*device):nullptr;
@@ -213,6 +245,8 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12D
 void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     const D3D12DDIARG_PRESENT_0001* args,D3D12DDI_PRESENT_0051* result,
     D3D12DDI_PRESENT_CONTEXTS_0051* contexts,D3D12DDI_PRESENT_HWQUEUES_0051* queues) {
+    // The entry path experiment's frame clock and arms (engine-ddi.h, "Entry path"); nothing without its knobs.
+    engine_ddi::entry_frame();
     const auto device=EntryPolicy::resolve(list);
     // A queue operation: its context must not be executing on another thread (QueueDomainScope).
     QueueDomainScope serial(device);
@@ -270,6 +304,7 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         original.pfnCreateHeapAndResource=create_heap_and_resource;
         original.pfnDestroyHeapAndResource=destroy_heap_and_resource;
         hr=DdiEntryTables<EntryPolicy>::wrap_core(original,&wrapped);if(hr!=S_OK)return hr;
+        if(engine_ddi::entry_stats_on())time_core(wrapped);
         *static_cast<Core*>(output)=wrapped;return S_OK;
     }
     case D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D:{
@@ -278,6 +313,14 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         List original{},wrapped{};
         HRESULT hr=compose_list_0092(&original,sizeof(original),number,present,fill);if(hr!=S_OK)return hr;
         hr=DdiEntryTables<EntryPolicy>::wrap_list(number,original,&wrapped);if(hr!=S_OK)return hr;
+        // The entry statistics' timed entries (engine-ddi.h, "Direct entry"), and the direct entries of the graphics
+        // table over the shell's own. Those write ring entries only for a device with the recording binding and
+        // deferred replay, so they are not installed when either default is off, nor under the full trace (mode 1),
+        // whose hooks only the shell's entry runs; direct-entry-off takes them back alone.
+        if(engine_ddi::entry_stats_on()){if(number)time_list<1>(wrapped);else time_list<0>(wrapped);}
+        if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
+           !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
+            (void)engine_ddi::install_direct_list(&wrapped,1);
         AcquireSRWLockExclusive(&adapter.tables_lock);
         auto& prior=adapter.list_tables[number];
         if(prior.handle && prior.handle!=runtime.handle)hr=E_UNEXPECTED;
@@ -294,6 +337,7 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         WRAP_QUEUE(pfnSignalFence)
         WRAP_QUEUE(pfnWaitForFence)
 #undef WRAP_QUEUE
+        if(engine_ddi::entry_stats_on())time_queue(wrapped);
         *static_cast<Queue*>(output)=wrapped;return S_OK;
     }
     case D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES:{

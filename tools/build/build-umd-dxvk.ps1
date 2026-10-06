@@ -26,6 +26,8 @@ if ($LASTEXITCODE -ne 0) { throw 'DDI error policy mutation controls failed' }
 # Device-table ABI and capability behavior are promotion gates, not optional
 # manual checks. Run before producing a deployable shell DLL.
 & "$PSScriptRoot\test-umd-ddi-draw.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\ddi-table') -VsInstall $VsInstall -Arch $Arch
+# The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
+& "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
 $saved=Save-ProcessEnvironment
 try {
     $env:TEMP=$OutputDir; $env:TMP=$OutputDir

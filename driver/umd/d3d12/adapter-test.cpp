@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstring>
 #include <cstdio>
+#include <string>
 #include <vector>
 #include "device-state.h"
 static unsigned queryMode;
@@ -125,6 +126,12 @@ static void publication_tests(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPT
 }
 int main(int argc,char** argv) {
     if(argc!=2)return 2;
+    // A recent-launch note (recent-launch.h) would land below this directory, never in the user's profile. Every
+    // CreateDevice below fails, so none may appear (checked at the end).
+    char local[MAX_PATH]{};assert(GetFullPathNameA("adapter-test-localappdata",MAX_PATH,local,nullptr));
+    CreateDirectoryA(local,nullptr);assert(SetEnvironmentVariableA("LOCALAPPDATA",local));
+    const std::string store=std::string(local)+"\\amdgpu-wddm\\recent-launches.txt";
+    DeleteFileA(store.c_str());
     HMODULE dll=LoadLibraryA(argv[1]);assert(dll);
     auto proc=GetProcAddress(dll,"OpenAdapter12");PFND3D12DDI_OPENADAPTER open=nullptr;
     static_assert(sizeof(open)==sizeof(proc));memcpy(&open,&proc,sizeof(open));assert(open);
@@ -171,5 +178,7 @@ int main(int argc,char** argv) {
     assert(guard[1]==0x123456);
     publication_tests(funcs,a.hAdapter);
     assert(funcs.pfnCloseAdapter(a.hAdapter)==S_OK);
-    FreeLibrary(dll);puts("adapter export/negotiation/publication/fail-closed tests passed");return 0;
+    Sleep(200); // longer than a recent-launch worker takes on the host
+    assert(GetFileAttributesA(store.c_str())==INVALID_FILE_ATTRIBUTES);
+    FreeLibrary(dll);puts("adapter export/negotiation/publication/fail-closed tests passed, no recent-launch note");return 0;
 }

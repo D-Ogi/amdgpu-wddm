@@ -113,8 +113,16 @@ HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* rs, std::ve
 }
 
 namespace {
-SIZE_T APIENTRY calc_root_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013*) {
-    return sizeof(RootSignatureRecord);
+// The record, and the shape of every parameter after it (ClearRootArguments, commands.cpp). create_root_signature
+// refuses what this counts no parameters for, so the two agree on the size.
+UINT shaped_parameters(const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013* args) noexcept {
+    return args && args->Version == D3D12DDI_ROOT_SIGNATURE_VERSION_1_1 && args->pRootSignature_1_1
+               ? args->pRootSignature_1_1->NumParameters
+               : 0;
+}
+
+SIZE_T APIENTRY calc_root_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013* args) {
+    return sizeof(RootSignatureRecord) + size_t{shaped_parameters(args)} * sizeof(RootParameterShape);
 }
 
 HRESULT APIENTRY create_root_signature(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013* args,
@@ -129,7 +137,14 @@ HRESULT APIENTRY create_root_signature(D3D12DDI_HDEVICE device, const D3D12DDIAR
     hr = c->device->CreateRootSignature(0, blob.data(), blob.size(), __uuidof(ID3D12RootSignature),
                                         reinterpret_cast<void**>(&rs));
     if (FAILED(hr)) return hr;
-    new (h.pDrvPrivate) RootSignatureRecord{{Tag::RootSignature, 0, rs, c}, args->pRootSignature_1_1->NumParameters};
+    const D3D12DDI_ROOT_SIGNATURE_0013& desc = *args->pRootSignature_1_1;
+    auto* r = new (h.pDrvPrivate) RootSignatureRecord{{Tag::RootSignature, 0, rs, c}, desc.NumParameters,
+                                                      shaped_parameters(args)};
+    for (UINT i = 0; i < r->shapes; ++i) {
+        const D3D12DDI_ROOT_PARAMETER_0013& p = desc.pRootParameters[i];
+        r->shape()[i] = {p.ParameterType,
+                         p.ParameterType == D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS ? p.Constants.Num32BitValues : 0};
+    }
     c->live.fetch_add(1);
     return S_OK;
 }

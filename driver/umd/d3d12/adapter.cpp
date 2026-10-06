@@ -13,6 +13,7 @@
 #include "ddi-trace.h"
 #include <cstring>
 #include "stdio-log.h"
+#include "../recent-launch/recent-launch.h"
 namespace {
 using native12::Adapter;
 using native12::Device;
@@ -42,7 +43,10 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     auto device=new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
     HRESULT hr=native12::create_device_engine(*device);
     if(FAILED(hr)){device->~Device();trace("CreateDevice-engine-failed",static_cast<unsigned>(hr));return hr;}
-    ++adapter->devices;return S_OK;
+    ++adapter->devices;
+    // The outer device exists: note the launch once per process, off this thread (recent-launch.h).
+    amdgpu_wddm::recent_launch::note_outer_device(amdgpu_wddm::recent_launch::ApiD3D12);
+    return S_OK;
 }
 HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
     if(!h.pDrvPrivate) return E_INVALIDARG;
