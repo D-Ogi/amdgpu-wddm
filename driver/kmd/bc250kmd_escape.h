@@ -38,6 +38,7 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
+#define BC250_ESCAPE_RUN_DPAUDIO 30u            // DP audio: step 0 observation and step 1 state (BC250_ESCAPE_DPAUDIO below)
 #define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
                                             // the respin. Seven revisions were written apart on seven branches,
                                             // each taking the next free number for itself: 209 (the DirectFlip
@@ -1543,3 +1544,101 @@ typedef struct _BC250_ESCAPE_PAGING_JOURNAL {
 } BC250_ESCAPE_PAGING_JOURNAL;
 typedef char BC250_PAGING_JOURNAL_RECORD_SIZE_CHECK[(sizeof(BC250_PAGING_JOURNAL_RECORD) == 72) ? 1 : -1];
 typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) == 4672) ? 1 : -1];
+
+// BC250_ESCAPE_RUN_DPAUDIO (30): DisplayPort audio, steps 0 and 1 (driver/kmd/dpaudio.c, dpaudio_seq.c).
+//
+// OBSERVE reads the step 0 registers now and returns them by slot (BC250_DPAUDIO_OBS_LIST): the codec root and
+// function parameters, DC_PINSTRAPS, the DCCG audio DTOs, for both stream encoders the DIG/DP/AFMT/HPD state,
+// and for both Azalia endpoints a few configuration registers read through the endpoint's INDEX/DATA pair. The
+// INDEX write of such a read selects a configuration register and changes nothing else (dce_audio.c:73-84);
+// nothing else is written. STATE returns only the software record of the last start, stop, resume and path
+// power change, and touches no register. Both operations fill the STATE half.
+//
+// Flags: exactly HardwareAccess (Flags.Value 1), as OBSERVE_DCN: the reads need dxgkrnl's Level Two exclusion
+// of stop and MMIO unmap, and STATE takes the same word so that the two cannot be told apart by a sampler. An
+// operator's tool, never a poller's: no shipped component sends it on a schedule. Administrators only.
+
+#define BC250_DPAUDIO_ABI 1u
+#define BC250_DPAUDIO_OP_OBSERVE 1u
+#define BC250_DPAUDIO_OP_STATE 2u
+
+// Observation slots, in reply order. X(slot). The driver binds each slot to its register by name
+// (dpaudio_seq.c g_ObsSlots, a designated initializer per slot); the CLI prints the slot names.
+#define BC250_DPAUDIO_OBS_LIST(X) \
+    X(CODEC_VENDOR_DEVICE) X(CODEC_REVISION) X(SUPPORTED_SIZE_RATES) X(STREAM_FORMATS) X(POWER_STATES) \
+    X(DC_PINSTRAPS) X(DTO_SOURCE) X(DTO0_PHASE) X(DTO0_MODULE) X(DTO1_PHASE) X(DTO1_MODULE) \
+    X(DIG0_FE_CNTL) X(DIG0_BE_CNTL) X(DP0_VID_STREAM_CNTL) X(DP0_SEC_CNTL) X(DP0_SEC_AUD_N) \
+    X(DP0_SEC_AUD_M_READBACK) X(DP0_SEC_TIMESTAMP) X(DIG0_AFMT_CNTL) X(DIG0_AFMT_AUDIO_SRC_CONTROL) \
+    X(DIG0_AFMT_AUDIO_PACKET_CONTROL) X(DIG0_AFMT_AUDIO_PACKET_CONTROL2) X(DIG0_AFMT_STATUS) X(HPD0_INT_STATUS) \
+    X(DIG1_FE_CNTL) X(DIG1_BE_CNTL) X(DP1_VID_STREAM_CNTL) X(DP1_SEC_CNTL) X(DP1_SEC_AUD_N) \
+    X(DP1_SEC_AUD_M_READBACK) X(DP1_SEC_TIMESTAMP) X(DIG1_AFMT_CNTL) X(DIG1_AFMT_AUDIO_SRC_CONTROL) \
+    X(DIG1_AFMT_AUDIO_PACKET_CONTROL) X(DIG1_AFMT_AUDIO_PACKET_CONTROL2) X(DIG1_AFMT_STATUS) X(HPD1_INT_STATUS) \
+    X(EP0_CONFIG_DEFAULT) X(EP0_HOT_PLUG_CONTROL) X(EP0_PIN_SENSE) X(EP0_UNSOLICITED_RESPONSE) \
+    X(EP0_WIDGET_CONTROL) X(EP0_CHANNEL_SPEAKER) X(EP0_AUDIO_DESCRIPTOR0) X(EP0_SINK_INFO1) \
+    X(EP1_CONFIG_DEFAULT) X(EP1_HOT_PLUG_CONTROL) X(EP1_PIN_SENSE) X(EP1_UNSOLICITED_RESPONSE) \
+    X(EP1_WIDGET_CONTROL) X(EP1_CHANNEL_SPEAKER) X(EP1_AUDIO_DESCRIPTOR0) X(EP1_SINK_INFO1)
+
+#define BC250_DPAUDIO_OBS_ENUM(n) BC250_DPAUDIO_OBS_##n,
+enum bc250_dpaudio_obs { BC250_DPAUDIO_OBS_LIST(BC250_DPAUDIO_OBS_ENUM) BC250_DPAUDIO_OBS_COUNT };
+#undef BC250_DPAUDIO_OBS_ENUM
+#define BC250_DPAUDIO_OBS_SLOTS 64u          // room in the reply; ValidMask has one bit per slot
+
+// Why the last start did or did not enable the endpoint. X(name, text); the text is what the log and the CLI say.
+#define BC250_DPAUDIO_REASON_LIST(X) \
+    X(OK, "endpoint enabled") \
+    X(NOT_STARTED, "no start since the driver loaded") \
+    X(SWITCH_OFF, "EnableDpAudio is not 1") \
+    X(ENDPOINT_SWITCH_OFF, "EnableDpAudioEndpoint is not 1") \
+    X(NO_MMIO, "BAR5 not mapped (EnableMmio)") \
+    X(READ_FAILED, "a precondition register could not be read") \
+    X(CODEC_ID, "codec vendor/device is not 0x1002AA01") \
+    X(STRAPS, "DC_PINSTRAPS_AUDIO is 0: audio not strapped on") \
+    X(NO_STREAM, "no DP stream encoder has its video stream on") \
+    X(TWO_STREAMS, "both DP stream encoders have their video stream on") \
+    X(NOT_DP_SST, "no DIG back end in DP SST mode is fed by that stream encoder") \
+    X(CONFIG_DEFAULT, "endpoint RESPONSE_CONFIGURATION_DEFAULT is not 0x185600F0") \
+    X(WRITE_FAILED, "a write of the sequence failed; AUDIO_ENABLED cleared") \
+    X(STOPPED, "stopped: AUDIO_ENABLED cleared") \
+    X(PATH_OFF, "monitor path powered off: AUDIO_ENABLED cleared")
+
+#define BC250_DPAUDIO_REASON_ENUM(n, t) BC250_DPAUDIO_REASON_##n,
+enum bc250_dpaudio_reason { BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_ENUM) BC250_DPAUDIO_REASON_COUNT };
+#undef BC250_DPAUDIO_REASON_ENUM
+
+#define BC250_DPAUDIO_STATE_IDLE 0u          // no start yet, or the start did not reach the decision
+#define BC250_DPAUDIO_STATE_ENABLED 1u       // AUDIO_ENABLED is 1 on Endpoint, written by this driver
+#define BC250_DPAUDIO_STATE_REFUSED 2u       // a precondition failed: nothing was written
+#define BC250_DPAUDIO_STATE_FAILED 3u        // a write failed part way; the disable sequence ran
+#define BC250_DPAUDIO_STATE_STOPPED 4u       // the stop path cleared AUDIO_ENABLED
+#define BC250_DPAUDIO_STATE_PATH_OFF 5u      // the monitor path is powered off; AUDIO_ENABLED is 0 until it is back
+
+#define BC250_DPAUDIO_NOTE_HPD_LOW 1u        // the chosen encoder's HPD sense read 0 (logged, not a refusal)
+#define BC250_DPAUDIO_NOTE_INHERITED 2u      // AUDIO_ENABLED was already 1 before this start wrote anything
+#define BC250_DPAUDIO_NOTE_REVISION 4u       // codec revision is not M819's 0x00100700 (logged, not a refusal)
+#define BC250_DPAUDIO_NOTE_UNSOLICITED 8u    // the pin's UNSOLICITED_RESPONSE.ENABLE was set before the write (U3)
+
+#define BC250_DPAUDIO_NO_SWITCH 0xFFFFFFFFu  // SwitchEnable/SwitchEndpoint before any start read them
+
+typedef struct _BC250_ESCAPE_DPAUDIO {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;   // Flags: BC250_ESCAPE_FLAG_MMIO_MAPPED
+    unsigned long long ValidMask;           // OBSERVE: bit i set when Regs[i] was read now
+    unsigned long Regs[BC250_DPAUDIO_OBS_SLOTS];    // OBSERVE: slot order of BC250_DPAUDIO_OBS_LIST, 0 when not read
+    // OBSERVE: the start's own decision (Bc250DpAudioDecide) over the registers above, as a start would take it
+    // now. Nothing is written for it; the CLI prints it rather than repeating the logic.
+    unsigned long ObsReason, ObsStream, ObsEndpoint, ObsNotes;
+    // STATE: the software record (both operations).
+    unsigned long State;                    // BC250_DPAUDIO_STATE_*
+    unsigned long Reason;                   // enum bc250_dpaudio_reason
+    unsigned long Notes;                    // BC250_DPAUDIO_NOTE_*
+    unsigned long Endpoint, Stream;         // the chosen Azalia endpoint and DP stream encoder (valid from the decision)
+    unsigned long SwitchEnable, SwitchEndpoint;      // EnableDpAudio, EnableDpAudioEndpoint as the last start read them
+    unsigned long Starts, Resumes, Stops, Refusals, Failures, PathOn, PathOff;
+    unsigned long IndirectReads, IndirectWrites, DirectWrites, AccessRefusals;  // through the checked accessors
+    unsigned long CodecId;                  // VENDOR_AND_DEVICE_ID at the last decision
+    unsigned long ConfigDefault;            // the chosen endpoint's RESPONSE_CONFIGURATION_DEFAULT at the last decision
+    unsigned long HotPlugBefore, HotPlugAfter;      // the endpoint's HOT_PLUG_CONTROL before and after the last sequence
+    unsigned long LastStatus;               // NTSTATUS of the last sequence (0 for none or success)
+} BC250_ESCAPE_DPAUDIO; // 408 bytes on Windows, ABI 1
+typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 408) ? 1 : -1];
+typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUDIO_OBS_SLOTS) ? 1 : -1];
