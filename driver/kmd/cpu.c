@@ -838,6 +838,12 @@ void CpuLogSummary(BC250_DEVICE* Device)
 // display.c admits them only with HardwareAccess=1 (the Level Two exclusion) and an administrator, exactly as
 // RUN_CLOCK's SET. READ is software state and takes NoAdapterSynchronization=1 alone.
 //
+// KEEP is the one write that sends nothing (0.7.213), so it takes NoAdapterSynchronization=1 as well, and that is
+// what the CLI and the DLL now send for it: it copies Applied into Stored, writes seven values of the Parameters
+// key - each one flushed to the disk (GuardStoreSetting) - and ends the trial under SnapLock. Seven registry
+// flushes with the GPU scheduler suspended is what HardwareAccess asked the OS for, and this operation never
+// needed it. The old flag word stays admitted for one release, for a CLI or DLL of 0.7.212 or older.
+//
 // Lock order: Readers (no wait) -> Lock -> SnapLock, with GuardLog and every registry write outside SnapLock. The
 // worker thread takes Lock -> SnapLock and nothing else, so there is no cycle. A sequence of messages holds Lock
 // but not the SMU owner lock, which SmuCpuMessage takes and releases per message, so the DPM governor's tick is
@@ -849,6 +855,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     const ULONG op = Data->Op;
     const BOOLEAN write = op != BC250_CPU_OP_READ;
+    const BOOLEAN keep = op == BC250_CPU_OP_KEEP;       // the one write that sends no mailbox message
     const ULONG given = Data->Given;
     // Read once: the buffer belongs to the caller, so nothing here reads an input twice.
     const BOOLEAN loaded = Data->Loaded ? TRUE : FALSE;
@@ -875,9 +882,13 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     Data->Status = BC250_ESCAPE_STATUS_REFUSED;
     Data->NtStatus = (ULONG)status;
     Data->Flags = Data->Error = 0;
+    // READ: expectedRead alone. KEEP: expectedRead, or expectedWrite for one release. Every other operation:
+    // expectedWrite alone. Any other flag word is refused, per operation.
     if (Data->AbiVersion != BC250_CPU_ABI || Size != sizeof(BC250_ESCAPE_CPU) || op > BC250_CPU_OP_SEARCH_STEP ||
         Data->Reserved[0] || Data->Reserved[1] ||
-        EscapeFlags != (write ? expectedWrite.Value : expectedRead.Value)) return;
+        (!write && EscapeFlags != expectedRead.Value) ||
+        (write && !keep && EscapeFlags != expectedWrite.Value) ||
+        (keep && EscapeFlags != expectedRead.Value && EscapeFlags != expectedWrite.Value)) return;
     // Every operation that sends a mailbox message needs an administrator, READBACK included (0.7.211). Reading
     // a voltage is not a privilege, but holding CpuLock and the SMU owner lock for 19 messages is: an
     // unprivileged loop of readbacks would delay the worker's revert and put mailbox traffic under a compute

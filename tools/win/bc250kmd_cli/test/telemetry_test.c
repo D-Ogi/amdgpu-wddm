@@ -65,6 +65,12 @@ static NTSTATUS TelemetryCpu(BC250_ESCAPE_CPU *c)
     if (cpuMode == 3) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0xC0000061u; }
     if (cpuMode == 4) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0; }
     if (cpuMode == 5) c->Command = 21;
+    /* A driver of 0.7.212 or older: a KEEP that does not carry HardwareAccess is refused at the gate with
+       STATUS_INVALID_PARAMETER and the build in Version; every other operation is answered as above. */
+    if (cpuMode == 6 && !escapeHardware && c->Op == BC250_CPU_OP_KEEP) {
+        memset(c, 0, sizeof(*c));
+        c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0xC000000Du; c->Version = 0x000700D4u;
+    }
     return 0;
 }
 // The same shape as the DLL: one function with the flag, and TelemetryEscape as its software-only wrapper, so
@@ -241,9 +247,11 @@ int main(void)
         r.Op = BC250_CPU_OP_SEARCH_STEP;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && sentCpu.Given == 0);
         CHECK(sentCpu.WheaEvents == 2 && sentCpu.ChecksumErrors == 3 && sentCpu.Loaded == 1);
-        /* KEEP sends none of the three values: it keeps what the driver already applied, and judges nothing. */
+        /* KEEP sends none of the three values: it keeps what the driver already applied, and judges nothing. It
+           reaches no mailbox either, so it is the one write that goes with the software flag word (0.7.213). */
         r.Op = BC250_CPU_OP_KEEP;
-        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.Given == 0 && sentCpu.MaxMHz == 0 && sentCpu.TrialMs == 0);
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 0 &&
+              sentCpu.Given == 0 && sentCpu.MaxMHz == 0 && sentCpu.TrialMs == 0);
         CHECK(sentCpu.WheaEvents == 0 && sentCpu.ChecksumErrors == 0 && sentCpu.Loaded == 0);
         r.Op = BC250_CPU_OP_SEARCH_BEGIN;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.UvSteps == 6 && sentCpu.TrialMs == 40000 && sentCpu.Given == 0);
@@ -256,7 +264,15 @@ int main(void)
         cpuMode = 3; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC0000061);
         cpuMode = 4; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC00000A3);
         cpuMode = 5; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC000000D);
-        cpuMode = 0;
+        /* Against a driver of 0.7.212 or older the refused KEEP goes again with the old flag word, with the request
+           rebuilt, and every later KEEP of this process goes that way at once. READ keeps the software word. */
+        cpuMode = 6; r.Op = BC250_CPU_OP_KEEP; r.ExpectedGeneration = 77; escapeCalls = 0;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && escapeCalls == 2 &&
+              sentCpu.Op == BC250_CPU_OP_KEEP && sentCpu.ExpectedGeneration == 77);
+        escapeCalls = 0;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && escapeCalls == 1);
+        cpuMode = 0; r.Op = BC250_CPU_OP_READ; escapeCalls = 0;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 0 && escapeCalls == 1);
     }
     escapeCalls = 0;
     statsMode = 1; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == (LONG)0xC0000001);

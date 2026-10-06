@@ -81,10 +81,29 @@ try{
  # without one). With one name the lines are those of before; with more each line ends with the process name.
  $counters=@('witcher3')
  try{if(Test-Path -LiteralPath "$d\game-profile.json"){$counters=@((Get-Content -LiteralPath "$d\game-profile.json" -Raw|ConvertFrom-Json).processes.counters|Where-Object{$_})}}catch{Put ('profile not read: '+$_.Exception.Message)}
+ # The driver's state where this session starts: LOG_SUMMARY writes the WDDM, DPM, interop and OTG tables into the
+ # KMD's ring and then reads the ring back (display.c LogEscape, wddm.c WddmSummary), so one call puts the table of
+ # this start into the evidence - the first question of a 0x116 triage. It is a HardwareAccess escape, which suspends
+ # the GPU scheduler for up to one VSync, so it is sent exactly once, here, before the game is in a frame loop, and
+ # never from the loop below. Up to 0.7.212 the loop polled it every 500 ms until the header matched, and discarded
+ # every line of it: the counter in the header is already past the summary's own lines, so they went to no file.
+ $head=Run-Bounded $cli 'log summary' 'summary'
+ if($head){
+  # One record, one flush, as an interval of the loop is written: the summary is up to a few hundred lines.
+  $block=New-Object Text.StringBuilder
+  foreach($line in ($head -split "`r?`n")){
+   if($line.TrimEnd()){$null=$block.Append('kmd summary ').Append($line.TrimEnd()).Append("`n")}
+   if($line -match 'log\s+(\d+) lines since'){$next=[int64]$Matches[1]}
+  }
+  $b=$encoding.GetBytes(('{0:HH:mm:ss.fff} driver summary at the stream start' -f [DateTime]::UtcNow)+"`n"+$block.ToString())
+  $file.Write($b,0,$b.Length);$file.Flush($true)
+  if($next -ge 0){Put ('log lines so far '+$next)}
+ }
  while($timer.Elapsed.TotalSeconds -lt $streamLimit -and !(Test-Path -LiteralPath (Join-Path $d 'kmdlog.stop'))){
   if($next -lt 0){
-   # The header is asked for again until it was read once.
-   $first=Run-Bounded $cli 'log summary' 'log header'
+   # The summary above did not answer: the header alone, through GET_LOG, which needs no adapter synchronization.
+   # The same line ("log N lines since this driver load") stands at the head of both commands' first page.
+   $first=Run-Bounded $cli 'log 0' 'log header'
    if($first -and $first -match 'log\s+(\d+) lines since'){$next=[int64]$Matches[1];Put ('log lines so far '+$next)}
   }else{
    # The newest lines matter most before a stop (068 lost them to a cap that kept the oldest): one write

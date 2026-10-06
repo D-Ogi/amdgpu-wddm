@@ -7,7 +7,13 @@ $source=Get-Content "$repo\tools\win\bc250kmd_cli\bc250kmd_cli.c" -Raw
 $first=$source.IndexOf('BC250_CONTROL_API LONG WINAPI Bc250StartHealth(')
 $last=$source.IndexOf('static int StartHealth(',$first)
 $actual=$source.Substring($first,$last-$first)
-if($IdleRead){$actual=$actual.Replace('op!=BC250_START_HEALTH_CONFIRM,&status))return status;', '0,&status))return status;')}
+# -IdleRead: the mutation control. The export sends both operations with NoAdapterSynchronization alone
+# (0.7.213); with HardwareAccess instead each one idles the adapter, and the test must say so.
+if($IdleRead){
+  $mutant=$actual.Replace(',sizeof(*data),1,&status))return status;', ',sizeof(*data),0,&status))return status;')
+  if($mutant -eq $actual){throw 'the -IdleRead mutation no longer applies: the export no longer sends softwareOnly 1'}
+  $actual=$mutant
+}
 $template=Get-Content "$repo\tools\win\bc250kmd_cli\test\start_health_test.c" -Raw
 [IO.File]::WriteAllText("$Out\test.c",$template.Replace('// ACTUAL_START_HEALTH',$actual))
 Copy-Item "$repo\driver\kmd\bc250kmd_escape.h" "$Out\bc250kmd_escape.h" -Force

@@ -380,9 +380,10 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     // software reads above support NoAdapterSynchronization. Other diagnostics
     // rely on OS Level Two/Three exclusion and must not enter a
     // powered-down/partially restored subsystem.
-    // RUN_CPU (0.7.210) is admitted with NoAdapterSynchronization as well, because its READ operation is adapter-owned
-    // software state and CpuRequest refuses that flag for every operation that touches the mailbox. The power-phase
-    // half below still applies to it: a CPU message during a retained power transition is exactly what must not run.
+    // RUN_CPU (0.7.210) is admitted with NoAdapterSynchronization as well, because its READ operation, and its KEEP
+    // from 0.7.213, are adapter-owned software state and CpuRequest refuses that flag for every operation that
+    // touches the mailbox. The power-phase half below still applies to it: a CPU message during a retained power
+    // transition is exactly what must not run.
     if ((data->Command!=BC250_ESCAPE_RUN_CLOCK && data->Command!=BC250_ESCAPE_RUN_CPU &&
          Escape->Flags.NoAdapterSynchronization) ||
         (data->Command!=BC250_ESCAPE_RUN_CLOCK &&
@@ -402,7 +403,8 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     }
     // The CPU surface (0.7.210): its write operations send mailbox messages on the firmware's queue 3, so it sits
     // here, past the Level Two gate, and not with the software snapshots above. CpuRequest itself admits READ with
-    // NoAdapterSynchronization only and every other operation with HardwareAccess only (cpu.c).
+    // NoAdapterSynchronization only, KEEP with either flag word, and every other operation with HardwareAccess
+    // only (cpu.c).
     if (data->Command == BC250_ESCAPE_RUN_CPU) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_CPU)) return STATUS_INVALID_PARAMETER;
         CpuRequest(device,(BC250_ESCAPE_CPU*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
