@@ -9,6 +9,9 @@
 #   fan_test.c           the fan control (driver/shim/bc250_fan.c, Part B): the write allowlist and the handshake
 #                        order against the M803 engine model, the restore record, every exit path, doubt, the
 #                        slope rule, the emergency, the lease and the chip's refusals.
+#   fan_native_test.c    the fan control's binding (driver/kmd/fan.c with driver/kmd/hwmon.c, against
+#                        fan_native_mock.h): the gate, the step, each exit path as the miniport calls it, the
+#                        watchdog, the bugcheck callback, the escape and the stored choice.
 #
 # The second one compiles the shipping file itself, with only the Windows kernel primitives replaced, so it
 # tests the driver and not a copy of it. Both assert that the EC model saw no write outside the page and the
@@ -43,8 +46,10 @@ $objPolicy = Join-Path $Out 'obj-policy'
 $objNative = Join-Path $Out 'obj-native'
 $objKern = Join-Path $Out 'obj-kernel'
 $objFan = Join-Path $Out 'obj-fan'
-New-Item -ItemType Directory -Force $Out, $objPolicy, $objNative, $objKern, $objFan | Out-Null
-Remove-Item "$objPolicy\*.obj", "$objNative\*.obj", "$objKern\*.obj", "$objFan\*.obj" -Force -ErrorAction SilentlyContinue
+$objFanNative = Join-Path $Out 'obj-fan-native'
+New-Item -ItemType Directory -Force $Out, $objPolicy, $objNative, $objKern, $objFan, $objFanNative | Out-Null
+Remove-Item "$objPolicy\*.obj", "$objNative\*.obj", "$objKern\*.obj", "$objFan\*.obj", "$objFanNative\*.obj" `
+    -Force -ErrorAction SilentlyContinue
 
 function Invoke-Tool([string]$exe, [string[]]$argv) {
     & $exe @argv | ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$|^Generating Code|^Generowanie') { Write-Host "  $_" } }
@@ -86,6 +91,14 @@ $needle = '#include "bc250kmd.h"'
 if (-not $source.Contains($needle)) { throw "driver\kmd\hwmon.c no longer includes the miniport header: the mock cannot replace it" }
 $native = $source.Replace($needle, '#include "hwmon_native_mock.h"')
 [IO.File]::WriteAllText((Join-Path $Out 'hwmon-native.inc'), $native, [Text.UTF8Encoding]::new($false))
+# The fan control's binding and the reader beside it, both against fan_native_mock.h (the same mock plus the
+# watchdog's timer, the bugcheck callback and the request mutex).
+$fanSource = Get-Content -LiteralPath (Join-Path $kmd 'fan.c') -Raw
+if (-not $fanSource.Contains($needle)) { throw "driver\kmd\fan.c no longer includes the miniport header: the mock cannot replace it" }
+[IO.File]::WriteAllText((Join-Path $Out 'fan-native.inc'), $fanSource.Replace($needle, '#include "fan_native_mock.h"'),
+    [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $Out 'hwmon-fan.inc'), $source.Replace($needle, '#include "fan_native_mock.h"'),
+    [Text.UTF8Encoding]::new($false))
 
 Write-Host 'compile (binding, user mode)'
 # /wd4201 the nameless struct inside D3DDDI_ESCAPEFLAGS, as d3dukmdt.h declares it; /wd4505 the model helpers
@@ -93,6 +106,11 @@ Write-Host 'compile (binding, user mode)'
 Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS',
     '/wd4201', '/wd4505', "/I$Out", "/I$here", "/I$kmd") + $incUser +
     @("/Fo$objNative\", "/Fd$objNative\cl.pdb", $policy, (Join-Path $here 'hwmon_native_test.c')))
+
+Write-Host 'compile (fan control binding, user mode)'
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS',
+    '/wd4201', '/wd4505', "/I$Out", "/I$here", "/I$kmd") + $incUser +
+    @("/Fo$objFanNative\", "/Fd$objFanNative\cl.pdb", $policy, $fan, (Join-Path $here 'fan_native_test.c')))
 
 $link = @('/nologo', '/DEBUG', '/MACHINE:X64', '/SUBSYSTEM:CONSOLE',
     "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64")
@@ -103,10 +121,12 @@ Invoke-Tool (Join-Path $bin 'link.exe') ($link +
     @("/OUT:$Out\hwmon_native_test.exe", "/PDB:$Out\hwmon_native_test.pdb") + (Get-ChildItem "$objNative\*.obj").FullName)
 Invoke-Tool (Join-Path $bin 'link.exe') ($link +
     @("/OUT:$Out\fan_test.exe", "/PDB:$Out\fan_test.pdb") + (Get-ChildItem "$objFan\*.obj").FullName)
+Invoke-Tool (Join-Path $bin 'link.exe') ($link +
+    @("/OUT:$Out\fan_native_test.exe", "/PDB:$Out\fan_native_test.pdb") + (Get-ChildItem "$objFanNative\*.obj").FullName)
 
 Write-Host 'run'
 $code = 0
-foreach ($test in 'hwmon_test', 'hwmon_native_test', 'fan_test') {
+foreach ($test in 'hwmon_test', 'hwmon_native_test', 'fan_test', 'fan_native_test') {
     & "$Out\$test.exe"
     if ($LASTEXITCODE -ne 0) { $code = $LASTEXITCODE; break }
 }

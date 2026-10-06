@@ -38,6 +38,7 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
+#define BC250_ESCAPE_RUN_FAN 30u                // case fan control: read, board, curve, fixed duty under a lease, renew
 #define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
                                             // the respin. Seven revisions were written apart on seven branches,
                                             // each taking the next free number for itself: 209 (the DirectFlip
@@ -658,8 +659,8 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 // BIOS "Fan Setting" curve; this escape only reports what the chip says. Adapter-owned software snapshot,
 // published by the governor thread once a second: the escape reads no port and sends no message, so it takes
 // NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, exactly as RUN_DPM. READ is the
-// only operation and is open to every caller; there is no write operation at all, here or anywhere else in
-// the driver.
+// only operation and is open to every caller; there is no write operation here. The one writer of the chip is
+// the fan control, with its own escape (RUN_FAN, below).
 //
 // Rpm[i] is raw RPM of tachometer i; 0 means either a channel that does not turn or a value this driver
 // refused. The two are told apart by RpmValidMask, which carries one bit per tachometer whose value THIS
@@ -674,8 +675,8 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 // are board thermistors. A source of 0 means the channel carries nothing in this sample, which covers a
 // channel the map does not hold and a value the driver refused: a reader must then show "no reading" for it
 // and never a temperature. ModeMask is 0xA00 and Engine is 0xCF8, both AS THE START READ THEM and not per
-// sample; both are documented by the out-of-tree nct6687d alone, so both are UNPROVEN on this board and no
-// decision reads either. AgeMs counts from the last accepted sample at the time of the escape, so a stopped
+// sample. M803 measured both on unit A (0xE0 and 0x60 at rest); the reader decides nothing on them, and the fan
+// control reads its own live values inside its handshake (RUN_FAN). AgeMs counts from the last accepted sample at the time of the escape, so a stopped
 // sampler shows its age growing. Reason is enum bc250_hwmon_reason (driver/shim/include/bc250_hwmon.h) and
 // says why VALID is clear.
 #define BC250_HWMON_ABI 1u
@@ -714,7 +715,7 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long EcBuild;                  // year << 16 | month << 8 | day
     unsigned long FanPresentMask;           // bit i: tachometer i exists
     unsigned long DutyPresentMask;          // bit i: duty output i exists
-    unsigned long ModeMask;                 // 0xA00 as read; UNPROVEN on this board
+    unsigned long ModeMask;                 // 0xA00 as the start read it (M803: 0xE0 at rest)
     unsigned long Rpm[BC250_HWMON_FAN_SLOTS];
     unsigned long DutyPermille[BC250_HWMON_FAN_SLOTS];
     long TemperatureMc[BC250_HWMON_TEMP_SLOTS];
@@ -723,7 +724,7 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long long Samples, Errors, Retries;
     unsigned long long Generation;          // start-health generation of the start this describes
     unsigned long Reason;                   // enum bc250_hwmon_reason when VALID is clear
-    unsigned long Engine;                   // 0xCF8 as the start read it; UNPROVEN, reported and logged only
+    unsigned long Engine;                   // 0xCF8 as the start read it (M803: 0x60 at rest); reported and logged only
     unsigned long RpmValidMask;             // bit i: Rpm[i] is a value this sample accepted, not a refusal
     unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
     unsigned long long Refusals;            // values refused since the start, over every register
@@ -885,6 +886,85 @@ typedef struct _BC250_ESCAPE_CPU {
     unsigned long long ExpectedGeneration;  // in: every write
     unsigned long Reserved[2];              // zero in, zero out
 } BC250_ESCAPE_CPU; // 296 bytes on Windows, ABI 1
+
+// The case fan control (driver/kmd/fan.c, driver/shim/bc250_fan.c, docs/design/fan.md Part B). The driver takes fan 1
+// from the BIOS curve while it runs and gives it back to the chip's own automatic mode on every exit path (owner,
+// 2026-10-06). Software state only: the escape reads the controller's published snapshot, and a write operation
+// leaves a request that the governor thread applies at its next hardware-monitor step (at most one second later).
+// No port is touched here, so every operation takes NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit
+// zero, as RUN_HWMON and RUN_DPM_CURVE.
+//
+// READ is open to every caller. BOARD, CURVE, FIXED and RENEW need an administrator, ExpectedGeneration equal to the
+// Generation a READ of this start returned (STATUS_RETRY otherwise), and a start whose fan control is enabled
+// (STATUS_INVALID_DEVICE_STATE otherwise; Gate says why it is not).
+//   BOARD  the chip's own curve (the BIOS "Fan Setting") runs the fan. Store=1 makes it the choice of every start.
+//   CURVE  the driver's curve: Profile names a preset, or PROFILE_CUSTOM with Points, CurveC and CurvePct. LeaseMs 0
+//          is durable (and Store=1 writes it to the registry); 5000..300000 is a trial that ends with the board.
+//   FIXED  one duty, FixedPct 20..100, always under a lease of LeaseMs 5000..300000. Never stored.
+//   RENEW  restarts the lease of a leased mode with LeaseMs.
+// A refused request changes nothing and names the rule in Error (enum bc250_fan_error, driver/shim/include/bc250_fan.h).
+//
+// A new command and not a new revision of an old one, and no change of BC250_KMD_VERSION: the escape is additive, no
+// existing layout moves, and a driver before this one answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which is how a tool
+// finds it is talking to an older driver. The version constant is tied to the INF DriverVer (packagecheck VRS010), so
+// a bump belongs to the release train that carries this escape, not to the escape itself.
+#define BC250_FAN_ABI 1u
+#define BC250_FAN_CURVE_SLOTS 8u
+#define BC250_FAN_OP_READ 0u
+#define BC250_FAN_OP_BOARD 1u
+#define BC250_FAN_OP_CURVE 2u
+#define BC250_FAN_OP_FIXED 3u
+#define BC250_FAN_OP_RENEW 4u
+#define BC250_FAN_FLAG_ENABLED 1u           // this start may drive the fan (EnableFanControl, the reader, the chip)
+#define BC250_FAN_FLAG_CONTROLLING 2u       // the driver holds fan 1 now: its mode bit is set in the chip
+#define BC250_FAN_FLAG_EMERGENCY 4u         // 100 %: the guard temperature reached 87 C
+#define BC250_FAN_FLAG_LEASED 8u            // the mode in force ends with the board when LeaseMs runs out
+#define BC250_FAN_FLAG_STORED 16u           // FanMode is on disk: StoredMode and StoredProfile are the registry's
+#define BC250_FAN_FLAG_FAULT 32u            // the chip refused something: the board has the fan for this start
+#define BC250_FAN_FLAG_GATED 64u            // EnableFanControl is 0: no write to the chip ever happens
+#define BC250_FAN_FLAG_PAUSED 128u          // the adapter is out of D0: the board has the fan until D0
+#define BC250_FAN_FLAG_RESTORE_SAVED 256u   // the board's own mode and target were recorded before the first change
+#define BC250_FAN_FLAG_SUBSTITUTED 512u     // that record holds the rest values: our bit was already set when it was taken
+#define BC250_FAN_FLAG_HELD_BACK 1024u      // a doubt gave the fan back; the driver takes it again after 30 s clean
+// Why a start's fan control is not enabled.
+#define BC250_FAN_GATE_OK 0u
+#define BC250_FAN_GATE_SETTING 1u           // EnableFanControl is 0
+#define BC250_FAN_GATE_READER 2u            // the hardware monitor is not online (EnableHwmon 0, or a refusal)
+#define BC250_FAN_GATE_CHIP 3u              // the customer ID is neither pinned (HwmonExpectId) nor unit A's 0x162B
+#define BC250_FAN_GATE_COUNT 4u
+typedef struct _BC250_ESCAPE_FAN {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion;
+    unsigned long Op;                       // in: BC250_FAN_OP_*
+    unsigned long Flags;                    // out: BC250_FAN_FLAG_*
+    unsigned long Mode;                     // in: CURVE/BOARD ignore it (the Op says); out: enum bc250_fan_mode in force
+    unsigned long State;                    // out: enum bc250_fan_state
+    unsigned long Reason;                   // out: enum bc250_fan_reason, the last handback
+    unsigned long DoubtReason;              // out: enum bc250_fan_reason, 0 without doubt
+    unsigned long Profile;                  // in: CURVE; out: enum bc250_fan_profile in force
+    unsigned long Points;                   // in: CURVE with PROFILE_CUSTOM; out: points of the curve in force
+    unsigned long CurveC[BC250_FAN_CURVE_SLOTS];    // in/out: degrees C, rising
+    unsigned long CurvePct[BC250_FAN_CURVE_SLOTS];  // in/out: duty percent, never falling, 20..100
+    unsigned long FixedPct;                 // in: FIXED; out: the fixed duty in force, 0 outside FIXED
+    unsigned long LeaseMs;                  // in: CURVE, FIXED, RENEW; out: what is left of the lease, 0 if durable
+    unsigned long Store;                    // in: BOARD, CURVE with LeaseMs 0: 1 writes the choice to the registry
+    unsigned long TargetPct;                // out: what the curve, the fixed duty or the emergency asks for
+    unsigned long AppliedPct;               // out: what the slope rule let through, 0 while the board has the fan
+    unsigned long WrittenRaw;               // out: the duty target written last, 0..255
+    unsigned long ReadbackRaw;              // out: the duty read-back of fan 1 in the last sample, 0..255
+    long GuardMc;                           // out: max(Tctl, EC SB-TSI) of the last step
+    unsigned long Rpm;                      // out: tachometer of fan 1 in the last sample
+    unsigned long Channel;                  // out: the fan this control drives (1, the one that turns on unit A)
+    unsigned long SavedMode, SavedTarget;   // out: the board's own values, the restore record
+    unsigned long Error;                    // out: enum bc250_fan_error of this request
+    unsigned long StoredMode, StoredProfile;    // out: the registry's choice, when STORED
+    unsigned long Gate;                     // out: BC250_FAN_GATE_*
+    unsigned long long Takeovers, Handbacks, Writes, Failures;     // out: since this device object was created
+    unsigned long long Emergencies, Doubts, LeaseExpiries, WatchdogFires;
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: every write operation
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_FAN; // 272 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

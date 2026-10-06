@@ -98,7 +98,17 @@ static void KeReleaseSpinLock(PKSPIN_LOCK lock, KIRQL irql)
 }
 
 static ULONG64 KeQueryInterruptTime(void) { return native_time; }
-static void KeStallExecutionProcessor(unsigned usec) { CHECK(usec == 1); native_stalls++; }
+/* The reader stalls 1 us after each access and nothing else. The fan control's handshake polls with longer stalls,
+ * so its test (fan_native_mock.h) admits any value. */
+static void KeStallExecutionProcessor(unsigned usec)
+{
+#ifndef NATIVE_STALL_ANY
+    CHECK(usec == 1);
+#else
+    UNREFERENCED_PARAMETER(usec);
+#endif
+    native_stalls++;
+}
 
 /* The rundown protection of the adapter context. The test clears native_rundown to prove that the escape
  * answers STATUS_DELETE_PENDING instead of reading the snapshot during a tear-down. */
@@ -148,7 +158,7 @@ static int native_log_has(const char *needle)
     return 0;
 }
 
-#define NATIVE_SETTINGS 8
+#define NATIVE_SETTINGS 32
 static struct { const WCHAR *Name; ULONG Value; } native_settings[NATIVE_SETTINGS];
 
 static void NativeSetSetting(const WCHAR *name, ULONG value)
@@ -165,6 +175,17 @@ static void NativeSetSetting(const WCHAR *name, ULONG value)
 }
 
 static void NativeClearSettings(void) { memset(native_settings, 0, sizeof(native_settings)); }
+
+/* A deleted value keeps its slot under an empty name, which no setting has, so a later value of the same name
+ * cannot land in a hole ahead of a stale copy. */
+static void NativeDeleteSetting(const WCHAR *name)
+{
+    int i;
+
+    for (i = 0; i < NATIVE_SETTINGS; i++)
+        if (native_settings[i].Name != NULL && wcscmp(native_settings[i].Name, name) == 0)
+            native_settings[i].Name = L"";
+}
 
 static NTSTATUS GuardQuerySetting(const WCHAR *name, ULONG *value)
 {
@@ -197,6 +218,9 @@ typedef struct _BC250_START_HEALTH_NATIVE {
     ULONGLONG Generation;
 } BC250_START_HEALTH_NATIVE;
 
+/* The fan control's test (fan_native_mock.h) defines a device that carries the fan owner as well. */
+#ifndef NATIVE_FAN_DEVICE
+
 typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_NATIVE StartHealth;
     BC250_HWMON_OWNER Hwmon;
@@ -208,3 +232,4 @@ void HwmonStop(BC250_HWMON_OWNER *Owner);
 void HwmonSample(BC250_DEVICE *Device);
 void HwmonLogLine(BC250_DEVICE *Device, _In_z_ const char *What);
 void HwmonRequest(BC250_DEVICE *Device, BC250_ESCAPE_HWMON *Data, ULONG EscapeFlags);
+#endif

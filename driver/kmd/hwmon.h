@@ -60,3 +60,15 @@ typedef struct _BC250_HWMON_OWNER {
     ULONGLONG Samples, Errors, Retries, Refusals;
     BC250_HWMON_SNAP Snap;                  // under SnapLock
 } BC250_HWMON_OWNER;
+
+// The port transport's own context: the owner and the IRQL of the hold. It lives on the caller's stack, so the
+// saved IRQL is never shared between two callers.
+typedef struct _BC250_HWMON_PORTS {
+    BC250_HWMON_OWNER* Owner;
+    KIRQL Irql;
+} BC250_HWMON_PORTS;
+
+// The fan control's transport (fan.c, Part B of docs/design/fan.md): the read transport plus the data port and a
+// microsecond stall for the handshake's polls. Lockless is for the bugcheck path only, where the other processors
+// are frozen and a spin lock could be held by one of them forever.
+void HwmonWriteIo(BC250_HWMON_PORTS* Ports, BC250_HWMON_OWNER* Owner, struct bc250_hwmon_io* Io, BOOLEAN Lockless);

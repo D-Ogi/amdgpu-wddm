@@ -138,15 +138,15 @@ HKR, Parameters, EnableHangBugcheck, 0x00010001, 0
 ; an upgrade: AddReg may run before the old driver stops. DWORD | NOCLOBBER affects only logging.
 HKR, Parameters, KeepLog,           0x00010003, 0
 ; ---- finished features: on by every install, each with one switch to bisect a regression -----------------------
-; The three values below are not gates in the sense of the block above. Each one carries a feature that is
+; The values below are not gates in the sense of the block above. Each one carries a feature that is
 ; written, reviewed and host-tested, and the release-train rule is that such a feature rides the driver on, with
 ; one switch an operator closes to get the previous behaviour back (owner, 2026-10-05). Writing 0 into any of
 ; them gives the behaviour of 0.7.208.1 for that one feature and nothing else.
 ;
 ; The board's own hardware monitor, read only (hwmon.c, docs/design/fan.md): the Nuvoton NCT6686D Super I/O that
 ; turns the case fan from the BIOS "Fan Setting" curve. 1 starts the reader; 0 means no x86 port access happens
-; at all. The reader never writes a configuration, control, limit or duty register, so the fan stays in the
-; chip's own automatic mode whatever this value is, and a window that does not answer like this chip is refused
+; at all. The reader never writes a configuration, control, limit or duty register (the fan control below is the
+; one writer, and it needs this reader online), and a window that does not answer like this chip is refused
 ; before any reading is believed. The EC window has no arbiter, so a third-party monitor driving the same ports
 ; can corrupt our reads: every sample is checked for plausibility, and a measured session needs the preflight
 ; check of the design document. HwmonBasePort 0 means the built-in 0x0A20, measured on unit A; the only other
@@ -157,6 +157,15 @@ HKR, Parameters, KeepLog,           0x00010003, 0
 ; customer ID once an operator has read it, the second says a lab trial proved the duty read-back.
 HKR, Parameters, EnableHwmon,       0x00010001, 1
 HKR, Parameters, HwmonBasePort,     0x00010001, 0
+; The case fan control (fan.c, docs/design/fan.md Part B). 1 lets the driver take fan 1 from the BIOS curve while
+; it runs: it drives the fan on its own curve (at least as fast as the BIOS Standard Mode, 100 % from 85 C) and
+; gives the fan back to the chip's automatic mode on every exit path - stop, remove, out of D0, unload, a stalled
+; control step, a bugcheck. The BIOS "Fan Setting" is never changed (owner, 2026-10-06). It needs the reader above
+; online and the chip identified as unit A's (or pinned with HwmonExpectId); otherwise it writes nothing. 0 means
+; the driver never writes the chip, and the fan stays in the chip's own automatic mode whatever else is set. FanMode,
+; FanProfile and the FanCurve values are the user's stored choice and are absent on purpose: the driver writes them
+; when the user picks a fan setting in the control application.
+HKR, Parameters, EnableFanControl,  0x00010001, 1
 ; The DirectFlip handshake, kernel half (wddm.c, docs/design/direct-flip-handshake.md, M15.14). 1 lets this start
 ; tell the compositor's user-mode driver, in the scan-out caps trailer, that it will admit a client scan-out flip
 ; and at what geometry. The driver ANDs it with every start-latched fact the flip path needs, so an open switch
