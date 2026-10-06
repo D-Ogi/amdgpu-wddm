@@ -1,0 +1,11 @@
+sinkwriter: a Media Foundation sink writer to .mp4 with our transform registered locally
+  stage: MFCreateSinkWriterFromURL
+  stage: AddStream
+  stage: SetInputMediaType
+  chain [0] category {F79EAC7D-...} ours
+  stage: BeginWriting
+  stage: Finalize
+  wrote 6 pictures in 1253.5 ms, C:\BC250\tmp\e52\20261006T031702Z\sink-720\mfthost-sinkwriter.mp4 is 179781 bytes
+  pictures that went through our transform: 6
+
+ALL PASS

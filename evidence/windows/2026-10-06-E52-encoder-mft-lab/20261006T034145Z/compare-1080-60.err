@@ -1,0 +1,113 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8959
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted paging create identity=000001D7C74BF408 queue=40000240 status=00000000
+radv_wddm2_winsys_create
+allocation handle=0x40000440
+allocation handle=0x40000480
+allocation handle=0x400004c0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000540
+allocation handle=0x40000640
+allocation handle=0x40000680
+allocation handle=0x400006c0
+[mft t11276] client device on adapter 1002:13FE
+allocation handle=0x40000700
+allocation handle=0x40000740
+allocation handle=0x40000780
+allocation handle=0x400007c0
+allocation handle=0x40000800
+allocation handle=0x40000840
+allocation handle=0x40000880
+allocation handle=0x400008c0
+allocation handle=0x40000900
+allocation handle=0x40000940
+allocation handle=0x40000980
+allocation handle=0x400009c0
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=2
+allocation handle=0x40000a00
+bc250: gather capacity=36864 bytes required=34880 ibs=4
+allocation handle=0x40000a40
+allocation handle=0x40000a80
+allocation handle=0x40000ac0
+allocation handle=0x40000b00
+allocation handle=0x40000b40
+bc250: gather capacity=4096 bytes required=992 ibs=2
+allocation handle=0x40000b80
+allocation handle=0x40000bc0
+[mft t11276] gpu picture: readback 21.362 ms, query wait 0.028 ms, gpu 18.107 ms (valid 1)
+allocation handle=0x40000c00
+bc250: gather capacity=20480 bytes required=20256 ibs=2
+[mft t11276] gpu picture: readback 59.514 ms, query wait 0.016 ms, gpu 57.516 ms (valid 1)
+allocation handle=0x40000c40
+bc250: gather capacity=20480 bytes required=20256 ibs=2
+[mft t11276] gpu picture: readback 39.786 ms, query wait 0.016 ms, gpu 37.727 ms (valid 1)
+allocation handle=0x40000c80
+bc250: gather capacity=20480 bytes required=20256 ibs=2
+[mft t11276] gpu picture: readback 39.801 ms, query wait 0.016 ms, gpu 37.702 ms (valid 1)
+allocation handle=0x40000cc0
+bc250: gather capacity=20480 bytes required=20256 ibs=2
+[mft t11276] gpu picture: readback 35.066 ms, query wait 0.017 ms, gpu 32.991 ms (valid 1)
+allocation handle=0x40000d00
+bc250: gather capacity=20480 bytes required=20256 ibs=2
+[mft t11276] gpu picture: readback 34.700 ms, query wait 0.016 ms, gpu 32.658 ms (valid 1)
+[mft t11276] gpu picture: readback 35.437 ms, query wait 0.016 ms, gpu 34.115 ms (valid 1)
+allocation handle=0x40000d40
+bc250: gather capacity=20480 bytes required=20256 ibs=2
+[mft t11276] gpu picture: readback 36.366 ms, query wait 0.017 ms, gpu 34.063 ms (valid 1)
+[mft t11276] gpu picture: readback 35.826 ms, query wait 0.017 ms, gpu 34.477 ms (valid 1)
+[mft t11276] gpu picture: readback 36.453 ms, query wait 0.016 ms, gpu 35.098 ms (valid 1)
+[mft t11276] gpu picture: readback 37.000 ms, query wait 0.017 ms, gpu 35.682 ms (valid 1)
+[mft t11276] gpu picture: readback 36.354 ms, query wait 0.012 ms, gpu 35.319 ms (valid 1)
+[mft t11276] gpu picture: readback 36.032 ms, query wait 0.016 ms, gpu 34.769 ms (valid 1)
+[mft t11276] gpu picture: readback 37.186 ms, query wait 0.016 ms, gpu 35.837 ms (valid 1)
+[mft t11276] gpu picture: readback 36.835 ms, query wait 0.017 ms, gpu 35.530 ms (valid 1)
+[mft t11276] gpu picture: readback 36.683 ms, query wait 0.017 ms, gpu 35.354 ms (valid 1)
+[mft t11276] gpu picture: readback 37.081 ms, query wait 0.016 ms, gpu 35.719 ms (valid 1)
+[mft t11276] gpu picture: readback 36.569 ms, query wait 0.016 ms, gpu 35.164 ms (valid 1)
+[mft t11276] gpu picture: readback 37.257 ms, query wait 0.016 ms, gpu 35.900 ms (valid 1)
+[mft t11276] gpu picture: readback 37.325 ms, query wait 0.017 ms, gpu 35.949 ms (valid 1)
+[mft t11276] gpu picture: readback 37.093 ms, query wait 0.017 ms, gpu 35.846 ms (valid 1)
+[mft t11276] gpu picture: readback 36.878 ms, query wait 0.016 ms, gpu 35.463 ms (valid 1)
+[mft t11276] gpu picture: readback 37.516 ms, query wait 0.016 ms, gpu 36.162 ms (valid 1)
+[mft t11276] gpu picture: readback 37.346 ms, query wait 0.016 ms, gpu 35.974 ms (valid 1)
+[mft t11276] gpu picture: readback 37.316 ms, query wait 0.017 ms, gpu 35.993 ms (valid 1)
+[mft t11276] gpu picture: readback 36.910 ms, query wait 0.017 ms, gpu 35.570 ms (valid 1)
+[mft t11276] gpu picture: readback 36.933 ms, query wait 0.021 ms, gpu 35.545 ms (valid 1)
+[mft t11276] gpu picture: readback 36.814 ms, query wait 0.016 ms, gpu 35.493 ms (valid 1)
+[mft t11276] gpu picture: readback 36.723 ms, query wait 0.017 ms, gpu 35.406 ms (valid 1)
+[mft t11276] gpu picture: readback 36.416 ms, query wait 0.012 ms, gpu 35.147 ms (valid 1)
+[mft t11276] gpu picture: readback 36.354 ms, query wait 0.017 ms, gpu 35.095 ms (valid 1)
+[mft t11276] gpu picture: readback 36.661 ms, query wait 0.017 ms, gpu 35.330 ms (valid 1)
+[mft t11276] gpu picture: readback 36.604 ms, query wait 0.016 ms, gpu 35.261 ms (valid 1)
+[mft t11276] gpu picture: readback 36.904 ms, query wait 0.016 ms, gpu 35.570 ms (valid 1)
+[mft t11276] gpu picture: readback 36.550 ms, query wait 0.017 ms, gpu 35.224 ms (valid 1)
+[mft t11276] gpu picture: readback 36.672 ms, query wait 0.016 ms, gpu 35.330 ms (valid 1)
+[mft t11276] gpu picture: readback 36.827 ms, query wait 0.016 ms, gpu 35.426 ms (valid 1)
+[mft t11276] gpu picture: readback 36.134 ms, query wait 0.016 ms, gpu 34.781 ms (valid 1)
+[mft t11276] gpu picture: readback 36.847 ms, query wait 0.018 ms, gpu 35.504 ms (valid 1)
+[mft t11276] gpu picture: readback 36.819 ms, query wait 0.017 ms, gpu 35.514 ms (valid 1)
+[mft t11276] gpu picture: readback 36.903 ms, query wait 0.016 ms, gpu 35.566 ms (valid 1)
+[mft t11276] gpu picture: readback 37.015 ms, query wait 0.016 ms, gpu 35.724 ms (valid 1)
+[mft t11276] gpu picture: readback 37.012 ms, query wait 0.017 ms, gpu 35.658 ms (valid 1)
+[mft t11276] gpu picture: readback 36.683 ms, query wait 0.017 ms, gpu 35.312 ms (valid 1)
+[mft t11276] gpu picture: readback 36.634 ms, query wait 0.016 ms, gpu 35.292 ms (valid 1)
+[mft t11276] gpu picture: readback 36.591 ms, query wait 0.017 ms, gpu 35.191 ms (valid 1)
+[mft t11276] gpu picture: readback 37.026 ms, query wait 0.017 ms, gpu 35.616 ms (valid 1)
+[mft t11276] gpu picture: readback 36.741 ms, query wait 0.017 ms, gpu 35.445 ms (valid 1)
+[mft t11276] gpu picture: readback 36.906 ms, query wait 0.016 ms, gpu 35.505 ms (valid 1)
+[mft t11276] gpu picture: readback 36.970 ms, query wait 0.016 ms, gpu 35.576 ms (valid 1)
+[mft t11276] gpu picture: readback 36.901 ms, query wait 0.016 ms, gpu 35.508 ms (valid 1)
+[mft t11276] gpu picture: readback 37.088 ms, query wait 0.016 ms, gpu 35.705 ms (valid 1)
+[mft t11276] gpu picture: readback 37.228 ms, query wait 0.066 ms, gpu 35.747 ms (valid 1)
+[mft t11276] gpu picture: readback 36.731 ms, query wait 0.016 ms, gpu 35.444 ms (valid 1)
+[mft t11276] gpu picture: readback 37.030 ms, query wait 0.016 ms, gpu 35.657 ms (valid 1)
+[mft t11276] gpu picture: readback 37.641 ms, query wait 0.017 ms, gpu 36.201 ms (valid 1)
+[mft t11276] gpu picture: readback 37.227 ms, query wait 0.014 ms, gpu 35.992 ms (valid 1)
+[mft t11276] gpu picture: readback 37.053 ms, query wait 0.016 ms, gpu 35.791 ms (valid 1)
+[mft t11276] gpu picture: readback 37.393 ms, query wait 0.019 ms, gpu 36.014 ms (valid 1)
+[mft t11276] gpu picture: readback 37.085 ms, query wait 0.017 ms, gpu 35.748 ms (valid 1)
+BC250 hosted paging destroy identity=000001D7C74BF408 queue=40000240 status=00000000

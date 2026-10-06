@@ -1,0 +1,14 @@
+compare: our encoder against the inbox H264 Encoder MFT, same source, CBR 12000000 bit/s
+
+                                         ours     inbox H264
+  bytes                               2987545        3320028
+  bit/s at the nominal rate          11950180       13280112
+  ms per picture                        44.89           3.40
+  pictures per second                    22.3          293.9
+  PSNR Y (dB)                           41.47          46.06
+  PSNR Cb (dB)                          39.01          45.50
+  PSNR Cr (dB)                          37.80          45.16
+  pictures decoded                         60             60
+
+
+ALL PASS

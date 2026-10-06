@@ -1,0 +1,32 @@
+mft: the asynchronous hardware transform contract, D3D11 BGRA input
+  DllCanUnloadNow: S_FALSE while a transform or a class object lives, S_OK after
+  MFTEnumEx LOCALMFT|HARDWARE|ASYNCMFT 0x00000000, 2 transform(s), ours by clsid 1
+  MFTEnumEx LOCALMFT|ASYNCMFT          0x00000000, 1 transform(s), ours by clsid 0
+  MFTEnumEx LOCALMFT|HARDWARE          0x00000000, 1 transform(s), ours by clsid 1
+  MFTEnumEx LOCALMFT                   0x00000000, 1 transform(s), ours by clsid 0
+  MFTEnumEx LOCALMFT|ALL               0x00000000, 3 transform(s), ours by clsid 1
+  MFTEnumEx ALL                        0x00000000, 3 transform(s), ours by clsid 1
+  found through MFTEnumEx with MFT_ENUM_FLAG_HARDWARE, MF_TRANSFORM_ASYNC set
+  streaming before MF_TRANSFORM_ASYNC_UNLOCK is refused, as the contract requires
+  an odd frame size is refused on both types during negotiation
+  MF_MT_MPEG_SEQUENCE_HEADER present on the output type, 36 bytes
+  the VUI is the client's own colour description, byte for byte: 5 input types, BT.601, BT.709, full range, unspecified, and 709 for the converting BGRA path
+  inbox encoder, CODECAPI_AVEncVideoEncodeQP: IsSupported 0x00000000
+    rate control to quality 0x00000000, quality 70 0x00000000
+    GetParameterRange 0x80004001 vt 0/0/0 lo 0x0 hi 0x0
+    SetValue a plain scalar as VT_UI8     0x00000000, GetValue 0x00000000 vt 21 value 0x1E
+    SetValue a plain scalar as VT_UI4     0x80070057, GetValue 0x00000000 vt 21 value 0x1E
+    SetValue the packed per-type form     0x00000000, GetValue 0x00000000 vt 21 value 0x1A
+    SetValue an I field above 51          0x80070057, GetValue 0x00000000 vt 21 value 0x1A
+    SetValue a P field above 51           0x00000000, GetValue 0x00000000 vt 21 value 0x1A
+  ICodecAPI: rate control, bitrate, GOP, low latency and the packed UINT64 quantiser set and read back; an out-of-range quantiser field and CABAC refused
+  MFT_ENUM_ADAPTER_LUID is the client's own adapter, 00000000:00008959, as an 8 byte blob
+  the first access unit opens with the exact 36 bytes of MF_MT_MPEG_SEQUENCE_HEADER
+  after COMMAND_DRAIN, NOTIFY_START_OF_STREAM opens a new segment with a key frame carrying its own parameter sets
+  a bitrate change while streaming leaves the published parameter sets and the declared level exactly as the stream carries them
+  fed 6 pictures, 7 NeedInput, 6 HaveOutput, 6 outputs, 1 key frames, drain complete
+  173283 bytes, 6931320 bit/s, 29.31 ms per picture through the transform interface
+  the inbox decoder accepted 6 of 6 access units
+  stream written to C:\BC250\tmp\e52\20261006T031702Z\mft-720\mfthost-mft.264
+
+ALL PASS

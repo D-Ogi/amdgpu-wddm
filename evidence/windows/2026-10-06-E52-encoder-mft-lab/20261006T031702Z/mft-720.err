@@ -1,0 +1,113 @@
+[mft t08960] ProcessMessage 0x10000000
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8959
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted paging create identity=000001AF6F497308 queue=40000240 status=00000000
+radv_wddm2_winsys_create
+allocation handle=0x40000440
+allocation handle=0x40000480
+allocation handle=0x400004c0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000540
+allocation handle=0x40000640
+allocation handle=0x40000680
+allocation handle=0x400006c0
+[mft t08960] ProcessMessage 0x2
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 6/1/6, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 1, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 2/2/2, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+[mft t08960] parameter sets rebuilt: level 31, colour 1/1/1, range 0, 36 bytes
+allocation handle=0x40000700
+allocation handle=0x40000740
+[mft t08960] ProcessMessage 0x10000000
+[mft t08960] client device on adapter 1002:13FE
+allocation handle=0x40000780
+allocation handle=0x400007c0
+[mft t08960] queue NeedInput
+[mft t08960] ProcessMessage 0x10000003
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000800
+allocation handle=0x40000840
+allocation handle=0x40000880
+allocation handle=0x400008c0
+allocation handle=0x40000900
+allocation handle=0x40000940
+allocation handle=0x40000980
+allocation handle=0x400009c0
+allocation handle=0x40000a00
+allocation handle=0x40000a40
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=2
+allocation handle=0x40000a80
+bc250: gather capacity=16384 bytes required=15712 ibs=8
+allocation handle=0x40000ac0
+allocation handle=0x40000b00
+[mft t08960] gpu picture: readback 16.328 ms, query wait 0.020 ms, gpu 9.239 ms (valid 1)
+[mft t08960] queue HaveOutput (84061 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000b40
+bc250: gather capacity=4096 bytes required=3456 ibs=2
+[mft t08960] gpu picture: readback 24.050 ms, query wait 0.014 ms, gpu 22.733 ms (valid 1)
+[mft t08960] queue HaveOutput (25455 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000b80
+bc250: gather capacity=4096 bytes required=3456 ibs=2
+[mft t08960] gpu picture: readback 25.262 ms, query wait 0.014 ms, gpu 23.627 ms (valid 1)
+[mft t08960] queue HaveOutput (19830 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000bc0
+bc250: gather capacity=4096 bytes required=3456 ibs=2
+[mft t08960] gpu picture: readback 23.577 ms, query wait 0.014 ms, gpu 22.040 ms (valid 1)
+[mft t08960] queue HaveOutput (15167 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000c00
+bc250: gather capacity=4096 bytes required=3456 ibs=2
+[mft t08960] gpu picture: readback 24.665 ms, query wait 0.013 ms, gpu 23.160 ms (valid 1)
+[mft t08960] queue HaveOutput (15851 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000c40
+bc250: gather capacity=4096 bytes required=3456 ibs=2
+[mft t08960] gpu picture: readback 23.720 ms, query wait 0.014 ms, gpu 22.206 ms (valid 1)
+[mft t08960] queue HaveOutput (12919 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessMessage 0x10000002
+[mft t08960] ProcessMessage 0x1
+[mft t08960] queue DrainComplete (pendingOutput=0)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessMessage 0x10000003
+[mft t08960] queue NeedInput
+[mft t08960] GetEvent -> 0x00000000
+allocation handle=0x40000c80
+bc250: gather capacity=12288 bytes required=12128 ibs=2
+[mft t08960] gpu picture: readback 11.129 ms, query wait 0.014 ms, gpu 9.237 ms (valid 1)
+[mft t08960] queue HaveOutput (38198 bytes)
+[mft t08960] GetEvent -> 0x00000000
+[mft t08960] ProcessOutput delivered a sample
+[mft t08960] queue NeedInput
+[mft t08960] ProcessMessage 0x10000001
+BC250 hosted paging destroy identity=000001AF6F497308 queue=40000240 status=00000000

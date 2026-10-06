@@ -1,0 +1,28 @@
+tables
+  coeff_token table 0: 62 codes, Kraft 0.999969
+  coeff_token table 1: 62 codes, Kraft 0.999878
+  coeff_token table 2: 62 codes, Kraft 0.999023
+  coeff_token table 3: 62 codes, Kraft 0.968750
+  coeff_token chroma DC: 14 codes, Kraft 1.000000
+  total_zeros: 15 rows prefix free, Kraft sums as expected
+  total_zeros chroma DC: 3 rows prefix free, Kraft 1.0
+  run_before: 7 rows prefix free, Kraft sums as expected
+  zig-zag and 4x4 block scans are permutations
+  Table 8-15 chroma QP: monotone, 29..39
+  Table 9-4 coded_block_pattern: 48 values invertible both ways
+  Table 8-14 and the forward multipliers: 18 pairs, worst error 0.0132 %
+bit writer
+  2000 items, 45150 bits, round trip exact
+emulation prevention
+  6 fixed cases and a 4096 byte zero-heavy payload: no start code emulation
+parameter sets
+  level selection: frame size, macroblock rate and MaxBR, 6 cases
+  colour description: carried from the configuration into the SPS
+  SPS and PPS built, 38 bytes, 1280x720 level 3.1, 1920x1080 crop 8
+frame sizes
+  9 sizes classified, odd sizes refused by the encoder, 638x478 crops 2 and 2
+adapter choice
+  the BC-250 is in this machine: the refusal case needs a machine without it
+selftest PASS: 0 failure(s)
+
+ALL PASS

@@ -1,0 +1,14 @@
+encode: 1280x720, 6 frames, qp 26, gop 60, deblocking on, source CPU synthetic (I420)
+  80x45 macroblocks, coded 1280x720, level 31
+  import exact: every visible sample of picture 0 reached the GPU unchanged
+  decoder returned 6 of 6 pictures
+  6 of 6 pictures bit exact against the inbox decoder
+  nnz agreement GPU vs CPU: exact (0 disagreements)
+  key frames 1, skipped macroblocks 0 of 21600
+  215930 bytes, 8637200 bit/s at 30 Hz, mean PSNR(Y) 47.21 dB
+  28.25 ms per picture total, 22.18 ms of it on the GPU, 35.4 pictures per second
+  per picture: gpu stage 24.58 ms (gpu busy 22.18, readback 23.56), cpu 3.66 ms (cavlc 3.51, nal 0.15)
+  per picture profile accounted for every picture: yes
+  stream written to C:\BC250\tmp\e52\20261006T031702Z\t720-2\mfthost-encode.264
+
+ALL PASS

@@ -1,0 +1,50 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8959
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted paging create identity=000001BC804E2018 queue=40000240 status=00000000
+radv_wddm2_winsys_create
+allocation handle=0x40000440
+allocation handle=0x40000480
+allocation handle=0x400004c0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000540
+allocation handle=0x40000640
+allocation handle=0x40000680
+allocation handle=0x400006c0
+[mft t10956] client device on adapter 1002:13FE
+allocation handle=0x40000700
+allocation handle=0x40000740
+allocation handle=0x40000780
+allocation handle=0x400007c0
+allocation handle=0x40000800
+allocation handle=0x40000840
+allocation handle=0x40000880
+allocation handle=0x400008c0
+allocation handle=0x40000900
+allocation handle=0x40000940
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=2
+allocation handle=0x40000980
+bc250: gather capacity=12288 bytes required=9216 ibs=4
+allocation handle=0x400009c0
+allocation handle=0x40000a00
+[mft t10956] gpu picture: readback 8.077 ms, query wait 0.018 ms, gpu 3.348 ms (valid 1)
+allocation handle=0x40000a40
+allocation handle=0x40000a80
+allocation handle=0x40000ac0
+bc250: gather capacity=4096 bytes required=992 ibs=2
+allocation handle=0x40000b00
+bc250: gather capacity=4096 bytes required=992 ibs=2
+allocation handle=0x40000b40
+bc250: gather capacity=4096 bytes required=992 ibs=2
+allocation handle=0x40000b80
+bc250: gather capacity=4096 bytes required=992 ibs=2
+allocation handle=0x40000bc0
+bc250: gather capacity=4096 bytes required=992 ibs=2
+allocation handle=0x40000c00
+bc250: gather capacity=4096 bytes required=992 ibs=2
+[mft t10956] gpu picture: readback 4.095 ms, query wait 0.009 ms, gpu 3.630 ms (valid 1)
+[mft t10956] gpu picture: readback 3.873 ms, query wait 0.007 ms, gpu 3.624 ms (valid 1)
+BC250 hosted paging destroy identity=000001BC804E2018 queue=40000240 status=00000000
