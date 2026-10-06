@@ -1,0 +1,83 @@
+﻿BD-075 shared-resource trial 20261006T052934Z
+registered C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+accepted   1926DBAF31DD2EA86EF044CE72C7C0C616E3474CA1C12B7F213BF9702789F4B3
+candidate  A08113051B2278A7E77BBA539B9C8ED54FDDAFC6286649A2FCD0CAD8131388B6  C:\BC250\tmp\bd075\amdgpu_wddm_d3d12.dll
+client     FD9A6AAFFC6A9B526E46AE94AD34820EB9D26C16262C5948B4C84AF0902A3B5B  C:\BC250\tmp\bd075\capshare.exe (peer C:\BC250\tmp\bd075\capshare-peer.exe)
+dpm before: driver 0x000700CF, requested dpm, reason none, generation 321340328, ticks 2099226, uptime 66320392 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 4545 exits 4544 refusals 0, 44884730 ms at the point | 07:29:34.650 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  65.0 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 5458 down 5497 thermal 23 err 0  src grbm submit   0.0% sdma   0.0%
+trace      C:\BC250\tmp\bd075\20261006T052934Z\<cell>.ddi.log, one file per row
+
+install    swapped
+
+w12                    expect=pass          result=pass     hr=-          decided_ms=6562   gate=held         checks=A:controls=pass                    route=A:d3d12,B:-          removed=0 exit=0 ok=1 
+    trace retries=0/0 accepted=0 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A   6562 VERDICT cell=w12 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=held route=A:d3d12,B:- fl=A:12_1,B:- checks=A:controls=pass elapsed_ms=6562 decided_ms=6562 note=- controls=settled=ok_pending=ok_gate=held_cross_queue=ok
+    | A   5578 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5578 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5593 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5593 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5593 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+    | A   5593 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 4: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a 
+s11to11                expect=content       result=pass     hr=-          decided_ms=609    gate=-            checks=B:P0=pass,B:A=pass,A:B=pass        route=A:cpu11,B:cpu11      removed=0 exit=0 ok=1 
+    trace retries=0/0 accepted=0 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A    641 VERDICT cell=s11to11 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:cpu11,B:cpu11 fl=A:10_0,B:10_0 checks=B:P0=pass,B:A=pass,A:B=pass elapsed_ms=641 decided_ms=609 note=- peer_exit=0x00000000
+s12to11                expect=content       result=pass     hr=-          decided_ms=6188   gate=-            checks=B:P0=pass,B:A=pass,A:B=pass        route=A:d3d12,B:cpu11      removed=0 exit=0 ok=1 
+    trace retries=1/1 accepted=1 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A   6204 VERDICT cell=s12to11 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:d3d12,B:cpu11 fl=A:12_1,B:10_0 checks=B:P0=pass,B:A=pass,A:B=pass elapsed_ms=6204 decided_ms=6188 note=- peer_exit=0x00000000
+    | A   5313 ODS amdgpu_wddm_d3d12 engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 256x256, heap of 262144 bytes aligned to 65536 becomes 262144 bytes, default alignment, pitch 1024) 
+    | A   5188 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5188 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5188 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5188 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5188 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+s12to11-srgb           expect=format-alias  result=pass     hr=-          decided_ms=6188   gate=-            checks=B:P0=pass,B:A=pass,A:B=pass        route=A:d3d12,B:cpu11      removed=0 exit=0 ok=0 why=result=pass is not the expected refused open
+    trace retries=1/1 accepted=1 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A   6203 VERDICT cell=s12to11 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:d3d12,B:cpu11 fl=A:12_1,B:10_0 checks=B:P0=pass,B:A=pass,A:B=pass elapsed_ms=6203 decided_ms=6188 note=- peer_exit=0x00000000
+    | A   5313 ODS amdgpu_wddm_d3d12 engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 91, 256x256, heap of 262144 bytes aligned to 65536 becomes 262144 bytes, default alignment, pitch 1024) 
+    | A   5203 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5203 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+s12to11-rgba8          expect=content       result=pass     hr=-          decided_ms=6203   gate=-            checks=B:P0=pass,B:A=pass,A:B=pass        route=A:d3d12,B:cpu11      removed=0 exit=0 ok=1 
+    trace retries=1/1 accepted=1 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A   6219 VERDICT cell=s12to11 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:d3d12,B:cpu11 fl=A:12_1,B:10_0 checks=B:P0=pass,B:A=pass,A:B=pass elapsed_ms=6219 decided_ms=6203 note=- peer_exit=0x00000000
+    | A   5344 ODS amdgpu_wddm_d3d12 engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 28, 256x256, heap of 262144 bytes aligned to 65536 becomes 262144 bytes, default alignment, pitch 1024) 
+    | A   5219 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5219 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5219 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5219 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5219 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+s12to11-fence          expect=skip          result=skip     hr=-          decided_ms=5281   gate=-            checks=-                                  route=A:d3d12,B:cpu11      removed=0 exit=5 ok=1 
+    trace retries=0/0 accepted=0 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A   7844 VERDICT cell=s12to11 result=skip side=- stage=route-cannot-order-gpu-waits call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:d3d12,B:cpu11 fl=A:12_1,B:10_0 checks=- elapsed_ms=7844 decided_ms=5281 note=a_cpu11_opener_copies_on_the_CPU_inside_Flush,_so_no_GPU_wait_can_order_its_read_of_the_shared_surface_(route=A:d3d12,B:cpu11) peer_exit=0x00000002
+    | A   5172 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5172 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5172 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5172 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5172 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+    | A   5172 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 4: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a 
+s11to12                expect=record-length result=fail     hr=0x8007000E decided_ms=5219   gate=-            checks=-                                  route=A:cpu11,B:d3d12      removed=0 exit=2 ok=1 
+    trace retries=0/0 accepted=0 opens=0/0 refusals=1 fence_signal=0 fence_wait=0
+    ! OpenHeapAndResource: 80070057 reported as 8007000e, declined at record length; 1 allocation(s), kernel resource given, resource private data 16 bytes (magic 0x52363245, version 2), first allocation private data 32 bytes (magic 0x4137424c, version 1), allocation handle given, initial state 0x0, heap handle given, resource handle given
+    A   5484 VERDICT cell=s11to12 result=fail side=B stage=open-shared call=ID3D12Device::OpenSharedHandle(resource) hr=0x8007000E at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:cpu11,B:d3d12 fl=A:10_0,B:12_1 checks=- elapsed_ms=5484 decided_ms=5219 note=- peer_exit=0x00000002
+    | B   5219 ODS amdgpu_wddm_d3d12 engine-ddi: OpenHeapAndResource: 80070057 reported as 8007000e, declined at record length; 1 allocation(s), kernel resource given, resource private data 16 bytes (magic 0x52363245, version 2), first allocation private data 32 bytes (magic 0x4137424c, version 1), allocation handle given, initial state 0x0, heap handle given, resource handle given 
+    | B   5187 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | B   5187 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | B   5187 -> HELLO route=d3d12 fl=12_1 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | B   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | B   5203 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+neg-s12to11-fence      expect=gate-only     result=mismatch hr=-          decided_ms=5766   gate=violated:fence-1 checks=B:P0=pass,B:A=mismatch,A:B=mismatch route=A:d3d12,B:cpu11      removed=0 exit=1 ok=1 
+    trace retries=1/1 accepted=1 opens=0/0 refusals=0 fence_signal=0 fence_wait=0
+    A   6688 VERDICT cell=s12to11 result=mismatch side=- stage=fence-1 call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=violated:fence-1 route=A:d3d12,B:cpu11 fl=A:12_1,B:10_0 checks=B:P0=pass,B:A=mismatch,A:B=mismatch elapsed_ms=6688 decided_ms=5766 note=f1=1 inject=skip-wait peer_exit=0x00000000
+    | A   5344 ODS amdgpu_wddm_d3d12 engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 256x256, heap of 262144 bytes aligned to 65536 becomes 262144 bytes, default alignment, pitch 1024) 
+    | A   5219 MODULE when=device C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+    | A   5219 MODULES when=device total=40 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv.dll
+    | A   5219 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+    | A   5219 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+    | A   5219 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+
+TOTAL ok=7/8 skips=1 cells_s=52
+dpm after: driver 0x000700CF, requested dpm, reason none, generation 321340328, ticks 2100885, uptime 66372651 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release off (default) | idle: 500 MHz after 3000 ms under 2 permille busy; entries 4551 exits 4551 refusals 0, 44901379 ms at the point | 07:30:26.922 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  67.4 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle none confirmed  up 5465 down 5503 thermal 23 err 0  src grbm submit   0.0% sdma   0.0%
+restore    kept (A0811305 stays registered)
+registered A0811305
+allow      not-needed (this run never read the allowlist)
