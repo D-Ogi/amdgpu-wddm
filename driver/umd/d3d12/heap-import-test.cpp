@@ -471,23 +471,45 @@ int main(){
    events.clear();
    assert(owner.adopt(&adopt,&borrowed)==S_OK && events=="MZI" && borrowed.allocation==adopt.allocation &&
           borrowed.byte_size==65536 && borrowed.memory_type_index==0 && borrowed.gpu_va==gpu_address);
-   // Not ours: the ICD's borrowed-allocation map must not take it for one of this driver's, and no view
-   // is ever placed beside the opened image.
-   assert(!owner.owns_allocation(borrowed.allocation) && !owner.borrow_backing(borrowed.allocation));
-   // One record per handle. free(), Lock2, Unlock2 and the destroyed-resource lookup all find a record by its
-   // allocation handle, so a second record with the same handle would send one release to the other's record.
-   // The runtime gives every open its own allocation; a repeat is refused before anything is mapped.
+   // In the store like any other allocation, so the ICD's Lock2/Unlock2 reach this record and its own state
+   // checks (owns_allocation). No view is ever placed beside the opened image.
+   assert(owner.owns_allocation(borrowed.allocation) && !owner.borrow_backing(borrowed.allocation));
+   // The same handle adopted twice: two records, two imports, two independent releases. An application may call
+   // OpenSharedHandle twice on one device, and nothing promises that dxgkrnl answers with two handles. The store
+   // tells the two imports apart by the cookie each one carries, not by the handle.
    {
     engine_ddi::ImportedMemory again{};events.clear();
-    assert(owner.adopt(&adopt,&again)==E_INVALIDARG && !again.memory && events.empty());
-    assert(owner.last_report().stage==ImportStage::Request && owner.last_report().refusal &&
-           !std::strcmp(owner.last_report().refusal,"the allocation is already imported"));
+    // The stub's vkAllocateMemory answers with a handle derived from the allocation, so the two imports share
+    // their VkDeviceMemory value here; the cookie is the field that tells the two records apart, and it is the
+    // field free() now looks at.
+    assert(owner.adopt(&adopt,&again)==S_OK && events=="MZI" && again.allocation==adopt.allocation &&
+           again.cookie && again.cookie!=borrowed.cookie);
+    assert(owner.owns_allocation(again.allocation));
+    // Each import is released on its own, and neither release touches the other's record.
+    events.clear();assert(owner.free(&again)==S_OK && events=="VU");
+    assert(owner.last_free_report().adopted && owner.last_free_report().stage==FreeStage::Done);
+    assert(owner.free(&again)==E_INVALIDARG && owner.owns_allocation(borrowed.allocation));
    }
-   // The release returns the mapping and the import and makes no deallocate callback in either form.
-   events.clear();assert(owner.free(&borrowed)==S_OK && events=="VEU");
+   // The release returns the mapping and the import and makes no deallocate callback in either form. No Evict
+   // either ('E' is absent): the runtime destroys a borrowed allocation as soon as its destroy returns, so a
+   // callback naming that handle could evict an allocation dxgkrnl has since recycled.
+   const unsigned evicted_before=evictions;
+   events.clear();assert(owner.free(&borrowed)==S_OK && events=="VU" && evictions==evicted_before);
    assert(owner.last_free_report().adopted && owner.last_free_report().surface &&
           owner.last_free_report().stage==FreeStage::Done && !owner.last_free_report().owner_expired);
    assert(!owner.owns_allocation(borrowed.allocation) && owner.free(&borrowed)==E_INVALIDARG);
+  }
+  // A handle this driver created itself is never adopted over: that is the store corruption the refusal exists
+  // for, and the only shape adopt still declines on a known handle.
+  {
+   engine_ddi::MemoryRequest plain=req;plain.resource=&target;plain.flags=shareable_flags;
+   engine_ddi::ImportedMemory created{},stolen{};
+   events.clear();assert(owner.allocate(&plain,&created)==S_OK && events=="AMZI");
+   engine_ddi::AdoptRequest over=adopt;over.allocation=created.allocation;events.clear();
+   assert(owner.adopt(&over,&stolen)==E_INVALIDARG && !stolen.memory && events.empty());
+   assert(owner.last_report().refusal &&
+          !std::strcmp(owner.last_report().refusal,"the allocation is one this driver created"));
+   events.clear();assert(owner.free(&created)==S_OK && events=="VEUD");
   }
   // Every malformed adopt request is refused before the paging queue is touched, by one name.
   {
@@ -525,7 +547,7 @@ int main(){
    engine_ddi::AdoptRequest open=adopt;open.allocation=++next_allocation;
    engine_ddi::ImportedMemory borrowed{};
    events.clear();assert(held.adopt(&open,&borrowed)==S_OK && events=="MZI");
-   events.clear();assert(held.free(&borrowed)==S_OK && events=="VEU" && !held.held_count() && !held.held_bytes());
+   events.clear();assert(held.free(&borrowed)==S_OK && events=="VU" && !held.held_count() && !held.held_bytes());
    assert(held.last_free_report().adopted && held.last_free_report().stage==FreeStage::Done);
    assert(held.close_after_engine_retirement()==S_OK && held.discard_metadata()==0);
   }
@@ -555,8 +577,11 @@ int main(){
  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");fail_evict=false;
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- // Every reference taken was released: all calls but the refused one and the failed eviction.
- assert(makes_resident==evictions+2);assert(surfaces==5);
+ // Every reference taken was released by an Evict callback except five: the refused reference, the failed
+ // eviction, and the three borrowed allocations of the BD-075 section (two opens of one handle and the
+ // quarantine instance's one), whose residency is dropped without a callback because the runtime destroys the
+ // allocation itself and the handle may already be gone.
+ assert(makes_resident==evictions+5);assert(surfaces==5);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.

@@ -111,6 +111,9 @@ class RuntimeHeapImports final {
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
+    // The record an import belongs to, by the cookie it carries, under lock_. One borrowed allocation handle may
+    // have several records (BD-075: two opens of the same handle), so the handle no longer identifies an import.
+    Record* find_import(const engine_ddi::ImportedMemory*) const noexcept;
     // Records the declining check in report_, writes one line naming it and the request's shape, and returns
     // hr unchanged. Only for a refusal taken before any callback, probe or allocation.
     static HRESULT refuse(const char* why,HRESULT hr,const engine_ddi::MemoryRequest& request,

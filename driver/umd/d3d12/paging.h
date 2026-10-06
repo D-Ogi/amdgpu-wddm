@@ -41,9 +41,12 @@ class PagingDomain final {
     D3DKMT_HANDLE queue_{},sync_{};
     const volatile UINT64* completed_{};
     std::atomic<unsigned> mappings_{};
-    std::atomic<unsigned> evict_failures_{};
+    std::atomic<unsigned> evict_failures_{},evicts_skipped_{};
 public:
     unsigned evict_failures() const noexcept {return evict_failures_.load();}
+    // Borrowed allocations whose residency reference was dropped without an Evict callback: see
+    // unmap_after_gpu_retirement.
+    unsigned evicts_skipped() const noexcept {return evicts_skipped_.load();}
     PagingDomain(D3D12DDI_HRTDEVICE device,const D3DDDI_DEVICECALLBACKS& cb) noexcept
         : device_(device.handle),create_(cb.pfnCreatePagingQueueCb),destroy_(cb.pfnDestroyPagingQueueCb),
           map_(cb.pfnMapGpuVirtualAddressCb),free_(cb.pfnFreeGpuVirtualAddressCb),
@@ -154,17 +157,27 @@ public:
     // does not hold the VA: residency and mapping are independent, and deallocating the
     // allocation drops its residency anyway, while a retry could never succeed on an error
     // that does not clear (the record, its VA and the paging queue would leak).
-    HRESULT unmap_after_gpu_retirement(GpuMapping& mapping) noexcept {
+    // borrowed (BD-075): the allocation is not this driver's. The runtime destroys it as soon as
+    // pfnDestroyHeapAndResource returns, and that destroy can outrun this release - the in-DDI release of a
+    // borrowed backing waits only in_ddi_bound_ms and then queues the node anyway (engine-ddi context.cpp). An
+    // Evict callback naming a handle the runtime has already destroyed, and dxgkrnl may have recycled, could evict
+    // somebody else's allocation, so it is not made at all: destroying an allocation drops its residency, and
+    // nothing of ours needs the eviction (BD-075 review, 2026-10-06). The VA is still freed; that names an address,
+    // not a handle.
+    HRESULT unmap_after_gpu_retirement(GpuMapping& mapping,bool borrowed=false) noexcept {
         if(!mapping.owner_) return S_OK;
         UINT64 address=0;HRESULT hr=ready(mapping,&address);if(FAILED(hr)) return hr;
         if(!free_) return E_UNEXPECTED;
         if(mapping.resident_){
-            HRESULT evicted=E_UNEXPECTED;
-            if(evict_){
-                D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
-                evicted=evict_(device_,&evict);
+            if(borrowed) ++evicts_skipped_;
+            else {
+                HRESULT evicted=E_UNEXPECTED;
+                if(evict_){
+                    D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
+                    evicted=evict_(device_,&evict);
+                }
+                if(FAILED(evicted)) ++evict_failures_;
             }
-            if(FAILED(evicted)) ++evict_failures_;
             mapping.resident_=false;
         }
         D3DDDICB_FREEGPUVIRTUALADDRESS args{};args.BaseAddress=address;args.Size=mapping.bytes_;

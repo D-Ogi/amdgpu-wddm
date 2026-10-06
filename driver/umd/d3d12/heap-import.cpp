@@ -103,15 +103,24 @@ RuntimeHeapImports::Record* RuntimeHeapImports::find(D3DKMT_HANDLE handle) const
     for(auto r=records_;r;r=r->next)if(r->handle==handle)return r;
     return nullptr;
 }
+RuntimeHeapImports::Record* RuntimeHeapImports::find_import(const engine_ddi::ImportedMemory* memory) const noexcept {
+    if(!memory || !memory->cookie)return nullptr;
+    for(auto r=records_;r;r=r->next)if(static_cast<const void*>(r)==memory->cookie)return r;
+    return nullptr;
+}
+// The one question this answers, and its only caller (device-engine.cpp, the BC250_HOST_Lock2/Unlock2 router):
+// is this allocation in our store, so that the ICD's lock goes to our record and its kernel callback instead of
+// to HostedDispatch? A borrowed allocation (BD-075) is in the store like any other: its mapping is ours and
+// dispatch()'s own state checks are the ones that must see the lock. Until the BD-075 review of 2026-10-06 this
+// answered false for an adopted record, with a comment about "the ICD's borrowed-allocation map"; that map has no
+// call here, and the false sent such a lock to HostedDispatch, which refuses an allocation it does not know. The
+// question of whose allocation it is to destroy is a different one and lives in release_owned.
 bool RuntimeHeapImports::owns_allocation(D3DKMT_HANDLE handle) const noexcept {
     if(!active_.load() || !domain_.entered())return false;
     AcquireSRWLockShared(&lock_);
-    // A borrowed allocation (BD-075) is not ours: this driver did not create it and will not destroy it, so
-    // the ICD's borrowed-allocation map must not treat it as one of ours.
-    const auto record=find(handle);
-    const bool owned=record && !record->adopted;
+    const bool known=find(handle)!=nullptr;
     ReleaseSRWLockShared(&lock_);
-    return owned;
+    return known;
 }
 bool RuntimeHeapImports::borrow_backing(D3DKMT_HANDLE handle) noexcept {
     if(!active_.load() || !domain_.entered())return false;
@@ -248,7 +257,7 @@ HRESULT RuntimeHeapImports::release_import(Record& record,VkDeviceMemory memory)
 }
 HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
     free_report_.stage=FreeStage::Unmap;
-    HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping);
+    HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping,record.adopted);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;
     if(record.adopted){
@@ -501,7 +510,11 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // is the only signal there is, and it is read only where it can mean that: the first attempt of a create
     // inside the shareable envelope, which has not yet asked the engine for anything. Any other allocation
     // keeps the runtime's status unchanged.
-    const bool share_required=hr==E_INVALIDARG && shareable && !surface;
+    // shared-create-retry-off: the bisect switch for this whole behaviour (the owner's release-train rule of
+    // 2026-10-05 is "switches + bisect on failure"). With it the shell never answers kShareRequired, so no create
+    // is ever retried as a shared surface and a shared create fails as it did before BD-075 - without removing the
+    // device, which is the fail-fast part and has no switch.
+    const bool share_required=hr==E_INVALIDARG && shareable && !surface && !ddi_experiment("shared-create-retry-off");
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
     // The runtime makes a new heap resident only after this DDI returns, on its own paging queue,
@@ -560,16 +573,6 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
        (request->alignment&(request->alignment-1)) || (request->byte_size&4095)){
         report_.refusal="malformed adopt request";return E_INVALIDARG;
     }
-    // One record per allocation handle, which the whole store depends on: free(), Lock2, Unlock2 and the
-    // destroyed-resource lookup all find a record by its handle, so a second record with the same handle would
-    // send one import's release to the other one's record. The runtime gives each open its own allocation, so
-    // this refuses a shape it is not expected to meet, loudly, instead of corrupting the store if it ever does.
-    {
-        AcquireSRWLockShared(&lock_);
-        const bool known=find(request->allocation)!=nullptr;
-        ReleaseSRWLockShared(&lock_);
-        if(known){report_.refusal="the allocation is already imported";return E_INVALIDARG;}
-    }
     const uint64_t alignment=std::max<uint64_t>(4096,request->alignment);
     report_.stage=ImportStage::MemoryType;report_.bytes=request->byte_size;report_.alignment=alignment;
     // The surface is GPU-only memory, as the create's is: the opener maps nothing on the CPU.
@@ -590,7 +593,28 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     record->busy=true;record->surface=true;record->adopted=true;
     // A borrowed allocation names no release owner: its authority is the runtime's, not a resource of ours.
     record->authority=0;
-    {Exclusive held(lock_);record->next=records_;records_=record;}
+    // Several records may hold one borrowed handle. An application may call OpenSharedHandle twice on one device
+    // for the same NT handle, and nothing we can read promises that dxgkrnl answers with two different allocation
+    // handles; engine-ddi asks the shell once per open either way, so the second open must get its own import, not
+    // a refusal (BD-075 review, 2026-10-06; before it, that second open failed with E_OUTOFMEMORY while the
+    // boundary's own test asserted it succeeds). What the store needed instead was to stop identifying an import
+    // by its handle: free() finds the record by the cookie the import carries (find_import), and every lookup left
+    // that is keyed by the handle gives the same answer for any adopted record of it - Lock2/Unlock2 reach a
+    // borrowed record's own state checks, borrow_backing refuses one, begin_owner_scope skips one because it names
+    // no runtime resource. A handle this driver created itself is a different matter and still refused: that would
+    // be the store corruption the first form of this check was written for.
+    // The check and the insert are one hold, so two threads adopting the same handle cannot both pass it.
+    bool ours=false;
+    {
+        Exclusive held(lock_);
+        if(const auto other=find(request->allocation);other && !other->adopted)ours=true;
+        else {record->next=records_;records_=record;}
+    }
+    if(ours){
+        delete record;
+        report_.refusal="the allocation is one this driver created";
+        return E_INVALIDARG;
+    }
     HRESULT hr=record->allocation.adopt(request->allocation);
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping);}
@@ -631,8 +655,12 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
     Record* record=nullptr;VkDeviceMemory imported=VK_NULL_HANDLE;bool quarantine=false;
     {
         Exclusive held(lock_);
-        record=find(memory->allocation);
-        if(!record || record!=memory->cookie || record->retired || record->imported.memory!=memory->memory ||
+        // By the cookie, not by the handle: one borrowed handle may have several records (adopt), and the cookie
+        // is the only field that names exactly one of them. It is still validated against records_ before it is
+        // dereferenced, and every other field of the import must match that record.
+        record=find_import(memory);
+        if(!record || record->imported.allocation!=memory->allocation || record->retired ||
+           record->imported.memory!=memory->memory ||
            record->imported.byte_size!=memory->byte_size || record->imported.gpu_va!=memory->gpu_va)return E_INVALIDARG;
         // A runtime callback that names this import as backing, or its own Lock2/Unlock2 on another
         // thread, is in flight: retiring it now would leave it taken for a release that release() refuses.
@@ -644,6 +672,9 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
         // destroy that ends it (release_owned), which a later drain is no longer inside. Nor is an opened
         // shared surface (BD-075): the runtime destroys its allocation as soon as the destroy returns, so a
         // mapping of it held past that destroy would name memory that is no longer the opener's.
+        // The adopted term is redundant today (adopt sets surface as well) and is kept on purpose: the two reasons
+        // above are different reasons, and a later record that is adopted without being a surface must still never
+        // be quarantined. heap-import-test pins both.
         quarantine=policy_.holds() && !record->surface && !record->adopted;
         if(quarantine){imported=record->imported.memory;record->imported.memory=VK_NULL_HANDLE;}
     }
