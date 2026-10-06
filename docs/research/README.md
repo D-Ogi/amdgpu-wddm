@@ -17,3 +17,4 @@ and evidence, they do not replace them, and the deployed state is always workspa
 | `driver-review-2026-09-24.md` | How the three-reviewer driver review of 2026-09-24 was integrated; statuses live in workspace `DEFECTS.md` | Integration pointer |
 | `bios-analysis-followup.md` | What the BIOS static analysis (workspace `firmware/bios/analysis`) means for the driver, reviewed against facts M430-M435 | Review note, 2026-09-24 |
 | `m13-present-baseline.md` | M13: the working full-WDDM desktop baseline on the CPU renderer and its controls | Status note, checkpoint M406-M412; later steps indexed in workspace `STATE.md` and `facts.md` |
+| `offgpu-frame-cost-c48-c55.md` | M15 off-GPU frame cost: what the long idle gaps of the 3D ring are. Which five explanations died. Why our own overlay poll made the class. The rules that come out of it | Investigation record, 2026-10-06. Its measured rows are facts M797 to M800 |

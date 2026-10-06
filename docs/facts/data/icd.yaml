@@ -391,3 +391,10 @@ facts:
     evidence: "[E57](../evidence/windows/2026-10-01-E57-cts-rt-wave64/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M773"}
+  - id: M800
+    status: HYPOTHESIS
+    date: "2026-10-06"
+    claim: "A first-order estimate of what same-context GPU wait elision in the ICD could recover, read offline from three recorded ETW sessions. A gap of the node-0 ring counts when the packet that ends it carries a self-wait that an earlier signal of the same dxgkrnl context had already satisfied. Session 416 gives 2.221 s of such gap time over 3557 frames, 59.6 % of the 3.729 s node-0 ring idle in the window, which is 0.624 ms of the 1.048 ms idle per frame. Session 413 (Witcher 3, high preset with ray tracing) gives 0.759 s over 1066 frames, 59.7 % of 1.271 s, 0.712 ms of 1.193 ms per frame. Session 414 (Witcher 3, low preset) gives 0.871 s over 7987 frames, 34.8 % of 2.506 s, 0.109 ms of 0.314 ms per frame. Single gaps show the packet submittable 8.7 ms to 13.1 ms before the ring started it"
+    status_text: "HYPOTHESIS (first-order offline estimate from existing captures; no lab arm ran)"
+    detail: "This is NOT a measured gain. It is the gap time the counted packets could have filled if nothing else held them, read from captures made for another purpose, and it credits the whole gap in 6420 of 416's counted gaps because the preceding packet had cleared before the gap began. The one witnessed lab arm of the mechanism went the other way: the own-client rule asks for at least 0.5 ms a frame and the elide arm produced -0.41 ms a frame of mean idle, so the conjecture behind this estimate (C45) is refuted on its own acceptance rule and the code stayed out of the b19 release. The ICD default is BC250_SELF_WAIT=keep, so a release that carries the code at all carries it inert. Treat this row as the size of the opportunity the instrument was built to test, never as a result"
+    evidence: "[Off-GPU frame cost, C48 to C55](research/offgpu-frame-cost-c48-c55.md)"
