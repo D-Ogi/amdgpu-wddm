@@ -25,6 +25,7 @@
       "EnableDirectFlipHandshake": 1,
       "EnableHwmon": 1,
       "NotifyDpcInReport": 1,
+      "EnableVmidPool": 1,
       "DpmMode": 1,
       "DpmMaxMHz": 1500,
       "DpmIdleMHz": 500,
