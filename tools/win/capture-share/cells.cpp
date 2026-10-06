@@ -66,12 +66,22 @@ static int PeerFailFence(Side &s, int i)
 // The peer's GPU waits end before its watchdog, so that a stuck wait is reported as that wait.
 static ULONGLONG PeerOpDeadline() { return g_opt.deadline > 300 ? g_opt.deadline - 300 : g_opt.deadline; }
 
+// Why a peer's wait ended, when it did not end with the message it waited for. The parent sends DONE as soon as its
+// own side of the cell is over, and it also decides a cell without reaching the peer's next step: a skipped cell
+// (BD-075 round 2) leaves the peer waiting for HANDLES that will never come. That is a normal end of the peer, not a
+// failure of it, so PeerStopped gives 0 there and the row's peer_exit stops reporting a failure in a cell that
+// attempted nothing. Anything else - a timeout, a closed pipe - is still exit 2.
+static bool g_peerParentDone = false;
+
 bool PeerExpect(const char *verb, std::string &msg)
 {
     if (g_ipc.Expect(verb, msg, g_opt.deadline > 200 ? g_opt.deadline - 200 : g_opt.deadline)) return true;
+    g_peerParentDone = msg.compare(0, 4, "DONE") == 0 && (msg.size() == 4 || msg[4] == ' ');
     Log("PEER lost the parent while waiting for %s: %s", verb, msg.c_str());
     return false;
 }
+
+static int PeerStopped() { return g_peerParentDone ? 0 : 2; }
 
 static HANDLE ParseHandle(const std::string &m, const char *key)
 {
@@ -138,6 +148,18 @@ static bool KeyedParent(Side &s)
     VerdictGate("key-3", !early, early ? "the peer acquired key 3 before the creator released it" : "");
     SetStage("write-a");
     if (!s.WritePattern(Pattern::A, true)) return FailA(s);
+    // --creator-finish, the BD-075 round 2 discriminator for km12to11. By the keyed mutex's contract the release
+    // belongs behind this write: the creator submitted it on the same queue the mutex's release is signalled on.
+    // The lab reads poison here while s12to11 - the same memory, the same two processes, a CPU wait after the
+    // write - passes. With this wait the handover cannot race the submission, so a pass says the memory path is
+    // sound and the ordering of the runtime's own release against our ExecuteCommandLists is the defect, and a
+    // poison read says the write itself is not reaching the reader. It is a measurement, never a fix.
+    // Its own stage: a hang or a failure inside this wait must not be reported as write-a, in the one cell whose
+    // whole purpose is to tell the write and the wait apart (BD-075 review, 2026-10-06).
+    if (g_opt.creatorFinish) {
+        SetStage("finish-a");
+        if (!s.Finish()) return FailA(s);
+    }
     SetStage("release-3");
     if (!s.Release(3)) return FailA(s);
     if (!PeerStep("ACQUIRED", m, "peer-acquire-3")) return false;
@@ -157,7 +179,7 @@ static int KeyedPeer(Side &s)
 {
     std::string m;
     Check c0, ca;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-shared");
     if (!s.OpenShared(ParseHandle(m, "res"), true)) return PeerFail(s);
     g_ipc.Send("OPENED");
@@ -213,14 +235,14 @@ static int SharedCpuPeer(Side &s)
 {
     std::string m;
     Check c0, ca;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-shared");
     if (!s.OpenShared(ParseHandle(m, "res"), false)) return PeerFail(s);
     g_ipc.Send("OPENED");
     SetStage("read-poison");
     if (!ReadCheck(s, "P0", Pattern::Poison, c0)) return PeerFail(s);
     g_ipc.Send("P0 %s", CheckText(c0).c_str());
-    if (!PeerExpect("WROTE_A", m)) return 2;
+    if (!PeerExpect("WROTE_A", m)) return PeerStopped();
     SetStage("read-a");
     if (!ReadCheck(s, "A", Pattern::A, ca)) return PeerFail(s);
     SetStage("write-b");
@@ -289,7 +311,7 @@ static bool FenceParent(Side &s)
 static int FencePeer(Side &s)
 {
     std::string m;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-fences");
     if (!s.OpenFence(0, ParseHandle(m, "fence0")) || !s.OpenFence(1, ParseHandle(m, "fence1"))) return PeerFail(s);
     g_ipc.Send("OPENED");
@@ -299,7 +321,7 @@ static int FencePeer(Side &s)
     SetStage("gpu-past-wait-f0-1");
     if (!s.WaitMark(PeerOpDeadline())) return PeerFailFence(s, 0);
     g_ipc.Send("PASSED1");
-    if (!PeerExpect("SUBMITTED2", m)) return 2;
+    if (!PeerExpect("SUBMITTED2", m)) return PeerStopped();
     SetStage("gate-leg-2");
     Sleep(g_opt.gateMs);
     const UINT64 seen = s.Completed(0);
@@ -360,7 +382,7 @@ static int SharedFencePeer(Side &s)
 {
     std::string m;
     Check c0;
-    if (!PeerExpect("HANDLES", m)) return 2;
+    if (!PeerExpect("HANDLES", m)) return PeerStopped();
     SetStage("open-shared");
     if (!s.OpenShared(ParseHandle(m, "res"), false)) return PeerFail(s);
     SetStage("open-fences");
@@ -381,7 +403,7 @@ static int SharedFencePeer(Side &s)
     SetStage("write-b");
     if (!s.WritePattern(Pattern::B, true)) return PeerFail(s);
     g_ipc.Send("CHECKA %s", CheckText(ca).c_str());
-    if (!PeerExpect("SUBMITTED2", m)) return 2;
+    if (!PeerExpect("SUBMITTED2", m)) return PeerStopped();
     SetStage("gate-fence-2");
     Sleep(g_opt.gateMs);
     const UINT64 seen = s.Completed(0);
@@ -418,6 +440,25 @@ static bool ParentDevice(Api api, std::unique_ptr<Side> &side)
     return true;
 }
 
+// Which routes can order a submitted copy of the shared surface behind a GPU wait on a shared fence. A --sync
+// fence cell asks exactly that of both sides: the opener submits its read inside the wait-gated batch, and the
+// creator submits its leg-2 read the same way. The CPU D3D11 UMD (bc250d3d.dll, Mesa d3d10umd) performs
+// CopyResource as a CPU memcpy inside Flush and lets its event query complete at once, while
+// ID3D11DeviceContext4::Wait defers only the kernel monitored-fence operations of the context - so the copy runs
+// before the wait is satisfied, by construction and not by a driver defect. Round 1 of BD-075 scored three such
+// rows as content failures (s12to11-fence, s12to11-rgba8 read poison about 300 ms before the creator wrote
+// pattern A, by their own timestamps), which sent a lens hunting a memory fault that was not there.
+// The injected negative control is exempt: it exists to show the gate can be violated, and a CPU-route side can
+// still signal a fence, which is what that row measures.
+static std::string FenceOrderingBlocker(const std::string &routeA, const std::string &routeB)
+{
+    const bool a = routeA.find("cpu11") != std::string::npos, b = routeB.find("cpu11") != std::string::npos;
+    if (!a && !b) return std::string();
+    return std::string("a ") + (a && b ? "cpu11 side" : a ? "cpu11 creator" : "cpu11 opener") +
+           " copies on the CPU inside Flush, so no GPU wait can order its read of the shared surface" +
+           " (route=A:" + routeA + ",B:" + routeB + ")";
+}
+
 int RunTwoProcessParent(const CellInfo &cell)
 {
     std::unique_ptr<Side> side;
@@ -430,6 +471,13 @@ int RunTwoProcessParent(const CellInfo &cell)
     }
     if (!PeerStep("HELLO", m, "peer-device")) return 0;
     VerdictRoute('B', Field(m, "route"), Field(m, "fl"));
+    if (cell.kind == Kind::Shared && g_opt.syncFence && !g_opt.skipWait) {
+        const std::string blocker = FenceOrderingBlocker(RouteTag(nullptr), Field(m, "route"));
+        if (!blocker.empty()) {
+            VerdictSkip("route-cannot-order-gpu-waits", blocker);
+            return 0;
+        }
+    }
     switch (cell.kind) {
     case Kind::Keyed: KeyedParent(*side); break;
     case Kind::Shared: g_opt.syncFence ? SharedFenceParent(*side) : SharedCpuParent(*side); break;
@@ -529,7 +577,7 @@ int RunIpcPeer()
         WriteFile(err, probe, (DWORD)(sizeof(probe) - 1), &written, nullptr);
     }
     g_ipc.Send("HELLO route=none fl=- stderr=%s", valid ? "inherited" : "none");
-    if (!PeerExpect("EVENT", m)) return 2;
+    if (!PeerExpect("EVENT", m)) return PeerStopped();
     SetStage("set-event");
     const BOOL ok = SetEvent(ParseHandle(m, "h"));
     g_ipc.Send("SET ok=%u", ok ? 1u : 0u);
@@ -728,6 +776,20 @@ int RunSelfTest()
                          Field("P0 what=P0 pass=1", "what") == "P0" && Field(fail, "note") == "f1=2" &&
                          (HRESULT)strtoul(Field(fail, "removed").c_str(), nullptr, 16) == DXGI_ERROR_DRIVER_INTERNAL_ERROR &&
                          (HRESULT)strtoul(Field(msg, "removed").c_str(), nullptr, 16) == S_OK);
+
+    // The route blocker (BD-075 round 2), on hand-written route strings. Its first execution would otherwise be on
+    // the lab: this host has no CPU D3D11 UMD, so no host row can reach it, and the lab kit's offline test only
+    // checks how a result=skip line is read, not the decision to emit one. A wrong decision here is a row that
+    // measures nothing (a false skip) or three content mismatches nobody can explain (a missed skip).
+    const bool blocker =
+        FenceOrderingBlocker("d3d12", "cpu11").find("cpu11 opener") != std::string::npos &&
+        FenceOrderingBlocker("cpu11", "d3d12").find("cpu11 creator") != std::string::npos &&
+        FenceOrderingBlocker("cpu11", "cpu11").find("cpu11 side") != std::string::npos &&
+        FenceOrderingBlocker("d3d12+11on12", "cpu11").find("cpu11 opener") != std::string::npos &&
+        FenceOrderingBlocker("d3d12", "gpu11").empty() && FenceOrderingBlocker("gpu11", "d3d12").empty() &&
+        FenceOrderingBlocker("nvidia", "nvidia").empty() && FenceOrderingBlocker("?", "").empty() &&
+        FenceOrderingBlocker("", "").empty();
+    record("route-blocker", blocker, FenceOrderingBlocker("d3d12", "cpu11"));
 
     c = CompareImage("A", one, Pattern::A, false, false, 0);
     const Check back = CheckFromText("CHECKA " + CheckText(c));

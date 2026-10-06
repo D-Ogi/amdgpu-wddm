@@ -142,8 +142,11 @@ void Log(const char *format, ...)
 // with the same text. With no debugger attached a vectored handler sees both first; it only copies into preallocated
 // slots, FlushOds writes them out. This is where the D3D11 shell's "M14 ..." lines, the D3D12 shell's
 // "amdgpu_wddm_d3d12 failure ..." lines and the runtimes' "Removing Device" lines of this process arrive.
+// 640 bytes a slot, because that is the longest line the driver sends: amdgpu_wddm_d3d12's ddi_refusal formats
+// into char[640] and engine-ddi's log_refusal into char[540]. At 480 the tail of a CreateHeapAndResource refusal
+// (castable count, base resource, offset) was cut off, which is exactly the part a shared-resource trial reads.
 static const LONG OdsSlots = 4096;
-static char g_ods[OdsSlots][480];
+static char g_ods[OdsSlots][640];
 static volatile LONG g_odsReady[OdsSlots];
 static volatile LONG g_odsNext = 0;
 static LONG g_odsWritten = 0;
@@ -467,6 +470,11 @@ struct VerdictState {
     std::vector<std::pair<std::string, std::string>> extra;
     bool decided = false, emitted = false;
     int exitCode = 0;
+    // When the verdict was decided, as against elapsed_ms, which is read when the verdict is written out -
+    // after the peer shutdown block of main(). A create cell whose side A fails before it sends HANDLES used
+    // to report 3.2 s for a refusal that took about 200 ms, because the peer was still waiting and had to be
+    // killed (BD-075 was written with those numbers). Both are reported now.
+    ULONGLONG decidedMs = 0;
 };
 static VerdictState g_v;
 static SRWLOCK g_vLock = SRWLOCK_INIT;
@@ -480,6 +488,7 @@ void VerdictFail(char side, const std::string &stage, const std::string &call, H
     AcquireSRWLockExclusive(&g_vLock);
     if (!g_v.decided) {
         g_v.decided = true;
+        g_v.decidedMs = Now();
         g_v.result = "fail";
         g_v.side = std::string(1, side);
         g_v.stage = Token(stage);
@@ -496,6 +505,7 @@ void VerdictTimeout(char side, const std::string &stage, const std::string &note
     AcquireSRWLockExclusive(&g_vLock);
     if (!g_v.decided) {
         g_v.decided = true;
+        g_v.decidedMs = Now();
         g_v.result = "timeout";
         g_v.side = std::string(1, side);
         g_v.stage = Token(stage);
@@ -511,6 +521,7 @@ void VerdictCheck(char side, const Check &c)
     g_v.checks.push_back(std::string(1, side) + ":" + Token(c.what) + "=" + (c.pass ? "pass" : "mismatch"));
     if (!c.pass && !g_v.decided) {
         g_v.decided = true;
+        g_v.decidedMs = Now();
         g_v.result = "mismatch";
         g_v.side = std::string(1, side);
         g_v.stage = Token(c.what);
@@ -535,9 +546,24 @@ void VerdictGate(const std::string &what, bool held, const std::string &detail)
     if (g_v.gate == "-" || (g_v.gate == "held" && !held)) g_v.gate = held ? "held" : "violated:" + Token(what);
     if (!held && !g_v.decided) {
         g_v.decided = true;
+        g_v.decidedMs = Now();
         g_v.result = "mismatch";
         g_v.stage = Token(what);
         g_v.note = Token(detail);
+    }
+    ReleaseSRWLockExclusive(&g_vLock);
+}
+
+void VerdictSkip(const std::string &stage, const std::string &reason)
+{
+    Log("SKIP stage=%s %s", stage.c_str(), reason.c_str());
+    AcquireSRWLockExclusive(&g_vLock);
+    if (!g_v.decided) {
+        g_v.decided = true;
+        g_v.decidedMs = Now();
+        g_v.result = "skip";
+        g_v.stage = Token(stage);
+        g_v.note = Token(reason);
     }
     ReleaseSRWLockExclusive(&g_vLock);
 }
@@ -547,6 +573,15 @@ void VerdictRoute(char side, const std::string &route, const std::string &fl)
     AcquireSRWLockExclusive(&g_vLock);
     (side == 'A' ? g_v.routeA : g_v.routeB) = Token(route);
     (side == 'A' ? g_v.flA : g_v.flB) = Token(fl);
+    ReleaseSRWLockExclusive(&g_vLock);
+}
+
+// Called when the cell's own work is over, before the peer shutdown. A cell that decided nothing (a pass)
+// takes this tick as its decision point.
+void VerdictCellEnded()
+{
+    AcquireSRWLockExclusive(&g_vLock);
+    if (!g_v.decidedMs) g_v.decidedMs = Now();
     ReleaseSRWLockExclusive(&g_vLock);
 }
 
@@ -597,14 +632,19 @@ int VerdictEmit()
     char line[3000];
     _snprintf_s(line, _TRUNCATE,
                 "VERDICT cell=%s result=%s side=%s stage=%s call=%s hr=%s at=%s got=%s want=%s diff=%zu/%zu "
-                "max_delta=%d content=%s gate=%s route=A:%s,B:%s fl=A:%s,B:%s checks=%s elapsed_ms=%llu note=%s",
+                "max_delta=%d content=%s gate=%s route=A:%s,B:%s fl=A:%s,B:%s checks=%s elapsed_ms=%llu "
+                "decided_ms=%llu note=%s",
                 g_v.cell.c_str(), g_v.result.c_str(), g_v.side.c_str(), g_v.stage.c_str(), g_v.call.c_str(),
                 g_v.hr.c_str(), g_v.at.c_str(), g_v.got.c_str(), g_v.want.c_str(), g_v.diff, g_v.total, g_v.maxDelta,
                 g_v.content.c_str(), g_v.gate.c_str(), g_v.routeA.c_str(), g_v.routeB.c_str(), g_v.flA.c_str(),
-                g_v.flB.c_str(), checks.c_str(), Now(), g_v.note.c_str());
+                g_v.flB.c_str(), checks.c_str(), Now(), g_v.decidedMs, g_v.note.c_str());
     std::string full = line;
     for (const auto &e : g_v.extra) full += " " + e.first + "=" + e.second;
-    g_v.exitCode = g_v.result == "pass" ? 0 : g_v.result == "mismatch" ? 1 : g_v.result == "fail" ? 2 : 3;
+    g_v.exitCode = g_v.result == "pass"       ? 0
+                   : g_v.result == "mismatch" ? 1
+                   : g_v.result == "fail"     ? 2
+                   : g_v.result == "skip"     ? 5
+                                              : 3;
 
     std::string j = "{\n";
     auto add = [&j](const char *k, const std::string &v, bool quote = true) {
@@ -633,6 +673,7 @@ int VerdictEmit()
     for (size_t i = 0; i < g_v.checks.size(); ++i) arr += (i ? ", " : "") + JsonString(g_v.checks[i]);
     add("checks", arr + "]", false);
     add("elapsed_ms", std::to_string(Now()), false);
+    add("decided_ms", std::to_string(g_v.decidedMs), false);
     add("note", g_v.note);
     for (const auto &e : g_v.extra) add(e.first.c_str(), e.second);
     add("exit_code", std::to_string(g_v.exitCode), false);
@@ -722,8 +763,13 @@ bool Ipc::Expect(const char *verb, std::string &msg, ULONGLONG deadlineTick)
 {
     AcquireSRWLockExclusive(&g_ipcLock);
     for (;;) {
+        // FAIL ends any wait. On the peer, DONE does as well: the parent sends it when its own side of the
+        // cell is over, so a peer still waiting for a message that will never come stops here instead of
+        // waiting out its deadline. Before this, a cell whose side A failed before it sent HANDLES left the
+        // peer blocked until the parent's PeerExit timed out and killed it, which added three seconds to the
+        // elapsed time of every create cell of BD-075 and reported peer_exit=killed.
         for (auto it = g_ipcQueue.begin(); it != g_ipcQueue.end(); ++it)
-            if (VerbIs(*it, verb) || VerbIs(*it, "FAIL")) {
+            if (VerbIs(*it, verb) || VerbIs(*it, "FAIL") || (g_opt.peer && VerbIs(*it, "DONE"))) {
                 msg = *it;
                 g_ipcQueue.erase(it);
                 ReleaseSRWLockExclusive(&g_ipcLock);
@@ -784,6 +830,19 @@ static std::wstring HexW(ULONG_PTR v)
     return t;
 }
 
+// The --format token for a format, so that the peer is asked for exactly what this process has. One table, used
+// by the relaunch below; the parser in main.cpp is its other half. It used to be a two-way choice that sent every
+// format but RGBA8 to the peer as "bgra8", which would have silently downgraded an sRGB cell.
+static std::wstring FormatOption(DXGI_FORMAT f)
+{
+    switch (f) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return L"rgba8";
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: return L"bgra8-srgb";
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return L"rgba8-srgb";
+    default: return L"bgra8";
+    }
+}
+
 static std::wstring PeerExePath()
 {
     std::wstring p = g_opt.peerExe.empty() ? g_opt.self : g_opt.peerExe;
@@ -796,7 +855,7 @@ static std::wstring PeerArgs()
 {
     std::wstring a = L"--role peer --cell " + Widen(g_opt.cell);
     a += L" --size " + std::to_wstring(g_opt.w) + L"x" + std::to_wstring(g_opt.h);
-    a += g_opt.format == DXGI_FORMAT_R8G8B8A8_UNORM ? L" --format rgba8" : L" --format bgra8";
+    a += L" --format " + FormatOption(g_opt.format);
     a += g_opt.syncFence ? L" --sync fence" : L" --sync cpu";
     a += g_opt.kmt ? L" --handle kmt" : L" --handle nt";
     a += L" --delay-copies " + std::to_wstring(g_opt.delayCopies) + L" --delay-size " + std::to_wstring(g_opt.delaySize);
