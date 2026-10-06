@@ -26,10 +26,12 @@ namespace AmdgpuWddmControl
             _fixture = true;
             _snap = s ?? new RecoverySnapshot();
             if (_snap.GameProfiles == null) _snap.GameProfiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            _snap.GameProfiles["witcher3.exe"] = "raytracing-tier,present-noprimary,x-future-switch";
-            _snap.GameProfiles["ascent.exe"] = "recording-bind,retire-handoff,deferred-replay";
+            // witcher3: one Invert group off, one opt-in group partial, one unknown name kept.
+            // ascent: three of the four names of an Invert group, which draws that group partial.
+            _snap.GameProfiles["witcher3.exe"] = "raytracing-tier-off,present-noprimary,x-future-switch";
+            _snap.GameProfiles["ascent.exe"] = "recording-bind-off,retire-handoff-off,deferred-replay-off";
             if (_snap.DefaultApplications == null) _snap.DefaultApplications = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            _snap.DefaultApplications["witcher3.exe"] = "raytracing-tier";
+            _snap.DefaultApplications["witcher3.exe"] = "raytracing-tier-off";
             var now = DateTime.UtcNow;
             _recent = new List<RecentLaunch>
             {

@@ -323,24 +323,31 @@ static partial class UnitTests
     static void GroupsAndOrigins()
     {
         var rt = GameGroups.Find("rt"); var present = GameGroups.Find("present"); var cpu = GameGroups.Find("cpu");
-        string stored = "raytracing-tier,present-noprimary,x-future,release-two-phase-off";
+        // The rt and cpu groups are Invert groups: the box is checked while the value names none of their off
+        // switches, so "rt off" is the value that names raytracing-tier-off.
+        string stored = "raytracing-tier-off,present-noprimary,x-future,release-two-phase-off";
         Equal(GroupState.Partial, GameGroups.State(present, stored), "G-PROF: one of two present switches is partial");
-        Equal(GroupState.On, GameGroups.State(rt, stored), "G-PROF: rt on");
+        Equal(GroupState.Off, GameGroups.State(rt, stored), "G-PROF: rt off, the value names its off switch");
+        Equal(GroupState.On, GameGroups.State(rt, "present-cached"), "G-PROF: rt on without its off switch");
+        Equal(GroupState.On, GameGroups.State(cpu, stored), "G-PROF: cpu on, the value names none of its off switches");
         Equal(ProfileWriteKind.None, GameGroups.Plan("g.exe", stored, new Dictionary<string, bool>()).Kind, "G-PROF: no change, no write");
-        var w = GameGroups.Plan("g.exe", stored, new Dictionary<string, bool> { { "cpu", true } });
+        var w = GameGroups.Plan("g.exe", stored, new Dictionary<string, bool> { { "cpu", false } });
         Equal(ProfileWriteKind.Set, w.Kind, "G-PROF: a group change writes");
         Check(w.Value.Contains("present-noprimary") && !w.Value.Contains("present-cached"), "G-PROF: the untouched partial group keeps its exact tokens");
         Check(w.Value.Contains("x-future") && w.Value.Contains("release-two-phase-off"), "G-PROF: unknown and diagnostic names are kept");
-        Check(w.Value.Contains("recording-bind") && w.Value.Contains("retire-handoff") && w.Value.Contains("deferred-replay"), "G-PROF: the changed group fully on");
-        w = GameGroups.Plan("g.exe", "raytracing-tier", new Dictionary<string, bool> { { "rt", false } });
+        Check(w.Value.Contains("recording-bind-off") && w.Value.Contains("retire-handoff-off") && w.Value.Contains("deferred-replay-off")
+            && w.Value.Contains("direct-entry-off"), "G-PROF: the changed group fully off");
+        w = GameGroups.Plan("g.exe", "raytracing-tier-off", new Dictionary<string, bool> { { "rt", true } });
         Equal(ProfileWriteKind.Delete, w.Kind, "G-PROF: no names left removes the key (settings rule)");
         Equal(ProfileWriteKind.None, GameGroups.Plan("g.exe", "present-cached,present-noprimary", new Dictionary<string, bool> { { "present", true } }).Kind, "G-PROF: the same set in another order is no change");
         Throws<ArgumentException>(() => GameGroups.Apply("", new Dictionary<string, bool> { { "nope", true } }), "G-PROF: unknown group refused");
         // WU-015 origins.
-        Equal(ValueOrigin.DriverDefault, GameGroups.Origin(rt, null, "raytracing-tier"), "origin: no key is the driver default");
-        Equal(ValueOrigin.Recommended, GameGroups.Origin(rt, "raytracing-tier", "raytracing-tier"), "origin: as the installer recommends");
-        Equal(ValueOrigin.ThisGame, GameGroups.Origin(cpu, "deferred-replay,recording-bind,retire-handoff", "raytracing-tier"), "origin: set for this game");
-        Equal(ValueOrigin.DriverDefault, GameGroups.Origin(cpu, "raytracing-tier", "raytracing-tier"), "origin: off is the driver default");
+        Equal(GroupState.On, GameGroups.Default(rt), "an Invert group's default state is on");
+        Equal(GroupState.Off, GameGroups.Default(present), "an opt-in group's default state is off");
+        Equal(ValueOrigin.DriverDefault, GameGroups.Origin(rt, null, "raytracing-tier-off"), "origin: no key is the driver default");
+        Equal(ValueOrigin.Recommended, GameGroups.Origin(rt, "raytracing-tier-off", "raytracing-tier-off"), "origin: as the installer recommends");
+        Equal(ValueOrigin.ThisGame, GameGroups.Origin(cpu, "deferred-replay-off,recording-bind-off,retire-handoff-off,direct-entry-off", "raytracing-tier-off"), "origin: set for this game");
+        Equal(ValueOrigin.DriverDefault, GameGroups.Origin(cpu, "raytracing-tier-off", "raytracing-tier-off"), "origin: the group's default state is the driver default");
         Check(GameGroups.Hidden(stored).SequenceEqual(new[] { "release-two-phase-off", "x-future" }), "G-PROF: the support-only names: " + string.Join(",", GameGroups.Hidden(stored)));
         foreach (var g in GameGroups.All) foreach (var t in g.Tokens) Check(Profiles.Find(t) != null, "group token " + t + " is a catalog switch");
         Check(Profiles.Catalog.All(c => GameGroups.All.Count(g => g.Tokens.Contains(c.Token)) == 1), "every catalog switch is in exactly one group");
@@ -401,7 +408,7 @@ static partial class UnitTests
         var more = new Dictionary<string, Recovery.PlanArgs>
         {
             { "cu-mode", new Recovery.PlanArgs { Cu = 40 } }, { "reset-defaults", new Recovery.PlanArgs { Games = "reset" } },
-            { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier,deferred-replay" } },
+            { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off" } },
         };
         foreach (var s in fixtures)
             foreach (var a in Recovery.Actions)
