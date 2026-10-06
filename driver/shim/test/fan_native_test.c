@@ -20,7 +20,7 @@ static BC250_DEVICE device;
 
 /* ---- the wire ------------------------------------------------------------------------------------------ */
 
-/* KmdReply.cs, Driver.cs and test_telemetry.py read this reply by byte offset: every offset is pinned. */
+/* The control app (KmdReply.ParseFan, checked by its FanTests.cs) reads this reply by byte offset: every offset is pinned. */
 C_ASSERT(sizeof(BC250_ESCAPE_FAN) == 272);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_FAN, Magic) == 0);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_FAN, Command) == 4);

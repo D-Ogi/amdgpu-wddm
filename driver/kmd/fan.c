@@ -43,7 +43,8 @@ static const PCWSTR g_FanCurveSetting[BC250_FAN_POINTS_MAX] = {
     L"FanCurve4", L"FanCurve5", L"FanCurve6", L"FanCurve7",
 };
 
-// The reply's layout, as the C# and Python readers mirror it (KmdReply.cs, Driver.cs, test_telemetry.py).
+// The reply's layout. The control app reads it by byte offset (KmdReply.ParseFan, checked against this header by
+// test/FanTests.cs); bc250kmd_cli includes the header itself; test_escape_flags.py checks the request flags.
 C_ASSERT(sizeof(BC250_ESCAPE_FAN) == 272);      // ABI 1
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_FAN, Op) == 24);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_FAN, CurveC) == 56);
