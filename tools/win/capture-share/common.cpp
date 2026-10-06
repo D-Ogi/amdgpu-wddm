@@ -554,6 +554,20 @@ void VerdictGate(const std::string &what, bool held, const std::string &detail)
     ReleaseSRWLockExclusive(&g_vLock);
 }
 
+void VerdictSkip(const std::string &stage, const std::string &reason)
+{
+    Log("SKIP stage=%s %s", stage.c_str(), reason.c_str());
+    AcquireSRWLockExclusive(&g_vLock);
+    if (!g_v.decided) {
+        g_v.decided = true;
+        g_v.decidedMs = Now();
+        g_v.result = "skip";
+        g_v.stage = Token(stage);
+        g_v.note = Token(reason);
+    }
+    ReleaseSRWLockExclusive(&g_vLock);
+}
+
 void VerdictRoute(char side, const std::string &route, const std::string &fl)
 {
     AcquireSRWLockExclusive(&g_vLock);
@@ -626,7 +640,11 @@ int VerdictEmit()
                 g_v.flB.c_str(), checks.c_str(), Now(), g_v.decidedMs, g_v.note.c_str());
     std::string full = line;
     for (const auto &e : g_v.extra) full += " " + e.first + "=" + e.second;
-    g_v.exitCode = g_v.result == "pass" ? 0 : g_v.result == "mismatch" ? 1 : g_v.result == "fail" ? 2 : 3;
+    g_v.exitCode = g_v.result == "pass"       ? 0
+                   : g_v.result == "mismatch" ? 1
+                   : g_v.result == "fail"     ? 2
+                   : g_v.result == "skip"     ? 5
+                                              : 3;
 
     std::string j = "{\n";
     auto add = [&j](const char *k, const std::string &v, bool quote = true) {

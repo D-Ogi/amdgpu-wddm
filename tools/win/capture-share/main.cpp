@@ -18,11 +18,14 @@
 // different UMDs) is the opener or the producer. Both write into the --out file (lines "A ..." and "B ...").
 //
 // Output: the --out text file, one record per line, ending with exactly one line
-//   VERDICT cell=.. result=pass|mismatch|fail|timeout side=A|B|- stage=.. call=.. hr=.. at=x,y got=rgba:.. want=rgba:..
-//           diff=n/total max_delta=.. content=.. gate=held|violated:..|- route=A:..,B:.. fl=A:..,B:.. checks=..
-//           elapsed_ms=.. note=.. [extra key=value ...]
+//   VERDICT cell=.. result=pass|mismatch|fail|timeout|skip side=A|B|- stage=.. call=.. hr=.. at=x,y got=rgba:..
+//           want=rgba:.. diff=n/total max_delta=.. content=.. gate=held|violated:..|- route=A:..,B:.. fl=A:..,B:..
+//           checks=.. elapsed_ms=.. note=.. [extra key=value ...]
 // and the same fields in --json (result.json, which app-run.ps1 reads). Exit code 0 pass, 1 mismatch, 2 fail,
-// 3 timeout, 4 usage. Every run ends within --bound seconds (at most 170): a watchdog reports the stage it hung in.
+// 3 timeout, 4 usage, 5 skip. result=skip means this pair of routes cannot measure this cell at all and nothing
+// was attempted: today only a --sync fence shared cell whose D3D11 side runs on the CPU UMD, which copies inside
+// Flush and can never order that copy behind a GPU wait (BD-075 round 2). A skip is not a pass.
+// Every run ends within --bound seconds (at most 170): a watchdog reports the stage it hung in.
 // --stderr relaunches the program with that file as its standard output and error from the start, so the C runtime
 // of every DLL (the UMDs' "engine-ddi: ..." lines, Mesa and RADV messages) writes there, the peer included.
 #include "capshare.h"

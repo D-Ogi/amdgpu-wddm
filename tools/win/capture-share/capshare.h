@@ -115,6 +115,10 @@ void VerdictFail(char side, const std::string &stage, const std::string &call, H
 void VerdictTimeout(char side, const std::string &stage, const std::string &note = "-");
 void VerdictCheck(char side, const Check &c);
 void VerdictGate(const std::string &what, bool held, const std::string &detail);
+// A cell this pair of routes cannot measure at all: result=skip, exit code 5, and the reason on the line. Not a
+// pass and not a failure. BD-075 round 2: a --sync fence shared cell whose D3D11 side runs on the CPU UMD scored
+// three content mismatches that were the harness asking for an ordering no CPU copy can have.
+void VerdictSkip(const std::string &stage, const std::string &reason);
 void VerdictRoute(char side, const std::string &route, const std::string &fl);
 void VerdictCellEnded();                         // the cell's own work is over; fixes decided_ms for a pass
 void VerdictNote(const std::string &key, const std::string &value);

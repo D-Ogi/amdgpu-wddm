@@ -418,6 +418,25 @@ static bool ParentDevice(Api api, std::unique_ptr<Side> &side)
     return true;
 }
 
+// Which routes can order a submitted copy of the shared surface behind a GPU wait on a shared fence. A --sync
+// fence cell asks exactly that of both sides: the opener submits its read inside the wait-gated batch, and the
+// creator submits its leg-2 read the same way. The CPU D3D11 UMD (bc250d3d.dll, Mesa d3d10umd) performs
+// CopyResource as a CPU memcpy inside Flush and lets its event query complete at once, while
+// ID3D11DeviceContext4::Wait defers only the kernel monitored-fence operations of the context - so the copy runs
+// before the wait is satisfied, by construction and not by a driver defect. Round 1 of BD-075 scored three such
+// rows as content failures (s12to11-fence, s12to11-rgba8 read poison about 300 ms before the creator wrote
+// pattern A, by their own timestamps), which sent a lens hunting a memory fault that was not there.
+// The injected negative control is exempt: it exists to show the gate can be violated, and a CPU-route side can
+// still signal a fence, which is what that row measures.
+static std::string FenceOrderingBlocker(const std::string &routeA, const std::string &routeB)
+{
+    const bool a = routeA.find("cpu11") != std::string::npos, b = routeB.find("cpu11") != std::string::npos;
+    if (!a && !b) return std::string();
+    return std::string("a ") + (a && b ? "cpu11 side" : a ? "cpu11 creator" : "cpu11 opener") +
+           " copies on the CPU inside Flush, so no GPU wait can order its read of the shared surface" +
+           " (route=A:" + routeA + ",B:" + routeB + ")";
+}
+
 int RunTwoProcessParent(const CellInfo &cell)
 {
     std::unique_ptr<Side> side;
@@ -430,6 +449,13 @@ int RunTwoProcessParent(const CellInfo &cell)
     }
     if (!PeerStep("HELLO", m, "peer-device")) return 0;
     VerdictRoute('B', Field(m, "route"), Field(m, "fl"));
+    if (cell.kind == Kind::Shared && g_opt.syncFence && !g_opt.skipWait) {
+        const std::string blocker = FenceOrderingBlocker(RouteTag(nullptr), Field(m, "route"));
+        if (!blocker.empty()) {
+            VerdictSkip("route-cannot-order-gpu-waits", blocker);
+            return 0;
+        }
+    }
     switch (cell.kind) {
     case Kind::Keyed: KeyedParent(*side); break;
     case Kind::Shared: g_opt.syncFence ? SharedFenceParent(*side) : SharedCpuParent(*side); break;
