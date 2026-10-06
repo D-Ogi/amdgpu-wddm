@@ -84,7 +84,10 @@ $front = [int]$m.defaults.desktop_router.DirectFlipFront
 Check ($r.text -match ("DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); " +
                        "DirectFlipFront=$front \(new\); CpuUmdPath=")) `
       "desktop route DwmForceCpu $dwm and DirectFlipFront $front from the defaults table"
-Check ($r.text -match 'AppRouter: Mode=gpu-default \(new\); Allow=\[dxdiag\.exe\] \(new\)') 'D3D11 gpu-default from the defaults table'
+# Allow and Deny ship empty from b20 (the Windows component rule is gone); the expected text comes from the table.
+$allow = [regex]::Escape('[' + (@($m.defaults.app_router.Allow) -join ', ') + ']')
+$deny = [regex]::Escape('[' + (@($m.defaults.app_router.Deny) -join ', ') + ']')
+Check ($r.text -match "AppRouter: Mode=gpu-default \(new\); Allow=$allow \(new\); Deny=$deny \(new\)") 'D3D11 gpu-default from the defaults table'
 $tbl = Get-Content -LiteralPath (Join-Path $Package 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
 Check (($m.defaults | ConvertTo-Json -Depth 6 -Compress) -eq ($tbl.defaults | ConvertTo-Json -Depth 6 -Compress)) 'manifest.json defaults = installer\registry-defaults.json defaults (one table)'
 Check (@('EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz' | Where-Object { $null -eq $m.defaults.parameters.$_ }).Count -eq 0 -and $null -ne $m.defaults.desktop_router.DwmForceCpu) 'manifest defaults carry the five values the control application resets'
