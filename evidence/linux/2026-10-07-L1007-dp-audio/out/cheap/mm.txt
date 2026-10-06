@@ -1,0 +1,101 @@
+--- amdgpu_vram_mm
+  use_type: 1
+  use_tt: 0
+  size: 8589934592
+  usage: 14614528
+  vis usage:14614528
+default_page_size: 4KiB
+chunk_size: 4KiB, total: 8192MiB, free: 8178MiB, clear_free: 0MiB
+order-21 free:        0 KiB, blocks: 0
+order-20 free:        0 KiB, blocks: 0
+order-19 free:     4096 MiB, blocks: 2
+order-18 free:     2048 MiB, blocks: 2
+order-17 free:     1024 MiB, blocks: 2
+order-16 free:      512 MiB, blocks: 2
+order-15 free:      256 MiB, blocks: 2
+order-14 free:      128 MiB, blocks: 2
+order-13 free:       64 MiB, blocks: 2
+order-12 free:       16 MiB, blocks: 1
+order-11 free:       16 MiB, blocks: 2
+order-10 free:        8 MiB, blocks: 2
+order- 9 free:        6 MiB, blocks: 3
+order- 8 free:        2 MiB, blocks: 2
+order- 7 free:        1 MiB, blocks: 2
+order- 6 free:      512 KiB, blocks: 2
+order- 5 free:      384 KiB, blocks: 3
+order- 4 free:      128 KiB, blocks: 2
+order- 3 free:       32 KiB, blocks: 1
+order- 2 free:       16 KiB, blocks: 1
+order- 1 free:        8 KiB, blocks: 1
+order- 0 free:        8 KiB, blocks: 2
+reserved:
+--- amdgpu_gtt_mm
+  use_type: 1
+  use_tt: 1
+  size: 4020457472
+  usage: 13185024
+0x0000000000000400-0x0000000000000401: 1: used
+0x0000000000000401-0x0000000000000409: 8: used
+0x0000000000000409-0x0000000000000609: 512: used
+0x0000000000000609-0x0000000000000649: 64: used
+0x0000000000000649-0x000000000000064d: 4: used
+0x000000000000064d-0x000000000000064f: 2: used
+0x000000000000064f-0x0000000000000651: 2: used
+0x0000000000000651-0x0000000000000653: 2: used
+0x0000000000000653-0x0000000000000655: 2: used
+0x0000000000000655-0x0000000000000657: 2: used
+0x0000000000000657-0x0000000000000659: 2: used
+0x0000000000000659-0x000000000000065b: 2: used
+0x000000000000065b-0x000000000000065d: 2: used
+0x000000000000065d-0x000000000000065f: 2: used
+0x000000000000065f-0x0000000000000660: 1: used
+0x0000000000000660-0x0000000000000662: 2: used
+0x0000000000000662-0x0000000000000664: 2: used
+0x0000000000000664-0x0000000000000667: 3: used
+0x0000000000000667-0x0000000000000700: 153: free
+0x0000000000000700-0x0000000000000800: 256: used
+0x0000000000000800-0x0000000000000900: 256: used
+0x0000000000000900-0x0000000000000a00: 256: used
+0x0000000000000a00-0x0000000000000b00: 256: used
+0x0000000000000b00-0x0000000000000c00: 256: used
+0x0000000000000c00-0x0000000000000d62: 354: used
+0x0000000000000d62-0x000000000000112c: 970: used
+0x000000000000112c-0x0000000000020000: 126676: free
+total: 130048, used 3219 free 126829
+--- amdgpu_gem_info
+--- amdgpu_firmware_info
+VCE feature version: 0, firmware version: 0x00000000
+UVD feature version: 0, firmware version: 0x00000000
+MC feature version: 0, firmware version: 0x00000000
+ME feature version: 32, firmware version: 0x00000063
+PFP feature version: 32, firmware version: 0x00000094
+CE feature version: 32, firmware version: 0x00000025
+RLC feature version: 0, firmware version: 0x0000000d
+RLC SRLC feature version: 0, firmware version: 0x00000000
+RLC SRLG feature version: 0, firmware version: 0x00000000
+RLC SRLS feature version: 0, firmware version: 0x00000000
+RLCP feature version: 0, firmware version: 0x00000000
+RLCV feature version: 0, firmware version: 0x00000000
+MEC feature version: 32, firmware version: 0x00000090
+MEC2 feature version: 32, firmware version: 0x00000090
+IMU feature version: 0, firmware version: 0x00000000
+SOS feature version: 0, firmware version: 0x00000000
+ASD feature version: 0, firmware version: 0x00000000
+TA XGMI feature version: 0x00000000, firmware version: 0x00000000
+TA RAS feature version: 0x00000000, firmware version: 0x00000000
+TA HDCP feature version: 0x00000000, firmware version: 0x00000000
+TA DTM feature version: 0x00000000, firmware version: 0x00000000
+TA RAP feature version: 0x00000000, firmware version: 0x00000000
+TA SECUREDISPLAY feature version: 0x00000000, firmware version: 0x00000000
+SMC feature version: 0, program: 0, firmware version: 0x00580600 (88.6.0)
+SDMA0 feature version: 50, firmware version: 0x00000034
+SDMA1 feature version: 50, firmware version: 0x00000034
+VCN feature version: 0, firmware version: 0x00000000
+DMCU feature version: 0, firmware version: 0x00000000
+DMCUB feature version: 0, firmware version: 0x00000000
+TOC feature version: 0, firmware version: 0x00000000
+MES_KIQ feature version: 0, firmware version: 0x00000000
+MES feature version: 0, firmware version: 0x00000000
+VPE feature version: 0, firmware version: 0x00000000
+VBIOS version: 113-AMDRBN-003
+--- amdgpu_vm_info

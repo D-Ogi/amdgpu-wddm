@@ -1,0 +1,15 @@
+dpm curve: driver 0x000700D5, mode dpm, ceiling 1500 MHz, serial 0 applied 0, governing
+dpm curve: no trial runs; a set would get a 25000 ms window
+   MHz   line  stored  active  trial   floor
+  1000    820     820     820      0     820
+  1100    840     840     840      0     820
+  1200    860     860     860      0     835
+  1300    880     880     880      0     855
+  1400    899     899     899      0     874
+  1500    919     919     919      0     894
+  1600    935     935     935      0     910
+  1700    952     952     952      0     927
+  1800    968     968     968      0     943
+  1900    984     984     984      0     959
+  2000   1000    1000    1000      0     975
+dpm curve: now 500 MHz at 820 mV (SMU 500 MHz VID 116), 65.5 C; sets 0 keeps 0 cancels 0 reverts 0

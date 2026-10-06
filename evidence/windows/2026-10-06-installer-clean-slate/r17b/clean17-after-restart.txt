@@ -1,0 +1,64 @@
+boot 2026-10-06T21:53:38.5000000Z
+LEFT dir C:\Program Files\amdgpu-wddm: 6 files
+   \d3d11\amdgpu_wddm_d3d11.dll
+   \d3d11\amdgpu_wddm_dxvk.dll
+   \d3d11\amdgpu_wddm_radv.dll
+   \desktop\bc250d3d.dll
+   \desktop\bc250d3d_router.dll
+   \desktop\bc250d3d_zink.dll
+LEFT dir C:\ProgramData\amdgpu-wddm: 11 files
+   \control\backup-20261003T190649279Z.json
+   \control\backup-20261003T202558887Z.json
+   \control\backup-20261003T213910205Z.json
+   \control\backup-20261003T214314563Z.json
+   \control\backup-20261003T215709351Z.json
+   \control\backup-20261003T220123700Z.json
+   \control\backup-20261006T191917706Z.json
+   \control\backup-20261006T192344110Z.json
+   \control\control-actions.log
+   \control\dwm-observations.json
+   \control\route-written.json
+LEFT dir C:\Users\bc250\AppData\Local\amdgpu-wddm: 91 files
+   \dwm-observations.json
+   \recent-launches.lock
+   \recent-launches.txt
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.driver
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.write
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.5416.1.tmp
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.6612.1.tmp
+LEFT dir C:\Users\bc250\AppData\Local\amdgpu-wddm: 91 files
+   \dwm-observations.json
+   \recent-launches.lock
+   \recent-launches.txt
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.driver
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.write
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.5416.1.tmp
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.6612.1.tmp
+gone dir C:\Users\bc250\AppData\Roaming\amdgpu-wddm
+gone file C:\Windows\System32\bc250umd.dll
+gone file C:\Windows\SysWOW64\bc250umd.dll
+gone key HKLM:\SOFTWARE\amdgpu-wddm
+gone key HKLM:\SOFTWARE\WOW6432Node\amdgpu-wddm
+gone key HKCU:\Software\amdgpu-wddm
+gone key HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd
+gone vulkan entries in HKLM:\SOFTWARE\Khronos\Vulkan\Drivers
+gone vulkan entries in HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers
+gone mft clsid
+driver store bc250kmd packages: 0 
+scheduled tasks amdgpu-wddm*: 0 
+lab emergency task present: True
+certificates Root: 0 
+certificates TrustedPublisher: 0 
+gpu device: status OK, name Microsoft Basic Display Adapter, inf display.inf, version 10.0.22621.1
+display class keys naming our UMD: 0
+harness C:\BC250 present: True

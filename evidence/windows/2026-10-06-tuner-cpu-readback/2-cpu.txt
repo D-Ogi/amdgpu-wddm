@@ -1,0 +1,6 @@
+cpu: driver 0x000700D5, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3200 / 0 / 100)
+cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 65.6 C
+cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 40 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001

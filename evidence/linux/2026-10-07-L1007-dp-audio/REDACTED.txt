@@ -1,0 +1,7 @@
+Left out before the first commit (docs/01-evidence-rules.md). Counts only; the values are kept nowhere.
+
+- out/cheap/edid.txt: not copied. A monitor EDID can carry a serial number descriptor.
+- out/cheap/vbios.txt: not copied (empty file, the read returned nothing).
+
+Checked and found clean: every other text file of this directory (no MAC address, USB serial,
+UUID or IPv4 address). The lab network's addresses and host names never appear in these files.

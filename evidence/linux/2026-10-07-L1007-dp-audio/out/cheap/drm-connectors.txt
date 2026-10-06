@@ -1,0 +1,2 @@
+/sys/class/drm/card1-DP-1/ connected enabled 1920x1200
+/sys/class/drm/card1-DP-2/ disconnected disabled 

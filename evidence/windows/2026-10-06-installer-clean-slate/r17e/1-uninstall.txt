@@ -1,0 +1,157 @@
+zip ok A32A4DA2
+--- before
+boot 2026-10-06T22:37:56.5000000Z
+LEFT dir C:\Program Files\amdgpu-wddm: 71 files
+   \manifest.json
+   \uninstall.cmd
+   \verify.cmd
+   \control\amdgpu_wddm_control.exe
+   \control\bc250control.dll
+   \d3d11\amdgpu_wddm_d3d11.config
+   \d3d11\amdgpu_wddm_d3d11.dll
+   \d3d11\amdgpu_wddm_dxvk.dll
+   \d3d11\amdgpu_wddm_radv.dll
+   \d3d12\amdgpu_wddm_d3d12.dll
+   \d3d12\amdgpu_wddm_radv.dll
+   \d3d12\amdgpu_wddm_vkd3d.dll
+LEFT dir C:\ProgramData\amdgpu-wddm: 117 files
+   \dwm-baseline.json
+   \start-confirm.log
+   \control\backup-20261003T190649279Z.json
+   \control\backup-20261003T202558887Z.json
+   \control\backup-20261003T213910205Z.json
+   \control\backup-20261003T214314563Z.json
+   \control\backup-20261003T215709351Z.json
+   \control\backup-20261003T220123700Z.json
+   \control\backup-20261006T191917706Z.json
+   \control\backup-20261006T192344110Z.json
+   \control\control-actions.log
+   \control\dwm-observations.json
+LEFT dir C:\Users\bc250\AppData\Local\amdgpu-wddm: 12 files
+   \recent-launches.lock
+   \recent-launches.txt
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.write
+   \vkd3d\vkd3d-proton.mscopilot.exe.cache
+   \vkd3d\vkd3d-proton.mscopilot.exe.cache.driver
+   \vkd3d\vkd3d-proton.msedge.exe.cache
+   \vkd3d\vkd3d-proton.msedge.exe.cache.driver
+   \vkd3d\vkd3d-proton.msedgewebview2.exe.cache
+   \vkd3d\vkd3d-proton.msedgewebview2.exe.cache.driver
+   \vkd3d\vkd3d-proton.steamwebhelper.exe.cache
+   \vkd3d\vkd3d-proton.steamwebhelper.exe.cache.driver
+LEFT dir C:\Users\bc250\AppData\Local\amdgpu-wddm: 12 files
+   \recent-launches.lock
+   \recent-launches.txt
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.write
+   \vkd3d\vkd3d-proton.mscopilot.exe.cache
+   \vkd3d\vkd3d-proton.mscopilot.exe.cache.driver
+   \vkd3d\vkd3d-proton.msedge.exe.cache
+   \vkd3d\vkd3d-proton.msedge.exe.cache.driver
+   \vkd3d\vkd3d-proton.msedgewebview2.exe.cache
+   \vkd3d\vkd3d-proton.msedgewebview2.exe.cache.driver
+   \vkd3d\vkd3d-proton.steamwebhelper.exe.cache
+   \vkd3d\vkd3d-proton.steamwebhelper.exe.cache.driver
+gone dir C:\Users\bc250\AppData\Roaming\amdgpu-wddm
+LEFT file C:\Windows\System32\bc250umd.dll
+LEFT file C:\Windows\SysWOW64\bc250umd.dll
+LEFT key HKLM:\SOFTWARE\amdgpu-wddm (subkeys: AppRouter,DesktopRouter,Release)
+gone key HKLM:\SOFTWARE\WOW6432Node\amdgpu-wddm
+gone key HKCU:\Software\amdgpu-wddm
+LEFT key HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd (subkeys: Parameters,CuModeBoot,InteropBoot,Video,Enum)
+LEFT vulkan HKLM:\SOFTWARE\Khronos\Vulkan\Drivers: C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json
+LEFT vulkan HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers: C:\Program Files\amdgpu-wddm\wow64\vulkan\radeon_icd.json
+LEFT mft clsid
+driver store bc250kmd packages: 1 oem3.inf 10/06/2026 0.7.213.102
+scheduled tasks amdgpu-wddm*: 1 amdgpu-wddm start confirm
+lab emergency task present: True
+certificates Root: 1 O=amdgpu-wddm project, CN=amdgpu-wddm tester release (test signing)
+certificates TrustedPublisher: 1 O=amdgpu-wddm project, CN=amdgpu-wddm tester release (test signing)
+gpu device: status OK, name BC-250 GPU (amdgpu-wddm), inf oem3.inf, version 0.7.213.102
+display class keys naming our UMD: 1
+harness C:\BC250 present: True
+--- uninstall
+   7 file(s) in use: removal scheduled for the next restart
+   doing: remove C:\Windows\System32\bc250umd.dll
+   doing: remove C:\Windows\SysWOW64\bc250umd.dll
+   C:\BC250\firmware was there before the install: kept
+
+== Certificate
+   doing: remove certificate 71B3BFDDB5EFC22F0C133AD55D865D48AD352981 from LocalMachine Root and TrustedPublisher
+   no other test certificate of ours in Root or TrustedPublisher
+
+== Test signing
+   test signing left as it is
+
+== Installer state
+   doing: remove the installer state C:\ProgramData\amdgpu-wddm\installer (with the kept repair sets and the running-release witness), C:\ProgramData\amdgpu-wddm\start-confirm.log and C:\ProgramData\amdgpu-wddm\dwm-baseline.json
+
+== Per-user data
+   doing: remove the per-user data of this release (shader caches, the recent-launch list, DWM observations): C:\Windows\system32\config\systemprofile\AppData\Local\amdgpu-wddm, C:\Users\bc250\AppData\Local\amdgpu-wddm
+   kept: C:\ProgramData\amdgpu-wddm\control (the control application's setting backups and action log; delete it by hand if you do not need them)
+
+== What is left of this release
+   [LEFT] install root             C:\Program Files\amdgpu-wddm is there
+   [gone] System32 stub            C:\Windows\System32\bc250umd.dll is gone
+   [gone] SysWOW64 stub            C:\Windows\SysWOW64\bc250umd.dll is gone
+   [gone] driver store             no package of ours
+   [gone] driver service           HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd is gone
+   [gone] policy keys              HKLM:\SOFTWARE\amdgpu-wddm is gone
+   [gone] Vulkan registration      no entry of ours in either view
+   [gone] H.264 encoder keys       no key of ours
+   [gone] scheduled task           no task of ours
+   [gone] RunOnce entry            HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce amdgpu-wddm-installer is gone
+   [gone] Start menu               no shortcut of ours
+   [gone] installer state          C:\ProgramData\amdgpu-wddm\installer is gone
+   [gone] per-user data            no %LOCALAPPDATA%\amdgpu-wddm in any profile
+   [gone] certificates             no certificate of ours in Root or TrustedPublisher
+   [kept] GPU firmware             C:\BC250\firmware is there, and it was there before the install
+   [kept] control application data C:\ProgramData\amdgpu-wddm\control is there (the tester's setting backups and action log)
+   WARNING: 1 item(s) above are marked LEFT. A file or a registry key that Windows still holds goes at the restart below; run uninstall.cmd again afterwards if one of them stays.
+
+Uninstall complete. Restart the computer to finish. Log: C:\Users\bc250\AppData\Local\Temp\amdgpu-wddm-uninstall-20261006T224848Z.log
+Until the restart, some Windows 11 apps (the command bar of File Explorer, Task Manager) can ignore mouse clicks: the GPU changed to Microsoft Basic Display Adapter under the running desktop.
+uninstall exit 0
+--- after
+boot 2026-10-06T22:37:56.5000000Z
+LEFT dir C:\Program Files\amdgpu-wddm: 7 files
+   \d3d11\amdgpu_wddm_d3d11.dll
+   \d3d11\amdgpu_wddm_dxvk.dll
+   \d3d11\amdgpu_wddm_radv.dll
+   \desktop\amdgpu_wddm_radv.dll
+   \desktop\bc250d3d.dll
+   \desktop\bc250d3d_router.dll
+   \desktop\bc250d3d_zink.dll
+LEFT dir C:\ProgramData\amdgpu-wddm: 11 files
+   \control\backup-20261003T190649279Z.json
+   \control\backup-20261003T202558887Z.json
+   \control\backup-20261003T213910205Z.json
+   \control\backup-20261003T214314563Z.json
+   \control\backup-20261003T215709351Z.json
+   \control\backup-20261003T220123700Z.json
+   \control\backup-20261006T191917706Z.json
+   \control\backup-20261006T192344110Z.json
+   \control\control-actions.log
+   \control\dwm-observations.json
+   \control\route-written.json
+gone dir C:\Users\bc250\AppData\Local\amdgpu-wddm
+gone dir C:\Users\bc250\AppData\Local\amdgpu-wddm
+gone dir C:\Users\bc250\AppData\Roaming\amdgpu-wddm
+gone file C:\Windows\System32\bc250umd.dll
+gone file C:\Windows\SysWOW64\bc250umd.dll
+gone key HKLM:\SOFTWARE\amdgpu-wddm
+gone key HKLM:\SOFTWARE\WOW6432Node\amdgpu-wddm
+gone key HKCU:\Software\amdgpu-wddm
+gone key HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd
+gone vulkan entries in HKLM:\SOFTWARE\Khronos\Vulkan\Drivers
+gone vulkan entries in HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers
+gone mft clsid
+driver store bc250kmd packages: 0 
+scheduled tasks amdgpu-wddm*: 0 
+lab emergency task present: True
+certificates Root: 0 
+certificates TrustedPublisher: 0 
+gpu device: status OK, name Microsoft Basic Display Adapter, inf display.inf, version 10.0.22621.1
+display class keys naming our UMD: 0
+harness C:\BC250 present: True

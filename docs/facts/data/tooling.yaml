@@ -211,3 +211,10 @@ facts:
     evidence: "[Nested console diagnostic](../evidence/windows/2026-09-28-E34-m14-console002/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M740", "auto": true, "cue": "...e closes, baseline postflight passes14.346s, task Missing. Standalone M740 remains positive; separate controller/client Job design prepared with..."}
+  - id: M818
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The tester release 0.7.213.102-tester.17 (build r17e) removes itself from unit A and installs fresh from its package (2026-10-06): after its uninstaller and one restart no install root, per-user data, System32 or SysWOW64 stub, registry key, driver package, scheduled task, Vulkan or H.264 encoder registration or certificate of ours is left, and the GPU runs on Microsoft Basic Display Adapter; only the control application's own data stays, by design. The 7 files DWM held were scheduled as deletes at the restart (10 `PendingFileRenameOperations` entries) and were gone after it. The fresh install then started on the GPU desktop route with 40 CU, idle 500 MHz, a confirmed start, the fan read and the Start menu entries"
+    status_text: "MEASURED (unit A, builds r17b, r17d and r17e)"
+    detail: "The first uninstall (r17b) removed 47 driver packages of earlier lab installs (KMD 0.7.159.1 to 0.7.213.101) but left 6 held DLLs: it passed PowerShell `$null` to `MoveFileEx` as the new name, PowerShell turned it into an empty string and the call failed with `ERROR_PATH_NOT_FOUND`. r17d passes `[NullString]::Value` and removes per-user data; r17e also removes per-user data when no installation is left. A `-Repair` install of r17e over r17d copied only the changed installer file, so no in-use replacement happened in that run"
+    evidence: "[Installer clean-slate test](../evidence/windows/2026-10-06-installer-clean-slate/README.md)"

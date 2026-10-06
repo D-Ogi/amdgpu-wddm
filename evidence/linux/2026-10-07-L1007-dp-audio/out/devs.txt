@@ -1,0 +1,10 @@
+/dev/dri:
+card1
+renderD128
+
+/dev/snd:
+controlC0
+hwC0D0
+pcmC0D3p
+pcmC0D7p
+timer

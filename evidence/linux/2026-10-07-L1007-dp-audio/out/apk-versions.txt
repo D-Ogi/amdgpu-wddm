@@ -1,0 +1,6 @@
+alsa-tools-1.2.15-r1
+alsa-utils-1.2.15.2-r1
+alsa-utils-openrc-1.2.15.2-r1
+libdrm-2.4.134-r0
+libdrm-tests-2.4.134-r0
+python3-3.14.7-r1

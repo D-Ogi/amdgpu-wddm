@@ -1,0 +1,146 @@
+zip ok B8B9753B
+
+   cyan_skillfish2_sdma.bin   SHA256 
+15D0D3626DA7F2513F03B13BB7E02EEEECCAB276276AE27D0B6067B5F25E9E95 ok  https://git.kernel.org/pub/sc
+m/linux/kernel/git/firmware/linux-firmware.git/plain/amdgpu/cyan_skillfish2_sdma.bin?id=2b8daaf611
+fbade74f26a5b58ec1defe6a02f5e0
+   cyan_skillfish2_sdma1.bin  SHA256 
+BD1C0B0F6A6A4F17EDE034F2C844B6553FC444E08915C7BB500C09FDE59D6255 ok  https://git.kernel.org/pub/sc
+m/linux/kernel/git/firmware/linux-firmware.git/plain/amdgpu/cyan_skillfish2_sdma1.bin?id=2b8daaf61
+1fbade74f26a5b58ec1defe6a02f5e0
+   LICENSE.amdgpu             SHA256 
+572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE ok  https://git.kernel.org/pub/sc
+m/linux/kernel/git/firmware/linux-firmware.git/plain/LICENSES/LICENSE.amdgpu?id=2b8daaf611fbade74f
+26a5b58ec1defe6a02f5e0
+   doing: stage the continuation closure: every file of this package and no firmware folder 
+(downloaded in phase 2) into C:\ProgramData\amdgpu-wddm\installer\packages\0.7.213.102-tester.17, 
+each SHA256 checked there
+   doing: copy payload\d3d12 -> C:\Program Files\amdgpu-wddm\d3d12 (same SHA256: kept; in use: 
+replaced by rename)
+   doing: copy payload\desktop -> C:\Program Files\amdgpu-wddm\desktop (same SHA256: kept; in 
+use: replaced by rename)
+   doing: copy payload\d3d11 -> C:\Program Files\amdgpu-wddm\d3d11 (same SHA256: kept; in use: 
+replaced by rename)
+   doing: copy payload\vulkan -> C:\Program Files\amdgpu-wddm\vulkan (same SHA256: kept; in use: 
+replaced by rename)
+   doing: copy payload\wow64 -> C:\Program Files\amdgpu-wddm\wow64 (same SHA256: kept; in use: 
+replaced by rename)
+   doing: copy payload\tools -> C:\Program Files\amdgpu-wddm\tools (same SHA256: kept; in use: 
+replaced by rename)
+   doing: copy payload\control -> C:\Program Files\amdgpu-wddm\control (same SHA256: kept; in 
+use: replaced by rename)
+   doing: copy payload\mft -> C:\Program Files\amdgpu-wddm\mft (same SHA256: kept; in use: 
+replaced by rename)
+   doing: copy payload\system32\bc250umd.dll -> C:\Windows\System32\bc250umd.dll (the D3D9 slot 
+of UserModeDriverName; same SHA256: kept; in use: replaced by rename)
+   doing: copy payload\syswow64\bc250umd.dll -> C:\Windows\SysWOW64\bc250umd.dll (the D3D9 slot 
+of UserModeDriverNameWow, 32-bit processes; same SHA256: kept; in use: replaced by rename)
+   doing: copy the checked GPU firmware files (linux-firmware cyan_skillfish2_*.bin, 
+LICENSE.amdgpu) from C:\ProgramData\amdgpu-wddm\installer\firmware-staging -> C:\BC250\firmware; 
+its existing access rights are kept; C:\BC250 itself is not changed
+   DWM of session 1 before the driver package: DWM 1984 (created 2026-10-06 22:29:55Z)
+   doing: pnputil /add-driver payload\kmd\bc250kmd.inf /install (the GPU changes to it at the 
+next restart)
+   pnputil: pnputil exit 3010: completed, a system restart is required
+   after the driver package: device: pnputil exit 3010: completed, a system restart is required; 
+device status OK; DWM: same DWM instance: DWM 1984 (created 2026-10-06 22:29:55Z)
+   previous installer defaults: the defaults of tester.1 to tester.7 (no record)
+   doing: HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters: EnableMmio=1 (new); 
+EnableVram=1 (new); EnableVramWrite=1 (new); EnableGart=1 (new); EnablePsp=1 (new); EnableGfx=1 
+(new); EnableIh=1 (new); EnableDcnWrite=1 (new); EnableVidPnFlip=1 (new); EnableGpuVa=1 (new); 
+EnableGpuSubmit=1 (new); EnablePagingNode=1 (new); EnablePresentBlit=1 (new); EnableFullWddm=2 
+(new); EnableNativeSmu=1 (new); EnableNativePteCopy=1 (new); EnableHandleIdentityProbe=1 (new); 
+EnableGpuPresentBlit=1 (new); EnableCddDwmInterop=1 (new); EnableScanoutAdmit=1 (new); 
+EnableDirectFlipHandshake=1 (new); EnableHwmon=1 (new); NotifyDpcInReport=1 (new); DpmMode=1 
+(new); DpmMaxMHz=1500 (new); DpmIdleMHz=500 (new); KeepLog=0 (new); CuMode=40 (command line); 
+UnconfirmedStarts=0
+   doing: HKLM:\SOFTWARE\amdgpu-wddm\DesktopRouter: DwmForceCpu=0 (new); RequireKmdSwitches=1 
+(new); DirectFlipFront=1 (new); CpuUmdPath=C:\Program Files\amdgpu-wddm\desktop\bc250d3d.dll; 
+CpuUmdPathWow=C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d.dll
+   doing: HKLM:\SOFTWARE\amdgpu-wddm\AppRouter: Mode=gpu-default (new); Allow=[] (new); Deny=[] 
+(new); GpuUmdPath=C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll; 
+GpuUmdPathWow=C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_d3d11.dll
+   doing: HKLM:\SOFTWARE\amdgpu-wddm\Release: Version, InstallDir, InstallRoot, InstalledUtc, 
+AppliedDefaults (this package's defaults)
+   DWM at the end of phase 2: same DWM instance: DWM 1984 (created 2026-10-06 22:29:55Z)
+   doing: keep C:\ProgramData\amdgpu-wddm\installer\packages\0.7.213.102-tester.17 as the active 
+repair set (with the installed firmware), the one before it as the previous set, remove older sets
+   driver store: 1 package(s) of ours kept (oem3.inf); 0 to remove
+Installation complete. After the restart, the installer verifies the driver by itself.
+A restart is needed: the driver starts with its full configuration at the next start.
+   restart the computer yourself; the installer continues after you log on again
+install exit 0
+--- after install
+boot 2026-10-06T22:29:13.5000000Z
+LEFT dir C:\Program Files\amdgpu-wddm: 71 files
+   \manifest.json
+   \uninstall.cmd
+   \verify.cmd
+   \control\amdgpu_wddm_control.exe
+   \control\bc250control.dll
+   \d3d11\amdgpu_wddm_d3d11.config
+   \d3d11\amdgpu_wddm_d3d11.dll
+   \d3d11\amdgpu_wddm_dxvk.dll
+   \d3d11\amdgpu_wddm_radv.dll
+   \d3d12\amdgpu_wddm_d3d12.dll
+   \d3d12\amdgpu_wddm_radv.dll
+   \d3d12\amdgpu_wddm_vkd3d.dll
+LEFT dir C:\ProgramData\amdgpu-wddm: 109 files
+   \control\backup-20261003T190649279Z.json
+   \control\backup-20261003T202558887Z.json
+   \control\backup-20261003T213910205Z.json
+   \control\backup-20261003T214314563Z.json
+   \control\backup-20261003T215709351Z.json
+   \control\backup-20261003T220123700Z.json
+   \control\backup-20261006T191917706Z.json
+   \control\backup-20261006T192344110Z.json
+   \control\control-actions.log
+   \control\dwm-observations.json
+   \control\route-written.json
+   \installer\engine.lock
+LEFT dir C:\Users\bc250\AppData\Local\amdgpu-wddm: 91 files
+   \dwm-observations.json
+   \recent-launches.lock
+   \recent-launches.txt
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.driver
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.write
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.5416.1.tmp
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.6612.1.tmp
+LEFT dir C:\Users\bc250\AppData\Local\amdgpu-wddm: 91 files
+   \dwm-observations.json
+   \recent-launches.lock
+   \recent-launches.txt
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.driver
+   \vkd3d\vkd3d-proton.3DMarkSteelNomad.exe.cache.write
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache
+   \vkd3d\vkd3d-proton.adapter_info.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.5416.1.tmp
+   \vkd3d\vkd3d-proton.amdgpu_wddm_d3d12caps.exe.cache.driver.6612.1.tmp
+gone dir C:\Users\bc250\AppData\Roaming\amdgpu-wddm
+LEFT file C:\Windows\System32\bc250umd.dll
+LEFT file C:\Windows\SysWOW64\bc250umd.dll
+LEFT key HKLM:\SOFTWARE\amdgpu-wddm (subkeys: AppRouter,DesktopRouter,Release)
+gone key HKLM:\SOFTWARE\WOW6432Node\amdgpu-wddm
+gone key HKCU:\Software\amdgpu-wddm
+LEFT key HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd (subkeys: Parameters,Video)
+LEFT vulkan HKLM:\SOFTWARE\Khronos\Vulkan\Drivers: C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json
+LEFT vulkan HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers: C:\Program Files\amdgpu-wddm\wow64\vulkan\radeon_icd.json
+LEFT mft clsid
+driver store bc250kmd packages: 1 oem3.inf 10/06/2026 0.7.213.102
+scheduled tasks amdgpu-wddm*: 1 amdgpu-wddm start confirm
+lab emergency task present: True
+certificates Root: 1 O=amdgpu-wddm project, CN=amdgpu-wddm tester release (test signing)
+certificates TrustedPublisher: 1 O=amdgpu-wddm project, CN=amdgpu-wddm tester release (test signing)
+gpu device: status OK, name BC-250 GPU (amdgpu-wddm), inf oem3.inf, version 0.7.213.102
+display class keys naming our UMD: 1
+harness C:\BC250 present: True
+
+

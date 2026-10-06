@@ -1,0 +1,33 @@
+doing: copy payload\d3d12 -> C:\Program Files\amdgpu-wddm\d3d12 (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\d3d12: 0 copied, 3 already current, 0 replaced in use
+doing: copy payload\desktop -> C:\Program Files\amdgpu-wddm\desktop (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\desktop: 0 copied, 4 already current, 0 replaced in use
+doing: copy payload\d3d11 -> C:\Program Files\amdgpu-wddm\d3d11 (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\d3d11: 0 copied, 4 already current, 0 replaced in use
+doing: copy payload\vulkan -> C:\Program Files\amdgpu-wddm\vulkan (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\vulkan: 0 copied, 2 already current, 0 replaced in use
+doing: copy payload\wow64 -> C:\Program Files\amdgpu-wddm\wow64 (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\wow64: 0 copied, 8 already current, 0 replaced in use
+doing: copy payload\tools -> C:\Program Files\amdgpu-wddm\tools (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\tools: 0 copied, 8 already current, 0 replaced in use
+doing: copy payload\control -> C:\Program Files\amdgpu-wddm\control (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\control: 0 copied, 2 already current, 0 replaced in use
+doing: copy payload\mft -> C:\Program Files\amdgpu-wddm\mft (same SHA256: kept; in use: replaced by rename)
+C:\Program Files\amdgpu-wddm\mft: 0 copied, 1 already current, 0 replaced in use
+C:\Program Files\amdgpu-wddm\installer: 1 copied, 12 already current, 0 replaced in use
+C:\Program Files\amdgpu-wddm\licenses: 0 copied, 22 already current, 0 replaced in use
+doing: copy payload\system32\bc250umd.dll -> C:\Windows\System32\bc250umd.dll (the D3D9 slot of UserModeDriverName; same SHA256: kept; in use: replaced by rename)
+doing: copy payload\syswow64\bc250umd.dll -> C:\Windows\SysWOW64\bc250umd.dll (the D3D9 slot of UserModeDriverNameWow, 32-bit processes; same SHA256: kept; in use: replaced by rename)
+doing: scheduled task 'amdgpu-wddm start confirm': at logon of an administrator, runs C:\Program Files\amdgpu-wddm\tools\start-confirm.ps1 (at most 2 minutes)
+A restart is needed: the driver starts with its full configuration at the next start.
+pending rename entries: 10
+*1\??\C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+*1\??\C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_dxvk.dll
+*1\??\C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_radv.dll
+*1\??\C:\Program Files\amdgpu-wddm\desktop\amdgpu_wddm_radv.dll
+*1\??\C:\Program Files\amdgpu-wddm\desktop\bc250d3d.dll
+*1\??\C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll
+*1\??\C:\Program Files\amdgpu-wddm\desktop\bc250d3d_zink.dll
+*1\??\C:\Program Files\amdgpu-wddm\desktop
+*1\??\C:\Program Files\amdgpu-wddm\d3d11
+*1\??\C:\Program Files\amdgpu-wddm

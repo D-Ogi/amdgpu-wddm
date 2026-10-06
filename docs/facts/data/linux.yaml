@@ -363,6 +363,25 @@ facts:
     status_text: "MEASURED (unit A, three boots)"
     detail: "Kernel 6.18.52-0-lts. The warnings taint the kernel, so later traces in the same log read `Tainted: G W`. In a session log they are not a sign of a GPU fault"
     evidence: "[L1006 visit 1](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md), [E01](../evidence/linux/2026-09-21-E01-recon/dmesg-full.txt)"
+  - id: M819
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "The DP audio codec of unit A (`0x1002aa01`, rev `0x00100700`, pins `0x03` and `0x05`) has no HDA-specification ELD buffer (wishlist L41, GET verbs through the hwdep ioctl under Linux 6.18 with amdgpu loaded): `F2E` (DIP size, ELD) returns 0 on both pins, and `F2D`, `F31` and `F34` return 0. Pin sense `F09` bit 31 follows the monitor (pin `0x03` `0xffffffff` with the DP monitor, pin `0x05` `0x7fffffff` without one); bits 30 to 0 read all ones on both pins, so bit 30 (ELD valid) carries no information. The sink data is in the ATI vendor verbs: on pin `0x03` speaker allocation (`F70`) `0x201` and sink info (`F81`, index 0) `0xae30`, the manufacture id of ALSA's ELD; both read 0 on pin `0x05`"
+    status_text: "MEASURED (unit A, n = 1 visit, GET verbs only)"
+    detail: "ALSA's valid ELD for pin `0x03` (M810) therefore comes from amdgpu's audio component and the ATI verbs, not from a codec ELD buffer. A Windows driver that reads the ELD through the standard `F2E`/`F2F` verbs gets nothing from this codec. `GET_HBR_CONTROL` and `GET_MULTICHANNEL_MODE` read 1 on pin `0x03`, pin widget control `0x40` (output on), unsolicited responses off"
+    evidence: "[L1007, L41](../evidence/linux/2026-10-07-L1007-dp-audio/README.md)"
+    edges:
+      - {"type": "uses", "to": "M810"}
+  - id: M820
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "amdgpu sets up DP audio on unit A at the mode set and playback changes none of its registers (wishlist L38, Linux 6.18, monitor on DIG0, DP0, Azalia endpoint 0, reads before, during two 1 kHz 48 kHz stereo playbacks and after): `DCCG_AUDIO_DTO_SOURCE` `0x00100010`, `DCCG_AUDIO_DTO1_PHASE` 240 000, `DCCG_AUDIO_DTO1_MODULE` 5 988 740, `DIG0_AFMT_CNTL` `0x101`, `DIG0_AFMT_AUDIO_PACKET_CONTROL` `0x04000801`, `DIG0_AFMT_AUDIO_PACKET_CONTROL2` `0x300`, `DP0_DP_SEC_CNTL` `0x1111`, `DP0_DP_SEC_AUD_N` `0x8000`, `DP0_DP_SEC_TIMESTAMP` 1. `DP0_DP_SEC_AUD_M_READBACK` reads 0 also during playback. The DP link runs 4 lanes at RBR (`0x06`) with HBR (`0x0a`) verified"
+    status_text: "MEASURED (unit A, n = 1 visit, 6 register reads)"
+    detail: "The DTO1 module is 5 988 740, not the 6 000 000 a 600 MHz reference times 10 would give (M788 measures the reference at 600.000 MHz under Windows). Whether the tone was audible is not recorded: no microphone, and the camera checks were suspended. Registers read through `amdgpu_regs` at `regcalc` offsets. The encoder run of L38 is still open"
+    evidence: "[L1007, L38 and L8](../evidence/linux/2026-10-07-L1007-dp-audio/README.md)"
+    edges:
+      - {"type": "uses", "to": "M788"}
+      - {"type": "uses", "to": "M810"}
   - id: S4
     status: HYPOTHESIS
     date: "2026-09-21"

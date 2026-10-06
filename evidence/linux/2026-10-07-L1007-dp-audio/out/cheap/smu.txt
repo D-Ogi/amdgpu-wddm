@@ -1,0 +1,16 @@
+--- pp_dpm_sclk
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+--- pp_dpm_mclk
+0: 450Mhz *
+--- pp_dpm_fclk
+0: 450Mhz *
+--- pp_dpm_socclk
+0: 1254Mhz *
+--- pp_dpm_dcefclk
+
+--- power_dpm_force_performance_level
+auto
+--- gpu_busy_percent
+cat: read error: Not supported

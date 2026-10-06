@@ -1,0 +1,10 @@
+
+ALSA lib conf.c:5572:(parse_args) [error.core] Parameter DEV must be an integer
+ALSA lib conf.c:5714:(snd_config_expand) [error.core] Parse arguments error: Invalid argument
+ALSA lib pcm.c:2722:(snd_pcm_open_noupdate) [error.pcm] Unknown PCM hw:0,device
+speaker-test 1.2.15.2
+
+Playback device is hw:0,device
+Stream parameters are 48000Hz, S16_LE, 2 channels
+Sine wave rate is 1000.0000Hz
+Playback open error: -22,Invalid argument

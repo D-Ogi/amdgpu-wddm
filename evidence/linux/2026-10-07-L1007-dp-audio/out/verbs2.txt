@@ -1,0 +1,22 @@
+pin 0x03
+  GET_SPEAKER_ALLOCATION   0xf70: 0x00000201
+  GET_AUDIO_DESCRIPTOR     0xf76: 0x00000000
+  GET_AUDIO_VIDEO_DELAY    0xf7b: 0x00000000
+  GET_SINK_INFO_INDEX      0xf80: 0x00000000
+  GET_SINK_INFO_DATA       0xf81: 0x0000ae30
+  GET_HBR_CONTROL          0xf7c: 0x00000001
+  GET_MULTICHANNEL_MODE    0xf89: 0x00000001
+  pin sense                0xf09: 0xffffffff
+  pin widget control       0xf07: 0x00000040
+  unsol enable             0xf08: 0x00000000
+pin 0x05
+  GET_SPEAKER_ALLOCATION   0xf70: 0x00000000
+  GET_AUDIO_DESCRIPTOR     0xf76: 0x00000000
+  GET_AUDIO_VIDEO_DELAY    0xf7b: 0x00000000
+  GET_SINK_INFO_INDEX      0xf80: 0x00000000
+  GET_SINK_INFO_DATA       0xf81: 0x00000000
+  GET_HBR_CONTROL          0xf7c: 0x00000001
+  GET_MULTICHANNEL_MODE    0xf89: 0x00000001
+  pin sense                0xf09: 0x7fffffff
+  pin widget control       0xf07: 0x00000040
+  unsol enable             0xf08: 0x00000000

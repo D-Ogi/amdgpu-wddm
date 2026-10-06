@@ -1,0 +1,3 @@
+driver 0x000700D5, requested dpm, reason none, generation 320207602, ticks 4185, uptime 131255 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 9 exits 8 refusals 0, 84028 ms at the point
+00:40:39.700 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  65.5 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 8 down 9 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%

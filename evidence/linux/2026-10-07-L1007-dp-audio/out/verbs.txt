@@ -1,0 +1,12 @@
+/dev/snd/hwC0D0: vendor/device 0x1002aa01 revision 0x00100700
+  AFG nodes 2..5
+  pin 0x03: widget caps 0x00400381 pin caps 0x00000094 config 0x185600f0 sense 0xffffffff (presence 1, ELD valid 1)
+    F2E ELD buffer size: 0x00000000
+    DIP index (0xf2d): 0x00000000
+    DIP xmitctrl (0xf31): 0x00000000
+    conv channel count (0xf34): 0x00000000
+  pin 0x05: widget caps 0x00400381 pin caps 0x00000094 config 0x185600f0 sense 0x7fffffff (presence 0, ELD valid 1)
+    F2E ELD buffer size: 0x00000000
+    DIP index (0xf2d): 0x00000000
+    DIP xmitctrl (0xf31): 0x00000000
+    conv channel count (0xf34): 0x00000000

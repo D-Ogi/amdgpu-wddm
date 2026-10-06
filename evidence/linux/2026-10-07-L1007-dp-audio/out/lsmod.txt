@@ -1,0 +1,4 @@
+amdgpu              14934016  0 
+snd_hda_codec_atihdmi    16384  1 
+snd_hda_codec_hdmi     61440  1 snd_hda_codec_atihdmi
+snd_hda_intel          61440  0 

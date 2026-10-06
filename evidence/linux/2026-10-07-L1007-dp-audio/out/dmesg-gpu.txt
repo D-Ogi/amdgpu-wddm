@@ -1,0 +1,40 @@
+[  122.857620] amdgpu 0000:01:00.0: [drm] dal_irq_service_set: src: 10, st: 0
+[  122.857632] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[  122.857635] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=10 on init
+[  122.857638] amdgpu 0000:01:00.0: [drm] dal_irq_service_ack: src: 11
+[  122.857650] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_ack: called for non-implemented irq source, src_id=0, ext_id=0
+[  122.857653] amdgpu 0000:01:00.0: [drm] dal_irq_service_set: src: 11, st: 0
+[  122.857664] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[  122.857667] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=11 on init
+[  122.857670] amdgpu 0000:01:00.0: [drm] dal_irq_service_ack: src: 12
+[  122.857682] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_ack: called for non-implemented irq source, src_id=0, ext_id=0
+[  122.857685] amdgpu 0000:01:00.0: [drm] dal_irq_service_set: src: 12, st: 0
+[  122.857697] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[  122.857700] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=12 on init
+[  122.858056] amdgpu 0000:01:00.0: amdgpu: kiq ring mec 2 pipe 1 q 0
+[  123.367560] amdgpu 0000:01:00.0: amdgpu: Fence fallback timer expired on ring sdma0
+[  123.367686] kfd kfd: amdgpu: Allocated 3969056 bytes on gart
+[  123.367719] kfd kfd: amdgpu: Total number of KFD nodes to be created: 1
+[  123.871565] amdgpu 0000:01:00.0: amdgpu: Fence fallback timer expired on ring sdma0
+[  123.871632] amdgpu: Virtual CRAT table created for GPU
+[  123.872060] amdgpu: Topology: Add dGPU node [0x13fe:0x1002]
+[  123.872067] kfd kfd: amdgpu: added device 1002:13fe
+[  123.872086] amdgpu 0000:01:00.0: amdgpu: SE 2, SH per SE 2, CU per SH 10, active_cu_number 24
+[  123.872098] amdgpu 0000:01:00.0: amdgpu: ring gfx_0.0.0 uses VM inv eng 0 on hub 0
+[  123.872105] amdgpu 0000:01:00.0: amdgpu: ring comp_1.0.0 uses VM inv eng 1 on hub 0
+[  123.872111] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.0 uses VM inv eng 4 on hub 0
+[  123.872116] amdgpu 0000:01:00.0: amdgpu: ring comp_1.2.0 uses VM inv eng 5 on hub 0
+[  123.872122] amdgpu 0000:01:00.0: amdgpu: ring comp_1.3.0 uses VM inv eng 6 on hub 0
+[  123.872128] amdgpu 0000:01:00.0: amdgpu: ring comp_1.0.1 uses VM inv eng 7 on hub 0
+[  123.872134] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.1 uses VM inv eng 8 on hub 0
+[  123.872139] amdgpu 0000:01:00.0: amdgpu: ring comp_1.2.1 uses VM inv eng 9 on hub 0
+[  123.872145] amdgpu 0000:01:00.0: amdgpu: ring comp_1.3.1 uses VM inv eng 10 on hub 0
+[  123.872151] amdgpu 0000:01:00.0: amdgpu: ring kiq_0.2.1.0 uses VM inv eng 11 on hub 0
+[  123.872157] amdgpu 0000:01:00.0: amdgpu: ring sdma0 uses VM inv eng 12 on hub 0
+[  123.872163] amdgpu 0000:01:00.0: amdgpu: ring sdma1 uses VM inv eng 13 on hub 0
+[  123.872695] amdgpu 0000:01:00.0: amdgpu: Runtime PM not available
+[  123.873437] [drm] Initialized amdgpu 3.64.0 for 0000:01:00.0 on minor 1
+[  123.883918] fbcon: amdgpudrmfb (fb0) is primary device
+[  124.033357] [drm] Failed to add display topology, DTM TA is not initialized.
+[  124.035077] Console: switching to colour frame buffer device 240x75
+[  124.059557] amdgpu 0000:01:00.0: [drm] fb0: amdgpudrmfb frame buffer device

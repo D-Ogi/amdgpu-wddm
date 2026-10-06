@@ -1,0 +1,75 @@
+Get-Content : Access to the path 'C:\ProgramData\amdgpu-wddm\installer\verify' is denied.
+At C:\BC250\tmp\r17-check.ps1:37 char:182
++ ...  | ForEach-Object { $_.Name; Get-Content $_.FullName -TotalCount 30 }
++                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : PermissionDenied: (C:\ProgramData\...nstaller\verify:String) [Get-C 
+   ontent], UnauthorizedAccessException
+    + FullyQualifiedErrorId : GetContentReaderUnauthorizedAccessError,Microsoft.PowerShell.Comman 
+   ds.GetContentCommand
+ 
+boot 2026-10-06T22:52:50.5000000Z
+device OK version 0.7.213.102 problem 0
+# adapter    BC-250 GPU (amdgpu-wddm)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00008AC7
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+00:54:53.137 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  69.6 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle none confirmed  up 7 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%
+fan fan=2 rpm=1321 turning=1/5 answered=5/5 duty_pct=77 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=69.0 board_c=60.0 age_ms=415 fresh=1 valid=1 stopped=0 reason=ok samples=90 errors=0 retries=0 refusals=0
+dwm pid 1916 session 1 created 2026-10-06T22:53:33.0155320Z
+dwm modules: bc250d3d_zink.dll, bc250d3d_router.dll, amdgpu_wddm_radv.dll
+--- components
+control\amdgpu_wddm_control.exe          1FE6A77B
+tools\bc250kmd_cli.exe                   C4A26B99
+d3d11\amdgpu_wddm_d3d11.dll              D42801CC
+d3d12\amdgpu_wddm_d3d12.dll              477373C1
+desktop\bc250d3d.dll                     A57F7376
+desktop\bc250d3d_router.dll              0F611676
+vulkan\radeon_icd.json                   234175BD
+mft\amdgpu_wddm_mft_h264.dll             D3E29E6E
+dir control: 2 files
+dir d3d11: 4 files
+dir d3d12: 3 files
+dir desktop: 4 files
+dir installer: 13 files
+dir licenses: 23 files
+dir mft: 1 files
+dir tools: 8 files
+dir vulkan: 2 files
+dir wow64: 8 files
+start menu: amdgpu-wddm Control (recovery).lnk, amdgpu-wddm Control.lnk
+start-confirm task: last run 2026-10-06T22:53:53.0000000Z result 0x0
+vulkan drivers: C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json
+AppRouter Mode gpu-default Allow [] Deny []
+D3D12 application profiles: 
+--- control application status (GUI binary, console mode)
+amdgpu-wddm Control 0.5.1.0 status, 2026-10-06 22:54:55Z
+dwm-restart: unknown-history (boot 232, session 1, session start 2026-10-06T22:53:22.600Z, DWM process 1916 started 2026-10-06T22:53:33.015Z, instances seen 1, watched since 2026-10-06T22:53:40.387Z by start-confirm)
+states:
+  [info] Desktop compositor: No replacement of the desktop compositor (DWM) seen since 2026-10-06 22:53:40 UTC (first seen by the installer's start-confirm task at logon, 18 s after the session began). A replacement before that would not be seen.
+  [ok] Driver start: This start is confirmed. Unconfirmed starts: 0 of 2. Last driver step: first display mode set.
+  [ok] GPU desktop path: Open: both switches are on for this start. Desktop devices on the path: 1.
+  [info] Desktop composition: GPU route: selected and active (the DWM that started after the change loaded it). If the desktop goes black or restarts, put it back on the CPU route (desktop-cpu) and restart Windows. Active now: the GPU route (bc250d3d_zink.dll, bc250d3d_router.dll, amdgpu_wddm_radv.dll).
+  [ok] Clock control: Automatic clocks, ceiling 1500 MHz. Setting for the next start: Automatic, ceiling 1500 MHz.
+  [ok] Graphics cores: All 40 cores, confirmed. Your choice: All (40). Next start: 40 cores (confirmed earlier). (snapshot: applied 40, flags 53, reason NONE, active 40, mask 0x0, generation 321032091)
+  [ok] Start confirmation task: Last run 2026-10-07 00:53: confirmed the start. Log: 2026-10-06T22:54:41.781Z +  63.0s running-release witness: not written, an installer run holds engine.lock: no witness until the next start
+--- kernel log lines
+    13     30.484 hwmon: base 0x0A20 ec 1.0 build 07/28/21 customer 0x162B -> ok
+    14     30.484 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+    28     30.484 wddm: DirectFlip handshake on
+    29     30.484 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 1 vram 1 mmio 1 aligned 1 post 1
+    30     30.484 wddm: completion report pairs its own notify dpc: yes
+   177     30.719 dpm: thermal zone DpmThermalZone 0 (absent) -> on, error 0
+   178     30.719 dpm: thermal zone: steps from 86000 mC, no raise from 83000 mC
+  6643    115.980 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 6 exits 6 refusals 0, 42312 ms at the point
+  6646    115.980 hwmon: telemetry 85 samples 0 errors 0 retries 0 refusals
+  6739    121.006 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 7 exits 7 refusals 0, 43598 ms at the point
+  6742    121.006 hwmon: telemetry 90 samples 0 errors 0 retries 0 refusals
+  7052    126.010 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 8 exits 8 refusals 0, 46593 ms at the point
+  7055    126.010 hwmon: telemetry 94 samples 0 errors 0 retries 0 refusals
+  7059    126.239 dpm: summary idle 500 MHz, hold 3000 ms under 2 permille, entries 8 exits 8 refusals 0, 46593 ms at the point
+  7062    126.239 hwmon: summary 95 samples 0 errors 0 retries 0 refusals
+  7068    126.239 interop summary: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x803 users 1 marks 1 unmarks 0 mark-failures 0 last-end 0
+--- verify report
+verify

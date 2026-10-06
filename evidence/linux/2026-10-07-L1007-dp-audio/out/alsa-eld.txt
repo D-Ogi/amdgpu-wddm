@@ -1,0 +1,28 @@
+--- /proc/asound/card0/eld#0.0
+monitor_present		1
+eld_valid		1
+codec_pin_nid		0x3
+codec_dev_id		0x0
+codec_cvt_nid		0x0
+monitor_name		LEN LT2452pwC
+connection_type		DisplayPort
+eld_version		[0x2] CEA-861D or below
+edid_version		[0x3] CEA-861-B, C or D
+manufacture_id		0xae30
+product_id		0x1144
+port_id			0x0
+support_hdcp		0
+support_ai		0
+audio_sync_delay	0
+speakers		[0x1] FL/FR
+sad_count		1
+sad0_coding_type	[0x1] LPCM
+sad0_channels		2
+sad0_rates		[0x1ee0] 32000 44100 48000 88200 96000 176400 192000
+sad0_bits		[0xe] 16 20 24
+--- /proc/asound/card0/eld#0.1
+monitor_present		0
+eld_valid		0
+codec_pin_nid		0x5
+codec_dev_id		0x0
+codec_cvt_nid		0x0

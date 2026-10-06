@@ -76,8 +76,6 @@ flowchart LR
   M430["M430"]
   M431["M431"]
   M562["M562"]
-  M575["M575<br/>d3d"]
-  M576["M576"]
   M596["M596"]
   M652["M652"]
   M653["M653"]
@@ -96,6 +94,7 @@ flowchart LR
   M724["M724"]
   M788["M788"]
   M810["M810<br/>linux"]
+  M820["M820<br/>linux"]
   M68 --> M67
   M84 --> M73
   M84 --> M83
@@ -127,7 +126,6 @@ flowchart LR
   M408 --> M407
   M411 --> M410
   M430 --> M431
-  M576 --> M575
   M596 --> M562
   M653 --> M652
   M682 --> M681
@@ -143,22 +141,26 @@ flowchart LR
   M413 --> M412
   M415 --> M412
   M810 --> M788
+  M820 --> M788
   M654 --> M653
   classDef other stroke-dasharray:4 3
-  class M20,M31,M67,M73,M77,M79,M190,M413,M415,M575,M654,M697,M810 other
+  class M20,M31,M67,M73,M77,M79,M190,M413,M415,M654,M697,M810,M820 other
 ```
 
 ### Part 2
 
 ```mermaid
 flowchart LR
+  M575["M575<br/>d3d"]
+  M576["M576"]
   M585["M585"]
   M586["M586<br/>d3d"]
   M719["M719"]
   M720["M720"]
+  M576 --> M575
   M720 --> M719
   M586 --> M585
   classDef other stroke-dasharray:4 3
-  class M586 other
+  class M575,M586 other
 ```
 

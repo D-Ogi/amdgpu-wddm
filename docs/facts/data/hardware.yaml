@@ -741,6 +741,13 @@ facts:
     evidence: "[L1006 visit 3, L12](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
     edges:
       - {"type": "uses", "to": "M21"}
+  - id: M817
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The KMD's CPU surface reads the CPU state of unit A through SMU queue 3 under Windows (2026-10-06, KMD 0.7.213.1, `CpuTune` 1): CPU voltage 806 mV in one read and 1199 mV in two later reads, firmware thermal cap 100 C, feature mask `0xDD602C7D`, core clocks 1400 MHz on six cores and 900 MHz on two, P-state table 3200, 2550, 2325, 1960, 1820, 1600, 1271 and 800 MHz, core mask `0x77` with 12 logical processors visible to Windows. 40 reads, 0 writes, 0 refusals"
+    status_text: "MEASURED (unit A, n = 1 readback step, read only)"
+    detail: "The readback stage of the Tuner order applied nothing: clock limit, undervolt and cap stay at the recorded baseline 3200 MHz, 0 steps, 100 C. The GPU stayed at its idle point (500 MHz, 820 mV) during the 13 s step. This run does not tell why the CPU voltage differs between reads"
+    evidence: "[Tuner CPU readback](../evidence/windows/2026-10-06-tuner-cpu-readback/README.md)"
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"
