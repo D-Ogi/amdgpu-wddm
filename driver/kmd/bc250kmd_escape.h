@@ -35,7 +35,49 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700D0u       // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
+#define BC250_KMD_VERSION 0x000700D2u       // revision 210 (INF 0.7.210.1, on 208.1): the ring's own idle-gap
+                                            // histogram, and the completion report pairs its own DPC-level
+                                            // notification.
+                                            //
+                                            // Offline analysis of RotTR sessions 418-420 found the 3D ring idle
+                                            // a median 8 ms, 418 to 605 times per 105 s, with a dispatchable
+                                            // packet already queued, the gap ending within 300 us of a display
+                                            // VSync: 0.45 to 0.67 ms of every frame, 59 to 64 % of all ring
+                                            // idle. Reading it took a 3 GB event-trace dump per session. This
+                                            // revision measures a near relative of that quantity in the driver
+                                            // that owns the ring (ring_gap.h, two counter reads per packet
+                                            // boundary, four summary lines per node) - a superset, because the
+                                            // driver cannot see a packet dxgkrnl holds queued, so only the
+                                            // VSync-ended filter separates the class from ordinary starved
+                                            // idle. "The GPU must not wait" now has a number in every
+                                            // workload, game or client, from the log summary alone.
+                                            //
+                                            // It also changes one thing, behind NotifyDpcInReport (default 1):
+                                            // the report pass calls DxgkCbNotifyDpc itself, and the
+                                            // DxgkCbQueueDpc whose only job was to bring that call about is
+                                            // then not made - one dxgkrnl device DPC per completion fewer.
+                                            // Until now the DPC-level notification a completion report owes
+                                            // arrived only with that next dxgkrnl DPC: a 12 to 20 us hop at the
+                                            // 187 completions a second session 418 retired, about 0.03 ms of a
+                                            // 70 Hz frame. It is NOT what holds the ring for 8 ms; C48 died on
+                                            // its own clause 1 and notify_pairing.h carries the evidence. The
+                                            // DDI asks for the pairing (d3dkmddi.md:2392); notify_pairing.h is
+                                            // the model of both shapes and the host test drives it. The value 0
+                                            // restores 0.7.208.1 exactly, which is how the lab prices it.
+                                            //
+                                            // Third, HotSubmitLog (default 0) takes the three per-submit guard
+                                            // log lines of SubmitIbLocked out of the hot path: they wrote 3871
+                                            // lines a second inside GartLock and 75 % of the ring was
+                                            // overwritten before anything read it. The count of what was left
+                                            // out is in the summary, so a quiet log is not read as a quiet
+                                            // ring. No escape struct, no journal record layout and no counter
+                                            // of the escape ABI changed, so bc250kmd_cli stays compatible; the
+                                            // constant moves because packagecheck VRS010 matches it against
+                                            // the INF revision, and because Windows keeps the driver it has
+                                            // when the version ties. 209 is taken by the independent-flip
+                                            // candidate, so this one is 210.
+                                            //
+                                            // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
                                             // guard log that did not fit a log line are two lines each.
                                             // BC250_LOG_TEXT is 160 bytes and RtlStringCchVPrintfA truncates
                                             // without a word, so 0.7.207.1 printed "wddm summary: scan-out ...
