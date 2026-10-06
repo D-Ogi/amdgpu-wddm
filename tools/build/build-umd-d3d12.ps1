@@ -82,6 +82,12 @@ try {
   if($LASTEXITCODE){throw 'Allocation ownership test build failed'}
   & .\allocation-test.exe
   if($LASTEXITCODE){throw 'Allocation ownership tests failed'}
+  # BD-075: the shared surface's two records as bytes on the wire. The contract header is the one reader and
+  # writer for the kernel driver, both shells and the Mesa winsys, so its test takes no API header at all.
+  & cl.exe @flags /analyze /analyze:external- /Fe:shared-surface-test.exe "$repo\driver\contract\test\shared-surface-test.cpp"
+  if($LASTEXITCODE){throw 'Shared surface contract test build failed'}
+  & .\shared-surface-test.exe
+  if($LASTEXITCODE){throw 'Shared surface contract tests failed'}
   & cl.exe @flags /Fe:allocation-request-test.exe "$repo\driver\umd\d3d12\allocation-request-test.cpp" "$repo\driver\kmd\umd_blob.c"
   if($LASTEXITCODE){throw 'Allocation request test build failed'}
   & .\allocation-request-test.exe
