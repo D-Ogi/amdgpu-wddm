@@ -315,6 +315,11 @@ With the value at 1 the `DXGKQAITYPE_UMDRIVERPRIVATE` reply carries the `bc250_s
 (`driver/contract/bc250_scanout_caps.h`): 24 bytes at offset 1496, after the adapter identity trailer,
 holding the `DIRECT_FLIP` flag and the POST geometry. A reader must query at least
 `BC250_SCANOUT_CAPS_TOTAL` (1520) bytes; the driver writes the trailer only when the whole of it fits.
+In 0.7.213.1 the readers that size their query that way are the two application shells
+(`driver/umd/dxvk/adapter-identity.h`, `driver/umd/d3d12/adapter-contract.h`). The compositor's own
+user-mode driver, the router front, does not query the trailer yet and still answers
+`pfnCheckDirectFlipSupport` FALSE, so this value cannot change the desktop's DirectFlip answer in this
+revision. What it changes is what the trailer says when a reader asks.
 
 The value alone is not enough. `WddmStart` ANDs it with every start-latched fact the flip path needs -
 `EnableScanoutAdmit`, `VidPnFlipEnabled` (that is `EnableMmio` and `EnableDcnWrite` and

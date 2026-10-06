@@ -2719,9 +2719,11 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->ScanoutAdmitGate = (GuardReadSetting(L"EnableScanoutAdmit", 1) != 0);
     GuardLog("wddm: scan-out admission %s", wddm->ScanoutAdmitGate ? "on" : "off (0.7.205.1 behaviour)");
     // M15.14 increment 2, read once for this start: whether the bc250_scanout_caps trailer tells the
-    // compositor's user-mode driver that a client scan-out flip will be admitted. Absent = off, because
-    // the one process whose answer changes is the compositor itself and a wrong TRUE costs a copy the OS
-    // no longer makes.
+    // compositor's user-mode driver that a client scan-out flip will be admitted. Absent = on from
+    // 0.7.213, the train rule for a finished feature; 0 is the bisect switch and gives back 0.7.208.1
+    // byte for byte at every buffer size.
+    //   A wrong TRUE costs a copy the operating system no longer makes, and the one process whose answer
+    // changes is the compositor itself, so an open default is only safe because of what follows.
     //   The invariant this publishes is "a closed kernel path can never leave the shell agreeing to a flip
     // this driver will refuse", so every start-latched fact the flip path needs is ANDed in, not only
     // EnableScanoutAdmit. All of them are known here: MmioStart, VramStart and AcquirePostDisplayOwnership

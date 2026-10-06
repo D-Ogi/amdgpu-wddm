@@ -204,7 +204,7 @@ function Write-Verdict {
         if ($After.values.Contains('directflip_handshake')) {
             Write-Output ("  DirectFlip handshake {0} in the running driver: {1}" -f $After.values['directflip_handshake'],
                 $(if ($After.values['directflip_handshake'] -eq 'on') { 'the compositor was told the driver accepts a client buffer, so its refusal is its own' }
-                  else { 'the compositor was never offered the flip, so this arm could not have reached the driver (set EnableDirectFlipHandshake and restart the adapter)' }))
+                  else { 'the compositor was never offered the flip, so this arm could not have reached the driver - with EnableDirectFlipHandshake absent or 1 this is a start-latched input refusing, named on the driver "DirectFlip handshake inputs" log line, and not a closed switch' }))
         }
         if (Has-Counter $Before $After 'create_v3_asked') {
             $asked = $Delta.create_v3_asked + $Delta.create_v2_asked + $Delta.create_v1_asked + $Delta.create_none_asked + $Delta.create_other_asked
@@ -344,10 +344,15 @@ try { $setting = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\
                     -Name 'EnableDirectFlipHandshake' -ErrorAction Stop).EnableDirectFlipHandshake }
 catch { $setting = $null }
 $published = if ($before.values.Contains('directflip_handshake')) { $before.values['directflip_handshake'] } else { 'unknown' }
-$handshakeNote = "EnableDirectFlipHandshake $(if ($null -eq $setting) { 'absent (default 0)' } else { $setting }), driver publishes $published"
+# Absent means on from 0.7.213 (the train rule for a finished feature), the same reading the overlay's
+# absent-value table uses. So an absent or 1 value next to a published "off" is not a closed switch: one of
+# the start-latched facts the flip path needs refused, and the driver's own "DirectFlip handshake inputs"
+# line in the kernel log names which one. Only a value of 0 is the operator having closed it.
+$handshakeNote = "EnableDirectFlipHandshake $(if ($null -eq $setting) { 'absent (default 1 from 0.7.213)' } else { $setting }), driver publishes $published"
 if ($Experiment -and $published -eq 'off') {
-    $handshakeNote += $(if ($setting) { ' - SET BUT NOT IN EFFECT: restart the adapter before this arm means anything' }
-                        else { ' - this arm can only end "not reached": set the value to 1 and restart the adapter' })
+    $handshakeNote += $(if ($null -ne $setting -and $setting -eq 0) {
+                            ' - CLOSED BY THE OPERATOR: this arm can only end "not reached"; remove the value or set it to 1 and restart the adapter' }
+                        else { ' - the switch is open, so a start-latched input refused: read the "DirectFlip handshake inputs" line of the kernel log (EnableVidPnFlip, VRAM, alignment, POST geometry)' })
 }
 Write-Host "handshake: $handshakeNote"
 
