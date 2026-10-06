@@ -145,6 +145,7 @@ namespace Bc250Mon
             { "EnableDirectFlipHandshake", 1 }, // wddm.c: absent = on from 0.7.213, the caps trailer of route C
             { "NotifyDpcInReport", 1 },         // wddm.c: absent = on from 0.7.213 (C50, notify_pairing.h)
             { "EnableHwmon", 1 },               // hwmon.c: absent = on from 0.7.213, the board's monitor, read only
+            { "EnableFanControl", 1 },          // fan.c: GuardReadSetting(..., 1), the case fan control (Part B)
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
             { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ
