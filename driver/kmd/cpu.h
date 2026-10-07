@@ -48,6 +48,8 @@ typedef struct _BC250_CPU_STATE {
     struct bc250_cpu_settings Stored;       // the registry's values
     struct bc250_cpu_settings Baseline;     // what the firmware answered before the first write of this start
     BOOLEAN BaselineValid;
+    ULONG StretchRefMHz;                    // the P-state table's top: what a loaded core is judged against with no
+                                            // limit applied (0.7.216.15 keeps it apart from the baseline's boost)
     struct bc250_cpu_settings TrialBefore;  // what a revert puts back
     ULONG TrialMs;                          // the window a SET gets by default (CpuTrialMs)
     ULONG TrialSerial;                      // one more for every SET, KEEP, CANCEL and revert

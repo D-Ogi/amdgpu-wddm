@@ -197,6 +197,21 @@ unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
 int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *before,
 			     const struct bc250_cpu_settings *baseline, struct bc250_cpu_settings *out);
 
+/* The clock limit of the recorded baseline (0.7.216.15, K137): the highest clock the firmware itself answered in
+ * the read stage, over the P-state table (BC250_CPU_MSG_READ_PSTATE_MHZ) and the per-core clocks
+ * (BC250_CPU_MSG_READ_CORE_MHZ). Both are the firmware's own answers, so neither is an invented constant: the
+ * P-state table gives the highest named P-state (3200 MHz on unit A), and the per-core clock gives the boost the
+ * firmware actually grants above it (3481 to 3500 MHz on unit A after a cold boot). Up to 0.7.216.14 the baseline
+ * was the P-state table alone, so every restore sent 3200 MHz and capped the boost the firmware had given.
+ *   - An answer outside BC250_CPU_MIN_MHZ..BC250_CPU_MAX_MHZ_LAB is not a clock of this part and counts as no
+ *     answer (a core that did not answer reads 0, an idle core reads far under the floor).
+ *   - The result is clamped to BC250_CPU_MAX_MHZ, the release bound: a restore never asks for more than stock.
+ *   - previous_mhz is the baseline this start recorded already (0 for none). The result is never below it, so a
+ *     later read stage of the same start can raise the baseline and never lower it.
+ * Returns 0 when no answer is plausible and previous_mhz is 0: the baseline then names no clock limit. */
+unsigned int bc250_cpu_baseline_mhz(const unsigned int *pstate_mhz, unsigned int pstates,
+				    const unsigned int *core_mhz, unsigned int cores, unsigned int previous_mhz);
+
 /* ---- what the hardware said, and the three failure signs --------------------------------------- */
 
 struct bc250_cpu_sample {
