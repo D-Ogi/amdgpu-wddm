@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/07/2026,0.7.216.14
+DriverVer   = 10/07/2026,0.7.216.16
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -153,8 +153,9 @@ HKR, Parameters, EnablePresentBlit, 0x00010003, 1
 ; NOCLOBBER on purpose and not in the release table: installing a package disarms a test bugcheck somebody left armed.
 HKR, Parameters, EnableHangBugcheck, 0x00010001, 0
 ; M15.12 stage-1 hang recovery (wddm.c ResetEngine, docs/design/hang-recovery.md): 1 lets a node-0 engine reset
-; kill the hung job's VMID waves (an SQ_CMD write) at the next device start. Closed by every install, like every
-; gate above. Its verdicts go to the Parameters\HangRecovery subkey, which no install touches.
+; kill the hung job's VMID waves (an SQ_CMD write) at the next device start; 0 or absent is the 0.7.216.14 driver.
+; No NOCLOBBER on purpose and not in the release table, like EnableHangBugcheck above: installing a package closes
+; an experiment somebody left on. Its verdicts go to the Parameters\HangRecovery subkey, which no install touches.
 HKR, Parameters, HangRecoveryMode,  0x00010001, 0
 ; The log ring into a file under C:\BC250\kmdlog at every device start and stop (guard.c GuardLogKeep). A synchronous
 ; file write in a PnP stop, so disabled by default. An explicitly enabled capture survives an upgrade, as it has since

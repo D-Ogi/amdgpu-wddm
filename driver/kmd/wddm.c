@@ -335,9 +335,11 @@ typedef struct _BC250_WDDM {
     // and running that release twice is a worse failure than the lost ack, which the watchdog still sees. It is
     // counted and logged, so "the scheduler waits for a preemption that never came" has a line of its own.
     volatile LONG PreemptionReportsLost;
-    volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value";
-                                         // shared across nodes on purpose (design note section 5): a lab
-                                         // simplification, not a claim that dxgkrnl only ever sees one node's value
+    volatile LONG LastCompletedFence;   // the fence of the newest completion report on EITHER node, for the two log
+                                         // lines that print it (summary, stop; tools/runcompare reads the stop line).
+                                         // Diagnostics only: fence ids are per node, so this is never a bound for
+                                         // one node's fences. "The last completed fence ID" dxgkrnl checks against
+                                         // is per node: LastReportedFence[node] (hang-recovery.md, 0.7.216.16)
     UINT NodeCount;                     // 1 with EnablePagingNode closed, 2 open; read once in WddmStart
     // M15.12 (docs/design/hang-recovery.md): the hang-recovery switch, read once. 0 or absent = today's behaviour
     // (ResetEngine refuses, ResetFromTimeout fails, 0x116). 1 = DxgkDdiResetEngine attempts a node-0 soft
@@ -6062,8 +6064,9 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         const BC250_GFX_COMPLETION* head;
         const BC250_GFX_COMPLETION* tail;
         ULONG verdict, seq, kills = 0, micros = 0, vmid = 0;
-        UINT hungFence = 0, lastCompleted;
+        UINT hungFence = 0, lastCompleted = 0;
         BOOLEAN onRing;
+        int lastKnown;
         KIRQL irql;
 
         WddmGpuFence(device);           // retire anything that arrived late before deciding there is still a hang
@@ -6078,7 +6081,12 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         if (onRing) { hungFence = head->Fence; vmid = head->Vmid; }
         tail = Bc250GfxQueueTail(&wddm->GfxPending);
         seq = tail != NULL ? tail->Seq : 0;     // the newest sequence on the ring, the one a drain has to retire
-        lastCompleted = (UINT)wddm->LastCompletedFence;
+        // The lower bound of the 0x119 range is THIS node's last reported fence, never the adapter-wide
+        // LastCompletedFence: fence ids are per node, and node 1's run far ahead of node 0's. 0.7.216.13 read the
+        // shared field, so a paging completion after the hang (trial D: node 1 at 9228, node 0 at 1185, hung 1186)
+        // made the guard refuse a valid recovery (hang_recovery.h, Bc250HangNodeLastCompleted).
+        lastKnown = Bc250HangNodeLastCompleted(wddm->LastReportedFence, wddm->LastReportedValid,
+                                               BC250_WDDM_NODE_COUNT_MAX, pResetEngine->NodeOrdinal, &lastCompleted);
         KeReleaseSpinLock(&wddm->Lock, irql);
 
         // Decided before the hardware is touched: no job of this node on the ring, an abort fence outside the
@@ -6086,7 +6094,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         // guard is defence-in-depth against bugcheck 0x119: the aborted fence is the head job's own, so it is above
         // the last completed and no newer than itself, but we check rather than trust - and before the kill, so
         // that a refusal never follows a kill we cannot report.
-        verdict = Bc250HangPreKillVerdict(onRing, hungFence, lastCompleted, vmid);
+        verdict = Bc250HangPreKillVerdict(onRing, hungFence, lastKnown, lastCompleted, vmid);
         if (verdict == BC250_HANG_VERDICT_PENDING)
         {
             // On the disk before the first SQ_CMD write: should the kill itself take the machine down, the record
@@ -6119,11 +6127,13 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // here. The reset subsumes it: clear it so the DPC does not later report a stale DMA_PREEMPTED for a
             // preemption the aborted fence has already superseded.
             wddm->PreemptionPending[BC250_WDDM_NODE_3D] = 0;
-            // dxgkrnl treats the aborted fence and everything below it as completed; advance our notion to match.
+            // dxgkrnl treats the aborted fence and everything below it as completed; advance node 0's notion to
+            // match, and only node 0's. The adapter-wide LastCompletedFence is not written: it holds the newest
+            // report of either node, and node 1's ids run ahead of node 0's, so writing hungFence there (0.7.216.13)
+            // moved it backwards below fences node 1 had already reported.
             wddm->SubmittedFence[BC250_WDDM_NODE_3D] = (LONG)hungFence;
             wddm->LastReportedFence[BC250_WDDM_NODE_3D] = (LONG)hungFence;
             wddm->LastReportedValid[BC250_WDDM_NODE_3D] = TRUE;
-            InterlockedExchange(&wddm->LastCompletedFence, (LONG)hungFence);
             // Last, with the queue already empty: it clears HwPending, cancels the submit watchdog and closes the
             // ring-gap edge, which a hand-written HwPending = FALSE would have left open (0.7.210's histogram).
             WddmGfxHeadLocked(wddm);
@@ -6147,6 +6157,11 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
                  pResetEngine->NodeOrdinal, verdict);
         GuardLog("wddm: soft recovery refused: seq %lu fence %u vmid %lu, %lu kill(s) in %lu us", seq, hungFence,
                  vmid, kills, micros);
+        // The bound the fence guard compared with, so that a verdict 4 says on its own which value refused it
+        // (trial D needed a dump and a script to find that out).
+        if (verdict == BC250_HANG_VERDICT_FENCE_GUARD)
+            GuardLog("wddm: soft recovery fence guard: node %u last reported %u (known %d), abort fence %u",
+                     pResetEngine->NodeOrdinal, lastCompleted, lastKnown, hungFence);
     }
 
     // Today's behaviour (HangRecoveryMode off, node 1, or a stage-1 verdict that is not a recovery): the documented

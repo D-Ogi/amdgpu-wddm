@@ -72,8 +72,10 @@ no code from Microsoft's MS-PL sample.
 - **Hang recovery** (0.7.216.13, M15.12 stage 1). `HangRecoveryMode=1` lets `DxgkDdiResetEngine` kill the waves
   of a hung node-0 job, on that job's own VMID, and, if its fence then retires, report the engine reset as done
   instead of refusing it, so that only the guilty process loses its device. Every call leaves a flushed verdict
-  in `Parameters\HangRecovery`, which outlives the 0x116 of a refusal. Default off, closed by every install. Not
-  yet run on the lab. See `docs/design/hang-recovery.md`.
+  in `Parameters\HangRecovery`, which outlives the 0x116 of a refusal. Default off, closed by every install. In
+  lab trial D (2026-10-07) the fence guard of 0.7.216.13 compared the hung node-0 fence with the newest fence of
+  either node and refused. 0.7.216.16 compares it with the last reported fence of node 0 only. The kill itself
+  has not run on the lab yet. See `docs/design/hang-recovery.md`.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and

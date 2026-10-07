@@ -34,6 +34,24 @@ static __inline int Bc250AbortedFenceValid(unsigned aborted, unsigned lastComple
     return (int)(aborted - lastCompleted) >= 0 && (int)(lastSubmitted - aborted) >= 0;
 }
 
+/* The lower bound of that range is the last completed fence OF THE NODE BEING RESET. Submission fence ids are
+ * counted per node: node 0 (3D) and node 1 (paging) each have their own sequence, and on the lab node 1's ids run
+ * far ahead of node 0's (trial D, 2026-10-07: node 0 had reported 1185 and hung at 1186, node 1 had reported
+ * 9228). Up to 0.7.216.13 ResetEngine read the adapter-wide LastCompletedFence, which holds the newest report of
+ * EITHER node, so whenever paging work completed after the hang the guard compared node 0's 1186 with node 1's
+ * 9228 and refused a valid recovery (verdict 4, then 0x116). The value to compare with is what the report DPC last
+ * told dxgkrnl for this node: LastReportedFence[node], valid once LastReportedValid[node] is set. Returns 0 when
+ * the node has no reported fence yet (or is out of range): the range cannot be proven then, and the caller
+ * refuses. The arrays are wddm.c's own (volatile LONG and BOOLEAN there, long and unsigned char here). */
+static __inline int Bc250HangNodeLastCompleted(const volatile long* lastReportedFence,
+                                               const unsigned char* lastReportedValid, unsigned nodeCount,
+                                               unsigned node, unsigned* lastCompleted)
+{
+    if (node >= nodeCount || !lastReportedValid[node]) return 0;
+    *lastCompleted = (unsigned)lastReportedFence[node];
+    return 1;
+}
+
 /* Which VMID a wave kill may name. Up to 0.7.213.1 every WDDM job ran at VMID 1 and the kill could name that
  * constant; with the VMID pool (0.7.214, vmid_pool.h) the hung job's VMID comes out of the completion-queue
  * entry, so it is a value the kill has to check. VMID 0 is the GART/system domain and VMID 2 is SDMA paging's:
@@ -58,11 +76,14 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 
 /* Before any kill: stage 1 needs a job of the reset's own node on the ring (the WDDM queue's view, after late
  * fences have been retired), an abort fence the engine-reset contract accepts, and a VMID a kill may name.
+ * lastCompletedKnown and lastCompleted are Bc250HangNodeLastCompleted's answer for the reset node; a node with no
+ * reported fence fails the fence guard, because nothing proves the abort fence is in range.
  * PENDING = go ahead: record, then kill. The others are refusals decided without touching the hardware. */
-static __inline unsigned Bc250HangPreKillVerdict(int jobOnRing, unsigned abortFence, unsigned lastCompleted,
-                                                 unsigned vmid)
+static __inline unsigned Bc250HangPreKillVerdict(int jobOnRing, unsigned abortFence, int lastCompletedKnown,
+                                                 unsigned lastCompleted, unsigned vmid)
 {
     if (!jobOnRing) return BC250_HANG_VERDICT_NOTHING_ON_RING;
+    if (!lastCompletedKnown) return BC250_HANG_VERDICT_FENCE_GUARD;
     if (!Bc250AbortedFenceValid(abortFence, lastCompleted, abortFence)) return BC250_HANG_VERDICT_FENCE_GUARD;
     if (!Bc250KillVmidValid(vmid)) return BC250_HANG_VERDICT_VMID_GUARD;
     return BC250_HANG_VERDICT_PENDING;

@@ -1,7 +1,8 @@
 /* M15.12 host control: the pure decisions behind DxgkDdiResetEngine's stage-1 soft recovery (hang_recovery.h).
  * The wave kill (SQ_CMD) and the bounded fence poll touch hardware and are exercised on the lab behind the
  * HangRecoveryMode switch (docs/design/hang-recovery.md); this test fixes the gate, the 0x119 fence-range guard
- * (including 32-bit fence wrap), the VMID guard the VMID pool made necessary, the pre-kill verdict and the sticky
+ * (including 32-bit fence wrap, and its lower bound read per node with node 0 and node 1 fence ids interleaved, the
+ * defect of lab trial D), the VMID guard the VMID pool made necessary, the pre-kill verdict and the sticky
  * record's counter arithmetic, so a refactor cannot quietly change when we attempt a recovery, what we report, or
  * how the lab reads the record. */
 #include <stdio.h>
@@ -38,6 +39,35 @@ static void record_call(struct record* r, unsigned preKill, unsigned killVerdict
 static int balanced(const struct record* r)
 {
     return r->attempts == r->recovered + r->notDrained + r->refused;
+}
+
+/* The fence state of wddm.c's BC250_WDDM that ResetEngine reads, with the same names and types (volatile LONG
+ * and BOOLEAN there): one pair per node, and the adapter-wide LastCompletedFence that every delivered completion
+ * report also writes (WddmReportDpcPublish). Fence ids are per node; node 1 (paging) runs far ahead of node 0. */
+#define MODEL_NODES 2u
+struct fences {
+    volatile long LastReportedFence[MODEL_NODES];
+    unsigned char LastReportedValid[MODEL_NODES];
+    volatile long LastCompletedFence;
+};
+
+/* One delivered DMA_COMPLETED report, written as the report DPC writes it. */
+static void model_report(struct fences* f, unsigned node, long fence)
+{
+    f->LastCompletedFence = fence;
+    f->LastReportedFence[node] = fence;
+    f->LastReportedValid[node] = 1;
+}
+
+/* ResetEngine's read site and pre-kill decision, as in wddm.c: the lower bound of the 0x119 range for the reset
+ * node. run_hang_recovery.ps1 -SharedLastCompleted replaces the marked line with the 0.7.216.13 read of the
+ * adapter-wide field, and the two-node checks below must then fail. */
+static unsigned model_pre_kill(const struct fences* f, unsigned node, unsigned hungFence, unsigned vmid)
+{
+    unsigned lastCompleted = 0;
+    int known;
+    known = Bc250HangNodeLastCompleted(f->LastReportedFence, f->LastReportedValid, MODEL_NODES, node, &lastCompleted); /* READ SITE */
+    return Bc250HangPreKillVerdict(1, hungFence, known, lastCompleted, vmid);
 }
 
 int main(void)
@@ -88,18 +118,69 @@ int main(void)
 
     /* Pre-kill verdict: nothing on the ring wins over everything; then the fence guard, then the VMID guard;
      * only then a kill. VMID 1 below is a valid pool VMID, so it is never what refuses these cases. */
-    CHECK(Bc250HangPreKillVerdict(0, 105, 100, 1) == BC250_HANG_VERDICT_NOTHING_ON_RING);
-    CHECK(Bc250HangPreKillVerdict(0, 99, 100, 1) == BC250_HANG_VERDICT_NOTHING_ON_RING);
-    CHECK(Bc250HangPreKillVerdict(0, 105, 100, 0) == BC250_HANG_VERDICT_NOTHING_ON_RING);  /* an empty ring first */
-    CHECK(Bc250HangPreKillVerdict(1, 105, 100, 1) == BC250_HANG_VERDICT_PENDING);    /* the hang: head above completed */
-    CHECK(Bc250HangPreKillVerdict(1, 100, 100, 1) == BC250_HANG_VERDICT_PENDING);    /* at the bound is still valid */
-    CHECK(Bc250HangPreKillVerdict(1, 99, 100, 1) == BC250_HANG_VERDICT_FENCE_GUARD); /* would be 0x119: no kill */
-    CHECK(Bc250HangPreKillVerdict(1, 99, 100, 0) == BC250_HANG_VERDICT_FENCE_GUARD); /* the fence guard goes first */
-    CHECK(Bc250HangPreKillVerdict(1, 105, 100, 0) == BC250_HANG_VERDICT_VMID_GUARD); /* no VMID recorded: no kill */
-    CHECK(Bc250HangPreKillVerdict(1, 105, 100, 2) == BC250_HANG_VERDICT_VMID_GUARD); /* SDMA paging's: no kill */
-    CHECK(Bc250HangPreKillVerdict(1, 105, 100, 7) == BC250_HANG_VERDICT_PENDING);    /* a pool VMID of 3..15 */
-    CHECK(Bc250HangPreKillVerdict(1, 0x00000002u, 0xFFFFFFFEu, 1) == BC250_HANG_VERDICT_PENDING);     /* across wrap */
-    CHECK(Bc250HangPreKillVerdict(1, 0xFFFFFFFDu, 0xFFFFFFFEu, 1) == BC250_HANG_VERDICT_FENCE_GUARD);
+    CHECK(Bc250HangPreKillVerdict(0, 105, 1, 100, 1) == BC250_HANG_VERDICT_NOTHING_ON_RING);
+    CHECK(Bc250HangPreKillVerdict(0, 99, 1, 100, 1) == BC250_HANG_VERDICT_NOTHING_ON_RING);
+    CHECK(Bc250HangPreKillVerdict(0, 105, 1, 100, 0) == BC250_HANG_VERDICT_NOTHING_ON_RING);  /* an empty ring first */
+    CHECK(Bc250HangPreKillVerdict(1, 105, 1, 100, 1) == BC250_HANG_VERDICT_PENDING);    /* the hang: head above completed */
+    CHECK(Bc250HangPreKillVerdict(1, 100, 1, 100, 1) == BC250_HANG_VERDICT_PENDING);    /* at the bound is still valid */
+    CHECK(Bc250HangPreKillVerdict(1, 99, 1, 100, 1) == BC250_HANG_VERDICT_FENCE_GUARD); /* would be 0x119: no kill */
+    CHECK(Bc250HangPreKillVerdict(1, 99, 1, 100, 0) == BC250_HANG_VERDICT_FENCE_GUARD); /* the fence guard goes first */
+    CHECK(Bc250HangPreKillVerdict(1, 105, 1, 100, 0) == BC250_HANG_VERDICT_VMID_GUARD); /* no VMID recorded: no kill */
+    CHECK(Bc250HangPreKillVerdict(1, 105, 1, 100, 2) == BC250_HANG_VERDICT_VMID_GUARD); /* SDMA paging's: no kill */
+    CHECK(Bc250HangPreKillVerdict(1, 105, 1, 100, 7) == BC250_HANG_VERDICT_PENDING);    /* a pool VMID of 3..15 */
+    CHECK(Bc250HangPreKillVerdict(1, 0x00000002u, 1, 0xFFFFFFFEu, 1) == BC250_HANG_VERDICT_PENDING);     /* across wrap */
+    CHECK(Bc250HangPreKillVerdict(1, 0xFFFFFFFDu, 1, 0xFFFFFFFEu, 1) == BC250_HANG_VERDICT_FENCE_GUARD);
+
+    /* No reported fence on the node: the range cannot be proven, so the fence guard refuses before any kill. */
+    CHECK(Bc250HangPreKillVerdict(1, 105, 0, 0, 1) == BC250_HANG_VERDICT_FENCE_GUARD);
+    CHECK(Bc250HangPreKillVerdict(0, 105, 0, 0, 1) == BC250_HANG_VERDICT_NOTHING_ON_RING);  /* an empty ring first */
+
+    /* Two nodes, interleaved fence ids (0.7.216.16, lab trial D of 2026-10-07). Node 0 reports 1180..1185 and
+     * hangs at 1186; node 1's paging fences run around 9220 and keep completing after the hang, the last report
+     * being node 1's 9228 - exactly the dump of trial D. The guard must compare 1186 with node 0's 1185. With the
+     * adapter-wide field (9228) it refused a valid recovery with verdict 4 and the machine went to 0x116. */
+    {
+        struct fences f = { { 0, 0 }, { 0, 0 }, 0 };
+        unsigned last = 0;
+        long i;
+
+        for (i = 0; i < 6; i++) {
+            model_report(&f, 0, 1180 + i);
+            model_report(&f, 1, 9220 + i);
+        }
+        model_report(&f, 1, 9226);      /* paging work completes after node 0 hung at 1186 */
+        model_report(&f, 1, 9227);
+        model_report(&f, 1, 9228);
+        CHECK(f.LastReportedFence[0] == 1185 && f.LastReportedFence[1] == 9228 && f.LastCompletedFence == 9228);
+        CHECK(Bc250HangNodeLastCompleted(f.LastReportedFence, f.LastReportedValid, MODEL_NODES, 0, &last));
+        CHECK(last == 1185u);
+        CHECK(Bc250HangNodeLastCompleted(f.LastReportedFence, f.LastReportedValid, MODEL_NODES, 1, &last));
+        CHECK(last == 9228u);
+        CHECK(!Bc250HangNodeLastCompleted(f.LastReportedFence, f.LastReportedValid, MODEL_NODES, 2, &last));
+        /* The trial-D case: node 0, hung fence 1186, VMID 12 - a kill goes ahead. */
+        CHECK(model_pre_kill(&f, 0, 1186, 12) == BC250_HANG_VERDICT_PENDING);
+        /* Node 0's own bound still guards: a fence below node 0's last report is refused. */
+        CHECK(model_pre_kill(&f, 0, 1184, 12) == BC250_HANG_VERDICT_FENCE_GUARD);
+        /* The other order: node 0 reported last and node 1 is still far ahead. The decision must not depend on
+         * which node happened to report last. */
+        model_report(&f, 0, 1186);
+        CHECK(model_pre_kill(&f, 0, 1187, 12) == BC250_HANG_VERDICT_PENDING);
+        model_report(&f, 1, 9229);
+        CHECK(model_pre_kill(&f, 0, 1187, 12) == BC250_HANG_VERDICT_PENDING);
+        /* Node 1 behind node 0 (ids wrap independently): node 0's guard still reads node 0. */
+        model_report(&f, 1, 5);
+        CHECK(model_pre_kill(&f, 0, 1187, 12) == BC250_HANG_VERDICT_PENDING);
+        CHECK(model_pre_kill(&f, 0, 1185, 12) == BC250_HANG_VERDICT_FENCE_GUARD);
+    }
+    /* A node that has reported nothing yet has no proven lower bound: refused, even though node 1 has one. */
+    {
+        struct fences f = { { 0, 0 }, { 0, 0 }, 0 };
+        unsigned last = 0;
+
+        CHECK(!Bc250HangNodeLastCompleted(f.LastReportedFence, f.LastReportedValid, MODEL_NODES, 0, &last));
+        model_report(&f, 1, 40);
+        CHECK(model_pre_kill(&f, 0, 41, 12) == BC250_HANG_VERDICT_FENCE_GUARD);
+    }
 
     /* Only DRAINED and ALREADY_RETIRED report a reset; every other verdict keeps today's refusal. */
     CHECK(Bc250HangVerdictRecovered(BC250_HANG_VERDICT_DRAINED));
@@ -134,7 +215,8 @@ int main(void)
     record_write(&r, BC250_HANG_VERDICT_PENDING);
     CHECK(!balanced(&r) && r.attempts == r.recovered + r.notDrained + r.refused + 1 && r.lastVerdict == 0u);
 
-    printf("PASS: soft-recovery gate (switch/node), the 0x119 fence-range guard including 32-bit wrap, the VMID "
-           "guard, the pre-kill verdict and the sticky record's counters\n");
+    printf("PASS: soft-recovery gate (switch/node), the 0x119 fence-range guard including 32-bit wrap and its "
+           "per-node lower bound with interleaved node 0/node 1 fences, the VMID guard, the pre-kill verdict and the "
+           "sticky record's counters\n");
     return 0;
 }

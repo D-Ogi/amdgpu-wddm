@@ -37,6 +37,7 @@ PLAIN_DWORD = 0x00010001        # FLG_ADDREG_TYPE_DWORD
 UNCONDITIONAL = {
     "UnconfirmedStarts": "installing the package grants a fresh start budget to the boot-loop guard (guard.c)",
     "EnableHangBugcheck": "a test bugcheck somebody left armed is disarmed by installing a package (hang.c)",
+    "HangRecoveryMode": "a hang-recovery experiment somebody left on is closed by installing a package (wddm.c)",
 }
 
 # Named by the INF, absent from the released configuration: the value here is what a computer that

@@ -34,11 +34,11 @@ line, and prints the size and SHA-256 of what it made.
 ## Why a spin loop and not an unmapped read
 
 The hang class of the real bugcheck reports (trials 147, 151, 208, 245, 251) is a no-retry GFXHUB fault whose
-waves halt on `MEM_VIOL`. A read of never-mapped memory cannot be formed through the validated system D3D12
+waves stop on `MEM_VIOL`. A read of never-mapped memory cannot be formed through the validated system D3D12
 runtime without a descriptor the runtime rejects, so this client does not try. The spin loop reproduces the
-class the stage-1 kill is for: live waves, which `SQ_CMD` `CMD=KILL` terminates, after which the end-of-pipe
-fires and the fence retires. Whether the same kill drains already-halted `MEM_VIOL` waves on gfx1013 is an open
-question, and `docs/linux-session-wishlist.md` row L38 is how to settle it. A pass here is therefore not a claim
+class the stage-1 kill is for: live waves, which `SQ_CMD` `CMD=KILL` stops, after which the end-of-pipe
+fires and the fence retires. Whether the same kill drains `MEM_VIOL` waves that have already stopped on gfx1013 is
+an open question, and `docs/linux-session-wishlist.md` row L43 is how to settle it. A pass here is therefore not a claim
 about the reports' class - that limit is written down in `docs/design/hang-recovery.md`.
 
 Nie wszystko złoto, co się świeci - not all that glitters is gold: a recovered device is not a recovered
