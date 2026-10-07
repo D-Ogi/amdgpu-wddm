@@ -1,0 +1,5 @@
+hang-client: runtime=System32/d3d12.dll adapter=BC-250 mode=short pid=12416 utc=2026-10-07T15:27:00.345Z
+hang-client: calibration outer=64 elapsed=20.19 ms
+hang-client: short target=200 ms -> outer=634 (watchdog=500 ms)
+hang-client: short dispatch elapsed=97.4 ms completed=0x2 reason=0x00000000 S_OK (device alive)
+RESULT=SHORT-COMPLETED-DEVICE-ALIVE

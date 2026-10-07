@@ -1,0 +1,27 @@
+kmd log: C:\BC250\hangb22\kmdlog-20261007T152726425Z.txt exit 0, 1024 lines, 7423 lost to the wrap
+current device start at seq 8 (in the kept head): HangRecoveryMode 1 line PRESENT
+    33 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+record before: C:\BC250\hangb22\record-before-long-20261007T152726695Z.json (switch 1, TdrDelay 10, dwm 1876)
+client: C:\BC250\hangb22\bc250hang.exe --lab --long --deadline 60 (bound 100 s) utc 2026-10-07T15:27:27.0342627Z
+hang-client: runtime=System32/d3d12.dll adapter=BC-250 mode=long pid=5748 utc=2026-10-07T15:27:27.064Z
+hang-client: long dispatch outer=0xFFFFFFFF inner=4096 groups=16 deadline=60000 ms (TdrDelay~10 s), one submission
+hang-client: submitted utc=2026-10-07T15:27:27.428Z fence target=1
+hang-client: long wait ended utc=2026-10-07T15:27:42.017Z elapsed=14590.4 ms fence=0xffffffffffffffff completed_at=-1.0 removed_at=14590.4 reason=0x887a0006 DXGI_ERROR_DEVICE_HUNG
+RESULT=HANG-DETECTED-DEVICE-REMOVED
+client exit 0 after 15 s
+dwm pids before 1876 after 1876
+VERDICT DRAINED: recovered by the kill: 1 kill(s) in 1011 us, the ring drained, fence reported aborted
+record: LastVerdict 1 LastSeq 8654 LastFence 1123 LastKills 1 LastMicros 1011 LastTime 2026-10-07T15:27:42.0151348Z writer 0x000700D8
+kmd log: C:\BC250\hangb22\kmdlog-20261007T152742417Z.txt exit 0, 1024 lines, 8431 lost to the wrap
+current device start at seq 8 (in the kept head): HangRecoveryMode 1 line PRESENT
+    33 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+  9078 hang record: verdict 0 seq 8654 fence 1123 kills 0 0 us, persisted 0x00000000
+  9080 gfx: soft recovery: seq 8654 retired after 1 kill(s) of VMID 12 waves in 1011 us; ring reopened
+  9081 hang record: verdict 1 seq 8654 fence 1123 kills 1 1011 us, persisted 0x00000000
+  9082 wddm: *** ResetEngine node 0: SOFT RECOVERED, aborted fence 1123, node 0 reopened ***
+  9083 wddm: soft recovery: verdict 1 seq 8654 vmid 12, 1 kill(s) in 1011 us
+desktop: ring C:\BC250\hangb22\kmdlog-20261007T152747769Z.txt, visibility after 5.3 s: 10265 98.921 display visibility: call 11 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+desktop: blank lines in the current start 0, SOFT RECOVERED to visible  s
+desktop: dwm 1876 0.022 core(s) over 5.01 s, busiest thread 2344 0.016 core(s)
+desktop: zink 7C4E5E7E58D2AFE93C362534370AFF6ED481418F0FF83F50BF562320FB841E6E (pinned 7C4E5E7E)
+DESKTOP DESKTOP-OK
