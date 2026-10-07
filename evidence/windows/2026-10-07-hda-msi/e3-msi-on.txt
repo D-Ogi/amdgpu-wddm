@@ -1,0 +1,8 @@
+before: status=OK MSISupported=0 irq=53,53
+Microsoft PnP Utility
+
+Restarting device:         PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002&REV_00\<instance-id-removed>
+Device restarted successfully.
+
+pnputil exit 
+after:  status=OK MSISupported=1 irq=

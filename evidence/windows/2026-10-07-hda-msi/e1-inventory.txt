@@ -1,0 +1,36 @@
+=== High Definition Audio Controller [OK] PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002&REV_00\<inst>
+service HDAudBus
+registry MSISupported=0 MessageNumberLimit=
+prop DEVPKEY_Device_LocationInfo = PCI bus 1, device 0, function 1
+prop DEVPKEY_Device_BusNumber = 1
+prop DEVPKEY_Device_Address = 1
+prop DEVPKEY_PciDevice_InterruptSupport = 3
+prop DEVPKEY_PciDevice_InterruptMessageMaximum = 1
+irq 53 trigger=2 shareable= shared-with 0 other device(s): 
+irq 53 trigger=2 shareable= shared-with 0 other device(s): 
+mem 0xFE8FC000 - 0xFE8FFFFF (16 KB)
+mem 0xFE8FC000 - 0xFE8FFFFF (16 KB)
+=== BC-250 GPU (amdgpu-wddm) [OK] PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\<inst>
+service bc250kmd
+registry MSISupported=1 MessageNumberLimit=1
+prop DEVPKEY_Device_LocationInfo = PCI bus 1, device 0, function 0
+prop DEVPKEY_Device_BusNumber = 1
+prop DEVPKEY_Device_Address = 0
+prop DEVPKEY_PciDevice_InterruptSupport = 7
+prop DEVPKEY_PciDevice_InterruptMessageMaximum = 3
+irq 4294967277 trigger=2 shareable= shared-with 0 other device(s): 
+irq 4294967277 trigger=2 shareable= shared-with 0 other device(s): 
+mem 0xC0000000 - 0xD01FFFFF (264192 KB)
+mem 0xD0000000 - 0xD01FFFFF (2048 KB)
+mem 0xFE800000 - 0xFE87FFFF (512 KB)
+mem 0xC0000000 - 0xD01FFFFF (264192 KB)
+mem 0xD0000000 - 0xD01FFFFF (2048 KB)
+mem 0xFE800000 - 0xFE87FFFF (512 KB)
+=== inbox INF interrupt line (lab copy)
+DriverVer = 05/30/2025,10.0.22621.5415
+HKR,Interrupt Management\MessageSignaledInterruptProperties,MSISupported,0x00010001,0
+=== HDAudBus driver file
+10.0.22621.5415 (WinBuild.160101.0800)
+=== Kernel DMA protection / device guard (DMA remapping context)
+VirtualizationBasedSecurityStatus=0 AvailableSecurityProperties=4,5,7,8
+=== recent System log entries from HDAudBus / hdaudio / Kernel-PnP for the audio device (last 2 h, count and ids only)

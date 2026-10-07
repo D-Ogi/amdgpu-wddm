@@ -382,6 +382,27 @@ facts:
     edges:
       - {"type": "uses", "to": "M788"}
       - {"type": "uses", "to": "M810"}
+  - id: M821
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "DP audio on unit A under Linux 6.18 (`snd_hda_intel` with amdgpu, L1007b) plays at the right rate. It was audible only with the ALSA `IEC958 Playback Switch` on. A 10.000 s WAV through `aplay -D hw:0,3` took 10 s at 48 kHz and 10 s at 44.1 kHz (whole-second timer). The switch (`numid=5`, pcm 3) reads off after the amdgpu load. With it off, the owner heard nothing during two `speaker-test` runs. After `amixer cset numid=5 on`, the owner heard a 60 s 660 Hz tone. The switch is the codec's digital converter enable. Converter node `0x02` reads `F0D` 1 (DigEn) with the switch on and 0 with it off. During playback node `0x02` reads `A00` (stream format) `0x0011` and `F06` (stream, channel) `0x10`, after playback 0 and 0. Pins `0x03` and `0x05` read pin widget control `0x40`"
+    status_text: "MEASURED (unit A, n = 1 visit, the audibility is the owner's report)"
+    detail: "The two tones differ in level: `speaker-test` uses its default level, the 660 Hz tone has amplitude 26000 of 32767. The owner gave no report for a later playback with the switch off. By the HDA stream format encoding, `0x0011` is 48 kHz, 16 bit, 2 channels, and `F06` `0x10` is stream 1, channel 0. The second converter (node `0x04`) reads 0 in all fields. A second rate check: the 60 s tone played in 61 s at 1 s resolution. No read of the HD Audio controller's wall clock succeeded. `mmap` of BAR 0 of `0000:01:00.1` through the sysfs `resource0` file failed with `EINVAL`, with `O_RDONLY` and with `O_RDWR`. The cause of that error is not established. The register state of the same visit is M822"
+    evidence: "[L1007b](../evidence/linux/2026-10-07-L1007b-dp-audio/README.md)"
+    edges:
+      - {"type": "uses", "to": "M810"}
+      - {"type": "uses", "to": "M819"}
+      - {"type": "uses", "to": "M820"}
+  - id: M822
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "On unit A under Linux 6.18 (L1007b), DP audio playback and the IEC958 switch change none of amdgpu's Azalia controller, DIO memory power and DCCG gate registers. Five reads through `amdgpu_regs` give the same values: before playback, during 48 kHz, during 44.1 kHz, during with the switch on, and after. `AZALIA_CONTROLLER_CLOCK_GATING` 1, `AZALIA_AUDIO_DTO` `0x00640018`, `AZALIA_AUDIO_DTO_CONTROL` 0, `AZALIA_SOCCLK_CONTROL` 1, `AZALIA_DATA_DMA_CONTROL` and `AZALIA_BDL_DMA_CONTROL` `0xA`, `AZALIA_OUTPUT_PAYLOAD_CAPABILITY` `0x80`, `AZALIA_OUTPUT_STREAM_ARBITER_CONTROL` `0x00080008`. `AZALIA_UNDERFLOW_FILLER_SAMPLE`, `AZALIA_RIRB_AND_DP_CONTROL`, `AZALIA_CORB_DMA_CONTROL`, `AZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER`, `AZALIA_CYCLIC_BUFFER_SYNC` and `AZALIA_GLOBAL_CAPABILITIES` read 0. `DIO_MEM_PWR_CTRL`, `CTRL2` and `CTRL3` read 0, `DIO_MEM_PWR_STATUS` `0x10`. `DCCG_GATE_DISABLE_CNTL` and `CNTL2` read 0"
+    status_text: "MEASURED (unit A, n = 1 visit, 5 reads of 37 registers)"
+    detail: "The same reads repeat the L1007 values of M820. DCCG: `DCCG_AUDIO_DTO_SOURCE` `0x00100010`, `DCCG_AUDIO_DTO0_PHASE` 0 and `MODULE` 1, `DCCG_AUDIO_DTO1_PHASE` 240 000, `DCCG_AUDIO_DTO1_MODULE` 5 988 740. DIG0 and DP0: `DIG0_AFMT_CNTL` `0x101`, `DIG0_AFMT_AUDIO_SRC_CONTROL` 0, `DIG0_AFMT_AUDIO_PACKET_CONTROL` `0x04000801`, `DIG0_AFMT_AUDIO_PACKET_CONTROL2` `0x300`, `DIG0_AFMT_INFOFRAME_CONTROL0` and `DIG0_AFMT_60958_0` 0, `DP0_DP_SEC_CNTL` `0x1111`, `DP0_DP_SEC_AUD_N` `0x8000`, `DP0_DP_SEC_TIMESTAMP` 1, `DP0_DP_SEC_AUD_M_READBACK` 0. Byte offsets by `regcalc` over `dcn_2_0_1_offset.h`. The rate was correct during these reads (M821), so this is the register state of a correct DP audio rate on this unit. The Windows comparison is M825"
+    evidence: "[L1007b](../evidence/linux/2026-10-07-L1007b-dp-audio/README.md)"
+    edges:
+      - {"type": "uses", "to": "M821"}
+      - {"type": "supports", "to": "M820"}
   - id: S4
     status: HYPOTHESIS
     date: "2026-09-21"

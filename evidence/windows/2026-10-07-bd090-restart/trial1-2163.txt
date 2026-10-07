@@ -1,0 +1,72 @@
+[t1] before: dwm 1940 UnconfirmedStarts 0 GuardBoot 1 rings 11950
+  pnputil: Microsoft PnP Utility
+  pnputil: 
+  pnputil: Restarting device:         PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\<instance-id-removed>
+  pnputil: Device restarted successfully.
+  pnputil: 
+[t1] pnputil returned after 1 s
+[t1] +15s device OK CM_PROB_NONE UnconfirmedStarts 1 StageHistory 10 20 30 31 32 33 34 35 39 50 
+[t1] health ok=False : 
+[t1] dwm now 1940 (was 1940) start 2026-10-07T05:07:08.0498818Z
+[t1] dwm threads: Wait/UserRequestx10 Wait/EventPairLowx16 Wait/LpcReceivex1 Wait/ExecutionDelayx1 Wait/Unknownx1
+[t1] kept stop log ring-20261007-050929-494.log 91108 bytes:
+    8225    181.982 fan: stop (stop) after 1 takeovers, 1 handbacks
+    8226    181.982 fan: stop (stop): 13 writes, 0 failures
+    8227    181.982 hwmon: stop after 150 samples, 0 errors, 0 retries, 0 refusals
+    8228    181.982 dpaudio: stop: stream off on DP0: sec 0x00000000 afmt 0x00000100 pkt 0x04000800
+    8229    181.982 dpaudio: stop: AUDIO_ENABLED cleared on endpoint 0: hpc 0x80000000 -> 0x00000000 (0x00000000)
+    8230    181.982 dcnflip: stop: verified firmware scanout status 0x00000000
+    8234    181.982 wddm summary: CreateDevice                       32  first at 291
+    8464    181.982 wddm: GPU Present snapshot refused stopping0 unopened0 owner0 umdopen0 unbound0 gone0 umdbacking0 descriptor0 same0 format0
+    8494    181.982 wddm: stop, last completed fence 6919, 0 vsync ticks, 0 objects freed at the stop
+    8497    182.013 gfx: RLC after-cp-stop-before-mapping-retirement CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    8498    182.013 gfx: GRBM after-cp-stop-before-mapping-retirement STATUS 0x00003028 read 0x00000000
+    8501    182.342 amdgpu[0]: SDMA0 reset released readback 0x00000000
+    8503    182.342 amdgpu[0]: SDMA1 reset released readback 0x00000000
+    8519    182.670 gfx: RLC after-stop CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    8520    182.670 gfx: GRBM after-stop STATUS 0x00003028 read 0x00000000
+    8526    182.717 gfx: RLC after-psp-ring-stop CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    8527    182.717 gfx: GRBM after-psp-ring-stop STATUS 0x00003028 read 0x00000000
+    8528    182.717 psp: unload: destroy TMR 0, ring stop 0
+    8534    182.717 gfx: RLC before-gfx-memory-release CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    8535    182.717 gfx: GRBM before-gfx-memory-release STATUS 0x00003028 read 0x00000000
+    8536    182.717 gfx: RLC after-gfx-memory-release CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    8537    182.717 gfx: GRBM after-gfx-memory-release STATUS 0x00003028 read 0x00000000
+    8538    182.717 gart: full stop retains disabled translation state
+    8539    182.717 gfx: RLC after-gart-stop CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    8540    182.717 gfx: GRBM after-gart-stop STATUS 0x00003028 read 0x00000000
+[t1] kept stop log ring-20261007-050930-103.log 2487 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-119.log 3151 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-134.log 4719 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-244.log 9285 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-260.log 9943 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-275.log 10573 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-291.log 10911 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-302.log 11088 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-307.log 11943 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-322.log 12339 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-338.log 12789 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-354.log 14731 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-369.log 15837 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-385.log 17994 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+[t1] kept stop log ring-20261007-050930-400.log 18844 bytes:
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+--- live ring (guard / CreateDevice)
+    5      0.562 guard: count 0 -> 1 flushed, durable required 1
+    4906     74.838 guard: healthy start confirmation persistence 0x00000000
+    4907     74.838 guard: boot marked confirmed 0x00000000
+--- System events since the restart

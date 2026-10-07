@@ -1,0 +1,31 @@
+
+### wasapi-probe info -secs 5  utc 05:20:28.227
+wall_s=0.09 exit=
+### wasapi-probe excl-poll -rate 48000 -secs 5  utc 05:20:28.333
+mode=excl-poll format tag=0xFFFE ch=2 rate=48000 bits=16 align=4 float=False init_ms=9.4 buffer_frames=1024 latency_100ns=101667 clock_freq=48000 period_100ns=101587
+result mode=excl-poll rate=48000 elapsed_s=5.006 written_s=5.024 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=7.0 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=5.12 exit=
+### wasapi-probe excl-event -rate 48000 -secs 5  utc 05:20:33.457
+mode=excl-event format tag=0xFFFE ch=2 rate=48000 bits=16 align=4 float=False init_ms=4.4 buffer_frames=512 latency_100ns=106667 clock_freq=48000 period_100ns=106667
+result mode=excl-event rate=48000 elapsed_s=5.005 written_s=5.024 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=1.1 events=470 timeouts=0 mean_gap_ms=10.64 max_gap_ms=11.1 write_fails=0
+gap_hist_ms <2:1 <5:0 <15:469 <25:0 <35:0 <60:0 <150:0 >=150:0
+wall_s=5.11 exit=
+### wasapi-probe excl-poll -rate 44100 -secs 5  utc 05:20:38.573
+mode=excl-poll format tag=0xFFFE ch=2 rate=44100 bits=16 align=4 float=False init_ms=8.5 buffer_frames=1024 latency_100ns=101587 clock_freq=44100 period_100ns=101587
+result mode=excl-poll rate=44100 elapsed_s=5.006 written_s=5.026 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=8.6 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=5.11 exit=
+### wasapi-probe excl-event -rate 44100 -secs 5  utc 05:20:43.683
+mode=excl-event format tag=0xFFFE ch=2 rate=44100 bits=16 align=4 float=False init_ms=9.6 buffer_frames=448 latency_100ns=101587 clock_freq=44100 period_100ns=101587
+result mode=excl-event rate=44100 elapsed_s=5.008 written_s=5.029 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=1.0 events=494 timeouts=0 mean_gap_ms=10.13 max_gap_ms=11.0 write_fails=0
+gap_hist_ms <2:1 <5:0 <15:493 <25:0 <35:0 <60:0 <150:0 >=150:0
+wall_s=5.10 exit=
+### wasapi-probe shared-event -secs 5  utc 05:20:48.786
+mode=shared-event format tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True init_ms=19.0 buffer_frames=984 latency_100ns=0 clock_freq=352800 period_100ns=101587
+result mode=shared-event rate=44100 elapsed_s=5.010 written_s=5.041 device_rate_all=0.9983 device_rate_after2s=1.0000 first_move_ms=252.4 events=494 timeouts=0 mean_gap_ms=10.13 max_gap_ms=11.0 write_fails=0
+gap_hist_ms <2:1 <5:0 <15:493 <25:0 <35:0 <60:0 <150:0 >=150:0
+wall_s=5.11 exit=
+### wasapi-probe shared-poll -secs 5  utc 05:20:53.901
+mode=shared-poll format tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True init_ms=17.1 buffer_frames=984 latency_100ns=0 clock_freq=352800 period_100ns=101587
+result mode=shared-poll rate=44100 elapsed_s=5.014 written_s=5.041 device_rate_all=0.9999 device_rate_after2s=1.0000 first_move_ms=261.0 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=5.11 exit=
+

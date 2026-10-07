@@ -1,0 +1,22 @@
+--- render endpoints
+
+Status FriendlyName                                       
+------ ------------                                       
+OK     Digital Audio (HDMI) (High Definition Audio Device)
+
+
+
+render state 1 name Digital Audio (HDMI) device-format rate 44100
+render state 8 name Digital Audio (HDMI) device-format rate 
+audiosrv: Running
+t48: PlaySync 30.611 s for 10.000 s of audio 
+   during: DP0_SEC_CNTL 0x00001111: stream 1 asp 1 atp 1 aip 1; AUD_N 0x00008000 M_READBACK 0x00000AB4
+   during: DIG0_AFMT_CNTL 0x00000101: audio clock en 1 on 1; SRC_CONTROL 0x00000000 PACKET_CONTROL 0x00000801 (sample send 1)
+   during: DP1_SEC_CNTL 0x00000000: stream 0 asp 0 atp 0 aip 0; AUD_N 0x00008000 M_READBACK 0x00000000
+   during: DIG1_AFMT_CNTL 0x00000000: audio clock en 0 on 0; SRC_CONTROL 0x00000000 PACKET_CONTROL 0x04000800 (sample send 0)
+   during: R DP0_SEC_CNTL                       00001111
+   during: R DIG0_AFMT_CNTL                     00000101
+   during: R DP1_SEC_CNTL                       00000000
+   during: R DIG1_AFMT_CNTL                     00000000
+   during: read back: DP_SEC_CNTL 0x00001111 AFMT_CNTL 0x00000101 PACKET_CONTROL 0x04000801 PACKET_CONTROL2 0x00000300
+t44: PlaySync 30.633 s for 10.000 s of audio 

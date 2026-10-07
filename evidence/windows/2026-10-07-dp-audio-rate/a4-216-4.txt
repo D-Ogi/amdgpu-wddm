@@ -1,0 +1,25 @@
+start 2026-10-07T04:42:04.5128614Z
+demo60: PlaySync 107.387 s for 60.000 s of audio 
+
+  endpoint 0 HOT_PLUG_CONTROL  0x80000000 (state)      ok   AUDIO_ENABLED 1, CLOCK_GATING_DISABLE 
+0
+  endpoint 1 HOT_PLUG_CONTROL  0x00000000 (state)      ok   AUDIO_ENABLED 0, CLOCK_GATING_DISABLE 
+0
+stream half (step 2 writes these; read only here):
+  DP0_SEC_CNTL 0x00001111: stream 1 asp 1 atp 1 aip 1; AUD_N 0x00008000 M_READBACK 0x00000AB4
+  DP1_SEC_CNTL 0x00000000: stream 0 asp 0 atp 0 aip 0; AUD_N 0x00008000 M_READBACK 0x00000000
+decision now (the driver's Bc250DpAudioDecide over these reads): stream on and endpoint enabled; 
+stream DP0, endpoint 0, notes  audio-enabled-inherited unsolicited-enabled
+  R POWER_STATES                       C0000009
+  R DP0_SEC_CNTL                       00001111
+  R DP0_SEC_AUD_M_READBACK             00000AB4
+  R DP1_SEC_AUD_M_READBACK             00000000
+record of the last start:
+  state enabled, reason: stream on and endpoint enabled
+  stream on, step NONE, NTSTATUS 0x00000000; on 1 off 0 undone 0
+DMU.mmDIO_MEM_PWR_CTRL = 0x14E78
+read 0x14e78 00000000
+DMU.mmDIO_MEM_PWR_STATUS = 0x14E74
+read 0x14e74 00000010
+
+

@@ -1,0 +1,9 @@
+Changed or left out before the first commit (docs/01-evidence-rules.md). Counts only. No copy of the values exists.
+
+- out/session-console.txt: the lab's network address, 4 times, replaced by <lab>.
+- out/session-console.txt: the 36 ELD bytes of the amixer control numid=6, 1 line, left out. The L1007 evidence
+  already holds ALSA's decoded ELD (evidence/linux/2026-10-07-L1007-dp-audio/out/alsa-eld.txt).
+- The WAV files t48000.wav, t44100.wav (generated test tones, 1.9 MB and 1.8 MB) are not copied.
+
+Checked and found clean: every other file of this directory (no MAC address, serial number, UUID or IPv4
+address).

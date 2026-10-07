@@ -1,0 +1,4 @@
+t48000: aplay 0 s for 10.000 s of audio
+t44100: aplay 0 s for 10.000 s of audio
+t48000: aplay 10 s for 10.000 s of audio
+t44100: aplay 10 s for 10.000 s of audio

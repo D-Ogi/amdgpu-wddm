@@ -755,6 +755,34 @@ facts:
     status_text: "MEASURED (unit A, n = 1 readback step, read only)"
     detail: "The readback stage of the Tuner order applied nothing: clock limit, undervolt and cap stay at the recorded baseline 3200 MHz, 0 steps, 100 C. The GPU stayed at its idle point (500 MHz, 820 mV) during the 13 s step. This run does not tell why the CPU voltage differs between reads"
     evidence: "[Tuner CPU readback](../evidence/windows/2026-10-06-tuner-cpu-readback/README.md)"
+  - id: M823
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "HAZARD: a CPU sweep of the Azalia endpoint 0 indirect register space hung unit A under Linux (L1007b). `endpoint.py` wrote `AZF0ENDPOINT0_AZALIA_F0_CODEC_ENDPOINT_INDEX` (`BAR5+0x0E118`) and read `AZF0ENDPOINT0_AZALIA_F0_CODEC_ENDPOINT_DATA` (`BAR5+0x0E11C`) through `amdgpu_regs`. amdgpu ran and no sound played. The indices were `0x00` to `0x0E`, `0x20` to `0x25`, `0x36` to `0x38`, `0x54` to `0x58` and `0x62` to `0x69`. The SSH session dropped and port 22 stopped answering. The machine needed an AC cycle (03:59:22Z to 03:59:42Z). Its outputs were lost. Do not sweep this INDEX/DATA pair from the CPU while amdgpu runs"
+    status_text: "MEASURED (unit A, n = 1, the index that hung the machine is not known)"
+    detail: "The script uses the access pattern of `dce_audio.c` `read_indirect_azalia_reg`: write INDEX, read DATA. The offsets come from `regcalc` over `dcn_2_0_1_offset.h`. The smart plug read 118.5 W at 03:57Z, so the machine had power. After the boot `ep-idle.txt` did not exist on the stick. The direct registers of the Azalia controller block read without a fault in the same visit (M822)"
+    evidence: "[L1007b](../evidence/linux/2026-10-07-L1007b-dp-audio/README.md)"
+    edges:
+      - {"type": "uses", "to": "M822"}
+  - id: M828
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "A first-order thermal model of unit A fits two trials at a fixed 1000 MHz GPU clock (C62 open-loop identification, Windows). With a fan lease of 100 %, the time constant is 14 to 15 s and the thermal resistance 0.25 to 0.26 C/W. With 50 %, they are 19 to 28 s and 0.41 to 0.46 C/W. The GPU sensor and Tctl both give values in these ranges. Four busy CPU threads heat the sensors as fast as 64 to 79 W more SMU socket power would. At the wall they add about 10 to 14 W. The fit is coarse: R2 of dT/dt is 0.47 to 0.68"
+    status_text: "MEASURED (unit A, n = 2 trials, a least-squares model fit, R2 0.47 to 0.68)"
+    detail: "Method: `ident-fit.py` fits `dT/dt = a * (P - P_idle) + c * cpu_on - b * (T - T_idle)` per sensor over all 2 s samples (56 and 45). `P` is the KMD's `power_w`, the SMU socket power. `tau = 1/b`, `R = a/b`, CPU equivalence `c/a`. Fan 100 %: GPU sensor 14.4 s, 0.259 C/W, 68.4 W, R2 0.466. Tctl 15.1 s, 0.252 C/W, 75.1 W, R2 0.577. Fan 50 %: GPU sensor 19.0 s, 0.414 C/W, 63.6 W, R2 0.566. Tctl 27.6 s, 0.459 C/W, 79.4 W, R2 0.675. Both trials hit the thermal stop in the GPU + CPU phase (at 98 s and 79 s). The CPU-only phase therefore did not run. The CPU term rests on 15 and 4 samples, and in them the clock fell to 800 or 900 MHz. The wall figure is one plug sample of the fan 100 % trial: 179.4 W against 165.8 to 169.6 W in the GPU phase. In the fan 50 % trial the fan emergency set 100 % for the last two samples, which are in the fit. The GPU phase draws 90.4 and 90.6 W of `power_w` at 1000 MHz. Kernel driver escape ABI `0x000700D8`, `DpmMaxMHz` 1000"
+    evidence: "[C62 identification](../evidence/windows/2026-10-07-c62-ident/README.md)"
+    edges:
+      - {"type": "uses", "to": "M806"}
+  - id: M829
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "The C62 grid ran 4 of 12 cells on unit A under Windows, 75 s each. The load was a GPU fill and two busy CPU threads, at `DpmMaxMHz` 1500. In every cell the thermal policy ends at 800 MHz, with and without a 25 mV GPU V/F offset and a 4-step CPU undervolt. Every cell starts at 1500 MHz and runs 800 MHz in its last 30 s. The Standard fan curve already holds the fan at full duty (read-back 100 %, 1612 to 1741 rpm). The GPU offset lowers the voltage only above the floor (1500 MHz at 894 mV against 919 mV). All cells read 820 mV at 800 MHz. In the last 30 s the SMU socket power reads 89.5 W without offsets. It reads 82.5 to 84.7 W in the three cells with an offset"
+    status_text: "MEASURED (unit A, n = 1 trial per cell)"
+    detail: "One trial per cell, so the 4.8 to 7.0 W difference is not separated from the spread between trials. The thermal stop (Tctl at or above 87 C for 10 s) fired in the baseline cell only, at 71 s. No WHEA event and no event 4101. The mean clock of a cell is 963 to 1030 MHz, the mean wall power 159.9 to 171.4 W. The per-cell first-order fit of the sweep gives R from -0.0107 to 0.0132 C/W. These values describe no thermal path, so the grid does not identify the thermal model (M828 does). The 800 MHz point is the sub-floor point of M785. Kernel driver escape ABI `0x000700D7`"
+    evidence: "[C62 grid](../evidence/windows/2026-10-07-c62-ident/README.md)"
+    edges:
+      - {"type": "uses", "to": "M785"}
+      - {"type": "uses", "to": "M828"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

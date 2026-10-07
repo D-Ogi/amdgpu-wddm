@@ -1,0 +1,12 @@
+Changed before the first commit (docs/01-evidence-rules.md). Counts only. No copy of the values exists.
+
+- trial1-2163.txt, trial2-2163.txt: 1 device instance suffix each (the part after the GPU hardware ID) replaced
+  by <instance-id-removed>.
+- step0-2163.txt: in the 2 events 1074, the host name (3 places each) and the user name replaced by <host> and
+  <user>.
+- hang-probe-2163.txt: in the 1 event 1074, the same change.
+- The text files were read as UTF-8 and written back without a byte order mark.
+- The two lab screenshots are not copied (they show the lab overlay, which includes a lab network address).
+
+Checked and found clean: every other file of this directory (no MAC address, serial number, UUID, IPv4 address,
+host name or user name).

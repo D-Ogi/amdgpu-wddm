@@ -1,0 +1,110 @@
+### wasapi-probe info -secs 5  utc 05:17:49.052
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=3.0 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+wall_s=0.77 exit=
+### wasapi-probe excl-poll -rate 48000 -secs 5  utc 05:17:49.847
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=2.6 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=excl-poll format tag=0xFFFE ch=2 rate=48000 bits=16 align=4 float=False init_ms=9614.2 buffer_frames=1024 latency_100ns=101667 clock_freq=48000 period_100ns=101587
+start_ms=3562.0 start_hr=0x00000000
+sample t=0.015 pos_s=0.0160 padding=1019 written_s=0.0373
+sample t=0.253 pos_s=0.2534 padding=1020 written_s=0.2746
+sample t=0.505 pos_s=0.5059 padding=1020 written_s=0.5272
+sample t=0.758 pos_s=0.7591 padding=1021 written_s=0.7804
+sample t=1.011 pos_s=1.0122 padding=1021 written_s=1.0335
+sample t=1.265 pos_s=1.2654 padding=1021 written_s=1.2867
+sample t=2.006 pos_s=2.0071 padding=1021 written_s=2.0284
+sample t=2.259 pos_s=2.2603 padding=1021 written_s=2.2815
+sample t=3.003 pos_s=3.0036 padding=1021 written_s=3.0249
+sample t=3.256 pos_s=3.2568 padding=1020 written_s=3.2780
+sample t=4.014 pos_s=4.0146 padding=1020 written_s=4.0359
+sample t=4.266 pos_s=4.2665 padding=1020 written_s=4.2878
+sample t=5.007 pos_s=5.0076 padding=1018 written_s=5.0288
+result mode=excl-poll rate=48000 elapsed_s=8.552 written_s=5.029 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=15.2 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=21.82 exit=
+### wasapi-probe excl-event -rate 48000 -secs 5  utc 05:18:11.672
+probe killed after 25 s
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=2.6 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+realigned_period_100ns=106667
+mode=excl-event format tag=0xFFFE ch=2 rate=48000 bits=16 align=4 float=False init_ms=7094.7 buffer_frames=512 latency_100ns=106667 clock_freq=48000 period_100ns=106667
+start_ms=3548.6 start_hr=0x00000000
+sample t=0.004 pos_s=0.0060 padding=0 written_s=0.0213
+sample t=2.017 pos_s=0.0140 padding=0 written_s=0.0320
+sample t=4.021 pos_s=0.0231 padding=0 written_s=0.0427
+sample t=6.035 pos_s=0.0425 padding=0 written_s=0.0533
+wall_s=25.04 exit=
+### wasapi-probe excl-poll -rate 44100 -secs 5  utc 05:18:36.724
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=2.6 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=excl-poll format tag=0xFFFE ch=2 rate=44100 bits=16 align=4 float=False init_ms=9627.0 buffer_frames=1024 latency_100ns=101587 clock_freq=44100 period_100ns=101587
+start_ms=3549.4 start_hr=0x00000000
+sample t=0.015 pos_s=0.0158 padding=1019 written_s=0.0389
+sample t=0.252 pos_s=0.2532 padding=1022 written_s=0.2763
+sample t=0.505 pos_s=0.5062 padding=1020 written_s=0.5293
+sample t=0.759 pos_s=0.7595 padding=1021 written_s=0.7826
+sample t=1.011 pos_s=1.0122 padding=1021 written_s=1.0354
+sample t=1.265 pos_s=1.2654 padding=1021 written_s=1.2886
+sample t=2.008 pos_s=2.0085 padding=1021 written_s=2.0317
+sample t=2.261 pos_s=2.2617 padding=1021 written_s=2.2848
+sample t=3.003 pos_s=3.0041 padding=1021 written_s=3.0273
+sample t=3.257 pos_s=3.2575 padding=1021 written_s=3.2806
+sample t=4.015 pos_s=4.0161 padding=1021 written_s=4.0393
+sample t=4.252 pos_s=4.2529 padding=1021 written_s=4.2761
+sample t=5.011 pos_s=5.0122 padding=1021 written_s=5.0353
+result mode=excl-poll rate=44100 elapsed_s=8.554 written_s=5.035 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=15.0 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=24.09 exit=
+### wasapi-probe excl-event -rate 44100 -secs 5  utc 05:19:00.817
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=2.7 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=excl-event format tag=0xFFFE ch=2 rate=44100 bits=16 align=4 float=False init_ms=7089.5 buffer_frames=448 latency_100ns=101587 clock_freq=44100 period_100ns=101587
+start_ms=3548.4 start_hr=0x00000000
+sample t=0.002 pos_s=0.0044 padding=0 written_s=0.0203
+sample t=2.009 pos_s=0.0202 padding=0 written_s=0.0305
+sample t=4.017 pos_s=0.0266 padding=0 written_s=0.0406
+sample t=6.026 pos_s=0.0350 padding=0 written_s=0.0508
+result mode=excl-event rate=44100 elapsed_s=9.564 written_s=0.051 device_rate_all=0.0051 device_rate_after2s=0.0037 first_move_ms=2.1 events=1 timeouts=3 mean_gap_ms=1506.60 max_gap_ms=2009.7 write_fails=0
+gap_hist_ms <2:0 <5:1 <15:0 <25:0 <35:0 <60:0 <150:0 >=150:3
+wall_s=20.29 exit=
+### wasapi-probe shared-event -secs 5  utc 05:19:21.110
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=2.7 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=shared-event format tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True init_ms=8130.5 buffer_frames=984 latency_100ns=0 clock_freq=352800 period_100ns=101587
+start_ms=3589.9 start_hr=0x00000000
+sample t=0.002 pos_s=0.0223 padding=984 written_s=0.0446
+sample t=0.264 pos_s=0.1950 padding=984 written_s=0.2173
+sample t=0.513 pos_s=0.3576 padding=984 written_s=0.3799
+sample t=0.762 pos_s=0.5201 padding=984 written_s=0.5424
+sample t=1.010 pos_s=0.6826 padding=984 written_s=0.7049
+sample t=1.259 pos_s=0.8452 padding=984 written_s=0.8675
+sample t=2.005 pos_s=1.3328 padding=984 written_s=1.3551
+sample t=2.253 pos_s=1.4953 padding=984 written_s=1.5176
+sample t=3.013 pos_s=1.9931 padding=984 written_s=2.0154
+sample t=3.262 pos_s=2.1556 padding=984 written_s=2.1780
+sample t=4.006 pos_s=2.6433 padding=984 written_s=2.6656
+sample t=4.254 pos_s=2.8058 padding=984 written_s=2.8281
+sample t=5.013 pos_s=3.3036 padding=984 written_s=3.3259
+result mode=shared-event rate=44100 elapsed_s=5.016 written_s=3.326 device_rate_all=0.6549 device_rate_after2s=0.6551 first_move_ms=264.0 events=324 timeouts=0 mean_gap_ms=15.47 max_gap_ms=15.9 write_fails=0
+gap_hist_ms <2:0 <5:1 <15:1 <25:322 <35:0 <60:0 <150:0 >=150:0
+wall_s=17.04 exit=
+### wasapi-probe shared-poll -secs 5  utc 05:19:38.154
+device={0.0.0.00000000}.{<endpoint-guid-removed>}
+activate_ms=2.6 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=shared-poll format tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True init_ms=8125.1 buffer_frames=984 latency_100ns=0 clock_freq=352800 period_100ns=101587
+start_ms=3523.2 start_hr=0x00000000
+sample t=0.015 pos_s=0.0223 padding=984 written_s=0.0446
+sample t=0.250 pos_s=0.1747 padding=984 written_s=0.1970
+sample t=0.501 pos_s=0.3271 padding=984 written_s=0.3494
+sample t=0.751 pos_s=0.4998 padding=984 written_s=0.5221
+sample t=1.002 pos_s=0.6623 padding=984 written_s=0.6846
+sample t=1.252 pos_s=0.8147 padding=984 written_s=0.8370
+sample t=2.003 pos_s=1.3125 padding=984 written_s=1.3348
+sample t=2.253 pos_s=1.4750 padding=536 written_s=1.4872
+sample t=3.003 pos_s=1.9626 padding=536 written_s=1.9748
+sample t=3.253 pos_s=2.1252 padding=536 written_s=2.1373
+sample t=4.003 pos_s=2.6026 padding=984 written_s=2.6249
+sample t=4.253 pos_s=2.7753 padding=984 written_s=2.7976
+sample t=5.001 pos_s=3.2528 padding=536 written_s=3.2751
+result mode=shared-poll rate=44100 elapsed_s=5.004 written_s=3.275 device_rate_all=0.6480 device_rate_after2s=0.6472 first_move_ms=250.0 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=20.21 exit=
+output: C:\BC250\tmp\dpaudio-probe\probe-base-20261007-051749.txt

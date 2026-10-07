@@ -1,0 +1,13 @@
+boot 2026-10-07T05:06:25.5000000Z
+device OK problem CM_PROB_NONE driver 0.7.216.3
+UnconfirmedStarts 1 KeepLog 1 DpmMaxMHz 1500 CuMode 40 StageHistory 10 20 30 31 32 33 34 35 39 50 
+GuardBoot Confirmed 
+dwm pid 1940 start 2026-10-07T05:07:08.0498818Z
+2026-10-07T05:07:08.1610392Z 6005 The Event log service was started.
+2026-10-07T05:06:04.5606079Z 6006 The Event log service was stopped.
+2026-10-07T05:01:59.0648092Z 1074 The process C:\Windows\system32\shutdown.exe (<host>) has initiated the restart of computer <host> on behalf of user <host>\<user> for the following reason: No title for this reason could be found
+
+2026-10-07T04:40:41.0373737Z 6005 The Event log service was started.
+2026-10-07T04:39:38.4126987Z 6006 The Event log service was stopped.
+2026-10-07T04:39:23.3718147Z 1074 The process C:\Windows\system32\shutdown.exe (<host>) has initiated the restart of computer <host> on behalf of user <host>\<user> for the following reason: No title for this reason could be found
+

@@ -1,0 +1,36 @@
+--- High Definition Audio Controller [OK] PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002&REV_00\...
+  Service = HDAudBus
+  DriverInfPath = hdaudbus.inf
+  DriverVersion = 10.0.22621.5415
+  DriverProvider = Microsoft
+  HardwareIds = PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002&REV_00 PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002 PCI\VEN_1002&DEV_13FF&CC_040300 PCI\VEN_1002&DEV_13FF&CC_0403
+--- High Definition Audio Device [OK] HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS_00AA0100&REV_1007\...
+  Service = HdAudAddService
+  DriverInfPath = hdaudio.inf
+  DriverVersion = 10.0.22621.2506
+  DriverProvider = Microsoft
+  HardwareIds = HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS_00AA0100&REV_1007 HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS_00AA0100
+--- BC-250 GPU (amdgpu-wddm) [OK] PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\...
+  Service = bc250kmd
+  DriverInfPath = oem5.inf
+  DriverVersion = 0.7.216.4
+  DriverProvider = amdgpu-wddm
+  HardwareIds = PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00 PCI\VEN_1002&DEV_13FE&SUBSYS_00001022 PCI\VEN_1002&DEV_13FE&CC_030000 PCI\VEN_1002&DEV_13FE&CC_0300
+--- service HDAudBus
+  HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\HDAudBus\Parameters
+    WppRecorder_TraceGuid = {b3a109ec-1cb3-4947-95ed-431033eeb1b4}
+  HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\HDAudBus\Parameters\Wdf
+    WdfMajorVersion = 1
+    WdfMinorVersion = 25
+  HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\HDAudBus\State
+  HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\HDAudBus\State\Wdf
+    TimeOfLastTelemetryLog = 134357427202556821
+  HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\HDAudBus\Enum
+    0 = PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002&REV_00\<instance-id-removed>
+    Count = 1
+    NextInstance = 1
+--- service HdAudAddService
+  HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\HdAudAddService\Enum
+    0 = HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS_00AA0100&REV_1007\<instance-id-removed>
+    Count = 1
+    NextInstance = 1

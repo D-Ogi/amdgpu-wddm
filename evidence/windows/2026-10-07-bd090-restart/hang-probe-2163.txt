@@ -1,0 +1,38 @@
+now 2026-10-07T05:05:03.8177709Z
+--- services not Running/Stopped
+--- session 1 processes
+876 csrss threads 14
+940 winlogon threads 5
+1228 fontdrvhost threads 5
+1932 dwm threads 15
+4104 svchost threads 3
+4132 svchost threads 3
+4180 svchost threads 3
+4336 svchost threads 3
+5532 SearchHost threads 66
+5756 RuntimeBroker threads 8
+6060 svchost threads 1
+6812 svchost threads 1
+5436 SystemSettings threads 39
+12508 ShellExperienceHost threads 17
+11544 RuntimeBroker threads 1
+12724 svchost threads 1
+6420 LogonUI threads 7
+--- shutdown participants: thread wait reasons
+868 wininit s0: Wait/UserRequestx1 Wait/EventPairLowx3
+940 winlogon s1: Wait/UserRequestx1 Wait/Unknownx1 Wait/EventPairLowx1 Wait/LpcReplyx1
+784 csrss s0: Wait/LpcReceivex6 Wait/LpcReplyx1 Wait/UserRequestx5
+876 csrss s1: Wait/LpcReceivex6 Wait/LpcReplyx1 Wait/UserRequestx5 Wait/Executivex2
+1036 services s0: Wait/UserRequestx1 Wait/EventPairLowx5
+1932 dwm s1: Wait/UserRequestx7 Running/x1 Wait/EventPairLowx3 Wait/Unknownx2 Wait/LpcReceivex1 Wait/ExecutionDelayx1
+6420 LogonUI s1: Wait/UserRequestx5 Wait/EventPairLowx2
+--- device
+Error CM_PROB_FAILED_POST_START
+--- recent System events
+2026-10-07T05:02:14.2522440Z winsrvext 101 Process C:\Program Files\WindowsApps\Microsoft.MicrosoftOfficeHub_19.2609.52011.0_x64__8wekyb3d8bbwe\M365Copilot.exe from package Microsoft.MicrosoftOfficeHub_19.2609.52011.0_x64__8wekyb3d8bbwe is delaying system shutdown after 10016 milliseconds.
+2026-10-07T05:02:09.2647459Z Application Popup 26 Application popup: M365Copilot.exe - Application Error : The instruction at 0x00007FFCDC51594F referenced memory at 0x0000000000000008. The memory could not be read.
+
+2026-10-07T05:02:09.2423052Z winsrvext 100 Process C:\Windows\System32\PickerHost.exe is delaying system shutdown after 5016 milliseconds.
+2026-10-07T05:02:09.2423023Z winsrvext 100 Process C:\Windows\System32\WerFault.exe is delaying system shutdown after 5016 milliseconds.
+2026-10-07T05:01:59.0648092Z User32 1074 The process C:\Windows\system32\shutdown.exe (<host>) has initiated the restart of computer <host> on behalf of user <host>\<user> for the following reason: No title for this reason could be found
+

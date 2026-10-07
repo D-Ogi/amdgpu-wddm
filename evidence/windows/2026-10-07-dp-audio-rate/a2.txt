@@ -1,0 +1,36 @@
+bc250kmd_cli.exe : unknown command smu
+At C:\BC250\tmp\a2-azalia-regs.ps1:23 char:1
++ & $cli smu 2>&1 | Select-Object -First 12
++ ~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (unknown command smu:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+DCCG_AUDIO_DTO1_MODULE                         0x005BC  name: DCN.mmDCCG_AUDIO_DTO1_MODULE is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: read 0x005bc 005B8D80
+DCCG_AUDIO_DTO1_PHASE                          0x005B8  name: DCN.mmDCCG_AUDIO_DTO1_PHASE is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: read 0x005b8 0003A980
+DCCG_AUDIO_DTO_SOURCE                          0x005AC  name: DCN.mmDCCG_AUDIO_DTO_SOURCE is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: read 0x005ac 00100010
+DCCG_GATE_DISABLE_CNTL                         0x004D0  name: DCN.mmDCCG_GATE_DISABLE_CNTL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x004d0: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+DCCG_GATE_DISABLE_CNTL2                        0x004F0  name: DCN.mmDCCG_GATE_DISABLE_CNTL2 is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x004f0: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_CONTROLLER_CLOCK_GATING                 0x0E208  name: DCN.mmAZALIA_CONTROLLER_CLOCK_GATING is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e208: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_AUDIO_DTO                               0x0E20C  name: DCN.mmAZALIA_AUDIO_DTO is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e20c: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_AUDIO_DTO_CONTROL                       0x0E210  name: DCN.mmAZALIA_AUDIO_DTO_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e210: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_SOCCLK_CONTROL                          0x0E214  name: DCN.mmAZALIA_SOCCLK_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e214: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_UNDERFLOW_FILLER_SAMPLE                 0x0E218  name: DCN.mmAZALIA_UNDERFLOW_FILLER_SAMPLE is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e218: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_DATA_DMA_CONTROL                        0x0E21C  name: DCN.mmAZALIA_DATA_DMA_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e21c: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_BDL_DMA_CONTROL                         0x0E220  name: DCN.mmAZALIA_BDL_DMA_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e220: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_RIRB_AND_DP_CONTROL                     0x0E224  name: DCN.mmAZALIA_RIRB_AND_DP_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e224: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_CORB_DMA_CONTROL                        0x0E228  name: DCN.mmAZALIA_CORB_DMA_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e228: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER   0x0E244  name: DCN.mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e244: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_CYCLIC_BUFFER_SYNC                      0x0E248  name: DCN.mmAZALIA_CYCLIC_BUFFER_SYNC is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e248: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_GLOBAL_CAPABILITIES                     0x0E24C  name: DCN.mmAZALIA_GLOBAL_CAPABILITIES is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e24c: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_OUTPUT_PAYLOAD_CAPABILITY               0x0E250  name: DCN.mmAZALIA_OUTPUT_PAYLOAD_CAPABILITY is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e250: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+AZALIA_OUTPUT_STREAM_ARBITER_CONTROL           0x0E254  name: DCN.mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x0e254: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+DIO_MEM_PWR_STATUS                             0x14E74  name: DCN.mmDIO_MEM_PWR_STATUS is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x14e74: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+DIO_MEM_PWR_CTRL                               0x14E78  name: DCN.mmDIO_MEM_PWR_CTRL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x14e78: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+DIO_MEM_PWR_CTRL2                              0x14E7C  name: DCN.mmDIO_MEM_PWR_CTRL2 is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x14e7c: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+DIO_MEM_PWR_CTRL3                              0x14E84  name: DCN.mmDIO_MEM_PWR_CTRL3 is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS) | offset: refused 0x14e84: see NTSTATUS (driver status 2, NTSTATUS 0xC0000022 STATUS_ACCESS_DENIED; mmio mapped, writes off)
+--- smu clocks
+
+smu metrics: ok, 718 tables, 1 failures, last 672 ms ago: gfx 818 mV 1000 MHz 58.25 C, soc 1181 
+mV 58.50 C, throttler 0x0000
+
+

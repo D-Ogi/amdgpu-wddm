@@ -1,0 +1,11 @@
+Changed before the first commit (docs/01-evidence-rules.md). Counts only. No copy of the values exists.
+
+- e2-base.txt: 7 copies of the render endpoint GUID (the second part of the endpoint ID) replaced by
+  {<endpoint-guid-removed>}.
+- e3-msi-on.txt: 1 device instance suffix (the part after the hardware ID) replaced by <instance-id-removed>.
+- e1-inventory.txt: the lab script already printed <inst> in place of the instance suffixes.
+- The text files were read as UTF-8 and written back without a byte order mark.
+
+Checked and found clean: every other file of this directory (no MAC address, serial number, IPv4 address, host
+name or user name). The GUIDs in wasapi-probe.cs are the public COM interface IDs of the Windows audio API and the
+PCM subformat GUID.
