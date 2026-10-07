@@ -29,7 +29,7 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # parent of tools\).
 if (-not $ExpectedVersion) {
     try { $ExpectedVersion = [string](Get-Content -LiteralPath (Join-Path (Split-Path $here) 'manifest.json') -Raw | ConvertFrom-Json).kmd_abi } catch { }
-    if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D7' }   # this release's kmd_abi; test-dryrun.ps1 gates it
+    if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D8' }   # this release's kmd_abi; test-dryrun.ps1 gates it
 }
 . (Join-Path $here 'start-confirm-core.ps1')
 $clock = [Diagnostics.Stopwatch]::StartNew()
