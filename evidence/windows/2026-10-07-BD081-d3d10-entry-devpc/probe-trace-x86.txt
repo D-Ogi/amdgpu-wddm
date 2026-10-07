@@ -1,0 +1,25 @@
+d3d10probe pid 88820, x86 build
+entry trace: 6 GetProcAddress imports of the runtime DLLs replaced
+entry: the runtime asks C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvldumd.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B002D version 00010000
+entry: CreateDevice interface 000B002D (11.45) version 00010000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDeviceAndSwapChain(hardware) -> 0x00000000
+adapter "NVIDIA GeForce RTX 4090" vendor 0x10DE device 0x2684 luid 00000000:000243C1 dedicated 3072 MiB shared 1023 MiB
+UMD version 32.0.15.9597
+shaders and input layout -> 0x00000000
+resources -> 0x00000000
+Map -> 0x00000000
+pixels: triangle 32640 (exact rule 32640), clear 32896, other 0, wrong samples 0
+swap chain buffer -> 0x00000000
+present: 10 frames, 10 presented, 0 occluded, 0 failed (first 0x00000000), window hidden
+module P:\bc-250\scratch\bd081\build\d3d10probe-x86\d3d10probe.exe
+module C:\WINDOWS\SYSTEM32\d3d10.dll
+module C:\WINDOWS\SYSTEM32\d3d11.dll
+module C:\WINDOWS\SYSTEM32\d3d10core.dll
+module C:\WINDOWS\SYSTEM32\dxgi.dll
+module C:\WINDOWS\SYSTEM32\d3d10_1.dll
+module C:\WINDOWS\SYSTEM32\d3d10_1core.dll
+module C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvwgf2um.dll
+served by: none of the named UMDs
+verdict PASS

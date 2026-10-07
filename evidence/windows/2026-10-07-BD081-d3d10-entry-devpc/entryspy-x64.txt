@@ -1,0 +1,40 @@
+=== entryspy.exe show all (x64; the UMD exports both entries)
+patched 1 GetProcAddress imports in d3d10.dll
+patched 1 GetProcAddress imports in d3d10core.dll
+patched 1 GetProcAddress imports in d3d10_1.dll
+patched 1 GetProcAddress imports in d3d10_1core.dll
+patched 1 GetProcAddress imports in d3d11.dll
+patched 1 GetProcAddress imports in dxgi.dll
+D3D10CreateDevice (the D3D10.0 runtime)
+  GetProcAddress(nvldumdx.dll, OpenAdapter10_2) -> 00007FF8FFF2AB90
+  call OpenAdapter10_2 interface=000b0011 version=00060000
+  OpenAdapter10_2 -> 00000000
+  CalcPrivateDeviceSize interface=000b002d version=00010000
+  CreateDevice interface=000b002d version=00010000
+  -> 00000000
+D3D10CreateDevice1 level 10_0 (the D3D10.1 runtime)
+  GetProcAddress(nvldumdx.dll, OpenAdapter10_2) -> 00007FF8FFF2AB90
+  call OpenAdapter10_2 interface=000b0011 version=00060000
+  OpenAdapter10_2 -> 00000000
+  CalcPrivateDeviceSize interface=000b002d version=00010000
+  CreateDevice interface=000b002d version=00010000
+  -> 00000000
+D3D11CreateDevice (the D3D11 runtime)
+  GetProcAddress(nvldumdx.dll, OpenAdapter10_2) -> 00007FF8FFF2AB90
+  call OpenAdapter10_2 interface=000b0011 version=00060000
+  OpenAdapter10_2 -> 00000000
+  CalcPrivateDeviceSize interface=000b002d version=00010000
+  CreateDevice interface=000b002d version=00010000
+  -> 00000000
+exit 0
+=== entryspy.exe hide102 d3d10 (x64; GetProcAddress answers NULL for OpenAdapter10_2)
+patched 1 GetProcAddress imports in d3d10.dll
+patched 1 GetProcAddress imports in d3d10core.dll
+patched 1 GetProcAddress imports in d3d10_1.dll
+patched 1 GetProcAddress imports in d3d10_1core.dll
+patched 1 GetProcAddress imports in d3d11.dll
+patched 1 GetProcAddress imports in dxgi.dll
+D3D10CreateDevice (the D3D10.0 runtime)
+  GetProcAddress(nvldumdx.dll, OpenAdapter10_2) -> 00007FF8FFF2AB90
+  (hidden)
+exit -1073741819
