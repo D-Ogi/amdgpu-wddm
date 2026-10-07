@@ -1,7 +1,8 @@
 # Design: the Vulkan WSI presents through DXGI on a D3D12 device
 
-Date: 2026-10-07. Status: implemented offline, not measured on unit A. The default route stays GDI until the lab
-plan below passes. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
+Date: 2026-10-07. Status: implemented offline, not measured on unit A. The DXGI route is the default (owner
+decision, 2026-10-07: a route that must be switched on gets forgotten). GDI is the explicit rollback and the
+automatic fallback when the DXGI route fails. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
 D3D11 and KMT plans of [the engine present note](wsi-engine-present.md) for the WSI side. Nothing here is a
 measured result unless it cites a `facts.md` row.
 
@@ -40,7 +41,9 @@ flip needs no work of its own here. The change is a small set of hooks in Mesa, 
 
 ## How a frame moves
 
-1. At swapchain creation the WSI asks the driver whether the route may run (`route_allowed`). Then it creates
+1. When the application lists the surface formats, and again at swapchain creation, the WSI asks the driver
+   whether the route can run (`route_allowed`). The driver answers no only when it cannot make its D3D12
+   presenter, so the formats that have no CPU path are not offered then. Then the WSI creates
    one D3D12 shared committed resource per image (`D3D12_HEAP_FLAG_SHARED`). Our D3D12 shell makes it a linear
    surface in the aperture and writes its LB7A record.
 2. The Vulkan image is created with `VK_IMAGE_TILING_LINEAR` and imported over that resource
@@ -58,12 +61,13 @@ There is no CPU pixel copy on this path. The present log (`BC250_WSI_PRESENT_LOG
 
 ### The second device: cost, recursion, memory
 
-- **Recursion.** `vk_dxgi_create_d3d12_device(LUID)` loads System32 `d3d12.dll` by full path. The runtime loads
-  our D3D12 shell. The shell loads its engine and its hosted RADV (`amdgpu_wddm_radv.dll`) with `LoadLibraryExW`
+- **Recursion.** The presenter takes the adapter from a System32 DXGI factory by its LUID and calls
+  `D3D12CreateDevice` from System32 `d3d12.dll`, loaded by full path. The runtime loads our D3D12 shell. The shell loads its engine and its hosted RADV (`amdgpu_wddm_radv.dll`) with `LoadLibraryExW`
   by full path (`driver/umd/d3d12/adapter-caps.cpp`), not through the Vulkan loader, so the call never comes
   back into `vulkan_radeon.dll`. The hosted RADV runs with the host dispatch set, and the winsys keeps the route
   off there, so the shell's own instance never makes a D3D12 device either.
-- **When.** The device is made at the first swapchain of a process, once per winsys, under a lock. A failure is
+- **When.** The device is made when the process first lists surface formats or makes a swapchain, once per
+  winsys, under a lock. A failure is
   remembered, so a game that recreates its swapchain does not retry the device each time.
 - **Cost.** Not measured. The lab plan measures the time of the first swapchain creation and the process's
   private bytes before and after it. The device holds one direct queue, two command lists and two committed
@@ -125,24 +129,48 @@ shared surface (`driver/contract/amdgpu_wddm_surface_format.h`). Nothing in the 
 - `AMDGPU_WDDM_VK_WSI` in the environment, else the REG_SZ value `WsiRoute` under
   `HKLM\SOFTWARE\amdgpu-wddm\Vulkan`: `gdi`, `dxgi` (window swap chain) or `dxgi-composition`. An empty
   environment value counts as absent. Any other value selects GDI and the log names it invalid.
-- The default is GDI (`RADV_WDDM2_WSI_ROUTE_DEFAULT`) until the lab plan passes. Then one line changes the
-  default to `dxgi`, and `gdi` stays the fallback switch, as ADR 0018 point 2 asks.
-- **The module gate.** The route stands down when the process holds a `dxgi.dll`, `d3d12.dll` or
-  `d3d12core.dll` from outside System32. An app-local DXVK `dxgi.dll` shadows the System32 one for System32
-  modules ([M792](../facts/d3d.md#m792), [M794](../facts/d3d.md#m794)), and E56 named force-loading System32
-  `d3d12` in such a process as a thing the WSI must not do ([M793](../facts/d3d.md#m793)). The gate reads every
-  loaded module at instance creation and again at each swapchain, because two modules of one name can be loaded
-  at once. The native D3D11 and D3D12 games do not use this WSI at all: they present through DXGI and our
-  shells.
-- **Per swapchain.** If the gate fails, the D3D12 device or queue cannot be made, or any DXGI step fails, that
-  swapchain takes CPU images and the log says why. A format that has no CPU path then fails with
+- The default is `dxgi` (`RADV_WDDM2_WSI_ROUTE_DEFAULT`). `gdi` from either source is the rollback, as
+  ADR 0018 point 2 asks. An invalid value also selects GDI, so a mistyped rollback still rolls back.
+- **Application-local runtime modules do not change the route.** The presenter binds System32 `dxgi.dll` and
+  `d3d12.dll` by full path and takes `CreateDXGIFactory2` and `D3D12CreateDevice` from those handles. It never
+  looks up a runtime module by name. `util_load_system_library` loads with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` and
+  `LOAD_LIBRARY_SEARCH_SYSTEM32`, so a dependency that is not loaded yet comes from System32. The DXGI present
+  route passes beside DXVK and vkd3d-proton DLLs in all six E56 modes ([M793](../facts/d3d.md#m793)). The
+  shadow of [M792](../facts/d3d.md#m792) and [M794](../facts/d3d.md#m794) breaks only the D3D11 calls of
+  `D3D11CreateDevice` with a NULL adapter and the `GetModuleHandle("dxgi")` and `CompatValue` lookup. This route
+  is D3D12 and uses an explicit adapter. The init line names each copy, `loaded` when it is in the process,
+  `file` when it is only in the executable's directory, and adds `bound=System32`. An Agility SDK
+  `D3D12Core.dll` is Microsoft's newer runtime over our user-mode driver, so it is no reason to leave the route.
+- **One narrow fallback: a replacement D3D12 core.** System32 `d3d12.dll` (10.0.26100.9278) does not import
+  `d3d12core.dll`. It holds the name as a string and loads its core at run time. vkd3d-proton's `d3d12core.dll`
+  exports the same `D3D12GetInterface` and `D3D12SDKVersion` (`libs/d3d12core/d3d12core.def`). If the System32
+  runtime binds to that module, the "D3D12 device" is vkd3d-proton on Vulkan. It has no LB7A shared resources,
+  and it re-enters this ICD. After `D3D12CreateDevice`, the presenter finds the module of the device's vtable.
+  A `d3d12core.dll` or `d3d12.dll` outside System32, and outside the directory that the executable's
+  `D3D12SDKPath` export names, is a replacement. The process then presents through GDI with the reason
+  `d3d12-replaced`. A different module name, such as the debug layer `d3d12SDKLayers.dll` or a capture tool,
+  wraps the runtime and is accepted. Whether the System32 runtime binds to such a core at all is not
+  measured. The check acts only on the device it actually got.
+- **Automatic fallback, each with its HRESULT in the log.** On the init line: the DXGI runtime could not be set
+  up (`dxgi-load`, `dxgi-factory`, `dcomp-load`, `dcomp-device`). On the `D3D12 presenter device` line:
+  `dxgi-adapter`, `d3d12-load`, `d3d12-device`, `d3d12-replaced`, `d3d12-queue`. On the swapchain lines: a
+  fence or resource import, the layout check, or the swap chain itself. In each case that swapchain takes CPU
+  images, and the log line names the reason. A format that has no CPU path is offered only while the presenter
+  works. If the presenter fails between the format list and the swapchain, such a format fails with
   `VK_ERROR_INITIALIZATION_FAILED`.
+- The native D3D11 and D3D12 games do not use this WSI at all: they present through DXGI and our shells. The
+  hosted RADV inside the shells keeps the route off.
 
 ## Code
 
 | Repository, branch | Change |
 |---|---|
-| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi` | `radv_wddm2_wsi_route.h` (switch, gate, LB7A rules, host test), `radv_wddm2_bo.c` (10-bit and FP16 import), `radv_wddm2_wsi.c` (hooks, device, layout check), `wsi_common.c` (per-swapchain blit hook and CPU wait), `wsi_common_win32.cpp` (the route) |
+| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi` | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
+| | `radv_wddm2_bo.c`: the import of 10-bit and FP16 surfaces |
+| | `radv_wddm2_wsi.c`: the hooks, the presenter device with the System32 binding, the layout check |
+| | `wsi_common.c`: the blit hook of each swapchain and the CPU wait |
+| | `wsi_common_win32.cpp`: the route, the init failure and its HRESULT |
+| | `u_win32_library.h`: the search for dependencies in System32 only |
 | bc250-win, `wsi/vk-dxgi` | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 
 Two upstream defects are fixed on the way. The device-wide `wsi_device::blit` hook skipped the own blit of a CPU
@@ -161,30 +189,49 @@ destroy also leaked each image's D3D12 resource, command list and allocator.
   flip that put the frame on the screen.
 - The route runs its copy on the D3D12 shell's queue, so the shell's hosted device and the application's RADV
   device share the GPU through two contexts. Their order is the shared fences only.
-- An application that ships the Agility SDK (`d3d12core.dll` beside it) fails the gate and keeps GDI.
+- The route is the default before any lab run. A defect that the fallbacks do not catch (a wrong picture, a
+  hang in the D3D12 queue) reaches every pure Vulkan application until `gdi` is set.
+- System32 `d3d12core.dll` delay-imports `dxgi.dll!CreateDXGIFactory2` (10.0.26100.9278). When an
+  application-local DXVK `dxgi.dll` is already in the process, that import binds to DXVK, as the `d3d11` import
+  does in [M792](../facts/d3d.md#m792). In M792 only the NULL-adapter path reached that import, and this route
+  passes an explicit adapter. The DXVK step of the lab plan is the first measurement on unit A.
+- A replacement D3D12 core is detected only after `D3D12CreateDevice` returns. If vkd3d-proton builds its device
+  on this ICD during that call, the re-entry happens before the check.
+- An application that wraps the D3D12 device with a module of a different name passes the implementation check,
+  and the layout check (`check_blit_image`) is then the guard.
 
 ## Lab plan
 
 Each step is one trial of at most three minutes. The Vulkan game step is a game session under the game bound.
-Each step uses the installed release with only `vulkan_radeon.dll` replaced by the candidate, and the GDI
-switch (`AMDGPU_WDDM_VK_WSI=gdi`) is the rollback. Capture ETW with the present-mode provider set of
-`tools/win/lab-runner/etw/etw-capture.ps1 -PresentMode`, and read it with `tools/win/etw/etw-present-mode.py`.
+Each step uses the installed release with only `vulkan_radeon.dll` replaced by the candidate. The rollback is
+`AMDGPU_WDDM_VK_WSI=gdi` for one process or the registry value `gdi` for all. Capture ETW with the present-mode
+provider set of `tools/win/lab-runner/etw/etw-capture.ps1 -PresentMode`, and read it with
+`tools/win/etw/etw-present-mode.py`.
 
-1. **vkcube, window, `AMDGPU_WDDM_VK_WSI=dxgi`, 60 s.** Collect `BC250_WSI_PRESENT_LOG`, the amdgpu-wddm log and
-   ETW. Pass: the log line `BC250 WSI: route=dxgi`, a `window swap chain` line, present log rows with path
-   `dxgi` and `copy_us` 0, and no `CPU images` line. `etw-present-mode.py gpu.etl vkcube` reports present-history
-   tokens with model REDIRECTED_FLIP and `Present` flags 0x9000 for vkcube, and no "no present-history token"
-   presents. The KMD CPU blit counter does not advance. Also record the private bytes of vkcube before and
-   after the first swapchain and the time of `vkCreateSwapchainKHR`.
-2. **vkcube, window, present modes, 60 s.** Run FIFO, MAILBOX and IMMEDIATE for 20 s each. Pass: FIFO near the
+1. **vkcube, window, no variable and no registry value set, 60 s.** Collect `BC250_WSI_PRESENT_LOG`, the
+   amdgpu-wddm log and ETW. Pass: the init line `BC250 WSI: route=dxgi asked=dxgi source=default ... reason=ok`,
+   `D3D12 presenter device created ... impl=system:d3d12core.dll`, a `window swap chain` line, present log rows
+   with path `dxgi` and `copy_us` 0, and no `CPU images` line. `etw-present-mode.py gpu.etl vkcube` reports
+   present-history tokens with model REDIRECTED_FLIP and `Present` flags 0x9000 for vkcube, and no "no
+   present-history token" presents. The KMD CPU blit counter does not advance. Also record the private bytes of
+   vkcube before and after the first swapchain and the time of `vkCreateSwapchainKHR`.
+2. **vkcube, window, `AMDGPU_WDDM_VK_WSI=gdi`, 30 s (rollback check).** Pass: `route=gdi asked=gdi source=env
+   reason=asked`, present log rows with path `gdi`, no `D3D12 presenter device` line, and the ETW present of
+   the GDI path. Then set the registry value `WsiRoute=gdi` with no variable for 20 s: `source=registry`, the
+   same result. Remove the value at the end of the step.
+3. **vkcube, window, present modes, 60 s.** Run FIFO, MAILBOX and IMMEDIATE for 20 s each. Pass: FIFO near the
    refresh rate, MAILBOX and IMMEDIATE above it with no `vkQueuePresentKHR` time near a refresh in the present
    log. A resize of the window gives new chains with `taken over from oldSwapchain` and no error.
-3. **vkcube, fullscreen 1920x1200, 60 s, with `AMDGPU_WDDM_D3D12_EXPERIMENT=scanout-flip-1920x1200`.** Pass:
+4. **vkcube with an upstream DXVK `dxgi.dll` next to a copy of `vkcube.exe`, 60 s.** Pass: as step 1,
+   and the init line has `app-local=dxgi.dll(file) bound=System32` (`loaded` if something in the process loaded
+   it). The presenter line has `impl=system`. No vkcube window error and no `CPU images` line.
+5. **vkcube, fullscreen 1920x1200, 60 s, with `AMDGPU_WDDM_D3D12_EXPERIMENT=scanout-flip-1920x1200`.** Pass:
    the router front logs `answer=1 rule=supported`, and `etw-present-mode.py gpu.etl vkcube --admitted-address
    ... --kmd-counters ...` prints the `M15.14 INCREMENT2 vkcube` line with its pass result (all four clauses PASS). A COMPOSED verdict here is
    the M15.14 result for native D3D12 as well, not a WSI defect.
-4. **vkcube, `dxgi-composition`, 60 s.** Pass: as step 1, with the `composition swap chain` line.
-5. **A Vulkan game, borderless at 1920x1200, `AMDGPU_WDDM_VK_WSI=dxgi`.** Pass: as steps 1 and 3 for the game
-   process, the game's own frame rate against the same session on `gdi`, and no swapchain fallback line.
+6. **vkcube, `dxgi-composition`, 60 s.** Pass: as step 1, with the `composition swap chain` line.
+7. **A Vulkan game, borderless at 1920x1200, no variable set.** Pass: as steps 1 and 5 for the game process, the
+   game's own frame rate against the same session on `gdi`, and no swapchain fallback line.
 
-After step 5 passes, the default changes to `dxgi` in one commit, and the release notes name the `gdi` switch.
+If a step fails on the DXGI route, the release notes keep `gdi` as the named workaround
+(`docs/testing/release-notes/pending/vk-wsi-dxgi.md`), and the failure gets a GitHub issue.
