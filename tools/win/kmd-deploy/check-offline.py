@@ -73,6 +73,9 @@ def main():
     # The desktop pins freeze derives from lab-baseline.json (CPU desktop, or the router desktop's CPU route).
     r = subprocess.run([sys.executable, str(BASE / 'tools/test_desktop_pins.py')], capture_output=True, text=True, timeout=120)
     record('desktop pins', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
+    # The package identity (R, B) from DriverVer 0.7.R.B, the release rule, labels and the freeze refusals.
+    r = subprocess.run([sys.executable, str(BASE / 'tools/test_versions.py')], capture_output=True, text=True, timeout=300)
+    record('versions', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
     r = ps(kmd168 / 'test-deadline.ps1')
     record('kmd168 test-deadline', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
     if not args.quick:

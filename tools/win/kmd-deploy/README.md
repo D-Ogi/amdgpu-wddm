@@ -12,13 +12,63 @@ Only the steps marked LAB touch unit A. Every lab trial stays within three minut
 - `--package DIR`: the candidate. A directory with `bc250kmd.sys`, `.inf`, `.cat`, `bc250-lab-test.cer` and the
   build's `source-manifest.json`. The build must be BUILT, deployment-source eligible and clean, from
   `driver/kmd/build.ps1` on a clean checkout, in the plain `package` flavor.
-- `--rollback DIR`: the KMD deployed now, in the same form. Either the `candidateRRR` directory of the attempt
-  that promoted it, or its build package directory.
+- `--rollback DIR`: the KMD deployed now, in the same form. Either the candidate directory of the attempt that
+  promoted it, or its build package directory. When the lab runs a tester release, give the release package
+  directory (`manifest.json`, `payload/kmd`, `payload/cert`). See "A release package as the rollback".
+- `--rollback-build DIR`: only with a release package as `--rollback`. The build package directory that the
+  release packages: the `source` of `payload/kmd` in the release's `release-sources.json`.
 - `--repo DIR`: the git repository that holds both commits. The default is `<BC250_ROOT>/bc250-win`.
 
 Nothing above is typed twice. `freeze` reads the version from `DriverVer`, the ABI from `BC250_KMD_VERSION` at
 the commit, the SYS/INF/CAT hashes from the files, the detector contract from the INF and the hang settings from
-`hang.c`, and it refuses unless the version and the ABI encode the same revision.
+`hang.c`. The rules for the version are in the next section.
+
+## Versions and labels
+
+The identity of a package is (R, B) from `DriverVer` 0.7.R.B:
+
+- R is the ABI revision. It must be the low 16 bits of `BC250_KMD_VERSION` at the commit (0.7.216.B and
+  0x000700D8). `freeze` refuses a version and an ABI that name different revisions.
+- B is the build counter, a decimal number of 1 or more. Up to 0.7.215 every build was 0.7.R.1. From 0.7.216 the
+  counter goes up with each build (0.7.216.14, 0.7.216.16). A release package has a B of its own (0.7.216.100).
+- The package INF and the source INF at the commit must name the same `DriverVer`. The only exception is a
+  release package, under the rule of the next section.
+
+The candidate and the rollback must differ in the full version (R, B) and in the SYS hash. The lab arms tell the two
+drivers apart by `DriverVer` and by the SYS hash. Two builds of one revision have the same ABI, so the ABI alone
+does not tell them apart. One package as both candidate and rollback (the same-package control) is never frozen.
+
+The labels and the attempt name carry (R, B). A build 1 keeps the old names: `candidate175`, `rollback173`,
+`kmd175-deploy001`. A build B of 2 or more adds `-B`: `candidate216-16`, `rollback216-100`, `kmd216-16-deploy001`.
+The kit never writes `-1`, so one (R, B) has exactly one name. Attempts frozen with the old rule keep their names
+and still work with every step.
+
+## A release package as the rollback
+
+`tools/release/build-release.ps1` packages a build and changes it in a known way:
+
+1. The INF gets the release's own `DriverVer` (manifest.json `kmd_version`, for example 0.7.216.100). The first
+   three fields stay those of the build (manifest.json `kmd_build`, for example 0.7.216.14).
+2. The INF gets one `Reboot` line after each install section header (`Add-InfRebootDirective`).
+3. The release signs the SYS again with the release certificate and makes a new catalog. The code does not change.
+
+`freeze` accepts the release package only when each of these checks passes:
+
+- Every file in `payload/kmd` and the release certificate has its hash in `manifest.json`.
+- The release INF names manifest.json `kmd_version`. The build INF names manifest.json `kmd_build`, and both name
+  the same 0.7.R.
+- The release INF without the two edits above is the build INF, character for character.
+- The release SYS and the build SYS have the same image digest (the SHA256 without the signature).
+- manifest.json `kmd_abi` is the ABI of the build commit.
+- The certificate that manifest.json names signs the SYS and the CAT. The candidate keeps the lab certificate.
+- `lab-baseline.json` names this KMD, and its `release` block names this manifest and this build.
+
+The attempt copies the release SYS, INF, CAT and certificate into `rollbackRRR-B`, together with
+`release-manifest.json` and `build-source-manifest.json`.
+
+The release INF has the `Reboot` directive. Up to 2026-10-07 no attempt restored a release package on the lab.
+Thus a restore that needs a restart before the device takes the release driver is possible and not measured. Do the
+first promotion over a release as a `--mode rehearsal` attempt.
 
 `<BC250_ROOT>/scratch/m15/native-caps001/lab-baseline.json` is the deployed baseline. The rollback must be the
 KMD it names, and it supplies the desktop UMD and ICD pins that `preflight`, `Verify` and `postflight` require.
@@ -26,14 +76,15 @@ KMD it names, and it supplies the desktop UMD and ICD pins that `preflight`, `Ve
 `freeze` writes each attempt's own `kmd-transition/identity.ps1` from these inputs and then runs
 `test-identity.ps1` on it: no version, ABI, label, hash or lab path literal may appear in any other script. The
 template's `identity.ps1` is only a host-test fixture. Attempts live in
-`<BC250_ROOT>/scratch/kmd-deploy/attempts/kmdRRR-deployNNN` and are never rewritten. Any change is a new freeze.
+`<BC250_ROOT>/scratch/kmd-deploy/attempts/kmdRRR-deployNNN` (build 1) or `kmdRRR-B-deployNNN` and are never
+rewritten. Any change is a new freeze. The steps below write `kmdRRR-deployNNN` for both forms.
 
 ## Steps
 
 | # | Command | Pass |
 |---|---------|------|
-| 1 | `python check-offline.py` | 41/41. `--quick` 38/38, measured 2026-10-05 from this copy |
-| 2 | `python stage.py freeze --package <dir> --rollback <dir>` (`--mode rehearsal` always rolls back) | prints the attempt name and the manifest hash |
+| 1 | `python check-offline.py` | 42/42. `--quick` 39/39, measured 2026-10-07 from this copy |
+| 2 | `python stage.py freeze --package <dir> --rollback <dir>` (`--rollback-build <dir>` with a release package, `--mode rehearsal` always rolls back) | prints the attempt name and the manifest hash |
 | 3 | LAB `mon.py status "KMD<R> promotion: staging" info`, then `mon.py stop?` | STOP clear |
 | 4 | LAB `python stage.py push kmdRRR-deployNNN` | exit 0: a 30 s bounded child checks the rollback baseline, and the candidate enters the DriverStore without an install |
 | 5 | LAB `python dispatch.py kmdRRR-deployNNN Prepare`, `mon.py status "... 3 min" warn`, `python dispatch.py kmdRRR-deployNNN Start` | task `BC250-KMD-Watch` Ready. Start first starts the present heartbeat and refuses if it does not run |
@@ -116,8 +167,9 @@ Values that exist live but not in the capture are listed in `parameters_added`. 
 ## Host tests
 
 ```
-python tools\win\kmd-deploy\check-offline.py            41 checks, about 3 minutes
-python tools\win\kmd-deploy\check-offline.py --quick    38 checks, without the bounded-child tests
+python tools\win\kmd-deploy\check-offline.py            42 checks, about 3 minutes
+python tools\win\kmd-deploy\check-offline.py --quick    39 checks, without the bounded-child tests
+python tools\win\kmd-deploy\tools\test_versions.py      the version rules, also part of both runs above
 python tools\win\kmd-deploy\tools\test_accept.py <dry-run attempt dir>    11 checks on a scratch copy
 ```
 
@@ -140,8 +192,20 @@ It checks that `accept` refuses an attempt with no receipts, one that was restor
 failed or foreign postflight. It also checks that a print-only run writes nothing, that `--apply` moves only the KMD pins, and
 that a second `--apply` refuses.
 
-Negative controls of `freeze` itself: a rollback that is not the baseline KMD, and a candidate whose revision
-equals the rollback's, are both refused.
+Negative controls of `freeze` itself, in `tools/test_versions.py` (part of `check-offline.py`):
+
+- A version and an ABI that name different revisions, a build counter of 0 and a version that is not 0.7.R.B.
+- A package INF and a source INF that name different `DriverVer` values, with no release rule to explain it.
+- A release INF that differs from manifest.json, from its build or in more than the two release edits.
+- A release SYS that is not its build SYS signed again, and a release package without `--rollback-build`.
+- The same package as candidate and rollback, the same version with another SYS and the same SYS with another
+  version.
+- A rollback that is not the KMD or the release that `lab-baseline.json` names, and a wrong certificate.
+
+The test also reads the tester.20 release over its build 0.7.216.14, and the 0.7.216.16 build as a candidate over
+it, when those directories are in the workspace. `tools/test-identity-revisions.ps1` runs `test-identity.ps1` on
+identities with build counters (216.16 over 216.100, 216.16 over 216.14, 217.1 over 216.100) and refuses a wrong
+directory pattern, one version twice, build 0, a label without its build and a foreign ABI.
 
 ### The Get-FileHash trap, now closed
 

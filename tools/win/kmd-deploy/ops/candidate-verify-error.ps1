@@ -1,5 +1,5 @@
 # Read-only: why the candidate Verify of a kmd-deploy attempt failed (error text, result receipt, last health wait).
-param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}-deploy[0-9]{3}$')][string]$Attempt)
+param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-deploy[0-9]{3}$')][string]$Attempt)
 $d = "C:\BC250\m15\$Attempt"
 foreach ($f in @('candidate-verify.err', 'candidate-verify-helper.json', 'candidate-result.json', 'worker.err', 'watch-error.txt', 'retain-rejected.txt', 'candidate-verify-cpu.json', 'candidate-verify-baseline-wait-1.json')) {
   $p = Join-Path $d $f
