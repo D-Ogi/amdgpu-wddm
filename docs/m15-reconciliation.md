@@ -171,9 +171,10 @@ proposed here as M15's exit criteria.
   Windows does not fall back by itself. With the slot empty and a restart, the same calls load `d3d9on12.dll`, which
   runs on `d3d12.dll` and our D3D12 shell; the probe's readback is exact at about 185 000 draws per second, and DWM on
   the D3D11 slot and the start confirmation are unchanged. The installer of branch `installer/d3d9on12` writes the
-  empty slot into `UserModeDriverName` and `UserModeDriverNameWow` and ships no stub. `UserModeDriverNameWow` has no
-  D3D12 entry, so a 32-bit D3D9 application still gets no device. Open: a D3D9 game session on an installed package,
-  and the facts row with its evidence.
+  empty slot into `UserModeDriverName` and `UserModeDriverNameWow` and ships no stub. Branch `umd/wow64-d3d12` adds
+  the x86 D3D12 shell as the fourth entry of `UserModeDriverNameWow`, so a 32-bit D3D9 application takes the same
+  route (host gates only, not yet measured on unit A). Open: a D3D9 game session on an installed package, the 32-bit
+  probe on unit A, and the facts row with its evidence.
 - **Kernel driver switches and version.** MEASURED: the GPU present blit and DWM interop are start-latched
   registry switches, off by default (`driver/kmd/wddm.c` line 1772). PLANNED: both on by default and closed by the
   driver after an unclean boot, as it already resets DPM. The driver is compiled at WDDM 2.0
