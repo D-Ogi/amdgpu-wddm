@@ -11,7 +11,8 @@
 // library the driver gets, and every association, defaults included, arrives as an explicit list per export.
 // CreateStateObject rebuilds the API description the engine parses (libs/vkd3d/raytracing_pipeline.c,
 // d3d12_state_object_parse_subobject):
-//   STATE_OBJECT_CONFIG, NODE_MASK, RAYTRACING_SHADER_CONFIG  copied;
+//   STATE_OBJECT_CONFIG, NODE_MASK, RAYTRACING_SHADER_CONFIG  copied; a STATE_OBJECT_CONFIG allowing additions is
+//                          added when the runtime of unit A drops it from a link or an addition (fact M839, translate);
 //   GLOBAL_ and LOCAL_ROOT_SIGNATURE  the engine root signature of the handle, a live one of this device;
 //   DXIL_LIBRARY  a container rebuilt by shader-container BuildLibraryContainer; the export array in place;
 //   RAYTRACING_PIPELINE_CONFIG  read as _0075 and passed as the API's PIPELINE_CONFIG1 (type 12);
@@ -168,6 +169,9 @@ struct StateObjectTranslation {
         UINT count;
     };
     std::vector<DdiRange> described;
+    // The state object allows additions: its state object configuration has ALLOW_STATE_OBJECT_ADDITIONS, given by
+    // the runtime or synthesized (translate). A link of collections that all have it may get it synthesized.
+    bool additions = false;
 
     StateObjectTranslation() = default;
     StateObjectTranslation(const StateObjectTranslation&) = delete;
@@ -592,7 +596,8 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     // Pass 1: types, and what the summaries associate.
     std::vector<size_t> counts(n, 0);
     size_t names = 0, exports = 0, unlocal = 0;
-    UINT summaries = 0, libraries = 0, locals = 0, imports = 0;
+    UINT summaries = 0, libraries = 0, locals = 0, imports = 0, groups = 0, configs = 0, config_flags = 0;
+    bool imports_allow_additions = true;
     text.add("; types");
     for (UINT i = 0; i < n; ++i) {
         const D3D12DDI_STATE_SUBOBJECT_0054& s = a.pSubobjects[i];
@@ -601,11 +606,14 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
         if (!s.pDesc) return refuse(i, "no description", E_INVALIDARG);
         switch (s.Type) {
         case D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG:
+            ++configs;
+            config_flags |= static_cast<UINT>(static_cast<const D3D12DDI_STATE_OBJECT_CONFIG_0054*>(s.pDesc)->Flags);
+            break;
+        case D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP: ++groups; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_NODE_MASK:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG:
-        case D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG:
-        case D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP: break;
+        case D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG: break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE: ++locals; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY: ++libraries; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION:
@@ -617,6 +625,7 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
             if (static_cast<const D3D12DDI_EXISTING_COLLECTION_DESC_0054*>(s.pDesc)->NumExports)
                 return refuse(i, "a restricted import list, temporarily unsupported", E_NOTIMPL);
             ++imports;
+            imports_allow_additions = imports_allow_additions && collection_of(c, s.pDesc)->translation->additions;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY: {
             ++summaries;
@@ -655,6 +664,27 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     }
     if (parent)
         for (const std::wstring& name : parent->translation->exposed) expose(name);
+    // ALLOW_STATE_OBJECT_ADDITIONS where the runtime gave no state object configuration. The engine makes a pipeline
+    // that allows additions as a library and a link of it (raytracing_pipeline.c:2528-2642), so it must know at the
+    // create, and it grows only a parent with the flag and only by an addition with the flag (:2890-2907).
+    // Measured on unit A (fact M839, D3D12Core.dll 10.0.22621.5415): the runtime gives the state object configuration
+    // of a collection, but none for a link of collections or for an addition, although the application's descriptions
+    // have one with ALLOW_STATE_OBJECT_ADDITIONS (Unreal Engine 4.26 on a tier 1.1 device). The runtime of the
+    // development PC (10.0.26100.9278, fact M838) gives it for both. So, with no state object configuration:
+    //   - an addition gets the flag: the API requires it of every addition (Raytracing.md:3785), and the runtime
+    //     checks the API call;
+    //   - a RAYTRACING_PIPELINE that only imports collections (no library, no hit group of its own) gets the flag when
+    //     every imported collection has it. A collection without it can only be imported by a pipeline without it
+    //     (Raytracing.md:3380), so then the pipeline cannot have it. With every collection allowing additions the
+    //     application may still have set none: then the pipeline allows more than it asked for, which costs the engine
+    //     one more link (INFERENCE: no API path depends on a pipeline refusing an addition the runtime admits).
+    // A pipeline with libraries or hit groups of its own keeps what the runtime gives (INFERENCE: unit A's runtime keeps
+    // the configuration where an export of the description is associated with it, as for a collection).
+    const bool executable = a.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+    const bool synthesize = executable && !configs && c->device7 &&
+                            (parent || (imports && !libraries && !groups && imports_allow_additions));
+    if (synthesize) text.add("; state object configuration allowing additions synthesized");
+    t.additions = synthesize || (config_flags & D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS);
     t.held.reserve(size_t{imports} + (parent ? 1 : 0));
     size_t targets = 0;                        // counts[i] <= kMaxAssociatedNames, within an association's UINT
     for (size_t k : counts) targets += k ? 1 : 0;
@@ -670,7 +700,7 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
 
     // Pass 2: the API subobjects, then one association per associated subobject, then the empty local root signature
     // and its default association.
-    const size_t total = size_t{n} - summaries + targets + (empty_local ? 2 : 0);
+    const size_t total = size_t{n} - summaries + targets + (empty_local ? 2 : 0) + (synthesize ? 1 : 0);
     t.descs.resize(total);
     t.subobjects.resize(total);
     t.names.resize(names);
@@ -693,6 +723,11 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
         }
         t.subobjects[out] = {type, &d};
         api[i] = out++;
+    }
+    if (synthesize) {
+        StateObjectTranslation::Desc& d = t.descs[out];
+        d.config.Flags = D3D12_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
+        t.subobjects[out++] = {D3D12_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &d};
     }
     if (parent) {
         t.held.push_back(parent->h.engine);

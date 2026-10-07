@@ -749,7 +749,9 @@ already resolves.
 
 CreateStateObject rebuilds the API description from the DDI's (d3d12umddi.h 10.0.26100; DirectX-Specs
 Raytracing.md, "State object DDIs"), subobject by subobject:
-- STATE_OBJECT_CONFIG, NODE_MASK (0 or 1), RAYTRACING_SHADER_CONFIG: copied; unknown flags are E_INVALIDARG.
+- STATE_OBJECT_CONFIG, NODE_MASK (0 or 1), RAYTRACING_SHADER_CONFIG: copied; unknown flags are E_INVALIDARG. A
+  STATE_OBJECT_CONFIG with ALLOW_STATE_OBJECT_ADDITIONS is added in two cases, because the runtime of unit A drops
+  it (fact M839, "State object configuration" below).
 - GLOBAL_ and LOCAL_ROOT_SIGNATURE: the handle's engine root signature; a null handle or another device's is
   E_INVALIDARG.
 - DXIL_LIBRARY: `pDXILLibrary` has no size. Its length is the length the payload claims, checked for internal
@@ -868,7 +870,8 @@ INFERENCE until a lab run logs a real description (the create's log line is the 
 hands over the DDI form the harness builds, in particular that a 0092 driver receives RAYTRACING_PIPELINE_CONFIG as
 _0075 (the header names both layouts, and WARP gets _0075 on the development PC, fact M837), that `pDXILLibrary` is a
 DXIL part with SizeInUint32 as for shaders (a whole container is also accepted), and that unit A's D3D12Core.dll
-10.0.22621.5415 describes collection imports as the development PC's 10.0.26100.9278 does.
+10.0.22621.5415 describes collection imports as the development PC's 10.0.26100.9278 does. Measured difference: unit
+A's runtime drops the state object configuration of a link and of an addition (fact M839).
 
 Development PC witness (harness round trip 9, `tests/test-raytracing.cpp`, RuntimeBacked on the stub shell): a dxc
 lib_6_3 library (`tests/fixture-raylib.hlsl`) with raygen, miss and closest, one triangles hit group with a local
@@ -953,6 +956,29 @@ hits and 3 on the 52 misses, 64 words exact. UE stops on any failure of either c
 E_OUTOFMEMORY clamp keeps the device but not the game.
 The same round trip passes with the pinned engine and with the lab's engine 348117F1 (vkd3d-proton fork 4e9a98e9),
 on the development PC's NVIDIA GPU. On unit A's RADV, the pipeline library path of an addition is not yet measured.
+
+State object configuration (fact M839). The runtime of unit A (D3D12Core.dll 10.0.22621.5415) gives a collection its
+state object configuration, but gives a link of collections and an addition none. The application's configuration
+that allows additions does not reach the driver. The development PC's runtime 10.0.26100 gives it (fact M838). The
+engine takes the additions flag only from a configuration subobject (`raytracing_pipeline.c:963-984` of 4e9a98e9).
+`AddToStateObject` is E_INVALIDARG unless the parent and the addition both have the flag (`:2888-2907`). The D3D12
+specification requires the flag on both (Raytracing.md:3785), and a pipeline that allows additions can import only
+collections that allow them (Raytracing.md:3380). So `translate` adds a STATE_OBJECT_CONFIG with
+ALLOW_STATE_OBJECT_ADDITIONS when the description has no configuration and the device has ID3D12Device7, in two
+cases:
+- An addition. The runtime calls AddToStateObject only for an application that asked for additions.
+- A RAYTRACING_PIPELINE with no library and no hit group whose imports are all collections that allow additions
+  (`StateObjectTranslation::additions`, set from the given configuration or from this rule).
+The create's log line says "state object configuration allowing additions synthesized". A pipeline with its own
+library or hit group gets no configuration. That the runtime of unit A forwards the configuration of such a pipeline
+is an INFERENCE from the collections, which keep theirs. Case 7d of the harness sends the UE link and addition in the
+form of unit A: no state object configuration. The engine gets one configuration with flags 4 for the link and for
+each addition. The addition gives S_OK, grows from the link's engine object and keeps the link's `RGS_00000001`
+identifier. A second addition (`MS_00000006`) onto the grown object also gives S_OK. In the same case, collections
+without the flag give a link with no configuration, and an addition onto it is E_OUTOFMEMORY with E_INVALIDARG on one
+refusal line. Case 7c also checks that a forwarded configuration reaches the engine once. A control build with the
+state-objects.cpp of the parent commit failed the three unit A form checks, as unit A did (0 configurations, then
+8007000e and 80004005).
 
 Indirect ray dispatch: a command signature of one DISPATCH_RAYS argument, stride 128 (above the record's 104 bytes),
 no root signature, S_OK. Two records over the first pipeline's table, 8x4 then 8x8, and the count words 1, 2, 0 and
