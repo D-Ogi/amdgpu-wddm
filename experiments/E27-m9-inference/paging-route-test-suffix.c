@@ -1422,7 +1422,7 @@ static void case_aperture_partition(void)
  unsigned long long mc,table;unsigned i;
  const unsigned long long start=0x300000000ull,root=0x400000000ull,limit=0x1000000000000ull;
  check(PagingWindowInit(start,512ull<<20,root,1ull<<20,&window),"OS partition temporary window positive control");
- check(PagingApertureInit(start,512ull<<20,root,1ull<<20,&aperture),"OS aperture fits existing512MiB GART");
+ check(PagingApertureInit(start,512ull<<20,root,1ull<<20,PAGING_APERTURE_MIN_BYTES,&aperture),"OS aperture fits existing512MiB GART");
  check(aperture.mc==start+67117056 && aperture.table==root+131088 &&
        aperture.bytes==268435456,"OS aperture independently calculated MC and PTE extent");
  check(aperture.mc>=window.mc+8192 && aperture.table>=window.table+16 &&
@@ -1443,18 +1443,18 @@ static void case_aperture_partition(void)
  check(!PagingApertureRange(&aperture,~0ull,1,&mc,&table) && !mc && !table,"OS page offset wrap refused");
  check(!PagingApertureRange(&aperture,1,~0ull,&mc,&table) && !mc && !table,"OS page count wrap refused");
  check(!PagingApertureRange(&aperture,0,1,&mc,&mc) && !mc,"aliased output locations refused");
- check(!PagingApertureInit(start,335552511,root,1ull<<20,&invalid) &&
+ check(!PagingApertureInit(start,335552511,root,1ull<<20,PAGING_APERTURE_MIN_BYTES,&invalid) &&
        !invalid.mc && !invalid.table && !invalid.bytes,"short GART cannot partially advertise OS extent");
- check(!PagingApertureInit(start,512ull<<20,root,655375,&invalid) &&
+ check(!PagingApertureInit(start,512ull<<20,root,655375,PAGING_APERTURE_MIN_BYTES,&invalid) &&
        !invalid.bytes,"short PTE table cannot back entire OS extent");
- check(!PagingApertureInit(start+1,512ull<<20,root,1ull<<20,&invalid) && !invalid.bytes,"unaligned GART base refused");
- check(!PagingApertureInit(start,512ull<<20,root+1,1ull<<20,&invalid) && !invalid.bytes,"unaligned PTE base refused");
- check(PagingApertureInit(limit-335552512,335552512,limit-655376,655376,&invalid) &&
+ check(!PagingApertureInit(start+1,512ull<<20,root,1ull<<20,PAGING_APERTURE_MIN_BYTES,&invalid) && !invalid.bytes,"unaligned GART base refused");
+ check(!PagingApertureInit(start,512ull<<20,root+1,1ull<<20,PAGING_APERTURE_MIN_BYTES,&invalid) && !invalid.bytes,"unaligned PTE base refused");
+ check(PagingApertureInit(limit-335552512,335552512,limit-655376,655376,PAGING_APERTURE_MIN_BYTES,&invalid) &&
        invalid.mc+invalid.bytes==limit &&
        invalid.table+(invalid.bytes/4096)*8==limit,"48bit exclusive ends accepted exactly");
- check(!PagingApertureInit(limit-335552512+4096,335552512,root,1ull<<20,&invalid) &&
+ check(!PagingApertureInit(limit-335552512+4096,335552512,root,1ull<<20,PAGING_APERTURE_MIN_BYTES,&invalid) &&
        !invalid.bytes,"48bit MC overrun refused");
- check(!PagingApertureInit(start,512ull<<20,limit-655376+8,655376,&invalid) &&
+ check(!PagingApertureInit(start,512ull<<20,limit-655376+8,655376,PAGING_APERTURE_MIN_BYTES,&invalid) &&
        !invalid.bytes,"48bit PTE overrun refused");
  invalid=aperture;invalid.bytes=0;
  check(!PagingApertureRange(&invalid,0,1,&mc,&table) && !mc && !table,"uninitialized OS extent refused");
@@ -1467,7 +1467,7 @@ static void case_aperture_ddi(void)
  BC250_DEVICE d={0};BC250_GFX gfx={0};struct amdgpu_ring ring={0};struct amdgpu_bo bo={0};
  struct {MDL mdl;PFN_NUMBER pages[520];} m;
  DXGKARG_BUILDPAGINGBUFFER b={0};__declspec(align(8)) u32 dma[2048],priv[PAGING_PRIVATE_BUFFER_BYTES/4];static u64 scratch[16];
- static u64 logical[PAGING_APERTURE_BYTES/4096];
+ static u64 logical[PAGING_APERTURE_MIN_BYTES/4096];
  u64 table,mc,value;unsigned i,pass,count,done;NTSTATUS status;
  d.Gfx=&gfx;gfx.PagingReady=1;gfx.PagingRing=&ring;gfx.PagingDevicePtr=&g_adev;
  ring.funcs=bc250_sdma_ring_funcs();ring.max_dw=1024;
@@ -1475,9 +1475,9 @@ static void case_aperture_ddi(void)
  g_adev.gmc.gart_start=0x300000000ull;g_adev.gmc.gart_size=512ull<<20;
  bo.gpu_addr=0x400000000ull;g_adev.gart.bo=&bo;g_adev.gart.table_size=1ull<<20;
  g_adev.sdma.fence_mem.cpu=scratch;g_adev.sdma.fence_mem.mc=0x500000000ull;
- check(PagingApertureInit(g_adev.gmc.gart_start,g_adev.gmc.gart_size,bo.gpu_addr,g_adev.gart.table_size,&d.WddmAperture),
+ check(PagingApertureInit(g_adev.gmc.gart_start,g_adev.gmc.gart_size,bo.gpu_addr,g_adev.gart.table_size,PAGING_APERTURE_MIN_BYTES,&d.WddmAperture),
        "aperture DDI uses captured advertised geometry");
- check(PagingApertureStateInit(&g_VidMm.Aperture,&d.WddmAperture,logical,(unsigned)(PAGING_APERTURE_BYTES/4096)),"logical aperture fixture");
+ check(PagingApertureStateInit(&g_VidMm.Aperture,&d.WddmAperture,logical,(unsigned)(PAGING_APERTURE_MIN_BYTES/4096)),"logical aperture fixture");
  g_VidMm.Ready=TRUE;g_VidMm.Write=TRUE;b.Operation=DXGK_OPERATION_MAP_APERTURE_SEGMENT;
  // Failed private-header publication must not expose a new planned mapping.
  m.pages[1]=0x12311;
@@ -1582,7 +1582,7 @@ static void case_aperture_state_lifetime(void)
  d.FullWddm=d.VramEnabled=d.VramWriteEnabled=1;
  d.VramPhysical.QuadPart=0x200000000ull;d.VramLength=0x200000;
  cpu_map_fail=0;cpu_write_setting=1;
- check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&d.WddmAperture),"lifetime aperture geometry");
+ check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,PAGING_APERTURE_MIN_BYTES,&d.WddmAperture),"lifetime aperture geometry");
  check(VidMmStartLayout(&d,0,0x100000,1,0x100000,sizeof(cpu_storage),3)==STATUS_SUCCESS,
        "actual VidMm start prepares table and aperture storage");
  check(shadow_pool_live==before+2 && g_VidMm.Aperture.count==65536 &&
@@ -1613,7 +1613,7 @@ static void case_indirect_multipass_bytes(void)
  hub->vmhub_funcs=&funcs;hub->vm_inv_eng0_req=TEST_REQ_ID;hub->vm_inv_eng0_ack=TEST_ACK_ID;
  g_adev.sdma.fence_mem.cpu=scratch;g_adev.sdma.fence_mem.mc=0x300400000ull;
  check(PagingWindowInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&gfx.PagingWindow),"byte replay temporary window");
- check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&d.WddmAperture),"byte replay permanent aperture");
+ check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,PAGING_APERTURE_MIN_BYTES,&d.WddmAperture),"byte replay permanent aperture");
  check(PagingApertureStateInit(&g_VidMm.Aperture,&d.WddmAperture,logical,65536),"byte replay logical state");
  g_VidMm.Ready=g_VidMm.Write=TRUE;
  check(PagingApertureStateMap(&g_VidMm.Aperture,0,3,physical,~4095ull) &&
@@ -1681,7 +1681,7 @@ static void case_aperture_transfer(void)
  hub->vmhub_funcs=&funcs;hub->vm_inv_eng0_req=TEST_REQ_ID;hub->vm_inv_eng0_ack=TEST_ACK_ID;
  g_adev.sdma.fence_mem.cpu=scratch;g_adev.sdma.fence_mem.mc=0x300400000ull;
  check(PagingWindowInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&gfx.PagingWindow),"transfer temporary window");
- check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&d.WddmAperture),"transfer permanent aperture");
+ check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,PAGING_APERTURE_MIN_BYTES,&d.WddmAperture),"transfer permanent aperture");
  check(PagingApertureStateInit(&g_VidMm.Aperture,&d.WddmAperture,logical,65536),"transfer logical state");
  g_VidMm.Ready=g_VidMm.Write=TRUE;
  check(PagingApertureStateMap(&g_VidMm.Aperture,0,2,pages,~4095ull),"transfer maps fragmented physical pages");
@@ -1764,7 +1764,7 @@ static void case_permutation_packets(unsigned partial)
  hub->vmhub_funcs=&funcs;hub->vm_inv_eng0_req=TEST_REQ_ID;hub->vm_inv_eng0_ack=TEST_ACK_ID;
  g_adev.sdma.fence_mem.cpu=fence;g_adev.sdma.fence_mem.mc=0x300400000ull;
  check(PagingWindowInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&gfx.PagingWindow),"permutation temporary window");
- check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&d.WddmAperture),"permutation aperture");
+ check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,PAGING_APERTURE_MIN_BYTES,&d.WddmAperture),"permutation aperture");
  check(PagingApertureStateInit(&g_VidMm.Aperture,&d.WddmAperture,logical,65536),"permutation logical state");
  g_VidMm.Ready=g_VidMm.Write=TRUE;
  for(plan=0;plan<5;plan++)for(mode=0;mode<4;mode++) {
@@ -1903,7 +1903,7 @@ static void case_permutation_multipass(unsigned longCycle)
  hub->vmhub_funcs=&funcs;hub->vm_inv_eng0_req=TEST_REQ_ID;hub->vm_inv_eng0_ack=TEST_ACK_ID;
  g_adev.sdma.fence_mem.cpu=fence;g_adev.sdma.fence_mem.mc=0x300400000ull;
  check(PagingWindowInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&gfx.PagingWindow),"cycle multipass window");
- check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,&d.WddmAperture),"cycle multipass aperture");
+ check(PagingApertureInit(0x300000000ull,512ull<<20,0x400000000ull,1ull<<20,PAGING_APERTURE_MIN_BYTES,&d.WddmAperture),"cycle multipass aperture");
  check(PagingApertureStateInit(&g_VidMm.Aperture,&d.WddmAperture,logical,65536),"cycle multipass logical state");
  g_VidMm.Ready=g_VidMm.Write=TRUE;
  for(i=0;i<8;i++)physical[i]=0x100123000ull+(u64)i*0x100003000ull;

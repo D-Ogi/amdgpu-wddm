@@ -3199,8 +3199,9 @@ NTSTATUS GfxPagingBuildAperture(BC250_DEVICE* Device, const BC250_PAGING_APERTUR
         status=STATUS_DEVICE_NOT_READY;goto Done;
     }
     adev=gfx->PagingDevicePtr;
+    // The live GART must still hold the geometry this start advertised, at this start's size.
     if (!adev->gart.bo || !PagingApertureInit(adev->gmc.gart_start,adev->gmc.gart_size,
-            adev->gart.bo->gpu_addr,adev->gart.table_size,&live) ||
+            adev->gart.bo->gpu_addr,adev->gart.table_size,Device->WddmAperture.bytes,&live) ||
         live.mc!=Device->WddmAperture.mc || live.table!=Device->WddmAperture.table ||
         live.bytes!=Device->WddmAperture.bytes) goto Done;
     budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,gfx->PagingRing->max_dw,

@@ -48,7 +48,8 @@
 // (segment set 0) dxgmms2 maps a NULL allocation into the context's address space and the machine goes down
 // (E16 run 008, VIDMM_DMA_POOL::AddDmaBufferToPool). Stage B gives it the real GART behind it.
 #define BC250_WDDM_SEGMENT_APERTURE 2u
-#define BC250_WDDM_APERTURE_BYTES PAGING_APERTURE_BYTES
+// Its size is no longer a constant (0.7.216.8): WddmStart latches ApertureSegmentMegabytes into
+// Device->WddmApertureRequest, and Device->WddmAperture.bytes is what the GART capture granted.
 #define BC250_WDDM_SEGMENT_SET(id) (1u << ((id) - 1))
 #define BC250_WDDM_NODE_3D 0u
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node,
@@ -376,6 +377,12 @@ typedef struct _BC250_WDDM {
     volatile LONG PagingMapsBuilt;
     volatile LONG PagingUnmapsBuilt;
     volatile LONG64 PagingBytesMoved;
+    // Memory manager stage 1d (0.7.216.8): the halves PagingXferBytes does not carry. Fill bytes (FILL and
+    // VIRTUAL_FILL; PagingBytesMoved sums them with the transfers) and aperture pages mapped and unmapped, so
+    // two summaries give a session's paging volume without the journal ring and its loss.
+    volatile LONG64 PagingFillBytes;
+    volatile LONG64 PagingMapPages;
+    volatile LONG64 PagingUnmapPages;
     // KMD183: built transfers by kind and direction, count and bytes, indexed by BC250_WDDM_XFER (trial 211 could
     // not tell evictions to system memory from restores without the journal, which wrapped).
     volatile LONG PagingXferCount[BC250WddmXferKinds];
@@ -415,6 +422,13 @@ typedef struct _BC250_WDDM {
     // separately from the GDI path, so a desktop present cannot spend the evidence.
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
+    // Memory manager stage 1c (0.7.216.8): EnableSharedResidency, latched at WddmStart, and the UMD
+    // allocations by the segment sets they got (umd_blob.c UmdBlobPlacement): local or aperture alone, or
+    // local first with the aperture as VidMm's demotion target.
+    BOOLEAN SharedResidency;
+    volatile LONG UmdAllocsLocalOnly;
+    volatile LONG UmdAllocsShared;
+    volatile LONG UmdAllocsAperture;
     volatile LONG UmdContexts;
     volatile LONG ContextsLogged;       // KMD193: the capped "context %p pid ..." identity line, every kind
     volatile LONG FaultSnapshots;       // KMD193: HARDWARE FENCE TIMEOUT register snapshots taken
@@ -2282,6 +2296,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->HwSubmitted, Wddm->HwCompleted, Wddm->HwTimeouts, Wddm->HwRefused);
     GuardLog("wddm summary: umd: %ld allocs (%ld refused), %ld contexts, %ld submits on the ring, %ld not run",
              Wddm->UmdAllocs, Wddm->UmdAllocRefused, Wddm->UmdContexts, Wddm->UmdSubmitHw, Wddm->UmdSubmitSoft);
+    // A line of its own, so that the line above keeps the text its readers parse.
+    GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
+             Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
+             Wddm->UmdAllocsAperture);
     // ADR 0008 stage D (docs/design/paging-node.md section 7): node 1 exists in this line whether or not the
     // gate is open - every counter stays 0 with it closed, same as every other stage-behind-a-gate counter here.
     GuardLog("wddm profile: umd calls %ld, elapsed ticks %lld, QPC frequency %lld",
@@ -2415,6 +2433,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingXferCount[BC250WddmXferPhysicalFromSystem], Wddm->PagingXferBytes[BC250WddmXferPhysicalFromSystem],
              Wddm->PagingXferCount[BC250WddmXferPhysicalOther], Wddm->PagingXferBytes[BC250WddmXferPhysicalOther]);
     GuardLog("wddm summary: aperture map batches %ld, unmap batches %ld",Wddm->PagingMapsBuilt,Wddm->PagingUnmapsBuilt);
+    GuardLog("wddm summary: paging fills %ld/%lld bytes, aperture pages mapped %lld unmapped %lld",
+             Wddm->PagingFillsBuilt,Wddm->PagingFillBytes,Wddm->PagingMapPages,Wddm->PagingUnmapPages);
     GuardLog("wddm summary: paging TLB invalidations %ld, PTE update batches %ld",
              Wddm->PagingFlushesBuilt,Wddm->PagingUpdatesBuilt);
     GuardLog("wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) %ld/%ld/%ld/%ld/%ld",
@@ -2699,6 +2719,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->FullWddm = g_FullWddm;
     Device->Wddm = NULL;
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
+    Device->WddmApertureRequest = 0;
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     if (!g_FullWddm) return STATUS_SUCCESS;                            // gate closed: this file does nothing at all
@@ -2787,6 +2808,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // owner set on 2026-10-05. The value 0 is 0.7.208.1 behaviour exactly, which is what makes it the bisect
     // switch of this feature: one restart with NotifyDpcInReport 0 prices the pairing against the driver that
     // does not have it, in the same session shape.
+    // Memory manager stage 1c (0.7.216.8), read once for this start: absent = ON. A VRAM allocation of the UMD that
+    // is not a scan-out and not DISCARDABLE gets the aperture as its second segment, so VidMm can demote it to
+    // system memory under local pressure instead of evicting it (umd_blob.c UmdBlobPlacement, the amdgpu rule).
+    // Under GpuMmu such an allocation is "not mapped" into the aperture; its pages are reached through
+    // system-memory leaves of the GPU page tables (gpu-segments.md), the PTE shape every GTT allocation already
+    // uses. 0 gives every VRAM allocation the one local segment, which is 0.7.216.1 byte for byte.
+    wddm->SharedResidency = (GuardReadSetting(L"EnableSharedResidency", 1) != 0);
+    GuardLog("wddm: shared residency %s", wddm->SharedResidency ?
+             "on (UMD VRAM allocations may be demoted to the aperture)" : "off (0.7.216.1 placement)");
     wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
              wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
@@ -2834,8 +2864,36 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         status=STATUS_DEVICE_NOT_READY;
         goto Failed;
     }
+    // Memory manager stage 1a (0.7.216.8), read once for this start: the OS aperture (segment 2) size in MiB.
+    // Absent = 384; the INF writes no value, so a driver update never changes an operator's choice. 256 is the
+    // bisect value: it gives the 256 MiB aperture of every driver before this one, byte for byte. A value
+    // outside [256, 447] is clamped and logged. If the GART cannot hold the size asked for, the start falls back
+    // to 256 MiB once, the size every earlier start had, instead of failing the adapter.
+    //   What the size changes is narrow, and the log says so in the same line: under GpuMmu an aperture-segment
+    // allocation without AccessedPhysically is "not mapped" into the aperture - its pages are system memory
+    // reached through the GPU page tables (windows-driver-docs gpu-segments.md, "Accessing allocations by
+    // physical address", table row "Aperture Segment"). Only MAP_APERTURE_SEGMENT operations use this range, and
+    // no recorded session of this driver has issued one (summary "aperture map batches 0, unmap batches 0").
+    // The aperture's Size and CommitLimit follow the size (WddmQuerySegment4); the shared pool does not, because
+    // dxgkrnl's implicit system-memory segment already has no commit limit (calculating-graphics-memory.md).
+    {
+        int clamped=0;
+        const ULONG asked=GuardReadSetting(L"ApertureSegmentMegabytes",
+                                           (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
+        Device->WddmApertureRequest=PagingApertureBytesForSetting(asked,&clamped);
+        GuardLog("wddm: OS aperture asked %lu MiB, using %llu MiB%s (only MAP_APERTURE_SEGMENT uses it)",asked,
+                 Device->WddmApertureRequest/PAGING_APERTURE_MIB,clamped?" (clamped to 256..447)":"");
+    }
     status=GartCaptureAperture(Device,&Device->WddmAperture);
+    if (!NT_SUCCESS(status) && Device->WddmApertureRequest!=PAGING_APERTURE_MIN_BYTES) {
+        GuardLog("wddm: GART refused a %llu MiB OS aperture (0x%08X), retrying at 256 MiB",
+                 Device->WddmApertureRequest/PAGING_APERTURE_MIB,status);
+        Device->WddmApertureRequest=PAGING_APERTURE_MIN_BYTES;
+        status=GartCaptureAperture(Device,&Device->WddmAperture);
+    }
     if (!NT_SUCCESS(status)) goto Failed;
+    GuardLog("wddm: OS aperture %llu MiB at gpu 0x%llX, PTE slice 0x%llX",
+             Device->WddmAperture.bytes/PAGING_APERTURE_MIB,Device->WddmAperture.mc,Device->WddmAperture.table);
     vidmmPrepared=TRUE; // VidMmStartLayout initializes its lock even on failure.
     status=VidMmStartLayout(Device,segmentOffset,segmentLength,BC250_WDDM_SEGMENT_VRAM,
                            tableOffset,tableLength,BC250_WDDM_SEGMENT_TABLES);
@@ -2867,6 +2925,7 @@ Failed:
     // unwinds attempted hardware phases; PnP cleanup handles prepared objects.
     if (vidmmPrepared) VidMmStop();
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
+    Device->WddmApertureRequest = 0;
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
@@ -3211,8 +3270,10 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
     if (Query->OutputDataSize < sizeof(*out) || out == NULL) return STATUS_BUFFER_TOO_SMALL;
     count = WddmMemoryLayout(Device, &offset, &length, &tableOffset, &tableLength) ? 1u : 0u;
 
-    // Geometry is captured before publishing WDDM state; queries never run setup.
-    if (count != 0 && Device->WddmAperture.bytes!=PAGING_APERTURE_BYTES) {
+    // Geometry is captured before publishing WDDM state; queries never run setup. Since 0.7.216.8 the size is
+    // whatever WddmStart's capture granted (ApertureSegmentMegabytes, 256 to 447 MiB), so the test is "a valid
+    // captured aperture exists" rather than "it is 256 MiB": a start without one still offers no aperture.
+    if (count != 0 && !PagingApertureBytesValid(Device->WddmAperture.bytes)) {
         g_ApertureOffered=FALSE;
         return STATUS_DEVICE_NOT_READY;
     }
@@ -4097,10 +4158,29 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         info->MaximumRenamingListLength = 0;
         info->pAllocationUsageHint = NULL;
         info->PitchAlignedSize = 0;
-        info->PreferredSegment.Value = 0;
-        info->PreferredSegment.SegmentId0 = segment;
-        info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
-        info->SupportedWriteSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
+        // Memory manager stage 1c: the winsys heap still decides the first segment (segment above); a VRAM
+        // allocation that is not a scan-out may also live in the aperture, second in the preference order, when
+        // EnableSharedResidency is on. Preferences are ordered (d3dukmdt.h D3DDDI_SEGMENTPREFERENCE) and every
+        // one of them is in both supported sets, which DXGK_ALLOCATIONINFO requires.
+        //   EvictionSegmentSet stays 0 (the report's stage 1b is not taken): with 0 VidMm "transfer[s] the content
+        // ... directly to paged-locked system memory" (d3dkmddi.h DXGK_ALLOCATIONINFO), and on this driver an
+        // aperture endpoint and an MDL endpoint resolve to the same host physical page (gfx.c
+        // PagingResolvePhysical), so staging through the aperture would add a map, a GART write and a TLB flush
+        // per eviction and accelerate nothing.
+        {
+            struct umd_placement placement;
+            const int shared = UmdBlobPlacement(&view, BC250_WDDM_SEGMENT_VRAM, BC250_WDDM_SEGMENT_APERTURE,
+                                                wddm != NULL && wddm->SharedResidency, &placement);
+            info->PreferredSegment.Value = 0;
+            info->PreferredSegment.SegmentId0 = placement.preferred[0];
+            info->PreferredSegment.SegmentId1 = placement.preferred[1];
+            info->SupportedReadSegmentSet = placement.supported;
+            info->SupportedWriteSegmentSet = placement.supported;
+            if (wddm != NULL)
+                InterlockedIncrement(shared ? &wddm->UmdAllocsShared :
+                                     segment == BC250_WDDM_SEGMENT_APERTURE ? &wddm->UmdAllocsAperture :
+                                     &wddm->UmdAllocsLocalOnly);
+        }
         info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
@@ -5253,8 +5333,10 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         ULONG before=pBuildPagingBuffer->MultipassOffset;
         NTSTATUS status=WddmBuildAperture((BC250_DEVICE*)hAdapter,pBuildPagingBuffer,unmap);
         if (pBuildPagingBuffer->MultipassOffset!=before) {
-            if (unmap) InterlockedIncrement(&wddm->PagingUnmapsBuilt);
-            else InterlockedIncrement(&wddm->PagingMapsBuilt);
+            // MultipassOffset is the next page of the operation (WddmBuildAperture), so the step is the page count.
+            const LONG64 pages=(LONG64)(pBuildPagingBuffer->MultipassOffset-before);
+            if (unmap) { InterlockedIncrement(&wddm->PagingUnmapsBuilt); InterlockedAdd64(&wddm->PagingUnmapPages,pages); }
+            else { InterlockedIncrement(&wddm->PagingMapsBuilt); InterlockedAdd64(&wddm->PagingMapPages,pages); }
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -5266,6 +5348,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            InterlockedAdd64(&wddm->PagingFillBytes,(LONG64)moved);
             PagingJournalNote(BC250_PJ_FILL,0,pBuildPagingBuffer->Fill.hAllocation,moved,
                 WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
@@ -5285,6 +5368,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            InterlockedAdd64(&wddm->PagingFillBytes,(LONG64)moved);
             PagingJournalNote(BC250_PJ_VIRTUAL_FILL,pBuildPagingBuffer->FillVirtual.DestinationVirtualAddress,
                 pBuildPagingBuffer->FillVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }

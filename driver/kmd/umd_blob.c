@@ -157,6 +157,28 @@ int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation)
         (allocation->gem_flags & (UMD_BLOB_GEM_NO_CPU_ACCESS | UMD_BLOB_GEM_GTT_USWC)) == 0;
 }
 
+int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram, unsigned long aperture,
+                     int shared, struct umd_placement* out)
+{
+    unsigned long first = vram, second = 0;
+    if (out == 0) return 0;
+    if (allocation != 0 && allocation->heap == UMD_BLOB_HEAP_GTT) first = aperture;
+    else if (allocation != 0 && shared && !allocation->scanout &&
+             (allocation->gem_flags & UMD_BLOB_GEM_DISCARDABLE) == 0)
+        second = aperture;
+    if (first == 0 || first > 31 || second > 31 || second == first) {
+        // Not a segment pair this driver has; nothing is offered rather than a shifted guess.
+        out->preferred[0] = out->preferred[1] = out->supported = 0;
+        return 0;
+    }
+    out->preferred[0] = first;
+    out->preferred[1] = second;
+    // A preference outside the supported set makes VidMm assert (d3dkmddi.h DXGK_ALLOCATIONINFO
+    // SupportedReadSegmentSet), so the set is built from the preferences and nothing else.
+    out->supported = (1ul << (first - 1)) | (second ? (1ul << (second - 1)) : 0ul);
+    return second != 0;
+}
+
 int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, struct umd_context_view* out)
 {
     const unsigned char* p = (const unsigned char*)bytes;

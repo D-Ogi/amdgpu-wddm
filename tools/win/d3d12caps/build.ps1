@@ -5,8 +5,9 @@ param(
     # Export D3D12SDKVersion = <n> and D3D12SDKPath = .\D3D12_0\ so that d3d12.dll loads the Agility SDK core placed
     # next to the executable, as a game that ships one does. 0 builds the plain variant without those exports.
     [ValidateRange(0, 100000)][int]$AgilitySdkVersion = 0,
-    # d3d12caps: the capability dump; d3d12allocprobe: the probe of textures the driver cannot size (README.md).
-    [ValidateSet('d3d12caps', 'd3d12allocprobe')][string]$Tool = 'd3d12caps',
+    # d3d12caps: the capability dump; d3d12allocprobe: the probe of textures the driver cannot size; d3d12oversub: the
+    # over-commit probe of the memory manager (README.md).
+    [ValidateSet('d3d12caps', 'd3d12allocprobe', 'd3d12oversub')][string]$Tool = 'd3d12caps',
     # x86: a 32-bit build, which a WoW64 process runs, so that the dump shows what the UserModeDriverNameWow D3D12
     # entry reports. Pass another -Out: the file name does not change.
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
@@ -75,6 +76,18 @@ if ($Tool -eq 'd3d12allocprobe') {
     if ($LASTEXITCODE -ne 3) { throw "deadline test: exit $LASTEXITCODE, expected 3" }
     $doc = Get-Content -LiteralPath $stalled -Raw | ConvertFrom-Json
     if (-not $doc.deadline.hit -or $doc.deadline.step -ne 'dxgi') { throw 'deadline test: the document lacks the step' }
+}
+if ($Tool -eq 'd3d12oversub') {
+    # The same deadline test at the shortest deadline the probe takes, and the refusal of an option out of range.
+    $stalled = Join-Path $Out 'deadline-test.json'
+    Remove-Item -LiteralPath $stalled -ErrorAction SilentlyContinue
+    $env:D3D12OVERSUB_TEST_STALL = 'dxgi'
+    try { & "$Out\$name.exe" 0 $stalled --seconds 5 2>$null } finally { Remove-Item Env:D3D12OVERSUB_TEST_STALL }
+    if ($LASTEXITCODE -ne 3) { throw "deadline test: exit $LASTEXITCODE, expected 3" }
+    $doc = Get-Content -LiteralPath $stalled -Raw | ConvertFrom-Json
+    if (-not $doc.deadline.hit -or $doc.deadline.step -ne 'dxgi') { throw 'deadline test: the document lacks the step' }
+    & "$Out\$name.exe" 0 --seconds 171 2>$null
+    if ($LASTEXITCODE -ne 2) { throw 'a deadline above 170 s accepted' }
 }
 Get-Item "$Out\$name.exe" | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }
 
