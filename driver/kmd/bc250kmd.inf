@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/07/2026,0.7.216.12
+DriverVer   = 10/07/2026,0.7.216.14
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -103,39 +103,58 @@ ServiceBinary = %13%\bc250kmd.sys
 AddReg        = Bc250_Parameters
 
 [Bc250_Parameters]
-; Boot-loop guard (guard.c). Installing the package grants a fresh start budget.
+; The driver settings this package writes. Every value here is the release default of
+; tools\release\installer\registry-defaults.json, and the build gate tools\quality\inf_gates.py fails when the two
+; drift apart, so the INF and the installer cannot disagree about what a gate's released value is.
+;
+; The flags are 0x00010003 = FLG_ADDREG_TYPE_DWORD | FLG_ADDREG_NOCLOBBER, except where a line below says otherwise.
+; NOCLOBBER means the value is written when it is absent and left alone when it is there: a fresh install gets the
+; released configuration, and an install over an existing one keeps what the installer, the control application or an
+; experiment set. Up to 0.7.216.3 these were plain DWORD writes of 0 (BD-091), so every install this installer did not
+; drive - Windows Update, Device Manager, pnputil by hand - closed each gate named here while EnableNativeSmu, which
+; the INF did not name at all, stayed 1. The next start then asked for the SMU owner with no register mapping and
+; failed with Code 43 (StageHistory ... 34 91). Two values keep the old unconditional write on purpose, and each says
+; why at its line.
+;
+; Boot-loop guard (guard.c). No NOCLOBBER: installing the package grants a fresh start budget, which is the point.
 HKR, Parameters, UnconfirmedStarts, 0x00010001, 0
-; Register access gates (mmio.c, ADR 0007). Every install closes them; an experiment opens them on purpose.
-HKR, Parameters, EnableMmio,        0x00010001, 0
-HKR, Parameters, EnableMmioWrite,   0x00010001, 0
-HKR, Parameters, EnableVram,        0x00010001, 0
-HKR, Parameters, EnableVramWrite,   0x00010001, 0
-HKR, Parameters, EnableGart,        0x00010001, 0
-HKR, Parameters, EnablePsp,         0x00010001, 0
-HKR, Parameters, EnableGfx,         0x00010001, 0
-HKR, Parameters, EnableIh,          0x00010001, 0
+; Register access gates (mmio.c, ADR 0007). A gate an experiment closes stays closed over a reinstall.
+HKR, Parameters, EnableMmio,        0x00010003, 1
+; EnableMmioWrite is not in the release table: the released configuration leaves it as it is, and a computer that has
+; never had this driver gets the closed value. The gate's own table names it (inf_gates.py, NOT_IN_TABLE).
+HKR, Parameters, EnableMmioWrite,   0x00010003, 0
+HKR, Parameters, EnableVram,        0x00010003, 1
+HKR, Parameters, EnableVramWrite,   0x00010003, 1
+HKR, Parameters, EnableGart,        0x00010003, 1
+HKR, Parameters, EnablePsp,         0x00010003, 1
+HKR, Parameters, EnableGfx,         0x00010003, 1
+HKR, Parameters, EnableIh,          0x00010003, 1
+; The single native SMU owner (smu.c, pnp.c). It needs EnableMmio: without the BAR mapping there is no mailbox, and
+; until 0.7.216.10 a start with this value 1 and EnableMmio 0 failed the whole device start instead of saying so
+; (BD-091). The driver now logs the refusal and starts without the owner. Never re-enable a legacy direct SMU writer
+; while this owner is active.
+HKR, Parameters, EnableNativeSmu,   0x00010003, 1
 ; The gated DCN flip (dcn.c, 0.7.20, ADR 0011 point 3 step 2). Needs EnableMmio; the fill needs EnableVramWrite too.
-HKR, Parameters, EnableDcnWrite,    0x00010001, 0
+HKR, Parameters, EnableDcnWrite,    0x00010003, 1
 ; SetVidPnSourceAddress's own hardware flip plus the VUPDATE_NO_LOCK interrupt (dcn.c/wddm.c, 0.7.24, E22 step 3,
-; ADR 0011 point 3 step 3). Needs EnableDcnWrite; meaningful only with EnableFullWddm open too. Closed by every
-; install, like every gate above.
-HKR, Parameters, EnableVidPnFlip,   0x00010001, 0
-; The DDI table gate (entry.c, ADR 0008). 0 = DxgkInitializeDisplayOnlyDriver, the driver that runs the display
-; today. 1 = DxgkInitialize with the full WDDM table of wddm.c. Closed by every install, like every gate above.
-HKR, Parameters, EnableFullWddm,    0x00010001, 0
-HKR, Parameters, EnableGpuVa,       0x00010001, 0
-HKR, Parameters, EnableGpuSubmit,   0x00010001, 0
+; ADR 0011 point 3 step 3). Needs EnableDcnWrite; meaningful only with EnableFullWddm open too.
+HKR, Parameters, EnableVidPnFlip,   0x00010003, 1
+; The DDI table gate (entry.c, ADR 0008). 0 = DxgkInitializeDisplayOnlyDriver. 2 = DxgkInitialize with the full WDDM
+; table of wddm.c, which is what the release runs.
+HKR, Parameters, EnableFullWddm,    0x00010003, 2
+HKR, Parameters, EnableGpuVa,       0x00010003, 1
+HKR, Parameters, EnableGpuSubmit,   0x00010003, 1
 ; ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. Needs
-; EnableGpuSubmit's own preconditions (EnableGfx, EnableIh); closed by every install, like every gate above.
-HKR, Parameters, EnablePagingNode,  0x00010001, 0
-HKR, Parameters, EnablePresentBlit, 0x00010001, 0
-; Test-only hang bugcheck (hang.c, docs/design/hang-detector.md). 1 arms it at the next device start; it bugchecks
-; the machine on purpose when no ordinary thread has run for HangBugcheckSeconds (5..60, default 10, left unset
-; here). Closed by every install, like every gate above.
+; EnableGpuSubmit's own preconditions (EnableGfx, EnableIh).
+HKR, Parameters, EnablePagingNode,  0x00010003, 1
+HKR, Parameters, EnablePresentBlit, 0x00010003, 1
+; Test-only hang bugcheck (hang.c, docs/design/hang-detector.md). 1 arms it at the next device start; it bugchecks the
+; machine on purpose when no ordinary thread has run for HangBugcheckSeconds (5..60, default 10, left unset here). No
+; NOCLOBBER on purpose and not in the release table: installing a package disarms a test bugcheck somebody left armed.
 HKR, Parameters, EnableHangBugcheck, 0x00010001, 0
-; The log ring into a file under C:\BC250\kmdlog at every device stop (guard.c GuardLogKeep). A synchronous file
-; write in a PnP stop, so disabled by default. Preserve an explicitly enabled capture across
-; an upgrade: AddReg may run before the old driver stops. DWORD | NOCLOBBER affects only logging.
+; The log ring into a file under C:\BC250\kmdlog at every device start and stop (guard.c GuardLogKeep). A synchronous
+; file write in a PnP stop, so disabled by default. An explicitly enabled capture survives an upgrade, as it has since
+; 0.7.35: AddReg may run before the old driver stops.
 HKR, Parameters, KeepLog,           0x00010003, 0
 ; ---- finished features: on by every install, each with one switch to bisect a regression -----------------------
 ; The values below are not gates in the sense of the block above. Each one carries a feature that is
@@ -153,10 +172,12 @@ HKR, Parameters, KeepLog,           0x00010003, 0
 ; values the driver admits are 0x0A00 and 0x0A10, the two other windows the DSDT reports on this board. Anything
 ; else is refused before a port is touched, because this reader writes three latch bytes to read one register,
 ; and numbers such as 0x0CF8 (the PCI configuration address port) or 0x0CD0 (the FCH power-management index pair)
-; would take those writes. HwmonExpectId and HwmonDutyProven are absent on purpose: the first pins the chip's
-; customer ID once an operator has read it, the second says a lab trial proved the duty read-back.
-HKR, Parameters, EnableHwmon,       0x00010001, 1
-HKR, Parameters, HwmonBasePort,     0x00010001, 0
+; would take those writes. HwmonBasePort is not in the release table either (inf_gates.py NOT_IN_TABLE): 0 is the
+; built-in default, and an operator who pinned another window keeps it over a reinstall. HwmonExpectId and
+; HwmonDutyProven are absent on purpose: the first pins the chip's customer ID once an operator has read it, the
+; second says a lab trial proved the duty read-back.
+HKR, Parameters, EnableHwmon,       0x00010003, 1
+HKR, Parameters, HwmonBasePort,     0x00010003, 0
 ; The case fan control (fan.c, docs/design/fan.md Part B). 1 lets the driver take fan 1 from the BIOS curve while
 ; it runs: it drives the fan on its own curve (at least as fast as the BIOS Standard Mode, 100 % from 80 C) and
 ; gives the fan back to the chip's automatic mode on every exit path - stop, remove, out of D0, unload, a stalled
@@ -165,29 +186,29 @@ HKR, Parameters, HwmonBasePort,     0x00010001, 0
 ; the driver never writes the chip, and the fan stays in the chip's own automatic mode whatever else is set. FanMode,
 ; FanProfile and the FanCurve values are the user's stored choice and are absent on purpose: the driver writes them
 ; when the user picks a fan setting in the control application.
-HKR, Parameters, EnableFanControl,  0x00010001, 1
+HKR, Parameters, EnableFanControl,  0x00010003, 1
 ; The CPU tuning surface (cpu.c, docs/design/tuner.md). 1 opens it: the driver reads the CPU rail through the
 ; firmware's queue 3 at start, and the control application's processor cards may then run a change as a trial that
 ; reverts by itself. Nothing is changed at start: a setter runs only on an administrator's request, after a getter
 ; answered in the same start. Lab check on unit A (b21, 2026-10-07): 4 undervolt steps took 1206 mV to 1175-1181 mV
 ; under a steady load, and the cancel brought 1206-1212 mV back, with no WHEA event. 0 makes the surface read-only:
 ; no thread, no message.
-HKR, Parameters, CpuTune,           0x00010001, 1
+HKR, Parameters, CpuTune,           0x00010003, 1
 ; The DirectFlip handshake, kernel half (wddm.c, docs/design/direct-flip-handshake.md, M15.14). 1 lets this start
 ; tell the compositor's user-mode driver, in the scan-out caps trailer, that it will admit a client scan-out flip
 ; and at what geometry. The driver ANDs it with every start-latched fact the flip path needs, so an open switch
 ; on a start that cannot flip still publishes nothing. 0 makes the trailer absent, which is 0.7.208.1 byte for
 ; byte at every buffer size.
-HKR, Parameters, EnableDirectFlipHandshake, 0x00010001, 1
+HKR, Parameters, EnableDirectFlipHandshake, 0x00010003, 1
 ; The completion report pairs its own DPC-level notification (wddm.c, driver/kmd/notify_pairing.h, C50). 1 calls
 ; DxgkCbNotifyDpc at the end of the report pass, which is what the DDI text asks for, and the otherwise empty
 ; dxgkrnl DPC is not asked for at all: one DPC per completion fewer, measured at 12 to 20 us each. 0 is
 ; 0.7.208.1 exactly, where the notification arrives with the next dxgkrnl DPC.
-HKR, Parameters, NotifyDpcInReport,  0x00010001, 1
+HKR, Parameters, NotifyDpcInReport,  0x00010003, 1
 ; The VMID pool (gfx.c, driver/kmd/vmid_pool.h, docs/design/gfx-submit-root-serialization.md). 1 gives each page-table
 ; root its own VMID from a pool of up to 14, so a job of another process does not wait for the ring to drain. The
 ; driver never changes the root of a VMID whose last job has not retired. 0 is 0.7.213.1 exactly: every job at VMID 1.
-HKR, Parameters, EnableVmidPool,     0x00010001, 1
+HKR, Parameters, EnableVmidPool,     0x00010003, 1
 ; DisplayPort audio, steps 0 to 2 (dpaudio.c, docs/design/dp-audio.md, M819, M820). At every start and resume the
 ; driver checks the codec ID, the audio strap, the one DP stream the firmware left running, its DP SST back end, the
 ; endpoint's pin configuration and the DP reference clock. It writes nothing unless all of them hold. It needs BAR5
@@ -196,17 +217,19 @@ HKR, Parameters, EnableVmidPool,     0x00010001, 1
 ; DP_SEC ASP, ATP, AIP and STREAM_ENABLE, then SAMPLE_SEND) and sets AUDIO_ENABLED last. The inbox HD Audio driver
 ; sees the endpoint only while the stream runs. EnableDpAudio 0 means no audio register is read or written at all,
 ; the behaviour before this feature. EnableDpAudioEndpoint 0 and EnableDpAudioStream 0 each refuse the whole start,
-; so the endpoint stays hidden.
-HKR, Parameters, EnableDpAudio,      0x00010001, 1
-HKR, Parameters, EnableDpAudioEndpoint, 0x00010001, 1
-HKR, Parameters, EnableDpAudioStream, 0x00010001, 1
+; so the endpoint stays hidden. The interrupt the inbox driver uses for that endpoint is the HD Audio function's own
+; (PCI\VEN_1002&DEV_13FF), not this device's: the installer sets MSISupported there, because on a line interrupt the
+; stream interrupts never arrive and the audio plays at 0.33x (BD-092).
+HKR, Parameters, EnableDpAudio,      0x00010003, 1
+HKR, Parameters, EnableDpAudioEndpoint, 0x00010003, 1
+HKR, Parameters, EnableDpAudioStream, 0x00010003, 1
 ; The SMU metrics table (smu_metrics.c, docs/design/dpm.md "Power reading"). 1 lets the DPM governor thread ask the
 ; SMU for its metrics table once a second, through the one SMU owner, into one driver page at the top of VRAM: the
 ; package power, the two rail voltages and the table's own clock and temperatures, for RUN_DPM ABI 3 and the control
 ; application's Power row. These are the three messages amdgpu sends on unit A (SetDriverTableDramAddrHigh and Low
 ; once per start, TransferTableSmu2Dram with table 6). A refusal or a timeout stops the reads until the next boot,
 ; and the governor runs on. 0 means no metrics message is sent and no page is mapped, the behaviour before this feature.
-HKR, Parameters, EnableSmuMetrics,   0x00010001, 1
+HKR, Parameters, EnableSmuMetrics,   0x00010003, 1
 ; ---- memory manager stage 1 (wddm.c, 0.7.216.8): on when absent, so the INF writes no value ----------------------
 ; These switches are read once per device start and default to the feature on when the value is absent. The INF
 ; names none of them on purpose: a value the INF does not write is one a driver update can never reset, so an

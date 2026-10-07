@@ -15,6 +15,7 @@
 // 0.7.1 it is safe up to DISPATCH_LEVEL, because the M7 submission and DPC paths log.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "guard_keep_prune.h"
 #include <ntstrsafe.h>
 #include <stdarg.h>
 
@@ -334,12 +335,30 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
 // stop): a synchronous file write has no timeout, and a stop during a shutdown or over a wedged volume is no
 // place for one on a board without a BMC. An experiment that expects dxgkrnl to end the start opens it.
 //
-// A text file per stop under C:\BC250\kmdlog, named by UTC time to the millisecond, in the format bc250kmd_cli
-// log prints. The directory is created if it is missing. What became of the attempt is written to
-// Parameters\KeepStatus (the NTSTATUS of the create, or of the last write), because a line in the ring saying
-// that the ring was not kept would be read by nobody. PASSIVE_LEVEL only: DxgkDdiStopDevice is, and everything
-// here (Zw file and registry calls, paged pool) needs it.
+// ONE text file per episode under C:\BC250\kmdlog, where an episode is one device start or one device stop
+// (GuardLogKeepEpisode, called by pnp.c). The file is named by the UTC time of the first keep of that episode, to
+// the millisecond, and by the episode's label, in the format bc250kmd_cli log prints. The directory is created if
+// it is missing. What became of the attempt is written to Parameters\KeepStatus (the NTSTATUS of the create, or of
+// the last write), because a line in the ring saying that the ring was not kept would be read by nobody.
+// PASSIVE_LEVEL only: DxgkDdiStopDevice is, and everything here (Zw file and registry calls, paged pool) needs it.
+//
+// Up to 0.7.216.3 every call made its own file, and a start with the tracing gates open calls this about fifteen
+// times (startup.c at each stage, gfx.c at each CP step and RLC boundary, gpumem.c at the bootstrap TLB). Fifteen
+// files of one start, each holding the same early lines, and nothing ever removed one: unit A reached 11993 files
+// and 134 MB. A later call now APPENDS the lines the file does not hold yet, at a byte offset this file keeps
+// itself, so the checkpoints stay in order and in one file, and a crash between two of them leaves everything that
+// was written before it. Each append writes its own "-- keep" line first, so a reader still sees where the
+// checkpoints were. The number of files is bounded as well: see KeepPrune below.
 #define BC250_LOG_KEEP_LINE (BC250_LOG_TEXT + 32)   // "%6lu %6lu.%03lu " is 18 characters, CR LF, and room to spare
+#define BC250_KEEP_DIRECTORY L"\\??\\C:\\BC250\\kmdlog"
+#define BC250_KEEP_SCAN_BYTES 8192u                 // one directory page; about 90 names of ours
+#define BC250_KEEP_DELETE_MAX 512u                  // deletes in one prune: a bound on the work a PnP start does
+
+static WCHAR g_KeepPath[160];           // the open episode's file, or empty when the next keep opens one
+static LONGLONG g_KeepBytes;            // bytes that file already holds; the offset the next write uses
+static ULONG g_KeepFrom;                // the first ring sequence that is not in it yet
+static ULONG g_KeepAppends;             // keeps of this episode, the first one included
+static PCWSTR g_KeepLabel = L"load";    // what the episode is; before the first GuardLogKeepEpisode, the load
 
 static void KeepStatus(NTSTATUS Status)
 {
@@ -351,45 +370,160 @@ static void KeepStatus(NTSTATUS Status)
     ZwClose(key);
 }
 
+// A new episode: one device start, or one device stop. The next GuardLogKeep opens a file of its own for it; every
+// keep after that appends to the same file. PASSIVE_LEVEL, and it touches nothing but these statics, so it is safe
+// to call on a path that then never keeps anything (KeepLog closed, which is the release default).
+void GuardLogKeepEpisode(_In_z_ PCWSTR Label)
+{
+    g_KeepPath[0] = 0;
+    g_KeepBytes = 0;
+    g_KeepFrom = 0;
+    g_KeepAppends = 0;
+    g_KeepLabel = Label;
+}
+
+// Keep at most BC250_KEEP_FILES of our ring files, the newest ones (driver/kmd/guard_keep_prune.h). Two passes over
+// the directory: the first finds the oldest name that may stay, the second deletes what is older. Both are bounded,
+// and so is the number of deletes in one prune: this runs inside a device start, and a directory that an older
+// driver left with twelve thousand files must not hold that start for seconds. The rest goes at the next prune.
+// Called once per episode, when its file is created, so the directory gains one file and loses at least one.
+static void KeepPrune(HANDLE Directory)
+{
+    UNICODE_STRING pattern, path;
+    OBJECT_ATTRIBUTES attributes;
+    IO_STATUS_BLOCK io;
+    BC250_KEEP_PRUNE* table;
+    UCHAR* buffer;
+    FILE_NAMES_INFORMATION* entry;
+    WCHAR leaf[BC250_KEEP_NAME];
+    WCHAR name[BC250_KEEP_NAME + RTL_NUMBER_OF(BC250_KEEP_DIRECTORY) + 2];
+    ULONG offset, length, deleted = 0, failed = 0, pass, i;
+    NTSTATUS status;
+
+    table = (BC250_KEEP_PRUNE*)ExAllocatePool2(POOL_FLAG_PAGED, sizeof(*table), BC250_TAG);
+    buffer = (UCHAR*)ExAllocatePool2(POOL_FLAG_PAGED, BC250_KEEP_SCAN_BYTES, BC250_TAG);
+    if (table == NULL || buffer == NULL)
+    {
+        if (table != NULL) ExFreePoolWithTag(table, BC250_TAG);
+        if (buffer != NULL) ExFreePoolWithTag(buffer, BC250_TAG);
+        return;
+    }
+    Bc250KeepPruneBegin(table);
+    RtlInitUnicodeString(&pattern, BC250_KEEP_PATTERN);
+    for (pass = 0; pass < 2; pass++)
+    {
+        BOOLEAN restart = TRUE;
+
+        if (pass == 1 && Bc250KeepPruneLimit(table) == NULL) break;
+        for (;;)
+        {
+            status = ZwQueryDirectoryFile(Directory, NULL, NULL, NULL, &io, buffer, BC250_KEEP_SCAN_BYTES,
+                                          FileNamesInformation, FALSE, &pattern, restart);
+            restart = FALSE;
+            if (!NT_SUCCESS(status)) break;             // STATUS_NO_MORE_FILES ends it
+            offset = 0;
+            for (;;)
+            {
+                entry = (FILE_NAMES_INFORMATION*)(buffer + offset);
+                length = entry->FileNameLength / sizeof(WCHAR);
+                if (pass == 0) (void)Bc250KeepPruneOffer(table, entry->FileName, length);
+                else if (Bc250KeepPruneGoes(table, entry->FileName, length))
+                {
+                    if (deleted + failed >= BC250_KEEP_DELETE_MAX) break;
+                    // Bc250KeepPruneGoes has accepted the name, so it is shorter than the buffer. Terminated here,
+                    // because a directory entry is not: the printing below takes a string, not a counted name.
+                    for (i = 0; i < length; i++) leaf[i] = entry->FileName[i];
+                    leaf[length] = 0;
+                    if (NT_SUCCESS(RtlStringCchPrintfW(name, RTL_NUMBER_OF(name), L"%ws\\%ws",
+                                                       BC250_KEEP_DIRECTORY, leaf)))
+                    {
+                        RtlInitUnicodeString(&path, name);
+                        InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE,
+                                                   NULL, NULL);
+                        if (NT_SUCCESS(ZwDeleteFile(&attributes))) deleted++; else failed++;
+                    }
+                    else failed++;
+                }
+                if (entry->NextEntryOffset == 0) break;
+                offset += entry->NextEntryOffset;
+                if (offset >= BC250_KEEP_SCAN_BYTES) break;     // a malformed chain must not walk off the buffer
+            }
+            if (pass == 1 && deleted + failed >= BC250_KEEP_DELETE_MAX) break;
+        }
+    }
+    if (table->Offered > BC250_KEEP_FILES || deleted != 0 || failed != 0)
+        GuardLog("keeplog: %lu ring file(s), %lu over the limit of %lu, %lu deleted, %lu refused",
+                 (ULONG)table->Offered, Bc250KeepPruneGoing(table), (ULONG)BC250_KEEP_FILES, deleted, failed);
+    ExFreePoolWithTag(buffer, BC250_TAG);
+    ExFreePoolWithTag(table, BC250_TAG);
+}
+
 void GuardLogKeep(void)
 {
-    WCHAR name[96];
     UNICODE_STRING path;
     OBJECT_ATTRIBUTES attributes;
     IO_STATUS_BLOCK io;
+    HANDLE directory = NULL;
     HANDLE file = NULL;
-    LARGE_INTEGER now;
+    LARGE_INTEGER now, offset;
     TIME_FIELDS t;
     BC250_LOG_LINE* page = NULL;
     char* text = NULL;
     char* cursor;
     size_t left;
-    ULONG from = 0, next = 0, returned, total, lost, above, i, rounds;
+    ULONG from, next = 0, returned, total, lost, above, i, rounds;
+    BOOLEAN created = FALSE;
     NTSTATUS status;
 
     if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
     if (GuardReadSetting(L"KeepLog", 0) == 0) return;
 
-    // The directory first; FILE_OPEN_IF makes this a no-op when it is there, and a failure shows in the create below.
-    RtlInitUnicodeString(&path, L"\\??\\C:\\BC250\\kmdlog");
+    // The directory first; FILE_OPEN_IF makes this a no-op when it is there, and a failure shows in the create
+    // below. The handle stays open while a new file is made, because the prune enumerates through it.
+    RtlInitUnicodeString(&path, BC250_KEEP_DIRECTORY);
     InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
-    status = ZwCreateFile(&file, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL,
-                          FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF,
+    status = ZwCreateFile(&directory, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attributes, &io, NULL,
+                          FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF,
                           FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE, NULL, 0);
-    if (NT_SUCCESS(status)) ZwClose(file);
-    file = NULL;
+    if (!NT_SUCCESS(status)) directory = NULL;
 
-    KeQuerySystemTime(&now);
-    RtlTimeToTimeFields(&now, &t);
-    status = RtlStringCchPrintfW(name, RTL_NUMBER_OF(name),
-                                 L"\\??\\C:\\BC250\\kmdlog\\ring-%04d%02d%02d-%02d%02d%02d-%03d.log",
-                                 t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second, t.Milliseconds);
-    if (!NT_SUCCESS(status)) { KeepStatus(status); return; }
-    RtlInitUnicodeString(&path, name);
+    if (g_KeepPath[0] == 0)
+    {
+        KeQuerySystemTime(&now);
+        RtlTimeToTimeFields(&now, &t);
+        status = RtlStringCchPrintfW(g_KeepPath, RTL_NUMBER_OF(g_KeepPath),
+                                     L"%ws\\ring-%04d%02d%02d-%02d%02d%02d-%03d-%ws.log", BC250_KEEP_DIRECTORY,
+                                     t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second, t.Milliseconds,
+                                     g_KeepLabel);
+        if (!NT_SUCCESS(status))
+        {
+            g_KeepPath[0] = 0;
+            if (directory != NULL) ZwClose(directory);
+            KeepStatus(status);
+            return;
+        }
+        // Before the new file, so that the file this episode is about to write is never a candidate for the prune.
+        if (directory != NULL) KeepPrune(directory);
+        created = TRUE;
+    }
+    if (directory != NULL) ZwClose(directory);
+
+    RtlInitUnicodeString(&path, g_KeepPath);
     InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
     status = ZwCreateFile(&file, FILE_GENERIC_WRITE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
-                          FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
-    if (!NT_SUCCESS(status)) { KeepStatus(status); return; }
+                          created ? FILE_OVERWRITE_IF : FILE_OPEN,
+                          FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
+    if (!NT_SUCCESS(status))
+    {
+        // The file of this episode is gone (deleted by hand, another volume): the next keep starts a new one rather
+        // than failing for the rest of the episode.
+        g_KeepPath[0] = 0;
+        KeepStatus(status);
+        return;
+    }
+    if (created) { g_KeepBytes = 0; g_KeepFrom = 0; }
+    from = g_KeepFrom;
+    g_KeepAppends++;
 
     page = (BC250_LOG_LINE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, BC250_LOG_MAX_LINES * sizeof(BC250_LOG_LINE), BC250_TAG);
     text = (char*)ExAllocatePool2(POOL_FLAG_PAGED, BC250_LOG_MAX_LINES * BC250_LOG_KEEP_LINE, BC250_TAG);
@@ -398,10 +532,17 @@ void GuardLogKeep(void)
         GuardLogStats(&total, &lost, &above);
         cursor = text;
         left = BC250_LOG_MAX_LINES * BC250_LOG_KEEP_LINE;
-        RtlStringCchPrintfExA(cursor, left, &cursor, &left, 0,
-                              "bc250kmd 0x%08X log snapshot: %lu lines, %lu lost to the wrap, %lu dropped above "
-                              "DISPATCH_LEVEL\r\n", BC250_KMD_VERSION, total, lost, above);
-        status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), NULL, NULL);
+        if (created)
+            RtlStringCchPrintfExA(cursor, left, &cursor, &left, 0,
+                                  "bc250kmd 0x%08X log snapshot, %ws: %lu lines, %lu lost to the wrap, %lu dropped "
+                                  "above DISPATCH_LEVEL\r\n", BC250_KMD_VERSION, g_KeepLabel, total, lost, above);
+        else
+            RtlStringCchPrintfExA(cursor, left, &cursor, &left, 0,
+                                  "-- keep %lu from sequence %lu: %lu lines, %lu lost to the wrap, %lu dropped "
+                                  "above DISPATCH_LEVEL\r\n", g_KeepAppends, from, total, lost, above);
+        offset.QuadPart = g_KeepBytes;
+        status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), &offset, NULL);
+        if (NT_SUCCESS(status)) g_KeepBytes += (LONGLONG)io.Information;
 
         // A page of the ring at a time, the way the escape reads it. The round count is a bound, not a need: the
         // ring holds RING_LINES and nothing logs during a stop, but a loop over a live structure gets a limit.
@@ -419,8 +560,12 @@ void GuardLogKeep(void)
             }
             // The one write whose failure matters: a full volume leaves a file that exists and is short, which
             // is the most misleading thing this function could produce.
-            status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), NULL, NULL);
-            if (!NT_SUCCESS(status) || next <= from) break;
+            offset.QuadPart = g_KeepBytes;
+            status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), &offset, NULL);
+            if (!NT_SUCCESS(status)) break;
+            g_KeepBytes += (LONGLONG)io.Information;
+            g_KeepFrom = next;
+            if (next <= from) break;
             from = next;
         }
         // KeepStatus is the only voice this function has, so a file that is short or not on the disk must not
