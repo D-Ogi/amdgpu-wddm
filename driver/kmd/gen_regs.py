@@ -225,7 +225,7 @@ NAMED += TSC_REGISTERS
 # Keep the timing inputs observable through READ_REG for pre-deployment control.
 EXTRA_READS += [("DMU", name) for name in DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_V_BLANK_START_END"]]
 
-# ---- DP audio (dpaudio.c): step 0 observation and step 1 endpoint presence ----------------------------------------
+# ---- DP audio (dpaudio.c): step 0 observation, step 1 endpoint presence, step 2 stream ----------------------------
 # Step 0, read only, and on the READ_REG list as well so that `bc250kmd_cli read <name>` shows each one: the codec's
 # root and function parameters, the audio straps, the DCCG audio DTOs, and for each of the two stream encoders the
 # DIG/DP/AFMT/HPD state that says which encoder drives the monitor and what the firmware left in its audio path.
@@ -242,8 +242,13 @@ AUDIO_READ_REGISTERS = (
         "DIG{n}_DIG_FE_CNTL", "DIG{n}_DIG_BE_CNTL", "DP{n}_DP_VID_STREAM_CNTL", "DP{n}_DP_SEC_CNTL",
         "DP{n}_DP_SEC_AUD_N", "DP{n}_DP_SEC_AUD_M_READBACK", "DP{n}_DP_SEC_TIMESTAMP", "DIG{n}_AFMT_CNTL",
         "DIG{n}_AFMT_AUDIO_SRC_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL2",
-        "DIG{n}_AFMT_STATUS", "HPD{n}_DC_HPD_INT_STATUS")])
+        "DIG{n}_AFMT_STATUS", "HPD{n}_DC_HPD_INT_STATUS",
+        # Step 2: the two AFMT registers enc1_se_setup_dp_audio (dcn10_stream_encoder.c) writes beside the ones above.
+        "DIG{n}_AFMT_INFOFRAME_CONTROL0", "DIG{n}_AFMT_60958_0")])
 EXTRA_READS += [("DMU", name) for name in AUDIO_READ_REGISTERS]
+# Step 2 also reads the DP reference clock counter (facts M788, 100 kHz units), from which the DTO1 module is set.
+# It is on the READ_REG list already (EXTRA_READS above); here it joins the audio read table, read only.
+AUDIO_OTHER_READS = [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
 # The two Azalia endpoints' INDEX/DATA pairs (dce_audio.c:55-84 write_indirect_azalia_reg / read_indirect_azalia_reg).
 # Not on the READ_REG list: what DATA returns depends on what INDEX holds, so only dpaudio.c reaches them, and only
 # for the indices below. The INDEX write of an indirect READ selects a configuration register and changes nothing
@@ -254,6 +259,15 @@ AUDIO_ENDPOINT_PAIRS = [(f"mmAZF0ENDPOINT{e}_AZALIA_F0_CODEC_ENDPOINT_INDEX",
 # CLKSTOP/EPSS bits of the codec's function group. Both are on AUDIO_READ_REGISTERS, so each write is verifiable.
 AUDIO_DIRECT_WRITES = ["mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_SUPPORTED_SIZE_RATES",
                        "mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES"]
+# Step 2's direct writes, the stream half: exactly the registers dce_aud_wall_dto_setup (dce_audio.c, the DP branch:
+# DTO1 and the DTO source select) and enc1_se_dp_audio_setup, enc1_se_dp_audio_enable, enc1_se_dp_audio_disable and
+# enc1_se_audio_mute_control (dcn10_stream_encoder.c, which DCN 2.0.1 uses) write, for both stream encoders. All are
+# on AUDIO_READ_REGISTERS, so each write is read back. DTO0, DP_SEC_AUD_M_READBACK and AFMT_STATUS stay read only.
+AUDIO_DIRECT_WRITES += ["mmDCCG_AUDIO_DTO_SOURCE", "mmDCCG_AUDIO_DTO1_PHASE", "mmDCCG_AUDIO_DTO1_MODULE"]
+AUDIO_DIRECT_WRITES += [f"mm{r.format(n=n)}" for n in range(2) for r in (
+    "DP{n}_DP_SEC_CNTL", "DP{n}_DP_SEC_AUD_N", "DP{n}_DP_SEC_TIMESTAMP", "DIG{n}_AFMT_CNTL",
+    "DIG{n}_AFMT_AUDIO_SRC_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL2",
+    "DIG{n}_AFMT_INFOFRAME_CONTROL0", "DIG{n}_AFMT_60958_0")]
 # Indirect indices, by their ENDPOINT0 name in dcn_2_0_1_offset.h (regcalc: `lookup ix...`); the ENDPOINT1 name must
 # carry the same number, which main() checks. Read: the configuration and status registers dpaudio.c observes. The
 # interrupt-status indices (AUDIO_ENABLED_INT_STATUS and its neighbours) are left out: whether a read clears them is
@@ -411,11 +425,17 @@ def main():
     # DP audio: dpaudio.c's own tables, in a block of their own so that only dpaudio.c compiles them (mmio.c's
     # BC250_REGS_WITH_TABLES block above is unchanged by this feature).
     audio_read = sorted({offset(maps, "DMU", n) for n in AUDIO_READ_REGISTERS} |
-                        {offset(maps, ip, n) for ip, n in audio_pairs})
+                        {offset(maps, ip, n) for ip, n in audio_pairs} |
+                        {offset(maps, ip, n) for ip, n in AUDIO_OTHER_READS})
     audio_write = sorted({offset(maps, ip, n) for ip, n in audio_pairs} |
                          {offset(maps, "DMU", n) for n in AUDIO_DIRECT_WRITES})
-    if len(audio_read) != len(AUDIO_READ_REGISTERS) + len(audio_pairs):
-        sys.exit("AUDIO_READ_REGISTERS and the endpoint pairs have two names for one offset")
+    if len(audio_read) != len(AUDIO_READ_REGISTERS) + len(audio_pairs) + len(AUDIO_OTHER_READS):
+        sys.exit("AUDIO_READ_REGISTERS, the endpoint pairs and AUDIO_OTHER_READS have two names for one offset")
+    if len(audio_write) != len(audio_pairs) + len(AUDIO_DIRECT_WRITES):
+        sys.exit("AUDIO_DIRECT_WRITES and the endpoint pairs have two names for one offset")
+    for ip, n in AUDIO_OTHER_READS:
+        if offset(maps, ip, n) in audio_write:
+            sys.exit(f"{ip}.{n} is read only for DP audio and must not be on the audio write table")
     for off in audio_write:
         if off not in audio_read:
             sys.exit(f"audio write: 0x{off:05X} is not on the audio read table - a write must be verifiable")
@@ -427,16 +447,17 @@ def main():
         sys.exit("AUDIO_IX_READ or AUDIO_IX_WRITE has two names for one index")
     if not set(ix_write) <= set(ix_read):
         sys.exit("an indirect index is writable but not readable: a write must be verifiable")
-    out += ["// DP audio (dpaudio.c): direct reads (AUDIO_READ_REGISTERS and the endpoint INDEX/DATA pairs), direct writes",
-            "// (the pairs and dce_aud_hw_init's two function-group registers), and the indirect indices dpaudio.c may",
-            "// read and write through a pair. Sorted, unique. For dpaudio.c alone.",
+    out += ["// DP audio (dpaudio.c): direct reads (AUDIO_READ_REGISTERS, the endpoint INDEX/DATA pairs and the DP reference",
+            "// clock counter), direct writes (the pairs, dce_aud_hw_init's two function-group registers and step 2's DTO,",
+            "// AFMT and DP_SEC registers), and the indirect indices dpaudio.c may read and write through a pair. Sorted,",
+            "// unique. For dpaudio.c alone.",
             "#ifdef BC250_REGS_WITH_AUDIO_TABLES",
             f"#define BC250_MMIO_AUDIO_ALLOW_COUNT {len(audio_read)}",
             "static const unsigned long g_MmioAudioAllow[BC250_MMIO_AUDIO_ALLOW_COUNT] = {"]
     out += ["    " + ", ".join(f"0x{o:05X}" for o in audio_read[i:i + 10]) + "," for i in range(0, len(audio_read), 10)]
     out += ["};", f"#define BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT {len(audio_write)}",
             "static const unsigned long g_MmioAudioWriteAllow[BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT] = {"]
-    out += ["    " + ", ".join(f"0x{o:05X}" for o in audio_write) + ","]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in audio_write[i:i + 10]) + "," for i in range(0, len(audio_write), 10)]
     out += ["};", f"#define BC250_AZ_IX_READ_ALLOW_COUNT {len(ix_read)}",
             "static const unsigned long g_AzIxReadAllow[BC250_AZ_IX_READ_ALLOW_COUNT] = {"]
     out += ["    " + ", ".join(f"0x{o:04X}" for o in ix_read[i:i + 10]) + "," for i in range(0, len(ix_read), 10)]

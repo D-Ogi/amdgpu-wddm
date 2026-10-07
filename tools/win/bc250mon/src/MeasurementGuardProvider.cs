@@ -148,6 +148,9 @@ namespace Bc250Mon
             { "EnableVmidPool", 1 },            // gfx.c: absent = on from 0.7.214, a VMID per page-table root
             { "EnableFanControl", 1 },          // fan.c: GuardReadSetting(..., 1), the case fan control (Part B)
             { "EnableSmuMetrics", 1 },          // smu_metrics.c: GuardReadSetting(..., 1), the SMU metrics table (0.7.215)
+            { "EnableDpAudio", 1 },             // dpaudio.c: GuardReadSetting(..., 1), DP audio at all (0.7.215)
+            { "EnableDpAudioEndpoint", 1 },     // dpaudio.c: GuardReadSetting(..., 1), the Azalia endpoint (step 1)
+            { "EnableDpAudioStream", 1 },       // dpaudio.c: GuardReadSetting(..., 1), the DP audio stream (0.7.216)
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
             { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ

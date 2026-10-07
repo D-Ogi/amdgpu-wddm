@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/07/2026,0.7.215.1
+DriverVer   = 10/07/2026,0.7.216.1
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -188,15 +188,18 @@ HKR, Parameters, NotifyDpcInReport,  0x00010001, 1
 ; root its own VMID from a pool of up to 14, so a job of another process does not wait for the ring to drain. The
 ; driver never changes the root of a VMID whose last job has not retired. 0 is 0.7.213.1 exactly: every job at VMID 1.
 HKR, Parameters, EnableVmidPool,     0x00010001, 1
-; DisplayPort audio, steps 0 and 1 (dpaudio.c, M819): at every start and resume, the Azalia endpoint of the one DP
-; stream the firmware left running is made present to the inbox HD Audio driver (pin configuration, one LPCM
-; descriptor of 2 channels at 32/44.1/48 kHz and 16 bit, AUDIO_ENABLED). The start checks the codec ID, the audio
-; strap, the stream encoder, the DP SST back end and the endpoint's pin configuration first, and writes nothing
-; unless all of them hold; it needs BAR5 (EnableMmio). No DIG, DP, OTG or DTO register is written: no sound flows
-; until step 2. EnableDpAudio 0 means no audio register is read or written at all, the behaviour before this
-; feature; EnableDpAudioEndpoint 0 does the same for step 1 alone.
+; DisplayPort audio, steps 0 to 2 (dpaudio.c, docs/design/dp-audio.md, M819, M820). At every start and resume the
+; driver checks the codec ID, the audio strap, the one DP stream the firmware left running, its DP SST back end, the
+; endpoint's pin configuration and the DP reference clock. It writes nothing unless all of them hold. It needs BAR5
+; (EnableMmio). Then it configures the Azalia endpoint (one LPCM descriptor of 2 channels at 32/44.1/48 kHz and
+; 16 bit), starts the audio stream of that DP encoder (audio DTO1, AFMT clock, source, channels, AUD_N, timestamp,
+; DP_SEC ASP, ATP, AIP and STREAM_ENABLE, then SAMPLE_SEND) and sets AUDIO_ENABLED last. The inbox HD Audio driver
+; sees the endpoint only while the stream runs. EnableDpAudio 0 means no audio register is read or written at all,
+; the behaviour before this feature. EnableDpAudioEndpoint 0 and EnableDpAudioStream 0 each refuse the whole start,
+; so the endpoint stays hidden.
 HKR, Parameters, EnableDpAudio,      0x00010001, 1
 HKR, Parameters, EnableDpAudioEndpoint, 0x00010001, 1
+HKR, Parameters, EnableDpAudioStream, 0x00010001, 1
 ; The SMU metrics table (smu_metrics.c, docs/design/dpm.md "Power reading"). 1 lets the DPM governor thread ask the
 ; SMU for its metrics table once a second, through the one SMU owner, into one driver page at the top of VRAM: the
 ; package power, the two rail voltages and the table's own clock and temperatures, for RUN_DPM ABI 3 and the control

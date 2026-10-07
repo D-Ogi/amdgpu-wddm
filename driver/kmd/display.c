@@ -411,8 +411,11 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         return STATUS_SUCCESS; // typed operation status is in the reply
     }
     if (data->Command == BC250_ESCAPE_RUN_DPAUDIO) {
-        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPAUDIO)) return STATUS_INVALID_PARAMETER;
-        DpAudioRequest(device,(BC250_ESCAPE_DPAUDIO*)data,CallerIsAdmin(),Escape->Flags.Value);
+        // Two exact sizes (0.7.216): ABI 2, the whole structure, and its ABI 1 prefix. DpAudioRequest matches the
+        // size against AbiVersion and touches nothing past the size it was given.
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPAUDIO) &&
+            Escape->PrivateDriverDataSize != BC250_DPAUDIO_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
+        DpAudioRequest(device,(BC250_ESCAPE_DPAUDIO*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS; // typed operation status is in the reply
     }
     // The CPU surface (0.7.210): its write operations send mailbox messages on the firmware's queue 3, so it sits

@@ -52,7 +52,7 @@ static void CpuRequest(BC250_DEVICE*d,BC250_ESCAPE_CPU*p,ULONG n,BOOLEAN a,ULONG
 /* The case fan control (fan.c, docs/design/fan.md Part B): a software snapshot like the hardware monitor's. */
 static void FanRequest(BC250_DEVICE*d,BC250_ESCAPE_FAN*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
 /* DP audio (escape 31) sits right after OBSERVE_DCN, past the same gates. */
-static void DpAudioRequest(BC250_DEVICE*d,BC250_ESCAPE_DPAUDIO*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
+static void DpAudioRequest(BC250_DEVICE*d,BC250_ESCAPE_DPAUDIO*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
 static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)
