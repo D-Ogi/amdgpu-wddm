@@ -125,6 +125,11 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
 - The 87 C gate has two exceptions, both of them the rule the GPU clock path already carries: a getter, and a
   step that lowers the dissipation. The way back from a trial must not be refused because the part is hot,
   since nothing else would ever take the trial out of the chip (`AllowHot` in `SmuCpuMessage`).
+- The clock limit of a restore is the baseline of the start (`bc250_cpu_baseline_mhz`, 0.7.216.15). It is the
+  highest clock that the firmware answered in the read stage, over the P-state clocks (`0x3B`) and the core clocks
+  (`0x43`), clamped to `BC250_CPU_MAX_MHZ`. The core clock counts because it is the firmware's own answer of the boost
+  it gives. On unit A the P-state table stops at 3200 MHz while the cores boost to 3500 MHz, so a baseline of the
+  table alone made each restore a cut. The number is still an answer of the chip, not a constant of the driver.
 
 ### The allowlist
 

@@ -65,7 +65,8 @@
 // window with the clock transaction and the first frames.
 #define CPU_START_DELAY_MS 2000u
 
-C_ASSERT(sizeof(BC250_ESCAPE_CPU) == 296);        // ABI 1; 272 up to 0.7.210, before the sample's three inputs
+C_ASSERT(sizeof(BC250_ESCAPE_CPU) == 296);
+C_ASSERT(sizeof(ULONG) == sizeof(unsigned int));  // the read stage's ULONG arrays go to bc250_cpu_baseline_mhz        // ABI 1; 272 up to 0.7.210, before the sample's three inputs
 // The escape header carries three of the shim's numbers for callers that cannot include the shim
 // (tools/win/bc250kmd_cli, bc250control.dll). They are the same numbers or this does not build.
 C_ASSERT(BC250_CPU_REQUEST_MASK_STOCK == BC250_CPU_MASK_STOCK);
@@ -211,29 +212,58 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
 
 // The baseline this start restores to, from what the firmware has just answered (0.7.211). Until this exists no
 // revert and no reset can name the clock limit, and 0.7.210 invented BC250_CPU_MAX_MHZ in its place, which is a
-// raise sold as a restore. Recorded once per start, and only while this driver has sent nothing:
+// raise sold as a restore. Recorded only while this driver has sent nothing in this start:
 //   the cap        message 0x40 when it is inside the admitted range, the firmware's own default otherwise
 //   the undervolt  always 0 steps: nothing of the curve scale persists in the chip across a boot
-//   the clock      the highest P-state clock message 0x3B answered, when it is inside the admitted band. With
-//                  no plausible answer max_given stays 0, and a restore then says the limit stays.
-static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, const ULONG* Pstate)
+//   the clock      the highest clock the firmware itself answered (bc250_cpu_baseline_mhz): the P-state table of
+//                  message 0x3B and the per-core clocks of message 0x43, each inside the admitted band, the result
+//                  clamped to the release bound BC250_CPU_MAX_MHZ. With no plausible answer max_given stays 0, and
+//                  a restore then says the limit stays.
+// Why 0x43 counts (0.7.216.15, K137): it is the firmware's own answer of the boost it gives. On unit A the P-state
+// table tops out at 3200 MHz while the per-core clocks read 3500 MHz after a cold boot, so a baseline of the table
+// alone made every revert, reset and joint-arm release a 0x8F 3200 that held the processor near 3180 MHz until a
+// restart. That is a cut sold as a restore, the mirror image of the 0.7.210 defect. The number is still an answer
+// and not a constant this driver chose: the release bound only clamps it.
+// The full read stage records the cap and the clock; a later read stage of the same start (READBACK, a search step)
+// may raise the clock while the driver has still sent nothing, so the baseline is the highest boost the firmware
+// showed before the first setter. Pstate is NULL for a stage that did not read the P-state table.
+static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULONG* Pstate, const ULONG* CoreMHz)
 {
     struct bc250_cpu_settings b;
-    ULONG i, top = 0;
-    if (s->BaselineValid) return;
+    ULONG top, previous;
     if (s->Applied.max_given || s->Applied.uv_given || s->Applied.temp_given) return;
+    if (!s->BaselineValid && Pstate == NULL) return;    // the full stage records first: it has the cap and the table
+    previous = (s->BaselineValid && s->Baseline.max_given) ? s->Baseline.max_mhz : 0u;
+    top = bc250_cpu_baseline_mhz((const unsigned int*)Pstate, Pstate != NULL ? BC250_CPU_PSTATES : 0u,
+                                 (const unsigned int*)CoreMHz, BC250_CPU_CORES, previous);
+    if (s->BaselineValid) {
+        if (top <= previous) return;
+        s->Baseline.max_given = 1;
+        s->Baseline.max_mhz = top;
+        GuardLog("cpu: the baseline clock of this start rises to %lu MHz (was %lu): the firmware's own boost",
+                 top, previous);
+        return;
+    }
     RtlZeroMemory(&b, sizeof(b));
     b.temp_given = 1;
     b.temp_c = (Cap >= BC250_CPU_TEMP_MIN_C && Cap <= BC250_CPU_TEMP_MAX_C) ? Cap : BC250_CPU_TEMP_MAX_C;
     b.uv_given = 1;
     b.uv_steps = 0;
-    for (i = 0; i < BC250_CPU_PSTATES; i++)
-        if (Pstate[i] > top) top = Pstate[i];
-    if (top >= BC250_CPU_MIN_MHZ && top <= BC250_CPU_MAX_MHZ_LAB) { b.max_given = 1; b.max_mhz = top; }
+    if (top) { b.max_given = 1; b.max_mhz = top; }
     s->Baseline = b;
     s->BaselineValid = TRUE;
+    // The clock a loaded core is judged against when no limit is applied stays the P-state table's top, as up to
+    // 0.7.216.14: the boost of one busy core is not what every core reaches under the search's load, and judging
+    // stretching against 3500 MHz would fail the first step of every undervolt search on an all-core clock.
+    s->StretchRefMHz = bc250_cpu_baseline_mhz((const unsigned int*)Pstate, BC250_CPU_PSTATES, NULL, 0u, 0u);
     GuardLog("cpu: the baseline of this start is clock %s%lu MHz, undervolt 0 steps, cap %lu C",
              b.max_given ? "" : "(not answered) ", b.max_mhz, b.temp_c);
+    {
+        ULONG i, ptop = 0, ctop = 0;
+        for (i = 0; i < BC250_CPU_PSTATES; i++) if (Pstate[i] > ptop) ptop = Pstate[i];
+        for (i = 0; i < BC250_CPU_CORES; i++) if (CoreMHz[i] > ctop) ctop = CoreMHz[i];
+        GuardLog("cpu: the baseline's answers: P-state table top %lu MHz, per-core top %lu MHz", ptop, ctop);
+    }
 }
 
 // The read stage: everything the surface can answer without changing anything. It is also the gate: until it has
@@ -286,8 +316,9 @@ static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full, ULONG GapMs)
         s->Snap.Features = features;
     }
     KeReleaseSpinLock(&s->SnapLock, irql);
-    // The caller holds Lock, so this is the one place the baseline can be recorded from a complete answer.
-    if (Full) CpuRecordBaseline(s, cap, pstate);
+    // The caller holds Lock, so this is the one place the baseline can be recorded from a complete answer. A stage
+    // without the P-state table may only raise the clock of a baseline the full stage recorded (CpuRecordBaseline).
+    CpuRecordBaseline(s, cap, Full ? pstate : NULL, coreMHz);
     return STATUS_SUCCESS;
 }
 
@@ -311,8 +342,7 @@ static void CpuSample(BC250_DEVICE* Device, const struct bc250_cpu_settings* Tar
     Sample->temperature_valid = s->Snap.TemperatureValid ? 1 : 0;
     KeReleaseSpinLock(&s->SnapLock, irql);
     Sample->cores = BC250_CPU_CORES;
-    Sample->target_mhz = Target->max_given ? Target->max_mhz
-                       : (s->BaselineValid && s->Baseline.max_given ? s->Baseline.max_mhz : 0u);
+    Sample->target_mhz = Target->max_given ? Target->max_mhz : (s->BaselineValid ? s->StretchRefMHz : 0u);
     Sample->loaded = Loaded ? 1 : 0;
     Sample->whea_events = Whea;
     Sample->checksum_errors = Checksum;
@@ -430,7 +460,7 @@ static NTSTATUS CpuRestoreTo(BC250_DEVICE* Device, const struct bc250_cpu_settin
     struct bc250_cpu_settings back;
     RtlZeroMemory(&back, sizeof(back));
     if (!bc250_cpu_restore_target(&s->Applied, Before, s->BaselineValid ? &s->Baseline : NULL, &back)) {
-        GuardLog("cpu: %s cannot name the clock limit to go back to - no P-state answered this start", Why);
+        GuardLog("cpu: %s cannot name the clock limit to go back to - no clock answered this start", Why);
         GuardLog("cpu: %s the applied limit of %lu MHz STAYS in the chip until a restart", Why,
                  s->Applied.max_mhz);
     }
@@ -1237,7 +1267,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 // the firmware's own ceiling from the read stage and not 0 (0.7.210 passed 0 and the sign died).
                 bc250_cpu_search_begin(&s->Search, steps, BC250_CPU_SEARCH_LOAD_MS, s->Snap.VoltageMv,
                                        s->Applied.max_given ? s->Applied.max_mhz
-                                       : (s->BaselineValid && s->Baseline.max_given ? s->Baseline.max_mhz : 0u));
+                                       : (s->BaselineValid ? s->StretchRefMHz : 0u));
                 if (!s->OnTrial) s->TrialBefore = s->Applied;
                 KeReleaseSpinLock(&s->SnapLock, irql);
                 (void)bc250_cpu_search_next(&s->Search, NULL);       // asks for step 1
