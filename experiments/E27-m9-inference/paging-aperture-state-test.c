@@ -6,11 +6,11 @@ static unsigned checks;
 int main(void)
 {
     unsigned i;unsigned long long physical,alias;
-    unsigned long long pages[256],*storage=(unsigned long long*)calloc(PAGING_APERTURE_BYTES/4096,8);
+    unsigned long long pages[256],*storage=(unsigned long long*)calloc(PAGING_APERTURE_MIN_BYTES/4096,8);
     PAGING_APERTURE aperture;PAGING_APERTURE_STATE state={0};
     CHECK(storage!=NULL);
-    CHECK(PagingApertureInit(0x100000000ull,1ull<<30,0x200000000ull,2ull<<20,&aperture));
-    CHECK(PagingApertureStateInit(&state,&aperture,storage,(unsigned)(PAGING_APERTURE_BYTES/4096)));
+    CHECK(PagingApertureInit(0x100000000ull,1ull<<30,0x200000000ull,2ull<<20,PAGING_APERTURE_MIN_BYTES,&aperture));
+    CHECK(PagingApertureStateInit(&state,&aperture,storage,(unsigned)(PAGING_APERTURE_MIN_BYTES/4096)));
     CHECK(!PagingApertureStateResolve(&state,aperture.mc,4,&physical));
     // Fragmented pages and page0 survive input storage reuse; nothing borrows PFNs.
     pages[0]=0x91000;pages[1]=0;pages[2]=0x37000;

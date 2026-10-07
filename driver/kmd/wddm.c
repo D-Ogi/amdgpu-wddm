@@ -48,7 +48,8 @@
 // (segment set 0) dxgmms2 maps a NULL allocation into the context's address space and the machine goes down
 // (E16 run 008, VIDMM_DMA_POOL::AddDmaBufferToPool). Stage B gives it the real GART behind it.
 #define BC250_WDDM_SEGMENT_APERTURE 2u
-#define BC250_WDDM_APERTURE_BYTES PAGING_APERTURE_BYTES
+// Its size is no longer a constant (0.7.216.8): WddmStart latches ApertureSegmentMegabytes into
+// Device->WddmApertureRequest, and Device->WddmAperture.bytes is what the GART capture granted.
 #define BC250_WDDM_SEGMENT_SET(id) (1u << ((id) - 1))
 #define BC250_WDDM_NODE_3D 0u
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node,
@@ -2699,6 +2700,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->FullWddm = g_FullWddm;
     Device->Wddm = NULL;
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
+    Device->WddmApertureRequest = 0;
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     if (!g_FullWddm) return STATUS_SUCCESS;                            // gate closed: this file does nothing at all
@@ -2834,8 +2836,36 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         status=STATUS_DEVICE_NOT_READY;
         goto Failed;
     }
+    // Memory manager stage 1a (0.7.216.8), read once for this start: the OS aperture (segment 2) size in MiB.
+    // Absent = 384; the INF writes no value, so a driver update never changes an operator's choice. 256 is the
+    // bisect value: it gives the 256 MiB aperture of every driver before this one, byte for byte. A value
+    // outside [256, 447] is clamped and logged. If the GART cannot hold the size asked for, the start falls back
+    // to 256 MiB once, the size every earlier start had, instead of failing the adapter.
+    //   What the size changes is narrow, and the log says so in the same line: under GpuMmu an aperture-segment
+    // allocation without AccessedPhysically is "not mapped" into the aperture - its pages are system memory
+    // reached through the GPU page tables (windows-driver-docs gpu-segments.md, "Accessing allocations by
+    // physical address", table row "Aperture Segment"). Only MAP_APERTURE_SEGMENT operations use this range, and
+    // no recorded session of this driver has issued one (summary "aperture map batches 0, unmap batches 0").
+    // The aperture's Size and CommitLimit follow the size (WddmQuerySegment4); the shared pool does not, because
+    // dxgkrnl's implicit system-memory segment already has no commit limit (calculating-graphics-memory.md).
+    {
+        int clamped=0;
+        const ULONG asked=GuardReadSetting(L"ApertureSegmentMegabytes",
+                                           (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
+        Device->WddmApertureRequest=PagingApertureBytesForSetting(asked,&clamped);
+        GuardLog("wddm: OS aperture asked %lu MiB, using %llu MiB%s (only MAP_APERTURE_SEGMENT uses it)",asked,
+                 Device->WddmApertureRequest/PAGING_APERTURE_MIB,clamped?" (clamped to 256..447)":"");
+    }
     status=GartCaptureAperture(Device,&Device->WddmAperture);
+    if (!NT_SUCCESS(status) && Device->WddmApertureRequest!=PAGING_APERTURE_MIN_BYTES) {
+        GuardLog("wddm: GART refused a %llu MiB OS aperture (0x%08X), retrying at 256 MiB",
+                 Device->WddmApertureRequest/PAGING_APERTURE_MIB,status);
+        Device->WddmApertureRequest=PAGING_APERTURE_MIN_BYTES;
+        status=GartCaptureAperture(Device,&Device->WddmAperture);
+    }
     if (!NT_SUCCESS(status)) goto Failed;
+    GuardLog("wddm: OS aperture %llu MiB at gpu 0x%llX, PTE slice 0x%llX",
+             Device->WddmAperture.bytes/PAGING_APERTURE_MIB,Device->WddmAperture.mc,Device->WddmAperture.table);
     vidmmPrepared=TRUE; // VidMmStartLayout initializes its lock even on failure.
     status=VidMmStartLayout(Device,segmentOffset,segmentLength,BC250_WDDM_SEGMENT_VRAM,
                            tableOffset,tableLength,BC250_WDDM_SEGMENT_TABLES);
@@ -2867,6 +2897,7 @@ Failed:
     // unwinds attempted hardware phases; PnP cleanup handles prepared objects.
     if (vidmmPrepared) VidMmStop();
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
+    Device->WddmApertureRequest = 0;
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
@@ -3211,8 +3242,10 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
     if (Query->OutputDataSize < sizeof(*out) || out == NULL) return STATUS_BUFFER_TOO_SMALL;
     count = WddmMemoryLayout(Device, &offset, &length, &tableOffset, &tableLength) ? 1u : 0u;
 
-    // Geometry is captured before publishing WDDM state; queries never run setup.
-    if (count != 0 && Device->WddmAperture.bytes!=PAGING_APERTURE_BYTES) {
+    // Geometry is captured before publishing WDDM state; queries never run setup. Since 0.7.216.8 the size is
+    // whatever WddmStart's capture granted (ApertureSegmentMegabytes, 256 to 447 MiB), so the test is "a valid
+    // captured aperture exists" rather than "it is 256 MiB": a start without one still offers no aperture.
+    if (count != 0 && !PagingApertureBytesValid(Device->WddmAperture.bytes)) {
         g_ApertureOffered=FALSE;
         return STATUS_DEVICE_NOT_READY;
     }

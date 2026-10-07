@@ -152,7 +152,9 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
         }
     }
     if (g_VidMm.Write && Device->WddmAperture.bytes) {
-        unsigned pages=(unsigned)(PAGING_APERTURE_BYTES/PAGE_SIZE);
+        // One shadow entry per page of this start's aperture (ApertureSegmentMegabytes): 768 KiB of paged
+        // pool at the 384 MiB default, 512 KiB at 256. PagingApertureStateInit refuses a size it cannot hold.
+        unsigned pages=(unsigned)(Device->WddmAperture.bytes/PAGE_SIZE);
         ULONGLONG* storage=(ULONGLONG*)ExAllocatePool2(POOL_FLAG_PAGED,
             (SIZE_T)pages*sizeof(ULONGLONG),BC250_VIDMM_SHADOW_TAG);
         if (!storage) return STATUS_INSUFFICIENT_RESOURCES;
@@ -225,10 +227,12 @@ NTSTATUS VidMmCommitPagingAperture(const DXGKARG_BUILDPAGINGBUFFER* Build, ULONG
             pages[i]=pfn<<PAGE_SHIFT;
         }
     } else return status;
-    if (Next>total || first>=PAGING_APERTURE_BYTES/PAGE_SIZE ||
-        Next>PAGING_APERTURE_BYTES/PAGE_SIZE-first) return status;
+    if (Next>total) return status;
     KeEnterCriticalRegion();ExAcquirePushLockExclusive(&g_VidMm.CpuUpdateLock);
+    // The aperture's page count is this start's (Aperture.count, set at start and cleared at stop under this
+    // lock), so the bound is read under the lock too. The state calls below check the same range again.
     if (!g_VidMm.Ready || !g_VidMm.Write) status=STATUS_DEVICE_NOT_READY;
+    else if (first>=g_VidMm.Aperture.count || Next>g_VidMm.Aperture.count-first) status=STATUS_INVALID_PARAMETER;
     else if (unmap ? PagingApertureStateUnmap(&g_VidMm.Aperture,(unsigned)(first+Start),count) :
              PagingApertureStateMap(&g_VidMm.Aperture,(unsigned)(first+Start),count,pages,~4095ull))
         status=STATUS_SUCCESS;

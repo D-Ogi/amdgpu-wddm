@@ -15,23 +15,44 @@ int PagingWindowInit(unsigned long long start, unsigned long long size,
 }
 
 
+int PagingApertureBytesValid(unsigned long long bytes)
+{
+    return bytes>=PAGING_APERTURE_MIN_BYTES && bytes<=PAGING_APERTURE_MAX_BYTES &&
+           (bytes&(PAGING_APERTURE_MIB-1))==0;
+}
+
+unsigned long long PagingApertureBytesForSetting(unsigned long megabytes, int* clamped)
+{
+    unsigned long long bytes=(unsigned long long)megabytes*PAGING_APERTURE_MIB;
+    int moved=0;
+    if (bytes<PAGING_APERTURE_MIN_BYTES) { bytes=PAGING_APERTURE_MIN_BYTES; moved=1; }
+    else if (bytes>PAGING_APERTURE_MAX_BYTES) { bytes=PAGING_APERTURE_MAX_BYTES; moved=1; }
+    if (clamped) *clamped=moved;
+    return bytes;
+}
+
 // Reserve OS aperture entries after both private GART consumers. Validate the
 // complete range once; callers never obtain a partially usable advertised extent.
+// Bytes is the size this start asked for (PagingApertureBytesForSetting): the
+// GART and its table hold all of it, or nothing is advertised. The checks are the
+// ones of the fixed 256 MiB version with that size in place of the constant.
 int PagingApertureInit(unsigned long long start, unsigned long long size,
                        unsigned long long table, unsigned long long tableBytes,
-                       PAGING_APERTURE* out)
+                       unsigned long long bytes, PAGING_APERTURE* out)
 {
     const unsigned long long offset=PAGING_APERTURE_OFFSET;
     const unsigned long long pteOffset=(PAGING_APERTURE_OFFSET/4096)*8;
-    const unsigned long long pteBytes=(PAGING_APERTURE_BYTES/4096)*8;
     const unsigned long long limit=0x1000000000000ull;
+    unsigned long long pteBytes;
     if (!out) return 0;
     out->mc=out->table=out->bytes=0;
-    if ((start&4095) || (table&7) || size<offset+PAGING_APERTURE_BYTES ||
+    if (!PagingApertureBytesValid(bytes)) return 0;
+    pteBytes=(bytes/4096)*8;
+    if ((start&4095) || (table&7) || size<offset+bytes ||
         tableBytes<pteOffset+pteBytes ||
-        start>limit-offset-PAGING_APERTURE_BYTES ||
+        start>limit-offset-bytes ||
         table>limit-pteOffset-pteBytes) return 0;
-    out->mc=start+offset;out->table=table+pteOffset;out->bytes=PAGING_APERTURE_BYTES;
+    out->mc=start+offset;out->table=table+pteOffset;out->bytes=bytes;
     return 1;
 }
 
@@ -44,10 +65,10 @@ int PagingApertureRange(const PAGING_APERTURE* aperture,
     if (mc) *mc=0;
     if (table) *table=0;
     if (!aperture || !mc || !table || mc==table ||
-        aperture->bytes!=PAGING_APERTURE_BYTES ||
+        !PagingApertureBytesValid(aperture->bytes) ||
         (aperture->mc&4095) || (aperture->table&7) ||
-        aperture->mc>limit-PAGING_APERTURE_BYTES ||
-        aperture->table>limit-(PAGING_APERTURE_BYTES/4096)*8) return 0;
+        aperture->mc>limit-aperture->bytes ||
+        aperture->table>limit-(aperture->bytes/4096)*8) return 0;
     pages=aperture->bytes/4096;
     if (!pageCount || firstPage>=pages || pageCount>pages-firstPage) return 0;
     *mc=aperture->mc+firstPage*4096;*table=aperture->table+firstPage*8;

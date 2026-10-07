@@ -422,6 +422,8 @@ NTSTATUS GartDevice(_In_ BC250_DEVICE* Device, _Outptr_ struct amdgpu_device** A
 
 // Copy only geometry while the GART owner is locked. Lazy setup uses the
 // existing AMD placement code in planning mode; this does not enable hardware.
+// The size is Device->WddmApertureRequest, which WddmStart latches once per start
+// (ApertureSegmentMegabytes), so every capture of one start asks for the same size.
 NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture)
 {
     struct amdgpu_device* adev=NULL;
@@ -435,7 +437,7 @@ NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture)
     if (NT_SUCCESS(status)) {
         if (!adev || !adev->gart.bo ||
             !PagingApertureInit(adev->gmc.gart_start,adev->gmc.gart_size,
-                adev->gart.bo->gpu_addr,adev->gart.table_size,Aperture))
+                adev->gart.bo->gpu_addr,adev->gart.table_size,Device->WddmApertureRequest,Aperture))
             status=STATUS_DEVICE_NOT_READY;
     }
     ExReleaseFastMutex(&Device->GartLock);

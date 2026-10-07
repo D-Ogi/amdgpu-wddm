@@ -1,4 +1,5 @@
-# Host test for driver\kmd\paging_window.c: the VRAM physical-to-MC conversion the SDMA paging packets need.
+# Host test for driver\kmd\paging_window.c: the VRAM physical-to-MC conversion the SDMA paging packets need,
+# and (paging_aperture_test.c) the start-time OS aperture size with paging_aperture_state.c at that size.
 #
 #   pwsh driver\kmd\test\run_paging_window.ps1
 #   pwsh driver\kmd\test\run_paging_window.ps1 -Out $env:BC250_ROOT\scratch\pagingwindow
@@ -45,15 +46,25 @@ Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/W4', '/WX', '/Od', 
     @((Join-Path $kmd 'paging_window.c'), (Join-Path $here 'paging_window_test.c')) +
     @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
 
+Write-Host 'compile and link the aperture size test (host, no WDK header)'
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/W4', '/WX', '/Od', '/Zi') + $incUser +
+    @("/Fo$obj\", "/Fd$obj\cl-aperture.pdb", "/Fe$Out\paging_aperture_test.exe") +
+    @((Join-Path $kmd 'paging_window.c'), (Join-Path $kmd 'paging_aperture_state.c'), (Join-Path $here 'paging_aperture_test.c')) +
+    @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
+
 Write-Host 'run'
 & "$Out\paging_window_test.exe"
 $code = $LASTEXITCODE
+& "$Out\paging_aperture_test.exe"
+if ($code -eq 0) { $code = $LASTEXITCODE }
 
 Write-Host 'compile-check (kernel flags, same source, no link)'
 $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$kmd", "/Fo$obj\kernel-", "/Fd$obj\clkernel.pdb")
 Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + @((Join-Path $kmd 'paging_window.c')))
+Invoke-Tool (Join-Path $bin 'cl.exe') (($kernFlags | ForEach-Object { $_ -replace '^/Fo.*kernel-$', "/Fo$obj\kernel-state-" }) +
+    @((Join-Path $kmd 'paging_aperture_state.c')))
 
 Write-Host ''
 Write-Host "paging_window_test.exe exit code $code"

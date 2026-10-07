@@ -2,17 +2,21 @@
 
 static int StateRange(const PAGING_APERTURE_STATE* s,unsigned first,unsigned count)
 {
-    return s && s->entries && s->count==PAGING_APERTURE_BYTES/4096 && count &&
+    // The aperture's own size since 0.7.216.8, no longer the one constant; Init made them agree.
+    return s && s->entries && s->count && s->count==s->aperture.bytes/4096 && count &&
            first<s->count && count<=s->count-first;
 }
 
 int PagingApertureStateInit(PAGING_APERTURE_STATE* s,const PAGING_APERTURE* aperture,
                            unsigned long long* storage,unsigned storagePages)
 {
-    unsigned i,pages=(unsigned)(PAGING_APERTURE_BYTES/4096);
+    unsigned i,pages;
     unsigned long long mc,table;
-    if(!s || !storage || storagePages<pages ||
-       !PagingApertureRange(aperture,0,pages,&mc,&table))return 0;
+    // The range check validates aperture->bytes (PagingApertureBytesValid) before it sizes anything.
+    if(!s || !storage || !aperture ||
+       !PagingApertureRange(aperture,0,aperture->bytes/4096,&mc,&table))return 0;
+    pages=(unsigned)(aperture->bytes/4096);
+    if(storagePages<pages)return 0;
     // The caller supplies separate storage; initialization never allocates or maps.
     for(i=0;i<pages;i++)storage[i]=0;
     s->aperture=*aperture;s->entries=storage;s->count=pages;

@@ -304,6 +304,8 @@ typedef struct _BC250_DEVICE {
                                         // OfferComposedSourceModes not 0; read at WddmStart)
     ULONG CommittedSourceFormat;        // D3DDDIFORMAT of the last committed source mode, for the commit log
     PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
+    ULONGLONG WddmApertureRequest;       // the aperture size GartCaptureAperture asks for (wddm.c WddmStart,
+                                         // ApertureSegmentMegabytes); 0 until WddmStart sets it
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation
