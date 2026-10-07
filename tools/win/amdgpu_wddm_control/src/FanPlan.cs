@@ -134,6 +134,55 @@ namespace AmdgpuWddmControl
             return string.Join(", ", c.Select((t, i) => Strings.T("perf.fan.point.value", t, pct[i])));
         }
 
+        // Moves point i of a curve to (temperature, duty) and keeps the curve legal while it moves: the temperature
+        // stays between its neighbours, one degree apart, the duty between theirs, both inside the driver's ranges. The
+        // chart's drag and keys go through here, so a curve edited on the chart never needs a refusal.
+        public static void Move(uint[] c, uint[] pct, int i, int temperature, int duty)
+        {
+            if (c == null || pct == null || i < 0 || i >= c.Length || c.Length != pct.Length) return;
+            int lowC = i > 0 ? (int)c[i - 1] + 1 : (int)MinC, highC = i < c.Length - 1 ? (int)c[i + 1] - 1 : (int)MaxC;
+            int lowP = i > 0 ? (int)pct[i - 1] : (int)FloorPct, highP = i < c.Length - 1 ? (int)pct[i + 1] : (int)FullPct;
+            lowC = Math.Max(lowC, (int)MinC); highC = Math.Min(highC, (int)MaxC);
+            lowP = Math.Max(lowP, (int)FloorPct); highP = Math.Min(highP, (int)FullPct);
+            if (lowC <= highC) c[i] = (uint)Math.Max(lowC, Math.Min(highC, temperature));
+            if (lowP <= highP) pct[i] = (uint)Math.Max(lowP, Math.Min(highP, duty));
+        }
+
+        // The duty a curve asks for at a temperature, as the driver computes it: the first duty below the first point,
+        // the last above the last, the straight line between two points rounded up to a whole percent.
+        public static uint DutyAt(uint[] c, uint[] pct, double temperature)
+        {
+            if (c == null || pct == null || c.Length == 0 || c.Length != pct.Length) return 0;
+            if (temperature <= c[0]) return pct[0];
+            for (int i = 1; i < c.Length; i++)
+                if (temperature <= c[i])
+                    return (uint)Math.Ceiling(pct[i - 1] + (pct[i] - (double)pct[i - 1]) * (temperature - c[i - 1]) / (c[i] - c[i - 1]) - 1e-9);
+            return pct[c.Length - 1];
+        }
+
+        // Whether the card's choice and curve differ from what the driver runs and stores, which is when Apply has
+        // something to do.
+        public static bool Changed(FanState f, string choice, uint[] c, uint[] pct)
+        {
+            if (f == null) return false;
+            bool sameCurve = CurveText(c, pct) == CurveText(ShownC(f), ShownPct(f));
+            return choice != StoredChoice(f) || (choice == "custom" && !sameCurve) ||
+                (choice != "board" && f.Mode != FanState.ModeCurve) || (choice == "board" && f.Mode != FanState.ModeBoard);
+        }
+
+        // The test of the card: one duty for TestMs under a lease of TestLeaseMs, then the choice in force again. The
+        // lease outlives the test by 5 s, so a helper that dies in the middle leaves the fan with the board, never stuck.
+        public const uint TestMs = 10000, TestLeaseMs = 15000;
+        public static readonly uint[] TestChoices = { 30, 40, 50, 60, 70, 80, 90, 100 };
+
+        // Whether a short test may run now: the driver runs the fan, and nothing more urgent has it.
+        public static bool TestAllowed(FanState f)
+        {
+            return f != null && f.Has(FanState.FlagEnabled) && !f.Has(FanState.FlagLeased) && !f.Has(FanState.FlagPaused) &&
+                !f.Has(FanState.FlagFault) && !f.Has(FanState.FlagEmergency) && !f.Has(FanState.FlagHeldBack) &&
+                f.State != FanState.StateEmergency && f.State != FanState.StateDoubt && f.State != FanState.StateFault;
+        }
+
         // The curve in force, as the driver reports it.
         public static uint[] ShownC(FanState f) { return f == null ? null : f.CurveC.Take((int)Math.Min(f.Points, MaxPoints)).ToArray(); }
         public static uint[] ShownPct(FanState f) { return f == null ? null : f.CurvePct.Take((int)Math.Min(f.Points, MaxPoints)).ToArray(); }
@@ -196,7 +245,7 @@ namespace AmdgpuWddmControl
 
     public static class FanPlan
     {
-        public static readonly string[] Actions = { "fan-auto", "fan-curve" };
+        public static readonly string[] Actions = { "fan-auto", "fan-curve", "fan-test" };
 
         public static bool Owns(string action) { return Actions.Contains(action); }
 
@@ -217,6 +266,7 @@ namespace AmdgpuWddmControl
             if (!s.DriverRunning) return No(p, "The graphics driver is not running.", "tuner.refuse.not-running");
             if (f == null) return No(p, "The driver did not answer the fan read.", "perf.fan.refuse.no-read");
             if (!f.Has(FanState.FlagEnabled)) return No(p, "This start does not run the fan control (gate " + f.Gate + ").", "perf.fan.refuse.off");
+            if (action == "fan-test") return Test(f, more, p);
             bool stored = f.Has(FanState.FlagStored);
             var request = new TuneRequest { Kind = action == "fan-auto" ? "fan-board" : "fan-curve" };
             if (action == "fan-auto")
@@ -266,6 +316,28 @@ namespace AmdgpuWddmControl
             return null;
         }
 
+        // A short test: one duty under a lease, then the choice in force again (docs/design/fan.md Part B, rule 9: a
+        // lease that runs out gives the fan to the board, so the helper sends the choice back itself at the end).
+        static string Test(FanState f, Recovery.PlanArgs more, ActionPlan p)
+        {
+            p.Title = "Test the fan at one speed";
+            uint pct = more.FanTestPct ?? 0;
+            if (!FanCurves.TestChoices.Contains(pct))
+                return No(p, "The test speed must be one of " + string.Join(", ", FanCurves.TestChoices) + " %.", "perf.fan.refuse.bad-test");
+            if (!FanCurves.TestAllowed(f))
+                return No(p, "The fan is not free for a test now (state " + f.State + ", flags " + f.Flags + ").", "perf.fan.refuse.busy");
+            var then = f.Mode == FanState.ModeCurve
+                ? new TuneRequest { Kind = "fan-curve", FanProfile = f.Profile }
+                : new TuneRequest { Kind = "fan-board" };
+            if (then.Kind == "fan-curve" && f.Profile == FanState.ProfileCustom) { then.FanC = FanCurves.ShownC(f); then.FanPct = FanCurves.ShownPct(f); }
+            p.Tune = new TuneRequest { Kind = "fan-fixed", FixedPct = pct, LeaseMs = FanCurves.TestLeaseMs, TestMs = FanCurves.TestMs, Then = then };
+            p.Change = "the fan runs at " + pct + " % for " + FanCurves.TestMs / 1000 + " s, then " +
+                (then.Kind == "fan-board" ? "the board runs it again" : "the curve in force runs it again") + "; nothing is stored";
+            p.Preview.Add(Strings.T("plan.line.fan-test", pct, FanCurves.TestMs / 1000));
+            p.Notes.Add("The lease is " + FanCurves.TestLeaseMs + " ms: if the test stops halfway, the board runs the fan when it ends.");
+            return null;
+        }
+
         // The step that puts the fan back to its standard choice for reset-defaults: the driver's standard curve, which
         // is also what a start with nothing stored runs. Null when nothing needs to change or the step was added; the
         // English note when this start cannot take the stored choice back.
@@ -286,6 +358,7 @@ namespace AmdgpuWddmControl
             if (more == null) return v;
             if (more.FanProfile != null) { v.Add("--fan-profile"); v.Add(more.FanProfile); }
             if (more.FanCurve != null) { v.Add("--fan-curve"); v.Add(more.FanCurve); }
+            if (more.FanTestPct != null) { v.Add("--fan-test-pct"); v.Add(more.FanTestPct.Value.ToString(CultureInfo.InvariantCulture)); }
             return v;
         }
 

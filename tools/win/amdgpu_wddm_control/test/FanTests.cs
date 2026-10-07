@@ -40,6 +40,124 @@ static partial class UnitTests
         FanModel(root);
         FanPlans();
         FanWords();
+        FanChartRules();
+        FanTestPlans();
+        FanSpeedOneSource();
+    }
+
+    // The chart moves points only through FanCurves.Move, so every curve it hands back passes the driver's rules.
+    static void FanChartRules()
+    {
+        uint[] c, pct;
+        FanCurves.Preset(FanState.ProfileStandard, out c, out pct);       // 40:50, 60:70, 70:82, 80:95, 85:100
+        int at;
+        FanCurves.Move(c, pct, 1, 90, 5);
+        Equal(69u, c[1], "a dragged point stops 1 C under its right neighbour");
+        Equal(50u, pct[1], "a dragged duty stops at its left neighbour");
+        FanCurves.Move(c, pct, 0, 0, 0);
+        Check(c[0] == FanCurves.MinC && pct[0] == FanCurves.FloorPct, "the first point stops at 20 C and the 20 % floor");
+        FanCurves.Move(c, pct, 4, 200, 200);
+        Check(c[4] == FanCurves.MaxC && pct[4] == FanCurves.FullPct, "the last point stops at 95 C and 100 %");
+        FanCurves.Move(c, pct, 2, 30, 99);
+        Check(c[2] == c[1] + 1 && pct[2] == pct[3], "a middle point stays between its neighbours");
+        Equal(FanCurveError.Ok, FanCurves.Check(c, pct, out at), "a curve moved on the chart is legal");
+        var r = new Random(7);
+        for (int n = 0; n < 2000; n++)
+        {
+            int i = r.Next(c.Length);
+            FanCurves.Move(c, pct, i, r.Next(0, 120), r.Next(0, 120));
+            if (FanCurves.Check(c, pct, out at) != FanCurveError.Ok) { Check(false, "random moves keep the curve legal (" + FanCurves.CurveText(c, pct) + ")"); break; }
+        }
+        Check(true, "2000 random moves kept the curve legal");
+        var before = FanCurves.CurveText(c, pct);
+        FanCurves.Move(c, pct, 9, 50, 50);
+        Equal(before, FanCurves.CurveText(c, pct), "a point that does not exist moves nothing");
+
+        FanCurves.Preset(FanState.ProfileStandard, out c, out pct);
+        Equal(50u, FanCurves.DutyAt(c, pct, 30), "below the first point the first duty applies");
+        Equal(100u, FanCurves.DutyAt(c, pct, 90), "above the last point the last duty applies");
+        Equal(76u, FanCurves.DutyAt(c, pct, 65), "65 C on the standard curve is 76 % (fan.md)");
+        Equal(81u, FanCurves.DutyAt(c, pct, 69), "69 C on the standard curve is 81 % (fan.md)");
+        Equal(98u, FanCurves.DutyAt(c, pct, 83), "83 C on the standard curve is 98 % (fan.md)");
+        Equal(70u, FanCurves.DutyAt(c, pct, 60), "a point gives its own duty");
+
+        var f = FanFixture(FanState.FlagEnabled | FanState.FlagControlling | FanState.FlagStored);
+        f.StoredMode = FanState.ModeCurve; f.StoredProfile = FanState.ProfileStandard;
+        Check(!FanCurves.Changed(f, "standard", c, pct), "the stored standard curve is no change");
+        Check(FanCurves.Changed(f, "quiet", c, pct), "another preset is a change");
+        Check(FanCurves.Changed(f, "board", null, null), "the board is a change while the driver runs the fan");
+        var moved = (uint[])pct.Clone(); moved[0] = 45;
+        Check(FanCurves.Changed(f, "custom", c, moved), "an edited curve is a change");
+        Check(!FanCurves.Changed(null, "quiet", c, pct), "no reading: nothing to apply");
+        var leasedNow = FanFixture(f.Flags); leasedNow.StoredMode = FanState.ModeCurve; leasedNow.StoredProfile = FanState.ProfileStandard;
+        leasedNow.Mode = FanState.ModeFixed;
+        Check(FanCurves.Changed(leasedNow, "standard", c, pct), "a fixed test in force makes the stored curve a change again");
+    }
+
+    // The short test: one speed from the list under a lease, then the choice in force again; refused while the driver
+    // does not run the fan in the normal way.
+    static void FanTestPlans()
+    {
+        Check(Strings.Has("plan.title.fan-test") && Strings.Has("perf.fan.refuse.busy") && Strings.Has("perf.fan.refuse.bad-test"), "the test has its words");
+        var s = FanSnapshot(FanFixture());
+        var p = TunePlan("fan-test", s, new Recovery.PlanArgs { FanTestPct = 60 });
+        Check(!p.Refused, "a test at 60 % is planned: " + p.Refusal);
+        Check(p.Tune.Kind == "fan-fixed" && p.Tune.FixedPct == 60 && p.Tune.LeaseMs == FanCurves.TestLeaseMs && p.Tune.TestMs == FanCurves.TestMs, "the plan carries the speed, the lease and the time");
+        Check(p.Tune.LeaseMs > p.Tune.TestMs && p.Tune.LeaseMs >= 5000 && p.Tune.LeaseMs <= 300000, "the lease outlives the test and is one the driver takes");
+        Check(p.Tune.Then != null && p.Tune.Then.Kind == "fan-curve" && p.Tune.Then.FanProfile == FanState.ProfileStandard && p.Tune.Then.FanC == null, "then the standard curve again");
+        Check(p.Writes.Count == 0 && !p.Undoable && p.Preview.Count == 1, "the test writes no setting and lists one line");
+        Check(!PlainWords.Findings(p.Preview.Concat(new[] { PlainPlan.Describe(p).Title })).Any(), "G-NOINT: the test dialog");
+        Check(p.Text().Contains("tuning request fan-fixed, fixed 60 % for 10000 ms, lease 15000 ms, then fan-curve profile standard"), "the log names the test");
+        Check(FanPlan.Arguments(new Recovery.PlanArgs { FanTestPct = 60 }).SequenceEqual(new[] { "--fan-test-pct", "60" }), "the helper gets the speed");
+
+        var custom = FanFixture();
+        custom.Profile = FanState.ProfileCustom; custom.Points = 2;
+        custom.CurveC[0] = 40; custom.CurvePct[0] = 30; custom.CurveC[1] = 80; custom.CurvePct[1] = 100;
+        p = TunePlan("fan-test", FanSnapshot(custom), new Recovery.PlanArgs { FanTestPct = 100 });
+        Check(!p.Refused && p.Tune.Then.FanProfile == FanState.ProfileCustom && p.Tune.Then.FanC.SequenceEqual(new uint[] { 40, 80 }) &&
+            p.Tune.Then.FanPct.SequenceEqual(new uint[] { 30, 100 }), "a custom curve in force comes back point for point");
+        var board = FanFixture(FanState.FlagEnabled); board.Mode = FanState.ModeBoard; board.State = FanState.StateBoard;
+        p = TunePlan("fan-test", FanSnapshot(board), new Recovery.PlanArgs { FanTestPct = 30 });
+        Check(!p.Refused && p.Tune.Then.Kind == "fan-board", "with the board in force, the board gets the fan back");
+
+        foreach (uint bad in new uint[] { 0, 20, 55, 101 })
+            Refused(TunePlan("fan-test", s, new Recovery.PlanArgs { FanTestPct = bad }), "must be one of", "a test at " + bad + " %");
+        Refused(TunePlan("fan-test", s), "must be one of", "a test without a speed");
+        foreach (var flag in new[] { FanState.FlagLeased, FanState.FlagPaused, FanState.FlagFault, FanState.FlagEmergency, FanState.FlagHeldBack })
+        {
+            var busy = FanFixture(FanState.FlagEnabled | FanState.FlagControlling | flag);
+            Check(!FanCurves.TestAllowed(busy), "no test with flag " + flag);
+            var q = TunePlan("fan-test", FanSnapshot(busy), new Recovery.PlanArgs { FanTestPct = 60 });
+            Check(q.Refused && q.PlainRefusal == Strings.T("perf.fan.refuse.busy"), "the test is refused in plain words with flag " + flag);
+        }
+        foreach (var state in new[] { FanState.StateEmergency, FanState.StateDoubt, FanState.StateFault })
+        {
+            var busy = FanFixture(); busy.State = state;
+            Check(!FanCurves.TestAllowed(busy), "no test in state " + state);
+        }
+        Check(FanCurves.TestAllowed(FanFixture()), "a test is allowed while the curve runs");
+        var off = FanFixture(FanState.FlagGated); off.Gate = FanState.GateSetting;
+        Refused(TunePlan("fan-test", FanSnapshot(off), new Recovery.PlanArgs { FanTestPct = 60 }), "does not run the fan control", "a test without the fan control");
+    }
+
+    // G-SENS: the "Now" card and the Case fan card read the fan speed from one function, so they cannot disagree.
+    static void FanSpeedOneSource()
+    {
+        var control = FanFixture();
+        Func<HwmonState, FanState, string> row = (h, c) => Sensors.Rows(null, null, h, c).First(r => r.Id == "fan").Value;
+        string level;
+        Equal(Strings.T("perf.fan.rpm-only", 1180), row(null, control), "without the reader's sample the fan control's RPM is shown");
+        Equal(row(null, control), Sensors.FanValue(null, control, out level), "the Now card and the fan card agree (fixture path)");
+        Equal(Strings.T("perf.no-reading"), row(null, null), "no reading at all");
+        var h0 = new HwmonState { Flags = HwmonState.FlagValid | HwmonState.FlagFresh };
+        h0.Rpm[2] = 1240;
+        Equal(Strings.T("perf.fan.rpm-only", 1240), row(h0, control), "the reader's own sample comes first");
+        Equal(row(h0, control), Sensors.FanValue(h0, control, out level), "the Now card and the fan card agree (live path)");
+        var stopped = new HwmonState { Flags = HwmonState.FlagValid | HwmonState.FlagFresh | HwmonState.FlagStopped };
+        var sr = Sensors.Rows(null, null, stopped, control).First(r => r.Id == "fan");
+        Check(sr.Level == "hot" && sr.Value == Strings.T("perf.fan.stopped"), "a stopped fan stays hot whatever the control reports");
+        var zero = FanFixture(); zero.Rpm = 0;
+        Check(Sensors.Rows(null, null, null, zero).First(r => r.Id == "fan").NoReading, "a zero RPM from the control is no reading");
     }
 
     static void FanLayout(string header)

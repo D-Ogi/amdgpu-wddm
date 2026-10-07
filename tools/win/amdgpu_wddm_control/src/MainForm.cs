@@ -273,6 +273,7 @@ namespace AmdgpuWddmControl
             string focusName = null;
             if (page == _page && ActiveControl != null && _content.Contains(ActiveControl)) focusName = FocusKey(ActiveControl);
             int scroll = page == _page ? -_content.AutoScrollPosition.Y : 0;
+            if (page == "graphics" && TuningAnchor(anchor)) _tuningOpen = true;
             _page = page;
             _anchors.Clear(); _live.Clear();
             _content.SuspendLayout();
@@ -502,9 +503,9 @@ namespace AmdgpuWddmControl
         // Whether the 2 s timer runs (G-PERF): only while the window is visible, not minimised, and on a page with live values.
         public static bool LiveTimerWanted(bool visible, bool minimized, string page) { return Sensors.PollWanted(visible, minimized, page); }
 
-        // The graphics page polls only while a tuning trial runs: the countdown is the driver's, and a page without a
-        // trial has nothing that changes by itself (G-PERF).
-        public static bool LiveTimerWanted(bool visible, bool minimized, string page, bool trial) { return Sensors.PollWanted(visible, minimized, page, trial); }
+        // The graphics page polls only while its tuning cards are open or a tuning trial runs: the countdown, the clock
+        // and the temperature there are the driver's, and the closed page has nothing that changes by itself (G-PERF).
+        public static bool LiveTimerWanted(bool visible, bool minimized, string page, bool tuning) { return Sensors.PollWanted(visible, minimized, page, tuning); }
 
         bool TuningTrialRunning
         {
@@ -518,7 +519,7 @@ namespace AmdgpuWddmControl
         void UpdateTimer()
         {
             if (_smoke) { _timer.Enabled = false; return; }
-            _timer.Enabled = LiveTimerWanted(Visible, WindowState == FormWindowState.Minimized, _page, TuningTrialRunning);
+            _timer.Enabled = LiveTimerWanted(Visible, WindowState == FormWindowState.Minimized, _page, TuningTrialRunning || TuningShown);
         }
 
         public bool TimerRunning { get { return _timer.Enabled; } }

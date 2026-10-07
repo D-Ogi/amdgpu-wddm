@@ -1108,6 +1108,7 @@ static partial class UnitTests
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
         TunerTests(args[0], header);
+        TunerViewTests();
         FanTests(args[0], header);
         DriverCardTests();
         UpdateTests(args[0]);

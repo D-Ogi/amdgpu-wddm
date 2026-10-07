@@ -31,14 +31,34 @@ namespace AmdgpuWddmControl
             return visible && !minimized && (page == "home" || page == "performance");
         }
 
-        // The graphics page has one live value: the countdown of a tuning trial, which the driver keeps. Without a
-        // trial that page polls nothing (G-PERF: no escape every two seconds for a reading nobody looks at).
-        public static bool PollWanted(bool visible, bool minimized, string page, bool tuningTrial)
+        // The graphics page has live values only in its tuning cards: the countdown of a trial, the clock, voltage and
+        // temperature of the curve card. The window passes true while those cards are open or a trial runs; a closed
+        // page polls nothing (G-PERF: no escape every two seconds for a reading nobody looks at).
+        public static bool PollWanted(bool visible, bool minimized, string page, bool tuningLive)
         {
-            return PollWanted(visible, minimized, page) || (visible && !minimized && page == "graphics" && tuningTrial);
+            return PollWanted(visible, minimized, page) || (visible && !minimized && page == "graphics" && tuningLive);
         }
 
-        public static List<SensorRow> Rows(DpmState d, VideoMemoryState vram, HwmonState fan)
+        public static List<SensorRow> Rows(DpmState d, VideoMemoryState vram, HwmonState fan) { return Rows(d, vram, fan, null); }
+
+        // The fan speed in words, one source for the "Now" card and the Case fan card, so the two never disagree. The
+        // reader's own sample comes first (it alone carries the proven duty and the stopped fan). The fan control's
+        // reply carries the same reader's RPM, so a window that has only that one (a poll that missed the reader, a
+        // fixture) still shows the speed. Null: no reading. level: null or "hot".
+        public static string FanValue(HwmonState fan, FanState control, out string level)
+        {
+            level = null;
+            if (fan != null && fan.Reading)
+            {
+                if (fan.Has(HwmonState.FlagStopped)) { level = "hot"; return Strings.T("perf.fan.stopped"); }
+                if (fan.Has(HwmonState.FlagDutyProven)) return Strings.T("perf.fan.value", fan.FastestRpm, fan.DutyPercent);
+                return Strings.T("perf.fan.rpm-only", fan.FastestRpm);
+            }
+            if (control != null && control.Rpm != 0) return Strings.T("perf.fan.rpm-only", control.Rpm);
+            return null;
+        }
+
+        public static List<SensorRow> Rows(DpmState d, VideoMemoryState vram, HwmonState fan, FanState control)
         {
             var rows = new List<SensorRow>();
             Func<string, string, SensorRow> add = (id, value) =>
@@ -59,16 +79,9 @@ namespace AmdgpuWddmControl
             ulong total = vram == null ? 0 : vram.Dedicated != 0 ? vram.Dedicated : vram.LocalLimit;
             add("memory", vram != null && total != 0 && total != ulong.MaxValue ? Strings.T("perf.memory.value", Gib(vram.LocalResident), Gib(total)) : null);
             add("power", null);
-            if (fan == null || !fan.Reading) add("fan", null);
-            else if (fan.Has(HwmonState.FlagStopped))
-            {
-                // A duty output runs and nothing turns. The owner must see this one at a glance.
-                add("fan", Strings.T("perf.fan.stopped")).Level = "hot";
-            }
-            else if (fan.Has(HwmonState.FlagDutyProven))
-                add("fan", Strings.T("perf.fan.value", fan.FastestRpm, fan.DutyPercent));
-            else
-                add("fan", Strings.T("perf.fan.rpm-only", fan.FastestRpm));
+            // A stopped fan (a duty output runs and nothing turns) is "hot": the owner must see it at a glance.
+            string level;
+            add("fan", FanValue(fan, control, out level)).Level = level;
             return rows;
         }
 

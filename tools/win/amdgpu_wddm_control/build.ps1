@@ -48,7 +48,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'FanPlan.cs' |
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
@@ -213,11 +213,13 @@ if (-not $NoSmoke) {
         # The fan card (docs/design/fan.md Part B): the driver runs the standard curve with nothing stored.
         'fan-auto'    = @(0, 'tuning request fan-board', 'takes effect: at once', 'undo: no')
         'fan-curve'   = @(0, 'tuning request fan-curve, fan profile quiet', 'takes effect: at once')
+        # The card's short test: one speed under a lease, then the standard curve in force again, nothing stored.
+        'fan-test'    = @(0, 'tuning request fan-fixed, fixed 60 % for 10000 ms, lease 15000 ms, then fan-curve profile standard', 'takes effect: at once', 'undo: no')
     }
     foreach ($e in $tune.GetEnumerator()) {
         $extra = @(switch ($e.Key) { 'tune-trial' { '--curve', '820,830,850,870,889,909,925,942,958,974,990' }
             'reset-defaults' { '--games', 'keep' }
-            'cpu-trial' { '--cpu-uv', '8' } 'core-mask' { '--cores', '8' } 'fan-curve' { '--fan-profile', 'quiet' } })
+            'cpu-trial' { '--cpu-uv', '8' } 'core-mask' { '--cores', '8' } 'fan-curve' { '--fan-profile', 'quiet' } 'fan-test' { '--fan-test-pct', '60' } })
         $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $tuned)) "tune-$($e.Key)"
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
@@ -232,12 +234,15 @@ if (-not $NoSmoke) {
     if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The core count must be 6 or 8.')) { throw "7 cores must be refused (exit $($r.Code)): $($r.Text)" }
     $r = Invoke-DryRun @('--action', 'fan-curve', '--fan-profile', 'custom', '--fan-curve', '40:30,30:60', '--dry-run', '--snapshot', $tuned) 'fan-falling'
     if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The fan curve breaks rule Temperature at point 2.')) { throw "a fan curve that falls back must be refused (exit $($r.Code)): $($r.Text)" }
+    $r = Invoke-DryRun @('--action', 'fan-test', '--fan-test-pct', '55', '--dry-run', '--snapshot', $tuned) 'fan-test-off-list'
+    if ($r.Code -ne 3 -or -not $r.Text.Contains('refused: The test speed must be one of 30, 40, 50, 60, 70, 80, 90, 100 %.')) { throw "a test speed off the list must be refused (exit $($r.Code)): $($r.Text)" }
     foreach ($bad in @(@('tune-trial'), @('tune-trial', '--curve', '820,840'), @('cpu-trial', '--cores', '8'), @('core-mask', '--curve', '820,840,860,880,899,919,935,952,968,984,1000'),
-            @('fan-curve'), @('fan-auto', '--fan-profile', 'quiet'), @('fan-curve', '--fan-profile', 'quiet', '--fan-curve', '40:30,80:100'), @('fan-curve', '--fan-profile', 'custom'))) {
+            @('fan-curve'), @('fan-auto', '--fan-profile', 'quiet'), @('fan-curve', '--fan-profile', 'quiet', '--fan-curve', '40:30,80:100'), @('fan-curve', '--fan-profile', 'custom'),
+            @('fan-test'), @('fan-auto', '--fan-test-pct', '60'))) {
         $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $tuned)) ('usage-tune-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }
-    Write-Host "  tuning dry runs: $($tune.Count) plans, 3 refusals, 8 usage errors"
+    Write-Host "  tuning dry runs: $($tune.Count) plans, 4 refusals, 10 usage errors"
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'
@@ -361,6 +366,16 @@ if (-not $NoSmoke) {
     $runs += , @('ko-2-nagi', '2', '--lang', 'ko', '--nagi', '--fixture', "`"$fixture`"")
     $runs += , @('en-1-switch-ja', '1', '--switch-to', 'ja', '--fixture', "`"$fixture`"")
     $runs += , @('ja-1-switch-pl', '1', '--lang', 'ja', '--switch-to', 'pl', '--fixture', "`"$fixture`"")
+    # The tuning cards in their other states (docs/design/tuner.md): the BD-059 runs above draw a curve test and saved
+    # processor settings; these draw the standard curve with a readback behind it, and the card that waits for a restart.
+    $tuner = Join-Path $here 'test\snapshot-tuner.json'
+    $tunerOff = Join-Path $here 'test\snapshot-tuner-off.json'
+    $runs += , @('en-1-tuner', '1', '--fixture', "`"$tuner`"")
+    $runs += , @('pl-1.25-tuner', '1.25', '--lang', 'pl', '--fixture', "`"$tuner`"")
+    $runs += , @('ja-1.5-tuner', '1.5', '--lang', 'ja', '--fixture', "`"$tuner`"")
+    $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
+    $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
+    $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
     $failed = @()
     foreach ($r in $runs) {
         $dir = Join-Path $obj "render\$($r[0])"
@@ -369,7 +384,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (8 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (8 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch, tuning states): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name

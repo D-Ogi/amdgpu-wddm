@@ -289,6 +289,29 @@ has not applied yet leaves Keep off and says so. An owed way back (`BC250_CPU_FL
 firmware refused, which the driver repeats every second) is said at the top of the processor card, because the
 part is then running a setting nobody chose to keep.
 
+The "Advanced tuning" card is closed when the page opens, and shows one line per surface instead: standard, a
+test runs, or an own setting is in use. It opens by itself while a trial runs or a way back is owed, and cannot be
+closed then. While it is open, the page reads both escapes every 2 s (READ only, `NoAdapterSynchronization`); a
+closed card reads nothing.
+
+What the open cards show (`tools/win/amdgpu_wddm_control/src/TunerView.cs`, pure functions of the two readings):
+
+| Card | Rows |
+|---|---|
+| Graphics voltage | in use now, saved for every start, the clock and voltage of the governor's level and the temperature (`LevelMHz`, `LevelMv`, `TemperatureMc`), the chart with a ring at that level and a dashed line at the ceiling, one row per speed with the difference from standard and the voltage in use when an edit differs |
+| Processor | the readback (voltage, temperature, temperature cap, the clock of each core that answered, the P-state clocks, the processor count), then what is in force, what is saved, and the baseline this start recorded (what "Standard processor settings" puts back), then the three pickers over the driver's own lists |
+
+How a trial ended is said in a sentence, not left to the reader: kept, stopped, gone back by itself at the end of
+the window, or reset. The curve's own counters (`Keeps`, `Cancels`, `Reverts`) tell the four apart. The processor
+has one revert counter for a stop and for the end of a window, so the window names its own stop and reset itself.
+`DpmCurveLastReason` 2 or 3 and `CpuLastReason` 2, 3, 6 or 7 give one sentence each that the saved settings were
+not used at this start. `CpuTune` written but not yet read by the driver shows "turns on after the next restart"
+with a Restart button, never a second "turn on".
+
+A button is enabled exactly when the plan behind it stands. `test/TunerViewTests.cs` checks this at every step of
+each scenario against a fake driver that keeps the trial rules above (set, the governor's tick, keep, cancel, the end
+of the window, reset, the readback, `CpuTune` and a restart).
+
 "Reset driver settings to the release defaults" takes these settings back as well: the stored curve, the stored
 processor values, the core mask and `CpuTune` itself. They are not in the release's `manifest.json`, because the
 driver stores them, so the action sends the same escapes this page sends (WU-042: one control puts the standard

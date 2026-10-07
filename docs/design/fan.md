@@ -430,11 +430,33 @@ bc250kmd_cli fan set <percent 20..100> <seconds 5..300>
 bc250kmd_cli fan renew <seconds 5..300>
 ```
 
-The control application has a Case fan card on the Performance page. It shows the fan speed and who runs
-the fan, and offers Automatic (board), Driver curve (the default), Quiet, Performance and a curve that the
-user edits point by point. The card sends the choice through the elevated helper (`--action fan-auto` or
-`--action fan-curve`), always with `Store` 1. "Reset to defaults" puts the Driver curve back. The support
-report carries one `fan control:` line.
+The control application has a Case fan card on the Performance page. It shows:
+
+- The fan speed and who runs the fan. The speed comes from `Sensors.FanValue`, the same function that fills
+  the Fan row of the Now card: the reader's own sample first, else the RPM in the `RUN_FAN` reply. The two
+  cards therefore never disagree.
+- Five modes in one segmented row: Automatic (board), Driver curve (the default), Quiet, Performance and
+  Custom, with one line that says what the selected mode does.
+- A chart of the curve: temperature 20 to 95 C across, speed 0 to 100 % up. It shades the 20 % floor and the
+  87 C zone, draws the curve in force dashed when it differs, and puts a ring at the guard temperature and
+  the applied duty. A preset shows its curve here before it is applied. The points move with the mouse or
+  the keyboard (left and right select, up and down change the speed, Ctrl with left and right changes the
+  temperature), always through `FanCurves.Move`, so a curve made on the chart obeys the curve rules. Each
+  point is an accessible child with its own name and value. Compact rows under the chart show every point
+  again, with an inline message when a row breaks a rule.
+- Rules 4 to 8 above in plain words.
+- "Apply curve" (or "Hand the fan to the board"), enabled only when the choice differs from the one in
+  force and stored. After an apply, "Go back to the previous setting" applies the choice from before.
+- A short test: one speed from 30 to 100 % for 10 s (`--action fan-test --fan-test-pct N`). The helper sends
+  FIXED with a 15 s lease, as `bc250kmd_cli fan set` does, reads the fan once a second, and then sends the
+  choice that was in force again (CURVE or BOARD, `LeaseMs` 0, `Store` 0). If the helper stops halfway, the
+  lease runs out and the board gets the fan (rule 9). The window keeps its own poll during the test and shows
+  the fastest RPM it saw. The test is refused while the driver does not run the fan in the normal way:
+  leased, paused, fault, emergency, doubt or held back.
+
+The choices go through the elevated helper (`--action fan-auto` or `--action fan-curve`), always with
+`Store` 1. "Reset to defaults" puts the Driver curve back. The support report carries one `fan control:`
+line.
 
 The read check of Part A, `lab-fan-read.ps1`, judges the board's own curve. With the fan control on, run
 `bc250kmd_cli fan auto` before it, or the RPM trend it judges is the driver's curve.

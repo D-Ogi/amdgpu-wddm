@@ -17,6 +17,8 @@ namespace AmdgpuWddmControl
     {
         uint[] _mv = Tuner.Table(), _line = Tuner.Table(), _floor = Tuner.Floors();
         int _selected;
+        int _now = -1, _ceiling = -1;               // the governor's level now and the highest speed, -1: not on the grid
+        uint _nowMv;
         bool _drag;
         Tuner.ChangeGate _gate;                     // holds the two events while a drag or a key press runs
         public event EventHandler Changed;          // a knot moved
@@ -50,6 +52,16 @@ namespace AmdgpuWddmControl
             if (line != null && line.Length == Tuner.Points) _line = (uint[])line.Clone();
             if (floor != null && floor.Length == Tuner.Points) _floor = (uint[])floor.Clone();
             Describe();
+            Invalidate();
+        }
+
+        // Where the chip runs now (a ring on the curve in force) and the highest speed the clock may reach (a dashed
+        // line), both from the driver's reading. Either one off the grid is not drawn.
+        public void SetMarks(int nowIndex, uint nowMv, int ceilingIndex)
+        {
+            _now = nowIndex >= 0 && nowIndex < Tuner.Points ? nowIndex : -1;
+            _nowMv = nowMv;
+            _ceiling = ceilingIndex >= 0 && ceilingIndex < Tuner.Points ? ceilingIndex : -1;
             Invalidate();
         }
 
@@ -137,9 +149,22 @@ namespace AmdgpuWddmControl
                 var w = g.MeasureString(last, Theme.MonoSmall);
                 g.DrawString(last, Theme.MonoSmall, text, r.Right - w.Width, r.Bottom + Theme.S(3));
             }
+            if (_ceiling >= 0)
+                using (var cap = new Pen(Theme.Warn, Theme.S(1)) { DashStyle = DashStyle.Dash })
+                {
+                    int x = At(r, _ceiling, 0).X;
+                    g.DrawLine(cap, x, r.Top, x, r.Bottom);
+                }
             Line(g, r, _line, Theme.Dim, 1, false);
             Line(g, r, _floor, Color.FromArgb(120, Theme.Teal), 1, false);
             Line(g, r, _mv, Theme.Teal, 2, true);
+            if (_now >= 0 && _nowMv != 0)
+                using (var ring = new Pen(Theme.Text, Theme.S(2)))
+                {
+                    var p = At(r, _now, _nowMv);
+                    int s = Theme.S(8);
+                    g.DrawEllipse(ring, p.X - s, p.Y - s, s * 2, s * 2);
+                }
             if (Focused)
                 using (var focus = new Pen(Theme.Focus) { DashStyle = DashStyle.Dot })
                     g.DrawRectangle(focus, 0, 0, Width - 1, Height - 1);
