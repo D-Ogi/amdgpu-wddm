@@ -217,6 +217,10 @@ HKR, Parameters, EnableSmuMetrics,   0x00010001, 1
 ;                              largest whole MiB the 512 MiB GART holds after the private GTT and the paging window.
 ;                              If the GART refuses the size, the start falls back to 256 once instead of failing.
 ;                              Only MAP_APERTURE_SEGMENT operations use this range.
+;   EnableSharedResidency      absent = 1. A VRAM allocation of the user-mode driver that is not a scan-out surface
+;                              and not DISCARDABLE may also be resident in the aperture segment, second in order, so
+;                              Windows can move it to system memory under pressure instead of evicting it, as amdgpu
+;                              lets a VRAM buffer fall back to GTT. 0 gives the one local segment of 0.7.216.1.
 
 [Strings]
 Provider    = "amdgpu-wddm"

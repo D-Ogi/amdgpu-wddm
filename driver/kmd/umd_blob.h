@@ -31,6 +31,7 @@
 #define UMD_BLOB_HEAP_VRAM      0x4u          // AMDGPU_GEM_DOMAIN_VRAM
 #define UMD_BLOB_GEM_NO_CPU_ACCESS 0x2ull // AMDGPU_GEM_CREATE_NO_CPU_ACCESS
 #define UMD_BLOB_GEM_GTT_USWC      0x4ull // AMDGPU_GEM_CREATE_CPU_GTT_USWC
+#define UMD_BLOB_GEM_DISCARDABLE   0x1000ull // AMDGPU_GEM_CREATE_DISCARDABLE
 
 #define UMD_BLOB_IP_GFX         0u
 #define UMD_BLOB_IP_COMPUTE     1u
@@ -107,6 +108,26 @@ int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation);
 
 // On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);
+
+// Memory manager stage 1c (0.7.216.8): the segments an allocation may be resident in, for
+// DXGK_ALLOCATIONINFO.PreferredSegment and the two supported sets. Segment ids are the KMD's
+// one-based ones (vram, aperture); a set has bit (id - 1) for each id, as the DDI defines it.
+//   GTT heap            {aperture}, as before: the winsys asked for host memory.
+//   VRAM heap, shared   {vram, aperture} in that order: VidMm may demote the allocation to system
+//                       memory instead of evicting it. amdgpu does the same for every VRAM-only
+//                       buffer that is not a kernel or DISCARDABLE one (amdgpu_object.c
+//                       amdgpu_bo_create: allowed_domains |= AMDGPU_GEM_DOMAIN_GTT).
+//   VRAM heap, scan-out {vram}: the display core reads only the local segment.
+//   VRAM, DISCARDABLE   {vram}: amdgpu gives such a buffer no GTT fallback either.
+//   shared == 0         {vram} for every VRAM allocation: the placement before 0.7.216.8.
+// Returns 1 when the aperture is the second choice, else 0. A NULL view gets {vram} with no
+// second choice; *out is always written.
+struct umd_placement {
+    unsigned long preferred[2];   // preference order; preferred[1] == 0 means no second choice
+    unsigned long supported;      // the read and the write segment set, which are the same here
+};
+int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram, unsigned long aperture,
+                     int shared, struct umd_placement* out);
 
 // ddi_node is the node DxgkDdiCreateContext was asked for. The blob's node_ordinal must name that
 // same node, and that node must be UMD_BLOB_NODE_3D.

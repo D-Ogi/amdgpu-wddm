@@ -40,6 +40,7 @@ static void CheckContract(void)
     CHECK(offsetof(struct bc250_umd_alloc_private, gem_flags) == 40);
     CHECK(UMD_BLOB_GEM_GTT_USWC == AMDGPU_GEM_CREATE_CPU_GTT_USWC);
     CHECK(UMD_BLOB_GEM_NO_CPU_ACCESS == AMDGPU_GEM_CREATE_NO_CPU_ACCESS);
+    CHECK(UMD_BLOB_GEM_DISCARDABLE == AMDGPU_GEM_CREATE_DISCARDABLE);
     CHECK(offsetof(struct bc250_umd_context_private, ip_type) == 16);
     CHECK(offsetof(struct bc250_umd_context_private, ip_instance) == 20);
     CHECK(offsetof(struct bc250_umd_context_private, ring) == 24);
@@ -341,6 +342,57 @@ int main(void)
     CHECK(UmdBlobParseSubmit(0, 80, &sv) == UMD_BLOB_TOO_SMALL);
     FillSubmit(&submit, 1);
     CHECK(UmdBlobParseSubmit(&submit, SubmitWire(1) - 1, &sv) == UMD_BLOB_BAD_SIZE);
+
+    // Memory manager stage 1c: the segments a parsed allocation may live in. Segment ids as wddm.c
+    // has them: 1 local, 2 aperture; a set has bit (id - 1).
+    {
+        struct umd_placement pl;
+        unsigned shared, heap, scan, discard;
+        int second;
+        for (shared = 0; shared < 2; shared++)
+        for (heap = 0; heap < 2; heap++)
+        for (scan = 0; scan < 2; scan++)
+        for (discard = 0; discard < 2; discard++) {
+            int want;
+            memset(&av, 0, sizeof(av));
+            av.heap = heap ? UMD_BLOB_HEAP_VRAM : UMD_BLOB_HEAP_GTT;
+            av.scanout = (int)scan;
+            av.gem_flags = (discard ? AMDGPU_GEM_CREATE_DISCARDABLE : 0) | AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+            second = UmdBlobPlacement(&av, 1, 2, (int)shared, &pl);
+            if (!heap) {
+                // GTT: the aperture alone, whatever the switch and the flags say.
+                CHECK(!second && pl.preferred[0] == 2 && pl.preferred[1] == 0 && pl.supported == 0x2);
+                continue;
+            }
+            want = shared && !scan && !discard;
+            CHECK(second == want && pl.preferred[0] == 1);
+            CHECK(pl.preferred[1] == (want ? 2ul : 0ul));
+            CHECK(pl.supported == (want ? 0x3ul : 0x1ul));
+            // Every preference is in the supported set (VidMm asserts otherwise).
+            CHECK((pl.supported & (1ul << (pl.preferred[0] - 1))) != 0);
+            CHECK(!pl.preferred[1] || (pl.supported & (1ul << (pl.preferred[1] - 1))) != 0);
+        }
+        // From the parser: a v3 VRAM blob that asked for scan-out stays local, the same blob
+        // without the request may be demoted.
+        FillAlloc(&alloc, AMDGPU_GEM_DOMAIN_VRAM);
+        alloc.version = BC250_UMD_ALLOC_VERSION_SCANOUT;
+        alloc.alloc_size = 1920ull * 4 * 1080;
+        alloc.flags = BC250_UMD_A_SCANOUT;
+        alloc.scanout_width = 1920; alloc.scanout_height = 1080; alloc.scanout_pitch = 1920 * 4;
+        alloc.scanout_format = 87;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
+        CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 0 && pl.supported == 0x1 && pl.preferred[1] == 0);
+        alloc.flags = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
+        CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 1 && pl.supported == 0x3 && pl.preferred[1] == 2);
+        // No view: the local segment only. Ids this driver does not have: nothing at all.
+        CHECK(UmdBlobPlacement(NULL, 1, 2, 1, &pl) == 0 && pl.preferred[0] == 1 && pl.supported == 0x1);
+        CHECK(UmdBlobPlacement(&av, 0, 2, 1, &pl) == 0 && pl.supported == 0 && pl.preferred[0] == 0);
+        CHECK(UmdBlobPlacement(&av, 1, 1, 1, &pl) == 0 && pl.supported == 0);
+        CHECK(UmdBlobPlacement(&av, 1, 32, 1, &pl) == 0 && pl.supported == 0);
+        CHECK(UmdBlobPlacement(&av, 1, 2, 1, NULL) == 0);
+        printf("placement: 16 heap/scan-out/discardable/switch cases and the parser-fed ones\n");
+    }
 
     CHECK(strcmp(UmdBlobStatusText(UMD_BLOB_OK), "ok") == 0);
     CHECK(strcmp(UmdBlobStatusText(UMD_BLOB_BAD_IB), "bad ib") == 0);

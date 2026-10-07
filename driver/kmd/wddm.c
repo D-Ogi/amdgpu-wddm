@@ -416,6 +416,13 @@ typedef struct _BC250_WDDM {
     // separately from the GDI path, so a desktop present cannot spend the evidence.
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
+    // Memory manager stage 1c (0.7.216.8): EnableSharedResidency, latched at WddmStart, and the UMD
+    // allocations by the segment sets they got (umd_blob.c UmdBlobPlacement): local or aperture alone, or
+    // local first with the aperture as VidMm's demotion target.
+    BOOLEAN SharedResidency;
+    volatile LONG UmdAllocsLocalOnly;
+    volatile LONG UmdAllocsShared;
+    volatile LONG UmdAllocsAperture;
     volatile LONG UmdContexts;
     volatile LONG ContextsLogged;       // KMD193: the capped "context %p pid ..." identity line, every kind
     volatile LONG FaultSnapshots;       // KMD193: HARDWARE FENCE TIMEOUT register snapshots taken
@@ -2283,6 +2290,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->HwSubmitted, Wddm->HwCompleted, Wddm->HwTimeouts, Wddm->HwRefused);
     GuardLog("wddm summary: umd: %ld allocs (%ld refused), %ld contexts, %ld submits on the ring, %ld not run",
              Wddm->UmdAllocs, Wddm->UmdAllocRefused, Wddm->UmdContexts, Wddm->UmdSubmitHw, Wddm->UmdSubmitSoft);
+    // A line of its own, so that the line above keeps the text its readers parse.
+    GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
+             Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
+             Wddm->UmdAllocsAperture);
     // ADR 0008 stage D (docs/design/paging-node.md section 7): node 1 exists in this line whether or not the
     // gate is open - every counter stays 0 with it closed, same as every other stage-behind-a-gate counter here.
     GuardLog("wddm profile: umd calls %ld, elapsed ticks %lld, QPC frequency %lld",
@@ -2789,6 +2800,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // owner set on 2026-10-05. The value 0 is 0.7.208.1 behaviour exactly, which is what makes it the bisect
     // switch of this feature: one restart with NotifyDpcInReport 0 prices the pairing against the driver that
     // does not have it, in the same session shape.
+    // Memory manager stage 1c (0.7.216.8), read once for this start: absent = ON. A VRAM allocation of the UMD that
+    // is not a scan-out and not DISCARDABLE gets the aperture as its second segment, so VidMm can demote it to
+    // system memory under local pressure instead of evicting it (umd_blob.c UmdBlobPlacement, the amdgpu rule).
+    // Under GpuMmu such an allocation is "not mapped" into the aperture; its pages are reached through
+    // system-memory leaves of the GPU page tables (gpu-segments.md), the PTE shape every GTT allocation already
+    // uses. 0 gives every VRAM allocation the one local segment, which is 0.7.216.1 byte for byte.
+    wddm->SharedResidency = (GuardReadSetting(L"EnableSharedResidency", 1) != 0);
+    GuardLog("wddm: shared residency %s", wddm->SharedResidency ?
+             "on (UMD VRAM allocations may be demoted to the aperture)" : "off (0.7.216.1 placement)");
     wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
              wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
@@ -4128,10 +4148,29 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         info->MaximumRenamingListLength = 0;
         info->pAllocationUsageHint = NULL;
         info->PitchAlignedSize = 0;
-        info->PreferredSegment.Value = 0;
-        info->PreferredSegment.SegmentId0 = segment;
-        info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
-        info->SupportedWriteSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
+        // Memory manager stage 1c: the winsys heap still decides the first segment (segment above); a VRAM
+        // allocation that is not a scan-out may also live in the aperture, second in the preference order, when
+        // EnableSharedResidency is on. Preferences are ordered (d3dukmdt.h D3DDDI_SEGMENTPREFERENCE) and every
+        // one of them is in both supported sets, which DXGK_ALLOCATIONINFO requires.
+        //   EvictionSegmentSet stays 0 (the report's stage 1b is not taken): with 0 VidMm "transfer[s] the content
+        // ... directly to paged-locked system memory" (d3dkmddi.h DXGK_ALLOCATIONINFO), and on this driver an
+        // aperture endpoint and an MDL endpoint resolve to the same host physical page (gfx.c
+        // PagingResolvePhysical), so staging through the aperture would add a map, a GART write and a TLB flush
+        // per eviction and accelerate nothing.
+        {
+            struct umd_placement placement;
+            const int shared = UmdBlobPlacement(&view, BC250_WDDM_SEGMENT_VRAM, BC250_WDDM_SEGMENT_APERTURE,
+                                                wddm != NULL && wddm->SharedResidency, &placement);
+            info->PreferredSegment.Value = 0;
+            info->PreferredSegment.SegmentId0 = placement.preferred[0];
+            info->PreferredSegment.SegmentId1 = placement.preferred[1];
+            info->SupportedReadSegmentSet = placement.supported;
+            info->SupportedWriteSegmentSet = placement.supported;
+            if (wddm != NULL)
+                InterlockedIncrement(shared ? &wddm->UmdAllocsShared :
+                                     segment == BC250_WDDM_SEGMENT_APERTURE ? &wddm->UmdAllocsAperture :
+                                     &wddm->UmdAllocsLocalOnly);
+        }
         info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
