@@ -237,6 +237,43 @@ namespace AmdgpuWddmControl
             w.AppendLine("[HKLM\\" + Profiles.RegistryPath + "]");
             try { foreach (var kv in SettingsStore.ReadProfiles()) w.AppendLine(kv.Key + " Experiment = " + kv.Value); }
             catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
+            w.AppendLine();
+            w.AppendLine(AudioInterrupt());
+            return w.ToString();
+        }
+
+        // The one setting of a device that is not ours: MSISupported of the GPU's HD Audio function (BD-092). The
+        // installer writes 1 there, because on a line interrupt the DisplayPort audio of this board plays at a third
+        // of its rate. "absent" is the inbox state, which is what a computer looks like before the install.
+        const string AudioEnum = "SYSTEM\\CurrentControlSet\\Enum";
+        const string AudioIdPrefix = "PCI\\VEN_1002&DEV_13FF";
+        static string AudioInterrupt()
+        {
+            var w = new StringBuilder();
+            w.AppendLine("HD Audio function of the GPU (" + AudioIdPrefix + "*), MSISupported:");
+            try
+            {
+                var found = 0;
+                using (var root = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(AudioEnum + "\\PCI"))
+                    if (root != null)
+                        foreach (var device in root.GetSubKeyNames())
+                        {
+                            if (device.IndexOf("VEN_1002&DEV_13FF", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                            using (var instances = root.OpenSubKey(device))
+                                if (instances != null)
+                                    foreach (var instance in instances.GetSubKeyNames())
+                                    {
+                                        found++;
+                                        var path = AudioEnum + "\\PCI\\" + device + "\\" + instance
+                                                 + "\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties";
+                                        var value = SettingsStore.ReadDword(path, "MSISupported");
+                                        w.AppendLine("PCI\\" + device + "\\" + instance + " = "
+                                                     + (value.HasValue ? value.Value.ToString() : "absent"));
+                                    }
+                        }
+                if (found == 0) w.AppendLine("no such function on this computer");
+            }
+            catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
             return w.ToString();
         }
 

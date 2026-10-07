@@ -68,6 +68,35 @@ foreach ($name in 'amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk
     Invoke-Change "remove the Start menu shortcut $lnk" { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue } | Out-Null
 }
 
+Write-Step 'DisplayPort audio interrupt'
+# The one value the install changed on the GPU's HD Audio function (BD-092, common.ps1): back as it was, or removed
+# when there was none. Before the driver package goes, so the function is restarted while the audio endpoint of our
+# driver can still exist. A value that is not the one the install wrote belongs to whoever wrote it and stays.
+$audioRecord = @()
+if ($state -and $state.PSObject.Properties['hda_msi'] -and ($null -ne $state.hda_msi)) { $audioRecord = @($state.hda_msi) }
+if (-not $audioRecord.Count) { Write-Info 'no record of a change to the HD Audio function in the installer state: nothing to put back' }
+else {
+    $audioPlan = @(Get-GpuAudioMsiRestorePlan -Recorded $audioRecord -Readings (Read-GpuAudioMsi) -Wrote 1)
+    Write-Info "GPU HD Audio function: $(Format-GpuAudioMsiPlan $audioPlan)"
+    foreach ($audio in @($audioPlan | Where-Object { $_.write -or $_.drop })) {
+        try {
+            Invoke-Change "$($audio.key): $(Format-GpuAudioMsiPlan @($audio)), then pnputil /restart-device for that one function" {
+                if ($audio.drop) { Remove-GpuAudioMsiValue $audio.key } else { Set-GpuAudioMsiValue $audio.key $audio.value }
+                $check = Test-GpuAudioMsi -InstanceId $audio.instance -Expected $audio.value
+                if (-not $check.ok) { throw "$($script:AudioMsiValue) reads back as '$($check.value)'" }
+                $restart = Restart-GpuAudioDevice -InstanceId $audio.instance
+                Write-Info "pnputil /restart-device: exit $($restart.code), device status '$($restart.status)' after $($restart.seconds) s"
+                Write-Log $restart.text
+                if (-not $restart.ok) { throw "the HD Audio function did not come back within $($script:AudioRestartWaitSeconds) s (pnputil exit $($restart.code), status '$($restart.status)')" }
+            } | Out-Null
+        } catch {
+            Write-Warn2 ("the HD Audio function $($audio.instance) keeps $($script:AudioMsiValue) as this release set it: " +
+                "$($_.Exception.Message). Remove the value by hand (regedit, as an administrator) under $($audio.key), or leave it: " +
+                'it changes nothing but the interrupt of the DisplayPort audio endpoint.')
+        }
+    }
+}
+
 Write-Step 'Graphics registration and driver'
 $dev = @(Get-Bc250Device)
 if ($dev.Count -eq 1) {

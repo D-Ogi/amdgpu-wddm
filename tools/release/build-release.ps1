@@ -22,7 +22,7 @@ param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
     [string]$DriverVer = '0.7.216.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.216.100-tester.19',
+    [string]$Version = '0.7.216.100-tester.20',
     [string]$KitVersion = '10.0.26100.0',
     [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
@@ -285,6 +285,15 @@ $pwshExe = (Get-Process -Id $PID).Path
 $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-marker-guard.ps1'), '-Repo', $repo, '-Out', (Join-Path $Out 'marker-guard')) -TimeoutSeconds 600
 $r.text
 if ($r.code -ne 0) { throw 'marker guard: a fix named in a source revision has no comment in this release (see above)' }
+# The packaged INF's own settings against the defaults table this package carries (BD-091, tools\quality\inf_gates.py):
+# every setting the INF writes is the released value and carries NOCLOBBER, so an install this installer does not drive
+# cannot close one gate while another stays open. The packaged INF, not the repository's: the release re-stamps
+# DriverVer and adds the Reboot directive above, and it is the packaged file that runs on a tester's computer.
+$pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $pythonExe) { throw 'python is not on PATH: the inf-gates gate (BD-091) cannot run' }
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $repo 'tools\quality\inf_gates.py'), '--inf', $infPath, '--defaults', (Join-Path $PSScriptRoot 'installer\registry-defaults.json'), '--out', (Join-Path $Out 'inf-gates')) -TimeoutSeconds 120
+$r.text
+if ($r.code -ne 0) { throw 'the packaged bc250kmd.inf and installer\registry-defaults.json disagree about a driver setting (see above)' }
 # The kernel sources of this repository compile and link with the WDK of this workspace (test-kmd-compile.ps1).
 # quick.ps1 only exports the compile commands, so without this gate a C error in driver\kmd reached the release.
 $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-kmd-compile.ps1'), '-Root', $Root, '-Out', (Join-Path $Out 'kmd-compile'), '-KitVersion', $KitVersion) -TimeoutSeconds 900

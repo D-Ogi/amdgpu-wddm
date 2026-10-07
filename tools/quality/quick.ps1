@@ -24,6 +24,9 @@ function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
 }
 try {
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
+ # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
+ # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
+ Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
@@ -51,6 +54,9 @@ try {
  Check 'kmd-compile' { & pwsh -NoProfile -File "$repo\driver\kmd\build.ps1" -Kits "$Workspace\toolchain\nuget" -Out "$Out\kmd" -CompileOnly }
  Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
+ # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
+ # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
+ Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
@@ -149,6 +155,8 @@ try {
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
+  @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
+  @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}

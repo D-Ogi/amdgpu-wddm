@@ -1129,6 +1129,40 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 # pnputil back.
 Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames -Reopen:$script:ReopenClosures
 
+# DisplayPort audio, the interrupt of the GPU's HD Audio function (BD-092, common.ps1). That function keeps the inbox
+# HDAudBus driver, and the inbox INF leaves it on a line interrupt, where the stream interrupts of this board never
+# arrive: the audio plays at a third of its rate and a stream takes 7 to 9 seconds to start. One value, MSISupported,
+# and a restart of that one device put it on message-signalled interrupts, which is what Linux uses here. The value
+# from before this install goes into the state first, so the uninstaller can put it back; a re-run finds the value
+# already set and writes nothing. A failure is a warning: the rest of the driver does not depend on the audio.
+$audioPlan = @(Get-GpuAudioMsiPlan -Readings (Read-GpuAudioMsi) -Wanted 1)
+Write-Info "GPU HD Audio function: $(Format-GpuAudioMsiPlan $audioPlan)"
+if ($audioPlan.Count) {
+    # Recorded before the first write of this install, and only once: a re-run must not record the value this
+    # installer itself wrote as the value from before the install.
+    [void](Set-StateValueOnce $state 'hda_msi' @($audioPlan | ForEach-Object { [pscustomobject]@{ instance = $_.instance; previous = $_.previous; key_present = $_.key_present } }))
+    Save-InstallState $state
+}
+foreach ($audio in @($audioPlan | Where-Object { $_.write })) {
+    # Invoke-Change throws on to the top-level trap, so the catch is outside it (as for the H.264 encoder above).
+    try {
+        Invoke-Change "$($audio.key): $(Format-GpuAudioMsiPlan @($audio)), then pnputil /restart-device for that one function" {
+            Set-GpuAudioMsiValue $audio.key $audio.value
+            $check = Test-GpuAudioMsi -InstanceId $audio.instance -Expected $audio.value
+            if (-not $check.ok) { throw "$($script:AudioMsiValue) reads back as '$($check.value)', not $($audio.value)" }
+            $restart = Restart-GpuAudioDevice -InstanceId $audio.instance
+            Write-Info "pnputil /restart-device: exit $($restart.code), device status '$($restart.status)' after $($restart.seconds) s"
+            Write-Log $restart.text
+            if (-not $restart.ok) { throw "the HD Audio function did not come back within $($script:AudioRestartWaitSeconds) s (pnputil exit $($restart.code), status '$($restart.status)')" }
+            $check = Test-GpuAudioMsi -InstanceId $audio.instance -Expected $audio.value
+            if (-not $check.ok) { throw "$($script:AudioMsiValue) reads back as '$($check.value)' after the restart, not $($audio.value)" }
+        } | Out-Null
+    } catch {
+        Write-Warn2 ("DisplayPort audio keeps the line interrupt of $($audio.instance): $($_.Exception.Message). " +
+            'Sound over DisplayPort can play too slowly. Remedy: run install.cmd -Repair. The rest of the driver is not affected.')
+    }
+}
+
 # Graphics registration in the GPU's software key: the D3D9 slot empty (D3D9On12 on our D3D12 driver), the D3D10/11
 # slots, the D3D12 slot, Vulkan.
 $umd = Get-UmdNames $InstallRoot
