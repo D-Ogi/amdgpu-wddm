@@ -827,7 +827,9 @@ Inherited associations (fact M837, measured with `tools/win/d3d12ddicap` on WARP
 the development PC). The importer's summary lists every export of an imported collection with the subobjects that
 collection associated with it, as pointers into the collection's own DDI array. The runtime also leaves out of the
 importer's array every declared root signature and shader configuration that no export of the importer takes: the
-link of Unreal Engine 4.26's shape arrives as its collections, its pipeline configuration and the summary. The
+link of Unreal Engine 4.26's shape arrives as its collections, its state object configuration, its pipeline
+configuration and the summary. A summary also associates the state object configuration with each export, and an
+addition (AddToStateObject) gets a pipeline configuration that the application did not give (fact M838). The
 engine already has those associations in the collection's engine object (`raytracing_pipeline.c`,
 `d3d12_state_object_add_collection`: a compiled collection gives its configurations at priority INHERITED_COLLECTION
 and its global root signatures as pipeline variants, and a deferred one gives its associations, the explicit ones
@@ -931,13 +933,26 @@ the last two controls: the engine's own internal references keep an imported col
 (`raytracing_pipeline.c:2762-2769`), so engine-ddi's held references are for the lifetime contract, not the witness's
 pixels.
 
-The shape of Unreal Engine 4.26 (The Ascent, lab trial 465): three collections, each of one export renamed by the
-library's export list (`RGS_00000001`, `MS_00000002`, `CHS_00000003` in hit group `HitGroup_00000003`) with both
-configurations, the global and the local root signature, then their link in the measured form. Four creates, three
-identifiers from the link, and a description handed to the engine of the three imports with no association. After
-the collections' DDI objects are destroyed, a dispatch through the link's table writes its own constant on the 12 hits,
-through the local root signature only `CHS_00000003`'s collection associated, and 2 on the 52 misses, 64 words exact.
-The same round trip passes with the pinned engine and with the lab's engine 348117F1 (vkd3d-proton fork 4e9a98e9).
+The shape of Unreal Engine 4.26 (The Ascent, lab trial 465). Sources: the engine's D3D12RHI of 4.26.1-release, and
+the runtime's DDI form (fact M838). UE sets ALLOW_STATE_OBJECT_ADDITIONS on every collection and link when the device
+reports raytracing tier 1.1 and has ID3D12Device7, and engine-ddi reports tier 1.1. Three collections, each of one
+export renamed by the library's export list (`RGS_00000001`, `MS_00000002`, `CHS_00000003` in hit group
+`HitGroup_00000003`) with both configurations, the state object configuration, the global and the local root
+signature, then their link in the measured form. Four creates, three identifiers from the link, and a description
+handed to the engine of the three imports with no association. After the collections' DDI objects are destroyed, a
+dispatch through the link's table writes its own constant on the 12 hits, through the local root signature only
+`CHS_00000003`'s collection associated, and 2 on the 52 misses, 64 words exact.
+UE's addition onto a base pipeline (the pipeline cache finds a base with the same ray generation and miss shaders):
+two new collections in the same shape (`CHS_00000004` in `HitGroup_00000004`, `MS_00000005` renamed from
+`miss_far`), then AddToStateObject onto the link in the measured form (the two imports, the state object
+configuration, the pipeline configuration and the summary). Three creates. The grown object gives the base's
+`RGS_00000001` identifier unchanged and the two new ones. The description handed to the engine is grown from the
+link's engine object, with the two imports and no association. After the new collections' DDI objects are destroyed,
+a dispatch through a table of `RGS_00000001`, `MS_00000005` and `HitGroup_00000004` writes its own constant on the 12
+hits and 3 on the 52 misses, 64 words exact. UE stops on any failure of either call (VERIFYD3D12RESULT), so the
+E_OUTOFMEMORY clamp keeps the device but not the game.
+The same round trip passes with the pinned engine and with the lab's engine 348117F1 (vkd3d-proton fork 4e9a98e9),
+on the development PC's NVIDIA GPU. On unit A's RADV, the pipeline library path of an addition is not yet measured.
 
 Indirect ray dispatch: a command signature of one DISPATCH_RAYS argument, stride 128 (above the record's 104 bytes),
 no root signature, S_OK. Two records over the first pipeline's table, 8x4 then 8x8, and the count words 1, 2, 0 and

@@ -531,12 +531,22 @@ void test_raytracing(Env& env) {
 //      refusal line. The executable's record holds one public reference to the collection's engine object, and the
 //      collection's DDI object is destroyed before the executable is used: a dispatch through its table writes its
 //      own constant on every hit and 2 on every miss, the 64 words exact.
-//  7b. The UE 4.26 shape (The Ascent, lab trial 465): three collections of one renamed export each, each with both
-//      configurations, the global and the local root signature, then their link of the three imports and the
-//      pipeline configuration, its summary pointing into the collections' arrays. Three identifiers; the description
-//      handed to the engine holds the three imports and no association; after the collections' destroy, a dispatch
-//      through its table writes its own constant on every hit (CHS_00000003's local root signature, which only its
-//      collection associated) and 2 on every miss, the 64 words exact.
+//  7b. The UE 4.26 shape (The Ascent, lab trial 465; D3D12RHI of 4.26.1-release, and the runtime's DDI form measured
+//      with tools/win/d3d12ddicap, fact M838): three collections of one renamed export each, each with both
+//      configurations, a STATE_OBJECT_CONFIG allowing additions, the global and the local root signature, then their
+//      link of the three imports, the configuration allowing additions and the pipeline configuration, its summary
+//      pointing into the collections' arrays (every association, the state object configuration's included). Three
+//      identifiers; the description handed to the engine holds the three imports and no association; after the
+//      collections' destroy, a dispatch through its table writes its own constant on every hit (CHS_00000003's local
+//      root signature, which only its collection associated) and 2 on every miss, the 64 words exact.
+//  7c. UE 4.26's addition onto that link (FD3D12RayTracingPipelineState with a base pipeline): two new collections in
+//      the same shape (CHS_00000004 in HitGroup_00000004, MS_00000005 renamed from fixture-raylib-b's miss_far), then
+//      AddToStateObject of the two imports, the configuration allowing additions and the pipeline configuration that
+//      the runtime adds, its summary pointing into the new collections' arrays. The grown object answers the base's
+//      raygen identifier unchanged and the two new ones; the description handed to the engine is grown from the
+//      link's engine object and holds the two imports and no association. After the new collections' destroy, a
+//      dispatch through a table of the base's raygen, MS_00000005 and HitGroup_00000004 writes its own constant on
+//      every hit and miss_far's 3 on every miss, the 64 words exact.
 //   8. Growth (D115, D116): a pipeline allowing additions, its identifiers taken and its pipeline stack size set to
 //      4096 above its computed one, grown by fixture-raylib-b listing miss_far. The child's stack size read before any
 //      set is the parent's setting; the child's raygen identifier is the parent's. The description handed to the
@@ -575,13 +585,14 @@ constexpr UINT32 kMixedValues[2] = {0xB0253C0Cu, 0xB0253C0Du};     // and in the
 constexpr UINT32 kImportValue = 0xB0253C0Eu;       // and in the collection-only executable's
 constexpr UINT32 kGrowValue = 0xB0253C0Fu;         // and in the grown pipeline's
 constexpr UINT32 kUeValue = 0xB0253C10u;           // and in the UE 4.26-shaped link's
+constexpr UINT32 kUeAddValue = 0xB0253C11u;        // and in the UE 4.26-shaped addition's
 constexpr UINT32 kMissFar = 3;                      // what miss_far writes (fixture-raylib-b.hlsl)
 constexpr UINT32 kTrapValue = 0xB0253CFFu;         // a word no shader should read: see the second and third tables
 // The UPLOAD buffer: vertices at 0, the instance at kInstanceOffset, then the shader table, its records 32-byte and its
 // tables 64-byte aligned (D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-// the tables of the later pipelines kTable2 to kTable8 bytes after the first.
-constexpr UINT64 kUploadBytes = 8192, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
-                 kTable7 = 6144, kTable8 = 7168;
+// the tables of the later pipelines kTable2 to kTable9 bytes after the first.
+constexpr UINT64 kUploadBytes = 9216, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
+                 kTable7 = 6144, kTable8 = 7168, kTable9 = 8192;
 constexpr UINT64 kRaygenOffset = 512, kMissOffset = 576, kHitOffset = 640;
 constexpr UINT64 kRecordBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 constexpr UINT64 kHitStride = 64;                   // identifier, the constants, padding to the record alignment
@@ -593,9 +604,9 @@ static_assert(kRaygenOffset % kTableAlignment == 0 && kMissOffset % kTableAlignm
                   kHitOffset + kHitStride <= kTable2 && kTable2 % kTableAlignment == 0 &&
                   kTable3 - kTable2 == kTable2 && kTable4 - kTable3 == kTable2 && kTable5 - kTable4 == kTable2 &&
                   kTable6 - kTable5 == kTable2 && kTable7 - kTable6 == kTable2 && kTable8 - kTable7 == kTable2 &&
-                  kTable8 + kHitOffset + kHitStride <= kUploadBytes,
+                  kTable9 - kTable8 == kTable2 && kTable9 + kHitOffset + kHitStride <= kUploadBytes,
               "shader table layout");
-constexpr UINT64 kPipelineOutBytes = 8 * 256;      // one 64-word result per pipeline, 256 bytes apart
+constexpr UINT64 kPipelineOutBytes = 9 * 256;      // one 64-word result per pipeline, 256 bytes apart
 // The indirect dispatches (9): a command signature of one DISPATCH_RAYS argument, its stride above the record's 104
 // bytes. Their UPLOAD buffer: the two records kRaysStride apart, the count words at kCountsOffset (the first
 // kIndirectArgsBytes bytes, which the list also copies into a DEFAULT buffer), and the output's prefill at
@@ -825,21 +836,25 @@ void describe_import(ImportDesc& d, const PipelineDesc& in, void* collection) {
     d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 3, d.subobjects};
 }
 
-// One collection in the shape Unreal Engine 4.26 gives (D3D12RayTracing.cpp: one collection per shader, compiled on
-// worker threads, then a link of the collections), in the DDI form the runtime gives it (measured, d3d12ddicap S1-S3):
-// the library listing its one export under a new name, the hit group when there is one, the shader and pipeline
-// configurations, the global and the local root signature, and the summary associating the local root signature, both
-// configurations and the global root signature with the export. Holds pointers into itself.
+// One collection in the shape Unreal Engine 4.26 gives (D3D12RHI of 4.26.1-release, D3D12RayTracing.cpp: one
+// collection per shader, compiled on worker threads, then a link of the collections), in the DDI form the runtime gives
+// it (measured, d3d12ddicap case ue426-additions, fact M838): the library listing its one export under a new name,
+// the hit group when there is one, the shader and pipeline configurations, the state object configuration allowing
+// additions (the engine sets it on a device with raytracing tier 1.1 and ID3D12Device7), the global and the local root
+// signature, and the summary associating the shader configuration, the local root signature, the pipeline
+// configuration, the state object configuration and the global root signature with the export, in that order. Holds
+// pointers into itself.
 struct UeCollectionDesc {
     D3D12DDI_EXPORT_DESC_0054 export_desc;
     D3D12DDI_DXIL_LIBRARY_DESC_0054 library;
     D3D12DDI_HIT_GROUP_DESC_0054 hit_group;
     D3D12DDI_RAYTRACING_SHADER_CONFIG_0054 shader_config;
     D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
+    D3D12DDI_STATE_OBJECT_CONFIG_0054 config;
     D3D12DDI_GLOBAL_ROOT_SIGNATURE_0054 global;
     D3D12DDI_LOCAL_ROOT_SIGNATURE_0054 local;
-    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[7];    // the summary is last
-    const D3D12DDI_STATE_SUBOBJECT_0054* associated[4];
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[8];    // the summary is last
+    const D3D12DDI_STATE_SUBOBJECT_0054* associated[5];
     D3D12DDI_FUNCTION_SUMMARY_NODE_0054 node;
     D3D12DDI_FUNCTION_SUMMARY_0054 summary;
     D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
@@ -853,48 +868,62 @@ void describe_ue_collection(UeCollectionDesc& d, const UINT* library, LPCWSTR na
     d.hit_group = {group, D3D12DDI_HIT_GROUP_TYPE_TRIANGLES, nullptr, name, nullptr, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.shader_config = {sizeof(UINT32), 2 * sizeof(float)};
     d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
+    d.config = {D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS};
     d.global = {D3D12DDI_HROOTSIGNATURE{global}};
     d.local = {D3D12DDI_HROOTSIGNATURE{local}};
     UINT n = 0;
     d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d.library};
     if (group) d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP, &d.hit_group};
-    d.associated[1] = &d.subobjects[n];
+    d.associated[0] = &d.subobjects[n];
     d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &d.shader_config};
     d.associated[2] = &d.subobjects[n];
     d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
     d.associated[3] = &d.subobjects[n];
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &d.config};
+    d.associated[4] = &d.subobjects[n];
     d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d.global};
-    d.associated[0] = &d.subobjects[n];
+    d.associated[1] = &d.subobjects[n];
     d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &d.local};
     d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
-    d.node = {name, mangled, 4, d.associated, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.node = {name, mangled, 5, d.associated, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.summary = {1, &d.node, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.args = {D3D12DDI_STATE_OBJECT_TYPE_COLLECTION, n, d.subobjects};
 }
 
-// The link of the three UE-shaped collections (ray generation, miss, hit group), as the runtime gives it (measured,
-// d3d12ddicap S4): the three imports whole, the pipeline configuration, and the summary that lists each collection's
-// export with the subobjects of that collection's own array. No root signature and no shader configuration of its
-// own, though the application's link declared a shader configuration and a global root signature.
+// The link of the UE-shaped collections, as the runtime gives it (measured, d3d12ddicap cases ue426-additions and
+// ue426-add, fact M838): the imports whole, the state object configuration allowing additions, the pipeline
+// configuration, and the summary that lists each collection's export with the subobjects of that collection's own
+// array. No root signature and no shader configuration of its own, though the application's link declared a shader
+// configuration, its association and a global root signature. The same form for UE's addition onto a base pipeline
+// (AddToStateObject, parent non-null): there the application gave only the configuration and the imports, and the
+// runtime adds the pipeline configuration.
+template <int N>
 struct UeLinkDesc {
-    D3D12DDI_EXISTING_COLLECTION_DESC_0054 collections[3];
+    D3D12DDI_EXISTING_COLLECTION_DESC_0054 collections[N];
+    D3D12DDI_STATE_OBJECT_CONFIG_0054 config;
     D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
-    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[5];
-    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[3];
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[N + 3];
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[N];
     D3D12DDI_FUNCTION_SUMMARY_0054 summary;
     D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
+    D3D12DDIARG_ADD_TO_STATE_OBJECT_0072 addition;
 };
-void describe_ue_link(UeLinkDesc& d, const UeCollectionDesc (&in)[3], void* const (&collections)[3]) {
-    for (int i = 0; i < 3; ++i) {
+template <int N>
+void describe_ue_link(UeLinkDesc<N>& d, const UeCollectionDesc (&in)[N], void* const (&collections)[N],
+                      void* parent = nullptr) {
+    for (int i = 0; i < N; ++i) {
         d.collections[i] = {D3D12DDI_HSTATEOBJECT_0054{collections[i]}, 0, nullptr};
         d.subobjects[i] = {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &d.collections[i]};
         d.nodes[i] = in[i].node;                    // the same names and the same pointers into the collection
     }
+    d.config = {D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS};
     d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
-    d.subobjects[3] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
-    d.subobjects[4] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
-    d.summary = {3, d.nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
-    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 5, d.subobjects};
+    d.subobjects[N] = {D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &d.config};
+    d.subobjects[N + 1] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
+    d.subobjects[N + 2] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
+    d.summary = {N, d.nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, N + 3, d.subobjects};
+    d.addition = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, N + 3, d.subobjects, D3D12DDI_HSTATEOBJECT_0054{parent}};
 }
 // UE 4.26's names (D3D12RayTracing.cpp numbers each collection's exports), and dxc's mangling of them.
 constexpr LPCWSTR kUeRaygen = L"RGS_00000001", kUeMiss = L"MS_00000002", kUeClosest = L"CHS_00000003",
@@ -902,6 +931,10 @@ constexpr LPCWSTR kUeRaygen = L"RGS_00000001", kUeMiss = L"MS_00000002", kUeClos
 constexpr LPCWSTR kUeRaygenMangled = L"\x01?RGS_00000001@@YAXXZ";
 constexpr LPCWSTR kUeMissMangled = L"\x01?MS_00000002@@YAXUPayload@@@Z";
 constexpr LPCWSTR kUeClosestMangled = L"\x01?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z";
+// The addition's (7c): a second hit group and a miss shader renamed from fixture-raylib-b's miss_far.
+constexpr LPCWSTR kUeClosest2 = L"CHS_00000004", kUeGroup2 = L"HitGroup_00000004", kUeMiss2 = L"MS_00000005";
+constexpr LPCWSTR kUeClosest2Mangled = L"\x01?CHS_00000004@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z";
+constexpr LPCWSTR kUeMiss2Mangled = L"\x01?MS_00000005@@YAXUPayload@@@Z";
 
 // The refusal lines so far of slot (CreateStateObject or AddToStateObject) that report real as what the runtime
 // admits (engine-ddi.h, admitted_create_failure).
@@ -1444,7 +1477,7 @@ void test_raytracing_pipeline(Env& env) {
         const HRESULT hr_c = create_state_object(env, device, ue[i].args, &ue_collections[i], &rt);
         if (hr_ue_collections == S_OK) hr_ue_collections = hr_c;
     }
-    UeLinkDesc ue_link;
+    UeLinkDesc<3> ue_link;
     describe_ue_link(ue_link, ue, ue_collections);
     void* ue_storage = nullptr;
     int ue_rt = 0;
@@ -1462,9 +1495,9 @@ void test_raytracing_pipeline(Env& env) {
     }
     checkf(hr_ue_collections == S_OK && ue_ok && !device.shell.device_errors,
            "raytracing pipeline: the UE 4.26 shape, three collections of one renamed export each (RGS_00000001, "
-           "MS_00000002, CHS_00000003 in HitGroup_00000003), then their link of the three imports and the pipeline "
-           "configuration, its summary pointing into the collections' DDI arrays: four creates and three identifiers "
-           "from the link (hr %08lx %08lx)",
+           "MS_00000002, CHS_00000003 in HitGroup_00000003) allowing additions, then their link of the three imports, "
+           "the configuration allowing additions and the pipeline configuration, its summary pointing into the "
+           "collections' DDI arrays: four creates and three identifiers from the link (hr %08lx %08lx)",
            static_cast<unsigned long>(hr_ue_collections),
            static_cast<unsigned long>(hr_ue));
     bool ue_imports = ue_seen.imports.size() == 3;
@@ -1481,6 +1514,60 @@ void test_raytracing_pipeline(Env& env) {
     for (void* storage : ue_collections)
         if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
     if (!ue_ok) return;
+
+    // 7c, UE 4.26's addition onto the link: two new collections in the same shape, then AddToStateObject of their
+    // imports. The new collections' DDI objects are destroyed before the grown object is used.
+    UeCollectionDesc ue_more[2];
+    describe_ue_collection(ue_more[0], library.code.data(), kUeClosest2, L"closest", kUeClosest2Mangled, kUeGroup2,
+                           rs.global, rs.local);
+    describe_ue_collection(ue_more[1], library_b.code.data(), kUeMiss2, L"miss_far", kUeMiss2Mangled, nullptr,
+                           rs.global, rs.local);
+    void* ue_more_collections[2]{};
+    HRESULT hr_ue_more = S_OK;
+    for (int i = 0; i < 2; ++i) {
+        int rt = 0;
+        const HRESULT hr_c = create_state_object(env, device, ue_more[i].args, &ue_more_collections[i], &rt);
+        if (hr_ue_more == S_OK) hr_ue_more = hr_c;
+    }
+    UeLinkDesc<2> ue_add;
+    describe_ue_link(ue_add, ue_more, ue_more_collections, ue_storage);
+    void* ue_add_storage = nullptr;
+    int ue_add_rt = 0;
+    const HRESULT hr_ue_add =
+        hr_ue_more == S_OK ? add_to_state_object(env, device, ue_add.addition, &ue_add_storage, &ue_add_rt) : E_FAIL;
+    const Captured ue_add_seen = capture.captured;
+    const D3D12DDI_HSTATEOBJECT_0054 hue_add{ue_add_storage};
+    const wchar_t* const ue_add_names[3] = {kUeRaygen, kUeMiss2, kUeGroup2};
+    BYTE ue_add_ids[3][kRecordBytes]{};
+    bool ue_add_ok = hr_ue_add == S_OK;
+    for (int i = 0; ue_add_ok && i < 3; ++i) {
+        const void* id = env.core.pfnGetShaderIdentifier(hue_add, ue_add_names[i]);
+        ue_add_ok = id != nullptr;
+        if (id) std::memcpy(ue_add_ids[i], id, kRecordBytes);
+    }
+    checkf(hr_ue_more == S_OK && ue_add_ok && !std::memcmp(ue_add_ids[0], ue_ids[0], kRecordBytes) &&
+               !device.shell.device_errors,
+           "raytracing pipeline: UE 4.26's addition onto its link, two new collections (CHS_00000004 in "
+           "HitGroup_00000004, MS_00000005) and AddToStateObject of their imports, the configuration allowing additions "
+           "and the pipeline configuration: three creates, the base's RGS_00000001 identifier unchanged and the two new "
+           "ones from the grown object (hr %08lx %08lx)",
+           static_cast<unsigned long>(hr_ue_more), static_cast<unsigned long>(hr_ue_add));
+    const void* const ue_engine = static_cast<ID3D12StateObject*>(engine_ddi::harness_engine_object(ue_storage));
+    bool ue_add_imports = ue_add_seen.imports.size() == 2;
+    for (int i = 0; ue_add_imports && i < 2; ++i)
+        ue_add_imports = ue_add_seen.imports[i].exports == 0 &&
+                         ue_add_seen.imports[i].collection ==
+                             static_cast<ID3D12StateObject*>(engine_ddi::harness_engine_object(ue_more_collections[i]));
+    checkf(ue_add_seen.complete && ue_add_seen.type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE &&
+               ue_add_seen.parent == ue_engine && ue_add_imports && ue_add_seen.library_exports.empty() &&
+               ue_add_seen.locals.empty() && ue_add_seen.associations.empty(),
+           "raytracing pipeline: the description of UE 4.26's addition handed to the engine: grown from the link's "
+           "engine object, the two collections' engine objects with NumExports 0, no DXIL library, no local root "
+           "signature, no association (%zu imports, %zu associations)",
+           ue_add_seen.imports.size(), ue_add_seen.associations.size());
+    for (void* storage : ue_more_collections)
+        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
+    if (!ue_add_ok) return;
 
     // 8, growth: a pipeline allowing additions, its pipeline stack size set, grown by miss_far; the parent's DDI object
     // destroyed before the child is used, the child's table holding the parent's identifiers and the new one.
@@ -1612,18 +1699,20 @@ void test_raytracing_pipeline(Env& env) {
     }
     // The sixth table, the collection-only executable's; the seventh, the child's: the parent's raygen and hit group
     // identifiers (taken before the parent was destroyed) and miss_far's in the miss record; the eighth, the UE 4.26
-    // link's. Every UE export has the local root signature, so its records have room for the constant: the
-    // eighth dispatch gives the ray generation record that size and the miss table the hit group's stride.
+    // link's; the ninth, UE 4.26's addition: the base's raygen, MS_00000005 and HitGroup_00000004. Every UE export has
+    // the local root signature, so its records have room for the constant: the eighth and ninth dispatches give the
+    // ray generation record that size and the miss table the hit group's stride.
     const struct {
         UINT64 table;
         const BYTE* raygen;
         const BYTE* miss;
         const BYTE* hit;
         UINT32 value;
-    } later_tables[3] = {
+    } later_tables[4] = {
         {kTable6, importer_ids[0], importer_ids[1], importer_ids[2], kImportValue},
         {kTable7, parent_ids[0], miss_far, parent_ids[2], kGrowValue},
         {kTable8, ue_ids[0], ue_ids[1], ue_ids[2], kUeValue},
+        {kTable9, ue_add_ids[0], ue_add_ids[1], ue_add_ids[2], kUeAddValue},
     };
     for (const auto& later : later_tables) {
         std::memcpy(bytes + later.table + kRaygenOffset, later.raygen, kRecordBytes);
@@ -1749,17 +1838,18 @@ void test_raytracing_pipeline(Env& env) {
         mixed_rays.HitGroupTable.StartAddress += table;
         t.pfnDispatchRays(rec.hlist(), &mixed_rays);
     }
-    // 7, 8 and 7b, the dispatches: the collection-only executable after its collection's destroy, the child after its
-    // parent's, and the UE 4.26 link after its collections', into the sixth to eighth results.
-    const D3D12DDI_HSTATEOBJECT_0054 later_objects[3] = {himporter, hchild, hue};
-    for (int k = 0; k < 3; ++k) {
+    // 7, 8, 7b and 7c, the dispatches: the collection-only executable after its collection's destroy, the child after
+    // its parent's, the UE 4.26 link after its collections', and UE 4.26's addition after its new collections', into
+    // the sixth to ninth results.
+    const D3D12DDI_HSTATEOBJECT_0054 later_objects[4] = {himporter, hchild, hue, hue_add};
+    for (int k = 0; k < 4; ++k) {
         t.pfnSetPipelineState1(rec.hlist(), later_objects[k]);
         t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 1280 + 256 * k);
         D3D12DDIARG_DISPATCH_RAYS_0054 later_rays = rays;
         later_rays.RayGenerationShaderRecord.StartAddress += later_tables[k].table;
         later_rays.MissShaderTable.StartAddress += later_tables[k].table;
         later_rays.HitGroupTable.StartAddress += later_tables[k].table;
-        if (later_objects[k].pDrvPrivate == hue.pDrvPrivate) {
+        if (later_objects[k].pDrvPrivate == hue.pDrvPrivate || later_objects[k].pDrvPrivate == hue_add.pDrvPrivate) {
             later_rays.RayGenerationShaderRecord.SizeInBytes = kRecordBytes + sizeof(UINT32);
             later_rays.MissShaderTable.SizeInBytes = kHitStride;
             later_rays.MissShaderTable.StrideInBytes = kHitStride;
@@ -1896,6 +1986,15 @@ void test_raytracing_pipeline(Env& env) {
                    "expected words, %u hits with %08x through CHS_00000003's local root signature, which only its "
                    "collection associated, and %u misses with %u (%u differ, first at %u)",
                    hits, kUeValue, kWords - hits, kMiss, bad_ue, first_ue);
+            UINT32 expected_ue_add[kWords];
+            for (UINT i = 0; i < kWords; ++i) expected_ue_add[i] = expected[i] == kRecordValue ? kUeAddValue : kMissFar;
+            UINT first_ue_add = 0;
+            const UINT bad_ue_add = mismatches(words + 2048 / sizeof(UINT32), expected_ue_add, &first_ue_add);
+            checkf(bad_ue_add == 0,
+                   "raytracing pipeline: UE 4.26's addition, used after its new collections' DestroyStateObject, over a "
+                   "table of the base's RGS_00000001, MS_00000005 and HitGroup_00000004 writes its 64 expected words, %u "
+                   "hits with %08x and %u misses with miss_far's %u (%u differ, first at %u)",
+                   hits, kUeAddValue, kWords - hits, kMissFar, bad_ue_add, first_ue_add);
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
         }
         void* indirect_mapped = nullptr;
@@ -2072,7 +2171,8 @@ void test_raytracing_pipeline(Env& env) {
     for (void* storage : mixed_storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
     env.core.pfnDestroyStateObject(device.h(), himporter);
     env.core.pfnDestroyStateObject(device.h(), hchild);
-    env.core.pfnDestroyStateObject(device.h(), hue);
+    env.core.pfnDestroyStateObject(device.h(), hue);        // the base before the object grown from it
+    env.core.pfnDestroyStateObject(device.h(), hue_add);
     if (hr_rays_signature == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hrays_signature);
     for (Buffer* b : {&indirect_upload, &indirect_args, &indirect_out, &indirect_back}) destroy_buffer(env, device, *b);
     for (Buffer* b : {&blas, &tlas, &scratch, &out, &readback, &upload}) destroy_buffer(env, device, *b);
