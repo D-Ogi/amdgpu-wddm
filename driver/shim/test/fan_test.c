@@ -111,13 +111,14 @@ static void curves(void)
 	/* The default never runs the fan slower than the BIOS Standard Mode did at the four points unit A measured:
 	 * 65 C 65 % and 69 C 77 % (b20 read trial), 70 C 80 % (M803 at rest), 83 C 96 % (E01). */
 	CHECK(bc250_fan_profile_curve(BC250_FAN_PROFILE_STANDARD, &c) == 0);
-	CHECK(bc250_fan_curve_eval(&c, 65000) >= 65u && bc250_fan_curve_eval(&c, 65000) == 76u);
+	CHECK(bc250_fan_curve_eval(&c, 65000) >= 65u && bc250_fan_curve_eval(&c, 65000) == 78u);
 	CHECK(bc250_fan_curve_eval(&c, 69000) >= 77u);
-	CHECK(bc250_fan_curve_eval(&c, 70000) >= 80u && bc250_fan_curve_eval(&c, 70000) == 82u);
+	CHECK(bc250_fan_curve_eval(&c, 70000) >= 80u && bc250_fan_curve_eval(&c, 70000) == 85u);
 	CHECK(bc250_fan_curve_eval(&c, 83000) >= 96u);
-	/* At 80 C at or above the 1360..1590 RPM the EC held (95 % is about 1630 RPM at 1720 RPM full), and 100 % by 85 C. */
-	CHECK(bc250_fan_curve_eval(&c, 80000) == 95u);
-	CHECK(bc250_fan_curve_eval(&c, 85000) == 100u && bc250_fan_curve_eval(&c, 84000) == 99u);
+	/* 95 % (about 1630 RPM at 1720 RPM full) at 76 C, and 100 % by 80 C, under the DPM's 82 C raise limit. */
+	CHECK(bc250_fan_curve_eval(&c, 76000) == 95u && bc250_fan_curve_eval(&c, 78000) == 98u);
+	CHECK(bc250_fan_curve_eval(&c, 80000) == 100u && bc250_fan_curve_eval(&c, 79000) == 99u);
+	CHECK(bc250_fan_curve_eval(&c, 81900) == 100u);
 	/* Flat at both ends, never below the floor. */
 	CHECK(bc250_fan_curve_eval(&c, 20000) == 50u && bc250_fan_curve_eval(&c, -5000) == 50u);
 	CHECK(bc250_fan_curve_eval(&c, 120000) == 100u);
@@ -206,7 +207,7 @@ static void handshake(void)
 	struct ec_mock ec;
 	struct bc250_hwmon_io io;
 	struct bc250_fan_ctl ctl;
-	unsigned int raw = bc250_fan_pct_to_raw(82);
+	unsigned int raw = bc250_fan_pct_to_raw(85);
 
 	start(&ec, &io, &ctl);
 	/* The first tick at 70 C takes the fan: one phase, the record, our bit, the target, the close. */
@@ -226,7 +227,7 @@ static void handshake(void)
 
 	/* The same duty next second writes nothing. A rise writes the target alone, in its own phase. */
 	CHECK(tick_at(&io, &ec, &ctl, 70000) == 0 && ec.logged == 4u);
-	CHECK(tick_at(&io, &ec, &ctl, 80000) == 0);
+	CHECK(tick_at(&io, &ec, &ctl, 76000) == 0);
 	CHECK(ec.logged == 7u && ec.log[4].value == BC250_HWMON_FAN_CFG_REQUEST && ec.log[5].reg == TARGET1 &&
 	      ec.log[5].value == bc250_fan_pct_to_raw(95) && ec.log[6].value == BC250_HWMON_FAN_CFG_DONE);
 
@@ -594,7 +595,7 @@ static void slope_rule(void)
 	unsigned int i, last;
 
 	start(&ec, &io, &ctl);
-	CHECK(tick_at(&io, &ec, &ctl, 80000) == 0 && ctl.applied_pct == 95u);
+	CHECK(tick_at(&io, &ec, &ctl, 76000) == 0 && ctl.applied_pct == 95u);
 	/* Down to 50 C: the curve's input stops 3 C above it, at 53 C, where the curve asks for 63 %. The output holds
 	 * 95 % for 10 s. */
 	for (i = 0; i < 9u; i++)
@@ -617,7 +618,7 @@ static void slope_rule(void)
 	start(&ec, &io, &ctl);
 	CHECK(tick_at(&io, &ec, &ctl, 70000) == 0);
 	for (i = 0; i < 30u; i++)
-		CHECK(tick_at(&io, &ec, &ctl, i % 2u ? 70000 : 67500) == 0 && ctl.target_pct == 82u);
+		CHECK(tick_at(&io, &ec, &ctl, i % 2u ? 70000 : 67500) == 0 && ctl.target_pct == 85u);
 	CHECK(ec.logged == 4u);		/* one take-over and nothing after it */
 	CHECK(clean_writes(&ec));
 }

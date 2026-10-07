@@ -49,7 +49,7 @@ static partial class UnitTests
     static void FanChartRules()
     {
         uint[] c, pct;
-        FanCurves.Preset(FanState.ProfileStandard, out c, out pct);       // 40:50, 60:70, 70:82, 80:95, 85:100
+        FanCurves.Preset(FanState.ProfileStandard, out c, out pct);       // 40:50, 60:70, 70:85, 76:95, 80:100
         int at;
         FanCurves.Move(c, pct, 1, 90, 5);
         Equal(69u, c[1], "a dragged point stops 1 C under its right neighbour");
@@ -76,9 +76,9 @@ static partial class UnitTests
         FanCurves.Preset(FanState.ProfileStandard, out c, out pct);
         Equal(50u, FanCurves.DutyAt(c, pct, 30), "below the first point the first duty applies");
         Equal(100u, FanCurves.DutyAt(c, pct, 90), "above the last point the last duty applies");
-        Equal(76u, FanCurves.DutyAt(c, pct, 65), "65 C on the standard curve is 76 % (fan.md)");
-        Equal(81u, FanCurves.DutyAt(c, pct, 69), "69 C on the standard curve is 81 % (fan.md)");
-        Equal(98u, FanCurves.DutyAt(c, pct, 83), "83 C on the standard curve is 98 % (fan.md)");
+        Equal(78u, FanCurves.DutyAt(c, pct, 65), "65 C on the standard curve is 78 % (fan.md)");
+        Equal(84u, FanCurves.DutyAt(c, pct, 69), "69 C on the standard curve is 84 % (fan.md)");
+        Equal(100u, FanCurves.DutyAt(c, pct, 83), "83 C on the standard curve is 100 % (fan.md)");
         Equal(70u, FanCurves.DutyAt(c, pct, 60), "a point gives its own duty");
 
         var f = FanFixture(FanState.FlagEnabled | FanState.FlagControlling | FanState.FlagStored);

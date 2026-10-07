@@ -328,7 +328,7 @@ up to a whole percent. Below the first point the first duty applies, above the l
 
 | Profile | Points (C : %) | Use |
 | --- | --- | --- |
-| Standard (the default) | 40:50, 60:70, 70:82, 80:95, 85:100 | never slower than the BIOS Standard Mode |
+| Standard (the default) | 40:50, 60:70, 70:85, 76:95, 80:100 | never slower than the BIOS Standard Mode, full speed under the 82 C at which the DPM stops raising the clock |
 | Quiet | 40:30, 60:45, 70:60, 80:80, 85:100 | quieter than the board below 80 C |
 | Performance | 40:60, 55:75, 65:90, 75:100 | louder everywhere |
 
@@ -420,7 +420,7 @@ operation.
 ```
 fanctl state=curve mode=curve profile=standard target_pct=70 applied_pct=70 raw=179 readback=179 rpm=1180 \
     guard_c=60.5 enabled=1 controlling=1 emergency=0 leased=0 lease_ms=0 fault=0 paused=0 held_back=0 \
-    gate=ok reason=none doubt=none takeovers=1 handbacks=0 writes=3 ... curve=40:50,60:70,70:82,80:95,85:100
+    gate=ok reason=none doubt=none takeovers=1 handbacks=0 writes=3 ... curve=40:50,60:70,70:85,76:95,80:100
 ```
 
 The values in this example come from the test fixture, not from the lab. The write forms need an

@@ -162,7 +162,7 @@ static void gate(void)
     CHECK(f.Status == BC250_ESCAPE_STATUS_DONE && f.Version == BC250_KMD_VERSION && f.Generation == 7u);
     CHECK((f.Flags & BC250_FAN_FLAG_ENABLED) && !(f.Flags & BC250_FAN_FLAG_CONTROLLING));
     CHECK(f.Mode == BC250_FAN_MODE_CURVE && f.Profile == BC250_FAN_PROFILE_STANDARD && f.Points == 5u);
-    CHECK(f.CurveC[0] == 40u && f.CurvePct[0] == 50u && f.CurveC[4] == 85u && f.CurvePct[4] == 100u);
+    CHECK(f.CurveC[0] == 40u && f.CurvePct[0] == 50u && f.CurveC[4] == 80u && f.CurvePct[4] == 100u);
     CHECK(f.Channel == BC250_FAN_CHANNEL && f.State == BC250_FAN_STATE_BOARD);
     FanStop(&device, BC250_FAN_REASON_STOP);
 
@@ -212,7 +212,7 @@ static void TakeAt70(void)
     Fresh(1);
     Start();
     Second(70000);
-    CHECK(Held() && ec_peek8(&native_ec, TARGET1) == bc250_fan_pct_to_raw(82));
+    CHECK(Held() && ec_peek8(&native_ec, TARGET1) == bc250_fan_pct_to_raw(85));
     CHECK(device.Fan.Ctl.controlling && device.Fan.Ctl.restore.valid);
     CHECK(device.Fan.Ctl.restore.mode == BC250_HWMON_MODE_REST &&
           device.Fan.Ctl.restore.target == BC250_HWMON_TARGET_REST);
@@ -237,8 +237,8 @@ static void exit_paths(void)
     Second(70000);
     Read(&f);
     CHECK((f.Flags & BC250_FAN_FLAG_CONTROLLING) && (f.Flags & BC250_FAN_FLAG_RESTORE_SAVED));
-    CHECK(f.State == BC250_FAN_STATE_CURVE && f.AppliedPct == 82u && f.WrittenRaw == 209u);
-    CHECK(f.ReadbackRaw == 209u && f.Rpm == 209u * 1720u / 255u && f.GuardMc == 70000);
+    CHECK(f.State == BC250_FAN_STATE_CURVE && f.AppliedPct == 85u && f.WrittenRaw == bc250_fan_pct_to_raw(85));
+    CHECK(f.ReadbackRaw == f.WrittenRaw && f.Rpm == f.WrittenRaw * 1720u / 255u && f.GuardMc == 70000);
     CHECK(f.SavedMode == BC250_HWMON_MODE_REST && f.SavedTarget == BC250_HWMON_TARGET_REST && f.Takeovers == 1u);
     FanLogLine(&device, "telemetry");       /* the mock holds every line to the ring's 160 bytes */
     CHECK(CleanWrites(0));

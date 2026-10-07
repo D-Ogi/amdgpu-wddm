@@ -31,7 +31,7 @@ namespace AmdgpuWddmControl
         static readonly uint[][] PresetPoints =
         {
             null,
-            new uint[] { 40, 50, 60, 70, 70, 82, 80, 95, 85, 100 },
+            new uint[] { 40, 50, 60, 70, 70, 85, 76, 95, 80, 100 },
             new uint[] { 40, 30, 60, 45, 70, 60, 80, 80, 85, 100 },
             new uint[] { 40, 60, 55, 75, 65, 90, 75, 100 },
         };
