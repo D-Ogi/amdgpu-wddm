@@ -324,9 +324,9 @@ long Bc250DpAudioHwInit(BC250_AZ_IO* Io, BC250_DPAUDIO_RESULT* Result)
     return BC250_AZ_STATUS_SUCCESS;
 }
 
-// The fixed "basic audio" set of step 1, until step 4 reads the monitor's EDID: what every DP sink with audio must
-// accept (2-channel LPCM at 32, 44.1 and 48 kHz, 16 bit). Linux's values for unit A's monitor (M810: 32 to 192 kHz,
-// 16/20/24 bit) are wider; this set is a subset of them.
+// The fixed "basic audio" set of step 1, for a start with no usable EDID (step 4 below): what every DP sink with
+// audio must accept (2-channel LPCM at 32, 44.1 and 48 kHz, 16 bit). Linux's values for unit A's monitor (M810: 32 to
+// 192 kHz, 16/20/24 bit) are wider; this set is a subset of them.
 #define LPCM_CHANNELS 2u
 #define LPCM_RATES 0x07u                    // union audio_sample_rates (dc_types.h:437-449): RATE_32, RATE_44_1, RATE_48
 #define LPCM_SIZES 0x01u                    // the CTA-861 SAD byte 3 of LPCM: bit 0 = 16 bit (amdgpu_dm copies it as is)
@@ -349,22 +349,79 @@ static const unsigned long g_Descriptor[14] = {
 #define FORMAT_1BITAUDIO 9u
 #define FORMAT_DST 13u
 
-static unsigned long NameChar(unsigned long i)
+void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink)
 {
-    return i < sizeof(g_SinkName) - 1 ? (unsigned long)(unsigned char)g_SinkName[i] : 0;
+    unsigned long i;
+
+    Sink->Manufacturer = Sink->Product = 0;     // unknown without an EDID
+    for (i = 0; i < sizeof(Sink->Name); i++) Sink->Name[i] = i < sizeof(g_SinkName) ? g_SinkName[i] : '\0';
+    Sink->Name[BC250_DPAUDIO_SINK_NAME_MAX] = '\0';
+    Sink->LpcmChannels = LPCM_CHANNELS;
+    Sink->LpcmRates = LPCM_RATES;
+    Sink->LpcmSizes = LPCM_SIZES;
+    Sink->Speakers = SPEAKERS_FL_FR;
+    Sink->FromEdid = 0;
 }
 
-// dce_aud_az_configure (dce_audio.c:663-1022) for SIGNAL_TYPE_DISPLAY_PORT with the fixed set above.
+// dm_helpers_parse_edid_caps (amdgpu_dm_helpers.c:104-173) and is_audio_format_supported (dce_audio.c): the identity
+// in Linux's byte order, the monitor name, the LPCM descriptor with the most channels, the first speaker allocation
+// byte or DEFAULT_SPEAKER_LOCATION. HBR stays off whatever the descriptors say (Bc250DpAudioConfigureSink).
+int Bc250DpAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Sink)
+{
+    unsigned long i, best = BC250_EDID_MAX_SADS;
+
+    Bc250DpAudioSinkDefault(Sink);
+    if (Info == 0 || (Info->Reason != BC250_EDID_OK && Info->Reason != BC250_EDID_EXTENSION_DROPPED)) return 0;
+    for (i = 0; i < Info->SadCount && i < BC250_EDID_MAX_SADS; i++) {
+        if (Info->Sads[i].Format != FORMAT_LPCM || Info->Sads[i].Channels == 0) continue;
+        if (best == BC250_EDID_MAX_SADS || Info->Sads[i].Channels > Info->Sads[best].Channels) best = i;
+    }
+    if (best == BC250_EDID_MAX_SADS) return 0;
+    Sink->Manufacturer = (unsigned long)Info->ManufacturerId[0] | ((unsigned long)Info->ManufacturerId[1] << 8);
+    Sink->Product = Info->ProductCode & 0xFFFFul;
+    for (i = 0; i < sizeof(Sink->Name); i++) Sink->Name[i] = '\0';
+    for (i = 0; Info->HasName && i < BC250_EDID_NAME_CHARS && i < BC250_DPAUDIO_SINK_NAME_MAX && Info->Name[i]; i++)
+        Sink->Name[i] = Info->Name[i];
+    Sink->LpcmChannels = Info->Sads[best].Channels > BC250_DPAUDIO_MAX_CHANNELS ? BC250_DPAUDIO_MAX_CHANNELS
+                                                                                 : Info->Sads[best].Channels;
+    Sink->LpcmRates = Info->Sads[best].Rates & 0x7Ful;
+    Sink->LpcmSizes = Info->Sads[best].Byte2 & 0x07ul;
+    Sink->Speakers = Info->HasSpeaker ? Info->Speaker : BC250_DPAUDIO_DEFAULT_SPEAKERS;
+    Sink->FromEdid = 1;
+    return 1;
+}
+
+static unsigned long NameChar(const BC250_DPAUDIO_SINK* Sink, unsigned long i)
+{
+    return i < BC250_DPAUDIO_SINK_NAME_MAX ? (unsigned long)(unsigned char)Sink->Name[i] : 0;
+}
+
+// dce_aud_az_configure (dce_audio.c:663-1022) for SIGNAL_TYPE_DISPLAY_PORT with a sink (step 4) or the fixed set.
 // Deviations from Linux, each for the reason given:
 //   - ACP_DATA (SUPPORTS_AI) is not written: the DCN 2.0.1 header has no index for it (Linux reaches it through
-//     the DCE 11 table, index 0x27). Its value would be 0 here anyway: no EDID, no Supports_AI flag.
-//   - check_audio_bandwidth is not run: the set is 2 channels at 48 kHz at most, which fits the inherited mode's
-//     160 pixels of horizontal blank (design 1.4); HBR_CAPABLE is written 0, the value Linux writes when the
-//     192 kHz 8-channel check fails, so no high-bit-rate format is ever offered.
+//     the DCE 11 table, index 0x27). Its value would be 0 here anyway: amdgpu_dm sets SUPPORT_AI only for HDMI.
+//   - check_audio_bandwidth is not run. It removes no rate here: for SST with 8b/10b coding, which is the only DP
+//     link of unit A, check_audio_bandwidth_dp returns at once (dce_audio.c:480-482), so the descriptor carries
+//     the sink's rates as they are. Linux therefore writes HBR_CAPABLE 1 on this link; this driver writes 0, the
+//     value Linux writes when the 192 kHz 8-channel check fails, because the stream half (step 2) programs no
+//     high-bit-rate packets.
+//   - Only LPCM is described; the other formats' descriptors are written 0 (no compressed audio over this path).
 long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDIO_RESULT* Result)
 {
+    return Bc250DpAudioConfigureSink(Io, Endpoint, 0, Result);
+}
+
+long Bc250DpAudioConfigureSink(BC250_AZ_IO* Io, unsigned long Endpoint, const BC250_DPAUDIO_SINK* Sink,
+                               BC250_DPAUDIO_RESULT* Result)
+{
+    BC250_DPAUDIO_SINK fixed;
     unsigned long hpc, value, i, length;
     long status;
+
+    if (Sink == 0) {
+        Bc250DpAudioSinkDefault(&fixed);
+        Sink = &fixed;
+    }
 
     Result->HotPlugBefore = Result->HotPlugAfter = Result->SizeRates = Result->PowerStates = Result->Writes = 0;
     IR(HOT_PLUG_CONTROL, &hpc);
@@ -372,7 +429,7 @@ long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDI
     IW(HOT_PLUG_CONTROL, hpc | HPC_CLOCK_GATING_DISABLE);
     // Speaker allocation and connection type, in Linux's order of field updates.
     IR(CHANNEL_SPEAKER, &value);
-    value = SET(value, CHANNEL_SPEAKER, SPEAKER_ALLOCATION, SPEAKERS_FL_FR);
+    value = SET(value, CHANNEL_SPEAKER, SPEAKER_ALLOCATION, Sink->Speakers);
     value = SET(value, CHANNEL_SPEAKER, LFE_PLAYBACK_LEVEL, 0);
     value = SET(value, CHANNEL_SPEAKER, HDMI_CONNECTION, 0);
     value = SET(value, CHANNEL_SPEAKER, DP_CONNECTION, 0);
@@ -386,10 +443,10 @@ long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDI
         if (code == FORMAT_1BITAUDIO || code == FORMAT_DST) continue;
         value = 0;
         if (code == FORMAT_LPCM) {
-            value = SET(value, AUDIO_DESCRIPTOR0, SUPPORTED_FREQUENCIES_STEREO, LPCM_RATES);
-            value = SET(value, AUDIO_DESCRIPTOR0, MAX_CHANNELS, LPCM_CHANNELS - 1);
-            value = SET(value, AUDIO_DESCRIPTOR0, SUPPORTED_FREQUENCIES, LPCM_RATES);
-            value = SET(value, AUDIO_DESCRIPTOR0, DESCRIPTOR_BYTE_2, LPCM_SIZES);
+            value = SET(value, AUDIO_DESCRIPTOR0, SUPPORTED_FREQUENCIES_STEREO, Sink->LpcmRates);
+            value = SET(value, AUDIO_DESCRIPTOR0, MAX_CHANNELS, Sink->LpcmChannels - 1);
+            value = SET(value, AUDIO_DESCRIPTOR0, SUPPORTED_FREQUENCIES, Sink->LpcmRates);
+            value = SET(value, AUDIO_DESCRIPTOR0, DESCRIPTOR_BYTE_2, Sink->LpcmSizes);
         }
         TRY(Bc250AzIndirectWrite(Io, Endpoint, g_Descriptor[i], value));
         Result->Writes++;
@@ -402,24 +459,25 @@ long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDI
     IW(RESPONSE_LIPSYNC, SET(value, RESPONSE_LIPSYNC, VIDEO_LIPSYNC, 0));
     IR(RESPONSE_LIPSYNC, &value);
     IW(RESPONSE_LIPSYNC, SET(value, RESPONSE_LIPSYNC, AUDIO_LIPSYNC, 0));
-    // Manufacturer and product unknown until step 4 reads the EDID.
-    IW(SINK_INFO0, 0);
+    // Manufacturer and product from the EDID (step 4); 0 for the fixed set.
+    IW(SINK_INFO0, SET(SET(0, SINK_INFO0, MANUFACTURER_ID, Sink->Manufacturer), SINK_INFO0, PRODUCT_ID, Sink->Product));
     // Linux's count (dce_audio.c:886-892) includes the terminator: `while (name[len++] != '\0')` stops one past it,
     // capped at 18. Kept as Linux has it, so that the two drivers report the same length for the same name.
-    length = (unsigned long)sizeof(g_SinkName);         // the characters plus the terminator
+    for (length = 0; length < SINK_NAME_MAX && Sink->Name[length] != '\0'; length++) { }
+    length++;                                           // the characters plus the terminator
     if (length > SINK_NAME_MAX) length = SINK_NAME_MAX;
     IW(SINK_INFO1, SET(0, SINK_INFO1, SINK_DESCRIPTION_LEN, length));
     IW(SINK_INFO2, SET(0, SINK_INFO2, PORT_ID0, SINK_PORT_ID0));
     IW(SINK_INFO3, SET(0, SINK_INFO3, PORT_ID1, SINK_PORT_ID1));
-    IW(SINK_INFO4, SET(SET(SET(SET(0, SINK_INFO4, DESCRIPTION0, NameChar(0)), SINK_INFO4, DESCRIPTION1, NameChar(1)),
-                           SINK_INFO4, DESCRIPTION2, NameChar(2)), SINK_INFO4, DESCRIPTION3, NameChar(3)));
-    IW(SINK_INFO5, SET(SET(SET(SET(0, SINK_INFO5, DESCRIPTION4, NameChar(4)), SINK_INFO5, DESCRIPTION5, NameChar(5)),
-                           SINK_INFO5, DESCRIPTION6, NameChar(6)), SINK_INFO5, DESCRIPTION7, NameChar(7)));
-    IW(SINK_INFO6, SET(SET(SET(SET(0, SINK_INFO6, DESCRIPTION8, NameChar(8)), SINK_INFO6, DESCRIPTION9, NameChar(9)),
-                           SINK_INFO6, DESCRIPTION10, NameChar(10)), SINK_INFO6, DESCRIPTION11, NameChar(11)));
-    IW(SINK_INFO7, SET(SET(SET(SET(0, SINK_INFO7, DESCRIPTION12, NameChar(12)), SINK_INFO7, DESCRIPTION13, NameChar(13)),
-                           SINK_INFO7, DESCRIPTION14, NameChar(14)), SINK_INFO7, DESCRIPTION15, NameChar(15)));
-    IW(SINK_INFO8, SET(SET(0, SINK_INFO8, DESCRIPTION16, NameChar(16)), SINK_INFO8, DESCRIPTION17, NameChar(17)));
+    IW(SINK_INFO4, SET(SET(SET(SET(0, SINK_INFO4, DESCRIPTION0, NameChar(Sink, 0)), SINK_INFO4, DESCRIPTION1, NameChar(Sink, 1)),
+                           SINK_INFO4, DESCRIPTION2, NameChar(Sink, 2)), SINK_INFO4, DESCRIPTION3, NameChar(Sink, 3)));
+    IW(SINK_INFO5, SET(SET(SET(SET(0, SINK_INFO5, DESCRIPTION4, NameChar(Sink, 4)), SINK_INFO5, DESCRIPTION5, NameChar(Sink, 5)),
+                           SINK_INFO5, DESCRIPTION6, NameChar(Sink, 6)), SINK_INFO5, DESCRIPTION7, NameChar(Sink, 7)));
+    IW(SINK_INFO6, SET(SET(SET(SET(0, SINK_INFO6, DESCRIPTION8, NameChar(Sink, 8)), SINK_INFO6, DESCRIPTION9, NameChar(Sink, 9)),
+                           SINK_INFO6, DESCRIPTION10, NameChar(Sink, 10)), SINK_INFO6, DESCRIPTION11, NameChar(Sink, 11)));
+    IW(SINK_INFO7, SET(SET(SET(SET(0, SINK_INFO7, DESCRIPTION12, NameChar(Sink, 12)), SINK_INFO7, DESCRIPTION13, NameChar(Sink, 13)),
+                           SINK_INFO7, DESCRIPTION14, NameChar(Sink, 14)), SINK_INFO7, DESCRIPTION15, NameChar(Sink, 15)));
+    IW(SINK_INFO8, SET(SET(0, SINK_INFO8, DESCRIPTION16, NameChar(Sink, 16)), SINK_INFO8, DESCRIPTION17, NameChar(Sink, 17)));
     IR(HOT_PLUG_CONTROL, &hpc);
     hpc &= ~HPC_CLOCK_GATING_DISABLE;
     IW(HOT_PLUG_CONTROL, hpc);
@@ -698,7 +756,7 @@ unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run)
     if (reason != BC250_DPAUDIO_REASON_OK) return reason;
     Run->Wrote = 1;
     status = Bc250DpAudioHwInit(Io, &Run->Init);
-    if (status >= 0) { Run->Groups = 1; status = Bc250DpAudioConfigure(Io, Run->Plan.Endpoint, &Run->Config); }
+    if (status >= 0) { Run->Groups = 1; status = Bc250DpAudioConfigureSink(Io, Run->Plan.Endpoint, Run->Sink, &Run->Config); }
     if (status >= 0) {
         Run->Groups = 2;
         Run->StreamWrote = 1;

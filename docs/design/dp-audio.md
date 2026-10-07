@@ -14,7 +14,8 @@ The KMD does this in `driver/kmd/dpaudio.c` (switches, lock, record, log, entry 
 `dce_audio.c` for the endpoint and the DTO, `dcn10_stream_encoder.c` for the stream encoder (Linux v6.18).
 `driver/kmd/test/dpaudio_test.c` checks every write against a fake register file.
 
-The work has six steps. Steps 0 to 2 are in the driver from KMD 0.7.216.1. Steps 3 to 5 are not written yet.
+The work has six steps. Steps 0 to 2 are in the driver from KMD 0.7.216.1. Step 4 is in the driver from KMD
+0.7.216.19, without the container ID. Steps 3 and 5 are not done yet.
 
 | Step | What it does | State |
 | --- | --- | --- |
@@ -22,7 +23,7 @@ The work has six steps. Steps 0 to 2 are in the driver from KMD 0.7.216.1. Steps
 | 1 | Configures the endpoint and sets `AUDIO_ENABLED` | 0.7.215.1, changed in 0.7.216.1 |
 | 2 | Starts the audio stream: wall DTO, AFMT, DP_SEC packets | 0.7.216.1 |
 | 3 | A tone through the new endpoint, heard at the monitor | lab trial to do |
-| 4 | The real ELD from the monitor's EDID, the container ID | not written |
+| 4 | The real ELD from the monitor's EDID | 0.7.216.19. The container ID is not written |
 | 5 | Hot plug of the monitor | not written |
 
 ## Why the endpoint waits for the stream
@@ -73,9 +74,8 @@ The groups run in this order. Each group stops at its first failed write.
 
 1. **hw_init** on endpoint 0 (`dce_aud_hw_init`): the clock-gating bracket, the rates 32, 44.1 and 48 kHz, and
    `CLKSTOP` and `EPSS`.
-2. **configure** of the endpoint (`dce_aud_az_configure`, the DP branch): speaker allocation FL and FR, one LPCM
-   descriptor of 2 channels at 32/44.1/48 kHz and 16 bit, the lip-sync and HBR fields, and the sink name
-   "BC-250 DP".
+2. **configure** of the endpoint (`dce_aud_az_configure`, the DP branch): the speaker allocation, one LPCM
+   descriptor, the lip-sync and HBR fields, the sink IDs and the sink name. Step 4 below gives the values.
 3. **stream** on the encoder of the monitor. The table below has the writes.
 4. **`AUDIO_ENABLED`** (`dce_aud_az_enable`): `CLOCK_GATING_DISABLE` 1 with `AUDIO_ENABLED` 1, then
    `CLOCK_GATING_DISABLE` 0.
@@ -187,6 +187,34 @@ starts, stops and undos.
 the raw slots and the record. `bc250kmd_cli dpaudio state` prints the record alone. The CLI asks with ABI 2 and asks
 again with ABI 1 when an older driver refuses the size.
 
+## Step 4: the sink from the EDID
+
+The display modes feature reads the monitor's EDID over DP AUX at each start, before the DP audio start
+([display-modes.md](display-modes.md)). `DpAudioStart` takes the parsed EDID from `ModesetEdidForAudio`, and
+`Bc250DpAudioSinkFromEdid` makes the sink from it. Linux makes the same values in `dm_helpers_parse_edid_caps`
+and `dce_aud_az_configure`.
+
+| Field | From the EDID | Fixed set (no EDID or no LPCM) |
+| --- | --- | --- |
+| Speaker allocation | The first byte of the speaker allocation data block, else 5 (FL, FR, FC, Linux `DEFAULT_SPEAKER_LOCATION`) | FL and FR |
+| LPCM channels | The LPCM short audio descriptor with the most channels, at most 8 | 2 |
+| LPCM rates | Its rate bits (32 to 192 kHz) | 32, 44.1 and 48 kHz |
+| LPCM sizes | Its sample-size bits (16, 20, 24 bit) | 16 bit |
+| `MANUFACTURER_ID`, `PRODUCT_ID` | EDID bytes 8 and 9, and the product code | 0 |
+| Sink name | The monitor name descriptor, at most 18 characters | "BC-250 DP" |
+
+Without an EDID, or with an EDID that has no LPCM descriptor, the endpoint gets the fixed set. This is a deviation
+from Linux, which then writes no LPCM descriptor. An endpoint without a format would be an endpoint without sound.
+
+`HBR_CAPABLE` stays 0. Linux writes 1 on this link, because `check_audio_bandwidth_dp` returns early for SST
+8b/10b (`dce_audio.c`). HBR audio is not in the scope of this driver yet.
+
+The port ID (`SINK_INFO2` and `SINK_INFO3`) keeps Linux's constant until the driver gives Windows a container ID
+(`DXGK_CHILD_CONTAINER_ID`).
+
+The log line `dpaudio: configure done` says `EDID` or `fixed set`. The next line has the LPCM values and the sink
+IDs. `driver/kmd/test/dpaudio_test.c` runs step 4 with the lab monitor's EDID and with the negative cases.
+
 ## Not proven yet
 
 - No lab trial has run step 2. The host test proves the order and the values against a fake register file only.
@@ -194,3 +222,4 @@ again with ABI 1 when an older driver refuses the size.
 - `AUDIO_ENABLED` last is a deviation from Linux. It needs the step 3 trial to show that the class driver still
   finds the endpoint.
 - The read-back of the update strobes is not known. The driver does not compare them.
+- No lab trial has run step 4. The class driver's name for the endpoint is to be checked on the lab.
