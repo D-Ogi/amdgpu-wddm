@@ -1,0 +1,77 @@
+saved C:\BC250\hangb22\kmdlog-after-164406.txt
+14110    739.260 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 690512 ms at the point
+14114    739.260 hwmon: telemetry 730 samples 0 errors 0 retries 0 refusals
+14120    739.260 fan: telemetry 0 failures 0 emergencies 0 doubts
+14122    744.282 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 695439 ms at the point
+14126    744.282 hwmon: telemetry 735 samples 0 errors 0 retries 0 refusals
+14132    744.282 fan: telemetry 0 failures 0 emergencies 0 doubts
+14134    749.304 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 700367 ms at the point
+14138    749.304 hwmon: telemetry 740 samples 0 errors 0 retries 0 refusals
+14144    749.304 fan: telemetry 0 failures 0 emergencies 0 doubts
+14146    754.328 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 705295 ms at the point
+14150    754.328 hwmon: telemetry 745 samples 0 errors 0 retries 0 refusals
+14156    754.328 fan: telemetry 0 failures 0 emergencies 0 doubts
+14158    759.353 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 710224 ms at the point
+14162    759.353 hwmon: telemetry 750 samples 0 errors 0 retries 0 refusals
+14168    759.353 fan: telemetry 0 failures 0 emergencies 0 doubts
+14170    764.377 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 715152 ms at the point
+14174    764.377 hwmon: telemetry 755 samples 0 errors 0 retries 0 refusals
+14180    764.377 fan: telemetry 0 failures 0 emergencies 0 doubts
+14182    769.403 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 720081 ms at the point
+14186    769.403 hwmon: telemetry 760 samples 0 errors 0 retries 0 refusals
+14192    769.403 fan: telemetry 0 failures 0 emergencies 0 doubts
+14194    774.426 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 725009 ms at the point
+14198    774.426 hwmon: telemetry 765 samples 0 errors 0 retries 0 refusals
+14204    774.426 fan: telemetry 0 failures 0 emergencies 0 doubts
+14206    779.450 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 729938 ms at the point
+14210    779.450 hwmon: telemetry 770 samples 0 errors 0 retries 0 refusals
+14216    779.450 fan: telemetry 0 failures 0 emergencies 0 doubts
+14218    784.475 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 734866 ms at the point
+14222    784.475 hwmon: telemetry 775 samples 0 errors 0 retries 0 refusals
+14228    784.475 fan: telemetry 0 failures 0 emergencies 0 doubts
+14230    789.500 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 739795 ms at the point
+14234    789.500 hwmon: telemetry 780 samples 0 errors 0 retries 0 refusals
+14240    789.500 fan: telemetry 0 failures 0 emergencies 0 doubts
+14242    794.524 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 744723 ms at the point
+14246    794.524 hwmon: telemetry 785 samples 0 errors 0 retries 0 refusals
+14252    794.524 fan: telemetry 0 failures 0 emergencies 0 doubts
+14254    799.549 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 749652 ms at the point
+14258    799.549 hwmon: telemetry 790 samples 0 errors 0 retries 0 refusals
+14264    799.549 fan: telemetry 0 failures 0 emergencies 0 doubts
+14266    804.574 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 754579 ms at the point
+14270    804.574 hwmon: telemetry 795 samples 0 errors 0 retries 0 refusals
+14276    804.574 fan: telemetry 0 failures 0 emergencies 0 doubts
+14278    809.599 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 759507 ms at the point
+14282    809.599 hwmon: telemetry 800 samples 0 errors 0 retries 0 refusals
+14288    809.599 fan: telemetry 0 failures 0 emergencies 0 doubts
+14290    814.624 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 764435 ms at the point
+14294    814.624 hwmon: telemetry 805 samples 0 errors 0 retries 0 refusals
+14300    814.624 fan: telemetry 0 failures 0 emergencies 0 doubts
+14302    819.647 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 769363 ms at the point
+14306    819.647 hwmon: telemetry 810 samples 0 errors 0 retries 0 refusals
+14312    819.647 fan: telemetry 0 failures 0 emergencies 0 doubts
+14314    824.673 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 774291 ms at the point
+14318    824.673 hwmon: telemetry 815 samples 0 errors 0 retries 0 refusals
+14324    824.673 fan: telemetry 0 failures 0 emergencies 0 doubts
+14326    829.698 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 779220 ms at the point
+14330    829.698 hwmon: telemetry 819 samples 0 errors 0 retries 0 refusals
+14336    829.698 fan: telemetry 0 failures 0 emergencies 0 doubts
+14338    834.720 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 784147 ms at the point
+14342    834.720 hwmon: telemetry 824 samples 0 errors 0 retries 0 refusals
+14348    834.720 fan: telemetry 0 failures 0 emergencies 0 doubts
+--- tail
+ 14336    829.698 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 14337    834.720 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 8 lowers 17 thermal 0 warm 
+ 14338    834.720 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 4 exits 3 refusals 0, 784147 ms at the point
+ 14339    834.720 dpm: telemetry idle leave at 150 permille, exits 3 by a busy tick, 0 by the window
+ 14340    834.720 hwmon: telemetry fan2 1307 rpm (1/5 turn) duty 761 permille, mode 0xE0 eng 0x60
+ 14341    834.720 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 14342    834.720 hwmon: telemetry 824 samples 0 errors 0 retries 0 refusals
+ 14343    834.720 smu metrics: telemetry 39.4 W avg 39.9 W, gfx 10.1 W soc 3.7 W
+ 14344    834.720 smu metrics: telemetry gfx 824 mV 500 MHz 57.0 C soc 1168 mV 58.0 C thr 0
+ 14345    834.720 fan: telemetry curve curve/standard
+ 14346    834.720 fan: telemetry target 76% applied 76% raw 194 rb 194, 1307 rpm
+ 14347    834.720 fan: telemetry 1 takeovers 0 handbacks 14 writes
+ 14348    834.720 fan: telemetry 0 failures 0 emergencies 0 doubts
+             1024 lines printed
+             escapes: 17 without adapter synchronization, 0 with HardwareAccess

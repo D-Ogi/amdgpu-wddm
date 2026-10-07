@@ -1,0 +1,28 @@
+  11449    247.407 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+  11502    252.424 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+  11550    257.438 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+  11575    262.444 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/1400 cpu 1400-3500
+r3 state A 15:17:17 one thread perf 109 % = 3481 MHz
+  under load:
+    smu metrics: ok, 263 tables, 1 failures, last 885 ms ago: gfx 824 mV 500 MHz 61.00 C, soc 1199 mV 62.75 C, throttler 0x0000
+    smu clocks: socclk 1254 memclk 450 vclk 0 dclk 1111 l3 3500/1400, cpu cores 1555 3500 1555 1400 1400 1400 MHz
+  idle:
+    driver 0x000700D8, requested dpm, reason none, generation 48711203, ticks 8596, uptime 271266 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+    idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 2 exits 1 refusals 0, 254091 ms at the point
+    smu metrics: ok, 266 tables, 1 failures, last 885 ms ago: gfx 824 mV 500 MHz 61.25 C, soc 806 mV 62.25 C, throttler 0x0000
+    smu clocks: socclk 1254 memclk 450 vclk 0 dclk 1111 l3 1400/1400, cpu cores 1400 1400 1400 1400 1400 1400 MHz
+    15:17:20.564 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  67.1 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 1 down 2 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  37.2 W avg  36.8 W (gfx 10.8 W soc  0.7 W)  mem  450 soc 1254 l3 1400 cpu 1400 MHz
+
+device OK 0.7.216.15
+r3 after device restart 15:17:57 one thread perf 87 % = 2779 MHz
+  under load:
+    smu metrics: ok, 34 tables, 0 failures, last 182 ms ago: gfx 818 mV 500 MHz 62.75 C, soc 1199 mV 63.50 C, throttler 0x0000
+    smu clocks: socclk 1254 memclk 450 vclk 0 dclk 1111 l3 3500/3500, cpu cores 1555 3500 1555 3500 1555 1555 MHz
+  idle:
+    driver 0x000700D8, requested dpm, reason none, generation 2781419783, ticks 1190, uptime 37768 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+    idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 30882 ms at the point
+    smu metrics: ok, 37 tables, 0 failures, last 181 ms ago: gfx 818 mV 500 MHz 63.00 C, soc 1175 mV 63.75 C, throttler 0x0000
+    smu clocks: socclk 1254 memclk 450 vclk 0 dclk 1111 l3 1400/3500, cpu cores 1400 1400 1400 3500 1555 1555 MHz
+    15:18:00.280 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  66.0 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  45.9 W avg  47.0 W (gfx 17.2 W soc  2.9 W)  mem  450 soc 1254 l3 3500 cpu 3500 MHz
+  1670      4.770 cpu: the baseline of this start is clock 3500 MHz, undervolt 0 steps, cap 100 C
+  1671      4.770 cpu: the baseline's answers: P-state table top 3200 MHz, per-core top 3500 MHz

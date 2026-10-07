@@ -1,0 +1,10 @@
+staged C:\BC250\tmp\kmd216-14-release sys BB58D62A
+absent C:\BC250\tmp\t20-kmd
+absent C:\BC250\tmp\tester20\payload\kmd
+defaults True
+BB58D62ADC3BFEBD64A04883AA6CF05FDD7A17EB0E531851A367786FA10C993C  C:\BC250\tmp\kmd216-14-release\bc250kmd.sys
+CF221DF7DECC828A155105790A24B0C54ED90D9232441D866190E6FFA8AFD4FD  C:\BC250\tmp\kmd216-14-release\bc250kmd.inf
+update ok=True lasterror=0
+driver now 0.7.216.100, CuMode 40
+boot 2026-10-07T14:30:08.5000000Z
+shutdown exit=0

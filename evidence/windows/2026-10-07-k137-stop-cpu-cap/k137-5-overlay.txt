@@ -1,0 +1,7 @@
+fresh-boot, overlay on 14:32:13 overlay processes 1 perf 109 % = 3481 MHz
+
+device OK
+after device restart, overlay on 14:32:47 overlay processes 1 perf 87 % = 2779 MHz
+overlay stopped 14:32:59 overlay processes 0 perf 87 % = 2779 MHz
+overlay stopped, 15 s later 14:33:17 overlay processes 0 perf 87 % = 2779 MHz
+overlay started again 14:33:34 overlay processes 1 perf 87 % = 2779 MHz

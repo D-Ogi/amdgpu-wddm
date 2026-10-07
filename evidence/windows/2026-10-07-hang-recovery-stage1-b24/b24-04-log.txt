@@ -1,0 +1,3 @@
+kmd log: C:\BC250\hangb22\kmdlog-20261007T143136153Z.txt exit 0, 1024 lines, 5923 lost to the wrap
+current device start at seq 8 (in the kept head): HangRecoveryMode 1 line PRESENT
+    33 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery

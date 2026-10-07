@@ -1,0 +1,135 @@
+0      0.000 interop: \Callback\PowerState registration 0x00000000
+12      0.537 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+14      0.537 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+16      0.537 smu: native owner start status 0x00000000
+35      0.543 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+36      0.552 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+40      0.559 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 67000mc staged 0
+108      0.675 gfx: RLC startup policy pp_gfxoff 0
+179      0.696 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00010201/0x00100200 be 0x00000100/0x00010000 hpd 0x12/0x0
+184      0.696 dpaudio: hw_init done on endpoint 0: rates 0x00020070 power 0xC0000009 hpc 0x00000000, 4 writes
+190      0.696 fan: control off (EnableFanControl 0): the board's curve runs the fan, no write to the chip
+191      0.696 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+196      0.701 dpm: joint power arm DpmJointGovernor 0 (absent) -> off
+199      0.701 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+200      0.701 cpu: the surface sees 12 processors, core mask 0x77
+217      0.704 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+227      0.709 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+228      0.709 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+230      0.709 vidmm: table physical cache query pa 0x45E154000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+231      0.709 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+233      0.709 vidmm: table physical cache query pa 0x45E155000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+234      0.709 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+236      0.709 vidmm: table physical cache query pa 0x45E156000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+237      0.709 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+238      0.709 vidmm: table physical cache query pa 0x45E157000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+239      0.710 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+240      0.710 vidmm: table physical cache query pa 0x45E158000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+241      0.710 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+242      0.710 vidmm: table physical cache query pa 0x45E159000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+243      0.710 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+244      0.710 vidmm: table physical cache query pa 0x45E15A000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+245      0.710 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+246      0.768 wddm: paging DMA mapping op11 VA0x410000 root0x0 translated0 system0 PA0x0 CPU_PA0x147EC5000 match0 offset0
+248      0.768 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+254      0.773 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+255      0.773 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+1670      4.770 cpu: the baseline of this start is clock 3500 MHz, undervolt 0 steps, cap 100 C
+1671      4.770 cpu: the baseline's answers: P-state table top 3200 MHz, per-core top 3500 MHz
+1672      4.770 cpu: the read stage answered (0x00000000): 1206 mV, GPU 824 mV, cap 100 C
+1673      5.707 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 66.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle none, raises 0 lowers 0 thermal 0 warm
+1676      5.707 hwmon: telemetry fan2 1198 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+1679      5.707 smu metrics: telemetry 48.5 W avg 48.5 W, gfx 17.8 W soc 5.0 W
+1680      5.707 smu metrics: telemetry gfx 818 mV 1000 MHz 62.2 C soc 1187 mV 63.0 C thr 0
+1681      5.707 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500
+1685      6.874 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 66.6 C, throttle idle)
+1866     10.717 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+1869     10.717 hwmon: telemetry fan2 1237 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+1872     10.717 smu metrics: telemetry 46.0 W avg 47.2 W, gfx 17.2 W soc 3.1 W
+1873     10.717 smu metrics: telemetry gfx 818 mV 500 MHz 62.5 C soc 1175 mV 63.5 C thr 0
+1874     10.717 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2020     15.729 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2023     15.729 hwmon: telemetry fan2 1203 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2026     15.729 smu metrics: telemetry 46.6 W avg 46.3 W, gfx 17.8 W soc 3.1 W
+2027     15.729 smu metrics: telemetry gfx 818 mV 500 MHz 62.5 C soc 1181 mV 63.5 C thr 0
+2028     15.729 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2029     20.758 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2032     20.758 hwmon: telemetry fan2 1202 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2035     20.758 smu metrics: telemetry 46.6 W avg 46.2 W, gfx 17.2 W soc 3.7 W
+2036     20.758 smu metrics: telemetry gfx 818 mV 500 MHz 63.0 C soc 1181 mV 63.2 C thr 0
+2037     20.758 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2038     25.761 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.0 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2041     25.761 hwmon: telemetry fan2 1237 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2044     25.761 smu metrics: telemetry 46.6 W avg 46.3 W, gfx 17.2 W soc 3.7 W
+2045     25.761 smu metrics: telemetry gfx 818 mV 500 MHz 63.0 C soc 1181 mV 63.5 C thr 0
+2046     25.761 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500
+2047     30.780 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.0 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2050     30.780 hwmon: telemetry fan2 1201 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2053     30.780 smu metrics: telemetry 47.5 W avg 46.4 W, gfx 17.2 W soc 4.6 W
+2054     30.780 smu metrics: telemetry gfx 818 mV 500 MHz 62.7 C soc 1187 mV 63.7 C thr 0
+2055     30.780 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2056     35.801 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.0 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2059     35.801 hwmon: telemetry fan2 1234 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2062     35.801 smu metrics: telemetry 49.4 W avg 48.7 W, gfx 17.8 W soc 5.9 W
+2063     35.801 smu metrics: telemetry gfx 818 mV 500 MHz 62.7 C soc 1199 mV 63.5 C thr 0
+2064     35.801 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500
+2065     40.818 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2068     40.818 hwmon: telemetry fan2 1203 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2071     40.818 smu metrics: telemetry 46.8 W avg 46.3 W, gfx 17.8 W soc 3.3 W
+2072     40.818 smu metrics: telemetry gfx 818 mV 500 MHz 63.0 C soc 1175 mV 63.5 C thr 0
+2073     40.818 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2074     45.847 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2077     45.847 hwmon: telemetry fan2 1203 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2080     45.847 smu metrics: telemetry 46.4 W avg 46.3 W, gfx 17.2 W soc 3.5 W
+2081     45.847 smu metrics: telemetry gfx 818 mV 500 MHz 63.0 C soc 1175 mV 63.7 C thr 0
+2082     45.847 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500
+2083     50.849 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2086     50.849 hwmon: telemetry fan2 1239 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2089     50.849 smu metrics: telemetry 47.0 W avg 46.4 W, gfx 17.8 W soc 3.5 W
+2090     50.849 smu metrics: telemetry gfx 818 mV 500 MHz 63.5 C soc 1175 mV 64.2 C thr 0
+2091     50.849 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2092     55.865 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2095     55.865 hwmon: telemetry fan2 1203 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2098     55.865 smu metrics: telemetry 46.9 W avg 47.2 W, gfx 17.2 W soc 4.0 W
+2099     55.865 smu metrics: telemetry gfx 818 mV 500 MHz 63.5 C soc 1193 mV 64.0 C thr 0
+2100     55.865 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500
+2174     60.896 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2177     60.896 hwmon: telemetry fan2 1203 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2180     60.896 smu metrics: telemetry 47.1 W avg 47.2 W, gfx 17.2 W soc 4.1 W
+2181     60.896 smu metrics: telemetry gfx 818 mV 500 MHz 63.0 C soc 1175 mV 63.5 C thr 0
+2182     60.896 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500
+2183     65.901 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.5 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2186     65.901 hwmon: telemetry fan2 1237 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2189     65.901 smu metrics: telemetry 47.1 W avg 47.4 W, gfx 17.2 W soc 4.1 W
+2190     65.901 smu metrics: telemetry gfx 818 mV 500 MHz 63.5 C soc 1187 mV 64.5 C thr 0
+2191     65.901 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2192     70.903 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.5 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2195     70.903 hwmon: telemetry fan2 1201 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2198     70.903 smu metrics: telemetry 46.0 W avg 46.3 W, gfx 17.2 W soc 3.0 W
+2199     70.903 smu metrics: telemetry gfx 818 mV 500 MHz 63.2 C soc 1168 mV 64.0 C thr 0
+2200     70.903 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2201     75.912 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2204     75.912 hwmon: telemetry fan2 1234 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2207     75.912 smu metrics: telemetry 46.0 W avg 46.5 W, gfx 17.2 W soc 3.1 W
+2208     75.912 smu metrics: telemetry gfx 818 mV 500 MHz 63.5 C soc 1175 mV 64.2 C thr 0
+2209     75.912 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2210     80.919 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2213     80.919 hwmon: telemetry fan2 1201 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2216     80.919 smu metrics: telemetry 46.7 W avg 46.7 W, gfx 17.2 W soc 3.7 W
+2217     80.919 smu metrics: telemetry gfx 818 mV 500 MHz 63.5 C soc 1181 mV 64.5 C thr 0
+2218     80.919 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2219     85.924 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.7 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2222     85.924 hwmon: telemetry fan2 1234 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2225     85.924 smu metrics: telemetry 46.4 W avg 46.6 W, gfx 17.3 W soc 3.3 W
+2226     85.924 smu metrics: telemetry gfx 824 mV 500 MHz 63.5 C soc 1175 mV 64.0 C thr 0
+2227     85.924 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2228     90.933 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.7 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2231     90.933 hwmon: telemetry fan2 1201 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2234     90.933 smu metrics: telemetry 47.5 W avg 46.6 W, gfx 17.8 W soc 3.9 W
+2235     90.933 smu metrics: telemetry gfx 818 mV 500 MHz 63.5 C soc 1175 mV 64.2 C thr 0
+2236     90.933 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/3500 cpu 1400-3500
+2237     95.959 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.7 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+2240     95.959 hwmon: telemetry fan2 1233 rpm (1/5 turn) duty 682 permille, mode 0xE0 eng 0x60
+2243     95.959 smu metrics: telemetry 49.4 W avg 48.9 W, gfx 17.2 W soc 6.4 W
+2244     95.959 smu metrics: telemetry gfx 818 mV 500 MHz 63.7 C soc 1187 mV 64.2 C thr 0
+2245     95.959 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 1555-3500

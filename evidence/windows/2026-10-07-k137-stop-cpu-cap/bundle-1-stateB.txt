@@ -1,0 +1,17 @@
+Measure-Object : The property "CookedValue" cannot be found in the input for any objects.
+At C:\BC250\tmp\bundle.ps1:29 char:34
++ ... rf = ($c.CounterSamples | Measure-Object CookedValue -Average).Averag ...
++                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Measure-Object], PSArgumentException
+    + FullyQualifiedErrorId : GenericMeasurePropertyNotFound,Microsoft.PowerShell.Commands.Measur 
+   eObjectCommand
+b1-k137-A 16:51:02 fixed work 199.3 / 259.5 / 256.4 it/us, counter perf 0 %
+  placement local: src/dst type 0 (heap 1, flags 0x001), readback type 5 (flags 0x00E)
+  write  n=20 gpu_ms min 0.719 median 0.730 max 0.742 sum 14.6 | GB/s median 367.5 best 373.5 | cpu_ms 16.0 (0.798 per dispatch)
+  copy   n=20 gpu_ms min 1.379 median 1.390 max 1.408 sum 27.8 | GB/s median 386.3 best 389.3 | cpu_ms 29.0 (1.449 per dispatch)
+  read   n=20 gpu_ms min 0.746 median 0.750 max 0.754 sum 15.0 | GB/s median 380.1 best 382.4 | cpu_ms 15.8 (0.788 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+  placement host: src/dst type 2 (heap 0, flags 0x006), readback type 5 (flags 0x00E)
+  write  n=20 gpu_ms min 0.721 median 0.739 max 0.749 sum 14.7 | GB/s median 363.3 best 372.2 | cpu_ms 15.7 (0.784 per dispatch)
+  copy   n=20 gpu_ms min 1.388 median 1.394 max 1.408 sum 27.9 | GB/s median 385.2 best 386.9 | cpu_ms 28.9 (1.445 per dispatch)
+  16:51:09.186 dpm 1400 MHz  899 mV (SMU 1400 MHz VID 104)  63.9 C busy   0.0% avg   1.7% want 1400 cap 1500 max 1500 throttle none confirmed session  up 5 down 7 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  73.0 W avg  73.9 W (gfx 30.0 W soc  4.8 W)

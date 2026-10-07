@@ -1,0 +1,7 @@
+before 12:37:40 perf 97.6 % = 3116 MHz
+
+status Error
+disabled 12:37:54 perf 75.6 % = 2414 MHz
+
+status OK
+enabled 12:38:16 perf 81.5 % = 2602 MHz

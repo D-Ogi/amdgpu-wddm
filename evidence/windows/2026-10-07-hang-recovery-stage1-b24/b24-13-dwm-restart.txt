@@ -1,0 +1,10 @@
+old dwm 1936, new dwm 8932 started 14:46:10Z, cpu over 5 s 0.02
+idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 5 exits 4 refusals 0, 915114 ms at the point
+16:46:27.187 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.0 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 9 down 18 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  36.8 W avg  36.6 W (gfx 10.2 W soc  1.0 W)
+33      1.173 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+223      1.443 wddm: CreateDevice flags 0x00000001 pasid 0 pid 796
+224      1.443 wddm: CreateDevice flags 0x00000001 pasid 0 pid 796
+15897    961.878 display visibility: call 13 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+15898    961.878 display visibility: call 13 status 0x00000000 current 1 blanked 0
+15963    961.915 display visibility: call 14 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+15964    961.915 display visibility: call 14 status 0x00000000 current 1 blanked 0

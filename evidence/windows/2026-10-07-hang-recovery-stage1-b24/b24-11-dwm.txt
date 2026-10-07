@@ -1,0 +1,20 @@
+Get-WinEvent : The parameter is incorrect
+At C:\BC250\tmp\after-d1-dwm.ps1:4 char:5
++     Get-WinEvent -FilterHashtable @{ LogName = $log; StartTime = $sin ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Get-WinEvent], EventLogException
+    + FullyQualifiedErrorId : System.Diagnostics.Eventing.Reader.EventLogException,Microsoft.Powe 
+   rShell.Commands.GetWinEventCommand
+ 
+14:34:27Z [Application] Windows Error Reporting 1001 Fault bucket 1935938719551118528, type 5
+
+14:32:31Z [Application] Windows Error Reporting 1001 Fault bucket , type 0
+
+14:32:31Z [Application] Windows Error Reporting 1001 Fault bucket , type 0
+
+14:28:07Z [Application] Desktop Window Manager 9027 The Desktop Window Manager has registered the session port.
+14:23:30Z [Application] Application Error 1000 Faulting application name: M365Copilot.exe, version: 19.2610.35011.0, time stamp: 0x6ac3aa56
+
+dwm cpu seconds over 5 s: 5.02
+Monitor OK Generic Monitor
+Display OK BC-250 GPU (amdgpu-wddm)

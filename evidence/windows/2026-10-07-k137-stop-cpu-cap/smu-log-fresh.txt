@@ -1,0 +1,101 @@
+0      0.000 interop: \Callback\PowerState registration 0x00000000
+12      1.142 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+14      1.142 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+16      1.142 smu: native owner start status 0x00000000
+36      1.142 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+37      1.158 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+41      1.158 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1500MHz/VID101 observed 1000MHz/VID116 temp 69000mc staged 0
+109      1.284 gfx: RLC startup policy pp_gfxoff 0
+180      1.395 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00010201/0x00100200 be 0x00000100/0x00010000 hpd 0x12/0x0
+185      1.395 dpaudio: hw_init done on endpoint 0: rates 0x00020070 power 0xC0000009 hpc 0x00000000, 4 writes
+191      1.395 fan: control on: mode curve profile standard
+192      1.395 fan: restore record taken at the first change, bugcheck callback on
+193      1.395 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+198      1.395 dpm: joint power arm DpmJointGovernor 0 (absent) -> off
+201      1.400 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+202      1.400 cpu: the surface sees 12 processors, core mask 0x77
+219      1.409 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+229      1.412 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+230      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+232      1.412 vidmm: table physical cache query pa 0x45E154000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+233      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+235      1.412 vidmm: table physical cache query pa 0x45E155000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+236      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+238      1.412 vidmm: table physical cache query pa 0x45E156000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+239      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+240      1.412 vidmm: table physical cache query pa 0x45E157000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+241      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+242      1.412 vidmm: table physical cache query pa 0x45E158000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+243      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+244      1.412 vidmm: table physical cache query pa 0x45E159000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+245      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+246      1.412 vidmm: table physical cache query pa 0x45E15A000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+247      1.412 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+248      1.430 fan: now curve, duty 84% (raw 214), guard 69.0 C
+249      1.430 fan: now reason none, doubt none
+250      1.445 wddm: paging DMA mapping op11 VA0x410000 root0x0 translated0 system0 PA0x0 CPU_PA0x10FE25000 match0 offset0
+252      1.445 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+5972     46.550 fan: telemetry 0 failures 0 emergencies 0 doubts
+6011     51.569 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 70.0 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6014     51.569 hwmon: telemetry fan2 1492 rpm (1/5 turn) duty 902 permille, mode 0xE0 eng 0x60
+6017     51.569 smu metrics: telemetry 37.6 W avg 37.3 W, gfx 10.7 W soc 1.1 W
+6018     51.569 smu metrics: telemetry gfx 824 mV 500 MHz 61.7 C soc 806 mV 63.2 C thr 0
+6019     51.569 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+6020     51.569 fan: telemetry curve curve/standard
+6021     51.569 fan: telemetry target 90% applied 90% raw 230 rb 230, 1492 rpm
+6022     51.569 fan: telemetry 1 takeovers 0 handbacks 6 writes
+6023     51.569 fan: telemetry 0 failures 0 emergencies 0 doubts
+6038     56.581 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 69.2 C busy 0.0% avg 0.3% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6041     56.581 hwmon: telemetry fan2 1488 rpm (1/5 turn) duty 902 permille, mode 0xE0 eng 0x60
+6044     56.581 smu metrics: telemetry 37.2 W avg 37.3 W, gfx 10.7 W soc 0.7 W
+6045     56.581 smu metrics: telemetry gfx 824 mV 500 MHz 61.2 C soc 806 mV 62.7 C thr 0
+6046     56.581 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+6047     56.581 fan: telemetry curve curve/standard
+6048     56.581 fan: telemetry target 89% applied 90% raw 230 rb 230, 1488 rpm
+6049     56.581 fan: telemetry 1 takeovers 0 handbacks 6 writes
+6050     56.581 fan: telemetry 0 failures 0 emergencies 0 doubts
+6067     61.584 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 68.5 C busy 0.0% avg 0.3% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6070     61.584 hwmon: telemetry fan2 1492 rpm (1/5 turn) duty 902 permille, mode 0xE0 eng 0x60
+6073     61.584 smu metrics: telemetry 37.3 W avg 37.2 W, gfx 10.7 W soc 0.8 W
+6074     61.584 smu metrics: telemetry gfx 824 mV 500 MHz 61.2 C soc 806 mV 62.7 C thr 0
+6075     61.584 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+6076     61.584 fan: telemetry curve curve/standard
+6077     61.584 fan: telemetry target 88% applied 90% raw 230 rb 230, 1492 rpm
+6078     61.584 fan: telemetry 1 takeovers 0 handbacks 6 writes
+6079     61.584 fan: telemetry 0 failures 0 emergencies 0 doubts
+6106     66.600 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 67.8 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6109     66.600 hwmon: telemetry fan2 1466 rpm (1/5 turn) duty 871 permille, mode 0xE0 eng 0x60
+6112     66.600 smu metrics: telemetry 38.3 W avg 37.2 W, gfx 10.7 W soc 1.8 W
+6113     66.600 smu metrics: telemetry gfx 824 mV 500 MHz 60.7 C soc 806 mV 62.2 C thr 0
+6114     66.600 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+6115     66.600 fan: telemetry curve curve/standard
+6116     66.600 fan: telemetry target 87% applied 87% raw 222 rb 222, 1466 rpm
+6117     66.600 fan: telemetry 1 takeovers 0 handbacks 7 writes
+6118     66.600 fan: telemetry 0 failures 0 emergencies 0 doubts
+6151     71.616 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 67.3 C busy 0.0% avg 0.4% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6154     71.616 hwmon: telemetry fan2 1492 rpm (1/5 turn) duty 871 permille, mode 0xE0 eng 0x60
+6157     71.616 smu metrics: telemetry 38.0 W avg 37.0 W, gfx 10.1 W soc 2.1 W
+6158     71.616 smu metrics: telemetry gfx 824 mV 500 MHz 60.5 C soc 862 mV 62.0 C thr 0
+6159     71.616 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1352/2855 cpu 1352-2855
+6160     71.616 fan: telemetry curve curve/standard
+6161     71.616 fan: telemetry target 86% applied 87% raw 222 rb 222, 1492 rpm
+6162     71.616 fan: telemetry 1 takeovers 0 handbacks 7 writes
+6163     71.616 fan: telemetry 0 failures 0 emergencies 0 doubts
+6222     76.631 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.7 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6225     76.631 hwmon: telemetry fan2 1492 rpm (1/5 turn) duty 871 permille, mode 0xE0 eng 0x60
+6228     76.631 smu metrics: telemetry 36.3 W avg 38.1 W, gfx 10.1 W soc 0.4 W
+6229     76.631 smu metrics: telemetry gfx 824 mV 500 MHz 60.2 C soc 806 mV 61.7 C thr 0
+6230     76.631 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+6231     76.631 fan: telemetry curve curve/standard
+6232     76.631 fan: telemetry target 85% applied 87% raw 222 rb 222, 1492 rpm
+6233     76.631 fan: telemetry 1 takeovers 0 handbacks 7 writes
+6234     76.631 fan: telemetry 0 failures 0 emergencies 0 doubts
+6727     81.632 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 66.6 C busy 0.0% avg 0.4% want 1000 cap 1500 max 1500 throttle idle, raises 0 lowers 1 thermal 0 warm 0
+6730     81.632 hwmon: telemetry fan2 1463 rpm (1/5 turn) duty 851 permille, mode 0xE0 eng 0x60
+6733     81.632 smu metrics: telemetry 41.7 W avg 42.3 W, gfx 10.1 W soc 5.6 W
+6734     81.632 smu metrics: telemetry gfx 824 mV 500 MHz 60.2 C soc 1187 mV 62.0 C thr 0
+6735     81.632 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 3500/3500 cpu 3500-3500
+6736     81.632 fan: telemetry curve curve/standard
+6737     81.632 fan: telemetry target 85% applied 85% raw 217 rb 217, 1463 rpm
+6738     81.632 fan: telemetry 1 takeovers 0 handbacks 8 writes
+6739     81.632 fan: telemetry 0 failures 0 emergencies 0 doubts
