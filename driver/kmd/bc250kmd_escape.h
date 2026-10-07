@@ -1801,7 +1801,7 @@ enum bc250_dpaudio_reason { BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_ENUM)
 
 // The steps of the two stream sequences, for StreamStep: the first step that failed or read back wrong. X(name).
 // The enable sequence in its order, then the stop sequence in its order (dpaudio_seq.c Bc250DpAudioStreamEnable,
-// Bc250DpAudioStreamDisable). Append only: AFMT_MEM_POWER (0.7.216.3) runs first in the enable but takes the next
+// Bc250DpAudioStreamDisable). Append only: AFMT_MEM_POWER (0.7.216.4) runs first in the enable but takes the next
 // number, so the numbers a tool already decodes keep their meaning.
 #define BC250_DPAUDIO_STEP_LIST(X) \
     X(NONE) X(DTO_SELECT) X(DTO1_MODULE) X(DTO1_PHASE) X(DTO_512FBR) X(AFMT_CLOCK_ON) X(SRC_SELECT) \
