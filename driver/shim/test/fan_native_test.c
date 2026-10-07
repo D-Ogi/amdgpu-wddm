@@ -443,7 +443,22 @@ static void escape(void)
     CHECK(f.LeaseMs == 9000u);
     for (i = 0; i < 9u; i++) Second(70000);
     Read(&f);
-    CHECK(AtRest() && f.Reason == BC250_FAN_REASON_LEASE && f.Mode == BC250_FAN_MODE_BOARD && f.LeaseExpiries == 1u);
+    /* The lease ends with the durable mode from before it, the Standard curve: the driver keeps the fan. */
+    CHECK(Held() && f.Mode == BC250_FAN_MODE_CURVE && f.Profile == BC250_FAN_PROFILE_STANDARD && f.LeaseExpiries == 1u);
+    CHECK(f.State == BC250_FAN_STATE_CURVE && !(f.Flags & BC250_FAN_FLAG_LEASED) && (f.Flags & BC250_FAN_FLAG_CONTROLLING));
+    /* Over a durable board, the lease ends with the board. */
+    memset(&f, 0, sizeof(f));
+    Ask(&f, BC250_FAN_OP_BOARD, TRUE);
+    CHECK(f.Status == BC250_ESCAPE_STATUS_DONE);
+    Second(70000);
+    memset(&f, 0, sizeof(f));
+    f.FixedPct = 40;
+    f.LeaseMs = 5000;
+    Ask(&f, BC250_FAN_OP_FIXED, TRUE);
+    CHECK(f.Status == BC250_ESCAPE_STATUS_DONE && f.Error == BC250_FAN_ERROR_OK);
+    for (i = 0; i < 6u; i++) Second(70000);
+    Read(&f);
+    CHECK(AtRest() && f.Reason == BC250_FAN_REASON_LEASE && f.Mode == BC250_FAN_MODE_BOARD && f.LeaseExpiries == 2u);
     CHECK(!(f.Flags & BC250_FAN_FLAG_LEASED) && !(f.Flags & BC250_FAN_FLAG_CONTROLLING));
 
     /* Requests the policy refuses: nothing changes, and Error names the rule. */

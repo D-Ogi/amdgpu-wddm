@@ -314,8 +314,11 @@ time source, so the host test runs it against a model of the chip. These are its
    fan acts before the clock pays.
 8. **The output rises at once and falls slowly.** It falls only after 10 s below, by 10 points at most
    every 2 s. The curve's input falls only when it is 3 C under its peak.
-9. **A leased mode ends with the board.** A fixed duty, and a curve with a lease, give the fan back when
-   the lease runs out and nobody renewed it.
+9. **A leased mode ends with the durable mode from before it.** A fixed duty, and a curve with a lease, end
+   when the lease runs out and nobody renewed it. The driver then runs the last mode it got without a lease
+   (or the mode of the start): the driver's curve, which keeps the fan and follows the temperature again, or
+   the board, which gets the fan back. Until 0.7.215 every lease ended with the board, so a fan test from the
+   control application left the board's curve in force instead of the one the user chose.
 
 ### The curves
 
@@ -391,7 +394,7 @@ port. Every operation takes `NoAdapterSynchronization` only, so a request never 
 | --- | --- | --- |
 | READ (0) | returns the snapshot | everyone |
 | BOARD (1) | gives the fan to the board's curve. `Store` 1 makes that the choice of every start | administrator |
-| CURVE (2) | the driver's curve: a preset, or custom points. `LeaseMs` 0 is durable and `Store` 1 writes it. 5 to 300 s is a trial that ends with the board | administrator |
+| CURVE (2) | the driver's curve: a preset, or custom points. `LeaseMs` 0 is durable and `Store` 1 writes it. 5 to 300 s is a trial that ends with the durable mode from before it (rule 9) | administrator |
 | FIXED (3) | one duty of 20 to 100 %, always under a lease of 5 to 300 s, never stored | administrator |
 | RENEW (4) | restarts the lease of a leased mode | administrator |
 
@@ -450,7 +453,7 @@ The control application has a Case fan card on the Performance page. It shows:
 - A short test: one speed from 30 to 100 % for 10 s (`--action fan-test --fan-test-pct N`). The helper sends
   FIXED with a 15 s lease, as `bc250kmd_cli fan set` does, reads the fan once a second, and then sends the
   choice that was in force again (CURVE or BOARD, `LeaseMs` 0, `Store` 0). If the helper stops halfway, the
-  lease runs out and the board gets the fan (rule 9). The window keeps its own poll during the test and shows
+  lease runs out and the choice from before the test comes back (rule 9). The window keeps its own poll during the test and shows
   the fastest RPM it saw. The test is refused while the driver does not run the fan in the normal way:
   leased, paused, fault, emergency, doubt or held back.
 

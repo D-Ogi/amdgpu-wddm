@@ -146,6 +146,12 @@ static void apply_request(struct bc250_fan_ctl *ctl, const struct bc250_fan_requ
 	ctl->curve = *resolved;
 	ctl->fixed_pct = request->mode == BC250_FAN_MODE_FIXED ? request->fixed_pct : 0u;
 	ctl->lease_ms = request->mode == BC250_FAN_MODE_BOARD ? 0u : request->lease_ms;
+	/* A durable request is also what a later lease ends with. A FIXED duty always has a lease. */
+	if (ctl->lease_ms == 0u) {
+		ctl->durable_mode = ctl->mode;
+		ctl->durable_profile = ctl->profile;
+		ctl->durable_curve = ctl->curve;
+	}
 }
 
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start)
@@ -587,15 +593,24 @@ int bc250_fan_tick(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, c
 	if (!ctl->enabled)
 		return bc250_fan_handback(io, ctl, BC250_FAN_REASON_DISABLED);
 
-	/* A lease that ran out: the board gets the fan back, and it keeps it until somebody asks again. */
+	/* A lease that ran out: the durable mode from before the lease comes back (rule 9). That is the driver's
+	 * curve, which follows the temperature, or the board, which gets the fan back and keeps it until somebody
+	 * asks again. */
 	if (ctl->lease_ms != 0u) {
 		if (dt >= ctl->lease_ms) {
 			ctl->lease_ms = 0;
 			ctl->lease_expiries++;
-			ctl->mode = BC250_FAN_MODE_BOARD;
-			return bc250_fan_handback(io, ctl, BC250_FAN_REASON_LEASE);
-		}
-		ctl->lease_ms -= dt;
+			ctl->fixed_pct = 0;
+			if (ctl->durable_mode != BC250_FAN_MODE_CURVE) {
+				ctl->mode = BC250_FAN_MODE_BOARD;
+				ctl->profile = 0;
+				return bc250_fan_handback(io, ctl, BC250_FAN_REASON_LEASE);
+			}
+			ctl->mode = BC250_FAN_MODE_CURVE;
+			ctl->profile = ctl->durable_profile;
+			ctl->curve = ctl->durable_curve;
+		} else
+			ctl->lease_ms -= dt;
 	}
 	if (ctl->mode == BC250_FAN_MODE_BOARD) {
 		if (ctl->controlling)

@@ -389,21 +389,52 @@ static void leases(void)
 	CHECK(bc250_fan_renew(&ctl, 1000) != 0);
 	for (i = 0; i < 4u; i++)
 		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0 && ctl.controlling);
-	/* The lease runs out: the board gets the fan back and keeps it. */
+	/* The lease runs out over the start's durable Standard curve: that curve comes back, the driver keeps the fan
+	 * and the duty follows the temperature again, not the 40 % of the lease. */
+	CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
+	CHECK(ctl.controlling && ctl.mode == BC250_FAN_MODE_CURVE && ctl.profile == BC250_FAN_PROFILE_STANDARD);
+	CHECK(ctl.state == BC250_FAN_STATE_CURVE && ctl.lease_ms == 0u && ctl.fixed_pct == 0u);
+	CHECK(ctl.lease_expiries == 1u && ctl.handbacks == 0u);
+	for (i = 0; i < 40u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0 && ctl.controlling && ctl.state == BC250_FAN_STATE_CURVE);
+	CHECK(ec_peek8(&ec, TARGET1) != 102u);
+	/* A leased Performance curve over a durable Quiet curve ends with Quiet. */
+	memset(&r, 0, sizeof(r));
+	r.mode = BC250_FAN_MODE_CURVE;
+	r.profile = BC250_FAN_PROFILE_QUIET;
+	CHECK(bc250_fan_set(&ctl, &r) == BC250_FAN_ERROR_OK);
+	r.profile = BC250_FAN_PROFILE_PERFORMANCE;
+	r.lease_ms = 5000;
+	CHECK(bc250_fan_set(&ctl, &r) == BC250_FAN_ERROR_OK && ctl.profile == BC250_FAN_PROFILE_PERFORMANCE);
+	for (i = 0; i < 5u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
+	CHECK(ctl.controlling && ctl.mode == BC250_FAN_MODE_CURVE && ctl.profile == BC250_FAN_PROFILE_QUIET);
+	CHECK(ctl.lease_expiries == 2u);
+	/* Over a durable board, the lease ends with the board: the fan goes back and stays with it. */
+	memset(&r, 0, sizeof(r));
+	r.mode = BC250_FAN_MODE_BOARD;
+	CHECK(bc250_fan_set(&ctl, &r) == BC250_FAN_ERROR_OK);
+	CHECK(tick_at(&io, &ec, &ctl, 60000) == 0 && !ctl.controlling);
+	r.mode = BC250_FAN_MODE_FIXED;
+	r.fixed_pct = 40;
+	r.lease_ms = 5000;
+	CHECK(bc250_fan_set(&ctl, &r) == BC250_FAN_ERROR_OK);
+	for (i = 0; i < 5u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
 	CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
 	CHECK(!ctl.controlling && ctl.reason == BC250_FAN_REASON_LEASE && ctl.mode == BC250_FAN_MODE_BOARD);
-	CHECK(ctl.lease_expiries == 1u && at_rest(&ec, BC250_HWMON_TARGET_REST));
+	CHECK(ctl.lease_expiries == 3u && at_rest(&ec, BC250_HWMON_TARGET_REST));
 	ec.logged = 0;
 	for (i = 0; i < 40u; i++)
 		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
 	CHECK(ec.logged == 0u && !ctl.controlling);
-	/* A leased curve ends the same way; a durable one has nothing to renew. */
+	/* A leased curve over the board ends the same way; a durable one has nothing to renew. */
 	memset(&r, 0, sizeof(r));
 	r.mode = BC250_FAN_MODE_CURVE;
 	r.profile = BC250_FAN_PROFILE_PERFORMANCE;
 	r.lease_ms = 5000;
 	CHECK(bc250_fan_set(&ctl, &r) == BC250_FAN_ERROR_OK);
-	for (i = 0; i < 5u; i++)
+	for (i = 0; i < 6u; i++)
 		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
 	CHECK(!ctl.controlling && ctl.reason == BC250_FAN_REASON_LEASE);
 	r.lease_ms = 0;

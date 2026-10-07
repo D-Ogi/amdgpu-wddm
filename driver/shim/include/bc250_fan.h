@@ -223,6 +223,10 @@ struct bc250_fan_ctl {
 	struct bc250_fan_curve	curve;
 	unsigned int		fixed_pct;
 	unsigned int		lease_ms;	/* left of a leased mode, 0 for a durable one */
+	/* the durable mode a lease ends with (rule 9): the last request without a lease, or the start's mode */
+	unsigned int		durable_mode;	/* BOARD or CURVE */
+	unsigned int		durable_profile;
+	struct bc250_fan_curve	durable_curve;
 	/* the chip */
 	unsigned int		controlling;	/* our mode bit is set in the chip */
 	struct bc250_fan_restore restore;	/* kept across a device stop and start */

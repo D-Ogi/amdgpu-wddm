@@ -987,7 +987,7 @@ typedef struct _BC250_ESCAPE_CPU {
 #define BC250_FAN_FLAG_ENABLED 1u           // this start may drive the fan (EnableFanControl, the reader, the chip)
 #define BC250_FAN_FLAG_CONTROLLING 2u       // the driver holds fan 1 now: its mode bit is set in the chip
 #define BC250_FAN_FLAG_EMERGENCY 4u         // 100 %: the guard temperature reached 87 C
-#define BC250_FAN_FLAG_LEASED 8u            // the mode in force ends with the board when LeaseMs runs out
+#define BC250_FAN_FLAG_LEASED 8u            // the mode in force ends when LeaseMs runs out (then the durable mode from before it)
 #define BC250_FAN_FLAG_STORED 16u           // FanMode is on disk: StoredMode and StoredProfile are the registry's
 #define BC250_FAN_FLAG_FAULT 32u            // the chip refused something: the board has the fan for this start
 #define BC250_FAN_FLAG_GATED 64u            // EnableFanControl is 0: no write to the chip ever happens
