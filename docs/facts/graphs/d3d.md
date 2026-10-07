@@ -12,8 +12,11 @@ flowchart LR
   M575["M575"]
   M774["M774"]
   M801["M801"]
+  M838["M838"]
+  M839["M839"]
   M575 ==>|supersedes| M574
   M801 ==>|supersedes| M774
+  M839 -.->|refutes| M838
   classDef other stroke-dasharray:4 3
 ```
 
@@ -41,6 +44,7 @@ flowchart LR
   M723["M723<br/>display"]
   M753["M753"]
   M754["M754"]
+  M758["M758"]
   M780["M780"]
   M782["M782"]
   M784["M784"]
@@ -54,6 +58,7 @@ flowchart LR
   M804["M804<br/>hardware"]
   M837["M837"]
   M838["M838"]
+  M839["M839"]
   M804 --> M801
   M576 --> M575
   M723 --> M697
@@ -75,6 +80,8 @@ flowchart LR
   M801 --> M46
   M837 --> M782
   M838 --> M837
+  M839 --> M758
+  M839 --> M837
   M553 --> M546
   classDef other stroke-dasharray:4 3
   class M46,M553,M569,M571,M576,M585,M723,M804 other
