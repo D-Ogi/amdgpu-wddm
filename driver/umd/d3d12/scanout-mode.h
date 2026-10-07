@@ -27,9 +27,13 @@
 //                  and never against a size of its own, so it follows whatever source mode the kernel
 //                  driver offers (the same rule the router's front applies on the compositor's side).
 //   Format         the chain's format is not a SCANOUT_PRIMARY row of the shared table, or is a row with
-//                  no DXGI name (so the compositor's opener could not take its record).
+//                  no DXGI name (so the compositor's opener could not take its record), or is a row other
+//                  than the firmware's own format while the trailer lacks BC250_SCANOUT_CAPS_PLANE_FORMATS
+//                  (bc250_scanout_format_admitted: an older kernel driver does not program the plane's
+//                  pixel format, and its refusal would come after SharedPrimaryTransition).
 //   Pitch          the engine's row pitch is not the one pitch every component derives
-//                  (scanout_row_pitch). Nothing downstream could check a pitch only this shell knows.
+//                  (scanout_row_pitch, with the row's bytes_per_pixel). Nothing downstream could check a
+//                  pitch only this shell knows.
 //
 // ModeGeometry sits before the switches on purpose: a start with the mode named for another monitor must
 // read as "this chain is not the one" and not as "the kernel driver said no", or a trial would chase a
@@ -83,10 +87,13 @@ inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanou
     if(width!=caps.post_width || height!=caps.post_height){
         out.reason=ScanoutStandDown::SourceGeometry;return out;
     }
-    const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(dxgi),
-                                              AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
-    if(!row || !row->dxgi){out.reason=ScanoutStandDown::Format;return out;}
-    if(!pitch || pitch!=scanout_row_pitch(width)){out.reason=ScanoutStandDown::Pitch;return out;}
+    const auto* row=amdgpu_wddm_surface_format_by_dxgi(dxgi);
+    if(!row || !row->dxgi || !bc250_scanout_format_admitted(row,caps.flags)){
+        out.reason=ScanoutStandDown::Format;return out;
+    }
+    if(!pitch || pitch!=scanout_row_pitch(width,row->bytes_per_pixel)){
+        out.reason=ScanoutStandDown::Pitch;return out;
+    }
     out.reason=ScanoutStandDown::Admitted;out.admitted=true;return out;
 }
 // The desktop router's kill switch, read the way the router itself reads it (driver/umd/router/router.cpp

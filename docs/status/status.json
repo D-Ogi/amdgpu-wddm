@@ -264,7 +264,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryAdapterInfo",
-       "source": "driver/kmd/wddm.c:3556",
+       "source": "driver/kmd/wddm.c:3585",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -328,7 +328,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSetStablePowerState",
-       "source": "driver/kmd/wddm.c:6213",
+       "source": "driver/kmd/wddm.c:6246",
        "done": true,
        "reason": "forwards to DpmSetStable: does work"
       }
@@ -360,7 +360,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmControlInterrupt",
-       "source": "driver/kmd/wddm.c:7176",
+       "source": "driver/kmd/wddm.c:7225",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -402,7 +402,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryChildRelations",
-       "source": "driver/kmd/wddm.c:7343",
+       "source": "driver/kmd/wddm.c:7392",
        "done": true,
        "reason": "forwards to Bc250QueryChildRelations: does work"
       },
@@ -411,7 +411,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryChildStatus",
-       "source": "driver/kmd/wddm.c:7350",
+       "source": "driver/kmd/wddm.c:7399",
        "done": true,
        "reason": "forwards to Bc250QueryChildStatus: does work",
        "partial": true
@@ -421,7 +421,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryDeviceDescriptor",
-       "source": "driver/kmd/wddm.c:7358",
+       "source": "driver/kmd/wddm.c:7407",
        "done": true,
        "reason": "forwards to Bc250QueryDeviceDescriptor: forwards to ModesetQueryDescriptor: does work"
       },
@@ -457,7 +457,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedIsSupportedVidPn",
-       "source": "driver/kmd/wddm.c:7370",
+       "source": "driver/kmd/wddm.c:7419",
        "done": true,
        "reason": "forwards to Bc250IsSupportedVidPn: does work"
       },
@@ -466,7 +466,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedRecommendFunctionalVidPn",
-       "source": "driver/kmd/wddm.c:7371",
+       "source": "driver/kmd/wddm.c:7420",
        "done": false,
        "reason": "forwards to Bc250RecommendFunctionalVidPn: every return is a failure constant"
       },
@@ -475,7 +475,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedEnumVidPnCofuncModality",
-       "source": "driver/kmd/wddm.c:7372",
+       "source": "driver/kmd/wddm.c:7421",
        "done": true,
        "reason": "forwards to Bc250EnumVidPnCofuncModality: does work"
       },
@@ -484,7 +484,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedSetVidPnSourceVisibility",
-       "source": "driver/kmd/wddm.c:7373",
+       "source": "driver/kmd/wddm.c:7422",
        "done": true,
        "reason": "forwards to Bc250SetVidPnSourceVisibility: does work"
       },
@@ -493,7 +493,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedCommitVidPn",
-       "source": "driver/kmd/wddm.c:7374",
+       "source": "driver/kmd/wddm.c:7423",
        "done": true,
        "reason": "forwards to Bc250CommitVidPn: does work"
       },
@@ -502,7 +502,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedRecommendMonitorModes",
-       "source": "driver/kmd/wddm.c:7376",
+       "source": "driver/kmd/wddm.c:7425",
        "done": true,
        "reason": "forwards to Bc250RecommendMonitorModes: does work"
       },
@@ -520,7 +520,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmGetScanLine",
-       "source": "driver/kmd/wddm.c:7210",
+       "source": "driver/kmd/wddm.c:7259",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -539,7 +539,7 @@
        "since": "WIN7",
        "targeted": true,
        "function": "Bc250WddmTracedQueryVidPnHWCapability",
-       "source": "driver/kmd/wddm.c:7377",
+       "source": "driver/kmd/wddm.c:7426",
        "done": false,
        "reason": "forwards to Bc250QueryVidPnHWCapability: only logs, counts, reads or writes zeros"
       },
@@ -671,7 +671,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCreateDevice",
-       "source": "driver/kmd/wddm.c:3711",
+       "source": "driver/kmd/wddm.c:3743",
        "done": true,
        "reason": "does work"
       },
@@ -680,7 +680,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmSubmitCommand",
-       "source": "driver/kmd/wddm.c:5585",
+       "source": "driver/kmd/wddm.c:5618",
        "done": true,
        "reason": "does work"
       },
@@ -689,7 +689,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmPreemptCommand",
-       "source": "driver/kmd/wddm.c:5976",
+       "source": "driver/kmd/wddm.c:6009",
        "done": true,
        "reason": "forwards to WddmPreemptFence: does work"
       },
@@ -707,7 +707,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDestroyDevice",
-       "source": "driver/kmd/wddm.c:3727",
+       "source": "driver/kmd/wddm.c:3759",
        "done": true,
        "reason": "does work"
       },
@@ -725,7 +725,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCreateContext",
-       "source": "driver/kmd/wddm.c:3740",
+       "source": "driver/kmd/wddm.c:3772",
        "done": true,
        "reason": "does work"
       },
@@ -734,7 +734,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDestroyContext",
-       "source": "driver/kmd/wddm.c:3851",
+       "source": "driver/kmd/wddm.c:3883",
        "done": true,
        "reason": "does work"
       },
@@ -761,7 +761,7 @@
        "since": "WDDM1_3",
        "targeted": true,
        "function": "Bc250WddmGetNodeMetadata",
-       "source": "driver/kmd/wddm.c:3670",
+       "source": "driver/kmd/wddm.c:3702",
        "done": true,
        "reason": "does work"
       },
@@ -770,7 +770,7 @@
        "since": "WDDM1_3",
        "targeted": true,
        "function": "Bc250WddmCalibrateGpuClock",
-       "source": "driver/kmd/wddm.c:6246",
+       "source": "driver/kmd/wddm.c:6279",
        "done": true,
        "reason": "does work"
       },
@@ -779,7 +779,7 @@
        "since": "WDDM1_3",
        "targeted": true,
        "function": "Bc250WddmFormatHistoryBuffer",
-       "source": "driver/kmd/wddm.c:6284",
+       "source": "driver/kmd/wddm.c:6317",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -797,7 +797,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSubmitCommandVirtual",
-       "source": "driver/kmd/wddm.c:5938",
+       "source": "driver/kmd/wddm.c:5971",
        "done": true,
        "reason": "does work"
       },
@@ -806,7 +806,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmCreateProcess",
-       "source": "driver/kmd/wddm.c:3869",
+       "source": "driver/kmd/wddm.c:3901",
        "done": true,
        "reason": "does work"
       },
@@ -815,7 +815,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmDestroyProcess",
-       "source": "driver/kmd/wddm.c:3882",
+       "source": "driver/kmd/wddm.c:3914",
        "done": true,
        "reason": "forwards to WddmFreeObject: does work"
       },
@@ -1108,7 +1108,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCreateAllocation",
-       "source": "driver/kmd/wddm.c:4338",
+       "source": "driver/kmd/wddm.c:4370",
        "done": true,
        "reason": "does work"
       },
@@ -1117,7 +1117,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDestroyAllocation",
-       "source": "driver/kmd/wddm.c:4384",
+       "source": "driver/kmd/wddm.c:4416",
        "done": true,
        "reason": "does work"
       },
@@ -1126,7 +1126,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDescribeAllocation",
-       "source": "driver/kmd/wddm.c:4435",
+       "source": "driver/kmd/wddm.c:4468",
        "done": true,
        "reason": "does work"
       },
@@ -1135,7 +1135,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmGetStandardAllocationDriverData",
-       "source": "driver/kmd/wddm.c:3955",
+       "source": "driver/kmd/wddm.c:3987",
        "done": true,
        "reason": "does work"
       },
@@ -1171,7 +1171,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmBuildPagingBuffer",
-       "source": "driver/kmd/wddm.c:5516",
+       "source": "driver/kmd/wddm.c:5549",
        "done": true,
        "reason": "does work"
       },
@@ -1180,7 +1180,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmOpenAllocation",
-       "source": "driver/kmd/wddm.c:4464",
+       "source": "driver/kmd/wddm.c:4497",
        "done": true,
        "reason": "does work"
       },
@@ -1189,7 +1189,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCloseAllocation",
-       "source": "driver/kmd/wddm.c:4535",
+       "source": "driver/kmd/wddm.c:4568",
        "done": true,
        "reason": "does work"
       },
@@ -1198,7 +1198,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSetRootPageTable",
-       "source": "driver/kmd/wddm.c:3909",
+       "source": "driver/kmd/wddm.c:3941",
        "done": true,
        "reason": "does work"
       },
@@ -1207,7 +1207,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmGetRootPageTableSize",
-       "source": "driver/kmd/wddm.c:3895",
+       "source": "driver/kmd/wddm.c:3927",
        "done": true,
        "reason": "returns the answer"
       },
@@ -1275,7 +1275,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmResetFromTimeout",
-       "source": "driver/kmd/wddm.c:5990",
+       "source": "driver/kmd/wddm.c:6023",
        "done": false,
        "reason": "every return is a failure constant"
       },
@@ -1284,7 +1284,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmRestartFromTimeout",
-       "source": "driver/kmd/wddm.c:6006",
+       "source": "driver/kmd/wddm.c:6039",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -1293,7 +1293,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCollectDbgInfo",
-       "source": "driver/kmd/wddm.c:6196",
+       "source": "driver/kmd/wddm.c:6229",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -1302,7 +1302,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmQueryDependentEngineGroup",
-       "source": "driver/kmd/wddm.c:6018",
+       "source": "driver/kmd/wddm.c:6051",
        "done": true,
        "reason": "does work"
       },
@@ -1311,7 +1311,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmQueryEngineStatus",
-       "source": "driver/kmd/wddm.c:6036",
+       "source": "driver/kmd/wddm.c:6069",
        "done": true,
        "reason": "does work"
       },
@@ -1320,7 +1320,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmResetEngine",
-       "source": "driver/kmd/wddm.c:6057",
+       "source": "driver/kmd/wddm.c:6090",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -1416,7 +1416,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmSetVidPnSourceAddress",
-       "source": "driver/kmd/wddm.c:6987",
+       "source": "driver/kmd/wddm.c:7022",
        "done": true,
        "reason": "does work"
       },
@@ -1425,7 +1425,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedUpdateActiveVidPnPresentPath",
-       "source": "driver/kmd/wddm.c:7375",
+       "source": "driver/kmd/wddm.c:7424",
        "done": true,
        "reason": "forwards to Bc250UpdateActiveVidPnPresentPath: does work"
       },
@@ -1443,7 +1443,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmPresent",
-       "source": "driver/kmd/wddm.c:6821",
+       "source": "driver/kmd/wddm.c:6854",
        "done": true,
        "reason": "does work"
       },

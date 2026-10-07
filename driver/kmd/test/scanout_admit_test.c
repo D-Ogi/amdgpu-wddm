@@ -13,6 +13,7 @@
 #include <string.h>
 #include "dcn_translate.h"
 #include "scanout_admit.h"
+#include "../../contract/bc250_scanout_caps.h"   /* M15.14: the caps flag that publishes the new rows */
 
 static unsigned checks, failures;
 #define CHECK(x) do { ++checks; if(!(x)){++failures;printf("FAIL line %d: %s\n",__LINE__,#x);} } while(0)
@@ -27,6 +28,7 @@ static unsigned checks, failures;
 #define D3DDDIFMT_A8B8G8R8 32ul
 #define D3DDDIFMT_A2B10G10R10 31ul
 #define D3DDDIFMT_A16B16G16R16F 113ul
+#define D3DDDIFMT_A8 28ul
 
 // The scan-out surface an application asks for: POST geometry, BGRA8, a page-aligned VRAM address.
 static void Requested(BC250_SCANOUT_CANDIDATE* c)
@@ -93,17 +95,80 @@ int main(void)
     Requested(&c); c.ScanoutRequested = 0;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_NOT_REQUESTED);
 
-    // 4. Format. Only the table's SCANOUT_PRIMARY rows; the composed-only rows that carry the HDR and
-    //    10-bit work must never reach the plane, and nor must an unknown number.
+    // 4. Format. Only the table's SCANOUT_PRIMARY rows with a plane encoding of the same size (M15.14,
+    //    0.7.216.20: B8G8R8A8, X8, R8G8B8A8, R10G10B10A2). The composed-only rows (A8, the FP16 HDR row) must
+    //    never reach the plane, and nor must an unknown number. FP16 is refused at its own 8-byte pitch,
+    //    so the refusal is the format clause and not a pitch that happens to be wrong.
     {
-        static const unsigned long refused[] = {0ul, 28ul, D3DDDIFMT_A2B10G10R10, D3DDDIFMT_A8B8G8R8, 33ul, 35ul,
-                                                D3DDDIFMT_A16B16G16R16F, 0xffffffffull & 999ul};
+        static const unsigned long refused[] = {0ul, D3DDDIFMT_A8, 33ul, 35ul, D3DDDIFMT_A16B16G16R16F,
+                                                0xffffffffull & 999ul};
+        static const unsigned long admitted[] = {D3DDDIFMT_A8R8G8B8, D3DDDIFMT_X8R8G8B8, D3DDDIFMT_A8B8G8R8,
+                                                 D3DDDIFMT_A2B10G10R10};
         for (i = 0; i < sizeof(refused) / sizeof(refused[0]); i++) {
+            const AMDGPU_WDDM_SURFACE_FORMAT* row = amdgpu_wddm_surface_format_by_d3dddi((unsigned int)refused[i]);
             Requested(&c); c.Format = refused[i];
+            if (row) { c.Pitch = POST_WIDTH * row->bytes_per_pixel; c.Size = (unsigned long long)c.Pitch * POST_HEIGHT; }
             CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_FORMAT);
         }
-        Requested(&c); c.Format = D3DDDIFMT_X8R8G8B8;
-        CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+        for (i = 0; i < sizeof(admitted) / sizeof(admitted[0]); i++) {
+            Requested(&c); c.Format = admitted[i]; pitch = 0; bytes = 0;
+            CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+            CHECK(pitch == POST_PITCH && bytes == (unsigned long long)POST_PITCH * POST_HEIGHT);
+            // Each one at a pitch that is not whole pixels, and one too narrow for the row.
+            Requested(&c); c.Format = admitted[i]; c.Pitch = POST_PITCH + 2ul;
+            c.Size = (unsigned long long)c.Pitch * POST_HEIGHT;
+            CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_PITCH);
+            Requested(&c); c.Format = admitted[i]; c.Pitch = POST_PITCH - 4ul;
+            CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_PITCH);
+        }
+    }
+
+    // 4b. The table and the plane encodings agree (M15.14). Every SCANOUT_PRIMARY row has a plane format
+    //     whose bytes a pixel are the row's, and every encoding is reached from a SCANOUT_PRIMARY row: a
+    //     row added to the table before the driver can program it fails here, not on the lab. The
+    //     FIRMWARE_PLANE rows are exactly the ARGB8888 ones, the firmware's own format, and a shell may
+    //     offer any other SCANOUT_PRIMARY row only with BC250_SCANOUT_CAPS_PLANE_FORMATS.
+    {
+        unsigned int count, r;
+        unsigned long reached[BC250_PLANE_FORMATS] = {0};
+        const AMDGPU_WDDM_SURFACE_FORMAT* rows = amdgpu_wddm_surface_formats(&count);
+        for (r = 0; r < count; r++) {
+            const unsigned long plane = Bc250PlaneFormatOf(rows[r].d3dddi);
+            const int scanout = amdgpu_wddm_surface_admit(&rows[r], AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY) != 0;
+            const int firmware = amdgpu_wddm_surface_admit(&rows[r], AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE) != 0;
+            if (scanout) {
+                CHECK(Bc250PlaneEncoding(plane) != NULL);
+                CHECK(Bc250PlaneEncoding(plane) && Bc250PlaneEncoding(plane)->BytesPerPixel == rows[r].bytes_per_pixel);
+                CHECK(WddmSurfaceFormatBpp(rows[r].d3dddi, BC250_SURFACE_SCANOUT) == rows[r].bytes_per_pixel);
+                if (plane < BC250_PLANE_FORMATS) reached[plane]++;
+                CHECK(bc250_scanout_format_admitted(&rows[r], BC250_SCANOUT_CAPS_DIRECT_FLIP |
+                                                              BC250_SCANOUT_CAPS_PLANE_FORMATS));
+                CHECK(bc250_scanout_format_admitted(&rows[r], BC250_SCANOUT_CAPS_DIRECT_FLIP) == firmware);
+            } else {
+                CHECK(WddmSurfaceFormatBpp(rows[r].d3dddi, BC250_SURFACE_SCANOUT) == 0);
+                CHECK(!bc250_scanout_format_admitted(&rows[r], BC250_SCANOUT_CAPS_DIRECT_FLIP |
+                                                               BC250_SCANOUT_CAPS_PLANE_FORMATS));
+            }
+            CHECK(!firmware || (scanout && plane == BC250_PLANE_FORMAT_ARGB8888));
+        }
+        for (r = BC250_PLANE_FORMAT_ARGB8888; r < BC250_PLANE_FORMATS; r++) CHECK(reached[r] != 0);
+        CHECK(!bc250_scanout_format_admitted(NULL, BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        // The encodings decode back to themselves, and the names cover every id.
+        for (r = 1; r < BC250_PLANE_FORMATS; r++) {
+            const BC250_PLANE_ENCODING* e = Bc250PlaneEncoding(r);
+            CHECK(e && Bc250PlaneFormatDecode(e->HubpPixelFormat, e->CnvcPixelFormat, e->CrossbarCbB, e->CrossbarCrR) == r);
+            CHECK(strcmp(Bc250PlaneFormatText(r), "none") != 0);
+        }
+        CHECK(Bc250PlaneEncoding(BC250_PLANE_FORMAT_NONE) == NULL && Bc250PlaneEncoding(BC250_PLANE_FORMATS) == NULL);
+        CHECK(!strcmp(Bc250PlaneFormatText(BC250_PLANE_FORMATS), "unknown"));
+        // AMD's values (hubp1_program_pixel_format, dpp201_cnv_setup): 8 and 10, the ABGR crossbar swap.
+        CHECK(Bc250PlaneEncoding(BC250_PLANE_FORMAT_ARGB8888)->CrossbarCrR == 3 &&
+              Bc250PlaneEncoding(BC250_PLANE_FORMAT_ARGB8888)->CrossbarCbB == 2);
+        CHECK(Bc250PlaneEncoding(BC250_PLANE_FORMAT_ABGR8888)->CrossbarCrR == 2 &&
+              Bc250PlaneEncoding(BC250_PLANE_FORMAT_ABGR8888)->HubpPixelFormat == 8);
+        CHECK(Bc250PlaneEncoding(BC250_PLANE_FORMAT_ABGR2101010)->HubpPixelFormat == 10 &&
+              Bc250PlaneEncoding(BC250_PLANE_FORMAT_ABGR2101010)->CnvcPixelFormat == 10);
+        CHECK(Bc250PlaneFormatDecode(24, 25, 3, 2) == BC250_PLANE_FORMAT_NONE);   // FP16: no encoding yet
     }
 
     // 5. Geometry. One VidPN source mode exists, the POST one, so anything else is refused - including
@@ -158,7 +223,7 @@ int main(void)
     CHECK(Bc250ScanoutAdmit(&c, POST_WIDTH, POST_HEIGHT, 0ul, &pitch, &bytes) == BC250_SCANOUT_SEGMENT);
 
     // 10. A refusal writes neither output. Checked on one clause of each half of the function.
-    Requested(&c); c.Format = D3DDDIFMT_A2B10G10R10; pitch = 0x11111111ul; bytes = 0x2222222222222222ull;
+    Requested(&c); c.Format = D3DDDIFMT_A16B16G16R16F; pitch = 0x11111111ul; bytes = 0x2222222222222222ull;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_FORMAT);
     CHECK(pitch == 0x11111111ul && bytes == 0x2222222222222222ull);
     Requested(&c); c.Segment = APERTURE_SEGMENT;
@@ -173,8 +238,11 @@ int main(void)
     CHECK(pitch == POST_PITCH && bytes == (unsigned long long)POST_PITCH * POST_HEIGHT);
     Inherited(&c); c.Pitch = POST_PITCH + 2ul; c.Size = (unsigned long long)c.Pitch * POST_HEIGHT;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_PITCH);
-    // and the four checks it always had still refuse it.
+    // and the four checks it always had still refuse it. From 0.7.216.20 its format clause is the same table
+    // rule: an A8B8G8R8 shared primary (an R8G8B8A8 source mode) is a plane format now, FP16 is not.
     Inherited(&c); c.Format = D3DDDIFMT_A8B8G8R8;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+    Inherited(&c); c.Format = D3DDDIFMT_A16B16G16R16F;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_FORMAT);
     Inherited(&c); c.Height = POST_HEIGHT - 1ul;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_GEOMETRY);
@@ -196,8 +264,10 @@ int main(void)
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_SEGMENT);
     Shell(&c); c.Address = 0x271000800ull;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ALIGNMENT);
-    Shell(&c); c.Format = D3DDDIFMT_A2B10G10R10;
+    Shell(&c); c.Format = D3DDDIFMT_A16B16G16R16F;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_FORMAT);
+    Shell(&c); c.Format = D3DDDIFMT_A2B10G10R10;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
     Shell(&c); c.Height = POST_HEIGHT + 2ul;
     CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_GEOMETRY);
     Shell(&c); c.Size -= 1ull;

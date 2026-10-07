@@ -351,6 +351,27 @@ The kernel driver's own admission never reads this switch: `SetVidPnSourceAddres
 `scanout_admit.h` and `AddressAllowed` alone, so a stale or wrong "yes" in user mode cannot widen what
 may be programmed into HUBP0.
 
+## Plane pixel formats (M15.14, 0.7.216.20)
+
+`EnableScanoutPlaneFormats` decides whether the driver changes the plane's pixel format at a flip. It is a
+REG_DWORD under the service's `Parameters` key. The INF and the release installer write 1, and absent also
+means 1. At 1 and with the VidPN flip path open, the start reads the firmware's three format registers
+(`HUBP0_DCSURF_SURFACE_CONFIG`, `HUBPRET0_HUBPRET_CONTROL`, `CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT`). If
+they hold ARGB8888, the driver can flip RGBA8 and RGB10A2 surfaces as well as BGRA8. It then sets
+`BC250_SCANOUT_CAPS_PLANE_FORMATS` in the scan-out caps trailer. The encodings are in `plane_format.h`, and
+the design is in [scan-out admission](../../docs/design/scanout-admission.md#plane-pixel-formats-0721620).
+
+At 0 the driver does not read the registers, the flag stays clear, and every flip uses ARGB8888, as in
+0.7.216.18. This is the bisect switch of the feature. The start log says which way it went:
+
+```
+dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+wddm: plane formats on
+```
+
+The summary line `wddm summary: plane formats ...` counts the flips of each format, the format changes
+and the refusals.
+
 ## VMID pool (0.7.214.1)
 
 `EnableVmidPool` decides how many VMIDs the WDDM jobs use. It is a REG_DWORD under the service's

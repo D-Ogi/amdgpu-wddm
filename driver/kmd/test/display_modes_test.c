@@ -53,10 +53,13 @@ int main(void)
         CHECK(two[0] == FMT_A8R8G8B8 && two[1] == FMT_A8B8G8R8 && two[2] == 0xdeadbeeful);
     }
 
-    // Only a composed format leaves the scan-out plane alone: none of the added formats may flip.
-    for (i = 1; i < n; ++i)
-        CHECK(WddmSurfaceFormatBpp(f[i], BC250_SURFACE_SCANOUT) == 0);
+    // From 0.7.216.20 the flip programs the plane's pixel format (plane_format.h), so the two added 4-byte
+    // formats scan out as well; the FP16 one stays composed. The list itself is the one before (FIRMWARE_PLANE
+    // first, then the composed rows), so the display-only table still offers the firmware's format alone.
     CHECK(WddmSurfaceFormatBpp(f[0], BC250_SURFACE_SCANOUT) == 4);
+    CHECK(WddmSurfaceFormatBpp(f[1], BC250_SURFACE_SCANOUT) == 4);
+    CHECK(WddmSurfaceFormatBpp(f[2], BC250_SURFACE_SCANOUT) == 4);
+    CHECK(WddmSurfaceFormatBpp(f[3], BC250_SURFACE_SCANOUT) == 0);
 
     // What CommitVidPn and IsSupportedVidPn accept follows the offer exactly.
     CHECK(Bc250SourceModeAdmitted(0, FMT_A8R8G8B8));

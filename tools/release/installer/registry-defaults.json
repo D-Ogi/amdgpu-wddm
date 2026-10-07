@@ -23,6 +23,7 @@
       "EnableCddDwmInterop": 1,
       "EnableScanoutAdmit": 1,
       "EnableDirectFlipHandshake": 1,
+      "EnableScanoutPlaneFormats": 1,
       "EnableHwmon": 1,
       "EnableFanControl": 1,
       "CpuTune": 1,

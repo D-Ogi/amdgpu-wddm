@@ -13,6 +13,7 @@
 #include "display_timing_snapshot.h"
 #include "dcn_2_0_1_sh_mask.h"       // field masks for the decoded summary only; every offset comes from regcalc
 #include "dcn_translate.h"           // ADR 0011 point 3 step 3: the WDDM flip's host-testable address conversion
+#include "plane_format.h"            // M15.14: the plane's pixel format per flip
 #include <ntstrsafe.h>
 
 void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN_OBSERVE* Data,
@@ -308,7 +309,7 @@ void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* 
 //
 // PASSIVE_LEVEL only (the poll below stalls the processor, and the optional fill maps memory). Gated by
 // Device->DcnWriteEnabled (EnableMmio && EnableDcnWrite, mmio.c); the fill needs EnableVramWrite as well. The
-// six registers this writes are g_MmioDcnWriteAllow (gen_regs.py's DCN_WRITE_REGISTERS), checked by MmioDcnWrite;
+// registers this writes are g_MmioDcnWriteAllow (gen_regs.py's DCN_WRITE_REGISTERS), checked by MmioDcnWrite;
 // everything else here is MmioDcnRead, the same read-only path DcnEscape above uses.
 //
 // Dimensions come from POST; pitch follows the allocation and is restored with the firmware address.
@@ -397,6 +398,83 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
     return STATUS_SUCCESS;
 }
 
+// M15.14 (0.7.216.20): the three register values of PlaneFormat (plane_format.h), composed from the firmware's own
+// values with only the format fields replaced: SURFACE_PIXEL_FORMAT, CROSSBAR_SRC_CB_B, CROSSBAR_SRC_CR_R and
+// CNVC_SURFACE_PIXEL_FORMAT, the fields hubp1_program_pixel_format and dpp201_cnv_setup set for a format. So the
+// value for ARGB8888 is the firmware's value itself, and restoring is a flip to ARGB8888. FALSE when PlaneFormat
+// has no encoding or the firmware's format was not captured.
+static BOOLEAN DcnPlaneFormatRegisters(_In_ const BC250_DEVICE* Device, ULONG PlaneFormat,
+    _Out_ BC250_PLANE_REGISTERS* Out)
+{
+    const BC250_PLANE_ENCODING* e = Bc250PlaneEncoding(PlaneFormat);
+    Out->SurfaceConfig = Out->HubpretControl = Out->CnvcFormat = 0;
+    if (!e || !Device->DcnPlaneFormats) return FALSE;
+    Out->SurfaceConfig = (Device->DcnFirmwareSurfaceConfig & ~HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK) |
+        ((e->HubpPixelFormat << HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT__SHIFT) &
+         HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK);
+    Out->HubpretControl = (Device->DcnFirmwareHubpretControl &
+        ~(HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK | HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R_MASK)) |
+        ((e->CrossbarCbB << HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B__SHIFT) &
+         HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK) |
+        ((e->CrossbarCrR << HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R__SHIFT) &
+         HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R_MASK);
+    Out->CnvcFormat = (Device->DcnFirmwareCnvcFormat &
+        ~CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT__CNVC_SURFACE_PIXEL_FORMAT_MASK) |
+        ((e->CnvcPixelFormat << CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT__CNVC_SURFACE_PIXEL_FORMAT__SHIFT) &
+         CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT__CNVC_SURFACE_PIXEL_FORMAT_MASK);
+    return TRUE;
+}
+
+// The plane format the three register values name, by their format fields only.
+static ULONG DcnPlaneFormatDecodeRegisters(ULONG SurfaceConfig, ULONG HubpretControl, ULONG CnvcFormat)
+{
+    return Bc250PlaneFormatDecode(
+        (SurfaceConfig & HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK) >>
+            HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT__SHIFT,
+        (CnvcFormat & CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT__CNVC_SURFACE_PIXEL_FORMAT_MASK) >>
+            CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT__CNVC_SURFACE_PIXEL_FORMAT__SHIFT,
+        (HubpretControl & HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK) >>
+            HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B__SHIFT,
+        (HubpretControl & HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R_MASK) >>
+            HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R__SHIFT);
+}
+
+// Read once per start (WddmStart), before the first flip of this start can change the plane. MmioStart cleared
+// the state. Only a plane that decodes to ARGB8888 is "the firmware's BGRA8": restoring writes these values back,
+// and the POST framebuffer and the CPU blit (DcnScanoutMapping) hold B8G8R8A8 pixels. Any other answer keeps
+// this start at the firmware's format, as before 0.7.216.20. Reads only; the blend mode, FORMAT_CONTROL (ALPHA_EN,
+// CNVC_UPDATE_PENDING) and the 2-bit alpha table are logged because they decide whether a surface's alpha reaches
+// the output (dcn20_update_mpcc, dpp201_cnv_setup), and nothing in this driver writes them.
+void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device)
+{
+    ULONG config = 0, crossbar = 0, cnvc = 0, control = 0, mpcc = 0, lut = 0, decoded;
+    NTSTATUS status;
+    if (Device->Mmio == NULL || Device->DcnPlaneFormats) return;
+    status = MmioDcnRead(Device, BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG, &config);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL, &crossbar);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT, &cnvc);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_CNVC_CFG0_FORMAT_CONTROL, &control);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_MPCC0_MPCC_CONTROL, &mpcc);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_CNVC_CFG0_ALPHA_2BIT_LUT, &lut);
+    if (!NT_SUCCESS(status))
+    {
+        GuardLog("dcnflip: plane format: firmware registers unreadable (0x%08X), BGRA8 only", (ULONG)status);
+        return;
+    }
+    decoded = DcnPlaneFormatDecodeRegisters(config, crossbar, cnvc);
+    GuardLog("dcnflip: plane format: firmware %s config 0x%08X crossbar 0x%08X cnvc 0x%08X",
+             Bc250PlaneFormatText(decoded), config, crossbar, cnvc);
+    GuardLog("dcnflip: plane format: cnvc control 0x%08X alpha lut 0x%08X mpcc control 0x%08X (blend mode %lu)",
+             control, lut, mpcc, (mpcc & MPCC0_MPCC_CONTROL__MPCC_ALPHA_BLND_MODE_MASK) >>
+             MPCC0_MPCC_CONTROL__MPCC_ALPHA_BLND_MODE__SHIFT);
+    if (decoded != BC250_PLANE_FORMAT_ARGB8888) return;
+    Device->DcnFirmwareSurfaceConfig = config;
+    Device->DcnFirmwareHubpretControl = crossbar;
+    Device->DcnFirmwareCnvcFormat = cnvc;
+    Device->DcnPlaneFormat = BC250_PLANE_FORMAT_ARGB8888;
+    Device->DcnPlaneFormats = TRUE;
+}
+
 // M87's single-pipe flip, shared by the escape and the high-IRQL WDDM DDI.
 // AMD v6.18 optc1_lock waits for UPDATE_LOCK_STATUS before changing the surface;
 // hubp2_program_surface_flip_and_addr updates only SURFACE_FLIP_TYPE. Keep those
@@ -407,11 +485,18 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
 // Retain the measured manual trigger: dcn201_tg_funcs uses
 // optc2_program_manual_trigger, called after unlock by core/dc.c and dc_hw_sequencer.c.
 // Quiet suppresses per-write logging for the DDI (up to PROFILE_LEVEL - 1).
-static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch, BOOLEAN Quiet)
+// BytesPerPixel is the pitch field's unit (hubp2_program_size: pitch in pixels minus one). Format, when not NULL,
+// is the plane's new pixel format (DcnPlaneFormatRegisters), written inside the same acknowledged lock as the
+// address, so the new format and the new address latch at the same update and no frame shows one without the
+// other. dcn20_program_pipe likewise programs dpp_setup and hubp_program_surface_config under the pipe's lock
+// (dc/hwss/dcn20/dcn20_hwseq.c:1747 and :1843). NULL writes exactly the register set of 0.7.216.18.
+static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch,
+    ULONG BytesPerPixel, _In_opt_ const BC250_PLANE_REGISTERS* Format, BOOLEAN Quiet)
 {
     NTSTATUS status;
     ULONG value = 0, waited = 0;
-    if (!Pitch || (Pitch&3ul) || ((Pitch/4-1)&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)) return STATUS_INVALID_PARAMETER;
+    if (!Pitch || !BytesPerPixel || (Pitch%BytesPerPixel) ||
+        ((Pitch/BytesPerPixel-1)&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)) return STATUS_INVALID_PARAMETER;
 
     status = MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 1, Quiet);
     if (NT_SUCCESS(status))
@@ -440,10 +525,19 @@ static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Tar
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL,
         value & ~(HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_TMZ_MASK |
                   HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_META_SURFACE_TMZ_MASK), Quiet);
+    // M15.14: the format, in AMD's order (dpp_setup before hubp_program_surface_config; hubp1_program_pixel_format
+    // writes the crossbar before SURFACE_PIXEL_FORMAT). The lock makes the order invisible to the scan-out.
+    if (NT_SUCCESS(status) && Format != NULL) {
+        status = MmioDcnWriteEx(Device, BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT, Format->CnvcFormat, Quiet);
+        if (NT_SUCCESS(status))
+            status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL, Format->HubpretControl, Quiet);
+        if (NT_SUCCESS(status))
+            status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG, Format->SurfaceConfig, Quiet);
+    }
     // AMD hubp2_program_size uses pixels minus one; preserve META_PITCH.
     if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&value);
     if (NT_SUCCESS(status)) status=MmioDcnWriteEx(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,
-        (value&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)|(Pitch/4-1),Quiet);
+        (value&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)|(Pitch/BytesPerPixel-1),Quiet);
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, (ULONG)(Target >> 32), Quiet);
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, (ULONG)(Target & 0xFFFFFFFFull), Quiet);
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0, Quiet);
@@ -487,6 +581,8 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
     ULONGLONG before, target;
     NTSTATUS status;
     BOOLEAN cleared;
+    BC250_PLANE_REGISTERS registers;
+    const BC250_PLANE_REGISTERS* format;
 
     Out->Reason[0] = '\0';
     if (Device->Mmio == NULL || !Device->DcnWriteEnabled)
@@ -528,8 +624,13 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
 
     // Step 2 (M87): the write sequence, factored out (DcnFlipWriteSequence above) so the DDI path shares it.
     // Quiet = FALSE: the escape's own occasional, human-driven flip keeps its per-write GuardLog, unchanged.
+    // Its surfaces are the firmware's format (4 bytes, B8G8R8A8); a plane a VidPn flip left in another format
+    // is set back to it in the same update (M15.14).
+    format=NULL;
+    if (Device->DcnPlaneFormats && Device->DcnPlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 &&
+        DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers)) format=&registers;
     InterlockedIncrement(&Device->DcnSurfaceSequence);
-    status=DcnFlipWriteSequence(Device,target,pitch,FALSE);
+    status=DcnFlipWriteSequence(Device,target,pitch,4,format,FALSE);
     if (!NT_SUCCESS(status))
     {
         InterlockedIncrement(&Device->DcnSurfaceSequence);
@@ -550,6 +651,7 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
 
     Device->DcnCurrentAddress=target;
     Device->DcnCurrentPitch=pitch;
+    if (format!=NULL) Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
     Device->DcnDiverged=(target!=Device->DcnFirmwareAddress || pitch!=Device->DcnFirmwarePitch);
     InterlockedIncrement(&Device->DcnSurfaceSequence);
 
@@ -640,8 +742,22 @@ static NTSTATUS DcnCheckPostSurface(_In_ const BC250_DEVICE* Device)
     if (!NT_SUCCESS(status)) return status;
     status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
     if (!NT_SUCCESS(status)) return status;
+    // In the firmware's 4-byte unit: the comparison is with the firmware's pitch, and the format check below makes
+    // it exact, because a plane of another format fails that check whatever its pitch field says.
     pitch=((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4;
-    return scanned==Device->DcnFirmwareAddress && pitch==Device->DcnFirmwarePitch ? STATUS_SUCCESS : STATUS_DEVICE_BUSY;
+    if (scanned!=Device->DcnFirmwareAddress || pitch!=Device->DcnFirmwarePitch) return STATUS_DEVICE_BUSY;
+    // M15.14: the firmware's surface is also its pixel format. Only when the start captured that format; without
+    // it no flip of this start changed the format, and the check is the one of 0.7.216.18.
+    if (Device->DcnPlaneFormats)
+    {
+        ULONG config=0, crossbar=0, cnvc=0;
+        status=MmioDcnRead(Device,BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG,&config);
+        if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL,&crossbar);
+        if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT,&cnvc);
+        if (!NT_SUCCESS(status)) return status;
+        if (DcnPlaneFormatDecodeRegisters(config,crossbar,cnvc)!=BC250_PLANE_FORMAT_ARGB8888) return STATUS_DEVICE_BUSY;
+    }
+    return STATUS_SUCCESS;
 }
 
 // PROVENANCE: Linux AMD display (MIT), dcn201_tg_funcs uses optc1_set_blank
@@ -706,7 +822,12 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
     status=DcnCheckPostSurface(Device);
     if (!NT_SUCCESS(status))
     {
-        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,TRUE);
+        // M15.14: the firmware's format with its address, in the same update. NULL (no format write) when the
+        // start did not capture the format, which also means no flip of this start changed it.
+        BC250_PLANE_REGISTERS registers;
+        const BC250_PLANE_REGISTERS* format=
+            DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers) ? &registers : NULL;
+        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,4,format,TRUE);
         if (!NT_SUCCESS(status)) return status;
         for (;;)
         {
@@ -724,6 +845,7 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
     }
     Device->DcnCurrentAddress=Device->DcnFirmwareAddress;
     Device->DcnCurrentPitch=Device->DcnFirmwarePitch;
+    if (Device->DcnPlaneFormats) Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
     Device->DcnDiverged=FALSE;
     return STATUS_SUCCESS;
 }
@@ -770,14 +892,39 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 // DcnTranslateCardAddress (dcn_translate.c) is the inverse of that same arithmetic (facts M85), run from what
 // VramStart measured, never a literal. PhysicalOut, if not NULL, gets the translated address for the caller's
 // own log line.
-NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut)
+// M15.14 (0.7.216.20): PlaneFormat (plane_format.h) gives the pitch's unit and, when it differs from the plane's
+// current format, the three format registers the same update writes. The plane stays in a format until a flip of
+// another one, so a run of game frames writes the format once and the desktop's next BGRA8 flip writes it back.
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
+    ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut)
 {
     ULONGLONG physical,bytes;
     NTSTATUS status;
+    const BC250_PLANE_ENCODING* plane=Bc250PlaneEncoding(PlaneFormat);
+    BC250_PLANE_REGISTERS registers;
+    const BC250_PLANE_REGISTERS* format=NULL;
+    ULONG current;
 
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
-    if (!DcnSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,&bytes) || bytes>AllocationBytes)
-        return STATUS_INVALID_PARAMETER;
+    if (plane==NULL ||
+        !DcnLinearSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,plane->BytesPerPixel,
+                               &bytes) ||
+        bytes>AllocationBytes) return STATUS_INVALID_PARAMETER;
+    // A format other than the firmware's needs the firmware's format captured at start: restore writes it back.
+    // Refused before any register is touched, so the plane keeps its frame. wddm.c does not offer the flip to the
+    // compositor's driver in that case (BC250_SCANOUT_CAPS_PLANE_FORMATS), so this is a guard, not a path.
+    current=Device->DcnPlaneFormats ? Device->DcnPlaneFormat : BC250_PLANE_FORMAT_ARGB8888;
+    if (PlaneFormat!=current)
+    {
+        if (!DcnPlaneFormatRegisters(Device,PlaneFormat,&registers))
+        {
+            if (InterlockedIncrement(&Device->DcnFormatRefused) <= BC250_DCN_LOG_CALLS)
+                GuardLog("dcnflip: SetVidPnSourceAddress refused: plane format %s needs the firmware format",
+                         Bc250PlaneFormatText(PlaneFormat));
+            return STATUS_NOT_SUPPORTED;
+        }
+        format=&registers;
+    }
     status=CaptureFirmwareSurface(Device);
     if (!NT_SUCCESS(status)) return status;
     if (!Device->VramEnabled ||
@@ -796,14 +943,22 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     // desktop is up - MmioDcnWrite's per-write GuardLog was sized for the escape's occasional calls, not this.
     // The outcome is still logged, once, below, capped like every other counter here (BC250_DCN_LOG_CALLS).
     InterlockedIncrement(&Device->DcnSurfaceSequence);
-    status=DcnFlipWriteSequence(Device,physical,Pitch,TRUE);
+    status=DcnFlipWriteSequence(Device,physical,Pitch,plane->BytesPerPixel,format,TRUE);
     if (NT_SUCCESS(status))
     {
-        // Publish address and pitch together under DcnSurfaceSequence. The
+        // Publish address, pitch and format together under DcnSurfaceSequence. The
         // PASSIVE_LEVEL CPU mapper rejects a snapshot crossing this update.
         Device->DcnCurrentAddress=physical;
         Device->DcnCurrentPitch=Pitch;
-        Device->DcnDiverged=(physical!=Device->DcnFirmwareAddress || Pitch!=Device->DcnFirmwarePitch);
+        if (format!=NULL)
+        {
+            Device->DcnPlaneFormat=PlaneFormat;
+            if (InterlockedIncrement(&Device->DcnFormatChanges) <= BC250_DCN_LOG_CALLS)
+                GuardLog("dcnflip: SetVidPnSourceAddress plane format %s -> %s",
+                         Bc250PlaneFormatText(current), Bc250PlaneFormatText(PlaneFormat));
+        }
+        Device->DcnDiverged=(physical!=Device->DcnFirmwareAddress || Pitch!=Device->DcnFirmwarePitch ||
+                             PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888);
         if (InterlockedIncrement(&Device->DcnFlipsHardware) <= BC250_DCN_LOG_CALLS)
             GuardLog("dcnflip: SetVidPnSourceAddress flip: card 0x%llX -> physical 0x%llX", CardAddress, physical);
     }
@@ -1053,7 +1208,7 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
 {
     LONG generation=InterlockedCompareExchange(&Device->DcnSurfaceSequence,0,0);
     ULONGLONG target,bytes;
-    ULONG pitch;
+    ULONG pitch,format;
     BOOLEAN diverged;
     PHYSICAL_ADDRESS phys;
     SIZE_T length;
@@ -1061,7 +1216,11 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     if (generation&1) return FALSE;
     target=(ULONGLONG)InterlockedCompareExchange64((volatile LONG64*)&Device->DcnCurrentAddress,0,0);
     pitch=Device->DcnCurrentPitch;diverged=Device->DcnDiverged;
+    // M15.14: the CPU copy writes B8G8R8A8 pixels 4 bytes apart, so it lands only on a plane of that format. A
+    // client buffer of another format scanned out (0.7.216.20) gets no CPU copy; the next desktop flip ends it.
+    format=Device->DcnPlaneFormats ? Device->DcnPlaneFormat : BC250_PLANE_FORMAT_ARGB8888;
     if (InterlockedCompareExchange(&Device->DcnSurfaceSequence,0,0)!=generation || !diverged ||
+        format!=BC250_PLANE_FORMAT_ARGB8888 ||
         !DcnSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),pitch,&bytes)) return FALSE;
     if (Device->DcnScanoutMap && Device->DcnScanoutMapAddress==target && Device->DcnScanoutMapLength==bytes)
     {

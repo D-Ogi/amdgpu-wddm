@@ -40,6 +40,9 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     struct {ULONG Width,Height;} Post;
     // Display modes: the committed source size, 0 for none (the real one is BC250_MODESET.SourceWidth/Height).
     ULONG SourceWidth,SourceHeight;
+    // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
+    // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
+    BOOLEAN DcnPlaneFormats;
 } BC250_DEVICE;
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}
@@ -196,6 +199,30 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.post_width==1920 && scanout.post_height==1200);
+        // (2b) M15.14: the plane formats flag rides along only when the start captured the firmware's
+        // plane format, and never without the DirectFlip flag (the branch writes nothing with that off).
+        d.DcnPlaneFormats=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        wddm->DirectFlipHandshake=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        for(j=BC250_ADAPTER_CAPS_BYTES;j<sizeof(extended);j++) CHECK(extended[j]==0xA5);
+        wddm->DirectFlipHandshake=1;d.DcnPlaneFormats=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        // Both together: a committed mode and the captured format.
+        d.SourceWidth=1920;d.SourceHeight=1080;d.DcnPlaneFormats=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+              scanout.post_width==1920 && scanout.post_height==1080);
+        d.SourceWidth=0;d.SourceHeight=0;d.DcnPlaneFormats=0;
         memcpy(&identity,extended+BC250_ADAPTER_IDENTITY_OFFSET,sizeof(identity));
         CHECK(identity.magic==BC250_ADAPTER_IDENTITY_MAGIC && identity.size==sizeof(identity));
         CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));

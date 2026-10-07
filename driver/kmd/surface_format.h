@@ -16,8 +16,9 @@
 //             admitted here exactly as before the table.
 //   Gdi       a standard GDI surface, types 1..8. The table has no GDI stage; the set is the one before it
 //             (A8 at 1 byte, the 32-bit formats at 4).
-//   Scanout   the allocation of SetVidPnSourceAddress: the table's SCANOUT_PRIMARY rows (A8R8G8B8, X8R8G8B8).
-//             The flip programs the plane's address and pitch only (dcn.c), never its pixel format.
+//   Scanout   the allocation of SetVidPnSourceAddress: the table's SCANOUT_PRIMARY rows (A8R8G8B8, X8R8G8B8,
+//             and from 0.7.216.20 A8B8G8R8 and A2B10G10R10). The flip programs the plane's address, pitch and
+//             pixel format (dcn.c, plane_format.h); scanout_admit.h also requires a plane encoding.
 #define BC250_SURFACE_COMPOSED 0x1ul
 #define BC250_SURFACE_GDI 0x2ul
 #define BC250_SURFACE_SCANOUT 0x4ul

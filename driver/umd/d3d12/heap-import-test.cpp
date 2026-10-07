@@ -9,6 +9,8 @@
 #include <cassert>
 #include <cstring>
 #include <cstdio>
+#include <initializer_list>
+#include <utility>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -757,11 +759,19 @@ int main(){
   // X8 is the other scan-out row of the table and has no DXGI name, so no v3 record can describe it and
   // the compositor could never open it: refused, although the plane itself could read it.
   assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_X8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
-  // The composed-only rows cannot be scanned out, which is what keeps the 10-bit and FP16 primaries on
-  // the composition path whatever the instance selects.
-  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A2B10G10R10,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
+  // The composed-only FP16 row cannot be scanned out, which keeps an FP16 primary on the composition
+  // path whatever the instance selects. RGB10A2 and RGBA8 are SCANOUT_PRIMARY rows from 0.7.216.20: the
+  // wire shape is the same v3 record with their own DXGI format and the LB7A blob with their own
+  // D3DDDIFORMAT (scanout_decide asks the caps first; allocation-request-test drives that).
   assert(direct.prepare_surface(1920,1200,15360,D3DDDIFMT_A16B16G16R16F,15360*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
-  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8B8G8R8,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
+  for(const auto pair:{std::pair<D3DDDIFORMAT,uint32_t>{D3DDDIFMT_A2B10G10R10,24u},
+                       std::pair<D3DDDIFORMAT,uint32_t>{D3DDDIFMT_A8B8G8R8,28u}}){
+   assert(direct.prepare_surface(1920,1200,7680,pair.first,7680*1200,handle<void*>(2),false,true,true)==S_OK);
+   uint32_t r[16];std::memcpy(r,direct.args.pPrivateDriverData,sizeof(r));
+   assert(direct.args.PrivateDriverDataSize==64 && r[1]==3 && r[3]==5 && r[8]==pair.second);
+   uint32_t d[8];std::memcpy(d,direct.info.pPrivateDriverData,sizeof(d));
+   assert(d[4]==7680 && d[5]==uint32_t(pair.first) && direct.info.VidPnSourceId==0);
+  }
   // Scan-out contradicts both of the other two intents and is refused rather than silently reduced.
   assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),true,true,true)==E_INVALIDARG);
   assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),false,false,true)==E_INVALIDARG);
