@@ -95,6 +95,13 @@ static void PolicyTests()
         {L"d3d11mt.exe", (AppMode)17, allow, nullptr, true, true, AppRoute::Cpu, AppReason::ModeInvalid},
         {L"d3d11mt.exe", Al, allow, nullptr, false, true, AppRoute::Cpu, AppReason::D3d10Entry},
         {L"notepad.exe", Gd, nullptr, nullptr, false, true, AppRoute::Cpu, AppReason::D3d10Entry},
+        // BD-081: the Direct3D 10.0 runtime of Windows 11 opens the router through OpenAdapter10_2 (measured
+        // 2026-10-07), so a D3D10.0 application is decided at e102=true: the GPU UMD under gpu-default and for an
+        // allowed image, the CPU UMD for a denied or a not-allowed one, exactly as a D3D11 application.
+        {L"d3d10probe.exe", Gd, nullptr, nullptr, true, true, AppRoute::Gpu, AppReason::Default},
+        {L"d3d10probe.exe", Al, L"d3d10probe.exe\0", nullptr, true, true, AppRoute::Gpu, AppReason::Allowed},
+        {L"d3d10probe.exe", Al, allow, nullptr, true, true, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"d3d10probe.exe", Gd, nullptr, L"d3d10probe.exe\0", true, true, AppRoute::Cpu, AppReason::Denied},
         {L"d3d11mt.exe", Al, allow, nullptr, true, false, AppRoute::Cpu, AppReason::GpuUmdUnset},
         {L"notepad.exe", Gd, nullptr, nullptr, true, false, AppRoute::Cpu, AppReason::GpuUmdUnset},
         {L"logonui.exe", Gd, protectedAllowed, nullptr, true, true, AppRoute::Cpu, AppReason::Protected},

@@ -36,8 +36,10 @@
 //                                    invalid (fail safe: CPU).
 //     RouteLogDirectory   REG_SZ     application route lines go there; absent = DesktopRouter's RouteLogDirectory
 //   Built in: logonui.exe, consent.exe, lockapp.exe, credentialuibroker.exe and winlogon.exe always stay on the CPU
-//   UMD (router-policy.h IsProtectedApp). OpenAdapter10 (the D3D10.0 runtime) always goes to the CPU UMD: the
-//   application GPU UMD exports OpenAdapter10_2 only.
+//   UMD (router-policy.h IsProtectedApp). OpenAdapter10 always goes to the CPU UMD: the application GPU UMD
+//   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
+//   OpenAdapter10_2 is exported: it opens this router through OpenAdapter10_2 and creates a D3D11-family device,
+//   so a D3D10.0 application takes the AppRouter decision like a D3D11 one (BD-081, measured 2026-10-07).
 //   HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters
 //     InteropLastState    REG_DWORD, KMD 0.7.181 and later (driver/kmd/interop.c InteropStart): effective bits |
 //                         requested bits << 8, written at every full adapter start. Both switches count as on
