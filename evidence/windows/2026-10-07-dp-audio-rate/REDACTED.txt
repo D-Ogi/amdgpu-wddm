@@ -1,0 +1,9 @@
+Changed before the first commit (docs/01-evidence-rules.md). Counts only. No copy of the values exists.
+
+- a6.txt: 2 device instance suffixes (the part after the hardware ID in the Enum values of HDAudBus and
+  HdAudAddService) replaced by <instance-id-removed>.
+- The WAV files that the scripts generate on the lab (C:\BC250\tmp\audio) are not copied.
+
+Checked and found clean: every other file of this directory (no MAC address, serial number, UUID, IPv4 address,
+host name or user name). The GUID in a6.txt (WppRecorder_TraceGuid) is the trace provider GUID of the Microsoft
+HDAudBus driver, not a device identifier.

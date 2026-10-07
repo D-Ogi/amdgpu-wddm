@@ -1,0 +1,6 @@
+# during-off
+node 0x01 type 0 caps 0x00000000  F0D digconv 0x00000000  A00 format 0x00000000  F06 stream/ch 0x00000000  F2D convch 0x00000000  F07 pinctl 0x00000000  F05 power 0x00000200
+node 0x02 type 0 caps 0x00000221  F0D digconv 0x00000000  A00 format 0x00000011  F06 stream/ch 0x00000010  F2D convch 0x00000000  F07 pinctl 0x00000000  F05 power 0x00000000
+node 0x03 type 4 caps 0x00400381  F0D digconv 0x00000000  A00 format 0x00000000  F06 stream/ch 0x00000000  F2D convch 0x00000000  F07 pinctl 0x00000040  F05 power 0x00000000
+node 0x04 type 0 caps 0x00000221  F0D digconv 0x00000000  A00 format 0x00000000  F06 stream/ch 0x00000000  F2D convch 0x00000000  F07 pinctl 0x00000000  F05 power 0x00000000
+node 0x05 type 4 caps 0x00400381  F0D digconv 0x00000000  A00 format 0x00000000  F06 stream/ch 0x00000000  F2D convch 0x00000000  F07 pinctl 0x00000040  F05 power 0x00000000

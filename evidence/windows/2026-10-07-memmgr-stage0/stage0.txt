@@ -1,0 +1,41 @@
+0C99B59E  C:\BC250\memmgr\amdgpu_wddm_d3d12caps.exe
+adapter 0 exit , json 126376 bytes
+  "LOCAL": {
+  "Budget": 7741833216,
+  "CurrentUsage": 0,
+  "NON_LOCAL": {
+  "Budget": 3733582234,
+  "CurrentUsage": 0,
+  "DedicatedSystemMemory": 0,
+  "DedicatedVideoMemory": 8547139584,
+  "Description": "BC-250 GPU (amdgpu-wddm)",
+  "SharedSystemMemory": 4148424704,
+  "DedicatedSystemMemory": 0,
+  "DedicatedVideoMemory": 0,
+  "Description": "Microsoft Basic Render Driver",
+  "SharedSystemMemory": 4148424704,
+  "adapter_index": 0,
+adapter 1 exit , json 125470 bytes
+  "LOCAL": {
+  "Budget": 3733582234,
+  "CurrentUsage": 0,
+  "NON_LOCAL": {
+  "Budget": 0,
+  "CurrentUsage": 0,
+  "DedicatedSystemMemory": 0,
+  "DedicatedVideoMemory": 8547139584,
+  "Description": "BC-250 GPU (amdgpu-wddm)",
+  "SharedSystemMemory": 4148424704,
+  "DedicatedSystemMemory": 0,
+  "DedicatedVideoMemory": 0,
+  "Description": "Microsoft Basic Render Driver",
+  "SharedSystemMemory": 4148424704,
+  "adapter_index": 1,
+--- vram
+# adapter luid 00000000-00008AE4, 4 segment(s), dedicated 8547139584 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 433569792 committed 388861952 limit 8280080384
+segment 1 aperture resident 0 committed 0 limit 268435456
+segment 2 memory   resident 4284416 committed 4284416 limit 267059200
+segment 3 aperture resident 459489280 committed 459489280 limit 18446744073709551615
+memory   resident 437854208 committed 393146368 limit 8547139584
+aperture resident 459489280 limit 18446744073709551615

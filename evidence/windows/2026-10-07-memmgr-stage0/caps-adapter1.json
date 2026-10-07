@@ -1,0 +1,5027 @@
+{
+ "adapter": {
+  "IDXGIAdapter3": "0x00000000 S_OK",
+  "QueryVideoMemoryInfo": {
+   "LOCAL": {
+    "AvailableForReservation": 1970501734,
+    "Budget": 3733582234,
+    "CurrentReservation": 0,
+    "CurrentUsage": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "NON_LOCAL": {
+    "AvailableForReservation": 0,
+    "Budget": 0,
+    "CurrentReservation": 0,
+    "CurrentUsage": 0,
+    "hr": "0x00000000 S_OK"
+   }
+  },
+  "outputs": {
+   "00": {
+    "EnumOutputs": "0x887A0022 DXGI_ERROR_NOT_CURRENTLY_AVAILABLE"
+   },
+   "count": 0,
+   "enum_error": "0x887A0022 DXGI_ERROR_NOT_CURRENTLY_AVAILABLE"
+  }
+ },
+ "device": {
+  "D3D12CreateDevice": {
+   "12_1": "0x00000000 S_OK",
+   "12_2": "0x887A0004 DXGI_ERROR_UNSUPPORTED"
+  },
+  "GetDeviceRemovedReason": "0x00000000 S_OK",
+  "LoadLibrary": "0x00000000 S_OK",
+  "allocations": {
+   "bc1_2048_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 12,
+     "TotalBytes": 2802184,
+     "last": {
+      "Offset": 2802176,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 512,
+      "RowPitch": 4096,
+      "RowSizeInBytes": 4096,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 2818048
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC1_UNORM",
+     "Height": 2048,
+     "MipLevels": 12,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "bc3_2048_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 12,
+     "TotalBytes": 5595664,
+     "last": {
+      "Offset": 5595648,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 512,
+      "RowPitch": 8192,
+      "RowSizeInBytes": 8192,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 5636096
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC3_UNORM",
+     "Height": 2048,
+     "MipLevels": 12,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "bc5_2048_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 12,
+     "TotalBytes": 5595664,
+     "last": {
+      "Offset": 5595648,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 512,
+      "RowPitch": 8192,
+      "RowSizeInBytes": 8192,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 5636096
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC5_UNORM",
+     "Height": 2048,
+     "MipLevels": 12,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "bc7_2048_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 12,
+     "TotalBytes": 5595664,
+     "last": {
+      "Offset": 5595648,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 512,
+      "RowPitch": 8192,
+      "RowSizeInBytes": 8192,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 5636096
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC7_UNORM",
+     "Height": 2048,
+     "MipLevels": 12,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "bc7_srgb_2048_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 12,
+     "TotalBytes": 5595664,
+     "last": {
+      "Offset": 5595648,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 512,
+      "RowPitch": 8192,
+      "RowSizeInBytes": 8192,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 5636096
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC7_UNORM_SRGB",
+     "Height": 2048,
+     "MipLevels": 12,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "bgra8_1920x1200_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "B8G8R8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "buffer_16m_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 16777216,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 16777216
+     },
+     "sub0": {
+      "Height": 1,
+      "NumRows": 1,
+      "RowPitch": 16777216,
+      "RowSizeInBytes": 16777216,
+      "Width": 16777216
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 16777216
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x4",
+     "Format": "UNKNOWN",
+     "Height": 1,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 16777216
+    }
+   },
+   "buffer_256_align64k": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 256,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 1,
+      "NumRows": 1,
+      "RowPitch": 256,
+      "RowSizeInBytes": 256,
+      "Width": 256
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 65536
+    },
+    "desc": {
+     "Alignment": 65536,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "UNKNOWN",
+     "Height": 1,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 256
+    }
+   },
+   "buffer_64k": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 65536,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 65536
+     },
+     "sub0": {
+      "Height": 1,
+      "NumRows": 1,
+      "RowPitch": 65536,
+      "RowSizeInBytes": 65536,
+      "Width": 65536
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 65536
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "UNKNOWN",
+     "Height": 1,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 65536
+    }
+   },
+   "d24s8_1920x1200_ds": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 2,
+     "TotalBytes": 11673472,
+     "last": {
+      "Offset": 9216000,
+      "RowPitch": 2048
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "D24_UNORM_S8_UINT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "d24s8_1920x1200_ds_msaa4": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 4194304,
+     "SizeInBytes": 37748736
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "D24_UNORM_S8_UINT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 1920
+    }
+   },
+   "d32_1920x1200_ds": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "D32_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "d32_1920x1200_ds_msaa4": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 4194304,
+     "SizeInBytes": 37748736
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "D32_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 1920
+    }
+   },
+   "d32_2048x2048x4_ds_shadow_array": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 4,
+     "TotalBytes": 67108864,
+     "last": {
+      "Offset": 50331648,
+      "RowPitch": 8192
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 2048,
+      "RowPitch": 8192,
+      "RowSizeInBytes": 8192,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 67108864
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 4,
+     "Flags": "0x2",
+     "Format": "D32_FLOAT",
+     "Height": 2048,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "d32s8_1920x1200_ds": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 2,
+     "TotalBytes": 11673472,
+     "last": {
+      "Offset": 9216000,
+      "RowPitch": 2048
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 18481152
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "D32_FLOAT_S8X24_UINT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r11g11b10_1920x1200_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R11G11B10_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r11g11b10_1920x1200_rt_msaa4": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 4194304,
+     "SizeInBytes": 37748736
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R11G11B10_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 1920
+    }
+   },
+   "r11g11b10_1920x1200_rt_uav_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R11G11B10_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r11g11b10_1920x1200_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x4",
+     "Format": "R11G11B10_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r16g16f_1920x1200_rt_uav_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R16G16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r24g8_typeless_1920x1200_ds": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 2,
+     "TotalBytes": 11673472,
+     "last": {
+      "Offset": 9216000,
+      "RowPitch": 2048
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "R24G8_TYPELESS",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r32_typeless_1920x1200_ds": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "R32_TYPELESS",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r32f_1920x1200_rt_uav_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R32_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r32f_1920x1200_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x4",
+     "Format": "R32_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r32g8x24_typeless_1920x1200_ds": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 2,
+     "TotalBytes": 11673472,
+     "last": {
+      "Offset": 9216000,
+      "RowPitch": 2048
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 18481152
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "R32G8X24_TYPELESS",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "r32g8x24_typeless_1920x1200_ds_msaa4": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 4194304,
+     "SizeInBytes": 75497472
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x2",
+     "Format": "R32G8X24_TYPELESS",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 1920
+    }
+   },
+   "r8g8_1920x1200_rt_uav_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 4608000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 3840
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 3840,
+      "RowSizeInBytes": 3840,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 4653056
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R8G8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgb10a2_1920x1200_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R10G10B10A2_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba16f_128x128x128_3d_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 16777216,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 1024
+     },
+     "sub0": {
+      "Height": 128,
+      "NumRows": 128,
+      "RowPitch": 1024,
+      "RowSizeInBytes": 1024,
+      "Width": 128
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 16777216
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 128,
+     "Flags": "0x4",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 128,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 128
+    }
+   },
+   "rgba16f_1920x1200_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 18432000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 15360
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 15360,
+      "RowSizeInBytes": 15360,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 18481152
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba16f_1920x1200_rt_msaa4": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 4194304,
+     "SizeInBytes": 75497472
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 1920
+    }
+   },
+   "rgba16f_1920x1200_rt_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 18432000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 15360
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 15360,
+      "RowSizeInBytes": 15360,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 18481152
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x5",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba16f_1920x1200_rt_uav_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 18432000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 15360
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 15360,
+      "RowSizeInBytes": 15360,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 18481152
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba16f_1920x1200_rt_uav_simultaneous_mips9": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 9,
+     "TotalBytes": 24602936,
+     "last": {
+      "Offset": 24602112,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 15360,
+      "RowSizeInBytes": 15360,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 24641536
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 9,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba16f_1920x1200_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 18432000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 15360
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 15360,
+      "RowSizeInBytes": 15360,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 18481152
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x4",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba16f_256_cube_array6_mips_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 54,
+     "TotalBytes": 4226568,
+     "last": {
+      "Offset": 4226560,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 256,
+      "NumRows": 256,
+      "RowPitch": 2048,
+      "RowSizeInBytes": 2048,
+      "Width": 256
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 4259840
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 6,
+     "Flags": "0x1",
+     "Format": "R16G16B16A16_FLOAT",
+     "Height": 256,
+     "MipLevels": 9,
+     "SampleCount": 1,
+     "Width": 256
+    }
+   },
+   "rgba8_1024_cube_array6_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 66,
+     "TotalBytes": 33619460,
+     "last": {
+      "Offset": 33619456,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 1024,
+      "NumRows": 1024,
+      "RowPitch": 4096,
+      "RowSizeInBytes": 4096,
+      "Width": 1024
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 33619968
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 6,
+     "Flags": "0x0",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1024,
+     "MipLevels": 11,
+     "SampleCount": 1,
+     "Width": 1024
+    }
+   },
+   "rgba8_1920x1200_none": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba8_1920x1200_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba8_1920x1200_rt_msaa4": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 4194304,
+     "SizeInBytes": 37748736
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 1920
+    }
+   },
+   "rgba8_1920x1200_rt_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x21",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba8_1920x1200_rt_uav": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x5",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba8_1920x1200_rt_uav_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x25",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba8_1920x1200_simultaneous": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 9216000,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 7680
+     },
+     "sub0": {
+      "Height": 1200,
+      "NumRows": 1200,
+      "RowPitch": 7680,
+      "RowSizeInBytes": 7680,
+      "Width": 1920
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 9240576
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x20",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 1200,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 1920
+    }
+   },
+   "rgba8_2048_mips": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 12,
+     "TotalBytes": 22380036,
+     "last": {
+      "Offset": 22380032,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 2048,
+      "NumRows": 2048,
+      "RowPitch": 8192,
+      "RowSizeInBytes": 8192,
+      "Width": 2048
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 22413312
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 2048,
+     "MipLevels": 12,
+     "SampleCount": 1,
+     "Width": 2048
+    }
+   },
+   "rgba8_typeless_2560x1440_rt": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 14745600,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 10240
+     },
+     "sub0": {
+      "Height": 1440,
+      "NumRows": 1440,
+      "RowPitch": 10240,
+      "RowSizeInBytes": 10240,
+      "Width": 2560
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 14745600
+    },
+    "desc": {
+     "Alignment": 0,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R8G8B8A8_TYPELESS",
+     "Height": 1440,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 2560
+    }
+   },
+   "small_bc1_64_mips_align4k": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 7,
+     "TotalBytes": 8712,
+     "last": {
+      "Offset": 8704,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 64,
+      "NumRows": 16,
+      "RowPitch": 256,
+      "RowSizeInBytes": 128,
+      "Width": 64
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 4096,
+     "SizeInBytes": 4096
+    },
+    "desc": {
+     "Alignment": 4096,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC1_UNORM",
+     "Height": 64,
+     "MipLevels": 7,
+     "SampleCount": 1,
+     "Width": 64
+    }
+   },
+   "small_bc7_128_mips_align4k": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 8,
+     "TotalBytes": 25104,
+     "last": {
+      "Offset": 25088,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 128,
+      "NumRows": 32,
+      "RowPitch": 512,
+      "RowSizeInBytes": 512,
+      "Width": 128
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 4096,
+     "SizeInBytes": 24576
+    },
+    "desc": {
+     "Alignment": 4096,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "BC7_UNORM",
+     "Height": 128,
+     "MipLevels": 8,
+     "SampleCount": 1,
+     "Width": 128
+    }
+   },
+   "small_rgba8_256_align4k_too_large": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": "UINT64_MAX",
+     "last": {
+      "Offset": "UINT64_MAX",
+      "RowPitch": 4294967295
+     },
+     "sub0": {
+      "Height": 4294967295,
+      "NumRows": 4294967295,
+      "RowPitch": 4294967295,
+      "RowSizeInBytes": "UINT64_MAX",
+      "Width": 4294967295
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": "UINT64_MAX"
+    },
+    "desc": {
+     "Alignment": 4096,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 256,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 256
+    }
+   },
+   "small_rgba8_256_rt_msaa4_align64k": {
+    "GetResourceAllocationInfo": {
+     "Alignment": 65536,
+     "SizeInBytes": 1048576
+    },
+    "desc": {
+     "Alignment": 65536,
+     "DepthOrArraySize": 1,
+     "Flags": "0x1",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 256,
+     "MipLevels": 1,
+     "SampleCount": 4,
+     "Width": 256
+    }
+   },
+   "small_rgba8_64_align4k": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 1,
+     "TotalBytes": 16384,
+     "last": {
+      "Offset": 0,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 64,
+      "NumRows": 64,
+      "RowPitch": 256,
+      "RowSizeInBytes": 256,
+      "Width": 64
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 4096,
+     "SizeInBytes": 16384
+    },
+    "desc": {
+     "Alignment": 4096,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 64,
+     "MipLevels": 1,
+     "SampleCount": 1,
+     "Width": 64
+    }
+   },
+   "small_rgba8_64_mips_align4k": {
+    "GetCopyableFootprints": {
+     "NumSubresources": 7,
+     "TotalBytes": 32260,
+     "last": {
+      "Offset": 32256,
+      "RowPitch": 256
+     },
+     "sub0": {
+      "Height": 64,
+      "NumRows": 64,
+      "RowPitch": 256,
+      "RowSizeInBytes": 256,
+      "Width": 64
+     }
+    },
+    "GetResourceAllocationInfo": {
+     "Alignment": 4096,
+     "SizeInBytes": 24576
+    },
+    "desc": {
+     "Alignment": 4096,
+     "DepthOrArraySize": 1,
+     "Flags": "0x0",
+     "Format": "R8G8B8A8_UNORM",
+     "Height": 64,
+     "MipLevels": 7,
+     "SampleCount": 1,
+     "Width": 64
+    }
+   }
+  },
+  "created_at": "12_1",
+  "features": {
+   "ARCHITECTURE": {
+    "CacheCoherentUMA": true,
+    "NodeIndex": 0,
+    "TileBasedRenderer": false,
+    "UMA": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "ARCHITECTURE1": {
+    "CacheCoherentUMA": true,
+    "IsolatedMMU": false,
+    "NodeIndex": 0,
+    "TileBasedRenderer": false,
+    "UMA": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "COMMAND_QUEUE_PRIORITY": {
+    "COMPUTE": {
+     "GLOBAL_REALTIME": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "HIGH": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "NORMAL": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     }
+    },
+    "COPY": {
+     "GLOBAL_REALTIME": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "HIGH": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "NORMAL": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     }
+    },
+    "DIRECT": {
+     "GLOBAL_REALTIME": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "HIGH": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "NORMAL": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     }
+    },
+    "VIDEO_DECODE": {
+     "GLOBAL_REALTIME": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "HIGH": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "NORMAL": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     }
+    },
+    "VIDEO_ENCODE": {
+     "GLOBAL_REALTIME": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "HIGH": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "NORMAL": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     }
+    },
+    "VIDEO_PROCESS": {
+     "GLOBAL_REALTIME": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "HIGH": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     },
+     "NORMAL": {
+      "PriorityForTypeIsSupported": true,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "CROSS_NODE": {
+    "AtomicShaderInstructions": false,
+    "SharingTier": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS": {
+    "ConservativeRasterizationTier": 3,
+    "CrossAdapterRowMajorTextureSupported": true,
+    "CrossNodeSharingTier": 0,
+    "DoublePrecisionFloatShaderOps": true,
+    "MaxGPUVirtualAddressBitsPerResource": 32,
+    "MinPrecisionSupport": "0x3",
+    "OutputMergerLogicOp": true,
+    "PSSpecifiedStencilRefSupported": true,
+    "ROVsSupported": true,
+    "ResourceBindingTier": 3,
+    "ResourceHeapTier": 2,
+    "StandardSwizzle64KBSupported": true,
+    "TiledResourcesTier": 3,
+    "TypedUAVLoadAdditionalFormats": true,
+    "VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS1": {
+    "ExpandedComputeResourceStates": true,
+    "Int64ShaderOps": true,
+    "TotalLaneCount": 48,
+    "WaveLaneCountMax": 4,
+    "WaveLaneCountMin": 4,
+    "WaveOps": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS10": {
+    "MeshShaderPerPrimitiveShadingRateSupported": false,
+    "VariableRateShadingSumCombinerSupported": false,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS11": {
+    "AtomicInt64OnDescriptorHeapResourceSupported": false,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS12": {
+    "EnhancedBarriersSupported": false,
+    "MSPrimitivesPipelineStatisticIncludesCulledPrimitives": 0,
+    "RelaxedFormatCastingSupported": false,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS13": {
+    "AlphaBlendFactorSupported": true,
+    "InvertedViewportDepthFlipsZSupported": false,
+    "InvertedViewportHeightFlipsYSupported": false,
+    "TextureCopyBetweenDimensionsSupported": true,
+    "UnrestrictedBufferTextureCopyPitchSupported": true,
+    "UnrestrictedVertexElementAlignmentSupported": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS14": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS15": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS16": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS17": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS18": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS19": {
+    "AnisoFilterWithPointMipSupported": false,
+    "ComputeOnlyCustomHeapSupported": false,
+    "MaxSamplerDescriptorHeapSize": 0,
+    "MaxSamplerDescriptorHeapSizeWithStaticSamplers": 0,
+    "MaxViewDescriptorHeapSize": 0,
+    "MismatchingOutputDimensionsSupported": false,
+    "NarrowQuadrilateralLinesSupported": false,
+    "PointSamplingAddressesNeverRoundUp": false,
+    "RasterizerDesc2Supported": false,
+    "SupportedSampleCountsWithNoOutputs": "0x0",
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS2": {
+    "DepthBoundsTestSupported": true,
+    "ProgrammableSamplePositionsTier": 2,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS20": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS21": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "D3D12_OPTIONS3": {
+    "BarycentricsSupported": true,
+    "CastingFullyTypedFormatSupported": true,
+    "CopyQueueTimestampQueriesSupported": true,
+    "ViewInstancingTier": 1,
+    "WriteBufferImmediateSupportFlags": "0xF",
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS4": {
+    "MSAA64KBAlignedTextureSupported": true,
+    "Native16BitShaderOpsSupported": true,
+    "SharedResourceCompatibilityTier": 2,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS5": {
+    "RaytracingTier": 0,
+    "RenderPassesTier": 1,
+    "SRVOnlyTiledResourceTier3": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS6": {
+    "AdditionalShadingRatesSupported": true,
+    "BackgroundProcessingSupported": false,
+    "PerPrimitiveShadingRateSupportedWithViewportIndexing": false,
+    "ShadingRateImageTileSize": 0,
+    "VariableShadingRateTier": 1,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS7": {
+    "MeshShaderTier": 0,
+    "SamplerFeedbackTier": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS8": {
+    "UnalignedBlockTexturesSupported": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "D3D12_OPTIONS9": {
+    "AtomicInt64OnGroupSharedSupported": false,
+    "AtomicInt64OnTypedResourceSupported": false,
+    "DerivativesInMeshAndAmplificationShadersSupported": false,
+    "MeshShaderPipelineStatsSupported": false,
+    "MeshShaderSupportsFullRangeRenderTargetArrayIndex": false,
+    "WaveMMATier": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "DISPLAYABLE": {
+    "DisplayableTexture": false,
+    "SharedResourceCompatibilityTier": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "EXISTING_HEAPS": {
+    "Supported": true,
+    "hr": "0x00000000 S_OK"
+   },
+   "FEATURE_LEVELS": {
+    "list_9_1_to_12_2": {
+     "MaxSupportedFeatureLevel": "12_1",
+     "hr": "0x00000000 S_OK"
+    },
+    "list_all": {
+     "MaxSupportedFeatureLevel": "12_1",
+     "hr": "0x00000000 S_OK"
+    },
+    "single": {
+     "10_0": {
+      "MaxSupportedFeatureLevel": "10_0",
+      "hr": "0x00000000 S_OK"
+     },
+     "10_1": {
+      "MaxSupportedFeatureLevel": "10_1",
+      "hr": "0x00000000 S_OK"
+     },
+     "11_0": {
+      "MaxSupportedFeatureLevel": "11_0",
+      "hr": "0x00000000 S_OK"
+     },
+     "11_1": {
+      "MaxSupportedFeatureLevel": "11_1",
+      "hr": "0x00000000 S_OK"
+     },
+     "12_0": {
+      "MaxSupportedFeatureLevel": "12_0",
+      "hr": "0x00000000 S_OK"
+     },
+     "12_1": {
+      "MaxSupportedFeatureLevel": "12_1",
+      "hr": "0x00000000 S_OK"
+     },
+     "12_2": {
+      "hr": "0x887A0004 DXGI_ERROR_UNSUPPORTED"
+     },
+     "1_0_CORE": {
+      "MaxSupportedFeatureLevel": "1_0_CORE",
+      "hr": "0x00000000 S_OK"
+     },
+     "1_0_GENERIC": {
+      "MaxSupportedFeatureLevel": "1_0_GENERIC",
+      "hr": "0x00000000 S_OK"
+     },
+     "9_1": {
+      "MaxSupportedFeatureLevel": "9_1",
+      "hr": "0x00000000 S_OK"
+     },
+     "9_2": {
+      "MaxSupportedFeatureLevel": "9_2",
+      "hr": "0x00000000 S_OK"
+     },
+     "9_3": {
+      "MaxSupportedFeatureLevel": "9_3",
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "GPU_VIRTUAL_ADDRESS_SUPPORT": {
+    "MaxGPUVirtualAddressBitsPerProcess": 47,
+    "MaxGPUVirtualAddressBitsPerResource": 32,
+    "hr": "0x00000000 S_OK"
+   },
+   "HARDWARE_COPY": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "PLACED_RESOURCE_SUPPORT_INFO": {
+    "BUFFER": {
+     "DEFAULT": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "GPU_UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "READBACK": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     }
+    },
+    "TEXTURE2D_BC7_UNORM": {
+     "DEFAULT": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "GPU_UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "READBACK": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     }
+    },
+    "TEXTURE2D_D32_FLOAT": {
+     "DEFAULT": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "GPU_UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "READBACK": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     }
+    },
+    "TEXTURE2D_R8G8B8A8_UNORM": {
+     "DEFAULT": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "GPU_UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "READBACK": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "UPLOAD": {
+      "hr": "0x80070057 E_INVALIDARG"
+     }
+    }
+   },
+   "PREDICATION": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "PROTECTED_RESOURCE_SESSION_SUPPORT": {
+    "NodeIndex": 0,
+    "Support": "0x0",
+    "hr": "0x00000000 S_OK"
+   },
+   "PROTECTED_RESOURCE_SESSION_TYPE_COUNT": {
+    "Count": 0,
+    "NodeIndex": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "ROOT_SIGNATURE": {
+    "HighestVersion": "0x2",
+    "probe": {
+     "0x1": {
+      "HighestVersion": "0x1",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x2": {
+      "HighestVersion": "0x2",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x3": {
+      "hr": "0x80070057 E_INVALIDARG"
+     }
+    }
+   },
+   "SERIALIZATION": {
+    "HeapSerializationTier": 10,
+    "NodeIndex": 0,
+    "hr": "0x00000000 S_OK"
+   },
+   "SHADER_CACHE": {
+    "SupportFlagNames": "SINGLE_PSO|LIBRARY|SHADER_CONTROL_CLEAR|SHADER_SESSION_DELETE",
+    "SupportFlags": "0x63",
+    "hr": "0x00000000 S_OK"
+   },
+   "SHADER_MODEL": {
+    "HighestShaderModel": "0x62",
+    "probe": {
+     "0x51": {
+      "HighestShaderModel": "0x51",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x60": {
+      "HighestShaderModel": "0x60",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x61": {
+      "HighestShaderModel": "0x61",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x62": {
+      "HighestShaderModel": "0x62",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x63": {
+      "HighestShaderModel": "0x62",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x64": {
+      "HighestShaderModel": "0x62",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x65": {
+      "HighestShaderModel": "0x62",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x66": {
+      "HighestShaderModel": "0x62",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x67": {
+      "HighestShaderModel": "0x62",
+      "hr": "0x00000000 S_OK"
+     },
+     "0x68": {
+      "hr": "0x80070057 E_INVALIDARG"
+     },
+     "0x69": {
+      "hr": "0x80070057 E_INVALIDARG"
+     }
+    }
+   }
+  },
+  "formats": {
+   "000_UNKNOWN": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1",
+     "Support1Names": "BUFFER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "001_R32G32B32A32_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "002_R32G32B32A32_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "003_R32G32B32A32_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "004_R32G32B32A32_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "005_R32G32B32_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "006_R32G32B32_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0xF4D3FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "007_R32G32B32_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x7051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD",
+     "Support2": "0x100",
+     "Support2Names": "OUTPUT_MERGER_LOGIC_OP",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "008_R32G32B32_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x7051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "009_R16G16B16A16_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "010_R16G16B16A16_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2FCD3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|DISPLAY|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "011_R16G16B16A16_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "012_R16G16B16A16_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "013_R16G16B16A16_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "014_R16G16B16A16_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "015_R32G32_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "016_R32G32_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "017_R32G32_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "018_R32G32_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "019_R32G8X24_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "020_D32_FLOAT_S8X24_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3110B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|MIP|DEPTH_STENCIL|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "021_R32_FLOAT_X8X24_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x4D017B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|SHADER_SAMPLE_COMPARISON|MIP|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_LOAD|SHADER_GATHER|SHADER_GATHER_COMPARISON",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "022_X32_TYPELESS_G8X24_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x5011B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|SHADER_LOAD|MIP|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_LOAD",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "023_R10G10B10A2_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "024_R10G10B10A2_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3FCD3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|DISPLAY|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|BACK_BUFFER_CAST|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "025_R10G10B10A2_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "026_R11G11B10_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2E4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "027_R8G8B8A8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "028_R8G8B8A8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3FCD3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|DISPLAY|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|BACK_BUFFER_CAST|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "029_R8G8B8A8_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1FCD3F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|DISPLAY|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|BACK_BUFFER_CAST",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "030_R8G8B8A8_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "031_R8G8B8A8_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "032_R8G8B8A8_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "033_R16G16_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "034_R16G16_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "035_R16G16_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "036_R16G16_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "037_R16G16_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "038_R16G16_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "039_R32_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "040_D32_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3110B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|MIP|DEPTH_STENCIL|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "041_R32_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x6F4D7FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|SHADER_SAMPLE_COMPARISON|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW|SHADER_GATHER_COMPARISON",
+     "Support2": "0x2C8",
+     "Support2Names": "UAV_ATOMIC_EXCHANGE|UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "042_R32_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051FF",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|IA_INDEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3FF",
+     "Support2Names": "UAV_ATOMIC_ADD|UAV_ATOMIC_BITWISE_OPS|UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE|UAV_ATOMIC_EXCHANGE|UAV_ATOMIC_SIGNED_MIN_OR_MAX|UAV_ATOMIC_UNSIGNED_MIN_OR_MAX|UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "043_R32_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051FB",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|SO_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2FF",
+     "Support2Names": "UAV_ATOMIC_ADD|UAV_ATOMIC_BITWISE_OPS|UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE|UAV_ATOMIC_EXCHANGE|UAV_ATOMIC_SIGNED_MIN_OR_MAX|UAV_ATOMIC_UNSIGNED_MIN_OR_MAX|UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "044_R24G8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "045_D24_UNORM_S8_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3110B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|MIP|DEPTH_STENCIL|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "046_R24_UNORM_X8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x4D017B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|SHADER_SAMPLE_COMPARISON|MIP|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_LOAD|SHADER_GATHER|SHADER_GATHER_COMPARISON",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "047_X24_TYPELESS_G8_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x5011B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|SHADER_LOAD|MIP|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_LOAD",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "048_R8G8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "049_R8G8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "050_R8G8_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "051_R8G8_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "052_R8G8_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "053_R16_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "054_R16_FLOAT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "055_D16_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3110B0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURECUBE|MIP|DEPTH_STENCIL|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "056_R16_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x6F4D7F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|SHADER_SAMPLE_COMPARISON|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW|SHADER_GATHER_COMPARISON",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "057_R16_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F7",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|IA_INDEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "058_R16_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "059_R16_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "060_R8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "061_R8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "062_R8_UINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x3C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|OUTPUT_MERGER_LOGIC_OP|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "063_R8_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2F4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "064_R8_SINT": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x27051F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|MIP|RENDER_TARGET|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "065_A8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2E4D3F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "066_R1_UNORM": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "067_R9G9B9E5_SHAREDEXP": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x8013F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "068_R8G8_B8G8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x8013F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|SHADER_GATHER",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "069_G8R8_G8B8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x8013F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|SHADER_GATHER",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "070_BC1_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "071_BC1_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "072_BC1_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "073_BC2_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "074_BC2_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "075_BC2_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "076_BC3_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "077_BC3_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "078_BC3_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "079_BC4_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "080_BC4_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "081_BC4_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "082_BC5_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "083_BC5_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "084_BC5_SNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "085_B5G6R5_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2E4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "086_B5G5R5A1_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2E4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "087_B8G8R8A8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x3FCD3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|DISPLAY|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|BACK_BUFFER_CAST|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "088_B8G8R8X8_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0xF4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "089_R10G10B10_XR_BIAS_A2_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1180020",
+     "Support1Names": "TEXTURE2D|DISPLAY|CAST_WITHIN_BIT_LAYOUT|BACK_BUFFER_CAST",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "090_B8G8R8A8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "091_B8G8R8A8_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1FCD3F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|DISPLAY|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|BACK_BUFFER_CAST",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "092_B8G8R8X8_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "093_B8G8R8X8_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0xF4D3F0",
+     "Support1Names": "TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|CAST_WITHIN_BIT_LAYOUT|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "094_BC6H_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "095_BC6H_UF16": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "096_BC6H_SF16": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "097_BC7_TYPELESS": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x1010E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|MIP|CAST_WITHIN_BIT_LAYOUT",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "098_BC7_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "099_BC7_UNORM_SRGB": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x9013E0",
+     "Support1Names": "TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|CAST_WITHIN_BIT_LAYOUT|SHADER_GATHER",
+     "Support2": "0x200",
+     "Support2Names": "TILED",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "100_AYUV": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x280D320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 0,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 0,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 0,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "101_Y410": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2800320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "102_Y416": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2801320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|MIP|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "103_NV12": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x280C320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|RENDER_TARGET|BLENDABLE|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 0,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 0,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 0,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "104_P010": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "105_P016": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "106_420_OPAQUE": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x20",
+     "Support1Names": "TEXTURE2D",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "107_YUY2": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2800320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "108_Y210": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2800320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "109_Y216": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2800320",
+     "Support1Names": "TEXTURE2D|SHADER_LOAD|SHADER_SAMPLE|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x80",
+     "Support2Names": "UAV_TYPED_STORE",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "110_NV11": {
+    "FORMAT_INFO": {
+     "PlaneCount": 2,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "111_AI44": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "112_IA44": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "113_P8": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x20",
+     "Support1Names": "TEXTURE2D",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "114_A8P8": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x20",
+     "Support1Names": "TEXTURE2D",
+     "Support2": "0x0",
+     "Support2Names": "",
+     "hr": "0x00000000 S_OK"
+    }
+   },
+   "115_B4G4R4A4_UNORM": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "Support1": "0x2E4D3F3",
+     "Support1Names": "BUFFER|IA_VERTEX_BUFFER|TEXTURE1D|TEXTURE2D|TEXTURE3D|TEXTURECUBE|SHADER_LOAD|SHADER_SAMPLE|MIP|RENDER_TARGET|BLENDABLE|MULTISAMPLE_RESOLVE|MULTISAMPLE_RENDERTARGET|MULTISAMPLE_LOAD|SHADER_GATHER|TYPED_UNORDERED_ACCESS_VIEW",
+     "Support2": "0x2C0",
+     "Support2Names": "UAV_TYPED_LOAD|UAV_TYPED_STORE|TILED",
+     "hr": "0x00000000 S_OK"
+    },
+    "MULTISAMPLE_QUALITY_LEVELS": {
+     "1": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "2": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "4": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     },
+     "8": {
+      "NumQualityLevels": 1,
+      "hr": "0x00000000 S_OK"
+     }
+    }
+   },
+   "116_UNDEFINED_116": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "117_UNDEFINED_117": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "118_UNDEFINED_118": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "119_UNDEFINED_119": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "120_UNDEFINED_120": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "121_UNDEFINED_121": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "122_UNDEFINED_122": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "123_UNDEFINED_123": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "124_UNDEFINED_124": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "125_UNDEFINED_125": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "126_UNDEFINED_126": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "127_UNDEFINED_127": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "128_UNDEFINED_128": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "129_UNDEFINED_129": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "130_P208": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "131_V208": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "132_V408": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "189_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "190_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE": {
+    "FORMAT_INFO": {
+     "PlaneCount": 1,
+     "hr": "0x00000000 S_OK"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   },
+   "191_A4B4G4R4_UNORM": {
+    "FORMAT_INFO": {
+     "hr": "0x80070057 E_INVALIDARG"
+    },
+    "FORMAT_SUPPORT": {
+     "hr": "0x80004005 E_FAIL"
+    }
+   }
+  },
+  "properties": {
+   "CommandQueue": {
+    "COMPUTE": {
+     "CreateCommandQueue": "0x00000000 S_OK",
+     "GetTimestampFrequency": {
+      "hr": "0x00000000 S_OK",
+      "value": 10000000
+     }
+    },
+    "COPY": {
+     "CreateCommandQueue": "0x00000000 S_OK",
+     "GetTimestampFrequency": {
+      "hr": "0x00000000 S_OK",
+      "value": 10000000
+     }
+    },
+    "DIRECT": {
+     "CreateCommandQueue": "0x00000000 S_OK",
+     "GetTimestampFrequency": {
+      "hr": "0x00000000 S_OK",
+      "value": 10000000
+     }
+    }
+   },
+   "EnumerateMetaCommands": {
+    "commands": {
+     "980BFE94-D9FC-4AA7-837B-ACD6798383F7": {
+      "ExecutionDirtyState": "0x0",
+      "InitializationDirtyState": "0x0",
+      "Name": "Identity"
+     }
+    },
+    "count": 1,
+    "hr": "0x00000000 S_OK",
+    "hr_list": "0x00000000 S_OK"
+   },
+   "GetCustomHeapProperties": {
+    "DEFAULT": {
+     "CPUPageProperty": 1,
+     "CreationNodeMask": 1,
+     "MemoryPoolPreference": 1,
+     "Type": 4,
+     "VisibleNodeMask": 1
+    },
+    "GPU_UPLOAD": "skipped: GPUUploadHeapSupported is false",
+    "READBACK": {
+     "CPUPageProperty": 3,
+     "CreationNodeMask": 1,
+     "MemoryPoolPreference": 1,
+     "Type": 4,
+     "VisibleNodeMask": 1
+    },
+    "UPLOAD": {
+     "CPUPageProperty": 3,
+     "CreationNodeMask": 1,
+     "MemoryPoolPreference": 1,
+     "Type": 4,
+     "VisibleNodeMask": 1
+    }
+   },
+   "GetDescriptorHandleIncrementSize": {
+    "CBV_SRV_UAV": 64,
+    "DSV": 8,
+    "RTV": 32,
+    "SAMPLER": 64
+   },
+   "GetNodeCount": 1,
+   "QueryInterface": {
+    "ID3D12Device1": "0x00000000 S_OK",
+    "ID3D12Device10": "0x00000000 S_OK",
+    "ID3D12Device11": "0x80004002 E_NOINTERFACE",
+    "ID3D12Device12": "0x80004002 E_NOINTERFACE",
+    "ID3D12Device13": "0x80004002 E_NOINTERFACE",
+    "ID3D12Device14": "0x80004002 E_NOINTERFACE",
+    "ID3D12Device2": "0x00000000 S_OK",
+    "ID3D12Device3": "0x00000000 S_OK",
+    "ID3D12Device4": "0x00000000 S_OK",
+    "ID3D12Device5": "0x00000000 S_OK",
+    "ID3D12Device6": "0x00000000 S_OK",
+    "ID3D12Device7": "0x00000000 S_OK",
+    "ID3D12Device8": "0x00000000 S_OK",
+    "ID3D12Device9": "0x00000000 S_OK",
+    "ID3D12DeviceConfiguration": "0x80004002 E_NOINTERFACE",
+    "ID3D12DeviceConfiguration1": "0x80004002 E_NOINTERFACE"
+   }
+  },
+  "raw_features": {
+   "054_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "055_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "056_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "057_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "058_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "059_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "060_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "061_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "062_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "063_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "064_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "065_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "066_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "067_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "068_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "069_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "070_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "071_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "072_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "073_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "074_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "075_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "076_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "077_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "078_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   },
+   "079_feature": {
+    "hr": "0x80070057 E_INVALIDARG"
+   }
+  }
+ },
+ "dxgi": {
+  "CheckFeatureSupport_PRESENT_ALLOW_TEARING": {
+   "hr": "0x00000000 S_OK",
+   "value": true
+  },
+  "CreateDXGIFactory": {
+   "entry": "CreateDXGIFactory2",
+   "hr": "0x00000000 S_OK"
+  },
+  "LoadLibrary": "0x00000000 S_OK",
+  "adapter_count": 2,
+  "adapters": {
+   "00": {
+    "CheckInterfaceSupport_IDXGIDevice": {
+     "UMDVersion": "0.0.0.0",
+     "hr": "0x00000000 S_OK"
+    },
+    "GetDesc1": {
+     "DedicatedSystemMemory": 0,
+     "DedicatedVideoMemory": 8547139584,
+     "Description": "BC-250 GPU (amdgpu-wddm)",
+     "DeviceId": "0x13FE",
+     "Flags": "0x0",
+     "Revision": "0x0",
+     "SharedSystemMemory": 4148424704,
+     "SubSysId": "0x1022",
+     "VendorId": "0x1002",
+     "hr": "0x00000000 S_OK"
+    },
+    "GetDesc3": {
+     "ComputePreemptionGranularity": 0,
+     "FlagNames": "SUPPORT_MONITORED_FENCES|KEYED_MUTEX_CONFORMANCE",
+     "Flags": "0x28",
+     "GraphicsPreemptionGranularity": 0,
+     "hr": "0x00000000 S_OK"
+    },
+    "IDXGIAdapter4": "0x00000000 S_OK"
+   },
+   "01": {
+    "CheckInterfaceSupport_IDXGIDevice": {
+     "UMDVersion": "10.0.22621.5415",
+     "hr": "0x00000000 S_OK"
+    },
+    "GetDesc1": {
+     "DedicatedSystemMemory": 0,
+     "DedicatedVideoMemory": 0,
+     "Description": "Microsoft Basic Render Driver",
+     "DeviceId": "0x8C",
+     "Flags": "0x2",
+     "Revision": "0x0",
+     "SharedSystemMemory": 4148424704,
+     "SubSysId": "0x0",
+     "VendorId": "0x1414",
+     "hr": "0x00000000 S_OK"
+    },
+    "GetDesc3": {
+     "ComputePreemptionGranularity": 4,
+     "FlagNames": "SOFTWARE|ACG_COMPATIBLE|SUPPORT_MONITORED_FENCES|KEYED_MUTEX_CONFORMANCE",
+     "Flags": "0x2E",
+     "GraphicsPreemptionGranularity": 4,
+     "hr": "0x00000000 S_OK"
+    },
+    "IDXGIAdapter4": "0x00000000 S_OK"
+   }
+  }
+ },
+ "modules": {
+  "bcrypt.dll": {
+   "file_version": "6.2.22621.4746",
+   "location": "system32"
+  },
+  "bcryptprimitives.dll": {
+   "file_version": "6.2.22621.4317",
+   "location": "system32"
+  },
+  "cfgmgr32.dll": {
+   "file_version": "6.2.22621.2506",
+   "location": "system32"
+  },
+  "combase.dll": {
+   "file_version": "6.2.22621.6133",
+   "location": "system32"
+  },
+  "d3d10warp.dll": {
+   "file_version": "6.2.22621.5415",
+   "location": "system32"
+  },
+  "d3d12.dll": {
+   "file_version": "6.2.22621.5415",
+   "location": "system32"
+  },
+  "d3d12core.dll": {
+   "file_version": "6.2.22621.5415",
+   "location": "system32"
+  },
+  "d3dscache.dll": {
+   "file_version": "6.2.22621.5415",
+   "location": "system32"
+  },
+  "directxdatabasehelper.dll": {
+   "file_version": "6.2.22621.5983",
+   "location": "system32"
+  },
+  "dxcore.dll": {
+   "file_version": "6.2.22621.5415",
+   "location": "system32"
+  },
+  "dxgi.dll": {
+   "file_version": "6.2.22621.5415",
+   "location": "system32"
+  },
+  "gdi32.dll": {
+   "file_version": "6.2.22621.5697",
+   "location": "system32"
+  },
+  "gdi32full.dll": {
+   "file_version": "6.2.22621.6133",
+   "location": "system32"
+  },
+  "kernel.appcore.dll": {
+   "file_version": "6.2.22621.3958",
+   "location": "system32"
+  },
+  "msvcp_win.dll": {
+   "file_version": "6.2.22621.3374",
+   "location": "system32"
+  },
+  "rpcrt4.dll": {
+   "file_version": "6.2.22621.5840",
+   "location": "system32"
+  },
+  "sechost.dll": {
+   "file_version": "6.2.22621.5909",
+   "location": "system32"
+  },
+  "shcore.dll": {
+   "file_version": "6.2.22621.6133",
+   "location": "system32"
+  },
+  "shlwapi.dll": {
+   "file_version": "6.2.22621.5983",
+   "location": "system32"
+  },
+  "twinapi.appcore.dll": {
+   "file_version": "6.2.22621.5840",
+   "location": "system32"
+  },
+  "ucrtbase.dll": {
+   "file_version": "6.2.22621.3593",
+   "location": "system32"
+  },
+  "user32.dll": {
+   "file_version": "6.2.22621.6199",
+   "location": "system32"
+  },
+  "userenv.dll": {
+   "file_version": "6.2.22621.3527",
+   "location": "system32"
+  },
+  "win32u.dll": {
+   "file_version": "6.2.22621.6199",
+   "location": "system32"
+  },
+  "windows.storage.dll": {
+   "file_version": "6.2.22621.6133",
+   "location": "system32"
+  },
+  "wintypes.dll": {
+   "file_version": "6.2.22621.6133",
+   "location": "system32"
+  }
+ },
+ "schema": 1,
+ "tool": {
+  "adapter_index": 1,
+  "agility_sdk_version": null,
+  "headers": "Windows SDK 10.0.26100 (D3D12_FEATURE_D3D12_OPTIONS21 newest)"
+ }
+}

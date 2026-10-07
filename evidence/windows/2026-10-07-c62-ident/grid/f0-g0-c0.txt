@@ -1,0 +1,180 @@
+# 2026-10-07T03:13:10+00:00 rc=0
+tag=f0-g0-c0 fan=0 gpu_mv=0 cpu_uv=0 seconds=75 threads=2 start=2026-10-07T03:11:56.8536573Z
+fanctl state=emergency mode=curve profile=standard target_pct=100 applied_pct=100 raw=255 readback=255 rpm=1724 guard_c=87.9 enabled=1 controlling=1 emergency=1 leased=0 lease_ms=0 fault=0 paused=0 held_back=0 gate=ok reason=none doubt=none takeovers=1 handbacks=0 writes=89 failures=0 emergencies=2 lease_expiries=0 watchdog=0 curve=40:50,60:70,70:82,80:95,85:100 saved_mode=0xE0 saved_target=128
+stop=tctl >= 87 for 10 s elapsed=71
+WHEA since boot: 0
+4101 since boot: 0
+--- telemetry
+t_ms=1733 utc=2026-10-07T03:11:59.0464099Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=67.9 gfx_mhz=1500 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=148.4 power_avg_w=146.2
+fan fan=2 rpm=1741 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=60.0 board_c=54.0 age_ms=953 fresh=1 valid=1 stopped=0 reason=ok samples=2642 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=509 aperture_limit_mb=17592186044415
+t_ms=3553 utc=2026-10-07T03:12:00.8641470Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=75.5 gfx_mhz=1500 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=146.4 power_avg_w=147.7
+fan fan=2 rpm=1692 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=63.0 board_c=54.0 age_ms=742 fresh=1 valid=1 stopped=0 reason=ok samples=2644 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=505 aperture_limit_mb=17592186044415
+t_ms=5284 utc=2026-10-07T03:12:02.5956069Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=79.6 gfx_mhz=1500 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=149.8 power_avg_w=148.5
+fan fan=2 rpm=1648 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=75.0 board_c=53.5 age_ms=467 fresh=1 valid=1 stopped=0 reason=ok samples=2646 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=505 aperture_limit_mb=17592186044415
+t_ms=7014 utc=2026-10-07T03:12:04.3257968Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=82.1 gfx_mhz=1500 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=147.9 power_avg_w=148.8
+fan fan=2 rpm=1687 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=79.0 board_c=53.5 age_ms=193 fresh=1 valid=1 stopped=0 reason=ok samples=2648 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=509 aperture_limit_mb=17592186044415
+t_ms=8745 utc=2026-10-07T03:12:06.0566909Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=84.9 gfx_mhz=1500 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=152.0 power_avg_w=149.5
+fan fan=2 rpm=1664 turning=1/5 answered=5/5 duty_pct=97 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=80.0 board_c=53.5 age_ms=921 fresh=1 valid=1 stopped=0 reason=ok samples=2649 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=512 aperture_limit_mb=17592186044415
+t_ms=10471 utc=2026-10-07T03:12:07.7824858Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.6 gfx_mhz=1400 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=151.5 power_avg_w=149.6
+fan fan=2 rpm=1690 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=83.0 board_c=53.5 age_ms=616 fresh=1 valid=1 stopped=0 reason=ok samples=2651 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=512 aperture_limit_mb=17592186044415
+t_ms=12258 utc=2026-10-07T03:12:09.5700857Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.6 gfx_mhz=1300 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=129.6 power_avg_w=131.8
+fan fan=2 rpm=1652 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=53.5 age_ms=360 fresh=1 valid=1 stopped=0 reason=ok samples=2653 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=509 aperture_limit_mb=17592186044415
+t_ms=13990 utc=2026-10-07T03:12:11.3018770Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.6 gfx_mhz=1200 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=119.5 power_avg_w=117.6
+fan fan=2 rpm=1659 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=53.5 age_ms=88 fresh=1 valid=1 stopped=0 reason=ok samples=2655 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=509 aperture_limit_mb=17592186044415
+t_ms=15715 utc=2026-10-07T03:12:13.0273177Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.5 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=116.3 power_avg_w=108.8
+fan fan=2 rpm=1664 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=53.5 age_ms=813 fresh=1 valid=1 stopped=0 reason=ok samples=2656 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=505 aperture_limit_mb=17592186044415
+t_ms=17446 utc=2026-10-07T03:12:14.7579191Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.5 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=110.6 power_avg_w=108.8
+fan fan=2 rpm=1664 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=54.0 age_ms=493 fresh=1 valid=1 stopped=0 reason=ok samples=2658 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=505 aperture_limit_mb=17592186044415
+t_ms=19185 utc=2026-10-07T03:12:16.4969650Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.5 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=110.4 power_avg_w=109.1
+fan fan=2 rpm=1709 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=54.0 age_ms=178 fresh=1 valid=1 stopped=0 reason=ok samples=2660 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=509 aperture_limit_mb=17592186044415
+t_ms=20915 utc=2026-10-07T03:12:18.2262159Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.2 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=111.7 power_avg_w=108.7
+fan fan=2 rpm=1711 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=54.0 age_ms=891 fresh=1 valid=1 stopped=0 reason=ok samples=2661 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=505 aperture_limit_mb=17592186044415
+t_ms=22698 utc=2026-10-07T03:12:20.0101167Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.0 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=113.0 power_avg_w=109.2
+fan fan=2 rpm=1711 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=54.0 age_ms=633 fresh=1 valid=1 stopped=0 reason=ok samples=2663 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=441 aperture_limit_mb=17592186044415
+t_ms=24434 utc=2026-10-07T03:12:21.7448802Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=84.8 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=110.9 power_avg_w=108.9
+fan fan=2 rpm=1662 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=84.0 board_c=54.0 age_ms=365 fresh=1 valid=1 stopped=0 reason=ok samples=2665 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=26157 utc=2026-10-07T03:12:23.4687839Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.1 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=111.3 power_avg_w=109.2
+fan fan=2 rpm=1662 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=54.0 age_ms=57 fresh=1 valid=1 stopped=0 reason=ok samples=2667 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=441 aperture_limit_mb=17592186044415
+t_ms=27889 utc=2026-10-07T03:12:25.2005305Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=85.9 gfx_mhz=1100 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=111.1 power_avg_w=109.6
+fan fan=2 rpm=1664 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=54.0 age_ms=786 fresh=1 valid=1 stopped=0 reason=ok samples=2668 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=441 aperture_limit_mb=17592186044415
+t_ms=29621 utc=2026-10-07T03:12:26.9321976Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=86.2 gfx_mhz=1000 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=102.1 power_avg_w=106.2
+fan fan=2 rpm=1714 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=54.0 age_ms=513 fresh=1 valid=1 stopped=0 reason=ok samples=2670 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=31352 utc=2026-10-07T03:12:28.6637781Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=86.2 gfx_mhz=900 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=97.6 power_avg_w=96.1
+fan fan=2 rpm=1716 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=54.5 age_ms=240 fresh=1 valid=1 stopped=0 reason=ok samples=2672 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=33130 utc=2026-10-07T03:12:30.4409392Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=86.2 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=92.8 power_avg_w=90.6
+fan fan=2 rpm=1668 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=54.5 age_ms=12 fresh=1 valid=1 stopped=0 reason=ok samples=2674 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=34862 utc=2026-10-07T03:12:32.1734263Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=86.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=93.1 power_avg_w=90.3
+fan fan=2 rpm=1714 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=54.5 age_ms=741 fresh=1 valid=1 stopped=0 reason=ok samples=2675 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=36593 utc=2026-10-07T03:12:33.9039986Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=86.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.8 power_avg_w=90.5
+fan fan=2 rpm=1673 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=54.5 age_ms=467 fresh=1 valid=1 stopped=0 reason=ok samples=2677 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=38324 utc=2026-10-07T03:12:35.6355134Z
+dpm version=0x000700D7 flags=0x23CB temperature_c=86.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=95.0 power_avg_w=90.6
+fan fan=2 rpm=1716 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=54.5 age_ms=193 fresh=1 valid=1 stopped=0 reason=ok samples=2679 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=40059 utc=2026-10-07T03:12:37.3701891Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.9 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=90.7 power_avg_w=90.4
+fan fan=2 rpm=1711 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=55.0 age_ms=916 fresh=1 valid=1 stopped=0 reason=ok samples=2680 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=41836 utc=2026-10-07T03:12:39.1484008Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.6 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=92.8 power_avg_w=90.5
+fan fan=2 rpm=1668 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.0 age_ms=665 fresh=1 valid=1 stopped=0 reason=ok samples=2682 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=43565 utc=2026-10-07T03:12:40.8765345Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.5 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.3 power_avg_w=90.7
+fan fan=2 rpm=1668 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.0 age_ms=339 fresh=1 valid=1 stopped=0 reason=ok samples=2684 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=452 aperture_limit_mb=17592186044415
+t_ms=45295 utc=2026-10-07T03:12:42.6065262Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.2 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.8 power_avg_w=90.5
+fan fan=2 rpm=1716 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.0 age_ms=12 fresh=1 valid=1 stopped=0 reason=ok samples=2686 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=47009 utc=2026-10-07T03:12:44.3202121Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=92.1 power_avg_w=90.8
+fan fan=2 rpm=1716 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.0 age_ms=698 fresh=1 valid=1 stopped=0 reason=ok samples=2687 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=48741 utc=2026-10-07T03:12:46.0519408Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.0 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=93.0 power_avg_w=90.7
+fan fan=2 rpm=1673 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.5 age_ms=386 fresh=1 valid=1 stopped=0 reason=ok samples=2689 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=50477 utc=2026-10-07T03:12:47.7890819Z
+dpm version=0x000700D7 flags=0x238B temperature_c=84.9 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.7 power_avg_w=90.7
+fan fan=2 rpm=1721 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.5 age_ms=87 fresh=1 valid=1 stopped=0 reason=ok samples=2691 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=52258 utc=2026-10-07T03:12:49.5698210Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=90.3 power_avg_w=90.4
+fan fan=2 rpm=1675 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=84.0 board_c=55.5 age_ms=865 fresh=1 valid=1 stopped=0 reason=ok samples=2692 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=54002 utc=2026-10-07T03:12:51.3138569Z
+dpm version=0x000700D7 flags=0x238B temperature_c=85.9 gfx_mhz=800 busy_pct=96.7 avg_pct=99.1 src=grbm submit_pct=100.0 power_w=91.9 power_avg_w=90.9
+fan fan=2 rpm=1716 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=85.0 board_c=55.5 age_ms=556 fresh=1 valid=1 stopped=0 reason=ok samples=2694 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=452 aperture_limit_mb=17592186044415
+t_ms=55733 utc=2026-10-07T03:12:53.0440125Z
+dpm version=0x000700D7 flags=0x238B temperature_c=86.2 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=92.3 power_avg_w=90.7
+fan fan=2 rpm=1671 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=56.0 age_ms=230 fresh=1 valid=1 stopped=0 reason=ok samples=2696 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=57471 utc=2026-10-07T03:12:54.7826555Z
+dpm version=0x000700D7 flags=0x238B temperature_c=86.8 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.9 power_avg_w=90.5
+fan fan=2 rpm=1724 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=56.0 age_ms=967 fresh=1 valid=1 stopped=0 reason=ok samples=2697 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=59201 utc=2026-10-07T03:12:56.5130469Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.0 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=93.4 power_avg_w=91.0
+fan fan=2 rpm=1673 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=86.0 board_c=56.0 age_ms=665 fresh=1 valid=1 stopped=0 reason=ok samples=2699 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=60930 utc=2026-10-07T03:12:58.2416371Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=86.4 power_avg_w=90.9
+fan fan=2 rpm=1716 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.0 age_ms=339 fresh=1 valid=1 stopped=0 reason=ok samples=2701 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=62720 utc=2026-10-07T03:13:00.0310400Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.0 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.5 power_avg_w=90.4
+fan fan=2 rpm=1668 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.0 age_ms=75 fresh=1 valid=1 stopped=0 reason=ok samples=2703 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=64451 utc=2026-10-07T03:13:01.7621250Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.1 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.9 power_avg_w=90.9
+fan fan=2 rpm=1719 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.0 age_ms=806 fresh=1 valid=1 stopped=0 reason=ok samples=2704 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=66179 utc=2026-10-07T03:13:03.4909064Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.2 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=90.6 power_avg_w=91.0
+fan fan=2 rpm=1675 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.5 age_ms=479 fresh=1 valid=1 stopped=0 reason=ok samples=2706 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=67910 utc=2026-10-07T03:13:05.2211186Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.0 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=93.3 power_avg_w=91.0
+fan fan=2 rpm=1724 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.5 age_ms=152 fresh=1 valid=1 stopped=0 reason=ok samples=2708 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=445 aperture_limit_mb=17592186044415
+t_ms=69634 utc=2026-10-07T03:13:06.9451222Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.5 gfx_mhz=800 busy_pct=100.0 avg_pct=99.9 src=grbm submit_pct=100.0 power_w=91.8 power_avg_w=90.8
+fan fan=2 rpm=1675 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.5 age_ms=849 fresh=1 valid=1 stopped=0 reason=ok samples=2709 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=503 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=448 aperture_limit_mb=17592186044415
+t_ms=71364 utc=2026-10-07T03:13:08.6753097Z
+dpm version=0x000700D7 flags=0x238B temperature_c=87.8 gfx_mhz=800 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=52.8 power_avg_w=82.9
+fan fan=2 rpm=1724 turning=1/5 answered=5/5 duty_pct=100 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=87.0 board_c=56.5 age_ms=559 fresh=1 valid=1 stopped=0 reason=ok samples=2711 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=430 local_limit_mb=8151 dedicated_mb=8151 aperture_resident_mb=439 aperture_limit_mb=17592186044415
+--- slow
+utc,cpu_mv,cores_mhz,cpu_c,gpu_now
+2026-10-07T03:11:59.1435673Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,1500 MHz at 919 mV (SMU 1500 MHz VID 100); 68.3 C; sets 5 keeps 0 cancels 5 reverts 0
+2026-10-07T03:12:07.8415012Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,1400 MHz at 899 mV (SMU 1400 MHz VID 104); 85.6 C; sets 5 keeps 0 cancels 5 reverts 0
+2026-10-07T03:12:18.2853376Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,1100 MHz at 840 mV (SMU 1100 MHz VID 113); 85.2 C; sets 5 keeps 0 cancels 5 reverts 0
+2026-10-07T03:12:28.7185599Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,900 MHz at 820 mV (SMU 900 MHz VID 116); 86.2 C; sets 5 keeps 0 cancels 5 reverts 0
+2026-10-07T03:12:37.4280838Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,800 MHz at 820 mV (SMU 800 MHz VID 116); 85.8 C; sets 5 keeps 0 cancels 5 reverts 0
+2026-10-07T03:12:47.8510862Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,800 MHz at 820 mV (SMU 800 MHz VID 116); 84.8 C; sets 5 keeps 0 cancels 5 reverts 0
+2026-10-07T03:12:58.2999973Z,806,1400 1400 1400 900 1400 1400 1400 900,85.3,800 MHz at 820 mV (SMU 800 MHz VID 116); 87.1 C; sets 5 keeps 0 cancels 5 reverts 0

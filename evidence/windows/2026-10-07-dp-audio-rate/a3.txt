@@ -1,0 +1,125 @@
+idle DMU.mmDCCG_AUDIO_DTO1_MODULE = 0x005BC read 0x005bc 005B8D80
+idle DMU.mmDCCG_AUDIO_DTO1_PHASE = 0x005B8 read 0x005b8 0003A980
+idle DMU.mmDCCG_AUDIO_DTO_SOURCE = 0x005AC read 0x005ac 00100010
+idle DMU.mmDCCG_GATE_DISABLE_CNTL = 0x004D0 read 0x004d0 00000000
+idle DMU.mmDCCG_GATE_DISABLE_CNTL2 = 0x004F0 read 0x004f0 00000000
+idle DMU.mmAZALIA_CONTROLLER_CLOCK_GATING = 0x0E208 read 0x0e208 00000001
+idle DMU.mmAZALIA_AUDIO_DTO = 0x0E20C read 0x0e20c 00640018
+idle DMU.mmAZALIA_AUDIO_DTO_CONTROL = 0x0E210 read 0x0e210 00000000
+idle DMU.mmAZALIA_SOCCLK_CONTROL = 0x0E214 read 0x0e214 00000001
+idle DMU.mmAZALIA_UNDERFLOW_FILLER_SAMPLE = 0x0E218 read 0x0e218 00000000
+idle DMU.mmAZALIA_DATA_DMA_CONTROL = 0x0E21C read 0x0e21c 0000000A
+idle DMU.mmAZALIA_BDL_DMA_CONTROL = 0x0E220 read 0x0e220 0000000A
+idle DMU.mmAZALIA_RIRB_AND_DP_CONTROL = 0x0E224 read 0x0e224 00000000
+idle DMU.mmAZALIA_CORB_DMA_CONTROL = 0x0E228 read 0x0e228 00000000
+bc250kmd_cli.exe : unknown command version
+At C:\BC250\tmp\a3-azalia-ctl.ps1:14 char:1
++ & $cli version 2>&1 | Select-Object -First 2
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (unknown command version:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+idle DMU.mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER = 0x0E244 read 0x0e244 00000000
+idle DMU.mmAZALIA_CYCLIC_BUFFER_SYNC = 0x0E248 read 0x0e248 00000000
+idle DMU.mmAZALIA_GLOBAL_CAPABILITIES = 0x0E24C read 0x0e24c 00000000
+idle DMU.mmAZALIA_OUTPUT_PAYLOAD_CAPABILITY = 0x0E250 read 0x0e250 00000080
+idle DMU.mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL = 0x0E254 read 0x0e254 00080008
+idle DMU.mmDIO_MEM_PWR_STATUS = 0x14E74 read 0x14e74 00001410
+idle DMU.mmDIO_MEM_PWR_CTRL = 0x14E78 read 0x14e78 6DB6D800
+idle DMU.mmDIO_MEM_PWR_CTRL2 = 0x14E7C read 0x14e7c 00000000
+idle DMU.mmDIO_MEM_PWR_CTRL3 = 0x14E84 read 0x14e84 00000000
+idle DMU.mmDP0_SEC_CNTL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS)
+t48: PlaySync 26.970 s for 10.000 s of audio 
+play DMU.mmDCCG_AUDIO_DTO1_MODULE DCCG_AUDIO_DTO1_PHASE DCCG_AUDIO_DTO_SOURCE DCCG_GATE_DISABLE_CNTL DCCG_GATE_DISABLE_CNTL2 AZALIA_CONTROLLER_CLOCK_GATING AZALIA_AUDIO_DTO AZALIA_AUDIO_DTO_CONTROL AZALIA_SOCCLK_CONTROL AZALIA_UNDERFLOW_FILLER_SAMPLE AZALIA_DATA_DMA_CONTROL AZALIA_BDL_DMA_CONTROL AZALIA_RIRB_AND_DP_CONTROL AZALIA_CORB_DMA_CONTROL AZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER AZALIA_CYCLIC_BUFFER_SYNC AZALIA_GLOBAL_CAPABILITIES AZALIA_OUTPUT_PAYLOAD_CAPABILITY AZALIA_OUTPUT_STREAM_ARBITER_CONTROL DIO_MEM_PWR_STATUS DIO_MEM_PWR_CTRL DIO_MEM_PWR_CTRL2 DIO_MEM_PWR_CTRL3 DP0_SEC_CNTL is neither a hex offset nor a name on the driver's named read list (gen_regs.py EXTRA_READS)
+dpaudio observe: done, NTSTATUS 0x00000000 STATUS_SUCCESS, driver 0x000700D8, mmio mapped
+check table (now / unit A under Linux, M819 M820):
+  codec vendor/device          0x1002AA01 0x1002AA01   ok   start refuses on a difference
+  codec revision               0x00100700 0x00100700   ok   a note only
+  DC_PINSTRAPS                 0x00008000 AUDIO != 0   ok   DC_PINSTRAPS_AUDIO 2 (0 = no audio endpoint)
+  DP0_VID_STREAM_CNTL          0x00010201 enable 1     ok   DP_VID_STREAM_ENABLE 1
+  DP1_VID_STREAM_CNTL          0x00100200 enable 0     ok   DP_VID_STREAM_ENABLE 0
+  DIG0_BE_CNTL                 0x00000100 FE 1 mode 0  ok   FE_SOURCE_SELECT 0x01, DIG_MODE 0 (0 = DP SST)
+  DIG1_BE_CNTL                 0x00010000 (unused)     ok   FE_SOURCE_SELECT 0x00, DIG_MODE 1
+  HPD0_DC_HPD_INT_STATUS       0x00000012 sense 1      ok   DC_HPD_SENSE 1 (a note only)
+  HPD1_DC_HPD_INT_STATUS       0x00000000 (unused)     ok   DC_HPD_SENSE 0
+  endpoint 0 CONFIG_DEFAULT    0x185600F0 0x185600F0   ok   start refuses on a difference
+  endpoint 0 HOT_PLUG_CONTROL  0x80000000 (state)      ok   AUDIO_ENABLED 1, CLOCK_GATING_DISABLE 0
+  endpoint 1 CONFIG_DEFAULT    0x185600F0 0x185600F0   ok   start refuses on a difference
+  endpoint 1 HOT_PLUG_CONTROL  0x00000000 (state)      ok   AUDIO_ENABLED 0, CLOCK_GATING_DISABLE 0
+stream half (step 2 writes these; read only here):
+  DP0_SEC_CNTL 0x00001111: stream 1 asp 1 atp 1 aip 1; AUD_N 0x00008000 M_READBACK 0x00000AB4
+  DIG0_AFMT_CNTL 0x00000101: audio clock en 1 on 1; SRC_CONTROL 0x00000000 PACKET_CONTROL 0x00000801 (sample send 1)
+  DP1_SEC_CNTL 0x00000000: stream 0 asp 0 atp 0 aip 0; AUD_N 0x00008000 M_READBACK 0x00000000
+  DIG1_AFMT_CNTL 0x00000000: audio clock en 0 on 0; SRC_CONTROL 0x00000000 PACKET_CONTROL 0x04000800 (sample send 0)
+  DCCG_AUDIO_DTO_SOURCE 0x00100010 (DTO_SEL 1); DTO0 0/1; DTO1 240000/6000000
+  CLK4_CLK2_CURRENT_CNT        0x00001770 5000..7000   ok   600.0 MHz, DTO1 module 6000000
+decision now (the driver's Bc250DpAudioDecide over these reads): stream on and endpoint enabled; stream DP0, endpoint 0, notes  audio-enabled-inherited unsolicited-enabled
+raw slots (58 of 58 read):
+  R CODEC_VENDOR_DEVICE                1002AA01
+  R CODEC_REVISION                     00100700
+  R SUPPORTED_SIZE_RATES               00020070
+  R STREAM_FORMATS                     00000001
+  R POWER_STATES                       C0000009
+  R DC_PINSTRAPS                       00008000
+  R DTO_SOURCE                         00100010
+  R DTO0_PHASE                         00000000
+  R DTO0_MODULE                        00000001
+  R DTO1_PHASE                         0003A980
+  R DTO1_MODULE                        005B8D80
+  R DIG0_FE_CNTL                       01000000
+  R DIG0_BE_CNTL                       00000100
+  R DP0_VID_STREAM_CNTL                00010201
+  R DP0_SEC_CNTL                       00001111
+  R DP0_SEC_AUD_N                      00008000
+  R DP0_SEC_AUD_M_READBACK             00000AB4
+  R DP0_SEC_TIMESTAMP                  00000001
+  R DIG0_AFMT_CNTL                     00000101
+  R DIG0_AFMT_AUDIO_SRC_CONTROL        00000000
+  R DIG0_AFMT_AUDIO_PACKET_CONTROL     00000801
+  R DIG0_AFMT_AUDIO_PACKET_CONTROL2    00000300
+  R DIG0_AFMT_STATUS                   40000010
+  R HPD0_INT_STATUS                    00000012
+  R DIG1_FE_CNTL                       00000000
+  R DIG1_BE_CNTL                       00010000
+  R DP1_VID_STREAM_CNTL                00100200
+  R DP1_SEC_CNTL                       00000000
+  R DP1_SEC_AUD_N                      00008000
+  R DP1_SEC_AUD_M_READBACK             00000000
+  R DP1_SEC_TIMESTAMP                  00000000
+  R DIG1_AFMT_CNTL                     00000000
+  R DIG1_AFMT_AUDIO_SRC_CONTROL        00000000
+  R DIG1_AFMT_AUDIO_PACKET_CONTROL     04000800
+  R DIG1_AFMT_AUDIO_PACKET_CONTROL2    00000000
+  R DIG1_AFMT_STATUS                   00000000
+  R HPD1_INT_STATUS                    00000000
+  R EP0_CONFIG_DEFAULT                 185600F0
+  R EP0_HOT_PLUG_CONTROL               80000000
+  R EP0_PIN_SENSE                      7FFFFFFF
+  R EP0_UNSOLICITED_RESPONSE           00000080
+  R EP0_WIDGET_CONTROL                 00000040
+  R EP0_CHANNEL_SPEAKER                00020001
+  R EP0_AUDIO_DESCRIPTOR0              07010701
+  R EP0_SINK_INFO1                     0000000A
+  R EP1_CONFIG_DEFAULT                 185600F0
+  R EP1_HOT_PLUG_CONTROL               00000000
+  R EP1_PIN_SENSE                      7FFFFFFF
+  R EP1_UNSOLICITED_RESPONSE           00000081
+  R EP1_WIDGET_CONTROL                 00000000
+  R EP1_CHANNEL_SPEAKER                00000000
+  R EP1_AUDIO_DESCRIPTOR0              07010701
+  R EP1_SINK_INFO1                     00000000
+  R REFCLK_COUNT                       00001770
+  R DIG0_AFMT_INFOFRAME_CONTROL0       00000000
+  R DIG0_AFMT_60958_0                  00000000
+  R DIG1_AFMT_INFOFRAME_CONTROL0       00000000
+  R DIG1_AFMT_60958_0                  00000000
+record of the last start:
+  state enabled, reason: stream on and endpoint enabled
+  stream DP0, endpoint 0, notes  unsolicited-enabled
+  switches EnableDpAudio 1, EnableDpAudioEndpoint 1, EnableDpAudioStream 1 (default 1)
+  codec 0x1002AA01, config default 0x185600F0, HOT_PLUG_CONTROL 0x00000000 -> 0x80000000, last NTSTATUS 0x00000000
+  starts 1 resumes 0 stops 0 refusals 0 failures 0 path-on 0 path-off 0
+  accesses: indirect reads 41, indirect writes 31, direct writes 19, refused by the tables 0
+  stream on, step NONE, NTSTATUS 0x00000000; on 1 off 0 undone 0
+  reference clock 6000 (100 kHz units), DTO1 module 6000000 phase 240000, DTO_SOURCE 0x00100010
+  read back: DP_SEC_CNTL 0x00001111 AFMT_CNTL 0x00000101 PACKET_CONTROL 0x04000801 PACKET_CONTROL2 0x00000300

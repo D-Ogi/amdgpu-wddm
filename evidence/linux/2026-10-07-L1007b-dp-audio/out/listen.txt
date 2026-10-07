@@ -1,0 +1,27 @@
+
+speaker-test 1.2.15.2
+
+Playback device is hw:0,3
+Stream parameters are 48000Hz, S16_LE, 2 channels
+Sine wave rate is 1000.0000Hz
+Rate set to 48000Hz (requested 48000Hz)
+Buffer size range from 64 to 1048576
+Period size range from 32 to 524288
+Periods = 4
+was set period_size = 12000
+was set buffer_size = 48000
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 4.991441
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 5.988742
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 5.988745
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 5.988743
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 5.988737

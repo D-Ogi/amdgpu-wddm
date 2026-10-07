@@ -1,0 +1,1 @@
+Playing WAVE '/media/usb/l1007b/out/t48000.wav' : Signed 16 bit Little Endian, Rate 48000 Hz, Stereo
