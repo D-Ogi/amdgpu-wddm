@@ -13,6 +13,13 @@
 # of DirectFlipFront (absent, 0, a wrong type, on, the D3D10 entry point, a device created at the D3D10.0 interface,
 # the CPU route, and the front over the real hosted UMD). 80 scenarios, 0 failed on 2026-10-06.
 #
+# M15.14 increment 2 adds front-answer: the front over the double, with surfaces it recorded through its own
+# CreateResource and OpenResource hooks and the scan-out caps trailer in the adapter query. The pair the lab passes
+# is answered TRUE, and seven negative controls each turn it FALSE under the clause they name (no trailer, the flag
+# clear, the source mode moved, no SCANOUT bit, a v2 record, two pitches, a destroyed client). front-on keeps the
+# FALSE of a start without the trailer. 82 scenarios, 0 failed on 2026-10-07 with the tester.20 hosted UMD, CPU UMD
+# and D3D11 package.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(

@@ -26,7 +26,8 @@
 //                   object exists. 43 entries.
 //   a real body     pfnDiscard (a no-op: there is nothing to discard below), pfnAssignDebugBinary (a
 //                   no-op), pfnCheckDeferredContextHandleSizes (zero sizes), pfnClearView (amendment 4)
-//                   and pfnCheckDirectFlipSupport (the point of the increment). 5 entries;
+//                   and pfnCheckDirectFlipSupport (the point of the increment; from increment 2 it
+//                   writes the rule's own answer). 5 entries;
 //                   pfnRelocateDeviceFuncs, which re-fills the moved table from the front's own copy of
 //                   the hosted one, is counted with the thunks because it is one of the 32 the gate names.
 //
@@ -314,7 +315,10 @@ bool FillCreatedResource(const D3D11DDIARG_CREATERESOURCE *args, Resource *out)
         out->width = args->pMipInfoList[0].TexelWidth;
         out->height = args->pMipInfoList[0].TexelHeight;
     }
-    out->pitch = 0;  // the kernel driver chooses it; see front-resource.h
+    // The pitch the hosted driver will give this surface when it allocates it (HostedSurfacePitch). A
+    // format with no row in the shared table keeps 0, which the rule refuses as pitch-unknown.
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = amdgpu_wddm_surface_format_by_dxgi(out->format);
+    out->pitch = row ? HostedSurfacePitch(out->width, row->bytes_per_pixel) : 0u;
     out->vidpn_source = args->pPrimaryDesc ? (unsigned int)args->pPrimaryDesc->VidPnSourceId
                                            : BC250_SCANOUT_VIDPN_SOURCE;
     out->record.Magic = BC250_SURFACE_RESOURCE_MAGIC;
@@ -762,26 +766,39 @@ VOID APIENTRY ClearView(D3D10DDI_HDEVICE hDevice, D3D11DDI_HANDLETYPE viewType, 
     }
 }
 
-// The entry this whole increment exists for. It counts the call, logs both resource identities and both
-// geometries and the rule's verdict, and then writes FALSE.
+// The entry this whole increment exists for. It counts the call, reads the kernel driver's scan-out caps
+// trailer, applies the rule of front-direct-flip.h and writes its answer: TRUE exactly when every clause
+// holds. One log line carries the answer, the rule's word, the trailer's flag and source geometry, and
+// both surfaces with their geometry, pitch, format and record.
 //
-// Why FALSE and not the rule's answer: the kernel driver's scan-out caps trailer is not read here yet, no
-// surface in the system sets the E26R SCANOUT bit yet, and a wrong TRUE is not a lost optimisation but a
-// blank output the operating system does not recover from (front-direct-flip.h, F19). Increment 2 reads
-// the trailer, turns the answer into the rule's answer, and keeps this log line as its witness.
+// The trailer is read again for every call and never latched. The runtime asks at least once before the
+// compositor presents to a DirectFlip swap chain, again after each mode change and after the compositor
+// re-creates its own swap chain (ref/ddi-display/d3d10umddi.md:8781), so this is not a per-frame cost, and a
+// fresh read is what lets the geometry clause follow the source mode the kernel driver admits now rather
+// than the one of the adapter open. A failed read leaves the trailer zero, which the rule's first clause
+// answers "gated": the answer is then the one this stack gave before M15.14.
+//
+// The switches are the existing two. `DirectFlipFront` 0 removes the front, and with it this entry, from the
+// compositor's device altogether (router.cpp). `EnableDirectFlipHandshake` 0 in the kernel driver, or any
+// closed flip-path gate behind it, writes no trailer, and the rule answers "gated". There is no third
+// switch: a TRUE needs both, and each one alone returns the desktop to composition.
+//
+// Why a TRUE is safe to give: the kernel driver re-derives the format, the geometry, the pitch, the size,
+// the segment and the 4 KiB base at every SetVidPnSourceAddress (scanout_admit.h), and the rule here asks
+// the same questions first from the same words, so that the only clauses left to refuse a flip after a TRUE
+// are the base address and the segment, which VidMm decides for an allocation it pinned to scan out. A
+// wrong TRUE is not a lost optimisation: after SharedPrimaryTransition the operating system does not fall
+// back to composition (F19, front-direct-flip.h).
 VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE hResource1,
                                      D3D10DDI_HRESOURCE hResource2, UINT checkFlags, BOOL *supported)
 {
     if (supported) *supported = FALSE;  // before anything that could fail
     FRONT_DEVICE(hDevice, )
     const LONG call = InterlockedIncrement(&dev->direct_flip_calls);
-    // The two causes of a FALSE must not print the same word, because reading that word is what increment 1
-    // is for. `handle` is the operating system passing a null handle or the same surface twice; `record` is
-    // the front never having seen this surface (FindResource misses, so the struct stays zeroed and
-    // `recorded` is false). Both structs are therefore passed whenever the handles themselves are sound.
-    //   In increment 1 the caps trailer is zeroed, so the rule stops one clause earlier, at `gated`, and the
-    // `recorded=` field of the line below is what says whether the front knew the surface. `record` becomes
-    // the printed word in increment 2, where the clause before it can pass.
+    // The two causes of a FALSE must not print the same word. `handle` is the operating system passing a
+    // null handle or the same surface twice; `record` is the front never having seen this surface
+    // (FindResource misses, so the struct stays zeroed and `recorded` is false). Both structs are therefore
+    // passed whenever the handles themselves are sound.
     Resource client_record, compositor_record;
     const bool found_client = FindResource(hResource1.pDrvPrivate, &client_record);
     const bool found_compositor = FindResource(hResource2.pDrvPrivate, &compositor_record);
@@ -789,25 +806,25 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
                              hResource1.pDrvPrivate == hResource2.pDrvPrivate;
     const Resource *client = bad_handles ? nullptr : &client_record;
     const Resource *compositor = bad_handles ? nullptr : &compositor_record;
-    // Increment 1 holds no caps trailer, so the rule is computed against a zeroed one and its first
-    // clause answers "gated". The two record shapes are logged all the same: they are what decides
-    // whether increment 2 can ever answer TRUE.
     bc250_scanout_caps caps;
-    ZeroMemory(&caps, sizeof(caps));
-    FlipRefusal reason = FlipReason(caps, client, compositor);
-    // A rule that said "supported" and an answer of FALSE is exactly what FlipRefusal::forced_false names,
-    // and the log must say that rather than "supported" next to answer=0.
-    if (reason == FlipRefusal::none) reason = FlipRefusal::forced_false;
+    const HRESULT query = ReadScanoutCaps(dev->adapter, &caps);
+    const FlipRefusal reason = FlipReason(caps, client, compositor);
+    const bool answer = reason == FlipRefusal::none;
+    if (answer) InterlockedIncrement(&dev->direct_flip_true);
+    if (supported) *supported = answer ? TRUE : FALSE;
     // The log is bounded: the compositor asks at least once per swap-chain creation and after every mode
-    // change, and a flood would cost more than it tells. The counters above are never bounded.
-    if (InterlockedIncrement(&dev->direct_flip_logged) <= 64)
+    // change, and a flood would cost more than it tells. The counters above are never bounded, and the
+    // device's destroy line prints them.
+    if (InterlockedIncrement(&dev->direct_flip_logged) <= 256)
         LogPrintf(dev->adapter ? &dev->adapter->log : nullptr,
-                  "bc250d3d_front check_direct_flip call=%ld flags=%08x answer=0 rule=%s "
+                  "bc250d3d_front check_direct_flip call=%ld flags=%08x answer=%u rule=%s "
+                  "caps_query=%08lx caps_flags=%08x source=%ux%u "
                   "client=%p recorded=%u opened=%u primary=%u shared=%u %ux%u pitch=%u fmt=%u "
                   "record_v=%lu record_access=%lu "
                   "compositor=%p recorded=%u opened=%u primary=%u shared=%u %ux%u pitch=%u fmt=%u "
                   "record_v=%lu record_access=%lu\n",
-                  call, checkFlags, FlipRefusalText(reason), hResource1.pDrvPrivate,
+                  call, checkFlags, answer ? 1u : 0u, FlipRefusalText(reason), (unsigned long)query,
+                  caps.flags, caps.post_width, caps.post_height, hResource1.pDrvPrivate,
                   found_client ? 1u : 0u, client && client->opened ? 1u : 0u,
                   client && client->primary ? 1u : 0u, client && client->shared ? 1u : 0u,
                   client ? client->width : 0u, client ? client->height : 0u, client ? client->pitch : 0u,

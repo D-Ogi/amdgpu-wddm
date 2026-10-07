@@ -12,12 +12,12 @@
 // pipeline cannot reach, and answers the DirectFlip question itself. The hosted driver is not rebuilt
 // and not changed: `bc250d3d_zink.dll` stays the binary that was measured to render this desktop.
 //
-// WHAT INCREMENT 1 DOES AND DOES NOT DO. `pfnCheckDirectFlipSupport` counts the call, logs both resource
-// identities and both geometries, computes the rule of `front-direct-flip.h` for the record, and then
-// writes FALSE. Nothing else changes: no allocation moves, no placement changes, the kernel driver is
-// not called. The increment exists to find out whether the operating system asks a device whose 3D
-// pipeline level is 10_0, and whether the desktop survives the raised DDI. The answer becomes the rule's
-// answer in increment 2, behind the kernel driver's own caps flag.
+// WHAT THE ANSWER IS. Increment 1 computed the rule of `front-direct-flip.h` for its log line and then
+// wrote FALSE. From increment 2 `pfnCheckDirectFlipSupport` writes the rule's own answer: it reads the
+// kernel driver's scan-out caps trailer through the adapter query at every call (`ReadScanoutCaps`), and
+// the rule's first clause refuses unless that trailer says this adapter start admits a client flip. The
+// front moves no allocation and changes no placement; a TRUE only lets the operating system try the
+// flip, and the kernel driver re-derives every fact behind it at SetVidPnSourceAddress.
 //
 // HOW THE FRONT IS REACHED. `DirectFlipFront`, a REG_DWORD under the router's `DesktopRouter` key.
 // An absent value means on from 0.7.213.100-tester.15, where the front became a shipped feature. Zero
@@ -43,6 +43,7 @@
 #include <d3d11.h>
 #include <d3d10umddi.h>
 #pragma warning(pop)
+#include "../../contract/bc250_scanout_caps.h"
 
 namespace bc250front {
 
@@ -70,7 +71,23 @@ struct Adapter {
     SIZE_T hosted_device_size;
     unsigned int size_version, size_flags;
     volatile LONG size_valid;
+    // The runtime's adapter query, kept from OpenAdapter for the scan-out caps trailer (M15.14 increment
+    // 2). The runtime's adapter handle and its callback stay valid until CloseAdapter. Null when the
+    // runtime passed no callback table: every read then answers with a zero trailer.
+    D3D10DDI_HRTADAPTER rt_adapter;
+    PFND3DDDI_QUERYADAPTERINFOCB query_adapter_info;
 };
+
+// M15.14 increment 2: the kernel driver's scan-out caps trailer, read now. The buffer is sized
+// BC250_SCANOUT_CAPS_TOTAL, because the kernel driver writes the trailer only into a buffer that holds all
+// of it (driver/contract/bc250_scanout_caps.h). `*caps` is zeroed first and stays zero unless the query
+// succeeded and every header field of the trailer is right (magic, version, size, a non-zero geometry), so
+// a kernel driver without the trailer, a closed switch, a failed query and a torn trailer all read as the
+// same zero, which the rule answers "gated". Returns the query's HRESULT, for the log; E_POINTER when
+// there is no adapter or no callback.
+HRESULT ReadScanoutCaps(const Adapter *adapter, bc250_scanout_caps *caps);
+// The decode alone, for the host gate: the trailer of a zero-initialized query buffer of `bytes` bytes.
+void DecodeScanoutCaps(const unsigned char *data, size_t bytes, bc250_scanout_caps *caps);
 
 // Per-device record, in the runtime's device private block after the hosted driver's block.
 struct Device {

@@ -118,6 +118,40 @@ void CreateFailed(Device *device)
     device->um->pfnSetErrorCb(device->hRTCoreLayer, E_OUTOFMEMORY);
 }
 
+// ---------------------------------------------------------------- the scan-out caps trailer
+
+void DecodeScanoutCaps(const unsigned char *data, size_t bytes, bc250_scanout_caps *caps)
+{
+    if (!caps) return;
+    ZeroMemory(caps, sizeof(*caps));
+    if (!data || bytes < BC250_SCANOUT_CAPS_TOTAL) return;
+    bc250_scanout_caps read;
+    memcpy(&read, data + BC250_SCANOUT_CAPS_OFFSET, sizeof(read));
+    // Every header field, and a geometry: a trailer without one cannot be held against a surface, and the
+    // kernel driver writes the trailer whole or not at all.
+    if (read.magic != BC250_SCANOUT_CAPS_MAGIC || read.version != BC250_SCANOUT_CAPS_VERSION ||
+        read.size != sizeof(read) || !read.post_width || !read.post_height)
+        return;
+    *caps = read;
+}
+
+HRESULT ReadScanoutCaps(const Adapter *adapter, bc250_scanout_caps *caps)
+{
+    if (caps) ZeroMemory(caps, sizeof(*caps));
+    if (!adapter || !caps || !adapter->query_adapter_info || !adapter->rt_adapter.handle) return E_POINTER;
+    // Zero-initialized: an older kernel driver writes only the prefix it knows and leaves the rest alone.
+    unsigned char data[BC250_SCANOUT_CAPS_TOTAL];
+    ZeroMemory(data, sizeof(data));
+    D3DDDICB_QUERYADAPTERINFO request;
+    ZeroMemory(&request, sizeof(request));
+    request.pPrivateDriverData = data;
+    request.PrivateDriverDataSize = sizeof(data);
+    const HRESULT hr = adapter->query_adapter_info(adapter->rt_adapter.handle, &request);
+    if (FAILED(hr)) return hr;
+    DecodeScanoutCaps(data, sizeof(data), caps);
+    return hr;
+}
+
 // ---------------------------------------------------------------- the device lookup
 
 Device *DeviceOf(D3D10DDI_HDEVICE device)
@@ -499,6 +533,9 @@ Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, co
         ZeroMemory(&Adapters[i], sizeof(Adapters[i]));
         Adapters[i].hosted_adapter = args->hAdapter.pDrvPrivate;
         Adapters[i].hosted = hosted;
+        Adapters[i].rt_adapter = args->hRTAdapter;
+        Adapters[i].query_adapter_info =
+            args->pAdapterCallbacks ? args->pAdapterCallbacks->pfnQueryAdapterInfoCb : nullptr;
         if (log_directory) wcsncpy_s(Adapters[i].log.directory, log_directory, _TRUNCATE);
         if (exe) wcsncpy_s(Adapters[i].log.exe, exe, _TRUNCATE);
         AdapterUsed[i] = true;
@@ -517,8 +554,15 @@ Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, co
     args->pAdapterFuncs_2->pfnCloseAdapter = CloseAdapter;
     args->pAdapterFuncs_2->pfnGetSupportedVersions = GetSupportedVersions;
     args->pAdapterFuncs_2->pfnGetCaps = GetCaps;
-    LogPrintf(&adapter->log, "bc250d3d_front installed adapter=%p interface=%08x version=%08x\n",
-              args->hAdapter.pDrvPrivate, args->Interface, args->Version);
+    // The trailer as this adapter open sees it, for the log alone: the answer reads it again at every
+    // question. A failed read changes nothing here.
+    bc250_scanout_caps caps;
+    const HRESULT query = ReadScanoutCaps(adapter, &caps);
+    LogPrintf(&adapter->log,
+              "bc250d3d_front installed adapter=%p interface=%08x version=%08x caps_query=%08lx "
+              "caps_flags=%08x source=%ux%u\n",
+              args->hAdapter.pDrvPrivate, args->Interface, args->Version, (unsigned long)query, caps.flags,
+              caps.post_width, caps.post_height);
     return adapter;
 }
 

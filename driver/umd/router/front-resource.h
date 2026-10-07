@@ -46,10 +46,10 @@ struct Resource {
     bool shared;          // the create asked for a shared surface, or the record says so
     unsigned int vidpn_source;
     unsigned int width, height;
-    // 0 means "not known here". An opened surface carries its pitch in the LB7A blob the kernel driver
-    // wrote; a surface this device created does not, because the kernel driver chooses the pitch at
-    // CreateAllocation and nothing hands it back to user mode. front-direct-flip.h refuses an unknown
-    // pitch under its own name rather than guessing one.
+    // 0 means "not known here". An opened surface carries its pitch in the LB7A blob its creator wrote. A
+    // surface this device created gets the pitch the hosted driver gives every surface it allocates
+    // itself (HostedSurfacePitch below), or 0 for a format with no row in the shared table.
+    // front-direct-flip.h refuses an unknown pitch under its own name rather than guessing one.
     unsigned int pitch;
     unsigned int format;  // DXGI_FORMAT of the storage
     // The E26R record. At open it is the one the creator wrote, decoded from the open arguments and
@@ -84,6 +84,25 @@ inline bool DecodeRecord(const void *data, unsigned int bytes, BC250_SURFACE_RES
     out->Shared = (unsigned long)(shared ? 1 : 0);
     out->Access = access;
     return true;
+}
+
+// M15.14 increment 2: the byte pitch of a surface the hosted driver allocates itself, which is the
+// compositor's side of a DirectFlip pair. The front never sees that allocation: the hosted driver makes it
+// later, at the first Present or SetDisplayMode, and writes the pitch into its own LB7A blob
+// (mesa-wddm amdgpu-wddm/b19-hosted-umd 7eb7861d and amdgpu-wddm/hang-recovery-zink ea876500,
+// src/gallium/frontends/d3d10umd/DxgiFns.cpp, Bc250EnsureSurface: the row in bytes rounded up to 256).
+// The rule is this one line in that driver, so the front applies the same line instead of guessing. It
+// equals the kernel driver's own primary pitch for a 4-byte row (DcnPrimaryPitch rounds the width up to
+// 64 pixels), and a client that pins its scan-out pitch to the same rule (the D3D12 shell's
+// scanout_row_pitch) meets it. A mismatch is not a hazard at the plane, because the kernel driver
+// programs the address and the pitch of every flip from the flipped allocation's own description; the
+// clause keeps the pair the narrowest one that can be true of both surfaces. 0 for a width or a row size
+// that does not give a pitch.
+inline unsigned int HostedSurfacePitch(unsigned int width, unsigned int bytes_per_pixel)
+{
+    const unsigned long long row = (unsigned long long)width * bytes_per_pixel;
+    if (!width || !bytes_per_pixel || row > 0xFFFFFF00ull) return 0u;
+    return (unsigned int)((row + 255ull) & ~255ull);
 }
 
 // The LB7A allocation blob the kernel driver wrote, which is where an opened surface's geometry is. The

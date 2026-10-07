@@ -252,6 +252,13 @@ static void OverrideHklm()
 
 enum class Query { Trailer, NoTrailer, Fail, BadVersion, ZeroLuid, BadReserved };
 static Query QueryMode = Query::Trailer;
+// M15.14 increment 2: the scan-out caps trailer the double writes behind the identity, as the kernel driver
+// does when EnableDirectFlipHandshake and every flip-path gate are on. Off (all zero) by default, which is
+// what a kernel driver without the trailer and a start with the switch off both write. A scenario sets the
+// three fields; ScanoutFlags 0 with a geometry is the torn shape a reader must refuse as well.
+static bool ScanoutTrailer;
+static unsigned ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+static unsigned ScanoutWidth, ScanoutHeight;
 static UINT64 QueryLuid = 0x0000000100002A5FULL;
 static unsigned QueryCalls;
 static UINT QuerySize;
@@ -280,6 +287,12 @@ static HRESULT APIENTRY FakeQueryAdapterInfo(HANDLE adapter, const D3DDDICB_QUER
     if (QueryMode == Query::ZeroLuid) t.luid_low = t.luid_high = 0;
     if (QueryMode == Query::BadReserved) t.reserved = 1;
     memcpy((BYTE *)q->pPrivateDriverData + BC250_ADAPTER_IDENTITY_OFFSET, &t, sizeof(t));
+    // Whole or not at all, and only into a buffer that holds all of it (driver/kmd/wddm.c).
+    if (ScanoutTrailer && q->PrivateDriverDataSize >= BC250_SCANOUT_CAPS_TOTAL) {
+        bc250_scanout_caps c = {BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION, sizeof(c), ScanoutFlags,
+                                ScanoutWidth, ScanoutHeight};
+        memcpy((BYTE *)q->pPrivateDriverData + BC250_SCANOUT_CAPS_OFFSET, &c, sizeof(c));
+    }
     return S_OK;
 }
 
@@ -818,10 +831,22 @@ static void FrontRuleTests()
         run(c, &client, &compositor, FlipRefusal::gated, "the kernel driver published no DirectFlip");
         c = caps;
         c.post_width = 1280;
-        run(c, &client, &compositor, FlipRefusal::post_geometry, "a POST mode of another width");
+        run(c, &client, &compositor, FlipRefusal::source_geometry, "a source mode of another width");
         c = caps;
         c.post_height = 720;
-        run(c, &client, &compositor, FlipRefusal::post_geometry, "a POST mode of another height");
+        run(c, &client, &compositor, FlipRefusal::source_geometry, "a source mode of another height");
+        // No mode is built into the rule: the same pair at 1280x720 passes against a trailer that says
+        // 1280x720, and the 1920x1200 POST mode of this lab is only one value of the trailer.
+        Resource lowRes = client, lowResCompositor = compositor;
+        lowRes.width = lowResCompositor.width = 1280;
+        lowRes.height = lowResCompositor.height = 720;
+        lowRes.pitch = lowResCompositor.pitch = HostedSurfacePitch(1280, 4);
+        c = caps;
+        c.post_width = 1280;
+        c.post_height = 720;
+        run(c, &lowRes, &lowResCompositor, FlipRefusal::none, "a 1280x720 pair against a 1280x720 source mode");
+        run(caps, &lowRes, &lowResCompositor, FlipRefusal::source_geometry,
+            "a 1280x720 pair against a 1920x1080 source mode");
     }
     {
         Resource a = client;
@@ -886,7 +911,54 @@ static void FrontRuleTests()
     // Every refusal has a name, including one the enum does not define.
     CHECK(!strcmp(FlipRefusalText(FlipRefusal::none), "supported"), "FlipRefusalText(none)");
     CHECK(!strcmp(FlipRefusalText((FlipRefusal)99), "unknown"), "FlipRefusalText of an unknown value");
-    CHECK(!strcmp(FlipRefusalText(FlipRefusal::forced_false), "forced-false"), "FlipRefusalText(forced_false)");
+    CHECK(!strcmp(FlipRefusalText(FlipRefusal::source_geometry), "source-geometry"),
+          "FlipRefusalText(source_geometry)");
+
+    // The compositor's pitch: the hosted driver's own line (the row in bytes rounded up to 256), and the
+    // kernel driver's primary pitch for a 4-byte row. 1920 and 1280 are already whole multiples; 1366 is not.
+    CHECK(HostedSurfacePitch(1920, 4) == 7680, "HostedSurfacePitch(1920, 4) = %u", HostedSurfacePitch(1920, 4));
+    CHECK(HostedSurfacePitch(1280, 4) == 5120, "HostedSurfacePitch(1280, 4) = %u", HostedSurfacePitch(1280, 4));
+    CHECK(HostedSurfacePitch(1366, 4) == 5632, "HostedSurfacePitch(1366, 4) = %u", HostedSurfacePitch(1366, 4));
+    CHECK(HostedSurfacePitch(1, 4) == 256, "HostedSurfacePitch(1, 4) = %u", HostedSurfacePitch(1, 4));
+    CHECK(HostedSurfacePitch(1920, 8) == 15360, "HostedSurfacePitch(1920, 8) = %u", HostedSurfacePitch(1920, 8));
+    CHECK(HostedSurfacePitch(0, 4) == 0 && HostedSurfacePitch(1920, 0) == 0 &&
+          HostedSurfacePitch(0x7FFFFFFFu, 4) == 0, "HostedSurfacePitch of no row is not 0");
+
+    // The trailer decode. The negative controls first: each one is a reader that must see zeros.
+    unsigned char buffer[BC250_SCANOUT_CAPS_TOTAL];
+    bc250_scanout_caps read;
+    const bc250_scanout_caps good = {BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION, sizeof(good),
+                                     BC250_SCANOUT_CAPS_DIRECT_FLIP, 2560, 1440};
+    auto decoded = [&](const bc250_scanout_caps &trailer, size_t bytes) {
+        memset(buffer, 0, sizeof(buffer));
+        memcpy(buffer + BC250_SCANOUT_CAPS_OFFSET, &trailer, sizeof(trailer));
+        memset(&read, 0xA5, sizeof(read));
+        DecodeScanoutCaps(buffer, bytes, &read);
+        return read;
+    };
+    auto zero = [](const bc250_scanout_caps &c) {
+        return !c.magic && !c.version && !c.size && !c.flags && !c.post_width && !c.post_height;
+    };
+    CHECK(decoded(good, sizeof(buffer)).post_width == 2560 && read.post_height == 1440 &&
+          read.flags == BC250_SCANOUT_CAPS_DIRECT_FLIP, "a whole trailer did not decode");
+    CHECK(zero(decoded(good, sizeof(buffer) - 1)), "a buffer one byte short of the trailer decoded");
+    bc250_scanout_caps torn = good;
+    torn.magic = 0;
+    CHECK(zero(decoded(torn, sizeof(buffer))), "a trailer with no magic decoded");
+    torn = good;
+    torn.version = BC250_SCANOUT_CAPS_VERSION + 1;
+    CHECK(zero(decoded(torn, sizeof(buffer))), "a trailer of another version decoded");
+    torn = good;
+    torn.size = sizeof(torn) + 4;
+    CHECK(zero(decoded(torn, sizeof(buffer))), "a trailer of another size decoded");
+    torn = good;
+    torn.post_height = 0;
+    CHECK(zero(decoded(torn, sizeof(buffer))), "a trailer with no geometry decoded");
+    memset(&read, 0xA5, sizeof(read));
+    DecodeScanoutCaps(nullptr, sizeof(buffer), &read);
+    CHECK(zero(read), "a null buffer decoded");
+    // And the read through the adapter: no adapter, or one without a callback, is E_POINTER and zero.
+    CHECK(ReadScanoutCaps(nullptr, &read) == E_POINTER && zero(read), "a read with no adapter");
 }
 
 // ---------------------------------------------------------------- the records and the resource map (pure)
@@ -1012,6 +1084,176 @@ static void FrontRecordTests()
 }
 
 // ---------------------------------------------------------------- scenarios
+
+// ---------------------------------------------------------------- M15.14 increment 2: the answer, end to end
+
+// The front over the double, with surfaces the front recorded through its own CreateResource and
+// OpenResource hooks, and the kernel driver's scan-out caps trailer in the adapter query. The positive case
+// is the pair the operating system passes on the lab: hResource1 the application's swap-chain buffer opened
+// into the compositor's device (LB7A blob plus an E26R v3 record with PRIMARY and SCANOUT, as the D3D12 shell
+// writes it), hResource2 the compositor's own primary (a create with a primary descriptor). Each negative
+// control changes one input and must turn the answer FALSE under the clause it names.
+static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDEVICE hDevice,
+                              const char *(*record)(void), void (*recordReset)(void))
+{
+    using namespace bc250front;
+    const unsigned width = 1920, height = 1200;
+    // The compositor's own front buffer.
+    D3D10DDI_MIPINFO mip = {};
+    mip.TexelWidth = width;
+    mip.TexelHeight = height;
+    mip.TexelDepth = 1;
+    mip.PhysicalWidth = width;
+    mip.PhysicalHeight = height;
+    mip.PhysicalDepth = 1;
+    DXGI_DDI_PRIMARY_DESC primary = {};
+    primary.VidPnSourceId = 0;
+    primary.ModeDesc.Width = width;
+    primary.ModeDesc.Height = height;
+    primary.ModeDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    D3D11DDIARG_CREATERESOURCE create = {};
+    create.pMipInfoList = &mip;
+    create.ResourceDimension = D3D10DDIRESOURCE_TEXTURE2D;
+    create.Usage = D3D10_DDI_USAGE_DEFAULT;
+    create.BindFlags = D3D10_DDI_BIND_RENDER_TARGET | D3D10_DDI_BIND_PRESENT;
+    create.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    create.SampleDesc.Count = 1;
+    create.MipLevels = 1;
+    create.ArraySize = 1;
+    create.pPrimaryDesc = &primary;
+    D3D10DDI_HRESOURCE compositor, client, other;
+    compositor.pDrvPrivate = (void *)(UINT_PTR)0x41000000;
+    client.pDrvPrivate = (void *)(UINT_PTR)0x41000100;
+    other.pDrvPrivate = (void *)(UINT_PTR)0x41000200;
+    D3D10DDI_HRTRESOURCE rt = {};
+    recordReset();
+    device.pfnCreateResource(hDevice, &create, compositor, rt);
+    CHECK(strstr(record(), "create-resource") != nullptr, "CreateResource did not reach the hosted driver: %s",
+          record());
+    // The application's buffer, opened: the LB7A blob of its allocation and its E26R v3 resource record.
+    BC250_WDDM_ALLOCATION_PRIVATE lb7a = {};
+    lb7a.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
+    lb7a.Version = 1;
+    lb7a.Width = width;
+    lb7a.Height = height;
+    lb7a.Pitch = HostedSurfacePitch(width, 4);
+    lb7a.Format = D3DDDIFMT_A8R8G8B8;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    BC250_SURFACE_RESOURCE_PRIVATE e26r = {};
+    e26r.Magic = BC250_SURFACE_RESOURCE_MAGIC;
+    e26r.Version = BC250_SURFACE_RESOURCE_TEXTURE_VERSION;
+    e26r.Shared = 1;
+    e26r.Access = BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT;
+    e26r.Width = width;
+    e26r.Height = height;
+    e26r.MipLevels = 1;
+    e26r.ArraySize = 1;
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    e26r.SampleCount = 1;
+    D3DDDI_OPENALLOCATIONINFO allocation = {};
+    allocation.hAllocation = 0x1234;
+    allocation.pPrivateDriverData = &lb7a;
+    allocation.PrivateDriverDataSize = sizeof(lb7a);
+    D3D10DDIARG_OPENRESOURCE open = {};
+    open.NumAllocations = 1;
+    open.pOpenAllocationInfo = &allocation;
+    open.pPrivateDriverData = &e26r;
+    open.PrivateDriverDataSize = sizeof(e26r);
+    recordReset();
+    device.pfnOpenResource(hDevice, &open, client, rt);
+    CHECK(strstr(record(), "open-resource") != nullptr && strstr(record(), "private=64") != nullptr,
+          "OpenResource did not reach the hosted driver: %s", record());
+
+    const std::wstring logPath = Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                 std::to_wstring(GetCurrentProcessId()) + L".log";
+    auto ask = [&](D3D10DDI_HRESOURCE a, D3D10DDI_HRESOURCE b, UINT flags) {
+        BOOL supported = 2;
+        device.pfnCheckDirectFlipSupport(hDevice, a, b, flags, &supported);
+        CHECK(supported == TRUE || supported == FALSE, "CheckDirectFlipSupport wrote %d", supported);
+        return supported;
+    };
+    auto lastLine = [&]() {
+        const std::string log = ReadAll(logPath);
+        const size_t end = log.rfind("check_direct_flip");
+        return end == std::string::npos ? std::string() : log.substr(end, log.find('\n', end) - end);
+    };
+
+    // Negative control 1: no trailer at all (an older kernel driver, or EnableDirectFlipHandshake 0).
+    ScanoutTrailer = false;
+    CHECK(ask(client, compositor, 0) == FALSE, "TRUE with no scan-out caps trailer");
+    CHECK(Has(lastLine(), "answer=0 rule=gated"), "no trailer: %s", lastLine().c_str());
+    // Negative control 2: a trailer whose flag is clear. The kernel driver never writes this shape (it
+    // writes nothing while the switch is off), so a reader that keys on the magic alone would be wrong.
+    ScanoutTrailer = true;
+    ScanoutFlags = 0;
+    ScanoutWidth = width;
+    ScanoutHeight = height;
+    CHECK(ask(client, compositor, 0) == FALSE, "TRUE with the DirectFlip flag clear");
+    CHECK(Has(lastLine(), "answer=0 rule=gated"), "flag clear: %s", lastLine().c_str());
+
+    // The positive case: the trailer of a start that admits the flip, at this pair's geometry.
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    CHECK(ask(client, compositor, 0) == TRUE, "the admissible pair was refused: %s", lastLine().c_str());
+    const std::string yes = lastLine();
+    CHECK(Has(yes, "answer=1 rule=supported caps_query=00000000 caps_flags=00000001 source=1920x1200"),
+          "the TRUE line does not carry the answer, the rule and the source mode: %s", yes.c_str());
+    const std::string clientPart = "client=" + Ptr(0x41000100) +
+                                   " recorded=1 opened=1 primary=1 shared=1 1920x1200 pitch=7680 fmt=87 "
+                                   "record_v=3 record_access=5";
+    const std::string compositorPart = "compositor=" + Ptr(0x41000000) +
+                                       " recorded=1 opened=0 primary=1 shared=0 1920x1200 pitch=7680 fmt=87 "
+                                       "record_v=3 record_access=1";
+    CHECK(Has(yes, clientPart.c_str()), "the client's half of the line: %s", yes.c_str());
+    CHECK(Has(yes, compositorPart.c_str()), "the compositor's half of the line: %s", yes.c_str());
+    // IMMEDIATE changes nothing in the rule.
+    CHECK(ask(client, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "TRUE refused for IMMEDIATE");
+    // The pair the other way round is never a flip of the wrong buffer.
+    CHECK(ask(compositor, client, 0) == FALSE, "TRUE for the pair given the other way round");
+    CHECK(Has(lastLine(), "answer=0 rule=sides"), "reversed pair: %s", lastLine().c_str());
+
+    // Negative control 3: the source mode moved (a mode change the trailer reports at the next question).
+    // The answer follows the trailer read at this call, not the one the adapter open saw.
+    ScanoutWidth = 1920;
+    ScanoutHeight = 1080;
+    CHECK(ask(client, compositor, 0) == FALSE, "TRUE after the source mode moved to 1920x1080");
+    CHECK(Has(lastLine(), "answer=0 rule=source-geometry") && Has(lastLine(), "source=1920x1080"),
+          "source mode moved: %s", lastLine().c_str());
+    ScanoutWidth = width;
+    ScanoutHeight = height;
+    CHECK(ask(client, compositor, 0) == TRUE, "TRUE did not come back with the source mode");
+
+    // Negative control 4: the application's record never asked for scan-out (a composed client, which is
+    // what the D3D12 shell writes without its scan-out mode, and what the D3D11 shell writes today).
+    e26r.Access = BC250_SURFACE_RESOURCE_PRIMARY;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for a client record with no SCANOUT bit");
+    CHECK(Has(lastLine(), "answer=0 rule=client-scannable"), "no SCANOUT: %s", lastLine().c_str());
+    // Negative control 5: the 16-byte v2 record the D3D12 shell wrote before increment 2. The kernel driver
+    // admits it, the user-mode rule does not: WddmGdiRecordScannable takes exactly 64 bytes of version 3.
+    unsigned long v2[4] = {BC250_SURFACE_RESOURCE_MAGIC, 2ul, 1ul,
+                           BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT};
+    open.pPrivateDriverData = v2;
+    open.PrivateDriverDataSize = sizeof(v2);
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for a v2 client record");
+    CHECK(Has(lastLine(), "answer=0 rule=client-scannable") && Has(lastLine(), "record_v=2"),
+          "v2 record: %s", lastLine().c_str());
+    // Negative control 6: a client pitch the hosted driver would not give the compositor's buffer.
+    e26r.Access = BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT;
+    open.pPrivateDriverData = &e26r;
+    open.PrivateDriverDataSize = sizeof(e26r);
+    lb7a.Pitch = width * 4 + 256;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for two different pitches");
+    CHECK(Has(lastLine(), "answer=0 rule=pitch"), "pitch: %s", lastLine().c_str());
+    // Negative control 7: a destroyed client is forgotten, so a reused handle is never answered from the
+    // record of a buffer that is gone.
+    device.pfnDestroyResource(hDevice, client);
+    CHECK(ask(client, compositor, 0) == FALSE, "TRUE for a destroyed client");
+    CHECK(Has(lastLine(), "answer=0 rule=record"), "destroyed client: %s", lastLine().c_str());
+    ScanoutTrailer = false;
+}
 
 static void Child(const std::string &s)
 {
@@ -1269,6 +1511,13 @@ static void Child(const std::string &s)
         else if (s == "front-zero") SetDw(RouterKey, L"DirectFlipFront", 0);
         else if (s != "front-absent") SetDw(RouterKey, L"DirectFlipFront", 1);
         if (s == "front-cpu-route") SetDw(RouterKey, L"DwmForceCpu", 1);
+        // front-answer is front-on with the scan-out caps trailer of a start that admits a client flip; the
+        // adapter open sees it too, and its install line says so.
+        if (s == "front-answer") {
+            ScanoutTrailer = true;
+            ScanoutWidth = 1920;
+            ScanoutHeight = 1200;
+        }
         OverrideHklm();
         const bool real = s == "front-stack";
         const std::wstring routerDll = real ? L"umd-router\\bc250d3d_router.dll" : L"router\\bc250d3d_router.dll";
@@ -1607,21 +1856,30 @@ static void Child(const std::string &s)
         CHECK((void *)device.pfnDraw == (void *)hostedFuncs.pfnDraw, "pfnDraw is not the hosted entry itself");
         CHECK((void *)device.pfnCheckDirectFlipSupport != nullptr, "pfnCheckDirectFlipSupport is null");
 
-        // The entry this increment exists for: counted, logged, answered FALSE.
+        // M15.14 increment 2: the TRUE answer and its controls, over surfaces the front recorded itself.
+        if (s == "front-answer") {
+            FrontAnswerChecks(device, create.hDrvDevice, record, recordReset);
+            device.pfnDestroyDevice(create.hDrvDevice);
+            CHECK(o.funcs.pfnCloseAdapter && o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
+            return;
+        }
+        // The entry this increment exists for: counted, logged, answered. With no scan-out caps trailer in
+        // the adapter query (this scenario's kernel driver writes the identity alone, as a start with
+        // EnableDirectFlipHandshake 0 does), every answer is FALSE and the first clause says why.
         BOOL supported = TRUE;
         D3D10DDI_HRESOURCE r1, r2;
         r1.pDrvPrivate = (void *)(UINT_PTR)0x40000000;
         r2.pDrvPrivate = (void *)(UINT_PTR)0x40000100;
         device.pfnCheckDirectFlipSupport(create.hDrvDevice, r1, r2, 0, &supported);
-        CHECK(supported == FALSE, "CheckDirectFlipSupport answered TRUE in increment 1");
+        CHECK(supported == FALSE, "CheckDirectFlipSupport answered TRUE with no scan-out caps trailer");
         supported = TRUE;
         device.pfnCheckDirectFlipSupport(create.hDrvDevice, r1, r2, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE,
                                         &supported);
         CHECK(supported == FALSE, "CheckDirectFlipSupport answered TRUE for an immediate flip");
         device.pfnCheckDirectFlipSupport(create.hDrvDevice, r1, r2, 0, nullptr); // must not fault
         // A null or duplicated handle is `handle`; a handle the front never recorded reaches the next clause,
-        // which in increment 1 is `gated` (the caps trailer is zeroed) with `recorded=0` beside it. The two
-        // facts print differently, which is what increment 1 exists to read.
+        // which here is `gated` (no caps trailer) with `recorded=0` beside it. The two facts print
+        // differently, which is what a trial reads.
         supported = TRUE;
         D3D10DDI_HRESOURCE rNull;
         rNull.pDrvPrivate = nullptr;
@@ -1632,9 +1890,11 @@ static void Child(const std::string &s)
         CHECK(supported == FALSE, "the same surface twice answered TRUE");
         const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                              std::to_wstring(GetCurrentProcessId()) + L".log");
-        CHECK(Has(frontLog, "check_direct_flip call=1") && Has(frontLog, "answer=0") && Has(frontLog, "rule=gated"),
+        CHECK(Has(frontLog, "check_direct_flip call=1") && Has(frontLog, "answer=0") && Has(frontLog, "rule=gated") &&
+                  Has(frontLog, "caps_query=00000000 caps_flags=00000000 source=0x0"),
               "the front log has no CheckDirectFlipSupport line for an unrecorded surface: %s", frontLog.c_str());
-        const std::string gatedClient = "rule=gated client=" + Ptr(0x40000000) + " recorded=0";
+        const std::string gatedClient = "rule=gated caps_query=00000000 caps_flags=00000000 source=0x0 client=" +
+                                        Ptr(0x40000000) + " recorded=0";
         CHECK(Has(frontLog, gatedClient.c_str()),
               "the line does not say that the front had no record for the surface: %s", frontLog.c_str());
         CHECK(Has(frontLog, "rule=handle"), "no line names a null or duplicated handle: %s", frontLog.c_str());
@@ -1968,7 +2228,7 @@ static int RunAll(const std::wstring &out)
         {"front-tables", nullptr, {}}, {"front-rule", nullptr, {}}, {"front-record", nullptr, {}},
         {"front-absent", nullptr, {}}, {"front-zero", nullptr, {}}, {"front-wrong-type", nullptr, {}},
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
-        {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}},
+        {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}}, {"front-answer", nullptr, {}},
         // Application policy (AppRouter).
         {"app-absent-key", nullptr, {}}, {"app-mode-absent", nullptr, {}}, {"app-mode-cpu", nullptr, {}},
         {"app-mode-invalid", nullptr, {}}, {"app-mode-wrong-type", nullptr, {}},

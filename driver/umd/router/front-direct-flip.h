@@ -2,7 +2,8 @@
 //
 // M15.14: the answer of `pfnCheckDirectFlipSupport`, as a pure function of the adapter's published
 // scan-out capabilities and the two surfaces alone, so that a host gate drives the production rule
-// instead of a copy of it (tests/test-router.cpp).
+// instead of a copy of it (tests/test-router.cpp). From increment 2 the entry writes this answer: TRUE
+// exactly when every clause below holds (front-device.cpp, CheckDirectFlipSupport).
 //
 // The runtime asks whether the application's back buffer may take the place of the compositor's front
 // buffer with no copy in between. Answering TRUE is not a promise of hardware scan-out: the kernel
@@ -62,10 +63,9 @@ enum class FlipRefusal {
     compositor_scannable,  // the display core cannot read the compositor's own buffer where it is placed
     format,          // not one storage row the shared table enables for SCANOUT_PRIMARY
     geometry,        // the two differ in width or height
-    post_geometry,   // or they differ from the only mode this adapter offers
-    pitch_unknown,   // one side's pitch is not known here yet; see the clause below
+    source_geometry, // or they differ from the source mode the kernel driver admits a flip at now
+    pitch_unknown,   // one side's pitch is not known here; see the clause below
     pitch,           // the two differ in pitch
-    forced_false,    // increment 1: the rule was computed for the log and the answer is FALSE anyway
 };
 
 inline const char *FlipRefusalText(FlipRefusal reason)
@@ -82,10 +82,9 @@ inline const char *FlipRefusalText(FlipRefusal reason)
     case FlipRefusal::compositor_scannable: return "compositor-scannable";
     case FlipRefusal::format: return "format";
     case FlipRefusal::geometry: return "geometry";
-    case FlipRefusal::post_geometry: return "post-geometry";
+    case FlipRefusal::source_geometry: return "source-geometry";
     case FlipRefusal::pitch_unknown: return "pitch-unknown";
     case FlipRefusal::pitch: return "pitch";
-    case FlipRefusal::forced_false: return "forced-false";
     }
     return "unknown";
 }
@@ -124,16 +123,18 @@ inline FlipRefusal FlipReason(const bc250_scanout_caps &caps, const Resource *cl
     if (client->width != compositor->width || client->height != compositor->height)
         return FlipRefusal::geometry;
     // The geometry clause Bc250ScanoutAdmit will apply, said here rather than inferred from the
-    // compositor's chain being the desktop's size: display.c offers the POST mode alone.
+    // compositor's chain being the desktop's size. The trailer carries the geometry of the source mode at
+    // which the kernel driver admits a flip when the query runs, and the caller reads the trailer again
+    // for every question, so this rule assumes no mode: today display.c offers the POST mode alone, and a
+    // driver that offers more modes writes the committed one into the same two fields.
     if (client->width != caps.post_width || client->height != caps.post_height)
-        return FlipRefusal::post_geometry;
-    // The last clause, and the one increment 1 cannot satisfy. An opened surface carries its pitch in the
-    // LB7A blob the kernel driver wrote, so the application's side is known. A surface this device created
-    // does not: the kernel driver chooses the pitch at CreateAllocation and user mode never learns it.
-    // Pitch 0 therefore means "not known here", which is a refusal of its own name rather than a silent
-    // pass, and carrying the compositor's pitch into user mode is an increment-2 item
-    // (docs/design/direct-flip-handshake.md). A trial that reaches pitch-unknown has passed every other
-    // clause, which is exactly what the log must be able to say.
+        return FlipRefusal::source_geometry;
+    // The last clause. An opened surface carries its pitch in the LB7A blob its creator wrote, so the
+    // application's side is known. The compositor's side is the pitch the hosted user-mode driver gives a
+    // surface it allocates itself (HostedSurfacePitch in front-resource.h). Pitch 0 means "not known
+    // here", which is a refusal of its own name rather than a silent pass: a format with no row in the
+    // shared table leaves it 0. A trial that reaches pitch-unknown has passed every other clause, which is
+    // exactly what the log must be able to say.
     if (!client->pitch || !compositor->pitch) return FlipRefusal::pitch_unknown;
     if (client->pitch != compositor->pitch) return FlipRefusal::pitch;
     return FlipRefusal::none;

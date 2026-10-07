@@ -81,6 +81,31 @@ static VOID APIENTRY FakeClearDepthStencilView(D3D10DDI_HDEVICE, D3D10DDI_HDEPTH
                 view.pDrvPrivate, flags, depth, (unsigned)stencil);
     Note(line);
 }
+// M15.14 increment 2: the three resource entries the front hooks to keep its per-surface record. The front
+// calls the hosted entry first and records afterwards, so the double only notes the call; what the front
+// recorded is what the gate's CheckDirectFlipSupport call then reads.
+static VOID APIENTRY FakeCreateResource(D3D10DDI_HDEVICE, const D3D10DDIARG_CREATERESOURCE *args,
+                                        D3D10DDI_HRESOURCE resource, D3D10DDI_HRTRESOURCE)
+{
+    char line[128];
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "create-resource resource=%p primary=%u", resource.pDrvPrivate,
+                args && args->pPrimaryDesc ? 1u : 0u);
+    Note(line);
+}
+static VOID APIENTRY FakeOpenResource(D3D10DDI_HDEVICE, const D3D10DDIARG_OPENRESOURCE *args,
+                                      D3D10DDI_HRESOURCE resource, D3D10DDI_HRTRESOURCE)
+{
+    char line[128];
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "open-resource resource=%p private=%u", resource.pDrvPrivate,
+                args ? args->PrivateDriverDataSize : 0u);
+    Note(line);
+}
+static VOID APIENTRY FakeDestroyResource(D3D10DDI_HDEVICE, D3D10DDI_HRESOURCE resource)
+{
+    char line[128];
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "destroy-resource resource=%p", resource.pDrvPrivate);
+    Note(line);
+}
 // Every slot, in one place. Called by the double's CreateDevice and exported for the gate, so the two can
 // never disagree about what the hosted table holds.
 extern "C" __declspec(dllexport) void FakeDeviceFuncs(D3D10DDI_DEVICEFUNCS *out)
@@ -93,6 +118,9 @@ extern "C" __declspec(dllexport) void FakeDeviceFuncs(D3D10DDI_DEVICEFUNCS *out)
     out->pfnRelocateDeviceFuncs = FakeRelocateDeviceFuncs;
     out->pfnClearRenderTargetView = FakeClearRenderTargetView;
     out->pfnClearDepthStencilView = FakeClearDepthStencilView;
+    out->pfnCreateResource = FakeCreateResource;
+    out->pfnOpenResource = FakeOpenResource;
+    out->pfnDestroyResource = FakeDestroyResource;
 }
 
 static SIZE_T APIENTRY Size(D3D10DDI_HADAPTER, const D3D10DDIARG_CALCPRIVATEDEVICESIZE *args)
