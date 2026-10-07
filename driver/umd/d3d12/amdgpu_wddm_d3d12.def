@@ -1,0 +1,5 @@
+; The one entry point the D3D12 runtime looks up by name. x64 exports it undecorated anyway; the x86 build for
+; WoW64 processes would export the stdcall name _OpenAdapter12@4, which GetProcAddress("OpenAdapter12") does not find.
+LIBRARY amdgpu_wddm_d3d12
+EXPORTS
+    OpenAdapter12

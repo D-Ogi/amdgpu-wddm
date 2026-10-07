@@ -1,4 +1,6 @@
-param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude)
+# -Arch x86 builds the 32-bit shell for WoW64 processes (UserModeDriverNameWow) with vcvarsamd64_x86.bat (common.ps1),
+# and runs every host gate below as an x86 program.
+param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64')
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -15,18 +17,18 @@ $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir|Out-Null
 $engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
 $engineBuild=Join-Path $OutputDir 'engine-ddi'
-$engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly')
+$engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly','-Arch',$Arch)
 if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
 & pwsh @engineArgs
 if($LASTEXITCODE){throw 'Native engine-ddi build or host gates failed'}
 $engineLib=Join-Path $engineBuild 'engine-ddi.lib'
 if(!(Test-Path -LiteralPath $engineLib)){throw 'Native engine-ddi library missing'}
 # The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
-& "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall
+& "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
 $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
- $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
+ $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
  # /O2: the DLL and its host gates are optimised builds (until 2026-09-30 the line had no /O flag, so cl.exe
  # compiled at /Od; trial 164 attributed 4.3 ms/frame to scope bookkeeping alone).
@@ -43,8 +45,18 @@ try {
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /Brepro /MAP:amdgpu_wddm_d3d12.map
+  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /Brepro /MAP:amdgpu_wddm_d3d12.map "/DEF:$repo\driver\umd\d3d12\amdgpu_wddm_d3d12.def"
   if($LASTEXITCODE){throw 'Adapter build failed'}
+  # The runtime finds the shell by one export name, OpenAdapter12, on x64 and on x86 alike (the .def file keeps the
+  # x86 stdcall decoration out of the name). The image's machine must be the one asked for.
+  $exports=@(& dumpbin.exe /nologo /exports .\amdgpu_wddm_d3d12.dll|Where-Object{$_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)'}|ForEach-Object{$Matches[1]})
+  if(($exports -join ',') -ne 'OpenAdapter12'){throw "Shell exports '$($exports -join ',')', wanted exactly OpenAdapter12"}
+  $machine=(& dumpbin.exe /nologo /headers .\amdgpu_wddm_d3d12.dll|Select-String 'machine \(') -join ' '
+  $wantMachine=@{x64='8664 machine (x64)';x86='14C machine (x86)'}[$Arch]
+  if(!$machine.Contains($wantMachine)){throw "Shell image is '$machine', wanted $wantMachine"}
+  # Static C runtime, as the D3D11 shell's recipe checks it: a game's own older msvcp140.dll must not reach the shell.
+  $crt=@(& dumpbin.exe /nologo /dependents .\amdgpu_wddm_d3d12.dll|Where-Object{$_ -match '^\s+(msvcp|vcruntime|concrt|ucrtbase|api-ms-win-crt-)\S*\.dll\s*$'})
+  if($crt.Count){throw ('Shell imports a dynamic C/C++ runtime: '+(($crt|ForEach-Object{$_.Trim()}) -join ', '))}
   & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
   if($LASTEXITCODE){throw 'Test build failed'}
   & .\adapter-test.exe (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')
