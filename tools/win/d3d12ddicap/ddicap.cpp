@@ -4,18 +4,17 @@
 // does, points WARP's OpenAdapter12 export at a wrapper, and the wrapper replaces pfnCreateStateObject and
 // pfnAddToStateObject in the device table the runtime asks WARP to fill. Each wrapper prints the description the
 // runtime built (d3d12umddi.h, D3D12DDIARG_CREATE_STATE_OBJECT_0054) and then calls WARP's own slot.
-// The application side builds state objects in the shape we infer for Unreal Engine 4.26 (one COLLECTION per shader,
-// then a RAYTRACING_PIPELINE of the shader and pipeline configurations, the global root signature and the
-// EXISTING_COLLECTION subobjects). INFERENCE: the engine source was not available; the shape is read from trial 465,
-// whose failing link had 8 subobjects. It also builds the shape of the project's own client. Console only: no window,
-// nothing resident; it exits when the cases are done.
+// The application side builds state objects the way Unreal Engine 4.26 does (D3D12RHI of 4.26.1-release, read for
+// facts only): one COLLECTION per shader, then a RAYTRACING_PIPELINE that links the collections, or an
+// AddToStateObject that adds new collections to a base pipeline. It also builds the shape of the project's own
+// client. Console only: no window, nothing resident; it exits when the cases are done.
 //
 // Usage: d3d12ddicap.exe [--hardware[=<adapter substring>]] [--idle-seconds=<n>] [case...]
-//   cases: ue426 ue426-5 ue426-hitnames ue426-exportlist client-collection all (default all)
+//   cases: ue426 ue426-additions ue426-basic ue426-add client-collection all (default all)
 //   --hardware: no WARP hook; the cases run on the first hardware adapter (or the first whose description holds the
 //   substring) through its own driver, and print the API results and the device removed reason only. This is the
 //   lab client of The Ascent's trial 465 (README.md).
-//   --idle-seconds: sleep that long between the collections and the link of each ue426 case.
+//   --idle-seconds: sleep that long before the first link (ue426 cases) or the addition (ue426-add).
 #include <windows.h>
 #include <d3d12.h>
 #include <cstdlib>
@@ -26,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ue426-rgs.h"
@@ -313,116 +313,256 @@ HRESULT api_create(ID3D12Device5* device, const char* what, D3D12_STATE_OBJECT_T
     return hr;
 }
 
-// One collection the way UE 4.26 builds it (CreateRayTracingStateObject, D3D12_STATE_OBJECT_TYPE_COLLECTION):
-// the library with renamed exports, the shader config, the hit group if any, the pipeline config, the global root
-// signature, one local root signature and one association of it per name in associate.
-struct Ue426Collection {
-    std::vector<std::wstring> names, renames;  // export Name and ExportToRename, in pairs
-    const void* code;
-    size_t size;
-    std::wstring hit_group;                    // empty: no hit group
-    std::wstring closest, anyhit;              // the hit group's imports
-    std::vector<std::wstring> associate;       // the names the local root signature is associated with
-    ID3D12RootSignature* local;
+// ---- Unreal Engine 4.26 (4.26.1-release, Engine/Source/Runtime/D3D12RHI/Private/D3D12RayTracing.cpp) --------------
+// The shapes below follow the engine's CreateRayTracingStateObject, FD3D12RayTracingPipelineCache and
+// FD3D12RayTracingPipelineState. Facts only, no engine code. Shader names have the engine's form "<prefix>_<16 hex
+// digits of the shader hash>"; the hashes here are made up.
+enum class UeKind { RayGen, Miss, HitGroup };
+
+// One shader as the pipeline cache compiles it into its own COLLECTION.
+struct UeShader {
+    UeKind kind;
+    std::wstring primary;                      // RayGen_<hash>, Miss_<hash> or HitGroup_<hash>
+    std::wstring closest, anyhit;              // a hit group's CHS_<hash> and AHS_<hash>; anyhit may be empty
+    ID3D12RootSignature* local;                // a ray generation shader: the empty local root signature
 };
 
-HRESULT ue426_collection(ID3D12Device5* device, const Signatures& sig, const Ue426Collection& c, const char* what,
-                         ComPtr<ID3D12StateObject>& out) {
-    std::vector<D3D12_EXPORT_DESC> exports;
-    for (size_t i = 0; i < c.names.size(); ++i)
-        exports.push_back({c.names[i].c_str(), c.renames[i].c_str(), D3D12_EXPORT_FLAG_NONE});
-    const D3D12_DXIL_LIBRARY_DESC library{{c.code, c.size}, static_cast<UINT>(exports.size()), exports.data()};
-    const D3D12_RAYTRACING_SHADER_CONFIG shader_config{24, 8};
-    const D3D12_HIT_GROUP_DESC group{c.hit_group.c_str(), D3D12_HIT_GROUP_TYPE_TRIANGLES,
-                                     c.anyhit.empty() ? nullptr : c.anyhit.c_str(),
-                                     c.closest.empty() ? nullptr : c.closest.c_str(), nullptr};
-    const D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};
-    const D3D12_GLOBAL_ROOT_SIGNATURE global{sig.global.Get()};
-    const D3D12_LOCAL_ROOT_SIGNATURE local{c.local};
-    std::vector<LPCWSTR> names;
-    for (const std::wstring& n : c.associate) names.push_back(n.c_str());
-    std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(names.size());
-    std::vector<D3D12_STATE_SUBOBJECT> s;
-    s.reserve(16);
-    s.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &library});
-    s.push_back({D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &shader_config});
-    if (!c.hit_group.empty()) s.push_back({D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &group});
-    s.push_back({D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_config});
-    s.push_back({D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global});
-    const size_t local_index = s.size();
-    s.push_back({D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local});
-    for (size_t i = 0; i < names.size(); ++i) {
-        associations[i] = {&s[local_index], 1, &names[i]};
-        s.push_back({D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &associations[i]});
+// The renamed library exports of a shader (the export list of the collection), and the original entry points.
+void ue_exports(const UeShader& shader, std::vector<std::wstring>& renamed, std::vector<std::wstring>& original) {
+    if (shader.kind == UeKind::HitGroup) {
+        renamed = {shader.closest};
+        original = {L"MainCHS"};
+        if (!shader.anyhit.empty()) {
+            renamed.push_back(shader.anyhit);
+            original.push_back(L"MainAHS");
+        }
+    } else {
+        renamed = {shader.primary};
+        original = {shader.kind == UeKind::RayGen ? L"MainRGS" : L"MainMS"};
     }
-    return api_create(device, what, D3D12_STATE_OBJECT_TYPE_COLLECTION, s, out);
 }
 
-// The UE 4.26 link: shader config, pipeline config, global root signature and the collections, nothing else.
-// Trial 465 failed on a link of 8 subobjects; five collections (five_collections) give that count (INFERENCE).
-// export_list: each import names its exports (UE does not, INFERENCE). idle_ms: a sleep between the collections and
-// the link (the game showed a modal dialog for about 9 minutes before its link).
-HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, bool hit_group_names, bool export_list,
-                   bool five_collections, DWORD idle_ms) {
-    Ue426Collection rgs{{L"RGS_00000001"}, {L"MainRGS"}, g_ue426_rgs, sizeof(g_ue426_rgs), L"", L"", L"",
-                        {L"RGS_00000001"}, sig.empty.Get()};
-    Ue426Collection ms{{L"MS_00000002"}, {L"MainMS"}, g_ue426_ms, sizeof(g_ue426_ms), L"", L"", L"",
-                       {L"MS_00000002"}, sig.local.Get()};
-    Ue426Collection hit{{L"CHS_00000003", L"AHS_00000003"}, {L"MainCHS", L"MainAHS"}, g_ue426_hit, sizeof(g_ue426_hit),
-                        L"HitGroup_00000003", L"CHS_00000003", L"AHS_00000003",
-                        hit_group_names ? std::vector<std::wstring>{L"HitGroup_00000003"}
-                                        : std::vector<std::wstring>{L"CHS_00000003", L"AHS_00000003"},
-                        sig.local.Get()};
-    Ue426Collection ms2{{L"MS_00000004"}, {L"MainMS"}, g_ue426_ms, sizeof(g_ue426_ms), L"", L"", L"",
-                        {L"MS_00000004"}, sig.local.Get()};
-    Ue426Collection hit2{{L"CHS_00000005", L"AHS_00000005"}, {L"MainCHS", L"MainAHS"}, g_ue426_hit, sizeof(g_ue426_hit),
-                         L"HitGroup_00000005", L"CHS_00000005", L"AHS_00000005",
-                         std::vector<std::wstring>{L"CHS_00000005", L"AHS_00000005"}, sig.local.Get()};
-    ComPtr<ID3D12StateObject> c_rgs, c_ms, c_hit, c_ms2, c_hit2, pipeline;
-    HRESULT hr = ue426_collection(device, sig, rgs, "COLLECTION ue426 raygen", c_rgs);
-    if (SUCCEEDED(hr)) hr = ue426_collection(device, sig, ms, "COLLECTION ue426 miss", c_ms);
-    if (SUCCEEDED(hr)) hr = ue426_collection(device, sig, hit, "COLLECTION ue426 hit group", c_hit);
-    if (SUCCEEDED(hr) && five_collections) hr = ue426_collection(device, sig, ms2, "COLLECTION ue426 miss 2", c_ms2);
-    if (SUCCEEDED(hr) && five_collections)
-        hr = ue426_collection(device, sig, hit2, "COLLECTION ue426 hit group 2", c_hit2);
-    if (FAILED(hr)) return hr;
-    if (idle_ms) {
-        printf("api idle %lu ms before the link\n", static_cast<unsigned long>(idle_ms));
-        Sleep(idle_ms);
-        printf("api device removed reason after the idle: %08lx\n",
-               static_cast<unsigned long>(device->GetDeviceRemovedReason()));
+// The subobjects of CreateRayTracingStateObject in the engine's order, for a COLLECTION (one library, the shader's
+// exports, a hit group for a hit shader, one local root signature) or a link (no library, no exports, no local root
+// signature, the collections). The shader configuration's association names every export; for a link it names none
+// (an explicit default). One local root signature association per export. The flags are those of the
+// STATE_OBJECT_CONFIG: ALLOW_STATE_OBJECT_ADDITIONS when the engine found RaytracingTier 1.1 and ID3D12Device7
+// (D3D12Adapter.cpp, GRHISupportsRayTracingPSOAdditions), else none.
+HRESULT ue_state_object(ID3D12Device5* device, const Signatures& sig, const UeShader* shader,
+                        const std::vector<ID3D12StateObject*>& collections, D3D12_STATE_OBJECT_FLAGS flags,
+                        const char* what, ComPtr<ID3D12StateObject>& out) {
+    std::vector<std::wstring> renamed, original;
+    if (shader) ue_exports(*shader, renamed, original);
+    std::vector<D3D12_EXPORT_DESC> exports;
+    std::vector<LPCWSTR> names;
+    for (size_t i = 0; i < renamed.size(); ++i) {
+        exports.push_back({renamed[i].c_str(), original[i].c_str(), D3D12_EXPORT_FLAG_NONE});
+        names.push_back(renamed[i].c_str());
     }
-    D3D12_EXPORT_DESC rgs_export{L"RGS_00000001", nullptr, D3D12_EXPORT_FLAG_NONE};
-    D3D12_EXPORT_DESC ms_export{L"MS_00000002", nullptr, D3D12_EXPORT_FLAG_NONE};
-    D3D12_EXPORT_DESC hit_export{L"HitGroup_00000003", nullptr, D3D12_EXPORT_FLAG_NONE};
-    const D3D12_EXISTING_COLLECTION_DESC imports[3]{{c_rgs.Get(), export_list ? 1u : 0u, export_list ? &rgs_export : nullptr},
-                                                    {c_ms.Get(), export_list ? 1u : 0u, export_list ? &ms_export : nullptr},
-                                                    {c_hit.Get(), export_list ? 1u : 0u, export_list ? &hit_export : nullptr}};
-    const D3D12_RAYTRACING_SHADER_CONFIG shader_config{24, 8};
-    const D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};
+    const void* code = !shader ? nullptr
+                       : shader->kind == UeKind::RayGen ? static_cast<const void*>(g_ue426_rgs)
+                       : shader->kind == UeKind::Miss   ? static_cast<const void*>(g_ue426_ms)
+                                                        : static_cast<const void*>(g_ue426_hit);
+    const size_t size = !shader ? 0
+                        : shader->kind == UeKind::RayGen ? sizeof(g_ue426_rgs)
+                        : shader->kind == UeKind::Miss   ? sizeof(g_ue426_ms)
+                                                         : sizeof(g_ue426_hit);
+    const D3D12_DXIL_LIBRARY_DESC library{{code, size}, static_cast<UINT>(exports.size()), exports.data()};
+    const D3D12_RAYTRACING_SHADER_CONFIG shader_config{24, 8};      // the initializer's default payload, 2 floats
+    const bool hit = shader && shader->kind == UeKind::HitGroup;
+    const D3D12_HIT_GROUP_DESC group{hit ? shader->primary.c_str() : nullptr, D3D12_HIT_GROUP_TYPE_TRIANGLES,
+                                     hit && !shader->anyhit.empty() ? shader->anyhit.c_str() : nullptr,
+                                     hit ? shader->closest.c_str() : nullptr, nullptr};
+    const D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};      // RAY_TRACING_MAX_ALLOWED_RECURSION_DEPTH
+    const D3D12_STATE_OBJECT_CONFIG config{flags};
     const D3D12_GLOBAL_ROOT_SIGNATURE global{sig.global.Get()};
-    const D3D12_EXISTING_COLLECTION_DESC more[2]{{c_ms2.Get(), 0, nullptr}, {c_hit2.Get(), 0, nullptr}};
-    std::vector<D3D12_STATE_SUBOBJECT> s{
-        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &shader_config},
-        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_config},
-        {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global},
-        {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &imports[0]},
-        {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &imports[1]},
-        {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &imports[2]}};
-    if (five_collections) {
-        s.push_back({D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &more[0]});
-        s.push_back({D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &more[1]});
+    const D3D12_LOCAL_ROOT_SIGNATURE local{shader ? shader->local : nullptr};
+    std::vector<D3D12_EXISTING_COLLECTION_DESC> imports;
+    for (ID3D12StateObject* c : collections) imports.push_back({c, 0, nullptr});
+    // Sized once: the associations point into the array.
+    std::vector<D3D12_STATE_SUBOBJECT> s(5 + (shader ? 2 + (hit ? 1 : 0) + names.size() : 0) + imports.size());
+    std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(names.size());
+    size_t i = 0;
+    if (shader) s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &library};
+    const size_t shader_config_index = i;
+    s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &shader_config};
+    const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION shader_config_association{
+        &s[shader_config_index], static_cast<UINT>(names.size()), names.empty() ? nullptr : names.data()};
+    s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &shader_config_association};
+    if (hit) s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &group};
+    s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_config};
+    s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &config};
+    s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global};
+    if (shader) {
+        const size_t local_index = i;
+        s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local};
+        for (size_t e = 0; e < names.size(); ++e) {
+            associations[e] = {&s[local_index], 1, &names[e]};
+            s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &associations[e]};
+        }
     }
-    hr = api_create(device, "RAYTRACING_PIPELINE ue426 link", D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, s, pipeline);
-    if (SUCCEEDED(hr)) {
-        ComPtr<ID3D12StateObjectProperties> properties;
-        pipeline.As(&properties);
-        for (LPCWSTR name : {L"RGS_00000001", L"MS_00000002", L"HitGroup_00000003", L"MS_00000004", L"HitGroup_00000005"})
-            if (five_collections || wcscmp(name, L"MS_00000004") && wcscmp(name, L"HitGroup_00000005"))
-                printf("api GetShaderIdentifier %ls: %s\n", name,
-                       properties && properties->GetShaderIdentifier(name) ? "found" : "null");
+    for (const D3D12_EXISTING_COLLECTION_DESC& c : imports) s[i++] = {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &c};
+    if (i != s.size()) return E_UNEXPECTED;
+    return api_create(device, what,
+                      shader ? D3D12_STATE_OBJECT_TYPE_COLLECTION : D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, s, out);
+}
+
+// The engine's addition onto a base pipeline (FD3D12RayTracingPipelineState with a BasePipeline): a
+// STATE_OBJECT_CONFIG with ALLOW_STATE_OBJECT_ADDITIONS and the collections the base does not have, nothing else.
+HRESULT ue_addition(ID3D12Device5* device, ID3D12StateObject* base, const std::vector<ID3D12StateObject*>& collections,
+                    const char* what, ComPtr<ID3D12StateObject>& out) {
+    ComPtr<ID3D12Device7> device7;
+    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device7)))) {
+        printf("api %s: no ID3D12Device7\n", what);
+        return E_NOINTERFACE;
     }
+    const D3D12_STATE_OBJECT_CONFIG config{D3D12_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS};
+    std::vector<D3D12_EXISTING_COLLECTION_DESC> imports;
+    for (ID3D12StateObject* c : collections) imports.push_back({c, 0, nullptr});
+    std::vector<D3D12_STATE_SUBOBJECT> s{{D3D12_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &config}};
+    for (const D3D12_EXISTING_COLLECTION_DESC& c : imports) s.push_back({D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &c});
+    const D3D12_STATE_OBJECT_DESC desc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, static_cast<UINT>(s.size()), s.data()};
+    printf("api AddToStateObject %s: %zu subobjects\n", what, s.size());
+    const HRESULT hr = device7->AddToStateObject(&desc, base, IID_PPV_ARGS(&out));
+    printf("api AddToStateObject %s: hr %08lx\n", what, static_cast<unsigned long>(hr));
     return hr;
+}
+
+// Prints whether each name has a shader identifier in the state object; returns the count of null identifiers among
+// the names expected.
+int identifiers(ID3D12StateObject* object, const char* what, const std::vector<std::wstring>& expected,
+                const std::vector<std::wstring>& absent = {}) {
+    ComPtr<ID3D12StateObjectProperties> properties;
+    if (!object || FAILED(object->QueryInterface(IID_PPV_ARGS(&properties)))) return static_cast<int>(expected.size());
+    int missing = 0;
+    for (const std::wstring& name : expected) {
+        const bool found = properties->GetShaderIdentifier(name.c_str()) != nullptr;
+        printf("api %s GetShaderIdentifier %ls: %s\n", what, name.c_str(), found ? "found" : "null");
+        missing += found ? 0 : 1;
+    }
+    for (const std::wstring& name : absent) {
+        const bool found = properties->GetShaderIdentifier(name.c_str()) != nullptr;
+        printf("api %s GetShaderIdentifier %ls: %s (expected null)\n", what, name.c_str(), found ? "found" : "null");
+        missing += found ? 1 : 0;
+    }
+    printf("api %s GetPipelineStackSize %llu\n", what, static_cast<unsigned long long>(properties->GetPipelineStackSize()));
+    return missing;
+}
+
+// The shaders of the cases. The occlusion and intersection pipelines are those FD3D12BasicRayTracingPipeline creates
+// at InitRayTracing (a ray generation shader, the default miss shader, a closest hit shader); the extra ones stand for
+// a later material pipeline.
+struct UeShaders {
+    UeShader occlusion_rgs, intersection_rgs, default_ms, default_chs, intersection_chs, material_hit, material_ms;
+    explicit UeShaders(const Signatures& sig)
+        : occlusion_rgs{UeKind::RayGen, L"RayGen_0000000000000001", L"", L"", sig.empty.Get()},
+          intersection_rgs{UeKind::RayGen, L"RayGen_0000000000000002", L"", L"", sig.empty.Get()},
+          default_ms{UeKind::Miss, L"Miss_0000000000000003", L"", L"", sig.local.Get()},
+          default_chs{UeKind::HitGroup, L"HitGroup_0000000000000004", L"CHS_0000000000000004", L"", sig.local.Get()},
+          intersection_chs{UeKind::HitGroup, L"HitGroup_0000000000000005", L"CHS_0000000000000005", L"",
+                           sig.local.Get()},
+          material_hit{UeKind::HitGroup, L"HitGroup_0000000000000006", L"CHS_0000000000000006",
+                       L"AHS_0000000000000006", sig.local.Get()},
+          material_ms{UeKind::Miss, L"Miss_0000000000000007", L"", L"", sig.local.Get()} {}
+};
+
+// One pipeline as FD3D12RayTracingPipelineState links it without a base: a collection per shader (the cache's, or a
+// new one), then the link of 8 subobjects for three collections (trial 465: 8 subobjects, {24, 8}).
+struct UeCache {
+    std::vector<std::pair<const UeShader*, ComPtr<ID3D12StateObject>>> entries;
+    HRESULT get(ID3D12Device5* device, const Signatures& sig, const UeShader& shader, D3D12_STATE_OBJECT_FLAGS flags,
+                ID3D12StateObject** out) {
+        for (auto& e : entries)
+            if (e.first == &shader) {
+                *out = e.second.Get();
+                return S_OK;
+            }
+        ComPtr<ID3D12StateObject> collection;
+        char what[64];
+        snprintf(what, sizeof(what), "COLLECTION %ls", shader.primary.c_str());
+        const HRESULT hr = ue_state_object(device, sig, &shader, {}, flags, what, collection);
+        if (FAILED(hr)) return hr;
+        *out = collection.Get();
+        entries.emplace_back(&shader, collection);
+        return S_OK;
+    }
+};
+
+HRESULT ue_pipeline(ID3D12Device5* device, const Signatures& sig, UeCache& cache, std::vector<const UeShader*> shaders,
+                    D3D12_STATE_OBJECT_FLAGS flags, const char* what, ComPtr<ID3D12StateObject>& out) {
+    std::vector<ID3D12StateObject*> collections;
+    for (const UeShader* shader : shaders) {
+        ID3D12StateObject* c = nullptr;
+        const HRESULT hr = cache.get(device, sig, *shader, flags, &c);
+        if (FAILED(hr)) return hr;
+        collections.push_back(c);
+    }
+    return ue_state_object(device, sig, nullptr, collections, flags, what, out);
+}
+
+void idle(ID3D12Device5* device, DWORD idle_ms) {
+    if (!idle_ms) return;
+    printf("api idle %lu ms before the link\n", static_cast<unsigned long>(idle_ms));
+    Sleep(idle_ms);
+    printf("api device removed reason after the idle: %08lx\n", static_cast<unsigned long>(device->GetDeviceRemovedReason()));
+}
+
+// ue426 (flags none) and ue426-additions (ALLOW_STATE_OBJECT_ADDITIONS): the occlusion pipeline. ue426-basic: both
+// pipelines of InitRayTracing with additions, the second one taking the cached miss collection.
+HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, D3D12_STATE_OBJECT_FLAGS flags, bool both,
+                   DWORD idle_ms) {
+    const UeShaders u(sig);
+    UeCache cache;
+    for (const UeShader* shader : {&u.occlusion_rgs, &u.default_ms, &u.default_chs}) {
+        ID3D12StateObject* c = nullptr;
+        const HRESULT hr = cache.get(device, sig, *shader, flags, &c);
+        if (FAILED(hr)) return hr;
+    }
+    idle(device, idle_ms);
+    ComPtr<ID3D12StateObject> occlusion, intersection;
+    HRESULT hr = ue_pipeline(device, sig, cache, {&u.occlusion_rgs, &u.default_ms, &u.default_chs}, flags,
+                             "RAYTRACING_PIPELINE occlusion", occlusion);
+    if (FAILED(hr)) return hr;
+    int missing = identifiers(occlusion.Get(), "occlusion", {u.occlusion_rgs.primary, u.default_ms.primary,
+                                                             u.default_chs.primary});
+    if (both) {
+        hr = ue_pipeline(device, sig, cache, {&u.intersection_rgs, &u.default_ms, &u.intersection_chs}, flags,
+                         "RAYTRACING_PIPELINE intersection", intersection);
+        if (FAILED(hr)) return hr;
+        missing += identifiers(intersection.Get(), "intersection",
+                               {u.intersection_rgs.primary, u.default_ms.primary, u.intersection_chs.primary});
+    }
+    return missing ? E_FAIL : S_OK;
+}
+
+// ue426-add: the occlusion pipeline with additions as the base, then the engine's addition of two new collections (a
+// hit group with an any hit shader and a miss shader). The grown object has every export; the base keeps its own.
+HRESULT ue426_add_case(ID3D12Device5* device, const Signatures& sig, DWORD idle_ms) {
+    const UeShaders u(sig);
+    UeCache cache;
+    constexpr D3D12_STATE_OBJECT_FLAGS flags = D3D12_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
+    ComPtr<ID3D12StateObject> base, grown;
+    HRESULT hr = ue_pipeline(device, sig, cache, {&u.occlusion_rgs, &u.default_ms, &u.default_chs}, flags,
+                             "RAYTRACING_PIPELINE base", base);
+    if (FAILED(hr)) return hr;
+    ID3D12StateObject* hit = nullptr;
+    ID3D12StateObject* miss = nullptr;
+    hr = cache.get(device, sig, u.material_hit, flags, &hit);
+    if (SUCCEEDED(hr)) hr = cache.get(device, sig, u.material_ms, flags, &miss);
+    if (FAILED(hr)) return hr;
+    idle(device, idle_ms);
+    hr = ue_addition(device, base.Get(), {hit, miss}, "grown", grown);
+    if (FAILED(hr)) return hr;
+    int missing = identifiers(grown.Get(), "grown",
+                              {u.occlusion_rgs.primary, u.default_ms.primary, u.default_chs.primary,
+                               u.material_hit.primary, u.material_ms.primary});
+    missing += identifiers(base.Get(), "base", {u.occlusion_rgs.primary, u.default_ms.primary, u.default_chs.primary},
+                           {u.material_hit.primary, u.material_ms.primary});
+    // The engine reads the identifiers again from the grown object after the base is gone (the cache trims it).
+    base.Reset();
+    missing += identifiers(grown.Get(), "grown after the base's release",
+                           {u.occlusion_rgs.primary, u.material_hit.primary, u.material_ms.primary});
+    return missing ? E_FAIL : S_OK;
 }
 
 // The project's client shape (tools/win/d3d12queue -RayCollection): one collection holding everything, without
@@ -526,15 +666,16 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (cases.empty() || (cases.size() == 1 && cases[0] == "all"))
-        cases = {"ue426", "ue426-5", "ue426-hitnames", "ue426-exportlist", "client-collection"};
+        cases = {"ue426", "ue426-additions", "ue426-basic", "ue426-add", "client-collection"};
     int failures = 0;
     for (const std::string& c : cases) {
         printf("== case %s\n", c.c_str());
         created.clear();        // the state objects of the previous case are gone, and their descriptions with them
-        if (c == "ue426") hr = ue426_case(device.Get(), sig, false, false, false, idle_ms);
-        else if (c == "ue426-5") hr = ue426_case(device.Get(), sig, false, false, true, idle_ms);
-        else if (c == "ue426-hitnames") hr = ue426_case(device.Get(), sig, true, false, false, idle_ms);
-        else if (c == "ue426-exportlist") hr = ue426_case(device.Get(), sig, false, true, false, idle_ms);
+        constexpr D3D12_STATE_OBJECT_FLAGS additions = D3D12_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
+        if (c == "ue426") hr = ue426_case(device.Get(), sig, D3D12_STATE_OBJECT_FLAG_NONE, false, idle_ms);
+        else if (c == "ue426-additions") hr = ue426_case(device.Get(), sig, additions, false, idle_ms);
+        else if (c == "ue426-basic") hr = ue426_case(device.Get(), sig, additions, true, idle_ms);
+        else if (c == "ue426-add") hr = ue426_add_case(device.Get(), sig, idle_ms);
         else if (c == "client-collection") hr = client_collection_case(device.Get(), sig);
         else {
             printf("unknown case\n");
