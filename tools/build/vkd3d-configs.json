@@ -25,6 +25,25 @@
         "libs/ddi/amdgpu_wddm_vkd3d.dll",
         "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"
       ]
+    },
+    "ddi-engine-lto": {
+      "description": "amdgpu_wddm_vkd3d.dll as released since b17: the ddi-engine options, byte for byte and in the same order, followed by b_ndebug, MSVC whole-program optimisation (/GL and /LTCG), /arch:AVX2, WARN and FIXME compiled out (VKD3D_NO_DEBUG_MESSAGES; TRACE is already out in release) and a linker map of the DLL for ETW attribution (the map does not change the image). The x64 engine of the release and its x86 (WoW64) build use this set",
+      "options": [
+        "-Dbuildtype=release",
+        "-Denable_tests=false",
+        "-Denable_ddi_engine=true",
+        "-Db_vscrt=mt",
+        "-Db_ndebug=true",
+        "-Db_lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2 -DVKD3D_NO_DEBUG_MESSAGES",
+        "-Dcpp_args=/arch:AVX2",
+        "-Dcpp_link_args=/MAP"
+      ],
+      "targets": [
+        "libs/ddi/amdgpu_wddm_vkd3d.dll",
+        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"
+      ]
     }
   }
 }

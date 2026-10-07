@@ -272,12 +272,22 @@ What differs from the DXVK script:
 |---|---|---|
 | `per-app` | upstream vkd3d-proton | `d3d12.dll`, `d3d12core.dll`: application-local DLLs, the M12 per-application D3D12 path |
 | `ddi-engine` | vkd3d-proton branch `amdgpu-wddm/ddi-engine` | `amdgpu_wddm_vkd3d.dll`, the engine behind the proposed M15 native D3D12 UMD (ADR 0017 item 5), and `amdgpu_wddm_vkd3d_engine_test.exe` |
+| `ddi-engine-lto` | the same branch | the same two files, built the way the release builds its engine |
 
-Both configs build with `-Dbuildtype=release -Denable_tests=false`.
+All configs build with `-Dbuildtype=release -Denable_tests=false`.
 
 `ddi-engine` adds two options:
 - `-Denable_ddi_engine=true`, an option that exists only on that branch;
 - `-Db_vscrt=mt`: the engine links the C runtime statically, and the branch's meson refuses anything else for it.
+
+`ddi-engine-lto` is `ddi-engine` followed by the optimisation options of the released engine: `-Db_ndebug=true`,
+whole-program optimisation (`-Db_lto=true -Db_lto_mode=default`), `/arch:AVX2`, `VKD3D_NO_DEBUG_MESSAGES` (WARN and
+FIXME compiled out) and a linker map (`/MAP`, which does not change the image).
+
+`-Arch x86` builds the 32-bit engine for WoW64 processes with `vcvarsamd64_x86.bat`, as the DXVK and Mesa scripts
+do. The x86 engine of the release is `ddi-engine-lto` on branch `amdgpu-wddm/wow64-d3d12`: the x64 engine's commit
+plus one fix that only x86 needs (a calling convention on a function pointer). Its offline test passes on any x86
+Vulkan 1.3 driver, the same as the x64 one.
 
 The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is published at
 <https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>, together with the draft inline queue mode
