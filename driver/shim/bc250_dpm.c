@@ -10,7 +10,8 @@
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
  * top and wins over everything, the lab floor included: since 0.7.205 it alone may go under it, to 900 or
  * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). Since 0.7.207 the idle state goes lower
- * still, to 500 MHz, but only while the GPU has no work at all. Since 0.7.213 the cap starts stepping in the soft
+ * still, to 500 MHz, entered after a quiet window and held, since 0.7.216.6, while its own work fits it (a desktop
+ * frame no longer leaves it). Since 0.7.213 the cap starts stepping in the soft
  * zone, 86 C, with the reading extrapolated 15 s along its own slope, and the clock stops rising at 83 C
  * (bc250_dpm_warm_mc); the 87 C hot cap and the 90 C critical rule stay behind both as backstops on the raw reading.
  * From the warm threshold up no raise happens at all, and from RAMP_KNEE_MC
@@ -255,6 +256,7 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->idle_level = BC250_DPM_IDLE_LEVEL;
 	g->idle_hold_ms = BC250_DPM_IDLE_HOLD_MS;
 	g->idle_busy_permille = BC250_DPM_IDLE_BUSY_PERMILLE;
+	g->idle_leave_permille = BC250_DPM_IDLE_LEAVE_PERMILLE;
 	bc250_dpm_tune_default(&g->tune);
 }
 
@@ -276,6 +278,20 @@ enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, un
 	g->idle_hold_ms = hold_ms;
 	g->idle_busy_permille = busy_permille;
 	g->idle_on = 1;
+	return BC250_DPM_IDLE_OK;
+}
+
+enum bc250_dpm_idle_error bc250_dpm_idle_set_leave(struct bc250_dpm_governor *g, unsigned int leave_permille)
+{
+	if (leave_permille < BC250_DPM_IDLE_MIN_LEAVE_PERMILLE || leave_permille > BC250_DPM_IDLE_MAX_LEAVE_PERMILLE ||
+	    leave_permille <= g->idle_busy_permille) {
+		g->idle_on = 0;
+		g->idle = 0;
+		g->idle_ms = 0;
+		g->idle_acc = 0;
+		return BC250_DPM_IDLE_LEAVE;
+	}
+	g->idle_leave_permille = leave_permille;
 	return BC250_DPM_IDLE_OK;
 }
 
@@ -473,6 +489,25 @@ static unsigned int idle_exit_permille(const struct bc250_dpm_governor *g)
 								    : g->idle_busy_permille + 1u;
 }
 
+/* The slow exit's share (BC250_DPM_IDLE_LEAVE_PERMILLE and why), never at or below the entry window's admitted mean:
+ * bc250_dpm_idle_set_leave refuses such a value, and a caller that wrote the fields itself gets the mean plus one. */
+static unsigned int idle_leave_permille(const struct bc250_dpm_governor *g)
+{
+	return g->idle_leave_permille > g->idle_busy_permille ? g->idle_leave_permille : g->idle_busy_permille + 1u;
+}
+
+/* One exit from the state: the counters and the window, and *left for the caller's return to the lab floor. */
+static void idle_exit(struct bc250_dpm_governor *g, int *left)
+{
+	if (g->idle) {
+		g->idle = 0;
+		g->idle_exits++;
+		*left = 1;
+	}
+	g->idle_ms = 0;
+	g->idle_acc = 0;
+}
+
 /* One tick of the idle state (0.7.207). Returns 1 while the clock belongs at the idle point, and sets *left
  * when this tick ended an episode (the caller's exit rule reads it).
  *
@@ -483,13 +518,16 @@ static unsigned int idle_exit_permille(const struct bc250_dpm_governor *g)
  * again, so a busy GPU never enters, and the worst case from "the GPU went quiet" to the idle point is
  * two hold times (the burst lands at the end of a window that then has to run again).
  *
- * Two rules end an episode, and the fast one is the ring: work outstanding on the GFX ring or activity on the
- * paging node leaves the state in that tick, which is every submission this driver makes. A tick whose own busy
- * share reaches idle_exit_permille (half its wall time) leaves as well, for work the ring accounting cannot see.
- * Below that share the trailing window decides: the same window, the same admitted mean as the entry, so the
- * single desktop frame the entry rule tolerates does not leave the state, and work that keeps the GPU busier
- * than the admitted mean leaves within one hold time. The clock is back at the lab floor after the governor's
- * detection (one tick) plus the SMU transaction the caller runs; bc250_dpm_step names the latency.
+ * Inside the state the point behaves like a DPM level with hysteresis (0.7.216.6): it holds while its own work fits
+ * it. Two rules end an episode. The fast one is a tick whose own busy share (the higher of the graphics engine's and
+ * the paging node's) reaches idle_exit_permille, half its wall time: a game's first frame, an upload, any work the
+ * point cannot serve, leaves in that tick. The slow one is the trailing window: the same hold time as the entry,
+ * with its work counted as it comes, and the state is left at the tick at which that work reaches
+ * idle_leave_permille of the whole window (150 permille by default, 75 times the admitted entry mean). Work on the
+ * GFX ring no longer leaves by itself: every DWM frame of a desktop composed on this GPU is a submission, and the
+ * ring rule turned each one into 500 -> 1000 -> 500 MHz (BC250_DPM_IDLE_EXIT_PERMILLE has the lab record). The ring
+ * still gates the entry. The clock is back at the lab floor after the governor's detection (one tick) plus the SMU
+ * transaction the caller runs; bc250_dpm_step names the latency.
  *
  * The state does not run at all while another rule owns the clock: a runtime floor (an operator asked for
  * a clock), SetStablePowerState (a profiler asked for one steady clock), a temperature at or above HOT_MC
@@ -505,12 +543,36 @@ static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input 
 	unsigned int idle_busy = idle_busy_of(in, busy);
 
 	*left = 0;
-	if (!allowed || in->ring_busy || (g->idle && idle_busy >= idle_exit_permille(g))) {
-		if (g->idle) {
-			g->idle = 0;
-			g->idle_exits++;
-			*left = 1;
+	if (!allowed) {
+		idle_exit(g, left);
+		return 0;
+	}
+	if (g->idle) {
+		/* In the state. The fast exit first, then this tick's work into the trailing window, then the window's
+		 * budget: leave_permille x hold_ms of work per window, checked at every tick, so the exit does not wait for
+		 * the window's end. 64-bit: the budget is at most 400 x 60000. */
+		if (idle_busy >= idle_exit_permille(g)) {
+			g->idle_fast_exits++;
+			idle_exit(g, left);
+			return 0;
 		}
+		g->idle_ms = add_ms(g->idle_ms, dt);
+		g->idle_acc = add_ms(g->idle_acc, idle_busy * dt);
+		if ((unsigned long long)g->idle_acc >= (unsigned long long)idle_leave_permille(g) * g->idle_hold_ms) {
+			g->idle_slow_exits++;
+			idle_exit(g, left);
+			return 0;
+		}
+		if (g->idle_ms >= g->idle_hold_ms) {
+			g->idle_ms = 0;		/* the window is over and its work fitted: the next one starts */
+			g->idle_acc = 0;
+		}
+		g->idle_total_ms = add_ms(g->idle_total_ms, dt);
+		return 1;
+	}
+	/* Before the state: the entry rule of 0.7.207, unchanged. A tick with work on the GFX ring starts the window
+	 * again, and a whole window must stay under the admitted mean. */
+	if (in->ring_busy) {
 		g->idle_ms = 0;
 		g->idle_acc = 0;
 		return 0;
@@ -520,28 +582,14 @@ static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input 
 	if (g->idle_ms >= g->idle_hold_ms) {
 		int too_busy = (unsigned long long)g->idle_acc >
 			       (unsigned long long)g->idle_busy_permille * g->idle_ms;
-		g->idle_ms = 0;		/* entered, left, or simply too busy: either way the window starts again */
+		g->idle_ms = 0;		/* entered or too busy: either way the window starts again */
 		g->idle_acc = 0;
-		if (too_busy) {
-			/* Before the state: the candidate window failed and the next one decides. In the state: a
-			 * whole window above the admitted mean is the slow way out, for work that stays under the
-			 * exit share and that the ring accounting does not show. */
-			if (g->idle) {
-				g->idle = 0;
-				g->idle_exits++;
-				*left = 1;
-			}
-			return 0;
-		}
-		if (!g->idle) {
-			g->idle = 1;
-			g->idle_entries++;
-			return 1;	/* the caller's apply takes the clock there: no time at the point yet */
-		}
+		if (too_busy) return 0;	/* the candidate window failed and the next one decides */
+		g->idle = 1;
+		g->idle_entries++;
+		return 1;		/* the caller's apply takes the clock there: no time at the point yet */
 	}
-	if (!g->idle) return 0;
-	g->idle_total_ms = add_ms(g->idle_total_ms, dt);
-	return 1;
+	return 0;
 }
 
 /* ---- the soft zone's lead (0.7.213, BD-087) ---------------------------------------------------------- */
@@ -977,4 +1025,141 @@ enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s
 	if (!s->marked) return BC250_DPM_SESSION_NONE;
 	s->floor_ms += dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : dt_ms;
 	return s->floor_ms >= BC250_DPM_SESSION_CLEAR_MS ? BC250_DPM_SESSION_CLEAR : BC250_DPM_SESSION_NONE;
+}
+
+/* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------ */
+
+void bc250_joint_init(struct bc250_joint *j)
+{
+	memset(j, 0, sizeof(*j));
+	j->reason = BC250_JOINT_FREE;
+}
+
+void bc250_joint_read(const struct bc250_dpm_governor *g, const struct bc250_dpm_input *in,
+		      struct bc250_joint_input *out)
+{
+	/* The threshold the soft release raises the cap under; with the soft release off, the hot cap's own release. */
+	int release_mc = g->tune.soft_delta_mc ? (int)BC250_DPM_HOT_MC - (int)g->tune.soft_delta_mc
+					       : BC250_DPM_RELEASE_MC;
+	int valid = in->temperature_valid ? 1 : 0;
+	int clamped = g->thermal_cap < g->max_level;
+	int thermal_throttle = g->throttle == BC250_DPM_THROTTLE_THERMAL_SOFT ||
+			       g->throttle == BC250_DPM_THROTTLE_THERMAL_HARD ||
+			       g->throttle == BC250_DPM_THROTTLE_THERMAL_WARM ||
+			       g->throttle == BC250_DPM_THROTTLE_THERMAL_ZONE;
+	memset(out, 0, sizeof(*out));
+	out->busy_permille = g->avg_permille;
+	out->blind = !valid;
+	out->heat = valid && (g->hot || g->zone || thermal_throttle ||
+			      (clamped && in->temperature_mc >= release_mc));
+	out->cool = valid && !clamped && !g->hot && !g->zone &&
+		    in->temperature_mc < (int)BC250_DPM_HOT_MC - BC250_JOINT_COOL_DELTA_MC;
+	out->dt_ms = in->dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : in->dt_ms;
+}
+
+static void joint_clear(struct bc250_joint *j)
+{
+	if (j->cap_mhz) j->releases++;
+	j->cap_mhz = 0;
+	j->bound_ms = j->free_ms = j->step_ms = j->cool_ms = 0;
+}
+
+void bc250_joint_reset(struct bc250_joint *j)
+{
+	joint_clear(j);
+	j->reason = BC250_JOINT_FREE;
+}
+
+unsigned int bc250_joint_step(struct bc250_joint *j, const struct bc250_joint_input *in)
+{
+	unsigned int dt = in->dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : in->dt_ms;
+	int bound = in->busy_permille >= BC250_JOINT_BOUND_PERMILLE;
+	int free_gpu = in->busy_permille < BC250_JOINT_FREE_PERMILLE;
+
+	if (!in->cpu_ready) {
+		joint_clear(j);
+		j->reason = BC250_JOINT_NO_CPU;
+		return 0;
+	}
+	if (in->base_mhz <= BC250_JOINT_MIN_MHZ) {
+		joint_clear(j);
+		j->reason = BC250_JOINT_NO_ROOM;
+		return 0;
+	}
+	/* The base moved under the cap (the operator's own limit came down): the cap has nothing left to do. */
+	if (j->cap_mhz && j->cap_mhz >= in->base_mhz) {
+		joint_clear(j);
+		j->reason = BC250_JOINT_FREE;
+		return 0;
+	}
+	/* No reading: neither "hot" nor "cool" can be judged, so nothing moves and no timer runs. */
+	if (in->blind) {
+		j->reason = BC250_JOINT_BLIND;
+		return j->cap_mhz;
+	}
+	if (!j->cap_mhz) {
+		if (bound && in->heat) {
+			j->bound_ms = add_ms(j->bound_ms, dt);
+			if (j->bound_ms < BC250_JOINT_ENGAGE_MS) {
+				j->reason = BC250_JOINT_WAIT;
+				return 0;
+			}
+			j->cap_mhz = in->base_mhz - BC250_JOINT_STEP_MHZ;
+			if (j->cap_mhz < BC250_JOINT_MIN_MHZ || in->base_mhz < BC250_JOINT_MIN_MHZ + BC250_JOINT_STEP_MHZ)
+				j->cap_mhz = BC250_JOINT_MIN_MHZ;
+			j->bound_ms = j->free_ms = j->step_ms = j->cool_ms = 0;
+			j->engages++;
+			j->steps_down++;
+			j->reason = BC250_JOINT_CAPPING;
+			return j->cap_mhz;
+		}
+		j->bound_ms = 0;
+		j->reason = BC250_JOINT_FREE;
+		return 0;
+	}
+	/* Capped. The GPU is not the bottleneck any more: the whole cap goes, after FREE_MS of it. */
+	if (free_gpu) {
+		j->step_ms = j->cool_ms = 0;
+		j->free_ms = add_ms(j->free_ms, dt);
+		if (j->free_ms >= BC250_JOINT_FREE_MS) {
+			joint_clear(j);
+			j->reason = BC250_JOINT_FREE;
+			return 0;
+		}
+		j->reason = BC250_JOINT_HOLD;
+		return j->cap_mhz;
+	}
+	j->free_ms = 0;
+	if (bound && in->heat) {
+		j->cool_ms = 0;
+		j->step_ms = add_ms(j->step_ms, dt);
+		if (j->step_ms >= BC250_JOINT_STEP_MS && j->cap_mhz > BC250_JOINT_MIN_MHZ) {
+			j->cap_mhz = j->cap_mhz - BC250_JOINT_MIN_MHZ < BC250_JOINT_STEP_MHZ ? BC250_JOINT_MIN_MHZ
+							: j->cap_mhz - BC250_JOINT_STEP_MHZ;
+			j->step_ms = 0;
+			j->steps_down++;
+			j->reason = BC250_JOINT_CAPPING;
+			return j->cap_mhz;
+		}
+		j->reason = BC250_JOINT_HOLD;
+		return j->cap_mhz;
+	}
+	j->step_ms = 0;
+	if (in->cool) {
+		j->cool_ms = add_ms(j->cool_ms, dt);
+		if (j->cool_ms >= BC250_JOINT_COOL_MS) {
+			j->cool_ms = 0;
+			if (in->base_mhz - j->cap_mhz <= BC250_JOINT_STEP_MHZ) {
+				joint_clear(j);
+				j->reason = BC250_JOINT_FREE;
+				return 0;
+			}
+			j->cap_mhz += BC250_JOINT_STEP_MHZ;
+			j->steps_up++;
+			j->reason = BC250_JOINT_RAISING;
+			return j->cap_mhz;
+		}
+	} else j->cool_ms = 0;
+	j->reason = BC250_JOINT_HOLD;
+	return j->cap_mhz;
 }

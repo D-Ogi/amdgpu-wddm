@@ -2596,14 +2596,29 @@ static void test_idle(void)
 	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
 	CHECK(run_ring(&g, BC250_DPM_IDLE_EXIT_PERMILLE - 1u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL && g.idle);
 	CHECK(run_ring(&g, BC250_DPM_IDLE_EXIT_PERMILLE, 60000, 25, 0) == L(0) && !g.idle && g.idle_exits == 1);
-	/* Between the two thresholds the trailing window decides: a share over the admitted mean that never
-	 * reaches the exit share leaves after one hold time, not at once and not never. */
+	/* Between the two thresholds the trailing window decides (0.7.216.6): a share over the admitted entry mean but
+	 * under the leave share is work the point serves, and it holds for as long as it lasts. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	for (i = 0; i < 10u * hold; i++)
+		CHECK(run_ring(&g, BC250_DPM_IDLE_BUSY_PERMILLE + 50u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
+	for (i = 0; i < 10u * hold; i++)
+		CHECK(run_ring(&g, BC250_DPM_IDLE_LEAVE_PERMILLE - 1u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
+	CHECK(g.idle && g.idle_exits == 0 && g.idle_entries == 1);
+	/* A share at the leave share leaves when the window's work reaches it, which for exactly that share is the
+	 * window's last tick: not at once and not never. */
 	idle_init(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
 	for (i = 1; i < hold; i++)
-		CHECK(run_ring(&g, BC250_DPM_IDLE_BUSY_PERMILLE + 50u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
-	CHECK(run_ring(&g, BC250_DPM_IDLE_BUSY_PERMILLE + 50u, 60000, 25, 0) == L(0));
-	CHECK(!g.idle && g.idle_exits == 1 && g.idle_entries == 1);
+		CHECK(run_ring(&g, BC250_DPM_IDLE_LEAVE_PERMILLE, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
+	CHECK(run_ring(&g, BC250_DPM_IDLE_LEAVE_PERMILLE, 60000, 25, 0) == L(0));
+	CHECK(!g.idle && g.idle_exits == 1 && g.idle_slow_exits == 1 && g.idle_fast_exits == 0);
+	/* A higher share spends the window's budget sooner: 200 permille leaves at 150 / 200 of the window. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	for (i = 1; i < hold * BC250_DPM_IDLE_LEAVE_PERMILLE / 200u; i++)
+		CHECK(run_ring(&g, 200u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
+	CHECK(run_ring(&g, 200u, 60000, 25, 0) == L(0) && g.idle_slow_exits == 1);
 	/* The paging node (SDMA0) is work as well, and the GFX ring is empty throughout a transfer on it: no
 	 * entry while it runs, and an exit at the first tick that sees it. A single sample of it is tolerated,
 	 * exactly as a GFX one is. */
@@ -2616,11 +2631,14 @@ static void test_idle(void)
 	for (i = 1; i < hold; i++) CHECK(run_nodes(&g, 0, 60000, 25, 0, i == 5u ? 40u : 0u) == L(0));
 	CHECK(run_ring(&g, 0, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL && g.idle_entries == 1);
 
-	/* A submission with no hardware busy share of its own (a tick waiting on a fence) exits as well, and
-	 * keeps the window from starting while the ring has work. */
+	/* A submission with no hardware busy share of its own (a tick waiting on a fence) no longer leaves the state
+	 * (0.7.216.6): the point holds while its work fits it, and a submission is not work by itself. Outside the
+	 * state the ring still keeps the window from starting, which is the entry rule of 0.7.207, unchanged. */
 	idle_init(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
-	CHECK(run_ring(&g, 0, 60000, 25, 1) == L(0) && !g.idle && g.idle_exits == 1);
+	for (i = 0; i < 400u; i++) CHECK(run_ring(&g, 0, 60000, 25, 1) == BC250_DPM_IDLE_LEVEL);
+	CHECK(g.idle && g.idle_exits == 0);
+	CHECK(run_ring(&g, 1000, 60000, 25, 1) == L(0) && !g.idle && g.idle_exits == 1 && g.idle_fast_exits == 1);
 	for (i = 0; i < 400u; i++) CHECK(run_ring(&g, 0, 60000, 25, 1) == L(0));
 	CHECK(!g.idle && g.idle_entries == 1 && g.idle_ms == 0);
 	/* With the ring empty again the next full window enters. */
@@ -2816,6 +2834,411 @@ static void test_idle(void)
 	}
 }
 
+/* The leave share lies above the default entry mean and every admitted leave share under the fast exit's share. */
+typedef char dpm_idle_leave_order[(BC250_DPM_IDLE_BUSY_PERMILLE < BC250_DPM_IDLE_LEAVE_PERMILLE &&
+				   BC250_DPM_IDLE_MIN_LEAVE_PERMILLE <= BC250_DPM_IDLE_LEAVE_PERMILLE &&
+				   BC250_DPM_IDLE_LEAVE_PERMILLE <= BC250_DPM_IDLE_MAX_LEAVE_PERMILLE &&
+				   BC250_DPM_IDLE_MAX_LEAVE_PERMILLE < BC250_DPM_IDLE_EXIT_PERMILLE) ? 1 : -1];
+
+/* A small deterministic generator for the traces below (Numerical Recipes' LCG): the same trace on every run. */
+static unsigned int trace_rand(unsigned int *seed)
+{
+	*seed = *seed * 1664525u + 1013904223u;
+	return *seed >> 8;
+}
+
+/* The idle point as a DPM level with hysteresis (0.7.216.6). The lab record that asked for it: with the desktop
+ * composed on our GPU, every DWM frame put work on the GFX ring, the ring rule left the idle point at each one, and
+ * the owner watched 500 -> 1000 -> 500 MHz every two seconds at an idle desktop (29 exits in 6.5 minutes when quiet).
+ *   1. A desktop: one short frame every 0.5 to 2 s, 1 to 2 ticks of 40 to 160 permille with the ring busy in those
+ *      ticks, for 6.5 minutes. Entered once, never left, one transition of the clock.
+ *   2. The same desktop from the lab floor with the ring seen in one frame of eight: the entry rule (unchanged) still
+ *      finds its quiet window, and from then on the point holds.
+ *   3. A game: the first busy tick leaves, whatever the ring says, and the next tick is the load's own raise.
+ *   4. A steady 30 % load leaves within one hold time, wherever in the trailing window it starts, ring or not.
+ *   5. The setting DpmIdleLeavePermille: its bounds, and that it must be above the admitted entry mean. */
+static void test_idle_desktop(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, offset, ticks, frames, at_point, hold = BC250_DPM_IDLE_HOLD_MS / 25u;
+	unsigned int seed, next, burst, share;
+	const unsigned int minutes65 = 390000u / 25u;	/* 6.5 minutes of ticks */
+
+	/* 1. From the idle point, 6.5 minutes of a waking desktop. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 45000) == hold);
+	seed = 1u;
+	next = (500u + trace_rand(&seed) % 1501u) / 25u;
+	burst = 0;
+	share = 0;
+	frames = at_point = 0;
+	for (i = 0; i < minutes65; i++) {
+		int ring = 0;
+		unsigned int busy = 0;
+		if (burst) {
+			ring = 1;
+			busy = share;
+			burst--;
+		} else if (next-- == 0u) {
+			frames++;
+			burst = 1u + trace_rand(&seed) % 2u;		/* 1 or 2 ticks */
+			share = 40u + trace_rand(&seed) % 121u;		/* 40 to 160 permille */
+			ring = 1;
+			busy = share;
+			burst--;
+			next = (500u + trace_rand(&seed) % 1501u) / 25u;
+		}
+		if (run_ring(&g, busy, 45000, 25, ring) == BC250_DPM_IDLE_LEVEL) at_point++;
+	}
+	CHECK(frames > 190u);					/* about one frame every 1.25 s */
+	CHECK(g.idle && g.idle_entries == 1 && g.idle_exits == 0 && at_point == minutes65);
+	CHECK(g.raises == 0 && g.lowers == 1);
+
+	/* 2. From the lab floor. The ring is seen in one frame of eight, which is what a 25 ms tick sampling a 2 ms
+	 * frame sees: the entry needs one window with no ring sample and a mean under 2 permille, and then holds. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	seed = 7u;
+	next = (500u + trace_rand(&seed) % 1501u) / 25u;
+	frames = at_point = 0;
+	for (i = 0; i < minutes65; i++) {
+		int ring = 0;
+		unsigned int busy = 0;
+		if (next-- == 0u) {
+			frames++;
+			busy = 40u;					/* one active sample of the 25 a tick holds */
+			ring = (trace_rand(&seed) % 8u) == 0u;
+			next = (500u + trace_rand(&seed) % 1501u) / 25u;
+		}
+		if (run_ring(&g, busy, 45000, 25, ring) == BC250_DPM_IDLE_LEVEL) at_point++;
+	}
+	CHECK(g.idle && g.idle_entries == 1 && g.idle_exits == 0);
+	CHECK(at_point > minutes65 * 9u / 10u && g.raises + g.lowers == 1);
+
+	/* 3. A game from the idle point: the first busy tick returns to the lab floor in that tick, with the ring busy
+	 * or not, and the load raises from there at the next tick. A burst on the paging node alone does the same. */
+	for (i = 0; i < 3u; i++) {
+		idle_init(&g, BC250_DPM_TOP_LEVEL);
+		CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+		if (i < 2u) CHECK(run_ring(&g, 950, 60000, 25, (int)i) == L(0));
+		else CHECK(run_nodes(&g, 0, 60000, 25, 0, 950u) == L(0));
+		CHECK(!g.idle && g.idle_exits == 1 && g.idle_fast_exits == 1);
+		if (i < 2u) CHECK(run_ring(&g, 950, 60000, 25, 1) > L(0));
+	}
+
+	/* 4. A steady 30 % load, started at every tick of the trailing window: it leaves within one hold time, and
+	 * through the window rule, not the fast share. */
+	for (offset = 0; offset < hold; offset++) {
+		int ring = (int)(offset & 1u);
+		idle_init(&g, BC250_DPM_TOP_LEVEL);
+		CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+		for (i = 0; i < offset; i++) CHECK(run_ring(&g, 0, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
+		for (ticks = 1; ticks <= 2u * hold; ticks++)
+			if (run_ring(&g, 300, 60000, 25, ring) != BC250_DPM_IDLE_LEVEL) break;
+		CHECK(ticks <= hold && !g.idle && g.idle_slow_exits == 1 && g.idle_fast_exits == 0);
+		CHECK(g.level == L(0));
+	}
+
+	/* 5. The setting. The default is in place after bc250_dpm_idle_config; the bounds and the entry mean refuse, and a
+	 * refusal turns the state off, as every refused idle setting does. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(g.idle_leave_permille == BC250_DPM_IDLE_LEAVE_PERMILLE);
+	CHECK(bc250_dpm_idle_set_leave(&g, BC250_DPM_IDLE_MIN_LEAVE_PERMILLE) == BC250_DPM_IDLE_OK && g.idle_on);
+	CHECK(bc250_dpm_idle_set_leave(&g, BC250_DPM_IDLE_MAX_LEAVE_PERMILLE) == BC250_DPM_IDLE_OK && g.idle_on);
+	CHECK(bc250_dpm_idle_set_leave(&g, BC250_DPM_IDLE_MAX_LEAVE_PERMILLE + 1u) == BC250_DPM_IDLE_LEAVE && !g.idle_on);
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_idle_set_leave(&g, BC250_DPM_IDLE_MIN_LEAVE_PERMILLE - 1u) == BC250_DPM_IDLE_LEAVE && !g.idle_on);
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 50) == BC250_DPM_IDLE_OK);
+	CHECK(bc250_dpm_idle_set_leave(&g, 50) == BC250_DPM_IDLE_LEAVE && !g.idle_on);	/* not above the mean */
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 50) == BC250_DPM_IDLE_OK);
+	CHECK(bc250_dpm_idle_set_leave(&g, 51) == BC250_DPM_IDLE_OK && g.idle_on && g.idle_leave_permille == 51u);
+	/* A configured share is the one in force: 250 permille holds a 200 permille load that the default leaves. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_idle_set_leave(&g, 250) == BC250_DPM_IDLE_OK);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	for (i = 0; i < 10u * hold; i++) CHECK(run_ring(&g, 200, 60000, 25, 1) == BC250_DPM_IDLE_LEVEL);
+	CHECK(g.idle && g.idle_exits == 0);
+}
+
+/* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------- */
+
+typedef char joint_min_is_the_cpu_floor[(BC250_JOINT_MIN_MHZ == 2800u && BC250_JOINT_STEP_MHZ == 200u &&
+					 BC250_JOINT_FREE_PERMILLE < BC250_JOINT_BOUND_PERMILLE &&
+					 BC250_JOINT_ENGAGE_MS >= 2000u && BC250_JOINT_FREE_MS >= 2000u &&
+					 BC250_JOINT_STEP_MS >= BC250_JOINT_ENGAGE_MS &&
+					 BC250_JOINT_COOL_MS > BC250_JOINT_STEP_MS) ? 1 : -1];
+
+static struct bc250_joint_input jin(unsigned int busy, int heat, int cool, unsigned int base)
+{
+	struct bc250_joint_input in;
+	memset(&in, 0, sizeof(in));
+	in.busy_permille = busy;
+	in.heat = heat;
+	in.cool = cool;
+	in.cpu_ready = 1;
+	in.base_mhz = base;
+	in.dt_ms = 25;
+	return in;
+}
+
+/* Ticks of one input until the cap changes, or limit ticks; returns the ticks taken (limit when it did not change). */
+static unsigned int joint_until_change(struct bc250_joint *j, const struct bc250_joint_input *in, unsigned int limit)
+{
+	unsigned int i, before = j->cap_mhz;
+	for (i = 1; i <= limit; i++)
+		if (bc250_joint_step(j, in) != before) return i;
+	return limit;
+}
+
+static void test_joint(void)
+{
+	struct bc250_joint j;
+	struct bc250_joint_input in;
+	const unsigned int base = 3200u;	/* unit A's recorded baseline (facts M817) */
+	const unsigned int engage = BC250_JOINT_ENGAGE_MS / 25u, step = BC250_JOINT_STEP_MS / 25u;
+	const unsigned int freeTicks = BC250_JOINT_FREE_MS / 25u, cool = BC250_JOINT_COOL_MS / 25u;
+	unsigned int i;
+
+	bc250_joint_init(&j);
+	CHECK(j.cap_mhz == 0 && j.reason == BC250_JOINT_FREE);
+
+	/* Bound and hot: nothing for ENGAGE_MS, then base - one step, in the tick that completes it. */
+	in = jin(900, 1, 0, base);
+	for (i = 1; i < engage; i++) CHECK(bc250_joint_step(&j, &in) == 0 && j.reason == BC250_JOINT_WAIT);
+	CHECK(bc250_joint_step(&j, &in) == 3000u && j.reason == BC250_JOINT_CAPPING && j.engages == 1);
+	/* Then one step per STEP_MS, down to MIN_MHZ and no further. */
+	CHECK(joint_until_change(&j, &in, 10u * step) == step && j.cap_mhz == 2800u);
+	CHECK(joint_until_change(&j, &in, 10u * step) == 10u * step && j.cap_mhz == 2800u);
+	CHECK(j.reason == BC250_JOINT_HOLD && j.steps_down == 2);
+
+	/* Not bound any more: the whole cap goes after FREE_MS, and a dip shorter than that changes nothing. */
+	in = jin(500, 0, 0, base);
+	for (i = 1; i < freeTicks; i++) CHECK(bc250_joint_step(&j, &in) == 2800u);
+	in = jin(900, 1, 0, base);
+	CHECK(bc250_joint_step(&j, &in) == 2800u && j.free_ms == 0);
+	in = jin(500, 0, 0, base);
+	CHECK(joint_until_change(&j, &in, 10u * freeTicks) == freeTicks && j.cap_mhz == 0);
+	CHECK(j.releases == 1 && j.reason == BC250_JOINT_FREE);
+
+	/* Bound without heat never engages, and neither does heat without a bound GPU (the bound share is exact). */
+	in = jin(1000, 0, 0, base);
+	CHECK(joint_until_change(&j, &in, 100u * engage) == 100u * engage && j.cap_mhz == 0);
+	in = jin(BC250_JOINT_BOUND_PERMILLE - 1u, 1, 0, base);
+	CHECK(joint_until_change(&j, &in, 100u * engage) == 100u * engage && j.cap_mhz == 0);
+	in = jin(BC250_JOINT_BOUND_PERMILLE, 1, 0, base);
+	CHECK(joint_until_change(&j, &in, 100u * engage) == engage && j.cap_mhz == 3000u);
+	/* An interrupted bound window starts again. */
+	bc250_joint_reset(&j);
+	CHECK(j.cap_mhz == 0 && j.releases == 2);
+	in = jin(900, 1, 0, base);
+	for (i = 1; i < engage; i++) (void)bc250_joint_step(&j, &in);
+	in = jin(700, 1, 0, base);
+	CHECK(bc250_joint_step(&j, &in) == 0 && j.bound_ms == 0);
+	in = jin(900, 1, 0, base);
+	CHECK(joint_until_change(&j, &in, 10u * engage) == engage);
+
+	/* Cool: one step back up per COOL_MS, and the step that reaches base is the release. Bound and neither hot nor
+	 * cool holds without a timer. */
+	CHECK(joint_until_change(&j, &in, 10u * step) == step && j.cap_mhz == 2800u);
+	in = jin(900, 0, 0, base);
+	CHECK(joint_until_change(&j, &in, 100u * cool) == 100u * cool && j.cap_mhz == 2800u);
+	CHECK(j.step_ms == 0 && j.cool_ms == 0 && j.reason == BC250_JOINT_HOLD);
+	in = jin(900, 0, 1, base);
+	CHECK(joint_until_change(&j, &in, 10u * cool) == cool && j.cap_mhz == 3000u && j.reason == BC250_JOINT_RAISING);
+	CHECK(joint_until_change(&j, &in, 10u * cool) == cool && j.cap_mhz == 0 && j.steps_up == 1);
+	CHECK(j.releases == 3);
+
+	/* Blind: everything holds, the cap and the timers alike. */
+	in = jin(900, 1, 0, base);
+	for (i = 0; i < engage / 2u; i++) (void)bc250_joint_step(&j, &in);
+	in.blind = 1;
+	in.heat = 0;
+	for (i = 0; i < 10u * engage; i++) CHECK(bc250_joint_step(&j, &in) == 0 && j.reason == BC250_JOINT_BLIND);
+	in = jin(900, 1, 0, base);
+	CHECK(joint_until_change(&j, &in, 10u * engage) == engage - engage / 2u);
+	in.blind = 1;
+	for (i = 0; i < 10u * step; i++) CHECK(bc250_joint_step(&j, &in) == 3000u);
+
+	/* The CPU surface not ready: the cap goes at once, and coming back needs a whole window. */
+	in = jin(900, 1, 0, base);
+	in.cpu_ready = 0;
+	CHECK(bc250_joint_step(&j, &in) == 0 && j.reason == BC250_JOINT_NO_CPU && j.releases == 4);
+	in.cpu_ready = 1;
+	CHECK(joint_until_change(&j, &in, 10u * engage) == engage);
+
+	/* A base under the cap releases it; a base at MIN_MHZ has no room; 2900 gets the floor as its first cap. */
+	in = jin(900, 1, 0, 3000u);
+	CHECK(bc250_joint_step(&j, &in) == 0 && j.reason == BC250_JOINT_FREE);
+	in = jin(900, 1, 0, BC250_JOINT_MIN_MHZ);
+	CHECK(joint_until_change(&j, &in, 10u * engage) == 10u * engage && j.cap_mhz == 0);
+	CHECK(j.reason == BC250_JOINT_NO_ROOM);
+	in = jin(900, 1, 0, 2900u);
+	CHECK(joint_until_change(&j, &in, 10u * engage) == engage && j.cap_mhz == 2800u);
+	CHECK(joint_until_change(&j, &in, 10u * step) == 10u * step);
+	/* A long tick counts as BC250_DPM_MAX_DT_MS, so a stall cannot jump the windows. */
+	bc250_joint_reset(&j);
+	in = jin(900, 1, 0, base);
+	in.dt_ms = 60000u;
+	CHECK(bc250_joint_step(&j, &in) == 0 && bc250_joint_step(&j, &in) == 3000u);
+
+	/* Random inputs, ready and a fixed base: the cap is 0 or inside MIN..base - STEP, a lowering only ever follows a
+	 * bound and hot tick, a raise a cool one, a release a free one or a cool one, and two changes are never closer
+	 * than the shortest window (ENGAGE_MS and FREE_MS). */
+	{
+		unsigned int seed = 12345u, last = 0, changes = 0, sinceChange = 1000000u, minGap = 1000000u;
+		bc250_joint_init(&j);
+		for (i = 0; i < 2000000u; i++) {
+			unsigned int r, cap;
+			seed = seed * 1103515245u + 12345u;
+			r = seed >> 8;
+			in = jin((r % 4u == 0u) ? 400u : (r % 4u == 1u) ? 700u : 920u, (r >> 3) % 3u == 0u, 0, base);
+			in.cool = !in.heat && (r >> 5) % 2u == 0u;
+			/* Inputs stay put for a while, as a scene does: a fresh draw every 1..8 s. */
+			{
+				unsigned int k, hold = 40u + (r >> 9) % 280u;
+				for (k = 0; k < hold && i < 2000000u; k++, i++) {
+					cap = bc250_joint_step(&j, &in);
+					sinceChange += 25u;
+					CHECK(cap == 0 || (cap >= BC250_JOINT_MIN_MHZ && cap <= base - BC250_JOINT_STEP_MHZ));
+					if (cap != last) {
+						if (cap && (cap < last || !last)) CHECK(in.busy_permille >= 850u && in.heat);
+						if (cap > last && last) CHECK(in.cool);
+						if (!cap) CHECK(in.busy_permille < 600u || in.cool);
+						if (sinceChange < minGap) minGap = sinceChange;
+						sinceChange = 0;
+						changes++;
+						last = cap;
+					}
+				}
+			}
+		}
+		CHECK(changes > 1000u && minGap >= BC250_JOINT_ENGAGE_MS);
+		printf("joint arm fuzz: %u cap changes, the closest two %u ms apart, %u engages %u releases\n", changes,
+		       minGap, j.engages, j.releases);
+	}
+}
+
+/* The arm's inputs out of the governor: heat, cool and blind as bc250_joint_read derives them. */
+static void test_joint_read(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_input in;
+	struct bc250_joint_input out;
+	const unsigned int ceiling = (unsigned int)bc250_dpm_level_of(1500);
+
+	bc250_dpm_init(&g, ceiling);
+	g.avg_permille = 900;
+	in = tick(900, 80, 25);
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.busy_permille == 900 && !out.heat && out.cool && !out.blind && out.dt_ms == 25);
+	in.temperature_mc = 81000;		/* at the cool line: not cool, and not hot either */
+	bc250_joint_read(&g, &in, &out);
+	CHECK(!out.heat && !out.cool);
+	in.temperature_mc = 80999;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.cool);
+	/* The soft zone and an 87 C episode are heat at any reading. */
+	g.zone = 1;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.heat && !out.cool);
+	g.zone = 0;
+	g.hot = 1;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.heat && !out.cool);
+	g.hot = 0;
+	/* A lowered cap: heat at or above the soft-release threshold (83 C by default), the release at work under it. */
+	g.thermal_cap = ceiling - 1u;
+	in.temperature_mc = (int)BC250_DPM_HOT_MC - (int)g.tune.soft_delta_mc;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.heat && !out.cool);
+	in.temperature_mc -= 1;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(!out.heat && !out.cool);
+	in.temperature_mc = 70000;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(!out.heat && !out.cool);		/* a lowered cap is never cool */
+	/* With the soft release off, the hot cap's own release threshold. */
+	g.tune.soft_delta_mc = 0;
+	in.temperature_mc = BC250_DPM_RELEASE_MC;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.heat);
+	in.temperature_mc = BC250_DPM_RELEASE_MC - 1;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(!out.heat);
+	g.thermal_cap = ceiling;
+	/* A thermal throttle is heat; the other throttles are not. */
+	g.throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.heat);
+	g.throttle = BC250_DPM_THROTTLE_THERMAL_ZONE;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.heat);
+	g.throttle = BC250_DPM_THROTTLE_MAX_SETTING;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(!out.heat);
+	g.throttle = BC250_DPM_THROTTLE_THERMAL_RAMP;	/* the ramp slows raises from 70 C: not a held clock */
+	bc250_joint_read(&g, &in, &out);
+	CHECK(!out.heat);
+	/* No reading: blind, never hot and never cool, whatever the governor's state says. */
+	g.zone = 1;
+	in.temperature_valid = 0;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.blind && !out.heat && !out.cool);
+	in.temperature_valid = 1;
+	in.dt_ms = 60000;
+	bc250_joint_read(&g, &in, &out);
+	CHECK(out.dt_ms == BC250_DPM_MAX_DT_MS);
+}
+
+/* The arm on the governor, closed loop on the GPU clock, over recorded Tctl readings at a bound GPU: session 436
+ * (BD-087, 89.2 C) must engage it, and only once the governor's clock was held by heat; the cool segment of the same
+ * session must never engage it. The readings are replayed as recorded, so the CPU cap has no effect on them: this
+ * shows when the arm acts, not what it buys. */
+static void joint_replay(const char *name, const short *deci, unsigned int n, unsigned int *engages, int *first_mc)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_joint j;
+	const unsigned int ceiling = (unsigned int)bc250_dpm_level_of(1500);
+	unsigned int i, k, steps = 0;
+
+	*first_mc = 0;
+	bc250_dpm_init(&g, ceiling);
+	g.level = ceiling;
+	g.thermal_cap = ceiling;
+	bc250_joint_init(&j);
+	for (i = 0; i < n; i++) {
+		for (k = 0; k < 40u; k++) {
+			struct bc250_dpm_input in = tick(950, 0, 25);
+			struct bc250_joint_input ji;
+			unsigned int before = j.cap_mhz, level;
+			in.temperature_mc = deci[i] * 100;
+			in.ring_busy = 1;
+			level = bc250_dpm_step(&g, &in);
+			bc250_dpm_commit(&g, level);
+			bc250_joint_read(&g, &in, &ji);
+			ji.cpu_ready = 1;
+			ji.base_mhz = 3200u;
+			(void)bc250_joint_step(&j, &ji);
+			if (j.cap_mhz != before) steps++;
+			if (!before && j.cap_mhz && !*first_mc) *first_mc = deci[i] * 100;
+		}
+	}
+	*engages = j.engages;
+	printf("joint replay %-10s %4u samples: %u engages, %u cap changes, %u down %u up %u releases, first at %d mC\n",
+	       name, n, j.engages, steps, j.steps_down, j.steps_up, j.releases, *first_mc);
+}
+
+static void test_joint_traces(void)
+{
+	unsigned int engages;
+	int first;
+	joint_replay("436", zone_trace_436, (unsigned int)(sizeof(zone_trace_436) / sizeof(zone_trace_436[0])),
+		     &engages, &first);
+	CHECK(engages > 0u && first >= 83000);
+	joint_replay("436 cool", zone_flat_436, (unsigned int)(sizeof(zone_flat_436) / sizeof(zone_flat_436[0])),
+		     &engages, &first);
+	CHECK(engages == 0u);
+}
+
 int main(void)
 {
 	test_table();
@@ -2828,6 +3251,10 @@ int main(void)
 	test_session();
 	test_busy_source();
 	test_idle();
+	test_idle_desktop();
+	test_joint();
+	test_joint_read();
+	test_joint_traces();
 	test_curve();
 	test_tune_check();
 	test_tune_no_oscillation();

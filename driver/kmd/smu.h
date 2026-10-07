@@ -74,6 +74,17 @@ NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* Owner, ULONG Queue, ULONG Message, ULONG
                        BOOLEAN AllowHot, ULONG BusyPermille, _Out_opt_ ULONG* Value,
                        _Out_opt_ LONG* TemperatureMc, _Out_opt_ ULONG* FirmwareStatus,
                        _Out_opt_ BOOLEAN* TemperatureValid);
+// The joint power arm's way in (0.7.216.7, docs/design/dpm.md "The joint power arm"): SmuCpuMessage with the busy gate
+// lifted, for the two messages SmuCpuJointAdmitted names and no other - queue 3's maximum boost clock (a setter) and
+// its CPU voltage (a getter, the readback every change ends with). Any other message is refused with
+// STATUS_INVALID_PARAMETER before anything is read or written. Every other rule above stays as it is, the hot gate
+// included: a raise of the limit at or above BC250_CLOCK_HOT_MC waits unless AllowHot names it a restore.
+// driver/kmd/cpu.c calls it only for the arm's own changes, which DpmJointGovernor turns on (default off).
+NTSTATUS SmuCpuJointMessage(BC250_SMU_OWNER* Owner, ULONG Queue, ULONG Message, ULONG Parameter, BOOLEAN Write,
+                            BOOLEAN AllowHot, ULONG BusyPermille, _Out_opt_ ULONG* Value,
+                            _Out_opt_ LONG* TemperatureMc, _Out_opt_ ULONG* FirmwareStatus,
+                            _Out_opt_ BOOLEAN* TemperatureValid);
+BOOLEAN SmuCpuJointAdmitted(ULONG Queue, ULONG Message, BOOLEAN Write);
 // TRUE when this caller took the CPU sequence flag; SmuCpuEnd releases it. FALSE means another sequence runs.
 BOOLEAN SmuCpuBegin(BC250_SMU_OWNER* Owner);
 void SmuCpuEnd(BC250_SMU_OWNER* Owner);

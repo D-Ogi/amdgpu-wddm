@@ -289,16 +289,40 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_IDLE_MIN_HOLD_MS	250u	/* ten governor ticks */
 #define BC250_DPM_IDLE_MAX_HOLD_MS	60000u
 #define BC250_DPM_IDLE_MAX_BUSY_PERMILLE 100u	/* 10 %: anything higher is not an idle GPU */
-/* The share at which one tick of its own leaves the state. It is not the entry threshold on purpose. Entry
- * admits a mean of 2 permille because a static desktop wakes for single frames, and one such frame is
+/* The share at which one tick of its own leaves the state: the fast exit. It is not the entry threshold on purpose.
+ * Entry admits a mean of 2 permille because a static desktop wakes for single frames, and one such frame is
  * 1000 / BC250_DPM_TICK_MS = 40 permille of its own tick (one active GRBM sample of the 25 a 25 ms tick holds),
  * twenty times that mean. Comparing a tick's own share with the entry threshold therefore left the state at the
  * very frame the mean rule was written to tolerate: on the policy itself, one wake per second gave 15 entries and
  * 15 exits a minute and held the point for a quarter of the time. A tick at or above half its own wall time is
- * work no desktop frame reaches, and work on either ring leaves the state in that tick anyway (ring_busy), so
- * this threshold only has to catch heavy work that the ring accounting cannot see. Anything under it that lasts
- * leaves through the window rule: a whole window whose mean is above the admitted share. */
+ * work no desktop frame reaches: 12.5 ms of GPU work inside one 25 ms tick at 500 MHz is a frame that comes near a
+ * 60 Hz deadline, and a game's first busy tick reads 900 permille and more. Anything under it that lasts leaves
+ * through the window rule: the work of the trailing window reaches BC250_DPM_IDLE_LEAVE_PERMILLE.
+ *
+ * Since 0.7.216.6 work on the GFX ring (ring_busy) no longer leaves the state by itself. With the desktop composed
+ * on our GPU every DWM frame - the cursor, the clock, an overlay redraw - is a submission, and the ring rule left the
+ * idle point at each one: 500 -> 1000 MHz, three seconds at the lab floor for the next quiet window, back to 500, and
+ * again, every two seconds while the owner watched and 29 exits in 6.5 minutes at a quiet desktop (2026-10-07). The
+ * idle point is now a DPM level with hysteresis: it holds while its own work fits it and is left by work that does
+ * not. The ring still gates the entry, which is unchanged. */
 #define BC250_DPM_IDLE_EXIT_PERMILLE	500u
+/* The slow exit: the trailing window's mean busy share at the idle point, in permille, at which the state is left
+ * (DpmIdleLeavePermille). The window is the hold time; its work is counted as the ticks come, and the state is left
+ * at the tick at which the window's work reaches this share of the whole window, not at the window's end, so a
+ * steady load of at least twice the share leaves within one hold time wherever in a window it starts.
+ *
+ * Why 150. The measured desktop is far under it: the idle phases of the C62 identification (R120, 24 samples at
+ * 1.75 s, 500 MHz, quiet desktop on the GPU) read a tick share of 0 and a busy average of 2 to 6 permille, and the
+ * DWM frames that caused the flapping are about 2 ms of GPU work per 2 s, some 1 permille at the lab floor and 2 at
+ * the idle point. A desktop that animates at 60 Hz with 2 ms of work a frame is 120 permille here and still fits.
+ * And what stays under it fits the point: 150 permille at 500 MHz is about 75 at the lab floor, an order of magnitude
+ * under the load governor's own lowering threshold (BC250_DPM_DOWN_PERMILLE, 650), so the lab floor would serve the
+ * same work at the same throughput, only each frame's 2.5 ms becomes 1.25 ms, both far inside a 16.7 ms frame. It is
+ * the middle of the 100 to 250 permille band the review asked for: below it a video or an animated page starts to
+ * flap again, above it a sustained 30 % load (the test's case) would need more than one hold time. */
+#define BC250_DPM_IDLE_LEAVE_PERMILLE	150u
+#define BC250_DPM_IDLE_MIN_LEAVE_PERMILLE 10u	/* and always above the window's admitted entry mean */
+#define BC250_DPM_IDLE_MAX_LEAVE_PERMILLE 400u	/* and always under BC250_DPM_IDLE_EXIT_PERMILLE */
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
 #define BC250_DPM_CAP_MS_MAX		0x7FFFFFFFu	/* where the time since the last cap change saturates */
 
@@ -428,8 +452,10 @@ struct bc250_dpm_input {
 	int		temperature_valid;
 	unsigned int	dt_ms;			/* since the previous tick */
 	/* Work outstanding on the GFX ring at this tick (the KMD's GfxSubmitBusy): submitted and not yet
-	 * retired, whatever the hardware's busy samples say. The idle state alone reads it (0.7.207): a
-	 * submission waiting on a fence keeps the clock at the lab floor. Zero is "the ring is empty". */
+	 * retired, whatever the hardware's busy samples say. The idle state reads it for its entry (0.7.207): a
+	 * submission waiting on a fence keeps the clock at the lab floor. Since 0.7.216.6 it no longer ends an idle
+	 * episode by itself (BC250_DPM_IDLE_EXIT_PERMILLE says why); the soft zone's work gate reads it as well.
+	 * Zero is "the ring is empty". */
 	int		ring_busy;
 	/* The paging node's busy share over this tick, from the same hardware samples as busy_permille
 	 * (SDMA0_STATUS_REG.IDLE), 0 for a tick with too few samples. The idle state alone reads it (0.7.207):
@@ -464,11 +490,14 @@ struct bc250_dpm_governor {
 	int		idle_on, idle;
 	unsigned int	idle_level;		/* the point idle holds; raised to the thermal floor after a refusal */
 	unsigned int	idle_hold_ms;		/* the window the GPU must be quiet for */
-	unsigned int	idle_busy_permille;	/* the window's admitted mean busy share, and the exit threshold */
+	unsigned int	idle_busy_permille;	/* the entry window's admitted mean busy share */
 	unsigned int	idle_ms;		/* the window so far: the candidate one before entry, the trailing one in idle */
 	unsigned int	idle_acc;		/* busy permille x ms over that window, saturating */
 	unsigned int	idle_entries, idle_exits, idle_refusals;
 	unsigned int	idle_total_ms;		/* time held at the idle point, saturating */
+	unsigned int	idle_leave_permille;	/* the slow exit's share (0.7.216.6, BC250_DPM_IDLE_LEAVE_PERMILLE) */
+	unsigned int	idle_fast_exits;	/* exits by one tick at BC250_DPM_IDLE_EXIT_PERMILLE (0.7.216.6) */
+	unsigned int	idle_slow_exits;	/* exits by the window's work reaching idle_leave_permille (0.7.216.6) */
 	/* The soft zone (0.7.213, BD-087). */
 	unsigned int	zone_ms;		/* time in the zone since its last step down */
 	unsigned int	zone_steps;		/* cap lowerings by the zone */
@@ -522,6 +551,7 @@ enum bc250_dpm_idle_error {
 	BC250_DPM_IDLE_CLOCK = 1,	/* DpmIdleMHz is not a table clock below the lab floor */
 	BC250_DPM_IDLE_HOLD = 2,	/* DpmIdleHoldMs outside MIN..MAX_HOLD_MS */
 	BC250_DPM_IDLE_BUSY = 3,	/* DpmIdleBusyPermille above MAX_BUSY_PERMILLE */
+	BC250_DPM_IDLE_LEAVE = 4,	/* DpmIdleLeavePermille outside MIN..MAX_LEAVE_PERMILLE, or not above the entry mean */
 	BC250_DPM_IDLE_ERROR_COUNT
 };
 /* The start's idle setting, after bc250_dpm_init (which leaves the state off, so a caller that does not
@@ -530,6 +560,11 @@ enum bc250_dpm_idle_error {
  * Not a run-time operation: the KMD calls it once per start, before the governor thread exists. */
 enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, unsigned int idle_mhz,
 						unsigned int hold_ms, unsigned int busy_permille);
+/* The slow exit's share (DpmIdleLeavePermille, 0.7.216.6), after bc250_dpm_idle_config, which leaves the default in
+ * place. MIN..MAX_LEAVE_PERMILLE and strictly above the entry window's admitted mean: a share at or under that mean
+ * would leave the state on the very work that entered it. A refused value turns the idle state off, as every refused
+ * idle setting does, and the KMD logs it. */
+enum bc250_dpm_idle_error bc250_dpm_idle_set_leave(struct bc250_dpm_governor *g, unsigned int leave_permille);
 /* The caller could not put the hardware at the idle point (the SMU refused it, the readback did not match).
  * The idle point falls back one step at a time, as the owner asked: 500 MHz, then the thermal floor
  * (800 MHz), then off, which is the lab floor. One refusal is enough for each step: the firmware has never
@@ -626,5 +661,85 @@ struct bc250_dpm_session {
 /* Call with the level about to be applied (SET must be durable before it) and after each tick. */
 enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s, unsigned int level,
 						     unsigned int dt_ms);
+
+/* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------ */
+
+/* The GPU clock governor above, the CPU surface (bc250_cpu.h) and the fan control each run their own loop, and none
+ * of them knows what the others cost in heat. In a GPU-bound game the package's heat is shared: the CPU's part of it
+ * takes clock from the GPU through the thermal cap and the soft zone, while the CPU itself waits for the GPU. The
+ * joint arm closes that loop in one direction only. When the GPU is the bottleneck AND its clock is held by heat, it
+ * lowers the CPU's maximum boost clock (queue 3 BC250_CPU_MSG_SET_MAX_MHZ, the one CPU control that is a pure
+ * lowering) one step at a time; the GPU gets the headroom back through the governor's own soft release, whose rules
+ * stay exactly as they are. When the GPU is no longer the bottleneck, or the heat is gone, the CPU limit comes back.
+ *
+ * Pure policy, like the rest of this file: the KMD (driver/kmd/dpm.c) feeds one tick of the governor's own state and
+ * the CPU surface's readiness, and publishes the cap it returns; driver/kmd/cpu.c owns every mailbox message. The
+ * arm never names a GPU clock, never touches a thermal rule and never sends anything itself.
+ *
+ *   bound      the governor's busy average at or above BOUND_PERMILLE: the GPU is the bottleneck
+ *   free       the average under FREE_PERMILLE: it is not
+ *   heat       the governor's clock is held by a thermal rule: an 87 C episode, the soft zone, a throttle that names a
+ *              thermal rule (soft, hard, warm, zone), or a lowered thermal cap with the reading still at or above the
+ *              soft-release threshold. A lowered cap under that threshold is the soft release at work, and the arm
+ *              waits for it instead of capping the CPU further.
+ *   cool       a valid reading under BC250_DPM_HOT_MC - COOL_DELTA_MC, the thermal cap released, no episode, no zone
+ *   blind      no temperature reading this tick: the arm holds whatever it has (the governor itself goes to the floor)
+ *
+ * The states, by enum bc250_joint_reason:
+ *   no cap     bound and heat for ENGAGE_MS -> the first cap, base - STEP_MHZ (never under MIN_MHZ)
+ *   capped     bound and heat for another STEP_MS -> one step lower, down to MIN_MHZ
+ *              free for FREE_MS -> released at once, the whole cap
+ *              cool for COOL_MS -> one step higher; reaching base is the release
+ *   any        the CPU surface not ready (CpuTune 0, queue 3 not proven, a trial, a search, an owed revert, a fault),
+ *              or a base that leaves no room under it -> no cap, every timer cleared
+ * The cap never goes above base, and a base that falls to the cap or below releases it. */
+#define BC250_JOINT_BOUND_PERMILLE	850u	/* the governor raises from 900: a bound GPU averages above this */
+#define BC250_JOINT_FREE_PERMILLE	600u	/* well under the governor's own 651 target: a menu or a loading screen */
+#define BC250_JOINT_ENGAGE_MS		2000u	/* bound and hot this long before the first CPU message */
+#define BC250_JOINT_FREE_MS		2000u
+#define BC250_JOINT_STEP_MS		4000u	/* one CPU step per this, at most: the package's heat answers in seconds */
+#define BC250_JOINT_COOL_MS		8000u	/* a step back up waits twice as long as a step down */
+#define BC250_JOINT_STEP_MHZ		200u
+#define BC250_JOINT_MIN_MHZ		2800u	/* BC250_CPU_MIN_MHZ; driver/kmd/cpu.c asserts that they are equal */
+#define BC250_JOINT_COOL_DELTA_MC	6000	/* 81 C: two degrees under the default soft-release threshold of 83 C */
+
+enum bc250_joint_reason {
+	BC250_JOINT_OFF = 0,		/* the arm is off for this start (DpmJointGovernor 0) */
+	BC250_JOINT_NO_CPU = 1,		/* the CPU surface cannot take a cap now */
+	BC250_JOINT_NO_ROOM = 2,	/* the CPU's base clock is at MIN_MHZ already: nothing to lower */
+	BC250_JOINT_FREE = 3,		/* the GPU is not bound, or not held by heat: no cap */
+	BC250_JOINT_WAIT = 4,		/* bound and hot, ENGAGE_MS not yet over */
+	BC250_JOINT_CAPPING = 5,	/* this tick lowered the cap */
+	BC250_JOINT_HOLD = 6,		/* capped, waiting (for a step, for the cool time, at MIN_MHZ) */
+	BC250_JOINT_RAISING = 7,	/* this tick raised the cap one step */
+	BC250_JOINT_BLIND = 8,		/* no temperature reading: everything held */
+	BC250_JOINT_REASON_COUNT
+};
+
+struct bc250_joint_input {
+	unsigned int	busy_permille;		/* the governor's busy average (bc250_dpm_governor.avg_permille) */
+	int		heat, cool, blind;
+	int		cpu_ready;		/* the CPU surface can take a cap now (driver/kmd/cpu.c) */
+	unsigned int	base_mhz;		/* the CPU's limit without the arm: the operator's, or the recorded baseline */
+	unsigned int	dt_ms;
+};
+
+struct bc250_joint {
+	unsigned int	cap_mhz;		/* the CPU limit the arm asks for, 0 for none */
+	unsigned int	reason;			/* enum bc250_joint_reason of the last step */
+	unsigned int	bound_ms, free_ms, step_ms, cool_ms;
+	unsigned int	engages, steps_down, steps_up, releases;
+};
+
+void bc250_joint_init(struct bc250_joint *j);
+/* The tick's heat, cool, blind and busy average out of the governor right after bc250_dpm_step(), and the tick's
+ * input. The caller adds cpu_ready and base_mhz. */
+void bc250_joint_read(const struct bc250_dpm_governor *g, const struct bc250_dpm_input *in,
+		      struct bc250_joint_input *out);
+/* One tick. Returns the CPU limit to ask for, 0 for none; j->reason says why. */
+unsigned int bc250_joint_step(struct bc250_joint *j, const struct bc250_joint_input *in);
+/* The cap is gone outside a tick (a stop, a power transition, the governor gave up): no cap, timers cleared, and a
+ * cap that was in force counts as a release. */
+void bc250_joint_reset(struct bc250_joint *j);
 
 #endif

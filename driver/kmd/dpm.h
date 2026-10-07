@@ -35,10 +35,19 @@ typedef struct _BC250_DPM_SNAP {
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
     ULONG IdleEntries, IdleExits, IdleRefusals;
     ULONGLONG IdleMs;                       // time held at the idle point
+    // 0.7.216.6, the idle point's hysteresis: the slow exit's share in force and how the exits split between the one
+    // busy tick (fast) and the trailing window (slow). Driver log only, not in the escape.
+    ULONG IdleLeavePermille, IdleFastExits, IdleSlowExits;
     // 0.7.210, the operator's V/F curve. CurrentMv above already comes from the active curve; these three are
     // what the telemetry line and the escape's flags need. Serial counts changes of the active curve, Applied is
     // the serial the governor has put into the hardware.
     ULONG CurveSerial, CurveApplied, CurveTrialRemainingMs;
+    // 0.7.216.7, the joint power arm (C62): what it wants, what the CPU surface has in the chip and the limit it is
+    // measured from, why, and its counters. The flags BC250_DPM_FLAG_JOINT and _JOINT_CAP reach the escape; the rest
+    // is driver log only.
+    ULONG JointWantMHz, JointAppliedMHz, JointBaseMHz, JointReason;
+    ULONG JointEngages, JointStepsDown, JointStepsUp, JointReleases, JointSends, JointRefusals;
+    BOOLEAN JointReady;
 } BC250_DPM_SNAP;
 
 typedef struct _BC250_DPM_STATE {
@@ -81,6 +90,10 @@ typedef struct _BC250_DPM_STATE {
     struct bc250_dpm_curve_state Curve;     // under SnapLock
     ULONG CurveTrialMs;                     // DpmCurveTrialMs of this start, the window a SET gets by default
     BOOLEAN CurvePending, CurveConfirmed;    // the guard's marks of this start's stored curve
+    // The joint power arm (0.7.216.7, C62): DpmJointGovernor 1 of this start, and the policy's state, the thread's
+    // alone like Gov. The cap it decides goes to the CPU surface through Device->Cpu.JointWantMHz.
+    BOOLEAN JointOn;
+    struct bc250_joint Joint;
 } BC250_DPM_STATE;
 
 // The submit path (gfx.c SubmitIbLocked, after the IB is committed): the ring went, or stays, busy.
