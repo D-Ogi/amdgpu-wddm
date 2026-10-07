@@ -1,0 +1,27 @@
+# The documentation style gate: every document in the scope of docs/style.md must stay within
+# the findings that tools/quality/doclint_baseline.txt allows it, and a new document must be
+# clean. Same check as the 'doclint' step of tools/quality/quick.ps1. Standard library only.
+name: doclint
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  doclint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Documents stay within the baseline (docs/style.md states the rules)
+        run: python tools/quality/doclint.py
+      - name: Gate tests
+        run: python -m unittest discover -s tools/quality -p 'test_doclint.py'
+      - name: Vendored linter self-test
+        run: python tools/quality/third_party/ste_lint.py --selftest

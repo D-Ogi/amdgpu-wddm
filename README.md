@@ -153,7 +153,7 @@ engine, both D3D11 engines, the three RADV builds, the Zink UMD, both CPU UMDs, 
 
 | Path | Contents |
 |---|---|
-| `docs/` | Goal and roadmap, evidence rules, ADRs (`adr/`), design notes (`design/`), research notes, [build guide](docs/build.md) |
+| `docs/` | Goal and roadmap, evidence rules, ADRs (`adr/`), design notes (`design/`), research notes, [build guide](docs/build.md), [writing standard](docs/style.md) |
 | `docs/facts.md`, `docs/facts/` | The only list of established facts, generated from the facts graph in `docs/facts/data/`, one page per area. Each entry has a status, an evidence link and its relations to other facts |
 | `experiments/`, `evidence/` | Experiments `Exx` (hypothesis, procedure, expected result, result); raw results from hardware, immutable once added |
 | `regs/` | Generated register tables (never edited by hand) |

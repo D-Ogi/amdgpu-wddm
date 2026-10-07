@@ -1,0 +1,70 @@
+# The project glossary: one term, one meaning, everywhere.
+#
+# ASD-STE100 answers "one word, one meaning" with a controlled dictionary of about a thousand
+# words. A GPU driver cannot use that dictionary, because almost every noun we need is a
+# technical noun outside it. This file is the replacement that docs/style.md names: the terms
+# this repository uses, each with the single meaning it carries, and the spellings that must
+# not stand in for it.
+#
+# tools/quality/doclint.py reads this file. An `instead_of` spelling is a finding in any
+# document in the gate's scope. A term without `instead_of` is a definition only: it binds
+# the meaning, and nothing is gated.
+#
+# Format, which the parser holds to exactly (no pyyaml, as with docs/facts/data):
+#   terms:
+#     - term: <the word>
+#       means: "<one sentence, the single meaning>"
+#       instead_of: ["<banned spelling>", ...]        # optional
+#
+# Add a term when the same thing gets a second name in review. Keep the list short enough
+# that a reader finishes it.
+
+terms:
+  - term: adapter
+    means: "The WDDM display adapter that bc250kmd exposes to dxgkrnl, and nothing else."
+    instead_of: ["graphics card", "video card"]
+  - term: KMD
+    means: "bc250kmd.sys, our kernel-mode display miniport driver."
+  - term: UMD
+    means: "A user-mode display driver that the Direct3D runtime loads for our adapter."
+  - term: shell
+    means: "The UMD half that implements the Microsoft DDI and holds no rendering code."
+  - term: engine
+    means: "The translation layer behind a shell: DXVK, vkd3d-proton or Mesa."
+  - term: ICD
+    means: "Our RADV build, the Vulkan installable client driver that an engine loads."
+    instead_of: ["Vulkan DLL", "RADV DLL"]
+  - term: shim
+    means: "driver/shim, the slice of the Linux API that the imported amdgpu code needs."
+  - term: VRAM
+    means: "The memory that AGESA carves out of system DRAM for the GPU."
+    instead_of: ["video memory"]
+  - term: submit
+    means: "Give a command buffer to dxgkrnl for one GPU engine."
+  - term: present
+    means: "Hand a finished frame to the compositor or to the scan-out engine."
+  - term: flip
+    means: "Program a new scan-out address in DCN, so the display reads another buffer."
+  - term: lab
+    means: "Unit A, the ASRock BC-250 that runs our driver."
+  - term: trial
+    means: "One bounded run on the lab, with its own log and its own verdict."
+  - term: candidate
+    means: "An artifact under test on the lab, which is not yet the accepted baseline."
+  - term: promote
+    means: "Make a candidate the accepted baseline, after a trial that passed."
+  - term: use
+    means: "Apply a thing for its purpose. The plain verb, in place of the inflated ones."
+    instead_of: ["utilize", "utilise", "leverage"]
+  - term: to
+    means: "The plain infinitive marker of purpose."
+    instead_of: ["in order to"]
+  - term: for example
+    means: "The words that introduce an example. Latin abbreviations stay out of our prose."
+    instead_of: ["e.g."]
+  - term: that is
+    means: "The words that introduce a restatement."
+    instead_of: ["i.e."]
+  - term: and the rest
+    means: "Name the items, or say how many there are. A list that trails off tells nobody what is in it."
+    instead_of: ["etc."]
