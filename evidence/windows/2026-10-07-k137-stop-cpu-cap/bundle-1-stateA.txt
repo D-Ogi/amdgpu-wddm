@@ -1,0 +1,10 @@
+b1-fresh-A 16:54:02 fixed work 504.3 / 577.3 / 575.5 it/us, counter perf 76.1 %
+  placement local: src/dst type 0 (heap 1, flags 0x001), readback type 5 (flags 0x00E)
+  write  n=20 gpu_ms min 0.709 median 0.725 max 0.730 sum 14.5 | GB/s median 370.2 best 378.5 | cpu_ms 15.3 (0.767 per dispatch)
+  copy   n=20 gpu_ms min 1.384 median 1.388 max 1.391 sum 27.8 | GB/s median 386.8 best 387.8 | cpu_ms 28.6 (1.429 per dispatch)
+  read   n=20 gpu_ms min 0.759 median 0.764 max 0.767 sum 15.3 | GB/s median 373.5 best 375.8 | cpu_ms 15.9 (0.796 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+  placement host: src/dst type 2 (heap 0, flags 0x006), readback type 5 (flags 0x00E)
+  write  n=20 gpu_ms min 0.707 median 0.722 max 0.731 sum 14.4 | GB/s median 372.0 best 379.8 | cpu_ms 15.4 (0.768 per dispatch)
+  copy   n=20 gpu_ms min 1.384 median 1.391 max 1.401 sum 27.8 | GB/s median 386.0 best 388.0 | cpu_ms 28.1 (1.406 per dispatch)
+  16:54:07.881 dpm 1500 MHz  919 mV (SMU 1500 MHz VID 100)  65.6 C busy   0.0% avg  27.7% want 1500 cap 1500 max 1500 throttle none confirmed session  up 4 down 2 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  81.7 W avg  81.1 W (gfx 39.7 W soc  0.9 W)

@@ -1,0 +1,10 @@
+b1-k137r-A 16:51:34 fixed work 195.4 / 244.7 / 240.9 it/us, counter perf 87.2 %
+  placement local: src/dst type 0 (heap 1, flags 0x001), readback type 5 (flags 0x00E)
+  write  n=20 gpu_ms min 0.718 median 0.736 max 0.749 sum 14.7 | GB/s median 364.7 best 374.0 | cpu_ms 15.9 (0.796 per dispatch)
+  copy   n=20 gpu_ms min 1.378 median 1.386 max 1.391 sum 27.7 | GB/s median 387.3 best 389.5 | cpu_ms 29.0 (1.448 per dispatch)
+  read   n=20 gpu_ms min 0.746 median 0.750 max 0.756 sum 15.0 | GB/s median 380.5 best 382.2 | cpu_ms 16.2 (0.808 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+  placement host: src/dst type 2 (heap 0, flags 0x006), readback type 5 (flags 0x00E)
+  write  n=20 gpu_ms min 0.713 median 0.731 max 0.744 sum 14.6 | GB/s median 367.1 best 376.7 | cpu_ms 15.7 (0.786 per dispatch)
+  copy   n=20 gpu_ms min 1.381 median 1.385 max 1.389 sum 27.7 | GB/s median 387.5 best 388.8 | cpu_ms 28.8 (1.440 per dispatch)
+  16:51:4

@@ -1,0 +1,21 @@
+
+ Tid   Ms Start            State Wait          
+ ---   -- -----            ----- ----          
+2464 3078 0x7FFE8F86AF50 Running               
+3240    0 0x7FFE8F86AF50    Wait ExecutionDelay
+3124    0 0x7FFE8F86AF50    Wait EventPairLow  
+3184    0 0x7FFE8F86AF50    Wait LpcReceive    
+3372    0 0x7FFE8F86AF50    Wait UserRequest   
+5996    0 0x7FFE8F86AF50    Wait Unknown       
+
+
+
+dxgi.dll 0x7FFE8A070000 C:\Windows\system32\dxgi.dll
+dcomp.dll 0x7FFE880E0000 C:\Windows\system32\dcomp.dll
+d3d11.dll 0x7FFE874E0000 C:\Windows\system32\d3d11.dll
+D3DCOMPILER_47.dll 0x7FFE86FA0000 C:\Windows\system32\D3DCOMPILER_47.dll
+D3D10Warp.dll 0x7FFE84460000 C:\Windows\system32\D3D10Warp.dll
+bc250d3d_zink.dll 0x7FFE82240000 C:\Program Files\amdgpu-wddm\desktop\bc250d3d_zink.dll
+bc250d3d_router.dll 0x7FFE84340000 C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll
+amdgpu_wddm_radv.dll 0x7FFE80800000 C:\Program Files\amdgpu-wddm\desktop\amdgpu_wddm_radv.dll
+dump C:\BC250\tmp\dwmspin-b24\dwm-1936.dmp 390651266 bytes

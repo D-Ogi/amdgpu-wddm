@@ -5,7 +5,7 @@
 # used the guard's budget, and the rollback's start would be refused), the captured desktop switches, enable, and
 # wait for a started device. Hang detector, health confirm and the task follow as in the recovery-required steps.
 #   target.py ps ops\recover-after-boot.ps1 -Attempt kmd188-deploy001
-param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}-deploy[0-9]{3}$')][string]$Attempt)
+param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-deploy[0-9]{3}$')][string]$Attempt)
 $ErrorActionPreference = 'Stop'
 $dir = "C:\BC250\m15\$Attempt"; $t = "$dir\kmd-transition"
 . "$t\identity.ps1"; . "$t\durable.ps1"; . "$t\registration.ps1"; . "$t\verify-cpu.ps1"; . "$t\parameters.ps1"; . "$t\hang-detector.ps1"

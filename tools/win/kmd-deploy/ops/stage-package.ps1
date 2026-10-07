@@ -1,6 +1,6 @@
 # Runs on unit A through stage.py push, after the attempt tree is in place. Read-only preflight of the
 # rollback baseline, then the candidate package into the DriverStore WITHOUT /install; both packages proven registered.
-param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}-deploy[0-9]{3}$')][string]$Attempt,
+param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-deploy[0-9]{3}$')][string]$Attempt,
  [Parameter(Mandatory)][ValidatePattern('^[A-Fa-f0-9]{64}$')][string]$ManifestSha256)
 $ErrorActionPreference='Stop'
 $d="C:\BC250\m15\$Attempt"

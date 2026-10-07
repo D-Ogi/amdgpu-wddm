@@ -1,0 +1,77 @@
+Get-WinEvent : The parameter is incorrect
+At C:\BC250\tmp\boot-events.ps1:10 char:1
++ Get-WinEvent -FilterHashtable @{ LogName = 'System'; StartTime = $sin ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Get-WinEvent], EventLogException
+    + FullyQualifiedErrorId : System.Diagnostics.Eventing.Reader.EventLogException,Microsoft.Powe 
+   rShell.Commands.GetWinEventCommand
+ 
+11:57:22Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+11:57:29Z 6006 EventLog The Event log service was stopped.
+11:57:30Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+11:57:31Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T11:57:31.348571400Z.
+11:57:48Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T11:57:48.500000000Z.
+11:58:00Z 6005 EventLog The Event log service was started.
+12:01:45Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:02:02Z 6006 EventLog The Event log service was stopped.
+12:02:03Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:02:04Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:02:04.044480900Z.
+12:02:18Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:02:18.500000000Z.
+12:02:33Z 6005 EventLog The Event log service was started.
+12:06:43Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:06:43.500000000Z.
+12:06:44Z 41 Microsoft-Windows-Kernel-Power The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped 
+12:06:58Z 6008 EventLog The previous system shutdown at 2:02:33 PM on ?10/?7/?2026 was unexpected.
+12:06:58Z 6005 EventLog The Event log service was started.
+12:11:19Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:11:27Z 6006 EventLog The Event log service was stopped.
+12:11:28Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:11:28Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:11:28.687838900Z.
+12:11:44Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:11:44.500000000Z.
+12:11:59Z 6005 EventLog The Event log service was started.
+12:14:48Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:14:48.500000000Z.
+12:14:50Z 41 Microsoft-Windows-Kernel-Power The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped 
+12:15:03Z 6008 EventLog The previous system shutdown at 2:11:59 PM on ?10/?7/?2026 was unexpected.
+12:15:03Z 6005 EventLog The Event log service was started.
+12:19:49Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:19:56Z 6006 EventLog The Event log service was stopped.
+12:20:01Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:20:02Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:20:02.260269700Z.
+12:20:17Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:20:17.500000000Z.
+12:20:30Z 6005 EventLog The Event log service was started.
+12:22:21Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:22:28Z 6006 EventLog The Event log service was stopped.
+12:22:33Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:22:33Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:22:33.621071800Z.
+12:22:49Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:22:49.500000000Z.
+12:23:02Z 6005 EventLog The Event log service was started.
+12:38:32Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:42:38Z 6006 EventLog The Event log service was stopped.
+12:42:43Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:42:44Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:42:44.332446200Z.
+12:42:59Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:42:59.500000000Z.
+12:43:14Z 6005 EventLog The Event log service was started.
+12:45:14Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:45:28Z 6006 EventLog The Event log service was stopped.
+12:45:29Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:45:29Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:45:29.989643800Z.
+12:45:44Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T12:45:44.500000000Z.
+12:45:59Z 6005 EventLog The Event log service was started.
+12:59:10Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+12:59:22Z 6006 EventLog The Event log service was stopped.
+12:59:23Z 109 Microsoft-Windows-Kernel-Power The kernel power manager has initiated a shutdown transition.
+
+12:59:24Z 13 Microsoft-Windows-Kernel-General The operating system is shutting down at system time ?2026?-?10?-?07T12:59:24.431035300Z.
+13:12:44Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T13:12:44.500000000Z.
+13:12:59Z 6005 EventLog The Event log service was started.
+13:21:38Z 1074 User32 The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of computer BC250-A on behalf
+13:25:42Z 12 Microsoft-Windows-Kernel-General The operating system started at system time ?2026?-?10?-?07T13:25:42.500000000Z.
+13:25:43Z 41 Microsoft-Windows-Kernel-Power The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped 
+13:25:57Z 6008 EventLog The previous system shutdown at 3:12:59 PM on ?10/?7/?2026 was unexpected.
+13:25:57Z 6005 EventLog The Event log service was started.

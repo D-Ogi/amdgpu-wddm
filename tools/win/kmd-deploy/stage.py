@@ -1,14 +1,17 @@
 """Generic KMD promotion on unit A: freeze an immutable attempt offline, then push it.
 
-    python stage.py freeze --package DIR --rollback DIR [--mode deploy|rehearsal] [--repo DIR]
+    python stage.py freeze --package DIR --rollback DIR [--rollback-build DIR] [--mode deploy|rehearsal] [--repo DIR]
     python stage.py freeze ... --dry-run --out DIR     same checks and tree, outside attempts/, never pushed
-    python stage.py push kmdRRR-deployNNN              LAB: copy the attempt to C:\\BC250\\m15, preflight, pnputil /add-driver
+    python stage.py push kmdRRR[-B]-deployNNN          LAB: copy the attempt to C:\\BC250\\m15, preflight, pnputil /add-driver
 
 --package is the candidate's package directory (bc250kmd.sys/.inf/.cat, bc250-lab-test.cer, source-manifest.json),
 for example scratch\\cumode\\build-kmd174\\package. --rollback is the package now deployed on the lab, in the same
-form: its build package directory or the candidateRRR directory of the attempt that promoted it. Version, ABI and
-hashes come from each manifest and its commit (read in --repo); the rollback must equal lab-baseline.json, which
-also supplies the desktop UMD/ICD pins. freeze writes the attempt's own identity.ps1 from all of that; the template's
+form: its build package directory or the candidate directory of the attempt that promoted it. When the lab runs a
+tester release, --rollback is that release package (manifest.json, payload/kmd) and --rollback-build the build
+package it was made from. Version, ABI and hashes come from each manifest and its commit (read in --repo); the
+rollback must equal lab-baseline.json, which also supplies the desktop UMD/ICD pins. The identity of a package is
+(R, B) from DriverVer 0.7.R.B. Labels and the attempt name carry it (candidate216-16, kmd216-16-deploy001); a
+build 1 keeps the old names (candidate175, kmd175-deploy001). freeze writes the attempt's own identity.ps1 from all of that; the template's
 identity.ps1 is only the host-test fixture. Attempt directories are never rewritten; anything new is a new NNN.
 """
 import argparse
@@ -22,18 +25,45 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kmdcommon import (ATTEMPTS, BASE, HIST, HIST_MANIFEST_SHA256, LAB_BASELINE, MODES, OPS, POWERSHELL,  # noqa: E402
-                       REMOTE_BASE, REMOTE_TMP, REPO, TEMPLATE, TRANSITION, digest, fail, historical_manifest,
-                       identity, next_receipt, ps_env, read_package, resolve_attempt, target, verify_attempt)
+                       REMOTE_BASE, REMOTE_TMP, REPO, TEMPLATE, TRANSITION, compare_packages, digest, fail,
+                       historical_manifest, identity, label_suffix, next_receipt, ps_env, read_package, resolve_attempt,
+                       target, verify_attempt)
 
 SAFE_NAME = re.compile(r'^[a-zA-Z0-9_./-]+$')
 
 
 def check_signature(package):
+    """The SYS and CAT of a package are signed by the certificate it carries (bc250-lab-test.cer of a build, the
+    release certificate of a release package)."""
     r = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(OPS / 'verify-signature.ps1'),
-                        '-Package', str(package)], capture_output=True, text=True, timeout=60, env=ps_env())
+                        '-Package', str(package['signed']), '-Certificate', str(package['certificate'])],
+                       capture_output=True, text=True, timeout=60, env=ps_env())
     if r.returncode:
-        fail(f'signature check of {package}: {r.stdout[-400:]} {r.stderr[-400:]}')
+        fail(f'signature check of {package["directory"]}: {r.stdout[-400:]} {r.stderr[-400:]}')
     return json.loads(r.stdout)
+
+
+def check_certificates(candidate, rollback, signatures):
+    """Two builds are signed by one lab certificate. A release rollback is signed by the release certificate that
+    its manifest.json names; the candidate build then keeps the lab certificate."""
+    if rollback['kind'] == 'release':
+        if signatures['rollback']['certificate'].upper() != rollback['release_certificate']:
+            fail('rollback: the release package is not signed by the certificate its manifest.json names')
+    elif signatures['candidate']['certificate'] != signatures['rollback']['certificate']:
+        fail('candidate and rollback are signed by different certificates')
+
+
+def check_baseline(rollback, baseline):
+    """The rollback is the KMD that lab-baseline.json names; a release rollback is also the release it names."""
+    deployed = (baseline['kmd_version'], baseline['kmd_sys_sha256'].upper(), baseline['kmd_abi'])
+    if deployed != (rollback['version'], rollback['files']['bc250kmd.sys'], rollback['abi']):
+        fail(f'rollback {rollback["version"]} {rollback["files"]["bc250kmd.sys"][:8]} is not the deployed KMD of '
+             f'lab-baseline.json {deployed[0]} {deployed[1][:8]}')
+    if rollback['kind'] == 'release':
+        release = baseline.get('release') or {}
+        if (str(release.get('manifest_sha256', '')).upper(), release.get('kmd_build')) != \
+                (rollback['release_manifest_sha256'], rollback['kmd_build']):
+            fail('rollback: lab-baseline.json release block does not name this release manifest and build')
 
 
 def ps_file(script, *args, timeout=300):
@@ -86,13 +116,13 @@ def generated_identity(candidate, rollback, baseline, name_prefix):
     pins = {'Sys': rollback['files']['bc250kmd.sys'], 'Inf': rollback['files']['bc250kmd.inf'], 'Cat': rollback['files']['bc250kmd.cat']}
     desktop = desktop_pins(baseline)
     lines = [
-        f"# Generated by stage.py freeze: 0.7.{candidate['revision']}.1 (commit {candidate['commit'][:8]}) over the deployed",
+        f"# Generated by stage.py freeze: {candidate['version']} (commit {candidate['commit'][:8]}) over the deployed",
         f"# {rollback['version']} (commit {rollback['commit'][:8]}), which is also the rollback; desktop pins from lab-baseline.json.",
         '# The only file of this attempt that names the promotion; test-identity.ps1 rejects such literals elsewhere.',
-        f"$KmdCandidateLabel='candidate{candidate['revision']:03d}'",
+        f"$KmdCandidateLabel='candidate{label_suffix(candidate['version'])}'",
         f"$KmdCandidateVersion='{candidate['version']}'",
         f"$KmdCandidateAbi='{candidate['abi']}'",
-        f"$KmdRollbackLabel='rollback{rollback['revision']:03d}'",
+        f"$KmdRollbackLabel='rollback{label_suffix(rollback['version'])}'",
         f"$KmdRollbackVersion='{rollback['version']}'",
         f"$KmdRollbackAbi='{rollback['abi']}'",
         f"$KmdRollbackSysSha256='{pins['Sys']}'",
@@ -117,21 +147,16 @@ def generated_identity(candidate, rollback, baseline, name_prefix):
 
 def freeze(args):
     candidate = read_package(args.package, args.repo, 'candidate')
-    rollback = read_package(args.rollback, args.repo, 'rollback')
-    if candidate['revision'] == rollback['revision']:
-        fail('candidate and rollback are the same revision; the same-package control is not frozen here')
+    rollback = read_package(args.rollback, args.repo, 'rollback', args.rollback_build)
+    compare_packages(candidate, rollback)
     baseline = json.loads(LAB_BASELINE.read_text(encoding='utf-8'))
-    deployed = (baseline['kmd_version'], baseline['kmd_sys_sha256'].upper(), baseline['kmd_abi'])
-    if deployed != (rollback['version'], rollback['files']['bc250kmd.sys'], rollback['abi']):
-        fail(f'rollback {rollback["version"]} {rollback["files"]["bc250kmd.sys"][:8]} is not the deployed KMD of '
-             f'lab-baseline.json {deployed[0]} {deployed[1][:8]}')
-    signatures = {'candidate': check_signature(candidate['directory']), 'rollback': check_signature(rollback['directory'])}
-    if signatures['candidate']['certificate'] != signatures['rollback']['certificate']:
-        fail('candidate and rollback are signed by different certificates')
+    check_baseline(rollback, baseline)
+    signatures = {'candidate': check_signature(candidate), 'rollback': check_signature(rollback)}
+    check_certificates(candidate, rollback, signatures)
     hist = historical_manifest()
     gates = run_gates()
 
-    prefix = f'kmd{candidate["revision"]:03d}-deploy'
+    prefix = f'kmd{label_suffix(candidate["version"])}-deploy'
     if args.dry_run:
         attempt = args.out.resolve()
         if attempt.exists():
@@ -160,7 +185,7 @@ def freeze(args):
             copy_verified(HIST / rel, attempt / rel, value)
     for label, package in ((ident['KmdCandidateLabel'], candidate), (ident['KmdRollbackLabel'], rollback)):
         for fname, value in package['files'].items():
-            copy_verified(package['directory'] / fname, attempt / label / fname, value)
+            copy_verified(package['paths'][fname], attempt / label / fname, value)
     # The generated identity passes the same literal gate and well-formedness test as the fixture.
     r = ps_file(attempt / TRANSITION / 'test-identity.ps1')
     if r.returncode or 'PASS' not in r.stdout:
@@ -184,7 +209,10 @@ def freeze(args):
                 'candidate': {k: candidate[k] for k in ('version', 'abi', 'flavor', 'commit', 'tree', 'build_manifest_sha256')} |
                              {'label': ident['KmdCandidateLabel'], 'source': str(candidate['directory'])},
                 'rollback': {k: rollback[k] for k in ('version', 'abi', 'flavor', 'commit', 'tree', 'build_manifest_sha256')} |
-                            {'label': ident['KmdRollbackLabel'], 'source': str(rollback['directory'])},
+                            {'label': ident['KmdRollbackLabel'], 'source': str(rollback['directory'])} |
+                            ({'release': rollback['release'], 'kmd_build': rollback['kmd_build'],
+                              'release_manifest_sha256': rollback['release_manifest_sha256'],
+                              'build_source': str(rollback['build_directory'])} if rollback['kind'] == 'release' else {}),
                 'mode': ident[MODES[args.mode]], 'files': files}
     (attempt / 'stage-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     manifest_sha = digest(attempt / 'stage-manifest.json')
@@ -230,6 +258,7 @@ def main():
     f = sub.add_parser('freeze')
     f.add_argument('--package', type=Path, required=True)
     f.add_argument('--rollback', type=Path, required=True)
+    f.add_argument('--rollback-build', type=Path, help='with a release package as --rollback: the build package it was made from')
     f.add_argument('--mode', choices=sorted(MODES), default='deploy', help='rehearsal always rolls back')
     f.add_argument('--repo', type=Path, default=REPO, help='git repository holding both commits')
     f.add_argument('--dry-run', action='store_true')

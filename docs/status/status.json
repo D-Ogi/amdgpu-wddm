@@ -1,0 +1,4444 @@
+{
+ "generator": "tools/docs/status_map.py",
+ "rule": [
+  "A slot is done when the table stores a function in it and that function does work.",
+  "A function does no work when no return statement can return success: every return gives a failure constant (E_NOTIMPL, STATUS_NOT_SUPPORTED, STATUS_UNSUCCESSFUL and the other names in REFUSAL).",
+  "A function does no work when it only logs, counts, takes locks, reads state, reports an error or writes zeros: no call outside NEUTRAL and no write of a nonzero value through a pointer, a member or an index.",
+  "A function whose only work is one call to another function of the same driver is judged by that function.",
+  "A fail-safe entry of engine-ddi (FailSafe<...>) is not done. NULL is not done.",
+  "A done function that also refuses some inputs with a failure constant is marked partial. Partial counts as done."
+ ],
+ "neutral_calls": [
+  "AcquireSRWLockExclusive",
+  "AcquireSRWLockShared",
+  "DbgPrint",
+  "DbgPrintEx",
+  "ExAcquireFastMutex",
+  "ExReleaseFastMutex",
+  "FAILED",
+  "GetCurrentThreadId",
+  "GuardLog",
+  "GuardLogSequence",
+  "InterlockedAdd",
+  "InterlockedDecrement",
+  "InterlockedIncrement",
+  "InterlockedIncrement64",
+  "KdPrint",
+  "KdPrintEx",
+  "KeAcquireSpinLock",
+  "KeAcquireSpinLockAtDpcLevel",
+  "KeGetCurrentIrql",
+  "KeQueryPerformanceCounter",
+  "KeReleaseSpinLock",
+  "KeReleaseSpinLockFromDpcLevel",
+  "NT_SUCCESS",
+  "OutputDebugStringA",
+  "OutputDebugStringW",
+  "QueryPerformanceCounter",
+  "ReleaseSRWLockExclusive",
+  "ReleaseSRWLockShared",
+  "RtlSecureZeroMemory",
+  "RtlZeroMemory",
+  "SUCCEEDED",
+  "SetErrorCb",
+  "StartHealthClose",
+  "StartHealthEnter",
+  "StartHealthFault",
+  "StartHealthLeave",
+  "UNREFERENCED_PARAMETER",
+  "WddmAnswersLogged",
+  "WddmFirstCalls",
+  "WddmObject",
+  "WddmOf",
+  "WddmTraced",
+  "ZeroMemory",
+  "_snprintf",
+  "ddi_failure_note",
+  "ddi_mode2_note",
+  "ddi_refusal",
+  "ddi_trace_begin",
+  "ddi_trace_enabled",
+  "ddi_trace_end",
+  "ddi_trace_mode",
+  "device_status",
+  "fence_slot_seen",
+  "fetch_add",
+  "flush",
+  "fprintf",
+  "load",
+  "lock",
+  "log_line",
+  "memset",
+  "pfnSetErrorCb",
+  "print",
+  "printf",
+  "queue_failure",
+  "remove",
+  "report_device_error",
+  "report_list_error",
+  "snprintf",
+  "sprintf_s",
+  "trace",
+  "unlock"
+ ],
+ "failure_constants": [
+  "D3DDDIERR_DEVICEREMOVED",
+  "DXGI_ERROR_INVALID_CALL",
+  "DXGI_ERROR_UNSUPPORTED",
+  "E_FAIL",
+  "E_INVALIDARG",
+  "E_NOINTERFACE",
+  "E_NOTIMPL",
+  "E_OUTOFMEMORY",
+  "E_POINTER",
+  "E_UNEXPECTED",
+  "STATUS_DEVICE_REMOVED",
+  "STATUS_GRAPHICS_DRIVER_MISMATCH",
+  "STATUS_INSUFFICIENT_RESOURCES",
+  "STATUS_INVALID_DEVICE_REQUEST",
+  "STATUS_INVALID_DEVICE_STATE",
+  "STATUS_INVALID_PARAMETER",
+  "STATUS_NOT_IMPLEMENTED",
+  "STATUS_NOT_SUPPORTED",
+  "STATUS_NO_MEMORY",
+  "STATUS_UNSUCCESSFUL"
+ ],
+ "metrics": [
+  {
+   "id": "kmd-ddi",
+   "title": "Kernel-mode DDI",
+   "header": {
+    "wdk": "10.0.26100.0",
+    "file": "km/dispmprt.h",
+    "sha256": "261c8b985fe9b01d11dd74cccd611f27220409d34860f918f42c1a0b0b8c4ee7",
+    "struct": "DRIVER_INITIALIZATION_DATA"
+   },
+   "table": "WddmBuildTable in driver/kmd/wddm.c (the full WDDM table)",
+   "declared_version": "DXGKDDI_INTERFACE_VERSION_WDDM2_9",
+   "declared_label": "WDDM 2.9",
+   "interface_versions": {
+    "file": "shared/d3dukmdt.h",
+    "sha256": "e0091629425515f9e56d21a93addb0d06455fc250a3f31d24596180b30531cb5",
+    "values": {
+     "VISTA": 4178,
+     "VISTA_SP1": 4179,
+     "WIN7": 8197,
+     "WIN8": 12302,
+     "WDDM1_3": 16386,
+     "WDDM1_3_PATH_INDEPENDENT_ROTATION": 16387,
+     "WDDM2_0": 20515,
+     "WDDM2_1": 24579,
+     "WDDM2_1_5": 24592,
+     "WDDM2_1_6": 24593,
+     "WDDM2_2": 28682,
+     "WDDM2_3": 32769,
+     "WDDM2_4": 36870,
+     "WDDM2_5": 40971,
+     "WDDM2_6": 45060,
+     "WDDM2_7": 49156,
+     "WDDM2_8": 53249,
+     "WDDM2_9": 57347,
+     "WDDM3_0": 61443,
+     "WDDM3_1": 65540,
+     "WDDM3_2": 69639
+    }
+   },
+   "reserved": [
+    "DxgkDdiDescribePageTable",
+    "DxgkDdiUpdatePageTable",
+    "DxgkDdiUpdatePageDirectory",
+    "DxgkDdiMovePageDirectory",
+    "DxgkDdiSubmitRender",
+    "DxgkDdiCreateAllocation2",
+    "Reserved",
+    "Reserved1",
+    "Reserved2",
+    "Reserved3",
+    "Reserved4"
+   ],
+   "groups": [
+    {
+     "name": "Device and power",
+     "slots": [
+      {
+       "name": "DxgkDdiAddDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250AddDevice",
+       "source": "driver/kmd/pnp.c:4",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiStartDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250StartDevice",
+       "source": "driver/kmd/pnp.c:53",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiStopDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250StopDevice",
+       "source": "driver/kmd/pnp.c:184",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiRemoveDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250RemoveDevice",
+       "source": "driver/kmd/pnp.c:34",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiDispatchIoRequest",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250DispatchIoRequest",
+       "source": "driver/kmd/pnp.c:287",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "DxgkDdiSetPowerState",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250SetPowerState",
+       "source": "driver/kmd/pnp.c:410",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiNotifyAcpiEvent",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiResetDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250ResetDevice",
+       "source": "driver/kmd/pnp.c:277",
+       "done": true,
+       "reason": "forwards to FanResetDevice: forwards to FanBlind: does work"
+      },
+      {
+       "name": "DxgkDdiUnload",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250Unload",
+       "source": "driver/kmd/pnp.c:451",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiQueryInterface",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiControlEtwLogging",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiQueryAdapterInfo",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmQueryAdapterInfo",
+       "source": "driver/kmd/wddm.c:3539",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "DxgkDdiEscape",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250Escape",
+       "source": "driver/kmd/display.c:315",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiSetPowerComponentFState",
+       "since": "WIN8",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiStopDeviceAndReleasePostDisplayOwnership",
+       "since": "WIN8",
+       "targeted": true,
+       "function": "Bc250StopDeviceAndReleasePostDisplayOwnership",
+       "source": "driver/kmd/pnp.c:250",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiPowerRuntimeControlRequest",
+       "since": "WIN8",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetPowerPState",
+       "since": "WDDM1_3",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiPowerRuntimeSetDeviceHandle",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetStablePowerState",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": "Bc250WddmSetStablePowerState",
+       "source": "driver/kmd/wddm.c:6081",
+       "done": true,
+       "reason": "forwards to DpmSetStable: does work"
+      }
+     ]
+    },
+    {
+     "name": "Interrupt",
+     "slots": [
+      {
+       "name": "DxgkDdiInterruptRoutine",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250InterruptRoutine",
+       "source": "driver/kmd/pnp.c:325",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "DxgkDdiDpcRoutine",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250DpcRoutine",
+       "source": "driver/kmd/pnp.c:340",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiControlInterrupt",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmControlInterrupt",
+       "source": "driver/kmd/wddm.c:6999",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "DxgkDdiControlInterrupt2",
+       "since": "WDDM1_3",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiControlInterrupt3",
+       "since": "WDDM2_7",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetInterruptTargetPresentId",
+       "since": "WDDM2_9",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Display and VidPN",
+     "slots": [
+      {
+       "name": "DxgkDdiQueryChildRelations",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmQueryChildRelations",
+       "source": "driver/kmd/wddm.c:7166",
+       "done": true,
+       "reason": "forwards to Bc250QueryChildRelations: does work"
+      },
+      {
+       "name": "DxgkDdiQueryChildStatus",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmQueryChildStatus",
+       "source": "driver/kmd/wddm.c:7173",
+       "done": true,
+       "reason": "forwards to Bc250QueryChildStatus: does work",
+       "partial": true
+      },
+      {
+       "name": "DxgkDdiQueryDeviceDescriptor",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmQueryDeviceDescriptor",
+       "source": "driver/kmd/wddm.c:7181",
+       "done": false,
+       "reason": "forwards to Bc250QueryDeviceDescriptor: every return is a failure constant"
+      },
+      {
+       "name": "DxgkDdiSetPalette",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetPointerPosition",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250SetPointerPosition",
+       "source": "driver/kmd/display.c:124",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "DxgkDdiSetPointerShape",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250SetPointerShape",
+       "source": "driver/kmd/display.c:131",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "DxgkDdiIsSupportedVidPn",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedIsSupportedVidPn",
+       "source": "driver/kmd/wddm.c:7193",
+       "done": true,
+       "reason": "forwards to Bc250IsSupportedVidPn: does work"
+      },
+      {
+       "name": "DxgkDdiRecommendFunctionalVidPn",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedRecommendFunctionalVidPn",
+       "source": "driver/kmd/wddm.c:7194",
+       "done": false,
+       "reason": "forwards to Bc250RecommendFunctionalVidPn: every return is a failure constant"
+      },
+      {
+       "name": "DxgkDdiEnumVidPnCofuncModality",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedEnumVidPnCofuncModality",
+       "source": "driver/kmd/wddm.c:7195",
+       "done": true,
+       "reason": "forwards to Bc250EnumVidPnCofuncModality: does work"
+      },
+      {
+       "name": "DxgkDdiSetVidPnSourceVisibility",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedSetVidPnSourceVisibility",
+       "source": "driver/kmd/wddm.c:7196",
+       "done": true,
+       "reason": "forwards to Bc250SetVidPnSourceVisibility: does work"
+      },
+      {
+       "name": "DxgkDdiCommitVidPn",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedCommitVidPn",
+       "source": "driver/kmd/wddm.c:7197",
+       "done": true,
+       "reason": "forwards to Bc250CommitVidPn: does work"
+      },
+      {
+       "name": "DxgkDdiRecommendMonitorModes",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedRecommendMonitorModes",
+       "source": "driver/kmd/wddm.c:7199",
+       "done": true,
+       "reason": "forwards to Bc250RecommendMonitorModes: does work"
+      },
+      {
+       "name": "DxgkDdiRecommendVidPnTopology",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiGetScanLine",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmGetScanLine",
+       "source": "driver/kmd/wddm.c:7033",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "DxgkDdiStopCapture",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiQueryVidPnHWCapability",
+       "since": "WIN7",
+       "targeted": true,
+       "function": "Bc250WddmTracedQueryVidPnHWCapability",
+       "source": "driver/kmd/wddm.c:7200",
+       "done": false,
+       "reason": "forwards to Bc250QueryVidPnHWCapability: only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "DxgkDdiSystemDisplayEnable",
+       "since": "WIN8",
+       "targeted": true,
+       "function": "Bc250SystemDisplayEnable",
+       "source": "driver/kmd/display.c:1105",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "DxgkDdiSystemDisplayWrite",
+       "since": "WIN8",
+       "targeted": true,
+       "function": "Bc250SystemDisplayWrite",
+       "source": "driver/kmd/display.c:1131",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiGetChildContainerId",
+       "since": "WIN8",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiControlModeBehavior",
+       "since": "WDDM2_1",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUpdateMonitorLinkInfo",
+       "since": "WDDM2_1",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTimingsFromVidPn",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTargetGamma",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTargetContentType",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTargetAdjustedColorimetry",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDisplayDetectControl",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiQueryConnectionChange",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiExchangePreStartInfo",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTargetAdjustedColorimetry2",
+       "since": "WDDM2_5",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Scheduling and submission",
+     "slots": [
+      {
+       "name": "DxgkDdiCreateDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmCreateDevice",
+       "source": "driver/kmd/wddm.c:3692",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiSubmitCommand",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmSubmitCommand",
+       "source": "driver/kmd/wddm.c:5566",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiPreemptCommand",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmPreemptCommand",
+       "source": "driver/kmd/wddm.c:5957",
+       "done": true,
+       "reason": "forwards to WddmPreemptFence: does work"
+      },
+      {
+       "name": "DxgkDdiQueryCurrentFence",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyDevice",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmDestroyDevice",
+       "source": "driver/kmd/wddm.c:3708",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiRender",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateContext",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmCreateContext",
+       "source": "driver/kmd/wddm.c:3721",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiDestroyContext",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmDestroyContext",
+       "source": "driver/kmd/wddm.c:3832",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiLinkDevice",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiRenderKm",
+       "since": "WIN7",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiGetNodeMetadata",
+       "since": "WDDM1_3",
+       "targeted": true,
+       "function": "Bc250WddmGetNodeMetadata",
+       "source": "driver/kmd/wddm.c:3651",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiCalibrateGpuClock",
+       "since": "WDDM1_3",
+       "targeted": true,
+       "function": "Bc250WddmCalibrateGpuClock",
+       "source": "driver/kmd/wddm.c:6114",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiFormatHistoryBuffer",
+       "since": "WDDM1_3",
+       "targeted": true,
+       "function": "Bc250WddmFormatHistoryBuffer",
+       "source": "driver/kmd/wddm.c:6152",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "DxgkDdiRenderGdi",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSubmitCommandVirtual",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": "Bc250WddmSubmitCommandVirtual",
+       "source": "driver/kmd/wddm.c:5919",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiCreateProcess",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": "Bc250WddmCreateProcess",
+       "source": "driver/kmd/wddm.c:3850",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiDestroyProcess",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": "Bc250WddmDestroyProcess",
+       "source": "driver/kmd/wddm.c:3863",
+       "done": true,
+       "reason": "forwards to WddmFreeObject: does work"
+      },
+      {
+       "name": "DxgkDdiCreateHwContext",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyHwContext",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateHwQueue",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyHwQueue",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSubmitCommandToHwQueue",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSwitchToHwContextList",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUpdateHwContextState",
+       "since": "WDDM2_3",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetSchedulingLogBuffer",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetupPriorityBands",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetContextSchedulingProperties",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSuspendContext",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiResumeContext",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSignalMonitoredFence",
+       "since": "WDDM2_5",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiValidateSubmitCommand",
+       "since": "WDDM2_5",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTrackedWorkloadPowerLevel",
+       "since": "WDDM2_5",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateCpuEvent",
+       "since": "WDDM3_0",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyCpuEvent",
+       "since": "WDDM3_0",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateNativeFence",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyNativeFence",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUpdateMonitoredValues",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUpdateCurrentValuesFromCpu",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateDoorbell",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiConnectDoorbell",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDisconnectDoorbell",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyDoorbell",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiNotifyWorkSubmission",
+       "since": "WDDM3_1",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiOpenNativeFence",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCloseNativeFence",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetNativeFenceLogBuffer",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUpdateNativeFenceLogs",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiNotifyContextPriorityChange",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Memory and paging",
+     "slots": [
+      {
+       "name": "DxgkDdiCreateAllocation",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmCreateAllocation",
+       "source": "driver/kmd/wddm.c:4319",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiDestroyAllocation",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmDestroyAllocation",
+       "source": "driver/kmd/wddm.c:4365",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiDescribeAllocation",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmDescribeAllocation",
+       "source": "driver/kmd/wddm.c:4416",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiGetStandardAllocationDriverData",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmGetStandardAllocationDriverData",
+       "source": "driver/kmd/wddm.c:3936",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiAcquireSwizzlingRange",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiReleaseSwizzlingRange",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiPatch",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiBuildPagingBuffer",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmBuildPagingBuffer",
+       "source": "driver/kmd/wddm.c:5497",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiOpenAllocation",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmOpenAllocation",
+       "source": "driver/kmd/wddm.c:4445",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiCloseAllocation",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmCloseAllocation",
+       "source": "driver/kmd/wddm.c:4516",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiSetRootPageTable",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": "Bc250WddmSetRootPageTable",
+       "source": "driver/kmd/wddm.c:3890",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiGetRootPageTableSize",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": "Bc250WddmGetRootPageTableSize",
+       "source": "driver/kmd/wddm.c:3876",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "DxgkDdiMapCpuHostAperture",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUnmapCpuHostAperture",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiValidateUpdateAllocationProperty",
+       "since": "WDDM2_1",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetAllocationBackingStore",
+       "since": "WDDM3_0",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateMemoryBasis",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyMemoryBasis",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Recovery and diagnostics",
+     "slots": [
+      {
+       "name": "DxgkDdiResetFromTimeout",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmResetFromTimeout",
+       "source": "driver/kmd/wddm.c:5971",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "DxgkDdiRestartFromTimeout",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmRestartFromTimeout",
+       "source": "driver/kmd/wddm.c:5987",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "DxgkDdiCollectDbgInfo",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmCollectDbgInfo",
+       "source": "driver/kmd/wddm.c:6064",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "DxgkDdiQueryDependentEngineGroup",
+       "since": "WIN8",
+       "targeted": true,
+       "function": "Bc250WddmQueryDependentEngineGroup",
+       "source": "driver/kmd/wddm.c:5999",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiQueryEngineStatus",
+       "since": "WIN8",
+       "targeted": true,
+       "function": "Bc250WddmQueryEngineStatus",
+       "source": "driver/kmd/wddm.c:6017",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiResetEngine",
+       "since": "WIN8",
+       "targeted": true,
+       "function": "Bc250WddmResetEngine",
+       "source": "driver/kmd/wddm.c:6038",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "DxgkDdiCancelCommand",
+       "since": "WIN8",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiNotifySurpriseRemoval",
+       "since": "WIN8",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiResetHwEngine",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiQueryDiagnosticTypesSupport",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiControlDiagnosticReporting",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiResumeHwEngine",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCollectDiagnosticInfo",
+       "since": "WDDM2_6",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCollectDbgInfo2",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiResetDisplayEngine",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Present and flip",
+     "slots": [
+      {
+       "name": "DxgkDdiSetVidPnSourceAddress",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmSetVidPnSourceAddress",
+       "source": "driver/kmd/wddm.c:6811",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiUpdateActiveVidPnPresentPath",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmTracedUpdateActiveVidPnPresentPath",
+       "source": "driver/kmd/wddm.c:7198",
+       "done": false,
+       "reason": "forwards to Bc250UpdateActiveVidPnPresentPath: only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "DxgkDdiCreateOverlay",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiPresent",
+       "since": null,
+       "targeted": true,
+       "function": "Bc250WddmPresent",
+       "source": "driver/kmd/wddm.c:6689",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "DxgkDdiUpdateOverlay",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiFlipOverlay",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyOverlay",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetDisplayPrivateDriverFormat",
+       "since": null,
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay",
+       "since": "WIN8",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCheckMultiPlaneOverlaySupport",
+       "since": "WDDM1_3",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCheckMultiPlaneOverlaySupport2",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCheckMultiPlaneOverlaySupport3",
+       "since": "WDDM2_1",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3",
+       "since": "WDDM2_1",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiPostMultiPlaneOverlayPresent",
+       "since": "WDDM2_1",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreatePeriodicFrameNotification",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyPeriodicFrameNotification",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiGetMultiPlaneOverlayCaps",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiGetPostCompositionCaps",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiNotifyFocusPresent",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiPresentToHwQueue",
+       "since": "WDDM2_5",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetFlipQueueLogBuffer",
+       "since": "WDDM2_9",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiUpdateFlipQueueLog",
+       "since": "WDDM2_9",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCancelQueuedFlips",
+       "since": "WDDM2_9",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCancelFlips",
+       "since": "WDDM3_0",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Content protection",
+     "slots": [
+      {
+       "name": "DxgkDdiSetVideoProtectedRegion",
+       "since": "WDDM2_0",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetTargetAnalogCopyProtection",
+       "since": "WDDM2_2",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiCreateProtectedSession",
+       "since": "WDDM2_3",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiDestroyProtectedSession",
+       "since": "WDDM2_3",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    },
+    {
+     "name": "Virtualization",
+     "slots": [
+      {
+       "name": "DxgkDdiSetVirtualMachineData",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiBeginExclusiveAccess",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiEndExclusiveAccess",
+       "since": "WDDM2_4",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSaveMemoryForHotUpdate",
+       "since": "WDDM2_6",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiRestoreMemoryForHotUpdate",
+       "since": "WDDM2_6",
+       "targeted": true,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiStartDirtyTracking",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiStopDirtyTracking",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiQueryDirtyBitData",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiPrepareLiveMigration",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSaveImmutableMigrationData",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSaveMutableMigrationData",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiEndLiveMigration",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiRestoreImmutableMigrationData",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiRestoreMutableMigrationData",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiWriteVirtualizedInterrupt",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetVirtualGpuResources2",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      },
+      {
+       "name": "DxgkDdiSetVirtualFunctionPauseState",
+       "since": "WDDM3_2",
+       "targeted": false,
+       "function": null,
+       "done": false,
+       "reason": "NULL in WddmBuildTable",
+       "source": null
+      }
+     ]
+    }
+   ],
+   "summary": {
+    "done": 48,
+    "total": 147,
+    "partial": 5,
+    "percent": 32.65,
+    "all_versions": {
+     "done": 48,
+     "total": 181,
+     "partial": 5,
+     "percent": 26.52
+    }
+   }
+  },
+  {
+   "id": "d3d12-ddi",
+   "title": "D3D12 user-mode DDI",
+   "header": {
+    "wdk": "10.0.26100.0",
+    "file": "um/d3d12umddi.h",
+    "sha256": "d338e00bbd079cfed42434b5bd8cb9c658238cfe22747fb7d3b7cff3a3cabc28"
+   },
+   "build": "0092",
+   "table": "OpenAdapter12 and fill_native_tables in driver/umd/d3d12 (the command-list slots of table 1, the graphics table)",
+   "groups": [
+    {
+     "name": "Adapter",
+     "struct": "D3D12DDI_ADAPTERFUNCS",
+     "layout": [
+      {
+       "name": "pfnCalcPrivateDeviceSize",
+       "type": "PFND3D12DDI_CALCPRIVATEDEVICESIZE",
+       "since": null
+      },
+      {
+       "name": "pfnCreateDevice",
+       "type": "PFND3D12DDI_CREATEDEVICE_0003",
+       "since": null
+      },
+      {
+       "name": "pfnCloseAdapter",
+       "type": "PFND3D12DDI_CLOSEADAPTER",
+       "since": null
+      },
+      {
+       "name": "pfnGetSupportedVersions",
+       "type": "PFND3D12DDI_GETSUPPORTEDVERSIONS",
+       "since": null
+      },
+      {
+       "name": "pfnGetCaps",
+       "type": "PFND3D12DDI_GETCAPS",
+       "since": null
+      },
+      {
+       "name": "pfnGetOptionalDDITables",
+       "type": "PFND3D12DDI_GETOPTIONALDDITTABLES",
+       "since": null
+      },
+      {
+       "name": "pfnFillDDITable",
+       "type": "PFND3D12DDI_FILLDDITTABLE",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyDevice",
+       "type": "PFND3D12DDI_DESTROYDEVICE",
+       "since": null
+      }
+     ],
+     "slots": [
+      {
+       "name": "pfnCalcPrivateDeviceSize",
+       "function": "device_size",
+       "source": "driver/umd/d3d12/adapter.cpp:27",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateDevice",
+       "function": "create_device",
+       "source": "driver/umd/d3d12/adapter.cpp:33",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCloseAdapter",
+       "function": "close_adapter",
+       "source": "driver/umd/d3d12/adapter.cpp:51",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnGetSupportedVersions",
+       "function": "versions",
+       "source": "driver/umd/d3d12/adapter.cpp:57",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnGetCaps",
+       "function": "caps",
+       "source": "driver/umd/d3d12/adapter.cpp:65",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnGetOptionalDDITables",
+       "function": "optional_tables",
+       "source": "driver/umd/d3d12/adapter.cpp:117",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnFillDDITable",
+       "function": "fill_table",
+       "source": "driver/umd/d3d12/adapter.cpp:121",
+       "done": true,
+       "reason": "forwards to fill_native_tables: does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyDevice",
+       "function": "destroy_device",
+       "source": "driver/umd/d3d12/adapter.cpp:127",
+       "done": true,
+       "reason": "does work"
+      }
+     ]
+    },
+    {
+     "name": "Device core",
+     "struct": "D3D12DDI_DEVICE_FUNCS_CORE_0088",
+     "layout": [
+      {
+       "name": "pfnCheckFormatSupport",
+       "type": "PFND3D12DDI_CHECKFORMATSUPPORT",
+       "since": null
+      },
+      {
+       "name": "pfnCheckMultisampleQualityLevels",
+       "type": "PFND3D12DDI_CHECKMULTISAMPLEQUALITYLEVELS",
+       "since": null
+      },
+      {
+       "name": "pfnGetMipPacking",
+       "type": "PFND3D12DDI_GETMIPPACKING",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateElementLayoutSize",
+       "type": "PFND3D12DDI_CALCPRIVATEELEMENTLAYOUTSIZE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnCreateElementLayout",
+       "type": "PFND3D12DDI_CREATEELEMENTLAYOUT_0010",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyElementLayout",
+       "type": "PFND3D12DDI_DESTROYELEMENTLAYOUT",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateBlendStateSize",
+       "type": "PFND3D12DDI_CALCPRIVATEBLENDSTATESIZE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnCreateBlendState",
+       "type": "PFND3D12DDI_CREATEBLENDSTATE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyBlendState",
+       "type": "PFND3D12DDI_DESTROYBLENDSTATE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateDepthStencilStateSize",
+       "type": "PFND3D12DDI_CALCPRIVATEDEPTHSTENCILSTATESIZE_0025",
+       "since": null
+      },
+      {
+       "name": "pfnCreateDepthStencilState",
+       "type": "PFND3D12DDI_CREATEDEPTHSTENCILSTATE_0025",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyDepthStencilState",
+       "type": "PFND3D12DDI_DESTROYDEPTHSTENCILSTATE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateRasterizerStateSize",
+       "type": "PFND3D12DDI_CALCPRIVATERASTERIZERSTATESIZE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnCreateRasterizerState",
+       "type": "PFND3D12DDI_CREATERASTERIZERSTATE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyRasterizerState",
+       "type": "PFND3D12DDI_DESTROYRASTERIZERSTATE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateShaderSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_SHADER_SIZE_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateVertexShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreatePixelShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateGeometryShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateComputeShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateGeometryShaderWithStreamOutput",
+       "type": "PFND3D12DDI_CALC_PRIVATE_GEOMETRY_SHADER_WITH_STREAM_OUTPUT_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateGeometryShaderWithStreamOutput",
+       "type": "PFND3D12DDI_CREATE_GEOMETRY_SHADER_WITH_STREAM_OUTPUT_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateTessellationShaderSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_SHADER_SIZE_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateHullShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateDomainShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyShader",
+       "type": "PFND3D12DDI_DESTROYSHADER",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateCommandQueueSize",
+       "type": "PFND3D12DDI_CALCPRIVATECOMMANDQUEUESIZE_0050",
+       "since": null
+      },
+      {
+       "name": "pfnCreateCommandQueue",
+       "type": "PFND3D12DDI_CREATECOMMANDQUEUE_0050",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyCommandQueue",
+       "type": "PFND3D12DDI_DESTROYCOMMANDQUEUE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateCommandPoolSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_COMMAND_POOL_SIZE_0040",
+       "since": null
+      },
+      {
+       "name": "pfnCreateCommandPool",
+       "type": "PFND3D12DDI_CREATE_COMMAND_POOL_0040",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyCommandPool",
+       "type": "PFND3D12DDI_DESTROY_COMMAND_POOL_0040",
+       "since": null
+      },
+      {
+       "name": "pfnResetCommandPool",
+       "type": "PFND3D12DDI_RESET_COMMAND_POOL_0040",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivatePipelineStateSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_PIPELINE_STATE_SIZE_0075",
+       "since": null
+      },
+      {
+       "name": "pfnCreatePipelineState",
+       "type": "PFND3D12DDI_CREATE_PIPELINE_STATE_0075",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyPipelineState",
+       "type": "PFND3D12DDI_DESTROY_PIPELINE_STATE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateCommandListSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_COMMAND_LIST_SIZE_0040",
+       "since": null
+      },
+      {
+       "name": "pfnCreateCommandList",
+       "type": "PFND3D12DDI_CREATE_COMMAND_LIST_0040",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyCommandList",
+       "type": "PFND3D12DDI_DESTROYCOMMANDLIST",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateFenceSize",
+       "type": "PFND3D12DDI_CALCPRIVATEFENCESIZE",
+       "since": null
+      },
+      {
+       "name": "pfnCreateFence",
+       "type": "PFND3D12DDI_CREATEFENCE",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyFence",
+       "type": "PFND3D12DDI_DESTROYFENCE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateDescriptorHeapSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_DESCRIPTOR_HEAP_SIZE_0001",
+       "since": null
+      },
+      {
+       "name": "pfnCreateDescriptorHeap",
+       "type": "PFND3D12DDI_CREATE_DESCRIPTOR_HEAP_0001",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyDescriptorHeap",
+       "type": "PFND3D12DDI_DESTROY_DESCRIPTOR_HEAP",
+       "since": null
+      },
+      {
+       "name": "pfnGetDescriptorSizeInBytes",
+       "type": "PFND3D12DDI_GET_DESCRIPTOR_SIZE_IN_BYTES",
+       "since": null
+      },
+      {
+       "name": "pfnGetCPUDescriptorHandleForHeapStart",
+       "type": "PFND3D12DDI_GET_CPU_DESCRIPTOR_HANDLE_FOR_HEAP_START",
+       "since": null
+      },
+      {
+       "name": "pfnGetGPUDescriptorHandleForHeapStart",
+       "type": "PFND3D12DDI_GET_GPU_DESCRIPTOR_HANDLE_FOR_HEAP_START",
+       "since": null
+      },
+      {
+       "name": "pfnCreateShaderResourceView",
+       "type": "PFND3D12DDI_CREATE_SHADER_RESOURCE_VIEW_0002",
+       "since": null
+      },
+      {
+       "name": "pfnCreateConstantBufferView",
+       "type": "PFND3D12DDI_CREATE_CONSTANT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnCreateSampler",
+       "type": "PFND3D12DDI_CREATE_SAMPLER",
+       "since": null
+      },
+      {
+       "name": "pfnCreateUnorderedAccessView",
+       "type": "PFND3D12DDI_CREATE_UNORDERED_ACCESS_VIEW_0002",
+       "since": null
+      },
+      {
+       "name": "pfnCreateRenderTargetView",
+       "type": "PFND3D12DDI_CREATE_RENDER_TARGET_VIEW_0002",
+       "since": null
+      },
+      {
+       "name": "pfnCreateDepthStencilView",
+       "type": "PFND3D12DDI_CREATE_DEPTH_STENCIL_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateRootSignatureSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_ROOT_SIGNATURE_SIZE_0013",
+       "since": null
+      },
+      {
+       "name": "pfnCreateRootSignature",
+       "type": "PFND3D12DDI_CREATE_ROOT_SIGNATURE_0013",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyRootSignature",
+       "type": "PFND3D12DDI_DESTROY_ROOT_SIGNATURE",
+       "since": null
+      },
+      {
+       "name": "pfnMapHeap",
+       "type": "PFND3D12DDI_MAPHEAP",
+       "since": null
+      },
+      {
+       "name": "pfnUnmapHeap",
+       "type": "PFND3D12DDI_UNMAPHEAP",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateHeapAndResourceSizes",
+       "type": "PFND3D12DDI_CALCPRIVATEHEAPANDRESOURCESIZES_0088",
+       "since": null
+      },
+      {
+       "name": "pfnCreateHeapAndResource",
+       "type": "PFND3D12DDI_CREATEHEAPANDRESOURCE_0088",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyHeapAndResource",
+       "type": "PFND3D12DDI_DESTROYHEAPANDRESOURCE",
+       "since": null
+      },
+      {
+       "name": "pfnMakeResident",
+       "type": "PFND3D12DDI_MAKERESIDENT_0001",
+       "since": null
+      },
+      {
+       "name": "pfnEvict",
+       "type": "PFND3D12DDI_EVICT2",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateOpenedHeapAndResourceSizes",
+       "type": "PFND3D12DDI_CALCPRIVATEOPENEDHEAPANDRESOURCESIZES_0043",
+       "since": null
+      },
+      {
+       "name": "pfnOpenHeapAndResource",
+       "type": "PFND3D12DDI_OPENHEAPANDRESOURCE_0043",
+       "since": null
+      },
+      {
+       "name": "pfnCopyDescriptors",
+       "type": "PFND3D12DDI_COPY_DESCRIPTORS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnCopyDescriptorsSimple",
+       "type": "PFND3D12DDI_COPY_DESCRIPTORS_SIMPLE_0003",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateQueryHeapSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_QUERY_HEAP_SIZE_0001",
+       "since": null
+      },
+      {
+       "name": "pfnCreateQueryHeap",
+       "type": "PFND3D12DDI_CREATE_QUERY_HEAP_0001",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyQueryHeap",
+       "type": "PFND3D12DDI_DESTROY_QUERY_HEAP",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateCommandSignatureSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_COMMAND_SIGNATURE_SIZE_0001",
+       "since": null
+      },
+      {
+       "name": "pfnCreateCommandSignature",
+       "type": "PFND3D12DDI_CREATE_COMMAND_SIGNATURE_0001",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyCommandSignature",
+       "type": "PFND3D12DDI_DESTROY_COMMAND_SIGNATURE",
+       "since": null
+      },
+      {
+       "name": "pfnCheckResourceVirtualAddress",
+       "type": "PFND3D12DDI_CHECKRESOURCEVIRTUALADDRESS",
+       "since": null
+      },
+      {
+       "name": "pfnCheckResourceAllocationInfo",
+       "type": "PFND3D12DDI_CHECKRESOURCEALLOCATIONINFO_0088",
+       "since": null
+      },
+      {
+       "name": "pfnCheckSubresourceInfo",
+       "type": "PFND3D12DDI_CHECKSUBRESOURCEINFO",
+       "since": null
+      },
+      {
+       "name": "pfnCheckExistingResourceAllocationInfo",
+       "type": "PFND3D12DDI_CHECKEXISITINGRESOURCEALLOCATIONINFO_0022",
+       "since": null
+      },
+      {
+       "name": "pfnOfferResources",
+       "type": "PFND3D12DDI_OFFERRESOURCES",
+       "since": null
+      },
+      {
+       "name": "pfnReclaimResources",
+       "type": "PFND3D12DDI_RECLAIMRESOURCES_0001",
+       "since": null
+      },
+      {
+       "name": "pfnGetImplicitPhysicalAdapterMask",
+       "type": "PFND3D12DDI_GETIMPLICITPHYSICALADAPTERMASK",
+       "since": null
+      },
+      {
+       "name": "pfnGetPresentPrivateDriverDataSize",
+       "type": "PFND3D12DDI_GET_PRESENT_PRIVATE_DRIVER_DATA_SIZE",
+       "since": null
+      },
+      {
+       "name": "pfnQueryNodeMap",
+       "type": "PFND3D12DDI_QUERY_NODE_MAP",
+       "since": null
+      },
+      {
+       "name": "pfnRetrieveShaderComment",
+       "type": "PFND3D12DDI_RETRIEVE_SHADER_COMMENT_0003",
+       "since": null
+      },
+      {
+       "name": "pfnCheckResourceAllocationHandle",
+       "type": "PFND3D12DDI_CHECKRESOURCEALLOCATIONHANDLE",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivatePipelineLibrarySize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_PIPELINE_LIBRARY_SIZE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnCreatePipelineLibrary",
+       "type": "PFND3D12DDI_CREATE_PIPELINE_LIBRARY_0010",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyPipelineLibrary",
+       "type": "PFND3D12DDI_DESTROY_PIPELINE_LIBRARY_0010",
+       "since": null
+      },
+      {
+       "name": "pfnAddPipelineStateToLibrary",
+       "type": "PFND3D12DDI_ADD_PIPELINE_STATE_TO_LIBRARY_0010",
+       "since": null
+      },
+      {
+       "name": "pfnCalcSerializedLibrarySize",
+       "type": "PFND3D12DDI_CALC_SERIALIZED_LIBRARY_SIZE_0010",
+       "since": null
+      },
+      {
+       "name": "pfnSerializeLibrary",
+       "type": "PFND3D12DDI_SERIALIZE_LIBRARY_0010",
+       "since": null
+      },
+      {
+       "name": "pfnGetDebugAllocationInfo",
+       "type": "PFND3D12DDI_GET_DEBUG_ALLOCATION_INFO_0014",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateCommandRecorderSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_COMMAND_RECORDER_SIZE_0040",
+       "since": null
+      },
+      {
+       "name": "pfnCreateCommandRecorder",
+       "type": "PFND3D12DDI_CREATE_COMMAND_RECORDER_0040",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyCommandRecorder",
+       "type": "PFND3D12DDI_DESTROY_COMMAND_RECORDER_0040",
+       "since": null
+      },
+      {
+       "name": "pfnCommandRecorderSetCommandPoolAsTarget",
+       "type": "PFND3D12DDI_COMMAND_RECORDER_SET_COMMAND_POOL_AS_TARGET_0040",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateSchedulingGroupSize",
+       "type": "PFND3D12DDI_CALCPRIVATESCHEDULINGGROUPSIZE_0050",
+       "since": null
+      },
+      {
+       "name": "pfnCreateSchedulingGroup",
+       "type": "PFND3D12DDI_CREATESCHEDULINGGROUP_0050",
+       "since": null
+      },
+      {
+       "name": "pfnDestroySchedulingGroup",
+       "type": "PFND3D12DDI_DESTROYSCHEDULINGGROUP_0050",
+       "since": null
+      },
+      {
+       "name": "pfnEnumerateMetaCommands",
+       "type": "PFND3D12DDI_ENUMERATE_META_COMMANDS_0052",
+       "since": null
+      },
+      {
+       "name": "pfnEnumerateMetaCommandParameters",
+       "type": "PFND3D12DDI_ENUMERATE_META_COMMAND_PARAMETERS_0052",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateMetaCommandSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_META_COMMAND_SIZE_0052",
+       "since": null
+      },
+      {
+       "name": "pfnCreateMetaCommand",
+       "type": "PFND3D12DDI_CREATE_META_COMMAND_0052",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyMetaCommand",
+       "type": "PFND3D12DDI_DESTROY_META_COMMAND_0052",
+       "since": null
+      },
+      {
+       "name": "pfnGetMetaCommandRequiredParameterInfo",
+       "type": "PFND3D12DDI_GET_META_COMMAND_REQUIRED_PARAMETER_INFO_0052",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateStateObjectSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_STATE_OBJECT_SIZE_0054",
+       "since": null
+      },
+      {
+       "name": "pfnCreateStateObject",
+       "type": "PFND3D12DDI_CREATE_STATE_OBJECT_0054",
+       "since": null
+      },
+      {
+       "name": "pfnDestroyStateObject",
+       "type": "PFND3D12DDI_DESTROY_STATE_OBJECT_0054",
+       "since": null
+      },
+      {
+       "name": "pfnGetRaytracingAccelerationStructurePrebuildInfo",
+       "type": "PFND3D12DDI_GET_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_0054",
+       "since": null
+      },
+      {
+       "name": "pfnCheckDriverMatchingIdentifier",
+       "type": "PFND3D12DDI_CHECK_DRIVER_MATCHING_IDENTIFIER_0054",
+       "since": null
+      },
+      {
+       "name": "pfnGetShaderIdentifier",
+       "type": "PFND3D12DDI_GET_SHADER_IDENTIFIER_0054",
+       "since": null
+      },
+      {
+       "name": "pfnGetShaderStackSize",
+       "type": "PFND3D12DDI_GET_SHADER_STACK_SIZE_0054",
+       "since": null
+      },
+      {
+       "name": "pfnGetPipelineStackSize",
+       "type": "PFND3D12DDI_GET_PIPELINE_STACK_SIZE_0054",
+       "since": null
+      },
+      {
+       "name": "pfnSetPipelineStackSize",
+       "type": "PFND3D12DDI_SET_PIPELINE_STACK_SIZE_0054",
+       "since": null
+      },
+      {
+       "name": "pfnSetBackgroundProcessingMode",
+       "type": "PFND3D12DDI_SET_BACKGROUND_PROCESSING_MODE_0063",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateAddToStateObjectSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_ADD_TO_STATE_OBJECT_SIZE_0072",
+       "since": null
+      },
+      {
+       "name": "pfnAddToStateObject",
+       "type": "PFND3D12DDI_ADD_TO_STATE_OBJECT_0072",
+       "since": null
+      },
+      {
+       "name": "pfnCreateSamplerFeedbackUnorderedAccessView",
+       "type": "PFND3D12DDI_CREATE_SAMPLER_FEEDBACK_UNORDERED_ACCESS_VIEW_0075",
+       "since": null
+      },
+      {
+       "name": "pfnCreateAmplificationShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCreateMeshShader",
+       "type": "PFND3D12DDI_CREATE_SHADER_0026",
+       "since": null
+      },
+      {
+       "name": "pfnCalcPrivateMeshShaderSize",
+       "type": "PFND3D12DDI_CALC_PRIVATE_SHADER_SIZE_0026",
+       "since": null
+      },
+      {
+       "name": "pfnImplicitShaderCacheControl",
+       "type": "PFND3D12DDI_IMPLICITSHADERCACHECONTROL_0080",
+       "since": null
+      }
+     ],
+     "slots": [
+      {
+       "name": "pfnCheckFormatSupport",
+       "function": "check_format_support",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1376",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCheckMultisampleQualityLevels",
+       "function": "check_multisample_quality_levels",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1335",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnGetMipPacking",
+       "function": "get_mip_packing",
+       "source": "driver/umd/d3d12/engine-ddi/tiles.cpp:115",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateElementLayoutSize",
+       "function": "calc_element_layout",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:61",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateElementLayout",
+       "function": "create_element_layout",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:68",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyElementLayout",
+       "function": "destroy_element_layout",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:92",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateBlendStateSize",
+       "function": "calc_blend",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:103",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateBlendState",
+       "function": "create_blend",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:105",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyBlendState",
+       "function": "destroy_blend",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:140",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateDepthStencilStateSize",
+       "function": "calc_depth_stencil",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:159",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateDepthStencilState",
+       "function": "create_depth_stencil",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:163",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyDepthStencilState",
+       "function": "destroy_depth_stencil",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:193",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateRasterizerStateSize",
+       "function": "calc_rasterizer",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:204",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateRasterizerState",
+       "function": "create_rasterizer",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:210",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyRasterizerState",
+       "function": "destroy_rasterizer",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:241",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateShaderSize",
+       "function": "calc_shader",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:156",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateVertexShader",
+       "function": "create_vs",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:161",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnCreatePixelShader",
+       "function": "create_ps",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:164",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnCreateGeometryShader",
+       "function": "create_gs",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:167",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnCreateComputeShader",
+       "function": "create_cs",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:170",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnCalcPrivateGeometryShaderWithStreamOutput",
+       "function": "calc_gs_so",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:157",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateGeometryShaderWithStreamOutput",
+       "function": "create_gs_so",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:173",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnCalcPrivateTessellationShaderSize",
+       "function": "calc_shader",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:156",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateHullShader",
+       "function": "create_hs",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:177",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnCreateDomainShader",
+       "function": "create_ds",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:180",
+       "done": true,
+       "reason": "forwards to intake: does work"
+      },
+      {
+       "name": "pfnDestroyShader",
+       "function": "destroy_shader",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:190",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateCommandQueueSize",
+       "function": "native_queue_size",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:29",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateCommandQueue",
+       "function": "native_queue_create",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:32",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyCommandQueue",
+       "function": "native_queue_destroy",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:46",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateCommandPoolSize",
+       "function": "calc_pool",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:35",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateCommandPool",
+       "function": "create_pool",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:39",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyCommandPool",
+       "function": "destroy_pool",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:49",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResetCommandPool",
+       "function": "reset_pool",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:66",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivatePipelineStateSize",
+       "function": "calc_pipeline",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:204",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreatePipelineState",
+       "function": "create_pipeline",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:364",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyPipelineState",
+       "function": "destroy_pipeline",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:385",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateCommandListSize",
+       "function": "calc_list",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:137",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateCommandList",
+       "function": "create_list",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:141",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyCommandList",
+       "function": "destroy_list",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:174",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateFenceSize",
+       "function": "fence_size",
+       "source": "driver/umd/d3d12/fence-ddi.h:18",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateFence",
+       "function": "fence_create",
+       "source": "driver/umd/d3d12/fence-ddi.h:21",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyFence",
+       "function": "fence_destroy",
+       "source": "driver/umd/d3d12/fence-ddi.h:32",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateDescriptorHeapSize",
+       "function": "calc_heap",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:32",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateDescriptorHeap",
+       "function": "create_heap",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:36",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyDescriptorHeap",
+       "function": "destroy_heap",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:59",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnGetDescriptorSizeInBytes",
+       "function": "descriptor_size",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:73",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnGetCPUDescriptorHandleForHeapStart",
+       "function": "cpu_start",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:83",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnGetGPUDescriptorHandleForHeapStart",
+       "function": "gpu_start",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:94",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateShaderResourceView",
+       "function": "create_srv",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:242",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCreateConstantBufferView",
+       "function": "create_cbv",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:375",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCreateSampler",
+       "function": "create_sampler",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:387",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCreateUnorderedAccessView",
+       "function": "create_uav",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:117",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCreateRenderTargetView",
+       "function": "create_rtv",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:181",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCreateDepthStencilView",
+       "function": "create_dsv",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:322",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateRootSignatureSize",
+       "function": "calc_root_signature",
+       "source": "driver/umd/d3d12/engine-ddi/root-signature.cpp:124",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateRootSignature",
+       "function": "create_root_signature",
+       "source": "driver/umd/d3d12/engine-ddi/root-signature.cpp:128",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyRootSignature",
+       "function": "destroy_root_signature",
+       "source": "driver/umd/d3d12/engine-ddi/root-signature.cpp:152",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnMapHeap",
+       "function": "map_heap",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1014",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnUnmapHeap",
+       "function": "unmap_heap",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1028",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateHeapAndResourceSizes",
+       "function": "calc_heap_and_resource",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:455",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateHeapAndResource",
+       "function": "create_heap_and_resource",
+       "source": "driver/umd/d3d12/native-tables.cpp:215",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyHeapAndResource",
+       "function": "destroy_heap_and_resource",
+       "source": "driver/umd/d3d12/native-tables.cpp:247",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnMakeResident",
+       "function": "native_make_resident",
+       "source": "driver/umd/d3d12/native-residency-ddi.cpp:72",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnEvict",
+       "function": "native_evict",
+       "source": "driver/umd/d3d12/native-residency-ddi.cpp:77",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateOpenedHeapAndResourceSizes",
+       "function": "calc_opened_heap_and_resource",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:774",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnOpenHeapAndResource",
+       "function": "open_heap_and_resource",
+       "source": "driver/umd/d3d12/native-tables.cpp:237",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyDescriptors",
+       "function": "copy_descriptors",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:412",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyDescriptorsSimple",
+       "function": "copy_descriptors_simple",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:426",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateQueryHeapSize",
+       "function": "calc_query_heap",
+       "source": "driver/umd/d3d12/engine-ddi/queries.cpp:41",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateQueryHeap",
+       "function": "create_query_heap",
+       "source": "driver/umd/d3d12/engine-ddi/queries.cpp:45",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyQueryHeap",
+       "function": "destroy_query_heap",
+       "source": "driver/umd/d3d12/engine-ddi/queries.cpp:59",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateCommandSignatureSize",
+       "function": "calc_command_signature",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:457",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateCommandSignature",
+       "function": "create_command_signature",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:472",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyCommandSignature",
+       "function": "destroy_command_signature",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:545",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCheckResourceVirtualAddress",
+       "function": "check_resource_virtual_address",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1036",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCheckResourceAllocationInfo",
+       "function": "check_resource_allocation_info",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1114",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCheckSubresourceInfo",
+       "function": "check_subresource_info",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1154",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnCheckExistingResourceAllocationInfo",
+       "function": "check_existing_resource_allocation_info",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1170",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnOfferResources",
+       "function": "offer_resources",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:45",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "pfnReclaimResources",
+       "function": "reclaim_resources",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:50",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "pfnGetImplicitPhysicalAdapterMask",
+       "function": "implicit_physical_adapter_mask",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:24",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnGetPresentPrivateDriverDataSize",
+       "function": "present_private_size",
+       "source": "driver/umd/d3d12/native-tables.cpp:191",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnQueryNodeMap",
+       "function": "query_node_map",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:28",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnRetrieveShaderComment",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCheckResourceAllocationHandle",
+       "function": "check_resource_allocation_handle",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1356",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCalcPrivatePipelineLibrarySize",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCreatePipelineLibrary",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnDestroyPipelineLibrary",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnAddPipelineStateToLibrary",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCalcSerializedLibrarySize",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnSerializeLibrary",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnGetDebugAllocationInfo",
+       "function": "debug_allocation_info",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:77",
+       "done": false,
+       "reason": "forwards to reject_void: only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnCalcPrivateCommandRecorderSize",
+       "function": "calc_recorder",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:87",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateCommandRecorder",
+       "function": "create_recorder",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:91",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnDestroyCommandRecorder",
+       "function": "destroy_recorder",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:104",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCommandRecorderSetCommandPoolAsTarget",
+       "function": "set_pool_as_target",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:115",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCalcPrivateSchedulingGroupSize",
+       "function": "scheduling_group_size",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:60",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateSchedulingGroup",
+       "function": "scheduling_group_create",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:65",
+       "done": false,
+       "reason": "every return is a failure constant"
+      },
+      {
+       "name": "pfnDestroySchedulingGroup",
+       "function": "scheduling_group_destroy",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:71",
+       "done": false,
+       "reason": "forwards to reject_void: only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnEnumerateMetaCommands",
+       "function": "enumerate_no_meta_commands",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:554",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnEnumerateMetaCommandParameters",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCalcPrivateMetaCommandSize",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCreateMetaCommand",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnDestroyMetaCommand",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnGetMetaCommandRequiredParameterInfo",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCalcPrivateStateObjectSize",
+       "function": "calc_state_object",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:651",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnCreateStateObject",
+       "function": "create_state_object",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:726",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDestroyStateObject",
+       "function": "destroy_state_object",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:749",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnGetRaytracingAccelerationStructurePrebuildInfo",
+       "function": "get_prebuild_info",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:840",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCheckDriverMatchingIdentifier",
+       "function": "unrecognized_identifier",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:548",
+       "done": false,
+       "reason": "every return is a 'not supported' answer"
+      },
+      {
+       "name": "pfnGetShaderIdentifier",
+       "function": "get_shader_identifier",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:786",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnGetShaderStackSize",
+       "function": "get_shader_stack_size",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:791",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnGetPipelineStackSize",
+       "function": "get_pipeline_stack_size",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:797",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnSetPipelineStackSize",
+       "function": "set_pipeline_stack_size",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:804",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetBackgroundProcessingMode",
+       "function": "background_processing_mode",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:87",
+       "done": false,
+       "reason": "forwards to reject_void: only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnCalcPrivateAddToStateObjectSize",
+       "function": "calc_add_to_state_object",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:734",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnAddToStateObject",
+       "function": "add_to_state_object",
+       "source": "driver/umd/d3d12/engine-ddi/state-objects.cpp:741",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCreateSamplerFeedbackUnorderedAccessView",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:570"
+      },
+      {
+       "name": "pfnCreateAmplificationShader",
+       "function": "create_as",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:183",
+       "done": false,
+       "reason": "forwards to intake with Stage::Mesh, which build_shader refuses"
+      },
+      {
+       "name": "pfnCreateMeshShader",
+       "function": "create_ms",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:186",
+       "done": false,
+       "reason": "forwards to intake with Stage::Mesh, which build_shader refuses"
+      },
+      {
+       "name": "pfnCalcPrivateMeshShaderSize",
+       "function": "calc_shader",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:156",
+       "done": true,
+       "reason": "returns the answer"
+      },
+      {
+       "name": "pfnImplicitShaderCacheControl",
+       "function": "no_implicit_shader_cache",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:563",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      }
+     ]
+    },
+    {
+     "name": "Command list",
+     "struct": "D3D12DDI_COMMAND_LIST_FUNCS_3D_0092",
+     "layout": [
+      {
+       "name": "pfnCloseCommandList",
+       "type": "PFND3D12DDI_CLOSECOMMANDLIST",
+       "since": null
+      },
+      {
+       "name": "pfnResetCommandList",
+       "type": "PFND3D12DDI_RESETCOMMANDLIST_0040",
+       "since": null
+      },
+      {
+       "name": "pfnDrawInstanced",
+       "type": "PFND3D12DDI_DRAWINSTANCED",
+       "since": null
+      },
+      {
+       "name": "pfnDrawIndexedInstanced",
+       "type": "PFND3D12DDI_DRAWINDEXEDINSTANCED",
+       "since": null
+      },
+      {
+       "name": "pfnDispatch",
+       "type": "PFND3D12DDI_DISPATCH",
+       "since": null
+      },
+      {
+       "name": "pfnClearUnorderedAccessViewUint",
+       "type": "PFND3D12DDI_CLEAR_UNORDERED_ACCESS_VIEW_UINT_0003",
+       "since": null
+      },
+      {
+       "name": "pfnClearUnorderedAccessViewFloat",
+       "type": "PFND3D12DDI_CLEAR_UNORDERED_ACCESS_VIEW_FLOAT_0003",
+       "since": null
+      },
+      {
+       "name": "pfnClearRenderTargetView",
+       "type": "PFND3D12DDI_CLEAR_RENDER_TARGET_VIEW_0003",
+       "since": null
+      },
+      {
+       "name": "pfnClearDepthStencilView",
+       "type": "PFND3D12DDI_CLEAR_DEPTH_STENCIL_VIEW_0003",
+       "since": null
+      },
+      {
+       "name": "pfnDiscardResource",
+       "type": "PFND3D12DDI_DISCARD_RESOURCE_0003",
+       "since": null
+      },
+      {
+       "name": "pfnCopyTextureRegion",
+       "type": "PFND3D12DDI_COPYTEXTUREREGION_0003",
+       "since": null
+      },
+      {
+       "name": "pfnResourceCopy",
+       "type": "PFND3D12DDI_RESOURCECOPY",
+       "since": null
+      },
+      {
+       "name": "pfnCopyTiles",
+       "type": "PFND3D12DDI_COPYTILES",
+       "since": null
+      },
+      {
+       "name": "pfnCopyBufferRegion",
+       "type": "PFND3D12DDI_COPYBUFFERREGION_0003",
+       "since": null
+      },
+      {
+       "name": "pfnResourceResolveSubresource",
+       "type": "PFND3D12DDI_RESOURCERESOLVESUBRESOURCE",
+       "since": null
+      },
+      {
+       "name": "pfnExecuteBundle",
+       "type": "PFND3D12DDI_EXECUTE_BUNDLE",
+       "since": null
+      },
+      {
+       "name": "pfnExecuteIndirect",
+       "type": "PFND3D12DDI_EXECUTE_INDIRECT",
+       "since": null
+      },
+      {
+       "name": "pfnResourceBarrier",
+       "type": "PFND3D12DDI_RESOURCEBARRIER_0022",
+       "since": null
+      },
+      {
+       "name": "pfnBlt",
+       "type": "PFND3D12DDI_BLT",
+       "since": null
+      },
+      {
+       "name": "pfnPresent",
+       "type": "PFND3D12DDI_PRESENT_0051",
+       "since": null
+      },
+      {
+       "name": "pfnBeginQuery",
+       "type": "PFND3D12DDI_BEGIN_END_QUERY_0003",
+       "since": null
+      },
+      {
+       "name": "pfnEndQuery",
+       "type": "PFND3D12DDI_BEGIN_END_QUERY_0003",
+       "since": null
+      },
+      {
+       "name": "pfnResolveQueryData",
+       "type": "PFND3D12DDI_RESOLVE_QUERY_DATA",
+       "since": null
+      },
+      {
+       "name": "pfnSetPredication",
+       "type": "PFND3D12DDI_SET_PREDICATION",
+       "since": null
+      },
+      {
+       "name": "pfnIaSetTopology",
+       "type": "PFND3D12DDI_IA_SETTOPOLOGY_0003",
+       "since": null
+      },
+      {
+       "name": "pfnRsSetViewports",
+       "type": "PFND3D12DDI_RS_SETVIEWPORTS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnRsSetScissorRects",
+       "type": "PFND3D12DDI_RS_SETSCISSORRECTS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnOmSetBlendFactor",
+       "type": "PFND3D12DDI_OM_SETBLENDFACTOR",
+       "since": null
+      },
+      {
+       "name": "pfnOmSetStencilRef",
+       "type": "PFND3D12DDI_OM_SETSTENCILREF",
+       "since": null
+      },
+      {
+       "name": "pfnSetPipelineState",
+       "type": "PFND3D12DDI_SET_PIPELINE_STATE",
+       "since": null
+      },
+      {
+       "name": "pfnSetDescriptorHeaps",
+       "type": "PFND3D12DDI_SET_DESCRIPTOR_HEAPS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRootSignature",
+       "type": "PFND3D12DDI_SET_ROOT_SIGNATURE",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRootSignature",
+       "type": "PFND3D12DDI_SET_ROOT_SIGNATURE",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRootDescriptorTable",
+       "type": "PFND3D12DDI_SET_ROOT_DESCRIPTOR_TABLE",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRootDescriptorTable",
+       "type": "PFND3D12DDI_SET_ROOT_DESCRIPTOR_TABLE",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRoot32BitConstant",
+       "type": "PFND3D12DDI_SET_ROOT_32BIT_CONSTANT",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRoot32BitConstant",
+       "type": "PFND3D12DDI_SET_ROOT_32BIT_CONSTANT",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRoot32BitConstants",
+       "type": "PFND3D12DDI_SET_ROOT_32BIT_CONSTANTS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRoot32BitConstants",
+       "type": "PFND3D12DDI_SET_ROOT_32BIT_CONSTANTS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRootConstantBufferView",
+       "type": "PFND3D12DDI_SET_ROOT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRootConstantBufferView",
+       "type": "PFND3D12DDI_SET_ROOT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRootShaderResourceView",
+       "type": "PFND3D12DDI_SET_ROOT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRootShaderResourceView",
+       "type": "PFND3D12DDI_SET_ROOT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnSetComputeRootUnorderedAccessView",
+       "type": "PFND3D12DDI_SET_ROOT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnSetGraphicsRootUnorderedAccessView",
+       "type": "PFND3D12DDI_SET_ROOT_BUFFER_VIEW",
+       "since": null
+      },
+      {
+       "name": "pfnIASetIndexBuffer",
+       "type": "PFND3D12DDI_IA_SET_INDEX_BUFFER",
+       "since": null
+      },
+      {
+       "name": "pfnIASetVertexBuffers",
+       "type": "PFND3D12DDI_IA_SET_VERTEX_BUFFERS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnSOSetTargets",
+       "type": "PFND3D12DDI_SO_SET_TARGETS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnOMSetRenderTargets",
+       "type": "PFND3D12DDI_OM_SET_RENDER_TARGETS_0003",
+       "since": null
+      },
+      {
+       "name": "pfnSetMarker",
+       "type": "PFND3D12DDI_SET_MARKER",
+       "since": null
+      },
+      {
+       "name": "pfnClearRootArguments",
+       "type": "PFND3D12DDI_CLEAR_ROOT_ARGUMENTS",
+       "since": null
+      },
+      {
+       "name": "pfnAtomicCopyBufferRegion",
+       "type": "PFND3D12DDI_COPYBUFFERREGION_0003",
+       "since": null
+      },
+      {
+       "name": "pfnOMSetDepthBounds",
+       "type": "PFND3D12DDI_OM_SETDEPTHBOUNDS_0025",
+       "since": null
+      },
+      {
+       "name": "pfnSetSamplePositions",
+       "type": "PFND3D12DDI_SETSAMPLEPOSITIONS_0027",
+       "since": null
+      },
+      {
+       "name": "pfnResourceResolveSubresourceRegion",
+       "type": "PFND3D12DDI_RESOURCERESOLVESUBRESOURCEREGION_0027",
+       "since": null
+      },
+      {
+       "name": "pfnSetProtectedResourceSession",
+       "type": "PFND3D12DDI_SETPROTECTEDRESOURCESESSION_0030",
+       "since": null
+      },
+      {
+       "name": "pfnWriteBufferImmediate",
+       "type": "PFND3D12DDI_WRITEBUFFERIMMEDIATE_0032",
+       "since": null
+      },
+      {
+       "name": "pfnSetViewInstanceMask",
+       "type": "PFND3D12DDI_SETVIEWINSTANCEMASK_0033",
+       "since": null
+      },
+      {
+       "name": "pfnInitializeMetaCommand",
+       "type": "PFND3D12DDI_INITIALIZE_META_COMMAND_0052",
+       "since": null
+      },
+      {
+       "name": "pfnExecuteMetaCommand",
+       "type": "PFND3D12DDI_EXECUTE_META_COMMAND_0052",
+       "since": null
+      },
+      {
+       "name": "pfnBuildRaytracingAccelerationStructure",
+       "type": "PFND3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054",
+       "since": null
+      },
+      {
+       "name": "pfnEmitRaytracingAccelerationStructurePostbuildInfo",
+       "type": "PFND3D12DDI_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_0054",
+       "since": null
+      },
+      {
+       "name": "pfnCopyRaytracingAccelerationStructure",
+       "type": "PFND3D12DDI_COPY_RAYTRACING_ACCELERATION_STRUCTURE_0054",
+       "since": null
+      },
+      {
+       "name": "pfnSetPipelineState1",
+       "type": "PFND3D12DDI_SET_PIPELINE_STATE1_0054",
+       "since": null
+      },
+      {
+       "name": "pfnDispatchRays",
+       "type": "PFND3D12DDI_DISPATCH_RAYS_0054",
+       "since": null
+      },
+      {
+       "name": "pfnRSSetShadingRate",
+       "type": "PFND3D12DDI_RS_SET_SHADING_RATE_0062",
+       "since": null
+      },
+      {
+       "name": "pfnRSSetShadingRateImage",
+       "type": "PFND3D12DDI_RS_SET_SHADING_RATE_IMAGE_0062",
+       "since": null
+      },
+      {
+       "name": "pfnDispatchMesh",
+       "type": "PFND3D12DDI_DISPATCH_MESH_0074",
+       "since": null
+      },
+      {
+       "name": "pfnBarrier",
+       "type": "PFND3D12DDI_BARRIER_0088",
+       "since": null
+      },
+      {
+       "name": "pfnOmSetAlphaBlendFactor",
+       "type": "PFND3D12DDI_OM_SETALPHABLENDFACTOR_0092",
+       "since": null
+      }
+     ],
+     "slots": [
+      {
+       "name": "pfnCloseCommandList",
+       "function": "close_list",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:196",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResetCommandList",
+       "function": "reset_list",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:222",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDrawInstanced",
+       "function": "draw_instanced",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:314",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDrawIndexedInstanced",
+       "function": "draw_indexed_instanced",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:320",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDispatch",
+       "function": "dispatch",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:467",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnClearUnorderedAccessViewUint",
+       "function": "clear_uav_uint",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:497",
+       "done": true,
+       "reason": "forwards to clear_uav: does work"
+      },
+      {
+       "name": "pfnClearUnorderedAccessViewFloat",
+       "function": "clear_uav_float",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:504",
+       "done": true,
+       "reason": "forwards to clear_uav: does work"
+      },
+      {
+       "name": "pfnClearRenderTargetView",
+       "function": "clear_rtv",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:461",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnClearDepthStencilView",
+       "function": "clear_dsv",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:513",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDiscardResource",
+       "function": "discard_resource",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1690",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyTextureRegion",
+       "function": "copy_texture_region",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1634",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResourceCopy",
+       "function": "resource_copy",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1677",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyTiles",
+       "function": "copy_tiles",
+       "source": "driver/umd/d3d12/engine-ddi/tiles.cpp:139",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyBufferRegion",
+       "function": "copy_buffer_region",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1408",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResourceResolveSubresource",
+       "function": "resolve_subresource",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:581",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnExecuteBundle",
+       "function": "execute_bundle",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:325",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnExecuteIndirect",
+       "function": "execute_indirect",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:560",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResourceBarrier",
+       "function": "resource_barrier",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1712",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnBlt",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnPresent",
+       "function": "present",
+       "source": "driver/umd/d3d12/native-tables.cpp:285",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnBeginQuery",
+       "function": "begin_query",
+       "source": "driver/umd/d3d12/engine-ddi/queries.cpp:83",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnEndQuery",
+       "function": "end_query",
+       "source": "driver/umd/d3d12/engine-ddi/queries.cpp:92",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResolveQueryData",
+       "function": "resolve_query_data",
+       "source": "driver/umd/d3d12/engine-ddi/queries.cpp:101",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetPredication",
+       "function": "set_predication",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:271",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnIaSetTopology",
+       "function": "ia_set_topology",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:326",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnRsSetViewports",
+       "function": "rs_set_viewports",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:330",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnRsSetScissorRects",
+       "function": "rs_set_scissor_rects",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:337",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnOmSetBlendFactor",
+       "function": "om_set_blend_factor",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:345",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnOmSetStencilRef",
+       "function": "om_set_stencil_ref",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:350",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetPipelineState",
+       "function": "set_pipeline_state",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:402",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetDescriptorHeaps",
+       "function": "set_descriptor_heaps",
+       "source": "driver/umd/d3d12/engine-ddi/descriptors.cpp:439",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRootSignature",
+       "function": "set_compute_root_signature",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:415",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRootSignature",
+       "function": "set_graphics_root_signature",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:354",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRootDescriptorTable",
+       "function": "set_compute_root_table",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:428",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRootDescriptorTable",
+       "function": "set_graphics_root_table",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:364",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRoot32BitConstant",
+       "function": "set_compute_root_constant",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:435",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRoot32BitConstant",
+       "function": "set_graphics_root_constant",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:369",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRoot32BitConstants",
+       "function": "set_compute_root_constants",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:440",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRoot32BitConstants",
+       "function": "set_graphics_root_constants",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:374",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRootConstantBufferView",
+       "function": "set_compute_root_cbv",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:452",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRootConstantBufferView",
+       "function": "set_graphics_root_cbv",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:382",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRootShaderResourceView",
+       "function": "set_compute_root_srv",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:457",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRootShaderResourceView",
+       "function": "set_graphics_root_srv",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:387",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetComputeRootUnorderedAccessView",
+       "function": "set_compute_root_uav",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:462",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetGraphicsRootUnorderedAccessView",
+       "function": "set_graphics_root_uav",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:392",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnIASetIndexBuffer",
+       "function": "ia_set_index_buffer",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:397",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnIASetVertexBuffers",
+       "function": "ia_set_vertex_buffers",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:402",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSOSetTargets",
+       "function": "so_set_targets",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:411",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnOMSetRenderTargets",
+       "function": "om_set_render_targets",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:423",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetMarker",
+       "function": "set_marker",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:344",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnClearRootArguments",
+       "function": "clear_root_arguments",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:352",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnAtomicCopyBufferRegion",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnOMSetDepthBounds",
+       "function": "om_set_depth_bounds",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:285",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSetSamplePositions",
+       "function": "set_sample_positions",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:296",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnResourceResolveSubresourceRegion",
+       "function": "resolve_subresource_region",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:596",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnSetProtectedResourceSession",
+       "function": "set_protected_session",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:399",
+       "done": false,
+       "reason": "refuses every call"
+      },
+      {
+       "name": "pfnWriteBufferImmediate",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnSetViewInstanceMask",
+       "function": "set_view_instance_mask",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:311",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnInitializeMetaCommand",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnExecuteMetaCommand",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnBuildRaytracingAccelerationStructure",
+       "function": "build_acceleration_structure",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:853",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnEmitRaytracingAccelerationStructurePostbuildInfo",
+       "function": "emit_postbuild_info",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:894",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyRaytracingAccelerationStructure",
+       "function": "copy_acceleration_structure",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:920",
+       "done": true,
+       "reason": "does work",
+       "partial": true
+      },
+      {
+       "name": "pfnSetPipelineState1",
+       "function": "set_pipeline_state1",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:949",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDispatchRays",
+       "function": "dispatch_rays",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:966",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnRSSetShadingRate",
+       "function": "rs_set_shading_rate",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:404",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnRSSetShadingRateImage",
+       "function": "rs_set_shading_rate_image",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:419",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnDispatchMesh",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnBarrier",
+       "function": "FailSafe",
+       "done": false,
+       "reason": "fail-safe entry of engine-ddi",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:623"
+      },
+      {
+       "name": "pfnOmSetAlphaBlendFactor",
+       "function": "om_set_alpha_blend_factor",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:396",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      }
+     ]
+    },
+    {
+     "name": "Command queue",
+     "struct": "D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001",
+     "layout": [
+      {
+       "name": "pfnExecuteCommandLists",
+       "type": "PFND3D12DDI_EXECUTECOMMANDLISTS",
+       "since": null
+      },
+      {
+       "name": "pfnUnused",
+       "type": "void*",
+       "since": null
+      },
+      {
+       "name": "pfnUnused2",
+       "type": "void*",
+       "since": null
+      },
+      {
+       "name": "pfnUpdateTileMappings",
+       "type": "PFND3D12DDI_UPDATETILEMAPPINGS",
+       "since": null
+      },
+      {
+       "name": "pfnCopyTileMappings",
+       "type": "PFND3D12DDI_COPYTILEMAPPINGS",
+       "since": null
+      },
+      {
+       "name": "pfnSignalFence",
+       "type": "PFND3D12DDI_SIGNAL_FENCE",
+       "since": null
+      },
+      {
+       "name": "pfnWaitForFence",
+       "type": "PFND3D12DDI_WAIT_FOR_FENCE",
+       "since": null
+      }
+     ],
+     "slots": [
+      {
+       "name": "pfnExecuteCommandLists",
+       "function": "native_execute",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:59",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnUpdateTileMappings",
+       "function": "native_update_tiles",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:134",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnCopyTileMappings",
+       "function": "native_copy_tiles",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:145",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnSignalFence",
+       "function": "native_signal",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:77",
+       "done": true,
+       "reason": "does work"
+      },
+      {
+       "name": "pfnWaitForFence",
+       "function": "native_wait",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:116",
+       "done": true,
+       "reason": "does work"
+      }
+     ]
+    },
+    {
+     "name": "Extended features",
+     "struct": "D3D12DDI_EXTENDED_FEATURES_FUNCS_0021",
+     "layout": [
+      {
+       "name": "pfnGetSupportedExtendedFeatures",
+       "type": "PFND3D12DDI_GET_SUPPORTED_EXTENDED_FEATURES_0020",
+       "since": null
+      },
+      {
+       "name": "pfnGetSupportedExtendedFeatureVersions",
+       "type": "PFND3D12DDI_GET_SUPPORTED_EXTENDED_FEATURE_VERSIONS_0020",
+       "since": null
+      },
+      {
+       "name": "pfnEnableExtendedFeature",
+       "type": "PFND3D12DDI_ENABLE_EXTENDED_FEATURE_0020",
+       "since": null
+      },
+      {
+       "name": "pfnSetExtendedFeatureCallbacks",
+       "type": "PFND3D12DDI_SET_EXTENDED_FEATURE_CALLBACKS_0021",
+       "since": null
+      }
+     ],
+     "slots": [
+      {
+       "name": "pfnGetSupportedExtendedFeatures",
+       "function": "extended_features",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:155",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnGetSupportedExtendedFeatureVersions",
+       "function": "extended_versions",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:160",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnEnableExtendedFeature",
+       "function": "extended_enable",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:165",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      },
+      {
+       "name": "pfnSetExtendedFeatureCallbacks",
+       "function": "extended_callbacks",
+       "source": "driver/umd/d3d12/native-queue-ddi.cpp:168",
+       "done": false,
+       "reason": "only logs, counts, reads or writes zeros"
+      }
+     ]
+    }
+   ],
+   "summary": {
+    "done": 170,
+    "total": 209,
+    "partial": 13,
+    "percent": 81.34
+   }
+  }
+ ]
+}

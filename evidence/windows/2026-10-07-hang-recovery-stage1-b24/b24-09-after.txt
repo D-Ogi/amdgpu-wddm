@@ -1,0 +1,27 @@
+bc250mon 5128 start 14:30:23Z responding True cpu 12
+dwm 1936 start 14:30:20Z responding True cpu 398
+explorer 5840 start 14:30:23Z responding True cpu 5
+14:32:27Z Display 4101 Display driver bc250kmd stopped responding and has successfully recovered.
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 11 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 10 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 9 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 8 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 7 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 6 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 5 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 4 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 3 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 2 in group 0 exposes the following power management capabilities:
+
+14:30:10Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 1 in group 0 exposes the following power management capabilities:
+
+listen 2250 pid 4

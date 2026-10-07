@@ -1,0 +1,14 @@
+record before: C:\BC250\hangb22\record-before-short-20261007T143433386Z.json (switch 1, TdrDelay 10, dwm 1936)
+client: C:\BC250\hangb22\bc250hang.exe --lab --short --millis 200 (bound 20 s) utc 2026-10-07T14:34:33.9821236Z
+hang-client: runtime=System32/d3d12.dll adapter=BC-250 mode=short pid=4088 utc=2026-10-07T14:34:34.015Z
+hang-client: calibration outer=64 elapsed=19.01 ms
+hang-client: short target=200 ms -> outer=673 (watchdog=500 ms)
+hang-client: short dispatch elapsed=95.0 ms completed=0x2 reason=0x00000000 S_OK (device alive)
+RESULT=SHORT-COMPLETED-DEVICE-ALIVE
+client exit 0 after 2 s
+dwm pids before 1936 after 1936
+VERDICT NO-ATTEMPT: no node-0 ResetEngine ran with the switch on since the saved record (switch not 1 at the device start, no TDR yet, or a TDR that took another way)
+record: LastVerdict 1 LastSeq 8756 LastFence 1143 LastKills 1 LastMicros 0 LastTime 2026-10-07T14:32:26.2167403Z writer 0x000700D8
+kmd log: C:\BC250\hangb22\kmdlog-20261007T143436325Z.txt exit 0, 1024 lines, 11206 lost to the wrap
+current device start at seq 8 (in the kept head): HangRecoveryMode 1 line PRESENT
+    33 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery

@@ -1,5 +1,5 @@
 # Read-only: the supervisor's receipts of a kmd-deploy attempt on the lab (why did it end recovery-required?).
-param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}-deploy[0-9]{3}$')][string]$Attempt)
+param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-deploy[0-9]{3}$')][string]$Attempt)
 $d = "C:\BC250\m15\$Attempt"
 "--- files"
 Get-ChildItem -LiteralPath $d -File -Recurse | Where-Object { $_.Name -match '\.(json|txt|log|err|out)$' -and $_.Length -gt 0 } | Sort-Object LastWriteTimeUtc | ForEach-Object { '{0} {1} {2}' -f $_.FullName.Substring($d.Length), $_.Length, $_.LastWriteTimeUtc.ToString('HH:mm:ss') }

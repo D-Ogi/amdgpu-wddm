@@ -1,0 +1,53 @@
+197      0.388 dpm: joint power arm DpmJointGovernor 1 -> on: the CPU limit comes down while the GPU is bound and held by heat
+200      0.390 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+201      0.390 cpu: the surface sees 12 processors, core mask 0x77
+2755     30.509 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2785     35.528 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2786     35.528 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2804     40.545 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2805     40.545 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2835     45.546 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2836     45.546 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2867     50.572 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2868     50.572 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2897     55.600 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2898     55.600 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2924     60.632 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2925     60.632 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2948     65.661 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2949     65.661 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+2975     70.681 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+2976     70.681 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3002     75.705 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3003     75.705 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3031     80.719 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3032     80.719 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3056     85.723 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3057     85.723 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3080     90.747 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3081     90.747 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3103     95.765 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3104     95.765 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3124    100.765 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3125    100.765 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3148    105.768 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3149    105.768 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3180    110.785 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3181    110.785 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3212    115.816 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3213    115.816 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3226    120.844 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3227    120.844 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3240    125.876 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3241    125.876 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3254    130.877 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3255    130.877 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+3512    135.903 dpm: telemetry joint free, want 0 applied 0 base 3200 MHz, CPU ready 1
+3513    135.903 dpm: telemetry joint engages 0 down 0 up 0 releases 0, CPU sent 0 refused 0
+--- cpu
+  cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+  cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3200 / 0 / 100)
+  cpu: 1175 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 64.0 C
+  cpu: cores 1400 1400 1400 1555 1555 1400 1555 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+  cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+  cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001

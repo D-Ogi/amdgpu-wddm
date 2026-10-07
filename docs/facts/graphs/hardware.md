@@ -195,14 +195,17 @@ flowchart LR
   M349["M349"]
   M429["M429"]
   M433["M433"]
+  M817["M817"]
   M822["M822<br/>linux"]
   M823["M823"]
+  M833["M833<br/>kmd"]
   M95 --> M53
   M349 --> M348
   M433 --> M429
   M823 --> M822
+  M833 --> M817
   M106 --> M79
   classDef other stroke-dasharray:4 3
-  class M53,M106,M348,M822 other
+  class M53,M106,M348,M822,M833 other
 ```
 

@@ -29,6 +29,8 @@ flowchart LR
   M313["M313"]
   M455["M455"]
   M456["M456<br/>tooling"]
+  M776["M776<br/>games"]
+  M834["M834"]
   M242 ==>|supersedes| M241
   M110 ==>|supersedes| M108
   M112 ==>|supersedes| M110
@@ -38,10 +40,11 @@ flowchart LR
   M291 ==>|supersedes| M290
   M306 ==>|supersedes| M303
   M313 ==>|supersedes| M288
+  M834 ==>|supports| M776
   M253 ==>|supersedes| M251
   M456 ==>|supersedes| M455
   classDef other stroke-dasharray:4 3
-  class M242,M253,M456 other
+  class M242,M253,M456,M776 other
 ```
 
 ## References
@@ -98,16 +101,17 @@ flowchart LR
   M137["M137"]
   M138["M138"]
   M190["M190"]
-  M191["M191"]
-  M192["M192"]
-  M193["M193"]
-  M194["M194"]
   M200["M200"]
   M201["M201"]
   M202["M202<br/>display"]
   M206["M206"]
   M207["M207"]
   M287["M287"]
+  M817["M817<br/>hardware"]
+  M831["M831"]
+  M832["M832"]
+  M833["M833"]
+  M834["M834"]
   M63 --> M62
   M63 --> M64
   M64 --> M62
@@ -167,22 +171,22 @@ flowchart LR
   M137 --> M121
   M137 --> M136
   M138 --> M137
-  M191 --> M192
-  M191 --> M194
-  M192 --> M191
-  M193 --> M191
   M200 --> M190
   M201 --> M190
   M206 --> M190
   M207 --> M190
   M287 --> M190
+  M832 --> M831
+  M833 --> M817
+  M833 --> M832
+  M834 --> M832
   M68 --> M67
   M84 --> M73
   M99 --> M77
   M202 --> M190
   M40 --> M38
   classDef other stroke-dasharray:4 3
-  class M30,M40,M55,M57,M60,M68,M84,M99,M202 other
+  class M30,M40,M55,M57,M60,M68,M84,M99,M202,M817 other
 ```
 
 ### Part 2
@@ -196,6 +200,10 @@ flowchart LR
   M111["M111"]
   M187["M187"]
   M188["M188"]
+  M191["M191"]
+  M192["M192"]
+  M193["M193"]
+  M194["M194"]
   M224["M224"]
   M225["M225"]
   M237["M237"]
@@ -223,6 +231,10 @@ flowchart LR
   M37 --> M39
   M111 --> M108
   M187 --> M188
+  M191 --> M192
+  M191 --> M194
+  M192 --> M191
+  M193 --> M191
   M225 --> M224
   M238 --> M237
   M304 --> M303

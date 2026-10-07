@@ -2,7 +2,7 @@
 # bounded-child.exe opens its stdout/stderr files with CREATE_NEW and exits 125 before starting anything when they
 # exist. Each run therefore gets its own directory, and only that run's files are ever printed: kmd175-deploy003
 # postflights 1-5 all ended 125 on the first run's postflight.out and printed its stale "Competing test task".
-param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}-deploy[0-9]{3}$')][string]$Attempt,
+param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-deploy[0-9]{3}$')][string]$Attempt,
  [Parameter(Mandatory)][ValidatePattern('^[A-Fa-f0-9]{64}$')][string]$ManifestSha256)
 $ErrorActionPreference='Stop'
 $d="C:\BC250\m15\$Attempt"

@@ -27,6 +27,9 @@ try {
  # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
  # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
+ # The README Status maps: docs/status must be what tools/docs/status_map.py writes from the driver source
+ # and the WDK headers. With the kits it also reads the slot lists from the headers again.
+ Check 'status-map' { & python "$repo\tools\docs\status_map.py" --kits "$Workspace\toolchain\nuget" --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }

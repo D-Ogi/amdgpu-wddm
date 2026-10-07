@@ -13,14 +13,17 @@ flowchart LR
   M255["M255"]
   M274["M274"]
   M321["M321"]
+  M776["M776"]
   M816["M816"]
+  M834["M834<br/>kmd"]
+  M834 ==>|supports| M776
   M816 ==>|supersedes| M164
   M816 ==>|supersedes| M166
   M816 ==>|supersedes| M255
   M816 ==>|supersedes| M274
   M816 ==>|supersedes| M321
   classDef other stroke-dasharray:4 3
-  class M166 other
+  class M166,M834 other
 ```
 
 ## References

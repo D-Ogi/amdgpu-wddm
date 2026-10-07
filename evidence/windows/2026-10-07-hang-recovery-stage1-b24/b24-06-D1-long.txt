@@ -1,0 +1,24 @@
+kmd log: C:\BC250\hangb22\kmdlog-20261007T143211418Z.txt exit 0, 1024 lines, 7567 lost to the wrap
+current device start at seq 8 (in the kept head): HangRecoveryMode 1 line PRESENT
+    33 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+record before: C:\BC250\hangb22\record-before-long-20261007T143211609Z.json (switch 1, TdrDelay 10, dwm 1936)
+client: C:\BC250\hangb22\bc250hang.exe --lab --long --deadline 60 (bound 100 s) utc 2026-10-07T14:32:11.9696786Z
+hang-client: runtime=System32/d3d12.dll adapter=BC-250 mode=long pid=1280 utc=2026-10-07T14:32:11.997Z
+hang-client: long dispatch outer=0xFFFFFFFF inner=4096 groups=16 deadline=60000 ms (TdrDelay~10 s), one submission
+hang-client: submitted utc=2026-10-07T14:32:12.082Z fence target=1
+hang-client: long wait ended utc=2026-10-07T14:32:26.219Z elapsed=14137.7 ms fence=0xffffffffffffffff completed_at=-1.0 removed_at=14137.7 reason=0x887a0006 DXGI_ERROR_DEVICE_HUNG
+RESULT=HANG-DETECTED-DEVICE-REMOVED
+client exit 0 after 14.3 s
+dwm pids before 1936 after 1936
+VERDICT DRAINED: recovered by the kill: 1 kill(s) in 0 us, the ring drained, fence reported aborted
+record: LastVerdict 1 LastSeq 8756 LastFence 1143 LastKills 1 LastMicros 0 LastTime 2026-10-07T14:32:26.2167403Z writer 0x000700D8
+kmd log: C:\BC250\hangb22\kmdlog-20261007T143226576Z.txt exit 0, 1024 lines, 8199 lost to the wrap
+current device start at seq 8 (in the kept head): HangRecoveryMode 1 line PRESENT
+    33 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+  8780 gfx: submission path failed, no further ring writes this device start (seq 8756 in flight, slot 0x21A6)
+  8781 wddm: HARDWARE FENCE TIMEOUT after 500 ms (sequence 8756): fence 1143 remains pending for OS TDR, ring path closed
+  8921 hang record: verdict 0 seq 8756 fence 1143 kills 0 0 us, persisted 0x00000000
+  8923 gfx: soft recovery: seq 8756 retired after 1 kill(s) of VMID 12 waves in 0 us; ring reopened
+  8924 hang record: verdict 1 seq 8756 fence 1143 kills 1 0 us, persisted 0x00000000
+  8925 wddm: *** ResetEngine node 0: SOFT RECOVERED, aborted fence 1143, node 0 reopened ***
+  8926 wddm: soft recovery: verdict 1 seq 8756 vmid 12, 1 kill(s) in 0 us

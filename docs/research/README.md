@@ -27,6 +27,7 @@ ASD-STE100 pass that the rest of the documentation gets.
 | `bios-analysis-followup.md` | What the BIOS static analysis (workspace `firmware/bios/analysis`) means for the driver, reviewed against facts M430-M435 | Review note, 2026-09-24 |
 | `m13-present-baseline.md` | M13: the working full-WDDM desktop baseline on the CPU renderer and its controls | Status note, checkpoint M406-M412; later steps indexed in workspace `STATE.md` and `facts.md` |
 | `offgpu-frame-cost-c48-c55.md` | M15 off-GPU frame cost: what the long idle gaps of the 3D ring are. Which five explanations died. Why our own overlay poll made the class. The rules that come out of it | Investigation record, 2026-10-06. Its measured rows are facts M797 to M800 |
+| `k137-kmd-stop-cpu-cap.md` | BD-093: why a KMD stop leaves the CPU slower until a Windows restart. The constraints, five hypotheses and what killed each one, the next tests | Investigation record, 2026-10-07. Its measured rows are facts M832 to M834 |
 | `h264-encoder-literature-motion-estimation.md` | M15.11: what the literature does for GPU motion estimation, against our `cs_me.hlsl`. Ranked levers | Literature survey, 2026-10-06. Check beside it. STE pass owed |
 | `h264-encoder-literature-motion-estimation-check.md` | The independent re-check of that survey, source by source | Check record, newer than the survey |
 | `h264-encoder-literature-mode-decision.md` | M15.11: mode decision and rate-distortion choice on the GPU, against our `cs_mb.hlsl` | Literature survey, 2026-10-06. Check beside it. STE pass owed |

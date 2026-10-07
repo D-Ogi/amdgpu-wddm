@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="424" viewBox="0 0 860 424" role="img" aria-label="Kernel-mode DDI: 48 of 147 slots done (32.65%)" font-family="-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Noto Sans&#x27;,Helvetica,Arial,sans-serif">
+<title>Kernel-mode DDI: 48 of 147 slots done (32.65%)</title>
+<defs><pattern id="newer" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#0d1117"/><rect width="2" height="5" fill="#3d444d"/></pattern></defs>
+<rect x="0.5" y="0.5" width="859" height="423" rx="6" fill="#161b22" stroke="#30363d"/>
+<text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">Kernel-mode DDI: 48 of 147 slots done (32.65%)</text>
+<text x="10" y="39" font-size="12" fill="#9198a1">DRIVER_INITIALIZATION_DATA, WDK 10.0.26100, counted up to WDDM 2.9. Done: WddmBuildTable sets the slot to a function that does work.</text>
+<rect x="11.5" y="47.5" width="219.76" height="327" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Scheduling and submission: 11/32, and 16 newer than WDDM 2.9 (not targeted yet)</title>
+<rect x="13.5" y="49.5" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateDevice: done - does work</title></rect>
+<rect x="49.46" y="49.5" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSubmitCommand: done - does work</title></rect>
+<rect x="85.42" y="49.5" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPreemptCommand: done - forwards to WddmPreemptFence: does work</title></rect>
+<rect x="121.38" y="49.5" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyDevice: done - does work</title></rect>
+<rect x="157.34" y="49.5" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateContext: done - does work</title></rect>
+<rect x="193.3" y="49.5" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyContext: done - does work</title></rect>
+<rect x="13.5" y="89.88" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetNodeMetadata: done - does work</title></rect>
+<rect x="49.46" y="89.88" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCalibrateGpuClock: done - does work</title></rect>
+<rect x="85.42" y="89.88" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSubmitCommandVirtual: done - does work</title></rect>
+<rect x="121.38" y="89.88" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateProcess: done - does work</title></rect>
+<rect x="157.34" y="89.88" width="35.96" height="40.38" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyProcess: done - forwards to WddmFreeObject: does work</title></rect>
+<rect x="193.3" y="89.88" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryCurrentFence: missing - NULL in WddmBuildTable</title></rect>
+<rect x="13.5" y="130.25" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRender: missing - NULL in WddmBuildTable</title></rect>
+<rect x="49.46" y="130.25" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiLinkDevice: missing - NULL in WddmBuildTable</title></rect>
+<rect x="85.42" y="130.25" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRenderKm: missing - NULL in WddmBuildTable</title></rect>
+<rect x="121.38" y="130.25" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiFormatHistoryBuffer: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="157.34" y="130.25" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRenderGdi: missing - NULL in WddmBuildTable</title></rect>
+<rect x="193.3" y="130.25" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateHwContext: missing - NULL in WddmBuildTable</title></rect>
+<rect x="13.5" y="170.62" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyHwContext: missing - NULL in WddmBuildTable</title></rect>
+<rect x="49.46" y="170.62" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateHwQueue: missing - NULL in WddmBuildTable</title></rect>
+<rect x="85.42" y="170.62" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyHwQueue: missing - NULL in WddmBuildTable</title></rect>
+<rect x="121.38" y="170.62" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSubmitCommandToHwQueue: missing - NULL in WddmBuildTable</title></rect>
+<rect x="157.34" y="170.62" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSwitchToHwContextList: missing - NULL in WddmBuildTable</title></rect>
+<rect x="193.3" y="170.62" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateHwContextState: missing - NULL in WddmBuildTable</title></rect>
+<rect x="13.5" y="211" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetSchedulingLogBuffer: missing - NULL in WddmBuildTable</title></rect>
+<rect x="49.46" y="211" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetupPriorityBands: missing - NULL in WddmBuildTable</title></rect>
+<rect x="85.42" y="211" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetContextSchedulingProperties: missing - NULL in WddmBuildTable</title></rect>
+<rect x="121.38" y="211" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSuspendContext: missing - NULL in WddmBuildTable</title></rect>
+<rect x="157.34" y="211" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResumeContext: missing - NULL in WddmBuildTable</title></rect>
+<rect x="193.3" y="211" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSignalMonitoredFence: missing - NULL in WddmBuildTable</title></rect>
+<rect x="13.5" y="251.38" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiValidateSubmitCommand: missing - NULL in WddmBuildTable</title></rect>
+<rect x="49.46" y="251.38" width="35.96" height="40.38" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTrackedWorkloadPowerLevel: missing - NULL in WddmBuildTable</title></rect>
+<rect x="85.42" y="251.38" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateCpuEvent: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="121.38" y="251.38" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyCpuEvent: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="157.34" y="251.38" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateNativeFence: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="193.3" y="251.38" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyNativeFence: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="13.5" y="291.75" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateMonitoredValues: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="49.46" y="291.75" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateCurrentValuesFromCpu: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="85.42" y="291.75" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateDoorbell: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="121.38" y="291.75" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiConnectDoorbell: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="157.34" y="291.75" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDisconnectDoorbell: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="193.3" y="291.75" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyDoorbell: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="13.5" y="332.12" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiNotifyWorkSubmission: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="49.46" y="332.12" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiOpenNativeFence: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="85.42" y="332.12" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCloseNativeFence: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="121.38" y="332.12" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetNativeFenceLogBuffer: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="157.34" y="332.12" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateNativeFenceLogs: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="193.3" y="332.12" width="35.96" height="40.38" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiNotifyContextPriorityChange: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="17.5" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Scheduling and submission 11/32</text>
+<rect x="234.26" y="47.5" width="247.61" height="174.22" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Display and VidPN: 10/29</title>
+<rect x="236.26" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryChildRelations: done - forwards to Bc250QueryChildRelations: does work</title></rect>
+<rect x="271.06" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryChildStatus: done - forwards to Bc250QueryChildStatus: does work</title></rect>
+<rect x="305.86" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiIsSupportedVidPn: done - forwards to Bc250IsSupportedVidPn: does work</title></rect>
+<rect x="340.67" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEnumVidPnCofuncModality: done - forwards to Bc250EnumVidPnCofuncModality: does work</title></rect>
+<rect x="375.47" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceVisibility: done - forwards to Bc250SetVidPnSourceVisibility: does work</title></rect>
+<rect x="410.27" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCommitVidPn: done - forwards to Bc250CommitVidPn: does work</title></rect>
+<rect x="445.07" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRecommendMonitorModes: done - forwards to Bc250RecommendMonitorModes: does work</title></rect>
+<rect x="236.26" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetScanLine: done - does work</title></rect>
+<rect x="271.06" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSystemDisplayEnable: done - does work</title></rect>
+<rect x="305.86" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSystemDisplayWrite: done - does work</title></rect>
+<rect x="340.67" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryDeviceDescriptor: missing - forwards to Bc250QueryDeviceDescriptor: every return is a failure constant</title></rect>
+<rect x="375.47" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPalette: missing - NULL in WddmBuildTable</title></rect>
+<rect x="410.27" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPointerPosition: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="445.07" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPointerShape: missing - every return is a failure constant</title></rect>
+<rect x="236.26" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRecommendFunctionalVidPn: missing - forwards to Bc250RecommendFunctionalVidPn: every return is a failure constant</title></rect>
+<rect x="271.06" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRecommendVidPnTopology: missing - NULL in WddmBuildTable</title></rect>
+<rect x="305.86" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStopCapture: missing - NULL in WddmBuildTable</title></rect>
+<rect x="340.67" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryVidPnHWCapability: missing - forwards to Bc250QueryVidPnHWCapability: only logs, counts, reads or writes zeros</title></rect>
+<rect x="375.47" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetChildContainerId: missing - NULL in WddmBuildTable</title></rect>
+<rect x="410.27" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiControlModeBehavior: missing - NULL in WddmBuildTable</title></rect>
+<rect x="445.07" y="117.59" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateMonitorLinkInfo: missing - NULL in WddmBuildTable</title></rect>
+<rect x="236.26" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTimingsFromVidPn: missing - NULL in WddmBuildTable</title></rect>
+<rect x="271.06" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTargetGamma: missing - NULL in WddmBuildTable</title></rect>
+<rect x="305.86" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTargetContentType: missing - NULL in WddmBuildTable</title></rect>
+<rect x="340.67" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTargetAdjustedColorimetry: missing - NULL in WddmBuildTable</title></rect>
+<rect x="375.47" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDisplayDetectControl: missing - NULL in WddmBuildTable</title></rect>
+<rect x="410.27" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryConnectionChange: missing - NULL in WddmBuildTable</title></rect>
+<rect x="445.07" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiExchangePreStartInfo: missing - NULL in WddmBuildTable</title></rect>
+<rect x="236.26" y="185.68" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTargetAdjustedColorimetry2: missing - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="240.26" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Display and VidPN 10/29</text>
+<rect x="234.26" y="224.72" width="247.61" height="149.78" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Present and flip: 2/24, and 1 newer than WDDM 2.9 (not targeted yet)</title>
+<rect x="236.26" y="226.72" width="34.8" height="36.44" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceAddress: done - does work</title></rect>
+<rect x="271.06" y="226.72" width="34.8" height="36.44" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPresent: done - does work</title></rect>
+<rect x="305.86" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateActiveVidPnPresentPath: missing - forwards to Bc250UpdateActiveVidPnPresentPath: only logs, counts, reads or writes zeros</title></rect>
+<rect x="340.67" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateOverlay: missing - NULL in WddmBuildTable</title></rect>
+<rect x="375.47" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateOverlay: missing - NULL in WddmBuildTable</title></rect>
+<rect x="410.27" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiFlipOverlay: missing - NULL in WddmBuildTable</title></rect>
+<rect x="445.07" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyOverlay: missing - NULL in WddmBuildTable</title></rect>
+<rect x="236.26" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetDisplayPrivateDriverFormat: missing - NULL in WddmBuildTable</title></rect>
+<rect x="271.06" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay: missing - NULL in WddmBuildTable</title></rect>
+<rect x="305.86" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCheckMultiPlaneOverlaySupport: missing - NULL in WddmBuildTable</title></rect>
+<rect x="340.67" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCheckMultiPlaneOverlaySupport2: missing - NULL in WddmBuildTable</title></rect>
+<rect x="375.47" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2: missing - NULL in WddmBuildTable</title></rect>
+<rect x="410.27" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCheckMultiPlaneOverlaySupport3: missing - NULL in WddmBuildTable</title></rect>
+<rect x="445.07" y="263.17" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3: missing - NULL in WddmBuildTable</title></rect>
+<rect x="236.26" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPostMultiPlaneOverlayPresent: missing - NULL in WddmBuildTable</title></rect>
+<rect x="271.06" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreatePeriodicFrameNotification: missing - NULL in WddmBuildTable</title></rect>
+<rect x="305.86" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyPeriodicFrameNotification: missing - NULL in WddmBuildTable</title></rect>
+<rect x="340.67" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetMultiPlaneOverlayCaps: missing - NULL in WddmBuildTable</title></rect>
+<rect x="375.47" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetPostCompositionCaps: missing - NULL in WddmBuildTable</title></rect>
+<rect x="410.27" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiNotifyFocusPresent: missing - NULL in WddmBuildTable</title></rect>
+<rect x="445.07" y="299.61" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPresentToHwQueue: missing - NULL in WddmBuildTable</title></rect>
+<rect x="236.26" y="336.06" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetFlipQueueLogBuffer: missing - NULL in WddmBuildTable</title></rect>
+<rect x="271.06" y="336.06" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateFlipQueueLog: missing - NULL in WddmBuildTable</title></rect>
+<rect x="305.86" y="336.06" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCancelQueuedFlips: missing - NULL in WddmBuildTable</title></rect>
+<rect x="340.67" y="336.06" width="34.8" height="36.44" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCancelFlips: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="240.26" y="240.72" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Present and flip 2/24</text>
+<rect x="484.87" y="47.5" width="168.71" height="166.46" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Device and power: 11/19</title>
+<rect x="486.87" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiAddDevice: done - does work</title></rect>
+<rect x="519.81" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStartDevice: done - does work</title></rect>
+<rect x="552.76" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStopDevice: done - does work</title></rect>
+<rect x="585.7" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRemoveDevice: done - does work</title></rect>
+<rect x="618.64" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPowerState: done - does work</title></rect>
+<rect x="486.87" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetDevice: done - forwards to FanResetDevice: forwards to FanBlind: does work</title></rect>
+<rect x="519.81" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUnload: done - does work</title></rect>
+<rect x="552.76" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryAdapterInfo: done - does work</title></rect>
+<rect x="585.7" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEscape: done - does work</title></rect>
+<rect x="618.64" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStopDeviceAndReleasePostDisplayOwnership: done - does work</title></rect>
+<rect x="486.87" y="130.73" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetStablePowerState: done - forwards to DpmSetStable: does work</title></rect>
+<rect x="519.81" y="130.73" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDispatchIoRequest: missing - every return is a failure constant</title></rect>
+<rect x="552.76" y="130.73" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiNotifyAcpiEvent: missing - NULL in WddmBuildTable</title></rect>
+<rect x="585.7" y="130.73" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryInterface: missing - NULL in WddmBuildTable</title></rect>
+<rect x="618.64" y="130.73" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiControlEtwLogging: missing - NULL in WddmBuildTable</title></rect>
+<rect x="486.87" y="171.34" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPowerComponentFState: missing - NULL in WddmBuildTable</title></rect>
+<rect x="519.81" y="171.34" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPowerRuntimeControlRequest: missing - NULL in WddmBuildTable</title></rect>
+<rect x="552.76" y="171.34" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPowerPState: missing - NULL in WddmBuildTable</title></rect>
+<rect x="585.7" y="171.34" width="32.94" height="40.61" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPowerRuntimeSetDeviceHandle: missing - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="490.87" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Device and power 11/19</text>
+<rect x="484.87" y="216.96" width="168.71" height="157.54" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Memory and paging: 9/15, and 3 newer than WDDM 2.9 (not targeted yet)</title>
+<rect x="486.87" y="218.96" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateAllocation: done - does work</title></rect>
+<rect x="519.81" y="218.96" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyAllocation: done - does work</title></rect>
+<rect x="552.76" y="218.96" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDescribeAllocation: done - does work</title></rect>
+<rect x="585.7" y="218.96" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetStandardAllocationDriverData: done - does work</title></rect>
+<rect x="618.64" y="218.96" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiBuildPagingBuffer: done - does work</title></rect>
+<rect x="486.87" y="257.34" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiOpenAllocation: done - does work</title></rect>
+<rect x="519.81" y="257.34" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCloseAllocation: done - does work</title></rect>
+<rect x="552.76" y="257.34" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetRootPageTable: done - does work</title></rect>
+<rect x="585.7" y="257.34" width="32.94" height="38.39" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetRootPageTableSize: done - returns the answer</title></rect>
+<rect x="618.64" y="257.34" width="32.94" height="38.39" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiAcquireSwizzlingRange: missing - NULL in WddmBuildTable</title></rect>
+<rect x="486.87" y="295.73" width="32.94" height="38.39" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiReleaseSwizzlingRange: missing - NULL in WddmBuildTable</title></rect>
+<rect x="519.81" y="295.73" width="32.94" height="38.39" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPatch: missing - NULL in WddmBuildTable</title></rect>
+<rect x="552.76" y="295.73" width="32.94" height="38.39" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiMapCpuHostAperture: missing - NULL in WddmBuildTable</title></rect>
+<rect x="585.7" y="295.73" width="32.94" height="38.39" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUnmapCpuHostAperture: missing - NULL in WddmBuildTable</title></rect>
+<rect x="618.64" y="295.73" width="32.94" height="38.39" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiValidateUpdateAllocationProperty: missing - NULL in WddmBuildTable</title></rect>
+<rect x="486.87" y="334.11" width="32.94" height="38.39" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetAllocationBackingStore: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="519.81" y="334.11" width="32.94" height="38.39" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateMemoryBasis: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="552.76" y="334.11" width="32.94" height="38.39" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyMemoryBasis: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="490.87" y="232.96" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Memory and paging 9/15</text>
+<rect x="656.58" y="47.5" width="191.92" height="130.57" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Virtualization: 0/5, and 12 newer than WDDM 2.9 (not targeted yet)</title>
+<rect x="658.58" y="49.5" width="37.58" height="31.64" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVirtualMachineData: missing - NULL in WddmBuildTable</title></rect>
+<rect x="696.17" y="49.5" width="37.58" height="31.64" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiBeginExclusiveAccess: missing - NULL in WddmBuildTable</title></rect>
+<rect x="733.75" y="49.5" width="37.58" height="31.64" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEndExclusiveAccess: missing - NULL in WddmBuildTable</title></rect>
+<rect x="771.33" y="49.5" width="37.58" height="31.64" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSaveMemoryForHotUpdate: missing - NULL in WddmBuildTable</title></rect>
+<rect x="808.92" y="49.5" width="37.58" height="31.64" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRestoreMemoryForHotUpdate: missing - NULL in WddmBuildTable</title></rect>
+<rect x="658.58" y="81.14" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStartDirtyTracking: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="696.17" y="81.14" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStopDirtyTracking: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="733.75" y="81.14" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryDirtyBitData: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="771.33" y="81.14" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPrepareLiveMigration: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="808.92" y="81.14" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSaveImmutableMigrationData: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="658.58" y="112.79" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSaveMutableMigrationData: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="696.17" y="112.79" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEndLiveMigration: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="733.75" y="112.79" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRestoreImmutableMigrationData: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="771.33" y="112.79" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRestoreMutableMigrationData: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="808.92" y="112.79" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiWriteVirtualizedInterrupt: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="658.58" y="144.43" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVirtualGpuResources2: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="696.17" y="144.43" width="37.58" height="31.64" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVirtualFunctionPauseState: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="662.58" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Virtualization 0/5</text>
+<rect x="656.58" y="181.07" width="191.92" height="114.86" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Recovery and diagnostics: 2/13, and 2 newer than WDDM 2.9 (not targeted yet)</title>
+<rect x="658.58" y="183.07" width="37.58" height="36.95" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryDependentEngineGroup: done - does work</title></rect>
+<rect x="696.17" y="183.07" width="37.58" height="36.95" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryEngineStatus: done - does work</title></rect>
+<rect x="733.75" y="183.07" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetFromTimeout: missing - every return is a failure constant</title></rect>
+<rect x="771.33" y="183.07" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRestartFromTimeout: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="808.92" y="183.07" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCollectDbgInfo: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="658.58" y="220.02" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetEngine: missing - every return is a failure constant</title></rect>
+<rect x="696.17" y="220.02" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCancelCommand: missing - NULL in WddmBuildTable</title></rect>
+<rect x="733.75" y="220.02" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiNotifySurpriseRemoval: missing - NULL in WddmBuildTable</title></rect>
+<rect x="771.33" y="220.02" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetHwEngine: missing - NULL in WddmBuildTable</title></rect>
+<rect x="808.92" y="220.02" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryDiagnosticTypesSupport: missing - NULL in WddmBuildTable</title></rect>
+<rect x="658.58" y="256.98" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiControlDiagnosticReporting: missing - NULL in WddmBuildTable</title></rect>
+<rect x="696.17" y="256.98" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResumeHwEngine: missing - NULL in WddmBuildTable</title></rect>
+<rect x="733.75" y="256.98" width="37.58" height="36.95" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCollectDiagnosticInfo: missing - NULL in WddmBuildTable</title></rect>
+<rect x="771.33" y="256.98" width="37.58" height="36.95" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCollectDbgInfo2: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+<rect x="808.92" y="256.98" width="37.58" height="36.95" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetDisplayEngine: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="662.58" y="197.07" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Recovery and diagnostics 2/13</text>
+<rect x="656.58" y="298.93" width="113.95" height="75.57" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Interrupt: 3/6</title>
+<rect x="658.58" y="300.93" width="36.65" height="35.79" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiInterruptRoutine: done - returns the answer</title></rect>
+<rect x="695.23" y="300.93" width="36.65" height="35.79" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDpcRoutine: done - does work</title></rect>
+<rect x="731.88" y="300.93" width="36.65" height="35.79" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiControlInterrupt: done - does work</title></rect>
+<rect x="658.58" y="336.71" width="36.65" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiControlInterrupt2: missing - NULL in WddmBuildTable</title></rect>
+<rect x="695.23" y="336.71" width="36.65" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiControlInterrupt3: missing - NULL in WddmBuildTable</title></rect>
+<rect x="731.88" y="336.71" width="36.65" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetInterruptTargetPresentId: missing - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="662.58" y="314.93" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Interrupt 3/6</text>
+<rect x="773.53" y="298.93" width="74.97" height="75.57" rx="3" fill="#161b22" stroke="#30363d"/>
+<g><title>Content protection: 0/4</title>
+<rect x="775.53" y="300.93" width="35.48" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVideoProtectedRegion: missing - NULL in WddmBuildTable</title></rect>
+<rect x="811.02" y="300.93" width="35.48" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTargetAnalogCopyProtection: missing - NULL in WddmBuildTable</title></rect>
+<rect x="775.53" y="336.71" width="35.48" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateProtectedSession: missing - NULL in WddmBuildTable</title></rect>
+<rect x="811.02" y="336.71" width="35.48" height="35.79" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiDestroyProtectedSession: missing - NULL in WddmBuildTable</title></rect>
+</g>
+<text x="778.53" y="312.93" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">1</text>
+<rect x="10" y="386" width="11" height="11" fill="#2ea043"/><text x="26" y="396" font-size="12" fill="#9198a1">done</text><rect x="69.44" y="386" width="11" height="11" fill="#3d444d"/><text x="85.44" y="396" font-size="12" fill="#9198a1">missing</text><rect x="147" y="386" width="11" height="11" fill="url(#newer)"/><text x="163" y="396" font-size="12" fill="#9198a1">newer than WDDM 2.9 (not targeted yet)</text><text x="420.04" y="396" font-size="12" fill="#9198a1">one cell per slot, one rectangle per group, area = slot count</text><text x="10" y="414" font-size="12" fill="#9198a1">Small groups: [1] Content protection 0/4</text>
+</svg>

@@ -1,0 +1,20 @@
+  15307    518.759 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+  15327    523.760 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+  15353    528.760 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+  15372    533.791 smu metrics: telemetry MHz soc 1254 mem 450 v/d 0/1111 l3 1400/1400 cpu 1400-1400
+r2 state A 14:56:51 one thread perf 109 % = 3481 MHz
+  under load:
+    smu metrics: ok, 653 tables, 1 failures, last 94 ms ago: gfx 824 mV 500 MHz 56.50 C, soc 1193 mV 57.50 C, throttler 0x0000
+    smu clocks: socclk 1254 memclk 450 vclk 0 dclk 1111 l3 3500/3500, cpu cores 1555 3500 1555 3500 3500 1555 MHz
+  idle:
+    driver 0x000700D8, requested dpm, reason none, generation 48857143, ticks 21083, uptime 665176 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+    idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 2 exits 1 refusals 0, 643029 ms at the point
+    smu metrics: ok, 656 tables, 1 failures, last 128 ms ago: gfx 824 mV 500 MHz 56.25 C, soc 806 mV 57.25 C, throttler 0x0000
+    smu clocks: socclk 1254 memclk 450 vclk 0 dclk 1111 l3 1400/1400, cpu cores 1400 1400 1400 1400 1400 1400 MHz
+    14:56:54.440 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  60.9 C busy   0.0% avg   0.2% want 1000 cap 1500 max 1500 throttle idle confirmed  up 1 down 2 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  36.6 W avg  36.5 W (gfx 10.2 W soc  0.9 W)  mem  450 soc 1254 l3 1400 cpu 1400 MHz
+
+device Error 0.7.216.15
+r2 after device restart 14:57:31 one thread perf 87 % = 2780 MHz
+  under load:
+  idle:
+    no display adapter with hardware id PCI\VEN_1002&DEV_13FE
