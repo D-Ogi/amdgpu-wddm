@@ -21,11 +21,20 @@
 //                          chooses (a listed name, else a unique unmangled one, else a unique mangled one);
 //   EXISTING_COLLECTION  the engine object of a live COLLECTION of this device, NumExports 0 only (an export list is
 //                        E_NOTIMPL for now, translate); any other type is E_INVALIDARG, never passed through.
+// Every refusal of either slot is reported to the runtime as E_OUTOFMEMORY (admitted_create_failure, create_record),
+// with the real code on a log_refusal line: a create DDI that reports another code costs the application its device.
 // INFERENCE until a lab run logs a real description (one line per create, below): that a 0092 driver gets
 // RAYTRACING_PIPELINE_CONFIG as _0075 (H:7731-7732 names both layouts); that pDXILLibrary is a DXIL part, as for
-// shaders, or else a whole container; that the summary's subobject pointers point into pSubobjects (a pointer outside
-// it is matched by type and pDesc). pDXILLibrary has no size (H:7820-7825): the length used is the length the payload
-// claims, checked for internal consistency (shader-container.h, LibraryPayloadDwords).
+// shaders, or else a whole container. pDXILLibrary has no size (H:7820-7825): the length used is the length the
+// payload claims, checked for internal consistency (shader-container.h, LibraryPayloadDwords).
+// INHERITED, measured (fact M837: tools/win/d3d12ddicap on WARP, D3D12Core.dll 10.0.26100.9278 of the development
+// PC; that unit A's 10.0.22621.5415 does the same is an INFERENCE): the summary's subobject pointers point into pSubobjects, except for the exports of an imported
+// collection. Those the importer's summary lists with the associations the collection resolved, as pointers into
+// that collection's own DDI array; and the runtime leaves out of the importer's array every declared root signature
+// and shader configuration that no export of its own takes (a link of collections arrives as the collections and its
+// pipeline configuration only). The engine has those associations already, in the collection's engine object, so
+// they become no API subobject here (count_associations). A pointer in no array of this create or of what it
+// imports is matched by type and pDesc, and else refused.
 //
 // The engine also takes every declared root signature and configuration as a default for all exports (engine
 // 66c98e72: raytracing_pipeline.c:992-1030, parsed at priority DECLARED_STATE_OBJECT 4 by :1316-1326; priorities
@@ -50,7 +59,9 @@
 // An imported collection and a grown parent are different: the runtime keeps a collection's DDI object alive while an
 // importer lives (Raytracing.md:9661) but destroys a parent while its children live (:9667-9669). So a record never
 // points into another record: it holds its own engine references to what it imported or grew from, released at its
-// destroy, and its own copy of the names each exposed (StateObjectTranslation::held and exposed).
+// destroy, and its own copy of the names each exposed (StateObjectTranslation::held and exposed). The runtime's DDI
+// arrays it inherited are a different matter: the runtime keeps them alive for it (:9661, and :9667 for a parent's
+// creation description), so a record keeps their addresses (StateObjectTranslation::described).
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
 #include "replay.h"
@@ -146,6 +157,17 @@ struct StateObjectTranslation {
     // each summary export, every hit group's, and what an imported collection or the parent exposed. engine-ddi's own
     // copies, read by a later import or growth (never a pointer into runtime memory or another record).
     std::vector<std::wstring> exposed;
+    // The DDI subobject arrays the runtime described this state object with: its own create's, then those of every
+    // collection it imported and of the parent it grew from, transitively. The runtime keeps each alive while this
+    // state object lives (its own: Raytracing.md:9555; an imported collection's: :9661; a parent's creation
+    // description, though not the parent's DDI object: :9667). An importer's summary points into them (measured, the
+    // INHERITED note at the top of this file). A later importer or child reads them during its create
+    // (subobject_index), within those lifetimes.
+    struct DdiRange {
+        const D3D12DDI_STATE_SUBOBJECT_0054* base;
+        UINT count;
+    };
+    std::vector<DdiRange> described;
 
     StateObjectTranslation() = default;
     StateObjectTranslation(const StateObjectTranslation&) = delete;
@@ -191,22 +213,57 @@ struct Text {
     }
 };
 
+// A refusal goes to the debugger whatever the trace switches say (log_refusal): the create that reports it fails, and
+// the reason must be on record without a trace build (The Ascent, lab trial 465).
 HRESULT refuse(UINT index, const char* why, HRESULT hr) noexcept {
-    log_line("CreateStateObject: subobject %u: %s (hr %08lx)", index, why, static_cast<unsigned long>(hr));
+    log_refusal("CreateStateObject: subobject %u: %s (hr %08lx)", index, why, static_cast<unsigned long>(hr));
     return hr;
 }
 
-// The index in pSubobjects of a subobject the summary associates: by address, or else the subobject of the same
-// type and description. UINT_MAX when there is none.
-UINT subobject_index(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, const D3D12DDI_STATE_SUBOBJECT_0054* p) noexcept {
-    if (!p) return UINT_MAX;
+using DdiRange = StateObjectTranslation::DdiRange;
+
+// The index of p in the array r by address; UINT_MAX when p is not one of its elements.
+UINT index_in(const DdiRange& r, const D3D12DDI_STATE_SUBOBJECT_0054* p) noexcept {
     constexpr uintptr_t size = sizeof(D3D12DDI_STATE_SUBOBJECT_0054);
-    const auto base = reinterpret_cast<uintptr_t>(a.pSubobjects);
+    const auto base = reinterpret_cast<uintptr_t>(r.base);
     const auto at = reinterpret_cast<uintptr_t>(p);
-    if (at >= base && (at - base) % size == 0 && (at - base) / size < a.NumSubobjects)
+    if (r.base && at >= base && (at - base) % size == 0 && (at - base) / size < r.count)
         return static_cast<UINT>((at - base) / size);
-    for (UINT i = 0; i < a.NumSubobjects; ++i)
-        if (a.pSubobjects[i].Type == p->Type && a.pSubobjects[i].pDesc == p->pDesc) return i;
+    return UINT_MAX;
+}
+
+// What subobject_index answers for a subobject an imported collection (or the parent) declared.
+constexpr UINT kInherited = UINT_MAX - 1;       // above every index: kMaxCount bounds NumSubobjects
+
+// The index in pSubobjects of a subobject the summary associates: by address, or else the subobject of the same
+// type and description. kInherited for a subobject of an array in inherited (the importer's summary names the
+// associations an imported collection resolved, in that collection's own description: measured, top of this file).
+// UINT_MAX when there is none. *found is the subobject, of this array or an inherited one, when there is one.
+UINT subobject_index(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, const std::vector<DdiRange>& inherited,
+                     const D3D12DDI_STATE_SUBOBJECT_0054* p, const D3D12DDI_STATE_SUBOBJECT_0054** found) noexcept {
+    *found = nullptr;
+    if (!p) return UINT_MAX;
+    UINT i = index_in({a.pSubobjects, a.NumSubobjects}, p);
+    if (i != UINT_MAX) {
+        *found = &a.pSubobjects[i];
+        return i;
+    }
+    for (const DdiRange& r : inherited)
+        if (index_in(r, p) != UINT_MAX) {
+            *found = p;
+            return kInherited;
+        }
+    for (i = 0; i < a.NumSubobjects; ++i)
+        if (a.pSubobjects[i].Type == p->Type && a.pSubobjects[i].pDesc == p->pDesc) {
+            *found = &a.pSubobjects[i];
+            return i;
+        }
+    for (const DdiRange& r : inherited)
+        for (UINT k = 0; k < r.count; ++k)
+            if (r.base[k].Type == p->Type && r.base[k].pDesc == p->pDesc) {
+                *found = &r.base[k];
+                return kInherited;
+            }
     return UINT_MAX;
 }
 
@@ -254,15 +311,18 @@ HRESULT empty_local_root_signature(DeviceContext* c, ID3D12RootSignature** out) 
     }
     *out = c->empty_local;
     ReleaseSRWLockExclusive(&c->empty_local_lock);
-    if (FAILED(hr)) log_line("CreateStateObject: no empty local root signature (hr %08lx)", static_cast<unsigned long>(hr));
+    if (FAILED(hr)) log_refusal("CreateStateObject: no empty local root signature (hr %08lx)", static_cast<unsigned long>(hr));
     return hr;
 }
 
-// Pass 1 over one summary: every export named, every association within the description and of a type that takes
-// one. counts[i] grows by the exports associated with subobject i, total by all of them, unlocal by the exports
-// associated with no local root signature.
-HRESULT count_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, UINT index,
-                           std::vector<size_t>& counts, size_t& total, size_t& unlocal) noexcept {
+// Pass 1 over one summary: every export named, every association within the description or an inherited one and of
+// a type that takes one. counts[i] grows by the exports associated with subobject i, total by all of them, unlocal by
+// the exports associated with no local root signature. An inherited association is counted nowhere: the engine has it
+// already, in the imported collection's engine object (raytracing_pipeline.c, d3d12_state_object_add_collection: the
+// library path inherits the collection's configurations, the deferred path copies its associations, explicit ones
+// staying explicit). An inherited local root signature still makes its export local.
+HRESULT count_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, const std::vector<DdiRange>& inherited,
+                           UINT index, std::vector<size_t>& counts, size_t& total, size_t& unlocal) noexcept {
     const auto& f = *static_cast<const D3D12DDI_FUNCTION_SUMMARY_0054*>(a.pSubobjects[index].pDesc);
     if (f.NumExportedFunctions > kMaxCount || (f.NumExportedFunctions && !f.pSummaries))
         return refuse(index, "summary export count out of range, or no array", E_INVALIDARG);
@@ -274,13 +334,16 @@ HRESULT count_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, UINT i
             return refuse(index, "summary association count out of range, or no array", E_INVALIDARG);
         bool local = false;
         for (UINT k = 0; k < node.NumAssociatedSubobjects; ++k) {
-            const UINT target = subobject_index(a, node.ppAssociatedSubobjects[k]);
-            if (target == UINT_MAX) return refuse(index, "summary association outside the description", E_INVALIDARG);
-            const int kind = association_kind(a.pSubobjects[target].Type);
+            const D3D12DDI_STATE_SUBOBJECT_0054* found = nullptr;
+            const UINT target = subobject_index(a, inherited, node.ppAssociatedSubobjects[k], &found);
+            if (target == UINT_MAX)
+                return refuse(index, "summary association outside the description and every imported one", E_INVALIDARG);
+            const int kind = association_kind(found->Type);
             if (kind < 0) return refuse(index, "summary association with a subobject that takes none", E_INVALIDARG);
             if (!kind) continue;
+            local = local || found->Type == D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+            if (target == kInherited) continue;
             if (total == kMaxAssociatedNames) return refuse(index, "more associations than the bound", E_INVALIDARG);
-            local = local || a.pSubobjects[target].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
             ++counts[target];
             ++total;
         }
@@ -325,7 +388,7 @@ HRESULT resolve_exports(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_
             // 190-191 looks its associations up by HitGroupExport).
             const auto& group = *static_cast<const D3D12DDI_HIT_GROUP_DESC_0054*>(a.pSubobjects[i].pDesc);
             if (group.HitGroupExport && inherited.count(group.HitGroupExport)) {
-                log_line("CreateStateObject: subobject %u: a hit group named like an export of the parent", i);
+                log_refusal("CreateStateObject: subobject %u: a hit group named like an export of the parent", i);
                 return E_INVALIDARG;
             }
             if (group.HitGroupExport) aliases.insert(group.HitGroupExport);
@@ -372,7 +435,7 @@ HRESULT resolve_exports(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_
         } else if (plain_listed || mangled_listed) {
             chosen = plain_listed ? plain : mangled;
         } else if (!export_all) {
-            log_line("CreateStateObject: summary export %zu: not among the exports the libraries list", k);
+            log_refusal("CreateStateObject: summary export %zu: not among the exports the libraries list", k);
             return E_INVALIDARG;
         } else if (plain && carriers[plain] == 1) {
             chosen = plain;
@@ -382,11 +445,11 @@ HRESULT resolve_exports(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_
             kind = kMangled;
         }
         if (!chosen || !taken.insert(chosen).second) {
-            log_line("CreateStateObject: summary export %zu: its names are shared with another export", k);
+            log_refusal("CreateStateObject: summary export %zu: its names are shared with another export", k);
             return E_INVALIDARG;
         }
         if ((plain && inherited.count(plain)) || (mangled && inherited.count(mangled))) {
-            log_line("CreateStateObject: summary export %zu: named like an export of the parent", k);
+            log_refusal("CreateStateObject: summary export %zu: named like an export of the parent", k);
             return E_INVALIDARG;
         }
         identity[k] = chosen;
@@ -398,15 +461,17 @@ HRESULT resolve_exports(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_
 // Pass 2 over one summary: the export names, into each association's slice of names (cursor[i] is the next free
 // entry of subobject i's slice). identity holds the name of every summary export, from export *next on for this
 // summary. Pass 1 has validated everything read here.
-void fill_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, UINT index, std::vector<size_t>& cursor,
-                       const std::vector<LPCWSTR>& identity, size_t* next, std::vector<LPCWSTR>& names) noexcept {
+void fill_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, const std::vector<DdiRange>& inherited,
+                       UINT index, std::vector<size_t>& cursor, const std::vector<LPCWSTR>& identity, size_t* next,
+                       std::vector<LPCWSTR>& names) noexcept {
     const auto& f = *static_cast<const D3D12DDI_FUNCTION_SUMMARY_0054*>(a.pSubobjects[index].pDesc);
     for (UINT e = 0; e < f.NumExportedFunctions; ++e) {
         const D3D12DDI_FUNCTION_SUMMARY_NODE_0054& node = f.pSummaries[e];
         const LPCWSTR name = identity[(*next)++];
         for (UINT k = 0; k < node.NumAssociatedSubobjects; ++k) {
-            const UINT target = subobject_index(a, node.ppAssociatedSubobjects[k]);
-            if (association_kind(a.pSubobjects[target].Type) > 0) names[cursor[target]++] = name;
+            const D3D12DDI_STATE_SUBOBJECT_0054* found = nullptr;
+            const UINT target = subobject_index(a, inherited, node.ppAssociatedSubobjects[k], &found);
+            if (target != kInherited && association_kind(found->Type) > 0) names[cursor[target]++] = name;
         }
     }
 }
@@ -457,7 +522,7 @@ HRESULT translate_one(DeviceContext* c, const D3D12DDI_STATE_SUBOBJECT_0054& s, 
         if (!dwords || dwords > kMaxLibraryDwords) return refuse(index, "DXIL library length out of range", E_INVALIDARG);
         const sc::Result r = sc::BuildLibraryContainer(in.pDXILLibrary, dwords, library);
         if (!r) {
-            log_line("CreateStateObject: subobject %u: %s", index, r.detail.c_str());
+            log_refusal("CreateStateObject: subobject %u: %s", index, r.detail.c_str());
             return refuse(index, "no library container", r.hresult());
         }
         d.library.DXILLibrary = {library->bytes.data(), library->bytes.size()};
@@ -507,9 +572,23 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
                   StateObjectTranslation& t, Text& text) noexcept try {
     const UINT n = a.NumSubobjects;
     if (n > kMaxCount || (n && !a.pSubobjects)) {
-        log_line("CreateStateObject: %u subobjects, array %s: refused", n, a.pSubobjects ? "given" : "null");
+        log_refusal("CreateStateObject: %u subobjects, array %s: refused", n, a.pSubobjects ? "given" : "null");
         return E_INVALIDARG;
     }
+    // The DDI arrays of every imported collection (pass 1 refuses an import of anything else) and of the parent, with
+    // what each of them inherited: a summary association into one of them is the imported object's own, already the
+    // engine's. t keeps them with its own array (described) for a later importer or child.
+    std::vector<DdiRange> inherited;
+    for (UINT i = 0; i < n; ++i)
+        if (a.pSubobjects[i].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION && a.pSubobjects[i].pDesc)
+            if (const StateObjectRecord* collection = collection_of(c, a.pSubobjects[i].pDesc))
+                inherited.insert(inherited.end(), collection->translation->described.begin(),
+                                 collection->translation->described.end());
+    if (parent)
+        inherited.insert(inherited.end(), parent->translation->described.begin(), parent->translation->described.end());
+    t.described.reserve(1 + inherited.size());
+    t.described.push_back({a.pSubobjects, n});
+    t.described.insert(t.described.end(), inherited.begin(), inherited.end());
     // Pass 1: types, and what the summaries associate.
     std::vector<size_t> counts(n, 0);
     size_t names = 0, exports = 0, unlocal = 0;
@@ -541,7 +620,7 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY: {
             ++summaries;
-            const HRESULT hr = count_associations(a, i, counts, names, unlocal);
+            const HRESULT hr = count_associations(a, inherited, i, counts, names, unlocal);
             if (FAILED(hr)) return hr;
             exports += static_cast<const D3D12DDI_FUNCTION_SUMMARY_0054*>(s.pDesc)->NumExportedFunctions;
             if (exports > kMaxCount) return refuse(i, "more summary exports than the bound", E_INVALIDARG);
@@ -641,7 +720,7 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     size_t named = 0;
     for (UINT i = 0; i < n; ++i)
         if (a.pSubobjects[i].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY)
-            fill_associations(a, i, cursor, identity, &named, t.names);
+            fill_associations(a, inherited, i, cursor, identity, &named, t.names);
     return out == total && named == identity.size() ? S_OK : E_UNEXPECTED;
 } catch (const std::bad_alloc&) {
     return E_OUTOFMEMORY;
@@ -707,13 +786,20 @@ HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_00
         text.add("; parent's pipeline stack size %llu", static_cast<unsigned long long>(size));
     }
     // One line per create: what the runtime sent (the INFERENCES at the top of this file) and the answer.
-    log_line("%s: %s; hr %08lx", slot, text.buffer, static_cast<unsigned long>(hr));
     if (FAILED(hr)) {
+        // Both slots are creation functions of the AllowOutOfMemory category (engine-ddi.h, admitted_create_failure):
+        // the runtime removes the device for any other failure code, and the application then sees
+        // DXGI_ERROR_DEVICE_REMOVED for a refused state object (The Ascent, lab trial 465: UE 4.26 stops with a GPU
+        // crash report at CreateStateObject). The real code and the description are on the refusal line.
+        const HRESULT admitted = admitted_create_failure(hr);
+        log_refusal("%s: %s; hr %08lx reported as %08lx", slot, text.buffer, static_cast<unsigned long>(hr),
+                    static_cast<unsigned long>(admitted));
         if (properties) properties->Release();
         if (so) so->Release();
         delete t;
-        return hr;
+        return admitted;
     }
+    log_line("%s: %s; hr %08lx", slot, text.buffer, static_cast<unsigned long>(hr));
     r->h.engine = so;
     r->h.flags = 0;
     r->properties = properties;
@@ -726,7 +812,10 @@ HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_00
 HRESULT APIENTRY create_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_STATE_OBJECT_0054* args,
                                      D3D12DDI_HSTATEOBJECT_0054 h, D3D12DDI_HRTSTATEOBJECT_0054 rt) {
     DeviceContext* c = resolve(device);
-    if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
+    if (!c || !args || !h.pDrvPrivate) {
+        log_refusal("CreateStateObject: no device, description or record (hr %08lx)", static_cast<unsigned long>(E_INVALIDARG));
+        return admitted_create_failure(E_INVALIDARG);
+    }
     return create_record(c, *args, nullptr, h, rt);
 }
 
@@ -741,7 +830,10 @@ SIZE_T APIENTRY calc_add_to_state_object(D3D12DDI_HDEVICE, const D3D12DDIARG_ADD
 HRESULT APIENTRY add_to_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_ADD_TO_STATE_OBJECT_0072* args,
                                      D3D12DDI_HSTATEOBJECT_0054 h, D3D12DDI_HRTSTATEOBJECT_0054 rt) {
     DeviceContext* c = resolve(device);
-    if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
+    if (!c || !args || !h.pDrvPrivate) {
+        log_refusal("AddToStateObject: no device, description or record (hr %08lx)", static_cast<unsigned long>(E_INVALIDARG));
+        return admitted_create_failure(E_INVALIDARG);
+    }
     const D3D12DDIARG_CREATE_STATE_OBJECT_0054 addition{args->Type, args->NumSubobjects, args->pSubobjects};
     return create_record(c, addition, &args->StateObjectToGrowFrom, h, rt);
 }
