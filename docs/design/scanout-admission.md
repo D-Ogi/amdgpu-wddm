@@ -192,8 +192,8 @@ display core can actually read, and it must decide that from the same words and 
 placed the surface. Increment 2 is that shared derivation and the channel that carries the start's answer.
 The user-mode half of the same handshake is `docs/design/direct-flip-handshake.md`. That note names the
 driver which carries the entry, the rule behind the answer and the registry value which installs it.
-M15.14 increment 1 installs the entry and writes FALSE. The channel below is what lets increment 2 write
-TRUE. The two notes describe one rule from two sides, and the user-mode rule may answer TRUE only about a
+M15.14 increment 1 installed the entry and wrote FALSE. Increment 2 reads the channel below at every
+question and writes the rule's answer, TRUE when every clause holds. The two notes describe one rule from two sides, and the user-mode rule may answer TRUE only about a
 surface this section admits.
 
 **One derivation.** `WddmGdiRecordPolicy` (`driver/kmd/gdi_private.h`) turns a type-0 allocation's own
@@ -252,13 +252,13 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
   `bc250d3d_router.dll` which hosts the same Mesa device byte for byte
   (`driver/umd/router/front-device.cpp`, value `DirectFlipFront` under the router key, absent means on from
   0.7.213.100-tester.15 and 0 is its bisect switch).
-  That front counts the call, logs both resource records and writes FALSE, because increment 1 publishes
-  no caps trailer and the rule's first clause answers `gated`
-  (`driver/umd/router/front-direct-flip.h`). So DWM will not agree to a direct flip of its surfaces
-  whatever the kernel driver admits. A borderless chain's flip and a fullscreen chain's flip are the same
+  In increment 1 that front counted the call, logged both resource records and wrote FALSE, because it
+  read no caps trailer and the rule's first clause answered `gated`
+  (`driver/umd/router/front-direct-flip.h`). So DWM did not agree to a direct flip of its surfaces
+  whatever the kernel driver admitted. A borderless chain's flip and a fullscreen chain's flip are the same
   decision and DWM makes both, so a verdict of "the request stopped in user mode" must name DWM as the
   layer, not the client's shell. Increment 2 reads the kernel half below and is the first revision which
-  can answer TRUE. The route is in `docs/design/direct-flip-handshake.md`.
+  answers TRUE. The route is in `docs/design/direct-flip-handshake.md`.
 - **The composed fallback on the CPU desktop route.** A scan-out surface is VRAM-resident and not CPU
   visible. The record still shares it, so the compositor may open it, but the CPU compositor route
   (llvmpipe, the KMD-swap fallback) composes by reading the surface with the CPU and has no mapping to

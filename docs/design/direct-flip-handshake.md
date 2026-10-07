@@ -153,9 +153,14 @@ applies these clauses in order, and each clause has a name that a trace prints:
 | `compositor-scannable` | the display core cannot read the compositor's buffer where it sits |
 | `format` | the storage row is not a `SCANOUT_PRIMARY` row of the shared format table |
 | `geometry` | the two differ in width or height |
-| `post-geometry` | they differ from the one mode this adapter offers |
-| `pitch-unknown` | one side's pitch is not known in user mode yet |
+| `source-geometry` | they differ from the source mode at which the kernel driver admits a flip now |
+| `pitch-unknown` | one side's pitch is not known in user mode |
 | `pitch` | the two differ in pitch |
+
+The rule assumes no display mode. The geometry of the `source-geometry` clause comes from the scan-out
+caps trailer, which the front reads again at every question. Today `display.c` offers the POST mode
+alone, so the trailer says 1920x1200 on this lab. A kernel driver that offers more modes writes the
+committed mode into the same two fields, and the rule follows without a change.
 
 ### The two sides are not symmetric
 
@@ -213,10 +218,10 @@ still reads the line.
 The front writes its own log beside the route log, as `front-<exe>-<pid>.log`. It writes nothing when
 `RouteLogDirectory` is absent, so the lab script sets that value as part of the arm.
 
-## What increment 1 does, and what it does not
+## What increment 1 did, and what it did not
 
-`pfnCheckDirectFlipSupport` counts the call. It logs both resource identities, both geometries and the
-rule's verdict. Then it writes FALSE.
+In increment 1, `pfnCheckDirectFlipSupport` counted the call. It logged both resource identities, both
+geometries and the rule's verdict. Then it wrote FALSE.
 
 Nothing else changes. No allocation moves, no placement changes, and the kernel driver is not called. The
 kernel driver's `EnableDirectFlipHandshake` stays as the operator left it.
@@ -226,15 +231,54 @@ system ask a device whose 3D pipeline level is 10_0? DirectFlip is required of a
 driver, and WDDM 1.2 drivers shipped for feature-level 10_0 and 10_1 parts, so the answer is likely. That
 is an inference, not a measurement.
 
-The answer becomes the rule's answer in increment 2, behind the kernel driver's own caps flag.
+The answer became the rule's answer in increment 2, behind the kernel driver's own caps flag.
+
+## What increment 2 does
+
+`pfnCheckDirectFlipSupport` writes the rule's answer. It writes TRUE when every clause holds, and FALSE
+with the name of the first clause that fails.
+
+- **The caps trailer.** The front keeps the runtime's adapter query from `OpenAdapter`. At every question
+  it queries a buffer of `BC250_SCANOUT_CAPS_TOTAL` bytes and reads the trailer (`ReadScanoutCaps`). A
+  failed query, a kernel driver without the trailer, a closed `EnableDirectFlipHandshake` and a torn
+  trailer all read as zero, and the `gated` clause refuses. The runtime asks before the compositor presents
+  to a DirectFlip swap chain, after each mode change, and after the compositor re-creates its own swap
+  chain (`ref/ddi-display/d3d10umddi.md:8781`). So the query is not a per-frame cost.
+- **The compositor's pitch.** The hosted driver allocates the compositor's own buffer later than the
+  create, at the first Present or `SetDisplayMode`, and the front does not see that allocation. The hosted
+  driver gives every surface that it allocates the same pitch: the row in bytes, rounded up to 256 bytes
+  (`Bc250EnsureSurface` in `src/gallium/frontends/d3d10umd/DxgiFns.cpp`, mesa-wddm
+  `amdgpu-wddm/b19-hosted-umd` `7eb7861d` and `amdgpu-wddm/hang-recovery-zink` `ea876500`). The front
+  applies the same line (`HostedSurfacePitch`). For a 4-byte row it equals the kernel driver's own primary
+  pitch, `DcnPrimaryPitch`. A format with no row in the shared table keeps pitch 0, and the rule refuses
+  it as `pitch-unknown`.
+- **The log line.** Each answer writes one line with `answer=`, `rule=`, the trailer's flag and source
+  geometry, and both surfaces with their geometry, pitch, format, record version and access word. The
+  install line of the adapter carries the trailer as the adapter open saw it. The file holds at most 256
+  answer lines. The device's destroy line holds the counters, which have no limit.
+- **The switches.** There is no new switch. `DirectFlipFront = 0` removes the front from the compositor's
+  device. `EnableDirectFlipHandshake = 0` in the kernel driver removes the trailer, and the answer is
+  FALSE with `rule=gated`. A TRUE needs both switches on, and both are on by default from
+  0.7.213.100-tester.15.
+
+A TRUE lets the operating system try the flip. It does not move an allocation. The kernel driver still
+applies `Bc250ScanoutAdmit` at every `SetVidPnSourceAddress`. The rule asks the same questions first from
+the same words, so after a TRUE only the base address and the segment can still refuse the flip. VidMm
+decides both for an allocation that it pinned for scan-out, and `Bc250ScanoutCreateAlignment` asks for
+the 4 KiB base at the create.
+
+The client side asks for scan-out only when its own record carries the SCANOUT bit in an E26R v3 record
+of 64 bytes. The D3D12 shell writes that record in its scan-out mode (increment 2 of the shell). The
+D3D11 shell writes a v3 record without the SCANOUT bit, so a D3D11 client stays composed, with
+`rule=client-scannable`.
 
 ## The offline gate
 
 `tools/build/build-umd-router.ps1` compiles the front into the router and into `test-router.exe`, so the
 host gate drives the production table fills and the production rule. `tools/build/test-umd-router.ps1`
-runs 80 scenarios, each in its own process on a private application hive.
+runs 82 scenarios, each in its own process on a private application hive.
 
-Eleven of them are M15.14's:
+Twelve of them are M15.14's:
 
 | Scenario | What it settles |
 | --- | --- |
@@ -242,7 +286,8 @@ Eleven of them are M15.14's:
 | `front-rule` | one refusal per clause, the admissible pair, and the pair given the other way round |
 | `front-record` | the E26R decoder at 12, 16 and 64 bytes, the LB7A decoder, and the resource map |
 | `front-absent`, `front-zero`, `front-wrong-type` | the three states that mean off, and the column each one writes |
-| `front-on` | the whole path: versions, caps, device create, the forwards, and the FALSE answer |
+| `front-on` | the whole path: versions, caps, device create, the forwards, and the FALSE answer of a start without the trailer |
+| `front-answer` | the TRUE answer for the pair the lab passes. Seven negative controls each turn it FALSE under their own clause. |
 | `front-d3d10-entry` | the D3D10.0 adapter entry leaves the route unchanged |
 | `front-d3d10-interface` | the front forwards a device created at the D3D10.0 interface whole, and writes nothing past either table or past the hosted private block |
 | `front-cpu-route` | the kill switch keeps the front out of the path |
@@ -283,9 +328,11 @@ The rollback ladder, in order. Each rung assumes less than the one above it:
   knowledge. Under DirectFlip the scanned-out surface is the application's own buffer, so nothing in the
   pipeline can draw a cursor into it. Fullscreen games hide the cursor. Borderless with a visible cursor
   is at risk. No text in `ref/` settles whether the cursor blocks DirectFlip on this hardware.
-- **The compositor's pitch.** The kernel driver chooses the pitch at `CreateAllocation`, and user mode
-  never learns it for a surface that this device created. The rule refuses that pair under
-  `pitch-unknown` rather than a guess. Carrying the pitch into user mode is increment 2 work.
+- **The compositor's pitch.** Increment 2 takes it from the hosted driver's own pitch rule. If a later
+  hosted driver changes that rule, `HostedSurfacePitch` must change with it, or the rule refuses every
+  pair as `pitch`. That is a lost flip and not a wrong one, because the kernel driver programs the pitch
+  of each flip from the flipped allocation.
+- **The D3D11 client.** The D3D11 shell does not set the SCANOUT bit yet, so a D3D11 game stays composed.
 - **10-bit and HDR.** The kernel's scan-out format table admits 8-bit `SCANOUT_PRIMARY` rows only. The
   rule compares the storage row, so it refuses a 10-bit pair honestly until that table is wider.
 - **The interval bound.** `FlipImmediateMmIo` and `FlipInterval` are not declared, so a chain at present
