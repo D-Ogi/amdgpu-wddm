@@ -522,18 +522,27 @@ void test_raytracing(Env& env) {
 //      signature's association naming closest by that mangled name, the only one the engine knows it by, and the
 //      global one naming raygen, miss, that mangled name and miss_far. A dispatch per order writes its own constant on
 //      every hit, the 64 words exact.
-//   7. A collection-only executable: a COLLECTION of the library, then a pipeline with EXISTING_COLLECTION of all its
-//      exports and no DXIL library. The description handed to the engine: the collection's engine object with
-//      NumExports 0, no library, the global root signature associated with raygen, miss and closest, the names the
-//      collection exposed. The same import with an export list is E_NOTIMPL before the engine (temporarily
-//      unsupported, INTEGRATION.md). The executable's record holds one public reference to the collection's engine
-//      object, and the collection's DDI object is destroyed before the executable is used: a dispatch through its
-//      table writes its own constant on every hit and 2 on every miss, the 64 words exact.
+//   7. A collection-only executable: a COLLECTION of the library, then a pipeline in the DDI form the runtime gives it
+//      (fact M837): EXISTING_COLLECTION of all its exports, the pipeline configuration, and a summary whose
+//      associations point into the collection's own DDI array. The description handed to the engine: the
+//      collection's engine object with NumExports 0, no library, no root signature and no association. The same
+//      import with an export list (temporarily unsupported, INTEGRATION.md) and a summary association into an array
+//      neither held nor imported are refused before the engine: E_OUTOFMEMORY to the runtime, the real code on one
+//      refusal line. The executable's record holds one public reference to the collection's engine object, and the
+//      collection's DDI object is destroyed before the executable is used: a dispatch through its table writes its
+//      own constant on every hit and 2 on every miss, the 64 words exact.
+//  7b. The UE 4.26 shape (The Ascent, lab trial 465): three collections of one renamed export each, each with both
+//      configurations, the global and the local root signature, then their link of the three imports and the
+//      pipeline configuration, its summary pointing into the collections' arrays. Three identifiers; the description
+//      handed to the engine holds the three imports and no association; after the collections' destroy, a dispatch
+//      through its table writes its own constant on every hit (CHS_00000003's local root signature, which only its
+//      collection associated) and 2 on every miss, the 64 words exact.
 //   8. Growth (D115, D116): a pipeline allowing additions, its identifiers taken and its pipeline stack size set to
 //      4096 above its computed one, grown by fixture-raylib-b listing miss_far. The child's stack size read before any
 //      set is the parent's setting; the child's raygen identifier is the parent's. The description handed to the
 //      engine: grown from the parent's engine object, one library listing one export, the global root signature
-//      associated with miss_far alone. Refused growth, one E_INVALIDARG each and no device error: from a pipeline
+//      associated with miss_far alone. Refused growth, E_OUTOFMEMORY to the runtime and E_INVALIDARG on one refusal
+//      line each, no device error: from a pipeline
 //      without ALLOW_STATE_OBJECT_ADDITIONS (the engine's check, one engine call) and an addition exporting miss (the
 //      bridge's check, no engine call). The child's record holds one public reference to the parent's engine object,
 //      and the parent's DDI object is destroyed before the child is used: a dispatch through a table of the parent's
@@ -553,8 +562,9 @@ void test_raytracing(Env& env) {
 // state_object_shell, which the shell's entry thunk resolves these slots' device with, names the device's shell for a
 // live state object and for the inert record of a refused create, and nothing once either is destroyed.
 // Then refusals, each one error of the expected HRESULT: a subobject of an unknown type and a ray tracing pipeline
-// named as an existing collection (the create's result, E_INVALIDARG), the decoy without a mangled name and the decoy with both of closest's names (no unique name:
-// E_INVALIDARG and no device error, never broadened),
+// named as an existing collection, the decoy without a mangled name and the decoy with both of closest's names (no
+// unique name, never broadened): each create answers E_OUTOFMEMORY, the only failure a creation function may report
+// (engine-ddi.h, admitted_create_failure), with E_INVALIDARG on one refusal line and no device error;
 // DispatchRays on a closed list and SetPipelineState1 with another device context's state object (one error on the
 // list). The raytracing tier engine-ddi reports stays NOT_SUPPORTED (INTEGRATION.md).
 namespace {
@@ -564,13 +574,14 @@ constexpr UINT32 kRecordValue3 = 0xB0253C0Bu;      // and in the third's
 constexpr UINT32 kMixedValues[2] = {0xB0253C0Cu, 0xB0253C0Du};     // and in the two mixed-library pipelines'
 constexpr UINT32 kImportValue = 0xB0253C0Eu;       // and in the collection-only executable's
 constexpr UINT32 kGrowValue = 0xB0253C0Fu;         // and in the grown pipeline's
+constexpr UINT32 kUeValue = 0xB0253C10u;           // and in the UE 4.26-shaped link's
 constexpr UINT32 kMissFar = 3;                      // what miss_far writes (fixture-raylib-b.hlsl)
 constexpr UINT32 kTrapValue = 0xB0253CFFu;         // a word no shader should read: see the second and third tables
 // The UPLOAD buffer: vertices at 0, the instance at kInstanceOffset, then the shader table, its records 32-byte and its
 // tables 64-byte aligned (D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-// the tables of the later pipelines kTable2 to kTable7 bytes after the first.
-constexpr UINT64 kUploadBytes = 7168, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
-                 kTable7 = 6144;
+// the tables of the later pipelines kTable2 to kTable8 bytes after the first.
+constexpr UINT64 kUploadBytes = 8192, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
+                 kTable7 = 6144, kTable8 = 7168;
 constexpr UINT64 kRaygenOffset = 512, kMissOffset = 576, kHitOffset = 640;
 constexpr UINT64 kRecordBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 constexpr UINT64 kHitStride = 64;                   // identifier, the constants, padding to the record alignment
@@ -581,10 +592,10 @@ static_assert(kRaygenOffset % kTableAlignment == 0 && kMissOffset % kTableAlignm
                   kInstanceOffset + sizeof(D3D12_RAYTRACING_INSTANCE_DESC) <= kRaygenOffset &&
                   kHitOffset + kHitStride <= kTable2 && kTable2 % kTableAlignment == 0 &&
                   kTable3 - kTable2 == kTable2 && kTable4 - kTable3 == kTable2 && kTable5 - kTable4 == kTable2 &&
-                  kTable6 - kTable5 == kTable2 && kTable7 - kTable6 == kTable2 &&
-                  kTable7 + kHitOffset + kHitStride <= kUploadBytes,
+                  kTable6 - kTable5 == kTable2 && kTable7 - kTable6 == kTable2 && kTable8 - kTable7 == kTable2 &&
+                  kTable8 + kHitOffset + kHitStride <= kUploadBytes,
               "shader table layout");
-constexpr UINT64 kPipelineOutBytes = 7 * 256;      // one 64-word result per pipeline, 256 bytes apart
+constexpr UINT64 kPipelineOutBytes = 8 * 256;      // one 64-word result per pipeline, 256 bytes apart
 // The indirect dispatches (9): a command signature of one DISPATCH_RAYS argument, its stride above the record's 104
 // bytes. Their UPLOAD buffer: the two records kRaysStride apart, the count words at kCountsOffset (the first
 // kIndirectArgsBytes bytes, which the list also copies into a DEFAULT buffer), and the output's prefill at
@@ -786,42 +797,121 @@ void add_export_all_library(PipelineDesc& d, const UINT* library_b, bool b_first
     d.args.NumSubobjects = kDescribed + 1;
 }
 
-// A collection-only executable in the DDI form: its own configuration, the global root signature, the collection
-// imported whole (NumExports 0), both configurations and no DXIL library; the summary names raygen, miss and closest
-// with the executable's own global root signature and configurations. The collection's local root association for
-// closest is not restated: how the runtime passes an inherited association is not measured (INTEGRATION.md).
+// A collection-only executable in the DDI form the runtime gives it (fact M837, tools/win/d3d12ddicap on WARP,
+// D3D12Core.dll 10.0.26100.9278; INTEGRATION.md "Ray tracing state objects"): the collection imported whole (NumExports 0),
+// the pipeline configuration, and a summary that lists every export of the collection with the subobjects the
+// collection associated with it, as pointers into the collection's own DDI array (in): its global root signature and
+// configurations, and closest's local root signature. The executable has no root signature or shader configuration
+// of its own: the runtime leaves out every declared one that no export of the executable takes. The application's
+// description had a shader configuration and a global root signature beside the import.
 struct ImportDesc {
-    D3D12DDI_STATE_OBJECT_CONFIG_0054 config;
-    D3D12DDI_GLOBAL_ROOT_SIGNATURE_0054 global;
     D3D12DDI_EXISTING_COLLECTION_DESC_0054 collection;
-    D3D12DDI_RAYTRACING_SHADER_CONFIG_0054 shader_config;
     D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
-    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[6];    // the summary is the sixth
-    const D3D12DDI_STATE_SUBOBJECT_0054* common[3];
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[3];    // the summary is the third
     D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[3];
     D3D12DDI_FUNCTION_SUMMARY_0054 summary;
     D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
 };
-void describe_import(ImportDesc& d, void* global, void* collection) {
-    d.config = {D3D12DDI_STATE_OBJECT_FLAG_NONE};
-    d.global = {D3D12DDI_HROOTSIGNATURE{global}};
+void describe_import(ImportDesc& d, const PipelineDesc& in, void* collection) {
     d.collection = {D3D12DDI_HSTATEOBJECT_0054{collection}, 0, nullptr};
+    d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
+    d.subobjects[0] = {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &d.collection};
+    d.subobjects[1] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
+    d.subobjects[2] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
+    d.nodes[0] = {L"raygen", kRaygenMangled, 3, in.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[1] = {L"miss", kMissMangled, 3, in.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[2] = {L"closest", kClosestMangled, 4, in.hit, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.summary = {3, d.nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 3, d.subobjects};
+}
+
+// One collection in the shape Unreal Engine 4.26 gives (D3D12RayTracing.cpp: one collection per shader, compiled on
+// worker threads, then a link of the collections), in the DDI form the runtime gives it (measured, d3d12ddicap S1-S3):
+// the library listing its one export under a new name, the hit group when there is one, the shader and pipeline
+// configurations, the global and the local root signature, and the summary associating the local root signature, both
+// configurations and the global root signature with the export. Holds pointers into itself.
+struct UeCollectionDesc {
+    D3D12DDI_EXPORT_DESC_0054 export_desc;
+    D3D12DDI_DXIL_LIBRARY_DESC_0054 library;
+    D3D12DDI_HIT_GROUP_DESC_0054 hit_group;
+    D3D12DDI_RAYTRACING_SHADER_CONFIG_0054 shader_config;
+    D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
+    D3D12DDI_GLOBAL_ROOT_SIGNATURE_0054 global;
+    D3D12DDI_LOCAL_ROOT_SIGNATURE_0054 local;
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[7];    // the summary is last
+    const D3D12DDI_STATE_SUBOBJECT_0054* associated[4];
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 node;
+    D3D12DDI_FUNCTION_SUMMARY_0054 summary;
+    D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
+};
+// name: the export's new name; rename: the library's function; mangled: the new name's mangled form; group: the hit
+// group's name (null: no hit group), whose closest hit shader is the export.
+void describe_ue_collection(UeCollectionDesc& d, const UINT* library, LPCWSTR name, LPCWSTR rename, LPCWSTR mangled,
+                            LPCWSTR group, void* global, void* local) {
+    d.export_desc = {name, rename, D3D12DDI_EXPORT_FLAG_NONE};
+    d.library = {library, 1, &d.export_desc};
+    d.hit_group = {group, D3D12DDI_HIT_GROUP_TYPE_TRIANGLES, nullptr, name, nullptr, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.shader_config = {sizeof(UINT32), 2 * sizeof(float)};
     d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
-    d.subobjects[0] = {D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &d.config};
-    d.subobjects[1] = {D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d.global};
-    d.subobjects[2] = {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &d.collection};
-    d.subobjects[3] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &d.shader_config};
-    d.subobjects[4] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
-    d.subobjects[5] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
-    d.common[0] = &d.subobjects[1];
-    d.common[1] = &d.subobjects[3];
-    d.common[2] = &d.subobjects[4];
-    d.nodes[0] = {L"raygen", kRaygenMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
-    d.nodes[1] = {L"miss", kMissMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
-    d.nodes[2] = {L"closest", kClosestMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.global = {D3D12DDI_HROOTSIGNATURE{global}};
+    d.local = {D3D12DDI_HROOTSIGNATURE{local}};
+    UINT n = 0;
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d.library};
+    if (group) d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP, &d.hit_group};
+    d.associated[1] = &d.subobjects[n];
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &d.shader_config};
+    d.associated[2] = &d.subobjects[n];
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
+    d.associated[3] = &d.subobjects[n];
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d.global};
+    d.associated[0] = &d.subobjects[n];
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &d.local};
+    d.subobjects[n++] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
+    d.node = {name, mangled, 4, d.associated, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.summary = {1, &d.node, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.args = {D3D12DDI_STATE_OBJECT_TYPE_COLLECTION, n, d.subobjects};
+}
+
+// The link of the three UE-shaped collections (ray generation, miss, hit group), as the runtime gives it (measured,
+// d3d12ddicap S4): the three imports whole, the pipeline configuration, and the summary that lists each collection's
+// export with the subobjects of that collection's own array. No root signature and no shader configuration of its
+// own, though the application's link declared a shader configuration and a global root signature.
+struct UeLinkDesc {
+    D3D12DDI_EXISTING_COLLECTION_DESC_0054 collections[3];
+    D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[5];
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[3];
+    D3D12DDI_FUNCTION_SUMMARY_0054 summary;
+    D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
+};
+void describe_ue_link(UeLinkDesc& d, const UeCollectionDesc (&in)[3], void* const (&collections)[3]) {
+    for (int i = 0; i < 3; ++i) {
+        d.collections[i] = {D3D12DDI_HSTATEOBJECT_0054{collections[i]}, 0, nullptr};
+        d.subobjects[i] = {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &d.collections[i]};
+        d.nodes[i] = in[i].node;                    // the same names and the same pointers into the collection
+    }
+    d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
+    d.subobjects[3] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
+    d.subobjects[4] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
     d.summary = {3, d.nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
-    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 6, d.subobjects};
+    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 5, d.subobjects};
+}
+// UE 4.26's names (D3D12RayTracing.cpp numbers each collection's exports), and dxc's mangling of them.
+constexpr LPCWSTR kUeRaygen = L"RGS_00000001", kUeMiss = L"MS_00000002", kUeClosest = L"CHS_00000003",
+                  kUeGroup = L"HitGroup_00000003";
+constexpr LPCWSTR kUeRaygenMangled = L"\x01?RGS_00000001@@YAXXZ";
+constexpr LPCWSTR kUeMissMangled = L"\x01?MS_00000002@@YAXUPayload@@@Z";
+constexpr LPCWSTR kUeClosestMangled = L"\x01?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z";
+
+// The refusal lines so far of slot (CreateStateObject or AddToStateObject) that report real as what the runtime
+// admits (engine-ddi.h, admitted_create_failure).
+size_t reported(const char* slot, HRESULT real) {
+    char tail[64];
+    std::snprintf(tail, sizeof(tail), "hr %08lx reported as %08lx", static_cast<unsigned long>(real),
+                  static_cast<unsigned long>(engine_ddi::admitted_create_failure(real)));
+    size_t n = 0;
+    for (const std::string& line : refusal_lines(slot)) n += line.find(tail) != std::string::npos ? 1u : 0u;
+    return n;
 }
 
 // An addition in the DDI form, a description valid on its own (Raytracing.md:3781-3783): a configuration allowing
@@ -1262,7 +1352,7 @@ void test_raytracing_pipeline(Env& env) {
     const HRESULT hr_collection = create_state_object(env, device, gathered.args, &collection_storage, &collection_rt);
     const bool collection_seen = capture.captured.complete && capture.captured.type == D3D12_STATE_OBJECT_TYPE_COLLECTION;
     ImportDesc import;
-    describe_import(import, rs.global, collection_storage);
+    describe_import(import, gathered, collection_storage);
     void* importer_storage = nullptr;
     int importer_rt = 0;
     const ULONG collection_references = public_references(collection_storage);
@@ -1278,11 +1368,13 @@ void test_raytracing_pipeline(Env& env) {
     }
     checkf(hr_collection == S_OK && collection_seen && importer_ok && !device.shell.device_errors,
            "raytracing pipeline: a COLLECTION of the library, its root signatures, configurations and hit group, then a "
-           "collection-only executable (EXISTING_COLLECTION of all exports, no DXIL library): both creates and three "
-           "identifiers from the executable (hr %08lx %08lx)",
+           "collection-only executable (EXISTING_COLLECTION of all exports, the pipeline configuration, and a summary "
+           "that points into the collection's DDI array, as the runtime gives it): both creates and three identifiers "
+           "from the executable (hr %08lx %08lx)",
            static_cast<unsigned long>(hr_collection), static_cast<unsigned long>(hr_importer));
-    // The description handed to the engine: the collection's engine object imported whole, no library, the global
-    // root signature's association naming the three exports by the names the collection exposed.
+    // The description handed to the engine: the collection's engine object imported whole, the pipeline
+    // configuration, no library, no root signature and no association: what the summary associates is the
+    // collection's own, which the engine has already.
     const Captured& import_seen = capture.captured;
     const void* const collection_engine =
         collection_storage ? static_cast<ID3D12StateObject*>(engine_ddi::harness_engine_object(collection_storage))
@@ -1290,38 +1382,105 @@ void test_raytracing_pipeline(Env& env) {
     checkf(import_seen.complete && import_seen.type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE &&
                !import_seen.parent && import_seen.library_exports.empty() && import_seen.imports.size() == 1 &&
                collection_engine && import_seen.imports[0].collection == collection_engine &&
-               import_seen.imports[0].exports == 0 && import_seen.locals.empty() &&
-               names_are(associated(import_seen, D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, rs_global_root),
-                         {L"raygen", L"miss", L"closest"}),
+               import_seen.imports[0].exports == 0 && import_seen.locals.empty() && import_seen.associations.empty(),
            "raytracing pipeline: the description of the collection-only executable handed to the engine: the "
-           "collection's engine object with NumExports 0, no DXIL library, no local root signature, the global root "
-           "signature associated with raygen, miss and closest, the names the collection exposed (%zu imports)",
-           import_seen.imports.size());
+           "collection's engine object with NumExports 0, no DXIL library, no local root signature, no association "
+           "(%zu imports, %zu associations)",
+           import_seen.imports.size(), import_seen.associations.size());
     if (!importer_ok) return;
+    // Refused imports, each E_OUTOFMEMORY to the runtime (a creation function reports no other failure:
+    // admitted_create_failure), its real code on one refusal line, before the engine, and no device error.
+    const auto refused_import = [&](const char* what, const ImportDesc& bad, HRESULT real) {
+        const UINT calls = capture.captured.calls;
+        const size_t lines = reported("CreateStateObject", real);
+        void* storage = nullptr;
+        int rt = 0;
+        const HRESULT hr_bad = create_state_object(env, device, bad.args, &storage, &rt);
+        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
+        const size_t logged = reported("CreateStateObject", real) - lines;
+        checkf(hr_bad == E_OUTOFMEMORY && capture.captured.calls == calls && logged == 1 &&
+                   !device.shell.device_errors,
+               "raytracing pipeline: %s: 8007000e before the engine, %08lx on one refusal line, no device error (hr "
+               "%08lx, %zu lines)",
+               what, static_cast<unsigned long>(real), static_cast<unsigned long>(hr_bad), logged);
+    };
     {
         // A restricted import list: valid input, temporarily unsupported (the pinned engine's deferred import loop,
-        // INTEGRATION.md): E_NOTIMPL before the engine, and no device error.
+        // INTEGRATION.md).
         ImportDesc restricted;
-        describe_import(restricted, rs.global, collection_storage);
+        describe_import(restricted, gathered, collection_storage);
         D3D12DDI_EXPORT_DESC_0054 only{L"raygen", nullptr, D3D12DDI_EXPORT_FLAG_NONE};
         restricted.collection.NumExports = 1;
         restricted.collection.pExports = &only;
-        const UINT calls = capture.captured.calls;
-        void* storage = nullptr;
-        int rt = 0;
-        const HRESULT hr_restricted = create_state_object(env, device, restricted.args, &storage, &rt);
-        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
-        checkf(hr_restricted == E_NOTIMPL && capture.captured.calls == calls && !device.shell.device_errors,
-               "raytracing pipeline: an import of the collection with an export list: E_NOTIMPL before the engine, "
-               "temporarily unsupported (hr %08lx)",
-               static_cast<unsigned long>(hr_restricted));
+        refused_import("an import of the collection with an export list, temporarily unsupported", restricted,
+                       E_NOTIMPL);
+        // A summary association into a description that this create neither holds nor imports.
+        PipelineDesc stranger;
+        describe(stranger, rs.global, rs.local, library.code.data(), true);
+        ImportDesc outside;
+        describe_import(outside, stranger, collection_storage);
+        refused_import("a summary association into a description neither held nor imported", outside, E_INVALIDARG);
     }
     const ULONG collection_held = public_references(collection_storage);
     checkf(collection_references && collection_held == collection_references + 1,
            "raytracing pipeline: the executable's record holds one reference to the collection's engine object, the "
-           "refused import none (public references %lu, then %lu)",
+           "refused imports none (public references %lu, then %lu)",
            collection_references, collection_held);
     env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{collection_storage});
+
+    // 7b, the shape of Unreal Engine 4.26 (The Ascent, lab trial 465): three collections, each one export under a new
+    // name with its local root signature, then their link. The collections' DDI objects are destroyed before the link
+    // is used.
+    UeCollectionDesc ue[3];
+    describe_ue_collection(ue[0], library.code.data(), kUeRaygen, L"raygen", kUeRaygenMangled, nullptr, rs.global,
+                           rs.local);
+    describe_ue_collection(ue[1], library.code.data(), kUeMiss, L"miss", kUeMissMangled, nullptr, rs.global, rs.local);
+    describe_ue_collection(ue[2], library.code.data(), kUeClosest, L"closest", kUeClosestMangled, kUeGroup, rs.global,
+                           rs.local);
+    void* ue_collections[3]{};
+    HRESULT hr_ue_collections = S_OK;
+    for (int i = 0; i < 3; ++i) {
+        int rt = 0;
+        const HRESULT hr_c = create_state_object(env, device, ue[i].args, &ue_collections[i], &rt);
+        if (hr_ue_collections == S_OK) hr_ue_collections = hr_c;
+    }
+    UeLinkDesc ue_link;
+    describe_ue_link(ue_link, ue, ue_collections);
+    void* ue_storage = nullptr;
+    int ue_rt = 0;
+    const HRESULT hr_ue =
+        hr_ue_collections == S_OK ? create_state_object(env, device, ue_link.args, &ue_storage, &ue_rt) : E_FAIL;
+    const Captured ue_seen = capture.captured;
+    const D3D12DDI_HSTATEOBJECT_0054 hue{ue_storage};
+    const wchar_t* const ue_names[3] = {kUeRaygen, kUeMiss, kUeGroup};
+    BYTE ue_ids[3][kRecordBytes]{};
+    bool ue_ok = hr_ue == S_OK;
+    for (int i = 0; ue_ok && i < 3; ++i) {
+        const void* id = env.core.pfnGetShaderIdentifier(hue, ue_names[i]);
+        ue_ok = id != nullptr;
+        if (id) std::memcpy(ue_ids[i], id, kRecordBytes);
+    }
+    checkf(hr_ue_collections == S_OK && ue_ok && !device.shell.device_errors,
+           "raytracing pipeline: the UE 4.26 shape, three collections of one renamed export each (RGS_00000001, "
+           "MS_00000002, CHS_00000003 in HitGroup_00000003), then their link of the three imports and the pipeline "
+           "configuration, its summary pointing into the collections' DDI arrays: four creates and three identifiers "
+           "from the link (hr %08lx %08lx)",
+           static_cast<unsigned long>(hr_ue_collections),
+           static_cast<unsigned long>(hr_ue));
+    bool ue_imports = ue_seen.imports.size() == 3;
+    for (int i = 0; ue_imports && i < 3; ++i)
+        ue_imports = ue_seen.imports[i].exports == 0 &&
+                     ue_seen.imports[i].collection ==
+                         static_cast<ID3D12StateObject*>(engine_ddi::harness_engine_object(ue_collections[i]));
+    checkf(ue_seen.complete && ue_seen.type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE && ue_imports &&
+               ue_seen.library_exports.empty() && ue_seen.locals.empty() && ue_seen.associations.empty(),
+           "raytracing pipeline: the description of the UE 4.26 link handed to the engine: the three collections' "
+           "engine objects with NumExports 0, no DXIL library, no local root signature, no association (%zu imports, "
+           "%zu associations)",
+           ue_seen.imports.size(), ue_seen.associations.size());
+    for (void* storage : ue_collections)
+        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
+    if (!ue_ok) return;
 
     // 8, growth: a pipeline allowing additions, its pipeline stack size set, grown by miss_far; the parent's DDI object
     // destroyed before the child is used, the child's table holding the parent's identifiers and the new one.
@@ -1378,24 +1537,28 @@ void test_raytracing_pipeline(Env& env) {
            "object, one library listing one export, no local root signature, the global root signature associated with "
            "miss_far alone");
     if (hr_child != S_OK || !miss_far_id) return;
-    // Refused growth, each one E_INVALIDARG and no device error: from a pipeline created without
-    // ALLOW_STATE_OBJECT_ADDITIONS (the engine's check), and an addition exporting miss, which the parent has (the
-    // bridge's check, before the engine).
+    // Refused growth, each E_OUTOFMEMORY to the runtime (admitted_create_failure) with E_INVALIDARG on one refusal
+    // line, and no device error: from a pipeline created without ALLOW_STATE_OBJECT_ADDITIONS (the engine's check),
+    // and an addition exporting miss, which the parent has (the bridge's check, before the engine).
     const auto refused_growth = [&](const char* what, void* from, const UINT* code, LPCWSTR name, LPCWSTR mangled,
                                     bool reaches_engine) {
         AdditionDesc bad;
         describe_addition(bad, rs.global, code, name, mangled, from);
         const UINT calls = capture.captured.calls;
         const uint32_t before = device.shell.device_errors;
+        const size_t lines = reported("AddToStateObject", E_INVALIDARG);
         void* storage = nullptr;
         int rt = 0;
         const HRESULT hr_bad = add_to_state_object(env, device, bad.args, &storage, &rt);
         if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
         const UINT engine_calls = capture.captured.calls - calls;
-        checkf(hr_bad == E_INVALIDARG && device.shell.device_errors == before && engine_calls == (reaches_engine ? 1u : 0u),
-               "raytracing pipeline: AddToStateObject %s: 80070057 %s, no device error (hr %08lx, %u engine calls)",
+        const size_t logged = reported("AddToStateObject", E_INVALIDARG) - lines;
+        checkf(hr_bad == E_OUTOFMEMORY && logged == 1 && device.shell.device_errors == before &&
+                   engine_calls == (reaches_engine ? 1u : 0u),
+               "raytracing pipeline: AddToStateObject %s: 8007000e, 80070057 %s on one refusal line, no device error "
+               "(hr %08lx, %zu lines, %u engine calls)",
                what, reaches_engine ? "from the engine" : "before the engine", static_cast<unsigned long>(hr_bad),
-               engine_calls);
+               logged, engine_calls);
     };
     refused_growth("from a pipeline without ALLOW_STATE_OBJECT_ADDITIONS", so_storage, library_b.code.data(),
                    L"miss_far", kMissFarMangled, true);
@@ -1448,16 +1611,19 @@ void test_raytracing_pipeline(Env& env) {
         std::memcpy(record + kRecordBytes + sizeof(UINT32), &kTrapValue, sizeof(UINT32));
     }
     // The sixth table, the collection-only executable's; the seventh, the child's: the parent's raygen and hit group
-    // identifiers (taken before the parent was destroyed) and miss_far's in the miss record.
+    // identifiers (taken before the parent was destroyed) and miss_far's in the miss record; the eighth, the UE 4.26
+    // link's. Every UE export has the local root signature, so its records have room for the constant: the
+    // eighth dispatch gives the ray generation record that size and the miss table the hit group's stride.
     const struct {
         UINT64 table;
         const BYTE* raygen;
         const BYTE* miss;
         const BYTE* hit;
         UINT32 value;
-    } later_tables[2] = {
+    } later_tables[3] = {
         {kTable6, importer_ids[0], importer_ids[1], importer_ids[2], kImportValue},
         {kTable7, parent_ids[0], miss_far, parent_ids[2], kGrowValue},
+        {kTable8, ue_ids[0], ue_ids[1], ue_ids[2], kUeValue},
     };
     for (const auto& later : later_tables) {
         std::memcpy(bytes + later.table + kRaygenOffset, later.raygen, kRecordBytes);
@@ -1583,16 +1749,21 @@ void test_raytracing_pipeline(Env& env) {
         mixed_rays.HitGroupTable.StartAddress += table;
         t.pfnDispatchRays(rec.hlist(), &mixed_rays);
     }
-    // 7 and 8, the dispatches: the collection-only executable after its collection's destroy, and the child after its
-    // parent's, into the sixth and seventh results.
-    const D3D12DDI_HSTATEOBJECT_0054 later_objects[2] = {himporter, hchild};
-    for (int k = 0; k < 2; ++k) {
+    // 7, 8 and 7b, the dispatches: the collection-only executable after its collection's destroy, the child after its
+    // parent's, and the UE 4.26 link after its collections', into the sixth to eighth results.
+    const D3D12DDI_HSTATEOBJECT_0054 later_objects[3] = {himporter, hchild, hue};
+    for (int k = 0; k < 3; ++k) {
         t.pfnSetPipelineState1(rec.hlist(), later_objects[k]);
         t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 1280 + 256 * k);
         D3D12DDIARG_DISPATCH_RAYS_0054 later_rays = rays;
         later_rays.RayGenerationShaderRecord.StartAddress += later_tables[k].table;
         later_rays.MissShaderTable.StartAddress += later_tables[k].table;
         later_rays.HitGroupTable.StartAddress += later_tables[k].table;
+        if (later_objects[k].pDrvPrivate == hue.pDrvPrivate) {
+            later_rays.RayGenerationShaderRecord.SizeInBytes = kRecordBytes + sizeof(UINT32);
+            later_rays.MissShaderTable.SizeInBytes = kHitStride;
+            later_rays.MissShaderTable.StrideInBytes = kHitStride;
+        }
         t.pfnDispatchRays(rec.hlist(), &later_rays);
     }
     // 9, the indirect dispatches: the first pipeline again, each variant into its own result of the prefilled output,
@@ -1716,6 +1887,15 @@ void test_raytracing_pipeline(Env& env) {
                    "of the parent's raygen and hit group identifiers and the new miss_far's writes its 64 expected "
                    "words, %u hits with %08x and %u misses with miss_far's %u (%u differ, first at %u)",
                    hits, kGrowValue, kWords - hits, kMissFar, bad_grown, first_grown);
+            UINT32 expected_ue[kWords];
+            for (UINT i = 0; i < kWords; ++i) expected_ue[i] = expected[i] == kRecordValue ? kUeValue : expected[i];
+            UINT first_ue = 0;
+            const UINT bad_ue = mismatches(words + 1792 / sizeof(UINT32), expected_ue, &first_ue);
+            checkf(bad_ue == 0,
+                   "raytracing pipeline: the UE 4.26 link, used after its collections' DestroyStateObject, writes its 64 "
+                   "expected words, %u hits with %08x through CHS_00000003's local root signature, which only its "
+                   "collection associated, and %u misses with %u (%u differ, first at %u)",
+                   hits, kUeValue, kWords - hits, kMiss, bad_ue, first_ue);
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
         }
         void* indirect_mapped = nullptr;
@@ -1774,25 +1954,29 @@ void test_raytracing_pipeline(Env& env) {
         }
     }
 
-    // Refusals. A create answers with its result and reports nothing; its record is inert and destroyable.
+    // Refusals. A create answers E_OUTOFMEMORY (admitted_create_failure) with its real result on one refusal line, and
+    // reports nothing; its record is inert and destroyable.
     const auto refused_create = [&](const char* what, HRESULT expected_hr, const D3D12DDI_STATE_SUBOBJECT_0054& extra) {
         PipelineDesc bad;
         describe(bad, rs.global, rs.local, library.code.data(), true);
         bad.subobjects[kDescribed] = extra;
         bad.args.NumSubobjects = kDescribed + 1;
         const uint32_t before = device.shell.device_errors;
+        const size_t lines = reported("CreateStateObject", expected_hr);
         void* storage = nullptr;
         int rt = 0;
         const HRESULT hr_bad = create_state_object(env, device, bad.args, &storage, &rt);
+        const size_t logged = reported("CreateStateObject", expected_hr) - lines;
         // The inert record still names its device's shell (engine-ddi.h, state_object_shell), until destroyed.
         const D3D12DDI_HSTATEOBJECT_0054 h{storage};
         const bool owner = storage && engine_ddi::state_object_shell(h) == &device.shell;
         if (storage) env.core.pfnDestroyStateObject(device.h(), h);
         const bool gone = storage && !engine_ddi::state_object_shell(h);
-        checkf(hr_bad == expected_hr && device.shell.device_errors == before && owner && gone,
-               "raytracing pipeline: %s: CreateStateObject answers %08lx (hr %08lx, %u device errors), the inert "
-               "record's state_object_shell names the device's shell (%s), then none once destroyed (%s)",
-               what, static_cast<unsigned long>(expected_hr), static_cast<unsigned long>(hr_bad),
+        checkf(hr_bad == E_OUTOFMEMORY && logged == 1 && device.shell.device_errors == before && owner && gone,
+               "raytracing pipeline: %s: CreateStateObject answers 8007000e, %08lx on one refusal line (hr %08lx, %zu "
+               "lines, %u device errors), the inert record's state_object_shell names the device's shell (%s), then "
+               "none once destroyed (%s)",
+               what, static_cast<unsigned long>(expected_hr), static_cast<unsigned long>(hr_bad), logged,
                device.shell.device_errors - before, owner ? "yes" : "no", gone ? "yes" : "no");
     };
     const D3D12DDI_NODE_MASK_0054 mask{1};
@@ -1816,15 +2000,17 @@ void test_raytracing_pipeline(Env& env) {
         describe(shared, rs.global, rs.local, container.data(), false);
         add_decoy(shared, rs.decoy, shape.mangled);
         const uint32_t before = device.shell.device_errors;
+        const size_t lines = reported("CreateStateObject", E_INVALIDARG);
         void* storage = nullptr;
         int rt = 0;
         const HRESULT hr_shared = create_state_object(env, device, shared.args, &storage, &rt);
         if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
-        checkf(hr_shared == E_INVALIDARG && device.shell.device_errors == before,
+        const size_t logged = reported("CreateStateObject", E_INVALIDARG) - lines;
+        checkf(hr_shared == E_OUTOFMEMORY && logged == 1 && device.shell.device_errors == before,
                "raytracing pipeline: two summary exports sharing the plain name \"closest\" with different local root "
-               "signatures, %s: CreateStateObject answers 80070057, never a broadened association (hr %08lx, %u "
-               "device errors)",
-               shape.what, static_cast<unsigned long>(hr_shared), device.shell.device_errors - before);
+               "signatures, %s: CreateStateObject answers 8007000e, 80070057 on one refusal line, never a broadened "
+               "association (hr %08lx, %zu lines, %u device errors)",
+               shape.what, static_cast<unsigned long>(hr_shared), logged, device.shell.device_errors - before);
     }
 
     // One error on the calling list, then the count is put back.
@@ -1886,6 +2072,7 @@ void test_raytracing_pipeline(Env& env) {
     for (void* storage : mixed_storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
     env.core.pfnDestroyStateObject(device.h(), himporter);
     env.core.pfnDestroyStateObject(device.h(), hchild);
+    env.core.pfnDestroyStateObject(device.h(), hue);
     if (hr_rays_signature == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hrays_signature);
     for (Buffer* b : {&indirect_upload, &indirect_args, &indirect_out, &indirect_back}) destroy_buffer(env, device, *b);
     for (Buffer* b : {&blas, &tlas, &scratch, &out, &readback, &upload}) destroy_buffer(env, device, *b);

@@ -1,0 +1,329 @@
+build: 196608  d3d12ddicap.exe  sha256 A9307198328014D1016808993701B140CEA4A031429757CAADD1D20618A2D7A6
+ddi OpenAdapter12 (WARP): hr 00000000
+ddi FillDDITable DEVICE_CORE: 992 bytes, interface 0x0
+api D3D12CreateDevice (WARP): hr 00000000, core table wrapped: yes
+api RaytracingTier 11
+== case ue426
+api CreateStateObject COLLECTION ue426 raygen: 6 subobjects
+ddi CreateStateObject S1: type 0, 6 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 1 exports
+    export Name RGS_00000001 ExportToRename MainRGS
+  #1 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #2 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #3 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #4 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DEA0
+  #5 SHADER_EXPORT_SUMMARY (0x100000) 1 exports, overall flags 0x0
+    export unmangled RGS_00000001 mangled ?RGS_00000001@@YAXXZ flags 0x0, 4 associated:
+      #4 LOCAL_ROOT_SIGNATURE
+      #1 RAYTRACING_SHADER_CONFIG
+      #2 RAYTRACING_PIPELINE_CONFIG
+      #3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S1: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: 6 subobjects
+ddi CreateStateObject S2: type 0, 6 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 1 exports
+    export Name MS_00000002 ExportToRename MainMS
+  #1 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #2 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #3 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #4 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #5 SHADER_EXPORT_SUMMARY (0x100000) 1 exports, overall flags 0x0
+    export unmangled MS_00000002 mangled ?MS_00000002@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      #4 LOCAL_ROOT_SIGNATURE
+      #1 RAYTRACING_SHADER_CONFIG
+      #2 RAYTRACING_PIPELINE_CONFIG
+      #3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S2: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: 8 subobjects
+ddi CreateStateObject S3: type 0, 7 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 2 exports
+    export Name CHS_00000003 ExportToRename MainCHS
+    export Name AHS_00000003 ExportToRename MainAHS
+  #1 HIT_GROUP (0xb) HitGroup_00000003 type 0 anyhit AHS_00000003 closest CHS_00000003 intersection (null) summary flags 0x0
+  #2 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #3 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #4 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #5 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #6 SHADER_EXPORT_SUMMARY (0x100000) 2 exports, overall flags 0x0
+    export unmangled CHS_00000003 mangled ?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #5 LOCAL_ROOT_SIGNATURE
+      #2 RAYTRACING_SHADER_CONFIG
+      #3 RAYTRACING_PIPELINE_CONFIG
+      #4 GLOBAL_ROOT_SIGNATURE
+    export unmangled AHS_00000003 mangled ?AHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #5 LOCAL_ROOT_SIGNATURE
+      #2 RAYTRACING_SHADER_CONFIG
+      #3 RAYTRACING_PIPELINE_CONFIG
+      #4 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S3: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: 6 subobjects
+ddi CreateStateObject S4: type 3, 5 subobjects
+  #0 EXISTING_COLLECTION (0x6) collection S1, 0 exports
+  #1 EXISTING_COLLECTION (0x6) collection S2, 0 exports
+  #2 EXISTING_COLLECTION (0x6) collection S3, 0 exports
+  #3 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #4 SHADER_EXPORT_SUMMARY (0x100000) 4 exports, overall flags 0x0
+    export unmangled RGS_00000001 mangled ?RGS_00000001@@YAXXZ flags 0x0, 4 associated:
+      S1#4 LOCAL_ROOT_SIGNATURE
+      S1#1 RAYTRACING_SHADER_CONFIG
+      S1#2 RAYTRACING_PIPELINE_CONFIG
+      S1#3 GLOBAL_ROOT_SIGNATURE
+    export unmangled MS_00000002 mangled ?MS_00000002@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      S2#4 LOCAL_ROOT_SIGNATURE
+      S2#1 RAYTRACING_SHADER_CONFIG
+      S2#2 RAYTRACING_PIPELINE_CONFIG
+      S2#3 GLOBAL_ROOT_SIGNATURE
+    export unmangled CHS_00000003 mangled ?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      S3#5 LOCAL_ROOT_SIGNATURE
+      S3#2 RAYTRACING_SHADER_CONFIG
+      S3#3 RAYTRACING_PIPELINE_CONFIG
+      S3#4 GLOBAL_ROOT_SIGNATURE
+    export unmangled AHS_00000003 mangled ?AHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      S3#5 LOCAL_ROOT_SIGNATURE
+      S3#2 RAYTRACING_SHADER_CONFIG
+      S3#3 RAYTRACING_PIPELINE_CONFIG
+      S3#4 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S4: WARP hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 00000000
+api GetShaderIdentifier RGS_00000001: found
+api GetShaderIdentifier MS_00000002: found
+api GetShaderIdentifier HitGroup_00000003: found
+== case ue426: hr 00000000
+== case ue426-hitnames
+api CreateStateObject COLLECTION ue426 raygen: 6 subobjects
+ddi CreateStateObject S5: type 0, 6 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 1 exports
+    export Name RGS_00000001 ExportToRename MainRGS
+  #1 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #2 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #3 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #4 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DEA0
+  #5 SHADER_EXPORT_SUMMARY (0x100000) 1 exports, overall flags 0x0
+    export unmangled RGS_00000001 mangled ?RGS_00000001@@YAXXZ flags 0x0, 4 associated:
+      #4 LOCAL_ROOT_SIGNATURE
+      #1 RAYTRACING_SHADER_CONFIG
+      #2 RAYTRACING_PIPELINE_CONFIG
+      #3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S5: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: 6 subobjects
+ddi CreateStateObject S6: type 0, 6 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 1 exports
+    export Name MS_00000002 ExportToRename MainMS
+  #1 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #2 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #3 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #4 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #5 SHADER_EXPORT_SUMMARY (0x100000) 1 exports, overall flags 0x0
+    export unmangled MS_00000002 mangled ?MS_00000002@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      #4 LOCAL_ROOT_SIGNATURE
+      #1 RAYTRACING_SHADER_CONFIG
+      #2 RAYTRACING_PIPELINE_CONFIG
+      #3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S6: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: 7 subobjects
+ddi CreateStateObject S7: type 0, 7 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 2 exports
+    export Name CHS_00000003 ExportToRename MainCHS
+    export Name AHS_00000003 ExportToRename MainAHS
+  #1 HIT_GROUP (0xb) HitGroup_00000003 type 0 anyhit AHS_00000003 closest CHS_00000003 intersection (null) summary flags 0x0
+  #2 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #3 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #4 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #5 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #6 SHADER_EXPORT_SUMMARY (0x100000) 2 exports, overall flags 0x0
+    export unmangled CHS_00000003 mangled ?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #5 LOCAL_ROOT_SIGNATURE
+      #2 RAYTRACING_SHADER_CONFIG
+      #3 RAYTRACING_PIPELINE_CONFIG
+      #4 GLOBAL_ROOT_SIGNATURE
+    export unmangled AHS_00000003 mangled ?AHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #5 LOCAL_ROOT_SIGNATURE
+      #2 RAYTRACING_SHADER_CONFIG
+      #3 RAYTRACING_PIPELINE_CONFIG
+      #4 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S7: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: 6 subobjects
+ddi CreateStateObject S8: type 3, 5 subobjects
+  #0 EXISTING_COLLECTION (0x6) collection S5, 0 exports
+  #1 EXISTING_COLLECTION (0x6) collection S6, 0 exports
+  #2 EXISTING_COLLECTION (0x6) collection S7, 0 exports
+  #3 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #4 SHADER_EXPORT_SUMMARY (0x100000) 4 exports, overall flags 0x0
+    export unmangled RGS_00000001 mangled ?RGS_00000001@@YAXXZ flags 0x0, 4 associated:
+      S5#4 LOCAL_ROOT_SIGNATURE
+      S5#1 RAYTRACING_SHADER_CONFIG
+      S5#2 RAYTRACING_PIPELINE_CONFIG
+      S5#3 GLOBAL_ROOT_SIGNATURE
+    export unmangled MS_00000002 mangled ?MS_00000002@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      S6#4 LOCAL_ROOT_SIGNATURE
+      S6#1 RAYTRACING_SHADER_CONFIG
+      S6#2 RAYTRACING_PIPELINE_CONFIG
+      S6#3 GLOBAL_ROOT_SIGNATURE
+    export unmangled CHS_00000003 mangled ?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      S7#5 LOCAL_ROOT_SIGNATURE
+      S7#2 RAYTRACING_SHADER_CONFIG
+      S7#3 RAYTRACING_PIPELINE_CONFIG
+      S7#4 GLOBAL_ROOT_SIGNATURE
+    export unmangled AHS_00000003 mangled ?AHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      S7#5 LOCAL_ROOT_SIGNATURE
+      S7#2 RAYTRACING_SHADER_CONFIG
+      S7#3 RAYTRACING_PIPELINE_CONFIG
+      S7#4 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S8: WARP hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 00000000
+api GetShaderIdentifier RGS_00000001: found
+api GetShaderIdentifier MS_00000002: found
+api GetShaderIdentifier HitGroup_00000003: found
+== case ue426-hitnames: hr 00000000
+== case ue426-exportlist
+api CreateStateObject COLLECTION ue426 raygen: 6 subobjects
+ddi CreateStateObject S9: type 0, 6 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 1 exports
+    export Name RGS_00000001 ExportToRename MainRGS
+  #1 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #2 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #3 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #4 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DEA0
+  #5 SHADER_EXPORT_SUMMARY (0x100000) 1 exports, overall flags 0x0
+    export unmangled RGS_00000001 mangled ?RGS_00000001@@YAXXZ flags 0x0, 4 associated:
+      #4 LOCAL_ROOT_SIGNATURE
+      #1 RAYTRACING_SHADER_CONFIG
+      #2 RAYTRACING_PIPELINE_CONFIG
+      #3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S9: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: 6 subobjects
+ddi CreateStateObject S10: type 0, 6 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 1 exports
+    export Name MS_00000002 ExportToRename MainMS
+  #1 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #2 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #3 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #4 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #5 SHADER_EXPORT_SUMMARY (0x100000) 1 exports, overall flags 0x0
+    export unmangled MS_00000002 mangled ?MS_00000002@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      #4 LOCAL_ROOT_SIGNATURE
+      #1 RAYTRACING_SHADER_CONFIG
+      #2 RAYTRACING_PIPELINE_CONFIG
+      #3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S10: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: 8 subobjects
+ddi CreateStateObject S11: type 0, 7 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 2 exports
+    export Name CHS_00000003 ExportToRename MainCHS
+    export Name AHS_00000003 ExportToRename MainAHS
+  #1 HIT_GROUP (0xb) HitGroup_00000003 type 0 anyhit AHS_00000003 closest CHS_00000003 intersection (null) summary flags 0x0
+  #2 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #3 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #4 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #5 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #6 SHADER_EXPORT_SUMMARY (0x100000) 2 exports, overall flags 0x0
+    export unmangled CHS_00000003 mangled ?CHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #5 LOCAL_ROOT_SIGNATURE
+      #2 RAYTRACING_SHADER_CONFIG
+      #3 RAYTRACING_PIPELINE_CONFIG
+      #4 GLOBAL_ROOT_SIGNATURE
+    export unmangled AHS_00000003 mangled ?AHS_00000003@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #5 LOCAL_ROOT_SIGNATURE
+      #2 RAYTRACING_SHADER_CONFIG
+      #3 RAYTRACING_PIPELINE_CONFIG
+      #4 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S11: WARP hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: 6 subobjects
+ddi CreateStateObject S12: type 3, 5 subobjects
+  #0 EXISTING_COLLECTION (0x6) collection S9, 1 exports
+    export Name RGS_00000001 ExportToRename (null)
+  #1 EXISTING_COLLECTION (0x6) collection S10, 1 exports
+    export Name MS_00000002 ExportToRename (null)
+  #2 EXISTING_COLLECTION (0x6) collection S11, 1 exports
+    export Name HitGroup_00000003 ExportToRename (null)
+  #3 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #4 SHADER_EXPORT_SUMMARY (0x100000) 2 exports, overall flags 0x0
+    export unmangled RGS_00000001 mangled ?RGS_00000001@@YAXXZ flags 0x0, 4 associated:
+      S9#4 LOCAL_ROOT_SIGNATURE
+      S9#1 RAYTRACING_SHADER_CONFIG
+      S9#2 RAYTRACING_PIPELINE_CONFIG
+      S9#3 GLOBAL_ROOT_SIGNATURE
+    export unmangled MS_00000002 mangled ?MS_00000002@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      S10#4 LOCAL_ROOT_SIGNATURE
+      S10#1 RAYTRACING_SHADER_CONFIG
+      S10#2 RAYTRACING_PIPELINE_CONFIG
+      S10#3 GLOBAL_ROOT_SIGNATURE
+ddi CreateStateObject S12: WARP hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 00000000
+api GetShaderIdentifier RGS_00000001: found
+api GetShaderIdentifier MS_00000002: found
+api GetShaderIdentifier HitGroup_00000003: found
+== case ue426-exportlist: hr 00000000
+== case client-collection
+api CreateStateObject COLLECTION client: 8 subobjects
+ddi CreateStateObject S13: type 0, 9 subobjects
+  #0 DXIL_LIBRARY (0x5) first word 0x00060063, 2 exports
+    export Name MainCHS ExportToRename (null)
+    export Name MainAHS ExportToRename (null)
+  #1 DXIL_LIBRARY (0x5) first word 0x00060063, 0 exports
+  #2 DXIL_LIBRARY (0x5) first word 0x00060063, 0 exports
+  #3 HIT_GROUP (0xb) group type 0 anyhit MainAHS closest MainCHS intersection (null) summary flags 0x0
+  #4 RAYTRACING_SHADER_CONFIG (0x9) payload 24 attributes 8
+  #5 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #6 GLOBAL_ROOT_SIGNATURE (0x1) root signature 0000026DC1D8F410
+  #7 LOCAL_ROOT_SIGNATURE (0x2) root signature 0000026DC1E3DA50
+  #8 SHADER_EXPORT_SUMMARY (0x100000) 4 exports, overall flags 0x0
+    export unmangled MainCHS mangled ?MainCHS@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #4 RAYTRACING_SHADER_CONFIG
+      #5 RAYTRACING_PIPELINE_CONFIG
+      #6 GLOBAL_ROOT_SIGNATURE
+      #7 LOCAL_ROOT_SIGNATURE
+    export unmangled MainAHS mangled ?MainAHS@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      #4 RAYTRACING_SHADER_CONFIG
+      #5 RAYTRACING_PIPELINE_CONFIG
+      #6 GLOBAL_ROOT_SIGNATURE
+      #7 LOCAL_ROOT_SIGNATURE
+    export unmangled MainRGS mangled ?MainRGS@@YAXXZ flags 0x0, 4 associated:
+      #4 RAYTRACING_SHADER_CONFIG
+      #5 RAYTRACING_PIPELINE_CONFIG
+      #6 GLOBAL_ROOT_SIGNATURE
+      #7 LOCAL_ROOT_SIGNATURE
+    export unmangled MainMS mangled ?MainMS@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      #4 RAYTRACING_SHADER_CONFIG
+      #5 RAYTRACING_PIPELINE_CONFIG
+      #6 GLOBAL_ROOT_SIGNATURE
+      #7 LOCAL_ROOT_SIGNATURE
+ddi CreateStateObject S13: WARP hr 00000000
+api CreateStateObject COLLECTION client: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE client from collection: 3 subobjects
+ddi CreateStateObject S14: type 3, 3 subobjects
+  #0 EXISTING_COLLECTION (0x6) collection S13, 0 exports
+  #1 RAYTRACING_PIPELINE_CONFIG (0xa) depth 1 flags 0x0 (as _0075)
+  #2 SHADER_EXPORT_SUMMARY (0x100000) 4 exports, overall flags 0x0
+    export unmangled MainCHS mangled ?MainCHS@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      S13#4 RAYTRACING_SHADER_CONFIG
+      S13#5 RAYTRACING_PIPELINE_CONFIG
+      S13#6 GLOBAL_ROOT_SIGNATURE
+      S13#7 LOCAL_ROOT_SIGNATURE
+    export unmangled MainRGS mangled ?MainRGS@@YAXXZ flags 0x0, 4 associated:
+      S13#4 RAYTRACING_SHADER_CONFIG
+      S13#5 RAYTRACING_PIPELINE_CONFIG
+      S13#6 GLOBAL_ROOT_SIGNATURE
+      S13#7 LOCAL_ROOT_SIGNATURE
+    export unmangled MainAHS mangled ?MainAHS@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z flags 0x0, 4 associated:
+      S13#4 RAYTRACING_SHADER_CONFIG
+      S13#5 RAYTRACING_PIPELINE_CONFIG
+      S13#6 GLOBAL_ROOT_SIGNATURE
+      S13#7 LOCAL_ROOT_SIGNATURE
+    export unmangled MainMS mangled ?MainMS@@YAXUPayload@@@Z flags 0x0, 4 associated:
+      S13#4 RAYTRACING_SHADER_CONFIG
+      S13#5 RAYTRACING_PIPELINE_CONFIG
+      S13#6 GLOBAL_ROOT_SIGNATURE
+      S13#7 LOCAL_ROOT_SIGNATURE
+ddi CreateStateObject S14: WARP hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE client from collection: hr 00000000
+== case client-collection: hr 00000000

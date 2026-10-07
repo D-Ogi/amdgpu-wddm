@@ -52,6 +52,7 @@ flowchart LR
   M799["M799"]
   M801["M801"]
   M804["M804<br/>hardware"]
+  M837["M837"]
   M804 --> M801
   M576 --> M575
   M723 --> M697
@@ -71,6 +72,7 @@ flowchart LR
   M798 --> M797
   M799 --> M798
   M801 --> M46
+  M837 --> M782
   M553 --> M546
   classDef other stroke-dasharray:4 3
   class M46,M553,M569,M571,M576,M585,M723,M804 other
