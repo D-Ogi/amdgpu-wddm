@@ -1,34 +1,80 @@
 // SPDX-License-Identifier: MIT
 #include "allocation-request.h"
+#include "scanout-mode.h"
+#include "adapter-contract.h"
+#include "../../kmd/gdi_private.h"
 extern "C" {
 #include "../../kmd/umd_blob.h"
 }
-#include <cassert>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <initializer_list>
+using namespace native12;
+namespace {
+unsigned checks=0;
+// Not assert: the gate must not depend on NDEBUG, and a count of checks makes a test that silently ran
+// nothing visible in the build log.
+#define CHECK(expr) do{++checks;if(!(expr)){std::printf("FAIL %s:%d %s\n",__FILE__,__LINE__,#expr);std::fflush(stdout);std::abort();}}while(0)
+bc250_scanout_caps caps_on(unsigned width=1920,unsigned height=1200) {
+    bc250_scanout_caps caps{};
+    caps.magic=BC250_SCANOUT_CAPS_MAGIC;caps.version=BC250_SCANOUT_CAPS_VERSION;caps.size=sizeof(caps);
+    caps.flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;caps.post_width=width;caps.post_height=height;
+    return caps;
+}
+// The record on the wire, read as the words the kernel driver and the compositor's opener read.
+void check_scanout_record(const AllocationRequest& r,unsigned width,unsigned height,unsigned dxgi) {
+    CHECK(r.args.pPrivateDriverData==&r.resource);
+    CHECK(r.args.PrivateDriverDataSize==sizeof(BC250_SURFACE_RESOURCE_PRIVATE));
+    unsigned long w[16];std::memcpy(w,r.args.pPrivateDriverData,sizeof(w));
+    CHECK(w[0]==BC250_SURFACE_RESOURCE_MAGIC && w[1]==3 && w[2]==1 &&
+          w[3]==(BC250_SURFACE_RESOURCE_PRIMARY|BC250_SURFACE_RESOURCE_SCANOUT));
+    CHECK(w[4]==width && w[5]==height && w[6]==1 && w[7]==1 && w[8]==dxgi);
+    CHECK(w[9]==1 && w[10]==0 && w[11]==BC250_SCANOUT_RECORD_USAGE && w[12]==BC250_SCANOUT_RECORD_BIND);
+    CHECK(!w[13] && !w[14] && w[15]==BC250_SCANOUT_RECORD_LAYOUT);
+    // Byte for byte the contract builder's record: the D3D11 shell's write and this one are one shape.
+    BC250_SURFACE_RESOURCE_PRIVATE built{};
+    Bc250ScanoutRecordInit(&built,width,height,dxgi);
+    CHECK(!std::memcmp(&built,r.args.pPrivateDriverData,sizeof(built)));
+    // The parsers the kernel driver and the compositor use must both admit it, and must read it as a
+    // shared scan-out record with no cached CPU reader.
+    int shared=0,cached=0;
+    CHECK(Bc250SurfaceResourcePolicy(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize,&shared,&cached));
+    CHECK(shared==1 && !cached);
+    CHECK(Bc250SurfaceResourceScanout(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize));
+    unsigned long version=0,access=0;
+    CHECK(Bc250SurfaceResourceIntent(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize,&version,&access));
+    CHECK(version==3 && access==5);
+    // And the placement arithmetic must call it scannable from the opened side, which is the one
+    // question the compositor's CheckDirectFlipSupport asks about an application's buffer.
+    CHECK(WddmGdiRecordScannable(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize));
+    CHECK(WddmGdiCreatedScannable(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize));
+}
+}
 int main() {
-    using native12::AllocationAccess;
-    native12::AllocationRequest r;
     HANDLE owner=reinterpret_cast<HANDLE>(UINT_PTR(0x123));
+    AllocationRequest r;
     for(auto access:{AllocationAccess::GpuOnly,AllocationAccess::CpuWriteCombined,AllocationAccess::CpuCached}) {
-        assert(r.prepare(65537,65536,access,owner)==S_OK);
-        assert(r.args.hResource==owner && r.args.NumAllocations==1 && !r.args.hKMResource);
-        assert(r.args.pAllocationInfo==&r.info && r.info.pPrivateDriverData==&r.blob);
+        CHECK(r.prepare(65537,65536,access,owner)==S_OK);
+        CHECK(r.args.hResource==owner && r.args.NumAllocations==1 && !r.args.hKMResource);
+        CHECK(r.args.pAllocationInfo==&r.info && r.info.pPrivateDriverData==&r.blob);
         umd_alloc_view view{};
-        assert(UmdBlobParseAlloc(r.info.pPrivateDriverData,r.info.PrivateDriverDataSize,&view)==UMD_BLOB_OK);
-        assert(view.bytes==131072 && view.alignment==65536 && !view.exact_va && !view.requested_va);
-        assert(view.cache_policy_valid && r.blob.va_size==view.bytes);
-        assert(UmdBlobAllocCpuCached(&view)==(access==AllocationAccess::CpuCached));
-        assert(view.heap==(access==AllocationAccess::GpuOnly?UMD_BLOB_HEAP_VRAM:UMD_BLOB_HEAP_GTT));
+        CHECK(UmdBlobParseAlloc(r.info.pPrivateDriverData,r.info.PrivateDriverDataSize,&view)==UMD_BLOB_OK);
+        CHECK(view.bytes==131072 && view.alignment==65536 && !view.exact_va && !view.requested_va);
+        CHECK(view.cache_policy_valid && r.blob.va_size==view.bytes);
+        CHECK(UmdBlobAllocCpuCached(&view)==(access==AllocationAccess::CpuCached));
+        CHECK(view.heap==(access==AllocationAccess::GpuOnly?UMD_BLOB_HEAP_VRAM:UMD_BLOB_HEAP_GTT));
     }
     for(auto alignment:{uint64_t(0),uint64_t(2048),uint64_t(6144)})
-        assert(r.prepare(1,alignment,AllocationAccess::GpuOnly)==E_INVALIDARG && !r.args.pAllocationInfo);
-    assert(r.prepare(0,4096,AllocationAccess::GpuOnly)==E_INVALIDARG);
-    assert(r.prepare(UINT64_MAX,4096,AllocationAccess::GpuOnly)==E_INVALIDARG);
-    assert(r.prepare(1,4096,static_cast<AllocationAccess>(99))==E_INVALIDARG && !r.blob.magic);
-    assert(r.prepare(1,4096,AllocationAccess::CpuCached)==S_OK && r.blob.alloc_size==4096);
-    r.blob.flags=BC250_UMD_A_SPARSE;umd_alloc_view view{};
-    assert(UmdBlobParseAlloc(&r.blob,sizeof(r.blob),&view)==UMD_BLOB_BAD_FLAGS);
+        CHECK(r.prepare(1,alignment,AllocationAccess::GpuOnly)==E_INVALIDARG && !r.args.pAllocationInfo);
+    CHECK(r.prepare(0,4096,AllocationAccess::GpuOnly)==E_INVALIDARG);
+    CHECK(r.prepare(UINT64_MAX,4096,AllocationAccess::GpuOnly)==E_INVALIDARG);
+    CHECK(r.prepare(1,4096,static_cast<AllocationAccess>(99))==E_INVALIDARG && !r.blob.magic);
+    CHECK(r.prepare(1,4096,AllocationAccess::CpuCached)==S_OK && r.blob.alloc_size==4096);
+    {
+        r.blob.flags=BC250_UMD_A_SPARSE;umd_alloc_view view{};
+        CHECK(UmdBlobParseAlloc(&r.blob,sizeof(r.blob),&view)==UMD_BLOB_BAD_FLAGS);
+    }
 
     // BD-075: the shared surface's two records. The pair a create publishes must be the pair an opener decodes,
     // so the test decodes what it wrote and compares every field, and the kernel driver's own parser must admit it.
@@ -36,31 +82,31 @@ int main() {
         const uint32_t width=256,height=254,pitch=1024;
         const uint64_t size=uint64_t(pitch)*256;        // the rows a reader of four-row blocks takes
         const uint32_t bind=BC250_SHARED_BIND_SHADER_RESOURCE|BC250_SHARED_BIND_RENDER_TARGET;
-        assert(r.prepare_shared_surface(width,height,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind,owner)==S_OK);
-        assert(r.args.hResource==owner && r.args.NumAllocations==1 && !r.args.hKMResource);
-        assert(r.args.pAllocationInfo==&r.info && r.info.pPrivateDriverData==&r.surface);
-        assert(r.info.PrivateDriverDataSize==32 && r.args.PrivateDriverDataSize==64);
-        assert(r.args.pPrivateDriverData==&r.texture);
+        CHECK(r.prepare_shared_surface(width,height,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind,owner)==S_OK);
+        CHECK(r.args.hResource==owner && r.args.NumAllocations==1 && !r.args.hKMResource);
+        CHECK(r.args.pAllocationInfo==&r.info && r.info.pPrivateDriverData==&r.surface);
+        CHECK(r.info.PrivateDriverDataSize==32 && r.args.PrivateDriverDataSize==64);
+        CHECK(r.args.pPrivateDriverData==&r.texture);
         // Not a primary: no information flag and no video present source.
-        assert(r.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && r.info.VidPnSourceId==0);
-        assert(r.held==size);
-        assert(r.surface.magic==native12::kLb7aMagic && r.surface.version==1 && r.surface.width==width &&
-               r.surface.height==height && r.surface.pitch==pitch && r.surface.size==size &&
-               r.surface.format==D3DDDIFMT_A8R8G8B8);
-        assert(r.texture.Magic==BC250_SURFACE_RESOURCE_MAGIC && r.texture.Version==3 && r.texture.Shared==1 &&
-               r.texture.Access==0 && r.texture.Width==width && r.texture.Height==height && r.texture.MipLevels==1 &&
-               r.texture.ArraySize==1 && r.texture.Format==DXGI_FORMAT_B8G8R8A8_UNORM && r.texture.SampleCount==1 &&
-               !r.texture.SampleQuality && r.texture.Usage==0 && r.texture.BindFlags==bind &&
-               !r.texture.CpuAccessFlags && !r.texture.MiscFlags && r.texture.TextureLayout==0);
+        CHECK(r.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && r.info.VidPnSourceId==0);
+        CHECK(r.held==size);
+        CHECK(r.surface.magic==kLb7aMagic && r.surface.version==1 && r.surface.width==width &&
+              r.surface.height==height && r.surface.pitch==pitch && r.surface.size==size &&
+              r.surface.format==D3DDDIFMT_A8R8G8B8);
+        CHECK(r.texture.Magic==BC250_SURFACE_RESOURCE_MAGIC && r.texture.Version==3 && r.texture.Shared==1 &&
+              r.texture.Access==0 && r.texture.Width==width && r.texture.Height==height && r.texture.MipLevels==1 &&
+              r.texture.ArraySize==1 && r.texture.Format==DXGI_FORMAT_B8G8R8A8_UNORM && r.texture.SampleCount==1 &&
+              !r.texture.SampleQuality && r.texture.Usage==0 && r.texture.BindFlags==bind &&
+              !r.texture.CpuAccessFlags && !r.texture.MiscFlags && r.texture.TextureLayout==0);
         int shared_cpu=-1,cached_cpu=-1;
-        assert(Bc250SurfaceResourcePolicy(&r.texture,sizeof(r.texture),&shared_cpu,&cached_cpu)==1);
-        assert(shared_cpu==1 && cached_cpu==0);         // shared, and no cached CPU mapping is asked for
+        CHECK(Bc250SurfaceResourcePolicy(&r.texture,sizeof(r.texture),&shared_cpu,&cached_cpu)==1);
+        CHECK(shared_cpu==1 && cached_cpu==0);          // shared, and no cached CPU mapping is asked for
         BC250_SHARED_SURFACE back{};
-        assert(Bc250SharedSurfaceDecode(&r.texture,sizeof(r.texture),&r.surface,sizeof(r.surface),&back)==
-               BC250_SHARED_SURFACE_OK);
-        assert(back.Width==width && back.Height==height && back.Pitch==pitch && back.Size==size &&
-               back.DxgiFormat==DXGI_FORMAT_B8G8R8A8_UNORM && back.D3dDdiFormat==D3DDDIFMT_A8R8G8B8 &&
-               back.BindFlags==bind && back.BytesPerPixel==4 && back.Shared==1 && !back.Access && !back.MiscFlags);
+        CHECK(Bc250SharedSurfaceDecode(&r.texture,sizeof(r.texture),&r.surface,sizeof(r.surface),&back)==
+              BC250_SHARED_SURFACE_OK);
+        CHECK(back.Width==width && back.Height==height && back.Pitch==pitch && back.Size==size &&
+              back.DxgiFormat==DXGI_FORMAT_B8G8R8A8_UNORM && back.D3dDdiFormat==D3DDDIFMT_A8R8G8B8 &&
+              back.BindFlags==bind && back.BytesPerPixel==4 && back.Shared==1 && !back.Access && !back.MiscFlags);
         // The other composed rows, with their own pixel size and D3DDDIFORMAT.
         struct Row { DXGI_FORMAT dxgi; uint32_t d3dddi,bpp; };
         for(const Row row:{Row{DXGI_FORMAT_R8G8B8A8_UNORM,D3DDDIFMT_A8B8G8R8,4},
@@ -69,31 +115,205 @@ int main() {
                            Row{DXGI_FORMAT_R16G16B16A16_FLOAT,D3DDDIFMT_A16B16G16R16F,8},
                            Row{DXGI_FORMAT_A8_UNORM,D3DDDIFMT_A8,1}}) {
             const uint32_t row_pitch=((64*row.bpp+255)&~255u);
-            assert(r.prepare_shared_surface(64,64,row_pitch,row.dxgi,uint64_t(row_pitch)*64,
-                                            BC250_SHARED_BIND_RENDER_TARGET,owner)==S_OK);
-            assert(r.surface.format==row.d3dddi && r.texture.Format==uint32_t(row.dxgi));
+            CHECK(r.prepare_shared_surface(64,64,row_pitch,row.dxgi,uint64_t(row_pitch)*64,
+                                           BC250_SHARED_BIND_RENDER_TARGET,owner)==S_OK);
+            CHECK(r.surface.format==row.d3dddi && r.texture.Format==uint32_t(row.dxgi));
         }
         // Every refusal, each leaving nothing behind: a pitch that is not a multiple of 16 and one below the row,
         // a size that is not page rounded and one that does not cover four-row blocks, an empty and an oversized
         // edge, bind flags outside the mask, and a format no shared surface has.
         for(const uint32_t bad_pitch:{uint32_t(0),uint32_t(1020),uint32_t(512)})
-            assert(r.prepare_shared_surface(256,254,bad_pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG &&
-                   !r.texture.Magic && !r.surface.magic && !r.args.pAllocationInfo);
-        assert(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size+16,bind)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,uint64_t(pitch)*252,bind)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(0,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(256,0,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(8193,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(256,8193,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,0x4,owner)==E_INVALIDARG);
-        assert(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_R32_UINT,size,bind)==E_NOTIMPL &&
-               !r.texture.Magic && !r.surface.magic);
+            CHECK(r.prepare_shared_surface(256,254,bad_pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG &&
+                  !r.texture.Magic && !r.surface.magic && !r.args.pAllocationInfo);
+        CHECK(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size+16,bind)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,uint64_t(pitch)*252,bind)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(0,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(256,0,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(8193,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(256,8193,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,bind)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,0x4,owner)==E_INVALIDARG);
+        CHECK(r.prepare_shared_surface(256,254,pitch,DXGI_FORMAT_R32_UINT,size,bind)==E_NOTIMPL &&
+              !r.texture.Magic && !r.surface.magic);
         // The primary's own record is unchanged by all this: v1, PRIMARY, and no texture record on the wire.
-        assert(r.prepare_surface(256,254,pitch,D3DDDIFMT_A8R8G8B8,size,owner)==S_OK);
-        assert(r.args.PrivateDriverDataSize==native12::kE26rV1Bytes && r.args.pPrivateDriverData==&r.resource &&
-               r.resource.shared==1 && !r.resource.access && !r.texture.Magic &&
-               r.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
+        CHECK(r.prepare_surface(256,254,pitch,D3DDDIFMT_A8R8G8B8,size,owner)==S_OK);
+        CHECK(r.args.PrivateDriverDataSize==kE26rV1Bytes && r.args.pPrivateDriverData==&r.resource &&
+              r.resource.version==1 && r.resource.shared==1 && !r.resource.access && !r.texture.Magic &&
+              r.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
     }
-    puts("native allocation request accepted by KMD parser; cache/rounding/refusal gates passed; "
-         "shared surface records written, decoded and admitted by the kernel driver's parser");
+
+    // (a) M15.14 increment 2: the scan-out primary's description on the wire. The LB7A blob stays the
+    // composed one and the resource record becomes the 64-byte v3 texture record the compositor's opener
+    // takes, written into the widened E26rResource.
+    {
+        const unsigned width=1920,height=1200,pitch=scanout_row_pitch(width);
+        const uint64_t size=uint64_t(pitch)*height;
+        AllocationRequest direct;
+        static_assert(scanout_row_pitch(1920)==7680);
+        CHECK(direct.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==S_OK);
+        check_scanout_record(direct,width,height,AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM);
+        CHECK(direct.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
+        CHECK(direct.info.VidPnSourceId==BC250_SCANOUT_VIDPN_SOURCE);
+        CHECK(direct.info.pPrivateDriverData==&direct.surface && direct.info.PrivateDriverDataSize==32);
+        CHECK(direct.surface.magic==kLb7aMagic && direct.surface.version==1 && direct.surface.width==width &&
+              direct.surface.height==height && direct.surface.pitch==pitch &&
+              direct.surface.format==AMDGPU_WDDM_D3DDDI_A8R8G8B8 && direct.surface.size==size);
+        CHECK(direct.held==size && !direct.texture.Magic);
+        // The negative control of the widening: the same record cut to the 16-byte v2 shape the shell
+        // wrote before this increment. The kernel driver's parser refuses a v3 header on 16 bytes, and
+        // both user-mode scannable answers refuse it, so the old write could never become a flip.
+        CHECK(!WddmGdiRecordScannable(direct.args.pPrivateDriverData,16));
+        int shared=0,cached=0;
+        CHECK(!Bc250SurfaceResourcePolicy(direct.args.pPrivateDriverData,16,&shared,&cached));
+        E26rResource v2=direct.resource;v2.version=2;
+        CHECK(Bc250SurfaceResourcePolicy(&v2,16,&shared,&cached) && Bc250SurfaceResourceScanout(&v2,16));
+        CHECK(!WddmGdiRecordScannable(&v2,16) && !WddmGdiRecordScannable(&v2,sizeof(v2)));
+        // The composed primary and the present-cached primary keep their measured shapes: v1 in 12 bytes,
+        // v2 in 16, with the texture fields of the widened struct zero and not on the wire.
+        AllocationRequest composed;
+        CHECK(composed.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner)==S_OK);
+        CHECK(composed.args.pPrivateDriverData==&composed.resource && composed.args.PrivateDriverDataSize==12);
+        CHECK(composed.resource.version==1 && !composed.resource.width && !composed.resource.format);
+        CHECK(composed.info.VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
+        AllocationRequest cachedReq;
+        CHECK(cachedReq.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,true,true)==S_OK);
+        CHECK(cachedReq.args.pPrivateDriverData==&cachedReq.resource && cachedReq.args.PrivateDriverDataSize==16);
+        CHECK(cachedReq.resource.version==2 && cachedReq.resource.access==kE26rCpuRead && !cachedReq.resource.width);
+        CHECK(Bc250SurfaceResourcePolicy(cachedReq.args.pPrivateDriverData,16,&shared,&cached) && shared==1 && cached);
+        // A reused request keeps nothing of the previous call: after a scan-out call, a composed call on
+        // the same object sends v1 in 12 bytes and the texture fields are zero again.
+        CHECK(direct.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner)==S_OK);
+        CHECK(direct.args.PrivateDriverDataSize==12 && direct.resource.version==1 && !direct.resource.access &&
+              !direct.resource.width && !direct.resource.bind_flags);
+    }
+    // (b) The pitch pin. The kernel driver's flip clause admits any whole number of 4-byte pixels that
+    // holds the row, but only one pitch is derived by every component on the path, so only that one is
+    // asked for; a composed primary keeps the engine's own pitch.
+    {
+        const unsigned width=1920,height=1200;
+        AllocationRequest p;
+        for(unsigned pitch:{7936u,8192u,15360u}) {
+            const uint64_t size=uint64_t(pitch)*height;
+            CHECK(p.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==E_INVALIDARG);
+            CHECK(p.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner)==S_OK);
+        }
+        CHECK(p.prepare_surface(width,height,7696,D3DDDIFMT_A8R8G8B8,7696ull*height+2816,owner,false,true,true)==E_INVALIDARG);
+        // 1900 is not a multiple of 64 pixels: the pin is the rounded pitch, not width*4.
+        static_assert(scanout_row_pitch(1900)==7680 && 1900u*4u==7600u);
+        CHECK(p.prepare_surface(1900,height,7600,D3DDDIFMT_A8R8G8B8,7600ull*height,owner,false,true,true)==E_INVALIDARG);
+        CHECK(p.prepare_surface(1900,height,7680,D3DDDIFMT_A8R8G8B8,7680ull*height,owner,false,true,true)==S_OK);
+        check_scanout_record(p,1900,height,AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM);
+        // Any other source geometry gets its own record and its own pin: nothing here knows 1920x1200.
+        CHECK(p.prepare_surface(1280,720,5120,D3DDDIFMT_A8R8G8B8,5120ull*720,owner,false,true,true)==S_OK);
+        check_scanout_record(p,1280,720,AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM);
+        CHECK(p.prepare_surface(3840,2160,15360,D3DDDIFMT_A8R8G8B8,15360ull*2160,owner,false,true,true)==S_OK);
+        check_scanout_record(p,3840,2160,AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM);
+    }
+    // (c) The rows a scan-out primary may have. X8 is a SCANOUT_PRIMARY row with no DXGI name, so no v3
+    // record can describe it and the compositor could never open it: refused here rather than placed in
+    // VRAM for a flip that could not be admitted. The composed-only rows are refused as before.
+    {
+        const unsigned width=1920,height=1200,pitch=7680;const uint64_t size=uint64_t(pitch)*height;
+        AllocationRequest c;
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,owner,false,true,true)==E_NOTIMPL);
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8B8G8R8,size,owner,false,true,true)==E_NOTIMPL);
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A2B10G10R10,size,owner,false,true,true)==E_NOTIMPL);
+        CHECK(c.prepare_surface(width,height,15360,D3DDDIFMT_A16B16G16R16F,15360ull*height,owner,false,true,true)==E_NOTIMPL);
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8,size,owner,false,true,true)==E_NOTIMPL);
+        // Scan-out contradicts the other two intents and is refused rather than silently reduced.
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,true,true,true)==E_INVALIDARG);
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,false,true)==E_INVALIDARG);
+        // And the geometry rules of the composed path still hold for it.
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,4096,owner,false,true,true)==E_INVALIDARG);
+        CHECK(c.prepare_surface(0,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==E_INVALIDARG);
+        CHECK(c.prepare_surface(width,0,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==E_INVALIDARG);
+    }
+    // (d) The stand-down decision, one case per clause. Every refusal leaves the composed primary, so the
+    // test asserts the reason and not a failure.
+    {
+        const bc250_scanout_caps on=caps_on(),off{};
+        const unsigned bgra=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM,pitch=7680;
+        const char* mode="scanout-flip-1920x1200";
+        struct Case { const char* list;bc250_scanout_caps caps;unsigned long force;unsigned dxgi,w,h,pitch;
+                      ScanoutStandDown reason; };
+        const Case cases[]={
+            {mode,on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted},
+            {"",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
+            {"none",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
+            {"scanout-flip",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
+            {"scanout-flip-1920",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
+            {"present-cached,scanout-flip-1920x1200",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent},
+            {"scanout-flip-1920x1200,present-noprimary",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent},
+            {mode,on,0,bgra,1280,720,5120,ScanoutStandDown::ModeGeometry},
+            {mode,on,1,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu},
+            {mode,on,7,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu},
+            {mode,off,0,bgra,1920,1200,pitch,ScanoutStandDown::CapsClosed},
+            {mode,caps_on(1280,720),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry},
+            {mode,caps_on(1920,1080),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry},
+            // The source mode is the trailer's, whatever it is: a 1280x720 mode named and published admits.
+            {"scanout-flip-1280x720",caps_on(1280,720),0,bgra,1280,720,5120,ScanoutStandDown::Admitted},
+            {"scanout-flip-1280x720",on,0,bgra,1280,720,5120,ScanoutStandDown::SourceGeometry},
+            {mode,on,0,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::Format},
+            {mode,on,0,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Format},
+            {mode,on,0,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,pitch,ScanoutStandDown::Format},
+            {mode,on,0,0,1920,1200,pitch,ScanoutStandDown::Format},
+            {mode,on,0,bgra,1920,1200,0,ScanoutStandDown::Pitch},
+            {mode,on,0,bgra,1920,1200,7936,ScanoutStandDown::Pitch},
+        };
+        for(const auto& c:cases) {
+            const ScanoutDecision d=scanout_decide(c.list,c.caps,c.force,c.dxgi,c.w,c.h,c.pitch);
+            if(d.reason!=c.reason)std::printf("case %s %ux%u: got %s\n",c.list,c.w,c.h,scanout_stand_down_text(d.reason));
+            CHECK(d.reason==c.reason);
+            CHECK(d.admitted==(c.reason==ScanoutStandDown::Admitted));
+            CHECK(std::strcmp(scanout_stand_down_text(d.reason),"unknown")!=0);
+        }
+        for(unsigned reason=0;reason<unsigned(ScanoutStandDown::Count);++reason)
+            CHECK(std::strcmp(scanout_stand_down_text(ScanoutStandDown(reason)),"unknown")!=0);
+        CHECK(!std::strcmp(scanout_stand_down_text(ScanoutStandDown::SourceGeometry),"source-geometry"));
+        // A trailer with the right header and the flag clear reads exactly as no trailer at all, which is
+        // what a start with the operator's switch off and an older kernel driver must have in common.
+        bc250_scanout_caps flagless=on;flagless.flags=0;
+        CHECK(scanout_decide(mode,flagless,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        // A null list is the same as no mode, and the mode's geometry is reported for the trace.
+        CHECK(scanout_decide(nullptr,on,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::ModeOff);
+        const ScanoutDecision named=scanout_decide(mode,on,1,bgra,1920,1200,pitch);
+        CHECK(named.mode_width==1920 && named.mode_height==1200);
+        CHECK(!scanout_decide("",on,0,bgra,1920,1200,pitch).mode_width);
+        // Every admitted decision describes a surface prepare_surface then accepts: the two are one rule.
+        AllocationRequest d;
+        CHECK(d.prepare_surface(1920,1200,pitch,D3DDDIFMT_A8R8G8B8,uint64_t(pitch)*1200,owner,false,true,true)==S_OK);
+    }
+    // (e) The adapter trailer as query_contract decodes it: the header must be whole, and anything else
+    // reads as no trailer, so a shell on an older kernel driver asks for nothing.
+    {
+        unsigned char data[BC250_SCANOUT_CAPS_TOTAL]{};
+        CHECK(!decode_scanout_caps(data,sizeof(data)).flags);
+        CHECK(!decode_scanout_caps(nullptr,sizeof(data)).flags);
+        const bc250_scanout_caps good=caps_on();
+        std::memcpy(data+BC250_SCANOUT_CAPS_OFFSET,&good,sizeof(good));
+        CHECK(decode_scanout_caps(data,sizeof(data)).flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(decode_scanout_caps(data,sizeof(data)).post_width==1920);
+        CHECK(decode_scanout_caps(data,sizeof(data)).post_height==1200);
+        // A buffer one byte short of the trailer: the kernel driver writes nothing there, and a reader
+        // that read it anyway would read another trailer's bytes.
+        CHECK(!decode_scanout_caps(data,sizeof(data)-1).flags);
+        for(unsigned field=0;field<4;++field) {
+            bc250_scanout_caps bad=good;
+            if(field==0)bad.magic=0;else if(field==1)bad.version=BC250_SCANOUT_CAPS_VERSION+1;
+            else if(field==2)bad.size=sizeof(bad)-1;else bad.post_width=0;
+            std::memcpy(data+BC250_SCANOUT_CAPS_OFFSET,&bad,sizeof(bad));
+            CHECK(!decode_scanout_caps(data,sizeof(data)).flags);
+        }
+        bc250_scanout_caps noheight=good;noheight.post_height=0;
+        std::memcpy(data+BC250_SCANOUT_CAPS_OFFSET,&noheight,sizeof(noheight));
+        CHECK(!decode_scanout_caps(data,sizeof(data)).flags);
+    }
+    // (f) The kill switch is read the way the router reads it. The value on this machine is whatever it
+    // is; what the test holds is that the read is cached and never throws.
+    {
+        const unsigned long once=scanout_force_cpu();
+        CHECK(once==scanout_force_cpu() && once==scanout_force_cpu());
+    }
+    std::printf("native allocation request: %u checks, 0 failures\n",checks);
+    std::puts("KMD parser, cache/rounding/refusal gates, shared surface records, scan-out v3 record, pitch pin, "
+              "stand-down table and the adapter scan-out trailer passed");
 }

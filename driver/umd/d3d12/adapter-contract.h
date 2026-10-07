@@ -9,8 +9,26 @@
 namespace native12 {
 struct AdapterContract {
     bc250_umd_private caps{};
+    // M15.14 increment 2: the kernel driver's start-latched answer about a client scan-out flip, from the
+    // optional trailer behind the adapter identity. Every field zero is the correct reading of three
+    // states that must behave alike - a kernel driver older than the trailer, a start whose operator
+    // switch is off, and a query that wrote less than the whole trailer - and in all three this shell
+    // must behave as 0.7.207.1 did: no scan-out request leaves it.
+    bc250_scanout_caps scanout{};
     UINT64 luid{};
 };
+// The trailer of a zero-initialized query buffer, or a zeroed structure. No success flag is needed: the
+// caller tests flags, which is zero unless every header field was right. post_width and post_height are
+// the geometry of the source mode the kernel driver admits a flip at, whatever mode that is: the shell
+// compares a chain against them and never against a size of its own.
+inline bc250_scanout_caps decode_scanout_caps(const unsigned char* data,size_t bytes) noexcept {
+    bc250_scanout_caps caps{};
+    if(!data || bytes<BC250_SCANOUT_CAPS_TOTAL)return {};
+    std::memcpy(&caps,data+BC250_SCANOUT_CAPS_OFFSET,sizeof(caps));
+    if(caps.magic!=BC250_SCANOUT_CAPS_MAGIC || caps.version!=BC250_SCANOUT_CAPS_VERSION ||
+       caps.size!=sizeof(caps) || !caps.post_width || !caps.post_height)return {};
+    return caps;
+}
 inline HRESULT query_contract(D3D12DDI_HRTADAPTER adapter,
                               PFND3DDDI_QUERYADAPTERINFOCB query,AdapterContract& output) noexcept {
     output={};
@@ -40,6 +58,9 @@ inline HRESULT query_contract(D3D12DDI_HRTADAPTER adapter,
        identity.version!=BC250_ADAPTER_IDENTITY_VERSION || identity.size!=sizeof(identity) ||
        identity.reserved)return E_NOINTERFACE;
     candidate.luid=(UINT64(identity.luid_high)<<32)|identity.luid_low;
+    // The scan-out trailer is optional and never a reason to refuse the adapter: a driver that wrote
+    // none leaves the tail of this zero-initialized buffer alone and the shell keeps its old behaviour.
+    candidate.scanout=decode_scanout_caps(data,sizeof(data));
     output=candidate;return S_OK;
 }
 }
