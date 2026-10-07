@@ -17,7 +17,9 @@ our driver refuse, and why did the refusal remove the device?
    `minidump` package. Module versions, then the stack qwords around the failing call.
 2. `tools/win/d3d12ddicap` (this commit's source, `d3d12ddicap.exe` SHA-256 A9307198, first line of the file)
    on WARP. It prints the DDI description that the runtime gives the driver for each state object.
-   `ddicap-warp.txt` is the output of all four cases.
+   `ddicap-warp.txt` is the output of all four cases. `ddicap-warp-ue426-5.txt` is the output of a later build
+   (SHA-256 C27C5B81, the source of the commit that adds this file) for the cases `ue426` and `ue426-5`. The
+   `ue426-5` link has five imports and 8 subobjects, as the failing link of trial 465.
 3. The engine-ddi harness, round trip 9 (`driver/umd/d3d12/engine-ddi/tests/test-raytracing.cpp`), with the new
    cases 7 and 7b. Three runs: the fixed `state-objects.cpp` with the pinned engine, the same with the lab's engine
    DLL 348117F1, and a control build with the `state-objects.cpp` of bc250-win 3eca5f98. `harness-raytracing.txt`
@@ -29,6 +31,7 @@ our driver refuse, and why did the refusal remove the device?
 |---|---|
 | `trial465-stack.txt` | Modules and stack qwords of the trial 465 minidump |
 | `ddicap-warp.txt` | The DDI descriptions on WARP, cases `ue426`, `ue426-hitnames`, `ue426-exportlist`, `client-collection` |
+| `ddicap-warp-ue426-5.txt` | The DDI descriptions on WARP, cases `ue426` and `ue426-5` |
 | `harness-raytracing.txt` | Harness round trip 9, fixed (pinned engine, lab engine) and control |
 | `sha256.txt` | SHA-256 of every file above |
 

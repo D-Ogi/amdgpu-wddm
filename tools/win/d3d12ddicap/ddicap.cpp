@@ -10,9 +10,15 @@
 // whose failing link had 8 subobjects. It also builds the shape of the project's own client. Console only: no window,
 // nothing resident; it exits when the cases are done.
 //
-// Usage: d3d12ddicap.exe [case...]   cases: ue426 ue426-hitnames ue426-exportlist client-collection all (default all)
+// Usage: d3d12ddicap.exe [--hardware[=<adapter substring>]] [--idle-seconds=<n>] [case...]
+//   cases: ue426 ue426-5 ue426-hitnames ue426-exportlist client-collection all (default all)
+//   --hardware: no WARP hook; the cases run on the first hardware adapter (or the first whose description holds the
+//   substring) through its own driver, and print the API results and the device removed reason only. This is the
+//   lab client of The Ascent's trial 465 (README.md).
+//   --idle-seconds: sleep that long between the collections and the link of each ue426 case.
 #include <windows.h>
 #include <d3d12.h>
+#include <cstdlib>
 #include <dxgi1_6.h>
 #include <d3d12umddi.h>
 #include <wrl/client.h>
@@ -352,9 +358,12 @@ HRESULT ue426_collection(ID3D12Device5* device, const Signatures& sig, const Ue4
     return api_create(device, what, D3D12_STATE_OBJECT_TYPE_COLLECTION, s, out);
 }
 
-// The UE 4.26 link: shader config, pipeline config, global root signature and the collections, nothing else
-// (8 subobjects with 5 collections in trial 465). export_list: each import names its exports (UE does not, INFERENCE).
-HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, bool hit_group_names, bool export_list) {
+// The UE 4.26 link: shader config, pipeline config, global root signature and the collections, nothing else.
+// Trial 465 failed on a link of 8 subobjects; five collections (five_collections) give that count (INFERENCE).
+// export_list: each import names its exports (UE does not, INFERENCE). idle_ms: a sleep between the collections and
+// the link (the game showed a modal dialog for about 9 minutes before its link).
+HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, bool hit_group_names, bool export_list,
+                   bool five_collections, DWORD idle_ms) {
     Ue426Collection rgs{{L"RGS_00000001"}, {L"MainRGS"}, g_ue426_rgs, sizeof(g_ue426_rgs), L"", L"", L"",
                         {L"RGS_00000001"}, sig.empty.Get()};
     Ue426Collection ms{{L"MS_00000002"}, {L"MainMS"}, g_ue426_ms, sizeof(g_ue426_ms), L"", L"", L"",
@@ -364,11 +373,25 @@ HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, bool hit_group_
                         hit_group_names ? std::vector<std::wstring>{L"HitGroup_00000003"}
                                         : std::vector<std::wstring>{L"CHS_00000003", L"AHS_00000003"},
                         sig.local.Get()};
-    ComPtr<ID3D12StateObject> c_rgs, c_ms, c_hit, pipeline;
+    Ue426Collection ms2{{L"MS_00000004"}, {L"MainMS"}, g_ue426_ms, sizeof(g_ue426_ms), L"", L"", L"",
+                        {L"MS_00000004"}, sig.local.Get()};
+    Ue426Collection hit2{{L"CHS_00000005", L"AHS_00000005"}, {L"MainCHS", L"MainAHS"}, g_ue426_hit, sizeof(g_ue426_hit),
+                         L"HitGroup_00000005", L"CHS_00000005", L"AHS_00000005",
+                         std::vector<std::wstring>{L"CHS_00000005", L"AHS_00000005"}, sig.local.Get()};
+    ComPtr<ID3D12StateObject> c_rgs, c_ms, c_hit, c_ms2, c_hit2, pipeline;
     HRESULT hr = ue426_collection(device, sig, rgs, "COLLECTION ue426 raygen", c_rgs);
     if (SUCCEEDED(hr)) hr = ue426_collection(device, sig, ms, "COLLECTION ue426 miss", c_ms);
     if (SUCCEEDED(hr)) hr = ue426_collection(device, sig, hit, "COLLECTION ue426 hit group", c_hit);
+    if (SUCCEEDED(hr) && five_collections) hr = ue426_collection(device, sig, ms2, "COLLECTION ue426 miss 2", c_ms2);
+    if (SUCCEEDED(hr) && five_collections)
+        hr = ue426_collection(device, sig, hit2, "COLLECTION ue426 hit group 2", c_hit2);
     if (FAILED(hr)) return hr;
+    if (idle_ms) {
+        printf("api idle %lu ms before the link\n", static_cast<unsigned long>(idle_ms));
+        Sleep(idle_ms);
+        printf("api device removed reason after the idle: %08lx\n",
+               static_cast<unsigned long>(device->GetDeviceRemovedReason()));
+    }
     D3D12_EXPORT_DESC rgs_export{L"RGS_00000001", nullptr, D3D12_EXPORT_FLAG_NONE};
     D3D12_EXPORT_DESC ms_export{L"MS_00000002", nullptr, D3D12_EXPORT_FLAG_NONE};
     D3D12_EXPORT_DESC hit_export{L"HitGroup_00000003", nullptr, D3D12_EXPORT_FLAG_NONE};
@@ -378,19 +401,26 @@ HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, bool hit_group_
     const D3D12_RAYTRACING_SHADER_CONFIG shader_config{24, 8};
     const D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};
     const D3D12_GLOBAL_ROOT_SIGNATURE global{sig.global.Get()};
-    const std::vector<D3D12_STATE_SUBOBJECT> s{
+    const D3D12_EXISTING_COLLECTION_DESC more[2]{{c_ms2.Get(), 0, nullptr}, {c_hit2.Get(), 0, nullptr}};
+    std::vector<D3D12_STATE_SUBOBJECT> s{
         {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &shader_config},
         {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_config},
         {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global},
         {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &imports[0]},
         {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &imports[1]},
         {D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &imports[2]}};
+    if (five_collections) {
+        s.push_back({D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &more[0]});
+        s.push_back({D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &more[1]});
+    }
     hr = api_create(device, "RAYTRACING_PIPELINE ue426 link", D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, s, pipeline);
     if (SUCCEEDED(hr)) {
         ComPtr<ID3D12StateObjectProperties> properties;
         pipeline.As(&properties);
-        for (LPCWSTR name : {L"RGS_00000001", L"MS_00000002", L"HitGroup_00000003"})
-            printf("api GetShaderIdentifier %ls: %s\n", name, properties && properties->GetShaderIdentifier(name) ? "found" : "null");
+        for (LPCWSTR name : {L"RGS_00000001", L"MS_00000002", L"HitGroup_00000003", L"MS_00000004", L"HitGroup_00000005"})
+            if (five_collections || wcscmp(name, L"MS_00000004") && wcscmp(name, L"HitGroup_00000005"))
+                printf("api GetShaderIdentifier %ls: %s\n", name,
+                       properties && properties->GetShaderIdentifier(name) ? "found" : "null");
     }
     return hr;
 }
@@ -427,23 +457,64 @@ HRESULT client_collection_case(ID3D12Device5* device, const Signatures& sig) {
 }
 } // namespace
 
+// The first hardware adapter, or the first whose description holds want; null when there is none.
+ComPtr<IDXGIAdapter1> hardware_adapter(IDXGIFactory4* factory, const std::wstring& want) {
+    ComPtr<IDXGIAdapter1> adapter;
+    for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+        DXGI_ADAPTER_DESC1 desc{};
+        adapter->GetDesc1(&desc);
+        if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
+        if (!want.empty() && !wcsstr(desc.Description, want.c_str())) continue;
+        printf("api adapter %u: %ls, vendor 0x%04x device 0x%04x\n", i, desc.Description, desc.VendorId, desc.DeviceId);
+        return adapter;
+    }
+    return nullptr;
+}
+
 int main(int argc, char** argv) {
     setvbuf(stdout, nullptr, _IONBF, 0);
-    if (!hook_warp()) {
+    bool hardware = false;
+    std::wstring want;
+    DWORD idle_ms = 0;
+    std::vector<std::string> cases;
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "--hardware") {
+            hardware = true;
+        } else if (!a.compare(0, 11, "--hardware=")) {
+            hardware = true;
+            want.assign(a.begin() + 11, a.end());
+        } else if (!a.compare(0, 15, "--idle-seconds=")) {
+            idle_ms = static_cast<DWORD>(std::strtoul(a.c_str() + 15, nullptr, 10) * 1000u);
+        } else {
+            cases.push_back(a);
+        }
+    }
+    if (!hardware && !hook_warp()) {
         printf("could not point WARP's OpenAdapter12 at the wrapper\n");
         return 2;
     }
     ComPtr<IDXGIFactory4> factory;
-    ComPtr<IDXGIAdapter> warp;
-    if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory))) || FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp)))) {
-        printf("no WARP adapter\n");
+    if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)))) {
+        printf("no DXGI factory\n");
+        return 2;
+    }
+    ComPtr<IDXGIAdapter> adapter;
+    if (hardware) {
+        ComPtr<IDXGIAdapter1> found = hardware_adapter(factory.Get(), want);
+        if (found) found.As(&adapter);
+    } else {
+        factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter));
+    }
+    if (!adapter) {
+        printf("no %s adapter\n", hardware ? "matching hardware" : "WARP");
         return 2;
     }
     ComPtr<ID3D12Device5> device;
-    HRESULT hr = D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
-    printf("api D3D12CreateDevice (WARP): hr %08lx, core table wrapped: %s\n", static_cast<unsigned long>(hr),
-           core_table_seen ? "yes" : "no");
-    if (FAILED(hr) || !core_table_seen) return 2;
+    HRESULT hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
+    printf("api D3D12CreateDevice (%s): hr %08lx, core table wrapped: %s\n", hardware ? "hardware" : "WARP",
+           static_cast<unsigned long>(hr), core_table_seen ? "yes" : "no");
+    if (FAILED(hr) || (!hardware && !core_table_seen)) return 2;
     D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
     device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
     printf("api RaytracingTier %d\n", static_cast<int>(options5.RaytracingTier));
@@ -454,23 +525,23 @@ int main(int argc, char** argv) {
         printf("root signatures failed\n");
         return 2;
     }
-    std::vector<std::string> cases;
-    for (int i = 1; i < argc; ++i) cases.emplace_back(argv[i]);
     if (cases.empty() || (cases.size() == 1 && cases[0] == "all"))
-        cases = {"ue426", "ue426-hitnames", "ue426-exportlist", "client-collection"};
+        cases = {"ue426", "ue426-5", "ue426-hitnames", "ue426-exportlist", "client-collection"};
     int failures = 0;
     for (const std::string& c : cases) {
         printf("== case %s\n", c.c_str());
         created.clear();        // the state objects of the previous case are gone, and their descriptions with them
-        if (c == "ue426") hr = ue426_case(device.Get(), sig, false, false);
-        else if (c == "ue426-hitnames") hr = ue426_case(device.Get(), sig, true, false);
-        else if (c == "ue426-exportlist") hr = ue426_case(device.Get(), sig, false, true);
+        if (c == "ue426") hr = ue426_case(device.Get(), sig, false, false, false, idle_ms);
+        else if (c == "ue426-5") hr = ue426_case(device.Get(), sig, false, false, true, idle_ms);
+        else if (c == "ue426-hitnames") hr = ue426_case(device.Get(), sig, true, false, false, idle_ms);
+        else if (c == "ue426-exportlist") hr = ue426_case(device.Get(), sig, false, true, false, idle_ms);
         else if (c == "client-collection") hr = client_collection_case(device.Get(), sig);
         else {
             printf("unknown case\n");
             hr = E_INVALIDARG;
         }
-        printf("== case %s: hr %08lx\n", c.c_str(), static_cast<unsigned long>(hr));
+        printf("== case %s: hr %08lx, device removed reason %08lx\n", c.c_str(), static_cast<unsigned long>(hr),
+               static_cast<unsigned long>(device->GetDeviceRemovedReason()));
         failures += FAILED(hr) ? 1 : 0;
     }
     return failures ? 1 : 0;
