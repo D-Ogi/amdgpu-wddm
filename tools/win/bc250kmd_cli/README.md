@@ -45,7 +45,8 @@ bc250kmd_cli dpm floor <MHz|off>                  a runtime clock floor; thermal
 bc250kmd_cli dpm confirm                          clears a pending DPM start (elevated)
 bc250kmd_cli interop                              the GPU DWM interop switches this start runs with, and why
 bc250kmd_cli dpaudio [state]                      DP audio: the step 0 check table, the decision a start would take
-                                                  now, and the record of the last start (driver/kmd/dpaudio.c)
+                                                  now, and the record of the last start with the stream state
+                                                  (driver/kmd/dpaudio.c, ABI 2 from 0.7.216, ABI 1 before)
 bc250kmd_cli journal [from]                       the paging journal (docs/design/paging-journal.md)
 bc250kmd_cli journal follow SECONDS [MS]          one process, one held adapter, new records every MS (default 1000)
 ```

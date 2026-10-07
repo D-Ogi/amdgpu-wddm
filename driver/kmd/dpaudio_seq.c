@@ -1,4 +1,4 @@
-// DisplayPort audio, steps 0 and 1, the part with no Windows in it (dpaudio_seq.h says what is here and why).
+// DisplayPort audio, steps 0, 1 and 2, the part with no Windows in it (dpaudio_seq.h says what is here and why).
 #define BC250_REGS_WITH_AUDIO_TABLES
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"      // field masks only; every offset and index comes from regs.generated.h
@@ -154,6 +154,9 @@ static const OBS_SLOT g_ObsSlots[BC250_DPAUDIO_OBS_COUNT] = {
     I(EP1_PIN_SENSE, 1, RESPONSE_PIN_SENSE), I(EP1_UNSOLICITED_RESPONSE, 1, UNSOLICITED_RESPONSE),
     I(EP1_WIDGET_CONTROL, 1, WIDGET_CONTROL), I(EP1_CHANNEL_SPEAKER, 1, CHANNEL_SPEAKER),
     I(EP1_AUDIO_DESCRIPTOR0, 1, AUDIO_DESCRIPTOR0), I(EP1_SINK_INFO1, 1, SINK_INFO1),
+    [BC250_DPAUDIO_OBS_REFCLK_COUNT] = { SLOT_DIRECT, 0, BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT },
+    D(DIG0_AFMT_INFOFRAME_CONTROL0, DIG0_AFMT_INFOFRAME_CONTROL0), D(DIG0_AFMT_60958_0, DIG0_AFMT_60958_0),
+    D(DIG1_AFMT_INFOFRAME_CONTROL0, DIG1_AFMT_INFOFRAME_CONTROL0), D(DIG1_AFMT_60958_0, DIG1_AFMT_60958_0),
 };
 #undef D
 #undef I
@@ -182,12 +185,14 @@ void Bc250DpAudioObserve(BC250_AZ_IO* Io, BC250_DPAUDIO_OBSERVATION* Obs)
     }
 }
 
-// ---- step 1: the decision ----------------------------------------------------------------------------------------
+// ---- steps 1 and 2: the decision ---------------------------------------------------------------------------------
 
-unsigned long Bc250DpAudioGate(int MmioMapped, unsigned long EnableDpAudio, unsigned long EnableDpAudioEndpoint)
+unsigned long Bc250DpAudioGate(int MmioMapped, unsigned long EnableDpAudio, unsigned long EnableDpAudioEndpoint,
+                               unsigned long EnableDpAudioStream)
 {
     if (EnableDpAudio != 1) return BC250_DPAUDIO_REASON_SWITCH_OFF;
     if (EnableDpAudioEndpoint != 1) return BC250_DPAUDIO_REASON_ENDPOINT_SWITCH_OFF;
+    if (EnableDpAudioStream != 1) return BC250_DPAUDIO_REASON_STREAM_SWITCH_OFF;
     if (!MmioMapped) return BC250_DPAUDIO_REASON_NO_MMIO;
     return BC250_DPAUDIO_REASON_OK;
 }
@@ -216,13 +221,14 @@ unsigned long Bc250DpAudioDecide(const BC250_DPAUDIO_OBSERVATION* Obs, BC250_DPA
 {
     const unsigned long long required = BIT(CODEC_VENDOR_DEVICE) | BIT(DC_PINSTRAPS) | BIT(DP0_VID_STREAM_CNTL) |
         BIT(DP1_VID_STREAM_CNTL) | BIT(DIG0_BE_CNTL) | BIT(DIG1_BE_CNTL) | BIT(EP0_CONFIG_DEFAULT) |
-        BIT(EP1_CONFIG_DEFAULT) | BIT(EP0_HOT_PLUG_CONTROL) | BIT(EP1_HOT_PLUG_CONTROL);
-    unsigned long n, m, streams = 0, stream = 0, e;
+        BIT(EP1_CONFIG_DEFAULT) | BIT(EP0_HOT_PLUG_CONTROL) | BIT(EP1_HOT_PLUG_CONTROL) | BIT(REFCLK_COUNT);
+    unsigned long n, m, streams = 0, stream = 0, e, refclk;
     int sst = 0;
 
     Plan->Reason = BC250_DPAUDIO_REASON_OK;
     Plan->Stream = Plan->Endpoint = 0;
     Plan->Notes = 0;
+    Plan->RefClock = Plan->DtoModule = 0;
     if ((Obs->ValidMask & required) != required) return Plan->Reason = BC250_DPAUDIO_REASON_READ_FAILED;
     if (Obs->Regs[BC250_DPAUDIO_OBS_CODEC_VENDOR_DEVICE] != BC250_DPAUDIO_CODEC_ID)
         return Plan->Reason = BC250_DPAUDIO_REASON_CODEC_ID;
@@ -253,6 +259,18 @@ unsigned long Bc250DpAudioDecide(const BC250_DPAUDIO_OBSERVATION* Obs, BC250_DPA
     if (Obs->Regs[g_ConfigSlot[e]] != BC250_DPAUDIO_CONFIG_DEFAULT ||
         Obs->Regs[g_ConfigSlot[0]] != BC250_DPAUDIO_CONFIG_DEFAULT)
         return Plan->Reason = BC250_DPAUDIO_REASON_CONFIG_DEFAULT;
+    // Step 2's own precondition: the DP reference clock the wall DTO divides. Linux takes the DTO source clock from
+    // its clock manager (dp_dto_source_clock_in_khz, adjusted for the VBIOS spread-spectrum figure); on unit A that
+    // gives 598 874 kHz and a DTO1 module of 5 988 740 (M820). This driver takes the clock the hardware counts
+    // instead: 600.000 MHz under Windows (M788), and the board does not apply that spread-spectrum reduction (M788,
+    // the community board with the same count). With Linux's module the wall clock would be 600 000 x 240 000 /
+    // 5 988 740 = 24.045 MHz, 0.19 % fast, a pitch and drift error; with the counted clock it is 24.000 MHz.
+    // Module = count (100 kHz) x 100 = kHz, x 10 as get_azalia_clock_info_dp: 6000 -> 6 000 000.
+    refclk = Obs->Regs[BC250_DPAUDIO_OBS_REFCLK_COUNT];
+    Plan->RefClock = refclk;
+    if (refclk < BC250_DPAUDIO_REFCLK_MIN || refclk > BC250_DPAUDIO_REFCLK_MAX)
+        return Plan->Reason = BC250_DPAUDIO_REASON_REFCLK;
+    Plan->DtoModule = refclk * 1000ul;
     if (VALID(Obs, HPD0_INT_STATUS) && stream == 0 && !(Obs->Regs[g_HpdSlot[0]] & g_HpdSense[0]))
         Plan->Notes |= BC250_DPAUDIO_NOTE_HPD_LOW;
     if (VALID(Obs, HPD1_INT_STATUS) && stream == 1 && !(Obs->Regs[g_HpdSlot[1]] & g_HpdSense[1]))
@@ -436,32 +454,268 @@ long Bc250DpAudioSetEnabled(BC250_AZ_IO* Io, unsigned long Endpoint, int Enable,
     return BC250_AZ_STATUS_SUCCESS;
 }
 
+// ---- step 2: the stream half ---------------------------------------------------------------------------------------
+
+// The two stream encoders share one register layout. Every field is taken from the DP0/DIG0 names; these checks make
+// the build fail if the DP1/DIG1 names of a field this file touches ever say otherwise.
+#define SAME(r0, r1, field) typedef char Bc250StreamSame_##r0##_##field[(r0##__##field##_MASK == r1##__##field##_MASK && \
+                                                                       r0##__##field##__SHIFT == r1##__##field##__SHIFT) ? 1 : -1]
+SAME(DP0_DP_SEC_CNTL, DP1_DP_SEC_CNTL, DP_SEC_STREAM_ENABLE);
+SAME(DP0_DP_SEC_CNTL, DP1_DP_SEC_CNTL, DP_SEC_ASP_ENABLE);
+SAME(DP0_DP_SEC_CNTL, DP1_DP_SEC_CNTL, DP_SEC_ATP_ENABLE);
+SAME(DP0_DP_SEC_CNTL, DP1_DP_SEC_CNTL, DP_SEC_AIP_ENABLE);
+SAME(DP0_DP_SEC_CNTL, DP1_DP_SEC_CNTL, DP_SEC_ACM_ENABLE);
+SAME(DP0_DP_SEC_AUD_N, DP1_DP_SEC_AUD_N, DP_SEC_AUD_N);
+SAME(DP0_DP_SEC_TIMESTAMP, DP1_DP_SEC_TIMESTAMP, DP_SEC_TIMESTAMP_MODE);
+SAME(DIG0_AFMT_CNTL, DIG1_AFMT_CNTL, AFMT_AUDIO_CLOCK_EN);
+SAME(DIG0_AFMT_AUDIO_SRC_CONTROL, DIG1_AFMT_AUDIO_SRC_CONTROL, AFMT_AUDIO_SRC_SELECT);
+SAME(DIG0_AFMT_AUDIO_PACKET_CONTROL, DIG1_AFMT_AUDIO_PACKET_CONTROL, AFMT_AUDIO_SAMPLE_SEND);
+SAME(DIG0_AFMT_AUDIO_PACKET_CONTROL, DIG1_AFMT_AUDIO_PACKET_CONTROL, AFMT_60958_CS_UPDATE);
+SAME(DIG0_AFMT_AUDIO_PACKET_CONTROL2, DIG1_AFMT_AUDIO_PACKET_CONTROL2, AFMT_AUDIO_LAYOUT_OVRD);
+SAME(DIG0_AFMT_AUDIO_PACKET_CONTROL2, DIG1_AFMT_AUDIO_PACKET_CONTROL2, AFMT_AUDIO_CHANNEL_ENABLE);
+SAME(DIG0_AFMT_AUDIO_PACKET_CONTROL2, DIG1_AFMT_AUDIO_PACKET_CONTROL2, AFMT_60958_OSF_OVRD);
+SAME(DIG0_AFMT_INFOFRAME_CONTROL0, DIG1_AFMT_INFOFRAME_CONTROL0, AFMT_AUDIO_INFO_UPDATE);
+SAME(DIG0_AFMT_60958_0, DIG1_AFMT_60958_0, AFMT_60958_CS_CLOCK_ACCURACY);
+#undef SAME
+
+#define SEC_STREAM DP0_DP_SEC_CNTL__DP_SEC_STREAM_ENABLE_MASK
+#define SEC_ASP DP0_DP_SEC_CNTL__DP_SEC_ASP_ENABLE_MASK
+#define SEC_ATP DP0_DP_SEC_CNTL__DP_SEC_ATP_ENABLE_MASK
+#define SEC_AIP DP0_DP_SEC_CNTL__DP_SEC_AIP_ENABLE_MASK
+#define SEC_ACM DP0_DP_SEC_CNTL__DP_SEC_ACM_ENABLE_MASK
+#define SEC_AUDIO (SEC_STREAM | SEC_ASP | SEC_ATP | SEC_AIP)
+#define PKT_SAMPLE_SEND DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND_MASK
+#define PKT_CS_UPDATE DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_60958_CS_UPDATE_MASK
+#define PKT2_LAYOUT_OVRD DIG0_AFMT_AUDIO_PACKET_CONTROL2__AFMT_AUDIO_LAYOUT_OVRD_MASK
+#define PKT2_CHANNELS DIG0_AFMT_AUDIO_PACKET_CONTROL2__AFMT_AUDIO_CHANNEL_ENABLE_MASK
+#define PKT2_OSF_OVRD DIG0_AFMT_AUDIO_PACKET_CONTROL2__AFMT_60958_OSF_OVRD_MASK
+#define AFMT_CLOCK_EN DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN_MASK
+#define DTO_SEL DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL_MASK
+#define DTO_512FBR DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO2_USE_512FBR_DTO_MASK
+#define ALL 0xFFFFFFFFul
+#define FIELD(reg, field, x) (((unsigned long)(x) << reg##__##field##__SHIFT) & reg##__##field##_MASK)
+
+// Linux's values (dcn10_stream_encoder.c:1055-1056, enc1_se_setup_dp_audio): the default Maud/N of the ATP, and the
+// timestamp mode in which the encoder computes the audio timestamps itself.
+#define AUD_N_DEFAULT 0x8000ul
+#define TIMESTAMP_AUTO_CALC 1ul
+// speakers_to_channels (dcn10_stream_encoder.c:1129-1161) for the fixed FL/FR allocation of step 1: FL and FR, the
+// two lowest channel bits.
+#define CHANNELS_FL_FR 0x03ul
+
+typedef struct _STREAM_REGS {
+    unsigned long SecCntl, AudN, Timestamp, AfmtCntl, SrcControl, Packet, Packet2, Infoframe0, Cs0;
+} STREAM_REGS;
+#define STREAM_REGS_OF(dp, dig) { BC250_REG_DMU_##dp##_DP_SEC_CNTL, BC250_REG_DMU_##dp##_DP_SEC_AUD_N, \
+    BC250_REG_DMU_##dp##_DP_SEC_TIMESTAMP, BC250_REG_DMU_##dig##_AFMT_CNTL, BC250_REG_DMU_##dig##_AFMT_AUDIO_SRC_CONTROL, \
+    BC250_REG_DMU_##dig##_AFMT_AUDIO_PACKET_CONTROL, BC250_REG_DMU_##dig##_AFMT_AUDIO_PACKET_CONTROL2, \
+    BC250_REG_DMU_##dig##_AFMT_INFOFRAME_CONTROL0, BC250_REG_DMU_##dig##_AFMT_60958_0 }
+static const STREAM_REGS g_StreamRegs[BC250_DPAUDIO_STREAMS] = { STREAM_REGS_OF(DP0, DIG0), STREAM_REGS_OF(DP1, DIG1) };
+#undef STREAM_REGS_OF
+
+static void ClearStream(BC250_DPAUDIO_STREAM_RESULT* Result)
+{
+    Result->Step = BC250_DPAUDIO_STEP_NONE;
+    Result->Status = BC250_AZ_STATUS_SUCCESS;
+    Result->MismatchOffset = Result->MismatchExpected = Result->MismatchActual = Result->Writes = 0;
+    Result->DtoSource = Result->DtoModule = Result->DtoPhase = Result->AfmtCntl = Result->SrcControl = 0;
+    Result->PacketControl = Result->PacketControl2 = Result->SecCntl = Result->AudN = Result->Timestamp = 0;
+}
+
+// One step: read, change the bits of Mask only, write, read back. Check holds the named bits whose read-back must
+// equal what was written: the fields of the step and of earlier steps on the same register, without the update
+// strobes (AFMT_60958_CS_UPDATE, AFMT_AUDIO_INFO_UPDATE), whose read-back nothing documents. ReadBack, when given,
+// receives the read-back. The first failure of a sequence is kept in Step, Status and the Mismatch fields.
+static long Rmw(BC250_AZ_IO* Io, BC250_DPAUDIO_STREAM_RESULT* Result, unsigned long Step, unsigned long Offset,
+                unsigned long Mask, unsigned long Value, unsigned long Check, unsigned long* ReadBack)
+{
+    unsigned long old = 0, want = 0, got = 0;
+    long status = Bc250AzRead(Io, Offset, &old);
+
+    if (status >= 0) {
+        want = (old & ~Mask) | (Value & Mask);
+        status = Bc250AzWrite(Io, Offset, want);
+    }
+    if (status >= 0) {
+        Result->Writes++;
+        status = Bc250AzRead(Io, Offset, &got);
+    }
+    if (status >= 0) {
+        if (ReadBack != 0) *ReadBack = got;
+        if (((got ^ want) & Check) != 0) status = BC250_AZ_STATUS_MISMATCH;
+    }
+    if (status < 0 && Result->Step == BC250_DPAUDIO_STEP_NONE) {
+        Result->Step = Step;
+        Result->Status = status;
+        if (status == BC250_AZ_STATUS_MISMATCH) {
+            Result->MismatchOffset = Offset;
+            Result->MismatchExpected = want & Check;
+            Result->MismatchActual = got & Check;
+        }
+    }
+    return status;
+}
+
+#define STEP(step, offset, mask, value, check, readback) \
+    do { status = Rmw(Io, Result, BC250_DPAUDIO_STEP_##step, (offset), (mask), (value), (check), (readback)); \
+         if (status < 0) return status; } while (0)
+
+// The enable, in this order:
+//   1. The wall DTO, dce_aud_wall_dto_setup's DP branch (dce_audio.c:1113-1148) in its order: DTO_SEL 1 (DTO1),
+//      DTO1 module and phase, then DTO2_USE_512FBR_DTO 1. DCCG_AUDIO_DTO_SOURCE is shared by every audio stream; only
+//      its two named fields change.
+//   2. The AFMT audio clock (enc1_se_enable_audio_clock). Linux does not wait for AFMT_AUDIO_CLOCK_ON ("does not
+//      work well", dcn10_stream_encoder.c:1376-1384); the read-back records it, the check is on CLOCK_EN alone.
+//   3. enc1_se_audio_setup: the source select (Azalia endpoint -> this DIG) and the channel enable.
+//   4. enc1_se_setup_dp_audio: AUD_N, the timestamp mode, CS_UPDATE, the layout and OSF overrides 0,
+//      AUDIO_INFO_UPDATE, CS_CLOCK_ACCURACY 0. Linux writes AUD_N, the timestamp and the source select whole
+//      (REG_SET); this file changes only their named fields, so a bit the firmware set beside them stays.
+//   5. enc1_se_enable_dp_audio: ASP, then ATP and AIP, then DP_SEC_STREAM_ENABLE last ("after all the other
+//      enables"). DP_SEC_CNTL is live on the main link: only these four bits change, the GSP and MPG bits stay.
+//   6. enc1_se_audio_mute_control(false): AFMT_AUDIO_SAMPLE_SEND 1.
+// Linux runs 1 at the context apply, 3 at the stream's setup, 2, 4, 5, 6 at enable_audio_packet; the order of the
+// writes inside each function is Linux's, and 1 comes before everything as there.
+long Bc250DpAudioStreamEnable(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, unsigned long DtoModule,
+                              BC250_DPAUDIO_STREAM_RESULT* Result)
+{
+    const STREAM_REGS* r;
+    long status;
+
+    ClearStream(Result);
+    if (Stream >= BC250_DPAUDIO_STREAMS || Endpoint >= BC250_DPAUDIO_ENDPOINTS) {
+        Io->Refusals++;
+        Result->Status = BC250_AZ_STATUS_INVALID_PARAMETER;
+        return Result->Status;
+    }
+    r = &g_StreamRegs[Stream];
+    STEP(DTO_SELECT, BC250_REG_DMU_DCCG_AUDIO_DTO_SOURCE, DTO_SEL, FIELD(DCCG_AUDIO_DTO_SOURCE, DCCG_AUDIO_DTO_SEL, 1),
+         DTO_SEL, &Result->DtoSource);
+    STEP(DTO1_MODULE, BC250_REG_DMU_DCCG_AUDIO_DTO1_MODULE, ALL, DtoModule, ALL, &Result->DtoModule);
+    STEP(DTO1_PHASE, BC250_REG_DMU_DCCG_AUDIO_DTO1_PHASE, ALL, BC250_DPAUDIO_DTO1_PHASE, ALL, &Result->DtoPhase);
+    STEP(DTO_512FBR, BC250_REG_DMU_DCCG_AUDIO_DTO_SOURCE, DTO_512FBR, DTO_512FBR, DTO_SEL | DTO_512FBR, &Result->DtoSource);
+    STEP(AFMT_CLOCK_ON, r->AfmtCntl, AFMT_CLOCK_EN, AFMT_CLOCK_EN, AFMT_CLOCK_EN, &Result->AfmtCntl);
+    STEP(SRC_SELECT, r->SrcControl, DIG0_AFMT_AUDIO_SRC_CONTROL__AFMT_AUDIO_SRC_SELECT_MASK,
+         FIELD(DIG0_AFMT_AUDIO_SRC_CONTROL, AFMT_AUDIO_SRC_SELECT, Endpoint),
+         DIG0_AFMT_AUDIO_SRC_CONTROL__AFMT_AUDIO_SRC_SELECT_MASK, &Result->SrcControl);
+    STEP(CHANNEL_ENABLE, r->Packet2, PKT2_CHANNELS, FIELD(DIG0_AFMT_AUDIO_PACKET_CONTROL2, AFMT_AUDIO_CHANNEL_ENABLE,
+         CHANNELS_FL_FR), PKT2_CHANNELS, &Result->PacketControl2);
+    STEP(AUD_N, r->AudN, DP0_DP_SEC_AUD_N__DP_SEC_AUD_N_MASK, FIELD(DP0_DP_SEC_AUD_N, DP_SEC_AUD_N, AUD_N_DEFAULT),
+         DP0_DP_SEC_AUD_N__DP_SEC_AUD_N_MASK, &Result->AudN);
+    STEP(TIMESTAMP, r->Timestamp, DP0_DP_SEC_TIMESTAMP__DP_SEC_TIMESTAMP_MODE_MASK,
+         FIELD(DP0_DP_SEC_TIMESTAMP, DP_SEC_TIMESTAMP_MODE, TIMESTAMP_AUTO_CALC),
+         DP0_DP_SEC_TIMESTAMP__DP_SEC_TIMESTAMP_MODE_MASK, &Result->Timestamp);
+    STEP(CS_UPDATE, r->Packet, PKT_CS_UPDATE, PKT_CS_UPDATE, 0, &Result->PacketControl);
+    STEP(LAYOUT_OVRD, r->Packet2, PKT2_LAYOUT_OVRD | PKT2_OSF_OVRD, 0, PKT2_LAYOUT_OVRD | PKT2_OSF_OVRD | PKT2_CHANNELS,
+         &Result->PacketControl2);
+    STEP(INFO_UPDATE, r->Infoframe0, DIG0_AFMT_INFOFRAME_CONTROL0__AFMT_AUDIO_INFO_UPDATE_MASK,
+         DIG0_AFMT_INFOFRAME_CONTROL0__AFMT_AUDIO_INFO_UPDATE_MASK, 0, 0);
+    STEP(CLOCK_ACCURACY, r->Cs0, DIG0_AFMT_60958_0__AFMT_60958_CS_CLOCK_ACCURACY_MASK, 0,
+         DIG0_AFMT_60958_0__AFMT_60958_CS_CLOCK_ACCURACY_MASK, 0);
+    STEP(SEC_ASP_ON, r->SecCntl, SEC_ASP, SEC_ASP, SEC_ASP, &Result->SecCntl);
+    STEP(SEC_ATP_AIP_ON, r->SecCntl, SEC_ATP | SEC_AIP, SEC_ATP | SEC_AIP, SEC_ASP | SEC_ATP | SEC_AIP, &Result->SecCntl);
+    STEP(SEC_STREAM_ON, r->SecCntl, SEC_STREAM, SEC_STREAM, SEC_AUDIO, &Result->SecCntl);
+    STEP(SAMPLE_SEND_ON, r->Packet, PKT_SAMPLE_SEND, PKT_SAMPLE_SEND, PKT_SAMPLE_SEND, &Result->PacketControl);
+    return BC250_AZ_STATUS_SUCCESS;
+}
+#undef STEP
+
+// The disable, the enable's reverse: enc1_se_audio_mute_control(true) first (disable_dio_audio_packet), then
+// enc1_se_dp_audio_disable: the DP_SEC audio bits (Linux clears ASP, ATP, AIP, ACM and STREAM_ENABLE in one write;
+// here STREAM_ENABLE goes first and alone, then ATP and AIP, then ASP and ACM, the enable order reversed), and
+// Linux's rule after it: DP_SEC_CNTL is shared with the info frames, so STREAM_ENABLE goes back to 1 when any other
+// bit is still set. Then the AFMT audio clock off. Every step runs whatever an earlier one did, so a failed write
+// cannot leave the packets on. The DTO, the source select, the channel enable, AUD_N and the timestamp mode stay as
+// the enable left them, as in Linux, whose disable path does not touch them: the DTO is a clock that drives no pin
+// and no video, and the rest has no effect while the packets are off.
+long Bc250DpAudioStreamDisable(BC250_AZ_IO* Io, unsigned long Stream, BC250_DPAUDIO_STREAM_RESULT* Result)
+{
+    const STREAM_REGS* r;
+    unsigned long sec = 0;
+
+    ClearStream(Result);
+    if (Stream >= BC250_DPAUDIO_STREAMS) {
+        Io->Refusals++;
+        Result->Status = BC250_AZ_STATUS_INVALID_PARAMETER;
+        return Result->Status;
+    }
+    r = &g_StreamRegs[Stream];
+    (void)Rmw(Io, Result, BC250_DPAUDIO_STEP_SAMPLE_SEND_OFF, r->Packet, PKT_SAMPLE_SEND, 0, PKT_SAMPLE_SEND,
+              &Result->PacketControl);
+    (void)Rmw(Io, Result, BC250_DPAUDIO_STEP_SEC_STREAM_OFF, r->SecCntl, SEC_STREAM, 0, SEC_STREAM, &Result->SecCntl);
+    (void)Rmw(Io, Result, BC250_DPAUDIO_STEP_SEC_ATP_AIP_OFF, r->SecCntl, SEC_ATP | SEC_AIP, 0, SEC_STREAM | SEC_ATP | SEC_AIP,
+              &Result->SecCntl);
+    if (Rmw(Io, Result, BC250_DPAUDIO_STEP_SEC_ASP_OFF, r->SecCntl, SEC_ASP | SEC_ACM, 0, SEC_AUDIO | SEC_ACM, &sec) >= 0) {
+        Result->SecCntl = sec;
+        if (sec != 0)
+            (void)Rmw(Io, Result, BC250_DPAUDIO_STEP_SEC_STREAM_KEEP, r->SecCntl, SEC_STREAM, SEC_STREAM, SEC_STREAM,
+                      &Result->SecCntl);
+    }
+    (void)Rmw(Io, Result, BC250_DPAUDIO_STEP_AFMT_CLOCK_OFF, r->AfmtCntl, AFMT_CLOCK_EN, 0, AFMT_CLOCK_EN, &Result->AfmtCntl);
+    // Read only: what the DTO source select holds now, for the record.
+    if (Bc250AzRead(Io, BC250_REG_DMU_DCCG_AUDIO_DTO_SOURCE, &Result->DtoSource) < 0) Result->DtoSource = 0;
+    return Result->Status;
+}
+
+long Bc250DpAudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, int StreamWritten,
+                              int EndpointWritten, BC250_DPAUDIO_STOP* Stop)
+{
+    ClearStream(&Stop->Stream);
+    Stop->Endpoint.HotPlugBefore = Stop->Endpoint.HotPlugAfter = Stop->Endpoint.SizeRates = 0;
+    Stop->Endpoint.PowerStates = Stop->Endpoint.Writes = 0;
+    Stop->StreamStatus = Stop->EndpointStatus = BC250_AZ_STATUS_SUCCESS;
+    if (StreamWritten) Stop->StreamStatus = Bc250DpAudioStreamDisable(Io, Stream, &Stop->Stream);
+    if (EndpointWritten) Stop->EndpointStatus = Bc250DpAudioSetEnabled(Io, Endpoint, 0, &Stop->Endpoint);
+    return Stop->StreamStatus < 0 ? Stop->StreamStatus : Stop->EndpointStatus;
+}
+
+// The order of the groups. Linux enables the endpoint (az_enable) before the packets (dce110_enable_audio_stream).
+// This driver sets AUDIO_ENABLED last instead: AUDIO_ENABLED is what the HD Audio side sees as a plugged sink, and
+// the class driver may open a stream at once. With it last, Windows never sees an endpoint whose wall clock and DP
+// packets are not running yet, and a failure anywhere before it leaves no endpoint at all. The stop sequence is the
+// exact reverse, as Linux's disable is (packets off, then az_disable).
 unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run)
 {
     unsigned long reason;
     long status;
 
-    Run->Groups = Run->Wrote = 0;
-    Run->Status = Run->ClearStatus = BC250_AZ_STATUS_SUCCESS;
-    Run->Init.Writes = Run->Config.Writes = Run->Enable.Writes = Run->Clear.Writes = 0;
+    Run->Groups = Run->Wrote = Run->StreamWrote = 0;
+    Run->Status = Run->UndoStatus = BC250_AZ_STATUS_SUCCESS;
+    Run->Init.Writes = Run->Config.Writes = Run->Enable.Writes = 0;
+    ClearStream(&Run->Stream);
+    ClearStream(&Run->Undo.Stream);
+    Run->Undo.Endpoint.Writes = 0;
+    Run->Undo.StreamStatus = Run->Undo.EndpointStatus = BC250_AZ_STATUS_SUCCESS;
     Bc250DpAudioObserve(Io, &Run->Obs);
     reason = Bc250DpAudioDecide(&Run->Obs, &Run->Plan);
     if (reason != BC250_DPAUDIO_REASON_OK) return reason;
     Run->Wrote = 1;
     status = Bc250DpAudioHwInit(Io, &Run->Init);
     if (status >= 0) { Run->Groups = 1; status = Bc250DpAudioConfigure(Io, Run->Plan.Endpoint, &Run->Config); }
-    if (status >= 0) { Run->Groups = 2; status = Bc250DpAudioSetEnabled(Io, Run->Plan.Endpoint, 1, &Run->Enable); }
-    if (status >= 0) { Run->Groups = 3; return BC250_DPAUDIO_REASON_OK; }
-    // Leave silence behind, whatever group failed: dce_aud_az_disable on the chosen endpoint.
+    if (status >= 0) {
+        Run->Groups = 2;
+        Run->StreamWrote = 1;
+        status = Bc250DpAudioStreamEnable(Io, Run->Plan.Stream, Run->Plan.Endpoint, Run->Plan.DtoModule, &Run->Stream);
+    }
+    if (status >= 0) { Run->Groups = 3; status = Bc250DpAudioSetEnabled(Io, Run->Plan.Endpoint, 1, &Run->Enable); }
+    if (status >= 0) { Run->Groups = 4; return BC250_DPAUDIO_REASON_OK; }
+    // Leave silence behind, whatever group failed: the stream off if its group began, AUDIO_ENABLED 0. A failed
+    // AUDIO_ENABLED write turns the stream off as well: packets with no endpoint behind them serve nobody.
     Run->Status = status;
-    Run->ClearStatus = Bc250DpAudioSetEnabled(Io, Run->Plan.Endpoint, 0, &Run->Clear);
-    return BC250_DPAUDIO_REASON_WRITE_FAILED;
+    Run->UndoStatus = Bc250DpAudioStopSequence(Io, Run->Plan.Stream, Run->Plan.Endpoint, (int)Run->StreamWrote, 1, &Run->Undo);
+    return status == BC250_AZ_STATUS_MISMATCH ? BC250_DPAUDIO_REASON_STREAM_MISMATCH : BC250_DPAUDIO_REASON_WRITE_FAILED;
 }
 
 #define BC250_DPAUDIO_REASON_TEXT(n, t) t,
 static const char* const g_ReasonText[BC250_DPAUDIO_REASON_COUNT] = { BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_TEXT) };
+#define BC250_DPAUDIO_STEP_TEXT(n) #n,
+static const char* const g_StepText[BC250_DPAUDIO_STEP_COUNT] = { BC250_DPAUDIO_STEP_LIST(BC250_DPAUDIO_STEP_TEXT) };
 
 const char* Bc250DpAudioReasonText(unsigned long Reason)
 {
     return Reason < BC250_DPAUDIO_REASON_COUNT ? g_ReasonText[Reason] : "unknown reason";
+}
+
+const char* Bc250DpAudioStepText(unsigned long Step)
+{
+    return Step < BC250_DPAUDIO_STEP_COUNT ? g_StepText[Step] : "unknown step";
 }

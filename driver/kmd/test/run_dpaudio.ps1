@@ -1,4 +1,4 @@
-# Host test for DisplayPort audio steps 0 and 1: driver\kmd\dpaudio_seq.c, the register half the miniport links,
+# Host test for DisplayPort audio steps 0, 1 and 2: driver\kmd\dpaudio_seq.c, the register half the miniport links,
 # compiled as it is and driven against a fake register file (dpaudio_test.c says what it proves).
 #
 #   pwsh driver\kmd\test\run_dpaudio.ps1

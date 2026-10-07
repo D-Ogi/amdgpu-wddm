@@ -3470,12 +3470,14 @@ static int Interop(void)
 
 // ---- ---------------------------------------------------------------------------------------------------------
 
-// ---- dpaudio: DisplayPort audio, steps 0 and 1 (BC250_ESCAPE_RUN_DPAUDIO, driver/kmd/dpaudio.c) -------------------
+// ---- dpaudio: DisplayPort audio, steps 0 to 2 (BC250_ESCAPE_RUN_DPAUDIO, driver/kmd/dpaudio.c) -------------------
 //
 // "bc250kmd_cli dpaudio" reads the step 0 registers now (OBSERVE) and prints the check table, the decision a start
 // would take over them (the driver's own Bc250DpAudioDecide, not a copy of it here), the raw slots and the record
 // of the last start. "bc250kmd_cli dpaudio state" prints the record alone and reads no register. Expected values
-// are unit A's under Linux (facts M819, M820, evidence/linux/2026-10-07-L1007-dp-audio).
+// are unit A's under Linux (facts M819, M820, evidence/linux/2026-10-07-L1007-dp-audio). The CLI asks with ABI 2
+// (the stream record of step 2, KMD 0.7.216) and asks again with the ABI 1 prefix when an older driver refuses the
+// size, so it reads 0.7.215 as well.
 
 static const char *const g_DpAudioSlot[] = {
 #define BC250_DPAUDIO_SLOT_NAME(n) #n,
@@ -3488,6 +3490,12 @@ static const char *const g_DpAudioReason[] = {
 #undef BC250_DPAUDIO_REASON_NAME
 };
 static const char *const g_DpAudioState[] = { "idle", "enabled", "refused", "failed", "stopped", "path-off" };
+static const char *const g_DpAudioStreamState[] = { "off", "on", "undone" };
+static const char *const g_DpAudioStep[] = {
+#define BC250_DPAUDIO_STEP_NAME(n) #n,
+    BC250_DPAUDIO_STEP_LIST(BC250_DPAUDIO_STEP_NAME)
+#undef BC250_DPAUDIO_STEP_NAME
+};
 
 static const char *DpAudioReasonText(unsigned long reason)
 {
@@ -3590,10 +3598,16 @@ static void DpAudioPrintObserve(const BC250_ESCAPE_DPAUDIO *d)
                FIELD(pkt, DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND_MASK,
                      DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND__SHIFT));
     }
-    printf("  DCCG_AUDIO_DTO_SOURCE 0x%08lX (DTO_SEL %lu); DTO0 %lu/%lu; DTO1 %lu/%lu (Linux DP: DTO1 module 5988740)\n",
+    printf("  DCCG_AUDIO_DTO_SOURCE 0x%08lX (DTO_SEL %lu); DTO0 %lu/%lu; DTO1 %lu/%lu\n",
            DPA(DTO_SOURCE), FIELD(DPA(DTO_SOURCE), DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL_MASK,
                                   DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL__SHIFT),
            DPA(DTO0_PHASE), DPA(DTO0_MODULE), DPA(DTO1_PHASE), DPA(DTO1_MODULE));
+    // Step 2 sets the DTO1 module from this counter (100 kHz units, x 1000); Linux takes the clock manager's
+    // spread-spectrum-adjusted figure instead, 5988740 on unit A, which the counter does not show (M788).
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "%lu.%lu MHz, DTO1 module %lu", DPA(REFCLK_COUNT) / 10,
+                DPA(REFCLK_COUNT) % 10, DPA(REFCLK_COUNT) * 1000ul);
+    DpAudioCheck("CLK4_CLK2_CURRENT_CNT", DPA_OK(REFCLK_COUNT), DPA(REFCLK_COUNT), "5000..7000",
+                 DPA(REFCLK_COUNT) >= 5000 && DPA(REFCLK_COUNT) <= 7000, detail);
     DpAudioNotes(d->ObsNotes, notes, sizeof(notes));
     printf("decision now (the driver's Bc250DpAudioDecide over these reads): %s; stream DP%lu, endpoint %lu, notes %s\n",
            DpAudioReasonText(d->ObsReason), d->ObsStream, d->ObsEndpoint, notes);
@@ -3604,13 +3618,13 @@ static void DpAudioPrintObserve(const BC250_ESCAPE_DPAUDIO *d)
     }
 }
 
-static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d)
+static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi2)
 {
-    char notes[96], sw[2][16];
+    char notes[96], sw[3][16];
     unsigned long i;
-    const unsigned long sws[2] = { d->SwitchEnable, d->SwitchEndpoint };
+    const unsigned long sws[3] = { d->SwitchEnable, d->SwitchEndpoint, abi2 ? d->SwitchStream : BC250_DPAUDIO_NO_SWITCH };
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 3; i++) {
         if (sws[i] == BC250_DPAUDIO_NO_SWITCH) strcpy_s(sw[i], sizeof(sw[i]), "not read yet");
         else _snprintf_s(sw[i], sizeof(sw[i]), _TRUNCATE, "%lu", sws[i]);
     }
@@ -3619,29 +3633,51 @@ static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d)
     printf("  state %s, reason: %s\n", d->State < sizeof(g_DpAudioState) / sizeof(g_DpAudioState[0]) ?
            g_DpAudioState[d->State] : "?", DpAudioReasonText(d->Reason));
     printf("  stream DP%lu, endpoint %lu, notes %s\n", d->Stream, d->Endpoint, notes);
-    printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s (default 1)\n", sw[0], sw[1]);
+    if (abi2) printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s, EnableDpAudioStream %s (default 1)\n",
+                     sw[0], sw[1], sw[2]);
+    else printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s (default 1)\n", sw[0], sw[1]);
     printf("  codec 0x%08lX, config default 0x%08lX, HOT_PLUG_CONTROL 0x%08lX -> 0x%08lX, last NTSTATUS 0x%08lX\n",
            d->CodecId, d->ConfigDefault, d->HotPlugBefore, d->HotPlugAfter, d->LastStatus);
     printf("  starts %lu resumes %lu stops %lu refusals %lu failures %lu path-on %lu path-off %lu\n",
            d->Starts, d->Resumes, d->Stops, d->Refusals, d->Failures, d->PathOn, d->PathOff);
     printf("  accesses: indirect reads %lu, indirect writes %lu, direct writes %lu, refused by the tables %lu\n",
            d->IndirectReads, d->IndirectWrites, d->DirectWrites, d->AccessRefusals);
+    if (!abi2) { printf("  stream: not reported (driver before 0.7.216, DP audio ABI 1)\n"); return; }
+    printf("  stream %s, step %s, NTSTATUS 0x%08lX; on %lu off %lu undone %lu\n",
+           d->StreamState < sizeof(g_DpAudioStreamState) / sizeof(g_DpAudioStreamState[0]) ?
+           g_DpAudioStreamState[d->StreamState] : "?",
+           d->StreamStep < BC250_DPAUDIO_STEP_COUNT ? g_DpAudioStep[d->StreamStep] : "?", (unsigned long)d->StreamStatus,
+           d->StreamOn, d->StreamOff, d->StreamUndos);
+    printf("  reference clock %lu (100 kHz units), DTO1 module %lu phase %lu, DTO_SOURCE 0x%08lX\n",
+           d->RefClockCount, d->DtoModule, d->DtoPhase, d->DtoSource);
+    printf("  read back: DP_SEC_CNTL 0x%08lX AFMT_CNTL 0x%08lX PACKET_CONTROL 0x%08lX PACKET_CONTROL2 0x%08lX\n",
+           d->SecCntl, d->AfmtCntl, d->PacketControl, d->PacketControl2);
+    if (d->MismatchOffset)
+        printf("  mismatch at 0x%05lX: wrote 0x%08lX, read 0x%08lX\n", d->MismatchOffset, d->MismatchExpected,
+               d->MismatchActual);
 }
 
 static int DpAudio(int argc, WCHAR **argv)
 {
     static BC250_ESCAPE_DPAUDIO d;
     unsigned long op = BC250_DPAUDIO_OP_OBSERVE;
-    NTSTATUS status;
+    NTSTATUS status = 0;
+    int abi2;
+    typedef char DpAudioAbiSizeCheck[(sizeof(BC250_ESCAPE_DPAUDIO) == 480 && BC250_DPAUDIO_ABI1_SIZE == 408) ? 1 : -1];
+    (void)sizeof(DpAudioAbiSizeCheck);
 
     if (argc == 3 && !_wcsicmp(argv[2], L"state")) op = BC250_DPAUDIO_OP_STATE;
     else if (argc != 2) { fprintf(stderr, "usage: bc250kmd_cli dpaudio [state]\n"); return 2; }
-    memset(&d, 0, sizeof(d));
-    d.Magic = BC250_ESCAPE_MAGIC;
-    d.Command = BC250_ESCAPE_RUN_DPAUDIO;
-    d.AbiVersion = BC250_DPAUDIO_ABI;
-    d.Op = op;
-    if (SendEscape(BC250_DEFAULT_HWID, &d, sizeof(d), &status)) return 1;
+    for (abi2 = 1; abi2 >= 0; abi2--) {
+        memset(&d, 0, sizeof(d));
+        d.Magic = BC250_ESCAPE_MAGIC;
+        d.Command = BC250_ESCAPE_RUN_DPAUDIO;
+        d.AbiVersion = abi2 ? BC250_DPAUDIO_ABI : BC250_DPAUDIO_ABI_1;
+        d.Op = op;
+        if (SendEscape(BC250_DEFAULT_HWID, &d, abi2 ? (unsigned)sizeof(d) : BC250_DPAUDIO_ABI1_SIZE, &status)) return 1;
+        // A driver before 0.7.216 takes only the 408-byte ABI 1 record and refuses the size.
+        if (!(abi2 && status == (NTSTATUS)0xC000000Dl)) break;
+    }
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
     if (d.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
     if (d.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND || d.Command != BC250_ESCAPE_RUN_DPAUDIO) {
@@ -3652,7 +3688,8 @@ static int DpAudio(int argc, WCHAR **argv)
            d.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", d.NtStatus, StatusName((NTSTATUS)d.NtStatus),
            d.Version, (d.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "not mapped (EnableMmio)");
     if (op == BC250_DPAUDIO_OP_OBSERVE && d.ValidMask) DpAudioPrintObserve(&d);
-    if (d.AbiVersion == BC250_DPAUDIO_ABI) DpAudioPrintState(&d);
+    if (abi2 && d.AbiVersion == BC250_DPAUDIO_ABI) DpAudioPrintState(&d, 1);
+    else if (!abi2 && d.AbiVersion == BC250_DPAUDIO_ABI_1) DpAudioPrintState(&d, 0);
     return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 #undef DPA

@@ -1,4 +1,4 @@
-// DisplayPort audio as the miniport keeps it (dpaudio.c): steps 0 and 1 of the DP audio work. The register side
+// DisplayPort audio as the miniport keeps it (dpaudio.c): steps 0, 1 and 2 of the DP audio work. The register side
 // with no Windows in it is dpaudio_seq.c. Included by bc250kmd.h after the WDK headers.
 #pragma once
 
@@ -10,12 +10,21 @@ typedef struct _BC250_DPAUDIO {
     ULONG Reason;                           // enum bc250_dpaudio_reason
     ULONG Notes;                            // BC250_DPAUDIO_NOTE_*
     ULONG Endpoint, Stream;
-    ULONG SwitchEnable, SwitchEndpoint;     // as the last start read them, BC250_DPAUDIO_NO_SWITCH before
+    ULONG SwitchEnable, SwitchEndpoint, SwitchStream;   // as the last start read them, BC250_DPAUDIO_NO_SWITCH before
     ULONG Starts, Resumes, Stops, Refusals, Failures, PathOn, PathOff;
     ULONG IndirectReads, IndirectWrites, DirectWrites, AccessRefusals;
     ULONG CodecId, ConfigDefault, HotPlugBefore, HotPlugAfter;
     LONG LastStatus;
+    // Step 2, the stream half (BC250_ESCAPE_DPAUDIO ABI 2 fields of the same names).
+    ULONG StreamState;                      // BC250_DPAUDIO_STREAM_*
+    ULONG StreamStep;                       // enum bc250_dpaudio_step
+    LONG StreamStatus;
+    ULONG RefClockCount, DtoModule, DtoPhase;
+    ULONG MismatchOffset, MismatchExpected, MismatchActual;
+    ULONG DtoSource, SecCntl, AfmtCntl, PacketControl, PacketControl2;
+    ULONG StreamOn, StreamOff, StreamUndos;
     BOOLEAN Written;                        // this start wrote the endpoint: the stop path must clear AUDIO_ENABLED
+    BOOLEAN StreamWritten;                  // the stream is on: the stop path must turn it off first
 } BC250_DPAUDIO;
 
 struct _BC250_DEVICE;
@@ -25,4 +34,6 @@ void DpAudioStart(struct _BC250_DEVICE* Device);                        // Start
 void DpAudioResume(struct _BC250_DEVICE* Device);                       // back in D0
 void DpAudioStop(struct _BC250_DEVICE* Device);                         // StopDevice before WddmStop/DcnStop; D3
 void DpAudioPathPower(struct _BC250_DEVICE* Device, BOOLEAN On);        // CommitVidPn path power transition
-void DpAudioRequest(struct _BC250_DEVICE* Device, struct _BC250_ESCAPE_DPAUDIO* Data, BOOLEAN Admin, ULONG EscapeFlags);
+// Size: BC250_DPAUDIO_ABI1_SIZE or sizeof(BC250_ESCAPE_DPAUDIO), checked by display.c; nothing past it is touched.
+void DpAudioRequest(struct _BC250_DEVICE* Device, struct _BC250_ESCAPE_DPAUDIO* Data, ULONG Size, BOOLEAN Admin,
+                    ULONG EscapeFlags);

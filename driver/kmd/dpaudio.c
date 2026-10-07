@@ -1,31 +1,48 @@
-// DisplayPort audio, steps 0 and 1: the Azalia endpoint of the DP stream the firmware (GOP) left running is made
-// present to the HD Audio side, so that Windows' inbox HDA class driver can see a DP sink. The register work is
-// dpaudio_seq.c (Linux amdgpu's dce_audio.c sequences, checked accessors, no Windows); this file is its owner in
-// the miniport: switches, lock, record, log, entry points and the escape.
+// DisplayPort audio, steps 0, 1 and 2: the Azalia endpoint of the DP stream the firmware (GOP) left running is made
+// present to the HD Audio side, so that Windows' inbox HDA class driver can see a DP sink, and that stream carries
+// the audio: the 24 MHz wall clock (DCCG audio DTO1), the AFMT audio path and the DP secondary-data audio packets.
+// The register work is dpaudio_seq.c (Linux amdgpu's dce_audio.c and dcn10_stream_encoder.c sequences, checked
+// accessors, no Windows); this file is its owner in the miniport: switches, lock, record, log, entry points and the
+// escape.
 //
 //   <service key>\Parameters
 //     EnableDpAudio          REG_DWORD  1 (default) = run the start below. 0 = no audio register is read or
 //                                       written at any time; the driver behaves as before this feature.
 //     EnableDpAudioEndpoint  REG_DWORD  1 (default) = step 1, the endpoint fields and AUDIO_ENABLED. 0 = the same
-//                                       as EnableDpAudio 0 for now (step 2, the stream, is not in this driver).
+//                                       as EnableDpAudio 0.
+//     EnableDpAudioStream    REG_DWORD  1 (default) = step 2, the wall DTO, the AFMT audio path and the DP_SEC
+//                                       audio packets on the inherited stream. 0 = the same as EnableDpAudio 0.
 //
-// Both are read at every start and resume. The start refuses, logs the reason and writes nothing unless every
-// precondition holds (dpaudio_seq.c Bc250DpAudioDecide): BAR5 mapped, the codec is unit A's (M819), audio is
-// strapped on, exactly one DP stream encoder carries a video stream on a DP SST back end, and the endpoint that
-// belongs to it reads the pin configuration Linux saw. No DIG, DP, OTG or DTO register is written here: the
-// stream half (DTO, AFMT, DP_SEC) is step 2 and lives on another branch.
+// All three are read at every start and resume. The endpoint is never shown without its stream: with step 1
+// alone, Windows showed an active "Digital Audio (HDMI)" endpoint whose audio clock was not programmed, and it
+// played no sound, while Edge slaved its video to that clock and played at about 0.7 times real time. So either
+// switch at 0 means no endpoint and no stream, and a refusal or failure of the stream half leaves AUDIO_ENABLED 0.
 //
-// Entry points (scratch design section 4): DpAudioStart from Bc250StartDevice after DisplayPrepareInheritedTiming,
+// The start refuses, logs the reason and writes nothing unless every precondition holds (dpaudio_seq.c
+// Bc250DpAudioDecide): BAR5 mapped, the codec is unit A's (M819), audio is strapped on, exactly one DP stream
+// encoder carries a video stream on a DP SST back end, the endpoint that belongs to it reads the pin configuration
+// Linux saw, and the DP reference clock counter reads a plausible clock. Then, in this order: hw_init and
+// configure of the endpoint (step 1 without its last write), the stream (step 2, every write a read-modify-write of
+// named fields, read back at once), and AUDIO_ENABLED last (dpaudio_seq.c Bc250DpAudioRun says why last). A failure
+// or a read-back that differs anywhere runs the stop sequence at once: the stream off, then AUDIO_ENABLED 0. No
+// OTG, HUBP or link register is written here.
+//
+// Entry points (docs/design/dp-audio.md): DpAudioStart from Bc250StartDevice after DisplayPrepareInheritedTiming,
 // the seamless-boot point at which Linux adds audio to a stream it did not train (link_dpms.c:2520-2527);
 // DpAudioStop from Bc250StopDevice before WddmStop and DcnStop, and on the way to D3, so the next owner (Basic
-// Display, the next start) inherits AUDIO_ENABLED 0; DpAudioResume on the way back to D0; DpAudioPathPower from
-// CommitVidPn's path power transitions, so that a monitor powered off is an unplugged sink for audio, as Linux's
-// az_disable at DPMS off. Every entry point runs at PASSIVE_LEVEL (the settings are registry reads).
+// Display, the next start) inherits the stream off and AUDIO_ENABLED 0; DpAudioResume on the way back to D0;
+// DpAudioPathPower from CommitVidPn's path power transitions, so that a monitor powered off is an unplugged sink
+// for audio, as Linux's audio stream disable and az_disable at DPMS off. Every entry point runs at PASSIVE_LEVEL
+// (the settings are registry reads).
 #include "bc250kmd.h"
 #include "dpaudio_seq.h"
 
 #define DPAUDIO_SETTING_ENABLE L"EnableDpAudio"
 #define DPAUDIO_SETTING_ENDPOINT L"EnableDpAudioEndpoint"
+#define DPAUDIO_SETTING_STREAM L"EnableDpAudioStream"
+
+// The ABI 1 reply is exactly the fields before the stream record.
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPAUDIO, SwitchStream) == BC250_DPAUDIO_ABI1_SIZE);
 
 // The callbacks dpaudio_seq.c performs its checked accesses through. The tables are checked there; checked again
 // here so that nothing in this file can reach BAR5 past them either.
@@ -74,7 +91,26 @@ void DpAudioInitialize(_Inout_ BC250_DEVICE* Device)
     KeInitializeSpinLock(&audio->Lock);
     audio->State = BC250_DPAUDIO_STATE_IDLE;
     audio->Reason = BC250_DPAUDIO_REASON_NOT_STARTED;
-    audio->SwitchEnable = audio->SwitchEndpoint = BC250_DPAUDIO_NO_SWITCH;
+    audio->SwitchEnable = audio->SwitchEndpoint = audio->SwitchStream = BC250_DPAUDIO_NO_SWITCH;
+    audio->StreamState = BC250_DPAUDIO_STREAM_OFF;
+    audio->StreamStep = BC250_DPAUDIO_STEP_NONE;
+}
+
+// Under the lock: what a stream sequence left behind, into the record. The step and the mismatch are the first
+// failure of that sequence, or NONE and 0.
+static void RecordStream(_Inout_ BC250_DPAUDIO* Audio, _In_ const BC250_DPAUDIO_STREAM_RESULT* Failure,
+                         _In_ const BC250_DPAUDIO_STREAM_RESULT* Left)
+{
+    Audio->StreamStep = Failure->Step;
+    Audio->StreamStatus = Failure->Status;
+    Audio->MismatchOffset = Failure->MismatchOffset;
+    Audio->MismatchExpected = Failure->MismatchExpected;
+    Audio->MismatchActual = Failure->MismatchActual;
+    Audio->DtoSource = Left->DtoSource;
+    Audio->SecCntl = Left->SecCntl;
+    Audio->AfmtCntl = Left->AfmtCntl;
+    Audio->PacketControl = Left->PacketControl;
+    Audio->PacketControl2 = Left->PacketControl2;
 }
 
 // What a start or resume did, collected under the lock and logged after it.
@@ -84,11 +120,27 @@ typedef struct _DPAUDIO_START {
     ULONG Reason;                           // Bc250DpAudioRun's result when the gate was open
 } DPAUDIO_START;
 
-static const char* const g_GroupName[] = { "hw_init", "configure", "enable" };
+static const char* const g_GroupName[] = { "hw_init", "configure", "stream", "enable" };
+
+static void LogStopSequence(_In_z_ const char* What, ULONG Stream, ULONG Endpoint, _In_ const BC250_DPAUDIO_STOP* Stop,
+                            BOOLEAN StreamWritten, BOOLEAN EndpointWritten)
+{
+    if (StreamWritten) {
+        GuardLog("dpaudio: %s: stream off on DP%lu: sec 0x%08lX afmt 0x%08lX pkt 0x%08lX", What, Stream,
+                 Stop->Stream.SecCntl, Stop->Stream.AfmtCntl, Stop->Stream.PacketControl);
+        if (Stop->StreamStatus < 0)
+            GuardLog("dpaudio: %s: stream off failed at step %s (0x%08lX)", What, Bc250DpAudioStepText(Stop->Stream.Step),
+                     (ULONG)Stop->StreamStatus);
+    }
+    if (EndpointWritten)
+        GuardLog("dpaudio: %s: AUDIO_ENABLED cleared on endpoint %lu: hpc 0x%08lX -> 0x%08lX (0x%08lX)", What, Endpoint,
+                 Stop->Endpoint.HotPlugBefore, Stop->Endpoint.HotPlugAfter, (ULONG)Stop->EndpointStatus);
+}
 
 static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
 {
     const BC250_DPAUDIO_RUN* run = &Start->Seq;
+    const BC250_DPAUDIO_STREAM_RESULT* s = &run->Stream;
     const ULONG* r = run->Obs.Regs;
 
     if (Start->Gate != BC250_DPAUDIO_REASON_OK) {
@@ -109,6 +161,8 @@ static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
              r[BC250_DPAUDIO_OBS_DTO1_PHASE], r[BC250_DPAUDIO_OBS_DTO1_MODULE],
              r[BC250_DPAUDIO_OBS_DIG0_AFMT_CNTL], r[BC250_DPAUDIO_OBS_DIG1_AFMT_CNTL],
              r[BC250_DPAUDIO_OBS_DIG0_AFMT_AUDIO_PACKET_CONTROL], r[BC250_DPAUDIO_OBS_DIG1_AFMT_AUDIO_PACKET_CONTROL]);
+    GuardLog("dpaudio: DP reference clock count %lu (100 kHz units): DTO1 module %lu, phase %lu, for a 24 MHz wall clock",
+             run->Plan.RefClock, run->Plan.DtoModule, (ULONG)BC250_DPAUDIO_DTO1_PHASE);
     if (!run->Wrote) {
         GuardLog("dpaudio: %s refused, nothing written: %s (DP%lu ep %lu notes 0x%lX)", What,
                  Bc250DpAudioReasonText(Start->Reason), run->Plan.Stream, run->Plan.Endpoint, run->Plan.Notes);
@@ -122,12 +176,23 @@ static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
     if (run->Groups >= 2)
         GuardLog("dpaudio: configure done on endpoint %lu: FL/FR, DP, LPCM 2 ch 32/44.1/48 kHz 16 bit, BC-250 DP, %lu writes",
                  run->Plan.Endpoint, run->Config.Writes);
-    if (run->Groups >= 3)
+    if (run->Groups >= 3) {
+        GuardLog("dpaudio: stream on DP%lu: DTO_SOURCE 0x%08lX DTO1 %lu/%lu, AUD_N 0x%08lX timestamp 0x%lX, %lu writes",
+                 run->Plan.Stream, s->DtoSource, s->DtoPhase, s->DtoModule, s->AudN, s->Timestamp, s->Writes);
+        GuardLog("dpaudio: stream on DP%lu: AFMT_CNTL 0x%08lX SRC 0x%lX PACKET 0x%08lX PACKET2 0x%08lX SEC_CNTL 0x%08lX",
+                 run->Plan.Stream, s->AfmtCntl, s->SrcControl, s->PacketControl, s->PacketControl2, s->SecCntl);
+    }
+    if (run->Groups >= 4) {
         GuardLog("dpaudio: AUDIO_ENABLED set on endpoint %lu: hpc 0x%08lX -> 0x%08lX", run->Plan.Endpoint,
                  run->Enable.HotPlugBefore, run->Enable.HotPlugAfter);
-    else
-        GuardLog("dpaudio: write failed in %s (0x%08lX); AUDIO_ENABLED cleared: hpc 0x%08lX (0x%08lX)",
-                 g_GroupName[run->Groups], (ULONG)run->Status, run->Clear.HotPlugAfter, (ULONG)run->ClearStatus);
+        return;
+    }
+    GuardLog("dpaudio: write failed in %s (0x%08lX), stream step %s", g_GroupName[run->Groups], (ULONG)run->Status,
+             Bc250DpAudioStepText(s->Step));
+    if (s->Status == BC250_AZ_STATUS_MISMATCH)
+        GuardLog("dpaudio: read-back differs at 0x%05lX: named bits written 0x%08lX, read 0x%08lX", s->MismatchOffset,
+                 s->MismatchExpected, s->MismatchActual);
+    LogStopSequence("undo", run->Plan.Stream, run->Plan.Endpoint, &run->Undo, (BOOLEAN)(run->StreamWrote != 0), TRUE);
 }
 
 static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
@@ -137,6 +202,7 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     BC250_AZ_IO io;
     ULONG enable = GuardReadSetting(DPAUDIO_SETTING_ENABLE, 1);
     ULONG endpointSwitch = GuardReadSetting(DPAUDIO_SETTING_ENDPOINT, 1);
+    ULONG streamSwitch = GuardReadSetting(DPAUDIO_SETTING_STREAM, 1);
     KIRQL irql;
 
     // From pool: the observation alone is 270 bytes, and a start already runs deep in dxgkrnl's stack (M104).
@@ -146,14 +212,19 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
         return;
     }
     IoOpen(Device, &io);
-    start->Gate = Bc250DpAudioGate(Device->Mmio != NULL, enable, endpointSwitch);
+    start->Gate = Bc250DpAudioGate(Device->Mmio != NULL, enable, endpointSwitch, streamSwitch);
     KeAcquireSpinLock(&audio->Lock, &irql);
     if (Resume) audio->Resumes++; else audio->Starts++;
     audio->SwitchEnable = enable;
     audio->SwitchEndpoint = endpointSwitch;
-    audio->Written = FALSE;
+    audio->SwitchStream = streamSwitch;
+    audio->Written = audio->StreamWritten = FALSE;
     audio->Notes = 0;
     audio->LastStatus = 0;
+    audio->StreamState = BC250_DPAUDIO_STREAM_OFF;
+    audio->StreamStep = BC250_DPAUDIO_STEP_NONE;
+    audio->StreamStatus = 0;
+    audio->MismatchOffset = audio->MismatchExpected = audio->MismatchActual = 0;
     if (start->Gate != BC250_DPAUDIO_REASON_OK) {
         audio->State = BC250_DPAUDIO_STATE_REFUSED;
         audio->Reason = start->Gate;
@@ -166,10 +237,12 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
         audio->Notes = run->Plan.Notes;
         audio->Endpoint = run->Plan.Endpoint;
         audio->Stream = run->Plan.Stream;
+        audio->RefClockCount = run->Plan.RefClock;
         audio->CodecId = run->Obs.Regs[BC250_DPAUDIO_OBS_CODEC_VENDOR_DEVICE];
         audio->ConfigDefault = run->Obs.Regs[run->Plan.Endpoint == 0 ? BC250_DPAUDIO_OBS_EP0_CONFIG_DEFAULT
                                                                       : BC250_DPAUDIO_OBS_EP1_CONFIG_DEFAULT];
-        // From the first write on, the stop path owes the endpoint an AUDIO_ENABLED 0.
+        // From the first write on, the stop path owes the endpoint an AUDIO_ENABLED 0. A failed start already ran
+        // the stop sequence; the stop path runs its endpoint half once more, which changes nothing.
         audio->Written = run->Wrote != 0;
         audio->LastStatus = run->Status;
         if (!run->Wrote) {
@@ -177,13 +250,27 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
             audio->Refusals++;
         } else if (start->Reason == BC250_DPAUDIO_REASON_OK) {
             audio->State = BC250_DPAUDIO_STATE_ENABLED;
+            audio->StreamState = BC250_DPAUDIO_STREAM_ON;
+            audio->StreamWritten = TRUE;
+            audio->StreamOn++;
+            audio->DtoModule = run->Stream.DtoModule;
+            audio->DtoPhase = run->Stream.DtoPhase;
+            RecordStream(audio, &run->Stream, &run->Stream);
             audio->HotPlugBefore = run->Enable.HotPlugBefore;
             audio->HotPlugAfter = run->Enable.HotPlugAfter;
         } else {
             audio->State = BC250_DPAUDIO_STATE_FAILED;
             audio->Failures++;
-            audio->HotPlugBefore = run->Clear.HotPlugBefore;
-            audio->HotPlugAfter = run->Clear.HotPlugAfter;
+            if (run->StreamWrote) {
+                audio->StreamState = BC250_DPAUDIO_STREAM_UNDONE;
+                audio->StreamUndos++;
+                audio->StreamOff++;
+                audio->DtoModule = run->Stream.DtoModule;
+                audio->DtoPhase = run->Stream.DtoPhase;
+                RecordStream(audio, &run->Stream, &run->Undo.Stream);
+            }
+            audio->HotPlugBefore = run->Undo.Endpoint.HotPlugBefore;
+            audio->HotPlugAfter = run->Undo.Endpoint.HotPlugAfter;
         }
     }
     IoClose(audio, &io);
@@ -197,104 +284,120 @@ void DpAudioStart(_Inout_ BC250_DEVICE* Device)
     StartCore(Device, FALSE);
 }
 
-// Nothing of the endpoint is assumed to survive D3: the whole start runs again, preconditions included.
+// Nothing of the endpoint or the stream is assumed to survive D3: the whole start runs again, preconditions included.
 void DpAudioResume(_Inout_ BC250_DEVICE* Device)
 {
     StartCore(Device, TRUE);
 }
 
+// Under the lock: the stop sequence for what this start left on, and the record of it. Returns TRUE when it ran.
+// Both owed flags clear only when the sequence succeeded, so that a later stop tries the failed half again.
+static BOOLEAN StopLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_AZ_IO* Io, ULONG State, ULONG Reason,
+                          _Out_ BC250_DPAUDIO_STOP* Stop, _Out_ BOOLEAN* StreamWritten, _Out_ BOOLEAN* EndpointWritten)
+{
+    BC250_DPAUDIO* audio = &Device->DpAudio;
+    long status;
+
+    RtlZeroMemory(Stop, sizeof(*Stop));
+    *StreamWritten = audio->StreamWritten;
+    *EndpointWritten = audio->Written;
+    if ((!audio->StreamWritten && !audio->Written) || Device->Mmio == NULL) return FALSE;
+    status = Bc250DpAudioStopSequence(Io, audio->Stream, audio->Endpoint, audio->StreamWritten, audio->Written, Stop);
+    if (audio->StreamWritten) {
+        audio->StreamOff++;
+        audio->StreamState = Stop->StreamStatus >= 0 ? BC250_DPAUDIO_STREAM_OFF : BC250_DPAUDIO_STREAM_UNDONE;
+        RecordStream(audio, &Stop->Stream, &Stop->Stream);
+    }
+    if (audio->Written) {
+        audio->HotPlugBefore = Stop->Endpoint.HotPlugBefore;
+        audio->HotPlugAfter = Stop->Endpoint.HotPlugAfter;
+    }
+    audio->State = State;
+    audio->Reason = Reason;
+    audio->LastStatus = status;
+    if (status < 0) audio->Failures++;
+    else audio->StreamWritten = audio->Written = FALSE;
+    return TRUE;
+}
+
 void DpAudioStop(_Inout_ BC250_DEVICE* Device)
 {
     BC250_DPAUDIO* audio = &Device->DpAudio;
-    BC250_DPAUDIO_RESULT result;
+    BC250_DPAUDIO_STOP stop;
     BC250_AZ_IO io;
-    BOOLEAN cleared = FALSE;
-    ULONG endpoint, state;
-    long status = 0;
+    BOOLEAN ran, streamWritten, endpointWritten;
+    ULONG stream, endpoint, state;
     KIRQL irql;
 
-    RtlZeroMemory(&result, sizeof(result));
     IoOpen(Device, &io);
     KeAcquireSpinLock(&audio->Lock, &irql);
     audio->Stops++;
+    stream = audio->Stream;
     endpoint = audio->Endpoint;
     state = audio->State;
-    if (audio->Written && Device->Mmio != NULL) {
-        status = Bc250DpAudioSetEnabled(&io, endpoint, 0, &result);
-        audio->Written = FALSE;
-        audio->State = BC250_DPAUDIO_STATE_STOPPED;
-        audio->Reason = BC250_DPAUDIO_REASON_STOPPED;
-        audio->HotPlugBefore = result.HotPlugBefore;
-        audio->HotPlugAfter = result.HotPlugAfter;
-        audio->LastStatus = status;
-        if (status < 0) audio->Failures++;
-        cleared = TRUE;
-    }
+    ran = StopLocked(Device, &io, BC250_DPAUDIO_STATE_STOPPED, BC250_DPAUDIO_REASON_STOPPED, &stop, &streamWritten,
+                     &endpointWritten);
     IoClose(audio, &io);
     KeReleaseSpinLock(&audio->Lock, irql);
-    if (cleared)
-        GuardLog("dpaudio: stop: AUDIO_ENABLED cleared on endpoint %lu: hpc 0x%08lX -> 0x%08lX (0x%08lX)", endpoint,
-                 result.HotPlugBefore, result.HotPlugAfter, (ULONG)status);
+    if (ran) LogStopSequence("stop", stream, endpoint, &stop, streamWritten, endpointWritten);
     else if (state != BC250_DPAUDIO_STATE_IDLE)
-        GuardLog("dpaudio: stop: nothing to clear (state %lu, this start wrote nothing)", state);
+        GuardLog("dpaudio: stop: nothing to clear (state %lu, this start left nothing on)", state);
 }
 
 void DpAudioPathPower(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
 {
     BC250_DPAUDIO* audio = &Device->DpAudio;
-    BC250_DPAUDIO_RESULT result;
+    BC250_DPAUDIO_STOP stop;
     BC250_AZ_IO io;
-    BOOLEAN changed = FALSE, retry;
-    ULONG endpoint;
-    long status = 0;
+    BOOLEAN ran = FALSE, retry, again, streamWritten = FALSE, endpointWritten = FALSE;
+    ULONG stream, endpoint;
     KIRQL irql;
 
-    RtlZeroMemory(&result, sizeof(result));
     IoOpen(Device, &io);
     KeAcquireSpinLock(&audio->Lock, &irql);
+    stream = audio->Stream;
     endpoint = audio->Endpoint;
     retry = On && audio->State == BC250_DPAUDIO_STATE_REFUSED && audio->Reason == BC250_DPAUDIO_REASON_NO_STREAM;
-    // Only an endpoint this start enabled follows the monitor's power; a refused or stopped one stays as it is.
-    if (audio->Written && Device->Mmio != NULL &&
-        ((On && audio->State == BC250_DPAUDIO_STATE_PATH_OFF) || (!On && audio->State == BC250_DPAUDIO_STATE_ENABLED))) {
-        status = Bc250DpAudioSetEnabled(&io, endpoint, On ? 1 : 0, &result);
-        if (On) audio->PathOn++; else audio->PathOff++;
-        audio->State = (status >= 0 && On) ? BC250_DPAUDIO_STATE_ENABLED : BC250_DPAUDIO_STATE_PATH_OFF;
-        audio->Reason = audio->State == BC250_DPAUDIO_STATE_ENABLED ? BC250_DPAUDIO_REASON_OK : BC250_DPAUDIO_REASON_PATH_OFF;
-        audio->HotPlugBefore = result.HotPlugBefore;
-        audio->HotPlugAfter = result.HotPlugAfter;
-        audio->LastStatus = status;
-        if (status < 0) audio->Failures++;
-        changed = TRUE;
+    again = On && audio->State == BC250_DPAUDIO_STATE_PATH_OFF;
+    if (again) audio->PathOn++;
+    // Only what this start turned on follows the monitor's power; a refused or stopped start stays as it is.
+    if (!On && audio->State == BC250_DPAUDIO_STATE_ENABLED) {
+        audio->PathOff++;
+        ran = StopLocked(Device, &io, BC250_DPAUDIO_STATE_PATH_OFF, BC250_DPAUDIO_REASON_PATH_OFF, &stop, &streamWritten,
+                         &endpointWritten);
     }
     IoClose(audio, &io);
     KeReleaseSpinLock(&audio->Lock, irql);
-    if (changed)
-        GuardLog("dpaudio: path power %s: AUDIO_ENABLED %lu on endpoint %lu: hpc 0x%08lX -> 0x%08lX (0x%08lX)",
-                 On ? "on" : "off", On ? 1ul : 0ul, endpoint, result.HotPlugBefore, result.HotPlugAfter, (ULONG)status);
-    // A start or resume that found no DP stream (the monitor was off, or D0 came back before the stream did) gets
-    // one more full start when dxgkrnl powers the path on: preconditions and all, counted as a resume.
-    if (retry) {
-        GuardLog("dpaudio: path power on after a refusal for no stream: start again");
+    if (ran) LogStopSequence("path power off", stream, endpoint, &stop, streamWritten, endpointWritten);
+    // The monitor is back: the whole start again, preconditions and all, counted as a resume. The same for a start
+    // or resume that found no DP stream (the monitor was off, or D0 came back before the stream did).
+    if (again || retry) {
+        GuardLog("dpaudio: path power on after %s: start again", again ? "a path power off" : "a refusal for no stream");
         StartCore(Device, TRUE);
     }
 }
 
-// BC250_ESCAPE_RUN_DPAUDIO (bc250kmd_escape.h). HardwareAccess only, administrators only, one exact size (display.c).
-void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* Data, BOOLEAN Admin, ULONG EscapeFlags)
+// BC250_ESCAPE_RUN_DPAUDIO (bc250kmd_escape.h). HardwareAccess only, administrators only, one of two exact sizes
+// (display.c): ABI 1 with BC250_DPAUDIO_ABI1_SIZE bytes, ABI 2 with the whole structure. Nothing past Size is read
+// or written.
+void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* Data, ULONG Size, BOOLEAN Admin,
+                    ULONG EscapeFlags)
 {
     BC250_DPAUDIO* audio = &Device->DpAudio;
     BC250_DPAUDIO_OBSERVATION* obs = NULL;
     ULONG op = Data->Op, abi = Data->AbiVersion, i;
+    const BOOLEAN abi2 = abi == BC250_DPAUDIO_ABI && Size == sizeof(BC250_ESCAPE_DPAUDIO);
+    const BOOLEAN abi1 = abi == BC250_DPAUDIO_ABI_1 && Size == BC250_DPAUDIO_ABI1_SIZE;
     BC250_AZ_IO io;
     long status = STATUS_SUCCESS;
     KIRQL irql;
 
-    RtlZeroMemory(Data, sizeof(*Data));
+    if (Size != BC250_DPAUDIO_ABI1_SIZE && Size != sizeof(BC250_ESCAPE_DPAUDIO)) return;    // display.c refused it
+    RtlZeroMemory(Data, Size);
     Data->Magic = BC250_ESCAPE_MAGIC;
     Data->Command = BC250_ESCAPE_RUN_DPAUDIO;
     Data->Version = BC250_KMD_VERSION;
-    Data->AbiVersion = BC250_DPAUDIO_ABI;
+    Data->AbiVersion = abi1 ? BC250_DPAUDIO_ABI_1 : BC250_DPAUDIO_ABI;
     Data->Op = op;
     Data->Status = BC250_ESCAPE_STATUS_REFUSED;
     if (!Admin) {
@@ -303,7 +406,7 @@ void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* 
         return;
     }
     // HardwareAccess requests dxgkrnl's Level Two exclusion of stop and MMIO unmap, as OBSERVE_DCN.
-    if (EscapeFlags != 1u || abi != BC250_DPAUDIO_ABI || (op != BC250_DPAUDIO_OP_OBSERVE && op != BC250_DPAUDIO_OP_STATE)) {
+    if (EscapeFlags != 1u || !(abi1 || abi2) || (op != BC250_DPAUDIO_OP_OBSERVE && op != BC250_DPAUDIO_OP_STATE)) {
         Data->NtStatus = (ULONG)STATUS_INVALID_PARAMETER;
         return;
     }
@@ -330,6 +433,17 @@ void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* 
     Data->CodecId = audio->CodecId; Data->ConfigDefault = audio->ConfigDefault;
     Data->HotPlugBefore = audio->HotPlugBefore; Data->HotPlugAfter = audio->HotPlugAfter;
     Data->LastStatus = (ULONG)audio->LastStatus;
+    if (abi2) {
+        Data->SwitchStream = audio->SwitchStream;
+        Data->StreamState = audio->StreamState; Data->StreamStep = audio->StreamStep;
+        Data->StreamStatus = (ULONG)audio->StreamStatus; Data->RefClockCount = audio->RefClockCount;
+        Data->DtoModule = audio->DtoModule; Data->DtoPhase = audio->DtoPhase;
+        Data->MismatchOffset = audio->MismatchOffset;
+        Data->MismatchExpected = audio->MismatchExpected; Data->MismatchActual = audio->MismatchActual;
+        Data->DtoSource = audio->DtoSource; Data->SecCntl = audio->SecCntl; Data->AfmtCntl = audio->AfmtCntl;
+        Data->PacketControl = audio->PacketControl; Data->PacketControl2 = audio->PacketControl2;
+        Data->StreamOn = audio->StreamOn; Data->StreamOff = audio->StreamOff; Data->StreamUndos = audio->StreamUndos;
+    }
     KeReleaseSpinLock(&audio->Lock, irql);
     if (obs != NULL) {
         BC250_DPAUDIO_PLAN plan;
