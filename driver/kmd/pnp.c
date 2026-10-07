@@ -60,6 +60,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
     GuardStage(StageStartEnter);
+    // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does
+    // nothing unless Parameters\KeepLog is set.
+    GuardLogKeepEpisode(L"start");
     device->InheritedSignalValid=FALSE;
     if (device->GpuStopUnconfirmed) {
         GuardLog("start refused: previous GPU stop is unconfirmed for this device object");
@@ -108,12 +111,21 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // Set only after removing the legacy bc250rd mailbox writer. No implicit
     // fallback: full-WDDM startup requires this owner through SmuPrepareClock.
     if (GuardReadSetting(L"EnableNativeSmu",0)==1) {
-        status=SmuOwnerStart(&device->Smu,device->Mmio);
-        GuardLog("smu: native owner start status 0x%08X",status);
-        if (!NT_SUCCESS(status)) {
-            MmioStop(device);
-            DisplayUnmapFramebuffer(device);
-            goto failed;
+        // The mailbox is in BAR5, so this owner needs EnableMmio. Without the mapping SmuOwnerStart can only answer
+        // STATUS_INVALID_PARAMETER, and until 0.7.216.10 that refusal failed the whole device start: an install that
+        // closed EnableMmio and left EnableNativeSmu open (BD-091) gave Code 43 with nothing in the registry naming
+        // the cause. Say it in one line instead and start without the owner, which is what a closed EnableNativeSmu
+        // does: no clock control and no metrics, and SmuPrepareClock refuses a full WDDM start by itself.
+        if (device->Mmio==NULL)
+            GuardLog("smu: native owner start skipped, EnableNativeSmu 1 with EnableMmio 0 (no BAR5 mapping)");
+        else {
+            status=SmuOwnerStart(&device->Smu,device->Mmio);
+            GuardLog("smu: native owner start status 0x%08X",status);
+            if (!NT_SUCCESS(status)) {
+                MmioStop(device);
+                DisplayUnmapFramebuffer(device);
+                goto failed;
+            }
         }
     }
     VramStart(device);      // same rule
@@ -175,6 +187,9 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     HangDetectorStop();     // first: a stop may legitimately wait, and the detector must not judge it
     StartHealthClose(device);
     GuardStage(StageStopEnter);
+    // The stop gets its own kept log file, so that it is not appended to the start's (guard.c GuardLogKeep). A stop
+    // that unwinds a failed start therefore leaves two files, which is how it should read.
+    GuardLogKeepEpisode(L"stop");
     device->InheritedSignalValid=FALSE;
     CpuStop(device);        // first: a trial's revert needs the mailbox, which SmuOwnerStop below takes away
     DpmStop(device);        // the floor while the owner is still online, then no governor tick

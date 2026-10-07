@@ -491,6 +491,7 @@ void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
 void GuardLogKeep(void);                                        // the ring into a file under C:\BC250\kmdlog; PASSIVE_LEVEL
+void GuardLogKeepEpisode(_In_z_ PCWSTR Label);                  // one kept file per device start and per stop; PASSIVE_LEVEL
 // Where the ring and its cursor live, for hang.c's dump pages. Static storage: no lock, any IRQL.
 void GuardLogDumpRegion(_Outptr_ const void** Ring, _Out_ SIZE_T* RingBytes, _Outptr_ const void** Cursor);
 
