@@ -151,5 +151,5 @@ void SmuMetricsInitialize(BC250_DEVICE *Device);
 void SmuMetricsStart(BC250_DEVICE *Device);
 void SmuMetricsStop(BC250_DEVICE *Device);
 void SmuMetricsSample(BC250_DEVICE *Device);
-BOOLEAN SmuMetricsFill(BC250_DEVICE *Device, BC250_DPM_METRICS *Out);
+BOOLEAN SmuMetricsFill(BC250_DEVICE *Device, BC250_DPM_METRICS *Out, BC250_DPM_CLOCKS *Clocks);
 void SmuMetricsLogLine(BC250_DEVICE *Device, _In_z_ const char *What);

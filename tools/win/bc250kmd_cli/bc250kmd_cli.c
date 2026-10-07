@@ -627,6 +627,23 @@ typedef struct _BC250_ESCAPE_DPM_EX {
 } BC250_ESCAPE_DPM_EX; // 248 bytes on Windows, ABI 3
 #endif
 
+#ifndef BC250_DPM_ABI_4
+// Only for a driver/kmd/bc250kmd_escape.h before 0.7.216.15, which has no RUN_DPM ABI 4; this tree's header defines
+// it, so here the block drops out. It is the 0.7.216.15 definition under the header's own names.
+#define BC250_DPM_ABI_4 4u
+#define BC250_DPM_ABI4_SIZE 296u
+#define BC250_DPM_CPU_CLOCKS 6u
+typedef struct _BC250_DPM_CLOCKS {
+    unsigned long SocclkMHz, MemclkMHz, VclkMHz, DclkMHz;
+    unsigned long L3MHz[2];
+    unsigned long CpuCoreMHz[BC250_DPM_CPU_CLOCKS];
+} BC250_DPM_CLOCKS; // 48 bytes
+typedef struct _BC250_ESCAPE_DPM_EX2 {
+    BC250_ESCAPE_DPM_EX Ex;
+    BC250_DPM_CLOCKS Clocks;
+} BC250_ESCAPE_DPM_EX2; // 296 bytes on Windows, ABI 4
+#endif
+
 // The monitor's digest of dxgkrnl's segment statistics, not a KMD structure. Memory segments are what Task
 // Manager calls dedicated memory; aperture segments (the GART) are summed apart. Segment ids are zero-based.
 // tools/win/bc250mon/src/Driver.cs mirrors it; test_telemetry.py keeps the two equal.
@@ -702,18 +719,23 @@ static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
 // compile-time assertion on that size would stop the DLL being built at all. The driver takes either size
 // with its own AbiVersion (driver/kmd/display.c), so this function asks with the ABI of the size it was
 // given and never writes past it. A rebuilt caller that passes 192 gets the idle fields as well, and one that
-// passes BC250_DPM_ABI3_SIZE (a BC250_ESCAPE_DPM_EX, 0.7.215) also gets the SMU metrics tail with the power reading.
-// A driver before 0.7.215 refuses 248 bytes with STATUS_INVALID_PARAMETER; the caller then asks again with 160.
+// passes BC250_DPM_ABI3_SIZE (a BC250_ESCAPE_DPM_EX, 0.7.215) also gets the SMU metrics tail with the power reading,
+// and one that passes BC250_DPM_ABI4_SIZE (a BC250_ESCAPE_DPM_EX2, 0.7.216.15) the table's SoC, memory and CPU
+// clocks after it. A driver before 0.7.215 refuses 248 bytes with STATUS_INVALID_PARAMETER, and one before
+// 0.7.216.15 refuses 296 bytes the same way; the caller then asks again with a shorter structure.
 BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
 {
     NTSTATUS status;
     unsigned long abi;
     typedef char DpmAbiSizeCheck[(BC250_DPM_ABI1_SIZE == 160 && sizeof(BC250_ESCAPE_DPM) >= 160 &&
-                                  sizeof(BC250_ESCAPE_DPM_EX) == BC250_DPM_ABI3_SIZE) ? 1 : -1];
+                                  sizeof(BC250_ESCAPE_DPM_EX) == BC250_DPM_ABI3_SIZE &&
+                                  sizeof(BC250_ESCAPE_DPM_EX2) == BC250_DPM_ABI4_SIZE) ? 1 : -1];
     (void)sizeof(DpmAbiSizeCheck);
-    if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data) && bytes != BC250_DPM_ABI3_SIZE))
+    if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data) && bytes != BC250_DPM_ABI3_SIZE &&
+                  bytes != BC250_DPM_ABI4_SIZE))
         return (LONG)0xC000000D;
-    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : bytes == BC250_DPM_ABI3_SIZE ? BC250_DPM_ABI_3 : BC250_DPM_ABI;
+    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : bytes == BC250_DPM_ABI3_SIZE ? BC250_DPM_ABI_3 :
+          bytes == BC250_DPM_ABI4_SIZE ? BC250_DPM_ABI_4 : BC250_DPM_ABI;
     memset(data, 0, bytes);
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_DPM;
@@ -1339,18 +1361,22 @@ static int Fan(int argc, WCHAR **argv)
 // "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
 static int Telemetry(int argc, wchar_t **argv)
 {
-    BC250_ESCAPE_DPM_EX x;
+    BC250_ESCAPE_DPM_EX2 x2;
     BC250_VIDEO_MEMORY m;
     unsigned long count = argc >= 3 ? wcstoul(argv[2], NULL, 10) : 1, interval = argc >= 4 ? wcstoul(argv[3], NULL, 10) : 1000;
-    ULONG dpmBytes = sizeof(x);     // ABI 3; the ABI 2 structure after a driver before 0.7.215 refused it
+    // ABI 4 (0.7.216.15); ABI 3 after a driver before it refused 296 bytes, ABI 2 after one before 0.7.215.
+    ULONG dpmBytes = sizeof(x2);
     LONG status;
     int failed = 0;
     if (count == 0) count = 1;
     for (unsigned long i = 0; i < count; i++) {
-        const BC250_ESCAPE_DPM *d = &x.Dpm;
+        const BC250_ESCAPE_DPM *d = &x2.Ex.Dpm;
         if (i) Sleep(interval);
-        status = Bc250Dpm(&x.Dpm, dpmBytes);
-        if (status == (LONG)0xC000000D && dpmBytes == sizeof(x)) status = Bc250Dpm(&x.Dpm, dpmBytes = sizeof(x.Dpm));
+        status = Bc250Dpm(&x2.Ex.Dpm, dpmBytes);
+        if (status == (LONG)0xC000000D && dpmBytes == sizeof(x2))
+            status = Bc250Dpm(&x2.Ex.Dpm, dpmBytes = sizeof(x2.Ex));
+        if (status == (LONG)0xC000000D && dpmBytes == sizeof(x2.Ex))
+            status = Bc250Dpm(&x2.Ex.Dpm, dpmBytes = sizeof(x2.Ex.Dpm));
         failed |= status < 0;
         if (status < 0) PrintStatus("dpm", status);
         else {
@@ -1360,8 +1386,16 @@ static int Telemetry(int argc, wchar_t **argv)
                    (d->Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d->BusyPermille / 10.0, d->BusyAvgPermille / 10.0,
                    (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0);
             // The SMU's package power (0.7.215): only from a fresh table, so a sampler never logs an old value.
-            if (dpmBytes == sizeof(x) && (d->Flags & BC250_DPM_FLAG_POWER))
-                printf(" power_w=%.1f power_avg_w=%.1f", x.Metrics.SocketPowerMw / 1000.0, x.Metrics.SocketPowerAvgMw / 1000.0);
+            if (dpmBytes >= sizeof(x2.Ex) && (d->Flags & BC250_DPM_FLAG_POWER))
+                printf(" power_w=%.1f power_avg_w=%.1f", x2.Ex.Metrics.SocketPowerMw / 1000.0,
+                       x2.Ex.Metrics.SocketPowerAvgMw / 1000.0);
+            // The table's SoC, memory and CPU clocks (0.7.216.15, K137), from the same fresh table as the power.
+            if (dpmBytes == sizeof(x2) && (d->Flags & BC250_DPM_FLAG_POWER)) {
+                const BC250_DPM_CLOCKS *c = &x2.Clocks;
+                printf(" socclk_mhz=%lu memclk_mhz=%lu vclk_mhz=%lu dclk_mhz=%lu l3_mhz=%lu/%lu cpu_mhz=%lu/%lu/%lu/%lu/%lu/%lu",
+                       c->SocclkMHz, c->MemclkMHz, c->VclkMHz, c->DclkMHz, c->L3MHz[0], c->L3MHz[1], c->CpuCoreMHz[0],
+                       c->CpuCoreMHz[1], c->CpuCoreMHz[2], c->CpuCoreMHz[3], c->CpuCoreMHz[4], c->CpuCoreMHz[5]);
+            }
             printf("\n");
         }
         {
@@ -2677,18 +2711,19 @@ static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-ha
                                              "stable", "smu", "fixed", "thermal-warm", "thermal-ramp", "idle",
                                              "thermal-zone" };
 
-// ABI 3 first (0.7.215, the SMU metrics tail). BC250_DPM_ABI after a driver refused ABI 3, BC250_DPM_ABI_1 after
-// one refused ABI 2 (0.7.207).
-static unsigned long g_DpmAbi = BC250_DPM_ABI_3;
+// ABI 4 first (0.7.216.15, the table's clocks). BC250_DPM_ABI_3 after a driver refused ABI 4 (0.7.215, the SMU
+// metrics tail), BC250_DPM_ABI after one refused ABI 3, BC250_DPM_ABI_1 after one refused ABI 2 (0.7.207).
+static unsigned long g_DpmAbi = BC250_DPM_ABI_4;
 
-static int DpmQuery(BC250_ESCAPE_DPM_EX *x, unsigned long op, unsigned long long generation)
+static int DpmQuery(BC250_ESCAPE_DPM_EX2 *x, unsigned long op, unsigned long long generation)
 {
-    BC250_ESCAPE_DPM *d = &x->Dpm;
+    BC250_ESCAPE_DPM *d = &x->Ex.Dpm;
     NTSTATUS status;
     unsigned size;
     for (;;) {
         memset(x, 0, sizeof(*x));
-        size = g_DpmAbi == BC250_DPM_ABI_3 ? (unsigned)sizeof(*x) :
+        size = g_DpmAbi == BC250_DPM_ABI_4 ? (unsigned)sizeof(*x) :
+               g_DpmAbi == BC250_DPM_ABI_3 ? (unsigned)sizeof(x->Ex) :
                g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;
         d->Magic = BC250_ESCAPE_MAGIC;
         d->Command = BC250_ESCAPE_RUN_DPM;
@@ -2697,9 +2732,11 @@ static int DpmQuery(BC250_ESCAPE_DPM_EX *x, unsigned long op, unsigned long long
         d->ExpectedGeneration = generation;
         if (SendEscapeFlags(BC250_DEFAULT_HWID, d, size, 1, &status)) return 1;
         if (status != (NTSTATUS)0xC000000Dl || g_DpmAbi == BC250_DPM_ABI_1) break;
-        // STATUS_INVALID_PARAMETER for 248 bytes: a driver before 0.7.215, which takes ABI 2 and ABI 1. For 192
-        // bytes: a driver before 0.7.207, which takes ABI 1 alone.
-        g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI : BC250_DPM_ABI_1;
+        // STATUS_INVALID_PARAMETER for 296 bytes: a driver before 0.7.216.15, which takes ABI 3 and older. For 248
+        // bytes: a driver before 0.7.215, which takes ABI 2 and ABI 1. For 192 bytes: a driver before 0.7.207, which
+        // takes ABI 1 alone.
+        g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_4 ? BC250_DPM_ABI_3 : g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI :
+                   BC250_DPM_ABI_1;
     }
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
     return 0;
@@ -2708,10 +2745,11 @@ static int DpmQuery(BC250_ESCAPE_DPM_EX *x, unsigned long op, unsigned long long
 static const char *const g_DpmMetricsState[] = { "off", "waiting", "ok", "refused", "no table", "bad table" };
 
 // The SMU metrics state, once under the header (0.7.215): where the power reading comes from, or why there is none.
-static void DpmPrintMetrics(const BC250_ESCAPE_DPM_EX *x)
+static void DpmPrintMetrics(const BC250_ESCAPE_DPM_EX2 *x2)
 {
+    const BC250_ESCAPE_DPM_EX *x = &x2->Ex;
     const BC250_DPM_METRICS *m = &x->Metrics;
-    if (x->Dpm.AbiVersion != BC250_DPM_ABI_3) {
+    if (x->Dpm.AbiVersion != BC250_DPM_ABI_3 && x->Dpm.AbiVersion != BC250_DPM_ABI_4) {
         printf("smu metrics: n/a (a driver before 0x000700D7 answers RUN_DPM ABI %lu)\n", x->Dpm.AbiVersion);
         return;
     }
@@ -2723,17 +2761,36 @@ static void DpmPrintMetrics(const BC250_ESCAPE_DPM_EX *x)
                m->ThrottlerStatus);
     if (m->MetricsState == BC250_DPM_METRICS_OFF) printf(" (EnableSmuMetrics 0)");
     printf("\n");
+    // The table's SoC, memory and CPU clocks (0.7.216.15, K137): the same table as the line above.
+    if (x->Dpm.AbiVersion == BC250_DPM_ABI_4 && m->MetricsReads) {
+        const BC250_DPM_CLOCKS *c = &x2->Clocks;
+        printf("smu clocks: socclk %lu memclk %lu vclk %lu dclk %lu l3 %lu/%lu, cpu cores %lu %lu %lu %lu %lu %lu MHz\n",
+               c->SocclkMHz, c->MemclkMHz, c->VclkMHz, c->DclkMHz, c->L3MHz[0], c->L3MHz[1], c->CpuCoreMHz[0],
+               c->CpuCoreMHz[1], c->CpuCoreMHz[2], c->CpuCoreMHz[3], c->CpuCoreMHz[4], c->CpuCoreMHz[5]);
+    }
 }
 
 // The end of a sample line: the package power from the SMU's own table, or why there is no reading.
-static void DpmPrintPower(const BC250_ESCAPE_DPM_EX *x)
+// ABI 4 (0.7.216.15) adds the memory, SoC and L3 clocks and the highest CPU core clock of the same table, so a
+// sample line shows a fabric-side change next to the GPU clock (K137).
+static void DpmPrintPower(const BC250_ESCAPE_DPM_EX2 *x2)
 {
+    const BC250_ESCAPE_DPM_EX *x = &x2->Ex;
     const BC250_DPM_METRICS *m = &x->Metrics;
-    if (x->Dpm.AbiVersion != BC250_DPM_ABI_3) printf("  power n/a\n");
+    if (x->Dpm.AbiVersion != BC250_DPM_ABI_3 && x->Dpm.AbiVersion != BC250_DPM_ABI_4) printf("  power n/a\n");
     else if (!(x->Dpm.Flags & BC250_DPM_FLAG_POWER)) printf("  power ?\n");
-    else
-        printf("  power %5.1f W avg %5.1f W (gfx %4.1f W soc %4.1f W)\n", m->SocketPowerMw / 1000.0,
+    else {
+        printf("  power %5.1f W avg %5.1f W (gfx %4.1f W soc %4.1f W)", m->SocketPowerMw / 1000.0,
                m->SocketPowerAvgMw / 1000.0, m->GfxPowerMw / 1000.0, m->SocPowerMw / 1000.0);
+        if (x->Dpm.AbiVersion == BC250_DPM_ABI_4) {
+            const BC250_DPM_CLOCKS *c = &x2->Clocks;
+            unsigned long top = 0, i;
+            for (i = 0; i < BC250_DPM_CPU_CLOCKS; i++) if (c->CpuCoreMHz[i] > top) top = c->CpuCoreMHz[i];
+            printf("  mem %4lu soc %4lu l3 %4lu cpu %4lu MHz", c->MemclkMHz, c->SocclkMHz,
+                   c->L3MHz[0] > c->L3MHz[1] ? c->L3MHz[0] : c->L3MHz[1], top);
+        }
+        printf("\n");
+    }
 }
 
 // One sample line without its end; DpmPrintPower ends it.
@@ -2763,7 +2820,7 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
 // (0.7.215) contains the ABI 2 fields.
 static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
 {
-    if (d->AbiVersion != BC250_DPM_ABI && d->AbiVersion != BC250_DPM_ABI_3) {
+    if (d->AbiVersion != BC250_DPM_ABI && d->AbiVersion != BC250_DPM_ABI_3 && d->AbiVersion != BC250_DPM_ABI_4) {
         printf("idle: n/a (a driver before 0x000700CF answers RUN_DPM ABI 1)\n");
         return;
     }
@@ -3492,8 +3549,8 @@ static int Cpu(int argc, WCHAR **argv)
 
 static int Dpm(int argc, WCHAR **argv)
 {
-    BC250_ESCAPE_DPM_EX x;
-    const BC250_ESCAPE_DPM *d = &x.Dpm;
+    BC250_ESCAPE_DPM_EX2 x;
+    const BC250_ESCAPE_DPM *d = &x.Ex.Dpm;
     BC250_ESCAPE_DPM_TUNE t;
     unsigned long count = 1, interval = 1000, i;
     if (argc >= 3 && !_wcsicmp(argv[2], L"tune")) return DpmTune(argc, argv);

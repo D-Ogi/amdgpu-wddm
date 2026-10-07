@@ -143,17 +143,20 @@ void SmuMetricsSample(BC250_DEVICE* Device)
     }
 }
 
-BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out)
+// Clocks (0.7.216.15, RUN_DPM ABI 4) is filled from the same table as Out, or zeroed with it.
+BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out, _Out_opt_ BC250_DPM_CLOCKS* Clocks)
 {
     BC250_SMU_METRICS* m = &Device->SmuMetrics;
     BC250_SMU_METRICS_SNAP snap;
     ULONGLONG now = KeQueryInterruptTime(), age;
+    ULONG i;
     KIRQL irql;
 
     KeAcquireSpinLock(&m->SnapLock, &irql);
     snap = m->Snap;
     KeReleaseSpinLock(&m->SnapLock, irql);
     RtlZeroMemory(Out, sizeof(*Out));
+    if (Clocks != NULL) RtlZeroMemory(Clocks, sizeof(*Clocks));
     Out->MetricsState = snap.State;
     Out->MetricsReads = snap.Reads;
     Out->MetricsFailures = snap.Failures;
@@ -170,13 +173,23 @@ BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out)
     Out->GfxTemperatureCc = snap.Table.gfx_cc;
     Out->SocTemperatureCc = snap.Table.soc_cc;
     Out->ThrottlerStatus = snap.Table.throttler;
+    if (Clocks != NULL) {
+        Clocks->SocclkMHz = snap.Table.socclk_mhz;
+        Clocks->MemclkMHz = snap.Table.memclk_mhz;
+        Clocks->VclkMHz = snap.Table.vclk_mhz;
+        Clocks->DclkMHz = snap.Table.dclk_mhz;
+        for (i = 0; i < BC250_SMU_METRICS_L3; i++) Clocks->L3MHz[i] = snap.Table.l3_mhz[i];
+        for (i = 0; i < BC250_DPM_CPU_CLOCKS; i++) Clocks->CpuCoreMHz[i] = snap.Table.core_mhz[i];
+    }
     return snap.State == BC250_SMU_METRICS_STATE_OK && age <= BC250_SMU_METRICS_FRESH_MS;
 }
 
 void SmuMetricsLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
 {
     BC250_DPM_METRICS x;
-    BOOLEAN fresh = SmuMetricsFill(Device, &x);
+    BC250_DPM_CLOCKS c;
+    ULONG i, coreTop = 0, coreLow = 0;
+    BOOLEAN fresh = SmuMetricsFill(Device, &x, &c);
     if (x.MetricsState == BC250_SMU_METRICS_STATE_OFF) return;
     if (!fresh) {
         GuardLog("smu metrics: %s %s, no fresh table (%lu tables, %lu failures)", What, StateText(x.MetricsState),
@@ -191,4 +204,12 @@ void SmuMetricsLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
     GuardLog("smu metrics: %s gfx %lu mV %lu MHz %lu.%lu C soc %lu mV %lu.%lu C thr %lX", What, x.GfxMv, x.GfxMHz,
              x.GfxTemperatureCc / 100, x.GfxTemperatureCc % 100 / 10, x.SocMv, x.SocTemperatureCc / 100,
              x.SocTemperatureCc % 100 / 10, x.ThrottlerStatus);
+    // The SoC side and the processor as the table sees them (0.7.216.15, K137): a fresh boot against the state
+    // after a GPU stop. A third line, by the same width rule.
+    for (i = 0; i < BC250_DPM_CPU_CLOCKS; i++) {
+        if (c.CpuCoreMHz[i] > coreTop) coreTop = c.CpuCoreMHz[i];
+        if (c.CpuCoreMHz[i] && (!coreLow || c.CpuCoreMHz[i] < coreLow)) coreLow = c.CpuCoreMHz[i];
+    }
+    GuardLog("smu metrics: %s MHz soc %lu mem %lu v/d %lu/%lu l3 %lu/%lu cpu %lu-%lu", What, c.SocclkMHz,
+             c.MemclkMHz, c.VclkMHz, c.DclkMHz, c.L3MHz[0], c.L3MHz[1], coreLow, coreTop);
 }

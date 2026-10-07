@@ -49,11 +49,20 @@ static unsigned int u32_at(const unsigned char *raw, unsigned int offset)
 	return u16_at(raw, offset) | u16_at(raw, offset + 2) << 16;
 }
 
+/* A telemetry clock: the poison of an unwritten field reads 0, never 65535 MHz. */
+static unsigned int clock_at(const unsigned char *raw, unsigned int offset)
+{
+	unsigned int v = u16_at(raw, offset);
+	return v == 0xFFFFu ? 0u : v;
+}
+
 enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, unsigned int length,
 						     struct bc250_smu_metrics *out)
 {
 	struct bc250_smu_metrics m;
+	unsigned int i;
 	memset(out, 0, sizeof(*out));
+	memset(&m, 0, sizeof(m));
 	if (raw == NULL || length < BC250_SMU_METRICS_BYTES)
 		return BC250_SMU_METRICS_PARSE_SHORT;
 	m.socket_mw = u32_at(raw, BC250_SMU_METRICS_OFF_SOCKET);
@@ -82,6 +91,15 @@ enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, u
 	 * reader skips it and keeps the previous reading, which then ages out by the freshness rule. */
 	if (m.socket_mw == 0u || m.socket_avg_mw == 0u)
 		return BC250_SMU_METRICS_PARSE_ZERO_POWER;
+	/* The clocks are telemetry and decide nothing about the table (bc250_smu_metrics.h). */
+	m.socclk_mhz = clock_at(raw, BC250_SMU_METRICS_OFF_SOCCLK);
+	m.memclk_mhz = clock_at(raw, BC250_SMU_METRICS_OFF_MEMCLK);
+	m.vclk_mhz = clock_at(raw, BC250_SMU_METRICS_OFF_VCLK);
+	m.dclk_mhz = clock_at(raw, BC250_SMU_METRICS_OFF_DCLK);
+	for (i = 0u; i < BC250_SMU_METRICS_L3; i++)
+		m.l3_mhz[i] = clock_at(raw, BC250_SMU_METRICS_OFF_L3CLK + 2u * i);
+	for (i = 0u; i < BC250_SMU_METRICS_CPU_CORES; i++)
+		m.core_mhz[i] = clock_at(raw, BC250_SMU_METRICS_OFF_CORECLK + 2u * i);
 	*out = m;
 	return BC250_SMU_METRICS_PARSE_OK;
 }

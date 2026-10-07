@@ -40,7 +40,13 @@
 /* SmuMetrics_t, byte offsets. SmuMetricsTable_t is 116 bytes; Average follows Current. */
 #define BC250_SMU_METRICS_HALF 116u             /* sizeof(SmuMetricsTable_t) */
 #define BC250_SMU_METRICS_BYTES 244u            /* sizeof(SmuMetrics_t) */
+#define BC250_SMU_METRICS_OFF_CORECLK 0u        /* uint16 CoreFrequency[6], MHz: the firmware's own CPU core clocks */
+#define BC250_SMU_METRICS_OFF_L3CLK 48u         /* uint16 L3Frequency[2], MHz */
 #define BC250_SMU_METRICS_OFF_GFXCLK 68u        /* uint16 GfxclkFrequency, MHz */
+#define BC250_SMU_METRICS_OFF_SOCCLK 72u        /* uint16 SocclkFrequency, MHz */
+#define BC250_SMU_METRICS_OFF_VCLK 74u          /* uint16 VclkFrequency, MHz */
+#define BC250_SMU_METRICS_OFF_DCLK 76u          /* uint16 DclkFrequency, MHz */
+#define BC250_SMU_METRICS_OFF_MEMCLK 78u        /* uint16 MemclkFrequency, MHz */
 #define BC250_SMU_METRICS_OFF_GFX_TEMP 70u      /* uint16 GfxTemperature, centi-Celsius (amdgpu: edge) */
 #define BC250_SMU_METRICS_OFF_VOLTAGE 80u       /* uint32 Voltage[2], mV: [0] VDDCR_VDD, [1] VDDCR_GFX */
 #define BC250_SMU_METRICS_OFF_CURRENT 88u       /* uint32 Current[2], mA, same indices */
@@ -49,6 +55,13 @@
 #define BC250_SMU_METRICS_OFF_SOC_TEMP 108u     /* uint16 SocTemperature, centi-Celsius (amdgpu: hotspot) */
 #define BC250_SMU_METRICS_OFF_THROTTLER 112u    /* uint16 ThrottlerStatus */
 #define BC250_SMU_METRICS_OFF_ACCNT 240u        /* uint32 Accnt, after SampleStartTime and SampleStopTime */
+#define BC250_SMU_METRICS_CPU_CORES 6u          /* CoreFrequency[] entries: the six cores the part is sold with */
+#define BC250_SMU_METRICS_L3 2u                 /* L3Frequency[] entries */
+/* The SoC, memory and CPU clocks of the table (0.7.216.15, K137). The table has no FCLK and no STAPM or power-limit
+ * field: MemclkFrequency, SocclkFrequency, the two L3 clocks and the six core clocks are what it says about the
+ * fabric side and the processor, and ThrottlerStatus (above) is its only limit indicator. They are read-only
+ * telemetry: no check below depends on them, and a clock field that still holds the poison reads 0 ("not
+ * written") instead of refusing a table the power fields made whole. */
 
 /* The byte the owner fills the page with before every transfer. A field that still holds it afterwards was not
  * written by the firmware, so the table is refused instead of read as 4294967 W. */
@@ -102,6 +115,13 @@ struct bc250_smu_metrics {
 	unsigned int gfx_mhz;           /* Current.GfxclkFrequency: equal to GetGfxFrequency when the layout is right */
 	unsigned int gfx_cc, soc_cc;    /* Current.GfxTemperature and SocTemperature, centi-Celsius */
 	unsigned int throttler;         /* Current.ThrottlerStatus */
+	/* Telemetry only (0.7.216.15): 0 for a field the firmware left unwritten. */
+	unsigned int socclk_mhz;        /* Current.SocclkFrequency */
+	unsigned int memclk_mhz;        /* Current.MemclkFrequency */
+	unsigned int vclk_mhz;          /* Current.VclkFrequency */
+	unsigned int dclk_mhz;          /* Current.DclkFrequency */
+	unsigned int l3_mhz[BC250_SMU_METRICS_L3];              /* Current.L3Frequency[] */
+	unsigned int core_mhz[BC250_SMU_METRICS_CPU_CORES];     /* Current.CoreFrequency[] */
 };
 
 /* The reader. The governor thread alone touches it; the miniport copies what it publishes. */

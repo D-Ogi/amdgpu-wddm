@@ -188,7 +188,11 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
 
     KMD 0.7.215.1 adds ABI 3 (248 bytes: the ABI 2 structure and the SMU metrics tail). abi2 is also true for ABI 3,
     which contains the ABI 2 fields, and the tail is touched only inside `if (abi3)` statements. The CLI asks with
-    ABI 3 first and falls back to ABI 2, then ABI 1; the export takes all three lengths."""
+    ABI 3 first and falls back to ABI 2, then ABI 1; the export takes all three lengths.
+
+    KMD 0.7.216.15 adds ABI 4 (296 bytes: ABI 3 and the table's clocks). abi3 is also true for ABI 4, and the clocks
+    tail is touched only inside `if (abi4)` statements. The CLI asks with ABI 4 first and falls back one ABI at a
+    time; the export takes all four lengths."""
     found = []
     body = function_body(dpm_source, "DpmRequest")
     if body is None:
@@ -196,7 +200,9 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     if not re.search(r"expectedFlags\.NoAdapterSynchronization\s*=\s*1\s*;", body) or \
        not re.search(r"EscapeFlags\s*!=\s*expectedFlags\.Value\)\s*return\s*;", body):
         found.append("dpm.c: DpmRequest does not refuse every flag word but {NoAdapterSynchronization}")
-    if not re.search(r"abi3\s*=\s*abi\s*==\s*BC250_DPM_ABI_3\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM_EX\)", body) or \
+    if not re.search(r"abi4\s*=\s*abi\s*==\s*BC250_DPM_ABI_4\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM_EX2\)", body) or \
+       not re.search(r"abi3\s*=\s*\(abi\s*==\s*BC250_DPM_ABI_3\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM_EX\)\)"
+                     r"\s*\|\|\s*abi4\s*;", body) or \
        not re.search(r"abi2\s*=\s*\(abi\s*==\s*BC250_DPM_ABI\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM\)\)\s*\|\|\s*abi3\s*;",
                      body) or \
        not re.search(r"abi1\s*=\s*abi\s*==\s*BC250_DPM_ABI_1\s*&&\s*Size\s*==\s*BC250_DPM_ABI1_SIZE", body) or \
@@ -223,11 +229,20 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
         if not any(a <= m.start() < b for a, b in tail):
             found.append("dpm.c: DpmRequest touches ex->Metrics outside an if (abi3) block")
             break
+    # The ABI 4 tail, through ex2, only inside `if (abi4)` (0.7.216.15).
+    tail4 = [m.span() for m in re.finditer(r"if\s*\(abi4\)\s*(\{[^{}]*\}|[^;{}]*;)", body)]
+    if not tail4:
+        found.append("dpm.c: DpmRequest has no if (abi4) block")
+    for m in re.finditer(r"ex2->Clocks", body):
+        if not any(a <= m.start() < b for a, b in tail4):
+            found.append("dpm.c: DpmRequest touches ex2->Clocks outside an if (abi4) block")
+            break
     dispatch = re.search(r"if\s*\(\s*data->Command\s*==\s*BC250_ESCAPE_RUN_DPM\s*\)\s*\{(.*?)\n    \}",
                          display_source, re.S)
     if not dispatch:
         found.append("display.c: no RUN_DPM dispatch")
-    elif not re.search(r"PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI3_SIZE\s*&&\s*"
+    elif not re.search(r"PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI4_SIZE\s*&&\s*"
+                       r"Escape->PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI3_SIZE\s*&&\s*"
                        r"Escape->PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM\)\s*&&\s*"
                        r"Escape->PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI1_SIZE\)", dispatch.group(1)) or \
             not re.search(r"DpmRequest\(device,[^;]*Escape->PrivateDriverDataSize,", dispatch.group(1)):
@@ -237,10 +252,12 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     if query is None:
         found.append("bc250kmd_cli.c: DpmQuery not found")
     else:
-        if not re.search(r"size\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI_3\s*\?\s*\(unsigned\)sizeof\(\*x\)\s*:\s*"
+        if not re.search(r"size\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI_4\s*\?\s*\(unsigned\)sizeof\(\*x\)\s*:\s*"
+                         r"g_DpmAbi\s*==\s*BC250_DPM_ABI_3\s*\?\s*\(unsigned\)sizeof\(x->Ex\)\s*:\s*"
                          r"g_DpmAbi\s*==\s*BC250_DPM_ABI\s*\?\s*\(unsigned\)sizeof\(\*d\)\s*:\s*"
                          r"BC250_DPM_ABI1_SIZE\s*;", query) or \
-           not re.search(r"g_DpmAbi\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI_3\s*\?\s*BC250_DPM_ABI\s*:\s*"
+           not re.search(r"g_DpmAbi\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI_4\s*\?\s*BC250_DPM_ABI_3\s*:\s*"
+                         r"g_DpmAbi\s*==\s*BC250_DPM_ABI_3\s*\?\s*BC250_DPM_ABI\s*:\s*"
                          r"BC250_DPM_ABI_1\s*;", query):
             found.append("bc250kmd_cli.c: DpmQuery does not send each ABI with its own size, or never falls back")
         if not re.search(r"SendEscapeFlags\(BC250_DEFAULT_HWID,\s*d,\s*size,\s*1,", query):
@@ -248,8 +265,8 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     idle = function_body(cli_source, "DpmPrintIdle")
     if idle is None:
         found.append("bc250kmd_cli.c: DpmPrintIdle not found")
-    elif not re.search(r"if\s*\(d->AbiVersion\s*!=\s*BC250_DPM_ABI\s*&&\s*d->AbiVersion\s*!=\s*BC250_DPM_ABI_3\)\s*\{",
-                       idle):
+    elif not re.search(r"if\s*\(d->AbiVersion\s*!=\s*BC250_DPM_ABI\s*&&\s*d->AbiVersion\s*!=\s*BC250_DPM_ABI_3\s*&&\s*"
+                       r"d->AbiVersion\s*!=\s*BC250_DPM_ABI_4\)\s*\{", idle):
         found.append("bc250kmd_cli.c: DpmPrintIdle reads the ABI 2 fields without checking the answer's AbiVersion")
     # Bc250Dpm, the export bc250mon and the control application call through bc250control.dll. Its callers were
     # built against the ABI 1 layout and pass 160 bytes, so the ABI it asks with is the one its caller's length
@@ -260,10 +277,12 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
         found.append("bc250kmd_cli.c: Bc250Dpm not found")
     else:
         if not re.search(r"bytes\s*!=\s*BC250_DPM_ABI1_SIZE\s*&&\s*bytes\s*!=\s*sizeof\(\*data\)\s*&&\s*"
-                         r"bytes\s*!=\s*BC250_DPM_ABI3_SIZE\)+\s*return", export):
-            found.append("bc250kmd_cli.c: Bc250Dpm does not admit exactly the ABI 1 prefix, ABI 2 and ABI 3")
+                         r"bytes\s*!=\s*BC250_DPM_ABI3_SIZE\s*&&\s*bytes\s*!=\s*BC250_DPM_ABI4_SIZE\)+\s*return",
+                         export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not admit exactly the ABI 1 prefix, ABI 2, ABI 3 and ABI 4")
         if not re.search(r"abi\s*=\s*bytes\s*==\s*BC250_DPM_ABI1_SIZE\s*\?\s*BC250_DPM_ABI_1\s*:\s*"
-                         r"bytes\s*==\s*BC250_DPM_ABI3_SIZE\s*\?\s*BC250_DPM_ABI_3\s*:\s*BC250_DPM_ABI\s*;", export):
+                         r"bytes\s*==\s*BC250_DPM_ABI3_SIZE\s*\?\s*BC250_DPM_ABI_3\s*:\s*"
+                         r"bytes\s*==\s*BC250_DPM_ABI4_SIZE\s*\?\s*BC250_DPM_ABI_4\s*:\s*BC250_DPM_ABI\s*;", export):
             found.append("bc250kmd_cli.c: Bc250Dpm does not pair the caller's length with its AbiVersion")
         if not re.search(r"memset\(data,\s*0,\s*bytes\)\s*;", export) or \
            not re.search(r"TelemetryEscape\(data,\s*bytes\)\s*;", export):
@@ -309,11 +328,12 @@ class DpmRequestAbiTest(unittest.TestCase):
             (display, dpm, cli.replace("g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;",
                                        "(unsigned)sizeof(*d);", 1)),
             # The CLI printing the ABI 2 fields whatever the driver answered.
-            (display, dpm, cli.replace("    if (d->AbiVersion != BC250_DPM_ABI && d->AbiVersion != BC250_DPM_ABI_3) {",
-                                       "    if (0) {", 1)),
+            (display, dpm, cli.replace("    if (d->AbiVersion != BC250_DPM_ABI && d->AbiVersion != BC250_DPM_ABI_3 && "
+                                       "d->AbiVersion != BC250_DPM_ABI_4) {", "    if (0) {", 1)),
             # The export asking with ABI 2 for a 160-byte caller, which reads 32 bytes of its stack.
             (display, dpm, cli.replace("    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : "
-                                       "bytes == BC250_DPM_ABI3_SIZE ? BC250_DPM_ABI_3 : BC250_DPM_ABI;",
+                                       "bytes == BC250_DPM_ABI3_SIZE ? BC250_DPM_ABI_3 :\n"
+                                       "          bytes == BC250_DPM_ABI4_SIZE ? BC250_DPM_ABI_4 : BC250_DPM_ABI;",
                                        "    abi = BC250_DPM_ABI;", 1)),
             # The ABI 3 tail written for every caller: 56 bytes past a 192-byte request.
             (display, dpm.replace("    if (abi3) RtlZeroMemory(&ex->Metrics, sizeof(ex->Metrics));\n",
@@ -324,13 +344,25 @@ class DpmRequestAbiTest(unittest.TestCase):
             # The dispatch without the ABI 3 size: every ABI 3 caller refused.
             (display.replace("Escape->PrivateDriverDataSize != BC250_DPM_ABI3_SIZE &&\n", "", 1), dpm, cli),
             # The CLI never falling back from ABI 3, so a driver before 0.7.215 answers nothing.
-            (display, dpm, cli.replace("g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI : BC250_DPM_ABI_1;",
-                                       "g_DpmAbi = BC250_DPM_ABI_1;", 1)),
+            (display, dpm, cli.replace("g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_4 ? BC250_DPM_ABI_3 : "
+                                       "g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI :\n"
+                                       "                   BC250_DPM_ABI_1;", "g_DpmAbi = BC250_DPM_ABI_1;", 1)),
+            # The ABI 4 tail written for every caller: 48 bytes past a 248-byte request (0.7.216.15).
+            (display, dpm.replace("    if (abi4) RtlZeroMemory(&ex2->Clocks, sizeof(ex2->Clocks));\n",
+                                  "    RtlZeroMemory(&ex2->Clocks, sizeof(ex2->Clocks));\n", 1), cli),
+            # ABI 4 admitted without its pairing to the 296-byte size.
+            (display, dpm.replace("abi == BC250_DPM_ABI_4 && Size == sizeof(BC250_ESCAPE_DPM_EX2)",
+                                  "abi == BC250_DPM_ABI_4", 1), cli),
+            # The dispatch without the ABI 4 size: every ABI 4 caller refused.
+            (display.replace("Escape->PrivateDriverDataSize != BC250_DPM_ABI4_SIZE &&\n", "", 1), dpm, cli),
+            # The CLI hiding the idle fields of an ABI 4 answer, which carries them.
+            (display, dpm, cli.replace(" && d->AbiVersion != BC250_DPM_ABI_4) {", ") {", 1)),
             # The export zeroing the whole structure in a 160-byte caller's buffer.
             (display, dpm, cli.replace("    memset(data, 0, bytes);", "    memset(data, 0, sizeof(*data));", 1)),
             # The export back to one size, which refuses every deployed caller.
             (display, dpm, cli.replace("if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data) && "
-                                       "bytes != BC250_DPM_ABI3_SIZE))", "if (!data || bytes != sizeof(*data))", 1)),
+                                       "bytes != BC250_DPM_ABI3_SIZE &&\n                  bytes != BC250_DPM_ABI4_SIZE))",
+                                       "if (!data || bytes != sizeof(*data))", 1)),
             # A third request builder, outside both functions.
             (display, dpm, cli.replace("static void DpmPrint(const BC250_ESCAPE_DPM *d)",
                                        "static void DpmStray(BC250_ESCAPE_DPM *d)\n"

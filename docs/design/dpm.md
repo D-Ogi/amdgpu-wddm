@@ -71,6 +71,7 @@ application and `bc250kmd_cli dpm` show the package power.
 | Seen on unit A | amdgpu sends 0x4 (`0xF4`), 0x5 (`0x8CF000`) and 0x6 at every init | `init-sequence.md` (E03) |
 | Table | `SmuMetrics_t`: `Current` and `Average` (116 bytes each), then three counters; 244 bytes; driver interface 0x8 | Linux v6.18 `smu11_driver_if_cyan_skillfish.h` (AMD, MIT) |
 | Fields read | `CurrentSocketPower` (mW, offset 104), `Power[2]` (96), `Voltage[2]` (80), `GfxclkFrequency` (68), `GfxTemperature` (70), `SocTemperature` (108), `ThrottlerStatus` (112); `Average.CurrentSocketPower` (220) | the same header; `cyan_skillfish_ppt.c` reads the same fields |
+| Clocks read (0.7.216.15) | `CoreFrequency[6]` (offset 0), `L3Frequency[2]` (48), `SocclkFrequency` (72), `VclkFrequency` (74), `DclkFrequency` (76), `MemclkFrequency` (78), all MHz, all from `Current` | the same header |
 
 How it runs (`driver/shim/bc250_smu_metrics.c` for the rules, `driver/kmd/smu.c` `SmuReadMetrics` for the
 messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
@@ -94,6 +95,20 @@ messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
 - `EnableSmuMetrics` (REG_DWORD, default 1 in the INF and the installer): 0 sends no metrics message and maps no page.
 - RUN_DPM ABI 3 (248 bytes) carries the values. `BC250_DPM_FLAG_POWER` is set only for a table at most three
   seconds old. Without it the application shows "No reading", never an older value.
+- RUN_DPM ABI 4 (296 bytes, 0.7.216.15) adds `BC250_DPM_CLOCKS`: the SoC, memory, video, L3 and CPU core clocks of
+  the same table, under the same freshness flag. These clocks are telemetry only. No check of a table reads them. A
+  clock field that still holds `0xFF` reads 0 and does not refuse the table. The table has no FCLK field and no STAPM
+  or power-limit field. `MemclkFrequency` is the nearest clock to the data fabric, and `ThrottlerStatus` is the only
+  limit indicator. The driver log writes the clocks as a third line after each power line:
+  `smu metrics: telemetry MHz soc 1000 mem 1750 v/d 0/0 l3 3400/3400 cpu 3400-3500`. `bc250kmd_cli dpm` prints a
+  `smu clocks:` line under the header and the memory, SoC, L3 and top core clocks after the power of each sample.
+  `bc250kmd_cli telemetry` adds `socclk_mhz`, `memclk_mhz`, `vclk_mhz`, `dclk_mhz`, `l3_mhz` and `cpu_mhz`. A driver
+  before 0.7.216.15 refuses 296 bytes, and the tools then ask with ABI 3. The escape is additive, so
+  `BC250_KMD_VERSION` stays `0x000700D8`.
+- Why the clocks (K137, 2026-10-07): after a stop of the GPU with the native SMU owner on, unit A holds the CPU at
+  about 2.78 GHz until a Windows restart, and a GPU-bound game loses about 18 % at a higher GPU clock. A cap of the
+  CPU clock alone (`0x8F` 2800 MHz) did not slow the GPU. The clocks let the lab compare a fresh boot with the state
+  after a stop, without a new SMU message.
 - What the figure is: the SMU's own estimate for the whole package, processor and graphics together. The board, the
   memory chips, the fan and the losses of the supply are not in it, so it reads well under the smart plug.
 
@@ -583,6 +598,14 @@ base is the operator's own limit, or the baseline that this start's read stage r
 M817). On unit A the arm thus has two steps, 3000 and 2800 MHz. The arm does not change a GPU clock rule. The GPU gets
 the headroom back through the governor's own soft release, at its own timing.
 
+Since 0.7.216.15 the baseline is the highest clock that the firmware itself answered in the read stage, over the
+P-state table (`0x3B`) and the per-core clocks (`0x43`), each in the band 2800 to 4000 MHz and the result clamped to
+the release bound of 3500 MHz (`bc250_cpu_baseline_mhz`). On unit A the table tops out at 3200 MHz, but the cores read
+3500 MHz after a cold boot, so the base is 3500 MHz and the arm's steps are 3300, 3100, 2900 and 2800 MHz. Up to
+0.7.216.14 the base was the table alone. The release of a cap therefore sent `0x8F` 3200 and held one busy thread
+near 3180 MHz until a restart (session 454). The stretching check of the undervolt search still uses the table's
+3200 MHz with no limit applied, because one busy core boosts higher than all cores under the search's load.
+
 **Release.** The GPU is free (busy average under 600 permille) for 2 s: the whole cap goes. The die is cool (a valid
 reading under 81 C, the thermal cap released, no episode, no zone) for 8 s: the cap goes up one step, and the step
 that reaches the base is the release. A bound GPU that is neither hot nor cool holds the cap. A tick with no
@@ -617,9 +640,9 @@ during one. `CpuStop` and `CpuPause` take the cap out while the mailbox is still
 because the chip loses the limit in D3.
 
 **Telemetry.** With the arm on, every change of the cap writes one line:
-`dpm: joint CPU cap 0 -> 3000 MHz (capping): busy avg 912, 86.4 C, GPU cap 1400 MHz` (0 is no cap). The CPU worker
+`dpm: joint CPU cap 0 -> 3300 MHz (capping): busy avg 912, 86.4 C, GPU cap 1400 MHz` (0 is no cap). The CPU worker
 logs the change itself as `cpu: the joint arm's cap ...`. Two lines follow each 5 s telemetry line, the stop and the summary:
-`dpm: telemetry joint hold, want 3000 applied 3000 base 3200 MHz, CPU ready 1` and
+`dpm: telemetry joint hold, want 3300 applied 3300 base 3500 MHz, CPU ready 1` and
 `dpm: telemetry joint engages 1 down 1 up 0 releases 0, CPU sent 1 refused 0`. `RUN_DPM` carries two new flag bits in
 every ABI, `BC250_DPM_FLAG_JOINT` (16384, the arm runs in this start) and `BC250_DPM_FLAG_JOINT_CAP` (32768, the arm's
 limit is in the chip now). No field moves, so `BC250_KMD_VERSION` stays `0x000700D8`. `bc250kmd_cli dpm` prints a
@@ -647,6 +670,34 @@ keeps its busy gate for the same message.
 3. The logs of those sessions show every release path that the session reached (free, cool, stop), and no cap is
    left in the chip after the session.
 
+### The stop (0.7.216.15, K137)
+
+An orderly stop (`pnputil /restart-device` or `/disable-device`) runs `CpuStop`, then `DpmStop`, then the owner stop,
+then the GPU teardown. `CpuStop` sends a message only to end a trial or to release the joint arm's cap. `DpmStop`
+applies the 1000 MHz floor with its forced voltage (`RequestGfxclk` and `ForceGfxVid`) when the governor is above or
+below it, and it never unforces. The GPU teardown stops the RLC (`RLC_CNTL.RLC_ENABLE_F32` 0) and asks the PSP to
+destroy the TMR. On unit A, after such a stop with `EnableNativeSmu` 1, the CPU stays near 2.78 GHz until a Windows
+restart (K137). With `EnableNativeSmu` 0 a stop does not cause it. The RLC stop and the TMR destroy run in both
+configurations, so the cause is more likely in what the native owner does.
+
+The bisect arms, cheapest first. Each arm is one stop on a fresh boot, then one sample of the CPU clock and of the
+`smu clocks:` line:
+
+1. Existing switches, no new code: `EnableSmuMetrics` 0, `CpuTune` 0 and `DpmMode` 0. Each one removes one kind of
+   SMU traffic of the native owner for the whole start (the table transfer, the queue 3 read stage, the governor's
+   clock changes). They need a restart, because the driver reads them at the start.
+2. `StopDpmFloor` 0 (new in 0.7.216.15): the stop sends no SMU message at all, and the last governed point stays in
+   the chip. That point is one the start ran with, at most `DpmMaxMHz`. The next start applies its own point first,
+   and the session marker goes as on a clean stop, so the arm does not turn into a `DpmMode` 0 fallback.
+3. Not implemented, because each one is a risk for the BD-090 restart path (`wddm-start-confirmation.md`):
+   - Keep the RLC running at the stop. The TMR destroy that follows removes the firmware that the RLC runs, and the
+     next start asks the PSP to load the firmware again, which needs a stopped RLC.
+   - Keep the TMR. `PspStop` then takes its unconfirmed branch: `GpuStopUnconfirmed`, storage and GART kept. A
+     restart in the same device context then refuses the PSP load and fails the start.
+   - Give the GPU voltage back to the firmware at the stop (`UnforceGfxVid`, as Linux
+     `PP_OD_RESTORE_DEFAULT_TABLE` does). This needs a new message on the clock allowlist, which leaves it out on
+     purpose (see "SMU allowlist").
+
 ## Settings and boot guard (`HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`)
 
 | Value | Meaning |
@@ -659,6 +710,7 @@ keeps its busy gate for the same message.
 | `DpmIdleLeavePermille` | the slow exit (0.7.216.6). The idle point is left when its trailing window's work reaches this share. Absent = 150 (`BC250_DPM_IDLE_LEAVE_PERMILLE`), range 10 to 400. It must be above `DpmIdleBusyPermille`, else the idle state is off for the start |
 | `DpmThermalZone` | the soft thermal zone (0.7.213): absent or any other value runs it, 0 runs the 0.7.212 thermal rules for the whole start (the hot cap at 87 C alone, no soft release, the warm zone at 87 C). A runtime `dpm tune reset` turns the zone back on |
 | `DpmJointGovernor` | the joint power arm (0.7.216.7, C62). 1 runs it in a start that governs the clock. Absent or any other value leaves it off (the default). It also needs `CpuTune` 1 and a CPU read stage that answered. See "The joint power arm" above for what a lab trial must show before the default changes |
+| `StopDpmFloor` | a K137 bisect arm (0.7.216.15). 0 skips the floor apply of an orderly stop, so the stop sends no SMU message. Absent or any other value applies the floor (the default). The driver reads it at the stop, so it needs no new start. See "The stop" below |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
 | `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |

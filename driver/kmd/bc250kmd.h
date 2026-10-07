@@ -428,7 +428,7 @@ void SmuMetricsStart(BC250_DEVICE* Device);
 void SmuMetricsStop(BC250_DEVICE* Device);
 void SmuMetricsSample(BC250_DEVICE* Device);            // the governor thread, at most once a period
 // The ABI 3 tail of RUN_DPM from the published snapshot; TRUE when the reading is fresh (BC250_DPM_FLAG_POWER).
-BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out);
+BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out, _Out_opt_ BC250_DPM_CLOCKS* Clocks);
 void SmuMetricsLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 
 // interop.c

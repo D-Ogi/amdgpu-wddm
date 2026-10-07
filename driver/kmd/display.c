@@ -340,9 +340,11 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         CuModeRequest(device,(BC250_ESCAPE_CU_MODE*)data,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
-    // DPM: the governor's published snapshot, software state as well (dpm.c); ABI 3 adds the SMU metrics copy.
+    // DPM: the governor's published snapshot, software state as well (dpm.c); ABI 3 adds the SMU metrics copy and
+    // ABI 4 (0.7.216.15) the table's SoC, memory and CPU clocks.
     if (data->Command == BC250_ESCAPE_RUN_DPM) {
-        if (Escape->PrivateDriverDataSize != BC250_DPM_ABI3_SIZE &&
+        if (Escape->PrivateDriverDataSize != BC250_DPM_ABI4_SIZE &&
+            Escape->PrivateDriverDataSize != BC250_DPM_ABI3_SIZE &&
             Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM) &&
             Escape->PrivateDriverDataSize != BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
         DpmRequest(device,(BC250_ESCAPE_DPM*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);

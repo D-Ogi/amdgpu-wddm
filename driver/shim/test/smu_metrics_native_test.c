@@ -60,6 +60,16 @@ static void good_table(void)
     put32(BC250_SMU_METRICS_HALF + BC250_SMU_METRICS_OFF_VOLTAGE, 900);
     put32(BC250_SMU_METRICS_HALF + BC250_SMU_METRICS_OFF_VOLTAGE + 4, 915);
     put16(BC250_SMU_METRICS_HALF + BC250_SMU_METRICS_OFF_SOC_TEMP, 6000);
+    /* The clocks (0.7.216.15): Current only; the Average half carries other numbers so a mix-up shows. */
+    put16(BC250_SMU_METRICS_OFF_SOCCLK, 1000);
+    put16(BC250_SMU_METRICS_OFF_MEMCLK, 1750);
+    put16(BC250_SMU_METRICS_OFF_VCLK, 400);
+    put16(BC250_SMU_METRICS_OFF_DCLK, 300);
+    put16(BC250_SMU_METRICS_OFF_L3CLK, 3400);
+    put16(BC250_SMU_METRICS_OFF_L3CLK + 2, 3390);
+    put16(BC250_SMU_METRICS_OFF_CORECLK, 3500);
+    put16(BC250_SMU_METRICS_OFF_CORECLK + 10, 3481);
+    put16(BC250_SMU_METRICS_HALF + BC250_SMU_METRICS_OFF_MEMCLK, 9);
 }
 
 /* Governor ticks of 25 ms for ms milliseconds, each one calling the sampler as DpmTick does. */
@@ -82,7 +92,7 @@ static void gate_off(void)
     CHECK(native_setting_reads == 1 && native_maps == 0);
     ticks(5000);
     CHECK(native_reads == 0);                               /* EnableSmuMetrics 0: no message at all */
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OFF && x.SocketPowerMw == 0);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_OFF && x.SocketPowerMw == 0);
     CHECK(native_log_has("EnableSmuMetrics 0"));
     native_lines = 0;
     SmuMetricsLogLine(&device, "telemetry");
@@ -99,7 +109,7 @@ static void no_page(void)
     SmuMetricsStart(&device);
     CHECK(native_maps == 0);
     ticks(3000);
-    CHECK(native_reads == 0 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_NO_TABLE);
+    CHECK(native_reads == 0 && !SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_NO_TABLE);
     unit_a(); device.VramEnabled = FALSE;
     SmuMetricsStart(&device);
     ticks(3000);
@@ -112,7 +122,7 @@ static void no_page(void)
     SmuMetricsStart(&device);
     ticks(3000);
     CHECK(native_maps == 1 && native_reads == 0 && native_unmaps == 0);
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_NO_TABLE);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_NO_TABLE);
     CHECK(native_log_has("no table page"));
     /* A carve-out of 1 MB has no top window at all. */
     unit_a(); device.VramLength = 0x100000;
@@ -128,30 +138,40 @@ static void reading(void)
     SmuMetricsStart(&device);                               /* absent value: on (GuardReadSetting(..., 1)) */
     CHECK(native_setting_reads == 1 && native_maps == 1);
     CHECK(native_log_has("table page MC 0xF5FFFEC000"));
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_WAITING);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_WAITING);
     /* The first read waits one period after the start. */
     ticks(975);
     CHECK(native_reads == 0);
     ticks(25);
     CHECK(native_reads == 1);
-    CHECK(SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OK);
+    CHECK(SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_OK);
     CHECK(x.SocketPowerMw == 78000 && x.SocketPowerAvgMw == 77400 && x.GfxPowerMw == 48000 && x.SocPowerMw == 21000);
     CHECK(x.GfxMv == 919 && x.SocMv == 900 && x.GfxMHz == 1500 && x.GfxTemperatureCc == 6200 && x.SocTemperatureCc == 6050);
     CHECK(x.ThrottlerStatus == 4 && x.MetricsReads == 1 && x.MetricsFailures == 0 && x.MetricsAgeMs == 0);
+    /* RUN_DPM ABI 4 (0.7.216.15): the clocks of the same table. */
+    {
+        BC250_DPM_CLOCKS c;
+        memset(&c, 0xA5, sizeof(c));
+        CHECK(SmuMetricsFill(&device, &x, &c) && x.SocketPowerMw == 78000);
+        CHECK(c.SocclkMHz == 1000 && c.MemclkMHz == 1750 && c.VclkMHz == 400 && c.DclkMHz == 300);
+        CHECK(c.L3MHz[0] == 3400 && c.L3MHz[1] == 3390 && c.CpuCoreMHz[0] == 3500 && c.CpuCoreMHz[5] == 3481);
+        CHECK(c.CpuCoreMHz[1] == 0 && c.CpuCoreMHz[4] == 0);
+    }
     /* Rate: 40 ticks a second, one read a second. */
     ticks(10000);
     CHECK(native_reads == 11);
     native_advance_ms(640);
-    CHECK(SmuMetricsFill(&device, &x) && x.MetricsAgeMs == 640);
+    CHECK(SmuMetricsFill(&device, &x, NULL) && x.MetricsAgeMs == 640);
     /* The log line fits the ring and says what the escape says. */
     native_lines = 0;
     SmuMetricsLogLine(&device, "telemetry");
-    CHECK(native_lines == 2 && native_log_has("78.0 W avg 77.4 W, gfx 48.0 W soc 21.0 W") && native_log_has("gfx 919 mV 1500 MHz 62.0 C soc 900 mV 60.5 C thr 4"));
+    CHECK(native_lines == 3 && native_log_has("MHz soc 1000 mem 1750 v/d 400/300 l3 3400/3390 cpu 3481-3500"));
+    CHECK(native_log_has("78.0 W avg 77.4 W, gfx 48.0 W soc 21.0 W") && native_log_has("gfx 919 mV 1500 MHz 62.0 C soc 900 mV 60.5 C thr 4"));
     /* A governor that stops calling (paused for a power transition): the copy ages out after three seconds. */
     native_advance_ms(2360);
-    CHECK(SmuMetricsFill(&device, &x));
+    CHECK(SmuMetricsFill(&device, &x, NULL));
     native_advance_ms(1);
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OK && x.SocketPowerMw == 78000);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_OK && x.SocketPowerMw == 78000);
     native_lines = 0;
     SmuMetricsLogLine(&device, "telemetry");
     CHECK(native_log_has("no fresh table"));
@@ -159,10 +179,10 @@ static void reading(void)
     device.Smu.Online = FALSE;
     ticks(2000);
     CHECK(native_reads == 13);
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsFailures == 0);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsFailures == 0);
     device.Smu.Online = TRUE;
     ticks(1000);
-    CHECK(native_reads == 14 && SmuMetricsFill(&device, &x));
+    CHECK(native_reads == 14 && SmuMetricsFill(&device, &x, NULL));
     SmuMetricsStop(&device);
     CHECK(native_unmaps == 1 && native_log_has("stop after"));
     SmuMetricsStop(&device);                                /* idempotent */
@@ -180,14 +200,14 @@ static void bad_tables(void)
     SmuMetricsStart(&device);
     ticks(5000);
     CHECK(native_reads == 3);                               /* the third bad table ends this start */
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_BAD_TABLE && x.MetricsFailures == 3);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_BAD_TABLE && x.MetricsFailures == 3);
     CHECK(native_log_has("bad table") && native_log_has("off until next start"));
     /* Not latched for the boot: the next start reads again. */
     good_table();
     SmuMetricsStart(&device);
     CHECK(native_unmaps == 1 && native_maps == 2);          /* the earlier mapping went first */
     ticks(1000);
-    CHECK(native_reads == 4 && SmuMetricsFill(&device, &x));
+    CHECK(native_reads == 4 && SmuMetricsFill(&device, &x, NULL));
     SmuMetricsStop(&device);
 }
 
@@ -199,11 +219,11 @@ static void refusal(void)
     good_table();
     SmuMetricsStart(&device);
     ticks(1000);
-    CHECK(native_reads == 1 && SmuMetricsFill(&device, &x));
+    CHECK(native_reads == 1 && SmuMetricsFill(&device, &x, NULL));
     native_result = 0xFE;                                   /* the firmware refuses the transfer */
     ticks(1000);
     CHECK(native_reads == 2);
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_REFUSED && x.MetricsFailures == 1);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_REFUSED && x.MetricsFailures == 1);
     CHECK(native_log_has("refused") && native_log_has("off until next boot"));
     native_result = 0;
     ticks(10000);
@@ -212,12 +232,12 @@ static void refusal(void)
     SmuMetricsStart(&device);
     CHECK(native_maps == 1 && native_unmaps == 1);
     ticks(10000);
-    CHECK(native_reads == 2 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_REFUSED);
+    CHECK(native_reads == 2 && !SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_REFUSED);
     CHECK(native_log_has("refused the table earlier in this boot"));
     /* The switch still wins: EnableSmuMetrics 0 reports off, not refused. */
     native_setting_present = 1; native_setting_value = 0;
     SmuMetricsStart(&device);
-    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OFF);
+    CHECK(!SmuMetricsFill(&device, &x, NULL) && x.MetricsState == BC250_DPM_METRICS_OFF);
     /* A new device object in the same driver image (unit_a initializes it again): still latched. */
     unit_a();
     SmuMetricsStart(&device);

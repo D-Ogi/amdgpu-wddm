@@ -107,11 +107,16 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
     d->Status = BC250_ESCAPE_STATUS_DONE; d->Version = 0x000700B1u;
     d->Flags = BC250_DPM_FLAG_TEMPERATURE | BC250_DPM_FLAG_CLOCK | BC250_DPM_FLAG_HW_BUSY;
     d->TemperatureMc = 67500; d->ObservedMHz = 1000; d->BusyPermille = 910; d->BusyAvgPermille = 880;
-    if (size == BC250_DPM_ABI3_SIZE) {                        // ABI 3 (0.7.215): the SMU metrics tail
+    if (size == BC250_DPM_ABI3_SIZE || size == BC250_DPM_ABI4_SIZE) {   // ABI 3 (0.7.215): the SMU metrics tail
         BC250_ESCAPE_DPM_EX *x = data;
         x->Metrics.MetricsState = BC250_DPM_METRICS_OK; x->Metrics.MetricsReads = 12;
         x->Metrics.SocketPowerMw = 78000; x->Metrics.SocketPowerAvgMw = 77400;
         d->Flags |= BC250_DPM_FLAG_POWER;
+    }
+    if (size == BC250_DPM_ABI4_SIZE) {                        // ABI 4 (0.7.216.15): the table's clocks
+        BC250_ESCAPE_DPM_EX2 *x = data;
+        x->Clocks.SocclkMHz = 1000; x->Clocks.MemclkMHz = 1750; x->Clocks.L3MHz[1] = 3400;
+        x->Clocks.CpuCoreMHz[5] = 3481;
     }
     if (escapeMode == 3) { d->Status = BC250_ESCAPE_STATUS_REFUSED; d->NtStatus = 0xC000000Du; }
     if (escapeMode == 4) { d->Status = BC250_ESCAPE_STATUS_REFUSED; d->NtStatus = 0; }
@@ -192,6 +197,21 @@ int main(void)
         CHECK(x.Metrics.SocketPowerMw == 78000 && x.Metrics.SocketPowerAvgMw == 77400 && x.Metrics.GfxMv == 0);
         /* An answer that carries another AbiVersion is refused, as for the other two sizes. */
         escapeMode = 5; CHECK(Bc250Dpm(&x.Dpm, BC250_DPM_ABI3_SIZE) == (LONG)0xC000000D);
+        escapeMode = 0;
+    }
+    /* ABI 4 (0.7.216.15): a caller with a BC250_ESCAPE_DPM_EX2 passes 296 bytes and gets the clocks tail as well. */
+    {
+        BC250_ESCAPE_DPM_EX2 x;
+        CHECK(sizeof(x) == BC250_DPM_ABI4_SIZE && sizeof(x.Ex) == BC250_DPM_ABI3_SIZE && sizeof(x.Clocks) == 48);
+        escapeCalls = 0;
+        CHECK(Bc250Dpm(&x.Ex.Dpm, 295) < 0 && Bc250Dpm(&x.Ex.Dpm, 297) < 0 && escapeCalls == 0);
+        memset(&x, 0xA5, sizeof(x));
+        CHECK(Bc250Dpm(&x.Ex.Dpm, BC250_DPM_ABI4_SIZE) == 0 && escapeCalls == 1 && escapeSize == BC250_DPM_ABI4_SIZE);
+        CHECK(sent.AbiVersion == BC250_DPM_ABI_4 && sent.Command == 23 && sent.Op == 0 && sent.IdleMHz == 0);
+        CHECK((x.Ex.Dpm.Flags & BC250_DPM_FLAG_POWER) && x.Ex.Metrics.SocketPowerMw == 78000);
+        CHECK(x.Clocks.SocclkMHz == 1000 && x.Clocks.MemclkMHz == 1750 && x.Clocks.L3MHz[1] == 3400);
+        CHECK(x.Clocks.CpuCoreMHz[5] == 3481 && x.Clocks.VclkMHz == 0 && x.Clocks.CpuCoreMHz[0] == 0);
+        escapeMode = 5; CHECK(Bc250Dpm(&x.Ex.Dpm, BC250_DPM_ABI4_SIZE) == (LONG)0xC000000D);
         escapeMode = 0;
     }
 

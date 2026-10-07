@@ -49,6 +49,10 @@
 //                   lowers the CPU's maximum boost clock (cpu.c) one step at a time and gives it back when either
 //                   ends; it needs CpuTune 1 and a CPU read stage that answered. docs/design/dpm.md says what a lab
 //                   trial must show before the default changes.
+//   StopDpmFloor    a K137 bisect arm (0.7.216.15): 0 skips the floor apply of an orderly stop (DpmStop), so that the
+//                   stop sends no SMU message at all. Absent or any other value applies the floor, which is the
+//                   default and the behaviour up to 0.7.216.14. It is read at the stop itself, so a lab trial sets it
+//                   right before the stop and needs no new start. docs/design/dpm.md "The stop" has the arms.
 //   DpmLastMode, DpmLastReason   what the last start did, for the tools when the adapter is gone
 //   DpmClosedReason the reason the driver itself wrote DpmMode 0 (3 unconfirmed, 4 unclean, 8 SMU error).
 //                   PersistFallback writes it, the first start that reads a DpmMode other than 0 deletes it,
@@ -85,6 +89,7 @@
 #define DPM_SETTING_IDLE_LEAVE L"DpmIdleLeavePermille"
 #define DPM_SETTING_ZONE L"DpmThermalZone"
 #define DPM_SETTING_JOINT L"DpmJointGovernor"
+#define DPM_SETTING_STOP_FLOOR L"StopDpmFloor"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
 #define DPM_SETTING_CLOSED L"DpmClosedReason"
@@ -111,6 +116,9 @@ C_ASSERT(sizeof(BC250_ESCAPE_DPM) == BC250_DPM_ABI2_SIZE);
 C_ASSERT(sizeof(BC250_DPM_METRICS) == 56);
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_EX) == BC250_DPM_ABI3_SIZE);   // ABI 3 (0.7.215): ABI 2 and the metrics tail
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_EX, Metrics) == BC250_DPM_ABI2_SIZE);
+C_ASSERT(sizeof(BC250_DPM_CLOCKS) == 48);
+C_ASSERT(sizeof(BC250_ESCAPE_DPM_EX2) == BC250_DPM_ABI4_SIZE);  // ABI 4 (0.7.216.15): ABI 3 and the clocks tail
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_EX2, Clocks) == BC250_DPM_ABI3_SIZE);
 C_ASSERT(BC250_DPM_THROTTLE_COUNT == 12);         // 0.7.207 appended "idle", 0.7.213 "thermal-zone"
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 184);   // ABI 3 (0.7.213); ABI 2 is 152 bytes, ABI 1 120
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_SIZE);
@@ -1342,6 +1350,7 @@ void DpmStop(BC250_DEVICE* Device)
     BC250_DPM_STATE* s = &Device->Dpm;
     DPM_TICK tick;
     ULONG serial = 0;
+    BOOLEAN skipFloor = FALSE;
 
     DpmLock(s);
     if (!s->Created) { DpmUnlock(s); return; }
@@ -1371,16 +1380,28 @@ void DpmStop(BC250_DEVICE* Device)
     // The lab floor, from above or from a point below it (a thermal-only one since 0.7.205, the idle point
     // since 0.7.207): the clock gate admits a request up to the floor that does not raise the voltage however
     // hot the part is, so the hardware does not keep an untested clock after the driver has given up ownership.
-    if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL &&
-        DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "stop"))
-        DpmCurveApplied(s, serial);      // the floor apply carried the stored curve's own voltage
+    // StopDpmFloor 0 (0.7.216.15, a K137 bisect arm) skips it: the point the governor last applied stays in the chip.
+    // That point is one this start ran with (at most DpmMaxMHz, with its own table or curve voltage), the GPU has no
+    // work of ours after the stop, and the next start applies its own point before it raises anything.
+    {
+        unsigned int stopFloor = 1;
+        skipFloor = (QueryPresent(DPM_SETTING_STOP_FLOOR, &stopFloor) && stopFloor == 0u) ? TRUE : FALSE;
+        if (skipFloor)
+            GuardLog("dpm: StopDpmFloor 0: the stop sends no SMU message; the clock stays at %lu MHz (level %lu)",
+                     (ULONG)bc250_dpm_level_mhz(s->Gov.level), (ULONG)s->Gov.level);
+        else if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL &&
+                 DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "stop"))
+            DpmCurveApplied(s, serial);      // the floor apply carried the stored curve's own voltage
+    }
     bc250_dpm_idle_leave(&s->Gov);      // the thread is joined; the clock is not at the idle point any more
     DpmJointEnd(Device, s, "stop");     // cpu.c's stop, which runs first, has taken the cap out of the chip
     // "Not above the floor" ends a start cleanly, the same reading the session marker itself uses
     // (bc250_dpm_session_step): since 0.7.205 the thermal cap can leave the governor at 800 or 900 MHz, and a
     // stop from there is clean. Testing for the floor alone left the marker behind whenever the floor apply
     // above did not go through, and the next start then read it as an unclean end and wrote DpmMode = 0.
-    if (s->Session.marked && s->Gov.level <= BC250_DPM_FLOOR_LEVEL &&
+    // A stop that skipped the floor on purpose (StopDpmFloor 0) is clean as well: the marker must not turn the bisect
+    // arm into a DpmMode 0 fallback at the next start.
+    if (s->Session.marked && (s->Gov.level <= BC250_DPM_FLOOR_LEVEL || skipFloor) &&
         NT_SUCCESS(GuardDeleteSetting(DPM_SETTING_SESSION)))
         s->Session.marked = 0;
     InterlockedExchange(&Device->Smu.GovernorActive, 0);
@@ -1528,11 +1549,12 @@ void DpmLogSummary(BC250_DEVICE* Device)
 }
 
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.
-// Size (0.7.207, 0.7.215): display.c admits BC250_DPM_ABI3_SIZE, sizeof(BC250_ESCAPE_DPM) (ABI 2) and
-// BC250_DPM_ABI1_SIZE only. With a shorter size nothing past that prefix is read or written: abi2 guards every ABI 2
-// field and is also true for ABI 3, which contains them; abi3 alone guards the metrics tail. A size that is not its
-// AbiVersion's is refused before anything else, as in DpmTuneRequest. The tail is smu_metrics.c's published copy:
-// this escape sends no SMU message.
+// Size (0.7.207, 0.7.215, 0.7.216.15): display.c admits BC250_DPM_ABI4_SIZE, BC250_DPM_ABI3_SIZE,
+// sizeof(BC250_ESCAPE_DPM) (ABI 2) and BC250_DPM_ABI1_SIZE only. With a shorter size nothing past that prefix is read
+// or written: abi2 guards every ABI 2 field and is also true for ABI 3 and 4, which contain them; abi3 guards the
+// metrics tail and is true for ABI 4; abi4 alone guards the clocks tail. A size that is not its AbiVersion's is
+// refused before anything else, as in DpmTuneRequest. Both tails are smu_metrics.c's published copy: this escape
+// sends no SMU message.
 void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
@@ -1541,11 +1563,14 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
     ULONGLONG ready = 0;
     BOOLEAN confirm = Data->Op == BC250_DPM_OP_CONFIRM;
     const ULONG abi = Data->AbiVersion;
-    const BOOLEAN abi3 = abi == BC250_DPM_ABI_3 && Size == sizeof(BC250_ESCAPE_DPM_EX);
+    const BOOLEAN abi4 = abi == BC250_DPM_ABI_4 && Size == sizeof(BC250_ESCAPE_DPM_EX2);
+    const BOOLEAN abi3 = (abi == BC250_DPM_ABI_3 && Size == sizeof(BC250_ESCAPE_DPM_EX)) || abi4;
     const BOOLEAN abi2 = (abi == BC250_DPM_ABI && Size == sizeof(BC250_ESCAPE_DPM)) || abi3;
     const BOOLEAN abi1 = abi == BC250_DPM_ABI_1 && Size == BC250_DPM_ABI1_SIZE;
     BC250_ESCAPE_DPM_EX* ex = (BC250_ESCAPE_DPM_EX*)Data;  // dereferenced under abi3 only
+    BC250_ESCAPE_DPM_EX2* ex2 = (BC250_ESCAPE_DPM_EX2*)Data;  // dereferenced under abi4 only
     BC250_DPM_METRICS metrics;
+    BC250_DPM_CLOCKS clocks;
     BOOLEAN power = FALSE;
     BC250_DPM_SNAP snap;
     KIRQL irql;
@@ -1568,6 +1593,7 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
         Data->IdleMs = 0;
     }
     if (abi3) RtlZeroMemory(&ex->Metrics, sizeof(ex->Metrics));
+    if (abi4) RtlZeroMemory(&ex2->Clocks, sizeof(ex2->Clocks));
     if (!(abi1 || abi2) || Data->SubmitBusyPermille || Data->SdmaBusyPermille ||
         (Data->Op != BC250_DPM_OP_READ && !confirm) || EscapeFlags != expectedFlags.Value) return;
     if (confirm && !Admin) {
@@ -1595,7 +1621,8 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
     snap = s->Snap;
     KeReleaseSpinLock(&s->SnapLock, irql);
     RtlZeroMemory(&metrics, sizeof(metrics));
-    if (abi3) power = SmuMetricsFill(Device, &metrics);
+    RtlZeroMemory(&clocks, sizeof(clocks));
+    if (abi3) power = SmuMetricsFill(Device, &metrics, abi4 ? &clocks : NULL);
     ExReleaseRundownProtection(&Device->StartHealth.Readers);
     Data->Flags = snap.Flags;
     Data->Mode = snap.Mode;
@@ -1637,6 +1664,7 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
         ex->Metrics = metrics;
         if (power) Data->Flags |= BC250_DPM_FLAG_POWER;
     }
+    if (abi4) ex2->Clocks = clocks;
     Data->NtStatus = (ULONG)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }

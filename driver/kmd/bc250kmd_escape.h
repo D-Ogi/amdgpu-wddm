@@ -655,6 +655,29 @@ typedef struct _BC250_ESCAPE_DPM_EX {
     BC250_DPM_METRICS Metrics;
 } BC250_ESCAPE_DPM_EX; // 248 bytes on Windows, ABI 3
 
+// RUN_DPM ABI 4 (0.7.216.15, K137): the SoC, memory and CPU clocks of the same SMU metrics table, so that a fresh
+// boot and the state after a GPU stop can be compared (docs/design/dpm.md "Power reading"). BC250_ESCAPE_DPM_EX2 is
+// the ABI 3 structure above, unchanged, with AbiVersion 4, followed by BC250_DPM_CLOCKS. Everything in the tail is
+// out and comes from the same accepted table as BC250_DPM_METRICS, under the same BC250_DPM_FLAG_POWER freshness
+// rule; a clock the firmware left unwritten reads 0. The table has no FCLK and no STAPM or power-limit field:
+// MemclkMHz is the closest it has to the fabric, and ThrottlerStatus in the ABI 3 tail is its limit indicator.
+// A driver before 0.7.216.15 refuses 296 bytes with STATUS_INVALID_PARAMETER, and a tool then asks with ABI 3. The
+// escape is additive and no layout moves, so BC250_KMD_VERSION stays 0x000700D8 (the rule at BC250_FAN_ABI below).
+#define BC250_DPM_ABI_4 4u
+#define BC250_DPM_ABI4_SIZE 296u
+#define BC250_DPM_CPU_CLOCKS 6u              // CoreFrequency[] of the table: the six cores the part is sold with
+typedef struct _BC250_DPM_CLOCKS {
+    unsigned long SocclkMHz;                // Current.SocclkFrequency
+    unsigned long MemclkMHz;                // Current.MemclkFrequency
+    unsigned long VclkMHz, DclkMHz;         // Current.VclkFrequency and DclkFrequency (the video engine)
+    unsigned long L3MHz[2];                 // Current.L3Frequency[0..1]
+    unsigned long CpuCoreMHz[BC250_DPM_CPU_CLOCKS];  // Current.CoreFrequency[0..5]: the firmware's own core clocks
+} BC250_DPM_CLOCKS; // 48 bytes
+typedef struct _BC250_ESCAPE_DPM_EX2 {
+    BC250_ESCAPE_DPM_EX Ex;                 // the ABI 3 layout; Ex.Dpm.AbiVersion is BC250_DPM_ABI_4
+    BC250_DPM_CLOCKS Clocks;
+} BC250_ESCAPE_DPM_EX2; // 296 bytes on Windows, ABI 4
+
 // DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
 // thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state
 // only: the escape stores the values under the DPM state's locks and the governor thread takes them at its next tick

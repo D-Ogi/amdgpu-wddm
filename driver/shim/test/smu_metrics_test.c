@@ -60,6 +60,14 @@ struct layout_checks {
 	SAME(socket, offsetof(struct half, socket_mw) == BC250_SMU_METRICS_OFF_SOCKET);
 	SAME(soc_temp, offsetof(struct half, soc_cc) == BC250_SMU_METRICS_OFF_SOC_TEMP);
 	SAME(throttler, offsetof(struct half, throttler) == BC250_SMU_METRICS_OFF_THROTTLER);
+	SAME(coreclk, offsetof(struct half, core_mhz) == BC250_SMU_METRICS_OFF_CORECLK);
+	SAME(l3clk, offsetof(struct half, l3_mhz) == BC250_SMU_METRICS_OFF_L3CLK);
+	SAME(socclk, offsetof(struct half, soc_mhz) == BC250_SMU_METRICS_OFF_SOCCLK);
+	SAME(vclk, offsetof(struct half, vclk_mhz) == BC250_SMU_METRICS_OFF_VCLK);
+	SAME(dclk, offsetof(struct half, dclk_mhz) == BC250_SMU_METRICS_OFF_DCLK);
+	SAME(memclk, offsetof(struct half, mem_mhz) == BC250_SMU_METRICS_OFF_MEMCLK);
+	SAME(cores, sizeof(((struct half *)0)->core_mhz) / 2u == BC250_SMU_METRICS_CPU_CORES);
+	SAME(l3s, sizeof(((struct half *)0)->l3_mhz) / 2u == BC250_SMU_METRICS_L3);
 	SAME(average, offsetof(struct table, average) == BC250_SMU_METRICS_HALF);
 	SAME(accnt, offsetof(struct table, accnt) == BC250_SMU_METRICS_OFF_ACCNT);
 	SAME(fits, BC250_SMU_METRICS_BYTES % 4u == 0 && BC250_SMU_METRICS_BYTES <= BC250_SMU_METRICS_PAGE);
@@ -85,6 +93,28 @@ static void layout(void)
 	CHECK(m.gfx_mhz == 1111 && m.gfx_cc == 2222 && m.soc_mv == 333 && m.gfx_mv == 444);
 	CHECK(m.soc_mw == 5555 && m.gfx_mw == 6666 && m.socket_mw == 77777 && m.soc_cc == 3333);
 	CHECK(m.throttler == 0x0102 && m.socket_avg_mw == 88888);
+
+	/* The SoC, memory and CPU clocks (0.7.216.15, K137): each from its own field, and the Average half never. */
+	t.current.soc_mhz = 1001; t.current.mem_mhz = 1002; t.current.vclk_mhz = 1003; t.current.dclk_mhz = 1004;
+	t.current.l3_mhz[0] = 3401; t.current.l3_mhz[1] = 3402;
+	t.current.core_mhz[0] = 3491; t.current.core_mhz[5] = 3496;
+	t.average.soc_mhz = 9; t.average.mem_mhz = 9; t.average.core_mhz[0] = 9; t.average.l3_mhz[0] = 9;
+	memcpy(raw, &t, sizeof(raw));
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK);
+	CHECK(m.socclk_mhz == 1001 && m.memclk_mhz == 1002 && m.vclk_mhz == 1003 && m.dclk_mhz == 1004);
+	CHECK(m.l3_mhz[0] == 3401 && m.l3_mhz[1] == 3402);
+	CHECK(m.core_mhz[0] == 3491 && m.core_mhz[5] == 3496 && m.core_mhz[1] == 0);
+	CHECK(m.gfx_mhz == 1111 && m.socket_mw == 77777);       /* the old fields did not move */
+	/* An unwritten clock field reads 0 and does not refuse a table the power fields made whole. */
+	t.current.mem_mhz = 0xFFFF; t.current.core_mhz[2] = 0xFFFF;
+	memcpy(raw, &t, sizeof(raw));
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK);
+	CHECK(m.memclk_mhz == 0 && m.core_mhz[2] == 0 && m.socclk_mhz == 1001);
+	/* A refused table carries no clocks either. */
+	t.current.socket_mw = 0;
+	memcpy(raw, &t, sizeof(raw));
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_ZERO_POWER);
+	CHECK(m.socclk_mhz == 0 && m.l3_mhz[0] == 0 && m.core_mhz[0] == 0);
 }
 
 /* A table as the firmware writes it, in its own struct: 78 W on the package, 48 W on the GPU rail. */
