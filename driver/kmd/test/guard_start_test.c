@@ -66,7 +66,8 @@ static void Reset(void)
  bootMark=0;volatileStatus=0;g_StartCounted=FALSE;}
 /* The confirmation GuardConfirmStartDurable performs after its durable zero (start_health.c's CONFIRM). */
 static void Confirm(void){cached=durable=0;GuardStartConfirmed();}
-static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;NTSTATUS s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);CHECK(episodes==1);return s;}
+/* One episode per start, also for the BD-090 cases that start twice in one scenario without a Reset. */
+static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;unsigned before=episodes;NTSTATUS s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);CHECK(episodes==before+1);return s;}
 int main(void)
 {
     unsigned before;

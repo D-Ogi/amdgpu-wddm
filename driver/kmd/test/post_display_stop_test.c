@@ -178,6 +178,8 @@ int main(void)
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,D3DDDI_ID_UNINITIALIZED,&info)==STATUS_SUCCESS);
     CHECK(model.joined==0 && model.restores==1 && model.vidmm==0 && info.TargetId==BC250_CHILD_UID);
     CHECK(retireSignals==0);   /* no WDDM state, no held submission to wake */
-    CHECK(stopEpisodes==4);    /* one per stop, and the post-display stop goes through the ordinary one */
+    /* One per stop that tears down (five here), and the post-display stop goes through the ordinary one. The BD-090
+       repeat after a failed release returns before the episode: a stop that does nothing keeps no file. */
+    CHECK(stopEpisodes==5);
     printf("post display stop: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
