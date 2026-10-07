@@ -115,6 +115,34 @@
    },
    "table": "WddmBuildTable in driver/kmd/wddm.c (the full WDDM table)",
    "declared_version": "DXGKDDI_INTERFACE_VERSION_WDDM2_9",
+   "declared_label": "WDDM 2.9",
+   "interface_versions": {
+    "file": "shared/d3dukmdt.h",
+    "sha256": "e0091629425515f9e56d21a93addb0d06455fc250a3f31d24596180b30531cb5",
+    "values": {
+     "VISTA": 4178,
+     "VISTA_SP1": 4179,
+     "WIN7": 8197,
+     "WIN8": 12302,
+     "WDDM1_3": 16386,
+     "WDDM1_3_PATH_INDEPENDENT_ROTATION": 16387,
+     "WDDM2_0": 20515,
+     "WDDM2_1": 24579,
+     "WDDM2_1_5": 24592,
+     "WDDM2_1_6": 24593,
+     "WDDM2_2": 28682,
+     "WDDM2_3": 32769,
+     "WDDM2_4": 36870,
+     "WDDM2_5": 40971,
+     "WDDM2_6": 45060,
+     "WDDM2_7": 49156,
+     "WDDM2_8": 53249,
+     "WDDM2_9": 57347,
+     "WDDM3_0": 61443,
+     "WDDM3_1": 65540,
+     "WDDM3_2": 69639
+    }
+   },
    "reserved": [
     "DxgkDdiDescribePageTable",
     "DxgkDdiUpdatePageTable",
@@ -135,6 +163,7 @@
       {
        "name": "DxgkDdiAddDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250AddDevice",
        "source": "driver/kmd/pnp.c:4",
        "done": true,
@@ -143,6 +172,7 @@
       {
        "name": "DxgkDdiStartDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250StartDevice",
        "source": "driver/kmd/pnp.c:53",
        "done": true,
@@ -151,6 +181,7 @@
       {
        "name": "DxgkDdiStopDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250StopDevice",
        "source": "driver/kmd/pnp.c:184",
        "done": true,
@@ -159,6 +190,7 @@
       {
        "name": "DxgkDdiRemoveDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250RemoveDevice",
        "source": "driver/kmd/pnp.c:34",
        "done": true,
@@ -167,6 +199,7 @@
       {
        "name": "DxgkDdiDispatchIoRequest",
        "since": null,
+       "targeted": true,
        "function": "Bc250DispatchIoRequest",
        "source": "driver/kmd/pnp.c:287",
        "done": false,
@@ -175,6 +208,7 @@
       {
        "name": "DxgkDdiSetPowerState",
        "since": null,
+       "targeted": true,
        "function": "Bc250SetPowerState",
        "source": "driver/kmd/pnp.c:410",
        "done": true,
@@ -183,6 +217,7 @@
       {
        "name": "DxgkDdiNotifyAcpiEvent",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -191,6 +226,7 @@
       {
        "name": "DxgkDdiResetDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250ResetDevice",
        "source": "driver/kmd/pnp.c:277",
        "done": true,
@@ -199,6 +235,7 @@
       {
        "name": "DxgkDdiUnload",
        "since": null,
+       "targeted": true,
        "function": "Bc250Unload",
        "source": "driver/kmd/pnp.c:451",
        "done": true,
@@ -207,6 +244,7 @@
       {
        "name": "DxgkDdiQueryInterface",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -215,6 +253,7 @@
       {
        "name": "DxgkDdiControlEtwLogging",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -223,6 +262,7 @@
       {
        "name": "DxgkDdiQueryAdapterInfo",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmQueryAdapterInfo",
        "source": "driver/kmd/wddm.c:3539",
        "done": true,
@@ -232,6 +272,7 @@
       {
        "name": "DxgkDdiEscape",
        "since": null,
+       "targeted": true,
        "function": "Bc250Escape",
        "source": "driver/kmd/display.c:315",
        "done": true,
@@ -240,6 +281,7 @@
       {
        "name": "DxgkDdiSetPowerComponentFState",
        "since": "WIN8",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -248,6 +290,7 @@
       {
        "name": "DxgkDdiStopDeviceAndReleasePostDisplayOwnership",
        "since": "WIN8",
+       "targeted": true,
        "function": "Bc250StopDeviceAndReleasePostDisplayOwnership",
        "source": "driver/kmd/pnp.c:250",
        "done": true,
@@ -256,6 +299,7 @@
       {
        "name": "DxgkDdiPowerRuntimeControlRequest",
        "since": "WIN8",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -264,6 +308,7 @@
       {
        "name": "DxgkDdiSetPowerPState",
        "since": "WDDM1_3",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -272,6 +317,7 @@
       {
        "name": "DxgkDdiPowerRuntimeSetDeviceHandle",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -280,6 +326,7 @@
       {
        "name": "DxgkDdiSetStablePowerState",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": "Bc250WddmSetStablePowerState",
        "source": "driver/kmd/wddm.c:6081",
        "done": true,
@@ -293,6 +340,7 @@
       {
        "name": "DxgkDdiInterruptRoutine",
        "since": null,
+       "targeted": true,
        "function": "Bc250InterruptRoutine",
        "source": "driver/kmd/pnp.c:325",
        "done": true,
@@ -301,6 +349,7 @@
       {
        "name": "DxgkDdiDpcRoutine",
        "since": null,
+       "targeted": true,
        "function": "Bc250DpcRoutine",
        "source": "driver/kmd/pnp.c:340",
        "done": true,
@@ -309,6 +358,7 @@
       {
        "name": "DxgkDdiControlInterrupt",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmControlInterrupt",
        "source": "driver/kmd/wddm.c:6999",
        "done": true,
@@ -318,6 +368,7 @@
       {
        "name": "DxgkDdiControlInterrupt2",
        "since": "WDDM1_3",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -326,6 +377,7 @@
       {
        "name": "DxgkDdiControlInterrupt3",
        "since": "WDDM2_7",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -334,6 +386,7 @@
       {
        "name": "DxgkDdiSetInterruptTargetPresentId",
        "since": "WDDM2_9",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -347,6 +400,7 @@
       {
        "name": "DxgkDdiQueryChildRelations",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmQueryChildRelations",
        "source": "driver/kmd/wddm.c:7166",
        "done": true,
@@ -355,6 +409,7 @@
       {
        "name": "DxgkDdiQueryChildStatus",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmQueryChildStatus",
        "source": "driver/kmd/wddm.c:7173",
        "done": true,
@@ -364,6 +419,7 @@
       {
        "name": "DxgkDdiQueryDeviceDescriptor",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmQueryDeviceDescriptor",
        "source": "driver/kmd/wddm.c:7181",
        "done": false,
@@ -372,6 +428,7 @@
       {
        "name": "DxgkDdiSetPalette",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -380,6 +437,7 @@
       {
        "name": "DxgkDdiSetPointerPosition",
        "since": null,
+       "targeted": true,
        "function": "Bc250SetPointerPosition",
        "source": "driver/kmd/display.c:124",
        "done": false,
@@ -388,6 +446,7 @@
       {
        "name": "DxgkDdiSetPointerShape",
        "since": null,
+       "targeted": true,
        "function": "Bc250SetPointerShape",
        "source": "driver/kmd/display.c:131",
        "done": false,
@@ -396,6 +455,7 @@
       {
        "name": "DxgkDdiIsSupportedVidPn",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedIsSupportedVidPn",
        "source": "driver/kmd/wddm.c:7193",
        "done": true,
@@ -404,6 +464,7 @@
       {
        "name": "DxgkDdiRecommendFunctionalVidPn",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedRecommendFunctionalVidPn",
        "source": "driver/kmd/wddm.c:7194",
        "done": false,
@@ -412,6 +473,7 @@
       {
        "name": "DxgkDdiEnumVidPnCofuncModality",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedEnumVidPnCofuncModality",
        "source": "driver/kmd/wddm.c:7195",
        "done": true,
@@ -420,6 +482,7 @@
       {
        "name": "DxgkDdiSetVidPnSourceVisibility",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedSetVidPnSourceVisibility",
        "source": "driver/kmd/wddm.c:7196",
        "done": true,
@@ -428,6 +491,7 @@
       {
        "name": "DxgkDdiCommitVidPn",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedCommitVidPn",
        "source": "driver/kmd/wddm.c:7197",
        "done": true,
@@ -436,6 +500,7 @@
       {
        "name": "DxgkDdiRecommendMonitorModes",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedRecommendMonitorModes",
        "source": "driver/kmd/wddm.c:7199",
        "done": true,
@@ -444,6 +509,7 @@
       {
        "name": "DxgkDdiRecommendVidPnTopology",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -452,6 +518,7 @@
       {
        "name": "DxgkDdiGetScanLine",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmGetScanLine",
        "source": "driver/kmd/wddm.c:7033",
        "done": true,
@@ -461,6 +528,7 @@
       {
        "name": "DxgkDdiStopCapture",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -469,6 +537,7 @@
       {
        "name": "DxgkDdiQueryVidPnHWCapability",
        "since": "WIN7",
+       "targeted": true,
        "function": "Bc250WddmTracedQueryVidPnHWCapability",
        "source": "driver/kmd/wddm.c:7200",
        "done": false,
@@ -477,6 +546,7 @@
       {
        "name": "DxgkDdiSystemDisplayEnable",
        "since": "WIN8",
+       "targeted": true,
        "function": "Bc250SystemDisplayEnable",
        "source": "driver/kmd/display.c:1105",
        "done": true,
@@ -486,6 +556,7 @@
       {
        "name": "DxgkDdiSystemDisplayWrite",
        "since": "WIN8",
+       "targeted": true,
        "function": "Bc250SystemDisplayWrite",
        "source": "driver/kmd/display.c:1131",
        "done": true,
@@ -494,6 +565,7 @@
       {
        "name": "DxgkDdiGetChildContainerId",
        "since": "WIN8",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -502,6 +574,7 @@
       {
        "name": "DxgkDdiControlModeBehavior",
        "since": "WDDM2_1",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -510,6 +583,7 @@
       {
        "name": "DxgkDdiUpdateMonitorLinkInfo",
        "since": "WDDM2_1",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -518,6 +592,7 @@
       {
        "name": "DxgkDdiSetTimingsFromVidPn",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -526,6 +601,7 @@
       {
        "name": "DxgkDdiSetTargetGamma",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -534,6 +610,7 @@
       {
        "name": "DxgkDdiSetTargetContentType",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -542,6 +619,7 @@
       {
        "name": "DxgkDdiSetTargetAdjustedColorimetry",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -550,6 +628,7 @@
       {
        "name": "DxgkDdiDisplayDetectControl",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -558,6 +637,7 @@
       {
        "name": "DxgkDdiQueryConnectionChange",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -566,6 +646,7 @@
       {
        "name": "DxgkDdiExchangePreStartInfo",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -574,6 +655,7 @@
       {
        "name": "DxgkDdiSetTargetAdjustedColorimetry2",
        "since": "WDDM2_5",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -587,6 +669,7 @@
       {
        "name": "DxgkDdiCreateDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmCreateDevice",
        "source": "driver/kmd/wddm.c:3692",
        "done": true,
@@ -595,6 +678,7 @@
       {
        "name": "DxgkDdiSubmitCommand",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmSubmitCommand",
        "source": "driver/kmd/wddm.c:5566",
        "done": true,
@@ -603,6 +687,7 @@
       {
        "name": "DxgkDdiPreemptCommand",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmPreemptCommand",
        "source": "driver/kmd/wddm.c:5957",
        "done": true,
@@ -611,6 +696,7 @@
       {
        "name": "DxgkDdiQueryCurrentFence",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -619,6 +705,7 @@
       {
        "name": "DxgkDdiDestroyDevice",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmDestroyDevice",
        "source": "driver/kmd/wddm.c:3708",
        "done": true,
@@ -627,6 +714,7 @@
       {
        "name": "DxgkDdiRender",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -635,6 +723,7 @@
       {
        "name": "DxgkDdiCreateContext",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmCreateContext",
        "source": "driver/kmd/wddm.c:3721",
        "done": true,
@@ -643,6 +732,7 @@
       {
        "name": "DxgkDdiDestroyContext",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmDestroyContext",
        "source": "driver/kmd/wddm.c:3832",
        "done": true,
@@ -651,6 +741,7 @@
       {
        "name": "DxgkDdiLinkDevice",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -659,6 +750,7 @@
       {
        "name": "DxgkDdiRenderKm",
        "since": "WIN7",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -667,6 +759,7 @@
       {
        "name": "DxgkDdiGetNodeMetadata",
        "since": "WDDM1_3",
+       "targeted": true,
        "function": "Bc250WddmGetNodeMetadata",
        "source": "driver/kmd/wddm.c:3651",
        "done": true,
@@ -675,6 +768,7 @@
       {
        "name": "DxgkDdiCalibrateGpuClock",
        "since": "WDDM1_3",
+       "targeted": true,
        "function": "Bc250WddmCalibrateGpuClock",
        "source": "driver/kmd/wddm.c:6114",
        "done": true,
@@ -683,6 +777,7 @@
       {
        "name": "DxgkDdiFormatHistoryBuffer",
        "since": "WDDM1_3",
+       "targeted": true,
        "function": "Bc250WddmFormatHistoryBuffer",
        "source": "driver/kmd/wddm.c:6152",
        "done": false,
@@ -691,6 +786,7 @@
       {
        "name": "DxgkDdiRenderGdi",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -699,6 +795,7 @@
       {
        "name": "DxgkDdiSubmitCommandVirtual",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": "Bc250WddmSubmitCommandVirtual",
        "source": "driver/kmd/wddm.c:5919",
        "done": true,
@@ -707,6 +804,7 @@
       {
        "name": "DxgkDdiCreateProcess",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": "Bc250WddmCreateProcess",
        "source": "driver/kmd/wddm.c:3850",
        "done": true,
@@ -715,6 +813,7 @@
       {
        "name": "DxgkDdiDestroyProcess",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": "Bc250WddmDestroyProcess",
        "source": "driver/kmd/wddm.c:3863",
        "done": true,
@@ -723,6 +822,7 @@
       {
        "name": "DxgkDdiCreateHwContext",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -731,6 +831,7 @@
       {
        "name": "DxgkDdiDestroyHwContext",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -739,6 +840,7 @@
       {
        "name": "DxgkDdiCreateHwQueue",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -747,6 +849,7 @@
       {
        "name": "DxgkDdiDestroyHwQueue",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -755,6 +858,7 @@
       {
        "name": "DxgkDdiSubmitCommandToHwQueue",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -763,6 +867,7 @@
       {
        "name": "DxgkDdiSwitchToHwContextList",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -771,6 +876,7 @@
       {
        "name": "DxgkDdiUpdateHwContextState",
        "since": "WDDM2_3",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -779,6 +885,7 @@
       {
        "name": "DxgkDdiSetSchedulingLogBuffer",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -787,6 +894,7 @@
       {
        "name": "DxgkDdiSetupPriorityBands",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -795,6 +903,7 @@
       {
        "name": "DxgkDdiSetContextSchedulingProperties",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -803,6 +912,7 @@
       {
        "name": "DxgkDdiSuspendContext",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -811,6 +921,7 @@
       {
        "name": "DxgkDdiResumeContext",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -819,6 +930,7 @@
       {
        "name": "DxgkDdiSignalMonitoredFence",
        "since": "WDDM2_5",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -827,6 +939,7 @@
       {
        "name": "DxgkDdiValidateSubmitCommand",
        "since": "WDDM2_5",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -835,6 +948,7 @@
       {
        "name": "DxgkDdiSetTrackedWorkloadPowerLevel",
        "since": "WDDM2_5",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -843,6 +957,7 @@
       {
        "name": "DxgkDdiCreateCpuEvent",
        "since": "WDDM3_0",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -851,6 +966,7 @@
       {
        "name": "DxgkDdiDestroyCpuEvent",
        "since": "WDDM3_0",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -859,6 +975,7 @@
       {
        "name": "DxgkDdiCreateNativeFence",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -867,6 +984,7 @@
       {
        "name": "DxgkDdiDestroyNativeFence",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -875,6 +993,7 @@
       {
        "name": "DxgkDdiUpdateMonitoredValues",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -883,6 +1002,7 @@
       {
        "name": "DxgkDdiUpdateCurrentValuesFromCpu",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -891,6 +1011,7 @@
       {
        "name": "DxgkDdiCreateDoorbell",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -899,6 +1020,7 @@
       {
        "name": "DxgkDdiConnectDoorbell",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -907,6 +1029,7 @@
       {
        "name": "DxgkDdiDisconnectDoorbell",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -915,6 +1038,7 @@
       {
        "name": "DxgkDdiDestroyDoorbell",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -923,6 +1047,7 @@
       {
        "name": "DxgkDdiNotifyWorkSubmission",
        "since": "WDDM3_1",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -931,6 +1056,7 @@
       {
        "name": "DxgkDdiOpenNativeFence",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -939,6 +1065,7 @@
       {
        "name": "DxgkDdiCloseNativeFence",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -947,6 +1074,7 @@
       {
        "name": "DxgkDdiSetNativeFenceLogBuffer",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -955,6 +1083,7 @@
       {
        "name": "DxgkDdiUpdateNativeFenceLogs",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -963,6 +1092,7 @@
       {
        "name": "DxgkDdiNotifyContextPriorityChange",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -976,6 +1106,7 @@
       {
        "name": "DxgkDdiCreateAllocation",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmCreateAllocation",
        "source": "driver/kmd/wddm.c:4319",
        "done": true,
@@ -984,6 +1115,7 @@
       {
        "name": "DxgkDdiDestroyAllocation",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmDestroyAllocation",
        "source": "driver/kmd/wddm.c:4365",
        "done": true,
@@ -992,6 +1124,7 @@
       {
        "name": "DxgkDdiDescribeAllocation",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmDescribeAllocation",
        "source": "driver/kmd/wddm.c:4416",
        "done": true,
@@ -1000,6 +1133,7 @@
       {
        "name": "DxgkDdiGetStandardAllocationDriverData",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmGetStandardAllocationDriverData",
        "source": "driver/kmd/wddm.c:3936",
        "done": true,
@@ -1008,6 +1142,7 @@
       {
        "name": "DxgkDdiAcquireSwizzlingRange",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1016,6 +1151,7 @@
       {
        "name": "DxgkDdiReleaseSwizzlingRange",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1024,6 +1160,7 @@
       {
        "name": "DxgkDdiPatch",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1032,6 +1169,7 @@
       {
        "name": "DxgkDdiBuildPagingBuffer",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmBuildPagingBuffer",
        "source": "driver/kmd/wddm.c:5497",
        "done": true,
@@ -1040,6 +1178,7 @@
       {
        "name": "DxgkDdiOpenAllocation",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmOpenAllocation",
        "source": "driver/kmd/wddm.c:4445",
        "done": true,
@@ -1048,6 +1187,7 @@
       {
        "name": "DxgkDdiCloseAllocation",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmCloseAllocation",
        "source": "driver/kmd/wddm.c:4516",
        "done": true,
@@ -1056,6 +1196,7 @@
       {
        "name": "DxgkDdiSetRootPageTable",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": "Bc250WddmSetRootPageTable",
        "source": "driver/kmd/wddm.c:3890",
        "done": true,
@@ -1064,6 +1205,7 @@
       {
        "name": "DxgkDdiGetRootPageTableSize",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": "Bc250WddmGetRootPageTableSize",
        "source": "driver/kmd/wddm.c:3876",
        "done": true,
@@ -1072,6 +1214,7 @@
       {
        "name": "DxgkDdiMapCpuHostAperture",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1080,6 +1223,7 @@
       {
        "name": "DxgkDdiUnmapCpuHostAperture",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1088,6 +1232,7 @@
       {
        "name": "DxgkDdiValidateUpdateAllocationProperty",
        "since": "WDDM2_1",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1096,6 +1241,7 @@
       {
        "name": "DxgkDdiSetAllocationBackingStore",
        "since": "WDDM3_0",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1104,6 +1250,7 @@
       {
        "name": "DxgkDdiCreateMemoryBasis",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1112,6 +1259,7 @@
       {
        "name": "DxgkDdiDestroyMemoryBasis",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1125,6 +1273,7 @@
       {
        "name": "DxgkDdiResetFromTimeout",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmResetFromTimeout",
        "source": "driver/kmd/wddm.c:5971",
        "done": false,
@@ -1133,6 +1282,7 @@
       {
        "name": "DxgkDdiRestartFromTimeout",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmRestartFromTimeout",
        "source": "driver/kmd/wddm.c:5987",
        "done": false,
@@ -1141,6 +1291,7 @@
       {
        "name": "DxgkDdiCollectDbgInfo",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmCollectDbgInfo",
        "source": "driver/kmd/wddm.c:6064",
        "done": false,
@@ -1149,6 +1300,7 @@
       {
        "name": "DxgkDdiQueryDependentEngineGroup",
        "since": "WIN8",
+       "targeted": true,
        "function": "Bc250WddmQueryDependentEngineGroup",
        "source": "driver/kmd/wddm.c:5999",
        "done": true,
@@ -1157,6 +1309,7 @@
       {
        "name": "DxgkDdiQueryEngineStatus",
        "since": "WIN8",
+       "targeted": true,
        "function": "Bc250WddmQueryEngineStatus",
        "source": "driver/kmd/wddm.c:6017",
        "done": true,
@@ -1165,6 +1318,7 @@
       {
        "name": "DxgkDdiResetEngine",
        "since": "WIN8",
+       "targeted": true,
        "function": "Bc250WddmResetEngine",
        "source": "driver/kmd/wddm.c:6038",
        "done": false,
@@ -1173,6 +1327,7 @@
       {
        "name": "DxgkDdiCancelCommand",
        "since": "WIN8",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1181,6 +1336,7 @@
       {
        "name": "DxgkDdiNotifySurpriseRemoval",
        "since": "WIN8",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1189,6 +1345,7 @@
       {
        "name": "DxgkDdiResetHwEngine",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1197,6 +1354,7 @@
       {
        "name": "DxgkDdiQueryDiagnosticTypesSupport",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1205,6 +1363,7 @@
       {
        "name": "DxgkDdiControlDiagnosticReporting",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1213,6 +1372,7 @@
       {
        "name": "DxgkDdiResumeHwEngine",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1221,6 +1381,7 @@
       {
        "name": "DxgkDdiCollectDiagnosticInfo",
        "since": "WDDM2_6",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1229,6 +1390,7 @@
       {
        "name": "DxgkDdiCollectDbgInfo2",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1237,6 +1399,7 @@
       {
        "name": "DxgkDdiResetDisplayEngine",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1250,6 +1413,7 @@
       {
        "name": "DxgkDdiSetVidPnSourceAddress",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmSetVidPnSourceAddress",
        "source": "driver/kmd/wddm.c:6811",
        "done": true,
@@ -1258,6 +1422,7 @@
       {
        "name": "DxgkDdiUpdateActiveVidPnPresentPath",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmTracedUpdateActiveVidPnPresentPath",
        "source": "driver/kmd/wddm.c:7198",
        "done": false,
@@ -1266,6 +1431,7 @@
       {
        "name": "DxgkDdiCreateOverlay",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1274,6 +1440,7 @@
       {
        "name": "DxgkDdiPresent",
        "since": null,
+       "targeted": true,
        "function": "Bc250WddmPresent",
        "source": "driver/kmd/wddm.c:6689",
        "done": true,
@@ -1282,6 +1449,7 @@
       {
        "name": "DxgkDdiUpdateOverlay",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1290,6 +1458,7 @@
       {
        "name": "DxgkDdiFlipOverlay",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1298,6 +1467,7 @@
       {
        "name": "DxgkDdiDestroyOverlay",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1306,6 +1476,7 @@
       {
        "name": "DxgkDdiSetDisplayPrivateDriverFormat",
        "since": null,
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1314,6 +1485,7 @@
       {
        "name": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay",
        "since": "WIN8",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1322,6 +1494,7 @@
       {
        "name": "DxgkDdiCheckMultiPlaneOverlaySupport",
        "since": "WDDM1_3",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1330,6 +1503,7 @@
       {
        "name": "DxgkDdiCheckMultiPlaneOverlaySupport2",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1338,6 +1512,7 @@
       {
        "name": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1346,6 +1521,7 @@
       {
        "name": "DxgkDdiCheckMultiPlaneOverlaySupport3",
        "since": "WDDM2_1",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1354,6 +1530,7 @@
       {
        "name": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3",
        "since": "WDDM2_1",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1362,6 +1539,7 @@
       {
        "name": "DxgkDdiPostMultiPlaneOverlayPresent",
        "since": "WDDM2_1",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1370,6 +1548,7 @@
       {
        "name": "DxgkDdiCreatePeriodicFrameNotification",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1378,6 +1557,7 @@
       {
        "name": "DxgkDdiDestroyPeriodicFrameNotification",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1386,6 +1566,7 @@
       {
        "name": "DxgkDdiGetMultiPlaneOverlayCaps",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1394,6 +1575,7 @@
       {
        "name": "DxgkDdiGetPostCompositionCaps",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1402,6 +1584,7 @@
       {
        "name": "DxgkDdiNotifyFocusPresent",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1410,6 +1593,7 @@
       {
        "name": "DxgkDdiPresentToHwQueue",
        "since": "WDDM2_5",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1418,6 +1602,7 @@
       {
        "name": "DxgkDdiSetFlipQueueLogBuffer",
        "since": "WDDM2_9",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1426,6 +1611,7 @@
       {
        "name": "DxgkDdiUpdateFlipQueueLog",
        "since": "WDDM2_9",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1434,6 +1620,7 @@
       {
        "name": "DxgkDdiCancelQueuedFlips",
        "since": "WDDM2_9",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1442,6 +1629,7 @@
       {
        "name": "DxgkDdiCancelFlips",
        "since": "WDDM3_0",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1455,6 +1643,7 @@
       {
        "name": "DxgkDdiSetVideoProtectedRegion",
        "since": "WDDM2_0",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1463,6 +1652,7 @@
       {
        "name": "DxgkDdiSetTargetAnalogCopyProtection",
        "since": "WDDM2_2",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1471,6 +1661,7 @@
       {
        "name": "DxgkDdiCreateProtectedSession",
        "since": "WDDM2_3",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1479,6 +1670,7 @@
       {
        "name": "DxgkDdiDestroyProtectedSession",
        "since": "WDDM2_3",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1492,6 +1684,7 @@
       {
        "name": "DxgkDdiSetVirtualMachineData",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1500,6 +1693,7 @@
       {
        "name": "DxgkDdiBeginExclusiveAccess",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1508,6 +1702,7 @@
       {
        "name": "DxgkDdiEndExclusiveAccess",
        "since": "WDDM2_4",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1516,6 +1711,7 @@
       {
        "name": "DxgkDdiSaveMemoryForHotUpdate",
        "since": "WDDM2_6",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1524,6 +1720,7 @@
       {
        "name": "DxgkDdiRestoreMemoryForHotUpdate",
        "since": "WDDM2_6",
+       "targeted": true,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1532,6 +1729,7 @@
       {
        "name": "DxgkDdiStartDirtyTracking",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1540,6 +1738,7 @@
       {
        "name": "DxgkDdiStopDirtyTracking",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1548,6 +1747,7 @@
       {
        "name": "DxgkDdiQueryDirtyBitData",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1556,6 +1756,7 @@
       {
        "name": "DxgkDdiPrepareLiveMigration",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1564,6 +1765,7 @@
       {
        "name": "DxgkDdiSaveImmutableMigrationData",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1572,6 +1774,7 @@
       {
        "name": "DxgkDdiSaveMutableMigrationData",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1580,6 +1783,7 @@
       {
        "name": "DxgkDdiEndLiveMigration",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1588,6 +1792,7 @@
       {
        "name": "DxgkDdiRestoreImmutableMigrationData",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1596,6 +1801,7 @@
       {
        "name": "DxgkDdiRestoreMutableMigrationData",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1604,6 +1810,7 @@
       {
        "name": "DxgkDdiWriteVirtualizedInterrupt",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1612,6 +1819,7 @@
       {
        "name": "DxgkDdiSetVirtualGpuResources2",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1620,6 +1828,7 @@
       {
        "name": "DxgkDdiSetVirtualFunctionPauseState",
        "since": "WDDM3_2",
+       "targeted": false,
        "function": null,
        "done": false,
        "reason": "NULL in WddmBuildTable",
@@ -1630,9 +1839,15 @@
    ],
    "summary": {
     "done": 48,
-    "total": 181,
+    "total": 147,
     "partial": 5,
-    "percent": 26.52
+    "percent": 32.65,
+    "all_versions": {
+     "done": 48,
+     "total": 181,
+     "partial": 5,
+     "percent": 26.52
+    }
    }
   },
   {

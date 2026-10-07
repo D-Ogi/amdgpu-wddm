@@ -113,6 +113,24 @@ class TreemapTests(unittest.TestCase):
             {"name": "B", "slots": [{"name": "b", "done": False, "reason": "r"}] * 3}]}
         self.assertEqual(sm.treemap_svg(metric), sm.treemap_svg(metric))
         self.assertIn("5 of 8 slots done", sm.treemap_svg(metric))
+        self.assertNotIn("url(#newer)", sm.treemap_svg(metric))
+
+    def test_newer_slots_are_drawn_but_not_counted(self):
+        metric = {"title": "T", "subtitle": "S", "declared_label": "WDDM 2.9", "groups": [
+            {"name": "A", "slots": [{"name": "a", "done": True, "reason": "r"}] * 2
+             + [{"name": "n", "done": False, "reason": "r", "targeted": False}] * 3
+             + [{"name": "m", "done": False, "reason": "r"}]}]}
+        svg = sm.treemap_svg(metric)
+        self.assertIn("2 of 3 slots done", svg)
+        self.assertEqual(svg.count('fill="url(#newer)"'), 3 + 1)  # three cells and the legend key
+        self.assertIn("newer than WDDM 2.9 (not targeted yet)", svg)
+        self.assertEqual(sm.counts(metric), (2, 3, 0))
+        self.assertEqual(sm.counts(metric, every=True), (2, 6, 0))
+
+    def test_version_label(self):
+        self.assertEqual(sm.version_label("WDDM2_9"), "WDDM 2.9")
+        self.assertEqual(sm.version_label("WDDM2_1_5"), "WDDM 2.1.5")
+        self.assertEqual(sm.version_label("WIN8"), "WIN8")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 <rect x="0.5" y="0.5" width="859" height="423" rx="6" fill="#161b22" stroke="#30363d"/>
 <text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">D3D12 user-mode DDI: 170 of 209 slots done (81.34%)</text>
 <text x="10" y="39" font-size="12" fill="#9198a1">Tables given to the D3D12 runtime at DDI build 0092. Done: the function of the slot does work. A fail-safe entry is not done.</text>
-<rect x="11.5" y="47.5" width="487.33" height="327" rx="3" fill="#0d1117" stroke="#30363d"/>
+<rect x="11.5" y="47.5" width="487.33" height="327" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Device core: 98/122</title>
 <rect x="13.5" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckFormatSupport: done - does work</title></rect>
 <rect x="48.02" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckMultisampleQualityLevels: done - does work</title></rect>
@@ -129,7 +129,7 @@
 <rect x="324.22" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnImplicitShaderCacheControl: missing - only logs, counts, reads or writes zeros</title></rect>
 </g>
 <text x="17.5" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Device core 98/122</text>
-<rect x="501.83" y="47.5" width="278.34" height="327" rx="3" fill="#0d1117" stroke="#30363d"/>
+<rect x="501.83" y="47.5" width="278.34" height="327" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Command list: 60/70</title>
 <rect x="503.83" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCloseCommandList: done - does work</title></rect>
 <rect x="538.13" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResetCommandList: done - does work</title></rect>
@@ -203,7 +203,7 @@
 <rect x="675.3" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnOmSetAlphaBlendFactor: missing - only logs, counts, reads or writes zeros</title></rect>
 </g>
 <text x="507.83" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Command list 60/70</text>
-<rect x="783.17" y="47.5" width="65.33" height="152.29" rx="3" fill="#0d1117" stroke="#30363d"/>
+<rect x="783.17" y="47.5" width="65.33" height="152.29" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Adapter: 7/8</title>
 <rect x="785.17" y="49.5" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateDeviceSize: done - returns the answer</title></rect>
 <rect x="815.84" y="49.5" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateDevice: done - does work</title></rect>
@@ -215,7 +215,7 @@
 <rect x="815.84" y="160.72" width="30.66" height="37.07" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetOptionalDDITables: missing - only logs, counts, reads or writes zeros</title></rect>
 </g>
 <text x="788.17" y="61.5" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">1</text>
-<rect x="783.17" y="202.79" width="65.33" height="94.06" rx="3" fill="#0d1117" stroke="#30363d"/>
+<rect x="783.17" y="202.79" width="65.33" height="94.06" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Command queue: 5/5</title>
 <rect x="785.17" y="204.79" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnExecuteCommandLists: done - does work</title></rect>
 <rect x="815.84" y="204.79" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnUpdateTileMappings: done - does work</title></rect>
@@ -224,7 +224,7 @@
 <rect x="785.17" y="264.83" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnWaitForFence: done - does work</title></rect>
 </g>
 <text x="788.17" y="216.79" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">2</text>
-<rect x="783.17" y="299.85" width="65.33" height="74.65" rx="3" fill="#0d1117" stroke="#30363d"/>
+<rect x="783.17" y="299.85" width="65.33" height="74.65" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Extended features: 0/4</title>
 <rect x="785.17" y="301.85" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetSupportedExtendedFeatures: missing - only logs, counts, reads or writes zeros</title></rect>
 <rect x="815.84" y="301.85" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetSupportedExtendedFeatureVersions: missing - only logs, counts, reads or writes zeros</title></rect>
@@ -232,5 +232,5 @@
 <rect x="815.84" y="337.18" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSetExtendedFeatureCallbacks: missing - only logs, counts, reads or writes zeros</title></rect>
 </g>
 <text x="788.17" y="313.85" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">3</text>
-<rect x="10" y="386" width="11" height="11" fill="#2ea043"/><text x="26" y="396" font-size="12" fill="#9198a1">done</text><rect x="70" y="386" width="11" height="11" fill="#3d444d"/><text x="86" y="396" font-size="12" fill="#9198a1">missing</text><text x="150" y="396" font-size="12" fill="#9198a1">one cell per slot, one rectangle per group, area = slot count</text><text x="10" y="414" font-size="12" fill="#9198a1">Small groups: [1] Adapter 7/8, [2] Command queue 5/5, [3] Extended features 0/4</text>
+<rect x="10" y="386" width="11" height="11" fill="#2ea043"/><text x="26" y="396" font-size="12" fill="#9198a1">done</text><rect x="69.44" y="386" width="11" height="11" fill="#3d444d"/><text x="85.44" y="396" font-size="12" fill="#9198a1">missing</text><text x="153" y="396" font-size="12" fill="#9198a1">one cell per slot, one rectangle per group, area = slot count</text><text x="10" y="414" font-size="12" fill="#9198a1">Small groups: [1] Adapter 7/8, [2] Command queue 5/5, [3] Extended features 0/4</text>
 </svg>
