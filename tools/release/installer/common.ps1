@@ -7,6 +7,12 @@
 $script:ReleaseName      = 'amdgpu-wddm'
 $script:ServiceName      = 'bc250kmd'
 $script:HardwareIdPrefix = 'PCI\VEN_1002&DEV_13FE'          # bc250kmd.inf [Models.NTamd64]
+# The GPU's HD Audio function, the second function of the same silicon. It keeps the inbox HDAudBus driver; the
+# installer changes one value of it (BD-092, Set-GpuAudioMsi below).
+$script:AudioIdPrefix    = 'PCI\VEN_1002&DEV_13FF'
+$script:AudioMsiValue    = 'MSISupported'
+$script:AudioEnumRoot    = 'HKLM:\SYSTEM\CurrentControlSet\Enum'
+$script:AudioRestartWaitSeconds = 60                           # pnputil /restart-device, and the device back in D0
 $script:DisplayClassGuid = '{4d36e968-e325-11ce-bfc1-08002be10318}'
 $script:SoftwareKey      = 'HKLM:\SOFTWARE\amdgpu-wddm'
 $script:ParametersKey    = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
@@ -687,6 +693,145 @@ function Get-Bc250Device {
     $all = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.DeviceID -like ($script:HardwareIdPrefix + '*') })
     return $all
 }
+# ---------------------------------------------------------------------------------------------------------------
+# The GPU's HD Audio function on message-signalled interrupts (BD-092).
+#
+# The second function of the same silicon, PCI\VEN_1002&DEV_13FF, carries the DisplayPort audio endpoint that the
+# kernel driver configures (driver/kmd/dpaudio.c). It keeps the inbox HDAudBus driver, and the inbox hdaudbus.inf
+# writes MSISupported 0 for it, so Windows gives it a line interrupt. On this board the stream interrupts of that
+# function never arrive on a line interrupt: measured on unit A, every WASAPI mode played at 0.33 times its rate and
+# a stream took 7 to 9 seconds to start. With MSISupported 1 and a restart of that one device, every mode ran at
+# 1.0000 with its events 10 ms apart. Linux snd_hda_intel uses MSI on the same function.
+#
+# So the installer writes that one value and restarts that one device. Nothing else of the audio function is touched:
+# no driver, no other value, no other device, and no restart of the computer. The previous value is written down in
+# the installer state, and the uninstaller puts it back (or removes the value when there was none).
+#
+# A failure here is a warning, never a failed install: DisplayPort audio is a feature of the driver, and the rest of
+# the driver does not depend on it.
+function Get-GpuAudioDevices {
+    # Present functions only, matched on the hardware ID of the audio function.
+    return @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.DeviceID -like ($script:AudioIdPrefix + '*') })
+}
+function Get-GpuAudioMsiKey([string]$InstanceId) {
+    return "$($script:AudioEnumRoot)\$InstanceId\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"
+}
+# What the computer holds now: one row per present audio function (instance, key, whether the key is there, and the
+# value or $null). Reads only; a key or value that cannot be read reads as absent, which the plan treats as 'set'.
+function Read-GpuAudioMsi {
+    $rows = @()
+    foreach ($d in Get-GpuAudioDevices) {
+        $key = Get-GpuAudioMsiKey $d.DeviceID
+        $present = Test-Path -LiteralPath $key
+        $value = $null
+        if ($present) {
+            $p = Get-ItemProperty -LiteralPath $key -Name $script:AudioMsiValue -ErrorAction SilentlyContinue
+            if ($p -and ($null -ne $p.$($script:AudioMsiValue))) { $value = [int]$p.$($script:AudioMsiValue) }
+        }
+        $rows += [pscustomobject]@{ instance = $d.DeviceID; key = $key; key_present = $present; value = $value }
+    }
+    # A plain array, not ', $rows': every caller wraps the call in @(), and @() does not unroll a nested array.
+    return $rows
+}
+# Pure: the readings and the value this release wants in, one decision per function out.
+#   same   the value is already the one we want: nothing is written and no device is restarted
+#   set    the value (or its key) is absent: write it
+#   update another value is there: write ours, and remember the old one
+function Get-GpuAudioMsiPlan {
+    param($Readings, [int]$Wanted = 1)
+    $plan = @()
+    foreach ($r in @($Readings)) {
+        if ($null -eq $r.value) { $decision = 'set' }
+        elseif ([int]$r.value -eq $Wanted) { $decision = 'same' }
+        else { $decision = 'update' }
+        $plan += [pscustomobject]@{ instance = $r.instance; key = $r.key; key_present = [bool]$r.key_present
+            previous = $r.value; value = $Wanted; decision = $decision
+            write = ($decision -ne 'same'); restart = ($decision -ne 'same') }
+    }
+    return $plan
+}
+# Pure: what the uninstaller does with what the install wrote down.
+#   restore the value we wrote is still there and there was one before: write the old one back
+#   remove  the value we wrote is still there and there was none before: remove it
+#   kept    another value is there now: somebody else owns it, we leave it alone
+#   absent  the key or the function is gone: nothing to do
+function Get-GpuAudioMsiRestorePlan {
+    param($Recorded, $Readings, [int]$Wrote = 1)
+    $now = @{}
+    foreach ($r in @($Readings)) { $now[[string]$r.instance] = $r }
+    $plan = @()
+    foreach ($e in @($Recorded)) {
+        $instance = [string]$e.instance
+        $previous = $null
+        if ($e.PSObject.Properties['previous'] -and ($null -ne $e.previous)) { $previous = [int]$e.previous }
+        $row = $null
+        if ($now.ContainsKey($instance)) { $row = $now[$instance] }
+        if (($null -eq $row) -or -not $row.key_present) { $decision = 'absent'; $value = $null }
+        elseif ($null -eq $row.value) { $decision = 'absent'; $value = $null }
+        elseif ([int]$row.value -ne $Wrote) { $decision = 'kept'; $value = [int]$row.value }
+        elseif ($null -eq $previous) { $decision = 'remove'; $value = $null }
+        else { $decision = 'restore'; $value = $previous }
+        $key = $(if ($row) { $row.key } else { Get-GpuAudioMsiKey $instance })
+        $plan += [pscustomobject]@{ instance = $instance; key = $key; current = $(if ($row) { $row.value } else { $null })
+            value = $value; decision = $decision
+            write = ($decision -eq 'restore'); drop = ($decision -eq 'remove'); restart = ($decision -in @('restore', 'remove')) }
+    }
+    return $plan
+}
+# One line per function, for the console and the log. The instance id is the device's own, not a secret.
+function Format-GpuAudioMsiPlan($Plan) {
+    $parts = @()
+    foreach ($e in @($Plan)) {
+        switch ($e.decision) {
+            'same'    { $parts += "$($e.instance): $($script:AudioMsiValue) is already $($e.value)" }
+            'set'     { $parts += "$($e.instance): $($script:AudioMsiValue) = $($e.value) (absent before)" }
+            'update'  { $parts += "$($e.instance): $($script:AudioMsiValue) $($e.previous) -> $($e.value)" }
+            'restore' { $parts += "$($e.instance): $($script:AudioMsiValue) back to $($e.value) (as before the install)" }
+            'remove'  { $parts += "$($e.instance): $($script:AudioMsiValue) removed (absent before the install)" }
+            'kept'    { $parts += "$($e.instance): $($script:AudioMsiValue) $($e.current) kept (not the value this release wrote)" }
+            'absent'  { $parts += "$($e.instance): nothing to put back (the function or its key is gone)" }
+        }
+    }
+    if (-not $parts.Count) { return 'no HD Audio function of the GPU on this computer' }
+    return ($parts -join '; ')
+}
+function Set-GpuAudioMsiValue([string]$Key, [int]$Value) {
+    Initialize-RegistryKey $Key
+    New-ItemProperty -LiteralPath $Key -Name $script:AudioMsiValue -Value $Value -PropertyType DWord -Force | Out-Null
+}
+function Remove-GpuAudioMsiValue([string]$Key) {
+    Remove-ItemProperty -LiteralPath $Key -Name $script:AudioMsiValue -Force -ErrorAction SilentlyContinue
+}
+# pnputil /restart-device for one device, then the device back in its normal state, both inside one budget. The
+# endpoints of that function disappear for a few seconds and the audio service rebuilds them; no other device and no
+# part of the desktop is restarted (BD-060 is about the display device, which this is not).
+function Restart-GpuAudioDevice {
+    param([Parameter(Mandatory)][string]$InstanceId, [int]$TimeoutSeconds = $script:AudioRestartWaitSeconds)
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $n = Invoke-Native pnputil.exe @('/restart-device', $InstanceId)
+    $status = $null
+    while ($clock.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        $d = Get-PnpDevice -InstanceId $InstanceId -ErrorAction SilentlyContinue
+        if ($d) { $status = [string]$d.Status; if ($status -eq 'OK') { break } }
+        Start-Sleep -Seconds 1
+    }
+    return [pscustomobject]@{ code = $n.code; text = $n.text; status = $status
+        seconds = [Math]::Round($clock.Elapsed.TotalSeconds, 1)
+        ok = (($n.code -eq 0) -and ($status -eq 'OK')) }
+}
+# Did the write reach the computer? Reads the value again, for the one instance.
+function Test-GpuAudioMsi {
+    param([Parameter(Mandatory)][string]$InstanceId, $Expected)
+    $key = Get-GpuAudioMsiKey $InstanceId
+    $value = $null
+    if (Test-Path -LiteralPath $key) {
+        $p = Get-ItemProperty -LiteralPath $key -Name $script:AudioMsiValue -ErrorAction SilentlyContinue
+        if ($p -and ($null -ne $p.$($script:AudioMsiValue))) { $value = [int]$p.$($script:AudioMsiValue) }
+    }
+    if ($null -eq $Expected) { return [pscustomobject]@{ ok = ($null -eq $value); value = $value } }
+    return [pscustomobject]@{ ok = ($null -ne $value) -and ([int]$value -eq [int]$Expected); value = $value }
+}
+
 function Get-TestSigningActive {
     # The options the running boot was started with; readable without elevation.
     $o = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control' -Name SystemStartOptions -ErrorAction SilentlyContinue).SystemStartOptions
@@ -971,6 +1116,14 @@ function Get-ReleaseFootprint {
     }
     & $probe 'driver store' { $pk = @(Get-OurDriverPackages); @{ present = ($pk.Count -gt 0); detail = $(if ($pk.Count) { "$($pk.Count) package(s) of bc250kmd.inf: $($pk -join ', ')" } else { 'no package of ours' }) } }
     & $probe 'driver service' { $k = (Split-Path $script:ParametersKey); $p = (Test-Path -LiteralPath $k); @{ present = $p; detail = "$k$(if ($p) { ' is there' } else { ' is gone' })" } }
+    # The one value this release changes on a device that is not ours (BD-092): still as this release set it, or back.
+    & $probe 'DP audio interrupt' {
+        $recorded = @()
+        if ($State -and $State.PSObject.Properties['hda_msi'] -and ($null -ne $State.hda_msi)) { $recorded = @($State.hda_msi) }
+        if (-not $recorded.Count) { return @{ present = $false; detail = "no record of a change to $($script:AudioMsiValue) of the GPU's HD Audio function" } }
+        $left = @(Get-GpuAudioMsiRestorePlan -Recorded $recorded -Readings (Read-GpuAudioMsi) -Wrote 1 | Where-Object { $_.write -or $_.drop })
+        @{ present = ($left.Count -gt 0); detail = $(if ($left.Count) { Format-GpuAudioMsiPlan $left } else { "$($script:AudioMsiValue) of the GPU's HD Audio function is as it was before the install" }) }
+    }
     & $probe 'policy keys' {
         $found = @(@($script:SoftwareKey, "HKLM:\SOFTWARE\WOW6432Node\$($script:ReleaseName)") | Where-Object { Test-Path -LiteralPath $_ })
         @{ present = ($found.Count -gt 0); detail = $(if ($found.Count) { $found -join ', ' } else { "$($script:SoftwareKey) is gone" }) }

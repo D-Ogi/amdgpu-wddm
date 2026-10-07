@@ -289,6 +289,93 @@ try {
 } finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
 Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 
+'the driver package no longer resets a gate (BD-091): its AddReg writes DWORD | NOCLOBBER'
+# From 0.7.216.10 the INF writes the released value of every setting it names, with FLG_ADDREG_NOCLOBBER, so pnputil
+# changes nothing that is already there. The restore set above stays, because two names keep the unconditional write
+# (UnconfirmedStarts, EnableHangBugcheck) and because a package older than this one may still be installed over.
+# tools\quality\inf_gates.py is the gate that holds the INF to the table; here it is the plan's turn: with the key
+# unchanged between the judgement and the write, nothing is written at all.
+$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
+try {
+    $k = "$key\Noclobber"
+    Write-RegistryPlan $k (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $null -Current @{})
+    foreach ($e in @{ DpmMaxMHz = 1200; CuMode = 40; EnableMmioWrite = 1 }.GetEnumerator()) { New-ItemProperty -LiteralPath $k -Name $e.Key -Value $e.Value -PropertyType DWord -Force | Out-Null }
+    $before = Read-RegistryValues $k
+    # What a NOCLOBBER AddReg does to a key that already holds every name: nothing.
+    $after = Read-RegistryValues $k
+    $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $table.defaults.parameters -Current $before -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After $after -Restore @($before.Keys)
+    Check ((@($plan | Where-Object { $_.write -and $_.name -ne 'UnconfirmedStarts' }).Count -eq 0)) 'an upgrade over the same defaults writes nothing but UnconfirmedStarts'
+    Write-RegistryPlan $k $plan
+    $v = Read-RegistryValues $k
+    Check (($v.DpmMaxMHz -eq 1200) -and ($v.CuMode -eq 40) -and ($v.EnableMmioWrite -eq 1) -and ($v.UnconfirmedStarts -eq 0)) "the tester's values stay: DpmMaxMHz $($v.DpmMaxMHz), CuMode $($v.CuMode), EnableMmioWrite $($v.EnableMmioWrite), UnconfirmedStarts $($v.UnconfirmedStarts)"
+} finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
+
+'the GPU''s HD Audio function on message-signalled interrupts (BD-092)'
+$audioInstance = 'PCI\VEN_1002&DEV_13FF&SUBSYS_00000000&REV_00\4&TESTTEST&0&0041'
+function New-AudioReading($Value, [bool]$KeyPresent = $true, [string]$Instance = $audioInstance) {
+    return [pscustomobject]@{ instance = $Instance; key = (Get-GpuAudioMsiKey $Instance); key_present = $KeyPresent; value = $Value }
+}
+$p = @(Get-GpuAudioMsiPlan -Readings @(New-AudioReading 0) -Wanted 1)
+Check ((@($p).Count -eq 1) -and ($p[0].decision -eq 'update') -and ($p[0].previous -eq 0) -and ($p[0].value -eq 1) -and $p[0].write -and $p[0].restart) "MSISupported 0 (the inbox hdaudbus.inf value) -> 1: $($p[0].decision)"
+$p = @(Get-GpuAudioMsiPlan -Readings @(New-AudioReading 1) -Wanted 1)
+Check (($p[0].decision -eq 'same') -and -not $p[0].write -and -not $p[0].restart) 'MSISupported already 1: nothing written, no device restarted (a re-run of the installer)'
+$p = @(Get-GpuAudioMsiPlan -Readings @(New-AudioReading $null) -Wanted 1)
+Check (($p[0].decision -eq 'set') -and ($null -eq $p[0].previous) -and $p[0].write) 'MSISupported absent, key there: set'
+$p = @(Get-GpuAudioMsiPlan -Readings @(New-AudioReading $null $false) -Wanted 1)
+Check (($p[0].decision -eq 'set') -and -not $p[0].key_present -and $p[0].write) 'the whole MessageSignaledInterruptProperties key absent: set, and the plan says the key was not there'
+Check ((Format-GpuAudioMsiPlan @()) -eq 'no HD Audio function of the GPU on this computer') 'no audio function: the plan text says so'
+Check ((Format-GpuAudioMsiPlan (Get-GpuAudioMsiPlan -Readings @(New-AudioReading 0))) -match 'MSISupported 0 -> 1') 'the plan text names the value it changes'
+# Two functions (one GPU has one, but the plan must not assume it): each judged on its own.
+$p = @(Get-GpuAudioMsiPlan -Readings @((New-AudioReading 0), (New-AudioReading 1 $true 'PCI\VEN_1002&DEV_13FF&X\second')))
+Check ((@($p).Count -eq 2) -and ($p[0].decision -eq 'update') -and ($p[1].decision -eq 'same')) 'two functions: one written, one already right'
+
+# The uninstaller's side. What the install wrote down is {instance, previous, key_present}.
+$recordedAbsent = @([pscustomobject]@{ instance = $audioInstance; previous = $null; key_present = $false })
+$recordedZero = @([pscustomobject]@{ instance = $audioInstance; previous = 0; key_present = $true })
+$r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedZero -Readings @(New-AudioReading 1))
+Check (($r[0].decision -eq 'restore') -and ($r[0].value -eq 0) -and $r[0].write -and -not $r[0].drop -and $r[0].restart) "previous 0, ours still there: $($r[0].decision) -> $($r[0].value)"
+$r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedAbsent -Readings @(New-AudioReading 1))
+Check (($r[0].decision -eq 'remove') -and $r[0].drop -and -not $r[0].write -and $r[0].restart) "nothing there before the install: $($r[0].decision)"
+$r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedZero -Readings @(New-AudioReading 2))
+Check (($r[0].decision -eq 'kept') -and -not $r[0].write -and -not $r[0].drop -and -not $r[0].restart) "a value that is not the one we wrote: $($r[0].decision), and no device is restarted"
+$r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedZero -Readings @())
+Check (($r[0].decision -eq 'absent') -and -not $r[0].write -and -not $r[0].drop) "the function is gone: $($r[0].decision)"
+$r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedZero -Readings @(New-AudioReading $null))
+Check ($r[0].decision -eq 'absent') 'the value is gone already: nothing to put back'
+Check ((Format-GpuAudioMsiPlan (Get-GpuAudioMsiRestorePlan -Recorded $recordedAbsent -Readings @(New-AudioReading 1))) -match 'removed \(absent before the install\)') 'the restore text says what it removes'
+# A re-run of the uninstaller after a successful one: the value is as it was, so there is nothing left to do.
+$r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedZero -Readings @(New-AudioReading 0))
+Check ($r[0].decision -eq 'kept') 'a second uninstall finds the old value back and changes nothing'
+
+'write, read back and remove (HKCU scratch key)'
+$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+$saveEnum = $script:AudioEnumRoot
+try {
+    $script:AudioEnumRoot = "$key\Enum"
+    $target = Get-GpuAudioMsiKey $audioInstance
+    Check (-not (Test-Path -LiteralPath $target)) 'the scratch device key does not exist yet'
+    Check (-not (Test-GpuAudioMsi -InstanceId $audioInstance -Expected 1).ok) 'the check refuses an absent value'
+    Check ((Test-GpuAudioMsi -InstanceId $audioInstance -Expected $null).ok) 'and accepts it when nothing is expected'
+    Set-GpuAudioMsiValue $target 1
+    $check = Test-GpuAudioMsi -InstanceId $audioInstance -Expected 1
+    Check ($check.ok -and ($check.value -eq 1)) "written and read back: MSISupported $($check.value)"
+    Check ((Get-Item -LiteralPath $target).GetValueKind('MSISupported') -eq 'DWord') 'MSISupported is REG_DWORD'
+    $reading = @(Read-GpuAudioMsi)                     # no such device on this PC: the reading is empty
+    Check (@($reading).Count -eq 0) 'Read-GpuAudioMsi finds no GPU audio function on this computer'
+    Set-GpuAudioMsiValue $target 0
+    Check ((Test-GpuAudioMsi -InstanceId $audioInstance -Expected 0).ok) 'the restore write goes back to 0'
+    Remove-GpuAudioMsiValue $target
+    Check ((Test-GpuAudioMsi -InstanceId $audioInstance -Expected $null).ok) 'the value is removed, and the key stays'
+    Check (Test-Path -LiteralPath $target) 'the MessageSignaledInterruptProperties key itself is not removed: it is the inbox driver''s'
+    Remove-GpuAudioMsiValue $target
+    Check ((Test-GpuAudioMsi -InstanceId $audioInstance -Expected $null).ok) 'removing it twice is not an error'
+} finally {
+    $script:AudioEnumRoot = $saveEnum
+    Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue
+}
+Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
+
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }
 'registry defaults: all checks passed'
 exit 0
