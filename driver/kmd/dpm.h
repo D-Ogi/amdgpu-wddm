@@ -35,6 +35,9 @@ typedef struct _BC250_DPM_SNAP {
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
     ULONG IdleEntries, IdleExits, IdleRefusals;
     ULONGLONG IdleMs;                       // time held at the idle point
+    // 0.7.216.6, the idle point's hysteresis: the slow exit's share in force and how the exits split between the one
+    // busy tick (fast) and the trailing window (slow). Driver log only, not in the escape.
+    ULONG IdleLeavePermille, IdleFastExits, IdleSlowExits;
     // 0.7.210, the operator's V/F curve. CurrentMv above already comes from the active curve; these three are
     // what the telemetry line and the escape's flags need. Serial counts changes of the active curve, Applied is
     // the serial the governor has put into the hardware.

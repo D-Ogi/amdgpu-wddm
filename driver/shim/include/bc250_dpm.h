@@ -289,16 +289,40 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_IDLE_MIN_HOLD_MS	250u	/* ten governor ticks */
 #define BC250_DPM_IDLE_MAX_HOLD_MS	60000u
 #define BC250_DPM_IDLE_MAX_BUSY_PERMILLE 100u	/* 10 %: anything higher is not an idle GPU */
-/* The share at which one tick of its own leaves the state. It is not the entry threshold on purpose. Entry
- * admits a mean of 2 permille because a static desktop wakes for single frames, and one such frame is
+/* The share at which one tick of its own leaves the state: the fast exit. It is not the entry threshold on purpose.
+ * Entry admits a mean of 2 permille because a static desktop wakes for single frames, and one such frame is
  * 1000 / BC250_DPM_TICK_MS = 40 permille of its own tick (one active GRBM sample of the 25 a 25 ms tick holds),
  * twenty times that mean. Comparing a tick's own share with the entry threshold therefore left the state at the
  * very frame the mean rule was written to tolerate: on the policy itself, one wake per second gave 15 entries and
  * 15 exits a minute and held the point for a quarter of the time. A tick at or above half its own wall time is
- * work no desktop frame reaches, and work on either ring leaves the state in that tick anyway (ring_busy), so
- * this threshold only has to catch heavy work that the ring accounting cannot see. Anything under it that lasts
- * leaves through the window rule: a whole window whose mean is above the admitted share. */
+ * work no desktop frame reaches: 12.5 ms of GPU work inside one 25 ms tick at 500 MHz is a frame that comes near a
+ * 60 Hz deadline, and a game's first busy tick reads 900 permille and more. Anything under it that lasts leaves
+ * through the window rule: the work of the trailing window reaches BC250_DPM_IDLE_LEAVE_PERMILLE.
+ *
+ * Since 0.7.216.6 work on the GFX ring (ring_busy) no longer leaves the state by itself. With the desktop composed
+ * on our GPU every DWM frame - the cursor, the clock, an overlay redraw - is a submission, and the ring rule left the
+ * idle point at each one: 500 -> 1000 MHz, three seconds at the lab floor for the next quiet window, back to 500, and
+ * again, every two seconds while the owner watched and 29 exits in 6.5 minutes at a quiet desktop (2026-10-07). The
+ * idle point is now a DPM level with hysteresis: it holds while its own work fits it and is left by work that does
+ * not. The ring still gates the entry, which is unchanged. */
 #define BC250_DPM_IDLE_EXIT_PERMILLE	500u
+/* The slow exit: the trailing window's mean busy share at the idle point, in permille, at which the state is left
+ * (DpmIdleLeavePermille). The window is the hold time; its work is counted as the ticks come, and the state is left
+ * at the tick at which the window's work reaches this share of the whole window, not at the window's end, so a
+ * steady load of at least twice the share leaves within one hold time wherever in a window it starts.
+ *
+ * Why 150. The measured desktop is far under it: the idle phases of the C62 identification (R120, 24 samples at
+ * 1.75 s, 500 MHz, quiet desktop on the GPU) read a tick share of 0 and a busy average of 2 to 6 permille, and the
+ * DWM frames that caused the flapping are about 2 ms of GPU work per 2 s, some 1 permille at the lab floor and 2 at
+ * the idle point. A desktop that animates at 60 Hz with 2 ms of work a frame is 120 permille here and still fits.
+ * And what stays under it fits the point: 150 permille at 500 MHz is about 75 at the lab floor, an order of magnitude
+ * under the load governor's own lowering threshold (BC250_DPM_DOWN_PERMILLE, 650), so the lab floor would serve the
+ * same work at the same throughput, only each frame's 2.5 ms becomes 1.25 ms, both far inside a 16.7 ms frame. It is
+ * the middle of the 100 to 250 permille band the review asked for: below it a video or an animated page starts to
+ * flap again, above it a sustained 30 % load (the test's case) would need more than one hold time. */
+#define BC250_DPM_IDLE_LEAVE_PERMILLE	150u
+#define BC250_DPM_IDLE_MIN_LEAVE_PERMILLE 10u	/* and always above the window's admitted entry mean */
+#define BC250_DPM_IDLE_MAX_LEAVE_PERMILLE 400u	/* and always under BC250_DPM_IDLE_EXIT_PERMILLE */
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
 #define BC250_DPM_CAP_MS_MAX		0x7FFFFFFFu	/* where the time since the last cap change saturates */
 
@@ -428,8 +452,10 @@ struct bc250_dpm_input {
 	int		temperature_valid;
 	unsigned int	dt_ms;			/* since the previous tick */
 	/* Work outstanding on the GFX ring at this tick (the KMD's GfxSubmitBusy): submitted and not yet
-	 * retired, whatever the hardware's busy samples say. The idle state alone reads it (0.7.207): a
-	 * submission waiting on a fence keeps the clock at the lab floor. Zero is "the ring is empty". */
+	 * retired, whatever the hardware's busy samples say. The idle state reads it for its entry (0.7.207): a
+	 * submission waiting on a fence keeps the clock at the lab floor. Since 0.7.216.6 it no longer ends an idle
+	 * episode by itself (BC250_DPM_IDLE_EXIT_PERMILLE says why); the soft zone's work gate reads it as well.
+	 * Zero is "the ring is empty". */
 	int		ring_busy;
 	/* The paging node's busy share over this tick, from the same hardware samples as busy_permille
 	 * (SDMA0_STATUS_REG.IDLE), 0 for a tick with too few samples. The idle state alone reads it (0.7.207):
@@ -464,11 +490,14 @@ struct bc250_dpm_governor {
 	int		idle_on, idle;
 	unsigned int	idle_level;		/* the point idle holds; raised to the thermal floor after a refusal */
 	unsigned int	idle_hold_ms;		/* the window the GPU must be quiet for */
-	unsigned int	idle_busy_permille;	/* the window's admitted mean busy share, and the exit threshold */
+	unsigned int	idle_busy_permille;	/* the entry window's admitted mean busy share */
 	unsigned int	idle_ms;		/* the window so far: the candidate one before entry, the trailing one in idle */
 	unsigned int	idle_acc;		/* busy permille x ms over that window, saturating */
 	unsigned int	idle_entries, idle_exits, idle_refusals;
 	unsigned int	idle_total_ms;		/* time held at the idle point, saturating */
+	unsigned int	idle_leave_permille;	/* the slow exit's share (0.7.216.6, BC250_DPM_IDLE_LEAVE_PERMILLE) */
+	unsigned int	idle_fast_exits;	/* exits by one tick at BC250_DPM_IDLE_EXIT_PERMILLE (0.7.216.6) */
+	unsigned int	idle_slow_exits;	/* exits by the window's work reaching idle_leave_permille (0.7.216.6) */
 	/* The soft zone (0.7.213, BD-087). */
 	unsigned int	zone_ms;		/* time in the zone since its last step down */
 	unsigned int	zone_steps;		/* cap lowerings by the zone */
@@ -522,6 +551,7 @@ enum bc250_dpm_idle_error {
 	BC250_DPM_IDLE_CLOCK = 1,	/* DpmIdleMHz is not a table clock below the lab floor */
 	BC250_DPM_IDLE_HOLD = 2,	/* DpmIdleHoldMs outside MIN..MAX_HOLD_MS */
 	BC250_DPM_IDLE_BUSY = 3,	/* DpmIdleBusyPermille above MAX_BUSY_PERMILLE */
+	BC250_DPM_IDLE_LEAVE = 4,	/* DpmIdleLeavePermille outside MIN..MAX_LEAVE_PERMILLE, or not above the entry mean */
 	BC250_DPM_IDLE_ERROR_COUNT
 };
 /* The start's idle setting, after bc250_dpm_init (which leaves the state off, so a caller that does not
@@ -530,6 +560,11 @@ enum bc250_dpm_idle_error {
  * Not a run-time operation: the KMD calls it once per start, before the governor thread exists. */
 enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, unsigned int idle_mhz,
 						unsigned int hold_ms, unsigned int busy_permille);
+/* The slow exit's share (DpmIdleLeavePermille, 0.7.216.6), after bc250_dpm_idle_config, which leaves the default in
+ * place. MIN..MAX_LEAVE_PERMILLE and strictly above the entry window's admitted mean: a share at or under that mean
+ * would leave the state on the very work that entered it. A refused value turns the idle state off, as every refused
+ * idle setting does, and the KMD logs it. */
+enum bc250_dpm_idle_error bc250_dpm_idle_set_leave(struct bc250_dpm_governor *g, unsigned int leave_permille);
 /* The caller could not put the hardware at the idle point (the SMU refused it, the readback did not match).
  * The idle point falls back one step at a time, as the owner asked: 500 MHz, then the thermal floor
  * (800 MHz), then off, which is the lab floor. One refusal is enough for each step: the firmware has never

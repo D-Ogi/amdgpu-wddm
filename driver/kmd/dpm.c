@@ -35,6 +35,10 @@
 //   DpmIdleBusyPermille  the busy share the hold window still admits, in permille of its wall time. Absent =
 //                   BC250_DPM_IDLE_BUSY_PERMILLE (2); at most BC250_DPM_IDLE_MAX_BUSY_PERMILLE. The desktop
 //                   on the GPU wakes for single frames, so the rule is this mean, not a strict zero.
+//   DpmIdleLeavePermille  the slow exit (0.7.216.6): the idle point is left when the work of its trailing window
+//                   (DpmIdleHoldMs long) reaches this share; one tick at BC250_DPM_IDLE_EXIT_PERMILLE (500) leaves at
+//                   once. Absent = BC250_DPM_IDLE_LEAVE_PERMILLE (150), range 10..400 and above DpmIdleBusyPermille.
+//                   Work on the GFX ring no longer leaves the point by itself: every DWM frame is a submission.
 //   DpmThermalZone  the soft thermal zone (0.7.213, BD-087): absent or any non-zero value runs it, which is the
 //                   default, and 0 runs the 0.7.212 thermal rules instead (the hot cap at 87 C alone, no soft
 //                   release, the warm zone back at 87 C). It is one switch for a whole start, for bisecting a
@@ -73,6 +77,7 @@
 #define DPM_SETTING_IDLE_MHZ L"DpmIdleMHz"
 #define DPM_SETTING_IDLE_HOLD L"DpmIdleHoldMs"
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
+#define DPM_SETTING_IDLE_LEAVE L"DpmIdleLeavePermille"
 #define DPM_SETTING_ZONE L"DpmThermalZone"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
@@ -487,6 +492,9 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.IdleExits = g->idle_exits;
     snap.IdleRefusals = g->idle_refusals;
     snap.IdleMs = g->idle_total_ms;
+    snap.IdleLeavePermille = g->idle_leave_permille;
+    snap.IdleFastExits = g->idle_fast_exits;
+    snap.IdleSlowExits = g->idle_slow_exits;
     if (Running && governing && g->idle) snap.Flags |= BC250_DPM_FLAG_IDLE;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
@@ -564,6 +572,11 @@ static void DpmLogIdleLine(const char* What, const BC250_DPM_SNAP* P)
     GuardLog("dpm: %s idle %lu MHz%s, hold %lu ms under %lu permille, entries %lu exits %lu refusals %lu, "
              "%llu ms at the point", What, P->IdleMHz, (P->Flags & BC250_DPM_FLAG_IDLE) ? " (now)" : "",
              P->IdleHoldMs, P->IdleBusyPermille, P->IdleEntries, P->IdleExits, P->IdleRefusals, P->IdleMs);
+    // The hysteresis (0.7.216.6) on a line of its own: the line above is near the log's width already. The exits it
+    // counts are the ones by a busy tick and by the window; the rest of the exits are the other rules' (a thermal
+    // rule, a runtime floor, SetStablePowerState, a stop or a power transition).
+    GuardLog("dpm: %s idle leave at %lu permille, exits %lu by a busy tick, %lu by the window", What,
+             P->IdleLeavePermille, P->IdleFastExits, P->IdleSlowExits);
 }
 
 // The curve's state beside the telemetry, only while it is not the table's own line or a trial runs, so a start
@@ -796,8 +809,10 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         in.temperature_valid = T->TemperatureValid;
         in.dt_ms = dtMs;
         // Work submitted and not yet retired, whatever the hardware samples said: the idle state (0.7.207)
-        // does not leave the lab floor while the ring holds anything, and returns to it at the first tick
-        // that sees work again. Exit latency: this tick's detection (the period is BC250_DPM_TICK_MS, 25 ms)
+        // does not leave the lab floor for the idle point while the ring holds anything. Since 0.7.216.6 the ring
+        // no longer ends an idle episode by itself (every DWM frame is a submission): the episode ends at the first
+        // tick whose busy share reaches BC250_DPM_IDLE_EXIT_PERMILLE, or when the trailing window's work reaches
+        // DpmIdleLeavePermille. Exit latency: this tick's detection (the period is BC250_DPM_TICK_MS, 25 ms)
         // plus one SmuSetPoint, so some 25 to 35 ms for the first work of a burst. Neither figure is a bound.
         // This thread is an ordinary system thread, it waits a relative 25 ms after each tick, DpmPause holds
         // TickLock across a power transition, and a raise re-reads the clock up to BC250_CLOCK_SETTLE_READS
@@ -940,8 +955,8 @@ static void DpmThread(_In_ PVOID Context)
 // PASSIVE_LEVEL, under Lock, before the governor thread exists.
 static void DpmConfigureIdle(BC250_DPM_STATE* S, BOOLEAN Dpm)
 {
-    unsigned int mhz = 0, hold = 0, permille = 0;
-    BOOLEAN mhzPresent, holdPresent, busyPresent;
+    unsigned int mhz = 0, hold = 0, permille = 0, leave = 0;
+    BOOLEAN mhzPresent, holdPresent, busyPresent, leavePresent;
     enum bc250_dpm_idle_error error;
 
     if (!Dpm) {
@@ -956,10 +971,19 @@ static void DpmConfigureIdle(BC250_DPM_STATE* S, BOOLEAN Dpm)
     if (!holdPresent) hold = BC250_DPM_IDLE_HOLD_MS;
     if (!busyPresent) permille = BC250_DPM_IDLE_BUSY_PERMILLE;
     error = bc250_dpm_idle_config(&S->Gov, mhz, hold, permille);
+    // The slow exit's share (0.7.216.6, DpmIdleLeavePermille): the idle point holds while the trailing window's work
+    // stays under it, and a desktop frame on the GFX ring no longer leaves the point by itself. Only for a state the
+    // three values above turned on; a refused value turns the state off and is logged like the others.
+    leavePresent = QueryPresent(DPM_SETTING_IDLE_LEAVE, &leave);
+    if (!leavePresent) leave = BC250_DPM_IDLE_LEAVE_PERMILLE;
+    if (error == BC250_DPM_IDLE_OK && S->Gov.idle_on) error = bc250_dpm_idle_set_leave(&S->Gov, leave);
     GuardLog("dpm: idle DpmIdleMHz %lu%s hold %lu ms%s under %lu permille%s -> %s (error %d)", (ULONG)mhz,
              mhzPresent ? "" : " (absent)", (ULONG)hold, holdPresent ? "" : " (absent)", (ULONG)permille,
              busyPresent ? "" : " (absent)",
              bc250_dpm_idle_mhz(&S->Gov) ? "on" : (mhz == 0 ? "off by setting" : "off"), (int)error);
+    GuardLog("dpm: idle DpmIdleLeavePermille %lu%s: leaves at %lu permille over the window, or %lu in one tick",
+             (ULONG)leave, leavePresent ? "" : " (absent)", (ULONG)S->Gov.idle_leave_permille,
+             (ULONG)BC250_DPM_IDLE_EXIT_PERMILLE);
 }
 
 // The soft thermal zone's one switch (0.7.213, BD-087). DpmThermalZone 0 runs the 0.7.212 thermal rules for this whole

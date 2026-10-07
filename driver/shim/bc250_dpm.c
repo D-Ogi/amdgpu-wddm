@@ -10,7 +10,8 @@
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
  * top and wins over everything, the lab floor included: since 0.7.205 it alone may go under it, to 900 or
  * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). Since 0.7.207 the idle state goes lower
- * still, to 500 MHz, but only while the GPU has no work at all. Since 0.7.213 the cap starts stepping in the soft
+ * still, to 500 MHz, entered after a quiet window and held, since 0.7.216.6, while its own work fits it (a desktop
+ * frame no longer leaves it). Since 0.7.213 the cap starts stepping in the soft
  * zone, 86 C, with the reading extrapolated 15 s along its own slope, and the clock stops rising at 83 C
  * (bc250_dpm_warm_mc); the 87 C hot cap and the 90 C critical rule stay behind both as backstops on the raw reading.
  * From the warm threshold up no raise happens at all, and from RAMP_KNEE_MC
@@ -255,6 +256,7 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->idle_level = BC250_DPM_IDLE_LEVEL;
 	g->idle_hold_ms = BC250_DPM_IDLE_HOLD_MS;
 	g->idle_busy_permille = BC250_DPM_IDLE_BUSY_PERMILLE;
+	g->idle_leave_permille = BC250_DPM_IDLE_LEAVE_PERMILLE;
 	bc250_dpm_tune_default(&g->tune);
 }
 
@@ -276,6 +278,20 @@ enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, un
 	g->idle_hold_ms = hold_ms;
 	g->idle_busy_permille = busy_permille;
 	g->idle_on = 1;
+	return BC250_DPM_IDLE_OK;
+}
+
+enum bc250_dpm_idle_error bc250_dpm_idle_set_leave(struct bc250_dpm_governor *g, unsigned int leave_permille)
+{
+	if (leave_permille < BC250_DPM_IDLE_MIN_LEAVE_PERMILLE || leave_permille > BC250_DPM_IDLE_MAX_LEAVE_PERMILLE ||
+	    leave_permille <= g->idle_busy_permille) {
+		g->idle_on = 0;
+		g->idle = 0;
+		g->idle_ms = 0;
+		g->idle_acc = 0;
+		return BC250_DPM_IDLE_LEAVE;
+	}
+	g->idle_leave_permille = leave_permille;
 	return BC250_DPM_IDLE_OK;
 }
 
@@ -473,6 +489,25 @@ static unsigned int idle_exit_permille(const struct bc250_dpm_governor *g)
 								    : g->idle_busy_permille + 1u;
 }
 
+/* The slow exit's share (BC250_DPM_IDLE_LEAVE_PERMILLE and why), never at or below the entry window's admitted mean:
+ * bc250_dpm_idle_set_leave refuses such a value, and a caller that wrote the fields itself gets the mean plus one. */
+static unsigned int idle_leave_permille(const struct bc250_dpm_governor *g)
+{
+	return g->idle_leave_permille > g->idle_busy_permille ? g->idle_leave_permille : g->idle_busy_permille + 1u;
+}
+
+/* One exit from the state: the counters and the window, and *left for the caller's return to the lab floor. */
+static void idle_exit(struct bc250_dpm_governor *g, int *left)
+{
+	if (g->idle) {
+		g->idle = 0;
+		g->idle_exits++;
+		*left = 1;
+	}
+	g->idle_ms = 0;
+	g->idle_acc = 0;
+}
+
 /* One tick of the idle state (0.7.207). Returns 1 while the clock belongs at the idle point, and sets *left
  * when this tick ended an episode (the caller's exit rule reads it).
  *
@@ -483,13 +518,16 @@ static unsigned int idle_exit_permille(const struct bc250_dpm_governor *g)
  * again, so a busy GPU never enters, and the worst case from "the GPU went quiet" to the idle point is
  * two hold times (the burst lands at the end of a window that then has to run again).
  *
- * Two rules end an episode, and the fast one is the ring: work outstanding on the GFX ring or activity on the
- * paging node leaves the state in that tick, which is every submission this driver makes. A tick whose own busy
- * share reaches idle_exit_permille (half its wall time) leaves as well, for work the ring accounting cannot see.
- * Below that share the trailing window decides: the same window, the same admitted mean as the entry, so the
- * single desktop frame the entry rule tolerates does not leave the state, and work that keeps the GPU busier
- * than the admitted mean leaves within one hold time. The clock is back at the lab floor after the governor's
- * detection (one tick) plus the SMU transaction the caller runs; bc250_dpm_step names the latency.
+ * Inside the state the point behaves like a DPM level with hysteresis (0.7.216.6): it holds while its own work fits
+ * it. Two rules end an episode. The fast one is a tick whose own busy share (the higher of the graphics engine's and
+ * the paging node's) reaches idle_exit_permille, half its wall time: a game's first frame, an upload, any work the
+ * point cannot serve, leaves in that tick. The slow one is the trailing window: the same hold time as the entry,
+ * with its work counted as it comes, and the state is left at the tick at which that work reaches
+ * idle_leave_permille of the whole window (150 permille by default, 75 times the admitted entry mean). Work on the
+ * GFX ring no longer leaves by itself: every DWM frame of a desktop composed on this GPU is a submission, and the
+ * ring rule turned each one into 500 -> 1000 -> 500 MHz (BC250_DPM_IDLE_EXIT_PERMILLE has the lab record). The ring
+ * still gates the entry. The clock is back at the lab floor after the governor's detection (one tick) plus the SMU
+ * transaction the caller runs; bc250_dpm_step names the latency.
  *
  * The state does not run at all while another rule owns the clock: a runtime floor (an operator asked for
  * a clock), SetStablePowerState (a profiler asked for one steady clock), a temperature at or above HOT_MC
@@ -505,12 +543,36 @@ static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input 
 	unsigned int idle_busy = idle_busy_of(in, busy);
 
 	*left = 0;
-	if (!allowed || in->ring_busy || (g->idle && idle_busy >= idle_exit_permille(g))) {
-		if (g->idle) {
-			g->idle = 0;
-			g->idle_exits++;
-			*left = 1;
+	if (!allowed) {
+		idle_exit(g, left);
+		return 0;
+	}
+	if (g->idle) {
+		/* In the state. The fast exit first, then this tick's work into the trailing window, then the window's
+		 * budget: leave_permille x hold_ms of work per window, checked at every tick, so the exit does not wait for
+		 * the window's end. 64-bit: the budget is at most 400 x 60000. */
+		if (idle_busy >= idle_exit_permille(g)) {
+			g->idle_fast_exits++;
+			idle_exit(g, left);
+			return 0;
 		}
+		g->idle_ms = add_ms(g->idle_ms, dt);
+		g->idle_acc = add_ms(g->idle_acc, idle_busy * dt);
+		if ((unsigned long long)g->idle_acc >= (unsigned long long)idle_leave_permille(g) * g->idle_hold_ms) {
+			g->idle_slow_exits++;
+			idle_exit(g, left);
+			return 0;
+		}
+		if (g->idle_ms >= g->idle_hold_ms) {
+			g->idle_ms = 0;		/* the window is over and its work fitted: the next one starts */
+			g->idle_acc = 0;
+		}
+		g->idle_total_ms = add_ms(g->idle_total_ms, dt);
+		return 1;
+	}
+	/* Before the state: the entry rule of 0.7.207, unchanged. A tick with work on the GFX ring starts the window
+	 * again, and a whole window must stay under the admitted mean. */
+	if (in->ring_busy) {
 		g->idle_ms = 0;
 		g->idle_acc = 0;
 		return 0;
@@ -520,28 +582,14 @@ static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input 
 	if (g->idle_ms >= g->idle_hold_ms) {
 		int too_busy = (unsigned long long)g->idle_acc >
 			       (unsigned long long)g->idle_busy_permille * g->idle_ms;
-		g->idle_ms = 0;		/* entered, left, or simply too busy: either way the window starts again */
+		g->idle_ms = 0;		/* entered or too busy: either way the window starts again */
 		g->idle_acc = 0;
-		if (too_busy) {
-			/* Before the state: the candidate window failed and the next one decides. In the state: a
-			 * whole window above the admitted mean is the slow way out, for work that stays under the
-			 * exit share and that the ring accounting does not show. */
-			if (g->idle) {
-				g->idle = 0;
-				g->idle_exits++;
-				*left = 1;
-			}
-			return 0;
-		}
-		if (!g->idle) {
-			g->idle = 1;
-			g->idle_entries++;
-			return 1;	/* the caller's apply takes the clock there: no time at the point yet */
-		}
+		if (too_busy) return 0;	/* the candidate window failed and the next one decides */
+		g->idle = 1;
+		g->idle_entries++;
+		return 1;		/* the caller's apply takes the clock there: no time at the point yet */
 	}
-	if (!g->idle) return 0;
-	g->idle_total_ms = add_ms(g->idle_total_ms, dt);
-	return 1;
+	return 0;
 }
 
 /* ---- the soft zone's lead (0.7.213, BD-087) ---------------------------------------------------------- */
