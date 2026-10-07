@@ -34,6 +34,7 @@
     { "name": "m15/shader-model-68", "commit": "da9c4bef1fcf5da8f48bacb225a7ed644296c360" },
     { "name": "umd/per-app-graphics-settings", "commit": "4338d14c197fb42acb7fe9aac7b24060f4744d62" },
     { "name": "gui/per-app-graphics-settings", "commit": "28bd93c955b89b9225e8286ac218cc5c7558e120" },
-    { "name": "main (b23 base, with kmd/hang-recovery-b22 5e10c2bf, b23 wagon 1)", "commit": "9c03c35cfbb79046fd4cce629082f51f5a43ed2b" }
+    { "name": "main (b23 base, with kmd/hang-recovery-b22 5e10c2bf, b23 wagon 1)", "commit": "9c03c35cfbb79046fd4cce629082f51f5a43ed2b" },
+    { "name": "kmd/k137-cpu-baseline (424b2945 only, b23 wagon 13)", "commit": "424b294558052ef0322c2146232c02ae501d7eaf" }
   ]
 }
