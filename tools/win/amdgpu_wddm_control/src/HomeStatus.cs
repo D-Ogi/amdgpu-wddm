@@ -89,7 +89,7 @@ namespace AmdgpuWddmControl
                 cu = CuMode.View(s.Cu, s.Health != null ? (ulong?)s.Health.Generation : null, s.StoredCu(), x.CuConfirmFailed);
                 if (cu.Class == CuClass.Unknown && cu.ChoiceMode == CuMode.Full && s.DriverRunning) Item(c, GuideCause.CuUnknownAfter40, "cu-unknown-after-40", "problem", "page:graphics");
             }
-            if (s != null && s.DriverRunning && !Recovery.Confirmed(s.Health) && Recovery.ConfirmBlocker(s.Health, false) == null)
+            if (s != null && s.DriverRunning && !Recovery.StartConfirmed(s) && Recovery.ConfirmBlocker(s.Health, false) == null)
                 Item(c, GuideCause.StartAtRisk, "start-at-risk", "attention", "confirm-start");
             if (cu != null)
             {
