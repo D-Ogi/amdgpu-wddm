@@ -159,9 +159,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
   driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
   `d3d9on12.dll` by itself.
-- 32-bit Direct3D 10/11 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the same
-  routing rules as 64-bit applications. 32-bit Direct3D 12 applications do not have a driver yet, and therefore
-  32-bit Direct3D 9 applications get no device either: D3D9On12 needs a Direct3D 12 driver of the same bitness.
+- 32-bit Direct3D 10/11/12 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the
+  same routing rules as 64-bit applications. 32-bit Direct3D 9 applications use D3D9On12 on the 32-bit Direct3D 12
+  driver, as 64-bit ones do.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 - A program that records video can use the H.264 encoder of the GPU through Media Foundation. The encoder works only
   while Windows runs the BC-250 on this driver: if the driver did not start, the encoder refuses, and the program

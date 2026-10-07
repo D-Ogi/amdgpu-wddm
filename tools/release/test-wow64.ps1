@@ -3,8 +3,9 @@
 #   powershell -NoProfile -File tools\release\test-wow64.ps1 -Package <unpacked package folder> -WorkRoot <dir>
 # Asserts: every file under payload\wow64 is an x86 image or the ICD manifest, every other payload image is x64; the
 # package has no D3D9 stub (no payload\system32, no payload\syswow64: D3D9 goes through D3D9On12); manifest.json gives
-# the <InstallDir>\wow64 install paths; the x86 router exports its entry points undecorated; the x86 Vulkan manifest
-# names its library relative to itself; verify's Test-WowRegistration and Test-UmdRegistration (common.ps1) pass a
+# the <InstallDir>\wow64 install paths; the x86 router and shells export their entry points undecorated (the x86
+# D3D12 shell exactly OpenAdapter12); one x86 RADV build serves the D3D11 and D3D12 shells and the system ICD; the x86
+# Vulkan manifest names its library relative to itself; verify's Test-WowRegistration and Test-UmdRegistration (common.ps1) pass a
 # complete registration, with the D3D9 slot empty in both views after a registry round trip, and name each missing or
 # wrong part, the stub layout of the earlier releases included. The registration cases run against a scratch key,
 # HKCU:\Software\amdgpu-wddm-installer-test-wow, removed at the end, and files under -WorkRoot. Nothing under HKLM and
@@ -48,7 +49,7 @@ function Get-PeExports([string]$Path) {
 'payload images: x86 under wow64, x64 elsewhere, no D3D9 stub'
 Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\system32')) -and -not (Test-Path -LiteralPath (Join-Path $Package 'payload\syswow64'))) 'no payload\system32 and no payload\syswow64: the package ships no D3D9 stub'
 $wowFiles = @(Get-ChildItem -LiteralPath (Join-Path $Package 'payload\wow64') -Recurse -File)
-Check ($wowFiles.Count -eq 8) "8 files under payload\wow64 ($($wowFiles.Count))"
+Check ($wowFiles.Count -eq 11) "11 files under payload\wow64 ($($wowFiles.Count))"
 foreach ($f in $wowFiles) {
     if ($f.Extension -in '.json', '.config') { continue }
     $m = Get-PeMachine $f.FullName
@@ -69,15 +70,21 @@ $x = @(Get-PeExports (Join-Path $Package 'payload\wow64\vulkan\vulkan_radeon.dll
 Check (($x -contains 'vk_icdGetInstanceProcAddr') -and ($x -contains 'vk_icdNegotiateLoaderICDInterfaceVersion')) 'wow64\vulkan\vulkan_radeon.dll exports the ICD entry points undecorated'
 $icd = Get-Content -LiteralPath (Join-Path $Package 'payload\wow64\vulkan\radeon_icd.json') -Raw | ConvertFrom-Json
 Check ($icd.ICD.library_path -eq '.\vulkan_radeon.dll') "x86 ICD manifest library_path $($icd.ICD.library_path) (relative to the manifest)"
-Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\wow64\vulkan\vulkan_radeon.dll')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'payload\wow64\d3d11\amdgpu_wddm_radv.dll')).Hash) 'one x86 RADV build for the D3D11 shell and the system ICD'
+$x = @(Get-PeExports (Join-Path $Package 'payload\wow64\d3d12\amdgpu_wddm_d3d12.dll'))
+Check (($x -join ',') -eq 'OpenAdapter12') "wow64\d3d12\amdgpu_wddm_d3d12.dll exports exactly OpenAdapter12, undecorated ($($x -join ', '))"
+$x = @(Get-PeExports (Join-Path $Package 'payload\wow64\d3d12\amdgpu_wddm_vkd3d.dll'))
+Check (($x -join ',') -eq 'Bc250Vkd3dEngineGetFuncs') "wow64\d3d12\amdgpu_wddm_vkd3d.dll exports exactly Bc250Vkd3dEngineGetFuncs ($($x -join ', '))"
+$radv = @('vulkan\vulkan_radeon.dll', 'd3d11\amdgpu_wddm_radv.dll', 'd3d12\amdgpu_wddm_radv.dll' | ForEach-Object { (Get-FileHash -LiteralPath (Join-Path $Package "payload\wow64\$_")).Hash })
+Check (@($radv | Select-Object -Unique).Count -eq 1) 'one x86 RADV build for the D3D11 and D3D12 shells and the system ICD'
 
 'manifest.json install paths'
 $m = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
 $c = @($m.components | Where-Object { $_.package_path -like 'payload/wow64/*' })
-Check ($c.Count -eq 8) "8 x86 components in manifest.json ($($c.Count))"
+Check ($c.Count -eq 11) "11 x86 components in manifest.json ($($c.Count))"
 $sys = @($m.components | Where-Object { ([string]$_.install_path -like '%SystemRoot%*') -or ([string]$_.package_path -match '^payload/(system32|syswow64)/') -or ([string]$_.package_path -like '*bc250umd*') })
 Check ($sys.Count -eq 0) "no component installs into System32 or SysWOW64, no D3D9 stub ($(@($sys | ForEach-Object { $_.package_path }) -join ', '))"
 Check ((@($c | Where-Object { $_.package_path -eq 'payload/wow64/d3d11/amdgpu_wddm_d3d11.dll' })[0].install_path) -eq '<InstallDir>\wow64\d3d11\amdgpu_wddm_d3d11.dll') 'the x86 D3D11 shell goes to <InstallDir>\wow64\d3d11'
+Check ((@($c | Where-Object { $_.package_path -eq 'payload/wow64/d3d12/amdgpu_wddm_d3d12.dll' })[0].install_path) -eq '<InstallDir>\wow64\d3d12\amdgpu_wddm_d3d12.dll') 'the x86 D3D12 shell goes to <InstallDir>\wow64\d3d12'
 
 'verify: Test-WowRegistration against a scratch key and folder'
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test-wow'
@@ -88,7 +95,8 @@ try {
     [void][IO.Directory]::CreateDirectory($root)
     # The package's own x86 images in a copy of the install layout.
     $files = @()
-    foreach ($rel in 'desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll') {
+    foreach ($rel in 'desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll',
+        'd3d12\amdgpu_wddm_d3d12.dll', 'd3d12\amdgpu_wddm_vkd3d.dll', 'd3d12\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll') {
         $dst = Join-Path $root "wow64\$rel"
         [void][IO.Directory]::CreateDirectory((Split-Path $dst))
         Copy-Item -LiteralPath (Join-Path $Package "payload\wow64\$rel") -Destination $dst
@@ -105,17 +113,22 @@ try {
     New-ItemProperty -LiteralPath "$key\sw\AppRouter" -Name GpuUmdPathWow -Value (Join-Path $root 'wow64\d3d11\amdgpu_wddm_d3d11.dll') -PropertyType String -Force | Out-Null
     $p = @(Test-WowRegistration @args0)
     Check ($p.Count -eq 0) "complete registration: no finding ($($p -join '; '))"
-    Check ((@(Get-WowUmdNames $root).Count -eq 3) -and ((Get-WowUmdNames $root)[0] -eq '')) 'UserModeDriverNameWow has the D3D9 (empty), D3D10 and D3D11 slots only (no x86 D3D12)'
+    $wowUmd = @(Get-WowUmdNames $root)
+    Check (($wowUmd.Count -eq 4) -and ($wowUmd[0] -eq '') -and ($wowUmd[1] -eq (Join-Path $root 'wow64\desktop\bc250d3d_router.dll')) -and ($wowUmd[2] -eq $wowUmd[1]) -and ($wowUmd[3] -eq (Join-Path $root 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))) "UserModeDriverNameWow: D3D9 empty, the x86 router twice, the x86 D3D12 shell ($(Format-UmdNames $wowUmd))"
     $back = @((Get-ItemProperty -LiteralPath "$key\class").UserModeDriverNameWow)
-    Check (($back.Count -eq 3) -and ($back[0] -eq '') -and ($back[1] -eq (Join-Path $root 'wow64\desktop\bc250d3d_router.dll'))) "the empty D3D9 slot survives the registry round trip (UserModeDriverNameWow read back: $(Format-UmdNames $back))"
+    Check (($back.Count -eq 4) -and ($back[0] -eq '') -and ($back[1] -eq $wowUmd[1]) -and ($back[3] -eq $wowUmd[3])) "the empty D3D9 slot survives the registry round trip (UserModeDriverNameWow read back: $(Format-UmdNames $back))"
     # The layout of the releases up to tester.17, with the stub in the D3D9 slot, is a finding.
-    New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]](@('bc250umd.dll') + @(Get-WowUmdNames $root)[1..2])) -PropertyType MultiString -Force | Out-Null
+    New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]](@('bc250umd.dll') + $wowUmd[1..3])) -PropertyType MultiString -Force | Out-Null
     $p = @(Test-WowRegistration @args0)
     Check (($p.Count -eq 1) -and ($p[0] -match '^UserModeDriverNameWow is bc250umd\.dll')) "the stub in the D3D9 slot is a finding ($($p -join '; '))"
-    # A D3D12 entry appended, a 64-bit image in place of an x86 one, a missing file.
-    New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]]((Get-WowUmdNames $root) + 'x.dll')) -PropertyType MultiString -Force | Out-Null
+    # The layout without an x86 D3D12 slot (three entries), a fifth entry, a 64-bit image in place of an x86 one, a
+    # missing file.
+    New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]]$wowUmd[0..2]) -PropertyType MultiString -Force | Out-Null
     $p = @(Test-WowRegistration @args0)
-    Check (($p.Count -eq 1) -and ($p[0] -match '^UserModeDriverNameWow is')) "a fourth slot is a finding ($($p -join '; '))"
+    Check (($p.Count -eq 1) -and ($p[0] -match '^UserModeDriverNameWow is')) "a value without the x86 D3D12 slot is a finding ($($p -join '; '))"
+    New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]]($wowUmd + 'x.dll')) -PropertyType MultiString -Force | Out-Null
+    $p = @(Test-WowRegistration @args0)
+    Check (($p.Count -eq 1) -and ($p[0] -match '^UserModeDriverNameWow is')) "a fifth slot is a finding ($($p -join '; '))"
     New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]](Get-WowUmdNames $root)) -PropertyType MultiString -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $Package 'payload\desktop\bc250d3d_router.dll') -Destination (Join-Path $root 'wow64\desktop\bc250d3d_router.dll') -Force
     Remove-Item -LiteralPath (Join-Path $root 'wow64\vulkan\vulkan_radeon.dll')

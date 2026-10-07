@@ -208,6 +208,7 @@ function New-Bd089Manifest {
 $mapCases = @(
     @{ p = 'payload/d3d12/amdgpu_wddm_d3d12.dll'; want = (Join-Path $bdRoot 'd3d12\amdgpu_wddm_d3d12.dll') }
     @{ p = 'payload/wow64/d3d11/amdgpu_wddm_d3d11.dll'; want = (Join-Path $bdRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') }
+    @{ p = 'payload/wow64/d3d12/amdgpu_wddm_d3d12.dll'; want = (Join-Path $bdRoot 'wow64\d3d12\amdgpu_wddm_d3d12.dll') }
     @{ p = 'payload/mft/amdgpu_wddm_mft_h264.dll'; want = (Join-Path $bdRoot 'mft\amdgpu_wddm_mft_h264.dll') }
     @{ p = 'payload/control/amdgpu_wddm_control.exe'; want = (Join-Path $bdRoot 'control\amdgpu_wddm_control.exe') }
     @{ p = 'payload/system32/bc250umd.dll'; want = (Join-Path $bdSys 'bc250umd.dll') }
