@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/07/2026,0.7.216.14
+DriverVer   = 10/07/2026,0.7.216.18
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -230,6 +230,14 @@ HKR, Parameters, EnableDpAudioStream, 0x00010003, 1
 ; once per start, TransferTableSmu2Dram with table 6). A refusal or a timeout stops the reads until the next boot,
 ; and the governor runs on. 0 means no metrics message is sent and no page is mapped, the behaviour before this feature.
 HKR, Parameters, EnableSmuMetrics,   0x00010003, 1
+; M15.12 stage-1 hang recovery (wddm.c ResetEngine, docs/design/hang-recovery.md). 1 lets a node-0 engine reset
+; kill the hung job's VMID waves (an SQ_CMD write) and, when the ring drains, report the reset as done, so only the
+; process of the hung job loses its device and the desktop stays. Lab trial D1 of 0.7.216.17 (2026-10-07): one
+; kill drained the ring, the client got DXGI_ERROR_DEVICE_HUNG, no bugcheck, the desktop visible 5.3 s later.
+; Read once per device start; absent = 1. 0 is the 0.7.216.14 driver: ResetEngine refuses, and Windows resets the
+; adapter, which this GPU cannot do (0x116). The verdicts go to the Parameters\HangRecovery subkey, which no
+; install touches.
+HKR, Parameters, HangRecoveryMode,  0x00010003, 1
 ; ---- memory manager stage 1 (wddm.c, 0.7.216.8): on when absent, so the INF writes no value ----------------------
 ; These switches are read once per device start and default to the feature on when the value is absent. The INF
 ; names none of them on purpose: a value the INF does not write is one a driver update can never reset, so an

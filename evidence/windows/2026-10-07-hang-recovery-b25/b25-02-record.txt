@@ -1,0 +1,38 @@
+{
+    "utc":  "2026-10-07T15:25:00.8270000Z",
+    "boot_utc":  "2026-10-07T15:24:15.5000000Z",
+    "kmd":  {
+                "version":  "0.7.216.17",
+                "sys_sha256":  "4E033FB20821EB26334046A82A4D039681E469D8F0D77F8C5B7F600401857AA7",
+                "image":  "C:\\Windows\\System32\\DriverStore\\FileRepository\\bc250kmd.inf_amd64_9835ccc7b98b2c93\\bc250kmd.sys",
+                "problem":  0
+            },
+    "hang_recovery_mode":  0,
+    "enable_hang_bugcheck":  0,
+    "unconfirmed_starts":  1,
+    "tdr":  {
+                "TdrDelay":  10,
+                "TdrDdiDelay":  null,
+                "TdrLevel":  null,
+                "TdrDebugMode":  null
+            },
+    "record":  {
+                   "Attempts":  3,
+                   "Refused":  1,
+                   "LastVerdict":  1,
+                   "LastSeq":  8756,
+                   "LastFence":  1143,
+                   "LastKills":  1,
+                   "LastMicros":  0,
+                   "LastVersion":  458968,
+                   "LastTime":  134358571462167403,
+                   "LastTimeUtc":  "2026-10-07T14:32:26.2167403Z",
+                   "NotDrained":  1,
+                   "Recovered":  1
+               },
+    "dwm_pids":  [
+                     1904
+                 ],
+    "zink_sha256":  "7C4E5E7E58D2AFE93C362534370AFF6ED481418F0FF83F50BF562320FB841E6E"
+}
+saved C:\BC250\hangb22\record-20261007T152501659Z.json

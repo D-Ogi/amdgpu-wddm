@@ -1,0 +1,5 @@
+hang-client: runtime=System32/d3d12.dll adapter=BC-250 mode=long pid=5748 utc=2026-10-07T15:27:27.064Z
+hang-client: long dispatch outer=0xFFFFFFFF inner=4096 groups=16 deadline=60000 ms (TdrDelay~10 s), one submission
+hang-client: submitted utc=2026-10-07T15:27:27.428Z fence target=1
+hang-client: long wait ended utc=2026-10-07T15:27:42.017Z elapsed=14590.4 ms fence=0xffffffffffffffff completed_at=-1.0 removed_at=14590.4 reason=0x887a0006 DXGI_ERROR_DEVICE_HUNG
+RESULT=HANG-DETECTED-DEVICE-REMOVED

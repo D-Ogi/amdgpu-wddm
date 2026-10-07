@@ -1,0 +1,6 @@
+bc250d3d_zink-dwm.exe-1904.log 0 2026-10-07T15:24:28.6223367Z
+bc250d3d_zink-dwm.exe-1876.log 0 2026-10-07T15:26:15.1186832Z
+--- device lost lines
+bc250d3d_zink-dwm.exe-1876.log:764: BC250 hosted device lost: reason=5 (stop) op=4294967295 hr=00000000 tick=99671, SetErrorCb
+--- dwm process
+dwm pid 1876 start 2026-10-07T15:26:14.8113228Z cpu 4.390625

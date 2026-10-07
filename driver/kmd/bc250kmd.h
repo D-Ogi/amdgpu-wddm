@@ -486,6 +486,9 @@ NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written a
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
 NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
 NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
+// M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
+// so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros);
 
 // The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.
@@ -757,6 +760,17 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
+//   GfxSoftRecover   M15.12 stage 1 (docs/design/hang-recovery.md). PASSIVE_LEVEL, from DxgkDdiResetEngine only,
+//                    under the HangRecoveryMode switch: kill the waves on Vmid (amdgpu's
+//                    gfx_v10_0_ring_soft_recovery) until the newest sequence on the ring retires, for at most 10 ms.
+//                    Vmid is the hung job's own VMID, which the caller reads out of the completion-queue entry
+//                    (since the VMID pool of 0.7.214 there is no single application VMID to assume).
+//                    Returns a BC250_HANG_VERDICT_* (hang_recovery.h): ALREADY_RETIRED or DRAINED = the ring is idle
+//                    and reopened (SubmitInFlight and the sticky SubmitFailed cleared); NOT_DRAINED = nothing changed,
+//                    the caller keeps today's refusal. *Seq is the sequence waited for, *Kills the SQ_CMD writes
+//                    issued, *Micros the time spent.
+ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
+                     _Out_ ULONG* Micros);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);

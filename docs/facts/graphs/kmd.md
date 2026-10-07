@@ -225,6 +225,8 @@ flowchart LR
   M765["M765"]
   M766["M766"]
   M767["M767"]
+  M835["M835"]
+  M836["M836"]
   M39 --> M37
   M349 --> M348
   M37 --> M33
@@ -246,6 +248,7 @@ flowchart LR
   M467 --> M465
   M766 --> M765
   M767 --> M766
+  M836 --> M835
   classDef other stroke-dasharray:4 3
   class M33,M39,M349 other
 ```

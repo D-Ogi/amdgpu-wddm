@@ -1,0 +1,37 @@
+{
+    "utc":  "2026-10-07T15:27:42.0722201Z",
+    "boot_utc":  "2026-10-07T15:26:02.5000000Z",
+    "kmd":  {
+                "version":  "0.7.216.17",
+                "sys_sha256":  "4E033FB20821EB26334046A82A4D039681E469D8F0D77F8C5B7F600401857AA7",
+                "image":  "C:\\Windows\\System32\\DriverStore\\FileRepository\\bc250kmd.inf_amd64_9835ccc7b98b2c93\\bc250kmd.sys",
+                "problem":  0
+            },
+    "hang_recovery_mode":  1,
+    "enable_hang_bugcheck":  0,
+    "unconfirmed_starts":  0,
+    "tdr":  {
+                "TdrDelay":  10,
+                "TdrDdiDelay":  null,
+                "TdrLevel":  null,
+                "TdrDebugMode":  null
+            },
+    "record":  {
+                   "Attempts":  4,
+                   "Refused":  1,
+                   "LastVerdict":  1,
+                   "LastSeq":  8654,
+                   "LastFence":  1123,
+                   "LastKills":  1,
+                   "LastMicros":  1011,
+                   "LastVersion":  458968,
+                   "LastTime":  134358604620151348,
+                   "LastTimeUtc":  "2026-10-07T15:27:42.0151348Z",
+                   "NotDrained":  1,
+                   "Recovered":  2
+               },
+    "dwm_pids":  [
+                     1876
+                 ],
+    "zink_sha256":  "7C4E5E7E58D2AFE93C362534370AFF6ED481418F0FF83F50BF562320FB841E6E"
+}

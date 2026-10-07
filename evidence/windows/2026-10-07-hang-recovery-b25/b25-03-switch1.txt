@@ -1,0 +1,2 @@
+HangRecoveryMode 1 (REG_DWORD) written 2026-10-07T15:25:10.5792422Z; the KMD reads it at its next device start: restart Windows (K218), then -Action Log shows the current start
+UnconfirmedStarts 1 (restart only from 0: the guard refuses a start at 2)

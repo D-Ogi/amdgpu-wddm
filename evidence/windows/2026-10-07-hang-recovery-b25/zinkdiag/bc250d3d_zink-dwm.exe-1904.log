@@ -1,0 +1,1670 @@
+BC250 hosted UMD config pid=1904 hosted_render=1 runtime_probe=1 icd_source=module-directory icd=C:\Program Files\amdgpu-wddm\desktop\amdgpu_wddm_radv.dll icd_status=00000000
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=0000020431191BC0 screen=0000020434444070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f6f
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=000002043468C6A8 queue=40000800 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x40000980
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x400009c0
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x40000a00
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=0000020434444070 runtime=000002043468C6A8
+BC250 Renderer: zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))
+BC250 D3D device stage 3
+allocation handle=0x40000a80
+allocation handle=0x40000ac0
+allocation handle=0x40000b00
+allocation handle=0x40000b40
+allocation handle=0x40000b80
+allocation handle=0x40000bc0
+allocation handle=0x40000c00
+allocation handle=0x40000c40
+allocation handle=0x40000c80
+allocation handle=0x40000cc0
+allocation handle=0x40000d00
+allocation handle=0x40000d40
+allocation handle=0x40000d80
+allocation handle=0x40000dc0
+allocation handle=0x40000e00
+allocation handle=0x40000e40
+allocation handle=0x40000e80
+allocation handle=0x40000ec0
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0x40000f00
+allocation handle=0x40000f40
+allocation handle=0x40000f80
+allocation handle=0x40000fc0
+allocation handle=0x40001000
+allocation handle=0x40001040
+allocation handle=0x40001080
+allocation handle=0x400010c0
+allocation handle=0x40001100
+allocation handle=0x40001140
+allocation handle=0x40001180
+allocation handle=0x400011c0
+allocation handle=0x40001200
+allocation handle=0x40001240
+allocation handle=0x40001280
+allocation handle=0x400012c0
+allocation handle=0x40001300
+allocation handle=0x40001340
+allocation handle=0x40001380
+allocation handle=0x400013c0
+allocation handle=0x40001400
+allocation handle=0x40001440
+allocation handle=0x40001480
+allocation handle=0x400014c0
+allocation handle=0x40001500
+allocation handle=0x40001640
+allocation handle=0x40001680
+allocation handle=0x400016c0
+allocation handle=0x40001700
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40001740
+bc250: gather capacity=4096 bytes required=3072 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0x40001780
+allocation handle=0x400017c0
+allocation handle=0x40001800
+allocation handle=0x40001840
+BC250 Allocate hr=00000000 inputRT=00000204342A07C0 callbackRT=00000204342A07C0 miscShared=0 format=21 primary=0 allocation=40001940 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40001940 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4298113024
+BC250 Allocate hr=00000000 inputRT=00000204342A05C0 callbackRT=00000204342A05C0 miscShared=0 format=21 primary=0 allocation=400019c0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=400019c0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=69632
+BC250 Allocate hr=00000000 inputRT=00000204342A0600 callbackRT=00000204342A0600 miscShared=0 format=21 primary=0 allocation=40001a40 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40001a40 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=9285632
+BC250 Allocate hr=00000000 inputRT=00000204342A0A20 callbackRT=00000204342A0A20 miscShared=0 format=21 primary=1 allocation=40001ac0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40001ac0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4307329024
+BC250 hosted op=4 count=2 hr=00000000
+allocation handle=0x40001b00
+bc250: gather capacity=4096 bytes required=800 ibs=2
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+allocation handle=0x40001b40
+allocation handle=0x40001b80
+allocation handle=0x40001bc0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 Allocate hr=00000000 inputRT=00000204342A07C0 callbackRT=00000204342A07C0 miscShared=0 format=21 primary=1 allocation=40001c40 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40001c40 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4316545024
+BC250 Allocate hr=00000000 inputRT=00000204342A0600 callbackRT=00000204342A0600 miscShared=0 format=21 primary=1 allocation=40001cc0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40001cc0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=69632
+allocation handle=0x40001d00
+bc250: gather capacity=4096 bytes required=800 ibs=2
+allocation handle=0x40001d40
+allocation handle=0x40001d80
+allocation handle=0x40001dc0
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=40000900 value=3
+BC250 Present signals value=1 hr=00000000
+BC250 Perf frame 1 gap_ms 0.000 draws 0 draw_ms 0.000 max_draw_ms 0.000 present_ms 0.147 render_wait_ms 1.544
+allocation handle=0x40001e40
+bc250: gather capacity=4096 bytes required=3040 ibs=4
+BC250 render waits Present value=1 hr=00000000
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=40000900 value=4
+BC250 Present signals value=2 hr=00000000
+BC250 Perf frame 2 gap_ms 12.428 draws 1 draw_ms 0.743 max_draw_ms 0.743 present_ms 0.041 render_wait_ms 0.549
+allocation handle=0x40001e80
+bc250: gather capacity=4096 bytes required=3104 ibs=4
+BC250 render waits Present value=2 hr=00000000
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=40000900 value=5
+BC250 Present signals value=3 hr=00000000
+BC250 Perf frame 3 gap_ms 18.221 draws 1 draw_ms 3.671 max_draw_ms 3.671 present_ms 0.052 render_wait_ms 0.583
+allocation handle=0x40001ec0
+bc250: gather capacity=4096 bytes required=3104 ibs=4
+BC250 render waits Present value=3 hr=00000000
+allocation handle=0x40001f00
+allocation handle=0x40001f40
+allocation handle=0x40001f80
+allocation handle=0x40001fc0
+allocation handle=0x40002000
+allocation handle=0x40002040
+BC250 Perf frame 4 gap_ms 265.215 draws 1 draw_ms 0.082 max_draw_ms 0.082 present_ms 0.052 render_wait_ms 2.540
+allocation handle=0x40002080
+bc250: gather capacity=4096 bytes required=3104 ibs=4
+allocation handle=0x400020c0
+allocation handle=0x800000c0
+allocation handle=0x80000080
+allocation handle=0x40002100
+allocation handle=0x40002140
+allocation handle=0x40002180
+BC250 Perf frame 5 gap_ms 450.919 draws 1 draw_ms 0.072 max_draw_ms 0.072 present_ms 0.052 render_wait_ms 2.236
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+allocation handle=0x40002240
+BC250 surface hosted=1 allocation=40002200 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=9285632
+allocation handle=0x40002280
+allocation handle=0x400022c0
+allocation handle=0x40002300
+allocation handle=0x40002340
+allocation handle=0x40002380
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+bc250: gather capacity=12288 bytes required=10304 ibs=4
+allocation handle=0x400023c0
+allocation handle=0x40002400
+allocation handle=0x40002440
+allocation handle=0x40002480
+allocation handle=0x400024c0
+allocation handle=0x80000540
+BC250 Perf frame 6 gap_ms 263.610 draws 7 draw_ms 23.253 max_draw_ms 18.514 present_ms 0.048 render_wait_ms 2.551
+allocation handle=0x80000600
+BC250 surface hosted=1 allocation=800005c0 pitch=7936 bytes=9650176
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4325761024
+allocation handle=0x80000640
+BC250 hosted op=24 count=2 hr=00000000
+bc250: gather capacity=8192 bytes required=4352 ibs=4
+BC250 Perf frame 7 gap_ms 30.997 draws 3 draw_ms 13.339 max_draw_ms 10.318 present_ms 0.028 render_wait_ms 0.751
+allocation handle=0x40002500
+bc250: gather capacity=12288 bytes required=11392 ibs=4
+BC250 Perf frame 8 gap_ms 12.174 draws 9 draw_ms 8.402 max_draw_ms 4.763 present_ms 0.027 render_wait_ms 0.768
+allocation handle=0x40002540
+bc250: gather capacity=8192 bytes required=5120 ibs=4
+BC250 Perf frame 9 gap_ms 8.016 draws 4 draw_ms 0.116 max_draw_ms 0.074 present_ms 0.027 render_wait_ms 0.735
+allocation handle=0x40002580
+bc250: gather capacity=12288 bytes required=11744 ibs=4
+BC250 Perf frame 10 gap_ms 17.174 draws 9 draw_ms 0.195 max_draw_ms 0.082 present_ms 0.033 render_wait_ms 0.872
+allocation handle=0x400025c0
+bc250: gather capacity=8192 bytes required=5120 ibs=4
+BC250 Perf frame 11 gap_ms 16.184 draws 4 draw_ms 0.103 max_draw_ms 0.074 present_ms 0.034 render_wait_ms 0.829
+allocation handle=0x40002600
+bc250: gather capacity=12288 bytes required=11744 ibs=4
+BC250 Perf frame 12 gap_ms 17.237 draws 9 draw_ms 0.222 max_draw_ms 0.080 present_ms 0.032 render_wait_ms 0.870
+BC250 Perf frame 13 gap_ms 15.402 draws 4 draw_ms 0.101 max_draw_ms 0.073 present_ms 0.031 render_wait_ms 0.125
+allocation handle=0x40002640
+bc250: gather capacity=12288 bytes required=11744 ibs=4
+BC250 Perf frame 14 gap_ms 17.726 draws 9 draw_ms 0.149 max_draw_ms 0.072 present_ms 0.032 render_wait_ms 0.864
+BC250 Perf frame 15 gap_ms 15.726 draws 4 draw_ms 0.117 max_draw_ms 0.081 present_ms 0.037 render_wait_ms 0.146
+allocation handle=0x40002680
+bc250: gather capacity=12288 bytes required=11744 ibs=4
+BC250 Perf frame 16 gap_ms 17.558 draws 9 draw_ms 0.152 max_draw_ms 0.073 present_ms 0.029 render_wait_ms 0.808
+BC250 Perf frame 17 gap_ms 16.526 draws 5 draw_ms 0.125 max_draw_ms 0.072 present_ms 0.031 render_wait_ms 0.135
+allocation handle=0x400026c0
+bc250: gather capacity=12288 bytes required=11840 ibs=4
+BC250 Perf frame 18 gap_ms 17.424 draws 10 draw_ms 0.206 max_draw_ms 0.080 present_ms 0.028 render_wait_ms 0.856
+BC250 Perf frame 19 gap_ms 15.312 draws 5 draw_ms 0.104 max_draw_ms 0.072 present_ms 0.032 render_wait_ms 0.124
+BC250 Perf frame 20 gap_ms 16.842 draws 10 draw_ms 0.158 max_draw_ms 0.073 present_ms 0.029 render_wait_ms 0.146
+BC250 Perf frame 21 gap_ms 16.419 draws 5 draw_ms 0.117 max_draw_ms 0.079 present_ms 0.033 render_wait_ms 0.121
+BC250 Perf frame 22 gap_ms 16.955 draws 10 draw_ms 0.151 max_draw_ms 0.070 present_ms 0.032 render_wait_ms 0.157
+BC250 Perf frame 23 gap_ms 16.405 draws 5 draw_ms 0.109 max_draw_ms 0.074 present_ms 0.033 render_wait_ms 0.128
+BC250 Perf frame 24 gap_ms 17.059 draws 10 draw_ms 0.176 max_draw_ms 0.076 present_ms 0.035 render_wait_ms 0.159
+BC250 Perf frame 25 gap_ms 16.230 draws 5 draw_ms 0.101 max_draw_ms 0.071 present_ms 0.030 render_wait_ms 0.113
+BC250 Perf frame 26 gap_ms 17.489 draws 10 draw_ms 0.184 max_draw_ms 0.090 present_ms 0.030 render_wait_ms 0.153
+BC250 Perf frame 27 gap_ms 15.909 draws 5 draw_ms 0.103 max_draw_ms 0.072 present_ms 0.044 render_wait_ms 0.114
+BC250 Perf frame 28 gap_ms 17.351 draws 10 draw_ms 0.154 max_draw_ms 0.072 present_ms 0.033 render_wait_ms 0.157
+BC250 Perf frame 29 gap_ms 16.431 draws 5 draw_ms 0.151 max_draw_ms 0.097 present_ms 0.033 render_wait_ms 0.148
+BC250 Perf frame 30 gap_ms 16.687 draws 10 draw_ms 0.149 max_draw_ms 0.072 present_ms 0.032 render_wait_ms 0.159
+BC250 Perf frame 31 gap_ms 16.250 draws 5 draw_ms 0.100 max_draw_ms 0.071 present_ms 0.034 render_wait_ms 0.123
+BC250 Perf frame 32 gap_ms 17.345 draws 10 draw_ms 0.171 max_draw_ms 0.088 present_ms 0.032 render_wait_ms 0.156
+BC250 Perf frame 33 gap_ms 16.042 draws 5 draw_ms 0.100 max_draw_ms 0.072 present_ms 0.032 render_wait_ms 0.124
+BC250 Perf frame 34 gap_ms 16.965 draws 10 draw_ms 0.146 max_draw_ms 0.072 present_ms 0.036 render_wait_ms 0.147
+BC250 Perf frame 35 gap_ms 16.665 draws 5 draw_ms 0.162 max_draw_ms 0.113 present_ms 0.041 render_wait_ms 0.142
+BC250 Perf frame 36 gap_ms 16.722 draws 10 draw_ms 0.148 max_draw_ms 0.071 present_ms 0.033 render_wait_ms 0.145
+BC250 Perf frame 37 gap_ms 16.502 draws 5 draw_ms 0.100 max_draw_ms 0.078 present_ms 0.030 render_wait_ms 0.110
+BC250 Perf frame 38 gap_ms 18.465 draws 4 draw_ms 0.125 max_draw_ms 0.094 present_ms 0.036 render_wait_ms 0.131
+BC250 Perf frame 39 gap_ms 15.193 draws 10 draw_ms 0.145 max_draw_ms 0.077 present_ms 0.035 render_wait_ms 0.143
+BC250 Perf frame 40 gap_ms 16.274 draws 4 draw_ms 0.091 max_draw_ms 0.072 present_ms 0.034 render_wait_ms 0.136
+BC250 Perf frame 41 gap_ms 16.659 draws 4 draw_ms 0.090 max_draw_ms 0.072 present_ms 0.033 render_wait_ms 0.127
+BC250 Perf frame 42 gap_ms 16.782 draws 4 draw_ms 0.094 max_draw_ms 0.073 present_ms 0.033 render_wait_ms 0.138
+BC250 Perf frame 43 gap_ms 16.677 draws 4 draw_ms 0.103 max_draw_ms 0.079 present_ms 0.041 render_wait_ms 0.142
+BC250 Perf frame 44 gap_ms 16.592 draws 4 draw_ms 0.097 max_draw_ms 0.075 present_ms 0.035 render_wait_ms 0.127
+BC250 Perf frame 45 gap_ms 16.810 draws 4 draw_ms 0.104 max_draw_ms 0.081 present_ms 0.036 render_wait_ms 0.160
+BC250 Perf frame 46 gap_ms 16.541 draws 4 draw_ms 0.096 max_draw_ms 0.074 present_ms 0.030 render_wait_ms 0.115
+BC250 Perf frame 47 gap_ms 16.709 draws 4 draw_ms 0.095 max_draw_ms 0.073 present_ms 0.035 render_wait_ms 0.123
+BC250 Perf frame 48 gap_ms 16.770 draws 4 draw_ms 0.127 max_draw_ms 0.097 present_ms 0.035 render_wait_ms 0.150
+BC250 Perf frame 49 gap_ms 16.628 draws 4 draw_ms 0.092 max_draw_ms 0.071 present_ms 0.034 render_wait_ms 0.142
+BC250 Perf frame 50 gap_ms 16.663 draws 4 draw_ms 0.093 max_draw_ms 0.073 present_ms 0.031 render_wait_ms 0.157
+BC250 Perf frame 51 gap_ms 16.837 draws 4 draw_ms 0.114 max_draw_ms 0.084 present_ms 0.039 render_wait_ms 0.154
+BC250 Perf frame 52 gap_ms 16.654 draws 4 draw_ms 0.110 max_draw_ms 0.081 present_ms 0.039 render_wait_ms 0.156
+BC250 Perf frame 53 gap_ms 16.616 draws 4 draw_ms 0.107 max_draw_ms 0.081 present_ms 0.034 render_wait_ms 0.137
+BC250 Perf frame 54 gap_ms 16.632 draws 4 draw_ms 0.105 max_draw_ms 0.080 present_ms 0.037 render_wait_ms 0.137
+BC250 Perf frame 55 gap_ms 16.763 draws 4 draw_ms 0.108 max_draw_ms 0.080 present_ms 0.037 render_wait_ms 0.152
+BC250 Perf frame 56 gap_ms 16.737 draws 4 draw_ms 0.102 max_draw_ms 0.084 present_ms 0.033 render_wait_ms 0.116
+BC250 Perf frame 57 gap_ms 16.486 draws 4 draw_ms 0.093 max_draw_ms 0.074 present_ms 0.033 render_wait_ms 0.116
+BC250 Perf frame 58 gap_ms 16.885 draws 4 draw_ms 0.118 max_draw_ms 0.088 present_ms 0.037 render_wait_ms 0.152
+BC250 Perf frame 59 gap_ms 16.578 draws 4 draw_ms 0.095 max_draw_ms 0.074 present_ms 0.034 render_wait_ms 0.134
+BC250 Perf frame 60 gap_ms 16.754 draws 4 draw_ms 0.098 max_draw_ms 0.075 present_ms 0.039 render_wait_ms 0.155
+BC250 Perf frame 61 gap_ms 16.604 draws 4 draw_ms 0.099 max_draw_ms 0.074 present_ms 0.033 render_wait_ms 0.136
+BC250 Perf frame 62 gap_ms 16.747 draws 4 draw_ms 0.111 max_draw_ms 0.084 present_ms 0.035 render_wait_ms 0.148
+BC250 Perf frame 63 gap_ms 16.595 draws 4 draw_ms 0.094 max_draw_ms 0.074 present_ms 0.034 render_wait_ms 0.132
+BC250 Perf frame 64 gap_ms 16.614 draws 4 draw_ms 0.094 max_draw_ms 0.073 present_ms 0.034 render_wait_ms 0.125
+BC250 Perf frame 65 gap_ms 16.707 draws 4 draw_ms 0.124 max_draw_ms 0.101 present_ms 0.033 render_wait_ms 0.127
+BC250 Perf frame 66 gap_ms 16.631 draws 4 draw_ms 0.095 max_draw_ms 0.073 present_ms 0.031 render_wait_ms 0.113
+BC250 Perf frame 67 gap_ms 16.658 draws 4 draw_ms 0.092 max_draw_ms 0.072 present_ms 0.030 render_wait_ms 0.113
+BC250 Perf frame 68 gap_ms 16.782 draws 4 draw_ms 0.095 max_draw_ms 0.075 present_ms 0.035 render_wait_ms 0.124
+BC250 Perf frame 69 gap_ms 16.807 draws 4 draw_ms 0.113 max_draw_ms 0.083 present_ms 0.038 render_wait_ms 0.152
+BC250 Perf frame 70 gap_ms 16.614 draws 4 draw_ms 0.109 max_draw_ms 0.082 present_ms 0.040 render_wait_ms 0.143
+BC250 Perf frame 71 gap_ms 16.715 draws 4 draw_ms 0.102 max_draw_ms 0.073 present_ms 0.035 render_wait_ms 0.140
+BC250 Perf frame 72 gap_ms 16.631 draws 4 draw_ms 0.102 max_draw_ms 0.073 present_ms 0.042 render_wait_ms 0.149
+BC250 Perf frame 73 gap_ms 16.660 draws 4 draw_ms 0.096 max_draw_ms 0.074 present_ms 0.035 render_wait_ms 0.126
+BC250 Perf frame 74 gap_ms 16.640 draws 4 draw_ms 0.094 max_draw_ms 0.074 present_ms 0.034 render_wait_ms 0.128
+BC250 Perf frame 75 gap_ms 16.700 draws 4 draw_ms 0.095 max_draw_ms 0.074 present_ms 0.032 render_wait_ms 0.132
+BC250 Perf frame 76 gap_ms 16.731 draws 4 draw_ms 0.101 max_draw_ms 0.076 present_ms 0.035 render_wait_ms 0.128
+BC250 Perf frame 77 gap_ms 16.728 draws 4 draw_ms 0.093 max_draw_ms 0.073 present_ms 0.034 render_wait_ms 0.122
+BC250 Perf frame 78 gap_ms 16.791 draws 4 draw_ms 0.110 max_draw_ms 0.087 present_ms 0.034 render_wait_ms 0.121
+BC250 Perf frame 79 gap_ms 17.094 draws 10 draw_ms 0.160 max_draw_ms 0.072 present_ms 0.033 render_wait_ms 0.156
+BC250 Perf frame 80 gap_ms 16.103 draws 5 draw_ms 0.099 max_draw_ms 0.075 present_ms 0.034 render_wait_ms 0.127
+BC250 Perf frame 81 gap_ms 16.606 draws 4 draw_ms 0.095 max_draw_ms 0.074 present_ms 0.031 render_wait_ms 0.131
+BC250 Perf frame 82 gap_ms 16.817 draws 4 draw_ms 0.099 max_draw_ms 0.077 present_ms 0.032 render_wait_ms 0.137
+BC250 Perf frame 83 gap_ms 16.664 draws 4 draw_ms 0.108 max_draw_ms 0.081 present_ms 0.035 render_wait_ms 0.135
+BC250 Perf frame 84 gap_ms 16.751 draws 4 draw_ms 0.099 max_draw_ms 0.076 present_ms 0.041 render_wait_ms 0.158
+BC250 Perf frame 85 gap_ms 23.138 draws 10 draw_ms 0.157 max_draw_ms 0.076 present_ms 0.035 render_wait_ms 0.152
+BC250 Perf frame 86 gap_ms 10.151 draws 4 draw_ms 0.105 max_draw_ms 0.078 present_ms 0.037 render_wait_ms 0.149
+BC250 Perf frame 87 gap_ms 16.847 draws 4 draw_ms 0.092 max_draw_ms 0.072 present_ms 0.033 render_wait_ms 0.134
+BC250 Perf frame 88 gap_ms 16.709 draws 10 draw_ms 0.152 max_draw_ms 0.078 present_ms 0.033 render_wait_ms 0.150
+BC250 Perf frame 89 gap_ms 16.457 draws 5 draw_ms 0.101 max_draw_ms 0.074 present_ms 0.031 render_wait_ms 0.117
+BC250 Perf frame 90 gap_ms 16.991 draws 10 draw_ms 0.156 max_draw_ms 0.075 present_ms 0.035 render_wait_ms 0.156
+BC250 Perf frame 91 gap_ms 16.272 draws 5 draw_ms 0.099 max_draw_ms 0.073 present_ms 0.035 render_wait_ms 0.132
+BC250 Perf frame 92 gap_ms 17.089 draws 10 draw_ms 0.151 max_draw_ms 0.075 present_ms 0.034 render_wait_ms 0.155
+BC250 Perf frame 93 gap_ms 16.393 draws 5 draw_ms 0.114 max_draw_ms 0.083 present_ms 0.035 render_wait_ms 0.130
+BC250 Perf frame 94 gap_ms 17.157 draws 10 draw_ms 0.192 max_draw_ms 0.092 present_ms 0.040 render_wait_ms 0.185
+BC250 Perf frame 95 gap_ms 16.064 draws 5 draw_ms 0.100 max_draw_ms 0.074 present_ms 0.034 render_wait_ms 0.123
+BC250 Perf frame 96 gap_ms 17.040 draws 10 draw_ms 0.152 max_draw_ms 0.075 present_ms 0.034 render_wait_ms 0.159
+BC250 Perf frame 97 gap_ms 16.277 draws 5 draw_ms 0.097 max_draw_ms 0.073 present_ms 0.031 render_wait_ms 0.112
+BC250 Perf frame 98 gap_ms 17.311 draws 10 draw_ms 0.183 max_draw_ms 0.077 present_ms 0.039 render_wait_ms 0.175
+BC250 Perf frame 99 gap_ms 16.322 draws 5 draw_ms 0.107 max_draw_ms 0.079 present_ms 0.035 render_wait_ms 0.120
+BC250 Perf frame 100 gap_ms 16.851 draws 10 draw_ms 0.153 max_draw_ms 0.075 present_ms 0.034 render_wait_ms 0.152
+BC250 Perf frame 101 gap_ms 16.439 draws 5 draw_ms 0.108 max_draw_ms 0.083 present_ms 0.035 render_wait_ms 0.130
+BC250 Perf frame 102 gap_ms 17.468 draws 10 draw_ms 0.246 max_draw_ms 0.093 present_ms 0.046 render_wait_ms 0.193
+BC250 Perf frame 103 gap_ms 16.027 draws 5 draw_ms 0.120 max_draw_ms 0.083 present_ms 0.039 render_wait_ms 0.140
+BC250 Perf frame 104 gap_ms 16.913 draws 10 draw_ms 0.184 max_draw_ms 0.090 present_ms 0.034 render_wait_ms 0.161
+BC250 Perf frame 105 gap_ms 16.271 draws 4 draw_ms 0.095 max_draw_ms 0.075 present_ms 0.034 render_wait_ms 0.140
+BC250 Perf frame 106 gap_ms 16.649 draws 4 draw_ms 0.099 max_draw_ms 0.075 present_ms 0.035 render_wait_ms 0.167
+BC250 Perf frame 107 gap_ms 16.694 draws 4 draw_ms 0.095 max_draw_ms 0.075 present_ms 0.033 render_wait_ms 0.129
+BC250 Perf frame 108 gap_ms 16.613 draws 4 draw_ms 0.102 max_draw_ms 0.079 present_ms 0.032 render_wait_ms 0.137
+BC250 Perf frame 109 gap_ms 16.592 draws 4 draw_ms 0.100 max_draw_ms 0.080 present_ms 0.032 render_wait_ms 0.120
+BC250 Perf frame 110 gap_ms 16.707 draws 4 draw_ms 0.090 max_draw_ms 0.071 present_ms 0.035 render_wait_ms 0.123
+BC250 Perf frame 111 gap_ms 16.815 draws 4 draw_ms 0.090 max_draw_ms 0.072 present_ms 0.036 render_wait_ms 0.121
+BC250 Perf frame 112 gap_ms 16.778 draws 4 draw_ms 0.099 max_draw_ms 0.081 present_ms 0.033 render_wait_ms 0.120
+BC250 Perf frame 113 gap_ms 16.770 draws 4 draw_ms 0.118 max_draw_ms 0.088 present_ms 0.032 render_wait_ms 0.139
+BC250 Perf frame 114 gap_ms 16.418 draws 4 draw_ms 0.094 max_draw_ms 0.075 present_ms 0.032 render_wait_ms 0.129
+BC250 Perf frame 115 gap_ms 16.698 draws 4 draw_ms 0.095 max_draw_ms 0.076 present_ms 0.035 render_wait_ms 0.135
+BC250 Perf frame 116 gap_ms 17.316 draws 10 draw_ms 0.211 max_draw_ms 0.089 present_ms 0.036 render_wait_ms 0.172
+BC250 Perf frame 117 gap_ms 16.220 draws 4 draw_ms 0.111 max_draw_ms 0.082 present_ms 0.041 render_wait_ms 0.167
+BC250 Perf frame 118 gap_ms 17.480 draws 10 draw_ms 0.195 max_draw_ms 0.085 present_ms 0.035 render_wait_ms 0.171
+BC250 Perf frame 119 gap_ms 15.809 draws 5 draw_ms 0.100 max_draw_ms 0.074 present_ms 0.039 render_wait_ms 0.153
+BC250 Perf frame 120 gap_ms 17.221 draws 10 draw_ms 0.197 max_draw_ms 0.086 present_ms 0.039 render_wait_ms 0.185
+BC250 surface hosted=1 allocation=40003440 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4298260480
+BC250 surface hosted=1 allocation=400034c0 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4335411200
+allocation handle=0x40003580
+BC250 surface hosted=1 allocation=40003540 pitch=2560 bytes=1556480
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4302192640
+BC250 Perf frame 180 gap_ms 16.750 draws 4 draw_ms 0.115 max_draw_ms 0.084 present_ms 0.037 render_wait_ms 0.153
+allocation handle=0x400035c0
+allocation handle=0x40003600
+allocation handle=0x40003640
+allocation handle=0x40003680
+allocation handle=0x400036c0
+allocation handle=0x40003700
+allocation handle=0x40003740
+allocation handle=0x40003780
+allocation handle=0x400037c0
+allocation handle=0x40003800
+allocation handle=0x40003840
+allocation handle=0x40003880
+allocation handle=0x400038c0
+allocation handle=0x40003900
+allocation handle=0x40003940
+allocation handle=0x40003980
+allocation handle=0x80001a40
+bc250: gather capacity=16384 bytes required=15904 ibs=4
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=800019c0 pitch=256 bytes=8192
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8615297024
+allocation handle=0x80001980
+bc250: gather capacity=16384 bytes required=12512 ibs=4
+allocation handle=0x400039c0
+allocation handle=0x40003a00
+allocation handle=0x40003a40
+allocation handle=0x40003a80
+allocation handle=0x40003ac0
+allocation handle=0x40003b00
+allocation handle=0x40003b40
+allocation handle=0x40003b80
+allocation handle=0x40003bc0
+allocation handle=0x40003c00
+bc250: gather capacity=163840 bytes required=161920 ibs=6
+allocation handle=0x40003c40
+allocation handle=0x40003c80
+allocation handle=0x40003cc0
+bc250: gather capacity=28672 bytes required=25664 ibs=4
+allocation handle=0x40003d00
+bc250: gather capacity=20480 bytes required=20480 ibs=4
+allocation handle=0x40003d40
+bc250: gather capacity=20480 bytes required=17984 ibs=4
+allocation handle=0x40003d80
+allocation handle=0x40003dc0
+bc250: gather capacity=20480 bytes required=18496 ibs=4
+allocation handle=0x40003e00
+bc250: gather capacity=16384 bytes required=13152 ibs=4
+allocation handle=0x40003e40
+BC250 Perf frame 240 gap_ms 16.610 draws 5 draw_ms 0.092 max_draw_ms 0.073 present_ms 0.042 render_wait_ms 0.130
+allocation handle=0x40003e80
+bc250: gather capacity=36864 bytes required=34624 ibs=4
+allocation handle=0x40003ec0
+bc250: gather capacity=36864 bytes required=34624 ibs=4
+allocation handle=0x80001840
+bc250: gather capacity=36864 bytes required=34624 ibs=4
+allocation handle=0x40003f00
+bc250: gather capacity=36864 bytes required=35456 ibs=4
+allocation handle=0x40003f40
+bc250: gather capacity=36864 bytes required=35456 ibs=4
+allocation handle=0x40003f80
+bc250: gather capacity=36864 bytes required=35456 ibs=4
+allocation handle=0x40003fc0
+allocation handle=0x40004000
+allocation handle=0x80001740
+allocation handle=0x40004040
+bc250: gather capacity=40960 bytes required=38976 ibs=4
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+allocation handle=0x40004080
+allocation handle=0x400040c0
+allocation handle=0x40004100
+allocation handle=0x40004140
+BC250 Perf frame 300 gap_ms 18.918 draws 2 draw_ms 0.049 max_draw_ms 0.044 present_ms 0.033 render_wait_ms 0.105
+allocation handle=0x40004180
+allocation handle=0x400041c0
+allocation handle=0x40004200
+allocation handle=0x40004240
+allocation handle=0x80001b00
+allocation handle=0x80001d00
+allocation handle=0x80001e40
+allocation handle=0x80001e80
+allocation handle=0x80001ec0
+allocation handle=0x80002080
+allocation handle=0xc0000640
+allocation handle=0x80002540
+BC250 Perf frame 360 gap_ms 13.792 draws 1 draw_ms 0.060 max_draw_ms 0.060 present_ms 0.050 render_wait_ms 0.154
+allocation handle=0x800025c0
+allocation handle=0x40004280
+allocation handle=0x40004340
+BC250 surface hosted=1 allocation=40004300 pitch=4096 bytes=3145728
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8642363392
+BC250 surface hosted=1 allocation=400043c0 pitch=4096 bytes=3145728
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8682209280
+allocation handle=0x40004400
+allocation handle=0x40004440
+allocation handle=0x40004480
+allocation handle=0x40004540
+BC250 surface hosted=1 allocation=40004500 pitch=5888 bytes=4759552
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8645509120
+BC250 surface hosted=1 allocation=400045c0 pitch=5888 bytes=4759552
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=9285632
+allocation handle=0x40004600
+allocation handle=0x400046c0
+BC250 surface hosted=1 allocation=40004680 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8628174848
+BC250 surface hosted=1 allocation=40004740 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8685355008
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+allocation handle=0x40004780
+allocation handle=0x400047c0
+allocation handle=0x40004800
+allocation handle=0x40004840
+allocation handle=0x80002d00
+BC250 surface hosted=1 allocation=400048c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4303749120
+BC250 surface hosted=1 allocation=40004940 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8634236928
+allocation handle=0x40004a00
+BC250 surface hosted=1 allocation=400049c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8706850816
+BC250 surface hosted=1 allocation=40004a80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8650268672
+BC250 surface hosted=1 allocation=40004b00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8707899392
+BC250 surface hosted=1 allocation=40004b80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8651317248
+BC250 surface hosted=1 allocation=40004c00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8708947968
+BC250 surface hosted=1 allocation=40004c80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8652365824
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=40004d00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8709996544
+BC250 surface hosted=1 allocation=40004d80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8653414400
+BC250 surface hosted=1 allocation=40004e00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8682209280
+BC250 surface hosted=1 allocation=40004e80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4304797696
+BC250 surface hosted=1 allocation=40004f00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8635285504
+BC250 surface hosted=1 allocation=40004f80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8642363392
+BC250 surface hosted=1 allocation=80001140 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8711045120
+BC250 surface hosted=1 allocation=40005000 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8683257856
+BC250 surface hosted=1 allocation=40005080 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8643411968
+BC250 surface hosted=1 allocation=80002240 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4305846272
+BC250 surface hosted=1 allocation=40005100 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8636334080
+BC250 surface hosted=1 allocation=40005180 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8654462976
+BC250 surface hosted=1 allocation=40005200 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8644460544
+BC250 surface hosted=1 allocation=40005280 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8655511552
+BC250 surface hosted=1 allocation=40005300 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8684306432
+BC250 surface hosted=1 allocation=40005380 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8686403584
+BC250 surface hosted=1 allocation=40005400 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8656560128
+BC250 surface hosted=1 allocation=80002200 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8687452160
+BC250 surface hosted=1 allocation=c00005c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8657608704
+BC250 surface hosted=1 allocation=c0000580 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8688500736
+allocation handle=0x80002580
+allocation handle=0x40005480
+allocation handle=0x400054c0
+allocation handle=0x40005580
+BC250 surface hosted=1 allocation=40005540 pitch=9216 bytes=11796480
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4325761024
+BC250 surface hosted=1 allocation=40005600 pitch=9216 bytes=11796480
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=14045184
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+allocation handle=0xc0001980
+BC250 surface hosted=1 allocation=40005680 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8691646464
+BC250 surface hosted=1 allocation=40005700 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8662745088
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=800038c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8692695040
+BC250 surface hosted=1 allocation=800037c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8663793664
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=800036c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8615346176
+BC250 surface hosted=1 allocation=80003d00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8693743616
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80003dc0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8651317248
+BC250 surface hosted=1 allocation=c0001a40 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8711045120
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=800022c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8642363392
+BC250 surface hosted=1 allocation=800035c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8635285504
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80003840 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4305846272
+BC250 surface hosted=1 allocation=c0001740 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8636334080
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80003fc0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8643411968
+BC250 surface hosted=1 allocation=80004140 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8654462976
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80003a80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8683257856
+BC250 surface hosted=1 allocation=80004180 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8615346176
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80003e40 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8684306432
+BC250 surface hosted=1 allocation=80003480 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8682209280
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=c0002540 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4304797696
+BC250 surface hosted=1 allocation=80004100 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8616394752
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80003d80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8692695040
+BC250 surface hosted=1 allocation=80004340 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8663793664
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=c0001e40 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8711045120
+BC250 surface hosted=1 allocation=80003640 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8693743616
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 surface hosted=1 allocation=80004280 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=8651317248
+BC250 surface hosted=1 allocation=c0001d00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4305846272
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 Perf frame 420 gap_ms 182.681 draws 1 draw_ms 0.050 max_draw_ms 0.050 present_ms 0.031 render_wait_ms 0.128
+allocation handle=0x80004440
+allocation handle=0x80004540
+allocation handle=0xc0002080
+allocation handle=0x80003c80
+allocation handle=0x80003b00
+allocation handle=0x800043c0
+allocation handle=0x80004480
+allocation handle=0x80004380
+BC250 Perf frame 480 gap_ms 96.291 draws 1 draw_ms 0.046 max_draw_ms 0.046 present_ms 0.031 render_wait_ms 0.120
+allocation handle=0x80003980
+allocation handle=0x80004400
+allocation handle=0x800046c0
+allocation handle=0x80004600
+allocation handle=0x80004300
+BC250 Perf frame 540 gap_ms 250.261 draws 1 draw_ms 0.064 max_draw_ms 0.064 present_ms 0.044 render_wait_ms 0.166
+allocation handle=0x800042c0
+allocation handle=0x80003ac0
+allocation handle=0x80003600
+allocation handle=0x80002280
+BC250 Perf frame 600 gap_ms 216.903 draws 1 draw_ms 0.064 max_draw_ms 0.064 present_ms 0.043 render_wait_ms 0.160
+allocation handle=0x80002680
+allocation handle=0x80002380
+allocation handle=0x80000b00
+allocation handle=0x80002600
+allocation handle=0x40005740
+allocation handle=0x40005780
+allocation handle=0x400057c0
+allocation handle=0x40005880
+BC250 surface hosted=1 allocation=40005840 pitch=4096 bytes=4718592
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=4337557504
+BC250 surface hosted=1 allocation=80004b40 pitch=4096 bytes=4718592
+BC250 zink import type=2 modifier=0 identity=000002043468C6A8 va=25841664
+allocation handle=0x80004b00
+allocation handle=0x80004ac0
+allocation handle=0x400058c0
+allocation handle=0x40005d80
+allocation handle=0x40005dc0
+allocation handle=0x40005e00
+allocation handle=0x40005e40
+allocation handle=0x40005e80
+bc250: gather capacity=40960 bytes required=38976 ibs=4
+BC250 Perf frame 660 gap_ms 18.546 draws 47 draw_ms 0.246 max_draw_ms 0.055 present_ms 0.025 render_wait_ms 0.814
+allocation handle=0x40005ec0
+allocation handle=0x40005f00
+allocation handle=0x800047c0
+allocation handle=0x40005f40
+allocation handle=0x40005f80
+bc250: gather capacity=45056 bytes required=42720 ibs=4
+allocation handle=0x40005fc0
+bc250: gather capacity=49152 bytes required=45984 ibs=4
+allocation handle=0x40006000
+bc250: gather capacity=40960 bytes required=38336 ibs=4
+allocation handle=0x40006040
+bc250: gather capacity=49152 bytes required=45984 ibs=4
+allocation handle=0x40006080
+bc250: gather capacity=49152 bytes required=46016 ibs=4
+BC250 SetError 88760885
+BC250 OpenResource allocation=40006100 704x640 format=28: CreateResource failed
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 hosted op=28 count=1 hr=00000000
+BC250 destroy device screen=0000020434444070 runtime=000002043468C6A8
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 destroy private Vulkan instance=0000020431191BC0
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=000002043468C6A8 queue=40000800 status=00000000
+D3D destroy stage 8
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=000002043497DDC0 screen=0000020434444070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f6f
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000020440727698 queue=80004bc0 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80005000
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x40000600
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0xc0001140
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=0000020434444070 runtime=0000020440727698
+BC250 Renderer: zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))
+BC250 D3D device stage 3
+allocation handle=0xc0002240
+allocation handle=0xc0003580
+allocation handle=0x80005080
+allocation handle=0x80005040
+allocation handle=0x80005180
+allocation handle=0x80005140
+allocation handle=0x80005100
+allocation handle=0x800050c0
+allocation handle=0x80005280
+allocation handle=0x80005240
+allocation handle=0x80005200
+allocation handle=0x800051c0
+allocation handle=0x80005380
+allocation handle=0x80005340
+allocation handle=0x80005300
+allocation handle=0x800052c0
+allocation handle=0xc0003d00
+allocation handle=0xc0003b40
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0xc00036c0
+allocation handle=0xc0002500
+allocation handle=0x80004e80
+allocation handle=0x80004e40
+allocation handle=0x80004e00
+allocation handle=0x80004dc0
+allocation handle=0xc00037c0
+allocation handle=0xc0002640
+allocation handle=0xc00038c0
+allocation handle=0xc0000ac0
+allocation handle=0x40001a40
+allocation handle=0xc0003e00
+allocation handle=0xc0003dc0
+allocation handle=0xc0003d40
+allocation handle=0xc00035c0
+allocation handle=0xc0001640
+allocation handle=0xc00022c0
+allocation handle=0xc0003cc0
+allocation handle=0x40001740
+allocation handle=0x40001a00
+allocation handle=0xc0003840
+allocation handle=0x400019c0
+allocation handle=0x40001980
+allocation handle=0x80005580
+allocation handle=0x800054c0
+allocation handle=0xc00043c0
+BC250 Allocate hr=00000000 inputRT=000002043D41F460 callbackRT=000002043D41F460 miscShared=0 format=21 primary=0 allocation=c0004400 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c0004400 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=4298113024
+BC250 Allocate hr=00000000 inputRT=000002043D41F3E0 callbackRT=000002043D41F3E0 miscShared=0 format=21 primary=0 allocation=c0004300 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c0004300 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=69632
+BC250 Allocate hr=00000000 inputRT=000002043D41F160 callbackRT=000002043D41F160 miscShared=0 format=21 primary=0 allocation=c00042c0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c00042c0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=4307329024
+BC250 Allocate hr=00000000 inputRT=000002043D41F500 callbackRT=000002043D41F500 miscShared=0 format=21 primary=1 allocation=c0003ac0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c0003ac0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=9285632
+allocation handle=0xc00046c0
+allocation handle=0xc0002680
+allocation handle=0xc0002280
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0xc0000b00
+bc250: gather capacity=4096 bytes required=1728 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0x80003300
+allocation handle=0x800032c0
+allocation handle=0x80003700
+BC250 hosted op=4 count=2 hr=00000000
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 Allocate hr=00000000 inputRT=000002043D41F3E0 callbackRT=000002043D41F3E0 miscShared=0 format=21 primary=1 allocation=40002080 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40002080 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=4298113024
+BC250 Allocate hr=00000000 inputRT=000002043D41F160 callbackRT=000002043D41F160 miscShared=0 format=21 primary=1 allocation=80004200 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80004200 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=18501632
+BC250 SetError 88760885
+BC250 OpenResource allocation=80005440 704x640 format=28: CreateResource failed
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=000002043497E4C0 screen=00000204344D4920
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f6f
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=000002044072AC98 queue=80002b00 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0xc0000700
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0xc0000740
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x80002740
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=00000204344D4920 runtime=000002044072AC98
+BC250 Renderer: zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))
+BC250 D3D device stage 3
+allocation handle=0x80005400
+allocation handle=0x800053c0
+allocation handle=0x40006300
+allocation handle=0x40006340
+allocation handle=0x40006380
+allocation handle=0x80003f00
+allocation handle=0x400063c0
+allocation handle=0x40006400
+allocation handle=0x40006440
+allocation handle=0x40006480
+allocation handle=0x80004040
+allocation handle=0x80003e80
+allocation handle=0x80003ec0
+allocation handle=0xc0001840
+allocation handle=0x80003f40
+allocation handle=0x400064c0
+allocation handle=0x80001540
+allocation handle=0x80006140
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0xc0004800
+allocation handle=0x80001600
+allocation handle=0x80000680
+allocation handle=0x80001580
+allocation handle=0x80006200
+allocation handle=0x800015c0
+allocation handle=0x80000f00
+allocation handle=0x80000f40
+allocation handle=0x80000f80
+allocation handle=0x800018c0
+allocation handle=0x80001880
+allocation handle=0x800006c0
+allocation handle=0x80001e00
+allocation handle=0xc0004c80
+allocation handle=0x80006280
+allocation handle=0x80000780
+allocation handle=0x80000800
+allocation handle=0x800007c0
+allocation handle=0x80000880
+allocation handle=0x80000840
+allocation handle=0x800008c0
+allocation handle=0x80000940
+allocation handle=0x80005f80
+allocation handle=0x80003c00
+allocation handle=0x80006080
+BC250 SetError 88760885
+BC250 OpenResource allocation=80006000 704x640 format=28: CreateResource failed
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 hosted op=28 count=1 hr=00000000
+BC250 destroy device screen=0000020434444070 runtime=0000020440727698
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 destroy private Vulkan instance=000002043497DDC0
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=0000020440727698 queue=80004bc0 status=00000000
+D3D destroy stage 8
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+D3D destroy stage 0
+allocation handle=0x80001700
+allocation handle=0x800016c0
+allocation handle=0x80001680
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x80000980
+bc250: gather capacity=4096 bytes required=1728 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0x800009c0
+allocation handle=0x80000a00
+allocation handle=0x80000a40
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 hosted op=4 count=2 hr=00000000
+BC250 hosted op=28 count=1 hr=00000000
+BC250 destroy device screen=00000204344D4920 runtime=000002044072AC98
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 destroy private Vulkan instance=000002043497E4C0
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=000002044072AC98 queue=80002b00 status=00000000
+D3D destroy stage 8
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=000002043497DDC0 screen=000002043D6A91D0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f6f
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000020440727698 queue=c0004540 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0xc0004b00
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80000a80
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x80002300
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=000002043D6A91D0 runtime=0000020440727698
+BC250 Renderer: zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))
+BC250 D3D device stage 3
+allocation handle=0x80003a40
+allocation handle=0x80003800
+allocation handle=0x800039c0
+allocation handle=0x80005dc0
+allocation handle=0x80001100
+allocation handle=0x80003680
+allocation handle=0x80003780
+allocation handle=0x80003a00
+allocation handle=0x80004780
+allocation handle=0x80005f00
+allocation handle=0x80005f40
+allocation handle=0x80005ec0
+allocation handle=0x80005740
+allocation handle=0x80001440
+allocation handle=0x80001500
+allocation handle=0x800013c0
+allocation handle=0x80001480
+allocation handle=0x80001400
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0x800014c0
+allocation handle=0x80001380
+allocation handle=0x80001300
+allocation handle=0x80001340
+allocation handle=0x800012c0
+allocation handle=0x80001240
+allocation handle=0x80001280
+allocation handle=0x80001200
+allocation handle=0x80001180
+allocation handle=0x400042c0
+allocation handle=0x40004600
+allocation handle=0x40004300
+allocation handle=0x40004480
+allocation handle=0x40004400
+allocation handle=0x40003980
+allocation handle=0xc0005440
+allocation handle=0xc0005880
+allocation handle=0x40002580
+allocation handle=0xc0005480
+allocation handle=0x40003c80
+allocation handle=0x40002d00
+allocation handle=0x40003ac0
+allocation handle=0x40003600
+allocation handle=0xc0004200
+allocation handle=0x40004440
+allocation handle=0x40002600
+BC250 Allocate hr=00000000 inputRT=0000020439C99600 callbackRT=0000020439C99600 miscShared=0 format=21 primary=0 allocation=80002040 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80002040 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=4298113024
+BC250 Allocate hr=00000000 inputRT=0000020439C994C0 callbackRT=0000020439C994C0 miscShared=0 format=21 primary=0 allocation=80001fc0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80001fc0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=69632
+BC250 Allocate hr=00000000 inputRT=0000020439C99540 callbackRT=0000020439C99540 miscShared=0 format=21 primary=0 allocation=80002000 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80002000 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=4307329024
+BC250 Allocate hr=00000000 inputRT=0000020439C99B00 callbackRT=0000020439C99B00 miscShared=0 format=21 primary=1 allocation=80001800 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80001800 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=9285632
+allocation handle=0x80003bc0
+allocation handle=0x80001780
+allocation handle=0x80003b80
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x800017c0
+bc250: gather capacity=4096 bytes required=1728 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0x80000d00
+allocation handle=0x80001dc0
+allocation handle=0x80000c80
+BC250 hosted op=4 count=2 hr=00000000
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 Allocate hr=00000000 inputRT=0000020439C99540 callbackRT=0000020439C99540 miscShared=0 format=21 primary=1 allocation=80000cc0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80000cc0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=4298113024
+BC250 Allocate hr=00000000 inputRT=00000204342045A0 callbackRT=00000204342045A0 miscShared=0 format=21 primary=1 allocation=80000dc0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80000dc0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=0000020440727698 va=18501632
+BC250 SetError 88760885
+BC250 OpenResource allocation=80000d40 704x640 format=28: CreateResource failed
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 hosted op=28 count=1 hr=00000000
+BC250 destroy device screen=000002043D6A91D0 runtime=0000020440727698
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 destroy private Vulkan instance=000002043497DDC0
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=0000020440727698 queue=c0004540 status=00000000
+D3D destroy stage 8
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 hosted UMD adapter luid=0000000000007f6f source=identity
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=000002043497E4C0 screen=0000020434A17120
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f6f
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=000002044072AC98 queue=80002100 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80001b40
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80000c00
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x80001b80
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=0000020434A17120 runtime=000002044072AC98
+BC250 Renderer: zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))
+BC250 D3D device stage 3
+allocation handle=0x80005840
+allocation handle=0x80005800
+allocation handle=0xc0004b40
+allocation handle=0xc0004b80
+allocation handle=0xc0004280
+allocation handle=0xc0004e00
+allocation handle=0xc0005fc0
+allocation handle=0xc0000900
+allocation handle=0xc0006200
+allocation handle=0xc0005e80
+allocation handle=0xc0004a00
+allocation handle=0x40003b00
+allocation handle=0x40004380
+allocation handle=0x80006240
+allocation handle=0xc0004c40
+allocation handle=0xc0004bc0
+allocation handle=0xc0000b80
+allocation handle=0xc0001040
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0xc0002b40
+allocation handle=0xc0002340
+allocation handle=0xc0002a40
+allocation handle=0xc0002880
+allocation handle=0xc0002b00
+allocation handle=0xc0002980
+allocation handle=0xc0002940
+allocation handle=0xc0002900
+allocation handle=0xc00029c0
+allocation handle=0xc0002a80
+allocation handle=0xc0005e40
+allocation handle=0xc0000ec0
+allocation handle=0xc0000980
+allocation handle=0xc0002a00
+allocation handle=0xc0001680
+allocation handle=0xc00016c0
+allocation handle=0xc0001700
+allocation handle=0x40000700
+allocation handle=0x40000740
+allocation handle=0xc0002740
+allocation handle=0x40002380
+allocation handle=0xc00018c0
+allocation handle=0x80006380
+allocation handle=0x40004800
+allocation handle=0xc0000f40
+allocation handle=0xc0001580
+BC250 Allocate hr=00000000 inputRT=000002043D421B20 callbackRT=000002043D421B20 miscShared=0 format=21 primary=0 allocation=c0000940 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c0000940 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=4298113024
+BC250 Allocate hr=00000000 inputRT=000002043D4219C0 callbackRT=000002043D4219C0 miscShared=0 format=21 primary=0 allocation=c0000840 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c0000840 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=69632
+BC250 Allocate hr=00000000 inputRT=000002043D421C80 callbackRT=000002043D421C80 miscShared=0 format=21 primary=0 allocation=c00008c0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c00008c0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=4307329024
+BC250 Allocate hr=00000000 inputRT=000002043D421960 callbackRT=000002043D421960 miscShared=0 format=21 primary=1 allocation=c0000880 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c0000880 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=9285632
+allocation handle=0xc0000800
+allocation handle=0xc00007c0
+allocation handle=0xc0000780
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40004c80
+bc250: gather capacity=4096 bytes required=1728 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0xc0006280
+allocation handle=0xc0001e00
+allocation handle=0xc0001880
+BC250 hosted op=4 count=2 hr=00000000
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 Allocate hr=00000000 inputRT=000002043D421B20 callbackRT=000002043D421B20 miscShared=0 format=21 primary=1 allocation=80006340 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=80006340 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=4298113024
+BC250 Allocate hr=00000000 inputRT=000002043D4219E0 callbackRT=000002043D4219E0 miscShared=0 format=21 primary=1 allocation=c00053c0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=c00053c0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=18501632
+allocation handle=0xc00009c0
+allocation handle=0x80006300
+allocation handle=0xc0000a00
+allocation handle=0xc0004040
+allocation handle=0x80006440
+allocation handle=0x80006480
+allocation handle=0x80006400
+allocation handle=0xc0003f00
+allocation handle=0x800063c0
+allocation handle=0x40001840
+allocation handle=0xc0001540
+allocation handle=0xc0003e80
+allocation handle=0xc0003f40
+allocation handle=0xc0003ec0
+allocation handle=0x800064c0
+allocation handle=0xc0001080
+allocation handle=0xc0004c00
+allocation handle=0xc0004f80
+allocation handle=0x800062c0
+allocation handle=0xc0004f40
+allocation handle=0xc0004ec0
+allocation handle=0x40000b00
+allocation handle=0xc0004f00
+allocation handle=0x40002280
+allocation handle=0x40002680
+bc250: gather capacity=155648 bytes required=153856 ibs=5
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+allocation handle=0x400046c0
+allocation handle=0xc0005000
+allocation handle=0x80000600
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=80001bc0 value=2
+BC250 Present signals value=1 hr=00000000
+BC250 Perf frame 1 gap_ms 0.000 draws 55 draw_ms 53.827 max_draw_ms 16.405 present_ms 110.085 render_wait_ms 1.721
+allocation handle=0xc0004fc0
+allocation handle=0x40000ac0
+bc250: gather capacity=16384 bytes required=15040 ibs=4
+BC250 render waits Present value=1 hr=00000000
+allocation handle=0xc0002000
+allocation handle=0xc0001f40
+allocation handle=0xc0001fc0
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=80001bc0 value=3
+BC250 Present signals value=2 hr=00000000
+BC250 Perf frame 2 gap_ms 39.949 draws 39 draw_ms 19.044 max_draw_ms 15.533 present_ms 0.033 render_wait_ms 1.086
+allocation handle=0xc0001f00
+allocation handle=0xc0002040
+bc250: gather capacity=8192 bytes required=7968 ibs=4
+BC250 render waits Present value=2 hr=00000000
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=80001bc0 value=4
+BC250 Present signals value=3 hr=00000000
+BC250 Perf frame 3 gap_ms 227.741 draws 4 draw_ms 0.060 max_draw_ms 0.049 present_ms 0.038 render_wait_ms 0.486
+allocation handle=0xc0001f80
+allocation handle=0xc0000d40
+bc250: gather capacity=8192 bytes required=7968 ibs=4
+BC250 render waits Present value=3 hr=00000000
+allocation handle=0xc0000e00
+allocation handle=0xc00012c0
+allocation handle=0xc0000e40
+allocation handle=0xc0002440
+allocation handle=0xc00010c0
+allocation handle=0xc00023c0
+BC250 Perf frame 4 gap_ms 997.199 draws 4 draw_ms 0.060 max_draw_ms 0.049 present_ms 0.035 render_wait_ms 1.612
+allocation handle=0xc00011c0
+bc250: gather capacity=24576 bytes required=21696 ibs=4
+allocation handle=0x80002200
+allocation handle=0xc0000fc0
+allocation handle=0xc0005e00
+allocation handle=0x40004540
+allocation handle=0xc0005d80
+allocation handle=0xc00057c0
+BC250 Perf frame 5 gap_ms 94.391 draws 43 draw_ms 5.547 max_draw_ms 5.300 present_ms 0.037 render_wait_ms 1.767
+allocation handle=0xc00058c0
+bc250: gather capacity=24576 bytes required=22144 ibs=4
+allocation handle=0x40000080
+allocation handle=0xc00024c0
+allocation handle=0x400047c0
+allocation handle=0x40004ac0
+allocation handle=0xc00017c0
+allocation handle=0xc0005780
+BC250 Perf frame 6 gap_ms 78.777 draws 45 draw_ms 0.259 max_draw_ms 0.082 present_ms 0.048 render_wait_ms 2.204
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 Perf frame 7 gap_ms 14.226 draws 1 draw_ms 0.084 max_draw_ms 0.084 present_ms 0.058 render_wait_ms 1.012
+BC250 Perf frame 8 gap_ms 16.248 draws 1 draw_ms 0.091 max_draw_ms 0.091 present_ms 0.038 render_wait_ms 0.159
+BC250 Perf frame 9 gap_ms 16.553 draws 1 draw_ms 0.089 max_draw_ms 0.089 present_ms 0.037 render_wait_ms 0.139
+allocation handle=0xc0003bc0
+BC250 surface hosted=1 allocation=c0001780 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002044072AC98 va=69632
+BC250 Perf frame 10 gap_ms 181.849 draws 2 draw_ms 0.452 max_draw_ms 0.379 present_ms 0.036 render_wait_ms 0.115
+BC250 Perf frame 11 gap_ms 21.586 draws 2 draw_ms 3.905 max_draw_ms 3.830 present_ms 0.034 render_wait_ms 0.158
+BC250 Perf frame 12 gap_ms 13.244 draws 2 draw_ms 0.087 max_draw_ms 0.072 present_ms 0.037 render_wait_ms 0.157
+BC250 Perf frame 13 gap_ms 16.352 draws 2 draw_ms 0.086 max_draw_ms 0.072 present_ms 0.043 render_wait_ms 0.134
+allocation handle=0xc0002300
+bc250: gather capacity=8192 bytes required=6944 ibs=4
+BC250 Perf frame 14 gap_ms 17.414 draws 2 draw_ms 0.077 max_draw_ms 0.065 present_ms 0.035 render_wait_ms 0.711
+BC250 Perf frame 15 gap_ms 16.110 draws 2 draw_ms 0.069 max_draw_ms 0.057 present_ms 0.031 render_wait_ms 0.116
+BC250 Perf frame 16 gap_ms 16.531 draws 2 draw_ms 0.089 max_draw_ms 0.075 present_ms 0.032 render_wait_ms 0.138
+BC250 Perf frame 17 gap_ms 18.277 draws 2 draw_ms 0.085 max_draw_ms 0.071 present_ms 0.031 render_wait_ms 0.134
+BC250 Perf frame 18 gap_ms 17.631 draws 2 draw_ms 0.091 max_draw_ms 0.072 present_ms 0.043 render_wait_ms 0.133
+BC250 Perf frame 19 gap_ms 14.377 draws 2 draw_ms 0.093 max_draw_ms 0.078 present_ms 0.042 render_wait_ms 0.127
+BC250 Perf frame 20 gap_ms 16.322 draws 2 draw_ms 0.087 max_draw_ms 0.072 present_ms 0.035 render_wait_ms 0.121
+BC250 Perf frame 21 gap_ms 16.775 draws 2 draw_ms 0.089 max_draw_ms 0.073 present_ms 0.034 render_wait_ms 0.123
+BC250 Perf frame 22 gap_ms 16.410 draws 2 draw_ms 0.088 max_draw_ms 0.072 present_ms 0.040 render_wait_ms 0.130
+BC250 Perf frame 23 gap_ms 16.697 draws 2 draw_ms 0.089 max_draw_ms 0.074 present_ms 0.035 render_wait_ms 0.133
+BC250 Perf frame 24 gap_ms 20.898 draws 2 draw_ms 0.100 max_draw_ms 0.083 present_ms 0.036 render_wait_ms 0.127
+BC250 Perf frame 25 gap_ms 12.620 draws 2 draw_ms 0.084 max_draw_ms 0.071 present_ms 0.033 render_wait_ms 0.131
+BC250 Perf frame 26 gap_ms 16.377 draws 2 draw_ms 0.099 max_draw_ms 0.081 present_ms 0.033 render_wait_ms 0.134
+BC250 Perf frame 27 gap_ms 16.817 draws 2 draw_ms 0.114 max_draw_ms 0.093 present_ms 0.029 render_wait_ms 0.129
+BC250 Perf frame 28 gap_ms 16.711 draws 2 draw_ms 0.097 max_draw_ms 0.077 present_ms 0.041 render_wait_ms 0.135
+BC250 Perf frame 29 gap_ms 16.482 draws 2 draw_ms 0.089 max_draw_ms 0.073 present_ms 0.034 render_wait_ms 0.119
+BC250 Perf frame 30 gap_ms 16.912 draws 2 draw_ms 0.108 max_draw_ms 0.085 present_ms 0.080 render_wait_ms 0.170
+BC250 Perf frame 31 gap_ms 16.751 draws 2 draw_ms 0.110 max_draw_ms 0.087 present_ms 0.053 render_wait_ms 0.158
+BC250 Perf frame 32 gap_ms 16.423 draws 2 draw_ms 0.075 max_draw_ms 0.061 present_ms 0.026 render_wait_ms 0.114
+BC250 Perf frame 33 gap_ms 16.612 draws 2 draw_ms 0.086 max_draw_ms 0.073 present_ms 0.031 render_wait_ms 0.116
+BC250 Perf frame 34 gap_ms 17.016 draws 2 draw_ms 0.118 max_draw_ms 0.094 present_ms 0.044 render_wait_ms 0.161
+BC250 Perf frame 35 gap_ms 16.461 draws 2 draw_ms 0.086 max_draw_ms 0.068 present_ms 0.034 render_wait_ms 0.135
+BC250 Perf frame 36 gap_ms 16.725 draws 2 draw_ms 0.094 max_draw_ms 0.072 present_ms 0.036 render_wait_ms 0.155
+BC250 Perf frame 37 gap_ms 16.723 draws 2 draw_ms 0.099 max_draw_ms 0.078 present_ms 0.041 render_wait_ms 0.146
+BC250 Perf frame 38 gap_ms 17.105 draws 2 draw_ms 0.146 max_draw_ms 0.111 present_ms 0.105 render_wait_ms 0.216
+BC250 Perf frame 39 gap_ms 16.262 draws 2 draw_ms 0.085 max_draw_ms 0.071 present_ms 0.031 render_wait_ms 0.108
+BC250 Perf frame 40 gap_ms 16.635 draws 2 draw_ms 0.089 max_draw_ms 0.073 present_ms 0.036 render_wait_ms 0.140
+BC250 Perf frame 41 gap_ms 16.571 draws 2 draw_ms 0.085 max_draw_ms 0.070 present_ms 0.035 render_wait_ms 0.129
+BC250 Perf frame 42 gap_ms 16.798 draws 2 draw_ms 0.091 max_draw_ms 0.077 present_ms 0.031 render_wait_ms 0.121
+BC250 Perf frame 43 gap_ms 16.504 draws 2 draw_ms 0.087 max_draw_ms 0.072 present_ms 0.031 render_wait_ms 0.116
+BC250 Perf frame 44 gap_ms 16.786 draws 2 draw_ms 0.081 max_draw_ms 0.064 present_ms 0.033 render_wait_ms 0.122
+BC250 Perf frame 45 gap_ms 16.581 draws 2 draw_ms 0.085 max_draw_ms 0.071 present_ms 0.030 render_wait_ms 0.123
+BC250 Perf frame 46 gap_ms 16.781 draws 2 draw_ms 0.091 max_draw_ms 0.074 present_ms 0.035 render_wait_ms 0.130
+BC250 Perf frame 47 gap_ms 16.630 draws 2 draw_ms 0.091 max_draw_ms 0.073 present_ms 0.033 render_wait_ms 0.125
+BC250 Perf frame 48 gap_ms 16.644 draws 2 draw_ms 0.086 max_draw_ms 0.072 present_ms 0.034 render_wait_ms 0.107
+BC250 Perf frame 49 gap_ms 16.908 draws 2 draw_ms 0.108 max_draw_ms 0.086 present_ms 0.034 render_wait_ms 0.121
+BC250 Perf frame 50 gap_ms 16.689 draws 2 draw_ms 0.101 max_draw_ms 0.080 present_ms 0.044 render_wait_ms 0.138
+BC250 Perf frame 51 gap_ms 16.447 draws 2 draw_ms 0.085 max_draw_ms 0.073 present_ms 0.030 render_wait_ms 0.120
+BC250 Perf frame 52 gap_ms 16.693 draws 2 draw_ms 0.084 max_draw_ms 0.070 present_ms 0.030 render_wait_ms 0.120
+BC250 Perf frame 53 gap_ms 16.828 draws 2 draw_ms 0.091 max_draw_ms 0.075 present_ms 0.041 render_wait_ms 0.136
+BC250 Perf frame 54 gap_ms 16.772 draws 2 draw_ms 0.087 max_draw_ms 0.072 present_ms 0.051 render_wait_ms 0.128
+BC250 Perf frame 55 gap_ms 16.513 draws 2 draw_ms 0.093 max_draw_ms 0.076 present_ms 0.053 render_wait_ms 0.135
+BC250 Perf frame 56 gap_ms 16.780 draws 2 draw_ms 0.102 max_draw_ms 0.082 present_ms 0.034 render_wait_ms 0.139
+BC250 Perf frame 57 gap_ms 16.523 draws 2 draw_ms 0.090 max_draw_ms 0.074 present_ms 0.032 render_wait_ms 0.125
+BC250 Perf frame 58 gap_ms 16.713 draws 2 draw_ms 0.088 max_draw_ms 0.072 present_ms 0.036 render_wait_ms 0.122
+BC250 Perf frame 59 gap_ms 16.811 draws 2 draw_ms 0.112 max_draw_ms 0.090 present_ms 0.038 render_wait_ms 0.144
+BC250 Perf frame 60 gap_ms 16.704 draws 2 draw_ms 0.109 max_draw_ms 0.084 present_ms 0.037 render_wait_ms 0.144
+BC250 Perf frame 61 gap_ms 16.513 draws 2 draw_ms 0.090 max_draw_ms 0.074 present_ms 0.036 render_wait_ms 0.128
+BC250 Perf frame 62 gap_ms 16.701 draws 2 draw_ms 0.088 max_draw_ms 0.073 present_ms 0.042 render_wait_ms 0.131
+BC250 Perf frame 63 gap_ms 16.791 draws 2 draw_ms 0.088 max_draw_ms 0.073 present_ms 0.056 render_wait_ms 0.125
+BC250 Perf frame 64 gap_ms 16.588 draws 2 draw_ms 0.086 max_draw_ms 0.072 present_ms 0.055 render_wait_ms 0.154
+BC250 Perf frame 65 gap_ms 16.630 draws 2 draw_ms 0.090 max_draw_ms 0.076 present_ms 0.035 render_wait_ms 0.136
+BC250 Perf frame 66 gap_ms 16.709 draws 2 draw_ms 0.086 max_draw_ms 0.072 present_ms 0.034 render_wait_ms 0.123
+BC250 Perf frame 67 gap_ms 16.685 draws 2 draw_ms 0.087 max_draw_ms 0.073 present_ms 0.062 render_wait_ms 0.133
+BC250 Perf frame 68 gap_ms 16.769 draws 2 draw_ms 0.101 max_draw_ms 0.079 present_ms 0.053 render_wait_ms 0.159
+BC250 Perf frame 69 gap_ms 16.608 draws 2 draw_ms 0.086 max_draw_ms 0.073 present_ms 0.039 render_wait_ms 0.121
+BC250 Perf frame 70 gap_ms 16.706 draws 2 draw_ms 0.088 max_draw_ms 0.073 present_ms 0.036 render_wait_ms 0.124
+BC250 Perf frame 71 gap_ms 16.570 draws 2 draw_ms 0.087 max_draw_ms 0.073 present_ms 0.033 render_wait_ms 0.114
+BC250 Perf frame 72 gap_ms 16.664 draws 2 draw_ms 0.084 max_draw_ms 0.070 present_ms 0.032 render_wait_ms 0.114
+BC250 Perf frame 73 gap_ms 16.699 draws 2 draw_ms 0.086 max_draw_ms 0.072 present_ms 0.030 render_wait_ms 0.114
+BC250 Perf frame 74 gap_ms 16.951 draws 2 draw_ms 0.112 max_draw_ms 0.088 present_ms 0.035 render_wait_ms 0.122
+BC250 Perf frame 75 gap_ms 16.713 draws 2 draw_ms 0.109 max_draw_ms 0.087 present_ms 0.041 render_wait_ms 0.148
+BC250 Perf frame 76 gap_ms 16.567 draws 2 draw_ms 0.093 max_draw_ms 0.073 present_ms 0.045 render_wait_ms 0.143
+BC250 Perf frame 77 gap_ms 16.759 draws 2 draw_ms 0.101 max_draw_ms 0.079 present_ms 0.041 render_wait_ms 0.151
+BC250 Perf frame 78 gap_ms 16.653 draws 2 draw_ms 0.089 max_draw_ms 0.069 present_ms 0.038 render_wait_ms 0.149
+BC250 Perf frame 79 gap_ms 16.630 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.043 render_wait_ms 0.141
+BC250 Perf frame 80 gap_ms 16.713 draws 2 draw_ms 0.097 max_draw_ms 0.076 present_ms 0.038 render_wait_ms 0.148
+BC250 Perf frame 81 gap_ms 16.665 draws 2 draw_ms 0.090 max_draw_ms 0.070 present_ms 0.046 render_wait_ms 0.146
+BC250 Perf frame 82 gap_ms 16.635 draws 2 draw_ms 0.090 max_draw_ms 0.070 present_ms 0.059 render_wait_ms 0.146
+BC250 Perf frame 83 gap_ms 16.731 draws 2 draw_ms 0.090 max_draw_ms 0.069 present_ms 0.038 render_wait_ms 0.140
+BC250 Perf frame 84 gap_ms 16.653 draws 2 draw_ms 0.092 max_draw_ms 0.071 present_ms 0.042 render_wait_ms 0.142
+BC250 Perf frame 85 gap_ms 16.724 draws 2 draw_ms 0.093 max_draw_ms 0.073 present_ms 0.062 render_wait_ms 0.141
+BC250 Perf frame 86 gap_ms 16.602 draws 2 draw_ms 0.103 max_draw_ms 0.081 present_ms 0.042 render_wait_ms 0.140
+BC250 Perf frame 87 gap_ms 16.774 draws 2 draw_ms 0.100 max_draw_ms 0.078 present_ms 0.042 render_wait_ms 0.157
+BC250 Perf frame 88 gap_ms 16.742 draws 2 draw_ms 0.111 max_draw_ms 0.089 present_ms 0.043 render_wait_ms 0.159
+BC250 Perf frame 89 gap_ms 16.571 draws 2 draw_ms 0.095 max_draw_ms 0.074 present_ms 0.037 render_wait_ms 0.143
+BC250 Perf frame 90 gap_ms 16.719 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.040 render_wait_ms 0.145
+BC250 Perf frame 91 gap_ms 16.654 draws 2 draw_ms 0.094 max_draw_ms 0.073 present_ms 0.040 render_wait_ms 0.147
+BC250 Perf frame 92 gap_ms 16.659 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.040 render_wait_ms 0.143
+BC250 Perf frame 93 gap_ms 16.695 draws 2 draw_ms 0.094 max_draw_ms 0.072 present_ms 0.041 render_wait_ms 0.147
+BC250 Perf frame 94 gap_ms 16.681 draws 2 draw_ms 0.090 max_draw_ms 0.070 present_ms 0.041 render_wait_ms 0.154
+BC250 Perf frame 95 gap_ms 16.652 draws 2 draw_ms 0.090 max_draw_ms 0.070 present_ms 0.040 render_wait_ms 0.141
+BC250 Perf frame 96 gap_ms 16.725 draws 2 draw_ms 0.091 max_draw_ms 0.070 present_ms 0.046 render_wait_ms 0.141
+BC250 Perf frame 97 gap_ms 16.613 draws 2 draw_ms 0.091 max_draw_ms 0.070 present_ms 0.039 render_wait_ms 0.146
+BC250 Perf frame 98 gap_ms 16.715 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.037 render_wait_ms 0.141
+BC250 Perf frame 99 gap_ms 16.698 draws 2 draw_ms 0.110 max_draw_ms 0.088 present_ms 0.046 render_wait_ms 0.145
+BC250 Perf frame 100 gap_ms 16.527 draws 2 draw_ms 0.088 max_draw_ms 0.074 present_ms 0.033 render_wait_ms 0.116
+BC250 Perf frame 101 gap_ms 16.731 draws 2 draw_ms 0.076 max_draw_ms 0.065 present_ms 0.029 render_wait_ms 0.100
+BC250 Perf frame 102 gap_ms 16.711 draws 2 draw_ms 0.095 max_draw_ms 0.074 present_ms 0.039 render_wait_ms 0.135
+BC250 Perf frame 103 gap_ms 16.845 draws 2 draw_ms 0.118 max_draw_ms 0.095 present_ms 0.043 render_wait_ms 0.152
+BC250 Perf frame 104 gap_ms 16.528 draws 2 draw_ms 0.086 max_draw_ms 0.070 present_ms 0.034 render_wait_ms 0.125
+BC250 Perf frame 105 gap_ms 16.740 draws 2 draw_ms 0.101 max_draw_ms 0.079 present_ms 0.031 render_wait_ms 0.125
+BC250 Perf frame 106 gap_ms 16.656 draws 2 draw_ms 0.092 max_draw_ms 0.071 present_ms 0.042 render_wait_ms 0.146
+BC250 Perf frame 107 gap_ms 16.823 draws 2 draw_ms 0.110 max_draw_ms 0.088 present_ms 0.042 render_wait_ms 0.166
+BC250 Perf frame 108 gap_ms 16.721 draws 2 draw_ms 0.108 max_draw_ms 0.089 present_ms 0.036 render_wait_ms 0.142
+BC250 Perf frame 109 gap_ms 16.746 draws 2 draw_ms 0.119 max_draw_ms 0.095 present_ms 0.029 render_wait_ms 0.153
+BC250 Perf frame 110 gap_ms 16.388 draws 2 draw_ms 0.082 max_draw_ms 0.064 present_ms 0.033 render_wait_ms 0.128
+BC250 Perf frame 111 gap_ms 16.744 draws 2 draw_ms 0.092 max_draw_ms 0.071 present_ms 0.047 render_wait_ms 0.141
+BC250 Perf frame 112 gap_ms 16.650 draws 2 draw_ms 0.099 max_draw_ms 0.073 present_ms 0.037 render_wait_ms 0.146
+BC250 Perf frame 113 gap_ms 16.714 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.037 render_wait_ms 0.150
+BC250 Perf frame 114 gap_ms 16.658 draws 2 draw_ms 0.092 max_draw_ms 0.071 present_ms 0.036 render_wait_ms 0.142
+BC250 Perf frame 115 gap_ms 16.723 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.050 render_wait_ms 0.148
+BC250 Perf frame 116 gap_ms 16.602 draws 2 draw_ms 0.093 max_draw_ms 0.071 present_ms 0.040 render_wait_ms 0.139
+BC250 Perf frame 117 gap_ms 16.749 draws 2 draw_ms 0.093 max_draw_ms 0.072 present_ms 0.036 render_wait_ms 0.144
+BC250 Perf frame 118 gap_ms 16.670 draws 2 draw_ms 0.098 max_draw_ms 0.075 present_ms 0.037 render_wait_ms 0.141
+BC250 Perf frame 119 gap_ms 16.843 draws 2 draw_ms 0.120 max_draw_ms 0.097 present_ms 0.068 render_wait_ms 0.158
+BC250 Perf frame 120 gap_ms 16.323 draws 2 draw_ms 0.084 max_draw_ms 0.071 present_ms 0.029 render_wait_ms 0.107
