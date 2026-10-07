@@ -21,8 +21,8 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.213.102',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.213.102-tester.17',
+    [string]$DriverVer = '0.7.215.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.215.100-tester.18',
     [string]$KitVersion = '10.0.26100.0',
     [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
