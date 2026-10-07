@@ -6108,7 +6108,10 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             while (Bc250GfxQueueHead(&wddm->GfxPending) != NULL) Bc250GfxQueuePop(&wddm->GfxPending);
             wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = FALSE;      // reopen node 0: submits are admitted again
             wddm->RefusalPending[BC250_WDDM_NODE_3D] = FALSE;
-            wddm->RejectedPending[BC250_WDDM_NODE_3D] = FALSE;      // its fence is at or below the aborted one
+            // A rejected packet was never dispatched. After a reported reset dxgkrnl re-issues the render packets
+            // it still owes with NEW fence ids, so publishing the old rejected id afterwards would name a fence it
+            // no longer tracks. Drop the pending report with the queue.
+            wddm->RejectedPending[BC250_WDDM_NODE_3D] = FALSE;
             wddm->CompletionPending[BC250_WDDM_NODE_3D] = 0;
             wddm->CompletionRetries[BC250_WDDM_NODE_3D] = 0;        // 0.7.210: a fresh retry budget for the next pass
             wddm->DeferredValid = FALSE;

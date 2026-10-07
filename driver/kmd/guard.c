@@ -553,61 +553,6 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
     return status;
 }
 
-// ---- BD-090: a runtime restart in a confirmed boot -----------------------------------------------------------
-//
-// UnconfirmedStarts protects against a boot loop: a start that crashes the machine never reaches its stop, and
-// dxgkrnl does not stop the adapter at a shutdown either, so across reboots the count only grows until a healthy
-// desktop confirms it. The confirmation runs at logon (the start-confirm task). A runtime restart of the device
-// (pnputil /restart-device, a live driver update, Device Manager) starts the driver again in the same boot, with
-// no logon to confirm it: before this the second such restart was refused with Code 43 (b21 v2-restart cycle 3).
-//
-// The rule: an orderly stop of a start that completed gives its own count back, but only in a boot whose full
-// table has once been confirmed healthy. The mark of that confirmation is a volatile key, which the configuration
-// manager drops at every reboot, so the protection across reboots is unchanged: a crash, a power loss and a
-// shutdown never reach the give-back, and a new boot has no mark until its own start is confirmed. A start that
-// failed keeps its count (pnp.c calls this only for a device that was Started). No Linux counterpart: amdgpu has
-// no start guard.
-#define GUARD_BOOT_KEY L"GuardBoot"
-#define GUARD_BOOT_CONFIRMED L"Confirmed"
-
-static void GuardStartConfirmed(void)
-{
-    NTSTATUS status;
-
-    g_StartCounted = FALSE;     // the caller zeroed the count: nothing of this start is left to give back
-    status = GuardVolatileStore(GUARD_BOOT_KEY, GUARD_BOOT_CONFIRMED, 1);
-    GuardLog("guard: boot marked confirmed 0x%08X", status);
-}
-
-void GuardReleaseStart(void)
-{
-    HANDLE key;
-    ULONG starts, confirmed;
-    NTSTATUS status;
-
-    if (!g_StartCounted) return;
-    g_StartCounted = FALSE;     // once per counted start, whatever happens below
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
-    status = GuardVolatileQuery(GUARD_BOOT_KEY, GUARD_BOOT_CONFIRMED, &confirmed);
-    if (!NT_SUCCESS(status) || confirmed != 1) {
-        GuardLog("guard: stop keeps the count, boot not confirmed (0x%08X)", status);
-        return;
-    }
-    status = OpenParameters(&key);
-    if (!NT_SUCCESS(status)) {
-        GuardLog("guard: stop give-back open failed 0x%08X", status);
-        return;
-    }
-    status = ReadDword(key, L"UnconfirmedStarts", &starts);
-    // Never below zero: a value user mode already cleared stays cleared.
-    if (NT_SUCCESS(status) && starts > 0) {
-        status = WriteDword(key, L"UnconfirmedStarts", starts - 1);
-        if (NT_SUCCESS(status)) status = ZwFlushKey(key);
-        GuardLog("guard: orderly stop in a confirmed boot, count %u -> %u status 0x%08X", starts, starts - 1, status);
-    }
-    ZwClose(key);
-}
-
 // ---- the M15.12 hang-recovery record (docs/design/hang-recovery.md) -----------------------------------------------
 //
 //   <service key>\Parameters\HangRecovery   non-volatile, written and flushed by DxgkDdiResetEngine (wddm.c)
@@ -676,3 +621,58 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     GuardLog("hang record: verdict %lu seq %lu fence %lu kills %lu %lu us, persisted 0x%08X", Verdict, Seq, Fence,
              Kills, Micros, status);
 }
+// ---- BD-090: a runtime restart in a confirmed boot -----------------------------------------------------------
+//
+// UnconfirmedStarts protects against a boot loop: a start that crashes the machine never reaches its stop, and
+// dxgkrnl does not stop the adapter at a shutdown either, so across reboots the count only grows until a healthy
+// desktop confirms it. The confirmation runs at logon (the start-confirm task). A runtime restart of the device
+// (pnputil /restart-device, a live driver update, Device Manager) starts the driver again in the same boot, with
+// no logon to confirm it: before this the second such restart was refused with Code 43 (b21 v2-restart cycle 3).
+//
+// The rule: an orderly stop of a start that completed gives its own count back, but only in a boot whose full
+// table has once been confirmed healthy. The mark of that confirmation is a volatile key, which the configuration
+// manager drops at every reboot, so the protection across reboots is unchanged: a crash, a power loss and a
+// shutdown never reach the give-back, and a new boot has no mark until its own start is confirmed. A start that
+// failed keeps its count (pnp.c calls this only for a device that was Started). No Linux counterpart: amdgpu has
+// no start guard.
+#define GUARD_BOOT_KEY L"GuardBoot"
+#define GUARD_BOOT_CONFIRMED L"Confirmed"
+
+static void GuardStartConfirmed(void)
+{
+    NTSTATUS status;
+
+    g_StartCounted = FALSE;     // the caller zeroed the count: nothing of this start is left to give back
+    status = GuardVolatileStore(GUARD_BOOT_KEY, GUARD_BOOT_CONFIRMED, 1);
+    GuardLog("guard: boot marked confirmed 0x%08X", status);
+}
+
+void GuardReleaseStart(void)
+{
+    HANDLE key;
+    ULONG starts, confirmed;
+    NTSTATUS status;
+
+    if (!g_StartCounted) return;
+    g_StartCounted = FALSE;     // once per counted start, whatever happens below
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    status = GuardVolatileQuery(GUARD_BOOT_KEY, GUARD_BOOT_CONFIRMED, &confirmed);
+    if (!NT_SUCCESS(status) || confirmed != 1) {
+        GuardLog("guard: stop keeps the count, boot not confirmed (0x%08X)", status);
+        return;
+    }
+    status = OpenParameters(&key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("guard: stop give-back open failed 0x%08X", status);
+        return;
+    }
+    status = ReadDword(key, L"UnconfirmedStarts", &starts);
+    // Never below zero: a value user mode already cleared stays cleared.
+    if (NT_SUCCESS(status) && starts > 0) {
+        status = WriteDword(key, L"UnconfirmedStarts", starts - 1);
+        if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+        GuardLog("guard: orderly stop in a confirmed boot, count %u -> %u status 0x%08X", starts, starts - 1, status);
+    }
+    ZwClose(key);
+}
+

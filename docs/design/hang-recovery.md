@@ -88,6 +88,10 @@ Only the hung job's VMID is killed, not every VMID on the ring. The GFX ring is 
 hung one has not launched its waves, so it needs no kill and runs to completion once the head drains. This is also
 why the drain is judged on the newest sequence retiring: it can only retire after every job before it did.
 
+A VMID can hold several jobs, because the pool reuses a VMID for every job of the root it already holds. The
+broadcast kill takes the waves of all of them. They belong to that one page-table root, which is the process whose
+device dxgkrnl is about to put into the error state, so nobody else's work is cut short.
+
 ## The record
 
 Each stage-1 call leaves its verdict in the registry, under

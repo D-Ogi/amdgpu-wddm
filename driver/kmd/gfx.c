@@ -1072,11 +1072,12 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
     *Kills = 0;
     *Micros = 0;
     // The caller checked this, but the kill is a broadcast register write: never issue one on a VMID this file
-    // cannot name as an application's (0 is the GART domain, 2 is SDMA paging's).
+    // cannot name as an application's (0 is the GART domain, 2 is SDMA paging's). Unreachable from wddm.c, whose
+    // pre-kill verdict refuses first; the same verdict is returned so the record cannot read as a failed kill.
     if (!Bc250KillVmidValid(Vmid))
     {
         GuardLog("gfx: soft recovery refused: vmid %lu is not an application VMID; nothing changed", Vmid);
-        return BC250_HANG_VERDICT_NOT_DRAINED;
+        return BC250_HANG_VERDICT_VMID_GUARD;
     }
     gfx = GfxAccessAcquire(Device);
     if (gfx == NULL) {
