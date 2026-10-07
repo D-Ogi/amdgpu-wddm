@@ -454,7 +454,8 @@ ReplayRing* create_ring(Replay* rp, uint32_t index) noexcept {
     HANDLE owner = nullptr;
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &owner, SYNCHRONIZE, FALSE, 0))
         return nullptr;
-    void* memory = VirtualAlloc(nullptr, kRingHeader + bytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    // bytes is at most 64 MiB (set_replay_policy): the sum fits a 32-bit SIZE_T.
+    void* memory = VirtualAlloc(nullptr, static_cast<SIZE_T>(kRingHeader + bytes), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (!memory) {
         CloseHandle(owner);
         return nullptr;

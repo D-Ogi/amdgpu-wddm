@@ -76,8 +76,8 @@ static void publication_tests(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPT
     constexpr auto queueType=D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D;
     constexpr auto extendedType=D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES;
     const D3D12DDI_HRTTABLE runtime[2]={
-        {reinterpret_cast<HANDLE>(UINT_PTR(0x123456780001ULL))},
-        {reinterpret_cast<HANDLE>(UINT_PTR(0x123456780002ULL))}};
+        {reinterpret_cast<HANDLE>(UINT_PTR(0x56780001u))},
+        {reinterpret_cast<HANDLE>(UINT_PTR(0x56780002u))}};
     auto& state=*static_cast<native12::Adapter*>(adapter.pDrvPrivate);
     assert(!state.list_tables[0].handle && !state.list_tables[1].handle);
     rejected_table<Core>(funcs,adapter,coreType,sizeof(Core)-1,0,{});

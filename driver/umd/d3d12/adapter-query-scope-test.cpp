@@ -18,7 +18,12 @@ VKAPI_ATTR VkResult VKAPI_CALL create(const VkInstanceCreateInfo* ci,const VkAll
     auto query=static_cast<const bc250_host_adapter_query*>(binding->pNext);
     assert(query->sType==BC250_HOST_ADAPTER_QUERY_STYPE && query->version==1);
     auto policy=static_cast<const bc250_host_policy*>(query->pNext);
-    assert(policy->sType==BC250_HOST_POLICY_STYPE && policy->version==1 && policy->size==32);
+    assert(policy->sType==BC250_HOST_POLICY_STYPE && policy->version==BC250_HOST_POLICY_VERSION &&
+           policy->size==sizeof(bc250_host_policy));
+#if BC250_HOST_POLICY_VERSION >= 2
+    assert(!policy->specified && !policy->coalesce && !policy->gather_slots && !policy->progress_gpu &&
+           !policy->deferred_destroy && !policy->reserved2);
+#endif
     assert(policy->flags==expected_policy && !policy->reserved && policy->pNext==original_chain);
     assert(host->dispatch(host->userdata,BC250_HOST_CHECK_STATUS,nullptr)==0);
     *out=fake_instance;++creates;return VK_SUCCESS;

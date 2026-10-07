@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include <type_traits>
 #include "heap-import.h"
 #include "device-state.h"
 #include "allocation-request.h"
@@ -11,7 +12,9 @@
 #include <tuple>
 #include <utility>
 using namespace native12;
-template<class T> T handle(uintptr_t n){return reinterpret_cast<T>(n);}
+// A fake handle: a pointer type gets the address, an integer handle (a non-dispatchable Vulkan handle is
+// uint64_t on x86) the value.
+template<class T> T handle(uintptr_t n){if constexpr(std::is_pointer_v<T>) return reinterpret_cast<T>(n); else return static_cast<T>(n);}
 static std::string events;
 static UINT64 completed=10;
 static UINT64 gpu_address=UINT64_C(0x100000000);

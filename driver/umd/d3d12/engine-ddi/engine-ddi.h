@@ -648,6 +648,6 @@ struct RecordHeader {
     IUnknown* engine;                           // one reference, or null for records without an engine object
     DeviceContext* device;                      // creating device; use through another device is refused
 };
-static_assert(sizeof(RecordHeader) == 24, "RecordHeader layout");
+static_assert(sizeof(RecordHeader) == 8 + 2 * sizeof(void*), "RecordHeader layout (24 bytes on x64, 16 on x86)");
 
 } // namespace engine_ddi

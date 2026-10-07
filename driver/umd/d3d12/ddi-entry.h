@@ -512,7 +512,7 @@ public:
     static constexpr unsigned core_slots=0 NATIVE12_CORE_0088_MEMBERS(N12_COUNT);
     static constexpr unsigned list_slots=0 NATIVE12_LIST_0092_MEMBERS(N12_COUNT);
 #undef N12_COUNT
-    static_assert(sizeof(void*)==8 && core_slots==122 && list_slots==70);
+    static_assert(core_slots==122 && list_slots==70);
     static_assert(sizeof(Core)==core_slots*sizeof(void*) && sizeof(List)==list_slots*sizeof(void*));
     static HRESULT wrap_core(const Core& source,Core* out) noexcept {
         if(!out) return E_INVALIDARG;
