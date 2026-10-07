@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\hang-recovery",[switch]$IgnoreFenceGuard,[switch]$IgnoreVmidGuard,[switch]$SharedLastCompleted)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\hang-recovery",[switch]$IgnoreFenceGuard,[switch]$IgnoreVmidGuard,[switch]$SharedLastCompleted,[switch]$GartBackend,[switch]$CountRefusedKills,[switch]$NoBackendSwitch)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -10,7 +10,33 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 # -SharedLastCompleted puts back the read of 0.7.216.13 (lab trial D, 2026-10-07): the lower bound of that range from the
 # adapter-wide LastCompletedFence, which holds the newest report of either node, instead of the reset node's own
 # last reported fence. It changes the copied test's read site, which mirrors wddm.c's, so the two-node checks fail.
+# -GartBackend puts back the register path of 0.7.216.16 (lab trial D1, 2026-10-07): the kill runs with the GART
+# sequence installed, whose table has no SQ_CMD. It changes the copied test's backend switch, which mirrors gfx.c's.
+# -CountRefusedKills puts back 0.7.216.16's count: every kill the loop issued, whether or not it reached the register.
 # Each must fail by a check, not by a build error, or the control proves nothing.
+# -NoBackendSwitch removes the backend switch from the copy of gfx.c that the source check below reads.
+$gfx=Get-Content "$repo\driver\kmd\gfx.c" -Raw
+if($NoBackendSwitch){
+    $live='    adev->backend = &gfx->Sequence;'
+    $at=$gfx.IndexOf('ULONG GfxSoftRecover(')
+    if($at -lt 0 -or $gfx.IndexOf($live,$at) -lt 0){throw 'negative control: the backend switch of GfxSoftRecover moved'}
+    $cut=$gfx.IndexOf($live,$at)
+    $gfx=$gfx.Remove($cut,$live.Length).Insert($cut,'    /* no backend switch */')
+}
+# The source check. The host model below proves that the loop is right over the GFX table, but it cannot compile
+# gfx.c. So gfx.c's GfxSoftRecover must hold GartLock, install and begin the gfx sequence before the kill loop and
+# put the previous backend back after it - the shape of GfxSubmitIb, and what 0.7.216.16 lacked.
+$at=$gfx.IndexOf('ULONG GfxSoftRecover(')
+if($at -lt 0){throw 'source check: GfxSoftRecover is not in gfx.c'}
+$end=$gfx.IndexOf("`n}",$at)
+$body=$gfx.Substring($at,$end-$at)
+$steps=@('ExAcquireFastMutex(&Device->GartLock);','adev->backend = &gfx->Sequence;','SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);','Bc250HangKillLoop(','adev->backend = previousBackend;','ExReleaseFastMutex(&Device->GartLock);')
+$pos=0
+foreach($s in $steps){
+    $i=$body.IndexOf($s,$pos)
+    if($i -lt 0){Write-Output "FAIL source check: GfxSoftRecover lacks '$s' after the step before it (gfx.c)";exit 1}
+    $pos=$i+$s.Length
+}
 $header=Get-Content "$repo\driver\kmd\hang_recovery.h" -Raw
 if($IgnoreFenceGuard){
     $live='    return (int)(aborted - lastCompleted) >= 0 && (int)(lastSubmitted - aborted) >= 0;'
@@ -22,12 +48,22 @@ if($IgnoreVmidGuard){
     if(!$header.Contains($live)){throw 'negative control: the kill VMID guard moved'}
     $header=$header.Replace($live,'    return vmid < BC250_VMID_COUNT;')
 }
+if($CountRefusedKills){
+    $live='        if (!ops->Kill(context)) { *refused = 1; continue; }     /* one last look, then out */'
+    if(!$header.Contains($live)){throw 'negative control: the refused-kill exit moved'}
+    $header=$header.Replace($live,'        (void)ops->Kill(context);')
+}
 [IO.File]::WriteAllText((Join-Path $Out 'hang_recovery.h'),$header)
 $test=Get-Content "$PSScriptRoot\hang_recovery_test.c" -Raw
 if($SharedLastCompleted){
     $live='    known = Bc250HangNodeLastCompleted(f->LastReportedFence, f->LastReportedValid, MODEL_NODES, node, &lastCompleted); /* READ SITE */'
     if(!$test.Contains($live)){throw 'negative control: the read site moved'}
     $test=$test.Replace($live,'    known = 1; lastCompleted = (unsigned)f->LastCompletedFence; (void)node; /* READ SITE */')
+}
+if($GartBackend){
+    $live='    g->Backend = &g->Gfx; /* KILL BACKEND */'
+    if(!$test.Contains($live)){throw 'negative control: the kill backend moved'}
+    $test=$test.Replace($live,'    g->Backend = &g->Gart; /* KILL BACKEND */')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'hang_recovery_test.c'),$test)
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath

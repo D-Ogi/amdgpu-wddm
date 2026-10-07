@@ -74,8 +74,10 @@ no code from Microsoft's MS-PL sample.
   instead of refusing it, so that only the guilty process loses its device. Every call leaves a flushed verdict
   in `Parameters\HangRecovery`, which outlives the 0x116 of a refusal. Default off, closed by every install. In
   lab trial D (2026-10-07) the fence guard of 0.7.216.13 compared the hung node-0 fence with the newest fence of
-  either node and refused. 0.7.216.16 compares it with the last reported fence of node 0 only. The kill itself
-  has not run on the lab yet. See `docs/design/hang-recovery.md`.
+  either node and refused. 0.7.216.16 compares it with the last reported fence of node 0 only. In trial D1 the
+  kill of 0.7.216.16 used the GART register path, which refused `SQ_CMD`, so no kill reached the register.
+  0.7.216.17 issues it through the GFX sequence and counts only kills that reached the register. A kill that
+  reaches the register has not run on the lab yet. See `docs/design/hang-recovery.md`.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and

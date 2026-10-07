@@ -1,9 +1,9 @@
 /* M15.12 hang recovery (docs/design/hang-recovery.md): the pure decisions behind DxgkDdiResetEngine's stage-1
  * soft recovery, in a header so wddm.c, guard.c, gfx.c and the host test (test/hang_recovery_test.c,
  * run_hang_recovery.ps1) share one definition. No kernel types, no I/O: the gate, the fence-range guard, the
- * VMID guard and the verdicts of the sticky record. The wave kill itself (SQ_CMD) and the bounded fence poll are
- * in driver/shim/bc250_gfx.c and driver/kmd/gfx.c (they touch hardware) and are exercised only on the lab, behind
- * the HangRecoveryMode switch - never here. */
+ * VMID guard, the kill loop and the verdicts of the sticky record. The wave kill itself (SQ_CMD), the register
+ * path it takes and the fence reads are in driver/shim/bc250_gfx.c and driver/kmd/gfx.c (they touch hardware) and
+ * reach the hardware only on the lab, behind the HangRecoveryMode switch - never here. */
 #ifndef BC250_HANG_RECOVERY_H
 #define BC250_HANG_RECOVERY_H
 
@@ -87,6 +87,39 @@ static __inline unsigned Bc250HangPreKillVerdict(int jobOnRing, unsigned abortFe
     if (!Bc250AbortedFenceValid(abortFence, lastCompleted, abortFence)) return BC250_HANG_VERDICT_FENCE_GUARD;
     if (!Bc250KillVmidValid(vmid)) return BC250_HANG_VERDICT_VMID_GUARD;
     return BC250_HANG_VERDICT_PENDING;
+}
+
+/* The kill loop of amdgpu_ring_soft_recovery, with its hardware behind four callbacks so that gfx.c and the host
+ * test run the same loop. Retired: the newest sequence's fence has been reached. Expired: the 10 ms budget ran
+ * out. Kill: one SQ_CMD wave kill; it returns 1 when the write reached the register and 0 when the register path
+ * refused it. Stall: the 100 us between kills.
+ *
+ * Only a kill that reached the register is counted, and a refused kill ends the loop at once: the refusal is
+ * sticky (a stopped sequence drops every later write), so repeating it would only count kills that never
+ * happened. 0.7.216.16 (lab trial D1, 2026-10-07) issued the kill through the GART sequence, whose table has no
+ * SQ_CMD: the first write was refused, the next 94 were dropped, and the record still said 95 kills. The loop
+ * leaves only from a look at the fence, so a sequence that retired on its own is still found. *refused tells a
+ * refused kill from a budget that ran out: both are NOT_DRAINED. */
+typedef struct bc250_hang_kill_ops {
+    int (*Retired)(void* context);
+    int (*Expired)(void* context);
+    int (*Kill)(void* context);
+    void (*Stall)(void* context);
+} BC250_HANG_KILL_OPS;
+
+static __inline unsigned Bc250HangKillLoop(const BC250_HANG_KILL_OPS* ops, void* context, unsigned* kills,
+                                           int* refused)
+{
+    *kills = 0;
+    *refused = 0;
+    for (;;) {
+        if (ops->Retired(context))
+            return *kills == 0 ? BC250_HANG_VERDICT_ALREADY_RETIRED : BC250_HANG_VERDICT_DRAINED;
+        if (*refused || ops->Expired(context)) return BC250_HANG_VERDICT_NOT_DRAINED;
+        if (!ops->Kill(context)) { *refused = 1; continue; }     /* one last look, then out */
+        (*kills)++;
+        ops->Stall(context);
+    }
 }
 
 /* The verdicts after which ResetEngine reports success: either way the newest sequence retired and the ring is idle. */

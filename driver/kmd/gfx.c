@@ -1045,12 +1045,21 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
 // so no concurrent submit) under HangRecoveryMode, never on the normal path, after the caller has put a pending
 // record on the disk (GuardRecordHangRecovery).
 //
-// amdgpu_ring_soft_recovery's loop: while the fence has not signalled and the 10 ms budget lasts, issue amdgpu's
-// gfx_v10_0_ring_soft_recovery (bc250_gfx_soft_recover_vmid: SQ_CMD KILL broadcast on Vmid). Like upstream it
-// looks before it kills, so a sequence that retired on its own gets no kill at all. The sequence waited for is the
-// newest one emitted: the ring runs in order, so its retiring means every job before it retired too - the
-// end-of-pipe behind the killed waves fired and the ring drained to idle, and only then may the node take new work.
-// Deviation from upstream: a 100 us stall between kills (umr's retry cadence) where amdgpu spins; same 10 ms bound.
+// amdgpu_ring_soft_recovery's loop (hang_recovery.h Bc250HangKillLoop): while the fence has not signalled and the
+// 10 ms budget lasts, issue amdgpu's gfx_v10_0_ring_soft_recovery (bc250_gfx_soft_recover_vmid: SQ_CMD KILL
+// broadcast on Vmid). Like upstream it looks before it kills, so a sequence that retired on its own gets no kill at
+// all. The sequence waited for is the newest one emitted: the ring runs in order, so its retiring means every job
+// before it retired too - the end-of-pipe behind the killed waves fired and the ring drained to idle, and only then
+// may the node take new work. Deviation from upstream: a 100 us stall between kills (umr's retry cadence) where
+// amdgpu spins; same 10 ms bound.
+//
+// The register path. Every MMIO access of the shim goes through adev->backend, and the backend checks the offset
+// against its sequence's table. SQ_CMD is in the GFX table only (gen_regs.py), so the kill runs the way every other
+// GFX operation runs (GfxSubmitIb): under GartLock, with the gfx sequence installed as the backend for the loop and
+// put back after it. 0.7.216.16 issued the kill through whatever backend was installed, which is the GART
+// sequence: lab trial D1 (2026-10-07) logged "gart: register 0x08DEC refused (0xC0000022), sequence stopped" at
+// the first kill and 95 kills of which none reached the register. A kill counts only when the sequence has
+// recorded no fault after it, and the first refusal ends the loop with its own log line.
 //
 // Vmid is the hung job's VMID, chosen by the caller out of the completion-queue entry and checked against
 // Bc250KillVmidValid: with the VMID pool (0.7.214, vmid_pool.h) there is no single application VMID any more, so
@@ -1059,14 +1068,59 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
 // is a no-op if that already ran) and signals the retire waiters, because a submission held in GfxSubmitWait is
 // waiting for exactly this gate to reopen (KMD196). On NOT_DRAINED it changes nothing: the sticky state stands and
 // the caller falls back to today's refusal.
+typedef struct _GFX_KILL_CONTEXT {
+    BC250_GFX* Gfx;
+    struct amdgpu_device* Adev;
+    ULONG Seq;
+    ULONG Vmid;
+    ULONGLONG Deadline;
+} GFX_KILL_CONTEXT;
+
+static int GfxKillRetired(void* Context)
+{
+    GFX_KILL_CONTEXT* c = (GFX_KILL_CONTEXT*)Context;
+    return bc250_fence_reached((ULONG)bc250_gfx_fence_read(c->Adev, BC250_SUBMIT_FENCE_SLOT), c->Seq);
+}
+
+// KeQueryInterruptTime is 100 ns units. KeStallExecutionProcessor, not KeDelayExecutionThread: the kill must be
+// re-issued in a tight loop and the total is bounded to 10 ms, which a stall at APC_LEVEL (GartLock) may hold.
+static int GfxKillExpired(void* Context)
+{
+    return KeQueryInterruptTime() >= ((GFX_KILL_CONTEXT*)Context)->Deadline;
+}
+
+// The fence page is memory, not a register: GfxKillRetired reads it whatever the backend. The kill is a register
+// write, and the gfx sequence's Fault says whether it reached the register (sequence.c drops every write after
+// the first refusal).
+static int GfxKillIssue(void* Context)
+{
+    GFX_KILL_CONTEXT* c = (GFX_KILL_CONTEXT*)Context;
+    bc250_gfx_soft_recover_vmid(c->Adev, c->Vmid);
+    return NT_SUCCESS(c->Gfx->Sequence.Fault);
+}
+
+static void GfxKillStall(void* Context)
+{
+    UNREFERENCED_PARAMETER(Context);
+    KeStallExecutionProcessor(100);     // 100 us, like umr's retry cadence
+}
+
+static const BC250_HANG_KILL_OPS g_GfxKillOps = { GfxKillRetired, GfxKillExpired, GfxKillIssue, GfxKillStall };
+
 ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
                      _Out_ ULONG* Micros)
 {
     BC250_GFX* gfx;
-    struct amdgpu_device* adev;
-    ULONG seq;
-    ULONGLONG start, deadline;
-    ULONG verdict = BC250_HANG_VERDICT_NOT_DRAINED;
+    struct amdgpu_device* adev = NULL;
+    void* previousBackend;
+    BOOLEAN gartEnabled = FALSE;
+    GFX_KILL_CONTEXT kill;
+    NTSTATUS status, fault;
+    ULONG faultOffset;
+    ULONGLONG start;
+    unsigned kills = 0;
+    int refused = 0;
+    ULONG verdict;
 
     *Seq = 0;
     *Kills = 0;
@@ -1079,36 +1133,43 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         GuardLog("gfx: soft recovery refused: vmid %lu is not an application VMID; nothing changed", Vmid);
         return BC250_HANG_VERDICT_VMID_GUARD;
     }
-    gfx = GfxAccessAcquire(Device);
-    if (gfx == NULL) {
-        GuardLog("gfx: soft recovery found no ring to kill on; nothing changed");
+    // GfxSubmitIb's preamble. GartLock, not GfxAccessAcquire: lifecycle writers hold GartLock while they change
+    // Device->Gfx, and a GfxAccess holder may not take GartLock (the rule above GfxAccessAcquire).
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else status = GartDevice(Device, &adev, &gartEnabled);
+    if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
+    if (!NT_SUCCESS(status))
+    {
+        ExReleaseFastMutex(&Device->GartLock);
+        GuardLog("gfx: soft recovery found no ring to kill on (0x%08lX); nothing changed", (ULONG)status);
         return BC250_HANG_VERDICT_NOT_DRAINED;
     }
-    seq = gfx->SubmitSeq;
-    adev = gfx->SubmitAdev;
-    *Seq = seq;
-    if (seq == 0 || adev == NULL) {
-        GfxAccessRelease(Device);
-        GuardLog("gfx: soft recovery found no submission to retire (seq %lu); nothing changed", seq);
+    *Seq = gfx->SubmitSeq;
+    // SubmitAdev is the adev of the last submission, which SubmitIbLocked got from GartDevice: the same object.
+    if (gfx->SubmitSeq == 0 || gfx->SubmitAdev != adev)
+    {
+        ExReleaseFastMutex(&Device->GartLock);
+        GuardLog("gfx: soft recovery found no submission to retire (seq %lu); nothing changed", *Seq);
         return BC250_HANG_VERDICT_NOT_DRAINED;
     }
 
-    // amdgpu's own 10 ms budget (amdgpu_ring_soft_recovery: ktime_add_us(.., 10000)). KeStallExecutionProcessor,
-    // not KeDelayExecutionThread: the kill must be re-issued in a tight loop and the total is bounded to 10 ms,
-    // which is within what a PASSIVE_LEVEL stall may hold. KeQueryInterruptTime is 100 ns units, hence x10. The
-    // look after the last stall always happens: the loop leaves only from a look.
+    kill.Gfx = gfx;
+    kill.Adev = adev;
+    kill.Seq = gfx->SubmitSeq;
+    kill.Vmid = Vmid;
+    // amdgpu's own 10 ms budget (amdgpu_ring_soft_recovery: ktime_add_us(.., 10000)).
     start = KeQueryInterruptTime();
-    deadline = start + (ULONGLONG)BC250_SOFT_RECOVER_US * 10ull;
-    for (;;) {
-        if (bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), seq)) {
-            verdict = *Kills == 0 ? BC250_HANG_VERDICT_ALREADY_RETIRED : BC250_HANG_VERDICT_DRAINED;
-            break;
-        }
-        if (KeQueryInterruptTime() >= deadline) break;
-        bc250_gfx_soft_recover_vmid(adev, Vmid);
-        (*Kills)++;
-        KeStallExecutionProcessor(100);     // 100 us, like umr's retry cadence
-    }
+    kill.Deadline = start + (ULONGLONG)BC250_SOFT_RECOVER_US * 10ull;
+    previousBackend = adev->backend;
+    adev->backend = &gfx->Sequence;
+    SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+    verdict = Bc250HangKillLoop(&g_GfxKillOps, &kill, &kills, &refused);
+    fault = gfx->Sequence.Fault;
+    faultOffset = gfx->Sequence.FaultOffset;
+    adev->backend = previousBackend;
+    *Kills = kills;
     *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
 
     if (verdict != BC250_HANG_VERDICT_NOT_DRAINED) {
@@ -1119,13 +1180,20 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         InterlockedExchange(&gfx->SubmitFailed, 0);     // the one un-stick, only on the proven-drained path
         DpmBusyEnd(&Device->Dpm);                       // match the retirement the normal fence path would have reported
         GfxRetireSignal(Device);                        // KMD196: a held submission is waiting for this gate
-        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; ring reopened",
-                 seq, *Kills, Vmid, *Micros);
-    } else {
-        GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
-                 seq, *Kills, Vmid, *Micros);
     }
-    GfxAccessRelease(Device);
+    ExReleaseFastMutex(&Device->GartLock);
+
+    // A refusal says which register and why, because a refused kill and a kill the waves outlived look the same
+    // in the record (verdict 2): only Kills tells them apart.
+    if (refused)
+        GuardLog("gfx: soft recovery kill refused: register 0x%05lX (0x%08lX) after %lu kill(s) of VMID %lu",
+                 faultOffset, (ULONG)fault, *Kills, Vmid);
+    if (verdict != BC250_HANG_VERDICT_NOT_DRAINED)
+        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; ring reopened",
+                 *Seq, *Kills, Vmid, *Micros);
+    else
+        GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
+                 *Seq, *Kills, Vmid, *Micros);
     return verdict;
 }
 

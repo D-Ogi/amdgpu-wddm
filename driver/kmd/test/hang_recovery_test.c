@@ -2,12 +2,18 @@
  * The wave kill (SQ_CMD) and the bounded fence poll touch hardware and are exercised on the lab behind the
  * HangRecoveryMode switch (docs/design/hang-recovery.md); this test fixes the gate, the 0x119 fence-range guard
  * (including 32-bit fence wrap, and its lower bound read per node with node 0 and node 1 fence ids interleaved, the
- * defect of lab trial D), the VMID guard the VMID pool made necessary, the pre-kill verdict and the sticky
- * record's counter arithmetic, so a refactor cannot quietly change when we attempt a recovery, what we report, or
- * how the lab reads the record. */
+ * defect of lab trial D), the VMID guard the VMID pool made necessary, the pre-kill verdict, the kill loop over a
+ * model of the register path (the table that holds SQ_CMD, a refused kill never counted: the defect of lab trial
+ * D1) and the sticky record's counter arithmetic, so a refactor cannot quietly change when we attempt a recovery,
+ * what we report, or how the lab reads the record. */
 #include <stdio.h>
 #include "hang_recovery.h"
 #include "bc250_fence_order.h"
+/* The generated tables, as mmio.c compiles them. Their block also holds the DCN name table, whose type is
+ * bc250kmd.h's (a kernel header): the same two fields here. */
+typedef struct _BC250_DCN_REG_INFO { const char* Name; unsigned long Offset; } BC250_DCN_REG_INFO;
+#define BC250_REGS_WITH_TABLES
+#include "regs.generated.h"
 
 #define CHECK(x) do { if (!(x)) { printf("FAIL line %d: %s\n", __LINE__, #x); return 1; } } while (0)
 
@@ -70,8 +76,80 @@ static unsigned model_pre_kill(const struct fences* f, unsigned node, unsigned h
     return Bc250HangPreKillVerdict(1, hungFence, known, lastCompleted, vmid);
 }
 
+/* The kill's register path, as sequence.c and mmio.c run it, over the generated tables: the installed backend is
+ * a sequence, every write is checked against that sequence's table, the first refusal is sticky (0xC0000022,
+ * STATUS_ACCESS_DENIED) and every later write is dropped. The GPU: waves of the hung VMID that retire after
+ * DrainAfter kills reach SQ_CMD, or never (0). Time moves only in Stall, 100 us a kill, against the 10 ms budget. */
+struct model_sequence { const unsigned long* Table; unsigned Count; long Fault; unsigned long FaultOffset; };
+struct model_gpu {
+    struct model_sequence Gart, Gfx;
+    struct model_sequence* Backend;
+    unsigned DrainAfter, Landed, Now, Budget;
+    int RetiredBefore;
+};
+
+static int in_table(const unsigned long* table, unsigned count, unsigned long offset)
+{
+    unsigned i;
+    for (i = 0; i < count; i++) if (table[i] == offset) return 1;
+    return 0;
+}
+
+static void model_wreg(struct model_gpu* g, unsigned long offset)
+{
+    struct model_sequence* s = g->Backend;
+    if (s->Fault != 0) return;
+    if (!in_table(s->Table, s->Count, offset)) { s->Fault = (long)0xC0000022; s->FaultOffset = offset; return; }
+    if (offset == BC250_REG_GC_SQ_CMD) g->Landed++;
+}
+
+static int model_retired(void* c)
+{
+    struct model_gpu* g = (struct model_gpu*)c;
+    return g->RetiredBefore || (g->DrainAfter != 0 && g->Landed >= g->DrainAfter);
+}
+static int model_expired(void* c) { return ((struct model_gpu*)c)->Now >= ((struct model_gpu*)c)->Budget; }
+static int model_kill(void* c)
+{
+    struct model_gpu* g = (struct model_gpu*)c;
+    model_wreg(g, BC250_REG_GC_SQ_CMD);
+    return g->Backend->Fault == 0;
+}
+static void model_stall(void* c) { ((struct model_gpu*)c)->Now += 100; }
+static const BC250_HANG_KILL_OPS g_model_ops = { model_retired, model_expired, model_kill, model_stall };
+
+/* The GART sequence is the backend that is installed when ResetEngine runs (gart.c), as on the lab. */
+static void model_gpu_init(struct model_gpu* g, unsigned drainAfter, int retiredBefore)
+{
+    g->Gart.Table = g_MmioGartAllow; g->Gart.Count = BC250_MMIO_GART_ALLOW_COUNT; g->Gart.Fault = 0; g->Gart.FaultOffset = 0;
+    g->Gfx.Table = g_MmioGfxAllow; g->Gfx.Count = BC250_MMIO_GFX_ALLOW_COUNT; g->Gfx.Fault = 0; g->Gfx.FaultOffset = 0;
+    g->Backend = &g->Gart;
+    g->DrainAfter = drainAfter;
+    g->Landed = 0;
+    g->Now = 0;
+    g->Budget = 10000;
+    g->RetiredBefore = retiredBefore;
+}
+
+/* GfxSoftRecover's backend switch, as in gfx.c: the gfx sequence is installed and begun before the loop, and the
+ * previous backend put back after it. run_hang_recovery.ps1 -GartBackend replaces the marked line with the
+ * backend of 0.7.216.16 (whatever was installed: the GART sequence), and the trial-D1 checks below must then fail. */
+static unsigned model_soft_recover(struct model_gpu* g, unsigned* kills, int* refused)
+{
+    struct model_sequence* previous = g->Backend;
+    unsigned verdict;
+    g->Backend = &g->Gfx; /* KILL BACKEND */
+    g->Backend->Fault = 0;
+    verdict = Bc250HangKillLoop(&g_model_ops, g, kills, refused);
+    g->Backend = previous;
+    return verdict;
+}
+
 int main(void)
 {
+    struct model_gpu g;
+    unsigned kills;
+    int refused;
     struct record r = { 0, 0, 0, 0, 0 };
     unsigned vmid;
 
@@ -197,6 +275,36 @@ int main(void)
     CHECK(BC250_HANG_VERDICT_NOTHING_ON_RING == 3u && BC250_HANG_VERDICT_FENCE_GUARD == 4u);
     CHECK(BC250_HANG_VERDICT_ALREADY_RETIRED == 5u && BC250_HANG_VERDICT_VMID_GUARD == 6u);
 
+    /* The kill's register: SQ_CMD is in the GFX sequence's table and not in the GART sequence's. Lab trial D1 of
+     * 0.7.216.16 (2026-10-07) issued the kill with the GART sequence installed and logged
+     * "gart: register 0x08DEC refused (0xC0000022), sequence stopped". */
+    CHECK(in_table(g_MmioGfxAllow, BC250_MMIO_GFX_ALLOW_COUNT, BC250_REG_GC_SQ_CMD));
+    CHECK(!in_table(g_MmioGartAllow, BC250_MMIO_GART_ALLOW_COUNT, BC250_REG_GC_SQ_CMD));
+
+    /* Trial D1 as it should have gone: waves that retire after 3 kills reach SQ_CMD. Every counted kill landed, the
+     * GART sequence that was installed before is installed again and was not touched. */
+    model_gpu_init(&g, 3, 0);
+    CHECK(model_soft_recover(&g, &kills, &refused) == BC250_HANG_VERDICT_DRAINED);
+    CHECK(kills == 3 && g.Landed == 3 && !refused);
+    CHECK(g.Backend == &g.Gart && g.Gart.Fault == 0 && g.Gfx.Fault == 0);
+
+    /* Retired before the first look: no kill at all. */
+    model_gpu_init(&g, 3, 1);
+    CHECK(model_soft_recover(&g, &kills, &refused) == BC250_HANG_VERDICT_ALREADY_RETIRED);
+    CHECK(kills == 0 && g.Landed == 0 && !refused);
+
+    /* Waves that outlive the budget: 10 ms at 100 us a kill is 100 kills, all of which reached the register. */
+    model_gpu_init(&g, 0, 0);
+    CHECK(model_soft_recover(&g, &kills, &refused) == BC250_HANG_VERDICT_NOT_DRAINED);
+    CHECK(kills == 100 && g.Landed == 100 && !refused);
+
+    /* The loop over a refusing path (the GART sequence, as 0.7.216.16 ran it): the first refusal ends the loop and
+     * no refused kill is counted. 0.7.216.16 recorded 95 kills here, and none had reached the register. */
+    model_gpu_init(&g, 3, 0);
+    CHECK(Bc250HangKillLoop(&g_model_ops, &g, &kills, &refused) == BC250_HANG_VERDICT_NOT_DRAINED);
+    CHECK(refused && kills == 0 && g.Landed == 0);
+    CHECK(g.Gart.Fault == (long)0xC0000022 && g.Gart.FaultOffset == BC250_REG_GC_SQ_CMD && g.Now == 0);
+
     /* The record: every finished call leaves Attempts == Recovered + NotDrained + Refused. */
     record_call(&r, BC250_HANG_VERDICT_PENDING, BC250_HANG_VERDICT_DRAINED);
     CHECK(balanced(&r) && r.attempts == 1 && r.recovered == 1 && r.lastVerdict == BC250_HANG_VERDICT_DRAINED);
@@ -216,7 +324,7 @@ int main(void)
     CHECK(!balanced(&r) && r.attempts == r.recovered + r.notDrained + r.refused + 1 && r.lastVerdict == 0u);
 
     printf("PASS: soft-recovery gate (switch/node), the 0x119 fence-range guard including 32-bit wrap and its "
-           "per-node lower bound with interleaved node 0/node 1 fences, the VMID guard, the pre-kill verdict and the "
-           "sticky record's counters\n");
+           "per-node lower bound with interleaved node 0/node 1 fences, the VMID guard, the pre-kill verdict, the kill "
+           "loop over the GFX register path with refused kills uncounted, and the sticky record's counters\n");
     return 0;
 }

@@ -1,4 +1,4 @@
-# Hang recovery, stage 1: soft recovery in ResetEngine (KMD 0.7.216.16)
+# Hang recovery, stage 1: soft recovery in ResetEngine (KMD 0.7.216.17)
 
 Every GPU hang on unit A so far has ended the same way: bugcheck 0x116. The trials behind the reports (147, 151,
 153, 208, 245, 251) share one shape. A job's waves take no-retry GFXHUB faults, latch `MEM_VIOL` and stop, and the
@@ -8,8 +8,10 @@ end-of-pipe behind them never fires. The 500 ms submit watchdog closes node 0, s
 registry switch `HangRecoveryMode`: kill the waves, wait for the fence, and if it retires, report a successful
 engine reset so that dxgkrnl removes only the guilty process's device. Lab trial D of 2026-10-07 never got to the
 kill. A fence guard refused it because of a defect in this driver, which 0.7.216.16 removes (see "Lab trial D:
-the fence bound is per node" below). Whether the kill drains the ring on gfx1013 is still an open question. Only
-a lab trial or the Linux measurement (wishlist L43) can answer it.
+the fence bound is per node" below). Trial D1 of 0.7.216.16 got to the kill, but no kill reached the register.
+The kill took the register path of the GART sequence, which 0.7.216.17 corrects (see "Lab trial D1" below).
+Whether the kill drains the ring on gfx1013 is still an open question. Only a lab trial or the Linux measurement
+(wishlist L43) can answer it.
 
 ## The switch
 
@@ -42,12 +44,15 @@ this part is the 0x116 path anyway. For node 0, `Bc250WddmResetEngine` (`wddm.c`
 3. Otherwise it writes the record's pending entry and flushes it (see "The record" below), and only then kills.
 4. `GfxSoftRecover` (`gfx.c`) follows the shape of amdgpu's `amdgpu_ring_soft_recovery`, for at most
    `BC250_SOFT_RECOVER_US` (10 ms, amdgpu's value):
+   - it holds `GartLock` and installs the GFX sequence as the register path, as `GfxSubmitIb` does.
    - it reads the fence of the newest sequence.
    - if that sequence has not retired, it issues `bc250_gfx_soft_recover_vmid`, waits 100 us and reads again.
+   - if the register path refuses a kill, the loop reads the fence one last time and ends.
 
-   The ring runs in order, so when the newest sequence retires, every job on the ring has retired and the ring is
-   idle. Verdicts: 5 when the sequence retired before the first kill, 1 when it retired after kills, 2 when the
-   time ran out.
+   The loop itself is `Bc250HangKillLoop` (`hang_recovery.h`), which the host test also runs. The ring runs in
+   order, so when the newest sequence retires, every job on the ring has retired and the ring is idle. Verdicts: 5
+   when the sequence retired before the first kill, 1 when it retired after kills, 2 when the time ran out or the
+   register path refused a kill.
 5. It writes the verdict and flushes it.
    - On 1 or 5, the reset succeeds. `LastAbortedFenceId` is the head job's fence. The queued jobs are dropped,
      the node-0 gates are reopened (`WatchdogFaulted`, `RefusalPending`, `RejectedPending`, `CompletionPending`,
@@ -109,7 +114,8 @@ and flushes it with `ZwFlushKey`. The log ring is about 1024 lines and lives in 
 - Counters: `Attempts`, `Recovered` (verdicts 1 and 5), `NotDrained` (2) and `Refused` (3, 4 and 6). The driver
   never resets them.
 - The last call: `LastVerdict`, `LastSeq`, `LastFence`, `LastKills`, `LastMicros`, `LastTime` (a UTC FILETIME,
-  REG_QWORD) and `LastVersion`.
+  REG_QWORD) and `LastVersion`. Since 0.7.216.17, `LastKills` counts only the kills that reached the register. A
+  verdict 2 with `LastKills` 0 is a refused kill, and the log ring then has `gfx: soft recovery kill refused`.
 
 A call that kills writes twice: a pending entry (`LastVerdict` 0, `Attempts` + 1) before the first `SQ_CMD` write,
 and its verdict before it returns. A refusal decided before any kill writes once. After every call that the
@@ -182,6 +188,61 @@ blocked every lab hang in practice.
   the last to report. The kill must go ahead. The negative control `-SharedLastCompleted` puts back the read of
   0.7.216.13 at the read site of the test, and the test must then fail.
 
+## Lab trial D1: the kill took the wrong register path
+
+Trial D1 ran on unit A on 2026-10-07 with KMD 0.7.216.16 (SYS `B7DDED3A`), the switch on and a long hang. The
+fence guard passed. The record says `LastVerdict 2`, `LastSeq 15096`, `LastFence 1539`, `LastKills 95` and
+`LastMicros 10087`. Then `ResetFromTimeout` failed and the machine bugchecked with 0x116. The log ring of the dump
+(`kmdlog.py` with the map of the build) has these lines in sequence:
+
+- `FENCE TIMEOUT` of seq 15096 at VMID 4, with the register snapshot of the timeout.
+- `hang record: verdict 0`, the pending entry.
+- `gart: register 0x08DEC refused (0xC0000022), sequence stopped`, at the same time as the pending entry.
+- `gfx: soft recovery of seq 15096 did not drain: 95 kill(s) of VMID 4 in 10087 us`.
+
+`0x08DEC` is `GC.SQ_CMD` (regcalc), the register of the wave kill. The refusal names the GART sequence. All MMIO
+of the shim goes through `adev->backend`, and each sequence checks the offset against its own table. `SQ_CMD` is
+in the GFX table only. `GfxSoftRecover` did not install the GFX sequence, so the kill used the backend that was
+installed, which was the GART sequence. The first kill was refused with `STATUS_ACCESS_DENIED`. A refusal stops
+the sequence, so the next 94 writes were dropped. The loop counted all 95 as kills, but no kill reached the
+register.
+
+The snapshot of the timeout agrees with waves that nothing killed. It shows the client's spin and no fault:
+
+| Register | Value | Fields that are set |
+|---|---|---|
+| `CP_STAT` | `0x80060000` | `ME_BUSY`, `QUERY_BUSY`, `CP_BUSY`. |
+| `CP_BUSY_STAT` | `0x00040000` | `EOP_DONE_BUSY`. |
+| `CP_STALLED_STAT2` | `0x00200000` | `EOPD_FIFO_NEEDS_SC_EOP_DONE`: the end-of-pipe waits for the shaders. |
+| `GRBM_STATUS` | `0xA0403028` | `SPI_BUSY`, `GUI_ACTIVE`: waves are on the hardware. |
+| `GCVM_L2_PROTECTION_FAULT_STATUS` | `0x00000000` | No VM fault. |
+
+amdgpu's `amdgpu_ring_soft_recovery` (`ref/linux-src` v6.18, `amdgpu_ring.c`) does the same thing as our loop. It
+writes `SQ_CMD` again and again for 10 ms and reads the fence between writes. No hardware step is missing from our
+sequence. `CP_VMID_RESET` occurs only in the KIQ queue resets of `gfx_v10_0.c`, which is stage 2. The missing step
+was in this driver: the register path of the write.
+
+0.7.216.17 makes these changes:
+
+- `GfxSoftRecover` runs as `GfxSubmitIb` runs. It holds `GartLock`, gets the device through `GartDevice`,
+  installs the GFX sequence as `adev->backend` and starts it (`SequenceBegin`). After the loop, it puts the previous backend back.
+  It takes `GartLock` in place of the `GfxAccess` reference, because a holder of that reference must not take
+  `GartLock`.
+- The loop is `Bc250HangKillLoop` in `hang_recovery.h`. A kill counts only if the sequence has no fault after it.
+  The first refusal ends the loop after one last look at the fence. The verdict is then 2, and the log ring gets
+  `gfx: soft recovery kill refused` with the register and the status.
+- `gen_regs.py` names `SQ_CMD` (`BC250_REG_GC_SQ_CMD`), so that the host test can look it up in the generated
+  tables.
+- The host test runs `Bc250HangKillLoop` over a model of the register path with the generated GART and GFX
+  tables. It checks that only the GFX table holds `SQ_CMD`. It also checks the trial-D1 drain through the GFX
+  sequence and a refused kill that is not counted. Three negative controls must fail:
+  - `-GartBackend` puts back the backend of 0.7.216.16 in the model.
+  - `-CountRefusedKills` counts a refused kill in the loop.
+  - `-NoBackendSwitch` removes the backend switch from the copy of `gfx.c` that the source check reads.
+- `run_hang_recovery.ps1` reads `GfxSoftRecover` in `gfx.c` before the build. The function must take `GartLock`,
+  install and start the GFX sequence, run the loop, and then put the backend back and release the lock, in that
+  sequence.
+
 ## Why not in the 500 ms watchdog
 
 Killing at watchdog time would cut the freeze from about 10 s to 0.5 s. It would also turn the hang into an
@@ -217,9 +278,11 @@ reset.
 - Reopening the node re-admits work onto hardware that has just faulted. Proof that the ring drained is the
   precondition, and the next job brings its own VM flush. A second hang is still bounded by dxgkrnl's
   `TdrLimitCount`.
-- The host suite covers the decisions, never the kill. `hang_recovery_test.c` holds the gate, both guards, the
-  per-node bound of the fence guard, the pre-kill verdict and the record's arithmetic. `run_hang_recovery.ps1`
-  carries three negative controls (`-IgnoreFenceGuard`, `-IgnoreVmidGuard`, `-SharedLastCompleted`) that must
-  fail. The 10 ms kill loop and the `SQ_CMD` write have no host test at all and are measured only on the lab.
+- The host suite covers the decisions and the kill loop, never the kill on the hardware. `hang_recovery_test.c`
+  holds the gate, both guards, the per-node bound of the fence guard, the pre-kill verdict, the kill loop over a
+  model of the register path and the record's arithmetic. `run_hang_recovery.ps1` also reads the backend switch in
+  `gfx.c`. It carries six negative controls that must fail: `-IgnoreFenceGuard`, `-IgnoreVmidGuard`,
+  `-SharedLastCompleted`, `-GartBackend`, `-CountRefusedKills` and `-NoBackendSwitch`. Whether an `SQ_CMD` write
+  that reaches the register drains the ring is measured only on the lab.
 - The host test models the read site of `wddm.c` and the report DPC's writes. It does not compile `wddm.c`. A
   change of the read site in `wddm.c` that bypasses `Bc250HangNodeLastCompleted` is caught only by review.

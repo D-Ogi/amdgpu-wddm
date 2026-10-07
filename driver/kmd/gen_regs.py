@@ -127,6 +127,8 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmCP_ME_CNTL"), ("GC", "mmCP_MEC_CNTL"), ("GC", "mmSDMA0_F32_CNTL"), ("GC", "mmSDMA1_F32_CNTL"),
          # gfx.c: a stage that stopped half way must not leave a me/pipe/queue selected
          ("GC", "mmGRBM_GFX_CNTL"),
+         # test/hang_recovery_test.c: the M15.12 wave kill's register, to check which sequence table holds it
+         ("GC", "mmSQ_CMD"),
          # gfx.c: the one write that passes a stopped sequence (gpumem.c flushes the TLB after its binds)
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
