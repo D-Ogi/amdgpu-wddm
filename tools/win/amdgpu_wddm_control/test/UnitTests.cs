@@ -556,6 +556,13 @@ static partial class UnitTests
         Check(!p.Refused && p.ConfirmStart && p.Writes.Count == 0 && !p.Undoable, "confirm: the escape only, not undoable");
         var c = Closed(); c.Health.Flags = 15;
         Check(Recovery.Plan("confirm-start", c).Refusal.Contains("confirmed already"), "confirm refused when confirmed");
+        // The logon task confirmed the start, then the epoch moved on (flags back to 7): the guard counter decides.
+        c = Closed(); c.Health.Flags = 7; c.Parameters["UnconfirmedStarts"] = 0;
+        Check(Recovery.StartConfirmed(c) && Recovery.Plan("confirm-start", c).Refusal.Contains("confirmed already"), "confirm refused when the guard counter is 0");
+        c.Parameters["UnconfirmedStarts"] = 1;
+        Check(!Recovery.StartConfirmed(c) && !Recovery.Plan("confirm-start", c).Refused, "confirm offered while the guard counts this start");
+        c.Parameters["UnconfirmedStarts"] = 0; c.Parameters["DpmPending"] = 1;
+        Check(!Recovery.StartConfirmed(c), "a clock trial pending still needs the confirmation");
         c = Closed(); c.Health.ReadyAgeMs = 30000;
         Check(Recovery.Plan("confirm-start", c).Refusal.Contains("60 seconds"), "confirm refused before 60 s");
         c = Closed(); c.Health.Flags = 6;

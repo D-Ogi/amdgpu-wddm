@@ -389,6 +389,19 @@ namespace AmdgpuWddmControl
             return h != null && (h.Flags & (StartHealthState.Full | StartHealthState.Confirmed)) == (StartHealthState.Full | StartHealthState.Confirmed);
         }
 
+        // Whether this start needs a confirmation from the person. The KMD's confirmed flag belongs to one epoch of
+        // the start health, and the epoch moves on with every change of the picture's visibility (a monitor that
+        // sleeps, a mode change), so a start the logon task confirmed reads as unconfirmed again later (b21, lab
+        // 2026-10-07: confirmed at epoch 5, flags 7 at epoch 7). The boot-loop guard is what decides whether the
+        // next start runs: the driver adds one at every start and only a confirmation clears it. A running driver
+        // with UnconfirmedStarts 0 and no clock trial pending was confirmed, so the window does not ask again.
+        public static bool StartConfirmed(RecoverySnapshot s)
+        {
+            if (s == null) return false;
+            if (Confirmed(s.Health)) return true;
+            return s.DriverRunning && s.P("UnconfirmedStarts") == 0u && s.P("DpmPending") == null;
+        }
+
         // Why a reading is not eligible; null when it is. requireFresh false: the window's check, where the last
         // presentation may be a few seconds old; the helper applies the full rule (and waits briefly for freshness).
         public static string ConfirmBlocker(StartHealthState h, bool requireFresh)
@@ -811,7 +824,7 @@ namespace AmdgpuWddmControl
                 else
                     add("Driver start", "The driver is not running (" + (s.DriverError ?? "no answer") + "). " + guard, "warn", null, null);
             }
-            else if (Confirmed(s.Health))
+            else if (StartConfirmed(s))
                 add("Driver start", "This start is confirmed. " + guard, "ok", null, null);
             else
             {
@@ -1025,7 +1038,7 @@ namespace AmdgpuWddmControl
                     p.Change = "Tells the driver that this start is healthy. The driver resets its unconfirmed-start counter and keeps automatic clocks if they are on trial.";
                     p.Effect = "at once";
                     if (!s.DriverRunning) return Refuse(p, "The driver is not running: there is no start to confirm.");
-                    if (Confirmed(s.Health)) return Refuse(p, "This start is confirmed already.");
+                    if (StartConfirmed(s)) return Refuse(p, "This start is confirmed already.");
                     var blocker = ConfirmBlocker(s.Health, false);
                     if (blocker != null) return Refuse(p, "This start cannot be confirmed now: " + blocker + ".");
                     p.ConfirmStart = true; p.Undoable = false;
