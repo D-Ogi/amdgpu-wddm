@@ -1,4 +1,4 @@
-# Hang recovery, stage 1: soft recovery in ResetEngine (KMD 0.7.216.17)
+# Hang recovery, stage 1: soft recovery in ResetEngine (KMD 0.7.216.18)
 
 Every GPU hang on unit A so far has ended the same way: bugcheck 0x116. The trials behind the reports (147, 151,
 153, 208, 245, 251) share one shape. A job's waves take no-retry GFXHUB faults, latch `MEM_VIOL` and stop, and the
@@ -12,16 +12,25 @@ the fence bound is per node" below). Trial D1 of 0.7.216.16 got to the kill, but
 The kill took the register path of the GART sequence, which 0.7.216.17 corrects (see "Lab trial D1" below).
 In trial D1 of 0.7.216.17 the kill drained the ring, and stage 1 passed. The desktop then stayed black, because
 DWM spun in the hosted UMD when it destroyed its lost device. The KMD did not cause that. The hosted UMD gets the
-change (see "Lab trial D1 of 0.7.216.17" below).
+change (see "Lab trial D1 of 0.7.216.17" below). With that change (zink b25) the same trial recovered and the desktop
+stayed, but DWM still lost its device and made a new one. The cause is a 10 s CPU wait in the hosted ICD, not the
+KMD (see "Lab trial D1 of 0.7.216.17 with zink b25" below). From 0.7.216.18 stage 1 is on by default.
 
 ## The switch
 
-`HangRecoveryMode` is a REG_DWORD under the service's `Parameters` key, read once in `WddmStart`. Only the value
-1 turns stage 1 on. With the switch on, the start logs `wddm: HangRecoveryMode 1: ...`. Absent or 0 leaves every
-TDR DDI exactly as it is in 0.7.216.14, the driver of release 0.7.216.100-tester.20. The shim's kill helper is
-compiled in but never called, no register of the new table entry is ever written, and the start logs nothing new.
-Every install of the package writes 0. The INF writes it without NOCLOBBER, as it writes `EnableHangBugcheck`, so
-an experiment that somebody left on does not survive a reinstall (`tools/quality/inf_gates.py`, `UNCONDITIONAL`).
+`HangRecoveryMode` is a REG_DWORD under the service's `Parameters` key, read once in `WddmStart`. From 0.7.216.18
+stage 1 is a finished feature and is on by default, as the release-train rule asks (owner, 2026-10-05): absent
+means 1, and the INF writes 1 with NOCLOBBER, the value of `tools/release/installer/registry-defaults.json`. The
+start logs `wddm: HangRecoveryMode 1: ...`.
+
+0 is the switch-off. The start then logs `wddm: HangRecoveryMode 0: ...`, and every TDR DDI is exactly as it is in
+0.7.216.14, the driver of release 0.7.216.100-tester.20: the shim's kill helper is compiled in but never called,
+and no register of the new table entry is ever written. Any other value is on, as for `EnableVmidPool`. With
+NOCLOBBER a reinstall keeps an operator's 0. An install by the installer writes the table again, so it turns the
+feature on again.
+
+From 0.7.216.13 to 0.7.216.17 the switch was an experiment: off by default, and every install wrote 0 without
+NOCLOBBER, as for `EnableHangBugcheck`. No release carried those drivers.
 
 ## What ResetEngine does with the switch on
 
@@ -280,8 +289,8 @@ Three conclusions:
 - **The UMD change is in zink.** The Mesa branch `amdgpu-wddm/hang-recovery-zink` returns the current batch state
   only if neither list of the context holds it (`zink_bc250_batch_list.h`). Its host test
   (`zink/tests/bc250_batch_list.py`) holds the D1 shape, and the negative control without the guard spins on it.
-- **Why DWM declared its device lost is open.** The dump shows the result but not the path. An innocent device is
-  not put into the error state by an engine reset. Two paths of the hosted UMD can declare the loss without that:
+- **Why DWM declared its device lost was open here.** The next section answers it. The dump shows the result but
+  not the path. An innocent device is not put into the error state by an engine reset. Two paths of the hosted UMD can declare the loss without that:
   a runtime callback that returned a device-lost result, or the 10 s CPU bound of the Present-idle wait
   (`Bc250WaitPresentIdle`) while DWM's work waited about 14 s behind the hang (122.35 s to 136.47 s). The same
   branch keeps the first cause in the hosted state (`lost_reason`, `lost_op`, `lost_hr`, `lost_tick`) and names it
@@ -292,6 +301,70 @@ The packets that wait behind the hung one are a consequence of the contract. The
 hardware, and the scheduler then gives them new fence ids and submits them again. Thus such a packet can run twice.
 In D1 these were DWM's packets, and the second run did no harm, but a packet that is not idempotent can give a
 wrong frame once.
+
+## Lab trial D1 of 0.7.216.17 with zink b25: the desktop stays, DWM still lost its device
+
+Trials C4, D1 and D2 ran again on 2026-10-07 from 15:26Z, with KMD 0.7.216.17 and the hosted UMD of the branch
+above (zink b25, `bc250d3d_zink.dll` SHA-256 `7C4E5E7E`, Mesa `amdgpu-wddm/hang-recovery-zink` at `12133799`).
+Evidence: `evidence/windows/2026-10-07-hang-recovery-b25/`.
+
+- **Stage 1 passed again.** The client submitted one dispatch at 15:27:27.428. Its wait ended after 14590.4 ms with
+  `DXGI_ERROR_DEVICE_HUNG`. The log ring has `seq 8654 retired after 1 kill(s) of VMID 12 waves in 1011 us` and
+  `ResetEngine node 0: SOFT RECOVERED, aborted fence 1123`. The record has verdict 1, 1 kill, 1011 us.
+- **The desktop stayed.** DWM kept its process (PID 1876). The KMD log reports source 0 visible 5.3 s after the
+  recovery (`display visibility: call 11 ... visible 1`), and DWM used 0.022 of a core over 5 s. D2, a short client
+  after D1, completed with `S_OK`.
+- **DWM still lost its hosted device and made a new one.** Its diagnostic log has these lines, in this order:
+
+  ```
+  async wait event: 0x2
+  BC250 hosted op=36 count=1 hr=80004001
+  GetDeviceState: 0xC00000BB
+  MESA: error: ZINK: vkQueueSubmit failed (VK_ERROR_DEVICE_LOST)
+  BC250 hosted device lost: reason=5 (stop) op=4294967295 hr=00000000 tick=99671, SetErrorCb
+  ```
+
+The cause is in the hosted ICD of the desktop route (`payload/desktop/amdgpu_wddm_radv.dll`, Mesa
+`amdgpu-wddm/radv-wddm2-hosted-main` at `48546c73`), not in the KMD:
+
+1. A queue of the winsys reuses its gather slots in a ring. Before it reuses a slot, `cs_submit` waits on the CPU
+   until the job that last used the slot has retired (`vk_wddm2_fence_wait`). DWM's jobs were queued behind the
+   hung job, so that wait did not end. The winsys waited once, for 10 s. The wait ended with `VK_TIMEOUT` (the
+   `0x2`), and the winsys returned `VK_ERROR_DEVICE_LOST` for the submission.
+2. RADV marks the queue lost. On that path it asks for a page-fault report (`radv_queue_handle_fault_state`), and
+   the winsys asks the host for `GetDeviceState` (host operation 36). The hosted device has no kernel device of its
+   own, so the hosted UMD answers `E_NOTIMPL`, which goes back as `STATUS_NOT_SUPPORTED` (`0xC00000BB`). This is a
+   report on the way to the loss, not its cause.
+3. zink saw `VK_ERROR_DEVICE_LOST` from `vkQueueSubmit` and stopped the hosted device (reason 5, `stop`). The hosted
+   UMD called `pfnSetErrorCb` with `D3DDDIERR_DEVICEREMOVED`. DWM then released the device and made a new one,
+   which the b25 destroy change lets it do.
+
+The engine reset came 14.6 s after the hang started (`TdrDelay` 10 and the reset), longer than the 10 s wait. The
+contract says what happens to such a job: after a successful `DxgkDdiResetEngine` the scheduler gives the render
+packets that waited behind the hung one new fence ids and submits them again, and only the device of the hung
+packet goes into the error state ("TDR changes in Windows 8", "Packets unaffected by engine reset" and step 9,
+`windows-driver-docs` at `110f60ea`). So DWM's job would have retired. The 10 s bound turned an innocent wait into
+a loss.
+
+The change is in the user-mode layers, and the KMD keeps 0.7.216.17's recovery:
+
+- **Hosted ICD** (`amdgpu-wddm/hang-recovery-icd-hosted` at `9ddfcbe2`, on `48546c73`). `vk_wddm2_fence_wait` waits
+  in 1 s slices up to 120 s. After each slice it reads the fence. It stops early only when the device is lost: the
+  fence reads `UINT64_MAX`, the host reports the loss, or a kernel device (not a hosted one) is not in the
+  `D3DKMT_DEVICEEXECUTION_ACTIVE` state (`D3DKMT_DEVICEEXECUTION_STATE` in `d3dkmthk.h` of WDK 10.0.26100 and in
+  `windows-driver-docs-ddi` at `7515063`). A wait longer than one slice logs `radv/wddm2: fence F value V pending
+  after 1000 ms, device active: waiting on` and then `... completed after N ms of wait`. The winsys host test has
+  three new cases (`innocent_wait`, `lost_during_wait`, `wait_bound`). With the old bound (`BC250_TEST_OLD_BOUND=1`:
+  one slice, then a loss) `innocent_wait` fails, as the negative control must. The release ICD line gets the same
+  commit (`amdgpu-wddm/hang-recovery-icd` at `154050d5`, on `b19-icd` `31844893`), where all 45 cases pass.
+- **Hosted UMD** (zink b26, `amdgpu-wddm/hang-recovery-zink` at `ea876500`). The Present-idle wait
+  (`Bc250WaitPresentIdle`) had the same single 10 s bound. It now waits in 1 s slices up to 120 s through
+  `bc250_slice_wait.h`, and between slices it asks `Bc250HostStatus` for a loss and reads the Present fence. The
+  dispatcher no longer logs the `GetDeviceState` answer as an error. Host test `d3d10umd/tests/bc250_slice_wait.py`
+  with a negative control that ends the wait after one slice.
+
+The 120 s bound is far above one TDR cycle. A job that is still pending on a live device after 120 s is reported as
+lost, as before.
 
 ## Why not in the 500 ms watchdog
 

@@ -32,6 +32,7 @@
       "EnableDpAudio": 1,
       "EnableDpAudioEndpoint": 1,
       "EnableDpAudioStream": 1,
+      "HangRecoveryMode": 1,
       "DpmMode": 1,
       "DpmMaxMHz": 1500,
       "DpmIdleMHz": 500,

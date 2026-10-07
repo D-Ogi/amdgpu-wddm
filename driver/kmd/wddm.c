@@ -2851,12 +2851,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // existence for this whole device start is decided here. gfx.c's own gate (GfxStart) decides separately
     // whether GfxSubmitPaging itself may ever run; this one decides whether the table admits the node at all.
     wddm->NodeCount = (GuardReadSetting(L"EnablePagingNode", 0) == 1) ? BC250_WDDM_NODE_COPY + 1u : BC250_WDDM_NODE_COUNT;
-    // M15.12: start-latched hang-recovery switch (docs/design/hang-recovery.md). Absent/0 leaves every TDR DDI
-    // exactly as it was before 0.7.216.13.
-    wddm->HangRecoveryMode = (GuardReadSetting(L"HangRecoveryMode", 0) == 1);
-    if (wddm->HangRecoveryMode)     // said only when on, so the log of a start with the switch off is unchanged
+    // M15.12: start-latched hang-recovery switch (docs/design/hang-recovery.md). On by default from 0.7.216.18
+    // (absent = 1, lab-proven in trial D1 of 0.7.216.17); 0 is the switch-off and leaves every TDR DDI exactly as
+    // it was before 0.7.216.13. Any other value is on, as for the other finished features (EnableVmidPool).
+    wddm->HangRecoveryMode = (GuardReadSetting(L"HangRecoveryMode", 1) != 0);
+    if (wddm->HangRecoveryMode)
         GuardLog("wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in "
                  "Parameters\\HangRecovery");
+    else
+        GuardLog("wddm: HangRecoveryMode 0: ResetEngine refuses every engine reset, as before 0.7.216.13");
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
