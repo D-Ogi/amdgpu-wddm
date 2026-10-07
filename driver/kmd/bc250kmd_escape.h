@@ -48,6 +48,17 @@
                                             // EnableDpAudio and EnableDpAudioEndpoint are 1 by default; 0
                                             // is each one's bisect switch and gives the 214.1 behaviour.
                                             //
+                                            // The same revision also reads the SMU metrics table
+                                            // (smu_metrics.c, docs/design/dpm.md "Power reading") and
+                                            // adds RUN_DPM ABI 3: BC250_ESCAPE_DPM_EX, 248 bytes, the
+                                            // unchanged ABI 2 layout followed by BC250_DPM_METRICS (the
+                                            // package power, the two rails, the table's own clock and
+                                            // temperatures). ABI 1 and ABI 2 answer as before, and the
+                                            // RUN_DPM number does not change. EnableSmuMetrics is 1 by
+                                            // default; 0 is its bisect switch and sends no metrics
+                                            // message at all. Not released before this addition, so the
+                                            // word stays 0x000700D7.
+                                            //
                                             // Revision 214 (INF 0.7.214.1, on 213.1): the VMID pool
                                             // (kmd/vmid-pool, gfx.c, vmid_pool.h,
                                             // docs/design/gfx-submit-root-serialization.md). Each page-table
@@ -594,6 +605,43 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long IdleEntries, IdleExits, IdleRefusals;
     unsigned long long IdleMs;              // time the governor held the idle point
 } BC250_ESCAPE_DPM; // 192 bytes on Windows, ABI 2 (the first 160 are ABI 1)
+
+// RUN_DPM ABI 3 (0.7.215): the SMU metrics table (driver/kmd/smu_metrics.c, driver/shim/include/bc250_smu_metrics.h,
+// docs/design/dpm.md "Power reading"). BC250_ESCAPE_DPM_EX is the ABI 2 structure above, unchanged, with AbiVersion 3,
+// followed by BC250_DPM_METRICS. Everything in the tail is out, and like the rest of RUN_DPM it is the governor
+// thread's published copy: the escape sends no SMU message. The driver takes all three sizes, each with its own
+// AbiVersion; a driver before 0.7.215 refuses 248 bytes with STATUS_INVALID_PARAMETER, and a tool then asks with
+// ABI 2 or ABI 1. BC250_DPM_FLAG_POWER is set in an ABI 3 answer alone, when MetricsState is OK and the table is at
+// most three seconds old. The power figures are the SMU's own: SocketPowerMw is the whole package, processor and
+// graphics together, and neither the board nor the fan is in it.
+#define BC250_DPM_ABI_3 3u
+#define BC250_DPM_ABI2_SIZE 192u             // the ABI 2 prefix of BC250_ESCAPE_DPM_EX, which is BC250_ESCAPE_DPM
+#define BC250_DPM_ABI3_SIZE 248u
+#define BC250_DPM_FLAG_POWER 8192u           // ABI 3: the BC250_DPM_METRICS values come from a fresh table (0.7.215)
+#define BC250_DPM_METRICS_OFF 0u             // EnableSmuMetrics 0: no metrics message is sent
+#define BC250_DPM_METRICS_WAITING 1u         // on; no table accepted yet in this start
+#define BC250_DPM_METRICS_OK 2u              // the values are from the last accepted table (MetricsAgeMs old)
+#define BC250_DPM_METRICS_REFUSED 3u         // the firmware refused or did not answer: no reading until the driver loads again
+#define BC250_DPM_METRICS_NO_TABLE 4u        // no table page (VRAM closed, mapping failed) or no native SMU owner
+#define BC250_DPM_METRICS_BAD_TABLE 5u       // three tables in a row failed the checks: stopped for this start
+typedef struct _BC250_DPM_METRICS {
+    unsigned long MetricsState;             // BC250_DPM_METRICS_*
+    unsigned long MetricsAgeMs;             // since the last accepted table; 0 when there is none
+    unsigned long MetricsReads;             // tables accepted in this start
+    unsigned long MetricsFailures;          // reads in this start that ended without a table
+    unsigned long SocketPowerMw;            // Current.CurrentSocketPower: the package, mW
+    unsigned long SocketPowerAvgMw;         // Average.CurrentSocketPower, mW
+    unsigned long GfxPowerMw, SocPowerMw;   // Current.Power[1] (VDDCR_GFX) and Power[0] (VDDCR_VDD), mW
+    unsigned long GfxMv, SocMv;             // Current.Voltage[1] and Voltage[0], mV
+    unsigned long GfxMHz;                   // Current.GfxclkFrequency: the table's own GPU clock
+    unsigned long GfxTemperatureCc;         // Current.GfxTemperature, centi-Celsius
+    unsigned long SocTemperatureCc;         // Current.SocTemperature, centi-Celsius
+    unsigned long ThrottlerStatus;          // Current.ThrottlerStatus, the firmware's bits as they are
+} BC250_DPM_METRICS; // 56 bytes
+typedef struct _BC250_ESCAPE_DPM_EX {
+    BC250_ESCAPE_DPM Dpm;                   // the ABI 2 layout; Dpm.AbiVersion is BC250_DPM_ABI_3
+    BC250_DPM_METRICS Metrics;
+} BC250_ESCAPE_DPM_EX; // 248 bytes on Windows, ABI 3
 
 // DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
 // thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state

@@ -4,6 +4,7 @@
 #include "../shim/include/bc250_smu.h"
 #include "../shim/include/bc250_clock.h"
 #include "../shim/include/bc250_cpu.h"
+#include "../shim/include/bc250_smu_metrics.h"
 typedef struct _BC250_SMU_OWNER {
     EX_PUSH_LOCK Lock;
     PETHREAD Caller;
@@ -25,6 +26,10 @@ typedef struct _BC250_SMU_OWNER {
     struct bc250_smu CpuTransport;      // the firmware's queue 3; the registers are in include/bc250_cpu.h
     // Set by the DPM governor while it runs (dpm.c): the administrator's SET escape is refused then.
     volatile LONG GovernorActive;
+    // The page the firmware was told to write the metrics table into (0.7.215, SmuReadMetrics), or 0 while this
+    // owner start has told it nothing. Under the owner lock; SmuOwnerStart clears it, so the address goes out
+    // again after every power transition.
+    ULONGLONG MetricsTableMc;
 } BC250_SMU_OWNER;
 // AddDevice before publication; object storage lives with BC250_DEVICE.
 void SmuOwnerInitialize(BC250_SMU_OWNER* Owner);
@@ -72,6 +77,17 @@ NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* Owner, ULONG Queue, ULONG Message, ULONG
 // TRUE when this caller took the CPU sequence flag; SmuCpuEnd releases it. FALSE means another sequence runs.
 BOOLEAN SmuCpuBegin(BC250_SMU_OWNER* Owner);
 void SmuCpuEnd(BC250_SMU_OWNER* Owner);
+
+// ---- the SMU metrics table (0.7.215, driver/kmd/smu_metrics.c, docs/design/dpm.md "Power reading") ----------------
+// PASSIVE_LEVEL. One read under the owner lock: the first read of an owner start names TableMc to the firmware
+// (SetDriverTableDramAddrHigh, then SetDriverTableDramAddrLow), every read fills the page with
+// BC250_SMU_METRICS_POISON, sends TransferTableSmu2Dram with the table id and copies Length bytes of the page into
+// Copy. The three messages pass bc250_smu_metrics_message_allowed alone, with the arguments that list fixes for
+// TableMc; the clock list admits none of them. Table is the caller's uncached mapping of the page at TableMc;
+// Length is a multiple of 4 and at most one page. Returns the transport's result: 0, BC250_SMU_METRICS_OFFLINE
+// when the owner is not online (nothing was sent), or the first failure: a firmware answer other than OK, -62 for
+// a timeout, -22 for the allowlist. Every message is bounded by the transport's 20 ms poll.
+int SmuReadMetrics(BC250_SMU_OWNER* Owner, ULONGLONG TableMc, volatile ULONG* Table, UCHAR* Copy, ULONG Length);
 
 // Last successfully established firmware metadata, not an online/readiness test.
 // Cached only, PASSIVE_LEVEL; no mailbox lock or SMU message on this query path.

@@ -299,7 +299,7 @@ static partial class UnitTests
         finally { Directory.Delete(dir, true); }
     }
 
-    // WU-038: values only with their flag; power and fan honestly "No reading".
+    // WU-038: values only with their flag; power and fan honestly "No reading" without a fresh value.
     // Unit A's hardware monitor as E01 read it: one fan on channel 1 at 1589 rpm, duty read-back 961 permille.
     static HwmonState Fan(uint flags, uint rpm, uint dutyPermille)
     {
@@ -323,9 +323,17 @@ static partial class UnitTests
         Equal("hot", rows.First(r => r.Id == "temperature").Level, "sensors: 88 C is hot");
         Equal("1500 MHz", rows.First(r => r.Id == "clock").Value, "sensors: the observed clock when flagged");
         Check(rows.First(r => r.Id == "memory").Value.Contains("3.0") && rows.First(r => r.Id == "memory").Value.Contains("8.0"), "sensors: memory in GB");
-        Check(rows.First(r => r.Id == "power").NoReading, "sensors: power has no reading");
+        Check(rows.First(r => r.Id == "power").NoReading, "sensors: no power flag, no power");
         Equal(Strings.T("perf.fan.value", 1589u, 96u), rows.First(r => r.Id == "fan").Value, "sensors: fan speed and proved duty");
         Check(!rows.First(r => r.Id == "fan").NoReading && rows.First(r => r.Id == "fan").Level == null, "sensors: a turning fan is plain");
+        // Power (KMD 0.7.215, RUN_DPM ABI 3): only with the flag the driver sets for a table at most 3 s old.
+        d.SocketPowerMw = 78400; d.Flags |= DpmState.FlagPower;
+        rows = Sensors.Rows(d, null, null);
+        Equal("78 W", rows.First(r => r.Id == "power").Value, "sensors: the package power from a fresh SMU table");
+        Check(!rows.First(r => r.Id == "power").NoReading && rows.First(r => r.Id == "power").Level == null, "sensors: power is plain");
+        d.Flags &= ~DpmState.FlagPower;
+        Check(Sensors.Rows(d, null, null).First(r => r.Id == "power").NoReading, "sensors: a stale table is no reading, not the last value");
+        d.Flags = DpmState.FlagTemperature | DpmState.FlagHwBusy | DpmState.FlagClock;
         d.Flags = DpmState.FlagTemperature; d.TemperatureMc = 81000;
         rows = Sensors.Rows(d, null, null);
         Equal("warn", rows.First(r => r.Id == "temperature").Level, "sensors: 81 C warns");

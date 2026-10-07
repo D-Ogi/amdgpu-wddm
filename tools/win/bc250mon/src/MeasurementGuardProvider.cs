@@ -147,6 +147,7 @@ namespace Bc250Mon
             { "EnableHwmon", 1 },               // hwmon.c: absent = on from 0.7.213, the board's monitor, read only
             { "EnableVmidPool", 1 },            // gfx.c: absent = on from 0.7.214, a VMID per page-table root
             { "EnableFanControl", 1 },          // fan.c: GuardReadSetting(..., 1), the case fan control (Part B)
+            { "EnableSmuMetrics", 1 },          // smu_metrics.c: GuardReadSetting(..., 1), the SMU metrics table (0.7.215)
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
             { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ

@@ -39,6 +39,11 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   header presence alone does not authorize use. There is no raw user SMU interface.
   The private call graph enforces this operation set and `bc250_clock_message_allowed`
   carries the allowlist; the transport itself has ownership and timeout checks.
+  From 0.7.215 a second list, `bc250_smu_metrics_message_allowed`, admits the three messages
+  of the metrics table that amdgpu sends on unit A (E03, [M90](facts/linux.md#m90)):
+  `SetDriverTableDramAddrHigh` (0x4) and `Low` (0x5) with the address of the driver's own
+  page only, and `TransferTableSmu2Dram` (0x6) with table 6 only. `EnableSmuMetrics` 0
+  sends none of them (`design/dpm.md`, "Power reading").
   The three registers of that transport are the firmware's own queue 0. A third-party
   static read of the firmware puts queue 0's command, argument and response mailboxes at
   the byte offsets `regcalc` computes for `C2PMSG_66`, `C2PMSG_82` and `C2PMSG_90`, in the

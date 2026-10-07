@@ -158,7 +158,7 @@ perf.memory|src|-|Video memory in use
 perf.memory.explain|src|-|Memory that games and Windows use for graphics.
 perf.memory.value|src|-|{0} GB of {1} GB
 perf.power|src|-|Power
-perf.power.explain|src|-|The driver cannot read the power use yet. This comes later.
+perf.power.explain|src|-|How much power the processor and the graphics chip use together, as the chip itself measures it. The rest of the board, the fan and the losses of the power supply are not included.
 perf.fan|src|-|Fan
 perf.fan.explain|src|-|The speed of the case fan. Who runs the fan, and by which curve, is chosen in the Case fan card below.
 perf.fan.value|src|-|{0} rpm ({1} %)

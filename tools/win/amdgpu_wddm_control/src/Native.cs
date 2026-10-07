@@ -143,8 +143,21 @@ namespace AmdgpuWddmControl
             return result;
         }
 
+        // RUN_DPM with ABI 3 (KMD 0.7.215, the SMU metrics tail with the power reading), else ABI 1. A driver or a
+        // bc250control.dll from before 0.7.215 refuses the 248-byte request with STATUS_INVALID_PARAMETER before
+        // anything is read; from then on this process asks with ABI 1 alone, so an old driver costs one refused
+        // request per run and not one per poll.
+        static volatile bool _dpmAbi3Refused;
+
         public static KmdResult<DpmState> Dpm()
         {
+            if (!_dpmAbi3Refused)
+            {
+                var r = Call(KmdReply.DpmAbi3Bytes, b => Bc250Dpm(b, (uint)b.Length), KmdReply.ParseDpm);
+                bool refused = r.Value == null && (uint)r.Status == 0xC000000D && r.Error == KmdReply.StatusText(r.Status);
+                if (!refused) return r;
+                _dpmAbi3Refused = true;
+            }
             return Call(KmdReply.DpmBytes, b => Bc250Dpm(b, (uint)b.Length), KmdReply.ParseDpm);
         }
 

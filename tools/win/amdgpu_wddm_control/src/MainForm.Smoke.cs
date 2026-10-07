@@ -42,6 +42,23 @@ namespace AmdgpuWddmControl
             _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v1.0.1.0-tester.12", CandidateVersion = "1.0.1.0-tester.12" };
             _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "1.0.0.0-tester.11", DriverDate = "10-3-2026" });
             _vram = new VideoMemoryState { Segments = 1, LocalResident = 3L << 30, Dedicated = 8L << 30, LocalLimit = 8L << 30 };
+            // The "Now" card with every row filled: a recorded snapshot keeps its mode, reason and ceiling, and gets the
+            // live readings it never recorded (37 % load, 62 C, the clock of its mode, 78 W from the SMU metrics table).
+            if (_snap.Dpm == null) _snap.Dpm = new DpmState { Version = 0x000700D7, Mode = 1, Requested = 1, MaxMHz = 1500 };
+            {
+                var d = _snap.Dpm;
+                const uint live = DpmState.FlagTemperature | DpmState.FlagClock | DpmState.FlagHwBusy | DpmState.FlagPower;
+                if ((d.Flags & live) == 0)
+                {
+                    uint mhz = d.Mode == 1 ? 1500u : 1000u;
+                    d.Flags |= DpmState.FlagRunning | live;
+                    d.AbiVersion = 3; d.MetricsState = DpmState.MetricsOk; d.MetricsAgeMs = 400;
+                    d.BusyPermille = 360; d.BusyAvgPermille = 370; d.TemperatureMc = 62000;
+                    d.CurrentMHz = mhz; d.ObservedMHz = mhz; d.CurrentMv = d.Mode == 1 ? 919u : 820u;
+                    d.SocketPowerMw = 78000; d.SocketPowerAvgMw = 77400; d.GfxPowerMw = 48000; d.SocPowerMw = 21000;
+                    d.GfxMv = d.CurrentMv; d.SocMv = 900;
+                }
+            }
             _game = "witcher3.exe";
             _gameEdits["witcher3.exe"] = new Dictionary<string, bool> { { "cpu", true } };
             _ceilEdited = true; _ceilEdit = 1800;
