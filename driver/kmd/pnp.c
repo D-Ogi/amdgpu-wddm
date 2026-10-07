@@ -61,6 +61,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     *NumberOfChildren = 0;
     GuardStage(StageStartEnter);
     device->InheritedSignalValid=FALSE;
+    device->StopDone=FALSE;     // a PnP stop and start without a remove reuses this context
     if (device->GpuStopUnconfirmed) {
         GuardLog("start refused: previous GPU stop is unconfirmed for this device object");
         return STATUS_DEVICE_HARDWARE_ERROR;
@@ -171,7 +172,17 @@ failed:
 NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+    BOOLEAN wasStarted;
 
+    // BD-090. When DxgkDdiStopDeviceAndReleasePostDisplayOwnership fails, dxgkrnl calls DxgkDdiStopDevice after it
+    // (plug-and-play--pnp--start-and-stop-cases.md, "or after a call to DxgkDdiStopDeviceAndReleasePostDisplay-
+    // Ownership fails"). The release already ran this whole teardown; a second pass would restore DCN through an
+    // unmapped BAR5 and stop every block twice. The teardown is complete, so the second call only reports success.
+    if (device->StopDone) {
+        GuardLog("stop: teardown already done by the post-display release");
+        return STATUS_SUCCESS;
+    }
+    wasStarted=device->Started;
     HangDetectorStop();     // first: a stop may legitimately wait, and the detector must not judge it
     StartHealthClose(device);
     GuardStage(StageStopEnter);
@@ -208,6 +219,10 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     VramStop(device);
     MmioStop(device);
     DisplayUnmapFramebuffer(device);
+    device->StopDone=TRUE;
+    // BD-090: an orderly stop of a start that completed gives its boot-guard count back in a boot that was once
+    // confirmed healthy (guard.c). A start that failed calls this function with Started still FALSE: it keeps it.
+    if (wasStarted) GuardReleaseStart();
     GuardStage(StageStopDone);
     // Last, so that the file holds the stop as well. Does nothing unless Parameters\KeepLog is set: dxgkrnl may
     // end a full WDDM start by itself and unload the driver after, ring and all (E16 run 1).
@@ -226,6 +241,13 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
     NTSTATUS status;
     UNREFERENCED_PARAMETER(TargetId); // one active output; return its actual id below
     RtlZeroMemory(DisplayInfo,sizeof(*DisplayInfo));
+    // WDDM 1.2 (plug-and-play--pnp--start-and-stop-cases.md): the surface the pipe scans out when this call returns
+    // must be filled with black before source visibility goes TRUE. That surface is the POST framebuffer
+    // (DcnRestorePostDisplay below puts the scanout back on it), which the memory segment is carved clear of
+    // (VramFramebufferOffset), so nothing of ours lives in it. While DWM's primary is scanned out the fill is not
+    // visible; without it the next owner shows whatever picture that surface last held until its first frame.
+    if (device->Framebuffer != NULL && device->FramebufferLength != 0)
+        RtlZeroMemory(device->Framebuffer, device->FramebufferLength);
     // Local dispmprt contract: failure makes dxgkrnl call ordinary StopDevice.
     // Never publish a framebuffer that DCN failed to latch. Ordinary StopDevice
     // still finishes teardown and returns its own completion result.

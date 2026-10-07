@@ -28,7 +28,9 @@ typedef struct {
     BOOLEAN InheritedSignalValid;
     BOOLEAN PostDisplayStopAttempted;
     NTSTATUS PostDisplayStopStatus;
+    BOOLEAN StopDone;
     void *Framebuffer;
+    size_t FramebufferLength;
     DXGK_DISPLAY_INFORMATION Post;
 } BC250_DEVICE;
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
@@ -76,6 +78,9 @@ static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   
 static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardStage(int s){(void)s;}
 static void GuardLogKeep(void){}
+/* BD-090: the give-back runs once per stop of a started device, after the last block is down. */
+static unsigned releases;
+static void GuardReleaseStart(void){CHECK(model.unmaps==1);releases++;}
 static unsigned dpmStops;
 static int cpuStopped;          /* within one scenario: CpuStop ran; init clears it */
 /* KMD175: the DPM governor puts the floor back while the SMU owner is still online, before any teardown. */
@@ -122,11 +127,13 @@ static void GfxRetireSignal(BC250_DEVICE*d)
 { CHECK(d->Wddm && d->Wddm->Stopping && !d->Wddm->VSyncArmed);CHECK(model.joined==0 && model.restores==0 && model.vidmm==0 && model.objects==0);retireSignals++; }
 /* ACTUAL_SOURCE */
 static char buckets[16];
+static unsigned char post[64];  /* the POST framebuffer the release fills with black */
+static int postIs(unsigned char v){size_t i;for(i=0;i<sizeof(post);i++)if(post[i]!=v)return 0;return 1;}
 static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
 {
     memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;cpuStopped=0;
-    memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;
-    d->Wddm=w;d->Framebuffer=d;d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;
+    memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;releases=0;memset(post,0xab,sizeof(post));
+    d->Wddm=w;d->Framebuffer=post;d->FramebufferLength=sizeof(post);d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;d->Started=1;
     d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress=0x470000000ull;
     w->Objects.Flink=w->Objects.Blink=&o->Link;o->Link.Flink=o->Link.Blink=&w->Objects;
 }
@@ -144,13 +151,24 @@ int main(void)
     CHECK(retireSignals==1);
     CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
     CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
+    CHECK(postIs(0) && releases==1 && d.StopDone);  /* WDDM 1.2: black before the visible handover; BD-090 give-back */
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_IO_TIMEOUT);
     CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0);
     CHECK(model.restores==1 && model.unmaps==1 && d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);
+    /* BD-090: dxgkrnl follows a failed release with StopDevice. The teardown already ran: nothing runs twice. */
+    {unsigned cpu=cpuStops,dpm=dpmStops,interop=interopStops,fan=fanStops,audio=dpaudioStops;
+     CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS);
+     CHECK(model.restores==1 && model.unmaps==1 && model.smu==1 && model.vidmm==1 && releases==1);
+     CHECK(cpuStops==cpu && dpmStops==dpm && interopStops==interop && fanStops==fan && dpaudioStops==audio);
+     CHECK(d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);}
     // Ordinary stop remains successful even when display restoration failed.
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;
     CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS);CHECK(d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);
+    CHECK(postIs(0xab) && releases==1);  /* the black fill belongs to the release only */
+    /* A start that failed and stops itself (pnp.c's StartDevice error paths) has Started FALSE: it keeps its count. */
+    init(&d,&w,&o);d.Started=0;
+    CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS && releases==0 && d.StopDone);
     // No WDDM instance: PnP performs the restore itself before MMIO teardown.
     init(&d,&w,&o);d.Wddm=NULL;
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,D3DDDI_ID_UNINITIALIZED,&info)==STATUS_SUCCESS);

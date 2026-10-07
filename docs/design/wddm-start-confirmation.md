@@ -126,6 +126,25 @@ driver unload/reload takes more than a QPC tick. The monitor cannot carry an
 observation interval across an OS restart. This is not a wall-clock timestamp
 or the possibly repeated start-budget value.
 
+## Runtime restart in a confirmed boot (BD-090, 0.7.216.3)
+
+A runtime restart (`pnputil /restart-device`, a live driver update) starts the
+driver again in the same boot. When nothing confirms the new start, each such
+start adds one count, and the second one is refused with Code 43. The kernel
+therefore gives a count back at an orderly stop, under three conditions:
+
+1. The stopping start completed (`Started`); a start that failed keeps its count.
+2. This image wrote and flushed that count, and no confirmation cleared it since.
+3. A start in this boot was confirmed. A durable confirmation writes the mark
+   `Parameters\GuardBoot\Confirmed` = 1 in a volatile key, which the
+   configuration manager drops at every reboot.
+
+The count never goes below zero. The protection across reboots does not change:
+a crash or a power loss never reaches the stop, dxgkrnl does not stop the
+adapter at shutdown, and a new boot has no mark until its own start is
+confirmed. A start that is not confirmed and is stopped in an unconfirmed boot
+keeps its count. Host test: `driver/kmd/test/guard_start_test.c`.
+
 ## Acceptance
 
 Host tests must exercise the actual confirmation policy: healthy progress for

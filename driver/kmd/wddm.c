@@ -3637,7 +3637,9 @@ static NTSTATUS Bc250WddmCreateDevice(_In_ const HANDLE hAdapter, _Inout_ DXGKAR
 
     if (object == NULL) return STATUS_INSUFFICIENT_RESOURCES;
     pCreateDevice->hDevice = object;
-    if (WddmFirstCalls(wddm, WddmDdiCreateDevice)) GuardLog("wddm: CreateDevice flags 0x%08X pasid %u", flags, pCreateDevice->Pasid);
+    // The process too (BD-090): after a runtime restart, whether DWM's process opened a device on the new start.
+    if (WddmFirstCalls(wddm, WddmDdiCreateDevice)) GuardLog("wddm: CreateDevice flags 0x%08X pasid %u pid %lu", flags,
+        pCreateDevice->Pasid, HandleToULong(PsGetCurrentProcessId()));
     return STATUS_SUCCESS;
 }
 
