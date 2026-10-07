@@ -142,3 +142,33 @@ Exit 0 when the document was written, a removed device included; 1 when writing 
 main thread in its first step (`D3D12ALLOCPROBE_TEST_STALL=dxgi`), before any device is created.
 
 Diabeł tkwi w szczegółach - the devil is in the details, and here they are all on one page.
+
+## Over-commit probe
+
+`amdgpu_wddm_d3d12oversub.exe` measures what the driver and VidMm do when one process holds more DEFAULT memory than
+the LOCAL budget, with UPLOAD memory beside it (memory manager stage 1, test (a)). Phase L creates DEFAULT committed
+buffers of `--chunk-mb` (64) until `--default-mb` (5632) is held. Phase N then creates UPLOAD committed buffers
+until `--upload-mb` (1024) is held, and the CPU writes a 256-byte pattern into each. Phase T runs `--passes` (3)
+passes over the whole set in creation order. In each pass the GPU copies a 256 KiB pattern into every DEFAULT buffer
+and copies one 256-byte sample of every buffer to a READBACK buffer, 16 buffers per submission, and the CPU compares
+each sample. Every pass makes VidMm bring the whole set back, so a set larger than the budget is cycled.
+
+The probe records the budgets and never uses them to size a step. It reads `QueryVideoMemoryInfo` for both groups,
+and dxgkrnl's view of its own process (`D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT_GROUP`: `Budget`, `Requested`,
+`Usage`, `Demoted[]` by priority class), at start, after L, after N, after each pass and after the release, under
+`readings.<n>_<point>`. It reads `GetDeviceRemovedReason` after each phase, under `removed`. `d3d12.dll`, `dxgi.dll`
+and `gdi32.dll` come from System32 only.
+
+```
+pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget -Tool d3d12oversub [-Out <dir>]
+amdgpu_wddm_d3d12oversub.exe [adapter-index] [output-path] [--default-mb N] [--upload-mb N] [--chunk-mb N]
+                             [--passes N] [--seconds N] [--progress]
+```
+
+The probe writes one JSON document with sorted keys (the dump's writer), durably to the output path, and one
+`result PASS|FAIL ...` line on stdout. Exit 0 when every buffer was created, no device was removed, every sample
+matched and every submission was fenced. Exit 1 otherwise, 2 for a bad command line, and 3 when the deadline
+(`--seconds`, 150 by default, at most 170) passed first. On a deadline, a thread writes the document as it was, with
+the step that did not return. The build checks that path with `D3D12OVERSUB_TEST_STALL=dxgi`. Positive control
+(development PC, RTX 4090, 2026-10-07): 512 MiB DEFAULT and 256 MiB UPLOAD, 36 of 36 samples matched, and the
+process group's `Requested` was equal to DXGI's `CurrentUsage`.
