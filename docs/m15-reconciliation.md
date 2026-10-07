@@ -182,7 +182,9 @@ proposed here as M15's exit criteria.
   (`driver/kmd/bc250kmd.h` line 42) although ADR 0019 targets the newest version; HDR scan-out needs a later one.
 - **Vulkan WSI presentation (M12, ADR 0018).** Not met: the registered ICD presents through the retired CPU
   path, and dxgkrnl refused the kernel-thunk Present route (M677). A native D3D12 device on the adapter now
-  exists, which the WSI's DXGI path needs (`docs/design/wsi-engine-present.md`).
+  exists, which the WSI's DXGI path needs (`docs/design/wsi-engine-present.md`). The DXGI route on that device
+  is built offline behind `AMDGPU_WDDM_VK_WSI`, with GDI as the default until its lab plan passes
+  ([Vulkan WSI through DXGI](design/vulkan-wsi-dxgi.md)). Nothing of it is measured yet.
 - **Bounds.** DECIDED (owner): 3 minutes for every non-game lab trial (2026-09-28); game sessions 7-10 minutes
   controlled by the operator (2026-09-30), at most 7 minutes (2026-09-30). Every step in section 4 fits one of
   the two.
