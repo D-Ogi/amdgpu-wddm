@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
- * BC-250 hardware monitor read policy. See include/bc250_hwmon.h for the contract and the access
+ * BC-250 hardware monitor read policy, and the one write primitive of the fan control (bc250_fan.c owns the
+ * handshake and every decision). See include/bc250_hwmon.h for the contract and the access
  * sequence, and bc250-win docs/design/fan.md for the design. Pure: the only outside world this file
  * knows is the eight-bit port vtable it is given, so driver/shim/test/hwmon_test.c drives exactly
  * what the miniport drives.
@@ -77,17 +78,22 @@ int bc250_hwmon_read_allowed(unsigned int reg)
 	if (reg == BC250_HWMON_REG_MODE)
 		return 1;			/* fan mode mask; read only, UNPROVEN */
 	if (reg == BC250_HWMON_REG_ENGINE)
-		return 1;			/* fan engine status; read only, UNPROVEN */
+		return 1;			/* fan engine status: the handshake polls it */
+	if (reg == BC250_HWMON_REG_FAN_CTRL)
+		return 1;			/* the configuration request: the open waits for its bit 7 to clear */
+	if (reg == BC250_HWMON_REG_DUTY_WRITE(BC250_FAN_CHANNEL))
+		return 1;			/* the duty target of the one fan we drive: saved and verified */
 	return 0;
 }
 
 int bc250_hwmon_write_allowed(unsigned int reg)
 {
-	/* Every EC register, with no exception. The page and index ports are not EC registers: they
-	 * are the chip's own address latch, and the four-access read below is the only thing that
-	 * drives them. */
-	(void)reg;
-	return 0;
+	/* Three EC registers and nothing else, all measured on unit A (M803). The page and index ports are not EC
+	 * registers: they are the chip's own address latch. HWM_CFG, the limits, the beep, the curve points, the
+	 * monitor sources (nct6687d's "enable SIO voltage") and the four duty targets of the outputs with no fan
+	 * stay refused. */
+	return reg == BC250_HWMON_REG_FAN_CTRL || reg == BC250_HWMON_REG_MODE ||
+	       reg == BC250_HWMON_REG_DUTY_WRITE(BC250_FAN_CHANNEL);
 }
 
 /* ---- conversions ---------------------------------------------------------------------------- */
@@ -189,6 +195,24 @@ int bc250_hwmon_read16(const struct bc250_hwmon_io *io, unsigned int reg, unsign
 	low = read8_locked(io, reg + 1u);
 	transaction_end(io);
 	*value = (high << 8) | low;
+	return 0;
+}
+
+int bc250_hwmon_write8(const struct bc250_hwmon_io *io, unsigned int reg, unsigned int value)
+{
+	if (!bc250_hwmon_write_allowed(reg) || value > 0xFFu || io->out8_data == 0)
+		return BC250_HWMON_REFUSED;
+	/* The latch is set exactly as for a read, and the data port then takes the byte, all in one hold. */
+	transaction_begin(io);
+	io->out8(io->context, BC250_HWMON_PORT_PAGE, BC250_HWMON_PAGE_UNLOCK);
+	access_pause(io);
+	io->out8(io->context, BC250_HWMON_PORT_PAGE, (unsigned char)((reg >> 8) & 0xFFu));
+	access_pause(io);
+	io->out8(io->context, BC250_HWMON_PORT_INDEX, (unsigned char)(reg & 0xFFu));
+	access_pause(io);
+	io->out8_data(io->context, (unsigned char)value);
+	access_pause(io);
+	transaction_end(io);
 	return 0;
 }
 

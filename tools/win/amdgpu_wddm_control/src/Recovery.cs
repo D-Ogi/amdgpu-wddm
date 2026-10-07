@@ -61,6 +61,8 @@ namespace AmdgpuWddmControl
         // countdown runs in the driver and the window only reports what it reads.
         public CurveState Curve { get; set; }
         public CpuState Cpu { get; set; }
+        // The case fan control of this start (null: the read failed or the driver has none).
+        public FanState Fan { get; set; }
         // A setter run of this boot could not flush or verify its writes (cu-unflushed.json): no next-start prediction.
         public bool CuNotDurable { get; set; }
         // Per-game switches: image -> Experiment as stored ("" for a key without the value), and the release's
@@ -157,6 +159,11 @@ namespace AmdgpuWddmControl
                 if (Tune.UvSteps != null) w.Append(", undervolt " + Tune.UvSteps.Value + " steps");
                 if (Tune.TempC != null) w.Append(", cap " + Tune.TempC.Value + " C");
                 if (Tune.CoreMask != 0) w.Append(", cores " + CpuTuning.CoresFor(Tune.CoreMask));
+                if (Tune.Kind == "fan-curve") w.Append(", fan profile " + FanCurves.NameOf(Tune.FanProfile) +
+                    (Tune.FanC != null ? ", curve " + FanCurves.CurveText(Tune.FanC, Tune.FanPct) : ""));
+                if (Tune.Kind == "fan-fixed") w.Append(", fixed " + Tune.FixedPct + " % for " + Tune.TestMs + " ms, lease " + Tune.LeaseMs + " ms, then " + Tune.Then.Kind +
+                    (Tune.Then.Kind == "fan-curve" ? " profile " + FanCurves.NameOf(Tune.Then.FanProfile) : "") +
+                    (Tune.Then.FanC != null ? " curve " + FanCurves.CurveText(Tune.Then.FanC, Tune.Then.FanPct) : ""));
                 w.AppendLine();
             }
             if (Cu != null)
@@ -328,7 +335,9 @@ namespace AmdgpuWddmControl
             "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo",
             // The tuning page. Only cpu-enable and cpu-disable write a value; the other ten send one escape each.
             "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
-            "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask" };
+            "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask",
+            // The case fan card of the Performance page: one escape each, and the driver stores the choice.
+            "fan-auto", "fan-curve", "fan-test" };
 
         public static bool Allowed(string path, string name)
         {
@@ -378,6 +387,19 @@ namespace AmdgpuWddmControl
         public static bool Confirmed(StartHealthState h)
         {
             return h != null && (h.Flags & (StartHealthState.Full | StartHealthState.Confirmed)) == (StartHealthState.Full | StartHealthState.Confirmed);
+        }
+
+        // Whether this start needs a confirmation from the person. The KMD's confirmed flag belongs to one epoch of
+        // the start health, and the epoch moves on with every change of the picture's visibility (a monitor that
+        // sleeps, a mode change), so a start the logon task confirmed reads as unconfirmed again later (b21, lab
+        // 2026-10-07: confirmed at epoch 5, flags 7 at epoch 7). The boot-loop guard is what decides whether the
+        // next start runs: the driver adds one at every start and only a confirmation clears it. A running driver
+        // with UnconfirmedStarts 0 and no clock trial pending was confirmed, so the window does not ask again.
+        public static bool StartConfirmed(RecoverySnapshot s)
+        {
+            if (s == null) return false;
+            if (Confirmed(s.Health)) return true;
+            return s.DriverRunning && s.P("UnconfirmedStarts") == 0u && s.P("DpmPending") == null;
         }
 
         // Why a reading is not eligible; null when it is. requireFresh false: the window's check, where the last
@@ -802,7 +824,7 @@ namespace AmdgpuWddmControl
                 else
                     add("Driver start", "The driver is not running (" + (s.DriverError ?? "no answer") + "). " + guard, "warn", null, null);
             }
-            else if (Confirmed(s.Health))
+            else if (StartConfirmed(s))
                 add("Driver start", "This start is confirmed. " + guard, "ok", null, null);
             else
             {
@@ -1016,7 +1038,7 @@ namespace AmdgpuWddmControl
                     p.Change = "Tells the driver that this start is healthy. The driver resets its unconfirmed-start counter and keeps automatic clocks if they are on trial.";
                     p.Effect = "at once";
                     if (!s.DriverRunning) return Refuse(p, "The driver is not running: there is no start to confirm.");
-                    if (Confirmed(s.Health)) return Refuse(p, "This start is confirmed already.");
+                    if (StartConfirmed(s)) return Refuse(p, "This start is confirmed already.");
                     var blocker = ConfirmBlocker(s.Health, false);
                     if (blocker != null) return Refuse(p, "This start cannot be confirmed now: " + blocker + ".");
                     p.ConfirmStart = true; p.Undoable = false;
@@ -1068,6 +1090,8 @@ namespace AmdgpuWddmControl
                     // (DpmCurve*, CpuMaxMHz, CpuUvSteps, CpuTempC, CoreMask). WU-042 asks for one control that puts
                     // the standard settings back, so this action carries those steps as well.
                     var left = TunerPlan.StandardSteps(s, p);
+                    if (left != null) p.Notes.Add(left);
+                    left = FanPlan.StandardSteps(s, p);
                     if (left != null) p.Notes.Add(left);
                     // The CU part goes through the same setter as "Standard (24)" (WU-042, WU-055).
                     var cu = CuMode.Plan(s.StoredCu(), CuMode.Stock);
@@ -1183,6 +1207,15 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case "fan-auto":
+                case "fan-curve":
+                case "fan-test":
+                {
+                    var why = FanPlan.Fill(action, s, more, p);
+                    if (why != null) return Refuse(p, why);
+                    break;
+                }
+
                 case "game-undo":
                 case "game-redo":
                 {
@@ -1217,6 +1250,9 @@ namespace AmdgpuWddmControl
             // clock, undervolt steps, temperature cap and core count.
             public string Curve;
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
+            // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".
+            public string FanProfile, FanCurve;
+            public uint? FanTestPct;            // fan-test: the duty of the short test
         }
 
         static bool SameSet(string a, string b)

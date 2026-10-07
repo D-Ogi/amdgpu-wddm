@@ -13,6 +13,8 @@ bc250kmd_cli confirm              explicit human confirmation, checked durable z
 bc250kmd_cli health read          cached device-start identity and completed-presentation witness
 bc250kmd_cli health confirm <generation> <epoch>   checked confirmation of that observed start
 bc250kmd_cli read <offset>        one register through the driver (hex BAR5 byte offset from regcalc; ADR 0007)
+bc250kmd_cli read <name>          the same for a register of the named read list (gen_regs.py EXTRA_READS),
+                                  as NAME, mmNAME or IP.NAME; the tool prints the offset it resolved
 bc250kmd_cli write <offset> <v>   one register on the driver's write table, read back
 bc250kmd_cli memory               where the framebuffer, BAR0 and the VRAM carve-out are (E08)
 bc250kmd_cli vread <phys|bar0> <offset>          one 32-bit word of VRAM through either path
@@ -42,6 +44,9 @@ bc250kmd_cli dpm tune thermal <hot_ms> <soft_mC|off> <soft_ms>
 bc250kmd_cli dpm floor <MHz|off>                  a runtime clock floor; thermal, critical and max-setting limits still win
 bc250kmd_cli dpm confirm                          clears a pending DPM start (elevated)
 bc250kmd_cli interop                              the GPU DWM interop switches this start runs with, and why
+bc250kmd_cli dpaudio [state]                      DP audio: the step 0 check table, the decision a start would take
+                                                  now, and the record of the last start with the stream state
+                                                  (driver/kmd/dpaudio.c, ABI 2 from 0.7.216, ABI 1 before)
 bc250kmd_cli journal [from]                       the paging journal (docs/design/paging-journal.md)
 bc250kmd_cli journal follow SECONDS [MS]          one process, one held adapter, new records every MS (default 1000)
 ```

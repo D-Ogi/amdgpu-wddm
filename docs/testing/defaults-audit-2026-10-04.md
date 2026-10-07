@@ -14,6 +14,22 @@ fix/approuter-gpu-default 06a0975b, BD-061). The package payload behind that zip
 stack, so row 2 is urgent. The lab itself points GpuUmdPath at app-route-quiet since 2026-10-04T01:10Z (`STATE.md`),
 which a tester does not get.
 
+Status note (2026-10-07, row 4): measured on unit A with `tools/win/d3d9probe`. With `bc250umd.dll` in the D3D9 slot,
+`CreateDeviceEx` fails with D3DERR_NOTAVAILABLE and Windows does not fall back to D3D9On12. With the slot empty, D3D9
+renders through `d3d9on12.dll` on our D3D12 driver. Branch `installer/d3d9on12` writes the empty slot in both views
+and ships no stub. 32-bit D3D9 still gets no device, because there is no 32-bit D3D12 UMD (row 3).
+Branch `umd/wow64-d3d12` adds that UMD (`wow64\d3d12`, the fourth `UserModeDriverNameWow` entry); not yet measured on
+unit A.
+
+Status note (2026-10-07, row 18): the premise of the row is wrong for Windows 11. Measured on the development PC
+(build 26200, x64 and x86): the Direct3D 10.0 runtime asks a driver that exports both entries for `OpenAdapter10_2`,
+not `OpenAdapter10`, and creates its device at a D3D11-family interface, like the 10.1 and 11 runtimes
+(`evidence/windows/2026-10-07-BD081-d3d10-entry-devpc`). Our router exports both entries, so a D3D10.0 application
+takes the AppRouter decision at `OpenAdapter10_2` and gets the application GPU UMD under `gpu-default`, x64 and x86.
+The router's `OpenAdapter10` path is reached by no measured runtime; it stays on the CPU UMD. No router or default
+changes. The check on unit A is one run of `tools/win/d3d10probe --trace-entry`: the route line must read
+`entry=OpenAdapter10_2 route=gpu` and the probe PASS.
+
 ## Gaps, sorted by severity
 
 | # | Gap | What a user gets today | Evidence | Sev | What exists already | Smallest fix |
@@ -35,7 +51,7 @@ which a tester does not get.
 | 15 | Standard (non-admin) users lose the driver | The start-confirm task runs only for administrators: a standard user falls back to Basic Display after two restarts, with DPM off (V, documented) | wt `install.ps1:744` (GroupId S-1-5-32-544); `INSTALL.md` "The small blue window after logon" | LOW | - | Run the task as SYSTEM at the logon of any user |
 | 16 | No HDR scan-out, no VRR | 10-bit and FP16 swap chains are composed, but output is 8-bit; HDR10 is not offered (`CheckColorSpaceSupport` flags 0) (V). No VRR (I, from WDDMVersion 2.0) | wt `driver/kmd/display.c:637-639`, `wddm.c:2700`; `docs/m15-reconciliation.md` M15.4 | LOW | M15.4 architecture (FP16 and 10-bit rows in `driver/contract/amdgpu_wddm_surface_format.h`) | Later WDDMVersion step plus EDID plus DCN colour path |
 | 17 | No hardware-accelerated GPU scheduling | `Hardware Scheduling: DriverSupportState:AlwaysOff Enabled:False`, `Driver Model: WDDM 2.0`, `Block List: DISABLE_HWSCH` (V) | probe2 (dxdiag); wt `driver/kmd/wddm.c:2700` | LOW | - | ADR 0019 WDDMVersion move |
-| 18 | D3D10.0 apps always on the CPU | `OpenAdapter10` calls go to the CPU UMD even under gpu-default (V) | wt `driver/umd/router/router-policy.h` `D3d10Entry`; `router.cpp` header comment | LOW | - | Export `OpenAdapter10` from the GPU shell |
+| 18 | D3D10.0 apps always on the CPU | `OpenAdapter10` calls go to the CPU UMD even under gpu-default (V). Status 2026-10-07: no Windows 11 runtime calls `OpenAdapter10`; D3D10.0 applications arrive at `OpenAdapter10_2` and take the GPU UMD (measured on the development PC, see the status note above; unit A check open) | wt `driver/umd/router/router-policy.h` `D3d10Entry`; `router.cpp` header comment; `evidence/windows/2026-10-07-BD081-d3d10-entry-devpc` | LOW | - | None in the router: run `tools/win/d3d10probe --trace-entry` on unit A |
 | 19 | D3D11 has no driver command lists | THREADING caps 0, so the runtime emulates deferred contexts (V); the cost is unmeasured (I). RotTR's D3D11 route ran 2.68 fps with pipeline compiles inline on the game thread (K110) | wt `driver/umd/dxvk/adapter-caps.h` (`D3D11DDICAPS_THREADING`); `KNOWLEDGE.md` K110 | LOW | - | After row 2 |
 | 20 | Shader model ceiling 6.6 | SM 6.7 and 6.8 are never reported (V) | wt `driver/umd/d3d12/engine-ddi/caps.cpp:265, 306-307` | LOW | vkd3d-proton supports more | Raise the ceiling when a title needs it |
 | 21 | No OpenCL; DirectML unverified | The OpenCL Vendors key is empty (V). DirectML on our D3D12 is untested (I) | Lab probe1 | LOW | ADR 0016 (clvk); CLon12 in the Compatibility Pack | Test the Compatibility Pack together with row 7 |

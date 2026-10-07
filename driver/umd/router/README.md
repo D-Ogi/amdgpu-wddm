@@ -15,6 +15,12 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   are compared as final resolved paths (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions read as
   one form; an image or directory that cannot be resolved stays on the CPU UMD unless `Allow` names it (reason
   `app-component-unknown`);
+- a Direct3D 10.0 application takes the same application decision as a D3D11 one. The 10.0, 10.1 and 11 runtimes
+  of Windows 11 all open the router through `OpenAdapter10_2` and create a device at a D3D11-family interface
+  (BD-081, measured on x64 and x86 on 2026-10-07: `evidence/windows/2026-10-07-BD081-d3d10-entry-devpc`). The
+  router's `OpenAdapter10` export stays, and still sends every application to the CPU UMD (reason
+  `app-d3d10-entry`), because the application GPU UMD has no `OpenAdapter10`; no measured runtime calls it.
+  `tools/win/d3d10probe --trace-entry` shows the entry and the interface for one process;
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
 
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's

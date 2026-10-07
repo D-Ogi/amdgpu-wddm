@@ -34,7 +34,9 @@ param(
     # Build only.
     [switch]$NoRun,
     # Steps 0 to 2 only: the static library the shell links, and its host tests.
-    [switch]$NativeOnly
+    [switch]$NativeOnly,
+    # Target architecture: x86 builds the library of the 32-bit (WoW64) shell with vcvarsamd64_x86.bat (common.ps1).
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
@@ -71,7 +73,7 @@ New-Item -ItemType Directory -Force $OutputDir | Out-Null
 $saved = Save-ProcessEnvironment
 try {
     $env:TEMP = $OutputDir; $env:TMP = $OutputDir
-    $null = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
+    $null = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
     $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
     # /O2: the library holds the hot per-draw DDIs (draw, submit, descriptor copy, barriers) and compiled at the
     # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol

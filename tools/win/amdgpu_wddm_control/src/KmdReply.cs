@@ -1,6 +1,6 @@
 // Replies of the KMD's software-state escapes, parsed from the raw buffers bc250control.dll fills. Pure functions:
 // no P/Invoke here, so the host tests run on any PC. Layouts: driver/kmd/bc250kmd_escape.h (BC250_ESCAPE_DPM 160
-// bytes, BC250_ESCAPE_START_HEALTH 96, BC250_ESCAPE_INTEROP 104, BC250_ESCAPE_LOG 10812) and BC250_VIDEO_MEMORY of
+// bytes as ABI 1, BC250_ESCAPE_DPM_EX 248 as ABI 3, BC250_ESCAPE_START_HEALTH 96, BC250_ESCAPE_INTEROP 104, BC250_ESCAPE_LOG 10812) and BC250_VIDEO_MEMORY of
 // tools/win/bc250kmd_cli/bc250kmd_cli.c (264). test/UnitTests.cs checks the offsets against the header text.
 using System;
 using System.Collections.Generic;
@@ -16,9 +16,15 @@ namespace AmdgpuWddmControl
         public int TemperatureMc;
         public uint BusyPermille, BusyAvgPermille, ThermalEvents, Errors;
         public ulong UptimeMs, Generation;
+        // RUN_DPM ABI 3 (KMD 0.7.215): the SMU metrics table. Zero in an ABI 1 reply. The power figures are the chip's
+        // own: SocketPowerMw is the processor and the graphics together, without the rest of the board.
+        public uint AbiVersion, MetricsState, MetricsAgeMs, SocketPowerMw, SocketPowerAvgMw, GfxPowerMw, SocPowerMw, GfxMv, SocMv;
 
         public const uint FlagRunning = 1, FlagGoverning = 2, FlagPending = 4, FlagConfirmed = 8, FlagPaused = 16,
             FlagStable = 32, FlagSession = 64, FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512;
+        // ABI 3 only: the metrics values come from a table at most three seconds old.
+        public const uint FlagPower = 8192;
+        public const uint MetricsOff = 0, MetricsWaiting = 1, MetricsOk = 2, MetricsRefused = 3, MetricsNoTable = 4, MetricsBadTable = 5;
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
@@ -130,6 +136,27 @@ namespace AmdgpuWddmControl
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
+    // BC250_ESCAPE_FAN (272 bytes, driver/kmd/fan.c, docs/design/fan.md Part B): who runs the case fan now, the curve
+    // in force, the choice stored for every start, and why the driver gave the fan back to the board last time.
+    // State, Mode, Profile, Reason and Error are the enumerations of driver/shim/include/bc250_fan.h.
+    public sealed class FanState
+    {
+        public uint Version, Flags, Mode, State, Reason, DoubtReason, Profile, Points;
+        public uint[] CurveC, CurvePct;
+        public uint FixedPct, LeaseMs, TargetPct, AppliedPct, WrittenRaw, ReadbackRaw, Rpm, Channel;
+        public int GuardMc;
+        public uint SavedMode, SavedTarget, Error, StoredMode, StoredProfile, Gate;
+        public ulong Takeovers, Handbacks, Writes, Failures, Emergencies, Doubts, LeaseExpiries, WatchdogFires, Generation;
+
+        public const uint FlagEnabled = 1, FlagControlling = 2, FlagEmergency = 4, FlagLeased = 8, FlagStored = 16,
+            FlagFault = 32, FlagGated = 64, FlagPaused = 128, FlagRestoreSaved = 256, FlagSubstituted = 512, FlagHeldBack = 1024;
+        public const uint ModeBoard = 0, ModeCurve = 1, ModeFixed = 2;
+        public const uint StateOff = 0, StateBoard = 1, StateCurve = 2, StateFixed = 3, StateEmergency = 4, StateDoubt = 5, StateFault = 6;
+        public const uint ProfileCustom = 0, ProfileStandard = 1, ProfileQuiet = 2, ProfilePerformance = 3;
+        public const uint GateOk = 0, GateSetting = 1, GateReader = 2, GateChip = 3;
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+    }
+
     public sealed class VideoMemoryState
     {
         public uint Segments;
@@ -151,10 +178,14 @@ namespace AmdgpuWddmControl
     public static class KmdReply
     {
         public const uint Magic = 0x30353242;   // "B250"
+        // DpmBytes is RUN_DPM ABI 1. DpmAbi3Bytes is ABI 3 (KMD 0.7.215): the ABI 2 structure (192 bytes) followed by
+        // BC250_DPM_METRICS (56 bytes). The application asks with ABI 3 first and with ABI 1 after a refusal.
+        public const int DpmAbi3Bytes = 248, DpmMetricsOffset = 192;
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
         public const int HwmonBytes = 216;
         public const int CurveBytes = 360, CpuBytes = 296, CurvePoints = 11, CpuCoreSlots = 8;
-        public const uint CmdCuMode = 22, CmdHwmon = 27, CmdCurve = 28, CmdCpu = 29;
+        public const uint CmdCuMode = 22, CmdHwmon = 27, CmdCurve = 28, CmdCpu = 29, CmdFan = 30;
+        public const int FanBytes = 272, FanCurveSlots = 8;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
         public const uint CmdStartHealth = 21, CmdDpm = 23, CmdInterop = 25, CmdGetLog = 12;
@@ -168,10 +199,28 @@ namespace AmdgpuWddmControl
             if (U(b, 0) != Magic || U(b, 1) != command) throw new FormatException("reply is not a command " + command + " answer");
         }
 
+        // An ABI 1 reply (160 bytes) or an ABI 3 reply (248 bytes). Each length carries exactly one AbiVersion.
         public static DpmState ParseDpm(byte[] b)
         {
-            Head(b, DpmBytes, CmdDpm);
-            if (U(b, 5) != 1) throw new FormatException("DPM ABI " + U(b, 5) + ", 1 expected");
+            bool abi3 = b != null && b.Length == DpmAbi3Bytes;
+            Head(b, abi3 ? DpmAbi3Bytes : DpmBytes, CmdDpm);
+            uint abi = abi3 ? 3u : 1u;
+            if (U(b, 5) != abi) throw new FormatException("DPM ABI " + U(b, 5) + ", " + abi + " expected");
+            var d = Dpm1(b);
+            d.AbiVersion = abi;
+            if (abi3)
+            {
+                int m = DpmMetricsOffset / 4;
+                d.MetricsState = U(b, m); d.MetricsAgeMs = U(b, m + 1);
+                d.SocketPowerMw = U(b, m + 4); d.SocketPowerAvgMw = U(b, m + 5);
+                d.GfxPowerMw = U(b, m + 6); d.SocPowerMw = U(b, m + 7); d.GfxMv = U(b, m + 8); d.SocMv = U(b, m + 9);
+            }
+            else d.Flags &= ~DpmState.FlagPower;     // the bit means something only in an ABI 3 reply
+            return d;
+        }
+
+        static DpmState Dpm1(byte[] b)
+        {
             return new DpmState
             {
                 Version = U(b, 3), Flags = U(b, 7), Mode = U(b, 8), Requested = U(b, 9), Reason = U(b, 10), Throttle = U(b, 11),
@@ -283,6 +332,26 @@ namespace AmdgpuWddmControl
                 Reads = U(b, 58), Writes = U(b, 59), Refusals = U(b, 60), Reverts = U(b, 61),
                 RevertRetries = U(b, 62), RevertFailures = U(b, 63),
                 Generation = Q(b, 272),
+            };
+        }
+
+        public static FanState ParseFan(byte[] b)
+        {
+            Head(b, FanBytes, CmdFan);
+            if (U(b, 5) != 1) throw new FormatException("fan ABI " + U(b, 5) + ", 1 expected");
+            if (U(b, 13) > FanCurveSlots) throw new FormatException("fan curve has " + U(b, 13) + " points, " + FanCurveSlots + " at most");
+            return new FanState
+            {
+                Version = U(b, 3), Flags = U(b, 7), Mode = U(b, 8), State = U(b, 9), Reason = U(b, 10), DoubtReason = U(b, 11),
+                Profile = U(b, 12), Points = U(b, 13),
+                CurveC = Vector(b, 14, FanCurveSlots), CurvePct = Vector(b, 22, FanCurveSlots),
+                FixedPct = U(b, 30), LeaseMs = U(b, 31), TargetPct = U(b, 33), AppliedPct = U(b, 34),
+                WrittenRaw = U(b, 35), ReadbackRaw = U(b, 36), GuardMc = (int)U(b, 37), Rpm = U(b, 38), Channel = U(b, 39),
+                SavedMode = U(b, 40), SavedTarget = U(b, 41), Error = U(b, 42), StoredMode = U(b, 43), StoredProfile = U(b, 44),
+                Gate = U(b, 45),
+                Takeovers = Q(b, 184), Handbacks = Q(b, 192), Writes = Q(b, 200), Failures = Q(b, 208),
+                Emergencies = Q(b, 216), Doubts = Q(b, 224), LeaseExpiries = Q(b, 232), WatchdogFires = Q(b, 240),
+                Generation = Q(b, 248),
             };
         }
 

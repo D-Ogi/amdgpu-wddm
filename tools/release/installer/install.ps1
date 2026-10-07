@@ -558,13 +558,20 @@ function Invoke-Verify {
     if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
     else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
 
+    # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot empty, so that D3D9 goes through
+    # D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
+    $gpuSwKey = Get-DeviceDriverKey -InstanceId $id
+    if (-not $gpuSwKey) { Add-Result 'D3D registration' $false 'no software key for the GPU' }
+    else {
+        $reg = @(Test-UmdRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
+        Add-Result 'D3D registration' ($reg.Count -eq 0) $(if ($reg.Count) { $reg -join '; ' } else { 'UserModeDriverName (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverName' })
+    }
     # 32-bit processes (BD-064): the Wow registration, the router's Wow paths and x86 images in place. Registration
     # only: no 32-bit device is created here.
-    $wowKey = Get-DeviceDriverKey -InstanceId $id
-    if (-not $wowKey) { Add-Result '32-bit D3D/Vulkan' $false 'no software key for the GPU' }
+    if (-not $gpuSwKey) { Add-Result '32-bit D3D/Vulkan' $false 'no software key for the GPU' }
     else {
-        $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $wowKey)
-        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9/10/11, no D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
+        $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
+        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
 
     # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
@@ -727,6 +734,10 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     if ($installedManifest -and $script:Manifest) {
         try { $script:OrphanRows = @(Resolve-OrphanFilePlan (Get-OrphanFilePlan -PreviousManifest $installedManifest -NewManifest $script:Manifest -InstallRoot $InstallRoot)) }
         catch { Write-Warn2 "the files of the release installed in $InstallRoot were not examined ($($_.Exception.Message)): none of them is removed" }
+        # The D3D9 stub of the earlier releases is not a row here: the stub step of the files stage takes it away by
+        # the uninstaller's rule (whatever its bytes, unless it was there before the first install of ours).
+        $stubPaths = @(Get-LegacyStubPaths | ForEach-Object { $_.path.ToLowerInvariant() })
+        $script:OrphanRows = @($script:OrphanRows | Where-Object { $stubPaths -notcontains ([string]$_.path).ToLowerInvariant() })
         $takeAway = @($script:OrphanRows | Where-Object { $_.state -eq 'remove' })
         $changed = @($script:OrphanRows | Where-Object { $_.state -eq 'changed' })
         $gone = @($script:OrphanRows | Where-Object { $_.state -eq 'absent' })
@@ -954,23 +965,22 @@ Invoke-Change "copy licenses\ and THIRD-PARTY.md -> $InstallRoot\licenses (the l
     Copy-TreeSafe -Source (Join-Path $package 'licenses') -Destination (Join-Path $InstallRoot 'licenses')
     [void](Copy-FileSafe -Source (Join-Path $package 'THIRD-PARTY.md') -Destination (Join-Path $InstallRoot 'licenses\THIRD-PARTY.md'))
 } | Out-Null
-# Facts about the computer before the install are recorded once and saved before the step that changes them.
-$stub = Join-Path $env:windir 'System32\bc250umd.dll'
-[void](Set-StateValueOnce $state 'stub_existed' (Test-Path -LiteralPath $stub))
-$stubWow = Join-Path $env:windir 'SysWOW64\bc250umd.dll'
-[void](Set-StateValueOnce $state 'stub_wow_existed' (Test-Path -LiteralPath $stubWow))
+# Facts about the computer before the install are recorded once and saved before the step that changes them. The stub
+# flags come from the first install of ours: a stub that was there before it is not ours and stays.
+foreach ($s in @(Get-LegacyStubPaths)) { [void](Set-StateValueOnce $state $s.flag (Test-Path -LiteralPath $s.path)) }
 $bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
 $fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
 if (-not $script:DryRunMode) { Save-InstallState $state }
-Invoke-Change "copy payload\system32\bc250umd.dll -> $stub (the D3D9 slot of UserModeDriverName; same SHA256: kept; in use: replaced by rename)" {
-    $r = Copy-FileSafe -Source (Join-Path $package 'payload\system32\bc250umd.dll') -Destination $stub
-    Write-Info "$stub`: $r"
-} | Out-Null
-Invoke-Change "copy payload\syswow64\bc250umd.dll -> $stubWow (the D3D9 slot of UserModeDriverNameWow, 32-bit processes; same SHA256: kept; in use: replaced by rename)" {
-    $r = Copy-FileSafe -Source (Join-Path $package 'payload\syswow64\bc250umd.dll') -Destination $stubWow
-    Write-Info "$stubWow`: $r"
-} | Out-Null
+# D3D9 goes through D3D9On12 (the empty D3D9 slot, below): no stub is installed. The releases up to
+# 0.7.213.102-tester.17 installed bc250umd.dll in System32 and SysWOW64; it goes here, as uninstall.ps1 takes it.
+foreach ($s in @(Get-LegacyStubPaths)) {
+    if ($state.($s.flag)) { Write-Info "$($s.path) was there before the first install of ours: kept (no slot names it)"; continue }
+    if (-not (Test-Path -LiteralPath $s.path)) { continue }
+    Invoke-Change "remove $($s.path) (the D3D9 stub of an earlier release; D3D9 now goes through D3D9On12; in use: removed at the restart)" {
+        Remove-PathOrSchedule $s.path
+    } | Out-Null
+}
 $fwAcl = $(if ($fwExisted) { 'its existing access rights are kept' } else { 'created writable by administrators only' })
 Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfish2_*.bin, LICENSE.amdgpu) from $fwStaging -> $($script:FirmwareInstallDir); $fwAcl; $bc250Dir itself is not changed" {
     # An existing C:\BC250 may hold other files: its access rights stay as they are. Only the firmware folder that
@@ -1119,10 +1129,11 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 # pnputil back.
 Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames -Reopen:$script:ReopenClosures
 
-# Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.
-$umd = @('bc250umd.dll', (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
+# Graphics registration in the GPU's software key: the D3D9 slot empty (D3D9On12 on our D3D12 driver), the D3D10/11
+# slots, the D3D12 slot, Vulkan.
+$umd = Get-UmdNames $InstallRoot
 $icdJson = Join-Path $InstallRoot 'vulkan\radeon_icd.json'
-Invoke-Change ("$classKey UserModeDriverName = " + ($umd -join ' | ') + "; VulkanDriverName = $icdJson") {
+Invoke-Change ("$classKey UserModeDriverName = " + (Format-UmdNames $umd) + "; VulkanDriverName = $icdJson") {
     New-ItemProperty -LiteralPath $classKey -Name UserModeDriverName -Value ([string[]]$umd) -PropertyType MultiString -Force | Out-Null
     New-ItemProperty -LiteralPath $classKey -Name VulkanDriverName -Value ([string[]]@($icdJson)) -PropertyType MultiString -Force | Out-Null
 } | Out-Null
@@ -1131,10 +1142,11 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
     New-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
-# The same for 32-bit processes (BD-064): D3D9/10/11 slots only (no x86 D3D12 UMD), the x86 Vulkan ICD.
+# The same for 32-bit processes (BD-064): the empty D3D9 slot (D3D9On12 on the x86 D3D12 shell), the D3D10/11 slots,
+# the x86 D3D12 slot, the x86 Vulkan ICD.
 $umdWow = Get-WowUmdNames $InstallRoot
 $icdJsonWow = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
-Invoke-Change ("$classKey UserModeDriverNameWow = " + ($umdWow -join ' | ') + "; VulkanDriverNameWow = $icdJsonWow") {
+Invoke-Change ("$classKey UserModeDriverNameWow = " + (Format-UmdNames $umdWow) + "; VulkanDriverNameWow = $icdJsonWow") {
     New-ItemProperty -LiteralPath $classKey -Name UserModeDriverNameWow -Value ([string[]]$umdWow) -PropertyType MultiString -Force | Out-Null
     New-ItemProperty -LiteralPath $classKey -Name VulkanDriverNameWow -Value ([string[]]@($icdJsonWow)) -PropertyType MultiString -Force | Out-Null
 } | Out-Null

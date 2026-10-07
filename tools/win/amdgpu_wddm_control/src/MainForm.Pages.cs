@@ -195,7 +195,7 @@ namespace AmdgpuWddmControl
             var p = Frame("performance", width);
             var now = new CardPanel(Strings.T("perf.now.title"), width);
             Mark("perf.sensors", now);
-            foreach (var row in Sensors.Rows(_snap.Dpm, _vram, _fan))
+            foreach (var row in Sensors.Rows(_snap.Dpm, _vram, _fan, _snap.Fan))
             {
                 var r = row;
                 int keyWidth = Math.Min(Theme.S(210), now.Inner / 3);
@@ -208,13 +208,14 @@ namespace AmdgpuWddmControl
             }
             now.Add(Ui.Dim(Strings.T("perf.now.note"), now.Inner));
             p.Controls.Add(now);
+            p.Controls.Add(BuildFanCard(width));
 
             var caches = new CardPanel(Strings.T("perf.cache.title"), width);
             Mark("perf.cache", caches);
             foreach (var c in CacheInventory.Read(CacheInventory.D3D12Directory())) caches.Pair(c.Name, c.Text);
             caches.Add(Ui.Dim(Strings.T("perf.cache.note"), caches.Inner));
             p.Controls.Add(caches);
-            p.Controls.Add(LaterCard(width, "later.power", "later.fan", "later.fps-counter", "later.cache-clear"));
+            p.Controls.Add(LaterCard(width, "later.power", "later.fps-counter", "later.cache-clear"));
             return p;
         }
 
@@ -228,7 +229,7 @@ namespace AmdgpuWddmControl
         void RefreshLiveLabels()
         {
             if (_page == "performance")
-                foreach (var row in Sensors.Rows(_snap.Dpm, _vram, _fan))
+                foreach (var row in Sensors.Rows(_snap.Dpm, _vram, _fan, _snap.Fan))
                 {
                     Label l;
                     if (!_live.TryGetValue("perf." + row.Id, out l)) continue;

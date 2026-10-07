@@ -15,6 +15,7 @@ onto a different path; this tool puts all of them side by side.
 ```
 pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget                          # plain variant
 pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget -AgilitySdkVersion 619    # Agility SDK variant
+pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget -Arch x86 -Out <dir>      # 32-bit: the WoW64 D3D12 driver
 ```
 
 PowerShell 7: under Windows PowerShell 5.1 the bad-argument check stops the script, because the tool's message on

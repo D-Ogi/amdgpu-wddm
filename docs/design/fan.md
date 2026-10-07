@@ -9,8 +9,10 @@ cannot read it yet" in its Fan row, and a lab session record held no fan speed. 
 the read path, which KMD 0.7.213.1 adds. The path was written as revision 208 on `fan/read-nct6686` and
 train b20 merged it into the lineage that ships, so the released 0.7.208.1 does not have it.
 
-**Part B, the write path, is NOT implemented.** The last section says what it would be, and why it waits
-for the owner.
+**Part B, the write path, is the last section.** The owner allowed it on 2026-10-06: the driver takes the
+fan from the BIOS curve while it runs, and gives it back to the chip's automatic mode on every exit path.
+Part B adds one writer, `driver/shim/bc250_fan.c`, and keeps the reader of this page as it is. Its lab write
+path is not yet validated on Windows: see the lab trial at the end.
 
 ## What the chip is
 
@@ -47,8 +49,9 @@ A 16-bit read is two such reads, the high byte at `reg` and the low byte at `reg
 hold. The index latch must not move between the two halves.
 
 **Those are the only writes the read path makes.** They go to the chip's own address latch, never to a
-configuration, control, limit or duty register. `bc250_hwmon_write_allowed()` answers "no" for every EC
-register, and both host tests assert that the model of the chip saw no write outside the two latch ports.
+configuration, control, limit or duty register. `bc250_hwmon_write_allowed()` admits three EC registers, and
+only the fan control of Part B calls the write function. Both host tests assert that a sample of the reader
+writes nothing outside the two latch ports.
 
 ## Where the parts are
 
@@ -62,11 +65,14 @@ register, and both host tests assert that the model of the chip saw no write out
 | `tools/win/bc250kmd_cli/bc250kmd_cli.c` | `Bc250Hwmon`, `bc250kmd_cli fan`, and a fan line in `telemetry` |
 | `tools/win/amdgpu_wddm_control` | the Fan row of the Performance page, and a `fan:` line in the support report |
 | `tools/win/bc250mon` | the Fan row of the SoC / GPU panel, and the fan in `GET /telemetry` |
+| `driver/shim/include/bc250_fan.h`, `driver/shim/bc250_fan.c` | Part B, the policy of the fan control: the handshake, the restore record, the curves, doubt, the emergency, leases, faults. No OS call |
+| `driver/kmd/fan.h`, `driver/kmd/fan.c` | Part B in the miniport: the gate, the step, the exit paths, the watchdog, the bugcheck callback, the stored choice, `RUN_FAN` |
+| `tools/win/amdgpu_wddm_control/src/MainForm.Fan.cs`, `FanPlan.cs` | Part B in the control application: the Case fan card and its two helper actions |
 
 ## The five rules the driver keeps
 
-1. **Read only.** See above. There is no write function in the shim at all, so a duty write cannot arrive
-   by accident.
+1. **The reader reads only.** See above. The reader has no write call. The one writer is the fan control of
+   Part B, which goes through `bc250_hwmon_write8()` and an allowlist of three registers.
 2. **The Super I/O configuration ports are never touched.** See above.
 3. **The gate is open from 0.7.213, and it still exists.** The reader is finished, so it rides the release on
    and `EnableHwmon` 0 is the one switch that takes every port access away again (the release-train rule,
@@ -251,39 +257,234 @@ The guard is the hotter of the driver's Tctl and the EC's own SB-TSI channel, wi
 is the instrument under test: it can be absent from the channel map or refused in one sample, so it must not
 be the only thermometer of a run that heats the board. Two samples in a row with NEITHER reading end the phase.
 
-## Part B: the write path, NOT implemented
+## Part B: the write path
 
-Part B would let the driver set the fan duty. It is not written, and no code of it exists in the tree.
+Part B lets the driver set the fan duty. The owner allowed it on 2026-10-06 ("TAK"), under three conditions:
 
-What it would need:
+1. The BIOS "Fan Setting" option stays unchanged. The driver never writes it.
+2. The driver owns the fan only while it runs.
+3. The driver gives the fan back to the chip's automatic mode on every exit path.
 
-- `bc250_hwmon_write_allowed()` would stop returning 0 for the duty registers. That single function is the
-  whole gate today, and both host tests assert that it refuses everything.
-- The out-of-tree `nct6687d` alone names the mode mask at `0x0A00` and the duty write registers at
-  `0x0A28 + i`, and that driver is MSI-centred. On this board both are UNPROVEN. This repository's rules
-  forbid a write to a register of unknown meaning, so each one needs a readback trial first.
-- The board owns the fan curve now. Two owners of one fan is a thermal-safety question, not a feature
-  question: a driver that holds a low duty while the EC wants a high one would hide a hot board.
-- The BIOS "Fan Setting" option would have to stay where the owner put it, which means our duty would have
-  to live inside whatever the EC curve allows, or replace it completely.
+The release-train rule applies: the feature is on by default, and `EnableFanControl` 0 is its bisect switch.
+The goal is parity with the SkillFishOS Control Center: an automatic mode, a driver curve, presets and a
+curve that the user edits.
 
-**The owner has answered the first question.** On 2026-10-06, asked whether the driver may take the fan over
-from the BIOS curve at runtime, the owner said yes, under three conditions: the BIOS "Fan Setting" option
-itself stays unchanged, the driver owns the fan only while it runs, and it gives the fan back to the chip's
-automatic mode on every exit path. Fan control in our GUI is part of the same instruction, beside the GPU
-voltage/frequency curve and the CPU undervolt.
+### What the chip does
 
-**That answer does not put any write code in this tree.** The branch that carries this page is the read path,
-Part A, and its scope was frozen to reading. Every statement above about `bc250_hwmon_write_allowed()`
-refusing every register is a statement about the code as it stands, and both host tests assert it.
+M803 measured the write sequence on unit A under Linux, on fan index 1, the one fan that turns. The
+sequence is the `nct6687d` handshake:
 
-What is still open, and what Part B needs before a single duty byte is written:
+| Step | Register | Value | What M803 saw |
+| --- | --- | --- | --- |
+| open | `0x0A01` (configuration request) | `0x80` | the engine status `0x0CF8` goes from `0x60` to `0x08` within one 1 ms poll |
+| take | `0x0A00` (mode mask) | bit 1 set | the EC stops driving fan index 1 |
+| duty | `0x0A29` (duty target of index 1) | 0 to 255 | 255 gives 1699 to 1749 RPM, 102 gives 771 to 774 RPM |
+| close | `0x0A01` | `0x40` | `CFG_CHECK_DONE` and `CFG_LOCK` come back within four polls. `CFG_INVALID` never sets |
+| give back | `0x0A29`, then `0x0A00` | target 128, then bit 1 clear | the EC curve runs the fan again (1357 RPM after 3 s) |
 
-- whether the EC curve stays as a floor under our duty, or our duty replaces it;
-- the readback trial for the two UNPROVEN registers, the mode mask at `0x0A00` and the duty writes at
-  `0x0A28 + i`, which is a lab step and not a code change;
-- the handback rule the owner set, written as code on every exit path: the user's own request, the loop
-  stopping, device stop, a power transition out of D0, driver unload, a lost user-mode lease and a stalled
-  control loop. A bugcheck callback can only be best effort, so the safe-hold duty carries that case.
+`bc250_hwmon_write_allowed()` admits these three registers and no other. The duty targets of the other
+four channels, the configuration register, the engine status and the Super I/O ports stay refused. The
+host test asserts each refusal.
 
-Until Part B exists, the fan row in every tool is a reading and nothing else.
+### The rules of the policy
+
+`driver/shim/bc250_fan.c` decides every duty and makes every write. It has no OS call, no lock and no
+time source, so the host test runs it against a model of the chip. These are its rules:
+
+1. **Only three registers, each one inside an open phase.** A phase that does not open, does not close or
+   closes without `CFG_LOCK` is a handshake failure.
+2. **The restore record comes first.** Inside the first open phase, before the first change, the policy
+   reads the mode mask and the duty target as the board left them. If our mode bit is already set at that
+   moment, a previous driver stopped while it held the fan. The record then holds the M803 rest values
+   (mode `0xE0`, target 128) and sets `SUBSTITUTED`.
+3. **The give-back writes the target first and the mode second.** It writes the recorded target, then
+   clears our bit in the live mask and leaves the other bits as the chip has them. It reads both back.
+4. **On doubt, full speed.** The guard temperature is the hotter of Tctl and the EC's own SB-TSI channel.
+   No valid Tctl, a stale reader, or two readings more than 10 C apart puts the fan at 100 %. Doubt held
+   for 5 s gives the fan back to the board. After 30 s of clean inputs the driver takes it again, at most
+   three times per start.
+5. **A refusal by the chip is a fault.** A target that does not read back, a mode bit that does not stick,
+   a duty read-back that does not follow the target, and a stopped fan at or above the floor each give the
+   fan back at once. The fault latches: the driver writes nothing more in this start, except a retry of a
+   give-back that failed, every 10 s.
+6. **The duty never goes below 20 %, and 0 % is never written.** A three-wire fan can stall below the
+   floor and not start again by itself.
+7. **Emergency at 87 C.** A guard temperature at or above 87 C forces 100 % whatever the curve says. The
+   emergency ends when the guard stays at or below 82 C for 10 s. 87 C is also the DPM's hot step, so the
+   fan acts before the clock pays.
+8. **The output rises at once and falls slowly.** It falls only after 10 s below, by 10 points at most
+   every 2 s. The curve's input falls only when it is 3 C under its peak.
+9. **A leased mode ends with the durable mode from before it.** A fixed duty, and a curve with a lease, end
+   when the lease runs out and nobody renewed it. The driver then runs the last mode it got without a lease
+   (or the mode of the start): the driver's curve, which keeps the fan and follows the temperature again, or
+   the board, which gets the fan back. Until 0.7.215 every lease ended with the board, so a fan test from the
+   control application left the board's curve in force instead of the one the user chose.
+
+### The curves
+
+A curve has 2 to 8 points. The temperatures are 20 to 95 C and rise strictly. The duties are 20 to
+100 % and never fall as the temperature rises. Between two points the duty is the straight line, rounded
+up to a whole percent. Below the first point the first duty applies, above the last point the last duty.
+
+| Profile | Points (C : %) | Use |
+| --- | --- | --- |
+| Standard (the default) | 40:50, 60:70, 70:85, 76:95, 80:100 | never slower than the BIOS Standard Mode, full speed at 80 C, under the 82 C below which the DPM releases a thermal cap |
+| Quiet | 40:30, 60:45, 70:60, 80:80, 85:100 | quieter than the board below 80 C |
+| Performance | 40:60, 55:75, 65:90, 75:100 | louder everywhere |
+
+The Standard curve rests on four measurements under the BIOS Standard Mode: 65 C gave 65 %, 69 C gave
+77 % (the b20 read trial), 70 C gave 80 % (M803) and 83 C gave 96 % (E01). At those four temperatures
+the Standard curve gives 76 %, 81 %, 82 % and 98 %. It gives 95 % (about 1650 RPM) at 80 C and 100 % from
+85 C. No measurement exists below 60 C, so the curve holds 50 % or more there. Every profile reaches 100 %
+at or below 85 C. The 87 C emergency is the backstop for a quiet custom curve.
+
+### The exit paths
+
+Each exit path calls `bc250_fan_handback()` with its reason, through `driver/kmd/fan.c`. The give-back
+uses the full handshake and checks the result. A give-back that fails keeps `CONTROLLING` set, so the next
+exit path, the fault retry and the bugcheck callback still try.
+
+| Exit path | Where | Reason |
+| --- | --- | --- |
+| device stop and remove | `FanStop` from `Bc250StopDevice` and `Bc250RemoveDevice`, after `DpmStop` | `stop` |
+| out of D0 | `FanPause` from `Bc250SetPowerState` after `DpmPause`. `FanResume` takes the fan again in D0 | `power` |
+| out of D0, display-only branch | `FanStop` on the branch that stops the governor | `power` |
+| driver unload | `FanDriverUnload` from `Bc250Unload`, for a device that the stop paths missed | `unload` |
+| the step stops | the watchdog DPC: no step for 3 s. A step that holds the controller for 6 s gets a blind give-back | `watchdog` |
+| the user asks | `RUN_FAN` BOARD, applied at the next step | `user` |
+| a lease runs out | inside the policy, at the step that sees it | `lease` |
+| the control is off while the driver holds the fan | the next step, inside the policy | `disabled` |
+| bugcheck | the bugcheck callback and `Bc250ResetDevice` (`FanResetDevice`) | `bugcheck` |
+
+The bugcheck path runs at HIGH_LEVEL with the other processors stopped. It makes port writes only: no
+lock, no log, at most 20 polls of 100 us, and no check of the result. It is best effort. If it fails, the
+fan stays at the last duty that the driver wrote, and the EC curve returns at the next boot.
+
+### The settings
+
+All are `REG_DWORD` under `Services\bc250kmd\Parameters`.
+
+| Setting | Meaning |
+| --- | --- |
+| `EnableFanControl` | 1 (the default, written by the INF and by the release installer) lets the driver take the fan. 0, and any other value, means the driver never writes the chip. This is the bisect switch |
+| `FanMode` | the stored choice: 0 the board's curve, 1 the driver's curve. Absent means the driver's curve |
+| `FanProfile` | with `FanMode` 1: 1 Standard (also when absent), 2 Quiet, 3 Performance, 0 custom |
+| `FanCurvePoints`, `FanCurve0` to `FanCurve7` | with `FanProfile` 0: the point count (2 to 8) and each point as `(degrees C << 8) \| percent` |
+
+The INF writes `EnableFanControl` only. The driver writes the stored choice when a request carries
+`Store` 1. A stored choice that the policy refuses runs the Standard curve, and the log says so.
+
+The control also needs the reader of Part A online and the chip identified as unit A's. A start that
+fails either condition publishes a gate and writes nothing:
+
+| Gate | Meaning |
+| --- | --- |
+| `ok` | the fan control runs |
+| `EnableFanControl 0` | the switch is 0 |
+| `reader offline` | `EnableHwmon` is 0, or the reader refused the window |
+| `customer ID not unit A` | the customer ID is not `0x162B` (M803) and `HwmonExpectId` does not pin it |
+
+### The escape
+
+`BC250_ESCAPE_RUN_FAN` is 30, ABI 1, 272 bytes. The reply is `BC250_ESCAPE_FAN` in
+`driver/kmd/bc250kmd_escape.h`. Like `RUN_HWMON`, the escape reads a published snapshot and touches no
+port. Every operation takes `NoAdapterSynchronization` only, so a request never idles the GPU.
+
+| Op | What it does | Who may send it |
+| --- | --- | --- |
+| READ (0) | returns the snapshot | everyone |
+| BOARD (1) | gives the fan to the board's curve. `Store` 1 makes that the choice of every start | administrator |
+| CURVE (2) | the driver's curve: a preset, or custom points. `LeaseMs` 0 is durable and `Store` 1 writes it. 5 to 300 s is a trial that ends with the durable mode from before it (rule 9) | administrator |
+| FIXED (3) | one duty of 20 to 100 %, always under a lease of 5 to 300 s, never stored | administrator |
+| RENEW (4) | restarts the lease of a leased mode | administrator |
+
+A write needs `ExpectedGeneration` equal to the `Generation` that a READ of this start returned
+(`STATUS_RETRY` otherwise). It also needs an enabled control (`STATUS_INVALID_DEVICE_STATE` otherwise,
+with `Gate` set). The escape only leaves the request. The governor thread applies it at its next step,
+within one second. A refused request changes nothing, and `Error` names the rule.
+
+RUN_FAN is a new command, not a new revision of an existing one, and `BC250_KMD_VERSION` does not change.
+The escape adds a command and moves no existing layout. An older driver answers
+`BC250_ESCAPE_STATUS_UNKNOWN_COMMAND`, and that is how a tool finds that it talks to an older driver. The
+version constant follows the INF `DriverVer`, so the release train that carries this escape bumps it.
+
+Three gates keep the layout equal in its readers. `fan_native_test.c` asserts the size and every offset at
+compile time. `amdgpu_wddm_control/test/FanTests.cs` compares `KmdReply.ParseFan` and the CLI request
+structure with the C sources. `bc250kmd_cli/test_escape_flags.py` checks the escape flags of every
+operation.
+
+### What the tools show
+
+`bc250kmd_cli fan` prints the reader's line as before and one `fanctl` line after it:
+
+```
+fanctl state=curve mode=curve profile=standard target_pct=70 applied_pct=70 raw=179 readback=179 rpm=1180 \
+    guard_c=60.5 enabled=1 controlling=1 emergency=0 leased=0 lease_ms=0 fault=0 paused=0 held_back=0 \
+    gate=ok reason=none doubt=none takeovers=1 handbacks=0 writes=3 ... curve=40:50,60:70,70:85,76:95,80:100
+```
+
+The values in this example come from the test fixture, not from the lab. The write forms need an
+administrator:
+
+```
+bc250kmd_cli fan auto [store]
+bc250kmd_cli fan curve [standard|quiet|performance] [store]
+bc250kmd_cli fan set <percent 20..100> <seconds 5..300>
+bc250kmd_cli fan renew <seconds 5..300>
+```
+
+The control application has a Case fan card on the Performance page. It shows:
+
+- The fan speed and who runs the fan. The speed comes from `Sensors.FanValue`, the same function that fills
+  the Fan row of the Now card: the reader's own sample first, else the RPM in the `RUN_FAN` reply. The two
+  cards therefore never disagree.
+- Five modes in one segmented row: Automatic (board), Driver curve (the default), Quiet, Performance and
+  Custom, with one line that says what the selected mode does.
+- A chart of the curve: temperature 20 to 95 C across, speed 0 to 100 % up. It shades the 20 % floor and the
+  87 C zone, draws the curve in force dashed when it differs, and puts a ring at the guard temperature and
+  the applied duty. A preset shows its curve here before it is applied. The points move with the mouse or
+  the keyboard (left and right select, up and down change the speed, Ctrl with left and right changes the
+  temperature), always through `FanCurves.Move`, so a curve made on the chart obeys the curve rules. Each
+  point is an accessible child with its own name and value. Compact rows under the chart show every point
+  again, with an inline message when a row breaks a rule.
+- Rules 4 to 8 above in plain words.
+- "Apply curve" (or "Hand the fan to the board"), enabled only when the choice differs from the one in
+  force and stored. After an apply, "Go back to the previous setting" applies the choice from before.
+- A short test: one speed from 30 to 100 % for 10 s (`--action fan-test --fan-test-pct N`). The helper sends
+  FIXED with a 15 s lease, as `bc250kmd_cli fan set` does, reads the fan once a second, and then sends the
+  choice that was in force again (CURVE or BOARD, `LeaseMs` 0, `Store` 0). If the helper stops halfway, the
+  lease runs out and the choice from before the test comes back (rule 9). The window keeps its own poll during the test and shows
+  the fastest RPM it saw. The test is refused while the driver does not run the fan in the normal way:
+  leased, paused, fault, emergency, doubt or held back.
+
+The choices go through the elevated helper (`--action fan-auto` or `--action fan-curve`), always with
+`Store` 1. "Reset to defaults" puts the Driver curve back. The support report carries one `fan control:`
+line.
+
+The read check of Part A, `lab-fan-read.ps1`, judges the board's own curve. With the fan control on, run
+`bc250kmd_cli fan auto` before it, or the RPM trend it judges is the driver's curve.
+
+### The lab trial
+
+The Windows write path is host-tested only. One lab trial of at most three minutes validates it:
+
+1. Install the release that carries Part B. Read `bc250kmd_cli fan`. Pass: `fanctl state=curve
+   controlling=1 gate=ok fault=0`, and `readback` within 8 counts of `raw`.
+2. Run `bc250kmd_cli fan set 40 30`. Pass: about 770 RPM within 5 s.
+3. Wait for the lease to run out, or run `bc250kmd_cli fan auto`. Pass: `state=board controlling=0`
+   and about 1360 RPM, the EC curve, within 5 s.
+4. Run `bc250kmd_cli fan curve`, then restart the display device as the kmd-deploy kit does (disable,
+   enable). Pass: while it is disabled the fan turns at the EC curve's speed. After the enable
+   `controlling=1` again.
+
+During the whole trial Tctl stays below 87 C, and the trial stops at once if it does not.
+
+### Open risks
+
+- The EC window has no arbiter. A third-party monitor that drives the same window can interleave its latch
+  writes with ours. The readback checks turn such a collision into a fault and a give-back, not into a
+  wrong duty that stays.
+- The bugcheck give-back is best effort. It cannot wait for a slow chip and does not check its result.
+- The watchdog DPC runs the handshake at DISPATCH_LEVEL. The polls are bounded (200 polls of 250 us), but
+  a chip that never answers costs that time at raised IRQL.
+- No lab run on Windows wrote the chip yet. M803 measured the sequence under Linux only.

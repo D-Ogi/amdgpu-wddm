@@ -28,6 +28,29 @@ static LONG calls;
 static unsigned smu_version=0x00580600u,version_refuse;
 static HANDLE entered,release_write,stop_started,stop_done;
 static volatile LONG hold_write;
+// The metrics path (0.7.215): the page the firmware writes into, the address it was told, the order of the three
+// messages, and the two ways the fixture misbehaves (a refusal of the transfer, a transfer that writes nothing).
+static volatile ULONG metrics_page[BC250_SMU_METRICS_PAGE/sizeof(ULONG)];
+static ULONGLONG metrics_page_mc=0xF4008CF000ull;   // E03: the address amdgpu named on unit A
+static unsigned metrics_hi,metrics_lo,metrics_named,metrics_refuse,metrics_nowrite,metrics_log[8],metrics_logged;
+static void MetricsFirmwareWrite(void)
+{
+    volatile UCHAR* p=(volatile UCHAR*)metrics_page;
+    unsigned i;
+    // The firmware writes the table where it was told; this fixture checks that it was told the page's address.
+    CHECK(metrics_named==2 && (((ULONGLONG)metrics_hi<<32)|metrics_lo)==metrics_page_mc);
+    if(metrics_nowrite)return;
+    for(i=0;i<BC250_SMU_METRICS_BYTES;i++)p[i]=0;
+    *(volatile USHORT*)(p+BC250_SMU_METRICS_OFF_GFXCLK)=1500;
+    *(volatile USHORT*)(p+BC250_SMU_METRICS_OFF_GFX_TEMP)=6200;
+    *(volatile ULONG*)(p+BC250_SMU_METRICS_OFF_VOLTAGE)=900;
+    *(volatile ULONG*)(p+BC250_SMU_METRICS_OFF_VOLTAGE+4)=919;
+    *(volatile ULONG*)(p+BC250_SMU_METRICS_OFF_POWER)=21000;
+    *(volatile ULONG*)(p+BC250_SMU_METRICS_OFF_POWER+4)=48000;
+    *(volatile ULONG*)(p+BC250_SMU_METRICS_OFF_SOCKET)=78000;
+    *(volatile ULONG*)(p+BC250_SMU_METRICS_HALF+BC250_SMU_METRICS_OFF_SOCKET)=77400;
+    *(volatile USHORT*)(p+BC250_SMU_METRICS_OFF_SOC_TEMP)=6000;
+}
 ULONG NativeRead(PULONG address) {
     unsigned offset=(unsigned)((ULONG_PTR)address-(ULONG_PTR)registers);
     CHECK(OwnerHeld(&owner));
@@ -46,9 +69,15 @@ ULONG NativeRead(PULONG address) {
             case PPSMC_MSG_GetGfxVid:argument=vid;break;
             case PPSMC_MSG_GetSmuVersion:argument=smu_version;break;
             case BC250_CPU_MSG_SET_CORE_ENABLE_MASK:core_mask=argument;break; // the one CPU message on queue 0
+            case PPSMC_MSG_SetDriverTableDramAddrHigh:metrics_hi=argument;metrics_named=1;break;
+            case PPSMC_MSG_SetDriverTableDramAddrLow:CHECK(metrics_named==1);metrics_lo=argument;metrics_named=2;break;
+            case PPSMC_MSG_TransferTableSmu2Dram:CHECK(argument==6u);if(!metrics_refuse)MetricsFirmwareWrite();break;
             default:CHECK(0);
             }
-            reply=(command==PPSMC_MSG_GetSmuVersion && version_refuse)?0xFEu:1u;
+            if(command>=PPSMC_MSG_SetDriverTableDramAddrHigh && command<=PPSMC_MSG_TransferTableSmu2Dram &&
+               metrics_logged<ARRAYSIZE(metrics_log))metrics_log[metrics_logged++]=command;
+            reply=((command==PPSMC_MSG_GetSmuVersion && version_refuse) ||
+                   (command==PPSMC_MSG_TransferTableSmu2Dram && metrics_refuse))?0xFEu:1u;
         }
         return reply;
     }
@@ -310,6 +339,73 @@ int main(void) {
         version_refuse=0;reply=1;
         CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS);
         CHECK(SmuReadFirmwareVersion(&owner,&version)==STATUS_SUCCESS && version==0x00580701u && calls==before+2);
+        SmuOwnerStop(&owner);
+    }
+    // ---- the SMU metrics table (0.7.215, docs/design/dpm.md "Power reading") -----------------------------------
+    // The owner sends the three messages under its lock, names the page once per owner start in amdgpu's order,
+    // poisons the page before every transfer, and lets nothing through its own list but the page's arguments.
+    {
+        UCHAR copy[BC250_SMU_METRICS_BYTES];
+        struct bc250_smu_metrics m;
+        LONG before;
+        unsigned ignored=0;
+        // Offline: nothing is sent, and the reader is told to try again later.
+        before=calls;
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy))==BC250_SMU_METRICS_OFFLINE);
+        CHECK(calls==before && !metrics_logged);
+        CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS && !owner.MetricsTableMc);
+        // Malformed requests: refused before the lock, nothing sent.
+        before=calls;
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,NULL,copy,sizeof(copy))==-22);
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,NULL,sizeof(copy))==-22);
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,0)==-22);
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,243)==-22);
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,BC250_SMU_METRICS_PAGE+4u)==-22);
+        // An address the list does not admit (not page-aligned, or zero): the list refuses the first message.
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc+4u,metrics_page,copy,sizeof(copy))==-22);
+        CHECK(SmuReadMetrics(&owner,0,metrics_page,copy,sizeof(copy))==-22);
+        CHECK(calls==before && !metrics_logged && !owner.MetricsTableMc);
+        // The first read: High, Low, then the transfer, and the table as the firmware wrote it.
+        memset(copy,0,sizeof(copy));
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy))==0);
+        CHECK(calls==before+3 && metrics_logged==3 && metrics_log[0]==PPSMC_MSG_SetDriverTableDramAddrHigh &&
+              metrics_log[1]==PPSMC_MSG_SetDriverTableDramAddrLow && metrics_log[2]==PPSMC_MSG_TransferTableSmu2Dram);
+        CHECK(metrics_hi==0xF4u && metrics_lo==0x008CF000u && owner.MetricsTableMc==metrics_page_mc && !owner.Caller);
+        CHECK(bc250_smu_metrics_parse(copy,sizeof(copy),&m)==BC250_SMU_METRICS_PARSE_OK);
+        CHECK(m.socket_mw==78000 && m.socket_avg_mw==77400 && m.gfx_mw==48000 && m.soc_mw==21000);
+        CHECK(m.gfx_mv==919 && m.soc_mv==900 && m.gfx_mhz==1500 && m.gfx_cc==6200 && m.soc_cc==6000);
+        // Every later read of this owner start: the transfer alone.
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy))==0);
+        CHECK(calls==before+4 && metrics_logged==4 && metrics_log[3]==PPSMC_MSG_TransferTableSmu2Dram);
+        // A transfer the firmware answers OK and writes nothing for: the poison comes back, the decode refuses it.
+        metrics_nowrite=1;
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy))==0);
+        for(i=0;i<sizeof(copy) && copy[i]==BC250_SMU_METRICS_POISON;i++);
+        CHECK(i==sizeof(copy) && bc250_smu_metrics_parse(copy,sizeof(copy),&m)==BC250_SMU_METRICS_PARSE_UNWRITTEN);
+        metrics_nowrite=0;
+        // A refusal of the transfer: a non-zero result that is not OFFLINE, which the reader latches.
+        metrics_refuse=1;before=calls;
+        { int r=SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy));
+          CHECK(r!=0 && r!=BC250_SMU_METRICS_OFFLINE && calls==before+1 && !owner.Caller); }
+        metrics_refuse=0;reply=1;
+        // The clock list still admits none of the three, and the metrics list none of the clock messages.
+        before=calls;
+        owner.Caller=PsGetCurrentThread();
+        CHECK(Message(&owner,PPSMC_MSG_SetDriverTableDramAddrHigh,0xF4u,&ignored)==-22);
+        CHECK(Message(&owner,PPSMC_MSG_SetDriverTableDramAddrLow,0x008CF000u,&ignored)==-22);
+        CHECK(Message(&owner,PPSMC_MSG_TransferTableSmu2Dram,6,&ignored)==-22);
+        owner.Caller=NULL;
+        CHECK(!bc250_smu_metrics_message_allowed(PPSMC_MSG_RequestGfxclk,1500,metrics_page_mc));
+        CHECK(!bc250_smu_metrics_message_allowed(PPSMC_MSG_ForceGfxVid,116,metrics_page_mc));
+        CHECK(!bc250_smu_metrics_message_allowed(PPSMC_MSG_TransferTableDram2Smu,6,metrics_page_mc));
+        CHECK(calls==before);
+        // A new owner start names the page again before its first transfer.
+        SmuOwnerStop(&owner);
+        CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS && !owner.MetricsTableMc);
+        before=calls;metrics_logged=0;
+        CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy))==0);
+        CHECK(calls==before+3 && metrics_log[0]==PPSMC_MSG_SetDriverTableDramAddrHigh &&
+              metrics_log[1]==PPSMC_MSG_SetDriverTableDramAddrLow && metrics_log[2]==PPSMC_MSG_TransferTableSmu2Dram);
         SmuOwnerStop(&owner);
     }
     // Zero is a valid firmware response, distinct from never initialized.

@@ -38,7 +38,49 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
-#define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
+#define BC250_ESCAPE_RUN_FAN 30u                // case fan control: read, board, curve, fixed duty under a lease, renew
+#define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation, steps 1 and 2 state (BC250_ESCAPE_DPAUDIO below)
+#define BC250_KMD_VERSION 0x000700D8u       // revision 216 (INF 0.7.216.1, on 215.1): DP audio step 2, the
+                                            // stream half (dpaudio.c: wall DTO, AFMT, DP_SEC). One escape
+                                            // grows, and that is why this word moves: RUN_DPAUDIO ABI 2,
+                                            // 480 bytes, the unchanged ABI 1 layout (408 bytes) followed by
+                                            // the stream record. ABI 1 answers as before, and the RUN_DPAUDIO
+                                            // number does not change. EnableDpAudioStream is 1 by default;
+                                            // 0 is its bisect switch. The endpoint now stays hidden unless
+                                            // the stream runs, so 0 gives no audio endpoint at all.
+                                            //
+                                            // Revision 215 (INF 0.7.215.1, on 214.1): the b21 train driver.
+                                            // Two escapes are new, and that is why this word moves:
+                                            // BC250_ESCAPE_RUN_FAN (30, fan.c, docs/design/fan.md Part B)
+                                            // and BC250_ESCAPE_RUN_DPAUDIO (31, dpaudio.c, steps 0 and 1).
+                                            // No older escape changes its layout. EnableFanControl,
+                                            // EnableDpAudio and EnableDpAudioEndpoint are 1 by default; 0
+                                            // is each one's bisect switch and gives the 214.1 behaviour.
+                                            //
+                                            // The same revision also reads the SMU metrics table
+                                            // (smu_metrics.c, docs/design/dpm.md "Power reading") and
+                                            // adds RUN_DPM ABI 3: BC250_ESCAPE_DPM_EX, 248 bytes, the
+                                            // unchanged ABI 2 layout followed by BC250_DPM_METRICS (the
+                                            // package power, the two rails, the table's own clock and
+                                            // temperatures). ABI 1 and ABI 2 answer as before, and the
+                                            // RUN_DPM number does not change. EnableSmuMetrics is 1 by
+                                            // default; 0 is its bisect switch and sends no metrics
+                                            // message at all. Not released before this addition, so the
+                                            // word stays 0x000700D7.
+                                            //
+                                            // Revision 214 (INF 0.7.214.1, on 213.1): the VMID pool
+                                            // (kmd/vmid-pool, gfx.c, vmid_pool.h,
+                                            // docs/design/gfx-submit-root-serialization.md). Each page-table
+                                            // root gets a VMID of its own from VMIDs 1 and 3..15, so a job of
+                                            // another process no longer waits for the ring to drain. No escape
+                                            // grows or changes its layout. One field changes its meaning, and
+                                            // that is why this word moves: Valid of a BC250_PJ_GFX_SUBMIT
+                                            // journal record is the VMID of the IB from this revision, and 0 in
+                                            // the records of earlier drivers, whose WDDM jobs all ran at VMID 1.
+                                            // EnableVmidPool 1 is the default (INF and release installer), 0 is
+                                            // its bisect switch, and a start with it at 0 behaves as 0.7.213.1.
+                                            //
+                                            // Revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
                                             // the respin. Seven revisions were written apart on seven branches,
                                             // each taking the next free number for itself: 209 (the DirectFlip
                                             // handshake), 208 again (the fan reader), 210 twice (the ring-gap
@@ -573,6 +615,43 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long long IdleMs;              // time the governor held the idle point
 } BC250_ESCAPE_DPM; // 192 bytes on Windows, ABI 2 (the first 160 are ABI 1)
 
+// RUN_DPM ABI 3 (0.7.215): the SMU metrics table (driver/kmd/smu_metrics.c, driver/shim/include/bc250_smu_metrics.h,
+// docs/design/dpm.md "Power reading"). BC250_ESCAPE_DPM_EX is the ABI 2 structure above, unchanged, with AbiVersion 3,
+// followed by BC250_DPM_METRICS. Everything in the tail is out, and like the rest of RUN_DPM it is the governor
+// thread's published copy: the escape sends no SMU message. The driver takes all three sizes, each with its own
+// AbiVersion; a driver before 0.7.215 refuses 248 bytes with STATUS_INVALID_PARAMETER, and a tool then asks with
+// ABI 2 or ABI 1. BC250_DPM_FLAG_POWER is set in an ABI 3 answer alone, when MetricsState is OK and the table is at
+// most three seconds old. The power figures are the SMU's own: SocketPowerMw is the whole package, processor and
+// graphics together, and neither the board nor the fan is in it.
+#define BC250_DPM_ABI_3 3u
+#define BC250_DPM_ABI2_SIZE 192u             // the ABI 2 prefix of BC250_ESCAPE_DPM_EX, which is BC250_ESCAPE_DPM
+#define BC250_DPM_ABI3_SIZE 248u
+#define BC250_DPM_FLAG_POWER 8192u           // ABI 3: the BC250_DPM_METRICS values come from a fresh table (0.7.215)
+#define BC250_DPM_METRICS_OFF 0u             // EnableSmuMetrics 0: no metrics message is sent
+#define BC250_DPM_METRICS_WAITING 1u         // on; no table accepted yet in this start
+#define BC250_DPM_METRICS_OK 2u              // the values are from the last accepted table (MetricsAgeMs old)
+#define BC250_DPM_METRICS_REFUSED 3u         // the firmware refused or did not answer: no reading until the driver loads again
+#define BC250_DPM_METRICS_NO_TABLE 4u        // no table page (VRAM closed, mapping failed) or no native SMU owner
+#define BC250_DPM_METRICS_BAD_TABLE 5u       // three tables in a row failed the checks: stopped for this start
+typedef struct _BC250_DPM_METRICS {
+    unsigned long MetricsState;             // BC250_DPM_METRICS_*
+    unsigned long MetricsAgeMs;             // since the last accepted table; 0 when there is none
+    unsigned long MetricsReads;             // tables accepted in this start
+    unsigned long MetricsFailures;          // reads in this start that ended without a table
+    unsigned long SocketPowerMw;            // Current.CurrentSocketPower: the package, mW
+    unsigned long SocketPowerAvgMw;         // Average.CurrentSocketPower, mW
+    unsigned long GfxPowerMw, SocPowerMw;   // Current.Power[1] (VDDCR_GFX) and Power[0] (VDDCR_VDD), mW
+    unsigned long GfxMv, SocMv;             // Current.Voltage[1] and Voltage[0], mV
+    unsigned long GfxMHz;                   // Current.GfxclkFrequency: the table's own GPU clock
+    unsigned long GfxTemperatureCc;         // Current.GfxTemperature, centi-Celsius
+    unsigned long SocTemperatureCc;         // Current.SocTemperature, centi-Celsius
+    unsigned long ThrottlerStatus;          // Current.ThrottlerStatus, the firmware's bits as they are
+} BC250_DPM_METRICS; // 56 bytes
+typedef struct _BC250_ESCAPE_DPM_EX {
+    BC250_ESCAPE_DPM Dpm;                   // the ABI 2 layout; Dpm.AbiVersion is BC250_DPM_ABI_3
+    BC250_DPM_METRICS Metrics;
+} BC250_ESCAPE_DPM_EX; // 248 bytes on Windows, ABI 3
+
 // DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
 // thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state
 // only: the escape stores the values under the DPM state's locks and the governor thread takes them at its next tick
@@ -658,8 +737,8 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 // BIOS "Fan Setting" curve; this escape only reports what the chip says. Adapter-owned software snapshot,
 // published by the governor thread once a second: the escape reads no port and sends no message, so it takes
 // NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, exactly as RUN_DPM. READ is the
-// only operation and is open to every caller; there is no write operation at all, here or anywhere else in
-// the driver.
+// only operation and is open to every caller; there is no write operation here. The one writer of the chip is
+// the fan control, with its own escape (RUN_FAN, below).
 //
 // Rpm[i] is raw RPM of tachometer i; 0 means either a channel that does not turn or a value this driver
 // refused. The two are told apart by RpmValidMask, which carries one bit per tachometer whose value THIS
@@ -674,8 +753,8 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 // are board thermistors. A source of 0 means the channel carries nothing in this sample, which covers a
 // channel the map does not hold and a value the driver refused: a reader must then show "no reading" for it
 // and never a temperature. ModeMask is 0xA00 and Engine is 0xCF8, both AS THE START READ THEM and not per
-// sample; both are documented by the out-of-tree nct6687d alone, so both are UNPROVEN on this board and no
-// decision reads either. AgeMs counts from the last accepted sample at the time of the escape, so a stopped
+// sample. M803 measured both on unit A (0xE0 and 0x60 at rest); the reader decides nothing on them, and the fan
+// control reads its own live values inside its handshake (RUN_FAN). AgeMs counts from the last accepted sample at the time of the escape, so a stopped
 // sampler shows its age growing. Reason is enum bc250_hwmon_reason (driver/shim/include/bc250_hwmon.h) and
 // says why VALID is clear.
 #define BC250_HWMON_ABI 1u
@@ -714,7 +793,7 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long EcBuild;                  // year << 16 | month << 8 | day
     unsigned long FanPresentMask;           // bit i: tachometer i exists
     unsigned long DutyPresentMask;          // bit i: duty output i exists
-    unsigned long ModeMask;                 // 0xA00 as read; UNPROVEN on this board
+    unsigned long ModeMask;                 // 0xA00 as the start read it (M803: 0xE0 at rest)
     unsigned long Rpm[BC250_HWMON_FAN_SLOTS];
     unsigned long DutyPermille[BC250_HWMON_FAN_SLOTS];
     long TemperatureMc[BC250_HWMON_TEMP_SLOTS];
@@ -723,7 +802,7 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long long Samples, Errors, Retries;
     unsigned long long Generation;          // start-health generation of the start this describes
     unsigned long Reason;                   // enum bc250_hwmon_reason when VALID is clear
-    unsigned long Engine;                   // 0xCF8 as the start read it; UNPROVEN, reported and logged only
+    unsigned long Engine;                   // 0xCF8 as the start read it (M803: 0x60 at rest); reported and logged only
     unsigned long RpmValidMask;             // bit i: Rpm[i] is a value this sample accepted, not a refusal
     unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
     unsigned long long Refusals;            // values refused since the start, over every register
@@ -885,6 +964,85 @@ typedef struct _BC250_ESCAPE_CPU {
     unsigned long long ExpectedGeneration;  // in: every write
     unsigned long Reserved[2];              // zero in, zero out
 } BC250_ESCAPE_CPU; // 296 bytes on Windows, ABI 1
+
+// The case fan control (driver/kmd/fan.c, driver/shim/bc250_fan.c, docs/design/fan.md Part B). The driver takes fan 1
+// from the BIOS curve while it runs and gives it back to the chip's own automatic mode on every exit path (owner,
+// 2026-10-06). Software state only: the escape reads the controller's published snapshot, and a write operation
+// leaves a request that the governor thread applies at its next hardware-monitor step (at most one second later).
+// No port is touched here, so every operation takes NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit
+// zero, as RUN_HWMON and RUN_DPM_CURVE.
+//
+// READ is open to every caller. BOARD, CURVE, FIXED and RENEW need an administrator, ExpectedGeneration equal to the
+// Generation a READ of this start returned (STATUS_RETRY otherwise), and a start whose fan control is enabled
+// (STATUS_INVALID_DEVICE_STATE otherwise; Gate says why it is not).
+//   BOARD  the chip's own curve (the BIOS "Fan Setting") runs the fan. Store=1 makes it the choice of every start.
+//   CURVE  the driver's curve: Profile names a preset, or PROFILE_CUSTOM with Points, CurveC and CurvePct. LeaseMs 0
+//          is durable (and Store=1 writes it to the registry); 5000..300000 is a trial that ends with the board.
+//   FIXED  one duty, FixedPct 20..100, always under a lease of LeaseMs 5000..300000. Never stored.
+//   RENEW  restarts the lease of a leased mode with LeaseMs.
+// A refused request changes nothing and names the rule in Error (enum bc250_fan_error, driver/shim/include/bc250_fan.h).
+//
+// A new command and not a new revision of an old one, and no change of BC250_KMD_VERSION: the escape is additive, no
+// existing layout moves, and a driver before this one answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which is how a tool
+// finds it is talking to an older driver. The version constant is tied to the INF DriverVer (packagecheck VRS010), so
+// a bump belongs to the release train that carries this escape, not to the escape itself.
+#define BC250_FAN_ABI 1u
+#define BC250_FAN_CURVE_SLOTS 8u
+#define BC250_FAN_OP_READ 0u
+#define BC250_FAN_OP_BOARD 1u
+#define BC250_FAN_OP_CURVE 2u
+#define BC250_FAN_OP_FIXED 3u
+#define BC250_FAN_OP_RENEW 4u
+#define BC250_FAN_FLAG_ENABLED 1u           // this start may drive the fan (EnableFanControl, the reader, the chip)
+#define BC250_FAN_FLAG_CONTROLLING 2u       // the driver holds fan 1 now: its mode bit is set in the chip
+#define BC250_FAN_FLAG_EMERGENCY 4u         // 100 %: the guard temperature reached 87 C
+#define BC250_FAN_FLAG_LEASED 8u            // the mode in force ends when LeaseMs runs out (then the durable mode from before it)
+#define BC250_FAN_FLAG_STORED 16u           // FanMode is on disk: StoredMode and StoredProfile are the registry's
+#define BC250_FAN_FLAG_FAULT 32u            // the chip refused something: the board has the fan for this start
+#define BC250_FAN_FLAG_GATED 64u            // EnableFanControl is 0: no write to the chip ever happens
+#define BC250_FAN_FLAG_PAUSED 128u          // the adapter is out of D0: the board has the fan until D0
+#define BC250_FAN_FLAG_RESTORE_SAVED 256u   // the board's own mode and target were recorded before the first change
+#define BC250_FAN_FLAG_SUBSTITUTED 512u     // that record holds the rest values: our bit was already set when it was taken
+#define BC250_FAN_FLAG_HELD_BACK 1024u      // a doubt gave the fan back; the driver takes it again after 30 s clean
+// Why a start's fan control is not enabled.
+#define BC250_FAN_GATE_OK 0u
+#define BC250_FAN_GATE_SETTING 1u           // EnableFanControl is 0
+#define BC250_FAN_GATE_READER 2u            // the hardware monitor is not online (EnableHwmon 0, or a refusal)
+#define BC250_FAN_GATE_CHIP 3u              // the customer ID is neither pinned (HwmonExpectId) nor unit A's 0x162B
+#define BC250_FAN_GATE_COUNT 4u
+typedef struct _BC250_ESCAPE_FAN {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion;
+    unsigned long Op;                       // in: BC250_FAN_OP_*
+    unsigned long Flags;                    // out: BC250_FAN_FLAG_*
+    unsigned long Mode;                     // in: CURVE/BOARD ignore it (the Op says); out: enum bc250_fan_mode in force
+    unsigned long State;                    // out: enum bc250_fan_state
+    unsigned long Reason;                   // out: enum bc250_fan_reason, the last handback
+    unsigned long DoubtReason;              // out: enum bc250_fan_reason, 0 without doubt
+    unsigned long Profile;                  // in: CURVE; out: enum bc250_fan_profile in force
+    unsigned long Points;                   // in: CURVE with PROFILE_CUSTOM; out: points of the curve in force
+    unsigned long CurveC[BC250_FAN_CURVE_SLOTS];    // in/out: degrees C, rising
+    unsigned long CurvePct[BC250_FAN_CURVE_SLOTS];  // in/out: duty percent, never falling, 20..100
+    unsigned long FixedPct;                 // in: FIXED; out: the fixed duty in force, 0 outside FIXED
+    unsigned long LeaseMs;                  // in: CURVE, FIXED, RENEW; out: what is left of the lease, 0 if durable
+    unsigned long Store;                    // in: BOARD, CURVE with LeaseMs 0: 1 writes the choice to the registry
+    unsigned long TargetPct;                // out: what the curve, the fixed duty or the emergency asks for
+    unsigned long AppliedPct;               // out: what the slope rule let through, 0 while the board has the fan
+    unsigned long WrittenRaw;               // out: the duty target written last, 0..255
+    unsigned long ReadbackRaw;              // out: the duty read-back of fan 1 in the last sample, 0..255
+    long GuardMc;                           // out: max(Tctl, EC SB-TSI) of the last step
+    unsigned long Rpm;                      // out: tachometer of fan 1 in the last sample
+    unsigned long Channel;                  // out: the fan this control drives (1, the one that turns on unit A)
+    unsigned long SavedMode, SavedTarget;   // out: the board's own values, the restore record
+    unsigned long Error;                    // out: enum bc250_fan_error of this request
+    unsigned long StoredMode, StoredProfile;    // out: the registry's choice, when STORED
+    unsigned long Gate;                     // out: BC250_FAN_GATE_*
+    unsigned long long Takeovers, Handbacks, Writes, Failures;     // out: since this device object was created
+    unsigned long long Emergencies, Doubts, LeaseExpiries, WatchdogFires;
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: every write operation
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_FAN; // 272 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes
@@ -1481,7 +1639,8 @@ typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 5244
                                                 // IB1 GPU address, Offset the context's root page table,
                                                 // Allocation the KMD context object as a value, Level the
                                                 // scheduler node, Index the process that created the context,
-                                                // Count BC250_PJ_CTX_*. Valid and Dma unused.
+                                                // Count BC250_PJ_CTX_*, Valid the VMID the IB ran at
+                                                // (from 0.7.214.1; 0 before, when it was always 1). Dma unused.
 #define BC250_PJ_FLAG_REPEAT 1u                 // UPDATE: DXGK_UPDATEPAGETABLEFLAGS.Repeat (one entry for the whole range)
 #define BC250_PJ_FLAG_INITIAL 2u                // UPDATE: .InitialUpdate
 #define BC250_PJ_FLAG_EVICTION 4u               // UPDATE: .NotifyEviction, VidMm evicts the allocation
@@ -1543,3 +1702,145 @@ typedef struct _BC250_ESCAPE_PAGING_JOURNAL {
 } BC250_ESCAPE_PAGING_JOURNAL;
 typedef char BC250_PAGING_JOURNAL_RECORD_SIZE_CHECK[(sizeof(BC250_PAGING_JOURNAL_RECORD) == 72) ? 1 : -1];
 typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) == 4672) ? 1 : -1];
+
+// BC250_ESCAPE_RUN_DPAUDIO (31): DisplayPort audio, steps 0, 1 and 2 (driver/kmd/dpaudio.c, dpaudio_seq.c).
+//
+// OBSERVE reads the step 0 registers now and returns them by slot (BC250_DPAUDIO_OBS_LIST): the codec root and
+// function parameters, DC_PINSTRAPS, the DCCG audio DTOs, for both stream encoders the DIG/DP/AFMT/HPD state,
+// for both Azalia endpoints a few configuration registers read through the endpoint's INDEX/DATA pair, and the DP
+// reference clock counter that step 2 sets the DTO from. The
+// INDEX write of such a read selects a configuration register and changes nothing else (dce_audio.c:73-84);
+// nothing else is written. STATE returns only the software record of the last start, stop, resume and path
+// power change, and touches no register. Both operations fill the STATE half.
+//
+// Flags: exactly HardwareAccess (Flags.Value 1), as OBSERVE_DCN: the reads need dxgkrnl's Level Two exclusion
+// of stop and MMIO unmap, and STATE takes the same word so that the two cannot be told apart by a sampler. An
+// operator's tool, never a poller's: no shipped component sends it on a schedule. Administrators only.
+//
+// Two sizes (0.7.216). ABI 2 is the whole structure: the ABI 1 layout, unchanged, followed by the record of the
+// stream half (step 2). ABI 1 is its first BC250_DPAUDIO_ABI1_SIZE bytes, the 0.7.215 layout, and the driver
+// writes nothing past them. A size that is not its AbiVersion's is refused. A driver before 0.7.216 fails the
+// ABI 2 size itself with STATUS_INVALID_PARAMETER: a tool asks with ABI 2 and repeats with ABI 1 on that answer.
+// Slots, reasons and steps only grow at the end, so an ABI 1 reader keeps the meaning of every number it knows.
+
+#define BC250_DPAUDIO_ABI 2u
+#define BC250_DPAUDIO_ABI_1 1u
+#define BC250_DPAUDIO_ABI1_SIZE 408u         // the ABI 1 prefix of BC250_ESCAPE_DPAUDIO (dpaudio.c checks the offset)
+#define BC250_DPAUDIO_OP_OBSERVE 1u
+#define BC250_DPAUDIO_OP_STATE 2u
+
+// Observation slots, in reply order. X(slot). The driver binds each slot to its register by name
+// (dpaudio_seq.c g_ObsSlots, a designated initializer per slot); the CLI prints the slot names.
+#define BC250_DPAUDIO_OBS_LIST(X) \
+    X(CODEC_VENDOR_DEVICE) X(CODEC_REVISION) X(SUPPORTED_SIZE_RATES) X(STREAM_FORMATS) X(POWER_STATES) \
+    X(DC_PINSTRAPS) X(DTO_SOURCE) X(DTO0_PHASE) X(DTO0_MODULE) X(DTO1_PHASE) X(DTO1_MODULE) \
+    X(DIG0_FE_CNTL) X(DIG0_BE_CNTL) X(DP0_VID_STREAM_CNTL) X(DP0_SEC_CNTL) X(DP0_SEC_AUD_N) \
+    X(DP0_SEC_AUD_M_READBACK) X(DP0_SEC_TIMESTAMP) X(DIG0_AFMT_CNTL) X(DIG0_AFMT_AUDIO_SRC_CONTROL) \
+    X(DIG0_AFMT_AUDIO_PACKET_CONTROL) X(DIG0_AFMT_AUDIO_PACKET_CONTROL2) X(DIG0_AFMT_STATUS) X(HPD0_INT_STATUS) \
+    X(DIG1_FE_CNTL) X(DIG1_BE_CNTL) X(DP1_VID_STREAM_CNTL) X(DP1_SEC_CNTL) X(DP1_SEC_AUD_N) \
+    X(DP1_SEC_AUD_M_READBACK) X(DP1_SEC_TIMESTAMP) X(DIG1_AFMT_CNTL) X(DIG1_AFMT_AUDIO_SRC_CONTROL) \
+    X(DIG1_AFMT_AUDIO_PACKET_CONTROL) X(DIG1_AFMT_AUDIO_PACKET_CONTROL2) X(DIG1_AFMT_STATUS) X(HPD1_INT_STATUS) \
+    X(EP0_CONFIG_DEFAULT) X(EP0_HOT_PLUG_CONTROL) X(EP0_PIN_SENSE) X(EP0_UNSOLICITED_RESPONSE) \
+    X(EP0_WIDGET_CONTROL) X(EP0_CHANNEL_SPEAKER) X(EP0_AUDIO_DESCRIPTOR0) X(EP0_SINK_INFO1) \
+    X(EP1_CONFIG_DEFAULT) X(EP1_HOT_PLUG_CONTROL) X(EP1_PIN_SENSE) X(EP1_UNSOLICITED_RESPONSE) \
+    X(EP1_WIDGET_CONTROL) X(EP1_CHANNEL_SPEAKER) X(EP1_AUDIO_DESCRIPTOR0) X(EP1_SINK_INFO1) \
+    X(REFCLK_COUNT) X(DIG0_AFMT_INFOFRAME_CONTROL0) X(DIG0_AFMT_60958_0) \
+    X(DIG1_AFMT_INFOFRAME_CONTROL0) X(DIG1_AFMT_60958_0)
+
+#define BC250_DPAUDIO_OBS_ENUM(n) BC250_DPAUDIO_OBS_##n,
+enum bc250_dpaudio_obs { BC250_DPAUDIO_OBS_LIST(BC250_DPAUDIO_OBS_ENUM) BC250_DPAUDIO_OBS_COUNT };
+#undef BC250_DPAUDIO_OBS_ENUM
+#define BC250_DPAUDIO_OBS_SLOTS 64u          // room in the reply; ValidMask has one bit per slot
+
+// Why the last start did or did not enable the endpoint. X(name, text); the text is what the log and the CLI say.
+#define BC250_DPAUDIO_REASON_LIST(X) \
+    X(OK, "stream on and endpoint enabled") \
+    X(NOT_STARTED, "no start since the driver loaded") \
+    X(SWITCH_OFF, "EnableDpAudio is not 1") \
+    X(ENDPOINT_SWITCH_OFF, "EnableDpAudioEndpoint is not 1") \
+    X(NO_MMIO, "BAR5 not mapped (EnableMmio)") \
+    X(READ_FAILED, "a precondition register could not be read") \
+    X(CODEC_ID, "codec vendor/device is not 0x1002AA01") \
+    X(STRAPS, "DC_PINSTRAPS_AUDIO is 0: audio not strapped on") \
+    X(NO_STREAM, "no DP stream encoder has its video stream on") \
+    X(TWO_STREAMS, "both DP stream encoders have their video stream on") \
+    X(NOT_DP_SST, "no DIG back end in DP SST mode is fed by that stream encoder") \
+    X(CONFIG_DEFAULT, "endpoint RESPONSE_CONFIGURATION_DEFAULT is not 0x185600F0") \
+    X(WRITE_FAILED, "a write of the sequence failed; stream off and AUDIO_ENABLED cleared") \
+    X(STOPPED, "stopped: stream off and AUDIO_ENABLED cleared") \
+    X(PATH_OFF, "monitor path powered off: stream off and AUDIO_ENABLED cleared") \
+    X(STREAM_SWITCH_OFF, "EnableDpAudioStream is not 1") \
+    X(REFCLK, "DP reference clock count is outside 500 to 700 MHz") \
+    X(STREAM_MISMATCH, "a stream register read back another value; stream off and AUDIO_ENABLED cleared")
+
+#define BC250_DPAUDIO_REASON_ENUM(n, t) BC250_DPAUDIO_REASON_##n,
+enum bc250_dpaudio_reason { BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_ENUM) BC250_DPAUDIO_REASON_COUNT };
+#undef BC250_DPAUDIO_REASON_ENUM
+
+#define BC250_DPAUDIO_STATE_IDLE 0u          // no start yet, or the start did not reach the decision
+#define BC250_DPAUDIO_STATE_ENABLED 1u       // the stream is on and AUDIO_ENABLED is 1 on Endpoint, both by this driver
+#define BC250_DPAUDIO_STATE_REFUSED 2u       // a precondition failed: nothing was written
+#define BC250_DPAUDIO_STATE_FAILED 3u        // a write failed or read back wrong part way; the stop sequence ran
+#define BC250_DPAUDIO_STATE_STOPPED 4u       // the stop path turned the stream off and cleared AUDIO_ENABLED
+#define BC250_DPAUDIO_STATE_PATH_OFF 5u      // the monitor path is off: stream off, AUDIO_ENABLED 0 until it is back
+
+#define BC250_DPAUDIO_NOTE_HPD_LOW 1u        // the chosen encoder's HPD sense read 0 (logged, not a refusal)
+#define BC250_DPAUDIO_NOTE_INHERITED 2u      // AUDIO_ENABLED was already 1 before this start wrote anything
+#define BC250_DPAUDIO_NOTE_REVISION 4u       // codec revision is not M819's 0x00100700 (logged, not a refusal)
+#define BC250_DPAUDIO_NOTE_UNSOLICITED 8u    // the pin's UNSOLICITED_RESPONSE.ENABLE was set before the write (U3)
+
+#define BC250_DPAUDIO_NO_SWITCH 0xFFFFFFFFu  // SwitchEnable/SwitchEndpoint/SwitchStream before any start read them
+
+// ABI 2: the stream half (step 2) on the stream encoder Stream. StreamState says what this driver left there.
+#define BC250_DPAUDIO_STREAM_OFF 0u          // not written by this start, or turned off by the stop sequence
+#define BC250_DPAUDIO_STREAM_ON 1u           // the whole enable sequence ran and every read-back matched
+#define BC250_DPAUDIO_STREAM_UNDONE 2u       // the enable sequence failed or read back wrong; the stop sequence ran
+
+// The steps of the two stream sequences, for StreamStep: the first step that failed or read back wrong. X(name).
+// The enable sequence in its order, then the stop sequence in its order (dpaudio_seq.c Bc250DpAudioStreamEnable,
+// Bc250DpAudioStreamDisable).
+#define BC250_DPAUDIO_STEP_LIST(X) \
+    X(NONE) X(DTO_SELECT) X(DTO1_MODULE) X(DTO1_PHASE) X(DTO_512FBR) X(AFMT_CLOCK_ON) X(SRC_SELECT) \
+    X(CHANNEL_ENABLE) X(AUD_N) X(TIMESTAMP) X(CS_UPDATE) X(LAYOUT_OVRD) X(INFO_UPDATE) X(CLOCK_ACCURACY) \
+    X(SEC_ASP_ON) X(SEC_ATP_AIP_ON) X(SEC_STREAM_ON) X(SAMPLE_SEND_ON) \
+    X(SAMPLE_SEND_OFF) X(SEC_STREAM_OFF) X(SEC_ATP_AIP_OFF) X(SEC_ASP_OFF) X(SEC_STREAM_KEEP) X(AFMT_CLOCK_OFF)
+#define BC250_DPAUDIO_STEP_ENUM(n) BC250_DPAUDIO_STEP_##n,
+enum bc250_dpaudio_step { BC250_DPAUDIO_STEP_LIST(BC250_DPAUDIO_STEP_ENUM) BC250_DPAUDIO_STEP_COUNT };
+#undef BC250_DPAUDIO_STEP_ENUM
+
+typedef struct _BC250_ESCAPE_DPAUDIO {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;   // Flags: BC250_ESCAPE_FLAG_MMIO_MAPPED
+    unsigned long long ValidMask;           // OBSERVE: bit i set when Regs[i] was read now
+    unsigned long Regs[BC250_DPAUDIO_OBS_SLOTS];    // OBSERVE: slot order of BC250_DPAUDIO_OBS_LIST, 0 when not read
+    // OBSERVE: the start's own decision (Bc250DpAudioDecide) over the registers above, as a start would take it
+    // now. Nothing is written for it; the CLI prints it rather than repeating the logic.
+    unsigned long ObsReason, ObsStream, ObsEndpoint, ObsNotes;
+    // STATE: the software record (both operations).
+    unsigned long State;                    // BC250_DPAUDIO_STATE_*
+    unsigned long Reason;                   // enum bc250_dpaudio_reason
+    unsigned long Notes;                    // BC250_DPAUDIO_NOTE_*
+    unsigned long Endpoint, Stream;         // the chosen Azalia endpoint and DP stream encoder (valid from the decision)
+    unsigned long SwitchEnable, SwitchEndpoint;      // EnableDpAudio, EnableDpAudioEndpoint as the last start read them
+    unsigned long Starts, Resumes, Stops, Refusals, Failures, PathOn, PathOff;
+    unsigned long IndirectReads, IndirectWrites, DirectWrites, AccessRefusals;  // through the checked accessors
+    unsigned long CodecId;                  // VENDOR_AND_DEVICE_ID at the last decision
+    unsigned long ConfigDefault;            // the chosen endpoint's RESPONSE_CONFIGURATION_DEFAULT at the last decision
+    unsigned long HotPlugBefore, HotPlugAfter;      // the endpoint's HOT_PLUG_CONTROL before and after the last sequence
+    unsigned long LastStatus;               // NTSTATUS of the last sequence (0 for none or success)
+    unsigned long Abi1Pad;                  // 0. The ABI 1 record ended in 4 bytes of padding (ValidMask is 8-aligned)
+    // ABI 2 from here (0.7.216): the stream half, step 2. 0 until a start reaches it.
+    unsigned long SwitchStream;             // EnableDpAudioStream as the last start read it
+    unsigned long StreamState;              // BC250_DPAUDIO_STREAM_*
+    unsigned long StreamStep;               // enum bc250_dpaudio_step: the first step that failed or read back wrong
+    unsigned long StreamStatus;             // NTSTATUS of that step (0 for none)
+    unsigned long RefClockCount;            // CLK4_0_CLK4_CLK2_CURRENT_CNT at the last decision, 100 kHz units
+    unsigned long DtoModule, DtoPhase;      // DCCG_AUDIO_DTO1_MODULE and _PHASE as the last enable read them back
+    unsigned long MismatchOffset;           // BAR5 offset of the read-back that differed (0 for none)
+    unsigned long MismatchExpected, MismatchActual; // the named bits written there, and the same bits read back
+    unsigned long DtoSource, SecCntl, AfmtCntl;     // read back by the last stream sequence (enable or stop)
+    unsigned long PacketControl, PacketControl2;    // DIGn_AFMT_AUDIO_PACKET_CONTROL and _CONTROL2, the same
+    unsigned long StreamOn, StreamOff, StreamUndos; // enables that ran whole, stop sequences, undone enables
+} BC250_ESCAPE_DPAUDIO; // 480 bytes on Windows, ABI 2 (ABI 1: the first 408)
+typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 480) ? 1 : -1];
+typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUDIO_OBS_SLOTS) ? 1 : -1];

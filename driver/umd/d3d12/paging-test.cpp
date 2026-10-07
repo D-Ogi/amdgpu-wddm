@@ -7,7 +7,7 @@ static bool asynchronous=true,failFree,failDestroy;
 static unsigned maps,frees,destroys,waits;
 static HRESULT wait_result=S_OK;
 static bool lose_during_wait;
-static HANDLE expected_context=reinterpret_cast<HANDLE>(UINT_PTR(0x100000031ull));
+static HANDLE expected_context=reinterpret_cast<HANDLE>(UINT_PTR(0x10000031u));
 static HANDLE owner=reinterpret_cast<HANDLE>(UINT_PTR(27));
 static HRESULT APIENTRY create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){
     assert(d==owner);a->hPagingQueue=5;a->hSyncObject=6;a->FenceValueCPUVirtualAddress=&completed;return S_OK;
@@ -57,7 +57,7 @@ int main(){
     assert(a.address_for_context(m,expected_context,&address)==S_OK && address==0x200010000ull && waits==1);
     assert(completed==0 && a.ready(m,&address)==E_PENDING && !address);
     // Each independent context gets its own ordering; no global ready-state cache.
-    expected_context=reinterpret_cast<HANDLE>(UINT_PTR(0x200000031ull));
+    expected_context=reinterpret_cast<HANDLE>(UINT_PTR(0x20000031u));
     assert(a.address_for_context(m,expected_context,&address)==S_OK && address && waits==2);
     wait_result=E_FAIL;
     assert(a.address_for_context(m,expected_context,&address)==E_FAIL && !address && waits==3);
@@ -107,7 +107,7 @@ int main(){
     assert(r.ready(held,&address)==E_PENDING && !address);
     completed=7;assert(r.ready(held,&address)==E_PENDING && !address);   // the map alone is not enough
     // A GPU wait on a context also asks for the residency's value.
-    expected_context=reinterpret_cast<HANDLE>(UINT_PTR(0x100000031ull));
+    expected_context=reinterpret_cast<HANDLE>(UINT_PTR(0x10000031u));
     {
         auto gpu_wait=[](HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a)->HRESULT {
             assert(d==owner && a->ObjectCount==1 && a->ObjectHandleArray[0]==6 && a->MonitoredFenceValueArray[0]==11);

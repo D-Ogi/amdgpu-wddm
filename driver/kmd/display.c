@@ -155,6 +155,7 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     case BC250_ESCAPE_OBSERVE_DCN:
     case BC250_ESCAPE_RUN_CLOCK:
     case BC250_ESCAPE_RUN_CPU:      // the operator's own surface, like RUN_CLOCK: one mailbox sequence, bounded
+    case BC250_ESCAPE_RUN_DPAUDIO:  // reads, and the INDEX selects of indirect reads; the record (BC250_ESCAPE_DPAUDIO)
     case BC250_ESCAPE_GET_INFO:
     case BC250_ESCAPE_READ_REG:
     case BC250_ESCAPE_GET_MEMORY:
@@ -339,9 +340,10 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         CuModeRequest(device,(BC250_ESCAPE_CU_MODE*)data,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
-    // DPM: the governor's published snapshot, software state as well (dpm.c).
+    // DPM: the governor's published snapshot, software state as well (dpm.c); ABI 3 adds the SMU metrics copy.
     if (data->Command == BC250_ESCAPE_RUN_DPM) {
-        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM) &&
+        if (Escape->PrivateDriverDataSize != BC250_DPM_ABI3_SIZE &&
+            Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM) &&
             Escape->PrivateDriverDataSize != BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
         DpmRequest(device,(BC250_ESCAPE_DPM*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
@@ -368,6 +370,13 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     if (command == BC250_ESCAPE_RUN_HWMON) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_HWMON)) return STATUS_INVALID_PARAMETER;
         HwmonRequest(device,(BC250_ESCAPE_HWMON*)data,Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // The case fan control: its published snapshot, and requests the governor thread applies at its next step. No
+    // port is touched by the escape itself (fan.c), so it sits with the software snapshots as well.
+    if (command == BC250_ESCAPE_RUN_FAN) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_FAN)) return STATUS_INVALID_PARAMETER;
+        FanRequest(device,(BC250_ESCAPE_FAN*)data,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
     // Interop switches: the start's decision and the session marker, software state as well (interop.c).
@@ -399,6 +408,14 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     if (data->Command == BC250_ESCAPE_OBSERVE_DCN) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DCN_OBSERVE)) return STATUS_INVALID_PARAMETER;
         DcnObserve(device,(BC250_ESCAPE_DCN_OBSERVE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS; // typed operation status is in the reply
+    }
+    if (data->Command == BC250_ESCAPE_RUN_DPAUDIO) {
+        // Two exact sizes (0.7.216): ABI 2, the whole structure, and its ABI 1 prefix. DpAudioRequest matches the
+        // size against AbiVersion and touches nothing past the size it was given.
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPAUDIO) &&
+            Escape->PrivateDriverDataSize != BC250_DPAUDIO_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
+        DpAudioRequest(device,(BC250_ESCAPE_DPAUDIO*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS; // typed operation status is in the reply
     }
     // The CPU surface (0.7.210): its write operations send mailbox messages on the firmware's queue 3, so it sits
@@ -986,6 +1003,10 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
     StartHealthDisplayLocked(device,device->SourceVisible,
         NT_SUCCESS(status) && device->ModeActive && !Commit->Flags.PathPoweredOff);
     StartHealthLeave(device);
+    // Outside the start-health mutex: the audio endpoint follows the monitor's power (DPMS off is an unplug for
+    // audio, as Linux's az_disable), and takes only its own leaf lock (dpaudio.c).
+    if (NT_SUCCESS(status) && Commit->Flags.PathPowerTransition)
+        DpAudioPathPower(device,(BOOLEAN)!Commit->Flags.PathPoweredOff);
     return status;
 }
 

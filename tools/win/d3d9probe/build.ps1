@@ -7,6 +7,8 @@
 
 param(
     [Parameter(Mandatory)][string]$Kits,
+    # x86: a 32-bit build, the D3D9 path of a WoW64 process (D3D9On12 on the UserModeDriverNameWow D3D12 entry),
+    # into <Out>-x86 by default.
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
     [string]$Out = '',
     [string]$KitVersion = '10.0.26100.0'

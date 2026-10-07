@@ -84,7 +84,10 @@ enum class AppReason {
     Denied,       // listed in Deny (both modes; Deny wins over Allow)
     NotAllowed,   // allowlist mode and not listed in Allow
     ComponentUnknown, // gpu-default mode, the image or the Windows directory could not be resolved, not in Allow
-    D3d10Entry,   // OpenAdapter10 (the D3D10.0 runtime): the application GPU UMD exports OpenAdapter10_2 only
+    D3d10Entry,   // OpenAdapter10: the application GPU UMD exports OpenAdapter10_2 only. No Windows 11 runtime calls
+                  // this entry while OpenAdapter10_2 is exported, the D3D10.0 runtime included: a D3D10.0
+                  // application arrives at OpenAdapter10_2 and is decided like any other (BD-081, measured
+                  // 2026-10-07, evidence/windows/2026-10-07-BD081-d3d10-entry-devpc)
     GpuUmdUnset,  // GpuUmdPath absent, not a REG_SZ or not an absolute path
     Allowed,      // allowlist mode and listed in Allow: the GPU UMD
     Default,      // gpu-default mode and not denied: the GPU UMD

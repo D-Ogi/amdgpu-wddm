@@ -130,14 +130,14 @@ static void JournalKindEncoding(void)
     /* GFX_SUBMIT: 245's last game job, seq 604859, OS fence 53276, IB1 0x2_00B2_0000, root 0x46DFE1000. */
     memset(&r, 0, sizeof(r));
     Bc250PjGfxSubmit(&r, 604859u, 53276u, 0x200B20000ull, 0x46DFE1000ull, 0xFFFFC00Fae010ull, 0u, 11324u,
-                     BC250_PJ_CTX_UMD);
+                     BC250_PJ_CTX_UMD, 1u);
     CHECK(r.Kind == BC250_PJ_GFX_SUBMIT && r.Kind == 9u);
     CHECK(r.Seq == 604859u && r.Fence == 53276u);
     CHECK(r.Va == 0x200B20000ull && r.Offset == 0x46DFE1000ull && r.Allocation == 0xFFFFC00Fae010ull);
     CHECK(r.Level == 0u && r.Index == 11324u && r.Count == BC250_PJ_CTX_UMD);
-    CHECK(r.Valid == 0u && r.Dma == 0ull);              /* unused, and a stamp walk must see Dma zero */
-    Bc250PjGfxSubmit(&r, 1u, 2u, 3u, 4u, 5u, 1u, 6u, BC250_PJ_CTX_UMD | BC250_PJ_CTX_SYSTEM);
-    CHECK(r.Level == 1u && r.Count == 3u);
+    CHECK(r.Valid == 1u && r.Dma == 0ull);              /* KMD214: Valid the VMID; a stamp walk must see Dma zero */
+    Bc250PjGfxSubmit(&r, 1u, 2u, 3u, 4u, 5u, 1u, 6u, BC250_PJ_CTX_UMD | BC250_PJ_CTX_SYSTEM, 15u);
+    CHECK(r.Level == 1u && r.Count == 3u && r.Valid == 15u);
 
     /* The kind numbers are an on-disk contract with two readers outside this repository's build. */
     CHECK(BC250_PJ_UPDATE_CPU == 1u && BC250_PJ_UPDATE_GPU == 2u && BC250_PJ_VIRTUAL_FILL == 3u);

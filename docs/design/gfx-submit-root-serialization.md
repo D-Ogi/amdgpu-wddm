@@ -1,195 +1,237 @@
-# F2: removing the root serialization of the gfx submit path
+# The root serialization of the gfx submit path, and the VMID pool
 
-Status: design only, open. **Not implemented up to KMD 0.7.213.1**: the check quoted in section 1 is still in
-`SubmitIbLocked` (`driver/kmd/gfx.c`), and the registry value named below does not exist. The reasons it was
-held back are in "Why not in 196" at the end. KMD 196 implemented F1 (the event wake) alone, so that the lab
-session that priced F1 measured one change.
+Status: option (a) is **implemented in KMD 0.7.214.1 behind `EnableVmidPool` (default on)**. Option (b) is not
+implemented. `EnableVmidPool` 0 gives the behaviour of 0.7.213.1.
 
-Written against `kmd196-submit-wake` at the tree of KMD 0.7.196.1. Line references are that tree; they have
-moved since.
+This document was first written as "F2" against KMD 0.7.196.1. Sections 1 and 3 keep that analysis. Sections 2, 4
+and 5 describe what 0.7.214.1 does. Code names refer to the tree of 0.7.214.1.
 
-## 1. What serializes today
+## 1. What serialized up to 0.7.213.1
 
-`driver/kmd/gfx.c` `SubmitIbLocked` refuses a job that does not share VMID 1's current page-directory root
-while another job is still in flight:
+`driver/kmd/gfx.c` `SubmitIbLocked` refused a job that did not share the current page-directory root of VMID 1
+while another job was still in flight:
 
 ```c
 if (Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq) &&
     (Vmid != 1 || Gfx->SubmitVmid != 1 || Gfx->VmidRoot[Vmid] != RootPhysical)) return STATUS_DEVICE_BUSY;
 ```
 
-The whole WDDM path submits at one VMID (`wddm.c` `BC250_WDDM_VMID 1`), and the root is changed from the CPU by
-`bc250_gmc_set_vmid_pd` (`driver/shim/bc250_gmc.c:251`), which writes the hub's per-context page-table-base
-registers and then invalidates that VMID. A root change must not redirect a job that is still using VMID 1, so
-the driver waits for idle instead.
+The whole WDDM path submitted at one VMID (`wddm.c` `BC250_WDDM_VMID 1`). The CPU changed the root with
+`bc250_gmc_set_vmid_pd` (`driver/shim/bc250_gmc.c`), which writes the per-context page-table-base registers of the
+hub and then invalidates that VMID. A root change must not redirect a job that still uses VMID 1, so the driver
+waited for idle.
 
-Consequence measured in sessions 313 and 314 (Witcher 3 D3D12, register timeline aligned to dxgkrnl ETW to the
-microsecond): the game and DWM are different processes with different roots, so every frame alternates two roots
-on one VMID. DWM's composition job runs 0.29 ms (p10-p90 0.26-0.31); dxgkrnl's node-0 worker offers the game's
-next packet 0.14 ms into it, about 0.13 ms before DWM's completion interrupt, and the refusal above costs
-4.7 ms per handover at 0.6-1.0 holds a frame, i.e. 2.9-4.0 ms of GFX idle a frame.
+Sessions 313 and 314 measured the cost (Witcher 3 D3D12, register timeline aligned to dxgkrnl ETW to the
+microsecond). The game and DWM are different processes with different roots, so every frame alternates two roots
+on one VMID. The composition job of DWM runs 0.29 ms (p10-p90 0.26-0.31). The node-0 worker of dxgkrnl offers the
+next packet of the game 0.14 ms into it, about 0.13 ms before the completion interrupt of DWM. The refusal costs
+4.7 ms per handover at 0.6-1.0 holds a frame: 2.9-4.0 ms of GFX idle a frame.
 
-F1 removes the *wake* latency of that wait: a bounded spin catches the 0.13 ms remainder with no context
-switch, and an event wait covers the rest, instead of a relative sleep that expired on a clock tick (p50 4.2 ms
-/ p90 5.6 ms measured in the HIGH session, p50 2.3 / p90 14.2 in the LOW one). It does not remove the wait
-itself: the game job still cannot start until the DWM job retires. Removing that is what this document is for.
-The floor F1 leaves is therefore about 0.13 ms of blocking job plus the ~0.55 ms a plain submit costs.
+F1 (KMD 196, the event wake) removed the *wake* latency of that wait, not the wait. The game job still could not
+start until the DWM job retired.
 
-Two facts that matter to everything below, both already true in the deployed driver:
+Two facts were already true before the pool, and the pool depends on both:
 
-- **Several jobs may already be outstanding at once**, as long as they share a root. `Gfx->SubmitSeq` holds the
-  newest sequence, the fence slot `BC250_SUBMIT_FENCE_SLOT` is a monotonic counter read with
-  `bc250_fence_reached`, and `wddm.c`'s `GfxPending` queue (`BC250_GFX_PENDING_MAX` entries) retires them in
-  order. The `gfx: pipeline queued seq%lu prior%lu ... overlap%u` line exists to witness exactly that.
-- **The driver already invalidates a VMID by MMIO while a job of that VMID may be executing.** The flush at
-  `gfx.c` ~1080 is unconditional on every non-zero-VMID submit, and the refusal above admits a same-root job
-  with one in flight. So "CPU invalidate concurrent with CP execution" is not a hazard F2 introduces; it is the
-  hazard the current driver already takes, on purpose, because the invalidation is what picks up a leaf-PTE
-  change made under an unchanged root (the comment at `gfx.c` ~1075).
+- **Several jobs can be outstanding at once** if they share a root. The fence slot `BC250_SUBMIT_FENCE_SLOT` is a
+  monotonic counter read with `bc250_fence_reached`, and the `GfxPending` queue of `wddm.c`
+  (`BC250_GFX_PENDING_MAX`, 7 entries) retires them in order.
+- **The driver invalidates a VMID by MMIO while a job of that VMID can execute.** The flush is unconditional on
+  every submit with a non-zero VMID, and a same-root job is admitted with one in flight. The invalidation picks up a
+  leaf-PTE change under an unchanged root.
 
 ## 2. Option (a): a VMID per page-table root, recycled on retirement
 
-The hardware has 16 VMIDs (`AMDGPU_NUM_VMID`, `driver/shim/include/amdgpu.h:207`). Their contexts - depth,
-block size, address range, fault defaults - are already configured for VMIDs 1..15 by
-`gfxhub_v2_0_setup_vmid_config()` inside `bc250_gmc_gart_enable()`, and none of that changes per submission
-(the comment in `bc250_gmc_set_vmid_pd`). Only the page-directory base registers are per-submission state.
+### The pool
 
-Reserved and therefore outside the pool:
+The hardware has 16 VMIDs (`AMDGPU_NUM_VMID`). `gfxhub_v2_0_setup_vmid_config()` inside `bc250_gmc_gart_enable()`
+configures the contexts of VMIDs 1..15 once (depth, block size, address range, fault defaults). Only the
+page-directory base registers change per submission.
 
-| VMID | Owner | Why it is reserved |
+| VMID | Owner | In the pool |
 |---|---|---|
-| 0 | GART / system domain | depth 0, the flat aperture every driver-owned buffer is addressed through; `bc250_gmc_set_vmid_pd` refuses it outright |
-| 2 | SDMA paging | `BC250_SDMA_PAGING_VMID` (`shim/include/bc250_sdma.h:154`); node 1's channel programs its root per paging buffer, `SubmitIbLocked` returns `STATUS_ACCESS_DENIED` for it |
+| 0 | GART, the system domain | never: `bc250_gmc_set_vmid_pd` refuses it |
+| 1 | the single WDDM VMID up to 0.7.213.1 | always, also when the bring-up read finds it programmed |
+| 2 | SDMA paging, `BC250_SDMA_PAGING_VMID` | never: `SubmitIbLocked` returns `STATUS_ACCESS_DENIED` |
+| 3..15 | none known | yes, unless the bring-up read finds the pair non-zero |
 
-That leaves VMIDs 1 and 3..15 - fourteen - for application roots. No firmware use of any other VMID was found
-in the imported sources; before implementing, confirm it by reading all 16 `GCVM_CONTEXT*_PAGE_TABLE_BASE_ADDR`
-pairs once at the end of bring-up and logging the non-zero ones. If PSP or RLC holds one, it will show there.
+**The bring-up read.** Before the first pool job of a device start, `GfxVmidProbe` reads all 16
+`GCVM_CONTEXT*_PAGE_TABLE_BASE_ADDR` pairs through `bc250_gmc_get_vmid_pd` (the offsets come from the hub table of
+the shim, not from hand-typed addresses). The pairs of VMIDs 1..15 are in `g_MmioGfxAllow`, the pair of VMID 0 in
+the GART table. A VMID in 3..15 that reads non-zero, or that cannot be read, stays out of the pool. The read
+happens once per device start and logs this:
 
-### State
-
-In `BC250_GFX`, beside the existing `ULONGLONG VmidRoot[16]`:
-
-```c
-ULONG VmidLastSeq[16];      // the newest sequence submitted on this VMID, 0 = never used
-ULONG VmidRecycleOrder[16]; // claim order, for the LRU choice among free VMIDs
+```
+gfx: VMID bring-up read: non-zero 0x%04lX unread 0x%04lX, pool 0x%04lX (%lu VMIDs), excluded 0x%04lX
+gfx: VMID %lu base 0x%llX at bring-up: <GART aperture, reserved | SDMA paging, reserved | VMID 1, kept | excluded from the pool>
 ```
 
-`VmidRoot`/`VmidLastSeq` are written only under `GartLock`, which every submit already holds, so no new lock.
-`GfxTearDown` already zeroes `VmidRoot` (`gfx.c` ~3453 "force VMID reprogramming on the next job"); it must zero
-the two new arrays in the same place and for the same reason.
+The second line is written once for each non-zero pair. VMID 1 stays in the pool when it reads non-zero, because
+every earlier start of this driver wrote it. A device restart in the same boot finds the VMIDs that the earlier
+instance used non-zero and excludes them. The pool then shrinks toward VMID 1 alone, which is the 0.7.213.1
+behaviour. The start log shows the pool size, so a trial can see this.
+
+### The table
+
+`BC250_GFX` holds a `BC250_VMID_TABLE` (`driver/kmd/vmid_pool.h`) in place of `VmidRoot[16]`. For each VMID it has
+the root, the newest submitted sequence (`LiveSeq`, 0 when retired), the use order, and the tenant: process, first
+and last sequence. A ring of 16 `BC250_VMID_TENANT` records keeps the tenancies that ended (section 4).
+
+Locks. Every change happens under `GartLock`, which every submit holds. A change of a root, of a tenant or of the
+history also takes `VmidLock`, a spin lock. The fault and timeout reports (DISPATCH_LEVEL) and the `FLUSH_TLB`
+builder (which holds `GfxPagingLock`, never `GartLock`) take `VmidLock` to read. The teardown and the power-cycle
+reset run with access closed and `GfxPagingLock` exclusive. Both reset the table with `Bc250VmidResetAll`, which
+moves every tenancy that ran a job into the history first.
 
 ### Choosing a VMID
 
-Under `GartLock`, given `RootPhysical`:
+`SubmitIbLocked` reads the fence slot once, marks every VMID whose `LiveSeq` has arrived as retired
+(`Bc250VmidSweep`), then asks `Bc250VmidAdmit`:
 
-1. **Same root already resident.** A pool VMID with `VmidRoot[v] == RootPhysical` -> use `v`. This is today's
-   fast path and keeps a process on one VMID for as long as it keeps submitting, which is what makes the fault
-   attribution in section 4 useful.
-2. **A retired VMID.** Otherwise the least recently claimed pool VMID whose last job has retired -
-   `VmidLastSeq[v] == 0 || GfxFenceArrived(Device, VmidLastSeq[v])`. Program its root
-   (`bc250_gmc_set_vmid_pd`), set `VmidRoot[v]`, bump its recycle order.
-3. **Nothing free.** `STATUS_DEVICE_BUSY`, exactly as today. The caller then waits on F1's retirement event,
-   which is correct unchanged: a retirement is precisely what frees a VMID.
+1. **The same root is resident.** A pool VMID whose root is `RootPhysical` is used again. A process keeps its VMID
+   for as long as it keeps submitting.
+2. **A retired VMID.** Otherwise the pool VMID with the oldest use whose last job has retired. Its root is
+   programmed with `bc250_gmc_set_vmid_pd`, and the old tenant goes to the history (`Bc250VmidClaim`).
+3. **Nothing free.** `STATUS_DEVICE_BUSY`, as before. The caller waits on the retirement event of F1. A retirement
+   is what frees a VMID.
 
-The recycle rule is the correctness core: **a VMID's root may be rewritten only after that VMID's last
-submitted job has retired.** `VmidLastSeq[v]` plus the monotonic fence answers that with one memory read and no
-new hardware state. Because the fence is global and in-order, `GfxFenceArrived(Device, VmidLastSeq[v])` is true
-for every job that was submitted before the newest retired one, so step 2 never recycles a live VMID.
+A VMID 0 job in flight (the ring test) still holds every other job off, as before. An explicit VMID from the
+`IB_AT` escape takes the predicate of 0.7.213.1 unchanged and stays exclusive.
+
+**The rule.** The root of a VMID whose last job has not retired is never rewritten. The fence is global and in
+order, so one read of the fence slot answers "has the last job of VMID v retired" for all v. The rule is checked
+again after every decision, by `Bc250VmidMayProgram`, before the register write. A decision that breaks it is
+refused with `STATUS_DEVICE_BUSY`, counted, and logged once:
+
+```
+gfx: VMID %lu root 0x%llX -> 0x%llX REFUSED: its job %lu has not retired (fence %lu)
+```
+
+The chooser cannot produce such a decision (section 5 has the model check). The check is there for the next
+change to this code.
+
+**Deviation from the F2 text: the order is the order of use, not of claim.** The F2 text asked for "the least
+recently claimed" VMID. The table stamps the order on every claim and on every submit. With claim order, a VMID
+that DWM claimed early and uses every frame would be the oldest claim and the first to recycle as soon as it
+retires between two frames. With use order, the VMID that has not submitted for the longest time goes first, and
+DWM keeps its VMID.
 
 ### The per-submit invalidation stays
 
-`bc250_gmc_set_vmid_pd` is still called on every submit, for the chosen VMID, root unchanged or not. Dropping
-it when the root matches would lose the leaf-PTE change that the paging path may have made under that same root
-- the exact thing the comment at `gfx.c` ~1075 says the flush is for. Cost: one 32-bit pair of register writes
-and one request/ack poll per submit, which is what the path pays today.
+`bc250_gmc_set_vmid_pd` is still called on every submit, for the chosen VMID, with the root unchanged or not. The
+invalidation is what picks up a leaf-PTE change of the paging path under the same root. The pool never changes the
+root of a live VMID, so it needs no pipeline sync before a root change.
 
-This is also why option (a) does not need a pipeline sync before the root change: it never changes a live
-VMID's root, so there is nothing to sync against. The `PACKET3_PFP_SYNC_ME` that `bc250_gfx_submit_job` already
-emits (`shim/bc250_gfx.c:1813`, the PFP half of `gfx_v10_0_ring_emit_vm_flush`) stays as it is.
+### The VMID end to end
 
-### What else moves
+- `wddm.c` `WddmSubmitHardware` asks for `BC250_VMID_AUTO`. `GfxSubmitIb` returns the VMID it chose, and the
+  queue entry (`BC250_GFX_COMPLETION.Vmid`), the `wddm: fence %u on the gfx ring` line and the timeout report
+  keep it.
+- `bc250_gfx_submit_job` puts the VMID into the control word of the IB packet
+  (`PACKET3_INDIRECT_BUFFER__VMID`, `bc250_gfx_emit_ib`). The CP fetches the IB, and the job makes every access,
+  through that VMID.
+- The `BC250_PJ_GFX_SUBMIT` journal record carries the VMID in `Valid` (0 in the records of earlier drivers).
+  `bc250kmd_cli journal` prints it. The hot line `gfx: job seq %lu vmid %lu fence ...` carries it too; the node
+  left that line to keep it within 159 characters, and the journal record keeps the node.
+- `ProgressSiteVmFlush` records the VMID as its input, so a dump of a hang inside the flush names it.
 
-- `Gfx->SubmitVmid` becomes per-job information only (the journal and the timeout snapshot), not a gate.
-- `wddm.c` `WddmSubmitHardware` passes `BC250_WDDM_VMID` today; it would pass "pool" and let gfx.c choose. The
-  `BC250_PJ_GFX_SUBMIT` journal record and the `gfx: job seq ...` line must gain the chosen VMID, or a dump can
-  no longer tell which context a sequence ran on.
-- `GfxPagingBuildFlush` is called with `BC250_WDDM_VMID` from `wddm.c` ~4488 for `DXGK_OPERATION_FLUSH_TLB`.
-  With a pool, a TLB flush operation has to flush every pool VMID that currently holds the requesting root, not
-  a fixed 1. Getting this wrong is a stale-translation bug, not a performance regression, so it is the first
-  thing a reviewer should check in the implementation.
-- DPM: `DpmBusyBegin/End` already pair against "the newest outstanding sequence retired" and need no change.
+### FLUSH_TLB
 
-### Expected effect
+`DXGK_OPERATION_FLUSH_TLB` names a root. `wddm.c` resolves it with `VidMmRootPhysical` (0 when it does not
+resolve), and `GfxPagingBuildFlush` builds the invalidations. With `EnableVmidPool` 0 it invalidates VMID 1, as
+before. With the pool it invalidates `Bc250VmidFlushMask`: every VMID that holds the root, every pool member and
+every other VMID that holds a root at all.
 
-The game and DWM jobs land on the ring back to back. Where F1 leaves a floor of about 0.13 ms (the blocking
-job's remainder) plus the ~0.55 ms of a plain submit, (a) removes the first term entirely: the game job no
-longer waits for DWM's fence at all, only for the ring. The remaining per-frame idle is then the 0.94 ms
-completion-report class (GFX idle to dxgkrnl's DmaPacket Info, p50 0.47, p90 2.03) plus whatever the CP needs
-between frames. This is a prediction, not a measurement.
+**Deviation from the F2 text: a superset, not the holders of the root.** The VMIDs that hold the root when the
+paging buffer is built are not always the VMIDs that hold it when SDMA executes it. In between, the VMID of the
+root can retire and recycle, and the root can be claimed again on another VMID, whose TLB can then cache a
+translation that the page-table writes of the same buffer change. The superset does not depend on that timing.
+The cost is at most 14 invalidations of 15 dwords each for one `FLUSH_TLB`. The one logged rate on file is 47863
+`FLUSH_TLB` in 3909 s, about 12 a second (`evidence/linux/2026-09-24-E29-sdma-reset/windows-before.log`). The
+build is all or nothing: if the whole set does not fit, the answer is `STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER`
+with nothing published, and the next buffer starts the whole set again.
 
-## 3. Option (b): the flush on the ring
+### Every use of the old fixed VMID
 
-Upstream does the root change and the invalidation in the command stream:
-`gmc_v10_0_emit_flush_gpu_tlb` (`driver/amdgpu-import/reference/gmc_v10_0.c:374`) emits two `WREG` packets for
-the context's page-table-base pair and one `reg_write_reg_wait` for the invalidate request/ack, and
-`gfx_v10_0_ring_emit_vm_flush` (`reference/gfx_v10_0.c:8767`) follows it with `PACKET3_PFP_SYNC_ME`.
-`emit_pasid_mapping` and `PACKET3_INVALIDATE_TLBS` are the PASID-keyed variants, used for KFD, not needed here.
+| Use up to 0.7.213.1 | 0.7.214.1 |
+|---|---|
+| `wddm.c` `#define BC250_WDDM_VMID 1u` | removed |
+| `wddm.c` `WddmSubmitHardware`: `GfxSubmitIb(Device, BC250_WDDM_VMID, ...)` | `BC250_VMID_AUTO`, the chosen VMID returned |
+| `wddm.c` `WddmSubmitHardware`: the `vmid %u` of `wddm: fence %u on the gfx ring` | the chosen VMID |
+| `wddm.c` FLUSH_TLB: `GfxPagingBuildFlush(..., BC250_WDDM_VMID, ...)` | the resolved root; the fan-out above |
+| `gfx.c` `BC250_GFX.VmidRoot[16]` | `BC250_GFX.Vmid.Root[16]` with the rest of the table |
+| `gfx.c` `SubmitIbLocked`: the refusal predicate on `VmidRoot` | the same predicate with the gate at 0; `Bc250VmidAdmit` with the pool |
+| `gfx.c` `SubmitIbLocked`: `VmidRoot[Vmid] = RootPhysical` | `Bc250VmidClaim` under `VmidLock` |
+| `gfx.c` `TearDown` and `GfxPowerRetainedLocked`: zero `VmidRoot` | `Bc250VmidResetAll` |
+| `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types; the pipeline test checks the VMID in the queue and in the timeout report |
+| `experiments/E27-m9-inference/paging-route-test-suffix.c` (`shim-paging`) | the real `GfxPagingBuildFlush`, gate 0 and the fan-out |
 
-Because the packets execute in ring order, the CP itself serializes the root change against the previous job: no
-CPU wait, no idle requirement, and one VMID is enough. That is strictly better than (a) in throughput terms and
-is the upstream-shaped answer.
+## 3. Option (b): the flush on the ring (not implemented)
 
-Against it, here, now:
+Upstream does the root change and the invalidation in the command stream: `gmc_v10_0_emit_flush_gpu_tlb`
+(`driver/amdgpu-import/reference/gmc_v10_0.c`) emits two `WREG` packets for the page-table-base pair of the context
+and one `reg_write_reg_wait` for the invalidate request and acknowledge, and `gfx_v10_0_ring_emit_vm_flush`
+follows it with `PACKET3_PFP_SYNC_ME`. The packets execute in ring order, so the CP serializes the root change
+against the previous job, and one VMID is enough.
 
-- It changes `bc250_gfx_submit_job`'s frame, which is a fixed, logged, known-good packet sequence. The frame is
-  what a dump of a 0x116 is read against (the `gfx: job frame C0004200 ...` line exists for that).
-- It needs `vm_inv_eng`, `eng_distance`, the hub register bases and the per-engine ack semantics to be correct
-  in emitted packets rather than in MMIO writes that can be read back. A wrong ack mask is a CP that waits
-  forever, which on this part means a TDR and no engine reset (facts M53).
-- The invalidation engine registers are shared with the CPU path (`bc250_gmc_flush_gpu_tlb`), and the shim has
-  no equivalent of upstream's `adev->gmc.invalidate_lock` (`bc250_gmc.c:149`). On-ring and MMIO invalidation
-  would then be two unsynchronized users of one engine. Node 1's SDMA path already emits its own
-  `bc250_sdma_emit_vm_flush`, so this question has to be answered for (b) whether or not node 0 moves.
+Against it, now:
 
-Recommendation: (a) first, because it is additive and every step of it can be read back from a register; (b)
-afterwards, as the way to get down to one VMID and no CPU poll on the submit path, with the invalidation-engine
-ownership settled first.
+- It changes the frame of `bc250_gfx_submit_job`, a fixed, logged, known-good packet sequence that a dump of a
+  0x116 is read against.
+- It needs `vm_inv_eng`, `eng_distance`, the hub register bases and the acknowledge semantics to be correct in
+  emitted packets, not in MMIO writes that can be read back. A wrong acknowledge mask is a CP that waits forever:
+  a TDR, and no engine reset on this part (facts M53).
+- The invalidation engine is shared with the CPU path (`bc250_gmc_flush_gpu_tlb`), and the shim has no equivalent
+  of the upstream `adev->gmc.invalidate_lock`.
+
+(b) remains the way to one VMID and no CPU poll on the submit path, after the ownership of the invalidation
+engine is settled.
 
 ## 4. VM fault attribution
 
-Today every application job runs at VMID 1, so the `VMID` field of `GCVM_L2_PROTECTION_FAULT_STATUS`
-(`ih_fault.h:50`) and of the UTCL2 vector says nothing about which process faulted; the journal's
-`BC250_PJ_GFX_SUBMIT` record is the only link, and it is a link to a sequence, not to the VMID in the latch.
+Up to 0.7.213.1 every application job ran at VMID 1, so the VMID of `GCVM_L2_PROTECTION_FAULT_STATUS` and of the
+UTCL2 vector named no process. With the pool, a VMID maps to a root while it is not recycled, and the root maps to
+a process. A fault latched on a VMID that was recycled before the latch was read needs the history.
 
-Under (a) this improves: a VMID maps to a root for as long as it is not recycled, and the root maps to a
-process (`Context->CreatorProcessId` is already in the submit identity). The implementation therefore has to
-keep a small retired-VMID history - root, process, the sequence range it covered - so that a fault latched on a
-VMID that has since been recycled is still attributable. Without that history, (a) makes attribution *worse*
-than today in exactly the case that matters, the one where a fault stopped the engine and the next submit
-recycled the VMID before anybody read the latch.
+0.7.214.1 keeps a ring of 16 ended tenancies: VMID, root, process, first and last sequence. `GfxVmidReport` prints
+the current tenant and the newest ended tenant of a VMID:
 
-Under (b) with one VMID, attribution stays where it is: the journal record.
+```
+ih: GPU FAULT vector vmid %lu now: root 0x%llX pid %lu seq %lu-%lu
+ih: GPU FAULT vector vmid %lu before: root 0x%llX pid %lu seq %lu-%lu
+ih: GPU FAULT latch vmid %lu now: ...                   (only when the latch names another VMID)
+wddm: timeout job vmid %lu now: ...
+wddm: timeout latch vmid %lu now: ...
+```
 
-## 5. Risks
+`IhFaultReport` calls it for the VMID of the vector and, when it differs, for the VMID of the latch. The watchdog
+calls it for the VMID of the timed-out job and, in the register snapshot, for the VMID of the latch. The line
+`wddm: timeout seq %lu fence %u node %u vmid %lu ctx ...` names the VMID of the job.
 
-| Risk | Consequence | Mitigation |
-|---|---|---|
-| A VMID recycled while a job of its old root is still fetching | wrong translations, VM fault, 0x116 | the retirement test of section 2 step 2; a `C_ASSERT`-grade invariant check in the claim path, logged once |
-| A pool VMID used by firmware (PSP, RLC) | corruption outside our contexts | read all 16 page-table-base pairs at the end of bring-up, log the non-zero ones, start the pool from what that shows |
-| `FLUSH_TLB` flushing one VMID when several hold the root | stale translations after a paging unmap | flush every pool VMID holding that root; this is the item to review first |
-| Fault latched on a VMID that was recycled before the latch was read | a fault nobody can attribute | the retired-VMID history of section 4, in the same change, not later |
-| Fourteen VMIDs exhausted by many processes | back to `STATUS_DEVICE_BUSY`, i.e. today's behaviour | nothing needed; F1's event wake makes that wait cheap |
+## 5. Risks, and what tests them
 
-## 6. Why not in 196
+| Risk | Consequence | Mitigation | Test |
+|---|---|---|---|
+| A VMID recycled while a job of its old root still runs | wrong translations, VM fault, 0x116 | the retirement test of the chooser; the rule check before every root write, logged once | `vmid-pool`: an exhaustive model check of every interleaving of submit, retire and root choice for pools of 1, 2, 3 and 2 far-apart VMIDs (2.2 million interleavings), and 1.28 million seeded random steps across the sequence wrap; the safety property is "every job in flight still finds its root at its VMID" |
+| The chooser is changed to ignore retirement | the same | the negative control | `vmid-pool-ignore-retirement` must fail |
+| A pool VMID used by firmware (PSP, RLC) | corruption outside our contexts | the bring-up read; a non-zero VMID in 3..15 stays out | `vmid-pool`: the probe cases |
+| `FLUSH_TLB` misses a VMID that holds the root | stale translations after a paging unmap | the superset of section 2 | `shim-paging`: the real `GfxPagingBuildFlush` with gate 0 (VMID 1 alone, byte for byte) and with the pool (the fan-out, the recycle race, all or nothing) |
+| A fault latched on a recycled VMID | a fault nobody can attribute | the history of section 4 | `vmid-pool`: the history cases |
+| `EnableVmidPool` 0 is not 0.7.213.1 | a bisect switch that lies | the gate-0 path keeps the old predicate at the old point | `vmid-pool`: gate-0 identity against the old predicate (120 cases); `gfx-pipeline`, `gfx-retained` |
+| Fourteen VMIDs used up by many processes | `STATUS_DEVICE_BUSY`, the behaviour of 0.7.213.1 | nothing; F1 makes the wait cheap | the summary counts `busy` |
 
-- F1 is measurable on its own and the lead needs one lab session to price it. A VMID pool in the same package
-  would change the same counters for a second reason.
-- (a) is additive but not small: a chooser, two new arrays, the `FLUSH_TLB` fan-out, the journal/VMID plumbing
-  and the retired-VMID history for fault attribution. Each of those is a correctness surface whose failure mode
-  is a 0x116 on the lab, not a slow frame.
-- The one unknown that must be settled before any of it is which VMIDs the firmware uses. That is a read-only
-  bring-up measurement and it does not exist yet.
+## 6. Gate, counters, rollback
 
-When it is implemented, it goes behind `EnableVmidPool` (DWORD, service parameters, **default 0**), read once at
-start like every other gate in this driver, with the chosen VMID in the journal record and in the
-`gfx: job seq ...` line so that a run with the gate open can be told from one without it in a log alone.
+`EnableVmidPool` is a REG_DWORD under `Services\bc250kmd\Parameters`, read once in `GfxStart`. Absent or any value
+other than 0 opens the pool. The INF and the release installer write 1. 0 gives 0.7.213.1: every job at VMID 1,
+the old refusal at the old point, no bring-up read, and `FLUSH_TLB` on VMID 1 alone.
+
+The start log says `gfx: VMID pool on (EnableVmidPool)` or `gfx: VMID pool off (EnableVmidPool 0): every job at
+VMID 1`. The summary has three lines:
+
+```
+wddm summary: VMID pool on, members 0x%04lX, excluded 0x%04lX
+wddm summary: VMID pool: %lu claims, %lu reuses, %lu busy, %lu rule refusals
+wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations
+```
+
+`rule refusals` must be 0. Any other value is a defect. To roll back, set `EnableVmidPool` to 0 and restart.

@@ -96,6 +96,10 @@
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 192);        // ABI 2 (0.7.207); the ABI 1 prefix is 160 bytes
 C_ASSERT(BC250_DPM_ABI1_SIZE == 160);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM, IdleMHz) == BC250_DPM_ABI1_SIZE);
+C_ASSERT(sizeof(BC250_ESCAPE_DPM) == BC250_DPM_ABI2_SIZE);
+C_ASSERT(sizeof(BC250_DPM_METRICS) == 56);
+C_ASSERT(sizeof(BC250_ESCAPE_DPM_EX) == BC250_DPM_ABI3_SIZE);   // ABI 3 (0.7.215): ABI 2 and the metrics tail
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_EX, Metrics) == BC250_DPM_ABI2_SIZE);
 C_ASSERT(BC250_DPM_THROTTLE_COUNT == 12);         // 0.7.207 appended "idle", 0.7.213 "thermal-zone"
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 184);   // ABI 3 (0.7.213); ABI 2 is 152 bytes, ABI 1 120
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_SIZE);
@@ -861,6 +865,10 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
             }
         }
     }
+    // The SMU metrics table (0.7.215, smu_metrics.c): at most one read a second, on its own clock, after this tick's
+    // own SMU traffic. Fixed-lab starts read it too. A refusal ends it for the boot and costs this tick nothing more
+    // than the refused message; a paused governor never gets here.
+    SmuMetricsSample(Device);
     if (now >= T->NextHwmon) {
         // The board's own hardware monitor (hwmon.c): the fan speed, the duty read-back and the chip's own
         // temperature channels. Its own counter and not NextVerify, so a change to the SMU readback period
@@ -869,6 +877,9 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // EnableHwmon decides whether anything happens at all; HwmonSample returns at once when it is closed.
         T->NextHwmon = now + 10000ull * BC250_HWMON_PERIOD_MS;
         HwmonSample(Device);
+        // The fan control (fan.c) on the sample just taken and this tick's Tctl. Its own gate, EnableFanControl,
+        // decides whether it writes anything; with the gate closed it only publishes its state.
+        FanStep(Device, T->TemperatureMc, T->TemperatureValid);
     }
     DpmPublish(Device, S, T, TRUE);
     if (now >= T->NextLog) {
@@ -884,6 +895,8 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
         HwmonLogLine(Device, "telemetry");
+        SmuMetricsLogLine(Device, "telemetry");
+        FanLogLine(Device, "telemetry");
         DpmLogCurveLine("telemetry", &snap);
         // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
         bc250_dpm_tune_default(&defaults);
@@ -1378,15 +1391,19 @@ void DpmLogSummary(BC250_DEVICE* Device)
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
     HwmonLogLine(Device, "summary");
+    SmuMetricsLogLine(Device, "summary");
+    FanLogLine(Device, "summary");
     DpmLogCurveLine("summary", &snap);
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
     DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases, &snap);
 }
 
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.
-// Size (0.7.207): display.c admits sizeof (ABI 2) and BC250_DPM_ABI1_SIZE only. With the ABI 1 size nothing past
-// that prefix is read or written (abi2 below guards every ABI 2 field); a size that is not its AbiVersion's is
-// refused before anything else, as in DpmTuneRequest.
+// Size (0.7.207, 0.7.215): display.c admits BC250_DPM_ABI3_SIZE, sizeof(BC250_ESCAPE_DPM) (ABI 2) and
+// BC250_DPM_ABI1_SIZE only. With a shorter size nothing past that prefix is read or written: abi2 guards every ABI 2
+// field and is also true for ABI 3, which contains them; abi3 alone guards the metrics tail. A size that is not its
+// AbiVersion's is refused before anything else, as in DpmTuneRequest. The tail is smu_metrics.c's published copy:
+// this escape sends no SMU message.
 void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
@@ -1395,8 +1412,12 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
     ULONGLONG ready = 0;
     BOOLEAN confirm = Data->Op == BC250_DPM_OP_CONFIRM;
     const ULONG abi = Data->AbiVersion;
-    const BOOLEAN abi2 = abi == BC250_DPM_ABI && Size == sizeof(BC250_ESCAPE_DPM);
+    const BOOLEAN abi3 = abi == BC250_DPM_ABI_3 && Size == sizeof(BC250_ESCAPE_DPM_EX);
+    const BOOLEAN abi2 = (abi == BC250_DPM_ABI && Size == sizeof(BC250_ESCAPE_DPM)) || abi3;
     const BOOLEAN abi1 = abi == BC250_DPM_ABI_1 && Size == BC250_DPM_ABI1_SIZE;
+    BC250_ESCAPE_DPM_EX* ex = (BC250_ESCAPE_DPM_EX*)Data;  // dereferenced under abi3 only
+    BC250_DPM_METRICS metrics;
+    BOOLEAN power = FALSE;
     BC250_DPM_SNAP snap;
     KIRQL irql;
 
@@ -1417,6 +1438,7 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
         Data->IdleEntries = Data->IdleExits = Data->IdleRefusals = 0;
         Data->IdleMs = 0;
     }
+    if (abi3) RtlZeroMemory(&ex->Metrics, sizeof(ex->Metrics));
     if (!(abi1 || abi2) || Data->SubmitBusyPermille || Data->SdmaBusyPermille ||
         (Data->Op != BC250_DPM_OP_READ && !confirm) || EscapeFlags != expectedFlags.Value) return;
     if (confirm && !Admin) {
@@ -1443,6 +1465,8 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
     KeAcquireSpinLock(&s->SnapLock, &irql);
     snap = s->Snap;
     KeReleaseSpinLock(&s->SnapLock, irql);
+    RtlZeroMemory(&metrics, sizeof(metrics));
+    if (abi3) power = SmuMetricsFill(Device, &metrics);
     ExReleaseRundownProtection(&Device->StartHealth.Readers);
     Data->Flags = snap.Flags;
     Data->Mode = snap.Mode;
@@ -1479,6 +1503,10 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
         Data->IdleExits = snap.IdleExits;
         Data->IdleRefusals = snap.IdleRefusals;
         Data->IdleMs = snap.IdleMs;
+    }
+    if (abi3) {
+        ex->Metrics = metrics;
+        if (power) Data->Flags |= BC250_DPM_FLAG_POWER;
     }
     Data->NtStatus = (ULONG)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;

@@ -157,9 +157,9 @@ perf.memory|mt-safe|34a62533|使用中のビデオ メモリ
 perf.memory.explain|mt|28bc56be|ゲームと Windows がグラフィックスに使用しているメモリです。
 perf.memory.value|mt-safe|eaf124e2|{1} GB 中 {0} GB
 perf.power|mt-safe|848e9656|電力
-perf.power.explain|mt|2fb99c60|ドライバーはまだ消費電力を読み取れません。これは今後対応予定です。
+perf.power.explain|mt|a2850175|プロセッサーとグラフィックスチップが合わせて使用している電力で、チップ自身が測定した値です。ボードのその他の部分、ファン、電源の損失は含まれません。
 perf.fan|mt-safe|e27be641|ファン
-perf.fan.explain|mt|18194645|ファンはボードが自動的に回します (BIOS のファン設定)。ドライバーは回転数を読み取ってここに表示します。
+perf.fan.explain|mt|730cb123|ケース ファンの回転数です。誰がどのカーブでファンを制御するかは、下のケース ファン カードで選びます。
 perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)
 perf.fan.rpm-only|mt-safe|c140fb3e|{0} rpm
 perf.fan.stopped|mt|95e3cf4e|回転していません
@@ -321,8 +321,8 @@ search.later.vrr|mt-safe|2939546a|可変リフレッシュ レート
 search.later.vrr.terms|mt|685a6f1e|VRR|FreeSync|G-Sync|アダプティブ シンク|可変リフレッシュ
 search.later.power|mt-safe|fba85679|電力制限
 search.later.power.terms|mt|db72d2b0|電力制限|消費電力|ワット|TDP|パワー リミット
-search.later.fan|mt-safe|8c9a2877|ファン制御
-search.later.fan.terms|mt|f8a14c23|ファン|ファン カーブ|騒音|静音|冷却
+search.perf.fan|mt-safe|8c9a2877|ファン制御
+search.perf.fan.terms|mt|f8a14c23|ファン|ファン カーブ|騒音|静音|冷却
 search.later.fps-counter|mt-safe|8e4f7029|フレーム レートの表示
 search.later.fps-counter.terms|mt|40353cf6|FPS カウンター|フレーム時間|フレーム タイム|オーバーレイ|フレーム毎秒|FPS
 search.later.cache-clear|mt-safe|6b923412|シェーダー キャッシュを消去
@@ -625,7 +625,7 @@ help.setting.mode|mt|16a81243|このアプリから解像度とリフレッシ�
 help.setting.hdr|mt|af54494e|ハイ ダイナミック レンジ：明るい部分がより明るく、色がより豊かになります。今後対応予定です。
 help.setting.vrr|mt|4662d04f|モニターがゲームのフレーム レートに合わせて動作し、動きが滑らかになります。今後対応予定です。
 help.setting.power|mt|3659317e|チップが使用できる最大電力です。今後対応予定です。
-help.setting.fan|mt|0fda8087|ファンはボードのファームウェアが回します。このアプリは回転数を表示します。このアプリからの制御は今後対応予定です。
+help.setting.fan|mt|e5088079|ケース ファンを誰が制御するかを選びます。自動はボードの BIOS 設定に任せます。ドライバーのカーブは、チップが熱いときにボードの標準設定より少し速くファンを回します。静音は 80 °C 未満で遅く、パフォーマンスは全体で速くなります。87 °C 以上ではファンは常に全速で回ります。
 help.setting.fps-counter|mt|929ada50|フレーム レートを表示します。今後対応予定です。
 help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -748,3 +748,124 @@ tuner.curve.preview.standard|mt|0c38511f|すべての速度で標準の電圧に
 tuner.note.curve-risk|mt|28bb65b2|電圧を下げると、同じ速度でもグラフィックスチップの温度が下がり静かになります。下げすぎるとメッセージではなくゲームや画面のフリーズとして現れ、テストが終わると設定は自動的に戻ります。
 tuner.note.cpu-risk|mt|0e0c4e70|これらのプロセッサーの数値は他の人のボードから得られたものです。速度が高すぎたり電圧が低すぎたりすると、コンピューターのフリーズとして現れます。アプリは電圧を下げるだけで、変更のたびに読み戻します。
 tuner.note.cores-risk|mt|8be50b28|8 コアは 6 コアより発熱が多く、消費電力も大きくなります。このボードで残りの 2 コアを試した人はいません。
+
+# ---- case fan control (docs/design/fan.md Part B) ----
+perf.fan.title|mt|5c8d61f3|ケース ファン
+perf.fan.intro|mt|a21739ad|ケース ファンは、ボードの設定 (BIOS) かドライバーのカーブに従って回ります。選んだ設定は保存され、起動するたびに使われます。
+perf.fan.no-control|mt|fd9e9d33|このドライバーはファンを制御できません。ボードが BIOS の設定に従って回します。
+perf.fan.speed|mt|c372fee9|回転数
+perf.fan.who|mt|74669b7c|ファンの制御
+perf.fan.state.curve|mt|0d3840dd|ドライバー (下のカーブに従う)
+perf.fan.state.board|mt|6cc6995a|ボード (BIOS のファン設定に従う)
+perf.fan.state.held-back|mt|59f5a3c5|今はボード: 温度の読み取りが信頼できませんでした。読み取りが安定すると、ドライバーがファンの制御に戻ります。
+perf.fan.state.fixed|mt|4f18369a|ドライバー (短いテストのため一定の速度)
+perf.fan.state.emergency|mt|c7b823af|ドライバー (全速): チップが 87 °C 以上です
+perf.fan.state.doubt|mt|660c9278|ドライバー (全速): 温度の読み取りが信頼できません
+perf.fan.state.fault|mt|66ca68ee|ボード: ファン チップが変更を受け付けなかったため、ドライバーは次の起動まで制御を止めました
+perf.fan.state.paused|mt|fd766292|ボード (グラフィックス チップのスリープ中)
+perf.fan.gate.setting|mt|c8ff005e|ドライバーの設定でファン制御がオフになっています。ファンはボードが回します。
+perf.fan.gate.reader|mt|05e4ec56|このコンピューターでは、ドライバーがファン チップを読み取れません。ファンはボードが回します。
+perf.fan.gate.chip|mt|7fdd9fb9|ドライバーはこのボードのファン チップを知りません。ファンはボードが回します。
+perf.fan.choice|mt|490e9e7b|ファンの動作
+perf.fan.choice.board|mt|0660c6e8|自動 (ボード)
+perf.fan.choice.standard|mt|97831670|ドライバーのカーブ
+perf.fan.choice.quiet|mt|c0ebb7d6|静音
+perf.fan.choice.performance|mt|442aded8|パフォーマンス
+perf.fan.choice.custom|mt|494ca78f|カスタム
+perf.fan.curve|mt|2a45c073|カーブ
+perf.fan.curve.help|mt|2f35cf1a|各行はカーブの 1 つのポイントで、温度とその温度でのファンの速度です。2 つのポイントの間では速度が直線的に変わります。
+perf.fan.point|mt|d145e24e|ポイント {0}
+perf.fan.point.temp|mt|be391872|ポイント {0} の温度
+perf.fan.point.speed|mt|b36cbfd1|ポイント {0} の速度
+perf.fan.point.value|mt|2395e526|{0} °C {1} %
+perf.fan.add|mt|d6d9d451|ポイントを追加
+perf.fan.remove|mt|a6ebf703|最後のポイントを削除
+perf.fan.reset|mt|b03f57c8|カーブをリセット
+perf.fan.apply|mt|185c5444|カーブを適用
+perf.fan.note|mt|238b862b|87 °C 以上では、カーブに関係なくファンは常に全速で回ります。
+perf.fan.error.points|mt|51203614|カーブには {0} から {1} 個のポイントが必要です。
+perf.fan.error.temperature|mt|13cdba76|ポイント {0}: 温度は {1} から {2} °C で、前のポイントより高くする必要があります。
+perf.fan.error.duty|mt|1542faac|ポイント {0}: 速度は {1} から {2} % で、前のポイントより低くできません。
+perf.fan.refuse.no-read|mt|04a57b48|ドライバーからファンについての応答がありませんでした。しばらくしてからもう一度試してください。
+perf.fan.refuse.off|mt|7d6ac4d6|このコンピューターでは、ドライバーはファンを制御しません。
+perf.fan.refuse.same|mt|c47d1c73|そのファン設定はすでに使われています。
+perf.fan.refuse.bad-curve|mt|ee0a1378|そのファン カーブは無効です。
+plan.line.fan-board|mt|2372fc6a|今から、そして起動のたびに、ボード自身のファン設定がファンを回します。
+plan.line.fan-curve|mt|8917f825|今から、そして起動のたびに、ドライバーがカーブ「{0}」でファンを回します。
+plan.line.fan-points|mt|787b6e90|ファンの速度: {0}
+plan.title.fan-auto|mt|16d8024e|ファンをボードに任せる
+plan.title.fan-curve|mt|df6aeaec|ファン カーブを使う
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|mt|59b507b0|詳細な調整を隠す
+graphics.tuning.curve.title|mt|e47d7a86|グラフィックスの電圧
+graphics.tuning.chart.marks|mt|72154322|破線は現在許可されている最高速度、円はチップが今動いている位置を示します。
+tuner.end.kept|mt|31ccaced|設定は保持され、起動ごとに使われます。
+tuner.end.stopped|mt|403b4756|テストを停止しました。テスト前の設定に戻りました。
+tuner.end.expired|mt|7ef08e16|「保持」が押されないままテストが終わったため、テスト前の設定に自動で戻りました。
+tuner.end.reset.curve|mt|bfc2561a|すべての速度で標準の電圧に戻りました。
+tuner.end.reset.cpu|mt|337fc138|プロセッサはこの起動時の標準設定に戻りました。
+tuner.temp|mt|aa6b1ef9|{0} °C
+tuner.curve.in-use|mt|09effe8c|現在の設定: {0}
+tuner.curve.saved|mt|d626a63e|起動ごとに使う保存済みの設定: {0}
+tuner.curve.live|mt|648c554d|現在: {0} MHz、{1} mV
+tuner.curve.live.temp|mt|d1468279|現在: {0} MHz、{1} mV、{2}
+tuner.curve.guard.unfinished|mt|a7be7ff4|前回この電圧設定で起動したときに起動が完了しなかったため、今回は使われていません。標準の設定を使っています。
+tuner.curve.guard.refused|mt|4300b552|ドライバーが受け付けなかったため、今回はご自身の電圧設定が使われていません。標準の設定を使っています。
+tuner.curve.row|mt|b87bbfe9|{0} mV、{1}
+tuner.curve.row.now|mt|05e062ca|{0} mV、{1}(現在 {2} mV)
+tuner.cpu.mhz-list|mt|65d8ea4f|{0} MHz
+tuner.cpu.own|mt|38de4c9d|変更なし
+tuner.cpu.on-after-restart|mt|12f166fe|プロセッサの調整は、次に Windows を再起動した後に有効になります。
+tuner.cpu.off-after-restart|mt|14faf359|プロセッサの調整は、次に Windows を再起動した後に無効になります。
+tuner.cpu.saved|mt|1477534c|プロセッサの設定は保存され、起動ごとに使われます。
+tuner.cpu.standard|mt|8f0b39bc|プロセッサは標準の設定で動いています。
+tuner.cpu.guard.unfinished|mt|d96467db|前回このプロセッサ設定で起動したときに起動が完了しなかったため、今回は使われていません。標準の設定を使っています。
+tuner.cpu.guard.refused|mt|fff75ab6|プロセッサが受け付けなかったため、今回はご自身のプロセッサ設定が使われていません。標準の設定を使っています。
+tuner.cpu.temp.label|mt|9001480f|現在の温度
+tuner.cpu.cores-now.label|mt|3a5e306a|各コアの速度
+tuner.cpu.steps-now.label|mt|9ef2435f|速度の段階
+tuner.cpu.in-use.label|mt|8289ad5a|現在の設定
+tuner.cpu.settings|mt|88193f5c|最高速度 {0}、電圧 {1}、温度上限 {2}
+tuner.cpu.saved.label|mt|a7de57fb|起動ごとに使う設定
+tuner.cpu.baseline.label|mt|5d92c4a0|この起動時の標準
+tuner.cpu.baseline.none|mt|62a9af5e|先にプロセッサを読み取ってください。
+tuner.summary.curve-trial|mt|64c717a2|グラフィックス電圧のテストを実行中です。
+tuner.summary.curve-own|mt|82c1b09b|ご自身のグラフィックス電圧設定を使っています。
+tuner.summary.cpu-trial|mt|92b795ab|プロセッサのテストを実行中です。
+tuner.summary.cpu-own|mt|dea49322|ご自身のプロセッサ設定を使っています。
+tuner.summary.standard|mt|f3252110|標準の設定を使っています。
+tuner.discard|mt|c493ce8f|変更を破棄
+tuner.cpu.readings|mt|1fb1ec0b|プロセッサからの報告
+tuner.cpu.settings.title|mt|74a883a0|設定
+tuner.cpu.choose|mt|53eca097|テストする新しい設定
+tuner.cpu.choose.help|mt|f60a34ae|ドライバーが受け付ける値だけを表示しています。テストで変わるのは選び直した値だけで、ほかの値はそのままです。
+
+# ---- the case fan card: chart, modes, rules and the short test (docs/design/fan.md) ----
+perf.fan.apply.board|mt|00e4d22f|ファンをボードに任せる
+perf.fan.undo|mt|3ce707f0|前の設定に戻す
+perf.fan.mode.board|mt|7f4437f3|ボードが BIOS のカーブでファンを回します。ドライバーは速度を読み取るだけです。
+perf.fan.mode.standard|mt|230ac427|ドライバーのバランス型カーブです。ボードの標準設定より遅くなることはありません。
+perf.fan.mode.quiet|mt|031b8d9a|80 °C 未満ではボードより静かで、85 °C から全速になります。
+perf.fan.mode.performance|mt|a47e9e5f|どの温度でも速めに回してチップを冷やします。75 °C から全速です。
+perf.fan.mode.custom|mt|eedc0ab4|自分で決めたポイントです。グラフ上でドラッグするか、下の行で変更します。
+perf.fan.chart|mt|02698365|ファン カーブ
+perf.fan.chart.help|mt|0194917e|ポイントをドラッグするか、グラフを選んで矢印キーを使います。左右でポイントを選び、上下で速度を、Ctrl を押しながら左右で温度を変えます。
+perf.fan.chart.marks|mt|718f72a7|灰色の帯: ファンは 20 % 未満になりません。黄色の範囲: 87 °C から全速。緑の円: 現在のファン。破線: 現在使っているカーブ。
+perf.fan.now|mt|3ded7dc3|現在: {0}、ファン {1} %
+perf.fan.rules|mt|b0ae79df|ドライバーによるファン制御のしくみ
+perf.fan.rule.input|mt|57e81613|チップ自身の温度とボードのセンサーのうち、高いほうに従います。
+perf.fan.rule.doubt|mt|9a50960f|温度の読み取りが信頼できないときは、ファンを全速で回します。
+perf.fan.rule.slow|mt|7dc63ff0|速度はすぐに上がり、ゆっくり下がるので、回転が上下に揺れません。
+perf.fan.rule.hot|mt|0ad231b2|87 °C 以上になると、チップが 82 °C 以下を 10 秒間保つまで全速で回ります。
+perf.fan.rule.floor|mt|1c20a7e0|ファンは 20 % 未満にならないので、止まってしまうことはありません。
+perf.fan.test|mt|9aae2421|短いテスト
+perf.fan.test.help|mt|03396cdb|ファンを 1 つの速度で 10 秒間回して、音と回転数を確かめます。その後、使用中の設定に戻ります。何も保存されません。
+perf.fan.test.speed|mt|500893e9|テストの速度
+perf.fan.test.run|mt|ac39ee02|10 秒間テスト
+perf.fan.test.result|mt|6817274d|{0} % でのテスト: ファンは {1} rpm に達しました。使用中の設定に戻っています。
+perf.fan.test.no-rpm|mt|66e7cfb6|{0} % でのテストは終わりましたが、回転数を読み取れませんでした。ファンは使用中の設定に戻っています。
+perf.fan.refuse.bad-test|mt|31d68f2f|そのテスト速度は選べません。
+perf.fan.refuse.busy|mt|d56c3708|現在ドライバーがファンを通常どおり制御していないため、今はテストできません。
+plan.line.fan-test|mt|e34087ea|ファンを {0} % で {1} 秒間回し、その後使用中の設定に戻します。何も保存されません。
+plan.title.fan-test|mt|86153b93|ファンのテスト

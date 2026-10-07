@@ -157,9 +157,9 @@ perf.memory|mt-safe|34a62533|사용 중인 비디오 메모리
 perf.memory.explain|mt|28bc56be|게임과 Windows가 그래픽에 사용하는 메모리입니다.
 perf.memory.value|mt|eaf124e2|{1} GB 중 {0} GB
 perf.power|mt-safe|848e9656|전력
-perf.power.explain|mt|2fb99c60|드라이버가 아직 전력 사용량을 읽을 수 없습니다. 이 기능은 나중에 추가됩니다.
+perf.power.explain|mt|a2850175|프로세서와 그래픽 칩이 함께 사용하는 전력으로, 칩 자체가 측정한 값입니다. 보드의 나머지 부분, 팬, 전원 공급 장치의 손실은 포함되지 않습니다.
 perf.fan|mt-safe|e27be641|팬
-perf.fan.explain|mt|18194645|보드가 팬을 직접 돌립니다(BIOS 팬 설정). 드라이버가 회전 수를 읽어 여기에 표시합니다.
+perf.fan.explain|mt|730cb123|케이스 팬의 회전 수입니다. 누가 어떤 곡선으로 팬을 제어할지는 아래 케이스 팬 카드에서 고릅니다.
 perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)
 perf.fan.rpm-only|mt-safe|c140fb3e|{0} rpm
 perf.fan.stopped|mt|95e3cf4e|회전하지 않음
@@ -321,8 +321,8 @@ search.later.vrr|mt-safe|2939546a|가변 새로 고침 빈도
 search.later.vrr.terms|mt|685a6f1e|VRR|FreeSync|G-Sync|프리싱크|지싱크|적응형 동기화
 search.later.power|mt-safe|fba85679|전력 제한
 search.later.power.terms|mt|db72d2b0|전력 제한|와트|TDP|파워 리밋
-search.later.fan|mt-safe|8c9a2877|팬 제어
-search.later.fan.terms|mt|f8a14c23|팬|팬 커브|소음|냉각
+search.perf.fan|mt-safe|8c9a2877|팬 제어
+search.perf.fan.terms|mt|f8a14c23|팬|팬 커브|소음|냉각
 search.later.fps-counter|mt-safe|8e4f7029|프레임 속도 표시
 search.later.fps-counter.terms|mt|40353cf6|FPS 카운터|FPS 표시|프레임 타임|오버레이|초당 프레임
 search.later.cache-clear|mt-safe|6b923412|셰이더 캐시 지우기
@@ -625,7 +625,7 @@ help.setting.mode|mt|16a81243|이 앱에서 해상도와 새로 고침 빈도를
 help.setting.hdr|mt|af54494e|하이 다이내믹 레인지: 더 밝은 하이라이트와 더 많은 색상을 표시합니다. 나중에 제공됩니다.
 help.setting.vrr|mt|4662d04f|모니터가 게임의 프레임 속도에 맞춰 더 부드러운 움직임을 보여 줍니다. 나중에 제공됩니다.
 help.setting.power|mt|3659317e|칩이 사용할 수 있는 최대 전력입니다. 나중에 제공됩니다.
-help.setting.fan|mt|0fda8087|보드 펌웨어가 팬을 돌립니다. 이 앱은 회전 수를 표시합니다. 앱에서 제어하는 기능은 나중에 제공됩니다.
+help.setting.fan|mt|e5088079|케이스 팬을 누가 제어할지 고릅니다. 자동은 보드의 BIOS 설정에 맡깁니다. 드라이버 곡선은 칩이 뜨거울 때 보드의 표준 설정보다 팬을 조금 더 빠르게 돌립니다. 저소음은 80 °C 미만에서 더 느리고, 성능은 전 구간에서 더 빠릅니다. 87 °C부터는 팬이 항상 최대 속도로 돕니다.
 help.setting.fps-counter|mt|929ada50|프레임 속도를 표시합니다. 나중에 제공됩니다.
 help.setting.cache-clear|mt|c75227ac|셰이더 캐시를 삭제합니다. 나중에 제공됩니다.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -748,3 +748,124 @@ tuner.curve.preview.standard|mt|0c38511f|모든 속도에서 표주 전입으로
 tuner.note.curve-risk|mt|28bb65b2|전입을 낮추면 같은 속도에서도 그래픽 칩이 더 시원하고 조용해집니다. 너무 낮으면 메시지가 아니라 게임이나 화면이 멈추는 형태로 나타나며, 테스트가 끝나면 설정은 저절로 돌아갑니다.
 tuner.note.cpu-risk|mt|0e0c4e70|이 프로세서 값은 다른 사람의 부드에서 나왔습니다. 속도가 너무 높거나 전입이 너무 낮으면 코퓨터가 멈추는 형태로 나타납니다. 이 앱은 전입을 낮추기만 하고 변경할 때마다 다시 읽습니다.
 tuner.note.cores-risk|mt|8be50b28|8코어는 6코어보다 열이 많고 전력을 더 많이 사용합니다. 이 부드에서 나머지 두 코어를 시험한 사람은 없습니다.
+
+# ---- case fan control (docs/design/fan.md Part B) ----
+perf.fan.title|mt|5c8d61f3|케이스 팬
+perf.fan.intro|mt|a21739ad|케이스 팬은 보드 설정(BIOS)이나 드라이버 곡선에 따라 돌아갑니다. 선택한 설정은 저장되어 시작할 때마다 적용됩니다.
+perf.fan.no-control|mt|fd9e9d33|이 드라이버는 팬을 제어할 수 없습니다. 보드가 BIOS 설정에 따라 팬을 돌립니다.
+perf.fan.speed|mt|c372fee9|회전 수
+perf.fan.who|mt|74669b7c|팬 제어
+perf.fan.state.curve|mt|0d3840dd|드라이버 (아래 곡선에 따름)
+perf.fan.state.board|mt|6cc6995a|보드 (BIOS 팬 설정에 따름)
+perf.fan.state.held-back|mt|59f5a3c5|지금은 보드: 온도 측정값을 신뢰할 수 없었습니다. 측정값이 다시 안정되면 드라이버가 팬 제어를 다시 맡습니다.
+perf.fan.state.fixed|mt|4f18369a|드라이버 (짧은 테스트를 위한 고정 속도)
+perf.fan.state.emergency|mt|c7b823af|드라이버 (최대 속도): 칩이 87 °C 이상입니다
+perf.fan.state.doubt|mt|660c9278|드라이버 (최대 속도): 온도 측정값을 신뢰할 수 없습니다
+perf.fan.state.fault|mt|66ca68ee|보드: 팬 칩이 변경을 받아들이지 않아 드라이버가 다음 시작까지 제어를 멈췄습니다
+perf.fan.state.paused|mt|fd766292|보드 (그래픽 칩이 절전 중일 때)
+perf.fan.gate.setting|mt|c8ff005e|드라이버 설정에서 팬 제어가 꺼져 있습니다. 팬은 보드가 돌립니다.
+perf.fan.gate.reader|mt|05e4ec56|이 컴퓨터에서는 드라이버가 팬 칩을 읽을 수 없습니다. 팬은 보드가 돌립니다.
+perf.fan.gate.chip|mt|7fdd9fb9|드라이버가 이 보드의 팬 칩을 알지 못합니다. 팬은 보드가 돌립니다.
+perf.fan.choice|mt|490e9e7b|팬 동작
+perf.fan.choice.board|mt|0660c6e8|자동 (보드)
+perf.fan.choice.standard|mt|97831670|드라이버 곡선
+perf.fan.choice.quiet|mt|c0ebb7d6|저소음
+perf.fan.choice.performance|mt|442aded8|성능
+perf.fan.choice.custom|mt|494ca78f|사용자 지정
+perf.fan.curve|mt|2a45c073|곡선
+perf.fan.curve.help|mt|2f35cf1a|각 행은 곡선의 한 점으로, 온도와 그 온도에서의 팬 속도입니다. 두 점 사이에서는 속도가 직선으로 변합니다.
+perf.fan.point|mt|d145e24e|지점 {0}
+perf.fan.point.temp|mt|be391872|지점 {0}의 온도
+perf.fan.point.speed|mt|b36cbfd1|지점 {0}의 속도
+perf.fan.point.value|mt|2395e526|{0} °C {1} %
+perf.fan.add|mt|d6d9d451|지점 추가
+perf.fan.remove|mt|a6ebf703|마지막 지점 삭제
+perf.fan.reset|mt|b03f57c8|곡선 초기화
+perf.fan.apply|mt|185c5444|곡선 적용
+perf.fan.note|mt|238b862b|87 °C부터는 곡선과 관계없이 팬이 항상 최대 속도로 돕니다.
+perf.fan.error.points|mt|51203614|곡선에는 {0}~{1}개의 지점이 필요합니다.
+perf.fan.error.temperature|mt|13cdba76|지점 {0}: 온도는 {1}~{2} °C이고 앞 지점보다 높아야 합니다.
+perf.fan.error.duty|mt|1542faac|지점 {0}: 속도는 {1}~{2} %이고 앞 지점보다 낮을 수 없습니다.
+perf.fan.refuse.no-read|mt|04a57b48|드라이버가 팬에 대해 응답하지 않았습니다. 잠시 후 다시 시도하세요.
+perf.fan.refuse.off|mt|7d6ac4d6|이 컴퓨터에서는 드라이버가 팬을 제어하지 않습니다.
+perf.fan.refuse.same|mt|c47d1c73|그 팬 설정은 이미 사용 중입니다.
+perf.fan.refuse.bad-curve|mt|ee0a1378|그 팬 곡선은 올바르지 않습니다.
+plan.line.fan-board|mt|2372fc6a|지금부터, 그리고 시작할 때마다 보드 자체 팬 설정이 팬을 돌립니다.
+plan.line.fan-curve|mt|8917f825|지금부터, 그리고 시작할 때마다 드라이버가 "{0}" 곡선으로 팬을 돌립니다.
+plan.line.fan-points|mt|787b6e90|팬 속도: {0}
+plan.title.fan-auto|mt|16d8024e|팬을 보드에 맡기기
+plan.title.fan-curve|mt|df6aeaec|팬 곡선 사용
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|mt|59b507b0|고급 조정 숨기기
+graphics.tuning.curve.title|mt|e47d7a86|그래픽 전압
+graphics.tuning.chart.marks|mt|72154322|점선은 지금 허용되는 최고 속도이고, 원은 칩이 지금 동작하는 위치를 보여 줍니다.
+tuner.end.kept|mt|31ccaced|설정이 유지되며 시작할 때마다 사용됩니다.
+tuner.end.stopped|mt|403b4756|테스트를 중지했습니다. 테스트 전의 설정으로 돌아왔습니다.
+tuner.end.expired|mt|7ef08e16|유지를 누르지 않은 채 테스트가 끝나서 테스트 전의 설정으로 자동으로 돌아왔습니다.
+tuner.end.reset.curve|mt|bfc2561a|모든 속도에서 표준 전압으로 돌아왔습니다.
+tuner.end.reset.cpu|mt|337fc138|프로세서가 이번 시작의 표준 설정으로 돌아왔습니다.
+tuner.temp|mt|aa6b1ef9|{0} °C
+tuner.curve.in-use|mt|09effe8c|지금 사용 중: {0}
+tuner.curve.saved|mt|d626a63e|시작할 때마다 쓰는 저장된 설정: {0}
+tuner.curve.live|mt|648c554d|지금: {0} MHz, {1} mV
+tuner.curve.live.temp|mt|d1468279|지금: {0} MHz, {1} mV, {2}
+tuner.curve.guard.unfinished|mt|a7be7ff4|지난번 이 전압 설정으로 시작했을 때 시작이 끝나지 않아서 이번에는 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.curve.guard.refused|mt|4300b552|드라이버가 받아들이지 않아서 이번에는 직접 정한 전압 설정을 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.curve.row|mt|b87bbfe9|{0} mV, {1}
+tuner.curve.row.now|mt|05e062ca|{0} mV, {1} (지금 {2} mV)
+tuner.cpu.mhz-list|mt|65d8ea4f|{0} MHz
+tuner.cpu.own|mt|38de4c9d|변경 없음
+tuner.cpu.on-after-restart|mt|12f166fe|프로세서 조정은 다음에 Windows를 다시 시작한 뒤 켜집니다.
+tuner.cpu.off-after-restart|mt|14faf359|프로세서 조정은 다음에 Windows를 다시 시작한 뒤 꺼집니다.
+tuner.cpu.saved|mt|1477534c|프로세서 설정이 저장되어 시작할 때마다 사용됩니다.
+tuner.cpu.standard|mt|8f0b39bc|프로세서가 표준 설정으로 동작합니다.
+tuner.cpu.guard.unfinished|mt|d96467db|지난번 이 프로세서 설정으로 시작했을 때 시작이 끝나지 않아서 이번에는 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.cpu.guard.refused|mt|fff75ab6|프로세서가 받아들이지 않아서 이번에는 직접 정한 프로세서 설정을 사용하지 않았습니다. 표준 설정을 사용합니다.
+tuner.cpu.temp.label|mt|9001480f|지금 온도
+tuner.cpu.cores-now.label|mt|3a5e306a|코어별 속도
+tuner.cpu.steps-now.label|mt|9ef2435f|속도 단계
+tuner.cpu.in-use.label|mt|8289ad5a|지금 사용 중
+tuner.cpu.settings|mt|88193f5c|최고 속도 {0}, 전압 {1}, 온도 한도 {2}
+tuner.cpu.saved.label|mt|a7de57fb|시작할 때마다 쓰는 설정
+tuner.cpu.baseline.label|mt|5d92c4a0|이번 시작의 표준
+tuner.cpu.baseline.none|mt|62a9af5e|먼저 프로세서를 읽어 주세요.
+tuner.summary.curve-trial|mt|64c717a2|그래픽 전압 테스트가 진행 중입니다.
+tuner.summary.curve-own|mt|82c1b09b|직접 정한 그래픽 전압 설정을 사용 중입니다.
+tuner.summary.cpu-trial|mt|92b795ab|프로세서 테스트가 진행 중입니다.
+tuner.summary.cpu-own|mt|dea49322|직접 정한 프로세서 설정을 사용 중입니다.
+tuner.summary.standard|mt|f3252110|표준 설정을 사용 중입니다.
+tuner.discard|mt|c493ce8f|변경 내용 버리기
+tuner.cpu.readings|mt|1fb1ec0b|프로세서가 알려 주는 값
+tuner.cpu.settings.title|mt|74a883a0|설정
+tuner.cpu.choose|mt|53eca097|테스트할 새 설정
+tuner.cpu.choose.help|mt|f60a34ae|드라이버가 받아들이는 값만 보여 줍니다. 테스트는 직접 바꾼 값만 바꾸고 나머지는 그대로 둡니다.
+
+# ---- the case fan card: chart, modes, rules and the short test (docs/design/fan.md) ----
+perf.fan.apply.board|mt|00e4d22f|팬을 보드에 맡기기
+perf.fan.undo|mt|3ce707f0|이전 설정으로 되돌리기
+perf.fan.mode.board|mt|7f4437f3|보드가 BIOS에 있는 곡선으로 팬을 돌립니다. 드라이버는 속도만 읽습니다.
+perf.fan.mode.standard|mt|230ac427|드라이버의 균형 잡힌 곡선입니다. 보드의 표준 설정보다 느려지지 않습니다.
+perf.fan.mode.quiet|mt|031b8d9a|80 °C 미만에서는 보드보다 조용하고, 85 °C부터 최대 속도로 돕니다.
+perf.fan.mode.performance|mt|a47e9e5f|모든 온도에서 더 빠르게 돌려 칩을 시원하게 유지합니다. 75 °C부터 최대 속도입니다.
+perf.fan.mode.custom|mt|eedc0ab4|직접 정한 점입니다. 그래프에서 끌거나 아래 행에서 바꾸세요.
+perf.fan.chart|mt|02698365|팬 곡선
+perf.fan.chart.help|mt|0194917e|점을 끌거나, 그래프를 선택한 뒤 화살표 키를 쓰세요. 왼쪽과 오른쪽은 점 선택, 위와 아래는 속도 변경, Ctrl을 누른 채 왼쪽이나 오른쪽은 온도 변경입니다.
+perf.fan.chart.marks|mt|718f72a7|회색 띠: 팬은 20 % 아래로 내려가지 않습니다. 주황색 구역: 87 °C부터 최대 속도. 초록색 원: 지금 팬 상태. 점선: 지금 사용 중인 곡선.
+perf.fan.now|mt|3ded7dc3|지금: {0}, 팬 {1} %
+perf.fan.rules|mt|b0ae79df|드라이버가 팬을 제어하는 방식
+perf.fan.rule.input|mt|57e81613|칩 자체 온도와 보드 센서 값 중 더 높은 쪽을 따릅니다.
+perf.fan.rule.doubt|mt|9a50960f|온도 값을 믿을 수 없으면 팬을 최대 속도로 돌립니다.
+perf.fan.rule.slow|mt|7dc63ff0|속도는 바로 올라가고 천천히 내려가므로 팬 소리가 오르내리지 않습니다.
+perf.fan.rule.hot|mt|0ad231b2|87 °C 이상이 되면 칩이 82 °C 이하를 10초 동안 유지할 때까지 최대 속도로 돕니다.
+perf.fan.rule.floor|mt|1c20a7e0|팬은 20 % 아래로 돌지 않으므로 멈추지 않습니다.
+perf.fan.test|mt|9aae2421|짧은 테스트
+perf.fan.test.help|mt|03396cdb|팬을 한 속도로 10초 동안 돌려 소리와 회전 속도를 확인합니다. 그 뒤 사용 중인 설정으로 돌아갑니다. 아무것도 저장되지 않습니다.
+perf.fan.test.speed|mt|500893e9|테스트 속도
+perf.fan.test.run|mt|ac39ee02|10초 동안 테스트
+perf.fan.test.result|mt|6817274d|{0} % 테스트: 팬이 {1} rpm까지 올라갔습니다. 사용 중인 설정으로 돌아왔습니다.
+perf.fan.test.no-rpm|mt|66e7cfb6|{0} % 테스트가 끝났지만 회전 속도 값을 받지 못했습니다. 팬은 사용 중인 설정으로 돌아왔습니다.
+perf.fan.refuse.bad-test|mt|31d68f2f|그 테스트 속도는 선택할 수 없습니다.
+perf.fan.refuse.busy|mt|d56c3708|지금은 드라이버가 팬을 평소대로 제어하고 있지 않아서 테스트할 수 없습니다.
+plan.line.fan-test|mt|e34087ea|팬을 {0} %로 {1}초 동안 돌린 뒤 사용 중인 설정으로 되돌립니다. 아무것도 저장되지 않습니다.
+plan.title.fan-test|mt|86153b93|팬 테스트

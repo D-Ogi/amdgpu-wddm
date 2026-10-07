@@ -17,6 +17,7 @@
 //   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.213)
 //                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
+//   bc250kmd_cli dpaudio [state]      the DP audio check table (step 0 reads) and the record of the last start
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
 // private escape. That failure is a measurement too, so every step prints its own NTSTATUS instead of one
@@ -47,6 +48,8 @@
 #include <wchar.h>
 
 #include "../../../driver/kmd/bc250kmd_escape.h"     // shared with the driver, never copied
+#include "../../../driver/kmd/regs.generated.h"      // `read <name>`: the named READ_REG offsets, from gen_regs.py
+#include "../../../third_party/linux-amdgpu/dcn_2_0_1_sh_mask.h"  // `dpaudio`: field masks to decode the reply
 
 #define BC250_DEFAULT_HWID L"PCI\\VEN_1002&DEV_13FE"
 #define BC250_SERVICE_KEY  L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd"
@@ -595,6 +598,34 @@ typedef struct _BC250_ESCAPE_DPM {
 } BC250_ESCAPE_DPM; // 192 bytes on Windows, ABI 2 (the first 160 are ABI 1)
 #endif
 
+#ifndef BC250_DPM_ABI_3
+// Only for a driver/kmd/bc250kmd_escape.h before 0.7.215, which has no RUN_DPM ABI 3; this tree's header defines it,
+// so here the block drops out. It is the 0.7.215 definition under the header's own names.
+#define BC250_DPM_ABI_3 3u
+#define BC250_DPM_ABI2_SIZE 192u
+#define BC250_DPM_ABI3_SIZE 248u
+#define BC250_DPM_FLAG_POWER 8192u
+#define BC250_DPM_METRICS_OFF 0u
+#define BC250_DPM_METRICS_WAITING 1u
+#define BC250_DPM_METRICS_OK 2u
+#define BC250_DPM_METRICS_REFUSED 3u
+#define BC250_DPM_METRICS_NO_TABLE 4u
+#define BC250_DPM_METRICS_BAD_TABLE 5u
+typedef struct _BC250_DPM_METRICS {
+    unsigned long MetricsState, MetricsAgeMs, MetricsReads, MetricsFailures;
+    unsigned long SocketPowerMw, SocketPowerAvgMw;
+    unsigned long GfxPowerMw, SocPowerMw;
+    unsigned long GfxMv, SocMv;
+    unsigned long GfxMHz;
+    unsigned long GfxTemperatureCc, SocTemperatureCc;
+    unsigned long ThrottlerStatus;
+} BC250_DPM_METRICS; // 56 bytes
+typedef struct _BC250_ESCAPE_DPM_EX {
+    BC250_ESCAPE_DPM Dpm;
+    BC250_DPM_METRICS Metrics;
+} BC250_ESCAPE_DPM_EX; // 248 bytes on Windows, ABI 3
+#endif
+
 // The monitor's digest of dxgkrnl's segment statistics, not a KMD structure. Memory segments are what Task
 // Manager calls dedicated memory; aperture segments (the GART) are summed apart. Segment ids are zero-based.
 // tools/win/bc250mon/src/Driver.cs mirrors it; test_telemetry.py keeps the two equal.
@@ -633,6 +664,23 @@ typedef struct _BC250_CPU_REQUEST {
     ULONGLONG ExpectedGeneration;           // every operation but READ
 } BC250_CPU_REQUEST; // 56 bytes on Windows
 
+// What a caller asks the case fan control for (Bc250Fan). Size is sizeof(BC250_FAN_REQUEST), for the same reason as
+// BC250_CPU_REQUEST. tools/win/amdgpu_wddm_control mirrors it in src/Native.cs and its unit tests check the offsets
+// against this text.
+typedef struct _BC250_FAN_REQUEST {
+    ULONG Size;                             // sizeof(BC250_FAN_REQUEST), 104
+    ULONG Op;                               // BC250_FAN_OP_*
+    ULONG Profile;                          // CURVE: enum bc250_fan_profile (0 custom, 1 standard, 2 quiet, 3 performance)
+    ULONG Points;                           // CURVE with the custom profile: 2..8
+    ULONG CurveC[BC250_FAN_CURVE_SLOTS];    // degrees C, rising
+    ULONG CurvePct[BC250_FAN_CURVE_SLOTS];  // duty percent, never falling, 20..100
+    ULONG FixedPct;                         // FIXED: 20..100
+    ULONG LeaseMs;                          // CURVE (0 durable), FIXED and RENEW: 5000..300000
+    ULONG Store;                            // BOARD and a durable CURVE: 1 makes it the choice of every start
+    ULONG Reserved;                         // zero
+    ULONGLONG ExpectedGeneration;           // every operation but READ
+} BC250_FAN_REQUEST; // 104 bytes on Windows
+
 static NTSTATUS TelemetryEscape(void *data, unsigned size);
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
@@ -652,15 +700,19 @@ static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
 // state), so a check against sizeof(BC250_ESCAPE_DPM) alone would refuse every one of those calls and a
 // compile-time assertion on that size would stop the DLL being built at all. The driver takes either size
 // with its own AbiVersion (driver/kmd/display.c), so this function asks with the ABI of the size it was
-// given and never writes past it. A rebuilt caller that passes 192 gets the idle fields as well.
+// given and never writes past it. A rebuilt caller that passes 192 gets the idle fields as well, and one that
+// passes BC250_DPM_ABI3_SIZE (a BC250_ESCAPE_DPM_EX, 0.7.215) also gets the SMU metrics tail with the power reading.
+// A driver before 0.7.215 refuses 248 bytes with STATUS_INVALID_PARAMETER; the caller then asks again with 160.
 BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
 {
     NTSTATUS status;
     unsigned long abi;
-    typedef char DpmAbiSizeCheck[(BC250_DPM_ABI1_SIZE == 160 && sizeof(BC250_ESCAPE_DPM) >= 160) ? 1 : -1];
+    typedef char DpmAbiSizeCheck[(BC250_DPM_ABI1_SIZE == 160 && sizeof(BC250_ESCAPE_DPM) >= 160 &&
+                                  sizeof(BC250_ESCAPE_DPM_EX) == BC250_DPM_ABI3_SIZE) ? 1 : -1];
     (void)sizeof(DpmAbiSizeCheck);
-    if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data))) return (LONG)0xC000000D;
-    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : BC250_DPM_ABI;
+    if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data) && bytes != BC250_DPM_ABI3_SIZE))
+        return (LONG)0xC000000D;
+    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : bytes == BC250_DPM_ABI3_SIZE ? BC250_DPM_ABI_3 : BC250_DPM_ABI;
     memset(data, 0, bytes);
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_DPM;
@@ -708,6 +760,51 @@ BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_HWMON ||
         data->AbiVersion != BC250_HWMON_ABI || data->Op != BC250_HWMON_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// The case fan control (BC250_ESCAPE_RUN_FAN, docs/design/fan.md Part B): READ for anybody, and BOARD, CURVE, FIXED
+// and RENEW for an administrator with the Generation of a READ of the same start. Every operation is adapter-owned
+// software state answered with NoAdapterSynchronization alone: a write leaves a request that the governor thread
+// applies at its next step, so no escape of this surface touches a port. A driver that does not know command 30
+// answers UNKNOWN_COMMAND, mapped to 0xC00000BB as for the other snapshots. A refused request returns its NtStatus,
+// and the reply's Error names the rule (enum bc250_fan_error) even then.
+BC250_CONTROL_API LONG WINAPI Bc250Fan(const BC250_FAN_REQUEST *request, BC250_ESCAPE_FAN *data, ULONG bytes)
+{
+    NTSTATUS status;
+    ULONG op, i;
+    typedef char FanAbiSizeCheck[(sizeof(BC250_ESCAPE_FAN) == 272 && sizeof(BC250_FAN_REQUEST) == 104) ? 1 : -1];
+    (void)sizeof(FanAbiSizeCheck);
+    if (!request || !data || bytes != sizeof(*data) || request->Size != sizeof(*request)) return (LONG)0xC000000D;
+    op = request->Op;
+    if (op > BC250_FAN_OP_RENEW || request->Points > BC250_FAN_CURVE_SLOTS || request->Reserved)
+        return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_FAN;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_FAN_ABI;
+    data->Op = op;
+    if (op != BC250_FAN_OP_READ) {
+        data->ExpectedGeneration = request->ExpectedGeneration;
+        data->Profile = request->Profile;
+        data->Points = request->Points;
+        for (i = 0; i < request->Points; i++) {
+            data->CurveC[i] = request->CurveC[i];
+            data->CurvePct[i] = request->CurvePct[i];
+        }
+        data->FixedPct = request->FixedPct;
+        data->LeaseMs = request->LeaseMs;
+        data->Store = request->Store;
+    }
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_FAN ||
+        data->AbiVersion != BC250_FAN_ABI || data->Op != op)
         return (LONG)0xC000000D;
     return 0;
 }
@@ -1101,19 +1198,125 @@ static void HwmonLine(const BC250_ESCAPE_HWMON *h)
            h->Samples, h->Errors, h->Retries, h->Refusals);
 }
 
+// The names of the fan control's enumerations (driver/shim/include/bc250_fan.h), for the "fanctl" line.
+static const char *FanName(unsigned long value, const char *const *names, unsigned long count)
+{
+    return value < count ? names[value] : "?";
+}
+
+static const char *const g_fanStates[] = { "off", "board", "curve", "fixed", "emergency", "doubt", "fault" };
+static const char *const g_fanModes[] = { "board", "curve", "fixed" };
+static const char *const g_fanProfiles[] = { "custom", "standard", "quiet", "performance" };
+static const char *const g_fanReasons[] = { "none", "user", "stop", "power", "unload", "watchdog", "lease",
+                                            "temperature", "reader", "handshake", "readback", "mode", "stopped",
+                                            "disabled", "bugcheck" };
+static const char *const g_fanErrors[] = { "ok", "mode", "profile", "points", "temperature", "duty", "lease" };
+static const char *const g_fanGates[] = { "ok", "setting", "reader", "chip" };
+
+// One line of the fan control's state. The "fan " line above it stays as it was: the lab samplers read it.
+static void FanCtlLine(const BC250_ESCAPE_FAN *f)
+{
+    unsigned long i;
+
+    printf("fanctl state=%s mode=%s profile=%s target_pct=%lu applied_pct=%lu raw=%lu readback=%lu rpm=%lu "
+           "guard_c=%.1f enabled=%d controlling=%d emergency=%d leased=%d lease_ms=%lu fault=%d paused=%d "
+           "held_back=%d gate=%s reason=%s doubt=%s takeovers=%llu handbacks=%llu writes=%llu failures=%llu "
+           "emergencies=%llu lease_expiries=%llu watchdog=%llu curve=",
+           FanName(f->State, g_fanStates, ARRAYSIZE(g_fanStates)), FanName(f->Mode, g_fanModes, ARRAYSIZE(g_fanModes)),
+           FanName(f->Profile, g_fanProfiles, ARRAYSIZE(g_fanProfiles)), f->TargetPct, f->AppliedPct, f->WrittenRaw,
+           f->ReadbackRaw, f->Rpm, f->GuardMc / 1000.0, (f->Flags & BC250_FAN_FLAG_ENABLED) ? 1 : 0,
+           (f->Flags & BC250_FAN_FLAG_CONTROLLING) ? 1 : 0, (f->Flags & BC250_FAN_FLAG_EMERGENCY) ? 1 : 0,
+           (f->Flags & BC250_FAN_FLAG_LEASED) ? 1 : 0, f->LeaseMs, (f->Flags & BC250_FAN_FLAG_FAULT) ? 1 : 0,
+           (f->Flags & BC250_FAN_FLAG_PAUSED) ? 1 : 0, (f->Flags & BC250_FAN_FLAG_HELD_BACK) ? 1 : 0,
+           FanName(f->Gate, g_fanGates, ARRAYSIZE(g_fanGates)), FanName(f->Reason, g_fanReasons, ARRAYSIZE(g_fanReasons)),
+           FanName(f->DoubtReason, g_fanReasons, ARRAYSIZE(g_fanReasons)), f->Takeovers, f->Handbacks, f->Writes,
+           f->Failures, f->Emergencies, f->LeaseExpiries, f->WatchdogFires);
+    for (i = 0; i < f->Points && i < BC250_FAN_CURVE_SLOTS; i++)
+        printf("%s%lu:%lu", i ? "," : "", f->CurveC[i], f->CurvePct[i]);
+    if (f->Points == 0) printf("none");
+    printf(" saved_mode=0x%02lX saved_target=%lu\n", f->SavedMode, f->SavedTarget);
+}
+
+// "fan auto [store]", "fan curve [standard|quiet|performance] [store]", "fan set <pct> <seconds>",
+// "fan renew <seconds>". Each one reads first for the Generation, sends the request and prints the state the driver
+// answered with. The governor thread applies the request at its next step, so a second "fan" a second later shows it
+// in the chip. "store" makes "auto" or a durable curve the choice of every start; a fixed duty is never stored.
+static int FanControl(int argc, WCHAR **argv)
+{
+    BC250_FAN_REQUEST r;
+    BC250_ESCAPE_FAN f;
+    const WCHAR *verb = argv[2];
+    LONG status;
+    int next = 3;
+
+    memset(&r, 0, sizeof(r));
+    r.Size = sizeof(r);
+    r.Op = BC250_FAN_OP_READ;
+    status = Bc250Fan(&r, &f, sizeof(f));
+    if (status < 0) { PrintStatus("fanctl", status); return 1; }
+    r.ExpectedGeneration = f.Generation;
+    if (!_wcsicmp(verb, L"auto")) {
+        r.Op = BC250_FAN_OP_BOARD;
+    } else if (!_wcsicmp(verb, L"curve")) {
+        r.Op = BC250_FAN_OP_CURVE;
+        r.Profile = 1;      // BC250_FAN_PROFILE_STANDARD
+        if (argc > next && _wcsicmp(argv[next], L"store")) {
+            if (!_wcsicmp(argv[next], L"standard")) r.Profile = 1;
+            else if (!_wcsicmp(argv[next], L"quiet")) r.Profile = 2;
+            else if (!_wcsicmp(argv[next], L"performance")) r.Profile = 3;
+            else { fprintf(stderr, "fan curve: standard, quiet or performance\n"); return 2; }
+            next++;
+        }
+    } else if (!_wcsicmp(verb, L"set")) {
+        if (argc != 5) { fprintf(stderr, "usage: fan set <percent 20..100> <seconds 5..300>\n"); return 2; }
+        r.Op = BC250_FAN_OP_FIXED;
+        r.FixedPct = wcstoul(argv[3], NULL, 10);
+        r.LeaseMs = wcstoul(argv[4], NULL, 10) * 1000u;
+        next = 5;
+    } else if (!_wcsicmp(verb, L"renew")) {
+        if (argc != 4) { fprintf(stderr, "usage: fan renew <seconds 5..300>\n"); return 2; }
+        r.Op = BC250_FAN_OP_RENEW;
+        r.LeaseMs = wcstoul(argv[3], NULL, 10) * 1000u;
+        next = 4;
+    } else {
+        fprintf(stderr, "fan: auto [store] | curve [standard|quiet|performance] [store] | set <pct> <s> | renew <s>\n");
+        return 2;
+    }
+    if (argc > next && !_wcsicmp(argv[next], L"store") && (r.Op == BC250_FAN_OP_BOARD || r.Op == BC250_FAN_OP_CURVE)) {
+        r.Store = 1;
+        next++;
+    }
+    if (argc > next) { fprintf(stderr, "fan %ls: unexpected argument %ls\n", verb, argv[next]); return 2; }
+    status = Bc250Fan(&r, &f, sizeof(f));
+    if (status < 0) {
+        PrintStatus("fanctl", status);
+        if (f.Error) fprintf(stderr, "fanctl refused: %s\n", FanName(f.Error, g_fanErrors, ARRAYSIZE(g_fanErrors)));
+        if (f.Gate) fprintf(stderr, "fanctl gate: %s\n", FanName(f.Gate, g_fanGates, ARRAYSIZE(g_fanGates)));
+        return 1;
+    }
+    FanCtlLine(&f);
+    return 0;
+}
+
 // "fan [count [interval ms]]". The interval has a floor of one second, because the chip caches its registers for
 // about that long and the driver samples at exactly that rate: a faster poll returns the same snapshot and only
-// spends escapes.
+// spends escapes. Each sample adds the fan control's state; a driver without it (0xC00000BB) is reported once.
 static int Fan(int argc, WCHAR **argv)
 {
     BC250_ESCAPE_HWMON h;
+    BC250_FAN_REQUEST r;
+    BC250_ESCAPE_FAN f;
     unsigned long count = 1, interval = 1000, i;
     LONG status;
 
+    if (argc >= 3 && !iswdigit(argv[2][0])) return FanControl(argc, argv);
     if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
     if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
     if (count == 0) count = 1;
     if (interval < 1000) interval = 1000;
+    memset(&r, 0, sizeof(r));
+    r.Size = sizeof(r);
+    r.Op = BC250_FAN_OP_READ;
     for (i = 0; i < count; i++) {
         if (i) Sleep(interval);
         status = Bc250Hwmon(&h, sizeof(h));
@@ -1124,6 +1327,9 @@ static int Fan(int argc, WCHAR **argv)
                    h.EcVersion & 0xFF, (h.EcBuild >> 8) & 0xFF, h.EcBuild & 0xFF, (h.EcBuild >> 16) & 0xFF,
                    h.CustomerId, h.FanPresentMask, h.DutyPresentMask, h.Generation);
         HwmonLine(&h);
+        status = Bc250Fan(&r, &f, sizeof(f));
+        if (status < 0) { if (i == 0) PrintStatus("fanctl", status); }
+        else FanCtlLine(&f);
     }
     return 0;
 }
@@ -1132,23 +1338,31 @@ static int Fan(int argc, WCHAR **argv)
 // "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
 static int Telemetry(int argc, wchar_t **argv)
 {
-    BC250_ESCAPE_DPM d;
+    BC250_ESCAPE_DPM_EX x;
     BC250_VIDEO_MEMORY m;
     unsigned long count = argc >= 3 ? wcstoul(argv[2], NULL, 10) : 1, interval = argc >= 4 ? wcstoul(argv[3], NULL, 10) : 1000;
+    ULONG dpmBytes = sizeof(x);     // ABI 3; the ABI 2 structure after a driver before 0.7.215 refused it
     LONG status;
     int failed = 0;
     if (count == 0) count = 1;
     for (unsigned long i = 0; i < count; i++) {
+        const BC250_ESCAPE_DPM *d = &x.Dpm;
         if (i) Sleep(interval);
-        status = Bc250Dpm(&d, sizeof(d));
+        status = Bc250Dpm(&x.Dpm, dpmBytes);
+        if (status == (LONG)0xC000000D && dpmBytes == sizeof(x)) status = Bc250Dpm(&x.Dpm, dpmBytes = sizeof(x.Dpm));
         failed |= status < 0;
         if (status < 0) PrintStatus("dpm", status);
-        else
+        else {
             printf("dpm version=0x%08lX flags=0x%lX temperature_c=%.1f%s gfx_mhz=%lu%s busy_pct=%.1f avg_pct=%.1f src=%s "
-                   "submit_pct=%.1f\n", d.Version, d.Flags, d.TemperatureMc / 1000.0,
-                   (d.Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "(stale)", d.ObservedMHz,
-                   (d.Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d.BusyPermille / 10.0, d.BusyAvgPermille / 10.0,
-                   (d.Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d.SubmitBusyPermille / 10.0);
+                   "submit_pct=%.1f", d->Version, d->Flags, d->TemperatureMc / 1000.0,
+                   (d->Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "(stale)", d->ObservedMHz,
+                   (d->Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d->BusyPermille / 10.0, d->BusyAvgPermille / 10.0,
+                   (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0);
+            // The SMU's package power (0.7.215): only from a fresh table, so a sampler never logs an old value.
+            if (dpmBytes == sizeof(x) && (d->Flags & BC250_DPM_FLAG_POWER))
+                printf(" power_w=%.1f power_avg_w=%.1f", x.Metrics.SocketPowerMw / 1000.0, x.Metrics.SocketPowerAvgMw / 1000.0);
+            printf("\n");
+        }
         {
             // The board's hardware monitor, one line per sample, so the lab samplers pick the fan up with no new
             // process and no new session. A driver before 0.7.208.1 answers 0xC00000BB; that is reported once and
@@ -1185,6 +1399,59 @@ static int VideoMemory(const WCHAR *wantedId)
     return 0;
 }
 
+// `read <name>`: a register of the driver's named READ_REG list (gen_regs.py EXTRA_READS, BC250_REG_READ_NAMES), so
+// that an operator never types an offset. Accepted forms: NAME, mmNAME, IP.NAME and IP:NAME, any case. A text that
+// is a hex number (with or without 0x) is an offset, as before.
+static const struct { const char *Ip, *Name; unsigned long Offset; } g_RegNames[] = {
+#define BC250_REG_NAME_ROW(ip, name, offset) { ip, name, offset },
+    BC250_REG_READ_NAMES(BC250_REG_NAME_ROW)
+#undef BC250_REG_NAME_ROW
+};
+
+static int IsHexText(const WCHAR *text)
+{
+    if (text[0] == L'0' && (text[1] == L'x' || text[1] == L'X')) text += 2;
+    if (!*text) return 0;
+    for (; *text; text++) if (!iswxdigit(*text)) return 0;
+    return 1;
+}
+
+static int RegisterByName(const WCHAR *text, unsigned long *offset)
+{
+    char name[128], ip[16] = "";
+    const char *bare;
+    size_t i, n = wcslen(text);
+    char *dot;
+
+    if (n == 0 || n >= sizeof(name)) return 0;
+    for (i = 0; i <= n; i++) {
+        if (text[i] > 0x7E) return 0;
+        name[i] = (char)text[i];
+    }
+    bare = name;
+    dot = strpbrk(name, ".:");
+    if (dot) {
+        if ((size_t)(dot - name) >= sizeof(ip)) return 0;
+        memcpy(ip, name, (size_t)(dot - name));
+        ip[dot - name] = 0;
+        bare = dot + 1;
+    }
+    if ((bare[0] == 'm' || bare[0] == 'M') && (bare[1] == 'm' || bare[1] == 'M')) {
+        // mmNAME is regcalc's spelling; a register whose own name starts with MM keeps its prefix (the second try).
+        for (i = 0; i < sizeof(g_RegNames) / sizeof(g_RegNames[0]); i++)
+            if (!_stricmp(g_RegNames[i].Name, bare + 2) && (!ip[0] || !_stricmp(g_RegNames[i].Ip, ip))) {
+                *offset = g_RegNames[i].Offset;
+                return 1;
+            }
+    }
+    for (i = 0; i < sizeof(g_RegNames) / sizeof(g_RegNames[0]); i++)
+        if (!_stricmp(g_RegNames[i].Name, bare) && (!ip[0] || !_stricmp(g_RegNames[i].Ip, ip))) {
+            *offset = g_RegNames[i].Offset;
+            return 1;
+        }
+    return 0;
+}
+
 static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
 {
     BC250_ESCAPE data;
@@ -1194,8 +1461,17 @@ static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
     memset(&data, 0, sizeof(data));
     data.Magic = BC250_ESCAPE_MAGIC;
     data.Command = write ? BC250_ESCAPE_WRITE_REG : BC250_ESCAPE_READ_REG;
-    data.RegOffset = wcstoul(offsetText, &end, 16);
-    if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    if (!write && !IsHexText(offsetText)) {
+        if (!RegisterByName(offsetText, &data.RegOffset)) {
+            fprintf(stderr, "%ls is neither a hex offset nor a name on the driver's named read list"
+                            " (gen_regs.py EXTRA_READS)\n", offsetText);
+            return 2;
+        }
+        printf("%ls = 0x%05lX\n", offsetText, data.RegOffset);
+    } else {
+        data.RegOffset = wcstoul(offsetText, &end, 16);
+        if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    }
     if (write) {
         data.RegValue = wcstoul(valueText, &end, 16);
         if (*end) { fprintf(stderr, "value %ls is not a hex number\n", valueText); return 2; }
@@ -2066,7 +2342,7 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
     const BC250_PAGING_JOURNAL_RECORD *r = &journal->Records[i];
     const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
     char segments[64] = "";
-    char identity[128] = "";
+    char identity[160] = "";
 
     // KMD193 (0.7.193.1 and later) puts identity in the words each kind left unused, so the same L/i/n/v
     // columns mean something else for these two kinds. Print what they mean rather than four bare numbers.
@@ -2075,9 +2351,11 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
         snprintf(identity, sizeof(identity), " by pid %lu tid %lu, created by pid %lu, bc2a v%lu gem 0x%llX",
                  r->Level, r->Index, r->Count, r->Valid, r->Dma);
     else if (r->Kind == BC250_PJ_GFX_SUBMIT)
-        snprintf(identity, sizeof(identity), " node %lu ctx 0x%llX pid %lu%s%s ib 0x%llX root 0x%llX",
+        // Valid: the VMID, from 0.7.214.1. 0 = an earlier driver, whose WDDM jobs all ran at VMID 1.
+        snprintf(identity, sizeof(identity), " node %lu ctx 0x%llX pid %lu%s%s ib 0x%llX root 0x%llX vmid %lu%s",
                  r->Level, r->Allocation, r->Index, (r->Count & BC250_PJ_CTX_UMD) ? " umd" : "",
-                 (r->Count & BC250_PJ_CTX_SYSTEM) ? " system" : "", r->Va, r->Offset);
+                 (r->Count & BC250_PJ_CTX_SYSTEM) ? " system" : "", r->Va, r->Offset,
+                 r->Valid != 0 ? r->Valid : 1ul, r->Valid != 0 ? "" : " (not recorded)");
     else if (r->Flags & BC250_PJ_FLAG_PROCESS)
         snprintf(identity, sizeof(identity), " hprocess 0x%llX (no allocation)", r->Allocation);
 
@@ -2280,35 +2558,72 @@ static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-ha
                                              "stable", "smu", "fixed", "thermal-warm", "thermal-ramp", "idle",
                                              "thermal-zone" };
 
-static unsigned long g_DpmAbi = BC250_DPM_ABI;   // BC250_DPM_ABI_1 after a driver refused ABI 2 (0.7.207)
+// ABI 3 first (0.7.215, the SMU metrics tail). BC250_DPM_ABI after a driver refused ABI 3, BC250_DPM_ABI_1 after
+// one refused ABI 2 (0.7.207).
+static unsigned long g_DpmAbi = BC250_DPM_ABI_3;
 
-static int DpmQuery(BC250_ESCAPE_DPM *d, unsigned long op, unsigned long long generation)
+static int DpmQuery(BC250_ESCAPE_DPM_EX *x, unsigned long op, unsigned long long generation)
 {
+    BC250_ESCAPE_DPM *d = &x->Dpm;
     NTSTATUS status;
     unsigned size;
     for (;;) {
-        memset(d, 0, sizeof(*d));
-        size = g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;
+        memset(x, 0, sizeof(*x));
+        size = g_DpmAbi == BC250_DPM_ABI_3 ? (unsigned)sizeof(*x) :
+               g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;
         d->Magic = BC250_ESCAPE_MAGIC;
         d->Command = BC250_ESCAPE_RUN_DPM;
         d->AbiVersion = g_DpmAbi;
         d->Op = op;
         d->ExpectedGeneration = generation;
         if (SendEscapeFlags(BC250_DEFAULT_HWID, d, size, 1, &status)) return 1;
-        if (status != (NTSTATUS)0xC000000Dl || g_DpmAbi != BC250_DPM_ABI) break;
-        // STATUS_INVALID_PARAMETER for 192 bytes: a driver before 0.7.207, which takes ABI 1 alone.
-        g_DpmAbi = BC250_DPM_ABI_1;
+        if (status != (NTSTATUS)0xC000000Dl || g_DpmAbi == BC250_DPM_ABI_1) break;
+        // STATUS_INVALID_PARAMETER for 248 bytes: a driver before 0.7.215, which takes ABI 2 and ABI 1. For 192
+        // bytes: a driver before 0.7.207, which takes ABI 1 alone.
+        g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI : BC250_DPM_ABI_1;
     }
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
     return 0;
 }
 
+static const char *const g_DpmMetricsState[] = { "off", "waiting", "ok", "refused", "no table", "bad table" };
+
+// The SMU metrics state, once under the header (0.7.215): where the power reading comes from, or why there is none.
+static void DpmPrintMetrics(const BC250_ESCAPE_DPM_EX *x)
+{
+    const BC250_DPM_METRICS *m = &x->Metrics;
+    if (x->Dpm.AbiVersion != BC250_DPM_ABI_3) {
+        printf("smu metrics: n/a (a driver before 0x000700D7 answers RUN_DPM ABI %lu)\n", x->Dpm.AbiVersion);
+        return;
+    }
+    printf("smu metrics: %s, %lu tables, %lu failures", m->MetricsState < ARRAYSIZE(g_DpmMetricsState) ?
+           g_DpmMetricsState[m->MetricsState] : "?", m->MetricsReads, m->MetricsFailures);
+    if (m->MetricsReads)
+        printf(", last %lu ms ago: gfx %lu mV %lu MHz %.2f C, soc %lu mV %.2f C, throttler 0x%04lX", m->MetricsAgeMs,
+               m->GfxMv, m->GfxMHz, m->GfxTemperatureCc / 100.0, m->SocMv, m->SocTemperatureCc / 100.0,
+               m->ThrottlerStatus);
+    if (m->MetricsState == BC250_DPM_METRICS_OFF) printf(" (EnableSmuMetrics 0)");
+    printf("\n");
+}
+
+// The end of a sample line: the package power from the SMU's own table, or why there is no reading.
+static void DpmPrintPower(const BC250_ESCAPE_DPM_EX *x)
+{
+    const BC250_DPM_METRICS *m = &x->Metrics;
+    if (x->Dpm.AbiVersion != BC250_DPM_ABI_3) printf("  power n/a\n");
+    else if (!(x->Dpm.Flags & BC250_DPM_FLAG_POWER)) printf("  power ?\n");
+    else
+        printf("  power %5.1f W avg %5.1f W (gfx %4.1f W soc %4.1f W)\n", m->SocketPowerMw / 1000.0,
+               m->SocketPowerAvgMw / 1000.0, m->GfxPowerMw / 1000.0, m->SocPowerMw / 1000.0);
+}
+
+// One sample line without its end; DpmPrintPower ends it.
 static void DpmPrint(const BC250_ESCAPE_DPM *d)
 {
     SYSTEMTIME now;
     GetLocalTime(&now);
     printf("%02u:%02u:%02u.%03u %s%s %4lu MHz %4lu mV (SMU %4lu MHz VID %3lu%s) %5.1f C%s busy %5.1f%% avg %5.1f%% "
-           "want %4lu cap %4lu max %4lu throttle %s%s%s%s%s  up %lu down %lu thermal %lu err %lu  src %s submit %5.1f%% sdma %5.1f%%\n",
+           "want %4lu cap %4lu max %4lu throttle %s%s%s%s%s  up %lu down %lu thermal %lu err %lu  src %s submit %5.1f%% sdma %5.1f%%",
            now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
            d->Mode == 1 ? "dpm" : "fixed", (d->Flags & BC250_DPM_FLAG_RUNNING) ? "" : "(stopped)",
            d->CurrentMHz, d->CurrentMv, d->ObservedMHz, d->ObservedVid,
@@ -2325,10 +2640,11 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
 }
 
 // The idle state, once under the header (0.7.207): the point in force, the window the GPU must be quiet for,
-// and what the state did so far. A driver before 0.7.207 answers RUN_DPM ABI 1 and has no idle state.
+// and what the state did so far. A driver before 0.7.207 answers RUN_DPM ABI 1 and has no idle state; ABI 3
+// (0.7.215) contains the ABI 2 fields.
 static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
 {
-    if (d->AbiVersion != BC250_DPM_ABI) {
+    if (d->AbiVersion != BC250_DPM_ABI && d->AbiVersion != BC250_DPM_ABI_3) {
         printf("idle: n/a (a driver before 0x000700CF answers RUN_DPM ABI 1)\n");
         return;
     }
@@ -2696,7 +3012,7 @@ static void CurvePrint(const BC250_ESCAPE_DPM_CURVE *c)
            (c->Flags & BC250_DPM_CURVE_FLAG_PENDING) ? ", PENDING (unconfirmed start)" : "",
            (c->Flags & BC250_DPM_CURVE_FLAG_CONFIRMED) ? ", confirmed" : "");
     if (c->Flags & BC250_DPM_CURVE_FLAG_ON_TRIAL)
-        printf("dpm curve: ON TRIAL, %lu ms of %lu left; without a keep the stored curve comes back by itself\n",
+        printf("dpm curve: ON TRIAL, %lu ms left (default window %lu ms); without a keep the stored curve comes back by itself\n",
                c->TrialRemainingMs, c->TrialMs);
     else
         printf("dpm curve: no trial runs; a set would get a %lu ms window\n", c->TrialMs);
@@ -2890,7 +3206,7 @@ static void CpuPrint(const BC250_ESCAPE_CPU *c)
            (c->Flags & BC250_CPU_FLAG_CONFIRMED) ? ", confirmed" : "",
            (c->Flags & BC250_CPU_FLAG_SEARCHING) ? ", a search runs" : "");
     if (c->Flags & BC250_CPU_FLAG_ON_TRIAL)
-        printf("cpu: ON TRIAL, %lu ms of %lu left; without a keep the settings before it come back\n",
+        printf("cpu: ON TRIAL, %lu ms left (default window %lu ms); without a keep the settings before it come back\n",
                c->TrialRemainingMs, c->TrialMs);
     printf("cpu: applied clock %lu MHz, undervolt %lu steps, cap %lu C (stored %lu / %lu / %lu, baseline %lu / %lu "
            "/ %lu)\n", c->AppliedMaxMHz, c->AppliedUvSteps, c->AppliedTempC, c->StoredMaxMHz, c->StoredUvSteps,
@@ -3044,7 +3360,8 @@ static int Cpu(int argc, WCHAR **argv)
 
 static int Dpm(int argc, WCHAR **argv)
 {
-    BC250_ESCAPE_DPM d;
+    BC250_ESCAPE_DPM_EX x;
+    const BC250_ESCAPE_DPM *d = &x.Dpm;
     BC250_ESCAPE_DPM_TUNE t;
     unsigned long count = 1, interval = 1000, i;
     if (argc >= 3 && !_wcsicmp(argv[2], L"tune")) return DpmTune(argc, argv);
@@ -3053,35 +3370,37 @@ static int Dpm(int argc, WCHAR **argv)
     if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | confirm | tune ... | floor ... "
                                     "| curve ...\n"); return 2; }
     if (argc >= 3 && !_wcsicmp(argv[2], L"confirm")) {
-        if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
-        if (DpmQuery(&d, BC250_DPM_OP_CONFIRM, d.Generation)) return 1;
-        printf("dpm confirm: status %lu NTSTATUS 0x%08lX, flags 0x%lX%s%s\n", d.Status, d.NtStatus, d.Flags,
-               (d.Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "", (d.Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "");
-        return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 1;
+        if (DpmQuery(&x, BC250_DPM_OP_READ, 0)) return 1;
+        if (DpmQuery(&x, BC250_DPM_OP_CONFIRM, d->Generation)) return 1;
+        printf("dpm confirm: status %lu NTSTATUS 0x%08lX, flags 0x%lX%s%s\n", d->Status, d->NtStatus, d->Flags,
+               (d->Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "", (d->Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "");
+        return d->Status == BC250_ESCAPE_STATUS_DONE ? 0 : 1;
     }
     if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
     if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
     if (count == 0) count = 1;
     for (i = 0; i < count; i++) {
         if (i) Sleep(interval);
-        if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
-        if (d.Status != BC250_ESCAPE_STATUS_DONE) {
-            printf("dpm: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d.Status, d.NtStatus, d.Version);
+        if (DpmQuery(&x, BC250_DPM_OP_READ, 0)) return 1;
+        if (d->Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("dpm: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d->Status, d->NtStatus, d->Version);
             return 1;
         }
         if (i == 0) {
             // The header keeps its old head (dpm-lib.ps1 parses it); the governor's thresholds and floor follow it.
-            printf("driver 0x%08lX, requested %s, reason %s, generation %llu, ticks %llu, uptime %llu ms", d.Version,
-                   d.Requested == 1 ? "dpm" : (d.Requested == 0 ? "fixed" : "invalid"),
-                   d.Reason < 9 ? g_DpmReason[d.Reason] : "?", d.Generation, d.Ticks, d.UptimeMs);
+            printf("driver 0x%08lX, requested %s, reason %s, generation %llu, ticks %llu, uptime %llu ms", d->Version,
+                   d->Requested == 1 ? "dpm" : (d->Requested == 0 ? "fixed" : "invalid"),
+                   d->Reason < 9 ? g_DpmReason[d->Reason] : "?", d->Generation, d->Ticks, d->UptimeMs);
             if (TuneRead(&t, 1) == 0) {
                 printf("; ");
                 TunePrintState(&t);
             } else printf("; tune n/a (driver before 0x000700B9)");
             printf("\n");
-            DpmPrintIdle(&d);
+            DpmPrintIdle(d);
+            DpmPrintMetrics(&x);
         }
-        DpmPrint(&d);
+        DpmPrint(d);
+        DpmPrintPower(&x);
     }
     return 0;
 }
@@ -3151,6 +3470,232 @@ static int Interop(void)
 
 // ---- ---------------------------------------------------------------------------------------------------------
 
+// ---- dpaudio: DisplayPort audio, steps 0 to 2 (BC250_ESCAPE_RUN_DPAUDIO, driver/kmd/dpaudio.c) -------------------
+//
+// "bc250kmd_cli dpaudio" reads the step 0 registers now (OBSERVE) and prints the check table, the decision a start
+// would take over them (the driver's own Bc250DpAudioDecide, not a copy of it here), the raw slots and the record
+// of the last start. "bc250kmd_cli dpaudio state" prints the record alone and reads no register. Expected values
+// are unit A's under Linux (facts M819, M820, evidence/linux/2026-10-07-L1007-dp-audio). The CLI asks with ABI 2
+// (the stream record of step 2, KMD 0.7.216) and asks again with the ABI 1 prefix when an older driver refuses the
+// size, so it reads 0.7.215 as well.
+
+static const char *const g_DpAudioSlot[] = {
+#define BC250_DPAUDIO_SLOT_NAME(n) #n,
+    BC250_DPAUDIO_OBS_LIST(BC250_DPAUDIO_SLOT_NAME)
+#undef BC250_DPAUDIO_SLOT_NAME
+};
+static const char *const g_DpAudioReason[] = {
+#define BC250_DPAUDIO_REASON_NAME(n, t) t,
+    BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_NAME)
+#undef BC250_DPAUDIO_REASON_NAME
+};
+static const char *const g_DpAudioState[] = { "idle", "enabled", "refused", "failed", "stopped", "path-off" };
+static const char *const g_DpAudioStreamState[] = { "off", "on", "undone" };
+static const char *const g_DpAudioStep[] = {
+#define BC250_DPAUDIO_STEP_NAME(n) #n,
+    BC250_DPAUDIO_STEP_LIST(BC250_DPAUDIO_STEP_NAME)
+#undef BC250_DPAUDIO_STEP_NAME
+};
+
+static const char *DpAudioReasonText(unsigned long reason)
+{
+    return reason < BC250_DPAUDIO_REASON_COUNT ? g_DpAudioReason[reason] : "unknown reason";
+}
+
+static void DpAudioNotes(unsigned long notes, char *text, size_t size)
+{
+    _snprintf_s(text, size, _TRUNCATE, "%s%s%s%s%s", notes ? "" : "none",
+                (notes & BC250_DPAUDIO_NOTE_HPD_LOW) ? " hpd-sense-low" : "",
+                (notes & BC250_DPAUDIO_NOTE_INHERITED) ? " audio-enabled-inherited" : "",
+                (notes & BC250_DPAUDIO_NOTE_REVISION) ? " codec-revision-differs" : "",
+                (notes & BC250_DPAUDIO_NOTE_UNSOLICITED) ? " unsolicited-enabled" : "");
+}
+
+#define DPA(slot) d->Regs[BC250_DPAUDIO_OBS_##slot]
+#define DPA_OK(slot) ((d->ValidMask >> BC250_DPAUDIO_OBS_##slot) & 1ull)
+#define FIELD(v, mask, shift) (((v) & (mask)) >> (shift))
+
+static void DpAudioCheck(const char *what, int valid, unsigned long value, const char *expected, int pass, const char *detail)
+{
+    if (!valid) { printf("  %-28s %-10s %-12s NOT READ\n", what, "-", expected); return; }
+    printf("  %-28s 0x%08lX %-12s %-4s %s\n", what, value, expected, pass ? "ok" : "DIFF", detail);
+}
+
+static void DpAudioPrintObserve(const BC250_ESCAPE_DPAUDIO *d)
+{
+    char detail[160], notes[96];
+    unsigned long n, read = 0;
+
+    for (n = 0; n < BC250_DPAUDIO_OBS_COUNT; n++) read += (unsigned long)((d->ValidMask >> n) & 1ull);
+    printf("check table (now / unit A under Linux, M819 M820):\n");
+    DpAudioCheck("codec vendor/device", DPA_OK(CODEC_VENDOR_DEVICE), DPA(CODEC_VENDOR_DEVICE), "0x1002AA01",
+                 DPA(CODEC_VENDOR_DEVICE) == 0x1002AA01ul, "start refuses on a difference");
+    DpAudioCheck("codec revision", DPA_OK(CODEC_REVISION), DPA(CODEC_REVISION), "0x00100700",
+                 DPA(CODEC_REVISION) == 0x00100700ul, "a note only");
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DC_PINSTRAPS_AUDIO %lu (0 = no audio endpoint)",
+                FIELD(DPA(DC_PINSTRAPS), DC_PINSTRAPS__DC_PINSTRAPS_AUDIO_MASK, DC_PINSTRAPS__DC_PINSTRAPS_AUDIO__SHIFT));
+    DpAudioCheck("DC_PINSTRAPS", DPA_OK(DC_PINSTRAPS), DPA(DC_PINSTRAPS), "AUDIO != 0",
+                 (DPA(DC_PINSTRAPS) & DC_PINSTRAPS__DC_PINSTRAPS_AUDIO_MASK) != 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DP_VID_STREAM_ENABLE %lu",
+                FIELD(DPA(DP0_VID_STREAM_CNTL), DP0_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK,
+                      DP0_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE__SHIFT));
+    DpAudioCheck("DP0_VID_STREAM_CNTL", DPA_OK(DP0_VID_STREAM_CNTL), DPA(DP0_VID_STREAM_CNTL), "enable 1",
+                 (DPA(DP0_VID_STREAM_CNTL) & DP0_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK) != 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DP_VID_STREAM_ENABLE %lu",
+                FIELD(DPA(DP1_VID_STREAM_CNTL), DP1_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK,
+                      DP1_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE__SHIFT));
+    DpAudioCheck("DP1_VID_STREAM_CNTL", DPA_OK(DP1_VID_STREAM_CNTL), DPA(DP1_VID_STREAM_CNTL), "enable 0",
+                 (DPA(DP1_VID_STREAM_CNTL) & DP1_DP_VID_STREAM_CNTL__DP_VID_STREAM_ENABLE_MASK) == 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "FE_SOURCE_SELECT 0x%02lX, DIG_MODE %lu (0 = DP SST)",
+                FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT_MASK, DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT),
+                FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_MODE_MASK, DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT));
+    DpAudioCheck("DIG0_BE_CNTL", DPA_OK(DIG0_BE_CNTL), DPA(DIG0_BE_CNTL), "FE 1 mode 0",
+                 FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT_MASK, DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT) == 1 &&
+                 FIELD(DPA(DIG0_BE_CNTL), DIG0_DIG_BE_CNTL__DIG_MODE_MASK, DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT) == 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "FE_SOURCE_SELECT 0x%02lX, DIG_MODE %lu",
+                FIELD(DPA(DIG1_BE_CNTL), DIG1_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT_MASK, DIG1_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT),
+                FIELD(DPA(DIG1_BE_CNTL), DIG1_DIG_BE_CNTL__DIG_MODE_MASK, DIG1_DIG_BE_CNTL__DIG_MODE__SHIFT));
+    DpAudioCheck("DIG1_BE_CNTL", DPA_OK(DIG1_BE_CNTL), DPA(DIG1_BE_CNTL), "(unused)", 1, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DC_HPD_SENSE %lu (a note only)",
+                FIELD(DPA(HPD0_INT_STATUS), HPD0_DC_HPD_INT_STATUS__DC_HPD_SENSE_MASK, HPD0_DC_HPD_INT_STATUS__DC_HPD_SENSE__SHIFT));
+    DpAudioCheck("HPD0_DC_HPD_INT_STATUS", DPA_OK(HPD0_INT_STATUS), DPA(HPD0_INT_STATUS), "sense 1",
+                 (DPA(HPD0_INT_STATUS) & HPD0_DC_HPD_INT_STATUS__DC_HPD_SENSE_MASK) != 0, detail);
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "DC_HPD_SENSE %lu",
+                FIELD(DPA(HPD1_INT_STATUS), HPD1_DC_HPD_INT_STATUS__DC_HPD_SENSE_MASK, HPD1_DC_HPD_INT_STATUS__DC_HPD_SENSE__SHIFT));
+    DpAudioCheck("HPD1_DC_HPD_INT_STATUS", DPA_OK(HPD1_INT_STATUS), DPA(HPD1_INT_STATUS), "(unused)", 1, detail);
+    for (n = 0; n < 2; n++) {
+        unsigned long ep = n ? BC250_DPAUDIO_OBS_EP1_CONFIG_DEFAULT : BC250_DPAUDIO_OBS_EP0_CONFIG_DEFAULT;
+        unsigned long hp = n ? BC250_DPAUDIO_OBS_EP1_HOT_PLUG_CONTROL : BC250_DPAUDIO_OBS_EP0_HOT_PLUG_CONTROL;
+        char what[40];
+
+        _snprintf_s(what, sizeof(what), _TRUNCATE, "endpoint %lu CONFIG_DEFAULT", n);
+        DpAudioCheck(what, (int)((d->ValidMask >> ep) & 1ull), d->Regs[ep], "0x185600F0", d->Regs[ep] == 0x185600F0ul,
+                     "start refuses on a difference");
+        _snprintf_s(what, sizeof(what), _TRUNCATE, "endpoint %lu HOT_PLUG_CONTROL", n);
+        _snprintf_s(detail, sizeof(detail), _TRUNCATE, "AUDIO_ENABLED %lu, CLOCK_GATING_DISABLE %lu",
+                    FIELD(d->Regs[hp], AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__AUDIO_ENABLED_MASK,
+                          AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__AUDIO_ENABLED__SHIFT),
+                    FIELD(d->Regs[hp], AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__CLOCK_GATING_DISABLE_MASK,
+                          AZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL__CLOCK_GATING_DISABLE__SHIFT));
+        DpAudioCheck(what, (int)((d->ValidMask >> hp) & 1ull), d->Regs[hp], "(state)", 1, detail);
+    }
+    printf("stream half (step 2 writes these; read only here):\n");
+    for (n = 0; n < 2; n++) {
+        unsigned long sec = n ? DPA(DP1_SEC_CNTL) : DPA(DP0_SEC_CNTL);
+        unsigned long afmt = n ? DPA(DIG1_AFMT_CNTL) : DPA(DIG0_AFMT_CNTL);
+        unsigned long pkt = n ? DPA(DIG1_AFMT_AUDIO_PACKET_CONTROL) : DPA(DIG0_AFMT_AUDIO_PACKET_CONTROL);
+        printf("  DP%lu_SEC_CNTL 0x%08lX: stream %lu asp %lu atp %lu aip %lu; AUD_N 0x%08lX M_READBACK 0x%08lX\n", n, sec,
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_STREAM_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_STREAM_ENABLE__SHIFT),
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_ASP_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_ASP_ENABLE__SHIFT),
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_ATP_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_ATP_ENABLE__SHIFT),
+               FIELD(sec, DP0_DP_SEC_CNTL__DP_SEC_AIP_ENABLE_MASK, DP0_DP_SEC_CNTL__DP_SEC_AIP_ENABLE__SHIFT),
+               n ? DPA(DP1_SEC_AUD_N) : DPA(DP0_SEC_AUD_N), n ? DPA(DP1_SEC_AUD_M_READBACK) : DPA(DP0_SEC_AUD_M_READBACK));
+        printf("  DIG%lu_AFMT_CNTL 0x%08lX: audio clock en %lu on %lu; SRC_CONTROL 0x%08lX PACKET_CONTROL 0x%08lX"
+               " (sample send %lu)\n", n, afmt,
+               FIELD(afmt, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN_MASK, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN__SHIFT),
+               FIELD(afmt, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_ON_MASK, DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_ON__SHIFT),
+               n ? DPA(DIG1_AFMT_AUDIO_SRC_CONTROL) : DPA(DIG0_AFMT_AUDIO_SRC_CONTROL), pkt,
+               FIELD(pkt, DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND_MASK,
+                     DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND__SHIFT));
+    }
+    printf("  DCCG_AUDIO_DTO_SOURCE 0x%08lX (DTO_SEL %lu); DTO0 %lu/%lu; DTO1 %lu/%lu\n",
+           DPA(DTO_SOURCE), FIELD(DPA(DTO_SOURCE), DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL_MASK,
+                                  DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL__SHIFT),
+           DPA(DTO0_PHASE), DPA(DTO0_MODULE), DPA(DTO1_PHASE), DPA(DTO1_MODULE));
+    // Step 2 sets the DTO1 module from this counter (100 kHz units, x 1000); Linux takes the clock manager's
+    // spread-spectrum-adjusted figure instead, 5988740 on unit A, which the counter does not show (M788).
+    _snprintf_s(detail, sizeof(detail), _TRUNCATE, "%lu.%lu MHz, DTO1 module %lu", DPA(REFCLK_COUNT) / 10,
+                DPA(REFCLK_COUNT) % 10, DPA(REFCLK_COUNT) * 1000ul);
+    DpAudioCheck("CLK4_CLK2_CURRENT_CNT", DPA_OK(REFCLK_COUNT), DPA(REFCLK_COUNT), "5000..7000",
+                 DPA(REFCLK_COUNT) >= 5000 && DPA(REFCLK_COUNT) <= 7000, detail);
+    DpAudioNotes(d->ObsNotes, notes, sizeof(notes));
+    printf("decision now (the driver's Bc250DpAudioDecide over these reads): %s; stream DP%lu, endpoint %lu, notes %s\n",
+           DpAudioReasonText(d->ObsReason), d->ObsStream, d->ObsEndpoint, notes);
+    printf("raw slots (%lu of %u read):\n", read, (unsigned)BC250_DPAUDIO_OBS_COUNT);
+    for (n = 0; n < BC250_DPAUDIO_OBS_COUNT; n++) {
+        if ((d->ValidMask >> n) & 1ull) printf("  R %-34s %08lX\n", g_DpAudioSlot[n], d->Regs[n]);
+        else printf("  R %-34s not read\n", g_DpAudioSlot[n]);
+    }
+}
+
+static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi2)
+{
+    char notes[96], sw[3][16];
+    unsigned long i;
+    const unsigned long sws[3] = { d->SwitchEnable, d->SwitchEndpoint, abi2 ? d->SwitchStream : BC250_DPAUDIO_NO_SWITCH };
+
+    for (i = 0; i < 3; i++) {
+        if (sws[i] == BC250_DPAUDIO_NO_SWITCH) strcpy_s(sw[i], sizeof(sw[i]), "not read yet");
+        else _snprintf_s(sw[i], sizeof(sw[i]), _TRUNCATE, "%lu", sws[i]);
+    }
+    DpAudioNotes(d->Notes, notes, sizeof(notes));
+    printf("record of the last start:\n");
+    printf("  state %s, reason: %s\n", d->State < sizeof(g_DpAudioState) / sizeof(g_DpAudioState[0]) ?
+           g_DpAudioState[d->State] : "?", DpAudioReasonText(d->Reason));
+    printf("  stream DP%lu, endpoint %lu, notes %s\n", d->Stream, d->Endpoint, notes);
+    if (abi2) printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s, EnableDpAudioStream %s (default 1)\n",
+                     sw[0], sw[1], sw[2]);
+    else printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s (default 1)\n", sw[0], sw[1]);
+    printf("  codec 0x%08lX, config default 0x%08lX, HOT_PLUG_CONTROL 0x%08lX -> 0x%08lX, last NTSTATUS 0x%08lX\n",
+           d->CodecId, d->ConfigDefault, d->HotPlugBefore, d->HotPlugAfter, d->LastStatus);
+    printf("  starts %lu resumes %lu stops %lu refusals %lu failures %lu path-on %lu path-off %lu\n",
+           d->Starts, d->Resumes, d->Stops, d->Refusals, d->Failures, d->PathOn, d->PathOff);
+    printf("  accesses: indirect reads %lu, indirect writes %lu, direct writes %lu, refused by the tables %lu\n",
+           d->IndirectReads, d->IndirectWrites, d->DirectWrites, d->AccessRefusals);
+    if (!abi2) { printf("  stream: not reported (driver before 0.7.216, DP audio ABI 1)\n"); return; }
+    printf("  stream %s, step %s, NTSTATUS 0x%08lX; on %lu off %lu undone %lu\n",
+           d->StreamState < sizeof(g_DpAudioStreamState) / sizeof(g_DpAudioStreamState[0]) ?
+           g_DpAudioStreamState[d->StreamState] : "?",
+           d->StreamStep < BC250_DPAUDIO_STEP_COUNT ? g_DpAudioStep[d->StreamStep] : "?", (unsigned long)d->StreamStatus,
+           d->StreamOn, d->StreamOff, d->StreamUndos);
+    printf("  reference clock %lu (100 kHz units), DTO1 module %lu phase %lu, DTO_SOURCE 0x%08lX\n",
+           d->RefClockCount, d->DtoModule, d->DtoPhase, d->DtoSource);
+    printf("  read back: DP_SEC_CNTL 0x%08lX AFMT_CNTL 0x%08lX PACKET_CONTROL 0x%08lX PACKET_CONTROL2 0x%08lX\n",
+           d->SecCntl, d->AfmtCntl, d->PacketControl, d->PacketControl2);
+    if (d->MismatchOffset)
+        printf("  mismatch at 0x%05lX: wrote 0x%08lX, read 0x%08lX\n", d->MismatchOffset, d->MismatchExpected,
+               d->MismatchActual);
+}
+
+static int DpAudio(int argc, WCHAR **argv)
+{
+    static BC250_ESCAPE_DPAUDIO d;
+    unsigned long op = BC250_DPAUDIO_OP_OBSERVE;
+    NTSTATUS status = 0;
+    int abi2;
+    typedef char DpAudioAbiSizeCheck[(sizeof(BC250_ESCAPE_DPAUDIO) == 480 && BC250_DPAUDIO_ABI1_SIZE == 408) ? 1 : -1];
+    (void)sizeof(DpAudioAbiSizeCheck);
+
+    if (argc == 3 && !_wcsicmp(argv[2], L"state")) op = BC250_DPAUDIO_OP_STATE;
+    else if (argc != 2) { fprintf(stderr, "usage: bc250kmd_cli dpaudio [state]\n"); return 2; }
+    for (abi2 = 1; abi2 >= 0; abi2--) {
+        memset(&d, 0, sizeof(d));
+        d.Magic = BC250_ESCAPE_MAGIC;
+        d.Command = BC250_ESCAPE_RUN_DPAUDIO;
+        d.AbiVersion = abi2 ? BC250_DPAUDIO_ABI : BC250_DPAUDIO_ABI_1;
+        d.Op = op;
+        if (SendEscape(BC250_DEFAULT_HWID, &d, abi2 ? (unsigned)sizeof(d) : BC250_DPAUDIO_ABI1_SIZE, &status)) return 1;
+        // A driver before 0.7.216 takes only the 408-byte ABI 1 record and refuses the size.
+        if (!(abi2 && status == (NTSTATUS)0xC000000Dl)) break;
+    }
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (d.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (d.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND || d.Command != BC250_ESCAPE_RUN_DPAUDIO) {
+        printf("refused: this driver build has no DP audio command\n");
+        return 3;
+    }
+    printf("dpaudio %s: %s, NTSTATUS 0x%08lX %s, driver 0x%08lX, mmio %s\n", op == BC250_DPAUDIO_OP_STATE ? "state" : "observe",
+           d.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", d.NtStatus, StatusName((NTSTATUS)d.NtStatus),
+           d.Version, (d.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "not mapped (EnableMmio)");
+    if (op == BC250_DPAUDIO_OP_OBSERVE && d.ValidMask) DpAudioPrintObserve(&d);
+    if (abi2 && d.AbiVersion == BC250_DPAUDIO_ABI) DpAudioPrintState(&d, 1);
+    else if (!abi2 && d.AbiVersion == BC250_DPAUDIO_ABI_1) DpAudioPrintState(&d, 0);
+    return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+#undef DPA
+#undef DPA_OK
+#undef FIELD
+
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
@@ -3159,7 +3704,8 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
                         "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
-                        "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
+                        "       bc250kmd_cli read <hex offset | name> | write <hex offset> <hex value>\n"
+                        "       bc250kmd_cli dpaudio [state]              (DP audio check table and record, dpaudio.c)\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
                         "       bc250kmd_cli vtable <hex offset>          (one page table page, nonzero entries)\n"
@@ -3178,6 +3724,8 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
                         "       bc250kmd_cli fan [count [interval ms]]    (the board's hardware monitor, docs/design/fan.md)\n"
+                        "       bc250kmd_cli fan auto [store] | fan curve [standard|quiet|performance] [store]\n"
+                        "       bc250kmd_cli fan set <percent> <seconds> | fan renew <seconds>    (admin; the fan control)\n"
                         "       bc250kmd_cli dpm curve [set <mV>... | offset <mV> | preset mild|medium|deep | keep | cancel | reset]\n"
                         "       bc250kmd_cli cpu [readback | set [clock <MHz>] [uv <steps>] [temp <C>] [window <ms>] | keep | cancel | reset]\n"
                         "       bc250kmd_cli cpu cores 6|8 | cpu search [steps] | cpu step   (docs/design/tuner.md)\n"
@@ -3208,6 +3756,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     if (!_wcsicmp(argv[1], L"dcn")) return Dcn();
+    if (!_wcsicmp(argv[1], L"dpaudio") && argc <= 3) return DpAudio(argc, argv);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3 && !_wcsicmp(argv[2], L"restore")) return DcnFlip(NULL, NULL, NULL, 1);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3) return DcnFlip(argv[2], NULL, NULL, 0);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);
@@ -3217,7 +3766,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
-    if (!_wcsicmp(argv[1], L"fan") && argc <= 4) return Fan(argc, argv);
+    if (!_wcsicmp(argv[1], L"fan") && argc <= 5) return Fan(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
     if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
         return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);

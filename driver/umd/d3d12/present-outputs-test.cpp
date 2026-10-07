@@ -30,7 +30,7 @@ int main() {
     bad=args;bad.DirtyRects=1;assert(check_present(&bad,&result,&contexts)==E_INVALIDARG);
     bad=args;bad.PrivateDriverDataSize=4;assert(check_present(&bad,&result,&contexts)==E_INVALIDARG);
 
-    const HANDLE context=reinterpret_cast<HANDLE>(UINT_PTR{0x100000011});
+    const HANDLE context=reinterpret_cast<HANDLE>(UINT_PTR{0x10000011});
     std::memset(&result,0xa5,sizeof(result));std::memset(&contexts,0xa5,sizeof(contexts));
     std::memset(&queues,0xa5,sizeof(queues));
     assert(fill_present({0x40000100,0,0,0,context},&result,&contexts,&queues)==S_OK);

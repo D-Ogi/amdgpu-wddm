@@ -46,5 +46,31 @@ class GcAddressing(unittest.TestCase):
             self.assertNotIn(name, self.rm.regs)
 
 
+class DmuIndirectIndices(unittest.TestCase):
+    """The Azalia endpoint's indirect indices (ix names) come from dcn_2_0_1_offset.h itself."""
+
+    @classmethod
+    def setUpClass(cls):
+        from regcalc import HDR_DIR
+        cls.rm = RegMap(ip="DMU", reg_header=HDR_DIR / "dcn_2_0_1_offset.h")
+
+    def test_endpoint_pair_is_a_bar5_register(self):
+        # The INDEX/DATA pair itself is an ordinary BAR5 register (scratch design table 1.2, regcalc output).
+        self.assertEqual(self.rm.byte_offset("mmAZF0ENDPOINT0_AZALIA_F0_CODEC_ENDPOINT_INDEX"), 0x0E118)
+        self.assertEqual(self.rm.byte_offset("mmAZF0ENDPOINT0_AZALIA_F0_CODEC_ENDPOINT_DATA"), 0x0E11C)
+
+    def test_indices_match_the_dce11_table(self):
+        # dce_audio.c reaches these through dce_11_0_d.h for every generation; the DCN 2.0.1 header carries the
+        # same numbers under the per-endpoint names.
+        self.assertEqual(self.rm.index("ixAZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL"), 0x54)
+        self.assertEqual(self.rm.index("ixAZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_RESPONSE_CONFIGURATION_DEFAULT"), 0x56)
+        self.assertEqual(self.rm.index("ixAZF0ENDPOINT1_AZALIA_F0_CODEC_PIN_CONTROL_CHANNEL_SPEAKER"), 0x25)
+
+    def test_indices_are_not_offsets(self):
+        self.assertNotIn("ixAZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_HOT_PLUG_CONTROL", self.rm.regs)
+        # DCE 11 has ACP_DATA (0x27); the DCN 2.0.1 header does not, so this driver does not write it.
+        self.assertNotIn("ixAZF0ENDPOINT0_AZALIA_F0_CODEC_PIN_CONTROL_ACP_DATA", self.rm.ix)
+
+
 if __name__ == "__main__":
     unittest.main()

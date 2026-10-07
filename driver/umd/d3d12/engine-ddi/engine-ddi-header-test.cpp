@@ -26,26 +26,37 @@ constexpr bool tags_unique() {
 }
 static_assert(engine_ddi::kBoundaryRevision == 5, "boundary r5");
 static_assert(tags_unique(), "record tags must be unique and distinct from None/Poisoned");
-static_assert(sizeof(D3D12DDI_DEVICE_FUNCS_CORE_0088) == 976, "core table 0088");
-static_assert(sizeof(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092) == 560, "command list table 0092");
+static_assert(sizeof(D3D12DDI_DEVICE_FUNCS_CORE_0088) == 122 * sizeof(void*), "core table 0088 (976 bytes on x64)");
+static_assert(sizeof(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092) == 70 * sizeof(void*), "command list table 0092 (560 on x64)");
 static_assert(alignof(engine_ddi::RecordHeader) == alignof(void*), "record header alignment");
 
-// Structs that cross the boundary: no implicit padding in the parts the shell fills, x64 sizes pinned.
+// Structs that cross the boundary: no implicit padding in the parts the shell fills on x64, x64 and x86 sizes pinned.
+// The x86 build (the WoW64 shell) has 4-byte pointers and handles, so MemoryRequest and AdoptRequest get 4 bytes of
+// padding before their first uint64_t there; engine-ddi is linked into the shell, so both sides of these structs are
+// always one compiler's view of them.
 static_assert(std::is_standard_layout_v<engine_ddi::MemoryRequest>, "MemoryRequest layout");
 static_assert(std::is_standard_layout_v<engine_ddi::ImportedMemory>, "ImportedMemory layout");
 static_assert(std::is_standard_layout_v<engine_ddi::ShellHooks>, "ShellHooks layout");
+#ifdef _WIN64
 static_assert(sizeof(engine_ddi::MemoryRequest) == 72 &&
                   offsetof(engine_ddi::MemoryRequest, surface_row_pitch) == 56 &&
                   offsetof(engine_ddi::MemoryRequest, surface_layout_size) == 64,
               "MemoryRequest size (r4: the linear surface)");
+#else
+static_assert(sizeof(engine_ddi::MemoryRequest) == 64 &&
+                  offsetof(engine_ddi::MemoryRequest, surface_row_pitch) == 48 &&
+                  offsetof(engine_ddi::MemoryRequest, surface_layout_size) == 56,
+              "MemoryRequest x86 size (r4: the linear surface)");
+#endif
 static_assert(offsetof(engine_ddi::ImportedMemory, gpu_va) == 32, "ImportedMemory.gpu_va offset");
 static_assert(sizeof(engine_ddi::ImportedMemory) == 48, "ImportedMemory size");
-static_assert(sizeof(engine_ddi::ShellHooks) == 72, "ShellHooks size (r5: adopt_memory)");
+static_assert(sizeof(engine_ddi::ShellHooks) == (sizeof(void*) == 8 ? 72 : 36),
+              "ShellHooks size (r5: adopt_memory): a uint32_t and eight pointers");
 // r5 (BD-075): the open half of a shared surface. AdoptRequest is the shell's side of pfnOpenHeapAndResource and
 // carries the handle the runtime opened, never a size to allocate.
 static_assert(std::is_standard_layout_v<engine_ddi::AdoptRequest>, "AdoptRequest layout");
 static_assert(sizeof(engine_ddi::AdoptRequest) == 40 &&
-                  offsetof(engine_ddi::AdoptRequest, allocation) == 16 &&
+                  offsetof(engine_ddi::AdoptRequest, allocation) == 8 + sizeof(void*) &&
                   offsetof(engine_ddi::AdoptRequest, byte_size) == 24 &&
                   offsetof(engine_ddi::AdoptRequest, alignment) == 32,
               "AdoptRequest size (r5: the shared open)");
@@ -110,11 +121,13 @@ static_assert(std::is_same_v<decltype(&engine_ddi::set_replay_policy),
                              HRESULT (*)(engine_ddi::DeviceContext*, const engine_ddi::ReplayPolicy*) noexcept>,
               "set_replay_policy");
 static_assert(std::is_same_v<engine_ddi::ReplayBody, void (APIENTRY*)(void*)>, "ReplayBody");
-static_assert(std::is_standard_layout_v<engine_ddi::ReplayPolicy> && sizeof(engine_ddi::ReplayPolicy) == 48 &&
+static_assert(std::is_standard_layout_v<engine_ddi::ReplayPolicy> &&
+                  sizeof(engine_ddi::ReplayPolicy) == 16 + 4 * sizeof(void*) &&
                   offsetof(engine_ddi::ReplayPolicy, ring_bytes) == 12 && offsetof(engine_ddi::ReplayPolicy, shell) == 16 &&
-                  offsetof(engine_ddi::ReplayPolicy, worker) == 24 && offsetof(engine_ddi::ReplayPolicy, drained) == 32 &&
-                  offsetof(engine_ddi::ReplayPolicy, log) == 40,
-              "ReplayPolicy size and offsets");
+                  offsetof(engine_ddi::ReplayPolicy, worker) == 16 + sizeof(void*) &&
+                  offsetof(engine_ddi::ReplayPolicy, drained) == 16 + 2 * sizeof(void*) &&
+                  offsetof(engine_ddi::ReplayPolicy, log) == 16 + 3 * sizeof(void*),
+              "ReplayPolicy size and offsets (48 bytes on x64, 32 on x86)");
 // Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
 static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,
               "command_list_shell");
@@ -156,6 +169,7 @@ static_assert(std::is_same_v<PFND3D12DDI_COPYTILEMAPPINGS,
               "Q4 slot the shell forwards");
 // The engine header this revision is built against is ABI 1.3 (linear images, V13).
 static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 3u), "engine ABI 1.3 header");
+#ifdef _WIN64
 static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 80 &&
                   sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,
               "ABI 1.3 x64 sizes");
@@ -163,6 +177,16 @@ static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGI
 static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 48 &&
                   offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 40 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,
               "ABI 1.2 r4 create info");
+#else
+// The x86 engine (WoW64) is built from the same header, which pins its sizes only for x64. The function table is
+// two UINT32 and nine pointers.
+static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 20 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 44 &&
+                  sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,
+              "ABI 1.3 x86 sizes");
+static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 36 &&
+                  offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 32 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,
+              "ABI 1.2 r4 create info, x86");
+#endif
 // The two GetCaps payloads of M768 (d3d12umddi.h 10.0.26100): 1074 is 8 bytes, 1007 is the 4-byte level itself.
 static_assert(sizeof(D3D12DDI_3DPIPELINESUPPORT1_DATA_0081) == 8 && sizeof(D3D12DDI_3DPIPELINELEVEL) == 4,
               "GetCaps 1074 and 1007 payloads");

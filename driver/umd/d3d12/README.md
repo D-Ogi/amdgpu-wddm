@@ -15,6 +15,14 @@ by [engine-ddi/engine-abi.json](engine-ddi/engine-abi.json); the engine sub-buil
 checks those pins and runs under PowerShell 7. Only production engine code is
 linked into the UMD.
 
+`-Arch x86` builds the 32-bit shell for WoW64 processes (the fourth entry of
+`UserModeDriverNameWow`) and runs every host gate as an x86 program. Pass
+`-MesaSource` with the Mesa tree of the x86 ICD: its `bc250_host_bootstrap.h`
+pins the x86 layout of the host contract. `amdgpu_wddm_d3d12.def` keeps the
+export name `OpenAdapter12` free of the x86 stdcall decoration, and the recipe
+checks the export list, the image machine and that no dynamic C runtime is
+imported. The layout gates in `ddi-0092-layout.h` scale with the pointer size.
+
 ## Adapter and device ownership
 
 `OpenAdapter12` admits the runtime's adapter through the v3 caps blob and B2AI

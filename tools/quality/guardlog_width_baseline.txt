@@ -33,7 +33,6 @@
 176	dpm.c	dpm: tune (%s): hot step %lu->%lu ms, soft release delta %lu->%lu mC step %lu->%lu ms, serial %lu
 223	dpm.c	dpm: tune (%s): up %lu->%lu target %lu->%lu down %lu->%lu permille, hold %lu->%lu ms, floor %lu->%lu MHz, serial %lu
 186	gfx.c	gfx: %s %lu bytes -> 0x%08X, result %d, matched %lu, first mismatch at 0x%lX (got 0x%02lX want 0x%02lX), %lu us
-163	gfx.c	gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX
 199	gfx.c	gfx: sdmava root PA0x%llX IB PA0x%llX system PA0x%llX source PA0x%llX VA0x%llX CSA0x%llX VMID%u
 175	hang.c	hang: detector ARMED: bugcheck 0x%08X after %lu s without a heartbeat (requested %lu), progress %p, dump pages %s
 244	ih.c	ih: GPU FAULT latch status 0x%08X cid %lu %s vmid %lu rw %lu perm 0x%lX walker 0x%lX more %lu mapping %lu page 0x%llX, %lu register(s) refused

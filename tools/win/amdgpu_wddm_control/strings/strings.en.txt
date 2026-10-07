@@ -158,9 +158,9 @@ perf.memory|src|-|Video memory in use
 perf.memory.explain|src|-|Memory that games and Windows use for graphics.
 perf.memory.value|src|-|{0} GB of {1} GB
 perf.power|src|-|Power
-perf.power.explain|src|-|The driver cannot read the power use yet. This comes later.
+perf.power.explain|src|-|How much power the processor and the graphics chip use together, as the chip itself measures it. The rest of the board, the fan and the losses of the power supply are not included.
 perf.fan|src|-|Fan
-perf.fan.explain|src|-|The board turns the fan by itself (the BIOS fan setting). The driver reads the speed and shows it here.
+perf.fan.explain|src|-|The speed of the case fan. Who runs the fan, and by which curve, is chosen in the Case fan card below.
 perf.fan.value|src|-|{0} rpm ({1} %)
 perf.fan.rpm-only|src|-|{0} rpm
 perf.fan.stopped|src|-|Not turning
@@ -327,8 +327,8 @@ search.later.vrr|src|-|Variable refresh rate
 search.later.vrr.terms|src|-|VRR|FreeSync|G-Sync|adaptive sync
 search.later.power|src|-|Power limit
 search.later.power.terms|src|-|power limit|watts|TDP
-search.later.fan|src|-|Fan control
-search.later.fan.terms|src|-|fan|fan curve|noise|cooling
+search.perf.fan|src|-|Fan control
+search.perf.fan.terms|src|-|fan|fan curve|noise|cooling
 search.later.fps-counter|src|-|Frame rate display
 search.later.fps-counter.terms|src|-|FPS counter|frame time|overlay|frames per second
 search.later.cache-clear|src|-|Clear the shader cache
@@ -643,7 +643,7 @@ help.setting.mode|src|-|Choose the resolution and refresh rate from this app. Co
 help.setting.hdr|src|-|High dynamic range: brighter highlights and more colours. Coming later.
 help.setting.vrr|src|-|The monitor follows the game's frame rate for smoother motion. Coming later.
 help.setting.power|src|-|The most power the chip may use. Coming later.
-help.setting.fan|src|-|The board's firmware turns the fan. This app shows the speed. Control from this app comes later.
+help.setting.fan|src|-|Chooses who runs the case fan. Automatic leaves it to the board's BIOS setting. The driver curve turns the fan a little faster than the board's standard setting when the chip is hot. Quiet is slower below 80 °C, Performance is faster everywhere. From 87 °C the fan always runs at full speed.
 help.setting.fps-counter|src|-|Shows the frame rate. Coming later.
 help.setting.cache-clear|src|-|Deletes the shader cache. Coming later.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -766,3 +766,124 @@ tuner.curve.preview.standard|src|-|the standard voltage comes back at every spee
 tuner.note.curve-risk|src|-|Less voltage makes the graphics chip cooler and quieter at the same speed. Too little shows up as a game or the screen freezing, not as a message, and the setting goes back by itself when the test ends.
 tuner.note.cpu-risk|src|-|These processor numbers come from other people’s boards. A speed that is too high or a voltage that is too low shows up as the computer freezing. The app only lowers the voltage and reads it back after every change.
 tuner.note.cores-risk|src|-|Eight cores make more heat and use more power than six. Nobody has tested the other two cores on this board.
+
+# ---- case fan control (docs/design/fan.md Part B) ----
+perf.fan.title|src|-|Case fan
+perf.fan.intro|src|-|The case fan can follow the board's own setting (BIOS) or a curve of the driver. Your choice is saved and works after every start.
+perf.fan.no-control|src|-|This driver cannot run the fan. The board runs it by its BIOS setting.
+perf.fan.speed|src|-|Speed
+perf.fan.who|src|-|Runs the fan
+perf.fan.state.curve|src|-|The driver, by the curve below
+perf.fan.state.board|src|-|The board, by its BIOS fan setting
+perf.fan.state.held-back|src|-|The board for now: a temperature reading was not trusted. The driver takes the fan back when the readings are steady again.
+perf.fan.state.fixed|src|-|The driver, at one speed for a short test
+perf.fan.state.emergency|src|-|The driver, at full speed: the chip is at 87 °C or hotter
+perf.fan.state.doubt|src|-|The driver, at full speed: a temperature reading is not trusted
+perf.fan.state.fault|src|-|The board: the fan chip did not take a change, so the driver stopped until the next start
+perf.fan.state.paused|src|-|The board, while the graphics chip sleeps
+perf.fan.gate.setting|src|-|Fan control is off in the driver settings. The board runs the fan.
+perf.fan.gate.reader|src|-|The driver cannot read the fan chip on this computer. The board runs the fan.
+perf.fan.gate.chip|src|-|The driver does not know the fan chip of this board. The board runs the fan.
+perf.fan.choice|src|-|Fan behaviour
+perf.fan.choice.board|src|-|Automatic (board)
+perf.fan.choice.standard|src|-|Driver curve
+perf.fan.choice.quiet|src|-|Quiet
+perf.fan.choice.performance|src|-|Performance
+perf.fan.choice.custom|src|-|Custom
+perf.fan.curve|src|-|Curve
+perf.fan.curve.help|src|-|Each row is one point of the curve: a temperature and the fan speed at it. Between two points the speed changes in a straight line.
+perf.fan.point|src|-|Point {0}
+perf.fan.point.temp|src|-|Temperature of point {0}
+perf.fan.point.speed|src|-|Speed of point {0}
+perf.fan.point.value|src|-|{0} °C {1} %
+perf.fan.add|src|-|Add a point
+perf.fan.remove|src|-|Remove the last point
+perf.fan.reset|src|-|Reset curve
+perf.fan.apply|src|-|Apply curve
+perf.fan.note|src|-|From 87 °C the fan always runs at full speed, whatever the curve says.
+perf.fan.error.points|src|-|A curve needs {0} to {1} points.
+perf.fan.error.temperature|src|-|Point {0}: the temperature must be {1} to {2} °C and higher than the point before.
+perf.fan.error.duty|src|-|Point {0}: the speed must be {1} to {2} % and not lower than the point before.
+perf.fan.refuse.no-read|src|-|The driver did not answer about the fan. Try again in a moment.
+perf.fan.refuse.off|src|-|The driver does not run the fan on this computer.
+perf.fan.refuse.same|src|-|That fan setting is in use already.
+perf.fan.refuse.bad-curve|src|-|That fan curve is not valid.
+plan.line.fan-board|src|-|The board's own fan setting runs the fan, now and at every start.
+plan.line.fan-curve|src|-|The driver runs the fan by the curve "{0}", now and at every start.
+plan.line.fan-points|src|-|Fan speeds: {0}
+plan.title.fan-auto|src|-|Let the board run the fan
+plan.title.fan-curve|src|-|Use a fan curve
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|src|-|Hide advanced tuning
+graphics.tuning.curve.title|src|-|Graphics voltage
+graphics.tuning.chart.marks|src|-|The dashed line is the highest speed allowed now, and the ring shows where the chip runs at this moment.
+tuner.end.kept|src|-|The setting is kept and is used at every start.
+tuner.end.stopped|src|-|The test is stopped. The setting from before the test is back.
+tuner.end.expired|src|-|The test ended without Keep, so the setting from before the test came back by itself.
+tuner.end.reset.curve|src|-|The standard voltage is back at every speed.
+tuner.end.reset.cpu|src|-|The processor is back at the standard settings of this start.
+tuner.temp|src|-|{0} °C
+tuner.curve.in-use|src|-|In use now: {0}
+tuner.curve.saved|src|-|Saved for every start: {0}
+tuner.curve.live|src|-|Now: {0} MHz at {1} mV
+tuner.curve.live.temp|src|-|Now: {0} MHz at {1} mV, {2}
+tuner.curve.guard.unfinished|src|-|Your own voltage settings were not used this time, because the last start with them did not finish. The standard settings are in use.
+tuner.curve.guard.refused|src|-|Your own voltage settings were not used this time, because the driver did not accept them. The standard settings are in use.
+tuner.curve.row|src|-|{0} mV, {1}
+tuner.curve.row.now|src|-|{0} mV, {1} (now {2} mV)
+tuner.cpu.mhz-list|src|-|{0} MHz
+tuner.cpu.own|src|-|not changed
+tuner.cpu.on-after-restart|src|-|Processor tuning turns on after the next restart of Windows.
+tuner.cpu.off-after-restart|src|-|Processor tuning turns off after the next restart of Windows.
+tuner.cpu.saved|src|-|Your processor settings are saved and used at every start.
+tuner.cpu.standard|src|-|The processor runs with its standard settings.
+tuner.cpu.guard.unfinished|src|-|Your processor settings were not used this time, because the last start with them did not finish. The standard settings are in use.
+tuner.cpu.guard.refused|src|-|Your processor settings were not used this time, because the processor did not take them. The standard settings are in use.
+tuner.cpu.temp.label|src|-|Temperature now
+tuner.cpu.cores-now.label|src|-|Speed of each core
+tuner.cpu.steps-now.label|src|-|Speed steps
+tuner.cpu.in-use.label|src|-|In use now
+tuner.cpu.settings|src|-|highest speed {0}; voltage {1}; temperature limit {2}
+tuner.cpu.saved.label|src|-|Saved for every start
+tuner.cpu.baseline.label|src|-|Standard of this start
+tuner.cpu.baseline.none|src|-|Read the processor first.
+tuner.summary.curve-trial|src|-|A graphics voltage test is running.
+tuner.summary.curve-own|src|-|Your own graphics voltage setting is in use.
+tuner.summary.cpu-trial|src|-|A processor test is running.
+tuner.summary.cpu-own|src|-|Your own processor settings are in use.
+tuner.summary.standard|src|-|Standard settings are in use.
+tuner.discard|src|-|Discard my changes
+tuner.cpu.readings|src|-|What the processor reports
+tuner.cpu.settings.title|src|-|Settings
+tuner.cpu.choose|src|-|New settings to test
+tuner.cpu.choose.help|src|-|Only values the driver accepts are offered. The test changes only the values you stepped to; the others stay as they are.
+
+# ---- the case fan card: chart, modes, rules and the short test (docs/design/fan.md) ----
+perf.fan.apply.board|src|-|Hand the fan to the board
+perf.fan.undo|src|-|Go back to the previous setting
+perf.fan.mode.board|src|-|The board turns the fan by the curve in its BIOS. The driver only reads the speed.
+perf.fan.mode.standard|src|-|The driver's balanced curve. It is never slower than the board's standard setting.
+perf.fan.mode.quiet|src|-|Quieter than the board below 80 °C, full speed from 85 °C.
+perf.fan.mode.performance|src|-|Faster at every temperature to keep the chip cool, full speed from 75 °C.
+perf.fan.mode.custom|src|-|Your own points. Drag them on the chart or change them in the rows below.
+perf.fan.chart|src|-|Fan curve
+perf.fan.chart.help|src|-|Drag a point, or select the chart and use the arrow keys: left and right pick a point, up and down change its speed, Ctrl with left or right changes its temperature.
+perf.fan.chart.marks|src|-|Grey band: the fan never goes below 20 %. Amber zone: full speed from 87 °C. Green ring: the fan now. Dashed line: the curve in use now.
+perf.fan.now|src|-|Now: {0}, the fan at {1} %
+perf.fan.rules|src|-|How the driver runs the fan
+perf.fan.rule.input|src|-|It follows the hotter of two readings: the chip's own and the board's sensor.
+perf.fan.rule.doubt|src|-|If a reading cannot be trusted, the fan runs at full speed.
+perf.fan.rule.slow|src|-|The speed rises at once and falls slowly, so the fan does not pulse up and down.
+perf.fan.rule.hot|src|-|From 87 °C the fan runs at full speed until the chip has stayed at 82 °C or cooler for 10 seconds.
+perf.fan.rule.floor|src|-|The fan never runs below 20 %, so it cannot stall.
+perf.fan.test|src|-|Short test
+perf.fan.test.help|src|-|Run the fan at one speed for 10 seconds to hear it and see how fast it turns. Then it goes back to the setting in use. Nothing is saved.
+perf.fan.test.speed|src|-|Test speed
+perf.fan.test.run|src|-|Test for 10 seconds
+perf.fan.test.result|src|-|Test at {0} %: the fan reached {1} rpm. It is back on the setting in use.
+perf.fan.test.no-rpm|src|-|The test at {0} % finished, but no speed reading came in. The fan is back on the setting in use.
+perf.fan.refuse.bad-test|src|-|That test speed is not offered.
+perf.fan.refuse.busy|src|-|A test is not possible now, because the driver is not running the fan in the normal way at the moment.
+plan.line.fan-test|src|-|The fan runs at {0} % for {1} seconds, then goes back to the setting in use. Nothing is saved.
+plan.title.fan-test|src|-|Test the fan

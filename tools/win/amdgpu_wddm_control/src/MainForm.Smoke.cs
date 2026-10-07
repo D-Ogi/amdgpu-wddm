@@ -42,9 +42,75 @@ namespace AmdgpuWddmControl
             _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v1.0.1.0-tester.12", CandidateVersion = "1.0.1.0-tester.12" };
             _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "1.0.0.0-tester.11", DriverDate = "10-3-2026" });
             _vram = new VideoMemoryState { Segments = 1, LocalResident = 3L << 30, Dedicated = 8L << 30, LocalLimit = 8L << 30 };
+            // The "Now" card with every row filled: a recorded snapshot keeps its mode, reason and ceiling, and gets the
+            // live readings it never recorded (37 % load, 62 C, the clock of its mode, 78 W from the SMU metrics table).
+            if (_snap.Dpm == null) _snap.Dpm = new DpmState { Version = 0x000700D7, Mode = 1, Requested = 1, MaxMHz = 1500 };
+            {
+                var d = _snap.Dpm;
+                const uint live = DpmState.FlagTemperature | DpmState.FlagClock | DpmState.FlagHwBusy | DpmState.FlagPower;
+                if ((d.Flags & live) == 0)
+                {
+                    uint mhz = d.Mode == 1 ? 1500u : 1000u;
+                    d.Flags |= DpmState.FlagRunning | live;
+                    d.AbiVersion = 3; d.MetricsState = DpmState.MetricsOk; d.MetricsAgeMs = 400;
+                    d.BusyPermille = 360; d.BusyAvgPermille = 370; d.TemperatureMc = 62000;
+                    d.CurrentMHz = mhz; d.ObservedMHz = mhz; d.CurrentMv = d.Mode == 1 ? 919u : 820u;
+                    d.SocketPowerMw = 78000; d.SocketPowerAvgMw = 77400; d.GfxPowerMw = 48000; d.SocPowerMw = 21000;
+                    d.GfxMv = d.CurrentMv; d.SocMv = 900;
+                }
+            }
             _game = "witcher3.exe";
             _gameEdits["witcher3.exe"] = new Dictionary<string, bool> { { "cpu", true } };
             _ceilEdited = true; _ceilEdit = 1800;
+            // The fan card at its widest: the driver runs the standard curve (stored), the person has dragged a curve of
+            // six points on the chart and applied a choice before (so Undo shows), and the ring marks 61.5 C at 72 % (the standard curve there).
+            // The render gates see every row the card can have short of the eight-point maximum.
+            if (_snap.Fan == null)
+            {
+                _snap.Fan = new FanState
+                {
+                    Version = 0x000700D5, Flags = FanState.FlagEnabled | FanState.FlagControlling | FanState.FlagStored, Mode = FanState.ModeCurve,
+                    State = FanState.StateCurve, Profile = FanState.ProfileStandard, Points = 5, Rpm = 1180, Generation = 5,
+                    StoredMode = FanState.ModeCurve, StoredProfile = FanState.ProfileStandard, GuardMc = 61500, TargetPct = 72, AppliedPct = 72,
+                    CurveC = new uint[] { 40, 60, 70, 80, 85, 0, 0, 0 }, CurvePct = new uint[] { 50, 70, 82, 95, 100, 0, 0, 0 },
+                };
+                _fanEditC = new uint[] { 35, 50, 62, 70, 78, 84 };
+                _fanEditPct = new uint[] { 30, 42, 58, 70, 88, 100 };
+                _fanChoice = "custom";
+                _fanPoint = 2;
+                _fanUndo = new FanChoiceRecord { Choice = "quiet" };
+            }
+            // The tuning cards open and at their widest: a curve test running over a saved curve (every row differs from
+            // the one in force), and processor tuning on with one readback and saved settings. A fixture that brings
+            // its own readings (test/snapshot-tuner.json) keeps them.
+            _tuningOpen = true;
+            if (_snap.Curve == null)
+            {
+                var line = Tuner.Table(); var floor = Tuner.Floors();
+                var trial = Tuner.Preset("medium", line, floor);
+                _snap.Curve = new CurveState
+                {
+                    Version = 0x000700D5, Flags = CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagOnTrial | CurveState.FlagApplied | CurveState.FlagStored,
+                    TrialMs = 120000, TrialRemainingMs = 87000, Serial = 4, Applied = 4, FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = Tuner.Points,
+                    Candidate = trial, Active = (uint[])trial.Clone(), Stored = Tuner.Preset("mild", line, floor), Default = line, Floor = floor,
+                    Level = 5, LevelMHz = 1500, LevelMv = trial[5], CeilingMHz = 1500, Mode = 1, TemperatureMc = 64000, Sets = 2, Keeps = 1, Generation = 5,
+                };
+            }
+            if (_snap.Cpu == null)
+            {
+                _snap.Parameters["CpuTune"] = 1;
+                _snap.Cpu = new CpuState
+                {
+                    Version = 0x000700D5, Flags = CpuState.FlagValid | CpuState.FlagTuneOn | CpuState.FlagQueue3Proven | CpuState.FlagStored | CpuState.FlagTempValid,
+                    AppliedMaxMHz = 3300, AppliedUvSteps = 4, AppliedTempC = 90, StoredMaxMHz = 3300, StoredUvSteps = 4, StoredTempC = 90,
+                    BaselineMaxMHz = 3500, BaselineTempC = 95, VoltageMv = 1012, CapC = 90, TemperatureMc = 61000,
+                    CoreMHz = new uint[] { 3290, 3290, 3280, 3290, 3290, 3280, 0, 0 }, PstateMHz = new uint[] { 3500, 2800, 1600, 0, 0, 0, 0, 0 },
+                    Cores = 6, Threads = 12, CoreMask = CpuTuning.MaskStock, Reads = 3, Writes = 2, Generation = 5,
+                };
+            }
+            _fanEditC = new uint[] { 35, 50, 60, 70, 80, 85 };
+            _fanEditPct = new uint[] { 30, 40, 55, 70, 90, 100 };
+            _fanChoice = "custom";
             ComputeStatus();
             ShowPage(_page, null, false);
         }

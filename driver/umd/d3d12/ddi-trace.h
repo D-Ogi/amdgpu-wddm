@@ -126,11 +126,15 @@ inline bool application_profile_key(const wchar_t* image,wchar_t* key,size_t cap
     std::wmemcpy(key+prefix_length,name,name_length+1);
     return true;
 }
+// The registry view of every HKLM read of the shell. The installer and the control application write
+// HKLM\SOFTWARE\amdgpu-wddm in the 64-bit view; the x86 shell of a 32-bit process would otherwise read the empty
+// WOW6432Node copy (the x86 router reads the 64-bit view as well). 0 on x64 keeps that image as it was.
+inline constexpr DWORD registry_view=sizeof(void*)==4?RRF_SUBKEY_WOW6464KEY:0;
 // The "Experiment" value of one key into text, 1 when found, 0 when the key or the value does not exist, -1
 // when the value is not a string of the syntax that fits.
 inline int registry_experiment(const wchar_t* key,char* text,size_t capacity) noexcept {
     wchar_t value[256]{};DWORD bytes=sizeof(value);
-    const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,key,L"Experiment",RRF_RT_REG_SZ,nullptr,value,&bytes);
+    const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,key,L"Experiment",RRF_RT_REG_SZ|registry_view,nullptr,value,&bytes);
     if(status==ERROR_FILE_NOT_FOUND)return 0;
     if(status!=ERROR_SUCCESS)return -1;
     size_t i=0;

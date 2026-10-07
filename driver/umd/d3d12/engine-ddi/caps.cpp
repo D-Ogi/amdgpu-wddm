@@ -11,10 +11,10 @@
 namespace engine_ddi {
 
 // ---- Payload layouts ------------------------------------------------------------------------------------------------
-static_assert(sizeof(D3D12DDIARG_GETCAPS) == 32, "H:2611-2617");
+static_assert(sizeof(D3D12DDIARG_GETCAPS) == (sizeof(void*) == 8 ? 32 : 16), "H:2611-2617, x64 and x86");
 static_assert(sizeof(D3D12DDI_3DPIPELINESUPPORT1_DATA_0081) == 8, "1074: H:10415-10420");
 static_assert(sizeof(D3D12DDI_3DPIPELINELEVEL) == 4, "1007: the level itself, H:2922-2933");
-static_assert(sizeof(D3D12DDI_D3D12_SHADER_MODELS_DATA_0011) == 16, "1012: H:3502-3507");
+static_assert(sizeof(D3D12DDI_D3D12_SHADER_MODELS_DATA_0011) == 2 * sizeof(void*), "1012: H:3502-3507, two pointers");
 static_assert(sizeof(D3D12DDI_D3D12_OPTIONS_DATA_0089) == 124, "1006: H:11078-11112");
 static_assert(sizeof(D3D12DDI_SHADER_CAPS_0084) == 64, "1004: H:10515-10534");
 static_assert(sizeof(D3D12DDI_ARCHITECTURE_INFO_DATA) == 4, "1005: H:2916-2920");

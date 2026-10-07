@@ -39,7 +39,8 @@ inline bool directory(wchar_t* out,DWORD capacity) noexcept {
     wchar_t key[96+MAX_PATH]{};
     if(n && n<MAX_PATH && ddi_detail::application_profile_key(image,key,sizeof(key)/sizeof(wchar_t))){
         DWORD bytes=capacity*sizeof(wchar_t);
-        if(RegGetValueW(HKEY_LOCAL_MACHINE,key,L"LogDirectory",RRF_RT_REG_SZ,nullptr,out,&bytes)==ERROR_SUCCESS && out[0])
+        if(RegGetValueW(HKEY_LOCAL_MACHINE,key,L"LogDirectory",RRF_RT_REG_SZ|ddi_detail::registry_view,nullptr,out,&bytes)==
+           ERROR_SUCCESS && out[0])
             return true;
     }
     const DWORD length=GetTempPathW(capacity,out);

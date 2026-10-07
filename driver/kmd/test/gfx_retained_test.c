@@ -24,10 +24,11 @@ typedef unsigned long ULONG;
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define GuardLog(...) ((void)0)
 typedef struct {NTSTATUS Fault;} BC250_SEQUENCE;
+#include "vmid_pool.h"   /* KMD214: the VMID table the power cycle empties, its tenancies into the history */
 struct mem {void*cpu;unsigned size;};
 struct amdgpu_ring {uint64_t wptr,wptr_old;int count_dw;unsigned contents[8];};
 struct amdgpu_device {void*backend;struct {struct mem wb_mem;struct {struct amdgpu_ring ring;}kiq[1];struct amdgpu_ring compute_ring[8],gfx_ring[1];unsigned num_compute_rings,num_gfx_rings;}gfx;struct {struct mem wb_mem;struct {struct amdgpu_ring ring;}instance[2];int num_instances;}sdma;};
-typedef struct {BC250_SEQUENCE Sequence;int SetUp,Failed,SubmitFailed,PagingSubmitFailed,PowerSuspended;unsigned StagesDone;int SubmitInFlight,PagingSubmitInFlight;unsigned RingOwes[4];int FencePage,SdmaFencePage,PagingReady;uint64_t VmidRoot[16];unsigned FenceSeq,SubmitSeq,PagingSubmitSeq;unsigned FenceData[8];} BC250_GFX;
+typedef struct {BC250_SEQUENCE Sequence;int SetUp,Failed,SubmitFailed,PagingSubmitFailed,PowerSuspended;unsigned StagesDone;int SubmitInFlight,PagingSubmitInFlight;unsigned RingOwes[4];int FencePage,SdmaFencePage,PagingReady;BC250_VMID_TABLE Vmid;BC250_VMID_HISTORY_RING VmidHistory;unsigned FenceSeq,SubmitSeq,PagingSubmitSeq;unsigned FenceData[8];} BC250_GFX;
 typedef struct {BC250_GFX*Gfx;int IhQuiet,GfxTlbBootstrap,GpuStopUnconfirmed,MmioGfxEnabled,GfxStopPrepared;int GfxPagingLock,GartLock;}BC250_DEVICE;
 typedef void (*bc250_gfx_checkpoint_fn)(const char*);
 static unsigned checks,failures,closed,opened,sdmaHalt,gfxHalt,resets,rlcStop,stages,bootstrap,clears;
@@ -58,7 +59,7 @@ static int bc250_sdma_reset_for_reload(struct amdgpu_device*a){CHECK(a==&modelAd
 static void bc250_gfx_rlc_stop(struct amdgpu_device*a){CHECK(a==&modelAdev&&gfxHalt);rlcStop++;}
 static void KeMemoryBarrier(void){}
 static void amdgpu_ring_clear_ring(struct amdgpu_ring*r){CHECK(!r->wptr&&!r->wptr_old&&!r->count_dw);memset(r->contents,0,sizeof(r->contents));clears++;}
-static int stage_run(struct amdgpu_device*a){unsigned i;CHECK(a==&modelAdev&&clears==12&&!device->Gfx->PowerSuspended);stages++;if(stages>=6)CHECK(bootstrap==1&&!device->GfxTlbBootstrap);for(i=0;i<16;i++)CHECK(!device->Gfx->VmidRoot[i]);return (int)stages==failStage?-1:0;}
+static int stage_run(struct amdgpu_device*a){unsigned i;CHECK(a==&modelAdev&&clears==12&&!device->Gfx->PowerSuspended);stages++;if(stages>=6)CHECK(bootstrap==1&&!device->GfxTlbBootstrap);for(i=0;i<16;i++)CHECK(!device->Gfx->Vmid.Root[i]&&!device->Gfx->Vmid.LiveSeq[i]&&!device->Gfx->Vmid.Order[i]);CHECK(device->Gfx->VmidHistory.Next==15&&device->Gfx->VmidHistory.Entry[14].Vmid==15&&device->Gfx->VmidHistory.Entry[14].Root==0xabc00f);return (int)stages==failStage?-1:0;}
 static struct {int(*Run)(struct amdgpu_device*);}g_Stages[9]={{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run}};
 static int GpuMemCompleteGfxBootstrap(struct amdgpu_device*a){CHECK(a==&modelAdev&&stages==5);bootstrap++;if(failBootstrap)return -1;device->GfxTlbBootstrap=0;return 0;}
 /* ACTUAL_SOURCE */
@@ -66,7 +67,7 @@ static void setup(BC250_DEVICE*d,BC250_GFX*g,unsigned*wb){unsigned i;
  memset(d,0,sizeof(*d));memset(g,0,sizeof(*g));memset(&modelAdev,0,sizeof(modelAdev));
  device=d;d->Gfx=g;d->IhQuiet=d->MmioGfxEnabled=1;g->SetUp=g->FencePage=g->SdmaFencePage=g->PagingReady=1;g->StagesDone=8;
  g->FenceSeq=42;g->SubmitSeq=43;g->PagingSubmitSeq=44;g->FenceData[0]=43;g->FenceData[1]=44;
- for(i=0;i<16;i++)g->VmidRoot[i]=0xabc000+i;
+ for(i=0;i<16;i++){g->Vmid.Root[i]=0xabc000+i;g->Vmid.Order[i]=i+1;if(i){g->Vmid.FirstSeq[i]=g->Vmid.LastSeq[i]=g->Vmid.LiveSeq[i]=30+i;}}
  modelAdev.backend=d;modelAdev.gfx.wb_mem.cpu=wb;modelAdev.gfx.wb_mem.size=16;modelAdev.sdma.wb_mem.cpu=wb+4;modelAdev.sdma.wb_mem.size=16;
  memset(wb,0xaa,32);modelAdev.gfx.num_compute_rings=8;modelAdev.gfx.num_gfx_rings=1;modelAdev.sdma.num_instances=2;
  closed=opened=sdmaHalt=gfxHalt=resets=rlcStop=stages=bootstrap=clears=0;

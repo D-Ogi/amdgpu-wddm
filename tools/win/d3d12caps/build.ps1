@@ -6,17 +6,20 @@ param(
     # next to the executable, as a game that ships one does. 0 builds the plain variant without those exports.
     [ValidateRange(0, 100000)][int]$AgilitySdkVersion = 0,
     # d3d12caps: the capability dump; d3d12allocprobe: the probe of textures the driver cannot size (README.md).
-    [ValidateSet('d3d12caps', 'd3d12allocprobe')][string]$Tool = 'd3d12caps'
+    [ValidateSet('d3d12caps', 'd3d12allocprobe')][string]$Tool = 'd3d12caps',
+    # x86: a 32-bit build, which a WoW64 process runs, so that the dump shows what the UserModeDriverNameWow D3D12
+    # entry reports. Pass another -Out: the file name does not change.
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
-$sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
+$sdkLib = Join-Path $Kits "microsoft.windows.sdk.cpp.$Arch\c"
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+$cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 $dumpbin = Join-Path $msvc.FullName 'bin\Hostx64\x64\dumpbin.exe'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
@@ -45,7 +48,7 @@ $variant = @(); if ($AgilitySdkVersion) { $variant = @("/DCAPS_AGILITY_SDK_VERSI
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
     "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link',
-    "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
+    "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
     'version.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$|^\s*Creating library|\.exp$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }

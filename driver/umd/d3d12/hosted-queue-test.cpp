@@ -24,7 +24,7 @@ struct Fixture {
  unsigned creates{},destroys{},submits{},waits{},signals{},updates{};
  bool fail_submit{},reentrant{};
  Fixture():registry(device,reinterpret_cast<engine_ddi::DeviceContext*>(this),{make,execute,close,healthy,this}){
-  runtime[0]={this,reinterpret_cast<HANDLE>(UINT64_C(0x100000001))};runtime[1]={this,reinterpret_cast<HANDLE>(UINT64_C(0x200000002))};
+  runtime[0]={this,reinterpret_cast<HANDLE>(UINT_PTR{0x10000001})};runtime[1]={this,reinterpret_cast<HANDLE>(UINT_PTR{0x20000002})};
   device.runtime.handle=this;
   device.callbacks.pfnCreateContextVirtualCb=[](D3D12DDI_HRTCOMMANDQUEUE rt,D3DDDICB_CREATECONTEXTVIRTUAL* a)->HRESULT{
    auto r=static_cast<RuntimeQueue*>(rt.handle);assert(!r->live);r->live=true;++r->owner->creates;a->hContext=r->context;return S_OK;};

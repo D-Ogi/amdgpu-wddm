@@ -93,6 +93,10 @@ namespace AmdgpuWddmControl
                 w.AppendLine(string.Format("dpm: flags 0x{0:X} mode {1} requested {2} reason {3} throttle {4} max {5} cap {6} target {7} want {8} current {9} MHz {10} mV observed {11} MHz vid {12} temperature_mc {13} busy {14}/{15} permille thermal_events {16} errors {17} uptime_ms {18} generation {19}",
                     d.Flags, d.Mode, d.Requested, d.Reason, d.Throttle, d.MaxMHz, d.CapMHz, d.TargetMHz, d.WantMHz, d.CurrentMHz, d.CurrentMv,
                     d.ObservedMHz, d.ObservedVid, d.TemperatureMc, d.BusyPermille, d.BusyAvgPermille, d.ThermalEvents, d.Errors, d.UptimeMs, d.Generation));
+                // The SMU metrics table (RUN_DPM ABI 3, KMD 0.7.215); an older driver answers ABI 1 and has none.
+                if (d.AbiVersion != 3) w.AppendLine("smu metrics: n/a (RUN_DPM ABI " + d.AbiVersion + ")");
+                else w.AppendLine(string.Format("smu metrics: state {0} age_ms {1} fresh {2} socket_mw {3} socket_avg_mw {4} gfx_mw {5} soc_mw {6} gfx_mv {7} soc_mv {8}",
+                    d.MetricsState, d.MetricsAgeMs, d.Has(DpmState.FlagPower) ? 1 : 0, d.SocketPowerMw, d.SocketPowerAvgMw, d.GfxPowerMw, d.SocPowerMw, d.GfxMv, d.SocMv));
             }
             var hwmon = Kmd.Hwmon();
             if (hwmon.Value == null) w.AppendLine("fan: " + hwmon.Error + " (0x" + ((uint)hwmon.Status).ToString("X8") + ")");
@@ -109,6 +113,10 @@ namespace AmdgpuWddmControl
                     f.AgeMs, f.Samples, f.Errors, f.Retries, f.Generation, f.Engine, f.RpmValidMask, f.DutyValidMask,
                     f.Refusals));
             }
+            // The fan control: who ran the fan when the report was made, and why the driver last gave it back.
+            var fanCtl = Kmd.Fan();
+            w.AppendLine(fanCtl.Value == null ? "fan control: " + fanCtl.Error + " (0x" + ((uint)fanCtl.Status).ToString("X8") + ")"
+                : FanCurves.ReportLine(fanCtl.Value));
             var health = Kmd.StartHealth();
             w.AppendLine(health.Value == null ? "start health: " + health.Error :
                 string.Format("start health: flags 0x{0:X} generation {1} completed {2} ready_age_ms {3}", health.Value.Flags, health.Value.Generation, health.Value.Completed, health.Value.ReadyAgeMs));

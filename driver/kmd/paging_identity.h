@@ -36,10 +36,12 @@ static __inline void Bc250PjUpdateProcess(BC250_PAGING_JOURNAL_RECORD* Record, u
 
 // One GFX IB on the ring. Allocation is the submitting KMD context object as a value, never dereferenced: by
 // the time a dump is read the object may be freed, and the point is only to tell two contexts apart and to
-// match the line against the context's own CreateContext log.
+// match the line against the context's own CreateContext log. Valid is the VMID the IB ran at (KMD214; 0 in
+// records of earlier drivers, which ran every WDDM job at VMID 1).
 static __inline void Bc250PjGfxSubmit(BC250_PAGING_JOURNAL_RECORD* Record, unsigned long Seq, unsigned long Fence,
                                       unsigned long long Ib1, unsigned long long Root, unsigned long long Context,
-                                      unsigned long Node, unsigned long Process, unsigned long ContextFlags)
+                                      unsigned long Node, unsigned long Process, unsigned long ContextFlags,
+                                      unsigned long Vmid)
 {
     Record->Kind = BC250_PJ_GFX_SUBMIT;
     Record->Seq = Seq;
@@ -50,6 +52,7 @@ static __inline void Bc250PjGfxSubmit(BC250_PAGING_JOURNAL_RECORD* Record, unsig
     Record->Level = Node;
     Record->Index = Process;
     Record->Count = ContextFlags;
+    Record->Valid = Vmid;
 }
 
 #endif

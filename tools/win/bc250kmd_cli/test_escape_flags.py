@@ -12,7 +12,8 @@ NoAdapterSynchronization refusal; the CLI builds the request in one place and se
 
 From 0.7.213.1 the four escapes that had no gate here get one, as a table of what every operation admits and what it
 refuses (FlagContractTest): BC250_ESCAPE_RUN_HWMON (27), BC250_ESCAPE_RUN_DPM_CURVE (28), BC250_ESCAPE_RUN_CPU (29)
-and BC250_ESCAPE_RUN_START_HEALTH (21). The product rule behind the table: no shipped component sends HardwareAccess
+and BC250_ESCAPE_RUN_START_HEALTH (21). BC250_ESCAPE_RUN_FAN (30), the case fan control, has the plain software
+gate for every operation: its writes leave a request for the governor thread and touch no port. The product rule behind the table: no shipped component sends HardwareAccess
 on a repeating schedule, and no HardwareAccess escape holds the GPU scheduler across a registry flush. So
 RUN_START_HEALTH's CONFIRM and RUN_CPU's KEEP, which write the registry and touch no register, moved to
 NoAdapterSynchronization and keep their old word admitted for one release; RUN_CPU's other writes send mailbox
@@ -183,7 +184,11 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     inside an `if (abi2)` block - an unguarded one writes past the end of a 160-byte request, which is a kernel pool
     write out of bounds from an escape any caller may send. The CLI asks with ABI 2 and repeats with ABI 1, and
     prints the ABI 2 fields only when the answer carries them. Returns a list of sentences, empty when all of that
-    holds."""
+    holds.
+
+    KMD 0.7.215.1 adds ABI 3 (248 bytes: the ABI 2 structure and the SMU metrics tail). abi2 is also true for ABI 3,
+    which contains the ABI 2 fields, and the tail is touched only inside `if (abi3)` statements. The CLI asks with
+    ABI 3 first and falls back to ABI 2, then ABI 1; the export takes all three lengths."""
     found = []
     body = function_body(dpm_source, "DpmRequest")
     if body is None:
@@ -191,7 +196,9 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     if not re.search(r"expectedFlags\.NoAdapterSynchronization\s*=\s*1\s*;", body) or \
        not re.search(r"EscapeFlags\s*!=\s*expectedFlags\.Value\)\s*return\s*;", body):
         found.append("dpm.c: DpmRequest does not refuse every flag word but {NoAdapterSynchronization}")
-    if not re.search(r"abi2\s*=\s*abi\s*==\s*BC250_DPM_ABI\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM\)", body) or \
+    if not re.search(r"abi3\s*=\s*abi\s*==\s*BC250_DPM_ABI_3\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM_EX\)", body) or \
+       not re.search(r"abi2\s*=\s*\(abi\s*==\s*BC250_DPM_ABI\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM\)\)\s*\|\|\s*abi3\s*;",
+                     body) or \
        not re.search(r"abi1\s*=\s*abi\s*==\s*BC250_DPM_ABI_1\s*&&\s*Size\s*==\s*BC250_DPM_ABI1_SIZE", body) or \
        not re.search(r"if\s*\(\s*!\(abi1\s*\|\|\s*abi2\)", body):
         found.append("dpm.c: DpmRequest does not pair AbiVersion with the escape's size")
@@ -208,11 +215,20 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
         if not any(a <= m.start() < b for a, b in guarded):
             found.append(f"dpm.c: DpmRequest touches Data->{m.group(1)} outside an if (abi2) block")
             break
+    # The ABI 3 tail, through ex, only inside `if (abi3)`: a one-line statement or a block without nested braces.
+    tail = [m.span() for m in re.finditer(r"if\s*\(abi3\)\s*(\{[^{}]*\}|[^;{}]*;)", body)]
+    if not tail:
+        found.append("dpm.c: DpmRequest has no if (abi3) block")
+    for m in re.finditer(r"ex->Metrics", body):
+        if not any(a <= m.start() < b for a, b in tail):
+            found.append("dpm.c: DpmRequest touches ex->Metrics outside an if (abi3) block")
+            break
     dispatch = re.search(r"if\s*\(\s*data->Command\s*==\s*BC250_ESCAPE_RUN_DPM\s*\)\s*\{(.*?)\n    \}",
                          display_source, re.S)
     if not dispatch:
         found.append("display.c: no RUN_DPM dispatch")
-    elif not re.search(r"PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM\)\s*&&\s*"
+    elif not re.search(r"PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI3_SIZE\s*&&\s*"
+                       r"Escape->PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM\)\s*&&\s*"
                        r"Escape->PrivateDriverDataSize\s*!=\s*BC250_DPM_ABI1_SIZE\)", dispatch.group(1)) or \
             not re.search(r"DpmRequest\(device,[^;]*Escape->PrivateDriverDataSize,", dispatch.group(1)):
         found.append("display.c: RUN_DPM dispatch without the exact size check or without handing the size on")
@@ -221,16 +237,19 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     if query is None:
         found.append("bc250kmd_cli.c: DpmQuery not found")
     else:
-        if not re.search(r"size\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI\s*\?\s*\(unsigned\)sizeof\(\*d\)\s*:\s*"
+        if not re.search(r"size\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI_3\s*\?\s*\(unsigned\)sizeof\(\*x\)\s*:\s*"
+                         r"g_DpmAbi\s*==\s*BC250_DPM_ABI\s*\?\s*\(unsigned\)sizeof\(\*d\)\s*:\s*"
                          r"BC250_DPM_ABI1_SIZE\s*;", query) or \
-           not re.search(r"g_DpmAbi\s*=\s*BC250_DPM_ABI_1\s*;", query):
+           not re.search(r"g_DpmAbi\s*=\s*g_DpmAbi\s*==\s*BC250_DPM_ABI_3\s*\?\s*BC250_DPM_ABI\s*:\s*"
+                         r"BC250_DPM_ABI_1\s*;", query):
             found.append("bc250kmd_cli.c: DpmQuery does not send each ABI with its own size, or never falls back")
         if not re.search(r"SendEscapeFlags\(BC250_DEFAULT_HWID,\s*d,\s*size,\s*1,", query):
             found.append("bc250kmd_cli.c: DpmQuery does not send with NoAdapterSynchronization alone")
     idle = function_body(cli_source, "DpmPrintIdle")
     if idle is None:
         found.append("bc250kmd_cli.c: DpmPrintIdle not found")
-    elif not re.search(r"if\s*\(d->AbiVersion\s*!=\s*BC250_DPM_ABI\)\s*\{", idle):
+    elif not re.search(r"if\s*\(d->AbiVersion\s*!=\s*BC250_DPM_ABI\s*&&\s*d->AbiVersion\s*!=\s*BC250_DPM_ABI_3\)\s*\{",
+                       idle):
         found.append("bc250kmd_cli.c: DpmPrintIdle reads the ABI 2 fields without checking the answer's AbiVersion")
     # Bc250Dpm, the export bc250mon and the control application call through bc250control.dll. Its callers were
     # built against the ABI 1 layout and pass 160 bytes, so the ABI it asks with is the one its caller's length
@@ -240,9 +259,11 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
     if export is None:
         found.append("bc250kmd_cli.c: Bc250Dpm not found")
     else:
-        if not re.search(r"bytes\s*!=\s*BC250_DPM_ABI1_SIZE\s*&&\s*bytes\s*!=\s*sizeof\(\*data\)\)+\s*return", export):
-            found.append("bc250kmd_cli.c: Bc250Dpm does not admit exactly the ABI 1 prefix and the whole structure")
-        if not re.search(r"abi\s*=\s*bytes\s*==\s*BC250_DPM_ABI1_SIZE\s*\?\s*BC250_DPM_ABI_1\s*:\s*BC250_DPM_ABI\s*;", export):
+        if not re.search(r"bytes\s*!=\s*BC250_DPM_ABI1_SIZE\s*&&\s*bytes\s*!=\s*sizeof\(\*data\)\s*&&\s*"
+                         r"bytes\s*!=\s*BC250_DPM_ABI3_SIZE\)+\s*return", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not admit exactly the ABI 1 prefix, ABI 2 and ABI 3")
+        if not re.search(r"abi\s*=\s*bytes\s*==\s*BC250_DPM_ABI1_SIZE\s*\?\s*BC250_DPM_ABI_1\s*:\s*"
+                         r"bytes\s*==\s*BC250_DPM_ABI3_SIZE\s*\?\s*BC250_DPM_ABI_3\s*:\s*BC250_DPM_ABI\s*;", export):
             found.append("bc250kmd_cli.c: Bc250Dpm does not pair the caller's length with its AbiVersion")
         if not re.search(r"memset\(data,\s*0,\s*bytes\)\s*;", export) or \
            not re.search(r"TelemetryEscape\(data,\s*bytes\)\s*;", export):
@@ -285,18 +306,31 @@ class DpmRequestAbiTest(unittest.TestCase):
                              "Escape->PrivateDriverDataSize < BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;",
                              1), dpm, cli),
             # The CLI asking with ABI 2's size for an ABI 1 request.
-            (display, dpm, cli.replace("size = g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;",
-                                       "size = (unsigned)sizeof(*d);", 1)),
+            (display, dpm, cli.replace("g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;",
+                                       "(unsigned)sizeof(*d);", 1)),
             # The CLI printing the ABI 2 fields whatever the driver answered.
-            (display, dpm, cli.replace("    if (d->AbiVersion != BC250_DPM_ABI) {", "    if (0) {", 1)),
+            (display, dpm, cli.replace("    if (d->AbiVersion != BC250_DPM_ABI && d->AbiVersion != BC250_DPM_ABI_3) {",
+                                       "    if (0) {", 1)),
             # The export asking with ABI 2 for a 160-byte caller, which reads 32 bytes of its stack.
-            (display, dpm, cli.replace("    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : BC250_DPM_ABI;",
+            (display, dpm, cli.replace("    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : "
+                                       "bytes == BC250_DPM_ABI3_SIZE ? BC250_DPM_ABI_3 : BC250_DPM_ABI;",
                                        "    abi = BC250_DPM_ABI;", 1)),
+            # The ABI 3 tail written for every caller: 56 bytes past a 192-byte request.
+            (display, dpm.replace("    if (abi3) RtlZeroMemory(&ex->Metrics, sizeof(ex->Metrics));\n",
+                                  "    RtlZeroMemory(&ex->Metrics, sizeof(ex->Metrics));\n", 1), cli),
+            # ABI 3 admitted without its pairing to the 248-byte size.
+            (display, dpm.replace("abi == BC250_DPM_ABI_3 && Size == sizeof(BC250_ESCAPE_DPM_EX)",
+                                  "abi == BC250_DPM_ABI_3", 1), cli),
+            # The dispatch without the ABI 3 size: every ABI 3 caller refused.
+            (display.replace("Escape->PrivateDriverDataSize != BC250_DPM_ABI3_SIZE &&\n", "", 1), dpm, cli),
+            # The CLI never falling back from ABI 3, so a driver before 0.7.215 answers nothing.
+            (display, dpm, cli.replace("g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI : BC250_DPM_ABI_1;",
+                                       "g_DpmAbi = BC250_DPM_ABI_1;", 1)),
             # The export zeroing the whole structure in a 160-byte caller's buffer.
             (display, dpm, cli.replace("    memset(data, 0, bytes);", "    memset(data, 0, sizeof(*data));", 1)),
             # The export back to one size, which refuses every deployed caller.
-            (display, dpm, cli.replace("if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data)))",
-                                       "if (!data || bytes != sizeof(*data))", 1)),
+            (display, dpm, cli.replace("if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data) && "
+                                       "bytes != BC250_DPM_ABI3_SIZE))", "if (!data || bytes != sizeof(*data))", 1)),
             # A third request builder, outside both functions.
             (display, dpm, cli.replace("static void DpmPrint(const BC250_ESCAPE_DPM *d)",
                                        "static void DpmStray(BC250_ESCAPE_DPM *d)\n"
@@ -394,6 +428,7 @@ class EscapeFlagsTest(unittest.TestCase):
 START_HEALTH = os.path.join(HERE, "..", "..", "..", "driver", "kmd", "start_health.c")
 CPU = os.path.join(HERE, "..", "..", "..", "driver", "kmd", "cpu.c")
 HWMON = os.path.join(HERE, "..", "..", "..", "driver", "kmd", "hwmon.c")
+FAN = os.path.join(HERE, "..", "..", "..", "driver", "kmd", "fan.c")
 
 HARDWARE = 1        # D3DDDI_ESCAPEFLAGS.HardwareAccess
 NO_SYNC = 8         # D3DDDI_ESCAPEFLAGS.NoAdapterSynchronization
@@ -404,6 +439,7 @@ FLAG_WORDS = (0, 1, 2, 3, 4, 8, 9, 10, 12, 16, 24)
 # CONFIRM of RUN_START_HEALTH and KEEP of RUN_CPU write the registry and touch no register, so they take
 # NoAdapterSynchronization; both keep the HardwareAccess word of 0.7.212 admitted for one release, so that an
 # older CLI, DLL or overlay still works against this driver.
+FAN_OPS = ("READ", "BOARD", "CURVE", "FIXED", "RENEW")
 CPU_MAILBOX_OPS = ("READBACK", "SET", "CANCEL", "RESET", "CORES", "SEARCH_BEGIN", "SEARCH_STEP")
 FLAG_CONTRACT = {
     "BC250_ESCAPE_RUN_START_HEALTH": {"READ": {NO_SYNC}, "CONFIRM": {NO_SYNC, HARDWARE}},
@@ -411,6 +447,7 @@ FLAG_CONTRACT = {
     "BC250_ESCAPE_RUN_DPM_CURVE": dict.fromkeys(("READ", "SET", "KEEP", "CANCEL", "RESET"), {NO_SYNC}),
     "BC250_ESCAPE_RUN_CPU": dict({"READ": {NO_SYNC}, "KEEP": {NO_SYNC, HARDWARE}},
                                  **dict.fromkeys(CPU_MAILBOX_OPS, {HARDWARE})),
+    "BC250_ESCAPE_RUN_FAN": dict.fromkeys(FAN_OPS, {NO_SYNC}),
 }
 
 
@@ -463,9 +500,11 @@ def cpu_gate(body):
                 **dict.fromkeys(CPU_MAILBOX_OPS, {HARDWARE}))
 
 
-def driver_flag_contract(start_health_source, cpu_source, hwmon_source, dpm_source):
-    """What the four handlers admit, read out of their own gates: command -> operation -> flag words."""
+def driver_flag_contract(start_health_source, cpu_source, hwmon_source, dpm_source, fan_source=None):
+    """What the five handlers admit, read out of their own gates: command -> operation -> flag words."""
     curve_ops = FLAG_CONTRACT["BC250_ESCAPE_RUN_DPM_CURVE"].keys()
+    if fan_source is None:
+        fan_source = read(FAN)
     gates = {
         "BC250_ESCAPE_RUN_START_HEALTH": (start_health_source, "StartHealthRequest", start_health_gate),
         "BC250_ESCAPE_RUN_HWMON": (hwmon_source, "HwmonRequest",
@@ -473,6 +512,7 @@ def driver_flag_contract(start_health_source, cpu_source, hwmon_source, dpm_sour
         "BC250_ESCAPE_RUN_DPM_CURVE": (dpm_source, "DpmCurveRequest",
                                        lambda body: one_flag_word_gate(body, curve_ops)),
         "BC250_ESCAPE_RUN_CPU": (cpu_source, "CpuRequest", cpu_gate),
+        "BC250_ESCAPE_RUN_FAN": (fan_source, "FanRequest", lambda body: one_flag_word_gate(body, FAN_OPS)),
     }
     contract = {}
     for command, (source, name, gate) in gates.items():
@@ -544,7 +584,8 @@ def client_flag_problems(display_source, cli_source):
     for command, handler, size in (
             ("BC250_ESCAPE_RUN_START_HEALTH", "StartHealthRequest", "sizeof(BC250_ESCAPE_START_HEALTH)"),
             ("BC250_ESCAPE_RUN_HWMON", "HwmonRequest", "sizeof(BC250_ESCAPE_HWMON)"),
-            ("BC250_ESCAPE_RUN_DPM_CURVE", "DpmCurveRequest", "sizeof(BC250_ESCAPE_DPM_CURVE)")):
+            ("BC250_ESCAPE_RUN_DPM_CURVE", "DpmCurveRequest", "sizeof(BC250_ESCAPE_DPM_CURVE)"),
+            ("BC250_ESCAPE_RUN_FAN", "FanRequest", "sizeof(BC250_ESCAPE_FAN)")):
         at = re.search(r"==\s*" + command + r"\s*\)\s*\{(.*?)\n    \}", display_source, re.S)
         if not at:
             found.append(f"display.c: no {command} dispatch")
@@ -569,6 +610,7 @@ def client_flag_problems(display_source, cli_source):
         # function, the number of RUN_* builders expected in the whole file, the flag argument it must pass
         "Bc250StartHealth": (r"SendEscapeFlags\(BC250_DEFAULT_HWID,data,sizeof\(\*data\),1,", "BC250_ESCAPE_RUN_START_HEALTH", 1),
         "Bc250Hwmon": (r"TelemetryEscape\(data, sizeof\(\*data\)\)", "BC250_ESCAPE_RUN_HWMON", 1),
+        "Bc250Fan": (r"TelemetryEscape\(data, sizeof\(\*data\)\)", "BC250_ESCAPE_RUN_FAN", 1),
         "Bc250DpmCurve": (r"TelemetryEscape\(data, sizeof\(\*data\)\)", "BC250_ESCAPE_RUN_DPM_CURVE", 2),
         "CurveQuery": (r"SendEscapeFlags\(BC250_DEFAULT_HWID, c, sizeof\(\*c\), 1,", "BC250_ESCAPE_RUN_DPM_CURVE", 2),
         "Bc250Cpu": (r"TelemetryEscapeFlags\(data, sizeof\(\*data\),\s*op != BC250_CPU_OP_READ "
@@ -641,6 +683,18 @@ class FlagContractTest(unittest.TestCase):
                                              "op > BC250_DPM_CURVE_OP_RESET || Data->Reserved[0] || "
                                              "Data->Reserved[1])", 1)),
         ]
+        fan = read(FAN)
+        fan_mutations = [
+            # The fan control's requests admitted with HardwareAccess: each one would idle the GPU, for a request
+            # that only leaves a note for the governor thread.
+            fan.replace("expectedFlags.NoAdapterSynchronization = 1;", "expectedFlags.HardwareAccess = 1;", 1),
+            # Its gate dropped.
+            fan.replace("store > 1u || EscapeFlags != expectedFlags.Value) return;", "store > 1u) return;", 1),
+        ]
+        for i, mutant in enumerate(fan_mutations):
+            with self.subTest(fan_mutation=i):
+                self.assertNotEqual(mutant, fan, "mutation did not apply")
+                self.assertNotEqual(driver_flag_contract(health, cpu, hwmon, dpm, mutant), FLAG_CONTRACT)
         for i, sources in enumerate(gate_mutations):
             with self.subTest(gate_mutation=i):
                 self.assertNotEqual(sources, (health, cpu, hwmon, dpm), "mutation did not apply")
@@ -682,6 +736,15 @@ class FlagContractTest(unittest.TestCase):
                                   "static int StartHealth(int argc,wchar_t** argv)", 1)),
             # The hardware monitor dispatched behind the power-phase check, where a snapshot does not belong.
             (display.replace("command == BC250_ESCAPE_RUN_HWMON", "command == 0xFFFFFFFFu", 1), cli),
+            # The fan control's dispatch gone, or without its exact size check.
+            (display.replace("command == BC250_ESCAPE_RUN_FAN", "command == 0xFFFFFFFDu", 1), cli),
+            (display.replace("PrivateDriverDataSize != sizeof(BC250_ESCAPE_FAN)",
+                             "PrivateDriverDataSize < sizeof(BC250_ESCAPE_FAN)", 1), cli),
+            # A second place builds a fan request, which no flag rule would cover.
+            (display, cli.replace("static int FanControl(int argc, WCHAR **argv)",
+                                  "static void FanStray(BC250_ESCAPE_FAN *d)\n"
+                                  "{\n    d->Command = BC250_ESCAPE_RUN_FAN;\n}\n"
+                                  "static int FanControl(int argc, WCHAR **argv)", 1)),
             # RUN_CPU moved in front of the power-phase check, with its mailbox writes.
             (display.replace("data->Command == BC250_ESCAPE_RUN_CPU", "data->Command == 0xFFFFFFFEu", 1), cli),
         ]

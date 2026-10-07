@@ -16,7 +16,7 @@ typedef enum BC250_PROGRESS_SITE_ID {
     ProgressSitePagingDrain,            // WddmGpuFencePaging; Value: PAGING_DRAIN_EXIT
     ProgressSitePagingSubmit,           // GfxSubmitPaging; Value: sequence, 0 when refused
     ProgressSiteGfxSubmit,              // GfxSubmitIb, GartLock wait included; Value: sequence, 0 when refused
-    ProgressSiteVmFlush,                // bc250_gmc_set_vmid_pd in the graphics submit; Value: its result
+    ProgressSiteVmFlush,                // bc250_gmc_set_vmid_pd in the graphics submit; Input: the VMID; Value: its result
     ProgressSiteReportDpc,              // WddmReportDpcRoutine
     ProgressSiteSubmitWatchdogDpc,      // node 0's 500 ms deadline timer
     ProgressSitePagingWatchdogDpc,      // node 1's 500 ms deadline timer

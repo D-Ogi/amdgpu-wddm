@@ -5,7 +5,7 @@
 #include <cstdio>
 
 static HANDLE device=reinterpret_cast<HANDLE>(UINT_PTR(0x1234));
-static HANDLE queue=reinterpret_cast<HANDLE>(UINT_PTR(0x100002345ull));
+static HANDLE queue=reinterpret_cast<HANDLE>(UINT_PTR(0x10002345u));
 static std::array<D3DKMT_HANDLE,3> handles{7,9,11};
 static HRESULT make_status=S_OK,evict_status=S_OK;
 static UINT64 fence=42;

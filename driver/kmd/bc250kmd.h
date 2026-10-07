@@ -73,8 +73,11 @@
 #include "cumode.h"
 #include "dpm.h"
 #include "hwmon.h"
+#include "fan.h"
+#include "smu_metrics.h"
 #include "cpu.h"
 #include "interop.h"
+#include "dpaudio.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -119,6 +122,9 @@ C_ASSERT(FIELD_OFFSET(DXGK_NODEMETADATA, GpuMmuSupported) == 72);
 #define BC250_VRAM_PSP_BELOW    0x800000ull     // psp.c: TMR (4 MB, MC 0xF5FF800000, M34), staging, the ring pages
 #define BC250_VRAM_POOL_BELOW  0x2000000ull     // gpumem.c: the 24 MB pool for rings, MQDs and write-back slots
 #define BC250_VRAM_TOP_RESERVED BC250_VRAM_POOL_BELOW       // the whole reserved tail: the largest of the three
+// Inside the GART window above, between psp.c's three pages (end - 0x19000 .. end - 0x16000) and the last 64 KB
+// (the IP discovery table): one page the SMU writes its metrics table into (smu_metrics.c, 0.7.215).
+#define BC250_VRAM_SMU_TABLE_BELOW 0x14000ull
 
 // Breadcrumbs: the last value written survives a hang and a power cycle (guard.c). Append only: tools that
 // read them from the registry rely on the numbers. The list is mirrored in KmdStages.All
@@ -159,6 +165,9 @@ typedef struct _BC250_DEVICE {
     BC250_CPU_STATE Cpu;               // cpu.c: the CPU clock limit, undervolt, temperature cap and core mask
     BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     BC250_HWMON_OWNER Hwmon;           // hwmon.c: the board's own hardware monitor, read only, gated
+    BC250_FAN_OWNER Fan;               // fan.c: the case fan control, the one writer of the board's monitor chip
+    BC250_SMU_METRICS SmuMetrics;      // smu_metrics.c: the SMU metrics table, its page and its reader
+    BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -311,9 +320,10 @@ typedef struct _BC250_DEVICE {
     ULONG InterruptVector;
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
-    // KMD196: the wake of a held submission. gfx.c admits only jobs that share VMID 1's current root (the root
-    // is changed by CPU MMIO, which must not redirect a job still running), so a submission that arrives while
-    // another process's job is on the ring is refused with STATUS_DEVICE_BUSY and has to wait. It used to wait
+    // KMD196: the wake of a held submission. gfx.c never changes the root of a VMID whose job is still running
+    // (the root is changed by CPU MMIO, which must not redirect a job). With EnableVmidPool 0 every job runs at
+    // VMID 1, so a submission that arrives while another process's job is on the ring is refused with
+    // STATUS_DEVICE_BUSY and has to wait; with the pool (KMD214) it waits only when no VMID is free. It used to wait
     // by sleeping 1 ms at a time, which the clock tick rounds up: session 313 measured the game's packet
     // reaching the ring 1-2 ms after the DWM packet retired in 465 cases and 14-16 ms (the 15.6 ms default
     // tick) in 108, 3.1 ms of GFX idle per frame. Retirement signals this event instead, so the waiter wakes on
@@ -392,6 +402,31 @@ void HwmonStop(BC250_HWMON_OWNER* Owner);
 void HwmonSample(BC250_DEVICE* Device);                 // the governor thread, PASSIVE_LEVEL, once a second
 void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void HwmonRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_HWMON* Data, ULONG EscapeFlags);
+
+// fan.c
+struct _BC250_ESCAPE_FAN;
+void FanInitialize(BC250_DEVICE* Device);
+void FanStart(BC250_DEVICE* Device);
+void FanStop(BC250_DEVICE* Device, ULONG Reason);      // enum bc250_fan_reason; idempotent
+void FanPause(BC250_DEVICE* Device);
+void FanResume(BC250_DEVICE* Device);
+void FanResetDevice(BC250_DEVICE* Device);             // HIGH_LEVEL: port writes only
+void FanDriverUnload(void);
+void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid);    // the governor thread, after HwmonSample
+void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
+void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
+
+// smu_metrics.c: the SMU metrics table (0.7.215, docs/design/dpm.md "Power reading")
+void SmuMetricsInitialize(BC250_DEVICE* Device);        // AddDevice
+// StartDevice, after the SMU owner and VRAM are up and before DpmStart: reads EnableSmuMetrics and maps the page.
+// PASSIVE_LEVEL. Never fails the start and sends no message.
+void SmuMetricsStart(BC250_DEVICE* Device);
+// After DpmStop has joined the governor thread: unmaps the page. PASSIVE_LEVEL, idempotent.
+void SmuMetricsStop(BC250_DEVICE* Device);
+void SmuMetricsSample(BC250_DEVICE* Device);            // the governor thread, at most once a period
+// The ABI 3 tail of RUN_DPM from the published snapshot; TRUE when the reading is fresh (BC250_DPM_FLAG_POWER).
+BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out);
+void SmuMetricsLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 
 // interop.c
 struct _BC250_ESCAPE_INTEROP;
@@ -685,11 +720,13 @@ struct _BC250_ESCAPE_SDMACOPY;
 void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_SDMACOPY* Data);
 // ADR 0008 stage C: one indirect buffer on the gfx ring. The ring side of a submission lives here so that wddm.c
 // stays free of shim types, exactly as it is today.
-//   GfxSubmitIb      PASSIVE_LEVEL only; takes Device->GartLock. Programs VMID Vmid's page directory root if
-//                    RootPhysical differs from what that VMID was last given in this device start (Vmid 0 has no root
-//                    of its own and never programs one), then submits the IB with an interrupting fence and rings the
-//                    doorbell. It does NOT wait. One submission is in flight at a time: while the previous sequence
-//                    number has not arrived it answers STATUS_DEVICE_BUSY and writes nothing.
+//   GfxSubmitIb      PASSIVE_LEVEL only; takes Device->GartLock. Vmid is BC250_VMID_AUTO (vmid_pool.h) from the
+//                    WDDM path: gfx.c chooses the VMID, VMID 1 with EnableVmidPool 0, else one from the pool. An
+//                    explicit 0..15 is the IB_AT escape's. It programs the VMID's page directory root and invalidates
+//                    it (Vmid 0 has no root of its own and never programs one), then submits the IB with an
+//                    interrupting fence and rings the doorbell, and returns the VMID used in *VmidUsed. It does NOT
+//                    wait. It never changes the root of a VMID whose last job has not retired: when no VMID can take
+//                    RootPhysical now it answers STATUS_DEVICE_BUSY and writes nothing.
 //   GfxFenceArrived  DISPATCH_LEVEL: one read of the fence slot in GTT memory, no lock, no register. It also clears
 //                    the in-flight mark, so it is what lets the next submission through.
 //   GfxSubmitReady   whether a submission would be taken: stage 8 done, nothing failed, nothing in flight and the
@@ -709,7 +746,8 @@ typedef struct _BC250_GFX_SUBMIT_IDENTITY {
     ULONG Node;                 // the scheduler node it was submitted on
 } BC250_GFX_SUBMIT_IDENTITY;
 NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
-                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq);
+                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq,
+                     _Out_opt_ ULONG* VmidUsed);
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
@@ -717,6 +755,17 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);
+// KMD214, the VMID pool (docs/design/gfx-submit-root-serialization.md). GfxVmidReport logs who ran at Vmid now and
+// before it, with Who as the line's prefix: for a fault latch (ih.c) or a timeout (wddm.c). GfxVmidCounters is
+// the pool's state for the wddm summary. Both <= DISPATCH_LEVEL.
+typedef struct _BC250_GFX_VMID_COUNTERS {
+    BOOLEAN Gate;               // EnableVmidPool
+    USHORT Members;             // the pool, a VMID bit mask
+    USHORT Excluded;            // found programmed at bring-up
+    ULONG Claims, Reuses, Busy, RuleRefusals, Flushes, FlushVmids;
+} BC250_GFX_VMID_COUNTERS;
+void GfxVmidReport(_In_ const BC250_DEVICE* Device, _In_z_ const char* Who, ULONG Vmid);
+void GfxVmidCounters(_In_ const BC250_DEVICE* Device, _Out_ BC250_GFX_VMID_COUNTERS* Counters);
 
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. A
 // second, parallel channel to the four above, not a generalization of them: SubmitCommand (the paging buffer's
@@ -837,7 +886,8 @@ NTSTATUS GfxPagingBuildUpdate(_Inout_ BC250_DEVICE* Device,
                              _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
                              ULONG StartEntry, _Out_ ULONG* DwordsWritten, _Out_ ULONG* NextEntry,
                              _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
-NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONG Vmid,
+// Root: the root page table FLUSH_TLB names, resolved by VidMmRootPhysical, 0 when it does not resolve.
+NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONGLONG Root,
                             _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
                             _Out_ ULONG* DwordsWritten,
                             _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
@@ -888,7 +938,7 @@ void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULO
 void PagingJournalDestroy(ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONG Flags, ULONG Creator,
                           ULONG BlobVersion, ULONGLONG GemFlags);
 void PagingJournalGfxSubmit(ULONG Seq, ULONG Fence, ULONGLONG Ib1, ULONGLONG Root, ULONGLONG Context, ULONG Node,
-                            ULONG Process, ULONG ContextFlags);
+                            ULONG Process, ULONG ContextFlags, ULONG Vmid);
 void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence);
 void PagingJournalStampSeq(ULONG Fence, ULONG Seq);
 ULONG PagingJournalRead(ULONGLONG From, _Out_writes_to_(Max, return) struct _BC250_PAGING_JOURNAL_RECORD* Page, ULONG Max,
