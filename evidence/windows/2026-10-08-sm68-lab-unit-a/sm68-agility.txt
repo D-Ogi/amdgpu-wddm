@@ -1,0 +1,31 @@
+tool d3d12sm68 agility 619 path .\D3D12_0\
+tool headers D3D_HIGHEST_SHADER_MODEL 6_9
+blob sm67_quad 3368 bytes kind 5 model 6_7 ok
+blob sm68_wavesize 3552 bytes kind 5 model 6_8 ok
+blob sm68_samplecmpgrad 4000 bytes kind 5 model 6_8 ok
+adapter 0 "BC-250 GPU (amdgpu-wddm)" vendor 0x1002 device 0x13fe
+device D3D12CreateDevice hr 0x00000000 level 0xc100
+module d3d12.dll system32 6.2.22621.5415
+module D3D12Core.dll exe_dir 1.619.4.0
+module amdgpu_wddm_d3d12.dll other no-version
+shader_model asked 6_9 hr 0x00000000 answer 6_8
+shader_model highest 6_8
+options1 hr 0x00000000 WaveOps 1 WaveLaneCountMin 32 WaveLaneCountMax 64 TotalLaneCount 2560 Int64ShaderOps 1
+options9 hr 0x00000000 AtomicInt64OnTypedResourceSupported 1 AtomicInt64OnGroupSharedSupported 1 WaveMMATier 0
+options14 hr 0x00000000 AdvancedTextureOpsSupported 0 WriteableMSAATexturesSupported 0 IndependentFrontAndBackStencilRefMaskSupported 0
+options21 hr 0x00000000 WorkGraphsTier 0 ExecuteIndirectTier 10 SampleCmpGradientAndBiasSupported 1 ExtendedCommandInfoSupported 1
+test sm67_quad pipeline hr 0x00000000
+test sm67_quad submit hr 0x00000000
+test sm67_quad words 128 mismatches 0 first -1 (0x00000000)
+test sm67_quad PASS
+test sm68_wavesize pipeline hr 0x00000000
+test sm68_wavesize submit hr 0x00000000
+test sm68_wavesize lanes 64 (range 32-64, device 32-64) words 128 mismatches 0 first -1 (0x00000000)
+test sm68_wavesize PASS
+test sm68_samplecmpgrad texture hr 0x00000000
+test sm68_samplecmpgrad pipeline hr 0x00000000
+test sm68_samplecmpgrad submit hr 0x00000000
+test sm68_samplecmpgrad words 16 mismatches 0 first -1 (0x00000000)
+test sm68_samplecmpgrad PASS
+device GetDeviceRemovedReason 0x00000000
+result PASS highest 6_8 expect 6_8 tests 3 failed 0

@@ -746,3 +746,12 @@ facts:
     evidence: "[Shader model 6.7 and 6.8 runtime map](../evidence/windows/2026-10-08-sm68-runtime-shader-model-map/README.md)"
     edges:
       - {"type": "uses", "to": "M758"}
+  - id: M841
+    status: MEASURED
+    date: "2026-10-08"
+    claim: "On unit A (kernel driver 0.7.216.20, D3D12 shell 306AF1D2 of branch m15/shader-model-68) d3d12sm68 on the System32 runtime 10.0.22621.5415 reports highest shader model 6_6, and the same client with The Witcher 3's Agility core 1.619.4 reports 6_8 and runs the QuadAny/QuadAll (6.7), WaveSize (6.8, 64 lanes) and SampleCmpGrad (6.8) compute tests with exact readback; with the switch shader-model-68-off the 1.619.4 client reports 6_7 and its 6.7 test is exact"
+    status_text: "MEASURED (unit A, one run per arm)"
+    detail: "Confirms on our driver the M840 inference that the 1.619.4 core maps 0x60085 to 6_8. OPTIONS21 in the 6_8 run: SampleCmpGradientAndBias 1, ExtendedCommandInfo 1. GetDeviceRemovedReason 0 after every run. The shell was swapped in only for the runs; the lab shell after them is BBB5803E again. Not shown: a game on 6.8"
+    evidence: "[d3d12sm68 on unit A](../evidence/windows/2026-10-08-sm68-lab-unit-a/README.md)"
+    edges:
+      - {"type": "uses", "to": "M840"}
