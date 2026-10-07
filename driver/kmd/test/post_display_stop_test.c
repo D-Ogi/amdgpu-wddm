@@ -76,6 +76,10 @@ static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   
 static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardStage(int s){(void)s;}
 static void GuardLogKeep(void){}
+/* One kept log file per device stop (0.7.216.10), named before any teardown, so that the stop's own lines land in it. */
+static unsigned stopEpisodes;
+static void GuardLogKeepEpisode(const wchar_t*label)
+{CHECK(wcscmp(label,L"stop")==0);CHECK(model.smu==0 && model.restores==0);stopEpisodes++;}
 static unsigned dpmStops;
 static int cpuStopped;          /* within one scenario: CpuStop ran; init clears it */
 /* KMD175: the DPM governor puts the floor back while the SMU owner is still online, before any teardown. */
@@ -156,5 +160,6 @@ int main(void)
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,D3DDDI_ID_UNINITIALIZED,&info)==STATUS_SUCCESS);
     CHECK(model.joined==0 && model.restores==1 && model.vidmm==0 && info.TargetId==BC250_CHILD_UID);
     CHECK(retireSignals==0);   /* no WDDM state, no held submission to wake */
+    CHECK(stopEpisodes==4);    /* one per stop, and the post-display stop goes through the ordinary one */
     printf("post display stop: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
