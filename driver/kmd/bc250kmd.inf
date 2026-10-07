@@ -190,6 +190,13 @@ HKR, Parameters, EnableVmidPool,     0x00010001, 1
 ; feature; EnableDpAudioEndpoint 0 does the same for step 1 alone.
 HKR, Parameters, EnableDpAudio,      0x00010001, 1
 HKR, Parameters, EnableDpAudioEndpoint, 0x00010001, 1
+; The SMU metrics table (smu_metrics.c, docs/design/dpm.md "Power reading"). 1 lets the DPM governor thread ask the
+; SMU for its metrics table once a second, through the one SMU owner, into one driver page at the top of VRAM: the
+; package power, the two rail voltages and the table's own clock and temperatures, for RUN_DPM ABI 3 and the control
+; application's Power row. These are the three messages amdgpu sends on unit A (SetDriverTableDramAddrHigh and Low
+; once per start, TransferTableSmu2Dram with table 6). A refusal or a timeout stops the reads until the next boot,
+; and the governor runs on. 0 means no metrics message is sent and no page is mapped, the behaviour before this feature.
+HKR, Parameters, EnableSmuMetrics,   0x00010001, 1
 
 [Strings]
 Provider    = "amdgpu-wddm"

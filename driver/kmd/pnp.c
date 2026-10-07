@@ -13,6 +13,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     StartHealthInitialize(device);
     CuModeInitialize(device);
     DpmInitialize(device);
+    SmuMetricsInitialize(device);
     CpuInitialize(device);
     InteropInitialize(device);
     SmuOwnerInitialize(&device->Smu);
@@ -37,6 +38,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
     CpuStop(device);        // before DpmStop: a trial's revert still needs the mailbox and the governor's busy share
     DpmStop(device);        // idempotent, like the detector: its thread runs this image's code
+    SmuMetricsStop(device); // after DpmStop: the governor thread was the one reading the page
     FanStop(device, BC250_FAN_REASON_STOP);    // idempotent; the fan goes back to the board before the memory does
     StartHealthRemove(device);
     InteropRemove(device);  // the power callback must not find the device once its memory goes
@@ -150,6 +152,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // Before the governor, whose thread runs its step, and after the last point where the start can fail: it arms a
     // watchdog and a bugcheck callback. Never fails the start (fan.c).
     FanStart(device);
+    // Before the governor, whose thread reads the table: the page and the gate (smu_metrics.c). Sends nothing.
+    SmuMetricsStart(device);
     // After it: the governor starts from the floor the start set, and never fails the start (dpm.c).
     DpmStart(device);
     // After the governor: the CPU surface reads its settings and, if CpuTune is 1, starts its worker (cpu.c).
@@ -174,6 +178,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->InheritedSignalValid=FALSE;
     CpuStop(device);        // first: a trial's revert needs the mailbox, which SmuOwnerStop below takes away
     DpmStop(device);        // the floor while the owner is still online, then no governor tick
+    SmuMetricsStop(device); // after DpmStop: no tick reads the page any more
     FanStop(device, BC250_FAN_REASON_STOP);    // after DpmStop (no step runs), before HwmonStop: the fan to the board
     HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
     DpAudioStop(device);        // before WddmStop/DcnStop, with BAR5 mapped: the next owner inherits AUDIO_ENABLED 0
@@ -398,6 +403,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         StartHealthClose(device);
         CpuStop(device);
         DpmStop(device);
+        SmuMetricsStop(device);
         FanStop(device, BC250_FAN_REASON_POWER);
         DpAudioStop(device);    // like the governor: stopped here, started again only by the next start
         SmuOwnerStop(&device->Smu);

@@ -74,6 +74,7 @@
 #include "dpm.h"
 #include "hwmon.h"
 #include "fan.h"
+#include "smu_metrics.h"
 #include "cpu.h"
 #include "interop.h"
 #include "dpaudio.h"
@@ -121,6 +122,9 @@ C_ASSERT(FIELD_OFFSET(DXGK_NODEMETADATA, GpuMmuSupported) == 72);
 #define BC250_VRAM_PSP_BELOW    0x800000ull     // psp.c: TMR (4 MB, MC 0xF5FF800000, M34), staging, the ring pages
 #define BC250_VRAM_POOL_BELOW  0x2000000ull     // gpumem.c: the 24 MB pool for rings, MQDs and write-back slots
 #define BC250_VRAM_TOP_RESERVED BC250_VRAM_POOL_BELOW       // the whole reserved tail: the largest of the three
+// Inside the GART window above, between psp.c's three pages (end - 0x19000 .. end - 0x16000) and the last 64 KB
+// (the IP discovery table): one page the SMU writes its metrics table into (smu_metrics.c, 0.7.215).
+#define BC250_VRAM_SMU_TABLE_BELOW 0x14000ull
 
 // Breadcrumbs: the last value written survives a hang and a power cycle (guard.c). Append only: tools that
 // read them from the registry rely on the numbers. The list is mirrored in KmdStages.All
@@ -162,6 +166,7 @@ typedef struct _BC250_DEVICE {
     BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     BC250_HWMON_OWNER Hwmon;           // hwmon.c: the board's own hardware monitor, read only, gated
     BC250_FAN_OWNER Fan;               // fan.c: the case fan control, the one writer of the board's monitor chip
+    BC250_SMU_METRICS SmuMetrics;      // smu_metrics.c: the SMU metrics table, its page and its reader
     BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
@@ -410,6 +415,18 @@ void FanDriverUnload(void);
 void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid);    // the governor thread, after HwmonSample
 void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
+
+// smu_metrics.c: the SMU metrics table (0.7.215, docs/design/dpm.md "Power reading")
+void SmuMetricsInitialize(BC250_DEVICE* Device);        // AddDevice
+// StartDevice, after the SMU owner and VRAM are up and before DpmStart: reads EnableSmuMetrics and maps the page.
+// PASSIVE_LEVEL. Never fails the start and sends no message.
+void SmuMetricsStart(BC250_DEVICE* Device);
+// After DpmStop has joined the governor thread: unmaps the page. PASSIVE_LEVEL, idempotent.
+void SmuMetricsStop(BC250_DEVICE* Device);
+void SmuMetricsSample(BC250_DEVICE* Device);            // the governor thread, at most once a period
+// The ABI 3 tail of RUN_DPM from the published snapshot; TRUE when the reading is fresh (BC250_DPM_FLAG_POWER).
+BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out);
+void SmuMetricsLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 
 // interop.c
 struct _BC250_ESCAPE_INTEROP;

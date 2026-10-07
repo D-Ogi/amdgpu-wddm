@@ -132,6 +132,48 @@ static int CpuDomainMessage(BC250_SMU_OWNER* owner,unsigned queue,unsigned messa
     return result;
 }
 
+// ---- the SMU metrics table (0.7.215) --------------------------------------------------------------------------
+// One message of the metrics path, with the owner lock already held. Its own list and nothing else: the clock list
+// refuses all three numbers, and this list refuses every clock and CPU message. The arguments are fixed by the
+// page the caller names, so no caller can steer the firmware's DMA anywhere but that page.
+static int MetricsMessage(BC250_SMU_OWNER* owner,unsigned message,unsigned parameter,ULONGLONG tableMc)
+{
+    struct bc250_smu_report report;
+    if(!bc250_smu_metrics_message_allowed(message,parameter,tableMc))return -22;
+    return bc250_smu_message_locked(&owner->Transport,message,parameter,&report);
+}
+
+int SmuReadMetrics(BC250_SMU_OWNER* owner,ULONGLONG tableMc,volatile ULONG* table,UCHAR* copy,ULONG length)
+{
+    int result;
+    ULONG i,word;
+    if(!table || !copy || !length || (length&3u) || length>BC250_SMU_METRICS_PAGE)return -22;
+    result=OwnerBegin(owner);
+    if(result)return result==-19?BC250_SMU_METRICS_OFFLINE:result;
+    if(owner->MetricsTableMc!=tableMc) {
+        // Once per owner start, in amdgpu's order (smu_v11_0_set_driver_table_location): high half, then low half.
+        // A failure of either leaves the address unnamed, so nothing below asks the firmware to write anywhere.
+        owner->MetricsTableMc=0;
+        result=MetricsMessage(owner,BC250_SMU_METRICS_MSG_ADDR_HIGH,(unsigned)(tableMc>>32),tableMc);
+        if(!result)result=MetricsMessage(owner,BC250_SMU_METRICS_MSG_ADDR_LOW,(unsigned)tableMc,tableMc);
+        if(!result)owner->MetricsTableMc=tableMc;
+    }
+    if(!result) {
+        // The poison first: a field the firmware did not write reads as all ones, and the decode refuses it.
+        // Uncached dword stores and loads; x86 keeps them in order with the mailbox writes and reads around them.
+        for(i=0;i<length/4u;i++)table[i]=0xFFFFFFFFu;
+        result=MetricsMessage(owner,BC250_SMU_METRICS_MSG_TRANSFER,BC250_SMU_METRICS_TABLE_ID,tableMc);
+        if(!result)
+            for(i=0;i<length/4u;i++) {
+                word=table[i];
+                copy[4u*i]=(UCHAR)word;copy[4u*i+1u]=(UCHAR)(word>>8);
+                copy[4u*i+2u]=(UCHAR)(word>>16);copy[4u*i+3u]=(UCHAR)(word>>24);
+            }
+    }
+    OwnerEnd(owner);
+    return result;
+}
+
 BOOLEAN SmuCpuBegin(BC250_SMU_OWNER* owner)
 {
     return InterlockedCompareExchange(&owner->CpuBusy,1,0)==0;
@@ -207,6 +249,7 @@ NTSTATUS SmuOwnerStart(BC250_SMU_OWNER* owner,volatile ULONG* registers)
     if(!result) {
         unsigned version=0;
         owner->Registers=registers;owner->Online=TRUE;
+        owner->MetricsTableMc=0;    // a new owner start names the metrics page again before its first transfer
         owner->Caller=PsGetCurrentThread();
         // The BIOS owns this image. Query once per owner start, through the
         // same transport/lock as clock control (smu_cmn_get_smc_version).

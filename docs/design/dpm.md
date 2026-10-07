@@ -51,10 +51,51 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 
 ## SMU allowlist
 
-`smu.c` refuses every message except GetSmuVersion (0x2), RequestGfxclk (0xE), GetGfxFrequency (0x37),
+`smu.c` refuses every clock message except GetSmuVersion (0x2), RequestGfxclk (0xE), GetGfxFrequency (0x37),
 GetGfxVid (0x38) and ForceGfxVid (0x3B) before it touches the mailbox. UnforceGfxVid is left out on purpose: the
-firmware's own voltage choice at 2000 MHz is unmeasured. TransferTableSmu2Dram is left out too, so there is no
-power readout (it needs the metrics table and a DMA buffer); the plug telemetry covers whole-lab power.
+firmware's own voltage choice at 2000 MHz is unmeasured. From 0.7.215 the metrics table has a list of its own,
+`bc250_smu_metrics_message_allowed`: SetDriverTableDramAddrHigh (0x4), SetDriverTableDramAddrLow (0x5) and
+TransferTableSmu2Dram (0x6), each with the one argument that names the driver's own page or table 6. The clock list
+admits none of the three, and the metrics list admits no clock message. See "Power reading" below.
+
+## Power reading (0.7.215)
+
+The SMU keeps a metrics table, and amdgpu reads it for hwmon `power1_input`, `pp_dpm_sclk` and `gpu_metrics`. On
+unit A that is the only SMU traffic of a loaded Linux session: TransferTableSmu2Dram with table 6, 61 times in 20 s,
+with `power1_input` at 58-62 W ([M90](../facts/linux.md#m90)). The KMD now reads the same table, so the control
+application and `bc250kmd_cli dpm` show the package power.
+
+| Item | Value | Source |
+|---|---|---|
+| Messages | 0x4 and 0x5 (the page's MC address, high half first), then 0x6 with argument 6 | `driver/amdgpu-import/smu_v11_8_ppsmc.h`; Linux v6.18 `smu_v11_0_set_driver_table_location`, `smu_cmn_update_table` |
+| Seen on unit A | amdgpu sends 0x4 (`0xF4`), 0x5 (`0x8CF000`) and 0x6 at every init | `init-sequence.md` (E03) |
+| Table | `SmuMetrics_t`: `Current` and `Average` (116 bytes each), then three counters; 244 bytes; driver interface 0x8 | Linux v6.18 `smu11_driver_if_cyan_skillfish.h` (AMD, MIT) |
+| Fields read | `CurrentSocketPower` (mW, offset 104), `Power[2]` (96), `Voltage[2]` (80), `GfxclkFrequency` (68), `GfxTemperature` (70), `SocTemperature` (108), `ThrottlerStatus` (112); `Average.CurrentSocketPower` (220) | the same header; `cyan_skillfish_ppt.c` reads the same fields |
+
+How it runs (`driver/shim/bc250_smu_metrics.c` for the rules, `driver/kmd/smu.c` `SmuReadMetrics` for the
+messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
+
+- The page is one 4 KB page of the carve-out at `end - 0x14000` (`BC250_VRAM_SMU_TABLE_BELOW`). It is in the top
+  2 MB, which Windows' memory segment never covers, between the PSP's three pages and the last 64 KB. The KMD maps it
+  uncached for the start. The list admits only a page-aligned address in that window.
+- The governor thread reads the table at most once a second, after the tick's own SMU traffic. The first read waits
+  one second after the start. The escape never sends a message: it copies the published snapshot.
+- Each read fills the page with `0xFF` first. A table that still holds `0xFF` in a field the firmware always writes,
+  or holds a value over 400 W, 2 V or 150 C, is refused. Three refused tables in a row stop the reads for this start.
+- Every message is the transport's bounded poll (20 ms). A refusal or a timeout stops the reads for the rest of the
+  boot (a latch in the driver image), and the governor runs on as before. An owner that is offline (a power
+  transition) costs nothing: the next second tries again. After each owner start the address goes out again before
+  the first transfer.
+- `EnableSmuMetrics` (REG_DWORD, default 1 in the INF and the installer): 0 sends no metrics message and maps no page.
+- RUN_DPM ABI 3 (248 bytes) carries the values. `BC250_DPM_FLAG_POWER` is set only for a table at most three
+  seconds old. Without it the application shows "No reading", never an older value.
+- What the figure is: the SMU's own estimate for the whole package, processor and graphics together. The board, the
+  memory chips, the fan and the losses of the supply are not in it, so it reads well under the smart plug.
+
+A third-party manual (`cachenetics/project-ariel`, no log) says queue 0 message 0x4 hangs the SMU until AC is
+removed. amdgpu sends 0x4 with its own table address at every Linux start of unit A (E03), and the list admits 0x4
+only with the address of our own page. The first lab start of 0.7.215 is the first time this driver sends it: run
+it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
 
 ## Governor (`driver/shim/bc250_dpm.c`, pure; `driver/kmd/dpm.c`, the thread)
 
@@ -112,7 +153,8 @@ What stands: the accounting is the KMD's view, open from the ring write until a 
 SDMA; the GRBM samples are the engine's own. Every telemetry sample carries both (busy from GRBM, submit share),
 so the next game trial compares them in the world. If both read well under 90 % there, the clock is not the limit
 and the governor rightly stays low. SMU metrics are not an alternative: amdgpu reads only the metrics table on this
-part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
+part and reports no GPU busy percentage (M90). The KMD reads that table from 0.7.215 for power alone ("Power
+reading" above).
 
 Same sensor as temp.py (M23). At 87 C or more the cap drops to one level under the current clock, then one more
 level every hot step (500 ms by default) while it stays hot. The step starts at the lab floor when the clock is
@@ -672,6 +714,12 @@ that the machine does not survive costs the curve and not the machine, and the d
   these fields and `BC250_DPM_FLAG_IDLE` says the clock is at the idle point now. The driver still answers the
   160-byte ABI 1 request, and the CLI repeats with ABI 1 when a driver before 0.7.207 refuses ABI 2. A CLI built
   before 0.7.207 shows throttle 10 as `?`.
+- From 0.7.215 the CLI asks with RUN_DPM ABI 3 (248 bytes) first, then ABI 2, then ABI 1. The header gets one
+  `smu metrics:` line (state, tables, failures, and the table's own voltages, clock and temperatures), and every
+  sample line ends with `power 78.0 W avg 77.4 W (gfx 48.0 W soc 21.0 W)` from a fresh table, `power ?` without one,
+  or `power n/a` from a driver before 0.7.215. `bc250kmd_cli telemetry` adds `power_w` and `power_avg_w` to its
+  `dpm` line when the table is fresh. The driver log gets two `smu metrics:` lines next to each telemetry line and in
+  the summary.
 - The driver log (`bc250kmd_cli log`) gets every transition, a telemetry line every 5 s and a line in the summary.
   From 0.7.200 these lines show `warm N` after `thermal N`: N is the number of governor ticks in which the warm zone
   stopped a raise. The `RUN_DPM` escape does not carry this counter. A CLI built before 0.7.200 shows throttle 8 as
