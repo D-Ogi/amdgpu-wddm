@@ -59,6 +59,7 @@ flowchart LR
   M837["M837"]
   M838["M838"]
   M839["M839"]
+  M840["M840"]
   M804 --> M801
   M576 --> M575
   M723 --> M697
@@ -82,6 +83,7 @@ flowchart LR
   M838 --> M837
   M839 --> M758
   M839 --> M837
+  M840 --> M758
   M553 --> M546
   classDef other stroke-dasharray:4 3
   class M46,M553,M569,M571,M576,M585,M723,M804 other

@@ -737,3 +737,12 @@ facts:
       - {"type": "uses", "to": "M758"}
       - {"type": "uses", "to": "M837"}
       - {"type": "refutes", "to": "M838", "scope": "partial"}
+  - id: M840
+    status: MEASURED
+    date: "2026-10-08"
+    claim: "Which D3D12 runtime takes shader model 6.7 or 6.8 from a driver that negotiates DDI build 0092. Unit A's System32 runtime (D3D12Core.dll 10.0.22621.5415) maps the release values of 6_0 to 6_6 and the experimental 6_7 value 0x60070 in ConvertShaderModelFromDDI; it maps the release values of 6_7 (0x60075) and 6_8 (0x60085) to 5_1, so an application on it sees at most 6.6 whatever the driver lists in type 1012. Runtime 10.0.26100.9278 and the Agility SDK core 1.615.1 map 0x60075 to 6_7 and 0x60085 to 6_8, clamp the highest listed value to 6_8 and do not check the negotiated build; 26100 asks type 1091 (SHADER_MODEL_6_8_OPTIONS_0110) when the reported model is 6_8 or higher. The shell of branch m15/shader-model-68 lists every release model up to min(engine, 6_8) and answers 1091 from the engine's OPTIONS21"
+    status_text: "MEASURED (static reading of four runtime cores with public symbols; d3d12sm68 on the development PC; not on unit A)"
+    detail: "The 1.619.4 core of The Witcher 3 5.0 has no public PDB: it contains 0x60085 twice in its code and reports 6_9 for the NVIDIA driver on the development PC, so that it maps 6_8 for our shell is an INFERENCE. d3d12sm68 on the development PC (RTX 4090): inbox runtime 26100 highest 6_8, Agility 619 highest 6_9, the QuadAny/QuadAll (6.7), WaveSize(32,64) (6.8) and SampleCmpGrad (6.8) compute tests exact. engine-ddi caps-test: 1012 and 1091 for engines at 6_5 to 6_9, the ceilings of the switches shader-model-68-off (6_7) and shader-model-67-off (6_6), and refused engine answers. Not shown: a run on unit A, a game on 6.8"
+    evidence: "[Shader model 6.7 and 6.8 runtime map](../evidence/windows/2026-10-08-sm68-runtime-shader-model-map/README.md)"
+    edges:
+      - {"type": "uses", "to": "M758"}
