@@ -26,7 +26,7 @@ typedef const wchar_t* PCWSTR;
 #define StageStartEnter 30u
 #define StageStartGuardPassed 31u
 #define StageRefusedByGuard 90u
-typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed;} BC250_DEVICE;
+typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone;} BC250_DEVICE;
 typedef void* PDXGK_START_INFO;
 typedef void* PDXGKRNL_INTERFACE;
 static ULONG settingGate,cached,durable;
@@ -44,7 +44,15 @@ static NTSTATUS ZwFlushKey(HANDLE key){(void)key;flushes++;if(NT_SUCCESS(flushSt
 static void ZwClose(HANDLE key){(void)key;closes++;}
 static void GuardLog(const char* format,...){logs++;strcpy_s(lastLog,sizeof(lastLog),format);}
 static void GuardStage(ULONG stage){if(stage==StageStartGuardPassed)admissions++;}
+/* BD-090: the volatile GuardBoot key, which a reboot drops. */
+static ULONG bootMark;
+static NTSTATUS volatileStatus;
+static NTSTATUS GuardVolatileQuery(PCWSTR k,PCWSTR n,ULONG* v)
+{(void)n;*v=0;if(wcscmp(k,L"GuardBoot"))return STATUS_ACCESS_DENIED;if(!bootMark)return STATUS_OBJECT_NAME_NOT_FOUND;*v=bootMark;return volatileStatus;}
+static NTSTATUS GuardVolatileStore(PCWSTR k,PCWSTR n,ULONG v){(void)n;if(wcscmp(k,L"GuardBoot"))return STATUS_ACCESS_DENIED;if(NT_SUCCESS(volatileStatus))bootMark=v;return volatileStatus;}
+static BOOLEAN g_StartCounted;
 #include "guard_actual.inc"
+#include "release_actual.inc"
 #include "gate_actual.inc"
 // The start bookkeeping after the guard (start_health.c, cumode.c) is not what this test is about.
 static void StartHealthBegin(BC250_DEVICE* d,BOOLEAN full){(void)d;(void)full;}
@@ -52,7 +60,10 @@ static void CuModeBegin(BC250_DEVICE* d){(void)d;}
 #include "pnp_actual.inc"
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)
-{settingGate=cached=durable=0;openStatus=readStatus=writeStatus=flushStatus=0;opens=writes=flushes=closes=admissions=logs=0;g_FullWddm=FALSE;lastLog[0]=0;}
+{settingGate=cached=durable=0;openStatus=readStatus=writeStatus=flushStatus=0;opens=writes=flushes=closes=admissions=logs=0;g_FullWddm=FALSE;lastLog[0]=0;
+ bootMark=0;volatileStatus=0;g_StartCounted=FALSE;}
+/* The confirmation GuardConfirmStartDurable performs after its durable zero (start_health.c's CONFIRM). */
+static void Confirm(void){cached=durable=0;GuardStartConfirmed();}
 static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;NTSTATUS s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);return s;}
 int main(void)
 {
@@ -87,6 +98,37 @@ int main(void)
     Reset();writeStatus=STATUS_ACCESS_DENIED;CHECK(Start()==STATUS_SUCCESS&&admissions==1);
     Reset();flushStatus=STATUS_REGISTRY_IO_FAILED;CHECK(Start()==STATUS_SUCCESS&&admissions==1);
     Reset();cached=2;CHECK(Start()==STATUS_DEVICE_CONFIGURATION_ERROR&&admissions==0);
+
+    /* BD-090 (b21 v2-restart): boot start confirmed at logon, then three runtime restarts in the same boot. Each
+       orderly stop gives its own count back, so none is refused, and the count never goes below zero. */
+    Reset();settingGate=2;CHECK(WddmGateOpen());
+    CHECK(Start()==STATUS_SUCCESS&&durable==1&&g_StartCounted);
+    Confirm();CHECK(bootMark==1&&!g_StartCounted);
+    GuardReleaseStart();CHECK(durable==0); /* the confirmed boot start: nothing to give back */
+    {int i;for(i=0;i<3;i++){CHECK(Start()==STATUS_SUCCESS&&durable==1);GuardReleaseStart();CHECK(durable==0&&cached==0&&!g_StartCounted);}}
+    CHECK(admissions==4);
+    /* A second release of one start gives back nothing more. */
+    cached=durable=1;GuardReleaseStart();CHECK(durable==1);
+    /* A boot never confirmed (the volatile mark is gone after a reboot): the count stays, the third start is refused. */
+    Reset();settingGate=2;CHECK(WddmGateOpen());
+    CHECK(Start()==STATUS_SUCCESS);GuardReleaseStart();CHECK(durable==1);
+    CHECK(Start()==STATUS_SUCCESS);GuardReleaseStart();CHECK(durable==2);
+    CHECK(Start()==STATUS_DEVICE_CONFIGURATION_ERROR&&admissions==2&&!g_StartCounted);
+    /* A crash in a confirmed boot never reaches the stop; the reboot drops the mark: the boot-loop budget holds. */
+    Reset();settingGate=2;CHECK(WddmGateOpen());
+    CHECK(Start()==STATUS_SUCCESS);Confirm();CHECK(Start()==STATUS_SUCCESS&&durable==1);
+    bootMark=0;g_StartCounted=FALSE;                       /* crash and reboot: image and volatile key gone */
+    CHECK(Start()==STATUS_SUCCESS&&durable==2);GuardReleaseStart();CHECK(durable==2);
+    CHECK(Start()==STATUS_DEVICE_CONFIGURATION_ERROR);
+    /* A count whose flush failed was not counted: nothing to give back even in a confirmed boot. */
+    Reset();bootMark=1;flushStatus=STATUS_REGISTRY_IO_FAILED;
+    CHECK(Start()==STATUS_SUCCESS&&!g_StartCounted);       /* display-only keeps its recovery policy */
+    flushStatus=0;cached=durable=1;GuardReleaseStart();CHECK(durable==1);
+    /* The give-back itself must reach the disk, and a refused flush is only logged. */
+    Reset();bootMark=1;CHECK(Start()==STATUS_SUCCESS&&durable==1);flushStatus=STATUS_REGISTRY_IO_FAILED;
+    GuardReleaseStart();CHECK(cached==0&&durable==1&&!g_StartCounted);
+    /* An unreadable mark is no mark. */
+    Reset();bootMark=1;volatileStatus=STATUS_ACCESS_DENIED;CHECK(Start()==STATUS_SUCCESS);GuardReleaseStart();CHECK(durable==1);
     printf("durable start guard: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
 }

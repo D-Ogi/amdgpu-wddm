@@ -59,6 +59,11 @@ static NTSTATUS CuModeConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;C
 // dpm.c: the same for a pending DPM start, right after the CU mode, under the same conditions.
 static unsigned dpmConfirms;
 static NTSTATUS DpmConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);dpmConfirms++;return STATUS_SUCCESS;}
+// guard.c (BD-090): a durable confirmation marks the boot confirmed in a volatile key, after its flush and under
+// Lifecycle, with no spin lock held. Also when a fault during the flush makes the request STATUS_RETRY: the
+// interval before it was durably confirmed (start_health.c), so it can outnumber the CU confirmations.
+static unsigned bootMarks;
+static void GuardStartConfirmed(void){CHECK(spins==0 && mutexes==1 && flushes>0 && writeStatus==0 && flushStatus==0);bootMarks++;}
 #include "confirm_actual.inc"
 #include "start_health_actual.inc"
 static BC250_ESCAPE_START_HEALTH query(BC250_DEVICE*d,int confirm)
@@ -161,5 +166,6 @@ int main(void)
           writes==old && cuConfirms==cu0 && dpmConfirms==dpm0);
     StartHealthRemove(&d);r=query(&d,0);CHECK(r.NtStatus==(ULONG)STATUS_DELETE_PENDING);
     CHECK(spins==0 && mutexes==0 && closes>0);
+    CHECK(bootMarks>=cuConfirms && bootMarks>0); /* every durable confirmation, and only those (stub above) */
     printf("start health actual-source: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

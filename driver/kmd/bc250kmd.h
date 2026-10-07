@@ -202,6 +202,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
     BOOLEAN PostDisplayStopAttempted;  // WddmStop restores before freeing scanout objects
     NTSTATUS PostDisplayStopStatus;    // separate from the ordinary StopDevice completion result
+    BOOLEAN StopDone;                  // the teardown ran; a StopDevice after a refused release is a no-op (BD-090)
     ULONG FramebufferCacheProtect;     // actual successful POST mapping cache attribute
     D3DKMDT_VIDPN_PRESENT_PATH_ROTATION Rotation;
 
@@ -474,6 +475,7 @@ void GuardCleanup(void);
 void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);
 NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable); // full table needs a durably recorded start
+void GuardReleaseStart(void);       // orderly stop of a started device: give the count back in a confirmed boot (BD-090)
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0

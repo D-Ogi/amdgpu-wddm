@@ -8,6 +8,9 @@ $first=$source.IndexOf('ULONG GuardConsumeSetting(');$last=$source.IndexOf('void
 $code=$source.Substring($first,$last-$first)
 if($IgnoreDurability){$code=$code.Replace('return RequireDurable ? status : STATUS_SUCCESS;', 'return STATUS_SUCCESS;').Replace('if (RequireDurable) { ZwClose(key); return status; }','if (RequireDurable) { /* old ignored error */ }').Replace('if (RequireDurable) return status;','if (RequireDurable) { /* old ignored error */ }')}
 [IO.File]::WriteAllText((Join-Path $Out 'guard_actual.inc'),$code)
+# BD-090: the give-back after an orderly stop in a confirmed boot, to the end of guard.c.
+$first=$source.IndexOf('// ---- BD-090:');if($first -lt 0){throw 'guard.c has no BD-090 section'}
+[IO.File]::WriteAllText((Join-Path $Out 'release_actual.inc'),$source.Substring($first))
 $source=Get-Content (Join-Path $repo 'driver\kmd\wddm.c') -Raw
 $first=$source.IndexOf('BOOLEAN WddmGateOpen(');$last=$source.IndexOf('// ---- the log ----',$first)
 [IO.File]::WriteAllText((Join-Path $Out 'gate_actual.inc'),$source.Substring($first,$last-$first))

@@ -4,7 +4,9 @@
 //   <service key>\Parameters
 //     UnconfirmedStarts  REG_DWORD  incremented at every DxgkDdiStartDevice, cleared from user mode
 //                                   (bc250mon) once the desktop is up. At BC250_MAX_UNCONFIRMED_STARTS the
-//                                   driver refuses to start and Windows falls back to Basic Display.
+//                                   driver refuses to start and Windows falls back to Basic Display. An
+//                                   orderly stop gives its start's count back in a boot that was confirmed
+//                                   (BD-090, the section at the end of this file).
 //     LastStage          REG_DWORD  BC250_STAGE, written and flushed at each step
 //     StageHistory       REG_SZ     the last stages of this boot, oldest first
 //
@@ -19,6 +21,10 @@
 static UNICODE_STRING g_ParametersPath;
 static WCHAR g_History[256];
 static BC250_STAGE g_LastStage;
+// BD-090: this image's start wrote and flushed one count, and no confirmation has cleared it since. Per image on
+// purpose: a stop runs in the image of the start it ends (a restart or an update unloads the image in between).
+// Start, confirmation (under StartHealth.Lifecycle, closed by StartHealthClose) and stop never overlap.
+static BOOLEAN g_StartCounted;
 
 // ---- the log ring --------------------------------------------------------------------------------------------
 //
@@ -187,6 +193,7 @@ NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable)
     BOOLEAN countWritten;
     NTSTATUS status = OpenParameters(&key);
 
+    g_StartCounted=FALSE;   // set below only when this start's count is on the disk
     if (!NT_SUCCESS(status)) {
         GuardLog("guard: open failed 0x%08X, durable required %u",status,RequireDurable);
         return RequireDurable ? status : STATUS_SUCCESS; // retain display-only recovery policy
@@ -216,6 +223,7 @@ NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable)
         GuardLog("guard: count flush failed 0x%08X, durable required %u",status,RequireDurable);
         if (RequireDurable) return status;
     } else if (countWritten) {
+        g_StartCounted=TRUE;
         GuardLog("guard: count %u -> %u flushed, durable required %u",starts,starts+1,RequireDurable);
     }
     return STATUS_SUCCESS;
@@ -429,6 +437,8 @@ void GuardLogKeep(void)
     KeepStatus(status);
 }
 
+static void GuardStartConfirmed(void);
+
 // Used only after the typed health policy has accepted the live start identity.
 NTSTATUS GuardConfirmStartDurable(void)
 {
@@ -439,6 +449,7 @@ NTSTATUS GuardConfirmStartDurable(void)
     if (NT_SUCCESS(status)) status=ZwFlushKey(key);
     ZwClose(key);
     GuardLog("guard: healthy start confirmation persistence 0x%08X",status);
+    if (NT_SUCCESS(status)) GuardStartConfirmed();
     return status;
 }
 
@@ -539,4 +550,59 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
     status = WriteDword(key, Name, Value);
     ZwClose(key);
     return status;
+}
+
+// ---- BD-090: a runtime restart in a confirmed boot -----------------------------------------------------------
+//
+// UnconfirmedStarts protects against a boot loop: a start that crashes the machine never reaches its stop, and
+// dxgkrnl does not stop the adapter at a shutdown either, so across reboots the count only grows until a healthy
+// desktop confirms it. The confirmation runs at logon (the start-confirm task). A runtime restart of the device
+// (pnputil /restart-device, a live driver update, Device Manager) starts the driver again in the same boot, with
+// no logon to confirm it: before this the second such restart was refused with Code 43 (b21 v2-restart cycle 3).
+//
+// The rule: an orderly stop of a start that completed gives its own count back, but only in a boot whose full
+// table has once been confirmed healthy. The mark of that confirmation is a volatile key, which the configuration
+// manager drops at every reboot, so the protection across reboots is unchanged: a crash, a power loss and a
+// shutdown never reach the give-back, and a new boot has no mark until its own start is confirmed. A start that
+// failed keeps its count (pnp.c calls this only for a device that was Started). No Linux counterpart: amdgpu has
+// no start guard.
+#define GUARD_BOOT_KEY L"GuardBoot"
+#define GUARD_BOOT_CONFIRMED L"Confirmed"
+
+static void GuardStartConfirmed(void)
+{
+    NTSTATUS status;
+
+    g_StartCounted = FALSE;     // the caller zeroed the count: nothing of this start is left to give back
+    status = GuardVolatileStore(GUARD_BOOT_KEY, GUARD_BOOT_CONFIRMED, 1);
+    GuardLog("guard: boot marked confirmed 0x%08X", status);
+}
+
+void GuardReleaseStart(void)
+{
+    HANDLE key;
+    ULONG starts, confirmed;
+    NTSTATUS status;
+
+    if (!g_StartCounted) return;
+    g_StartCounted = FALSE;     // once per counted start, whatever happens below
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    status = GuardVolatileQuery(GUARD_BOOT_KEY, GUARD_BOOT_CONFIRMED, &confirmed);
+    if (!NT_SUCCESS(status) || confirmed != 1) {
+        GuardLog("guard: stop keeps the count, boot not confirmed (0x%08X)", status);
+        return;
+    }
+    status = OpenParameters(&key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("guard: stop give-back open failed 0x%08X", status);
+        return;
+    }
+    status = ReadDword(key, L"UnconfirmedStarts", &starts);
+    // Never below zero: a value user mode already cleared stays cleared.
+    if (NT_SUCCESS(status) && starts > 0) {
+        status = WriteDword(key, L"UnconfirmedStarts", starts - 1);
+        if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+        GuardLog("guard: orderly stop in a confirmed boot, count %u -> %u status 0x%08X", starts, starts - 1, status);
+    }
+    ZwClose(key);
 }
