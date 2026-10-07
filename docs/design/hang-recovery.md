@@ -10,8 +10,9 @@ engine reset so that dxgkrnl removes only the guilty process's device. Lab trial
 kill. A fence guard refused it because of a defect in this driver, which 0.7.216.16 removes (see "Lab trial D:
 the fence bound is per node" below). Trial D1 of 0.7.216.16 got to the kill, but no kill reached the register.
 The kill took the register path of the GART sequence, which 0.7.216.17 corrects (see "Lab trial D1" below).
-Whether the kill drains the ring on gfx1013 is still an open question. Only a lab trial or the Linux measurement
-(wishlist L43) can answer it.
+In trial D1 of 0.7.216.17 the kill drained the ring, and stage 1 passed. The desktop then stayed black, because
+DWM spun in the hosted UMD when it destroyed its lost device. The KMD did not cause that. The hosted UMD gets the
+change (see "Lab trial D1 of 0.7.216.17" below).
 
 ## The switch
 
@@ -242,6 +243,55 @@ was in this driver: the register path of the write.
 - `run_hang_recovery.ps1` reads `GfxSoftRecover` in `gfx.c` before the build. The function must take `GartLock`,
   install and start the GFX sequence, run the loop, and then put the backend back and release the lock, in that
   sequence.
+
+## Lab trial D1 of 0.7.216.17: DWM spun when it destroyed its lost device
+
+Trial D1 ran again on 2026-10-07 with KMD 0.7.216.17 (SYS `4E033FB2`). Stage 1 passed. The log ring has
+`seq 8756 retired after 1 kill(s) of VMID 12 waves in 0 us` and `SOFT RECOVERED, aborted fence 1143` at 136.473 s.
+The client got `DXGI_ERROR_DEVICE_HUNG`, the DWM process stayed the same, and event 4101 was logged with no
+bugcheck. After the recovery the desktop stayed black:
+
+- At 136.601 s dxgkrnl set source 0 to not visible (`display visibility: call 9 ... visible 0`). Nothing set it
+  visible again.
+- The GPU was idle (`dpm busy 0`).
+- One DWM thread used 100 % of a core for more than 10 minutes.
+- When the thread was stopped (DWM killed), the new DWM set the source visible and the desktop came back.
+
+A full user dump of DWM, read with `cdb -z` and the PDB of the deployed hosted UMD (`bc250d3d_zink.dll` SHA-256
+`D9C4DF68`, Mesa `amdgpu-wddm/b19-hosted-umd` at `7eb7861d`), shows the cause:
+
+| Item in the dump | Value |
+|---|---|
+| Spinning thread | `zink_context_destroy+0x574`, `zink_context.c` line 250, the walk to the end of the screen's free list of batch states |
+| Callers | d3d10umd `DestroyDevice`, D3D11 device release, dwmcore `ReleaseSwapChain` / `EnsureSwapChain` / `CheckOcclusionState`, `CComposition::PreRender` |
+| `ctx->is_device_lost`, `screen->device_lost` | both true |
+| `ctx->bs` | equal to `ctx->last_batch_state`, and `bs->next` points to `bs` |
+| Hosted state | `device_lost` and `submission_failed` true. Progress fence 0x33B of 0x33B, Present fence 0x338 of 0x338. No fence at `UINT64_MAX`. |
+
+DWM had declared its hosted device lost. DWM then releases such a device to make a new one. A failed submit marks
+the zink batch state lost, and `flush_batch` then starts no new batch, so `ctx->bs` stays on `ctx->batch_states`.
+The destroy of upstream zink appends that list to the screen's free list and then appends `ctx->bs` a second time.
+That makes `bs->next == bs`, and the walk never ends. Upstream Mesa has the same code (`ref/mesa`).
+
+Three conclusions:
+
+- **The KMD needs no change for this defect.** The GPU and the KMD recovered: every fence of DWM in the dump has
+  completed, and a new DWM drew the desktop at once. KMD 0.7.216.17 stays the stage-1 candidate.
+- **The UMD change is in zink.** The Mesa branch `amdgpu-wddm/hang-recovery-zink` returns the current batch state
+  only if neither list of the context holds it (`zink_bc250_batch_list.h`). Its host test
+  (`zink/tests/bc250_batch_list.py`) holds the D1 shape, and the negative control without the guard spins on it.
+- **Why DWM declared its device lost is open.** The dump shows the result but not the path. An innocent device is
+  not put into the error state by an engine reset. Two paths of the hosted UMD can declare the loss without that:
+  a runtime callback that returned a device-lost result, or the 10 s CPU bound of the Present-idle wait
+  (`Bc250WaitPresentIdle`) while DWM's work waited about 14 s behind the hang (122.35 s to 136.47 s). The same
+  branch keeps the first cause in the hosted state (`lost_reason`, `lost_op`, `lost_hr`, `lost_tick`) and names it
+  in the error line. The next D1 run tells which path it was. If it is the 10 s bound, that bound must be longer
+  than the TDR of the lab, or the wait must poll the device state, because the OS reports a real loss itself.
+
+The packets that wait behind the hung one are a consequence of the contract. The drain runs them on the
+hardware, and the scheduler then gives them new fence ids and submits them again. Thus such a packet can run twice.
+In D1 these were DWM's packets, and the second run did no harm, but a packet that is not idempotent can give a
+wrong frame once.
 
 ## Why not in the 500 ms watchdog
 
