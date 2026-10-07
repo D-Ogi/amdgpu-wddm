@@ -1,6 +1,6 @@
 // Replies of the KMD's software-state escapes, parsed from the raw buffers bc250control.dll fills. Pure functions:
 // no P/Invoke here, so the host tests run on any PC. Layouts: driver/kmd/bc250kmd_escape.h (BC250_ESCAPE_DPM 160
-// bytes, BC250_ESCAPE_START_HEALTH 96, BC250_ESCAPE_INTEROP 104, BC250_ESCAPE_LOG 10812) and BC250_VIDEO_MEMORY of
+// bytes as ABI 1, BC250_ESCAPE_DPM_EX 248 as ABI 3, BC250_ESCAPE_START_HEALTH 96, BC250_ESCAPE_INTEROP 104, BC250_ESCAPE_LOG 10812) and BC250_VIDEO_MEMORY of
 // tools/win/bc250kmd_cli/bc250kmd_cli.c (264). test/UnitTests.cs checks the offsets against the header text.
 using System;
 using System.Collections.Generic;
@@ -16,9 +16,15 @@ namespace AmdgpuWddmControl
         public int TemperatureMc;
         public uint BusyPermille, BusyAvgPermille, ThermalEvents, Errors;
         public ulong UptimeMs, Generation;
+        // RUN_DPM ABI 3 (KMD 0.7.215): the SMU metrics table. Zero in an ABI 1 reply. The power figures are the chip's
+        // own: SocketPowerMw is the processor and the graphics together, without the rest of the board.
+        public uint AbiVersion, MetricsState, MetricsAgeMs, SocketPowerMw, SocketPowerAvgMw, GfxPowerMw, SocPowerMw, GfxMv, SocMv;
 
         public const uint FlagRunning = 1, FlagGoverning = 2, FlagPending = 4, FlagConfirmed = 8, FlagPaused = 16,
             FlagStable = 32, FlagSession = 64, FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512;
+        // ABI 3 only: the metrics values come from a table at most three seconds old.
+        public const uint FlagPower = 8192;
+        public const uint MetricsOff = 0, MetricsWaiting = 1, MetricsOk = 2, MetricsRefused = 3, MetricsNoTable = 4, MetricsBadTable = 5;
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
@@ -172,6 +178,9 @@ namespace AmdgpuWddmControl
     public static class KmdReply
     {
         public const uint Magic = 0x30353242;   // "B250"
+        // DpmBytes is RUN_DPM ABI 1. DpmAbi3Bytes is ABI 3 (KMD 0.7.215): the ABI 2 structure (192 bytes) followed by
+        // BC250_DPM_METRICS (56 bytes). The application asks with ABI 3 first and with ABI 1 after a refusal.
+        public const int DpmAbi3Bytes = 248, DpmMetricsOffset = 192;
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
         public const int HwmonBytes = 216;
         public const int CurveBytes = 360, CpuBytes = 296, CurvePoints = 11, CpuCoreSlots = 8;
@@ -190,10 +199,28 @@ namespace AmdgpuWddmControl
             if (U(b, 0) != Magic || U(b, 1) != command) throw new FormatException("reply is not a command " + command + " answer");
         }
 
+        // An ABI 1 reply (160 bytes) or an ABI 3 reply (248 bytes). Each length carries exactly one AbiVersion.
         public static DpmState ParseDpm(byte[] b)
         {
-            Head(b, DpmBytes, CmdDpm);
-            if (U(b, 5) != 1) throw new FormatException("DPM ABI " + U(b, 5) + ", 1 expected");
+            bool abi3 = b != null && b.Length == DpmAbi3Bytes;
+            Head(b, abi3 ? DpmAbi3Bytes : DpmBytes, CmdDpm);
+            uint abi = abi3 ? 3u : 1u;
+            if (U(b, 5) != abi) throw new FormatException("DPM ABI " + U(b, 5) + ", " + abi + " expected");
+            var d = Dpm1(b);
+            d.AbiVersion = abi;
+            if (abi3)
+            {
+                int m = DpmMetricsOffset / 4;
+                d.MetricsState = U(b, m); d.MetricsAgeMs = U(b, m + 1);
+                d.SocketPowerMw = U(b, m + 4); d.SocketPowerAvgMw = U(b, m + 5);
+                d.GfxPowerMw = U(b, m + 6); d.SocPowerMw = U(b, m + 7); d.GfxMv = U(b, m + 8); d.SocMv = U(b, m + 9);
+            }
+            else d.Flags &= ~DpmState.FlagPower;     // the bit means something only in an ABI 3 reply
+            return d;
+        }
+
+        static DpmState Dpm1(byte[] b)
+        {
             return new DpmState
             {
                 Version = U(b, 3), Flags = U(b, 7), Mode = U(b, 8), Requested = U(b, 9), Reason = U(b, 10), Throttle = U(b, 11),

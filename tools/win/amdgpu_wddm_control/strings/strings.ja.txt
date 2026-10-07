@@ -157,7 +157,7 @@ perf.memory|mt-safe|34a62533|使用中のビデオ メモリ
 perf.memory.explain|mt|28bc56be|ゲームと Windows がグラフィックスに使用しているメモリです。
 perf.memory.value|mt-safe|eaf124e2|{1} GB 中 {0} GB
 perf.power|mt-safe|848e9656|電力
-perf.power.explain|mt|2fb99c60|ドライバーはまだ消費電力を読み取れません。これは今後対応予定です。
+perf.power.explain|mt|a2850175|プロセッサーとグラフィックスチップが合わせて使用している電力で、チップ自身が測定した値です。ボードのその他の部分、ファン、電源の損失は含まれません。
 perf.fan|mt-safe|e27be641|ファン
 perf.fan.explain|mt|730cb123|ケース ファンの回転数です。誰がどのカーブでファンを制御するかは、下のケース ファン カードで選びます。
 perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)

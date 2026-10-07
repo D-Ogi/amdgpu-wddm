@@ -157,7 +157,7 @@ perf.memory|mt-safe|34a62533|Używana pamięć wideo
 perf.memory.explain|mt|28bc56be|Pamięć, której gry i Windows używają do grafiki.
 perf.memory.value|mt|eaf124e2|{0} GB z {1} GB
 perf.power|mt-safe|848e9656|Pobór mocy
-perf.power.explain|mt|2fb99c60|Sterownik nie potrafi jeszcze odczytać poboru mocy. Ta funkcja pojawi się później.
+perf.power.explain|mt|a2850175|Ile mocy pobierają razem procesor i układ graficzny, według pomiaru samego układu. Nie obejmuje to reszty płyty, wentylatora ani strat zasilacza.
 perf.fan|mt-safe|e27be641|Wentylator
 perf.fan.explain|mt|730cb123|Obroty wentylatora obudowy. Kto steruje wentylatorem i według jakiej krzywej, wybierasz w karcie Wentylator obudowy poniżej.
 perf.fan.value|mt-safe|863e80e6|{0} obr./min ({1} %)

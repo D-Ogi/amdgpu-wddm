@@ -113,6 +113,44 @@ static partial class UnitTests
         Throws<FormatException>(() => KmdReply.ParseDpm(new byte[159]), "DPM short reply refused");
         Put(b, dpm["AbiVersion"], 1u); Put(b, dpm["Command"], 21u);
         Throws<FormatException>(() => KmdReply.ParseDpm(b), "DPM wrong command refused");
+        Put(b, dpm["Command"], 23u); Put(b, dpm["Flags"], 128u | 8192u);
+        Equal(0u, KmdReply.ParseDpm(b).Flags & DpmState.FlagPower, "DPM ABI 1: the power bit is dropped (it means something only in ABI 3)");
+
+        // RUN_DPM ABI 3 (0.7.215): BC250_ESCAPE_DPM_EX, the ABI 2 structure followed by BC250_DPM_METRICS. Both lengths
+        // and every offset come from the header text.
+        int exSize = int.Parse(Regex.Match(header, @"#define BC250_DPM_ABI3_SIZE (\d+)u").Groups[1].Value);
+        int prefix = int.Parse(Regex.Match(header, @"#define BC250_DPM_ABI2_SIZE (\d+)u").Groups[1].Value);
+        Equal(KmdReply.DpmAbi3Bytes, exSize, "DPM ABI 3 length from the header");
+        Equal(KmdReply.DpmMetricsOffset, prefix, "DPM ABI 3 metrics offset from the header");
+        Equal(prefix, size, "DPM ABI 2 structure is the ABI 3 prefix");
+        int metricsSize;
+        var mt = Layout(header, "BC250_DPM_METRICS", out metricsSize);
+        Equal(exSize - prefix, metricsSize, "DPM metrics size from the header");
+        Equal(8192u, uint.Parse(Regex.Match(header, @"#define BC250_DPM_FLAG_POWER (\d+)u").Groups[1].Value), "DPM power flag from the header");
+        Equal(2u, uint.Parse(Regex.Match(header, @"#define BC250_DPM_METRICS_OK (\d+)u").Groups[1].Value), "DPM metrics OK from the header");
+        var x = new byte[KmdReply.DpmAbi3Bytes];
+        Put(x, dpm["Magic"], KmdReply.Magic); Put(x, dpm["Command"], 23u); Put(x, dpm["AbiVersion"], 3u);
+        Put(x, dpm["Version"], 0x000700D7u); Put(x, dpm["Flags"], 128u | 256u | 512u | 8192u); Put(x, dpm["ObservedMHz"], 1500u);
+        Put(x, dpm["TemperatureMc"], 62000u); Put(x, dpm["BusyAvgPermille"], 370u); Put(x, dpm["IdleMHz"], 500u);
+        Put(x, prefix + mt["MetricsState"], 2u); Put(x, prefix + mt["MetricsAgeMs"], 640u);
+        Put(x, prefix + mt["SocketPowerMw"], 78400u); Put(x, prefix + mt["SocketPowerAvgMw"], 77100u);
+        Put(x, prefix + mt["GfxPowerMw"], 48000u); Put(x, prefix + mt["SocPowerMw"], 21000u);
+        Put(x, prefix + mt["GfxMv"], 919u); Put(x, prefix + mt["SocMv"], 900u);
+        d = KmdReply.ParseDpm(x);
+        Equal(3u, d.AbiVersion, "DPM ABI 3 version");
+        Check(d.Has(DpmState.FlagPower), "DPM ABI 3 power flag");
+        Equal(78400u, d.SocketPowerMw, "DPM ABI 3 socket power"); Equal(77100u, d.SocketPowerAvgMw, "DPM ABI 3 average power");
+        Equal(48000u, d.GfxPowerMw, "DPM ABI 3 gfx power"); Equal(21000u, d.SocPowerMw, "DPM ABI 3 soc power");
+        Equal(919u, d.GfxMv, "DPM ABI 3 gfx mV"); Equal(900u, d.SocMv, "DPM ABI 3 soc mV");
+        Equal(DpmState.MetricsOk, d.MetricsState, "DPM ABI 3 metrics state"); Equal(640u, d.MetricsAgeMs, "DPM ABI 3 metrics age");
+        Equal(1500u, d.ObservedMHz, "DPM ABI 3 keeps the ABI 1 fields"); Equal(62000, d.TemperatureMc, "DPM ABI 3 temperature");
+        Put(x, dpm["AbiVersion"], 2u);
+        Throws<FormatException>(() => KmdReply.ParseDpm(x), "DPM 248 bytes with ABI 2 refused");
+        Put(x, dpm["AbiVersion"], 1u);
+        Throws<FormatException>(() => KmdReply.ParseDpm(x), "DPM 248 bytes with ABI 1 refused");
+        Put(b, dpm["AbiVersion"], 3u);
+        Throws<FormatException>(() => KmdReply.ParseDpm(b), "DPM 160 bytes with ABI 3 refused");
+        Throws<FormatException>(() => KmdReply.ParseDpm(new byte[192]), "DPM ABI 2 length is not a reply this app asks for");
 
         var io = Layout(header, "BC250_ESCAPE_INTEROP", out size);
         Equal(KmdReply.InteropBytes, size, "interop size from the header");

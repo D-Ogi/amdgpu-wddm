@@ -1,6 +1,6 @@
 // The Performance page's readings (WU-038, WU-041, F-SENS): only Level-One escapes, and "No reading" wherever the
-// driver gives no value, never a guessed one. The current driver reports no power, so that row always says "No
-// reading". Voltage goes only into the support report.
+// driver gives no value, never a guessed one. Power comes from KMD 0.7.215 on (the SMU metrics table, RUN_DPM ABI 3);
+// an older driver has none, so that row says "No reading" there. Voltage goes only into the support report.
 //
 // The fan row became a real reading with KMD 0.7.213.1, from the board's own hardware monitor (docs/design/fan.md).
 // The board still turns the fan from its BIOS curve; the driver only reads it. Two rules this row keeps: a reading
@@ -78,7 +78,10 @@ namespace AmdgpuWddmControl
             add("clock", mhz != 0 ? mhz + " MHz" : null);
             ulong total = vram == null ? 0 : vram.Dedicated != 0 ? vram.Dedicated : vram.LocalLimit;
             add("memory", vram != null && total != 0 && total != ulong.MaxValue ? Strings.T("perf.memory.value", Gib(vram.LocalResident), Gib(total)) : null);
-            add("power", null);
+            // The chip's own power figure from the SMU metrics table (KMD 0.7.215, RUN_DPM ABI 3). The driver sets the
+            // flag only for a table at most three seconds old; an older driver, EnableSmuMetrics 0 or a refusal by the
+            // firmware leave it clear, and the row then says "No reading".
+            add("power", d != null && d.Has(DpmState.FlagPower) ? (d.SocketPowerMw / 1000.0).ToString("0", CultureInfo.InvariantCulture) + " W" : null);
             // A stopped fan (a duty output runs and nothing turns) is "hot": the owner must see it at a glance.
             string level;
             add("fan", FanValue(fan, control, out level)).Level = level;
