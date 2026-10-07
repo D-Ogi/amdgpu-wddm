@@ -594,6 +594,37 @@ void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested)
  if (adev && requested) WREG32_SOC15(GC,0,mmRLC_SAFE_MODE,RLC_SAFE_MODE__CMD_MASK);
 }
 
+/* PROVENANCE: amdgpu gfx_v10_0_ring_soft_recovery (ref/linux-src gfx_v10_0.c, also
+ * driver/amdgpu-import/reference/gfx_v10_0.c), AMD MIT. Upstream removed it in May 2025
+ * ("drm/amdgpu/gfx10: drop soft recovery", "Drop wave vmid kill in favor of queue resets"): on
+ * newer kernels gfx10 uses a firmware/KIQ queue reset instead. We keep the wave kill because this
+ * part has no working queue or ASIC reset to fall back on (facts M44/M53/M55) - it is our only
+ * non-destructive recovery primitive. M15.12 stage 1.
+ *
+ * It forcibly terminates (SQ_IND_CMD_CMD_KILL, stronger than SETHALT) every wave running on the
+ * given VMID, broadcast to all SE/SH/instances, so a workgroup halted on a no-retry VM fault
+ * (MEM_VIOL) retires, the end-of-pipe behind it fires and the job's fence can write back. Whether
+ * it worked is judged only by the caller watching that fence retire (amdgpu_ring_soft_recovery).
+ *
+ * Deviation from upstream: the RLC safe-mode bracket is bc250_gfx_rlc_safe_enter/exit, which is a
+ * no-op on this part (cg_flags = 0, so no safe-mode command is needed - the same early return the
+ * SDMA callers rely on). Everything else is the upstream body, value for value. The caller passes
+ * the VMID: up to 0.7.213.1 every WDDM job ran at VMID 1, and since the VMID pool (0.7.214) the
+ * hung job's VMID is the one its completion-queue entry recorded. */
+void bc250_gfx_soft_recover_vmid(struct amdgpu_device *adev, u32 vmid)
+{
+ u32 value = 0;
+ bool requested = false;
+ if (!adev) return;
+ value = REG_SET_FIELD(value, SQ_CMD, CMD, SQ_IND_CMD_CMD_KILL);
+ value = REG_SET_FIELD(value, SQ_CMD, MODE, SQ_IND_CMD_MODE_BROADCAST);
+ value = REG_SET_FIELD(value, SQ_CMD, CHECK_VMID, 1);
+ value = REG_SET_FIELD(value, SQ_CMD, VM_ID, vmid);
+ (void)bc250_gfx_rlc_safe_enter(adev, &requested);
+ WREG32_SOC15(GC, 0, mmSQ_CMD, value);
+ bc250_gfx_rlc_safe_exit(adev, requested);
+}
+
 /* PROVENANCE: Linux amdgpu gfx_v10_0_rlc_reset, AMD MIT. This callback is
  * not part of ordinary resume; the opt-in reload experiment below owns its use. */
 static void bc250_rlc_reset(struct amdgpu_device *adev)

@@ -79,6 +79,10 @@ SEQUENCES = [
      # amdgpu_amdkfd_gfx_v10.c:606-619). Without it the MEC keeps the queue's fetch state across the halt and the next
      # bring-up faults at the old ring's address (facts M44, E12 run 002).
      [("GC", "mmCP_HQD_DEQUEUE_REQUEST", "not traced: the undo's dequeue handshake, facts M44"),
+      # M15.12 stage 1: the wave kill of amdgpu gfx_v10_0_ring_soft_recovery (SQ_CMD CMD=KILL, MODE=BROADCAST,
+      # CHECK_VMID, VM_ID). Writable through the GFX table so the shim's bc250_gfx_soft_recover_vmid can issue it;
+      # reached only from DxgkDdiResetEngine under the HangRecoveryMode switch. Already on the escape read list.
+      ("GC", "mmSQ_CMD", "not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery"),
       ("GC", "mmGRBM_STATUS2", "read observation for opt-in RLC reload reset, M349"),
       ("GC", "mmGRBM_SOFT_RESET", "not traced: AMD RLC reset callback, opt-in M349"),
       ("GC", "mmRLC_SAFE_MODE", "not traced: AMD paired safe-mode scope, M370"),

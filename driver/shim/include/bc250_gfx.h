@@ -263,4 +263,9 @@ int  bc250_gfx_ib_ring_test_result(struct amdgpu_device *adev);
 int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested);
 void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested);
 
+/* M15.12 stage 1: kill every wave on one VMID (amdgpu gfx_v10_0_ring_soft_recovery). Best-effort;
+ * the caller judges success only by the job's fence retiring afterwards. See the implementation's
+ * PROVENANCE note. */
+void bc250_gfx_soft_recover_vmid(struct amdgpu_device *adev, u32 vmid);
+
 #endif /* BC250_GFX_H */
