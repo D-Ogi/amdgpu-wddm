@@ -630,6 +630,7 @@ namespace AmdgpuWddmControl
                 else if (a == "--cores" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Cores = n; i++; }
                 else if (a == "--fan-profile" && FanPlan.ValidProfileName(args[i + 1])) o.More.FanProfile = args[++i];
                 else if (a == "--fan-curve" && FanCurves.ParseCurve(args[i + 1], out fanC, out fanPct)) o.More.FanCurve = args[++i];
+                else if (a == "--fan-test-pct" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.FanTestPct = n; i++; }
                 else return null;
             }
             // set-clocks says what happens to both values ("unset" removes one); no other action takes a mode.
@@ -648,6 +649,7 @@ namespace AmdgpuWddmControl
             // The fan card: a profile for fan-curve only, and a curve only with the custom profile.
             if ((o.More.FanProfile != null) != (o.Action == "fan-curve")) return null;
             if ((o.More.FanCurve != null) != (o.More.FanProfile == "custom")) return null;
+            if ((o.More.FanTestPct != null) != (o.Action == "fan-test")) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
             if (o.RunId == null) o.RunId = Guid.NewGuid().ToString("N").Substring(0, 12);
             return o;
@@ -665,6 +667,7 @@ namespace AmdgpuWddmControl
                 Console.Error.WriteLine("       --action tune-trial --curve <11 values in mV> [--window ms] ...   --action tune-keep|tune-stop|tune-reset ...");
                 Console.Error.WriteLine("       --action cpu-trial [--cpu-clock MHz] [--cpu-uv steps] [--cpu-temp C] [--window ms] ...   --action core-mask --cores 6|8 ...");
                 Console.Error.WriteLine("       --action fan-auto ...   --action fan-curve --fan-profile standard|quiet|performance|custom [--fan-curve C:pct,...] ...");
+                Console.Error.WriteLine("       --action fan-test --fan-test-pct 30..100 ...   (one duty for 10 s, then the choice in force again)");
                 Console.Error.WriteLine("       --action " + Recovery.OperatorEscape + " --accept-bd060   (operator escape for a desktop that does not respond; see README)");
                 return Usage;
             }
@@ -1117,6 +1120,7 @@ namespace AmdgpuWddmControl
             var before = Kmd.Fan();
             if (before.Value == null) { Log("result: failed: no fan reading: " + before.Error); return Failed; }
             Log("fan before: " + FanCurves.ReportLine(before.Value));
+            if (t.Kind == "fan-fixed") return RunFanTest(plan, before.Value);
             var r = Kmd.NewFanRequest(t.Kind == "fan-board" ? Kmd.FanOpBoard : Kmd.FanOpCurve);
             r.ExpectedGeneration = before.Value.Generation;
             r.Store = 1;
@@ -1143,6 +1147,69 @@ namespace AmdgpuWddmControl
                 wrong = "the driver runs another curve: " + FanCurves.CurveText(FanCurves.ShownC(f), FanCurves.ShownPct(f));
             if (wrong != null) { Log("result: failed: " + wrong + " (error " + f.Error + ")"); return Failed; }
             Log("result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
+            return Done;
+        }
+
+        // The card's short test: FIXED under a lease (as `bc250kmd_cli fan set` sends it), one reading a second while it
+        // holds, then the choice that was in force again, durable and not stored (it is stored already). The lease
+        // outlives the test, so a helper that dies here leaves the fan with the board, which is rule 9 of fan.md.
+        static int RunFanTest(ActionPlan plan, FanState before)
+        {
+            var t = plan.Tune;
+            var r = Kmd.NewFanRequest(Kmd.FanOpFixed);
+            r.ExpectedGeneration = before.Generation;
+            r.FixedPct = t.FixedPct;
+            r.LeaseMs = t.LeaseMs;
+            r.Store = 0;
+            Log("fan request: fixed " + r.FixedPct + " %, lease " + r.LeaseMs + " ms, generation " + r.ExpectedGeneration);
+            var sent = Kmd.FanRequestOp(r);
+            if (sent.Value == null) { Log("result: failed: the driver did not take the test speed: " + sent.Error); return Failed; }
+            Log("fan after: " + FanCurves.ReportLine(sent.Value));
+            uint maxRpm = 0, minRpm = uint.MaxValue;
+            bool held = false;
+            for (uint waited = 0; waited < t.TestMs; waited += 1000)
+            {
+                System.Threading.Thread.Sleep(1000);
+                var now = Kmd.Fan();
+                if (now.Value == null) { Log("fan test: no reading at " + (waited + 1000) + " ms: " + now.Error); continue; }
+                var f = now.Value;
+                if (f.Mode == FanState.ModeFixed) held = true;
+                maxRpm = Math.Max(maxRpm, f.Rpm); minRpm = Math.Min(minRpm, f.Rpm);
+                Log("fan test: " + (waited + 1000) + " ms, state " + f.State + ", target " + f.TargetPct + " % applied " + f.AppliedPct + " %, " + f.Rpm + " rpm");
+            }
+            var back = Kmd.NewFanRequest(t.Then.Kind == "fan-board" ? Kmd.FanOpBoard : Kmd.FanOpCurve);
+            back.ExpectedGeneration = before.Generation;
+            back.Store = 0;
+            back.LeaseMs = 0;
+            if (t.Then.Kind == "fan-curve")
+            {
+                back.Profile = t.Then.FanProfile;
+                if (t.Then.FanC != null)
+                {
+                    back.Points = (uint)t.Then.FanC.Length;
+                    for (int i = 0; i < t.Then.FanC.Length; i++) { back.CurveC[i] = t.Then.FanC[i]; back.CurvePct[i] = t.Then.FanPct[i]; }
+                }
+            }
+            Log("fan request: back to " + t.Then.Kind + ", profile " + back.Profile + ", points " + back.Points);
+            var after = Kmd.FanRequestOp(back);
+            if (after.Value == null) { Log("result: failed: the driver did not take the choice back: " + after.Error + "; the lease gives the fan to the board within " + t.LeaseMs / 1000 + " s"); return Failed; }
+            var g = after.Value;
+            // The governor applies a request at its next step, within a second; give it three.
+            for (int i = 0; i < 3 && (g.Mode == FanState.ModeFixed || g.Has(FanState.FlagLeased)); i++)
+            {
+                System.Threading.Thread.Sleep(1000);
+                var again = Kmd.Fan();
+                if (again.Value != null) g = again.Value;
+            }
+            Log("fan after: " + FanCurves.ReportLine(g));
+            string wrong = null;
+            if (!held) wrong = "the test speed never ran";
+            else if (t.Then.Kind == "fan-board" && g.Mode != FanState.ModeBoard) wrong = "the board does not have the fan again";
+            else if (t.Then.Kind == "fan-curve" && (g.Mode != FanState.ModeCurve || g.Profile != t.Then.FanProfile || g.Has(FanState.FlagLeased)))
+                wrong = "the curve is not in force again";
+            if (wrong != null) { Log("result: failed: " + wrong + " (error " + g.Error + ")"); return Failed; }
+            Log("fan test rpm: " + (minRpm == uint.MaxValue ? "no reading" : minRpm + " to " + maxRpm));
+            Log("result: done: " + plan.Change + ".");
             return Done;
         }
 

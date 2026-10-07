@@ -161,6 +161,9 @@ namespace AmdgpuWddmControl
                 if (Tune.CoreMask != 0) w.Append(", cores " + CpuTuning.CoresFor(Tune.CoreMask));
                 if (Tune.Kind == "fan-curve") w.Append(", fan profile " + FanCurves.NameOf(Tune.FanProfile) +
                     (Tune.FanC != null ? ", curve " + FanCurves.CurveText(Tune.FanC, Tune.FanPct) : ""));
+                if (Tune.Kind == "fan-fixed") w.Append(", fixed " + Tune.FixedPct + " % for " + Tune.TestMs + " ms, lease " + Tune.LeaseMs + " ms, then " + Tune.Then.Kind +
+                    (Tune.Then.Kind == "fan-curve" ? " profile " + FanCurves.NameOf(Tune.Then.FanProfile) : "") +
+                    (Tune.Then.FanC != null ? " curve " + FanCurves.CurveText(Tune.Then.FanC, Tune.Then.FanPct) : ""));
                 w.AppendLine();
             }
             if (Cu != null)
@@ -334,7 +337,7 @@ namespace AmdgpuWddmControl
             "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
             "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask",
             // The case fan card of the Performance page: one escape each, and the driver stores the choice.
-            "fan-auto", "fan-curve" };
+            "fan-auto", "fan-curve", "fan-test" };
 
         public static bool Allowed(string path, string name)
         {
@@ -1193,6 +1196,7 @@ namespace AmdgpuWddmControl
 
                 case "fan-auto":
                 case "fan-curve":
+                case "fan-test":
                 {
                     var why = FanPlan.Fill(action, s, more, p);
                     if (why != null) return Refuse(p, why);
@@ -1235,6 +1239,7 @@ namespace AmdgpuWddmControl
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
             // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".
             public string FanProfile, FanCurve;
+            public uint? FanTestPct;            // fan-test: the duty of the short test
         }
 
         static bool SameSet(string a, string b)

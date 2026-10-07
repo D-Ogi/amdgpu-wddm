@@ -45,16 +45,23 @@ namespace AmdgpuWddmControl
             _game = "witcher3.exe";
             _gameEdits["witcher3.exe"] = new Dictionary<string, bool> { { "cpu", true } };
             _ceilEdited = true; _ceilEdit = 1800;
-            // The fan card at its widest: the driver runs the standard curve, and the person has edited a curve of six
-            // points, so the render gates see every row the card can have short of the eight-point maximum.
+            // The fan card at its widest: the driver runs the standard curve (stored), the person has dragged a curve of
+            // six points on the chart and applied a choice before (so Undo shows), and the ring marks 61.5 C at 72 % (the standard curve there).
+            // The render gates see every row the card can have short of the eight-point maximum.
             if (_snap.Fan == null)
             {
                 _snap.Fan = new FanState
                 {
-                    Version = 0x000700D5, Flags = FanState.FlagEnabled | FanState.FlagControlling, Mode = FanState.ModeCurve,
+                    Version = 0x000700D5, Flags = FanState.FlagEnabled | FanState.FlagControlling | FanState.FlagStored, Mode = FanState.ModeCurve,
                     State = FanState.StateCurve, Profile = FanState.ProfileStandard, Points = 5, Rpm = 1180, Generation = 5,
+                    StoredMode = FanState.ModeCurve, StoredProfile = FanState.ProfileStandard, GuardMc = 61500, TargetPct = 72, AppliedPct = 72,
                     CurveC = new uint[] { 40, 60, 70, 80, 85, 0, 0, 0 }, CurvePct = new uint[] { 50, 70, 82, 95, 100, 0, 0, 0 },
                 };
+                _fanEditC = new uint[] { 35, 50, 62, 70, 78, 84 };
+                _fanEditPct = new uint[] { 30, 42, 58, 70, 88, 100 };
+                _fanChoice = "custom";
+                _fanPoint = 2;
+                _fanUndo = new FanChoiceRecord { Choice = "quiet" };
             }
             // The tuning cards open and at their widest: a curve test running over a saved curve (every row differs from
             // the one in force), and processor tuning on with one readback and saved settings. A fixture that brings
