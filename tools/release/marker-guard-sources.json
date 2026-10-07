@@ -22,6 +22,11 @@
     { "name": "dpm/thermal-soft-zone", "commit": "846ad91925f2c159dc4d8ff401b648b74f8560c1" },
     { "name": "kmd/confirm-soft", "commit": "01cee34ceac56f2a991b99828c53e52d07577eec" },
     { "name": "m14/d3d11-iflip2", "commit": "0b325308bfa56f7d3d7d8687438040a6f7000d4c" },
-    { "name": "m15/d3d12-iflip2", "commit": "ef63bab313268d28b7fa214d79b8e8eb72931239" }
+    { "name": "m15/d3d12-iflip2", "commit": "ef63bab313268d28b7fa214d79b8e8eb72931239" },
+    { "name": "kmd/bd090-stop-restart", "commit": "b24bcee7ce1a44a3ca5194b0b34bcc1f4a04505e" },
+    { "name": "kmd/audio-controller-reads", "commit": "084c2bf8cd72bdd6827aec644eb5d114e413c287" },
+    { "name": "kmd/dpm-c62", "commit": "9e62b3f22720e02dec43f0298910c2541b046df4" },
+    { "name": "kmd/memmgr-stage1", "commit": "a5cb4a2b9dd821c09a9b623c1301c3bcb2b29192" },
+    { "name": "installer/hda-msi-gates", "commit": "c252b0ec788839783eae1247dd07b1ca55d8ef01" }
   ]
 }
