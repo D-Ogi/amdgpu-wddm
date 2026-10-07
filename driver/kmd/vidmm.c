@@ -56,7 +56,19 @@ typedef struct _BC250_VIDMM {
     volatile LONG64 EncodedSnoopMismatch[BC250_VIDMM_LEVELS][3];
     volatile LONG Refused;
     volatile LONG BadCalls;
-    volatile LONG SegmentSeen[BC250_VIDMM_SEGMENT_IDS];
+    // Memory manager stage 1d (0.7.216.8). SegmentSeen was declared and printed but never counted. It now
+    // counts valid, non-Zero encodings by the DXGK_PTE.Segment the OS named, with the same observation
+    // semantics as EncodedCoherent (GPU slices can count again at logical publication). This replaces the
+    // report's "aperture bucket" for the EncodedCoherent family: those count successful encodings only, and
+    // bc250_pte_from_dxgk refuses every segment that is not system, VRAM or table, so their "application
+    // local" bucket can only hold segment 1. A PTE naming the aperture (2) is a refusal, counted below.
+    // DXGK_PTE.Segment names where the page is located, zero being system memory (d3dukmdt.h WDK 26100,
+    // _DXGK_PTE), so pages of an aperture-segment allocation are expected as segment 0.
+    volatile LONG64 SegmentSeen[BC250_VIDMM_SEGMENT_IDS];
+    // Encodings bc250_pte_from_dxgk refused, by the segment the entry named. The CPU path counted them in
+    // Refused; the GPU path (VidMmEncodePageTable) returned FALSE and counted nothing.
+    volatile LONG64 RefusedSegment[BC250_VIDMM_SEGMENT_IDS];
+    volatile LONG GpuRefused;
     volatile LONG Roots;
 } BC250_VIDMM;
 
@@ -280,6 +292,7 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
 {
     BC250_VIDMM* vm=&g_VidMm;
     LONG64 coherent[3]={0},noncoherent[3]={0},mismatch[3]={0};
+    LONG64 seen[BC250_VIDMM_SEGMENT_IDS]={0}; // 256 bytes, one interlocked add per named segment
     ULONG i,kind,level=Update->PageTableLevel;
     for(i=0;i<Count;i++) {
         const DXGK_PTE* pte=Update->pPageTableEntries+(Update->Flags.Repeat?0:Start+i);
@@ -293,6 +306,7 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
             continue; // PRT SNOOP is a terminal flag, not a physical cache policy.
         }
         if(!(pte->Flags&BC250_DXGK_PTE_VALID)) continue;
+        seen[segment&(BC250_VIDMM_SEGMENT_IDS-1)]++; // the mask is the five-bit field width: no-op
         kind=segment==vm->Pte.system_segment?0u:
              (vm->Pte.table_size && segment==vm->Pte.table_segment?2u:1u);
         requested=(BOOLEAN)((pte->Flags&BC250_DXGK_PTE_CACHECOHERENT)!=0);
@@ -304,6 +318,22 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
         if(noncoherent[kind])InterlockedAdd64(&vm->EncodedNoncoherent[level][kind],noncoherent[kind]);
         if(mismatch[kind])InterlockedAdd64(&vm->EncodedSnoopMismatch[level][kind],mismatch[kind]);
     }
+    for(i=0;i<BC250_VIDMM_SEGMENT_IDS;i++)
+        if(seen[i])InterlockedAdd64(&vm->SegmentSeen[i],seen[i]);
+}
+
+// A PTE bc250_pte_from_dxgk refused: count it by the segment it named, and log the first few with the
+// path, level and raw fields. Gpu: the GPU_PHYSICAL encoder, which before 0.7.216.8 refused silently.
+static void VidMmNoteRefusal(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, const DXGK_PTE* Pte,
+                             BOOLEAN Gpu)
+{
+    BC250_VIDMM* vm=&g_VidMm;
+    ULONG segment=(ULONG)((Pte->Flags&BC250_DXGK_PTE_SEGMENT_MASK)>>BC250_DXGK_PTE_SEGMENT_SHIFT);
+    LONG64 n=InterlockedIncrement64(&vm->RefusedSegment[segment&(BC250_VIDMM_SEGMENT_IDS-1)]);
+    if (Gpu) InterlockedIncrement(&vm->GpuRefused);
+    if (n<=BC250_VIDMM_LOG_REFUSALS && KeGetCurrentIrql()<=DISPATCH_LEVEL)
+        GuardLog("vidmm: %s encoding refused level %u segment %u flags 0x%llX address 0x%llX",
+                 Gpu?"GPU":"CPU",Update->PageTableLevel,segment,Pte->Flags,Pte->PageAddress);
 }
 
 // PASSIVE_LEVEL. Immediate CPU_VIRTUAL initialization, or the serialized
@@ -345,6 +375,7 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
             const DXGK_PTE* pte = Update->pPageTableEntries + (Update->Flags.Repeat ? 0 : i);
             if (bc250_pte_from_dxgk(&vm->Pte,VidMmKind(level),pte->Flags,pte->PageAddress,&entries[i]) != 0) {
                 InterlockedIncrement(&vm->Refused);
+                VidMmNoteRefusal(Update,pte,FALSE);
                 status = STATUS_INVALID_PARAMETER;
                 break;
             }
@@ -461,7 +492,10 @@ BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* 
         const DXGK_PTE* pte = Update->pPageTableEntries + (Update->Flags.Repeat ? 0 : i);
         u64 entry;
         if (bc250_pte_from_dxgk(&vm->Pte,VidMmKind(Update->PageTableLevel),
-                               pte->Flags,pte->PageAddress,&entry) != 0) return FALSE;
+                               pte->Flags,pte->PageAddress,&entry) != 0) {
+            VidMmNoteRefusal(Update,pte,TRUE);
+            return FALSE;
+        }
         if (i >= Start && i - Start < Count) Entries[i - Start] = entry;
     }
     VidMmCountEncoding(Update,Start,Count,Entries);
@@ -786,8 +820,12 @@ void VidMmSummary(void)
         GuardLog("vidmm summary: level %u: %ld calls, %lld entries, %lld valid", level, vm->Calls[level],
                  vm->Entries[level], vm->Valid[level]);
     for (segment = 0; segment < BC250_VIDMM_SEGMENT_IDS; segment++)
-        if (vm->SegmentSeen[segment] != 0)
-            GuardLog("vidmm summary: segment %u named by %ld valid entries", segment, vm->SegmentSeen[segment]);
+    {
+        LONG64 seen=InterlockedCompareExchange64(&vm->SegmentSeen[segment],0,0);
+        LONG64 refused=InterlockedCompareExchange64(&vm->RefusedSegment[segment],0,0);
+        if (seen != 0 || refused != 0)
+            GuardLog("vidmm summary: segment %u named by %lld valid entries, %lld refused", segment, seen, refused);
+    }
     // Sampled totals may grow during this summary; they are not a synchronized
     // snapshot. Segment IDs preserve the OS input identity (including local tables).
     for(level=0;level<BC250_VIDMM_LEVELS;level++) {
@@ -812,7 +850,8 @@ void VidMmSummary(void)
                      level,segment,coherent,noncoherent);
         }
     }
-    GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls", vm->CpuCalls, vm->GpuCalls);
+    GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls, %ld gpu-physical refusals",
+             vm->CpuCalls, vm->GpuCalls, vm->GpuRefused);
     GuardLog("vidmm summary: %lld entries written (%s), %ld refused, %ld bad calls, %ld roots", vm->Written,
              vm->Write ? "EnableGpuVa open" : "plan only", vm->Refused, vm->BadCalls, vm->Roots);
 }

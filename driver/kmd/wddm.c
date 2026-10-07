@@ -377,6 +377,12 @@ typedef struct _BC250_WDDM {
     volatile LONG PagingMapsBuilt;
     volatile LONG PagingUnmapsBuilt;
     volatile LONG64 PagingBytesMoved;
+    // Memory manager stage 1d (0.7.216.8): the halves PagingXferBytes does not carry. Fill bytes (FILL and
+    // VIRTUAL_FILL; PagingBytesMoved sums them with the transfers) and aperture pages mapped and unmapped, so
+    // two summaries give a session's paging volume without the journal ring and its loss.
+    volatile LONG64 PagingFillBytes;
+    volatile LONG64 PagingMapPages;
+    volatile LONG64 PagingUnmapPages;
     // KMD183: built transfers by kind and direction, count and bytes, indexed by BC250_WDDM_XFER (trial 211 could
     // not tell evictions to system memory from restores without the journal, which wrapped).
     volatile LONG PagingXferCount[BC250WddmXferKinds];
@@ -2427,6 +2433,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingXferCount[BC250WddmXferPhysicalFromSystem], Wddm->PagingXferBytes[BC250WddmXferPhysicalFromSystem],
              Wddm->PagingXferCount[BC250WddmXferPhysicalOther], Wddm->PagingXferBytes[BC250WddmXferPhysicalOther]);
     GuardLog("wddm summary: aperture map batches %ld, unmap batches %ld",Wddm->PagingMapsBuilt,Wddm->PagingUnmapsBuilt);
+    GuardLog("wddm summary: paging fills %ld/%lld bytes, aperture pages mapped %lld unmapped %lld",
+             Wddm->PagingFillsBuilt,Wddm->PagingFillBytes,Wddm->PagingMapPages,Wddm->PagingUnmapPages);
     GuardLog("wddm summary: paging TLB invalidations %ld, PTE update batches %ld",
              Wddm->PagingFlushesBuilt,Wddm->PagingUpdatesBuilt);
     GuardLog("wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) %ld/%ld/%ld/%ld/%ld",
@@ -5323,8 +5331,10 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         ULONG before=pBuildPagingBuffer->MultipassOffset;
         NTSTATUS status=WddmBuildAperture((BC250_DEVICE*)hAdapter,pBuildPagingBuffer,unmap);
         if (pBuildPagingBuffer->MultipassOffset!=before) {
-            if (unmap) InterlockedIncrement(&wddm->PagingUnmapsBuilt);
-            else InterlockedIncrement(&wddm->PagingMapsBuilt);
+            // MultipassOffset is the next page of the operation (WddmBuildAperture), so the step is the page count.
+            const LONG64 pages=(LONG64)(pBuildPagingBuffer->MultipassOffset-before);
+            if (unmap) { InterlockedIncrement(&wddm->PagingUnmapsBuilt); InterlockedAdd64(&wddm->PagingUnmapPages,pages); }
+            else { InterlockedIncrement(&wddm->PagingMapsBuilt); InterlockedAdd64(&wddm->PagingMapPages,pages); }
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -5336,6 +5346,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            InterlockedAdd64(&wddm->PagingFillBytes,(LONG64)moved);
             PagingJournalNote(BC250_PJ_FILL,0,pBuildPagingBuffer->Fill.hAllocation,moved,
                 WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
@@ -5355,6 +5366,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            InterlockedAdd64(&wddm->PagingFillBytes,(LONG64)moved);
             PagingJournalNote(BC250_PJ_VIRTUAL_FILL,pBuildPagingBuffer->FillVirtual.DestinationVirtualAddress,
                 pBuildPagingBuffer->FillVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
