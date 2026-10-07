@@ -31,7 +31,7 @@ typedef void* PDXGK_START_INFO;
 typedef void* PDXGKRNL_INTERFACE;
 static ULONG settingGate,cached,durable;
 static NTSTATUS openStatus,readStatus,writeStatus,flushStatus;
-static unsigned opens,writes,flushes,closes,admissions,checks,failures,logs;
+static unsigned opens,writes,flushes,closes,admissions,checks,failures,logs,episodes;
 static char lastLog[180];
 static BOOLEAN g_FullWddm;
 static int KeGetCurrentIrql(void){return PASSIVE_LEVEL;}
@@ -44,6 +44,8 @@ static NTSTATUS ZwFlushKey(HANDLE key){(void)key;flushes++;if(NT_SUCCESS(flushSt
 static void ZwClose(HANDLE key){(void)key;closes++;}
 static void GuardLog(const char* format,...){logs++;strcpy_s(lastLog,sizeof(lastLog),format);}
 static void GuardStage(ULONG stage){if(stage==StageStartGuardPassed)admissions++;}
+// One kept log file per device start: the start names its episode before anything else can log.
+static void GuardLogKeepEpisode(PCWSTR label){if(!wcscmp(label,L"start"))episodes++;}
 #include "guard_actual.inc"
 #include "gate_actual.inc"
 // The start bookkeeping after the guard (start_health.c, cumode.c) is not what this test is about.
@@ -52,8 +54,8 @@ static void CuModeBegin(BC250_DEVICE* d){(void)d;}
 #include "pnp_actual.inc"
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)
-{settingGate=cached=durable=0;openStatus=readStatus=writeStatus=flushStatus=0;opens=writes=flushes=closes=admissions=logs=0;g_FullWddm=FALSE;lastLog[0]=0;}
-static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;NTSTATUS s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);return s;}
+{settingGate=cached=durable=0;openStatus=readStatus=writeStatus=flushStatus=0;opens=writes=flushes=closes=admissions=logs=episodes=0;g_FullWddm=FALSE;lastLog[0]=0;}
+static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;NTSTATUS s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);CHECK(episodes==1);return s;}
 int main(void)
 {
     unsigned before;
