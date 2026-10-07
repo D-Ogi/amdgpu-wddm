@@ -26,8 +26,9 @@ start logs `wddm: HangRecoveryMode 1: ...`.
 0 is the switch-off. The start then logs `wddm: HangRecoveryMode 0: ...`, and every TDR DDI is exactly as it is in
 0.7.216.14, the driver of release 0.7.216.100-tester.20: the shim's kill helper is compiled in but never called,
 and no register of the new table entry is ever written. Any other value is on, as for `EnableVmidPool`. With
-NOCLOBBER a reinstall keeps an operator's 0. An install by the installer writes the table again, so it turns the
-feature on again.
+NOCLOBBER a reinstall of the driver package keeps an operator's 0, and so does the release installer: it writes
+the default only where the value is absent or still holds what the previous installer wrote (rule `kept` in
+`tools/release/installer/common.ps1`). A machine that had tester.20, whose INF did not name the value, gets 1.
 
 From 0.7.216.13 to 0.7.216.17 the switch was an experiment: off by default, and every install wrote 0 without
 NOCLOBBER, as for `EnableHangBugcheck`. No release carried those drivers.
