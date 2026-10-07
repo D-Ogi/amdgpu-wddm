@@ -98,6 +98,11 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnFirmwareAddress = 0;
     Device->DcnCurrentAddress = 0;
     Device->DcnDiverged = FALSE;
+    // M15.14 (0.7.216.20): the plane format state, same reset rule; DcnCaptureFirmwareFormat fills it at WddmStart.
+    Device->DcnFirmwareSurfaceConfig = Device->DcnFirmwareHubpretControl = Device->DcnFirmwareCnvcFormat = 0;
+    Device->DcnPlaneFormats = FALSE;
+    Device->DcnPlaneFormat = 0;
+    Device->DcnFormatChanges = Device->DcnFormatRefused = 0;
     // 0.7.24 (ADR 0011 point 3 step 3): the hardware vsync's own state, same reset rule.
     Device->InterruptLastTime = Device->DcnVsyncEntryTime = 0;
     Device->DcnVsyncAckTime = Device->DcnVsyncNotifyTime = 0;

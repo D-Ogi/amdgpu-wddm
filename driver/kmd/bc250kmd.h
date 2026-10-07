@@ -229,6 +229,14 @@ typedef struct _BC250_DEVICE {
     ULONGLONG DcnCurrentAddress;
     BOOLEAN DcnDiverged;
     BOOLEAN DcnBlanked;                // this driver requested blank; restore must unblank
+    // M15.14 plane format (0.7.216.20, plane_format.h). The firmware's three format registers, read once per start
+    // by DcnCaptureFirmwareFormat (WddmStart). DcnPlaneFormats is TRUE only when they decode to ARGB8888, and
+    // only then may a flip program another format or restore check one. DcnPlaneFormat is the plane format the
+    // plane was last programmed with, published with the address and pitch under DcnSurfaceSequence.
+    ULONG DcnFirmwareSurfaceConfig, DcnFirmwareHubpretControl, DcnFirmwareCnvcFormat;
+    BOOLEAN DcnPlaneFormats;
+    ULONG DcnPlaneFormat;
+    volatile LONG DcnFormatChanges, DcnFormatRefused;
 
     // dcn.c's VidPn flip (0.7.24, ADR 0011 point 3 step 3): Device->DcnWriteEnabled && EnableVidPnFlip together
     // (mmio.c's MmioStart), i.e. EnableMmio && EnableDcnWrite && EnableVidPnFlip. Meaningful only under the full
@@ -540,7 +548,8 @@ typedef struct _BC250_DCN_REG_INFO {
 } BC250_DCN_REG_INFO;
 NTSTATUS MmioDcnRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table);
-// 0.7.20 (ADR 0011 point 3 step 2): the write side, g_MmioDcnWriteAllow's six HUBP0/OTG0 registers only, gated
+// 0.7.20 (ADR 0011 point 3 step 2): the write side, g_MmioDcnWriteAllow's HUBP0/OTG0 registers only (from 0.7.216.20
+// also the three plane format registers, gen_regs.py's DCN_WRITE_REGISTERS), gated
 // by Device->DcnWriteEnabled. Every call logged - the escape's own occasional writes (dcn.c's DcnFlipCore).
 NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 // 0.7.24 (ADR 0011 point 3 step 3, review 16 section 24): the same validated write, Quiet skips the per-write
@@ -600,8 +609,14 @@ NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no al
 // Device->VramMcBase + an offset), not the physical address DCN wants; PhysicalOut, if not NULL, gets the
 // translated address for the caller's own log line. STATUS_DEVICE_NOT_READY with the gate closed,
 // STATUS_ACCESS_DENIED when the address does not translate inside the carve-out or fails the escape's own 4
-// KiB/range rule.
-NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+// KiB/range rule. PlaneFormat (plane_format.h, 0.7.216.20) is the surface's plane format: its bytes a pixel are the
+// pitch's unit, and a format other than the plane's current one is programmed in the same locked update as the
+// address. STATUS_NOT_SUPPORTED for a format other than ARGB8888 when the firmware's format did not decode.
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
+    ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+// M15.14 (0.7.216.20): read the firmware's plane format registers once per start, before any flip can change them
+// (WddmStart). Read-only. Afterwards Device->DcnPlaneFormats says whether a flip may program another format.
+void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device);
 // Non-blocking hardware observations: pending includes EARLIEST_INUSE mismatch.
 // Scanout returns the actual card address, independently of request publication.
 BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress);

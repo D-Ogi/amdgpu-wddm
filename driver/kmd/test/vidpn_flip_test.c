@@ -63,11 +63,13 @@ typedef struct {
     volatile LONG PrimarySequence, PrimaryProgrammedSequence;
     BOOLEAN PrimaryNeedsRestore;
     ULONG PrimaryPitch; ULONGLONG PrimaryBytes;
+    ULONG PrimaryPlaneFormat;       /* M15.14: plane_format.h format of the published primary, 0 = none yet */
     unsigned PrimarySegment;
     volatile LONG Flips, FlipsAboveDispatch, VSyncReports;
     volatile LONG ScanoutFlips, ScanoutRequests, ScanoutAdmits[BC250_SCANOUT_STATUSES], ScanoutNotes, ScanoutTeardowns;
     /* M15.14 increment 2: the OS's own flip mode, per bit, for every accepted address call. */
     volatile LONG ScanoutFlipFlags[4];
+    volatile LONG ScanoutFlipsByFormat[BC250_PLANE_FORMATS];   /* M15.14: written flips by plane format */
     volatile LONGLONG ScanoutObject;
     BOOLEAN ScanoutAdmitGate;       /* EnableScanoutAdmit, absent = on (WddmStart) */
     int VSyncEnabled;
@@ -97,6 +99,9 @@ typedef unsigned long long ULONG_PTR;
 #define D3DDDIFMT_A8R8G8B8 21
 #define D3DDDIFMT_X8R8G8B8 22
 #define D3DDDIFMT_A8B8G8R8 32
+#define D3DDDIFMT_A2B10G10R10 31
+#define D3DDDIFMT_A8 28
+#define D3DDDIFMT_A16B16G16R16F 113
 /* Serial: adapter-unique, nonzero, never reused (wddm.c, WddmNewObject under the lock). The teardown record
  * holds it instead of the object's address, so a value that outlived its object cannot match a later object
  * allocated where the old one was. */
@@ -116,6 +121,7 @@ static void PagingJournalDestroy(ULONGLONG va,HANDLE h,ULONGLONG bytes,unsigned 
 static void WddmFreeObject(BC250_WDDM_OBJECT *o){if(o)++freed;}
 static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE *d){(void)d;++restores;return restore_result;}
 static ULONG programmed_pitch;
+static ULONG programmed_format;     /* M15.14: the plane format the last written flip carried */
 static unsigned checks,failures,hardware,arms,reports;
 static int irq,pending,inject_update,nested_writer,inject_fallback_update;
 /* The one interleaving the lifetime tie exists for: dxgkrnl frees the buffer of a flip that is still inside
@@ -153,12 +159,15 @@ static BOOLEAN WddmReadCompletedPrimary(BC250_DEVICE*,BC250_WDDM*,PHYSICAL_ADDRE
 static NTSTATUS Bc250WddmSetVidPnSourceAddress(const HANDLE,const DXGKARG_SETVIDPNSOURCEADDRESS*);
 static NTSTATUS Bc250WddmDestroyAllocation(const HANDLE,const DXGKARG_DESTROYALLOCATION*);
 void WddmDcnVsync(BC250_DEVICE*);
-static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pitch,ULONGLONG bytes,ULONGLONG *out)
+static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pitch,ULONG format,ULONGLONG bytes,ULONGLONG *out)
 {
     PHYSICAL_ADDRESS sample={-1};
     unsigned before=reports;
     DXGKARG_SETVIDPNSOURCEADDRESS other={0};
+    const BC250_PLANE_ENCODING *plane=Bc250PlaneEncoding(format);
     (void)out;
+    /* M15.14: every flip names a plane format with an encoding, and the pitch is whole pixels of it. */
+    CHECK(plane!=NULL && plane && pitch%plane->BytesPerPixel==0 && pitch>=d->Post.Width*plane->BytesPerPixel);
     CHECK(bytes==(ULONGLONG)pitch*d->Post.Height);
     hardware++;
     CHECK(!WddmReadCompletedPrimary(d,d->Wddm,&sample,NULL));
@@ -178,7 +187,7 @@ static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pit
         destroy.NumAllocations=1;destroy.pAllocationList=list;
         CHECK(Bc250WddmDestroyAllocation(d,&destroy)==STATUS_SUCCESS);
     }
-    if(NT_SUCCESS(hardware_result)){programmed=(LONGLONG)address;programmed_pitch=pitch;}
+    if(NT_SUCCESS(hardware_result)){programmed=(LONGLONG)address;programmed_pitch=pitch;programmed_format=format;}
     return hardware_result;
 }
 static BOOLEAN DcnFlipPending(BC250_DEVICE *d, ULONGLONG expected)
@@ -265,6 +274,89 @@ static void FlipFlagBits(void)
     CHECK(w.ScanoutFlipFlags[2]==2);
     request.VidPnSourceId=0;
 }
+/* M15.14 (0.7.216.20): the plane format travels with the flip. Each admitted SCANOUT_PRIMARY format reaches the
+ * hardware with its own plane format, the same address in another format is a change, a NULL allocation keeps
+ * the published format, and the composed-only formats (A8, A16B16G16R16F) and a mismatched pitch are refused
+ * before hardware. The compositor's B8G8R8A8 flip takes the plane back to the firmware's format. */
+static void PlaneFormatFlips(void)
+{
+    BC250_WDDM w={0};BC250_DEVICE d={0};
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    BC250_WDDM_OBJECT game={0},desktop={0};
+    DXGKARG_DESTROYALLOCATION destroy={0};
+    HANDLE list[1];
+    unsigned written;
+    d.Post.Width=1366;d.Post.Height=768;d.Post.Pitch=5632;
+    d.Wddm=&w;d.VidPnFlipEnabled=1;w.VSyncEnabled=1;w.ScanoutAdmitGate=TRUE;
+    w.PrimaryAddress.QuadPart=0x1000;w.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;w.PrimaryPitch=5632;
+    irq=0;hardware_result=STATUS_SUCCESS;hardware=0;programmed=displayed=0x1000;programmed_format=0;
+    game.Magic=BC250_WDDM_MAGIC_ALLOCATION;game.Serial=0x7001;game.UmdAlloc=1;game.ScanoutRequested=1;
+    game.ScanoutWidth=1366;game.ScanoutHeight=768;game.ScanoutPitch=5632;game.UmdBytes=5632ull*768;
+    game.ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+    desktop.Magic=BC250_WDDM_MAGIC_ALLOCATION;desktop.Serial=0x7002;
+    desktop.Allocation.Width=1366;desktop.Allocation.Height=768;desktop.Allocation.Pitch=5632;
+    desktop.Allocation.Format=D3DDDIFMT_A8R8G8B8;desktop.Allocation.Size=5632ull*768;
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+    /* The Witcher 3 shape: an R8G8B8A8 swap chain (lab session 458). */
+    request.hAllocation=&game;request.PrimaryAddress.QuadPart=0x10000;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(hardware==1 && programmed_format==BC250_PLANE_FORMAT_ABGR8888 && w.PrimaryPlaneFormat==BC250_PLANE_FORMAT_ABGR8888);
+    CHECK(w.ScanoutFlips==1 && w.ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR8888]==1 && w.ScanoutObject==(LONGLONG)game.Serial);
+    /* Same address, same pitch, another format: a change, so the hardware is written. */
+    game.ScanoutFormat=D3DDDIFMT_A2B10G10R10;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(hardware==2 && programmed_format==BC250_PLANE_FORMAT_ABGR2101010);
+    CHECK(w.ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR2101010]==1 && w.PrimaryPlaneFormat==BC250_PLANE_FORMAT_ABGR2101010);
+    /* The identical flip again is no change. */
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(hardware==2);
+    /* A NULL allocation keeps the published format and pitch. */
+    request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x20000;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(hardware==3 && programmed_format==BC250_PLANE_FORMAT_ABGR2101010 && programmed_pitch==5632);
+    /* The compositor's own B8G8R8A8 primary takes the plane back to the firmware's format. */
+    request.hAllocation=&desktop;request.PrimaryAddress.QuadPart=0x30000;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(hardware==4 && programmed_format==BC250_PLANE_FORMAT_ARGB8888 && w.PrimaryPlaneFormat==BC250_PLANE_FORMAT_ARGB8888);
+    CHECK(w.ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ARGB8888]==1 && w.ScanoutObject==0);
+    /* Refused before hardware: the composed-only rows and a pitch that is not whole pixels of the row. The
+     * plane keeps the surface and the format it has. */
+    {
+        LONG formats=w.ScanoutAdmits[BC250_SCANOUT_FORMAT],pitches=w.ScanoutAdmits[BC250_SCANOUT_PITCH];
+        written=hardware;request.hAllocation=&game;request.PrimaryAddress.QuadPart=0x40000;
+        game.ScanoutFormat=D3DDDIFMT_A16B16G16R16F;game.ScanoutPitch=1366*8;game.UmdBytes=1366ull*8*768;
+        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+        game.ScanoutFormat=D3DDDIFMT_A8;game.ScanoutPitch=1408;game.UmdBytes=1408ull*768;
+        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+        CHECK(w.ScanoutAdmits[BC250_SCANOUT_FORMAT]==formats+2);
+        game.ScanoutFormat=D3DDDIFMT_A8B8G8R8;game.UmdBytes=5632ull*768;
+        game.ScanoutPitch=1366*4-4;     /* shorter than a row */
+        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+        game.ScanoutPitch=5634;         /* not a whole number of 4-byte pixels */
+        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+        CHECK(w.ScanoutAdmits[BC250_SCANOUT_PITCH]==pitches+2);
+        CHECK(hardware==written && w.PrimaryPlaneFormat==BC250_PLANE_FORMAT_ARGB8888 && w.PrimaryAddress.QuadPart==0x30000);
+        game.ScanoutPitch=5632;
+    }
+    /* The kernel refuses another format when the firmware's format was not captured (dcn.c, STATUS_NOT_SUPPORTED):
+     * nothing is published and the format stays. */
+    hardware_result=(NTSTATUS)0xC00000BBu;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==(NTSTATUS)0xC00000BBu);
+    CHECK(w.PrimaryPlaneFormat==BC250_PLANE_FORMAT_ARGB8888 && w.PrimaryAddress.QuadPart==0x30000);
+    CHECK(w.ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR8888]==1 && w.ScanoutObject==0);
+    hardware_result=STATUS_SUCCESS;
+    /* The game's buffer scanned out again, then destroyed: the firmware surface comes back and the next flip
+     * starts from the firmware's format. */
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(programmed_format==BC250_PLANE_FORMAT_ABGR8888 && w.ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR8888]==2);
+    list[0]=&game;destroy.NumAllocations=1;destroy.pAllocationList=list;
+    freed=journaled=restores=0;restore_result=STATUS_SUCCESS;
+    CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
+    CHECK(restores==1 && w.PrimaryPlaneFormat==0 && w.PrimaryPitch==0);
+    request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x50000;w.PrimaryPitch=0;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(programmed_format==BC250_PLANE_FORMAT_ARGB8888 && programmed_pitch==5632);
+}
 int main(void)
 {
     int level;
@@ -349,9 +441,10 @@ int main(void)
             CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
             CHECK(hardware==6 && !(w.PrimarySequence&1));
             {
-                // The flip never programs a pixel format: only the firmware plane's own two are scanned
-                // out. A8B8G8R8, A2B10G10R10 (DXGI R10G10B10A2) and the rest are refused before hardware.
-                static const ULONG refused[]={0,28,31,32,33,35,113};
+                // Only the table's SCANOUT_PRIMARY rows with a plane encoding are scanned out (M15.14:
+                // A8R8G8B8, X8R8G8B8, and from 0.7.216.20 A8B8G8R8 and A2B10G10R10, PlaneFormatFlips below).
+                // A8, X8B8G8R8, A16B16G16R16F and the rest are refused before hardware.
+                static const ULONG refused[]={0,28,33,35,113};
                 unsigned k;
                 allocation.Allocation.Size=5888ull*768;request.PrimaryAddress.QuadPart=50;
                 for(k=0;k<sizeof(refused)/sizeof(refused[0]);k++){
@@ -396,7 +489,7 @@ int main(void)
                 request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x8010;
                 CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
                 CHECK(w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==1);
-                request.PrimaryAddress.QuadPart=0x8000;umd.ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+                request.PrimaryAddress.QuadPart=0x8000;umd.ScanoutFormat=D3DDDIFMT_A16B16G16R16F;
                 CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
                 CHECK(w.ScanoutAdmits[BC250_SCANOUT_FORMAT]==formats+1);
                 umd.ScanoutFormat=D3DDDIFMT_A8R8G8B8;umd.ScanoutHeight=767;
@@ -483,6 +576,7 @@ int main(void)
                     CHECK(w.ScanoutTeardowns==1 && w.ScanoutNotes==notes);
                     CHECK(restores==1 && freed==1 && journaled==1 && w.ScanoutObject==0);
                     CHECK(w.PrimaryNeedsRestore && w.PrimaryAddress.QuadPart==0 && w.PrimaryPitch==0);
+                    CHECK(w.PrimaryPlaneFormat==0);   // M15.14: the restore put the firmware's format back
                     // Any other allocation's destroy touches neither the plane nor the record.
                     w.PrimaryNeedsRestore=FALSE;list[0]=&umd;restores=0;freed=0;
                     CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
@@ -570,6 +664,7 @@ int main(void)
         CHECK(hardware==before+2); // identical OS address still reprograms lost hardware
     }
     FlipFlagBits();
+    PlaneFormatFlips();
     printf("vidpn publication: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
 }

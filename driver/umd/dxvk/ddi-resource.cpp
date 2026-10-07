@@ -136,7 +136,8 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     // dxgkrnl refused an RGB10A2 primary allocation with D3DDDI_ID_UNINITIALIZED (343: AllocateCb
     // E_INVALIDARG, the kernel driver saw no request). Admission as a primary is not permission to
     // scan out: the kernel driver's SetVidPnSourceAddress still takes only the SCANOUT_PRIMARY rows
-    // (8-bit), and direct scan-out of RGB10A2/RGBA16F stays unsupported. The Ascent's UE 4.26
+    // (BGRA8, and RGBA8 and RGB10A2 from 0.7.216.20 when its trailer carries PLANE_FORMATS), and direct
+    // scan-out of RGBA16F stays unsupported. The Ascent's UE 4.26
     // borderless swap chain is RGB10A2 with a primary descriptor; refusing it removed the device at
     // startup (339-342).
     const auto *row=runtime_surface_format(d.Format);

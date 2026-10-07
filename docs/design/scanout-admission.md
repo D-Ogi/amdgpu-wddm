@@ -50,9 +50,9 @@ In the order the function applies them:
 
 | Status | Rule |
 | --- | --- |
-| `format` | the format is a `SCANOUT_PRIMARY` row of `driver/contract/amdgpu_wddm_surface_format.h`: BGRA8 or X8 only, and a client can only ask for BGRA8 |
+| `format` | the format is a `SCANOUT_PRIMARY` row of `driver/contract/amdgpu_wddm_surface_format.h`. `driver/kmd/plane_format.h` has an encoding for it at the same bytes per pixel. The rows are BGRA8, X8, RGBA8 and RGB10A2 (the last two from 0.7.216.20) |
 | `geometry` | the width and height are the POST mode's. Only one VidPN source mode exists (`display.c`) |
-| `pitch` | `DcnSurfaceBytes` gives the surface a row layout. This also refuses a pitch that is not a whole number of 4-byte pixels, which is what keeps `HUBPREQ0_DCSURF_SURFACE_PITCH` (pitch/4 - 1) exact |
+| `pitch` | `DcnLinearSurfaceBytes` gives the surface a row layout at the row's bytes per pixel. This also refuses a pitch that is not a whole number of pixels, which is what keeps `HUBPREQ0_DCSURF_SURFACE_PITCH` (pitch / bytes per pixel - 1) exact |
 | `size` | the rows fit in the allocation |
 | `alignment` | the address is 4 KiB aligned |
 | `segment` | `PrimarySegment` is the local segment, the only one whose descriptor carries `Flags.DirectFlip` |
@@ -65,17 +65,99 @@ summary line `wddm summary: scan-out refusals format/geom/pitch/size/segment/ali
 the header. `geom` and `align` are short there because the line holds 159 characters, and the
 header gives both names in full.
 
-## Why the format table is unchanged
+## Plane pixel formats (0.7.216.20)
 
-Only BGRA8 and X8 carry `SCANOUT_PRIMARY`, and only one of the two has a DXGI storage format. The X8 row
-gives `dxgi` as 0 (`driver/contract/amdgpu_wddm_surface_format.h:83-92`), which no swap chain can name, so
-`B8G8R8A8_UNORM` and its sRGB view are the only formats a client can present and this rule can admit. A
-document or a comment that says "the 8-bit rows" means that one row.
+Up to 0.7.216.18 only BGRA8 and X8 had `SCANOUT_PRIMARY`, because the driver did not change the
+plane's pixel format. The firmware leaves the plane in ARGB8888, and every flip used that format. In lab
+session 458 The Witcher 3 presented from an `R8G8B8A8_UNORM` swap chain at 1920x1200. The router's
+front answered `answer=0 rule=primary`, and DWM composed every frame.
 
-RGB10A2 and RGBA16F carry `COMPOSED` only, so a 10-bit or
-FP16 swap chain cannot become a candidate and keeps the composed-primary path of `m14/d3d11-composed-primaries`
-unchanged (owner instruction, 2026-09-29: the Present and swap-chain architecture stays HDR-ready).
-Scan-out is a selected mode for an eligible 8-bit chain, not a replacement for composition.
+From 0.7.216.20 the driver programs the plane's pixel format at each flip. The surface format table is
+still the single source of truth. A row with `SCANOUT_PRIMARY` must have an encoding in
+`driver/kmd/plane_format.h`, and the `scanout-admit` host test holds the two together.
+
+| Table row | DXGI swap chain format | HUBP `SURFACE_PIXEL_FORMAT` | CNVC `CNVC_SURFACE_PIXEL_FORMAT` | Crossbar `CB_B`, `CR_R` |
+| --- | --- | --- | --- | --- |
+| BGRA8 | `B8G8R8A8_UNORM` (87), `_SRGB` (91) | 8 (ARGB8888) | 8 | 2, 3 |
+| X8 | none (the GDI desktop) | 8 | 8 | 2, 3 |
+| RGBA8 | `R8G8B8A8_UNORM` (28), `_SRGB` (29) | 8 | 8 | 3, 2 |
+| RGB10A2 | `R10G10B10A2_UNORM` (24) | 10 (ABGR2101010) | 10 | 3, 2 |
+| RGBA16F | `R16G16B16A16_FLOAT` (10) | not admitted | not admitted | not admitted |
+
+The registers are `HUBP0_DCSURF_SURFACE_CONFIG` (field `SURFACE_PIXEL_FORMAT`), `HUBPRET0_HUBPRET_CONTROL`
+(fields `CROSSBAR_SRC_CB_B` and `CROSSBAR_SRC_CR_R`) and `CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT`, from
+`third_party/linux-amdgpu/dcn_2_0_1_offset.h` and `dcn_2_0_1_sh_mask.h`. The values come from
+`hubp1_program_pixel_format` (Linux v6.18 `dcn10_hubp.c:236-300`, which `dcn201_hubp.c` calls) and
+`dpp201_cnv_setup` (`dcn201_dpp.c:44-176`). The firmware's own values (`SURFACE_PIXEL_FORMAT` 8,
+`HUBPRET_CONTROL` 0x00E40000) are in E21 and E22. The driver reads the three registers once at start.
+It writes back the firmware's values with only the named fields replaced. It does not write any other
+field of these registers.
+
+The write order is in `DcnFlipWriteSequence` (`driver/kmd/dcn.c`). The CNVC, crossbar and surface format
+writes come before the pitch and the address, inside the same `OTG_MASTER_UPDATE_LOCK` window. The driver
+clears `SURFACE_FLIP_TYPE`, so the format, the swizzle and the address all latch at the same VUPDATE. A
+format change is a full update in Linux (`dc.c:2672`), and Linux also writes it under the pipe lock
+(`dcn20_hwseq.c:1747` and `:1843`).
+
+The driver restores ARGB8888 on these paths:
+
+- the flip back to the desktop's primary.
+- the restore of the firmware's surface at stop and at D3 (`DcnRestorePostDisplay`).
+- a flip of an allocation that has no plane encoding. The driver refuses this flip with
+  `STATUS_NOT_SUPPORTED` and does not change the plane.
+
+The retained power pause sets the current format to "unknown", so the next flip writes the format again.
+The CPU mapping of the scan-out surface (`DcnScanoutMapping`) is available only while the plane uses
+ARGB8888.
+
+### The capability flag
+
+The scan-out caps trailer gets the flag `BC250_SCANOUT_CAPS_PLANE_FORMATS` (0x2). The driver sets it only
+with `BC250_SCANOUT_CAPS_DIRECT_FLIP`, and only when the start read the firmware's format registers and
+found ARGB8888. The table gets the policy bit `AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE` for BGRA8 and X8. A
+user-mode reader admits a row without that bit only when the trailer has the flag
+(`bc250_scanout_format_admitted` in `driver/contract/bc250_scanout_caps.h`). A new user-mode driver on an
+older kernel driver therefore keeps RGBA8 and RGB10A2 composed. This is necessary because a refused flip
+comes after `SharedPrimaryTransition`, and then the output stays black.
+
+The router's front admits a pair whose two rows differ, for example an RGBA8 client over DWM's BGRA8
+buffer. Both rows must pass `bc250_scanout_format_admitted` and must have the same bytes per pixel. The
+DDI asks for compatible swizzle formats, and it refuses an `IMMEDIATE` flip only for a swizzle that can
+change at VSync alone (`ref/ddi-display/d3d10umddi.md:8833-8838`). Here the address also changes at
+VSync alone, so the two always change in the same frame, and the front keeps `IMMEDIATE` admitted.
+
+The operator switch is `EnableScanoutPlaneFormats` (`REG_DWORD`, `Parameters` key, absent means 1). The
+value 0 makes the driver skip the start's register read, so the flag stays clear and every flip uses
+ARGB8888. This is the bisect switch of the release train.
+
+### Why FP16 is not admitted
+
+The plane has FP16 surface formats: `SURFACE_PIXEL_FORMAT` 24 (both FP16 orders, `dcn10_hubp.c`) in HUBP and
+`CNVC_SURFACE_PIXEL_FORMAT` 25 (ABGR16161616F) in `dpp201_cnv_setup`. Two parts are missing:
+
+1. **Request and deadline settings.** A 64-bit surface is `dm_444_64` in DML (`dcn20_fpu.c:1703`). It
+   needs other DLG/TTU values, request sizes and watermarks than the 32-bit surface that the firmware
+   programmed (`dm_444_32`, `dcn20_fpu.c:1716`, `dcn20_hubbub.c:148-151`). This driver does not run DML.
+   With the firmware's 32-bit values the plane gets twice the bytes a line, and an underflow is possible.
+2. **The transfer function.** scRGB values are linear and can be outside 0 to 1. The plane needs a
+   regamma to sRGB in `MPCC_OGAM` and a clamp. The driver does not program the output gamma.
+
+The RGBA16F row gets `SCANOUT_PRIMARY` only when `plane_format.h` gets its encoding together with these two
+parts.
+
+### Colour space
+
+`DXGKARG_SETVIDPNSOURCEADDRESS` does not carry a colour space. Only the multi-plane overlay DDI carries one
+(`ColorSpaceType` in `DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3`, `ref/ddi-display/d3dkmddi.md:23606`). The plane
+therefore applies the desktop's transfer function to RGB10A2. An HDR10 (ST 2084) chain gets no PQ
+curve. This is a named follow-up for the multi-plane overlay work (`kmd/display-modes`).
+
+### Alpha
+
+The firmware sets `MPCC_ALPHA_BLND_MODE`, and the driver does not change it. The start logs
+`MPCC_CONTROL`, `FORMAT_CONTROL` and `ALPHA_2BIT_LUT`. If the mode is per-pixel alpha, an application whose
+alpha channel is not 1.0 can get a darker image. A swap chain with `DXGI_ALPHA_MODE_IGNORE` does not
+guarantee alpha 1.0 in the buffer. The first lab arm reads the logged mode.
 
 ## Placement, and the one field that must move with it
 
@@ -241,6 +323,8 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
 
 - **The mode list.** `display.c` offers the inherited POST mode only, so a game that asks for 1080p
   cannot mode-set and is scaled and composed. A trial must therefore run at the POST geometry.
+- **FP16 and HDR scan-out.** See [Why FP16 is not admitted](#why-fp16-is-not-admitted) and
+  [Colour space](#colour-space).
 - **Multi-plane overlay.** There is no `DxgkDdiCheckMultiPlaneOverlaySupport` and no plane path, so the
   "DWM composes again when a window overlaps" half of M15.14 is handled by the OS falling back to
   composition, not by a driver plane.

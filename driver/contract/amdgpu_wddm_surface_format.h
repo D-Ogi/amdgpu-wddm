@@ -24,13 +24,30 @@
  *                    compositor, which converts it to the desktop's format. The monitor's depth does
  *                    not matter.
  *   SCANOUT_PRIMARY  may be the argument of SetVidPnSourceAddress, i.e. read by the display
- *                    pipeline. Today only the formats of the plane the firmware left.
+ *                    pipeline. The kernel driver programs the plane's pixel format for the row at
+ *                    every flip (driver/kmd/plane_format.h), so every row with this bit must have a
+ *                    plane encoding there; a host test holds the two together (scanout_admit_test.c).
+ *   FIRMWARE_PLANE   the format the firmware left the plane in: the GDI desktop's format, and the
+ *                    only format of a VidPN source mode of the display-only table
+ *                    (driver/kmd/display_modes.h). A SCANOUT_PRIMARY row without this bit makes the
+ *                    kernel driver change the plane's pixel format, which an older kernel driver does
+ *                    not do. A user-mode reader therefore admits such a row for scan-out only when the
+ *                    kernel driver publishes BC250_SCANOUT_CAPS_PLANE_FORMATS
+ *                    (driver/contract/bc250_scanout_caps.h, bc250_scanout_format_admitted).
  * A row without a bit is known and refused with a reason, never mistaken for an unknown format.
+ *
+ * RGBA8 and RGB10A2 are SCANOUT_PRIMARY from the kernel driver 0.7.216.20 (M15.14, a game's own
+ * R8G8B8A8 swap chain, lab session 458). The plane reads them with its red and blue crossbar
+ * swapped, and RGB10A2 with the 10-bit surface format (plane_format.h gives the AMD fields).
  *
  * RGBA16F (an FP16 swap chain, scRGB when the application says so) is COMPOSED at 8 bytes a
  * pixel. Every reader takes bytes_per_pixel from the row, never 4: the pitch is at least
  * width * 8. The colour space and HDR metadata are not part of LB7A: DXGI hands them to the
  * compositor, which converts to the desktop's format; no reader here interprets the values.
+ * RGBA16F is not SCANOUT_PRIMARY. The plane has an FP16 surface format, but two things are
+ * missing, and plane_format.h names both: the request and deadline settings of a 64-bit surface
+ * (the firmware programmed them for 32 bits), and an output transfer function for linear scRGB
+ * values. The row gets the bit when plane_format.h gets its encoding, and in no other way.
  * A component built against a copy of this table without the bit still refuses the row (the
  * kernel driver up to 0.7.184.1 and the desktop UMDs 4176D1DF and E6B944CF do), so the bit takes
  * effect on a machine only when every component along the path carries it.
@@ -50,6 +67,7 @@ extern "C" {
 
 #define AMDGPU_WDDM_SURFACE_COMPOSED        0x1u
 #define AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY 0x2u
+#define AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE  0x4u
 
 /* DXGI_FORMAT values (dxgiformat.h). */
 #define AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT  10u
@@ -81,15 +99,17 @@ static inline const AMDGPU_WDDM_SURFACE_FORMAT *amdgpu_wddm_surface_formats(unsi
 {
     static const AMDGPU_WDDM_SURFACE_FORMAT rows[] = {
         {AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM, AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM_SRGB, AMDGPU_WDDM_D3DDDI_A8R8G8B8, 4,
-         AMDGPU_WDDM_SURFACE_COMPOSED | AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY, "BGRA8"},
+         AMDGPU_WDDM_SURFACE_COMPOSED | AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY | AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE,
+         "BGRA8"},
         {AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM, AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM_SRGB, AMDGPU_WDDM_D3DDDI_A8B8G8R8, 4,
-         AMDGPU_WDDM_SURFACE_COMPOSED, "RGBA8"},
+         AMDGPU_WDDM_SURFACE_COMPOSED | AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY, "RGBA8"},
         {AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM, 0, AMDGPU_WDDM_D3DDDI_A2B10G10R10, 4,
-         AMDGPU_WDDM_SURFACE_COMPOSED, "RGB10A2"},
+         AMDGPU_WDDM_SURFACE_COMPOSED | AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY, "RGB10A2"},
         {AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT, 0, AMDGPU_WDDM_D3DDDI_A16B16G16R16F, 8,
          AMDGPU_WDDM_SURFACE_COMPOSED, "RGBA16F"},
         {AMDGPU_WDDM_DXGI_A8_UNORM, 0, AMDGPU_WDDM_D3DDDI_A8, 1, AMDGPU_WDDM_SURFACE_COMPOSED, "A8"},
-        {0, 0, AMDGPU_WDDM_D3DDDI_X8R8G8B8, 4, AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY, "X8"},
+        {0, 0, AMDGPU_WDDM_D3DDDI_X8R8G8B8, 4,
+         AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY | AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE, "X8"},
     };
     *count = (unsigned int)(sizeof(rows) / sizeof(rows[0]));
     return rows;

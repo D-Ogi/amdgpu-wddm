@@ -8,6 +8,7 @@
 #include "dcn_translate.h"
 #include "gdi_private.h"    /* the LB7A blob and its GDI trailer, as wddm.c includes them: never a copy here */
 #include "gdi_admission.h"  /* the request, the answer and the per-adapter counters of the DDI, likewise */
+#include "plane_format.h"   /* M15.14: the plane's format, which the CPU mapping must match */
 typedef unsigned long ULONG,*PULONG;
 typedef unsigned int UINT;
 typedef unsigned long long ULONGLONG;
@@ -42,6 +43,7 @@ typedef struct {
  volatile LONG DcnSurfaceSequence,DcnScanoutMapFailed,DcnScanoutRemaps;
  SIZE_T FramebufferLength,DcnScanoutMapLength;
  PVOID DcnScanoutMap;
+ int DcnPlaneFormats;ULONG DcnPlaneFormat;   /* M15.14 (dcn.c DcnCaptureFirmwareFormat) */
 } BC250_DEVICE;
 static unsigned checks,failures,maps,unmaps;
 #define CHECK(x) do{++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
@@ -169,6 +171,18 @@ int main(void){
   CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));
   CHECK(length==(SIZE_T)(pitches[i]+256)*heights[i] && pitch==pitches[i]+256 && !d.DcnScanoutSeedAddress);
   d.DcnSurfaceSequence=1;CHECK(!DcnScanoutMapping(&d,&mapping,&length,&pitch));CHECK(!mapping && !length && !pitch);d.DcnSurfaceSequence=2;
+  /* M15.14: the CPU copy writes B8G8R8A8, so a plane of another format gets no mapping, and an unknown one
+   * (after retained power loss, before the next flip) none either. Without the captured format the plane is
+   * the firmware's and the mapping is the one before 0.7.216.20. */
+  {ULONG f;
+   d.DcnPlaneFormats=1;
+   for(f=BC250_PLANE_FORMAT_NONE;f<BC250_PLANE_FORMATS;f++){
+    d.DcnPlaneFormat=f;
+    CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch)==(f==BC250_PLANE_FORMAT_ARGB8888));
+    if(f!=BC250_PLANE_FORMAT_ARGB8888)CHECK(!mapping && !length && !pitch);
+   }
+   d.DcnPlaneFormats=0;d.DcnPlaneFormat=BC250_PLANE_FORMAT_ABGR8888;
+   CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));d.DcnPlaneFormat=0;}
   DcnUnmapScanout(&d);
   // Firmware pitch is wider than destination; last row must still be copied.
   {SIZE_T srcsize=d.FramebufferLength;UCHAR *src=malloc(srcsize);UCHAR *dst=malloc((SIZE_T)bytes+128);int exact=1;

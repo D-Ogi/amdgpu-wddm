@@ -176,7 +176,13 @@ DCN_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG0_OTG_MASTER_UPD
                        "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG",
                        "mmOTG0_OTG_GLOBAL_SYNC_STATUS",
                        # BD-013: AMD optc1_set_blank, used by dcn201_tg_funcs.
-                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
+                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL",
+                       # M15.14 (0.7.216.20): the plane's pixel format per flip (plane_format.h). AMD writes the same
+                       # three for a format change: hubp1_program_pixel_format (SURFACE_PIXEL_FORMAT, crossbar),
+                       # dpp201_cnv_setup (CNVC_SURFACE_PIXEL_FORMAT). The firmware's values with those fields
+                       # replaced, inside the flip's OTG0 update lock, and only when the format changes.
+                       "mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
+                       "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT"]
 
 # ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
 # write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of
@@ -203,6 +209,13 @@ DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
 DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", "mmDP_DTO0_MODULO",
     "mmOTG0_PIXEL_RATE_CNTL", "mmOTG0_OTG_INTERLACE_CONTROL", "mmOTG0_OTG_V_TOTAL_CONTROL"]
 DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
+# M15.14 (0.7.216.20): the plane's pixel format registers (plane_format.h), read at start to decode the firmware's
+# format and on restore to verify it; MPCC0_MPCC_CONTROL, CNVC_CFG0_FORMAT_CONTROL and CNVC_CFG0_ALPHA_2BIT_LUT
+# for the start log only (the blend mode, ALPHA_EN and the 2-bit alpha table decide whether a surface's alpha
+# reaches the output; CNVC_UPDATE_PENDING is the double-buffer witness of the CNVC fields). HUBP0_DCSURF_SURFACE_CONFIG is on DCN_REGISTERS already; named here for a define.
+DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
+    "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT", "mmCNVC_CFG0_FORMAT_CONTROL", "mmMPCC0_MPCC_CONTROL",
+    "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
 NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
 

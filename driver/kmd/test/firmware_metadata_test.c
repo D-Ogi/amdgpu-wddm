@@ -38,6 +38,9 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // M15.14 increment 2: the POST mode the scan-out caps trailer publishes. The real member is
     // DXGK_DISPLAY_INFORMATION, of which this branch reads the two geometry fields.
     struct {ULONG Width,Height;} Post;
+    // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
+    // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
+    BOOLEAN DcnPlaneFormats;
 } BC250_DEVICE;
 typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
 // The adapter's WDDM table, of which the extracted branch reads one start-latched byte: whether this
@@ -179,6 +182,22 @@ int main(int argc,char**argv)
         CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && scanout.version==BC250_SCANOUT_CAPS_VERSION &&
               scanout.size==sizeof(scanout) && scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
         CHECK(scanout.post_width==1920 && scanout.post_height==1200);
+        // (2b) M15.14: the plane formats flag rides along only when the start captured the firmware's
+        // plane format, and never without the DirectFlip flag (the branch writes nothing with that off).
+        d.DcnPlaneFormats=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        wddm->DirectFlipHandshake=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        for(j=BC250_ADAPTER_CAPS_BYTES;j<sizeof(extended);j++) CHECK(extended[j]==0xA5);
+        wddm->DirectFlipHandshake=1;d.DcnPlaneFormats=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
         memcpy(&identity,extended+BC250_ADAPTER_IDENTITY_OFFSET,sizeof(identity));
         CHECK(identity.magic==BC250_ADAPTER_IDENTITY_MAGIC && identity.size==sizeof(identity));
         CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));

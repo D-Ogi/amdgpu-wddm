@@ -429,7 +429,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             return refuse("shared surface shape",E_NOTIMPL,*request);
         // The storage formats the compositor may open, from the one table the kernel driver and the
         // compositor's UMD read as well. M15.14: when the scan-out mode is selected and this format is
-        // also a SCANOUT_PRIMARY row - BGRA8 or X8, never the 10-bit or FP16 composed primaries - the
+        // also a SCANOUT_PRIMARY row - BGRA8, and RGBA8 or RGB10A2 when the kernel driver publishes
+        // BC250_SCANOUT_CAPS_PLANE_FORMATS (0.7.216.20); never the FP16 composed primary - the
         // buffer is admitted as a scan-out primary instead, so the display pipeline can read it
         // directly. The mode is off by default; the kernel driver still decides whether any flip of the
         // surface is admitted, against the source mode's geometry and the segment the allocation landed in.

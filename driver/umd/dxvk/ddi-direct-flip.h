@@ -23,9 +23,12 @@ namespace bc250::umd {
 //     runtime had already stopped copying. So today the shell answers FALSE, as it did before
 //     M15.14, and the rule is in place for the increment that moves the placement. Changing the
 //     answer without changing the placement is the one thing this function must not do;
-//   - both carry a format the shared surface format table enables for SCANOUT_PRIMARY. On this part
-//     that is the 8-bit rows only, which is also what the kernel driver admits, so a 10-bit or FP16
-//     swap chain keeps the composed-primary path of M14.1;
+//   - both carry a format the shared surface format table enables for SCANOUT_PRIMARY and that
+//     bc250_scanout_format_admitted admits without the trailer's PLANE_FORMATS flag, which this shell
+//     does not read: BGRA8 only. RGBA8 and RGB10A2 are SCANOUT_PRIMARY rows from the kernel driver
+//     0.7.216.20, but the kernel driver programs their plane format only when its trailer says so, so
+//     this dormant rule keeps them on the composed-primary path of M14.1 until the shell reads the
+//     trailer, and an FP16 swap chain stays there in any case;
 //   - the two layouts agree exactly: width, height, pitch, and the same storage row of that table. A
 //     flip substitutes one allocation for the other under one display mode; a difference in any of
 //     them would be a different mode. The row and not the DXGI format, so that a BGRA8_UNORM front

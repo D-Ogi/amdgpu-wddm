@@ -870,6 +870,44 @@ static void FrontRuleTests()
         a = client;
         a.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
         run(caps, &a, &compositor, FlipRefusal::format, "a storage row that is not a scan-out row");
+        // M15.14 (0.7.216.20): RGBA8 and RGB10A2 are scan-out rows, but a row that is not the firmware's
+        // own format needs the trailer's PLANE_FORMATS flag, because only that kernel driver programs the
+        // plane's pixel format. With the flag, the client's row may differ from the compositor's BGRA8
+        // row (the swizzle and the address latch in one VUPDATE); FP16 stays refused.
+        bc250_scanout_caps planes = caps;
+        planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        const DXGI_FORMAT newRows[] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM};
+        for (DXGI_FORMAT format : newRows) {
+            a = client;
+            a.format = format;
+            run(caps, &a, &compositor, FlipRefusal::format, "a new scan-out row without PLANE_FORMATS");
+            run(planes, &a, &compositor, FlipRefusal::none, "a new scan-out row with PLANE_FORMATS");
+            Resource b = compositor;
+            b.format = format;
+            run(caps, &a, &b, FlipRefusal::format, "two new rows without PLANE_FORMATS");
+            run(planes, &a, &b, FlipRefusal::none, "two new rows with PLANE_FORMATS");
+            run(planes, &client, &b, FlipRefusal::none, "a BGRA8 client over a new compositor row");
+        }
+        a = client;
+        run(planes, &a, &compositor, FlipRefusal::none, "BGRA8 with PLANE_FORMATS");
+        a.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        a.pitch = HostedSurfacePitch(1920, 8);
+        run(planes, &a, &compositor, FlipRefusal::format, "FP16 with PLANE_FORMATS");
+        a = client;
+        a.format = DXGI_FORMAT_A8_UNORM;
+        run(planes, &a, &compositor, FlipRefusal::format, "A8 with PLANE_FORMATS");
+        a = client;
+        a.format = 0;
+        run(planes, &a, &compositor, FlipRefusal::format, "a format the record and the blob disagree on");
+        {
+            Resource b = compositor;
+            b.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            run(planes, &client, &b, FlipRefusal::format, "an FP16 compositor buffer (an HDR desktop)");
+        }
+        a = client;
+        a.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        a.pitch = 1920 * 4 + 256;
+        run(planes, &a, &compositor, FlipRefusal::pitch, "an RGBA8 client of another pitch");
         a = client;
         a.width = 1280;
         run(caps, &a, &compositor, FlipRefusal::geometry, "a client of another width");
@@ -1247,6 +1285,50 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     device.pfnOpenResource(hDevice, &open, other, rt);
     CHECK(ask(other, compositor, 0) == FALSE, "TRUE for two different pitches");
     CHECK(Has(lastLine(), "answer=0 rule=pitch"), "pitch: %s", lastLine().c_str());
+    // M15.14 (0.7.216.20): an RGBA8 client, the W3 shape of lab session 458. The blob and the v3 record
+    // both say RGBA8. Without PLANE_FORMATS the rule says format; with it the pair flips.
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    lb7a.Format = D3DDDIFMT_A8B8G8R8;
+    e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for RGBA8 without PLANE_FORMATS");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=28"), "RGBA8 no flag: %s",
+          lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
+    CHECK(ask(other, compositor, 0) == TRUE, "RGBA8 with PLANE_FORMATS refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "answer=1 rule=supported") && Has(lastLine(), "caps_flags=00000003") &&
+          Has(lastLine(), "pitch=7680 fmt=28"), "RGBA8 with flag: %s", lastLine().c_str());
+    CHECK(ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "RGBA8 IMMEDIATE refused");
+    // The sRGB view of the same storage in the record is the same row.
+    e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == TRUE, "an RGBA8 sRGB record refused: %s", lastLine().c_str());
+    // A record that names another storage row than the kernel driver's blob is refused, not renamed.
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for a BGRA8 record over an RGBA8 blob");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=0 "), "mismatch: %s",
+          lastLine().c_str());
+    // RGB10A2, the 10-bit swap chain.
+    lb7a.Format = D3DDDIFMT_A2B10G10R10;
+    e26r.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == TRUE, "RGB10A2 with PLANE_FORMATS refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "fmt=24"), "RGB10A2: %s", lastLine().c_str());
+    // FP16 at its own 8-byte pitch: not a scan-out row, with or without the flag.
+    lb7a.Format = D3DDDIFMT_A16B16G16R16F;
+    lb7a.Pitch = width * 8;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    e26r.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for an FP16 client");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=10"), "FP16: %s", lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    lb7a.Format = D3DDDIFMT_A8R8G8B8;
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     // Negative control 7: a destroyed client is forgotten, so a reused handle is never answered from the
     // record of a buffer that is gone.
     device.pfnDestroyResource(hDevice, client);

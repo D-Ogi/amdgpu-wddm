@@ -40,8 +40,18 @@
 //
 // IMMEDIATE (`D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE`) says the runtime would present without waiting
 // for the vertical blank. Nothing in the rule changes with it: the front neither queues the flip nor
-// owns the retire, the flip is an address and a pitch with no swizzle that must change at VSync, and
-// refusing the flag would only send an immediate present back to a copy.
+// owns the retire, and refusing the flag would only send an immediate present back to a copy.
+//
+// THE TWO FORMATS MAY DIFFER (0.7.216.20). The contract asks for compatible "swizzle formats", and says
+// that a swizzle the hardware can change only at VSync must not be admitted for an IMMEDIATE flip
+// (ref/ddi-display/d3d10umddi.md:8833-8838). The kernel driver writes the plane's pixel format, its
+// red/blue crossbar and the address of every flip in one OTG master-update-lock window, and it clears
+// SURFACE_FLIP_TYPE, so the address too latches only at the next VUPDATE (driver/kmd/dcn.c,
+// DcnFlipWriteSequence). The swizzle and the address therefore always change in the same frame, and an
+// IMMEDIATE flip shows no frame with one buffer's bytes read in the other buffer's order. So an RGBA8
+// back buffer may take the place of the compositor's BGRA8 front buffer when both rows pass
+// bc250_scanout_format_admitted with the trailer's flags and have the same bytes per pixel. The kernel
+// driver programs the client's format at the flip and the firmware's BGRA8 at the flip back.
 #ifndef BC250_FRONT_DIRECT_FLIP_H
 #define BC250_FRONT_DIRECT_FLIP_H
 
@@ -61,7 +71,8 @@ enum class FlipRefusal {
     vidpn_source,    // they do not name the one video present source this adapter has
     client_scannable,      // the application's record never asked for scan-out, or its placement is unreadable
     compositor_scannable,  // the display core cannot read the compositor's own buffer where it is placed
-    format,          // not one storage row the shared table enables for SCANOUT_PRIMARY
+    format,          // a side's row is not admitted for scan-out on this start
+                     // (bc250_scanout_format_admitted), or the two rows differ in bytes per pixel
     geometry,        // the two differ in width or height
     source_geometry, // or they differ from the source mode the kernel driver admits a flip at now
     pitch_unknown,   // one side's pitch is not known here; see the clause below
@@ -114,11 +125,13 @@ inline FlipRefusal FlipReason(const bc250_scanout_caps &caps, const Resource *cl
         return FlipRefusal::client_scannable;
     if (!WddmGdiCreatedScannable(&compositor->record, sizeof(compositor->record)))
         return FlipRefusal::compositor_scannable;
-    const AMDGPU_WDDM_SURFACE_FORMAT *row =
-        amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(client->format),
-                                  AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
-    if (!row || row != amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(compositor->format),
-                                                 AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY))
+    // Each side's row on its own: the shared table's SCANOUT_PRIMARY bit, and for a row other than the
+    // firmware's own format the trailer's PLANE_FORMATS flag (an older kernel driver does not program the
+    // plane's pixel format). The rows may differ; see THE TWO FORMATS MAY DIFFER above.
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = amdgpu_wddm_surface_format_by_dxgi(client->format);
+    const AMDGPU_WDDM_SURFACE_FORMAT *own = amdgpu_wddm_surface_format_by_dxgi(compositor->format);
+    if (!bc250_scanout_format_admitted(row, caps.flags) || !bc250_scanout_format_admitted(own, caps.flags) ||
+        row->bytes_per_pixel != own->bytes_per_pixel)
         return FlipRefusal::format;
     if (client->width != compositor->width || client->height != compositor->height)
         return FlipRefusal::geometry;

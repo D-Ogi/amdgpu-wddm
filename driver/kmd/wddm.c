@@ -503,6 +503,7 @@ typedef struct _BC250_WDDM {
 
     BOOLEAN PrimaryNeedsRestore; // hardware address may change across retained power loss
     ULONG PrimaryPitch;
+    ULONG PrimaryPlaneFormat;           // M15.14: plane_format.h format of the published primary; 0 = none yet
     ULONGLONG PrimaryBytes;
     PHYSICAL_ADDRESS PrimaryAddress;    // last successfully programmed address (retire only after flip pending clears)
     volatile LONG PrimaryProgrammedSequence; // advances only after changed hardware programming succeeds
@@ -586,6 +587,10 @@ typedef struct _BC250_WDDM {
     // They are observed and never obeyed: refusing a flip for a flag is the hazard, because the OS does
     // not fall back to composition seamlessly after a SharedPrimaryTransition.
     volatile LONG ScanoutFlipFlags[4];
+    // M15.14 (0.7.216.20): the scan-out flips the hardware was written with, by the plane format of the surface
+    // (plane_format.h order: [0] unused, argb8888, abgr8888, abgr2101010). A run that scans out a game's
+    // R8G8B8A8 chain shows it here, apart from the compositor's B8G8R8A8 flips.
+    volatile LONG ScanoutFlipsByFormat[BC250_PLANE_FORMATS];
     volatile LONG RedirectedPresents;           // DxgkDdiPresent calls carrying Flags.RedirectedFlip
     // The operator's switch for the handshake, read once at WddmStart (EnableDirectFlipHandshake, absent
     // = on from 0.7.213, and 0 is its bisect switch) and ANDed with ScanoutAdmitGate. It is published to the compositor's user-mode driver in the
@@ -2505,6 +2510,16 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                  Wddm->ScanoutCreatePrimaries, Wddm->ScanoutCreateResources);
         GuardLog("wddm summary: flip flags mode/immediate/shared-transition/independent %ld/%ld/%ld/%ld, redirected presents %ld",
                  flipFlags[0], flipFlags[1], flipFlags[2], flipFlags[3], Wddm->RedirectedPresents);
+        // M15.14 (0.7.216.20): the plane format half. "plane formats 1" is this start's DcnPlaneFormats (the
+        // firmware's format decoded), which is also what the caps trailer publishes as PLANE_FORMATS. The flip
+        // counts are by plane format (plane_format.h): every flip the hardware was written with, the
+        // compositor's own as well as a client's.
+        GuardLog("wddm summary: plane formats %lu, flips argb8888/abgr8888/abgr2101010 %ld/%ld/%ld, changes %ld refused %ld",
+                 (ULONG)(Wddm->Device->DcnPlaneFormats ? 1 : 0),
+                 Wddm->ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ARGB8888],
+                 Wddm->ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR8888],
+                 Wddm->ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR2101010],
+                 Wddm->Device->DcnFormatChanges, Wddm->Device->DcnFormatRefused);
     }
     // The published answer of this start, in the summary and not only in the start-time line: the log ring
     // holds minutes, and a trial that reads the counters an hour after boot would otherwise have to guess
@@ -2810,6 +2825,17 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  (ULONG)(Device->VidPnFlipEnabled ? 1 : 0), (ULONG)(Device->VramEnabled ? 1 : 0),
                  (ULONG)(Device->Mmio != NULL ? 1 : 0), (ULONG)(aligned ? 1 : 0),
                  (ULONG)(Device->Post.Width != 0 && Device->Post.Height != 0 ? 1 : 0));
+        // M15.14 (0.7.216.20): the plane's pixel format per flip. The firmware's format registers are read here,
+        // before the first flip of this start, and only a plane that decodes to ARGB8888 lets a flip program
+        // R8G8B8A8 or R10G10B10A2 (dcn.c DcnCaptureFirmwareFormat). EnableScanoutPlaneFormats, read once,
+        // absent = on, is the bisect switch: 0 skips the read, so this start flips B8G8R8A8 surfaces only and
+        // the caps trailer does not carry PLANE_FORMATS, which is 0.7.216.18 behaviour.
+        if (Device->VidPnFlipEnabled) {
+            const BOOLEAN formats = (BOOLEAN)(GuardReadSetting(L"EnableScanoutPlaneFormats", 1) != 0);
+            if (formats) DcnCaptureFirmwareFormat(Device);
+            GuardLog("wddm: plane formats %s", Device->DcnPlaneFormats ? "on" :
+                     formats ? "off (firmware format not decoded)" : "off (EnableScanoutPlaneFormats 0)");
+        }
     }
     // C50, read once for this start: absent = ON. The DDI text asks for the pairing (d3dkmddi.md:2392) and the
     // hop it removes is pure latency, so the finished behaviour rides the release, which is the train rule the
@@ -2995,6 +3021,9 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
     }
     wddm->RetainedPowerPause=TRUE;
     wddm->PrimaryNeedsRestore=TRUE;
+    // M15.14: the plane's format registers may change with its address. Unknown (NONE) makes the next flip
+    // write the format, whatever it is, and keeps the CPU blit off the plane until then (dcn.c).
+    if (Device->DcnPlaneFormats) Device->DcnPlaneFormat=BC250_PLANE_FORMAT_NONE;
     wddm->VSyncArmed=FALSE;
     KeCancelTimer(&wddm->VSyncTimer);
     KeCancelTimer(&wddm->SubmitTimer);
@@ -3635,6 +3664,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.version = BC250_SCANOUT_CAPS_VERSION;
             scanout.size = sizeof(scanout);
             scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+            // M15.14 (0.7.216.20): the plane takes the table's non-firmware SCANOUT_PRIMARY rows (R8G8B8A8,
+            // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
+            if (device->DcnPlaneFormats) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
             scanout.post_width = (unsigned int)device->Post.Width;
             scanout.post_height = (unsigned int)device->Post.Height;
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
@@ -4415,6 +4447,7 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
             wddm->PrimaryNeedsRestore = TRUE;      // the next flip is a change, whatever address it carries
             InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, 0);
             wddm->PrimaryPitch = 0;
+            wddm->PrimaryPlaneFormat = 0;          // the restore put the firmware's format back (M15.14)
             // Its own budget: the flip lines are written at the frame rate and would otherwise spend the
             // whole allowance long before the one line that says the plane was taken back.
             if (InterlockedIncrement(&wddm->ScanoutTeardowns) <= BC250_WDDM_LOG_CALLS)
@@ -6959,7 +6992,9 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         ULONG generation = (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
         BOOLEAN changed;
         ULONG pitch;
-        ULONGLONG bytes;
+        ULONG planeFormat;              // M15.14 (0.7.216.20): plane_format.h format of this flip's surface
+        const BC250_PLANE_ENCODING* plane;
+        ULONGLONG bytes = 0;
         BOOLEAN scanout = FALSE;        // M15.14: this flip's allocation was an application scan-out surface
         BOOLEAN written = FALSE;        // the display hardware was actually written, not only admitted
         BC250_WDDM_OBJECT* scanoutObject = NULL;   // the admitted scan-out allocation, for the teardown record
@@ -6984,9 +7019,13 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         if (pSetVidPnSourceAddress->Flags.FlipImmediate) InterlockedIncrement(&wddm->ScanoutFlipFlags[1]);
         if (pSetVidPnSourceAddress->Flags.SharedPrimaryTransition) InterlockedIncrement(&wddm->ScanoutFlipFlags[2]);
         if (pSetVidPnSourceAddress->Flags.IndependentFlipExclusive) InterlockedIncrement(&wddm->ScanoutFlipFlags[3]);
-        // A NULL allocation preserves current private properties; initially POST.
+        // A NULL allocation preserves current private properties; initially POST, whose format is the
+        // firmware's ARGB8888. The bytes follow the format's own size, never a literal 4 (M15.14).
         pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:device->Post.Pitch;
-        if (!DcnSurfaceBytes(device->Post.Width,device->Post.Height,pitch,&bytes)) status=STATUS_INVALID_PARAMETER;
+        planeFormat=wddm->PrimaryPlaneFormat?wddm->PrimaryPlaneFormat:BC250_PLANE_FORMAT_ARGB8888;
+        plane=Bc250PlaneEncoding(planeFormat);
+        if (!plane || !DcnLinearSurfaceBytes(device->Post.Width,device->Post.Height,pitch,plane->BytesPerPixel,&bytes))
+            status=STATUS_INVALID_PARAMETER;
         if (pSetVidPnSourceAddress->hAllocation)
         {
             // M15.14. Until 0.7.205.1 this clause refused every application allocation outright, which is
@@ -7047,11 +7086,15 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             else {
                 scanout=candidate.ScanoutRequested?TRUE:FALSE;
                 if (scanout) scanoutObject=allocation;
+                // Admission guarantees a plane encoding of the row's own size (scanout_admit.h).
+                planeFormat=Bc250PlaneFormatOf(candidate.Format);
                 status=STATUS_SUCCESS;
             }
         }
+        // The format is part of what the plane shows: the same address in another format is a change.
         changed = wddm->PrimaryNeedsRestore || InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0) !=
-                  pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch;
+                  pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch ||
+                  planeFormat!=wddm->PrimaryPlaneFormat;
         if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
         if (NT_SUCCESS(status) && changed && device->VidPnFlipEnabled) {
             // The teardown record is taken before the plane is programmed, not after. The write to HUBP0 is
@@ -7063,9 +7106,10 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             // early, which the next flip undoes.
             const LONG64 record=(LONG64)(scanoutObject?scanoutObject->Serial:0ull);
             LONG64 previous=InterlockedExchange64(&wddm->ScanoutObject,record);
-            status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,bytes,
-                                       scanout?&physical:NULL);
+            status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,
+                                       planeFormat,bytes,scanout?&physical:NULL);
             written=NT_SUCCESS(status);
+            if (written && planeFormat<BC250_PLANE_FORMATS) InterlockedIncrement(&wddm->ScanoutFlipsByFormat[planeFormat]);
             // A failed programming sequence gave the plane no address it keeps, so the record goes back to the
             // object the previous flip left there - unless a destroy has taken the record away meanwhile, in
             // which case that destroy owns the restore and the record must stay empty.
@@ -7081,6 +7125,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             wddm->PrimaryNeedsRestore=FALSE;
             wddm->PrimarySegment = pSetVidPnSourceAddress->PrimarySegment;
             wddm->PrimaryPitch=pitch;wddm->PrimaryBytes=bytes;
+            wddm->PrimaryPlaneFormat=planeFormat;
             if (changed) {
                 InterlockedIncrement(&wddm->Flips);
                 // Only a flip the hardware was written with counts as a scan-out flip. With the flip
@@ -7098,9 +7143,9 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                     // line is deliberately left as it is - its worst case is already baselined over the
                     // log line's width (BD-070), and the flags of a refused flip are in the summary.
                     if (InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
-                        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu flags 0x%08X",
+                        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu flags 0x%08X fmt %lu",
                                  (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,physical,pitch,bytes,
-                                 pSetVidPnSourceAddress->Flags.Value);
+                                 pSetVidPnSourceAddress->Flags.Value,planeFormat);
                 }
                 // The teardown record follows the plane: an application surface while one is being
                 // scanned out, nothing while the compositor's own primary is. A flip the hardware was

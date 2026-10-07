@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/07/2026,0.7.216.18
+DriverVer   = 10/07/2026,0.7.216.20
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -200,6 +200,12 @@ HKR, Parameters, CpuTune,           0x00010003, 1
 ; on a start that cannot flip still publishes nothing. 0 makes the trailer absent, which is 0.7.208.1 byte for
 ; byte at every buffer size.
 HKR, Parameters, EnableDirectFlipHandshake, 0x00010003, 1
+; Scan-out plane formats (dcn.c, driver/kmd/plane_format.h, docs/design/scanout-admission.md, M15.14). 1 lets a
+; flip program the plane's pixel format, so an R8G8B8A8 or R10G10B10A2 swap-chain buffer scans out as well as a
+; B8G8R8A8 one. The driver reads the firmware's format registers at start and turns this on only when they hold the
+; firmware's B8G8R8A8; the stop, a bugcheck and the desktop's next flip write that format back. 0 reads nothing and
+; flips B8G8R8A8 surfaces only, which is 0.7.216.18 behaviour.
+HKR, Parameters, EnableScanoutPlaneFormats, 0x00010003, 1
 ; The completion report pairs its own DPC-level notification (wddm.c, driver/kmd/notify_pairing.h, C50). 1 calls
 ; DxgkCbNotifyDpc at the end of the report pass, which is what the DDI text asks for, and the otherwise empty
 ; dxgkrnl DPC is not asked for at all: one DPC per completion fewer, measured at 12 to 20 us each. 0 is
