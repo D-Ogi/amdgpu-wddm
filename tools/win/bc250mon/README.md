@@ -165,8 +165,8 @@ foreground one first, then the ones on our GPU path.
 
 A green row needs the whole user-mode stack of one render path: the shell the runtime opened, the engine
 that shell loads and the ICD the engine draws with. The module names are the ones the release installs
-(`tools/release/release-sources.json`), and the x86 payload uses the same names minus D3D12 and zink, which
-it does not have (`tools/release/installer/common.ps1`), so 32-bit processes are covered by the same table.
+(`tools/release/release-sources.json`), and the x86 payload uses the same names minus zink, which it does
+not have (`tools/release/installer/common.ps1`), so 32-bit processes are covered by the same table.
 
 | Loaded | Row |
 |---|---|
@@ -179,7 +179,6 @@ it does not have (`tools/release/installer/common.ps1`), so 32-bit processes are
 | `d3d9.dll` + `d3d9on12.dll` / `bc250umd.dll` | `via D3D9On12 (D3D12 path)` / `stub UMD, no D3D9 renderer` |
 | `vulkan-1.dll` + `vulkan_radeon.dll` | `Vulkan  GPU (RADV ICD)` (green) |
 | a Direct3D runtime or `dxgi.dll` mapped from outside `\Windows\` | `replacement DLL next to the app, not the system runtime` (amber) |
-| `d3d12.dll` in a 32-bit process | `no x86 D3D12 in this package` (amber) |
 
 An API runtime with none of our modules gives `none of our UMDs loaded`: many D3D12 games load `d3d11.dll`
 without drawing with it, so no claim is made, and another adapter's UMD is not ours to name.
