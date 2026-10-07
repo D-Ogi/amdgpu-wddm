@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Ray tracing libraries in the shape we infer for Unreal Engine 4.26 (one library per shader collection; INFERENCE,
-// the engine source was not available): one library for the ray generation shader, one for the miss shader, one for
-// the hit group's closest hit and any hit shaders. Compiled three times with -D RGS, -D MS or -D HIT (build.ps1).
+// Ray tracing libraries in the shape of Unreal Engine 4.26 (one library per shader collection, as the engine's
+// D3D12RHI makes them): one library for the ray generation shader, one for the miss shader, one for the hit group's
+// closest hit and any hit shaders. Compiled three times with -D RGS, -D MS or -D HIT (build.ps1).
 // The payload is 24 bytes and the attributes 8, as the trial 465 minidump shows ({24, 8} on the failing thread's
 // stack). The local root signature's constant is at b0 space1.
 struct Payload {

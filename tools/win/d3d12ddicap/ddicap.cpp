@@ -10,11 +10,12 @@
 // client. Console only: no window, nothing resident; it exits when the cases are done.
 //
 // Usage: d3d12ddicap.exe [--hardware[=<adapter substring>]] [--idle-seconds=<n>] [case...]
-//   cases: ue426 ue426-additions ue426-basic ue426-add client-collection all (default all)
+//   cases: ue426 ue426-additions ue426-basic ue426-add-miss ue426-add-chs ue426-ahs-link ue426-add client-collection
+//   all (default all)
 //   --hardware: no WARP hook; the cases run on the first hardware adapter (or the first whose description holds the
 //   substring) through its own driver, and print the API results and the device removed reason only. This is the
 //   lab client of The Ascent's trial 465 (README.md).
-//   --idle-seconds: sleep that long before the first link (ue426 cases) or the addition (ue426-add).
+//   --idle-seconds: sleep that long before the first link (ue426 cases) or the addition (ue426-add cases).
 #include <windows.h>
 #include <d3d12.h>
 #include <cstdlib>
@@ -502,7 +503,7 @@ HRESULT ue_pipeline(ID3D12Device5* device, const Signatures& sig, UeCache& cache
 
 void idle(ID3D12Device5* device, DWORD idle_ms) {
     if (!idle_ms) return;
-    printf("api idle %lu ms before the link\n", static_cast<unsigned long>(idle_ms));
+    printf("api idle %lu ms before the link or the addition\n", static_cast<unsigned long>(idle_ms));
     Sleep(idle_ms);
     printf("api device removed reason after the idle: %08lx\n", static_cast<unsigned long>(device->GetDeviceRemovedReason()));
 }
@@ -535,9 +536,14 @@ HRESULT ue426_case(ID3D12Device5* device, const Signatures& sig, D3D12_STATE_OBJ
     return missing ? E_FAIL : S_OK;
 }
 
-// ue426-add: the occlusion pipeline with additions as the base, then the engine's addition of two new collections (a
-// hit group with an any hit shader and a miss shader). The grown object has every export; the base keeps its own.
-HRESULT ue426_add_case(ID3D12Device5* device, const Signatures& sig, DWORD idle_ms) {
+// The kinds of addition of the ue426-add cases: the engine's (a hit group with an any hit shader and a miss shader),
+// and two smaller ones that tell a refusal of the addition itself from a refusal of the any hit shader.
+enum class UeAdd {HitAnyMiss, HitMiss, Miss};
+
+// ue426-add (UeAdd::HitAnyMiss), ue426-add-chs (HitMiss: a hit group with a closest hit shader only, and the miss
+// shader) and ue426-add-miss (Miss: the miss shader only): the occlusion pipeline with additions as the base, then the
+// addition of new collections. The grown object has every export; the base keeps its own.
+HRESULT ue426_add_case(ID3D12Device5* device, const Signatures& sig, DWORD idle_ms, UeAdd kind) {
     const UeShaders u(sig);
     UeCache cache;
     constexpr D3D12_STATE_OBJECT_FLAGS flags = D3D12_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
@@ -545,24 +551,54 @@ HRESULT ue426_add_case(ID3D12Device5* device, const Signatures& sig, DWORD idle_
     HRESULT hr = ue_pipeline(device, sig, cache, {&u.occlusion_rgs, &u.default_ms, &u.default_chs}, flags,
                              "RAYTRACING_PIPELINE base", base);
     if (FAILED(hr)) return hr;
-    ID3D12StateObject* hit = nullptr;
-    ID3D12StateObject* miss = nullptr;
-    hr = cache.get(device, sig, u.material_hit, flags, &hit);
-    if (SUCCEEDED(hr)) hr = cache.get(device, sig, u.material_ms, flags, &miss);
-    if (FAILED(hr)) return hr;
+    std::vector<const UeShader*> added;
+    if (kind == UeAdd::HitAnyMiss) added.push_back(&u.material_hit);
+    if (kind == UeAdd::HitMiss) added.push_back(&u.intersection_chs);
+    added.push_back(&u.material_ms);
+    std::vector<ID3D12StateObject*> collections;
+    std::vector<std::wstring> names;
+    for (const UeShader* shader : added) {
+        ID3D12StateObject* c = nullptr;
+        hr = cache.get(device, sig, *shader, flags, &c);
+        if (FAILED(hr)) return hr;
+        collections.push_back(c);
+        names.push_back(shader->primary);
+    }
     idle(device, idle_ms);
-    hr = ue_addition(device, base.Get(), {hit, miss}, "grown", grown);
+    hr = ue_addition(device, base.Get(), collections, "grown", grown);
     if (FAILED(hr)) return hr;
-    int missing = identifiers(grown.Get(), "grown",
-                              {u.occlusion_rgs.primary, u.default_ms.primary, u.default_chs.primary,
-                               u.material_hit.primary, u.material_ms.primary});
+    std::vector<std::wstring> all{u.occlusion_rgs.primary, u.default_ms.primary, u.default_chs.primary};
+    all.insert(all.end(), names.begin(), names.end());
+    int missing = identifiers(grown.Get(), "grown", all);
     missing += identifiers(base.Get(), "base", {u.occlusion_rgs.primary, u.default_ms.primary, u.default_chs.primary},
-                           {u.material_hit.primary, u.material_ms.primary});
+                           names);
     // The engine reads the identifiers again from the grown object after the base is gone (the cache trims it).
     base.Reset();
-    missing += identifiers(grown.Get(), "grown after the base's release",
-                           {u.occlusion_rgs.primary, u.material_hit.primary, u.material_ms.primary});
+    std::vector<std::wstring> later{u.occlusion_rgs.primary};
+    later.insert(later.end(), names.begin(), names.end());
+    missing += identifiers(grown.Get(), "grown after the base's release", later);
     return missing ? E_FAIL : S_OK;
+}
+
+// ue426-ahs-link: no addition. One link with additions of the ray generation collection, the new miss collection and
+// the hit group collection with an any hit shader: the collections of ue426-add's addition in a CreateStateObject.
+HRESULT ue426_ahs_link_case(ID3D12Device5* device, const Signatures& sig, DWORD idle_ms) {
+    const UeShaders u(sig);
+    UeCache cache;
+    constexpr D3D12_STATE_OBJECT_FLAGS flags = D3D12_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
+    for (const UeShader* shader : {&u.occlusion_rgs, &u.material_ms, &u.material_hit}) {
+        ID3D12StateObject* c = nullptr;
+        const HRESULT hr = cache.get(device, sig, *shader, flags, &c);
+        if (FAILED(hr)) return hr;
+    }
+    idle(device, idle_ms);
+    ComPtr<ID3D12StateObject> link;
+    const HRESULT hr = ue_pipeline(device, sig, cache, {&u.occlusion_rgs, &u.material_ms, &u.material_hit}, flags,
+                                   "RAYTRACING_PIPELINE any hit", link);
+    if (FAILED(hr)) return hr;
+    return identifiers(link.Get(), "any hit", {u.occlusion_rgs.primary, u.material_ms.primary, u.material_hit.primary})
+               ? E_FAIL
+               : S_OK;
 }
 
 // The project's client shape (tools/win/d3d12queue -RayCollection): one collection holding everything, without
@@ -666,7 +702,8 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (cases.empty() || (cases.size() == 1 && cases[0] == "all"))
-        cases = {"ue426", "ue426-additions", "ue426-basic", "ue426-add", "client-collection"};
+        cases = {"ue426", "ue426-additions", "ue426-basic", "ue426-add-miss", "ue426-add-chs", "ue426-ahs-link",
+                 "ue426-add", "client-collection"};
     int failures = 0;
     for (const std::string& c : cases) {
         printf("== case %s\n", c.c_str());
@@ -675,7 +712,10 @@ int main(int argc, char** argv) {
         if (c == "ue426") hr = ue426_case(device.Get(), sig, D3D12_STATE_OBJECT_FLAG_NONE, false, idle_ms);
         else if (c == "ue426-additions") hr = ue426_case(device.Get(), sig, additions, false, idle_ms);
         else if (c == "ue426-basic") hr = ue426_case(device.Get(), sig, additions, true, idle_ms);
-        else if (c == "ue426-add") hr = ue426_add_case(device.Get(), sig, idle_ms);
+        else if (c == "ue426-add") hr = ue426_add_case(device.Get(), sig, idle_ms, UeAdd::HitAnyMiss);
+        else if (c == "ue426-add-chs") hr = ue426_add_case(device.Get(), sig, idle_ms, UeAdd::HitMiss);
+        else if (c == "ue426-add-miss") hr = ue426_add_case(device.Get(), sig, idle_ms, UeAdd::Miss);
+        else if (c == "ue426-ahs-link") hr = ue426_ahs_link_case(device.Get(), sig, idle_ms);
         else if (c == "client-collection") hr = client_collection_case(device.Get(), sig);
         else {
             printf("unknown case\n");
