@@ -262,19 +262,19 @@ rules end an episode:
 
 Work on the GFX ring does not end an episode by itself any more. Up to 0.7.216.1 it did: with the desktop composed
 on our GPU every DWM frame (the cursor, the clock, an overlay redraw, about 2 ms of GPU work every 2 s) put work on
-the ring, and the clock went 500 -> 1000 MHz, held the lab floor for the next 3 s quiet window, went back to 500 MHz,
+the ring. The clock went 500 -> 1000 MHz, held the lab floor for the next 3 s quiet window, went back to 500 MHz,
 and did it again. The owner watched it flap every two seconds at an idle desktop, and the lab counted 29 exits in
 6.5 minutes when the desktop was quiet (2026-10-07). The trailing window of that rule admitted the entry's own
 2 permille mean, which a desktop frame every 2 s at 500 MHz already reaches, so the slow exit flapped as well. The
 ring still gates the entry: the entry rule is unchanged.
 
-Why 150 permille. The measured desktop is far under it: the idle phases of the C62 identification (R120, 24 samples
-at 1.75 s, 500 MHz, a quiet desktop on the GPU) read a tick share of 0 and a busy average of 2 to 6 permille, and a
+Why 150 permille. The measured desktop is far under it. The idle phases of the C62 identification (R120, 24 samples
+at 1.75 s, 500 MHz, a quiet desktop on the GPU) read a tick share of 0 and a busy average of 2 to 6 permille. A
 2 ms frame every 2 s is about 2 permille at the idle point. A desktop that animates at 60 Hz with 2 ms of work a
 frame is 120 permille and still fits. And the work under it fits the point: 150 permille at 500 MHz is about
 75 permille at the lab floor, an order of magnitude under the load governor's lowering threshold (650), so 1000 MHz
 would serve the same work at the same throughput, with each frame's 2.5 ms halved, both far inside a 16.7 ms frame.
-A lower share lets a video or an animated page flap again; a higher one makes a sustained 30 % load wait longer than
+A lower share lets a video or an animated page flap again. A higher one makes a sustained 30 % load wait longer than
 one hold time.
 
 The two thresholds differ on purpose. The entry admits a mean of 2 permille because a static desktop wakes for
@@ -569,8 +569,8 @@ connects the first two loops in one direction. It is off by default (`DpmJointGo
 
 **Trigger.** The GPU is the bottleneck and heat holds its clock, both for 2 s:
 
-- bound: the governor's busy average is at or above 850 permille (`BC250_JOINT_BOUND_PERMILLE`; the governor raises
-  from 900).
+- bound: the governor's busy average is at or above 850 permille (`BC250_JOINT_BOUND_PERMILLE`).
+  The governor raises from 900.
 - heat: an 87 C episode, the soft zone, a thermal throttle (soft, hard, warm or zone), or a lowered thermal cap with
   the reading at or above the soft-release threshold (83 C by default). A lowered cap under that threshold is the
   soft release at work, so the arm waits for it and does not cap the CPU further. The thermal ramp (70 C and up)
@@ -613,7 +613,7 @@ turns the arm off for the start and takes the cap out. A refused change is tried
 one SMU owner. `Applied` names the arm's cap while it is in force, because the chip has it, so `RUN_CPU` shows it as
 `AppliedMaxMHz`. An operator's SET, RESET or search takes the cap out first. A refusal of that release refuses the
 operation with `STATUS_DEVICE_BUSY`. A KEEP cannot store the cap, because a KEEP needs a trial and the arm takes no cap
-during one. `CpuStop` and `CpuPause` take the cap out while the mailbox is still ours; `CpuResume` clears the record,
+during one. `CpuStop` and `CpuPause` take the cap out while the mailbox is still ours. `CpuResume` clears the record,
 because the chip loses the limit in D3.
 
 **Telemetry.** With the arm on, every change of the cap writes one line:
@@ -655,10 +655,10 @@ keeps its busy gate for the same message.
 | `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
-| `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits; absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
-| `DpmIdleLeavePermille` | the slow exit (0.7.216.6): the idle point is left when its trailing window's work reaches this share; absent = 150 (`BC250_DPM_IDLE_LEAVE_PERMILLE`), range 10 to 400 and above `DpmIdleBusyPermille`, else the idle state is off for the start |
+| `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
+| `DpmIdleLeavePermille` | the slow exit (0.7.216.6). The idle point is left when its trailing window's work reaches this share. Absent = 150 (`BC250_DPM_IDLE_LEAVE_PERMILLE`), range 10 to 400. It must be above `DpmIdleBusyPermille`, else the idle state is off for the start |
 | `DpmThermalZone` | the soft thermal zone (0.7.213): absent or any other value runs it, 0 runs the 0.7.212 thermal rules for the whole start (the hot cap at 87 C alone, no soft release, the warm zone at 87 C). A runtime `dpm tune reset` turns the zone back on |
-| `DpmJointGovernor` | the joint power arm (0.7.216.7, C62): 1 runs it in a start that governs the clock, absent or any other value leaves it off (the default). It also needs `CpuTune` 1 and a CPU read stage that answered. See "The joint power arm" above for what a lab trial must show before the default changes |
+| `DpmJointGovernor` | the joint power arm (0.7.216.7, C62). 1 runs it in a start that governs the clock. Absent or any other value leaves it off (the default). It also needs `CpuTune` 1 and a CPU read stage that answered. See "The joint power arm" above for what a lab trial must show before the default changes |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
 | `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |

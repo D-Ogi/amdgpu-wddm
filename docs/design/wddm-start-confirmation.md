@@ -133,7 +133,7 @@ driver again in the same boot. When nothing confirms the new start, each such
 start adds one count, and the second one is refused with Code 43. The kernel
 therefore gives a count back at an orderly stop, under three conditions:
 
-1. The stopping start completed (`Started`); a start that failed keeps its count.
+1. The stopping start completed (`Started`). A start that failed keeps its count.
 2. This image wrote and flushed that count, and no confirmation cleared it since.
 3. A start in this boot was confirmed. A durable confirmation writes the mark
    `Parameters\GuardBoot\Confirmed` = 1 in a volatile key, which the
