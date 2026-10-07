@@ -1,0 +1,178 @@
+# doclint ratchet baseline: the findings each document had on the day this gate landed
+# (2026-10-07). The rules are in docs/style.md and docs/glossary.yaml.
+# tools/quality/doclint.py reads this file, and tools/quality/quick.ps1 runs the gate.
+#
+# One line a document: <findings><tab><path>. There are no line numbers, so an edit
+# somewhere else in the same document does not move its entry.
+#
+# The gate fails when a document in this file gets more findings, and when a document
+# outside it has any finding at all. It passes with a note when a document improves or
+# leaves the tree, and the note asks for its line to be lowered or removed. Nothing raises
+# a line by itself: --list prints candidate lines for a reader to judge, and --prune only
+# lowers and removes. --prune refuses to touch this file while the gate fails.
+#
+# 4764 findings in 160 documents on that day, out of 190 in scope. The other 30 documents
+# were clean, and the gate holds them clean. This file is the debt, not the standard. No
+# document has to be rewritten; a document that is touched anyway should come out lower.
+#
+# To look at one document: python tools/quality/doclint.py --files <path>
+44	README.md
+62	docs/00-goal-and-roadmap.md
+8	docs/01-evidence-rules.md
+4	docs/02-register-addressing.md
+1	docs/adr/0001-new-repo-instead-of-fork.md
+3	docs/adr/0002-amd-headers-and-code-as-source-of-truth.md
+1	docs/adr/0003-license.md
+4	docs/adr/0004-polyform-noncommercial.md
+3	docs/adr/0005-vulkan-first-user-mode.md
+10	docs/adr/0006-m3-display-only-miniport-first.md
+8	docs/adr/0007-bring-up-through-gated-escapes.md
+18	docs/adr/0008-full-wddm-behind-a-gate-in-stages.md
+6	docs/adr/0009-native-d3d-umd-is-a-goal.md
+4	docs/adr/0010-performance-decisions-before-they-set.md
+5	docs/adr/0011-present-is-a-flip.md
+3	docs/adr/0012-submission-many-in-flight-vmid-per-process.md
+3	docs/adr/0013-node-layout-3d-plus-sdma.md
+8	docs/adr/0014-clocks-through-the-smu.md
+2	docs/adr/0015-m10-cpu-wsi.md
+10	docs/adr/0016-opencl-through-clvk.md
+19	docs/adr/0017-graphics-stack-direction-after-m12.md
+13	docs/adr/0018-engine-present-for-vulkan-wsi.md
+8	docs/adr/0019-ddi-interface-version-follows-the-wdk.md
+5	docs/adr/0020-operator-tuning-in-the-smu-owner.md
+35	docs/build.md
+15	docs/d3d12-shared-resources.md
+8	docs/design/adaptive-cpu-gpu.md
+22	docs/design/bc250-open-test-pack.md
+34	docs/design/cu-mode.md
+66	docs/design/d3d11-ddi-engine.md
+26	docs/design/d3d12-ddi-engine.md
+2	docs/design/dp-audio.md
+73	docs/design/dpm.md
+12	docs/design/fan.md
+11	docs/design/gfx-submit-root-serialization.md
+16	docs/design/gpu-dwm-interop-switches.md
+5	docs/design/hang-detector.md
+4	docs/design/iommu-dma-remapping.md
+16	docs/design/paging-journal.md
+40	docs/design/paging-node.md
+11	docs/design/paging-queue-storage.md
+28	docs/design/recent-launches.md
+14	docs/design/rejected-options.md
+14	docs/design/reproducible-builds.md
+1	docs/design/scanout-admission.md
+14	docs/design/sdma-virtual-paging.md
+13	docs/design/sparse-wddm.md
+21	docs/design/startup-clock-ownership.md
+16	docs/design/tuner.md
+13	docs/design/umd-contract-stage-d.md
+14	docs/design/vidpn-flip.md
+3	docs/design/vsync-arm-status.md
+10	docs/design/vsync-diagnostic-samples.md
+39	docs/design/vsync-interrupt-route.md
+21	docs/design/wddm-start-confirmation.md
+349	docs/design/wddm-startup.md
+36	docs/design/wsi-engine-present.md
+2	docs/dxvk-engine-commit-map.md
+21	docs/facts/README.md
+67	docs/gui/interfaces-setup.md
+38	docs/gui/interfaces.md
+21	docs/hardware.md
+8	docs/init-sequence.md
+138	docs/linux-session-wishlist.md
+27	docs/m13-accelerated-desktop-roadmap.md
+160	docs/m15-reconciliation.md
+28	docs/predecessor-analysis.md
+12	docs/prior-art-vs-hardware.md
+18	docs/prior-art.md
+18	docs/research/2026-09-27-windowed-present-under-dwm.md
+10	docs/research/README.md
+14	docs/research/bios-analysis-followup.md
+11	docs/research/build-quality-gates.md
+6	docs/research/driver-review-2026-09-24.md
+11	docs/research/g0-cpu-copy-coverage.md
+6	docs/research/g0-implementation-status.md
+64	docs/research/h264-encoder-literature-entropy-pipelining-check.md
+51	docs/research/h264-encoder-literature-entropy-pipelining.md
+42	docs/research/h264-encoder-literature-mode-decision-check.md
+61	docs/research/h264-encoder-literature-mode-decision.md
+91	docs/research/h264-encoder-literature-motion-estimation-check.md
+69	docs/research/h264-encoder-literature-motion-estimation.md
+111	docs/research/h264-encoder-literature-rate-control-check.md
+113	docs/research/h264-encoder-literature-rate-control.md
+19	docs/research/m13-present-baseline.md
+37	docs/research/m6-compute-dispatch.md
+138	docs/research/m7-full-wddm-miniport.md
+153	docs/research/m9-acceptance-history-through-m447.md
+65	docs/research/m9-acceptance-status.md
+364	docs/research/m9-dma-contract-audit.md
+13	docs/research/m9-system-paging.md
+22	docs/testing/INSTALL.md
+14	docs/testing/THIRD-PARTY.md
+73	docs/testing/defaults-audit-2026-10-04.md
+1	docs/testing/release-notes/0.7.202.100-tester.11.md
+2	docs/testing/release-notes/0.7.203.100-tester.11.md
+2	docs/testing/release-notes/0.7.204.100-tester.11.md
+3	docs/testing/release-notes/0.7.204.101-tester.11.md
+3	docs/testing/release-notes/0.7.205.100-tester.11.md
+1	docs/testing/release-notes/pending/0.7.208-log-lines.md
+62	docs/wddm_contract_matrix.md
+9	driver/README.md
+45	driver/amdgpu-import/PROVENANCE.md
+8	driver/amdgpu-import/README.md
+22	driver/contract/README-winsys.md
+29	driver/contract/README.md
+3	driver/icd/README-rt-node-address.md
+9	driver/icd/README.md
+23	driver/icd/mesa-wddm2-runtime-queues/README.md
+46	driver/kmd/README.md
+1	driver/kmd/gfx-copy-provenance.md
+6	driver/kmd/test/ih_consume_test.md
+1	driver/kmd/test/vsync_vector_test.md
+56	driver/shim/README.md
+6	driver/shim/test/README.md
+26	driver/shim/test/sdma_faults_report.md
+24	driver/umd/d3d12/README.md
+215	driver/umd/d3d12/engine-ddi/INTEGRATION.md
+29	driver/umd/d3d12/engine-ddi/README.md
+31	driver/umd/d3d12/engine-ddi/SLOTS.md
+28	driver/umd/d3d12/engine-ddi/shader-container/README.md
+132	driver/umd/dxvk/README.md
+1	driver/umd/dxvk/error-contract.md
+12	driver/umd/mft-h264/README.md
+10	driver/umd/router/README.md
+6	tools/build/README.md
+16	tools/diagusb/README.md
+3	tools/firmware/README.md
+4	tools/fwinfo/README.md
+15	tools/packagecheck/README.md
+48	tools/release/README.md
+18	tools/runcompare/README.md
+25	tools/win/README.md
+74	tools/win/amdgpu_wddm_control/README.md
+7	tools/win/amdgpu_wddm_setup/README.md
+14	tools/win/bc250kmd_cli/README.md
+39	tools/win/bc250mon/README.md
+9	tools/win/bc250rd/README.md
+4	tools/win/cumode/README.md
+20	tools/win/d3d11bench/README.md
+3	tools/win/d3d11errors/README.md
+2	tools/win/d3d11mt/README.md
+20	tools/win/d3d12caps/README.md
+57	tools/win/d3d12queue/README.md
+1	tools/win/dxgimodes/README.md
+53	tools/win/frameloop/README.md
+3	tools/win/gpu-timeline/README.md
+12	tools/win/gpuload/README.md
+27	tools/win/gui-trials/T2.md
+7	tools/win/kd/README.md
+16	tools/win/kmtprobe/README.md
+5	tools/win/lab-runner/README.md
+8	tools/win/lab-runner/etw/README.md
+20	tools/win/redirblt-probe/README.md
+1	tools/win/smartplug/README.md
+6	tools/win/triage/README.md
+1	tools/win/vkfillcheck/README.md
+1	tools/win/vkmembw/README.md
+1	tools/win/wsi-dxgi/README.md
+2	tools/wininstall/README.md

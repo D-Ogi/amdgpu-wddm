@@ -24,6 +24,9 @@ function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
 }
 try {
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
+ # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
+ # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
+ Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }

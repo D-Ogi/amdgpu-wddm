@@ -71,6 +71,11 @@ those properties.
 
 ## Style
 
+- **[docs/style.md](docs/style.md) is the writing standard**: ASD-STE100 Part 1 with a project glossary
+  (`docs/glossary.yaml`) in place of its dictionary, per document type. `tools/quality/doclint.py` gates it
+  as a ratchet (`tools/quality/doclint_baseline.txt`): no document may get worse, a new document starts
+  clean, and no existing document has to be rewritten. `python tools/quality/doclint.py --files <path>`
+  reads one document.
 - Everything in the repo is in English: docs, code, identifiers, commit messages.
 - Plain hyphens `-` in prose, no em dashes.
 - One exception to the English rule, by the owner's wish: a Polish saying or proverb that fits the situation
