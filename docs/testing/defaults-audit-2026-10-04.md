@@ -14,6 +14,11 @@ fix/approuter-gpu-default 06a0975b, BD-061). The package payload behind that zip
 stack, so row 2 is urgent. The lab itself points GpuUmdPath at app-route-quiet since 2026-10-04T01:10Z (`STATE.md`),
 which a tester does not get.
 
+Status note (2026-10-07, row 4): measured on unit A with `tools/win/d3d9probe`. With `bc250umd.dll` in the D3D9 slot,
+`CreateDeviceEx` fails with D3DERR_NOTAVAILABLE and Windows does not fall back to D3D9On12. With the slot empty, D3D9
+renders through `d3d9on12.dll` on our D3D12 driver. Branch `installer/d3d9on12` writes the empty slot in both views
+and ships no stub. 32-bit D3D9 still gets no device, because there is no 32-bit D3D12 UMD (row 3).
+
 ## Gaps, sorted by severity
 
 | # | Gap | What a user gets today | Evidence | Sev | What exists already | Smallest fix |

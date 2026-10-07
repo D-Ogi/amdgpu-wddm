@@ -141,6 +141,9 @@ Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey
 Write-Step 'Files'
 Invoke-Change "remove $root" { Remove-PathOrSchedule $root } | Out-Null
 # The D3D9 stub in System32 and its x86 copy in SysWOW64 (BD-064), each kept when it was there before the install.
+# This release installs no stub (D3D9 goes through D3D9On12). The releases up to 0.7.213.102-tester.17 did; an install
+# of this release removes their stub, and this step stays for a stub that is still there (in use at that install and
+# not yet removed by a restart, or put back by hand).
 foreach ($s in @(@{ dir = 'System32'; flag = 'stub_existed' }, @{ dir = 'SysWOW64'; flag = 'stub_wow_existed' })) {
     $stub = Join-Path $env:windir "$($s.dir)\bc250umd.dll"
     $stubExisted = $false
