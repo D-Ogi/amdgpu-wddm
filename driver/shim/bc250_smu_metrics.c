@@ -76,6 +76,12 @@ enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, u
 	    m.gfx_mv > BC250_SMU_METRICS_MAX_MV || m.soc_mv > BC250_SMU_METRICS_MAX_MV ||
 	    m.gfx_cc > BC250_SMU_METRICS_MAX_CC || m.soc_cc > BC250_SMU_METRICS_MAX_CC)
 		return BC250_SMU_METRICS_PARSE_RANGE;
+	/* The package never draws 0 W while the SMU answers (58 W idle on unit A's Linux). A Linux stress run of
+	 * 2026-10-07 (4 parallel readers, 316 000 tables in 90 s) read 0 for the average in about one sample of
+	 * three, and never with one reader. A zero is therefore a table caught while the firmware wrote it: the
+	 * reader skips it and keeps the previous reading, which then ages out by the freshness rule. */
+	if (m.socket_mw == 0u || m.socket_avg_mw == 0u)
+		return BC250_SMU_METRICS_PARSE_ZERO_POWER;
 	*out = m;
 	return BC250_SMU_METRICS_PARSE_OK;
 }
@@ -121,6 +127,10 @@ int bc250_smu_metrics_record(struct bc250_smu_metrics_reader *r, unsigned long l
 	}
 	parse = bc250_smu_metrics_parse(raw, length, &m);
 	r->last_parse = (unsigned int)parse;
+	if (parse == BC250_SMU_METRICS_PARSE_ZERO_POWER) {
+		r->failures++;  /* counted, but not toward the bad-table limit: the next table is usually whole */
+		return 0;
+	}
 	if (parse != BC250_SMU_METRICS_PARSE_OK) {
 		r->failures++;
 		if (++r->bad_in_row >= BC250_SMU_METRICS_BAD_LIMIT)

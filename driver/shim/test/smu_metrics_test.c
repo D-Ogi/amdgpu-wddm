@@ -201,11 +201,19 @@ static void decode(void)
 	t.current.gfx_cc = (unsigned short)BC250_SMU_METRICS_MAX_CC;
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK);
-	/* An idle package that reads 0 mW is a reading, not a refusal. */
+	/* 0 mW, current or average, is a table caught mid-write (Linux stress 2026-10-07): a skipped sample. */
 	good_table(&t);
 	t.current.socket_mw = 0;
 	memcpy(raw, &t, sizeof(raw));
-	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK && m.socket_mw == 0);
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_ZERO_POWER);
+	good_table(&t);
+	t.average.socket_mw = 0;
+	memcpy(raw, &t, sizeof(raw));
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_ZERO_POWER);
+	good_table(&t);
+	t.current.socket_mw = 1u;
+	memcpy(raw, &t, sizeof(raw));
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK && m.socket_mw == 1u);
 }
 
 /* ---- the reader ---------------------------------------------------------------------------------------- */
@@ -265,6 +273,26 @@ static void reader(void)
 	now += BC250_SMU_METRICS_PERIOD_MS;
 	CHECK(bc250_smu_metrics_record(&r, now, 0, raw, sizeof(raw)) == 0);
 	CHECK(r.bad_in_row == 0 && r.reads == 2 && r.last_parse == BC250_SMU_METRICS_PARSE_OK && r.last_ok_ms == now);
+
+	/* Zero-power tables (caught mid-write): counted, never toward the bad-table limit, the last reading stays. Five
+	 * in a row do not stop the reader; the reading ages out by freshness instead. */
+	{
+		struct table z;
+		unsigned char zraw[BC250_SMU_METRICS_BYTES];
+		unsigned int i, before = r.failures;
+		good_table(&z);
+		z.average.socket_mw = 0;
+		memcpy(zraw, &z, sizeof(zraw));
+		for (i = 0; i < 5u; i++) {
+			now += BC250_SMU_METRICS_PERIOD_MS;
+			CHECK(bc250_smu_metrics_record(&r, now, 0, zraw, sizeof(zraw)) == 0);
+		}
+		CHECK(r.state == BC250_SMU_METRICS_STATE_OK && r.bad_in_row == 0 && r.failures == before + 5u && r.reads == 2);
+		CHECK(r.last_parse == BC250_SMU_METRICS_PARSE_ZERO_POWER && r.last.socket_mw == 78000);
+		CHECK(!bc250_smu_metrics_fresh(&r, now) && bc250_smu_metrics_due(&r, now + BC250_SMU_METRICS_PERIOD_MS));
+		now += BC250_SMU_METRICS_PERIOD_MS;
+		CHECK(bc250_smu_metrics_record(&r, now, 0, raw, sizeof(raw)) == 0 && r.reads == 3 && bc250_smu_metrics_fresh(&r, now));
+	}
 
 	/* Three bad tables in a row: stopped for this start, but not latched for the boot (return 0). */
 	now += BC250_SMU_METRICS_PERIOD_MS;

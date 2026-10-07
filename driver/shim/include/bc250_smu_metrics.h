@@ -89,7 +89,8 @@ enum bc250_smu_metrics_parse {
 	BC250_SMU_METRICS_PARSE_OK = 0,
 	BC250_SMU_METRICS_PARSE_SHORT = 1,      /* fewer than BC250_SMU_METRICS_BYTES bytes */
 	BC250_SMU_METRICS_PARSE_UNWRITTEN = 2,  /* the poison is still in a field the firmware always writes */
-	BC250_SMU_METRICS_PARSE_RANGE = 3       /* a value outside the bounds above */
+	BC250_SMU_METRICS_PARSE_RANGE = 3,      /* a value outside the bounds above */
+	BC250_SMU_METRICS_PARSE_ZERO_POWER = 4  /* the current or average socket power reads 0 mW: a skipped sample */
 };
 
 /* One accepted table, in the units of the header. */
