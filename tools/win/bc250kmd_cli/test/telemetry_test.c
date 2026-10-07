@@ -107,6 +107,12 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
     d->Status = BC250_ESCAPE_STATUS_DONE; d->Version = 0x000700B1u;
     d->Flags = BC250_DPM_FLAG_TEMPERATURE | BC250_DPM_FLAG_CLOCK | BC250_DPM_FLAG_HW_BUSY;
     d->TemperatureMc = 67500; d->ObservedMHz = 1000; d->BusyPermille = 910; d->BusyAvgPermille = 880;
+    if (size == BC250_DPM_ABI3_SIZE) {                        // ABI 3 (0.7.215): the SMU metrics tail
+        BC250_ESCAPE_DPM_EX *x = data;
+        x->Metrics.MetricsState = BC250_DPM_METRICS_OK; x->Metrics.MetricsReads = 12;
+        x->Metrics.SocketPowerMw = 78000; x->Metrics.SocketPowerAvgMw = 77400;
+        d->Flags |= BC250_DPM_FLAG_POWER;
+    }
     if (escapeMode == 3) { d->Status = BC250_ESCAPE_STATUS_REFUSED; d->NtStatus = 0xC000000Du; }
     if (escapeMode == 4) { d->Status = BC250_ESCAPE_STATUS_REFUSED; d->NtStatus = 0; }
     if (escapeMode == 5) d->AbiVersion = 2;
@@ -173,6 +179,21 @@ int main(void)
     CHECK(sent.AbiVersion == BC250_DPM_ABI && sent.Command == 23 && sent.Op == 0);
     escapeMode = 5; CHECK(Bc250Dpm(&d, (ULONG)sizeof(d)) == 0);   /* the fixture answers 2, which is the request */
     escapeMode = 0;
+    /* ABI 3 (0.7.215): a caller with a BC250_ESCAPE_DPM_EX passes 248 bytes and gets the metrics tail. */
+    {
+        BC250_ESCAPE_DPM_EX x;
+        CHECK(sizeof(x) == BC250_DPM_ABI3_SIZE && sizeof(x.Dpm) == BC250_DPM_ABI2_SIZE && sizeof(x.Metrics) == 56);
+        escapeCalls = 0;
+        CHECK(Bc250Dpm(&x.Dpm, 247) < 0 && Bc250Dpm(&x.Dpm, 249) < 0 && escapeCalls == 0);
+        memset(&x, 0xA5, sizeof(x));
+        CHECK(Bc250Dpm(&x.Dpm, BC250_DPM_ABI3_SIZE) == 0 && escapeCalls == 1 && escapeSize == BC250_DPM_ABI3_SIZE);
+        CHECK(sent.AbiVersion == BC250_DPM_ABI_3 && sent.Command == 23 && sent.Op == 0 && sent.IdleMHz == 0);
+        CHECK((x.Dpm.Flags & BC250_DPM_FLAG_POWER) && x.Metrics.MetricsState == BC250_DPM_METRICS_OK);
+        CHECK(x.Metrics.SocketPowerMw == 78000 && x.Metrics.SocketPowerAvgMw == 77400 && x.Metrics.GfxMv == 0);
+        /* An answer that carries another AbiVersion is refused, as for the other two sizes. */
+        escapeMode = 5; CHECK(Bc250Dpm(&x.Dpm, BC250_DPM_ABI3_SIZE) == (LONG)0xC000000D);
+        escapeMode = 0;
+    }
 
     CHECK(Bc250VideoMemory(NULL, NULL, sizeof(m)) < 0 && Bc250VideoMemory(NULL, &m, 263) < 0 && statsCalls == 0);
     CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == 0 && !wcscmp(adapterId, L"fixture"));
