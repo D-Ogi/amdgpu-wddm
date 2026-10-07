@@ -245,7 +245,24 @@ AUDIO_READ_REGISTERS = (
         "DIG{n}_AFMT_STATUS", "HPD{n}_DC_HPD_INT_STATUS",
         # Step 2: the two AFMT registers enc1_se_setup_dp_audio (dcn10_stream_encoder.c) writes beside the ones above.
         "DIG{n}_AFMT_INFOFRAME_CONTROL0", "DIG{n}_AFMT_60958_0")])
+# Step 2's first write: the AFMT (HDMIn) memories in the DIO. dcn201_init_hw writes DIO_MEM_PWR_CTRL 0 ("power AFMT
+# HDMI memory", dcn201_hwseq.c); the firmware leaves every HDMIn_MEM_PWR_FORCE at 3 (0x6DB6D800 on unit A, r19, while
+# DP audio played at 0.33x and silent; Linux read 0 there and played at 1.0x, L1007b).
+AUDIO_READ_REGISTERS += ["mmDIO_MEM_PWR_CTRL"]
 EXTRA_READS += [("DMU", name) for name in AUDIO_READ_REGISTERS]
+# The Azalia controller block (dce_dc_hda_azf0controller_dispdec), the DIO memory power and the DCCG clock gates:
+# read only, so that `bc250kmd_cli read <name>` can compare them with Linux. Linux read all of them on unit A before,
+# during and after a playback that sounded at the right rate (L1007b, scratch/linux-1007b, 2026-10-07), while
+# Windows r19 consumed DP audio at 0.33x with every register of AUDIO_READ_REGISTERS equal to Linux. Plain MMIO; the
+# endpoint indirect space (INDEX/DATA) stays out: a CPU sweep of its indices hung unit A under Linux in L1007b.
+AUDIO_CONTROLLER_READ_REGISTERS = [
+    "mmAZALIA_CONTROLLER_CLOCK_GATING", "mmAZALIA_AUDIO_DTO", "mmAZALIA_AUDIO_DTO_CONTROL", "mmAZALIA_SOCCLK_CONTROL",
+    "mmAZALIA_UNDERFLOW_FILLER_SAMPLE", "mmAZALIA_DATA_DMA_CONTROL", "mmAZALIA_BDL_DMA_CONTROL",
+    "mmAZALIA_RIRB_AND_DP_CONTROL", "mmAZALIA_CORB_DMA_CONTROL", "mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER",
+    "mmAZALIA_CYCLIC_BUFFER_SYNC", "mmAZALIA_GLOBAL_CAPABILITIES", "mmAZALIA_OUTPUT_PAYLOAD_CAPABILITY",
+    "mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL", "mmDIO_MEM_PWR_STATUS", "mmDIO_MEM_PWR_CTRL2",
+    "mmDIO_MEM_PWR_CTRL3", "mmDCCG_GATE_DISABLE_CNTL", "mmDCCG_GATE_DISABLE_CNTL2"]
+EXTRA_READS += [("DMU", name) for name in AUDIO_CONTROLLER_READ_REGISTERS]
 # Step 2 also reads the DP reference clock counter (facts M788, 100 kHz units), from which the DTO1 module is set.
 # It is on the READ_REG list already (EXTRA_READS above); here it joins the audio read table, read only.
 AUDIO_OTHER_READS = [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
@@ -268,6 +285,7 @@ AUDIO_DIRECT_WRITES += [f"mm{r.format(n=n)}" for n in range(2) for r in (
     "DP{n}_DP_SEC_CNTL", "DP{n}_DP_SEC_AUD_N", "DP{n}_DP_SEC_TIMESTAMP", "DIG{n}_AFMT_CNTL",
     "DIG{n}_AFMT_AUDIO_SRC_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL2",
     "DIG{n}_AFMT_INFOFRAME_CONTROL0", "DIG{n}_AFMT_60958_0")]
+AUDIO_DIRECT_WRITES += ["mmDIO_MEM_PWR_CTRL"]
 # Indirect indices, by their ENDPOINT0 name in dcn_2_0_1_offset.h (regcalc: `lookup ix...`); the ENDPOINT1 name must
 # carry the same number, which main() checks. Read: the configuration and status registers dpaudio.c observes. The
 # interrupt-status indices (AUDIO_ENABLED_INT_STATUS and its neighbours) are left out: whether a read clears them is

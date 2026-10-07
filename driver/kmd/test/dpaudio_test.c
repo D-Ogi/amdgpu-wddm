@@ -162,6 +162,7 @@ static void UnitA(FAKE* f)
         f->Ix[e][BC250_AZ_IX_RESPONSE_HBR] = 0xFFFFFFFFul;
         f->Ix[e][BC250_AZ_IX_RESPONSE_LIPSYNC] = 0xFFFFFFFFul;
     }
+    Set(f, BC250_REG_DMU_DIO_MEM_PWR_CTRL, 0x6DB6D800ul);  // the firmware's value on unit A (r19): every HDMIn force 3
     Set(f, REFCLK, 6000);
     Set(f, DTO_SOURCE, 0x30);
     Set(f, BC250_REG_DMU_DCCG_AUDIO_DTO0_MODULE, 1);
@@ -238,6 +239,7 @@ static void ExpectStream(unsigned long n, unsigned long e, unsigned long module,
 {
     const SREGS* s = &g_S[n];
 
+    D(BC250_REG_DMU_DIO_MEM_PWR_CTRL, 0);                 // the AFMT memories on, as dcn201_init_hw
     D(DTO_SOURCE, 0x00000010ul);                          // DTO_SEL 3 -> 1 (DTO1)
     D(DTO1_MODULE, module);
     D(DTO1_PHASE, 240000);                                // 24 MHz in 100 Hz units
@@ -495,8 +497,8 @@ static void StartOnStreamZero(void)
     CHECK(g_Fake.Trace[g_Fake.Traced - 2].Op == OP_DATA && (g_Fake.Trace[g_Fake.Traced - 2].Value & HPC_AE));
     CHECK(g_Fake.AudioEnabledWrites == 2);                // only the two writes of the enable group carry it
     CHECK(g_Fake.Protocol == 0);
-    CHECK(g_Run.Init.Writes == 4 && g_Run.Config.Writes == 27 && g_Run.Stream.Writes == 17 && g_Run.Enable.Writes == 2);
-    CHECK(io.DirectWrites == 2 + 17 && io.IndirectWrites == 31 && io.Refusals == 0);
+    CHECK(g_Run.Init.Writes == 4 && g_Run.Config.Writes == 27 && g_Run.Stream.Writes == 18 && g_Run.Enable.Writes == 2);
+    CHECK(io.DirectWrites == 2 + 18 && io.IndirectWrites == 31 && io.Refusals == 0);
     CHECK(g_Run.Init.SizeRates == 0xFFFFF070ul && g_Run.Init.PowerStates == 0xC0000000ul);
     CHECK(g_Run.Enable.HotPlugBefore == 0x10 && g_Run.Enable.HotPlugAfter == 0x80000010ul);
     CHECK(g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] == 0x80000010ul);      // enabled, gating back on
@@ -626,7 +628,7 @@ static void WriteFailures(void)
     unsigned long observe = Calls(0), init = Calls(1), configure = Calls(2), stream = Calls(3), enable = Calls(4), k, bad = 0;
     const unsigned long base = observe + init + configure;
 
-    CHECK(observe == 16 && init > 0 && configure > 0 && stream == 17 && enable > 0);
+    CHECK(observe == 16 && init > 0 && configure > 0 && stream == 18 && enable > 0);
     for (k = observe + 1; k <= base + stream + enable; k++) {
         BC250_AZ_IO io;
         unsigned long groups = k <= observe + init ? 0 : k <= base ? 1 : k <= base + stream ? 2 : 3, reason;
@@ -657,6 +659,7 @@ typedef struct { unsigned long Offset, Mask, Step; } STUCK;
 static void Mismatches(void)
 {
     const STUCK cases[] = {
+        { BC250_REG_DMU_DIO_MEM_PWR_CTRL, DIO_MEM_PWR_CTRL__HDMI0_MEM_PWR_FORCE_MASK, BC250_DPAUDIO_STEP_AFMT_MEM_POWER },
         { DTO_SOURCE, DCCG_AUDIO_DTO_SOURCE__DCCG_AUDIO_DTO_SEL_MASK, BC250_DPAUDIO_STEP_DTO_SELECT },
         { DTO1_MODULE, 0x00000001ul, BC250_DPAUDIO_STEP_DTO1_MODULE },
         { DTO1_PHASE, 0x00000080ul, BC250_DPAUDIO_STEP_DTO1_PHASE },       // 240000 is 0x3A980
@@ -755,7 +758,7 @@ static void Tables(void)
     // 27 offsets take a write: the two INDEX/DATA pairs, the two function parameters of hw_init, and step 2's DTO
     // source, DTO1 module and phase, and nine AFMT/DP_SEC registers per stream encoder.
     for (i = 0; i < BC250_MMIO_AUDIO_ALLOW_COUNT; i++) writable += (unsigned long)Bc250AzWriteAllowed(g_MmioAudioAllow[i]);
-    CHECK(writable == BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT && writable == 27);
+    CHECK(writable == BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT && writable == 28);
     CHECK(Bc250AzWriteAllowed(BC250_REG_DMU_AZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES));
     for (i = 0; i < 2; i++) {
         CHECK(Bc250AzWriteAllowed(g_S[i].Sec) && Bc250AzWriteAllowed(g_S[i].AudN) && Bc250AzWriteAllowed(g_S[i].Timestamp));
