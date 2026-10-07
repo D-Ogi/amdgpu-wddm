@@ -204,6 +204,9 @@ mode is committed. These paths use them:
 - `DcnFlipSourceAddress` and `DcnScanoutMapping`: the address and size checks of the plane.
 - The present blit of the display-only path: the destination size.
 - The framebuffer dump.
+- The scan-out caps trailer of `DXGKQAITYPE_UMDRIVERPRIVATE` (M15.14, `driver/contract/bc250_scanout_caps.h`).
+  Its `post_width` and `post_height` carry the geometry that the admission uses at the time of the query. The
+  trailer and the admission therefore change together when a mode is committed.
 
 The diagnostic flip escape uses the firmware's size. It refuses while a smaller mode is committed.
 
@@ -269,6 +272,9 @@ The suites that extract driver functions (`vidpn-flip`, `dcn-flip`, `post-displa
 - dxgkrnl may pin a scaling that the driver did not expect for the monitor. The native mode reports every
   scaling to prevent that.
 - An external monitor change (hot plug) is not handled. The EDID is read once at each start.
+- The D3D12 shell keeps the scan-out caps trailer from adapter open. A game that opens its device before a mode
+  change compares its chain with the geometry of that moment. The result is a composed frame, not a wrong flip:
+  the kernel's admission uses the current geometry.
 
 ## The lab plan for stage A
 

@@ -3620,8 +3620,10 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         // M15.14 increment 2: the second optional trailer, by the same rule. Two start-latched facts the
         // compositor's user-mode driver must have before it may answer CheckDirectFlipSupport TRUE: the
         // operator's switch (ANDed at WddmStart with the kernel gate and with every start-latched fact
-        // the flip path needs) and the POST geometry, which is the only video present source mode this
-        // driver offers and therefore the only geometry Bc250ScanoutAdmit admits. A reader that queried
+        // the flip path needs) and the source geometry Bc250ScanoutAdmit admits now. That is the committed
+        // source mode (display modes, modeset.c), or the POST geometry when none is committed; the field
+        // names keep "post" for the ABI. Both are read at each query, so the trailer and the admission
+        // change together when a mode is committed. A reader that queried
         // the shorter buffer gets exactly what it got before, and a shell against a driver without this
         // trailer reads zeros and refuses.
         //   Nothing is written at all while the handshake is off, not even a header with flags 0: a start
@@ -3635,8 +3637,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.version = BC250_SCANOUT_CAPS_VERSION;
             scanout.size = sizeof(scanout);
             scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
-            scanout.post_width = (unsigned int)device->Post.Width;
-            scanout.post_height = (unsigned int)device->Post.Height;
+            scanout.post_width = (unsigned int)DisplaySourceWidth(device);
+            scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
                           &scanout,sizeof(scanout));
         }

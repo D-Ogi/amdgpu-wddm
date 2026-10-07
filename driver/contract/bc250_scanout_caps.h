@@ -7,9 +7,12 @@
 //   flags  whether this adapter start will admit a client scan-out flip at all. It is the operator's
 //          EnableDirectFlipHandshake value ANDed with EnableScanoutAdmit, so a closed kernel gate can
 //          never leave the shell agreeing to a flip the kernel driver would refuse.
-//   post_* the POST mode's geometry, which is the only video present source mode display.c offers and
-//          therefore the only geometry Bc250ScanoutAdmit admits. The shell applies it directly instead
-//          of inferring it from the compositor's own chain being the desktop's size.
+//   post_* the geometry Bc250ScanoutAdmit admits at the time of the query: the committed video present
+//          source mode (display modes, KMD 0.7.216.19), or the POST mode's geometry when no smaller mode
+//          is committed. The name keeps "post" for the ABI. A reader that keeps the value from adapter
+//          open has the geometry of that moment; the kernel driver's admission is the final check. The
+//          shell applies it directly instead of inferring it from the compositor's own chain being the
+//          desktop's size.
 //
 // Read it the way bc250_adapter_identity is read: query a zero-initialized extended buffer and require
 // every header field before using the payload. An older kernel driver succeeds and writes only the
