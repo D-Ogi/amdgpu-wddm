@@ -151,6 +151,7 @@ namespace Bc250Mon
             { "EnableDpAudio", 1 },             // dpaudio.c: GuardReadSetting(..., 1), DP audio at all (0.7.215)
             { "EnableDpAudioEndpoint", 1 },     // dpaudio.c: GuardReadSetting(..., 1), the Azalia endpoint (step 1)
             { "EnableDpAudioStream", 1 },       // dpaudio.c: GuardReadSetting(..., 1), the DP audio stream (0.7.216)
+            { "CpuTune", 0 },                   // cpu.c: absent = 0, read-only; the INF writes 1 from 0.7.216
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
             { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ
