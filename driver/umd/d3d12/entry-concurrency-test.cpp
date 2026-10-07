@@ -6,6 +6,7 @@
 // only succeeds when every thread is inside together, bounded by a deadline: a lock held across the
 // scope or the callback turns it into a failure, not a hang. Built with AMDGPU_WDDM_D3D12_HOST_TEST,
 // which gives a device an owner without the engine device (device-engine.h).
+#include <type_traits>
 #include "device-engine.h"
 #include "device-state.h"
 #include "heap-import.h"
@@ -21,7 +22,9 @@ using namespace native12;
 namespace {
 constexpr unsigned kThreads=8,kRounds=200,kImportThreads=4,kImportRounds=50;
 constexpr ULONGLONG kDeadlineMs=5000;
-template<class T> T handle(uintptr_t n){return reinterpret_cast<T>(n);}
+// A fake handle: a pointer type gets the address, an integer handle (a non-dispatchable Vulkan handle is
+// uint64_t on x86) the value.
+template<class T> T handle(uintptr_t n){if constexpr(std::is_pointer_v<T>) return reinterpret_cast<T>(n); else return static_cast<T>(n);}
 std::atomic<unsigned> next_allocation{100},next_sync{1},next_context{1},next_memory{1};
 std::atomic<unsigned> errors{},allocations{},deallocations{},paging_creates{},paging_destroys{},failures{};
 std::atomic<UINT64> next_va{UINT64_C(0x100000000)};

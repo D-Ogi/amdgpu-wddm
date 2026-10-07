@@ -18,6 +18,8 @@ Status note (2026-10-07, row 4): measured on unit A with `tools/win/d3d9probe`. 
 `CreateDeviceEx` fails with D3DERR_NOTAVAILABLE and Windows does not fall back to D3D9On12. With the slot empty, D3D9
 renders through `d3d9on12.dll` on our D3D12 driver. Branch `installer/d3d9on12` writes the empty slot in both views
 and ships no stub. 32-bit D3D9 still gets no device, because there is no 32-bit D3D12 UMD (row 3).
+Branch `umd/wow64-d3d12` adds that UMD (`wow64\d3d12`, the fourth `UserModeDriverNameWow` entry); not yet measured on
+unit A.
 
 ## Gaps, sorted by severity
 

@@ -75,13 +75,17 @@ static class GraphicsApiTest
               .All(a => a.Api != "OpenGL"), "no OpenGL row next to one of our GPU paths");
         Check(C("kernel32.dll", "dxgi.dll").Count == 0, "DXGI alone is no API");
 
-        // 32-bit processes: the x86 payload has the D3D11 and desktop routes under the same file names, and no
-        // D3D12 at all (BD-064), so a 32-bit D3D12 application can never reach our driver.
+        // 32-bit processes: the x86 payload has the D3D11, D3D12 and desktop routes under the same file names
+        // (BD-064), so a 32-bit process gets the same rows as a 64-bit one.
         r = GraphicsApiProvider.Classify(new[] { "d3d11.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll", "amdgpu_wddm_radv.dll" }, true);
         Check(One(r, "D3D11") == "GPU (amdgpu-wddm DXVK + RADV)", "x86 D3D11 uses the same module names");
-        r = GraphicsApiProvider.Classify(new[] { "d3d12.dll" }, true);
-        Check(One(r, "D3D12") == "no x86 D3D12 in this package" && r[0].Level == Level.Warn, "x86 D3D12 is not served");
-        Check(One(C("d3d12.dll"), "D3D12") == "none of our UMDs loaded", "x64 D3D12 without a UMD makes no such claim");
+        r = GraphicsApiProvider.Classify(new[] { "d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv.dll" }, true);
+        Check(One(r, "D3D12") == "GPU (amdgpu-wddm vkd3d + RADV)", "x86 D3D12 uses the same module names");
+        r = GraphicsApiProvider.Classify(new[] { "d3d9.dll", "d3d9on12.dll", "d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv.dll" }, true);
+        Check(One(r, "D3D12") == "GPU (amdgpu-wddm vkd3d + RADV)" && One(r, "D3D9") == "via D3D9On12 (D3D12 path)",
+              "x86 D3D9 through D3D9On12 on the x86 D3D12 shell");
+        Check(One(GraphicsApiProvider.Classify(new[] { "d3d12.dll" }, true), "D3D12") == "none of our UMDs loaded"
+              && One(C("d3d12.dll"), "D3D12") == "none of our UMDs loaded", "D3D12 without a UMD: the same row on x86 and x64");
 
         // A translation layer copied next to the application replaces the system runtime: the application is
         // not using the installed Windows driver, whatever else is mapped in it.

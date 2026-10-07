@@ -51,8 +51,8 @@ struct Fixture {
     native12::QueueEngineSlot* tile_slot{};
     Fixture() : registry(device, reinterpret_cast<engine_ddi::DeviceContext*>(this),
         {make_engine, execute_engine, close_engine, engine_health, this, update_engine, copy_engine}) {
-        runtime[0] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x100000011}), false};
-        runtime[1] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x200000022}), false};
+        runtime[0] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x10000011}), false};
+        runtime[1] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x20000022}), false};
         device.runtime.handle = this;
         device.callbacks.pfnSetErrorCb = [](D3D10DDI_HRTDEVICE h, HRESULT hr) {
             auto f = static_cast<Fixture*>(h.handle);

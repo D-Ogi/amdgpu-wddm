@@ -571,7 +571,7 @@ function Invoke-Verify {
     if (-not $gpuSwKey) { Add-Result '32-bit D3D/Vulkan' $false 'no software key for the GPU' }
     else {
         $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
-        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9 empty, D3D10/11, no D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
+        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
 
     # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
@@ -1142,8 +1142,8 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
     New-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
-# The same for 32-bit processes (BD-064): the empty D3D9 slot and the D3D10/11 slots only (no x86 D3D12 UMD, so a
-# 32-bit D3D9 application gets no device), the x86 Vulkan ICD.
+# The same for 32-bit processes (BD-064): the empty D3D9 slot (D3D9On12 on the x86 D3D12 shell), the D3D10/11 slots,
+# the x86 D3D12 slot, the x86 Vulkan ICD.
 $umdWow = Get-WowUmdNames $InstallRoot
 $icdJsonWow = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
 Invoke-Change ("$classKey UserModeDriverNameWow = " + (Format-UmdNames $umdWow) + "; VulkanDriverNameWow = $icdJsonWow") {

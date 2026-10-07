@@ -10,6 +10,11 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
   ddi-engine  amdgpu_wddm_vkd3d.dll, the engine behind the proposed system D3D12 DDI UMD (G4), and its offline
               test; needs a checkout of the amdgpu-wddm/ddi-engine vkd3d-proton branch (enable_ddi_engine does
               not exist upstream)
+  ddi-engine-lto
+              the ddi-engine options followed by the optimisation options of the released engine (LTO, AVX2,
+              WARN and FIXME compiled out, a linker map)
+
+-Arch x86 builds the 32-bit (WoW64) engine with vcvarsamd64_x86.bat (common.ps1), as build-dxvk.ps1 does.
 
 The build is a native MSVC build, like the M12 per-application packages: vcvars64.bat, meson from PYTHONPATH,
 ninja and glslang on PATH, CC and CXX set to cl. vkd3d-proton also needs the IDL compiler widl (MSYS2
@@ -24,7 +29,7 @@ pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine -Source P:\BC-250\scratch\m1
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('per-app', 'ddi-engine')][string]$Config,
+    [Parameter(Mandatory)][ValidateSet('per-app', 'ddi-engine', 'ddi-engine-lto')][string]$Config,
     [Parameter(Mandatory)][string]$Source,
     [Parameter(Mandatory)][string]$Build,
     [switch]$ConfigureOnly,
@@ -44,7 +49,9 @@ param(
     [string]$Ninja,
     [string]$VsInstall,
     # TEMP and TMP for the build (default <BC250_ROOT>\scratch\tmp).
-    [string]$Temp
+    [string]$Temp,
+    # Target architecture: x86 builds the 32-bit (WoW64) DLL with vcvarsamd64_x86.bat (common.ps1).
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,7 +78,7 @@ foreach ($sub in 'khronos\Vulkan-Headers\include', 'khronos\SPIRV-Headers\includ
         throw "$Source\$sub is missing: run git -C $Source submodule update --init --recursive"
     }
 }
-if ($Config -eq 'ddi-engine' -and -not (Test-Path -LiteralPath (Join-Path $Source 'libs\ddi\bc250_vkd3d_engine.h'))) {
+if ($Config -like 'ddi-engine*' -and -not (Test-Path -LiteralPath (Join-Path $Source 'libs\ddi\bc250_vkd3d_engine.h'))) {
     throw "$Source has no libs\ddi: -Config ddi-engine needs the amdgpu-wddm/ddi-engine branch"
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Glslang 'glslangValidator.exe'))) { throw "glslangValidator.exe not found in ${Glslang}: pass -Glslang" }
@@ -99,7 +106,7 @@ function Get-SubmoduleStatus([string]$Tree) {
 $recipePath = Join-Path $Build 'recipe.json'
 $savedEnv = Save-ProcessEnvironment
 try {
-    $vs = Import-VsDevEnvironment $VsInstall $Temp
+    $vs = Import-VsDevEnvironment $VsInstall $Temp $Arch
     New-Item -ItemType Directory -Force $Temp, $Build | Out-Null
     $env:TEMP = $Temp
     $env:TMP = $Temp
@@ -145,6 +152,7 @@ try {
         ninja_targets   = $targets
         environment     = [ordered]@{
             vs_install          = $vs
+            arch                = $Arch
             vc_tools_version    = $env:VCToolsVersion
             windows_sdk_version = if ($env:WindowsSDKVersion) { $env:WindowsSDKVersion.TrimEnd('\') } else { $null }
             path_prepended      = $pathFront

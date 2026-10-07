@@ -36,7 +36,11 @@ VKAPI_ATTR VkResult VKAPI_CALL create(const VkInstanceCreateInfo* info,const VkA
     // No adapter-query structure is injected. Each owner's policy is its own.
     auto policy=static_cast<const bc250_host_policy*>(binding->pNext);
     assert(policy->sType==BC250_HOST_POLICY_STYPE && policy->version==BC250_HOST_POLICY_VERSION);
-    assert(policy->size==sizeof(bc250_host_policy) && policy->size==32 && !policy->reserved);
+    assert(policy->size==sizeof(bc250_host_policy) && !policy->reserved);
+#if BC250_HOST_POLICY_VERSION >= 2
+    assert(!policy->specified && !policy->coalesce && !policy->gather_slots && !policy->progress_gpu &&
+           !policy->deferred_destroy && !policy->reserved2);
+#endif
     assert(policy->flags==(expected_identity==&owner_a?BC250_HOST_POLICY_SPARSE:0u));
     assert(policy->pNext==&original_chain);
     assert(binding->funcs->size==sizeof(bc250_host_queue_funcs));
@@ -68,7 +72,9 @@ using Bootstrap=native12::HostedInstanceBootstrap;
 int main() {
     // The decision the ICD takes from a policy, by the contract's own functions: presence and value are
     // separate. Without a policy the environment decides, with one the host does, either way.
-    static_assert(sizeof(bc250_host_policy)==32 && offsetof(bc250_host_policy,flags)==24);
+    // Version 1 ends after flags and reserved; version 2 (the header of the x86 ICD) adds six uint32_t.
+    static_assert(offsetof(bc250_host_policy,flags)==8+2*sizeof(void*) &&
+                  sizeof(bc250_host_policy)==offsetof(bc250_host_policy,flags)+8+(BC250_HOST_POLICY_VERSION>=2?24:0));
     for(int environment=0;environment<2;++environment){
         assert(bc250_host_policy_sparse_bit(0,0,environment)==environment);
         assert(bc250_host_policy_sparse_bit(0,BC250_HOST_POLICY_SPARSE,environment)==environment);

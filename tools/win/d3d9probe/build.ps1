@@ -7,17 +7,20 @@
 param(
     [Parameter(Mandatory)][string]$Kits,
     [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\d3d9probe",
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    # x86: a 32-bit build, the D3D9 path of a WoW64 process (D3D9On12 on the UserModeDriverNameWow D3D12 entry).
+    # Pass another -Out: the file name does not change.
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
-$sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
+$sdkLib = Join-Path $Kits "microsoft.windows.sdk.cpp.$Arch\c"
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+$cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 New-Item -ItemType Directory -Force $Out | Out-Null
 $root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
 $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
@@ -40,7 +43,7 @@ $env:INCLUDE = ''; $env:LIB = ''
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d9probe.obj",
     "/Fe$Out\d3d9probe.exe", (Join-Path $here 'd3d9probe.cpp'), '/link',
-    "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
+    "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
     'psapi.lib', 'user32.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }

@@ -765,18 +765,19 @@ function Test-UmdRegistration {
     if ((@($c.VulkanDriverName) -join '|') -ne $icd) { $problems += "VulkanDriverName is '$(@($c.VulkanDriverName) -join ' | ')'" }
     return $problems
 }
-# BD-064: 32-bit processes. UserModeDriverNameWow mirrors the first three slots of UserModeDriverName (the empty D3D9
-# slot, the D3D10 and D3D11 routers) with the x86 builds; there is no x86 D3D12 UMD, so it has no fourth entry and a
-# 32-bit D3D12 application finds no driver. The empty D3D9 slot is there for the same layout as the 64-bit value: a
-# 32-bit D3D9 application still gets no device, because D3D9On12 needs a D3D12 UMD of its own bitness. The x86 router
-# reads the 64-bit policy keys and its own *Wow path values. The x86 builds link the C runtime statically: no x86
-# Visual C++ runtime is needed.
+# BD-064: 32-bit processes. UserModeDriverNameWow mirrors the four slots of UserModeDriverName with the x86 builds:
+# the empty D3D9 slot, the D3D10 and D3D11 routers, and the x86 D3D12 shell. As on x64 the D3D12 slot names the shell
+# itself, not a router, and the shell loads its engine and ICD from its own directory (wow64\d3d12), so the D3D12 pair
+# needs no Vulkan ICD registration. With the D3D12 slot a 32-bit D3D9 application gets D3D9On12 on our GPU, the same
+# route as a 64-bit one. The x86 router and the x86 D3D12 shell read the 64-bit policy keys; the router also reads its
+# own *Wow path values. The x86 builds link the C runtime statically: no x86 Visual C++ runtime is needed.
 function Get-WowUmdNames([string]$InstallRoot) {
     $router = Join-Path $InstallRoot 'wow64\desktop\bc250d3d_router.dll'
-    return @('', $router, $router)
+    return @('', $router, $router, (Join-Path $InstallRoot 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))
 }
 function Get-WowFiles([string]$InstallRoot) {
-    return @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
+    return @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll',
+        'd3d12\amdgpu_wddm_d3d12.dll', 'd3d12\amdgpu_wddm_vkd3d.dll', 'd3d12\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
 }
 # The D3D9 stub that the releases up to 0.7.213.102-tester.17 installed in System32 and SysWOW64. No slot names it any
 # more; install and uninstall take it away (unless it was there before the first install of ours), and the footprint

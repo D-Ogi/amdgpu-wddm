@@ -71,7 +71,9 @@ struct EntryHeader {
     uint32_t size;
     uint32_t reserved;
 };
-static_assert(sizeof(EntryHeader) == 16, "entry header");
+// 16 bytes on x64, 12 on x86 (the WoW64 shell); every offset below is computed from sizeof(EntryHeader), and an
+// entry's size stays a multiple of 16 on both.
+static_assert(sizeof(EntryHeader) == sizeof(void*) + 8, "entry header");
 
 // The argument kinds of record(). Each is copied into the entry at encode and passed to the lambda as a pointer to
 // the copy; a null source stays null, a non-null source with count 0 stays non-null.
@@ -329,7 +331,8 @@ template <size_t N> struct Plan {
 template <class A, size_t N> void plan(Plan<N>& p, size_t i, ReplayRing* r, const A& a) noexcept {
     size_t bytes = 0;
     if (p.oversize || p.unready) return;
-    if (!Arg<A>::bytes(a, r->max_entry, &bytes)) {
+    // max_entry is a ring size / 8, at most 8 MiB (set_replay_policy), so it fits a 32-bit size_t.
+    if (!Arg<A>::bytes(a, static_cast<size_t>(r->max_entry), &bytes)) {
         p.oversize = true;
         return;
     }

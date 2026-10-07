@@ -22,7 +22,7 @@
     "desktop_umd": "CPU route mesa fork amdgpu-wddm/b19-desktop-umd 76ab2c27, hosted route mesa fork amdgpu-wddm/b19-hosted-umd 7eb7861d, router bc250-win 17eb11bd (train/b20-setup), hosted ICD mesa 48546c73 (unchanged)",
     "vulkan_icd": "mesa fork 2732f9c8, published on branch amdgpu-wddm/gdi-immediate-quiet, the build of 0.7.205.100-tester.11, kept for its WSI present work",
     "control": "bc250-win bc1b00a9 (train/b20-setup): the control application 0.5.1.0, bc250control.dll and bc250kmd_cli.exe from one build",
-    "wow64": "x86 builds for 32-bit processes (BD-064). Router: bc250-win 17eb11bd (train/b20-setup). No D3D9 stub: D3D9 goes through D3D9On12, and a 32-bit D3D9 application gets no device. CPU UMD: mesa amdgpu-wddm/b19-desktop-umd 76ab2c27. D3D11 shell: bc250-win bc1b00a9 with the -Arch x86 recipes. Engine: dxvk 5611118e. ICD: mesa amdgpu-wddm/b19-icd 31844893. Every x86 file comes from a commit. No tree takes a patch. No x86 D3D12",
+    "wow64": "x86 builds for 32-bit processes (BD-064). Router: bc250-win 17eb11bd (train/b20-setup). No D3D9 stub: D3D9 goes through D3D9On12, for a 32-bit D3D9 application on the x86 D3D12 shell. CPU UMD: mesa amdgpu-wddm/b19-desktop-umd 76ab2c27. D3D11 shell: bc250-win bc1b00a9 with the -Arch x86 recipes. Engine: dxvk 5611118e. ICD: mesa amdgpu-wddm/b19-icd 31844893. D3D12 shell: bc250-win 41919147 (umd/wow64-d3d12) with the -Arch x86 recipe and the src/util of mesa 31844893. D3D12 engine: vkd3d-proton amdgpu-wddm/wow64-d3d12 bdec00f3 (4e9a98e9 plus one x86 fix, NOT published yet: push it to D-Ogi/vkd3d-proton before this release goes to a tester), dxil-spirv d2d82332. D3D12 ICD: the x86 D3D11 ICD. Every x86 file comes from a commit. No tree takes a patch",
     "mft_h264": "bc250-win 689852a8 (train/b20-setup), which carries e52/encoder-perf e4d1f630, the H.264 encoder transform; the respin does not rebuild it",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
@@ -197,6 +197,30 @@
       "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
       "size": 20150784,
       "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/b19-icd 31844893, x86 build, static CRT): no patch is applied to the tree (BD-064). The file reports git-3184489333 as its Mesa version"
+    },
+    {
+      "component": "d3d12-umd-wow64",
+      "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/wow64-d3d12/ship/wow64/d3d12/amdgpu_wddm_d3d12.dll",
+      "sha256": "077104FE075C0448887C0D7C47D1CD97956645294D581536406A7D1A81B91385",
+      "size": 1048064,
+      "role": "x86 D3D12 shell for 32-bit processes (bc250-win 41919147, branch umd/wow64-d3d12, built with the -Arch x86 recipe and the .def export: no patch). It exports exactly OpenAdapter12, links the C runtime statically and reads the 64-bit profile keys. Its host bootstrap contract is the src/util of the x86 ICD's Mesa commit 31844893. On a host Vulkan driver it reports the caps of the x64 shell: feature level 12_1 (level 13), 8 shader models, binding tier 3, tiled tier 3. /Brepro"
+    },
+    {
+      "component": "d3d12-umd-wow64",
+      "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/wow64-d3d12/ship/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
+      "sha256": "C00AC53870F1ABCEBACBB67A9DB29086A1812C070E55D9A9A4896754130D7ED8",
+      "size": 3255296,
+      "role": "x86 D3D12 engine (vkd3d-proton fork amdgpu-wddm/wow64-d3d12 bdec00f3 = the x64 engine's 4e9a98e9 plus one x86 calling convention fix of NtQueryInformationProcess, dxil-spirv d2d82332), the ddi-engine-lto option set of the x64 engine built with -Arch x86. Its offline engine test passes 212 of 212 on a host x86 Vulkan driver"
+    },
+    {
+      "component": "d3d12-umd-wow64",
+      "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
+      "source": "scratch/train/b19-build/mesa/ship/wow64/d3d11/amdgpu_wddm_radv.dll",
+      "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+      "size": 20150784,
+      "role": "x86 D3D12 ICD: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (mesa fork amdgpu-wddm/b19-icd 31844893, the commit of the x64 D3D12 ICD). The shell loads it from its own folder, so it needs no Vulkan registration"
     },
     {
       "component": "vulkan-icd-wow64",

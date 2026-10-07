@@ -63,7 +63,8 @@ namespace Bc250Mon
                 || path.Contains("\\windows\\winsxs\\");
         }
 
-        // modules: lower-case file names of every image mapped in the process. wow64: the process is 32-bit.
+        // modules: lower-case file names of every image mapped in the process. wow64: the process is 32-bit (no
+        // row depends on it today: the x86 payload uses the x64 file names for every API).
         // replacedRuntimes: the subset of `modules` that are Direct3D runtimes mapped from outside \Windows\.
         //
         // A GPU claim needs the whole user-mode stack of one render path: the shell the runtime opened, the
@@ -88,9 +89,8 @@ namespace Bc250Mon
                 else if (warp) result.Add(Cpu("D3D12", "CPU (WARP)"));
                 else if (shell) result.Add(Idle("D3D12", engine ? "our D3D12 shell and engine loaded, no ICD yet"
                                                                : "our D3D12 shell loaded, no engine yet"));
-                // The x86 payload of the release has no D3D12 (BD-064): a 32-bit D3D12 application cannot
-                // reach our driver at all, which is a different answer from "the device is still starting".
-                else if (wow64) result.Add(Foreign("D3D12", "no x86 D3D12 in this package"));
+                // The x86 payload has its own D3D12 shell, engine and ICD under the same file names (BD-064),
+                // so a 32-bit process takes the same rows as a 64-bit one.
                 else result.Add(Idle("D3D12", "none of our UMDs loaded"));
             }
             bool d3d11 = has("d3d11.dll"), d3d10 = has("d3d10.dll") || has("d3d10_1.dll");
