@@ -94,7 +94,8 @@ E_INVALIDARG with nothing written. An unanswered type returns E_NOTIMPL and logs
 Every `D3D12DDICAPS_TYPE` value (H:94-150) that exists at 0092. The version is the suffix of the name; a value
 without one predates the suffixes, except 1069, which H:127-130 lists between 1068 (0061) and 1070 (0073). 1008 and
 1011 are not defined. Left out because they are later than 0092: 1013 (0103), 1075 (0103), 1079 (0093), 1080 (0098),
-1081 (0101), 1082 (0102), 1084-1086 (106), 1087 (0109), 1088 (0110), 1091 (0110); 1083 is reserved (H:142).
+1081 (0101), 1082 (0102), 1084-1086 (106), 1087 (0109), 1088 (0110); 1083 is reserved (H:142). One later value
+is answered: 1091 (0110), because a runtime asks it of a 0092 driver ("Shader model" below).
 
 | Type | Name | Status | Reason |
 |---|---|---|---|
@@ -126,6 +127,7 @@ without one predates the suffixes, except 1069, which H:127-130 lists between 10
 | 1074 | 0081_3DPIPELINESUPPORT1 | answered | table below |
 | 1077 | OPTIONS_0090 | answered | table below |
 | 1078 | OPTIONS_0091 | answered | table below |
+| 1091 | SHADER_MODEL_6_8_OPTIONS_0110 | answered | later than 0092, table below and "Shader model" |
 
 Answered: 19 of the 31 values at 0092, 1061 as a refusal by contract. The 12 left E_NOTIMPL are the deprecated
 1000, 1001, 1010, 1058, 1063, 1064 and 1065, the undocumented 1066, and 1068, 1070, 1072 and 1073, which
@@ -146,7 +148,8 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 |---|---|---|---|---|
 | 1074 3DPIPELINESUPPORT1 | `D3D12DDI_3DPIPELINESUPPORT1_DATA_0081`, 8, H:10415-10420 | MaximumDriverSupportedFeatureLevel | min(L, HighestRuntimeSupportedFeatureLevel) | FEATURE_LEVELS; "highest ... that does not exceed what the runtime understands", H:10377-10378 |
 | 1007 3DPIPELINESUPPORT | `D3D12DDI_3DPIPELINELEVEL` itself, 4, H:2922-2933 | the level | L | FEATURE_LEVELS; never above 12_1, H:10373 |
-| 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, 6_6); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_6 gives M; 6_6 is the last release model at 0092 (6_7 is 0093, H:3478-3500) |
+| 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, C, 6_8); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_8 gives M. C is the shell's ceiling, 6_8 unless an experiment sets one ("Shader model" below). Earlier revisions ended the list at min(M, 6_6) |
+| 1091 SHADER_MODEL_6_8_OPTIONS_0110 | `D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110`, 8, H:13671-13679 | SampleCmpGradientAndBiasSupported, ExtendedCommandInfoSupported | the OPTIONS21 fields when 1012 ends at 6_8, else FALSE. FALSE when the engine does not answer OPTIONS21 | OPTIONS21. Another DataSize is E_INVALIDARG |
 | 1006 D3D12_OPTIONS | `D3D12DDI_D3D12_OPTIONS_DATA_0089`, 124, H:11078-11112 | ResourceBindingTier, ConservativeRasterizationTier, CrossNodeSharingTier, ResourceHeapTier, OutputMergerLogicOp, VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation | same value | OPTIONS; DDI and API enums are equal (static_assert in caps.cpp) |
 | 1006 | | TiledResourcesTier | OPTIONS tier, 4 reported as 3 | OPTIONS; no DDI tier 4 at 0092 (H:709-715). Reserved resources, GetMipPacking, CopyTiles and the engine parts of Q3 and Q4 are implemented ("Tiled resources" below); the queue slots need the shell's hook |
 | 1006 | | CopyQueueTimestampQueriesSupported, BarycentricsSupported | same value | OPTIONS3 |
@@ -213,6 +216,32 @@ the one implementation in the references and what the engine can honour.
   one copy path for every queue type.
 - ROW_MAJOR textures stay unsupported (1060). If a runtime needs them, the way forward is ROW_MAJOR support in the
   engine, not another constant.
+
+### Shader model
+
+engine-ddi asks the engine's SHADER_MODEL with 6_8 and lists in 1012 every release model from 5_1 up to the lowest
+of the engine's answer, the shell's ceiling and 6_8. The suffix of a DDI value (6_7 release 0093, 6_8 release 0108)
+names the DDI build that defined it. It is not a build the driver must negotiate. Fact M840 reads four runtime cores:
+
+| Runtime core | 6_7 and 6_8 release values | What an application sees from our 0092 shell |
+|---|---|---|
+| 10.0.22621.5415 (unit A's System32) | maps both to 5_1 | at most 6_6 |
+| 10.0.26100.9278, Agility 1.615.1 | maps both, with no check of the negotiated build | up to 6_8, and 26100 also asks 1091 at 6_8 |
+| Agility 1.619.4 (The Witcher 3 5.0) | no public symbols, reports 6_9 for another vendor | up to 6_8 (inference) |
+
+1091 is answered although the shell negotiates 0092, because runtime 26100 asks it of any driver that reports 6_8.
+1079 (OPTIONS_0093: AdvancedTextureOps, WriteableMSAATextures) stays unanswered: runtime 26100 asks it only of a driver
+that negotiated 0093 or later. The engine's OPTIONS14 values appear in the QueryAdapterCaps log line only.
+
+```cpp
+HRESULT engine_ddi::set_shader_model_ceiling(engine_ddi::AdapterCaps* caps, D3D_SHADER_MODEL ceiling) noexcept;
+```
+
+The call lowers the ceiling (default 6_8) before the first GetCaps. It never raises the list above the engine's
+answer. E_INVALIDARG for NULL caps or a model outside 5_1 to 6_8. The shell sets 6_7 under the experiment
+`shader-model-68-off` and 6_6 under `shader-model-67-off` (the second wins), for a bisection of a title that changes
+its shader path with the reported model. With `shader-model-67-off` the answer is that of earlier revisions: a list
+up to 6_6 and no 1091.
 
 ### Memory architecture policy
 

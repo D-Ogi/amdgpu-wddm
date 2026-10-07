@@ -133,6 +133,17 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
         amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier-off result=%08lx\n",static_cast<unsigned long>(hr));
         amdgpu_wddm_log::flush();
     }
+    // The shader model is the engine's, at most 6_8 (engine-ddi). For a bisect, shader-model-68-off reports 6_7 at
+    // most and shader-model-67-off 6_6 at most, the answer of every shell before 2026-10-07.
+    if(SUCCEEDED(hr)){
+        const bool off67=ddi_experiment_off("shader-model-67");
+        const char* name=off67?"shader-model-67-off":ddi_experiment_off("shader-model-68")?"shader-model-68-off":nullptr;
+        if(name){
+            hr=engine_ddi::set_shader_model_ceiling(owner.caps,off67?D3D_SHADER_MODEL_6_6:D3D_SHADER_MODEL_6_7);
+            amdgpu_wddm_log::print("d3d12-caps experiment %s result=%08lx\n",name,static_cast<unsigned long>(hr));
+            amdgpu_wddm_log::flush();
+        }
+    }
     if(SUCCEEDED(hr))owner.access={funcs,get};
     return hr;
 }
