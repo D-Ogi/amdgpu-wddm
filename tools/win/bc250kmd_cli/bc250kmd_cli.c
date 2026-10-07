@@ -3012,7 +3012,7 @@ static void CurvePrint(const BC250_ESCAPE_DPM_CURVE *c)
            (c->Flags & BC250_DPM_CURVE_FLAG_PENDING) ? ", PENDING (unconfirmed start)" : "",
            (c->Flags & BC250_DPM_CURVE_FLAG_CONFIRMED) ? ", confirmed" : "");
     if (c->Flags & BC250_DPM_CURVE_FLAG_ON_TRIAL)
-        printf("dpm curve: ON TRIAL, %lu ms of %lu left; without a keep the stored curve comes back by itself\n",
+        printf("dpm curve: ON TRIAL, %lu ms left (default window %lu ms); without a keep the stored curve comes back by itself\n",
                c->TrialRemainingMs, c->TrialMs);
     else
         printf("dpm curve: no trial runs; a set would get a %lu ms window\n", c->TrialMs);
@@ -3206,7 +3206,7 @@ static void CpuPrint(const BC250_ESCAPE_CPU *c)
            (c->Flags & BC250_CPU_FLAG_CONFIRMED) ? ", confirmed" : "",
            (c->Flags & BC250_CPU_FLAG_SEARCHING) ? ", a search runs" : "");
     if (c->Flags & BC250_CPU_FLAG_ON_TRIAL)
-        printf("cpu: ON TRIAL, %lu ms of %lu left; without a keep the settings before it come back\n",
+        printf("cpu: ON TRIAL, %lu ms left (default window %lu ms); without a keep the settings before it come back\n",
                c->TrialRemainingMs, c->TrialMs);
     printf("cpu: applied clock %lu MHz, undervolt %lu steps, cap %lu C (stored %lu / %lu / %lu, baseline %lu / %lu "
            "/ %lu)\n", c->AppliedMaxMHz, c->AppliedUvSteps, c->AppliedTempC, c->StoredMaxMHz, c->StoredUvSteps,
