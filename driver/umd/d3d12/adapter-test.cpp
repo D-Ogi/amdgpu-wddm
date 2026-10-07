@@ -35,8 +35,8 @@ static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* re
     if(queryMode==11)id.version+=1;
     if(queryMode==12)id.size-=4;
     if(queryMode!=6)memcpy(bytes+BC250_ADAPTER_IDENTITY_OFFSET,&id,sizeof(id));
-    // A driver that writes the last trailer the contract defines. Nothing here reads it yet; it stands
-    // where the kernel driver puts it, so the buffer above is proven to hold a complete one.
+    // A driver that writes the last trailer the contract defines, where the kernel driver puts it: the
+    // buffer above is proven to hold a complete one, and the open is proven to carry it to the contract.
     bc250_scanout_caps scanout{BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,
         sizeof(bc250_scanout_caps),BC250_SCANOUT_CAPS_DIRECT_FLIP,1920,1200};
     memcpy(bytes+BC250_SCANOUT_CAPS_OFFSET,&scanout,sizeof(scanout));
@@ -156,6 +156,14 @@ int main(int argc,char** argv) {
     queryMode=0;
     assert(open(&a)==S_OK && a.hAdapter.pDrvPrivate);
     assert(static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate)->contract.luid==0x8765432100001234ULL);
+    // M15.14 increment 2: the scan-out trailer the query wrote reached the adapter's contract, where the
+    // allocation path reads it. A missing or malformed trailer is allocation-request-test's table; here
+    // the one thing proven is that the open carries a complete one through.
+    {
+        const auto& scanout=static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate)->contract.scanout;
+        assert(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && scanout.post_width==1920 &&
+               scanout.post_height==1200 && scanout.version==BC250_SCANOUT_CAPS_VERSION);
+    }
     UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==1);
     UINT64 guard[2]={0xabcdef,0x123456};count=0;
     assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));

@@ -4,6 +4,8 @@
 #include "../../contract/bc250_umd_submit.h"
 #include "../../contract/amdgpu_wddm_surface_format.h"
 #include "../../contract/bc250_shared_surface.h"
+#include "../../contract/bc250_scanout_record.h"
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -19,29 +21,64 @@ inline constexpr uint32_t kLb7aMagic=0x4137424Cu;
 static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offsetof(Lb7aSurface,size)==24);
 // The E26R resource record, as the kernel driver defines it (driver/kmd/surface_resource_private.h):
 // v1 is the first 12 bytes (magic, version, shared), v2 adds the CPU access intent word (16 bytes:
-// PRIMARY=1, CPU_READ=2). The runtime's allocation call accepts the primary with v1 and shared 1.
-// v3 is the 64-byte texture record (BC250_SURFACE_RESOURCE_PRIVATE), which a shared surface carries and
-// bc250_shared_surface.h is the only writer of.
-struct E26rResource { uint32_t magic,version,shared,access; };
+// PRIMARY=1, CPU_READ=2, SCANOUT=4), v3 adds the D3D11 texture description and is 64 bytes
+// (BC250_SURFACE_RESOURCE_PRIVATE). Each version is the prefix of the next, so one struct holds all three
+// and the version written decides how many of its bytes go on the wire (e26r_bytes). The runtime's
+// allocation call accepts the composed primary with v1 and shared 1.
+//   M15.14 increment 2 widened this struct to v3, because a scan-out primary must carry the v3 record:
+// it is the only shape the compositor's opener takes (exactly 64 bytes of version 3) and the only one the
+// kernel driver's user-mode answer about an opened surface admits (WddmGdiRecordScannable). A v2 scan-out
+// record is placed in the local segment by the kernel driver and then refused by the compositor, which
+// cannot open it: it costs the CPU mapping and buys no flip.
+struct E26rResource {
+    uint32_t magic,version,shared,access;
+    uint32_t width,height,mip_levels,array_size,format;  // format: DXGI_FORMAT
+    uint32_t sample_count,sample_quality,usage,bind_flags,cpu_access_flags,misc_flags,texture_layout;
+};
 inline constexpr uint32_t kE26rMagic=0x52363245u;
 inline constexpr uint32_t kE26rV1Bytes=12,kE26rPrimary=1,kE26rCpuRead=2,kE26rScanout=4;
-static_assert(sizeof(E26rResource)==16 && offsetof(E26rResource,access)==kE26rV1Bytes);
+static_assert(offsetof(E26rResource,access)==kE26rV1Bytes);
 static_assert(uint32_t(BC250_SURFACE_RESOURCE_MAGIC)==kE26rMagic &&
               uint32_t(BC250_SURFACE_RESOURCE_PRIMARY)==kE26rPrimary &&
               uint32_t(BC250_SURFACE_RESOURCE_CPU_READ)==kE26rCpuRead &&
               uint32_t(BC250_SURFACE_RESOURCE_SCANOUT)==kE26rScanout);
 static_assert(sizeof(BC250_SURFACE_RESOURCE_PRIVATE)==64 && sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
+// The wire layout is the contract's, field for field: the scan-out record is built by the contract's own
+// builder (Bc250ScanoutRecordInit) and copied into this struct, so every offset must be the same one.
+static_assert(sizeof(E26rResource)==sizeof(BC250_SURFACE_RESOURCE_PRIVATE) &&
+              offsetof(E26rResource,shared)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,Shared) &&
+              offsetof(E26rResource,access)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,Access) &&
+              offsetof(E26rResource,width)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,Width) &&
+              offsetof(E26rResource,format)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,Format) &&
+              offsetof(E26rResource,sample_count)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,SampleCount) &&
+              offsetof(E26rResource,bind_flags)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,BindFlags) &&
+              offsetof(E26rResource,texture_layout)==offsetof(BC250_SURFACE_RESOURCE_PRIVATE,TextureLayout),
+              "E26rResource is not BC250_SURFACE_RESOURCE_PRIVATE on the wire");
 // Bytes an E26R record of a given version occupies on the wire. v3 is the full texture description and
 // is 64 bytes (driver/contract/bc250_scanout_record.h); the compositor's opener takes exactly that many
-// and refuses anything else, so a v3 header on this 16-byte body would be refused with nothing to show
-// for it but a flip that never happens. kE26rWritten is the only place the version is chosen, and raising
-// it past what this struct can describe does not compile.
+// and refuses anything else. kE26rWritten is the highest version this shell writes, and raising it past
+// what this struct can describe does not compile.
 inline constexpr uint32_t e26r_bytes(uint32_t version) noexcept {
     return version>=3?64u:version==2?16u:kE26rV1Bytes;
 }
-inline constexpr uint32_t kE26rWritten=2; // raise this and E26rResource together, never alone
-static_assert(e26r_bytes(kE26rWritten)==sizeof(E26rResource),
+inline constexpr uint32_t kE26rWritten=3; // raise this and E26rResource together, never alone
+static_assert(kE26rWritten==BC250_SURFACE_RESOURCE_TEXTURE_VERSION &&
+              e26r_bytes(kE26rWritten)==sizeof(E26rResource),
               "E26rResource cannot describe the record version this shell writes");
+// The byte pitch a scan-out surface of this width must have, and the only one every component along the
+// path derives on its own: the kernel driver's primary layout takes DcnPrimaryPitch
+// (driver/kmd/dcn_translate.c), which rounds the width up to 64 pixels of 4 bytes, and the compositor's
+// hosted driver rounds the row up to 256 bytes (the router's HostedSurfacePitch), which is the same number
+// for a 4-byte row. The flip clause itself is weaker - any whole number of pixels that holds the row - but
+// a pitch nothing else derives is a pitch no other component can check, and the cost of being wrong is not
+// a refusal before the flip: the OS has already taken SharedPrimaryTransition and does not fall back to
+// composition seamlessly, so the output goes black. 0 for a width this pitch cannot express.
+inline constexpr uint32_t scanout_row_pitch(uint32_t width) noexcept {
+    const uint64_t pixels=(uint64_t(width)+63ull)&~63ull;
+    return !width || pixels*4ull>0xfffffffful?0u:uint32_t(pixels*4ull);
+}
+static_assert(scanout_row_pitch(1920)==7680 && scanout_row_pitch(1280)==5120 && scanout_row_pitch(1366)==5632 &&
+              scanout_row_pitch(1)==256 && scanout_row_pitch(65)==512 && !scanout_row_pitch(0));
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
               AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
@@ -102,9 +139,10 @@ struct AllocationRequest final {
     // opener read, under the 12-byte E26R v1 resource record. pitch and size are the bound image's,
     // never chosen here. By default the allocation is a primary of no video present source: it is
     // composed, not scanned out, so its format is one the surface format table enables for composition.
-    // scanout (M15.14): the selected mode for an eligible 8-bit chain. The record becomes the 16-byte
-    // v2 one with PRIMARY and SCANOUT, which asks the kernel driver for the local segment, and the
-    // allocation names video present source 0, so SetVidPnSourceAddress can be given this surface. The
+    // scanout (M15.14): the selected mode for an eligible 8-bit chain. The record becomes the 64-byte
+    // v3 one with PRIMARY and SCANOUT (bc250_scanout_record.h), which asks the kernel driver for the
+    // local segment and is the only shape the compositor's opener takes, and the allocation names video
+    // present source 0, so SetVidPnSourceAddress can be given this surface. The
     // kernel driver re-derives every fact behind that request and refuses the flip otherwise; this is a
     // request for scan-out, not a claim that scan-out will happen. Composition of the same buffer stays
     // possible, which is what the OS falls back to when a window overlaps the output.
@@ -132,7 +170,16 @@ struct AllocationRequest final {
                                                   scanout?AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY
                                                          :AMDGPU_WDDM_SURFACE_COMPOSED);
         if(!row)return E_NOTIMPL;
+        // A scan-out surface must also be one the compositor can open, because the OS asks the
+        // compositor's driver about the pair before it flips: the v3 record names a DXGI format and the
+        // opener maps that back to this same table. The X8 row has no DXGI number (it is the GDI side's
+        // own), so no record can describe it and no flip of it is possible - refused here rather than
+        // allocated into VRAM for a flip that could never be admitted.
+        if(scanout && !row->dxgi)return E_NOTIMPL;
         if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
+        // The pitch pin (scanout_row_pitch): for scan-out the description carries the one pitch every
+        // component derives, not whatever the engine's image layout happened to produce.
+        if(scanout && pitch!=scanout_row_pitch(width))return E_INVALIDARG;
         const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
         if(pitch<width4*row->bytes_per_pixel || !size || (size&4095) || size>0xfffff000ull || size<uint64_t(pitch)*height4)
             return E_INVALIDARG;
@@ -145,14 +192,28 @@ struct AllocationRequest final {
         // SetVidPnSourceAddress. A scan-out primary is exactly that argument, so it names source 0 -
         // the one source this adapter has - and the kernel driver can match the flip to the surface.
         info.VidPnSourceId=primary&&!scanout?D3DDDI_ID_UNINITIALIZED:0;
-        resource.magic=kE26rMagic;resource.version=cpuRead||scanout?kE26rWritten:1u;resource.shared=1;
         // shared stays 1 for a scan-out surface as well: the OS composes this buffer again whenever a
         // window overlaps the output, and the compositor can only open what the record shares. What the
         // SCANOUT bit changes is the placement - the local segment, the only one the display core reads -
         // and not who may open it (M15.14).
-        resource.access=(cpuRead?kE26rCpuRead:0u)|(scanout?kE26rPrimary|kE26rScanout:0u);
+        //   Three wire shapes, one struct. Scan-out: v3, 64 bytes, built by the contract's builder from the
+        // bound image's width, height and DXGI format. present-cached: v2, 16 bytes with CPU_READ, exactly
+        // as experiments 104-107 measured it. Every other primary: v1, 12 bytes. The bytes past the
+        // version's length stay zero and are not sent.
+        uint32_t version=1u;
+        if(scanout){
+            BC250_SURFACE_RESOURCE_PRIVATE record{};
+            Bc250ScanoutRecordInit(&record,width,height,row->dxgi);
+            std::memcpy(&resource,&record,sizeof(resource));
+            version=kE26rWritten;
+        } else {
+            resource.magic=kE26rMagic;resource.shared=1;
+            resource.access=cpuRead?kE26rCpuRead:0u;
+            version=cpuRead?2u:1u;
+            resource.version=version;
+        }
         args.pPrivateDriverData=&resource;
-        args.PrivateDriverDataSize=cpuRead||scanout?e26r_bytes(kE26rWritten):kE26rV1Bytes;
+        args.PrivateDriverDataSize=e26r_bytes(version);
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;

@@ -3,6 +3,7 @@
 #include "heap-import.h"
 #include "device-state.h"
 #include "allocation-request.h"
+#include "scanout-mode.h"
 #include <bc250_host_bootstrap.h>
 #include <d3dkmthk.h>
 #include <cassert>
@@ -740,19 +741,22 @@ int main(){
   // Rows the table does not have, or has without COMPOSED: A2R10G10B10 (35), X8R8G8B8 (scan-out only).
   assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_A2R10G10B10,65536,handle<void*>(2))==E_NOTIMPL);
   assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_X8R8G8B8,65536,handle<void*>(2))==E_NOTIMPL);
-  // M15.14 scan-out: the v2 record with PRIMARY and SCANOUT, shared still 1, and video present source 0
-  // instead of D3DDDI_ID_UNINITIALIZED. The LB7A description is the composed one, unchanged.
+  // M15.14 scan-out: the 64-byte v3 record with PRIMARY and SCANOUT, shared still 1, and video present
+  // source 0 instead of D3DDDI_ID_UNINITIALIZED. The LB7A description is the composed one, unchanged.
+  // Every field of the record and the stand-down decision are allocation-request-test's; the shape on
+  // the wire is here.
   AllocationRequest direct;
   assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==S_OK);
-  assert(direct.args.PrivateDriverDataSize==16);
+  assert(direct.args.PrivateDriverDataSize==64 && direct.args.pPrivateDriverData==&direct.resource);
   std::memcpy(e,direct.args.pPrivateDriverData,sizeof(e));
-  assert(e[0]==0x52363245u && e[1]==2 && e[2]==1 && e[3]==5);
+  assert(e[0]==0x52363245u && e[1]==3 && e[2]==1 && e[3]==5);
   assert(direct.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY && direct.info.VidPnSourceId==0);
   assert(direct.info.PrivateDriverDataSize==32);
   {uint32_t d[8];std::memcpy(d,direct.info.pPrivateDriverData,sizeof(d));
    assert(d[0]==0x4137424Cu && d[1]==1 && d[2]==1920 && d[3]==1200 && d[4]==7680 && d[5]==21 && d[6]==7680u*1200u && !d[7]);}
-  // X8 is the other scan-out row and is admitted here although composition refuses it above.
-  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_X8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==S_OK);
+  // X8 is the other scan-out row of the table and has no DXGI name, so no v3 record can describe it and
+  // the compositor could never open it: refused, although the plane itself could read it.
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_X8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
   // The composed-only rows cannot be scanned out, which is what keeps the 10-bit and FP16 primaries on
   // the composition path whatever the instance selects.
   assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A2B10G10R10,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
@@ -765,6 +769,28 @@ int main(){
   // hold the rows, are refused before any record is built.
   assert(direct.prepare_surface(1920,1200,7676,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==E_INVALIDARG);
   assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,4096,handle<void*>(2),false,true,true)==E_INVALIDARG);
+  // The pitch pin: a wider pitch is a valid composed primary and not a scan-out one.
+  assert(direct.prepare_surface(1920,1200,7936,D3DDDIFMT_A8R8G8B8,7936ull*1200u,handle<void*>(2),false,true,true)==E_INVALIDARG);
+  assert(direct.prepare_surface(1920,1200,7936,D3DDDIFMT_A8R8G8B8,7936ull*1200u,handle<void*>(2))==S_OK);
+  // What the constructor took from the adapter and the registry (M15.14 increment 2). A device with no
+  // adapter - every owner of this suite - keeps the closed answer, so no allocation here asks for
+  // scan-out whatever the machine's registry says; a device whose adapter published the trailer carries it.
+  {
+   RuntimeHeapImports closed(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),
+       handle<VkInstance>(5),gipa,identity,ImportReleasePolicy::off());
+   assert(!device.adapter && !closed.scanout_caps().flags && !closed.scanout_caps().post_width);
+   Adapter probe{};
+   auto& caps=probe.contract.scanout;
+   caps.magic=BC250_SCANOUT_CAPS_MAGIC;caps.version=BC250_SCANOUT_CAPS_VERSION;caps.size=sizeof(caps);
+   caps.flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;caps.post_width=1280;caps.post_height=720;
+   Device published{};published.runtime=device.runtime;published.callbacks=device.callbacks;
+   published.kernel_callbacks=device.kernel_callbacks;published.adapter=&probe;
+   RuntimeHeapImports carried(published,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),
+       handle<VkInstance>(5),gipa,identity,ImportReleasePolicy::off());
+   assert(carried.scanout_caps().flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+   assert(carried.scanout_caps().post_width==1280 && carried.scanout_caps().post_height==720);
+   assert(carried.force_cpu()==native12::scanout_force_cpu());
+  }
  }
  // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a
  // policy is fixed for the owner's life. The event letters are the callbacks: A allocate, M map, Z the
