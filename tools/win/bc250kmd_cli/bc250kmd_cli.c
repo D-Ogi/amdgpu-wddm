@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
+#include <tlhelp32.h>       // `budget <image>`: a process by its image name
 
 #include "../../../driver/kmd/bc250kmd_escape.h"     // shared with the driver, never copied
 #include "../../../driver/kmd/regs.generated.h"      // `read <name>`: the named READ_REG offsets, from gen_regs.py
@@ -1384,6 +1385,8 @@ static int Telemetry(int argc, wchar_t **argv)
     return failed ? 1 : 0;
 }
 
+static int SegmentSizes(const WCHAR *wantedId, D3DKMT_SEGMENTSIZEINFO *sizes);
+
 static int VideoMemory(const WCHAR *wantedId)
 {
     BC250_VIDEO_MEMORY m;
@@ -1396,7 +1399,123 @@ static int VideoMemory(const WCHAR *wantedId)
                (m.ApertureMask & (1u << i)) ? "aperture" : "memory", m.Resident[i], m.Committed[i], m.Limit[i]);
     printf("memory   resident %llu committed %llu limit %llu\naperture resident %llu limit %llu\n",
            m.LocalResident, m.LocalCommitted, m.LocalLimit, m.ApertureResident, m.ApertureLimit);
+    // Memory manager stage 1d (0.7.216.8): the two sizes the line above has no room for, and the reason a
+    // summed aperture limit can read 2^64-1 (dxgkrnl's implicit system-memory segment has no limit).
+    // SharedSystemMemory is the pool the NON_LOCAL budget is taken from. A separate query, so the
+    // BC250_VIDEO_MEMORY layout the monitor and the control application share stays as it is.
+    {
+        D3DKMT_SEGMENTSIZEINFO sizes;
+        if (SegmentSizes(wantedId && wantedId[0] ? wantedId : BC250_DEFAULT_HWID, &sizes))
+            printf("sizes dedicated video %llu dedicated system %llu shared system %llu (KMTQAITYPE_GETSEGMENTSIZE)\n",
+                   sizes.DedicatedVideoMemorySize, sizes.DedicatedSystemMemorySize, sizes.SharedSystemMemorySize);
+        else printf("sizes not answered (KMTQAITYPE_GETSEGMENTSIZE)\n");
+        for (ULONG i = 0; i < m.Segments && i < BC250_VIDEO_MEMORY_SEGMENTS; i++)
+            if ((m.ApertureMask & (1u << i)) && m.Limit[i] == ~0ull)
+                printf("# segment %lu has no commit limit, so the summed aperture limit saturates\n", i);
+    }
     return 0;
+}
+
+// ---- budget: one process's memory budget and residency (memory manager stage 1d, 0.7.216.8) ----------------------
+//
+// dxgkrnl's own view of one process on one adapter: per segment group (LOCAL, NON_LOCAL) the Budget, the bytes the
+// process Requested and the Usage VidMm grants it, and Demoted[] - bytes VidMm placed in a lower-preference segment
+// than the allocation asked for, by priority class (D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT_GROUP, WDDM 2.1,
+// d3dkmthk.h WDK 26100 line 3964). Then per segment the bytes the process has committed there
+// (D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT). The WDK marks the group structure "reserved for system use"; this reads
+// it as Task Manager and Process Explorer do, for measurement only. Nothing here reaches the KMD.
+
+static int SegmentSizes(const WCHAR *wantedId, D3DKMT_SEGMENTSIZEINFO *sizes)
+{
+    D3DKMT_OPENADAPTERFROMDEVICENAME open;
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_QUERYADAPTERINFO info = { 0 };
+    int ok = 0;
+    memset(sizes, 0, sizeof(*sizes));
+    AcquireSRWLockExclusive(&g_TelemetryLock);
+    if (NT_SUCCESS(TelemetryOpenLocked(wantedId, &open))) {
+        info.hAdapter = open.hAdapter;
+        info.Type = KMTQAITYPE_GETSEGMENTSIZE;
+        info.pPrivateDriverData = sizes;
+        info.PrivateDriverDataSize = sizeof(*sizes);
+        ok = NT_SUCCESS(D3DKMTQueryAdapterInfo(&info));
+        close.hAdapter = open.hAdapter;
+        D3DKMTCloseAdapter(&close);
+    }
+    ReleaseSRWLockExclusive(&g_TelemetryLock);
+    return ok;
+}
+
+// A decimal pid, or the first process whose image name matches (case-insensitive). 0: none.
+static DWORD BudgetProcessId(const WCHAR *text)
+{
+    PROCESSENTRY32W entry;
+    HANDLE snapshot;
+    WCHAR *end = NULL;
+    unsigned long pid = wcstoul(text, &end, 10);
+    DWORD found = 0;
+    if (end && end != text && *end == 0) return (DWORD)pid;
+    snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return 0;
+    entry.dwSize = sizeof(entry);
+    for (BOOL more = Process32FirstW(snapshot, &entry); more && !found; more = Process32NextW(snapshot, &entry))
+        if (!_wcsicmp(entry.szExeFile, text)) found = entry.th32ProcessID;
+    CloseHandle(snapshot);
+    return found;
+}
+
+static int Budget(const WCHAR *process, const WCHAR *wantedId)
+{
+    static const char *const groups[2] = { "local", "non-local" };
+    BC250_VIDEO_MEMORY m;
+    D3DKMT_QUERYSTATISTICS query;
+    LUID luid;
+    HANDLE handle;
+    DWORD pid = BudgetProcessId(process);
+    LONG status;
+    int failed = 0;
+
+    if (!pid) { fprintf(stderr, "budget: no process %ls\n", process); return 1; }
+    status = Bc250VideoMemory(wantedId, &m, sizeof(m));
+    if (status < 0) { PrintStatus("budget", status); return 1; }
+    luid.LowPart = m.LuidLow; luid.HighPart = m.LuidHigh;
+    // dxgkrnl wants PROCESS_QUERY_INFORMATION: with a PROCESS_QUERY_LIMITED_INFORMATION handle every process query
+    // answered 0xC000000D (development PC, explorer.exe on the RTX 4090, 2026-10-07). The limited right stays as
+    // the fallback so that a refusal is a printed status, not a silent nothing.
+    handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (!handle) handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!handle) { fprintf(stderr, "budget: OpenProcess(%lu) failed, error %lu\n", pid, GetLastError()); return 1; }
+    printf("# process %lu (%ls) on adapter luid %08lX-%08lX\n", pid, process, (unsigned long)m.LuidHigh, m.LuidLow);
+    for (int g = 0; g < 2; g++) {
+        const D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT_GROUP_INFORMATION *r =
+            &query.QueryResult.ProcessSegmentGroupInformation;
+        memset(&query, 0, sizeof(query));
+        query.Type = D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT_GROUP;
+        query.AdapterLuid = luid;
+        query.hProcess = handle;
+        query.QueryProcessSegmentGroup = g ? D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL : D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL;
+        status = D3DKMTQueryStatistics(&query);
+        if (!NT_SUCCESS(status)) { printf("group %s status 0x%08lX\n", groups[g], (unsigned long)status); failed = 1; continue; }
+        printf("group %-9s budget %llu requested %llu usage %llu demoted", groups[g],
+               r->Budget, r->Requested, r->Usage);
+        for (int c = 0; c < (int)(sizeof(r->Demoted) / sizeof(r->Demoted[0])); c++) printf(" %llu", r->Demoted[c]);
+        printf("\n");
+    }
+    for (ULONG i = 0; i < m.Segments && i < BC250_VIDEO_MEMORY_SEGMENTS; i++) {
+        const D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT_INFORMATION *s = &query.QueryResult.ProcessSegmentInformation;
+        memset(&query, 0, sizeof(query));
+        query.Type = D3DKMT_QUERYSTATISTICS_PROCESS_SEGMENT;
+        query.AdapterLuid = luid;
+        query.hProcess = handle;
+        query.QueryProcessSegment.SegmentId = i;
+        status = D3DKMTQueryStatistics(&query);
+        if (!NT_SUCCESS(status)) { printf("segment %lu status 0x%08lX\n", i, (unsigned long)status); failed = 1; continue; }
+        printf("segment %lu %-8s committed %llu evicted-in-period %lu\n", i,
+               (m.ApertureMask & (1u << i)) ? "aperture" : "memory", s->BytesCommitted,
+               s->NbReferencedAllocationEvictedInPeriod);
+    }
+    CloseHandle(handle);
+    return failed;
 }
 
 // `read <name>`: a register of the driver's named READ_REG list (gen_regs.py EXTRA_READS, BC250_REG_READ_NAMES), so
@@ -3704,6 +3823,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
                         "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
+                        "       bc250kmd_cli budget <pid | image.exe> [hardware-id]   (one process: budget, usage, demoted)\n"
                         "       bc250kmd_cli read <hex offset | name> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli dpaudio [state]              (DP audio check table and record, dpaudio.c)\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
@@ -3740,6 +3860,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
     if (!_wcsicmp(argv[1], L"vram") && argc <= 3) return VideoMemory(argc == 3 ? argv[2] : NULL);
+    if (!_wcsicmp(argv[1], L"budget") && (argc == 3 || argc == 4)) return Budget(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"info")) return Info(argc > 2 ? argv[2] : BC250_DEFAULT_HWID);
     if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
     if (!_wcsicmp(argv[1], L"stages")) return Stages();

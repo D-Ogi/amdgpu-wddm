@@ -34,7 +34,11 @@ bc250kmd_cli log [from]                           the driver's log ring, 64 line
 bc250kmd_cli log summary [from | only]            the WDDM counters written into the ring first (one HardwareAccess escape),
                                                   then the ring; only: just the summary's own lines, the form for a poller
 bc250kmd_cli telemetry [count [interval ms]]      DPM snapshot and segment statistics: what the monitor's GPU line shows
-bc250kmd_cli vram [hardware-id]                   dxgkrnl's segment statistics of any adapter, one line per segment
+bc250kmd_cli vram [hardware-id]                   dxgkrnl's segment statistics of any adapter, one line per segment,
+                                                  then the dedicated and shared system memory sizes (0.7.216.8)
+bc250kmd_cli budget <pid | image.exe> [hardware-id]
+                                                  one process on one adapter: budget, requested, usage and Demoted[] per
+                                                  segment group, then its committed bytes per segment (0.7.216.8, elevated)
 bc250kmd_cli dpm [count [interval ms]]            the KMD DPM governor's state, with the thresholds and floor in force (docs/design/dpm.md)
                                                   the header also carries the idle state: its point, window and counters (0.7.207)
 bc250kmd_cli dpm tune <up> <target> <down> [hold_ms] | dpm tune reset
