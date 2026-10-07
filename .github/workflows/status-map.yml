@@ -1,0 +1,25 @@
+# The README Status gate: the maps and docs/status/status.json must be what tools/docs/status_map.py
+# writes from the driver source. Without the WDK it takes the slot lists from the committed status.json
+# and measures every verdict again. Same check as the 'status-map' step of tools/quality/quick.ps1.
+name: status-map
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  status-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generated maps match the source (fails on any diff; fix with status_map.py --kits <WDK>)
+        run: python tools/docs/status_map.py --check
+      - name: Generator tests
+        run: python -m unittest discover -s tools/docs -p 'test_*.py'

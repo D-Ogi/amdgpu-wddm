@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="424" viewBox="0 0 860 424" role="img" aria-label="D3D12 user-mode DDI: 170 of 209 slots done (81.34%)" font-family="-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Noto Sans&#x27;,Helvetica,Arial,sans-serif">
+<title>D3D12 user-mode DDI: 170 of 209 slots done (81.34%)</title>
+<rect x="0.5" y="0.5" width="859" height="423" rx="6" fill="#161b22" stroke="#30363d"/>
+<text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">D3D12 user-mode DDI: 170 of 209 slots done (81.34%)</text>
+<text x="10" y="39" font-size="12" fill="#9198a1">Tables given to the D3D12 runtime at DDI build 0092. Done: the function of the slot does work. A fail-safe entry is not done.</text>
+<rect x="11.5" y="47.5" width="487.33" height="327" rx="3" fill="#0d1117" stroke="#30363d"/>
+<g><title>Device core: 98/122</title>
+<rect x="13.5" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckFormatSupport: done - does work</title></rect>
+<rect x="48.02" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckMultisampleQualityLevels: done - does work</title></rect>
+<rect x="82.55" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetMipPacking: done - does work</title></rect>
+<rect x="117.07" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateElementLayoutSize: done - returns the answer</title></rect>
+<rect x="151.6" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateElementLayout: done - does work</title></rect>
+<rect x="186.12" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyElementLayout: done - does work</title></rect>
+<rect x="220.64" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateBlendStateSize: done - returns the answer</title></rect>
+<rect x="255.17" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateBlendState: done - does work</title></rect>
+<rect x="289.69" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyBlendState: done - does work</title></rect>
+<rect x="324.22" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateDepthStencilStateSize: done - returns the answer</title></rect>
+<rect x="358.74" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateDepthStencilState: done - does work</title></rect>
+<rect x="393.26" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyDepthStencilState: done - does work</title></rect>
+<rect x="427.79" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateRasterizerStateSize: done - returns the answer</title></rect>
+<rect x="462.31" y="49.5" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateRasterizerState: done - does work</title></rect>
+<rect x="13.5" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyRasterizerState: done - does work</title></rect>
+<rect x="48.02" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateShaderSize: done - returns the answer</title></rect>
+<rect x="82.55" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateVertexShader: done - forwards to intake: does work</title></rect>
+<rect x="117.07" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreatePixelShader: done - forwards to intake: does work</title></rect>
+<rect x="151.6" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateGeometryShader: done - forwards to intake: does work</title></rect>
+<rect x="186.12" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateComputeShader: done - forwards to intake: does work</title></rect>
+<rect x="220.64" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateGeometryShaderWithStreamOutput: done - returns the answer</title></rect>
+<rect x="255.17" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateGeometryShaderWithStreamOutput: done - forwards to intake: does work</title></rect>
+<rect x="289.69" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateTessellationShaderSize: done - returns the answer</title></rect>
+<rect x="324.22" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateHullShader: done - forwards to intake: does work</title></rect>
+<rect x="358.74" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateDomainShader: done - forwards to intake: does work</title></rect>
+<rect x="393.26" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyShader: done - does work</title></rect>
+<rect x="427.79" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateCommandQueueSize: done - returns the answer</title></rect>
+<rect x="462.31" y="85.39" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateCommandQueue: done - does work</title></rect>
+<rect x="13.5" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyCommandQueue: done - does work</title></rect>
+<rect x="48.02" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateCommandPoolSize: done - returns the answer</title></rect>
+<rect x="82.55" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateCommandPool: done - does work</title></rect>
+<rect x="117.07" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyCommandPool: done - does work</title></rect>
+<rect x="151.6" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResetCommandPool: done - does work</title></rect>
+<rect x="186.12" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivatePipelineStateSize: done - returns the answer</title></rect>
+<rect x="220.64" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreatePipelineState: done - does work</title></rect>
+<rect x="255.17" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyPipelineState: done - does work</title></rect>
+<rect x="289.69" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateCommandListSize: done - returns the answer</title></rect>
+<rect x="324.22" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateCommandList: done - does work</title></rect>
+<rect x="358.74" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyCommandList: done - does work</title></rect>
+<rect x="393.26" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateFenceSize: done - returns the answer</title></rect>
+<rect x="427.79" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateFence: done - does work</title></rect>
+<rect x="462.31" y="121.28" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyFence: done - does work</title></rect>
+<rect x="13.5" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateDescriptorHeapSize: done - returns the answer</title></rect>
+<rect x="48.02" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateDescriptorHeap: done - does work</title></rect>
+<rect x="82.55" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyDescriptorHeap: done - does work</title></rect>
+<rect x="117.07" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetDescriptorSizeInBytes: done - returns the answer</title></rect>
+<rect x="151.6" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetCPUDescriptorHandleForHeapStart: done - returns the answer</title></rect>
+<rect x="186.12" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetGPUDescriptorHandleForHeapStart: done - returns the answer</title></rect>
+<rect x="220.64" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateShaderResourceView: done - does work</title></rect>
+<rect x="255.17" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateConstantBufferView: done - does work</title></rect>
+<rect x="289.69" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateSampler: done - does work</title></rect>
+<rect x="324.22" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateUnorderedAccessView: done - does work</title></rect>
+<rect x="358.74" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateRenderTargetView: done - does work</title></rect>
+<rect x="393.26" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateDepthStencilView: done - does work</title></rect>
+<rect x="427.79" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateRootSignatureSize: done - returns the answer</title></rect>
+<rect x="462.31" y="157.17" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateRootSignature: done - does work</title></rect>
+<rect x="13.5" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyRootSignature: done - does work</title></rect>
+<rect x="48.02" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnMapHeap: done - does work</title></rect>
+<rect x="82.55" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnUnmapHeap: done - does work</title></rect>
+<rect x="117.07" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateHeapAndResourceSizes: done - returns the answer</title></rect>
+<rect x="151.6" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateHeapAndResource: done - does work</title></rect>
+<rect x="186.12" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyHeapAndResource: done - does work</title></rect>
+<rect x="220.64" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnMakeResident: done - does work</title></rect>
+<rect x="255.17" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnEvict: done - does work</title></rect>
+<rect x="289.69" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateOpenedHeapAndResourceSizes: done - returns the answer</title></rect>
+<rect x="324.22" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnOpenHeapAndResource: done - does work</title></rect>
+<rect x="358.74" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyDescriptors: done - does work</title></rect>
+<rect x="393.26" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyDescriptorsSimple: done - does work</title></rect>
+<rect x="427.79" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateQueryHeapSize: done - returns the answer</title></rect>
+<rect x="462.31" y="193.06" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateQueryHeap: done - does work</title></rect>
+<rect x="13.5" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyQueryHeap: done - does work</title></rect>
+<rect x="48.02" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateCommandSignatureSize: done - returns the answer</title></rect>
+<rect x="82.55" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateCommandSignature: done - does work</title></rect>
+<rect x="117.07" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyCommandSignature: done - does work</title></rect>
+<rect x="151.6" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckResourceVirtualAddress: done - returns the answer</title></rect>
+<rect x="186.12" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckResourceAllocationInfo: done - does work</title></rect>
+<rect x="220.64" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckSubresourceInfo: done - does work</title></rect>
+<rect x="255.17" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckExistingResourceAllocationInfo: done - does work</title></rect>
+<rect x="289.69" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetImplicitPhysicalAdapterMask: done - returns the answer</title></rect>
+<rect x="324.22" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetPresentPrivateDriverDataSize: done - returns the answer</title></rect>
+<rect x="358.74" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnQueryNodeMap: done - does work</title></rect>
+<rect x="393.26" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckResourceAllocationHandle: done - returns the answer</title></rect>
+<rect x="427.79" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateCommandRecorderSize: done - returns the answer</title></rect>
+<rect x="462.31" y="228.94" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateCommandRecorder: done - does work</title></rect>
+<rect x="13.5" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyCommandRecorder: done - does work</title></rect>
+<rect x="48.02" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCommandRecorderSetCommandPoolAsTarget: done - does work</title></rect>
+<rect x="82.55" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateSchedulingGroupSize: done - returns the answer</title></rect>
+<rect x="117.07" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateStateObjectSize: done - returns the answer</title></rect>
+<rect x="151.6" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateStateObject: done - does work</title></rect>
+<rect x="186.12" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyStateObject: done - does work</title></rect>
+<rect x="220.64" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetRaytracingAccelerationStructurePrebuildInfo: done - does work</title></rect>
+<rect x="255.17" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetShaderIdentifier: done - returns the answer</title></rect>
+<rect x="289.69" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetShaderStackSize: done - returns the answer</title></rect>
+<rect x="324.22" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetPipelineStackSize: done - returns the answer</title></rect>
+<rect x="358.74" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetPipelineStackSize: done - does work</title></rect>
+<rect x="393.26" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateAddToStateObjectSize: done - returns the answer</title></rect>
+<rect x="427.79" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnAddToStateObject: done - does work</title></rect>
+<rect x="462.31" y="264.83" width="34.52" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateMeshShaderSize: done - returns the answer</title></rect>
+<rect x="13.5" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnOfferResources: missing - every return is a failure constant</title></rect>
+<rect x="48.02" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnReclaimResources: missing - every return is a failure constant</title></rect>
+<rect x="82.55" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnRetrieveShaderComment: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="117.07" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivatePipelineLibrarySize: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="151.6" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCreatePipelineLibrary: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="186.12" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyPipelineLibrary: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="220.64" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnAddPipelineStateToLibrary: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="255.17" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCalcSerializedLibrarySize: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="289.69" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSerializeLibrary: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="324.22" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetDebugAllocationInfo: missing - forwards to reject_void: only logs, counts, reads or writes zeros</title></rect>
+<rect x="358.74" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCreateSchedulingGroup: missing - every return is a failure constant</title></rect>
+<rect x="393.26" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnDestroySchedulingGroup: missing - forwards to reject_void: only logs, counts, reads or writes zeros</title></rect>
+<rect x="427.79" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnEnumerateMetaCommands: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="462.31" y="300.72" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnEnumerateMetaCommandParameters: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="13.5" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateMetaCommandSize: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="48.02" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCreateMetaCommand: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="82.55" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyMetaCommand: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="117.07" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetMetaCommandRequiredParameterInfo: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="151.6" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCheckDriverMatchingIdentifier: missing - every return is a &#x27;not supported&#x27; answer</title></rect>
+<rect x="186.12" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSetBackgroundProcessingMode: missing - forwards to reject_void: only logs, counts, reads or writes zeros</title></rect>
+<rect x="220.64" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCreateSamplerFeedbackUnorderedAccessView: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="255.17" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCreateAmplificationShader: missing - forwards to intake with Stage::Mesh, which build_shader refuses</title></rect>
+<rect x="289.69" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnCreateMeshShader: missing - forwards to intake with Stage::Mesh, which build_shader refuses</title></rect>
+<rect x="324.22" y="336.61" width="34.52" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnImplicitShaderCacheControl: missing - only logs, counts, reads or writes zeros</title></rect>
+</g>
+<text x="17.5" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Device core 98/122</text>
+<rect x="501.83" y="47.5" width="278.34" height="327" rx="3" fill="#0d1117" stroke="#30363d"/>
+<g><title>Command list: 60/70</title>
+<rect x="503.83" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCloseCommandList: done - does work</title></rect>
+<rect x="538.13" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResetCommandList: done - does work</title></rect>
+<rect x="572.42" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDrawInstanced: done - does work</title></rect>
+<rect x="606.71" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDrawIndexedInstanced: done - does work</title></rect>
+<rect x="641" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDispatch: done - does work</title></rect>
+<rect x="675.3" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnClearUnorderedAccessViewUint: done - forwards to clear_uav: does work</title></rect>
+<rect x="709.59" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnClearUnorderedAccessViewFloat: done - forwards to clear_uav: does work</title></rect>
+<rect x="743.88" y="49.5" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnClearRenderTargetView: done - does work</title></rect>
+<rect x="503.83" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnClearDepthStencilView: done - does work</title></rect>
+<rect x="538.13" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDiscardResource: done - does work</title></rect>
+<rect x="572.42" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyTextureRegion: done - does work</title></rect>
+<rect x="606.71" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResourceCopy: done - does work</title></rect>
+<rect x="641" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyTiles: done - does work</title></rect>
+<rect x="675.3" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyBufferRegion: done - does work</title></rect>
+<rect x="709.59" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResourceResolveSubresource: done - does work</title></rect>
+<rect x="743.88" y="85.39" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnExecuteBundle: done - does work</title></rect>
+<rect x="503.83" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnExecuteIndirect: done - does work</title></rect>
+<rect x="538.13" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResourceBarrier: done - does work</title></rect>
+<rect x="572.42" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnPresent: done - does work</title></rect>
+<rect x="606.71" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnBeginQuery: done - does work</title></rect>
+<rect x="641" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnEndQuery: done - does work</title></rect>
+<rect x="675.3" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResolveQueryData: done - does work</title></rect>
+<rect x="709.59" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetPredication: done - does work</title></rect>
+<rect x="743.88" y="121.28" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnIaSetTopology: done - does work</title></rect>
+<rect x="503.83" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnRsSetViewports: done - does work</title></rect>
+<rect x="538.13" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnRsSetScissorRects: done - does work</title></rect>
+<rect x="572.42" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnOmSetBlendFactor: done - does work</title></rect>
+<rect x="606.71" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnOmSetStencilRef: done - does work</title></rect>
+<rect x="641" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetPipelineState: done - does work</title></rect>
+<rect x="675.3" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetDescriptorHeaps: done - does work</title></rect>
+<rect x="709.59" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRootSignature: done - does work</title></rect>
+<rect x="743.88" y="157.17" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRootSignature: done - does work</title></rect>
+<rect x="503.83" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRootDescriptorTable: done - does work</title></rect>
+<rect x="538.13" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRootDescriptorTable: done - does work</title></rect>
+<rect x="572.42" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRoot32BitConstant: done - does work</title></rect>
+<rect x="606.71" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRoot32BitConstant: done - does work</title></rect>
+<rect x="641" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRoot32BitConstants: done - does work</title></rect>
+<rect x="675.3" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRoot32BitConstants: done - does work</title></rect>
+<rect x="709.59" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRootConstantBufferView: done - does work</title></rect>
+<rect x="743.88" y="193.06" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRootConstantBufferView: done - does work</title></rect>
+<rect x="503.83" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRootShaderResourceView: done - does work</title></rect>
+<rect x="538.13" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRootShaderResourceView: done - does work</title></rect>
+<rect x="572.42" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetComputeRootUnorderedAccessView: done - does work</title></rect>
+<rect x="606.71" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetGraphicsRootUnorderedAccessView: done - does work</title></rect>
+<rect x="641" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnIASetIndexBuffer: done - does work</title></rect>
+<rect x="675.3" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnIASetVertexBuffers: done - does work</title></rect>
+<rect x="709.59" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSOSetTargets: done - does work</title></rect>
+<rect x="743.88" y="228.94" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnOMSetRenderTargets: done - does work</title></rect>
+<rect x="503.83" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnClearRootArguments: done - does work</title></rect>
+<rect x="538.13" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnOMSetDepthBounds: done - does work</title></rect>
+<rect x="572.42" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetSamplePositions: done - does work</title></rect>
+<rect x="606.71" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnResourceResolveSubresourceRegion: done - does work</title></rect>
+<rect x="641" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetViewInstanceMask: done - does work</title></rect>
+<rect x="675.3" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnBuildRaytracingAccelerationStructure: done - does work</title></rect>
+<rect x="709.59" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnEmitRaytracingAccelerationStructurePostbuildInfo: done - does work</title></rect>
+<rect x="743.88" y="264.83" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyRaytracingAccelerationStructure: done - does work</title></rect>
+<rect x="503.83" y="300.72" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSetPipelineState1: done - does work</title></rect>
+<rect x="538.13" y="300.72" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDispatchRays: done - does work</title></rect>
+<rect x="572.42" y="300.72" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnRSSetShadingRate: done - does work</title></rect>
+<rect x="606.71" y="300.72" width="34.29" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnRSSetShadingRateImage: done - does work</title></rect>
+<rect x="641" y="300.72" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnBlt: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="675.3" y="300.72" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSetMarker: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="709.59" y="300.72" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnAtomicCopyBufferRegion: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="743.88" y="300.72" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSetProtectedResourceSession: missing - refuses every call</title></rect>
+<rect x="503.83" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnWriteBufferImmediate: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="538.13" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnInitializeMetaCommand: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="572.42" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnExecuteMetaCommand: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="606.71" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnDispatchMesh: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="641" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnBarrier: missing - fail-safe entry of engine-ddi</title></rect>
+<rect x="675.3" y="336.61" width="34.29" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnOmSetAlphaBlendFactor: missing - only logs, counts, reads or writes zeros</title></rect>
+</g>
+<text x="507.83" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Command list 60/70</text>
+<rect x="783.17" y="47.5" width="65.33" height="152.29" rx="3" fill="#0d1117" stroke="#30363d"/>
+<g><title>Adapter: 7/8</title>
+<rect x="785.17" y="49.5" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCalcPrivateDeviceSize: done - returns the answer</title></rect>
+<rect x="815.84" y="49.5" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCreateDevice: done - does work</title></rect>
+<rect x="785.17" y="86.57" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCloseAdapter: done - does work</title></rect>
+<rect x="815.84" y="86.57" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetSupportedVersions: done - does work</title></rect>
+<rect x="785.17" y="123.65" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnGetCaps: done - does work</title></rect>
+<rect x="815.84" y="123.65" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnFillDDITable: done - forwards to fill_native_tables: does work</title></rect>
+<rect x="785.17" y="160.72" width="30.66" height="37.07" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDestroyDevice: done - does work</title></rect>
+<rect x="815.84" y="160.72" width="30.66" height="37.07" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetOptionalDDITables: missing - only logs, counts, reads or writes zeros</title></rect>
+</g>
+<text x="788.17" y="61.5" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">1</text>
+<rect x="783.17" y="202.79" width="65.33" height="94.06" rx="3" fill="#0d1117" stroke="#30363d"/>
+<g><title>Command queue: 5/5</title>
+<rect x="785.17" y="204.79" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnExecuteCommandLists: done - does work</title></rect>
+<rect x="815.84" y="204.79" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnUpdateTileMappings: done - does work</title></rect>
+<rect x="785.17" y="234.81" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCopyTileMappings: done - does work</title></rect>
+<rect x="815.84" y="234.81" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnSignalFence: done - does work</title></rect>
+<rect x="785.17" y="264.83" width="30.66" height="30.02" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnWaitForFence: done - does work</title></rect>
+</g>
+<text x="788.17" y="216.79" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">2</text>
+<rect x="783.17" y="299.85" width="65.33" height="74.65" rx="3" fill="#0d1117" stroke="#30363d"/>
+<g><title>Extended features: 0/4</title>
+<rect x="785.17" y="301.85" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetSupportedExtendedFeatures: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="815.84" y="301.85" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnGetSupportedExtendedFeatureVersions: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="785.17" y="337.18" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnEnableExtendedFeature: missing - only logs, counts, reads or writes zeros</title></rect>
+<rect x="815.84" y="337.18" width="30.66" height="35.32" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSetExtendedFeatureCallbacks: missing - only logs, counts, reads or writes zeros</title></rect>
+</g>
+<text x="788.17" y="313.85" font-size="11" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">3</text>
+<rect x="10" y="386" width="11" height="11" fill="#2ea043"/><text x="26" y="396" font-size="12" fill="#9198a1">done</text><rect x="70" y="386" width="11" height="11" fill="#3d444d"/><text x="86" y="396" font-size="12" fill="#9198a1">missing</text><text x="150" y="396" font-size="12" fill="#9198a1">one cell per slot, one rectangle per group, area = slot count</text><text x="10" y="414" font-size="12" fill="#9198a1">Small groups: [1] Adapter 7/8, [2] Command queue 5/5, [3] Extended features 0/4</text>
+</svg>
