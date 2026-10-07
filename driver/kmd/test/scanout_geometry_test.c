@@ -43,6 +43,9 @@ typedef struct {
  SIZE_T FramebufferLength,DcnScanoutMapLength;
  PVOID DcnScanoutMap;
 } BC250_DEVICE;
+/* Display modes (bc250kmd.h): the committed source size, else the inherited one. No mode is committed here. */
+static ULONG DisplaySourceWidth(const BC250_DEVICE *d){return d->Post.Width;}
+static ULONG DisplaySourceHeight(const BC250_DEVICE *d){return d->Post.Height;}
 static unsigned checks,failures,maps,unmaps;
 #define CHECK(x) do{++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
 static LONG InterlockedCompareExchange(volatile LONG *p,LONG v,LONG c){LONG x=*p;if(x==c)*p=v;return x;}
@@ -154,9 +157,14 @@ int main(void){
   CHECK(CaptureFirmwareSurface(&d)==STATUS_SUCCESS);
   CHECK(d.DcnFirmwarePitch==fw_pitch && d.DcnFirmwareAddress==fw_address);
   d.DcnCurrentAddress=fw_address+0x1000000;d.DcnCurrentPitch=pitches[i];d.DcnDiverged=1;
-  CHECK(AddressAllowed(&d,d.DcnCurrentAddress,pitches[i]));
-  CHECK(!AddressAllowed(&d,fw_address+d.VramLength-4096,pitches[i]));
-  CHECK(AddressAllowed(&d,fw_address,fw_pitch));CHECK(!AddressAllowed(&d,fw_address,pitches[i]));
+  CHECK(AddressAllowed(&d,d.DcnCurrentAddress,pitches[i],widths[i],heights[i]));
+  CHECK(!AddressAllowed(&d,fw_address+d.VramLength-4096,pitches[i],widths[i],heights[i]));
+  CHECK(AddressAllowed(&d,fw_address,fw_pitch,widths[i],heights[i]));CHECK(!AddressAllowed(&d,fw_address,pitches[i],widths[i],heights[i]));
+  /* Display modes: the size checked is the source mode's. A one-row surface fits in the last page of VRAM, where
+   * the full size does not; a zero size is no surface. */
+  CHECK(AddressAllowed(&d,fw_address+d.VramLength-4096,1024,256,1));
+  CHECK(!AddressAllowed(&d,fw_address+d.VramLength-4096,1024,256,2+4096/1024));
+  CHECK(!AddressAllowed(&d,d.DcnCurrentAddress,pitches[i],0,heights[i]));
   CHECK(FillSurface(&d,d.DcnCurrentAddress,pitches[i],0xff00aa55)==STATUS_SUCCESS);
   CHECK(mapped_bytes==bytes);
   CHECK(*(ULONG*)(buffer+64)==0xfffffffful);

@@ -249,7 +249,7 @@ void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* 
         FbdumpRefuse(Data, STATUS_INVALID_PARAMETER, "RowCount must be 1..BC250_FBDUMP_MAX_ROWS");
         return;
     }
-    height = (ULONG)Device->Post.Height;
+    height = DisplaySourceHeight(Device);   // the surface the plane reads: the committed source mode (modeset.c)
     if (Data->FirstRow >= height || Data->RowCount > height - Data->FirstRow)
     {
         FbdumpRefuse(Data, STATUS_INVALID_PARAMETER, "FirstRow/RowCount runs past the surface height");
@@ -293,7 +293,7 @@ void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* 
     }
     MmUnmapIoSpace((PVOID)map, (SIZE_T)length);
 
-    Data->Width = (unsigned long)Device->Post.Width;
+    Data->Width = (unsigned long)DisplaySourceWidth(Device);
     Data->Height = height;
     Data->Pitch = pitch;
     Data->ColorFormat = (unsigned long)Device->Post.ColorFormat;
@@ -329,11 +329,12 @@ static void Refuse(_Inout_ BC250_ESCAPE_DCNFLIP* Out, NTSTATUS Status, _In_z_ co
 // M31: base 0x270000000, length from GCMC_VM_FB_LOCATION_BASE/TOP, both already in Device->VramPhysical/VramLength
 // - vram.c's VramStart, the same numbers wddm.c's segment 1 is carved from). The alignment-and-range half of
 // this is dcn_translate.c's DcnAddressFits (0.7.24, ADR 0011 point 3 step 3): one host-testable rule shared with
-// DcnFlipSourceAddress below, rather than a second copy of the arithmetic.
-static BOOLEAN AddressAllowed(_In_ const BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch)
+// DcnFlipSourceAddress below, rather than a second copy of the arithmetic. Width and Height are the surface's: the
+// escape's own (Post, refused while a smaller source mode is committed) or the committed source mode's (modeset.c).
+static BOOLEAN AddressAllowed(_In_ const BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch, ULONG Width, ULONG Height)
 {
     ULONGLONG bytes;
-    if (!DcnSurfaceBytes(Device->Post.Width,Device->Post.Height,Pitch,&bytes)) return FALSE;
+    if (!DcnSurfaceBytes(Width,Height,Pitch,&bytes)) return FALSE;
     if (Device->DcnFirmwareKnown && Target==Device->DcnFirmwareAddress) return Pitch==Device->DcnFirmwarePitch;
     if (!Device->VramEnabled) return FALSE;
     return DcnAddressFits(Target,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,bytes)!=0;
@@ -369,7 +370,7 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
     ULONG x, y;
     ULONGLONG bytes;
     if (!DcnSurfaceBytes(Device->Post.Width,Device->Post.Height,Pitch,&bytes) ||
-        !AddressAllowed(Device,Physical,Pitch)) return STATUS_INVALID_PARAMETER;
+        !AddressAllowed(Device,Physical,Pitch,Device->Post.Width,Device->Post.Height)) return STATUS_INVALID_PARAMETER;
 
     phys.QuadPart = (LONGLONG)Physical;
     map = (volatile ULONG*)VramMapCpuRange(Device,phys,(SIZE_T)bytes,PAGE_READWRITE);
@@ -511,7 +512,7 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
 
     target = Restore ? Device->DcnFirmwareAddress : Physical;
     pitch=target==Device->DcnFirmwareAddress?Device->DcnFirmwarePitch:DcnPrimaryPitch(Device->Post.Width);
-    if (!AddressAllowed(Device,target,pitch))
+    if (!AddressAllowed(Device,target,pitch,Device->Post.Width,Device->Post.Height))
     {
         Refuse(Out, STATUS_ACCESS_DENIED, "target is not 4 KiB aligned, EnableVram is off, or the surface does not fit in VRAM");
         return;
@@ -583,6 +584,13 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCNFLIP* D
     if (Device->VidPnFlipEnabled)
     {
         Refuse(Data, STATUS_DEVICE_BUSY, "diagnostic flip refused while VidPn owns OTG0");
+        return;
+    }
+    // The escape's surfaces have the firmware's size (Post); a smaller committed source mode has a smaller
+    // viewport, and the fill pattern and the address checks of this path know nothing of it (modeset.c).
+    if (Device->Modeset.PipeChanged)
+    {
+        Refuse(Data, STATUS_INVALID_DEVICE_STATE, "diagnostic flip refused while a scaled display mode is committed");
         return;
     }
     DcnFlipCore(Device, Data->Physical, Data->Restore != 0, Data->Fill, Data->FillColor, Data);
@@ -685,14 +693,14 @@ NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
     return STATUS_SUCCESS;
 }
 
-NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
+static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unblank)
 {
     NTSTATUS status;
     ULONG waited=0;
     // Captured before any address write, so this also covers a bugcheck midway
     // through a flip before DcnDiverged/current-address publication completed.
     if (!Device->DcnFirmwareKnown)
-        return Device->DcnDiverged ? STATUS_DEVICE_NOT_READY : DcnSetVisibility(Device,TRUE);
+        return Device->DcnDiverged ? STATUS_DEVICE_NOT_READY : (Unblank ? DcnSetVisibility(Device,TRUE) : STATUS_SUCCESS);
     if (!Device->Framebuffer || Device->DcnFirmwarePitch!=Device->Post.Pitch)
         return STATUS_DEVICE_NOT_READY;
     status=DcnCheckPostSurface(Device);
@@ -710,12 +718,27 @@ NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
         }
         if (!NT_SUCCESS(status)) return status;
     }
-    status=DcnSetVisibility(Device,TRUE);
-    if (!NT_SUCCESS(status)) return status;
+    if (Unblank) {
+        status=DcnSetVisibility(Device,TRUE);
+        if (!NT_SUCCESS(status)) return status;
+    }
     Device->DcnCurrentAddress=Device->DcnFirmwareAddress;
     Device->DcnCurrentPitch=Device->DcnFirmwarePitch;
     Device->DcnDiverged=FALSE;
     return STATUS_SUCCESS;
+}
+
+NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
+{
+    return DcnFirmwareSurfaceCore(Device,TRUE);
+}
+
+// modeset.c, before the viewport grows: the plane back on the firmware surface, which holds the native size, so that
+// a larger viewport never reads past the end of the smaller surface it scanned. The source's visibility is the
+// OS's business (SetVidPnSourceVisibility) and stays as it is. PASSIVE_LEVEL in practice; same rules as above.
+NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device)
+{
+    return DcnFirmwareSurfaceCore(Device,FALSE);
 }
 
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
@@ -724,6 +747,9 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
     DcnUnmapScanout(Device);
     status=DcnRestorePostDisplay(Device);
     GuardLog("dcnflip: stop: verified firmware scanout status 0x%08X",status);
+    // After the firmware surface is back: the native viewport and scaler shape for the next owner (modeset.c). It
+    // runs when the restore above failed as well; the screen of the next owner needs the shape either way.
+    ModesetStop(Device);
     return status;
 }
 
@@ -750,13 +776,14 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     NTSTATUS status;
 
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
-    if (!DcnSurfaceBytes(Device->Post.Width,Device->Post.Height,Pitch,&bytes) || bytes>AllocationBytes) return STATUS_INVALID_PARAMETER;
+    if (!DcnSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,&bytes) || bytes>AllocationBytes)
+        return STATUS_INVALID_PARAMETER;
     status=CaptureFirmwareSurface(Device);
     if (!NT_SUCCESS(status)) return status;
     if (!Device->VramEnabled ||
         !DcnTranslateCardAddress(CardAddress, Device->VramMcBase, (ULONGLONG)Device->VramPhysical.QuadPart,
                                  Device->VramLength, &physical) ||
-        !AddressAllowed(Device,physical,Pitch))
+        !AddressAllowed(Device,physical,Pitch,DisplaySourceWidth(Device),DisplaySourceHeight(Device)))
     {
         if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)
             GuardLog("dcnflip: SetVidPnSourceAddress refused: card address 0x%llX does not translate inside the carve-out", CardAddress);
@@ -1035,7 +1062,7 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     target=(ULONGLONG)InterlockedCompareExchange64((volatile LONG64*)&Device->DcnCurrentAddress,0,0);
     pitch=Device->DcnCurrentPitch;diverged=Device->DcnDiverged;
     if (InterlockedCompareExchange(&Device->DcnSurfaceSequence,0,0)!=generation || !diverged ||
-        !DcnSurfaceBytes(Device->Post.Width,Device->Post.Height,pitch,&bytes)) return FALSE;
+        !DcnSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),pitch,&bytes)) return FALSE;
     if (Device->DcnScanoutMap && Device->DcnScanoutMapAddress==target && Device->DcnScanoutMapLength==bytes)
     {
         *Mapping=Device->DcnScanoutMap;*Length=Device->DcnScanoutMapLength;*Pitch=pitch;
@@ -1048,7 +1075,7 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     // privileged CPU mapping earns its own bounds check at the point it is made). AddressAllowed is the exact
     // rule DcnFlipSourceAddress already refused this address against, over dcn_translate.c's DcnAddressFits -
     // never a second, hand-typed range.
-    if (!AddressAllowed(Device,target,pitch))
+    if (!AddressAllowed(Device,target,pitch,DisplaySourceWidth(Device),DisplaySourceHeight(Device)))
     {
         if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
             GuardLog("dcnflip: scanout mapping refused: 0x%llX is no longer inside the carve-out", target);

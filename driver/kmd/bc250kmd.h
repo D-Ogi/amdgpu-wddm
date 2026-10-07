@@ -78,6 +78,7 @@
 #include "cpu.h"
 #include "interop.h"
 #include "dpaudio.h"
+#include "modeset.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -168,6 +169,7 @@ typedef struct _BC250_DEVICE {
     BC250_FAN_OWNER Fan;               // fan.c: the case fan control, the one writer of the board's monitor chip
     BC250_SMU_METRICS SmuMetrics;      // smu_metrics.c: the SMU metrics table, its page and its reader
     BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
+    BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -304,6 +306,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN ComposedSourceModes;        // display_modes.h: offer the composed formats' source modes too (full table,
                                         // OfferComposedSourceModes not 0; read at WddmStart)
     ULONG CommittedSourceFormat;        // D3DDDIFORMAT of the last committed source mode, for the commit log
+    ULONG CommittedSourceWidth, CommittedSourceHeight;  // its size, for the same log (modeset.c owns the scan-out size)
     PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
     ULONGLONG WddmApertureRequest;       // the aperture size GartCaptureAperture asks for (wddm.c WddmStart,
                                          // ApertureSegmentMegabytes); 0 until WddmStart sets it
@@ -336,6 +339,19 @@ typedef struct _BC250_DEVICE {
     KEVENT GfxRetireEvent;              // NotificationEvent, set by GfxRetireSignal, cleared by the waiter
     volatile LONG GfxRetireGeneration;  // bumped by every signal; snapshot closes the test/wait window
 } BC250_DEVICE;
+
+// The committed source size (modeset.c): the size of the surface the plane reads. Post's until a commit changes it;
+// the OTG timing is always Post's. Read at any IRQL: the pair changes only inside wddm.c's primary transaction.
+static __inline ULONG DisplaySourceWidth(_In_ const BC250_DEVICE* Device)
+{
+    LONG width = Device->Modeset.SourceWidth;
+    return width > 0 ? (ULONG)width : Device->Post.Width;
+}
+static __inline ULONG DisplaySourceHeight(_In_ const BC250_DEVICE* Device)
+{
+    LONG height = Device->Modeset.SourceHeight;
+    return height > 0 ? (ULONG)height : Device->Post.Height;
+}
 
 // Something a held submission is waiting for has happened: the gfx fence arrived, a completion-queue slot was
 // freed, or the path was closed by a failure, a TDR DDI or the stop. <= DISPATCH_LEVEL, callable with a spin
@@ -592,6 +608,7 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
+NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same without the unblank (modeset.c)
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
 // DcnFlipEscape uses (step 2), never PollFlipPending's blocking poll (this may run above DISPATCH_LEVEL, per
@@ -992,6 +1009,13 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
+// modeset.c: the primary transaction (the flip DDI's PrimarySequence) for a change of the source size at
+// PASSIVE_LEVEL. While it is held, SetVidPnSourceAddress answers STATUS_DEVICE_BUSY, as for a flip in progress.
+// Begin is bounded and returns FALSE when it could not take it; TRUE with nothing held when there is no full table.
+// End with Invalidate says that the plane went back to the firmware surface: the next flip is a change whatever
+// address it carries, and no application surface is scanned out any more.
+BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Generation);
+void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate);
 // PASSIVE/Level Three, software-owner retention only. Not wired to power DDIs
 // until the separate hardware suspend/restore coordinator is implemented.
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device);

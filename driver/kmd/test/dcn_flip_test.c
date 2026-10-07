@@ -9,11 +9,13 @@ typedef unsigned long ULONG;
 typedef uint64_t ULONGLONG;
 typedef int32_t NTSTATUS;
 typedef int BOOLEAN;
-typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled; } BC250_DEVICE;
+/* Modeset.PipeChanged: a committed scaled display mode (modeset.c); the escape refuses while it is set. */
+typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled; struct { BOOLEAN PipeChanged; } Modeset; } BC250_DEVICE;
 static long InterlockedIncrement(volatile long *value) { return ++*value; }
 #define TRUE 1
 #define FALSE 0
 #define STATUS_DEVICE_BUSY ((NTSTATUS)0x80000011u)
+#define STATUS_INVALID_DEVICE_STATE ((NTSTATUS)0xC0000184u)
 #define BC250_KMD_VERSION 1
 #define RtlZeroMemory(p,n) memset(p,0,n)
 typedef struct {
@@ -146,6 +148,12 @@ int main(void)
         CHECK(data.NtStatus==(unsigned long)STATUS_DEVICE_BUSY && escape_calls==0);
         CHECK(model.writes==writes);
         device.VidPnFlipEnabled=0;
+        device.Modeset.PipeChanged=1;
+        DcnFlipEscape(&device,&data);
+        CHECK(data.NtStatus==(unsigned long)STATUS_INVALID_DEVICE_STATE && escape_calls==0);
+        CHECK(model.writes==writes);
+        device.Modeset.PipeChanged=0;
+        data.NtStatus=0;
         DcnFlipEscape(&device,&data);
         CHECK(escape_calls==1 && data.NtStatus==0);
     }

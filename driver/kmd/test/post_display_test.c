@@ -90,6 +90,10 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }return STATUS_SUCCESS;
 }
+/* Display modes (modeset.c): after the firmware surface is back, the bugcheck screen gets the native viewport.
+ * Counted here; the modeset host suite tests what it writes. It must run only after a successful restore. */
+static unsigned modeset_restores;
+static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset_restores;}
 static void KeStallExecutionProcessor(ULONG us)
 {
     CHECK(us==1 || us==100);model.elapsed+=us;
@@ -117,6 +121,7 @@ int main(void)
     CHECK(d.SystemDisplayReady && width==4 && height==3 && fmt==D3DDDIFMT_X8R8G8B8);
     CHECK(model.scanned==d.DcnFirmwareAddress && model.elapsed==300 && !d.DcnDiverged);
     CHECK(d.DcnCurrentAddress==d.DcnFirmwareAddress && d.DcnCurrentPitch==32);
+    CHECK(modeset_restores==1);
     Bc250SystemDisplayWrite(&d,src,4,2,16,1,1);
     CHECK(fb[9]==1 && fb[10]==2 && fb[11]==3 && fb[17]==5 && fb[18]==6 && fb[19]==7);
     CHECK(fb[8]==0 && fb[12]==0 && fb[20]==0); // preserve pitch padding and clipped right edge
@@ -130,6 +135,7 @@ int main(void)
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_IO_TIMEOUT);
     CHECK(!d.SystemDisplayReady && d.DcnDiverged && width==0 && height==0 && fmt==D3DDDIFMT_UNKNOWN);
     CHECK(model.elapsed==50000 && model.scanned!=d.DcnFirmwareAddress);
+    CHECK(modeset_restores==2); // a failed restore leaves the scaler alone
     Bc250SystemDisplayWrite(&d,src,4,2,16,0,0);CHECK(fb[0]==0);
     init(&d,fb);d.DcnWriteEnabled=0;
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_DEVICE_NOT_READY);

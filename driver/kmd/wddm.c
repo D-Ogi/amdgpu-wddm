@@ -6374,7 +6374,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     BOOLEAN toFlip = FALSE, mapFailed = FALSE;    // for the counters and the log line at the end
     PVOID destinationMap = NULL;
     BOOLEAN destinationPrimary = FALSE, destinationRedFirst = FALSE;
-    UINT dstPitch = device->Post.Pitch, dstWidth = device->Post.Width, dstHeight = device->Post.Height;
+    UINT dstPitch = device->Post.Pitch, dstWidth = DisplaySourceWidth(device), dstHeight = DisplaySourceHeight(device);
 
 
     verbose = (wddm->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS);
@@ -6937,6 +6937,50 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     return STATUS_SUCCESS;
 }
 
+// modeset.c's side of the primary transaction below (bc250kmd.h says what it is for). PASSIVE_LEVEL. The flip DDI
+// never spins on an odd generation; this side may, a little: at most 200 tries 10 us apart (2 ms), because the
+// other holder is a flip in progress on another processor, which ends in microseconds, or a modeset, which the
+// caller's own mutex already excludes.
+#define BC250_WDDM_EXCLUSIVE_TRIES 200u
+#define BC250_WDDM_EXCLUSIVE_STEP_US 10u
+BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Generation)
+{
+    BC250_WDDM* wddm = WddmOf(Device);
+    ULONG i;
+
+    *Generation = 0;
+    if (wddm == NULL) return TRUE;
+    for (i = 0; i < BC250_WDDM_EXCLUSIVE_TRIES; i++)
+    {
+        ULONG generation = (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
+        if (!(generation & 1u) &&
+            (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, (LONG)(generation + 1u), (LONG)generation) ==
+            generation)
+        {
+            *Generation = generation;
+            return TRUE;
+        }
+        KeStallExecutionProcessor(BC250_WDDM_EXCLUSIVE_STEP_US);
+    }
+    return FALSE;
+}
+
+void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate)
+{
+    BC250_WDDM* wddm = WddmOf(Device);
+
+    if (wddm == NULL) return;
+    if (Invalidate)
+    {
+        // The same four fields DestroyAllocation resets when it takes the plane back (Bc250WddmDestroyAllocation).
+        wddm->PrimaryNeedsRestore = TRUE;
+        InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, 0);
+        wddm->PrimaryPitch = 0;
+        InterlockedExchange64(&wddm->ScanoutObject, 0);
+    }
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(Generation + 2u));
+}
+
 static DXGKDDI_SETVIDPNSOURCEADDRESS Bc250WddmSetVidPnSourceAddress;
 static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                                                _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* pSetVidPnSourceAddress)
@@ -6984,9 +7028,10 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         if (pSetVidPnSourceAddress->Flags.FlipImmediate) InterlockedIncrement(&wddm->ScanoutFlipFlags[1]);
         if (pSetVidPnSourceAddress->Flags.SharedPrimaryTransition) InterlockedIncrement(&wddm->ScanoutFlipFlags[2]);
         if (pSetVidPnSourceAddress->Flags.IndependentFlipExclusive) InterlockedIncrement(&wddm->ScanoutFlipFlags[3]);
-        // A NULL allocation preserves current private properties; initially POST.
+        // A NULL allocation preserves current private properties; initially POST. The surface has the committed
+        // source mode's size (modeset.c), which this transaction excludes from changing under it.
         pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:device->Post.Pitch;
-        if (!DcnSurfaceBytes(device->Post.Width,device->Post.Height,pitch,&bytes)) status=STATUS_INVALID_PARAMETER;
+        if (!DcnSurfaceBytes(DisplaySourceWidth(device),DisplaySourceHeight(device),pitch,&bytes)) status=STATUS_INVALID_PARAMETER;
         if (pSetVidPnSourceAddress->hAllocation)
         {
             // M15.14. Until 0.7.205.1 this clause refused every application allocation outright, which is
@@ -7025,7 +7070,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                 ((device->VramMcBase | (ULONGLONG)device->VramPhysical.QuadPart) & 0xFFFull))
                 admit=BC250_SCANOUT_ALIGNMENT;
             else
-                admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,device->Post.Width,device->Post.Height,
+                admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,DisplaySourceWidth(device),DisplaySourceHeight(device),
                                         BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
             InterlockedIncrement(&wddm->ScanoutAdmits[admit]);
             if (candidate.ScanoutRequested) InterlockedIncrement(&wddm->ScanoutRequests);

@@ -87,6 +87,10 @@ typedef struct {
     volatile LONG64 DcnVsyncSkipOddGenerationTime, DcnVsyncSkipReadFailureTime, DcnVsyncSkipSameAddressTime,
         DcnVsyncSkipChangedGenerationTime;
 } BC250_DEVICE;
+/* Display modes (bc250kmd.h): the source size is the committed mode when one is set, else the inherited mode.
+ * This fixture commits no mode, so the source size is always the inherited one. */
+static ULONG DisplaySourceWidth(const BC250_DEVICE *d){return d->Post.Width;}
+static ULONG DisplaySourceHeight(const BC250_DEVICE *d){return d->Post.Height;}
 #define BC250_WDDM_MAGIC_ALLOCATION 123
 #define BC250_WDDM_MAGIC_RESOURCE 124
 #define WddmDdiDestroyAllocation 1

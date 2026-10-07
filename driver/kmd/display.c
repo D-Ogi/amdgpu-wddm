@@ -5,6 +5,7 @@
 #include "paging_journal.h"
 #include "display_timing.h"
 #include "display_modes.h"
+#include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
 
 static ULONG g_Presents;
 
@@ -598,6 +599,26 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 
 // ---- VidPN ------------------------------------------------------------------------------------------------
 
+// The VidPN scaling of a present path as modeset.c names it; BC250_SCALING_COUNT for "no preference" (unpinned,
+// uninitialized, not specified) and for a scaling this driver never offers (custom).
+static ULONG ScalingFromPath(D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling)
+{
+    switch (Scaling)
+    {
+    case D3DKMDT_VPPS_IDENTITY: return BC250_SCALING_IDENTITY;
+    case D3DKMDT_VPPS_CENTERED: return BC250_SCALING_CENTERED;
+    case D3DKMDT_VPPS_STRETCHED: return BC250_SCALING_STRETCHED;
+    case D3DKMDT_VPPS_ASPECTRATIOCENTEREDMAX: return BC250_SCALING_ASPECT;
+    default: return BC250_SCALING_COUNT;
+    }
+}
+
+// Is the path's scaling one dxgkrnl pinned, as opposed to "no preference"?
+static BOOLEAN ScalingPinned(D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling)
+{
+    return Scaling != D3DKMDT_VPPS_UNPINNED && Scaling != D3DKMDT_VPPS_UNINITIALIZED && Scaling != D3DKMDT_VPPS_NOTSPECIFIED;
+}
+
 NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
 {
     D3DKMDT_VIDEO_SIGNAL_INFO signal;
@@ -634,39 +655,58 @@ static NTSTATUS FillSignalInfo(_In_ const BC250_DEVICE* Device, _Out_ D3DKMDT_VI
     return STATUS_SUCCESS;
 }
 
+// Display modes (modeset.c): every size of this start's mode list, each in every pixel format of display_modes.h.
+// The native size keeps the firmware's pitch; a smaller size gets the pitch its primary allocation will have
+// (DcnPrimaryPitch, gdi_admission.h). With a scaling pinned on the path, only the sizes that scaling admits.
 static NTSTATUS OfferSourceMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKMDT_HVIDPN hVidPn,
-                                D3DDDI_VIDEO_PRESENT_SOURCE_ID SourceId)
+                                D3DDDI_VIDEO_PRESENT_SOURCE_ID SourceId, D3DKMDT_VIDPN_PRESENT_PATH_SCALING PathScaling)
 {
     D3DKMDT_HVIDPNSOURCEMODESET hSet = NULL;
     const DXGK_VIDPNSOURCEMODESET_INTERFACE* set = NULL;
     D3DKMDT_VIDPN_SOURCE_MODE* mode = NULL;
     NTSTATUS status;
     unsigned long formats[BC250_SOURCE_MODE_MAX], count, i;
+    const BC250_MODE_LIST* list = &Device->Modeset.Modes;
+    const ULONG sizes = list->Count ? list->Count : 1;     // no list (start not reached): the native size alone
+    const ULONG filter = ScalingPinned(PathScaling) ? ScalingFromPath(PathScaling) : BC250_SCALING_COUNT;
+    ULONG size, offered = 0;
 
-    // One mode per pixel format of display_modes.h, all of the inherited geometry: the scan-out format first,
-    // then (full table only) the formats the UMDs compose, so that DXGI lists modes for them too.
+    // One mode per pixel format of display_modes.h: the scan-out format first, then (full table only) the formats
+    // the UMDs compose, so that DXGI lists modes for them too.
     count = Bc250SourceModeFormats(Device->ComposedSourceModes, formats, BC250_SOURCE_MODE_MAX);
     if (count == 0 || count > BC250_SOURCE_MODE_MAX) return STATUS_GRAPHICS_INVALID_PIXELFORMAT;
     status = VidPn->pfnCreateNewSourceModeSet(hVidPn, SourceId, &hSet, &set);
     if (!NT_SUCCESS(status)) return status;
 
-    for (i = 0; i < count && NT_SUCCESS(status); ++i)
+    for (size = 0; size < sizes && NT_SUCCESS(status); ++size)
     {
-        const ULONG stride = Bc250SourceModeStride(formats[i], Device->Post.Pitch);
-        if (stride == 0) { status = STATUS_GRAPHICS_INVALID_STRIDE; break; }
-        status = set->pfnCreateNewModeInfo(hSet, &mode);
-        if (!NT_SUCCESS(status)) break;
-        mode->Type = D3DKMDT_RMT_GRAPHICS;
-        mode->Format.Graphics.PrimSurfSize.cx = Device->Post.Width;
-        mode->Format.Graphics.PrimSurfSize.cy = Device->Post.Height;
-        mode->Format.Graphics.VisibleRegionSize = mode->Format.Graphics.PrimSurfSize;
-        mode->Format.Graphics.Stride = stride;
-        mode->Format.Graphics.PixelFormat = (D3DDDIFORMAT)formats[i];
-        mode->Format.Graphics.ColorBasis = D3DKMDT_CB_SCRGB;
-        mode->Format.Graphics.PixelValueAccessMode = D3DKMDT_PVAM_DIRECT;
-        status = set->pfnAddMode(hSet, mode);
-        if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(hSet, mode);
+        const ULONG width = list->Count ? list->Modes[size].Width : Device->Post.Width;
+        const ULONG height = list->Count ? list->Modes[size].Height : Device->Post.Height;
+        const BOOLEAN native = (width == Device->Post.Width && height == Device->Post.Height);
+        const ULONG support = ModesetScalingSupport(Device, width, height);
+        if (!native && (support == 0 || (filter != BC250_SCALING_COUNT && !(support & BC250_SCALING_BIT(filter)))))
+            continue;
+        for (i = 0; i < count && NT_SUCCESS(status); ++i)
+        {
+            const ULONG stride = Bc250SourceModeStride(formats[i], native ? Device->Post.Pitch : DcnPrimaryPitch(width));
+            if (stride == 0) { status = STATUS_GRAPHICS_INVALID_STRIDE; break; }
+            status = set->pfnCreateNewModeInfo(hSet, &mode);
+            if (!NT_SUCCESS(status)) break;
+            mode->Type = D3DKMDT_RMT_GRAPHICS;
+            mode->Format.Graphics.PrimSurfSize.cx = width;
+            mode->Format.Graphics.PrimSurfSize.cy = height;
+            mode->Format.Graphics.VisibleRegionSize = mode->Format.Graphics.PrimSurfSize;
+            mode->Format.Graphics.Stride = stride;
+            mode->Format.Graphics.PixelFormat = (D3DDDIFORMAT)formats[i];
+            mode->Format.Graphics.ColorBasis = D3DKMDT_CB_SCRGB;
+            mode->Format.Graphics.PixelValueAccessMode = D3DKMDT_PVAM_DIRECT;
+            status = set->pfnAddMode(hSet, mode);
+            if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(hSet, mode);
+            else offered++;
+        }
     }
+    // The native size is always cofunctional with identity; an empty set would leave dxgkrnl no mode at all.
+    if (NT_SUCCESS(status) && offered == 0) status = STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE;
     if (NT_SUCCESS(status)) status = VidPn->pfnAssignSourceModeSet(hVidPn, SourceId, hSet);
     if (!NT_SUCCESS(status)) VidPn->pfnReleaseSourceModeSet(hVidPn, hSet);
     return status;
@@ -769,7 +809,8 @@ NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUP
     if (!NT_SUCCESS(status)) return status;
 
     // One source, one target: zero or one path. Modes are constrained in EnumVidPnCofuncModality; a pinned
-    // source mode must also have a format of display_modes.h, the set CommitVidPn accepts.
+    // source mode must also have a format of display_modes.h, the set CommitVidPn accepts, and a size of this
+    // start's mode list (modeset.c) that the path's pinned scaling, if any, admits.
     IsSupportedVidPn->IsVidPnSupported = (paths <= 1);
     if (paths == 1)
     {
@@ -777,9 +818,26 @@ NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUP
         BOOLEAN pinned;
         // A VidPN whose source mode set cannot be read is judged by its topology alone, as before 0.7.201.
         if (NT_SUCCESS(SourceModeIsPinned(vidpn, IsSupportedVidPn->hDesiredVidPn, 0, &pinned, &mode)) &&
-            pinned && mode.Type == D3DKMDT_RMT_GRAPHICS &&
-            !Bc250SourceModeAdmitted(device->ComposedSourceModes, (unsigned long)mode.Format.Graphics.PixelFormat))
-            IsSupportedVidPn->IsVidPnSupported = FALSE;
+            pinned && mode.Type == D3DKMDT_RMT_GRAPHICS)
+        {
+            const ULONG width = (ULONG)mode.Format.Graphics.PrimSurfSize.cx;
+            const ULONG height = (ULONG)mode.Format.Graphics.PrimSurfSize.cy;
+            const ULONG support = ModesetScalingSupport(device, width, height);
+            const D3DKMDT_VIDPN_PRESENT_PATH* path = NULL;
+            if (!Bc250SourceModeAdmitted(device->ComposedSourceModes, (unsigned long)mode.Format.Graphics.PixelFormat) ||
+                support == 0)
+                IsSupportedVidPn->IsVidPnSupported = FALSE;
+            else if (NT_SUCCESS(topology->pfnAcquireFirstPathInfo(hTopology, &path)) && path != NULL)
+            {
+                const D3DKMDT_VIDPN_PRESENT_PATH_SCALING scaling = path->ContentTransformation.Scaling;
+                const BOOLEAN native = (width == device->Post.Width && height == device->Post.Height);
+                // At the native size every scaling dxgkrnl can pin is the 1:1 shape; custom is never offered.
+                if (ScalingPinned(scaling) && !native &&
+                    (ScalingFromPath(scaling) == BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(ScalingFromPath(scaling)))))
+                    IsSupportedVidPn->IsVidPnSupported = FALSE;
+                topology->pfnReleasePathInfo(hTopology, path);
+            }
+        }
     }
     return STATUS_SUCCESS;
 }
@@ -818,7 +876,8 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
         step = SourceModeIsPinned(vidpn, Enum->hConstrainingVidPn, path->VidPnSourceId, &pinned, NULL);
         if (NT_SUCCESS(step) && !pinned &&
             !(Enum->EnumPivotType == D3DKMDT_EPT_VIDPNSOURCE && Enum->EnumPivot.VidPnSourceId == path->VidPnSourceId))
-            step = OfferSourceMode(device, vidpn, Enum->hConstrainingVidPn, path->VidPnSourceId);
+            step = OfferSourceMode(device, vidpn, Enum->hConstrainingVidPn, path->VidPnSourceId,
+                                   path->ContentTransformation.Scaling);
 
         // Target mode set: the same.
         if (NT_SUCCESS(step)) step = TargetModeIsPinned(vidpn, Enum->hConstrainingVidPn, path->VidPnTargetId, &pinned);
@@ -826,13 +885,28 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
             !(Enum->EnumPivotType == D3DKMDT_EPT_VIDPNTARGET && Enum->EnumPivot.VidPnTargetId == path->VidPnTargetId))
             step = OfferTargetMode(device, vidpn, Enum->hConstrainingVidPn, path->VidPnTargetId);
 
-        // Path transformations: identity only, reported where nothing is pinned yet.
+        // Path transformations, reported where nothing is pinned yet. Scaling (modeset.c): what the pinned source
+        // mode's size gets, or with no source mode pinned what the native size gets (identity and every scaling of
+        // this start's level). Never all zero: dxgkrnl needs at least one, and identity is always the native shape.
         if (NT_SUCCESS(step))
         {
             if (path->ContentTransformation.Scaling == D3DKMDT_VPPS_UNPINNED && Enum->EnumPivotType != D3DKMDT_EPT_SCALING)
             {
+                D3DKMDT_VIDPN_SOURCE_MODE source;
+                ULONG support = 0;
                 RtlZeroMemory(&update.ContentTransformation.ScalingSupport, sizeof(update.ContentTransformation.ScalingSupport));
-                update.ContentTransformation.ScalingSupport.Identity = 1;
+                if (NT_SUCCESS(SourceModeIsPinned(vidpn, Enum->hConstrainingVidPn, path->VidPnSourceId, &pinned, &source)) &&
+                    pinned && source.Type == D3DKMDT_RMT_GRAPHICS)
+                    support = ModesetScalingSupport(device, (ULONG)source.Format.Graphics.PrimSurfSize.cx,
+                                                    (ULONG)source.Format.Graphics.PrimSurfSize.cy);
+                else
+                    support = ModesetScalingSupport(device, device->Post.Width, device->Post.Height);
+                if (support == 0) support = BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
+                update.ContentTransformation.ScalingSupport.Identity = (support & BC250_SCALING_BIT(BC250_SCALING_IDENTITY)) ? 1 : 0;
+                update.ContentTransformation.ScalingSupport.Centered = (support & BC250_SCALING_BIT(BC250_SCALING_CENTERED)) ? 1 : 0;
+                update.ContentTransformation.ScalingSupport.Stretched = (support & BC250_SCALING_BIT(BC250_SCALING_STRETCHED)) ? 1 : 0;
+                update.ContentTransformation.ScalingSupport.AspectRatioCenteredMax =
+                    (support & BC250_SCALING_BIT(BC250_SCALING_ASPECT)) ? 1 : 0;
                 changed = TRUE;
             }
             if (path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED && Enum->EnumPivotType != D3DKMDT_EPT_ROTATION)
@@ -973,17 +1047,34 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
     if (!pinned) return STATUS_SUCCESS;     // a path without a pinned source mode: nothing to show, not an error
                                             // (STATUS_GRAPHICS_MODE_NOT_PINNED has success severity anyway)
 
-    // The only geometry we can show is the one already on the wire, in a format that display_modes.h offers.
-    // A composed format leaves the plane as it is (8-bit, the firmware's): the UMDs compose such buffers, and
-    // SetVidPnSourceAddress refuses them. Each change of the committed format is logged once.
+    // The timing on the wire never changes. The source mode is one of this start's sizes (modeset.c: the native
+    // one, or a smaller one that pipe 0's scaler puts on the native timing), in a format that display_modes.h
+    // offers. A composed format leaves the plane as it is (8-bit, the firmware's): the UMDs compose such buffers,
+    // and SetVidPnSourceAddress refuses them. Each change of the committed format or size is logged once.
     if (mode.Type != D3DKMDT_RMT_GRAPHICS ||
-        mode.Format.Graphics.PrimSurfSize.cx != device->Post.Width ||
-        mode.Format.Graphics.PrimSurfSize.cy != device->Post.Height ||
+        ModesetScalingSupport(device, (ULONG)mode.Format.Graphics.PrimSurfSize.cx,
+                              (ULONG)mode.Format.Graphics.PrimSurfSize.cy) == 0 ||
         !Bc250SourceModeAdmitted(device->ComposedSourceModes, (unsigned long)mode.Format.Graphics.PixelFormat))
         return STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE;
-    if (device->CommittedSourceFormat != (ULONG)mode.Format.Graphics.PixelFormat)
+    {
+        const D3DKMDT_VIDPN_PRESENT_PATH* path = NULL;
+        ULONG scaling = BC250_SCALING_COUNT;            // no preference: modeset.c takes the default
+        if (NT_SUCCESS(topology->pfnAcquireFirstPathInfo(hTopology, &path)) && path != NULL)
+        {
+            scaling = ScalingFromPath(path->ContentTransformation.Scaling);
+            topology->pfnReleasePathInfo(hTopology, path);
+        }
+        status = ModesetCommit(device, (ULONG)mode.Format.Graphics.PrimSurfSize.cx,
+                               (ULONG)mode.Format.Graphics.PrimSurfSize.cy, scaling);
+        if (!NT_SUCCESS(status)) return status;
+    }
+    if (device->CommittedSourceFormat != (ULONG)mode.Format.Graphics.PixelFormat ||
+        device->CommittedSourceWidth != (ULONG)mode.Format.Graphics.PrimSurfSize.cx ||
+        device->CommittedSourceHeight != (ULONG)mode.Format.Graphics.PrimSurfSize.cy)
     {
         device->CommittedSourceFormat = (ULONG)mode.Format.Graphics.PixelFormat;
+        device->CommittedSourceWidth = (ULONG)mode.Format.Graphics.PrimSurfSize.cx;
+        device->CommittedSourceHeight = (ULONG)mode.Format.Graphics.PrimSurfSize.cy;
         GuardLog("display: CommitVidPn source %ux%u format %u stride %u",
                  (UINT)mode.Format.Graphics.PrimSurfSize.cx, (UINT)mode.Format.Graphics.PrimSurfSize.cy,
                  (UINT)mode.Format.Graphics.PixelFormat, (UINT)mode.Format.Graphics.Stride);
@@ -1012,17 +1103,28 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
 
 NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ const DXGKARG_UPDATEACTIVEVIDPNPRESENTPATH* const Update)
 {
-    UNREFERENCED_PARAMETER(hAdapter);
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    const D3DKMDT_VIDPN_PRESENT_PATH_SCALING scaling = Update->VidPnPresentPathInfo.ContentTransformation.Scaling;
+    ULONG width, height, support;
+
     if (Update->VidPnPresentPathInfo.ContentTransformation.Rotation != D3DKMDT_VPPR_IDENTITY &&
         Update->VidPnPresentPathInfo.ContentTransformation.Rotation != D3DKMDT_VPPR_UNINITIALIZED)
         return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
-    return STATUS_SUCCESS;
+    // The scaling of the active path (the user's "GPU scaling" choice): the same source mode, a new placement.
+    if (!ScalingPinned(scaling)) return STATUS_SUCCESS;
+    width = DisplaySourceWidth(device);
+    height = DisplaySourceHeight(device);
+    support = ModesetScalingSupport(device, width, height);
+    if (ScalingFromPath(scaling) == BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(ScalingFromPath(scaling))))
+        return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+    return ModesetCommit(device, width, height, ScalingFromPath(scaling));
 }
 
 NTSTATUS Bc250RecommendMonitorModes(_In_ const HANDLE hAdapter, _In_ const DXGKARG_RECOMMENDMONITORMODES* const Recommend)
 {
-    // The monitor has no descriptor in M3 (no EDID), so the OS would assume a default monitor that may not
-    // list the firmware's resolution. Tell it that this monitor can do the mode it is showing right now.
+    // Tell the OS that this monitor can do the mode it is showing right now. Without an EDID (EnableDisplayModes 0,
+    // or the AUX read failed) the OS would otherwise assume a default monitor that may not list the firmware's
+    // resolution; with one, the mode is in the EDID already and the add below answers "already in the mode set".
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     D3DKMDT_MONITOR_SOURCE_MODE* mode = NULL;
     NTSTATUS status;
@@ -1121,6 +1223,7 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
         return STATUS_DEVICE_NOT_READY;
     status=DcnRestorePostDisplay(device);
     if (!NT_SUCCESS(status)) return status;
+    ModesetRestoreQuiet(device);    // the native viewport and scaler: the bugcheck screen has the firmware's size
     *Width = device->Post.Width;
     *Height = device->Post.Height;
     *ColorFormat = device->Post.ColorFormat;
