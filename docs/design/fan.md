@@ -328,7 +328,7 @@ up to a whole percent. Below the first point the first duty applies, above the l
 
 | Profile | Points (C : %) | Use |
 | --- | --- | --- |
-| Standard (the default) | 40:50, 60:70, 70:85, 76:95, 80:100 | never slower than the BIOS Standard Mode, full speed under the 82 C at which the DPM stops raising the clock |
+| Standard (the default) | 40:50, 60:70, 70:85, 76:95, 80:100 | never slower than the BIOS Standard Mode, full speed at 80 C, under the 82 C below which the DPM releases a thermal cap |
 | Quiet | 40:30, 60:45, 70:60, 80:80, 85:100 | quieter than the board below 80 C |
 | Performance | 40:60, 55:75, 65:90, 75:100 | louder everywhere |
 

@@ -224,7 +224,7 @@ no-op on a harvested die, and either answer closes an open question.
 
 | Value | Meaning |
 |---|---|
-| `CpuTune` | 1 opens the surface. Absent or 0: read-only, no thread, no message. |
+| `CpuTune` | 1 opens the surface. The INF writes 1 from 0.7.216 (lab check of 2026-10-07: 4 undervolt steps, 1206 to 1175-1181 mV under load, reverted by the cancel). Absent or 0: read-only, no thread, no message. |
 | `CpuLab` | 1 admits the lab clock range, with an undervolt. |
 | `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none |
 | `CpuTrialMs` | the window a set gets when it asks for none |

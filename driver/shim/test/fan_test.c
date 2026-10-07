@@ -115,7 +115,7 @@ static void curves(void)
 	CHECK(bc250_fan_curve_eval(&c, 69000) >= 77u);
 	CHECK(bc250_fan_curve_eval(&c, 70000) >= 80u && bc250_fan_curve_eval(&c, 70000) == 85u);
 	CHECK(bc250_fan_curve_eval(&c, 83000) >= 96u);
-	/* 95 % (about 1630 RPM at 1720 RPM full) at 76 C, and 100 % by 80 C, under the DPM's 82 C raise limit. */
+	/* 95 % (about 1630 RPM at 1720 RPM full) at 76 C, and 100 % by 80 C, under the 82 C of the DPM's cap release. */
 	CHECK(bc250_fan_curve_eval(&c, 76000) == 95u && bc250_fan_curve_eval(&c, 78000) == 98u);
 	CHECK(bc250_fan_curve_eval(&c, 80000) == 100u && bc250_fan_curve_eval(&c, 79000) == 99u);
 	CHECK(bc250_fan_curve_eval(&c, 81900) == 100u);

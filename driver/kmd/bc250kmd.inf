@@ -158,7 +158,7 @@ HKR, Parameters, KeepLog,           0x00010003, 0
 HKR, Parameters, EnableHwmon,       0x00010001, 1
 HKR, Parameters, HwmonBasePort,     0x00010001, 0
 ; The case fan control (fan.c, docs/design/fan.md Part B). 1 lets the driver take fan 1 from the BIOS curve while
-; it runs: it drives the fan on its own curve (at least as fast as the BIOS Standard Mode, 100 % from 85 C) and
+; it runs: it drives the fan on its own curve (at least as fast as the BIOS Standard Mode, 100 % from 80 C) and
 ; gives the fan back to the chip's automatic mode on every exit path - stop, remove, out of D0, unload, a stalled
 ; control step, a bugcheck. The BIOS "Fan Setting" is never changed (owner, 2026-10-06). It needs the reader above
 ; online and the chip identified as unit A's (or pinned with HwmonExpectId); otherwise it writes nothing. 0 means
@@ -166,6 +166,13 @@ HKR, Parameters, HwmonBasePort,     0x00010001, 0
 ; FanProfile and the FanCurve values are the user's stored choice and are absent on purpose: the driver writes them
 ; when the user picks a fan setting in the control application.
 HKR, Parameters, EnableFanControl,  0x00010001, 1
+; The CPU tuning surface (cpu.c, docs/design/tuner.md). 1 opens it: the driver reads the CPU rail through the
+; firmware's queue 3 at start, and the control application's processor cards may then run a change as a trial that
+; reverts by itself. Nothing is changed at start: a setter runs only on an administrator's request, after a getter
+; answered in the same start. Lab check on unit A (b21, 2026-10-07): 4 undervolt steps took 1206 mV to 1175-1181 mV
+; under a steady load, and the cancel brought 1206-1212 mV back, with no WHEA event. 0 makes the surface read-only:
+; no thread, no message.
+HKR, Parameters, CpuTune,           0x00010001, 1
 ; The DirectFlip handshake, kernel half (wddm.c, docs/design/direct-flip-handshake.md, M15.14). 1 lets this start
 ; tell the compositor's user-mode driver, in the scan-out caps trailer, that it will admit a client scan-out flip
 ; and at what geometry. The driver ANDs it with every start-latched fact the flip path needs, so an open switch
