@@ -1,0 +1,46 @@
+BD-090 lab plan for KMD 0.7.216.3 (bc250-win b24bcee7, branch kmd/bd090-stop-restart)
+Package: scratch\bd090\build\a\package  (bc250kmd.sys SHA-256 85D475C3...DBBE, see the final report)
+Each trial at most 3 minutes. GPU DWM route (the route of the BD-090 symptoms). Tctl 87 C rule applies.
+
+0. Deploy (not a trial)
+   - Install with the kmd-deploy kit or the installer, NOT with a bare INF update: an INF install outside the
+     installer rewrites Parameters to the INF defaults (all Enable* 0) while EnableNativeSmu stays 1, which
+     gives Code 43 at SmuOwnerStart (case 3 of BD-090). If the INF goes in by hand, re-apply
+     tools\release\installer\registry-defaults.json before the device starts.
+   - Set Parameters\KeepLog = 1 (ring file at every stop: C:\BC250\kmdlog\ring-*.log).
+   - Restart Windows once (route changes apply at a restart, BD-060). After logon wait until the start-confirm
+     task has run: Parameters\UnconfirmedStarts = 0 and the volatile key Parameters\GuardBoot has Confirmed = 1.
+     Log must show "guard: boot marked confirmed 0x00000000". Positive control: if GuardBoot\Confirmed is
+     absent here, stop; the give-back cannot be judged.
+   - Record before trial 1: dwm PID, `bc250kmd_cli log` tail, health (flags/epoch/completed), UnconfirmedStarts.
+
+1. Trial 1 (<= 3 min): first runtime restart
+   - pnputil /restart-device "<PCI\VEN_1002&DEV_13FE instance>"; wait 15 s.
+   - Expect: device status OK; in the newest ring-*.log (the stop): "guard: orderly stop in a confirmed boot"
+     is NOT expected for the boot start (it was confirmed, nothing to give back); the stop ends at stage 79.
+   - In `bc250kmd_cli log` of the new image (sequence from 0): "guard: count 0 -> 1 flushed".
+   - Desktop: screenshot (mon.py screenshot, half scale). Health: READY|VISIBLE and Completed > 0 within 60 s.
+   - Decisive for the black-desktop question (H1 versus H2):
+       a) "wddm: CreateDevice ... pid <n>" lines: is DWM's PID among them? Is DWM the same PID as before?
+       b) Completed hardware flips after the restart (health completed, log summary vsync/flip counters).
+       c) Get-Process dwm | thread states (ThreadState, WaitReason) if the desktop is black.
+     a=no CreateDevice from DWM -> DWM did not reopen the adapter (H1, user-mode side: UMD/ICD state across
+     device removal). a=yes and b=0 -> the kernel side of the second start (H2: IH/VUPDATE or flip path).
+     a=yes, b>0 and black -> scanout address/visibility (DCN), compare SetVidPnSourceAddress lines.
+   - If black: keep SSH, take a DWM process dump with the lab's dump tool before anything else, then go to 3.
+
+2. Trial 2 (<= 3 min): second runtime restart (the one b21 refused)
+   - Same command and checks as trial 1.
+   - Expect in the stop's ring file: "guard: orderly stop in a confirmed boot, count 1 -> 0 status 0x00000000".
+   - Expect in the new image: "guard: count 0 -> 1 flushed" and status OK (b21: Code 43 here, count 2).
+   - Optionally a third restart: must also start (b21 v2-restart cycle 3).
+
+3. Trial 3 (<= 3 min to the new boot's SSH): normal restart must complete
+   - shutdown /r /t 0. Time from the command to SSH back (wait-new-boot.py). Pass: < 3 min, no hang at 1115.
+   - After boot: GuardBoot key absent until the new start is confirmed (volatile), UnconfirmedStarts = 1 then 0
+     after the confirm task. LastStage/StageHistory of the previous boot are not overwritten before read.
+   - If the restart hangs > 5 min with SSH alive: list session-1 processes (LogonUI, dwm, csrss) and their
+     thread wait states, then the plug per the standing rule.
+
+What this plan does not test: the boot-loop budget across reboots after a crash (host test covers it), a live
+driver update through the installer (same stop path; run it once in the b22 train), AC-cold boot.

@@ -930,3 +930,13 @@ facts:
     edges:
       - {"type": "uses", "to": "M824"}
       - {"type": "uses", "to": "M825"}
+  - id: M830
+    status: MEASURED
+    date: "2026-10-07"
+    claim: "On unit A under Windows the line-based interrupt of the GPU's HD Audio function `1002:13FF` causes the wrong DP audio rate of BD-092. With the inbox setting the function has a line interrupt: `HDAudBus`, `MSISupported` 0 from `hdaudbus.inf` 10.0.22621.5415, IRQ 53, shared with no other device. WASAPI streams then run as follows. Exclusive poll mode runs at rate 1.0000 at 48 and 44.1 kHz. Exclusive event mode gets 1 event and 3 timeouts of about 2 s at 44.1 kHz (rate 0.0051). At 48 kHz the probe did not end in 25 s. Shared mode runs at 0.6549 (event) and 0.6480 (poll). Stream initialization takes 7.1 to 9.6 s. After `MSISupported` 1 on the 13FF instance and a restart of that device only, every mode runs at 1.0000 after the first 2 s. Initialization then takes 4.4 to 19.0 ms, events come 10.13 to 10.64 ms apart and no wait times out"
+    status_text: "MEASURED (unit A, one probe set before and one after the change, 5 s per mode)"
+    detail: "The probe is `wasapi-probe.cs` on the default render endpoint: device position from `IAudioClock` against the elapsed time. Before the change `start_ms` is 3523 to 3590 ms in every mode. Over the whole run the shared modes read 0.9983 (event) and 0.9999 (poll) after the change. The operator gives KMD 0.7.216.3 and the boot 05:15:35Z for this run. The files do not record them. M824 measured 0.33x with `SoundPlayer` under r19, and this run measured 0.65x in shared mode with another tool and KMD. These files do not show the audible result after the change, a return to `MSISupported` 0, or a full Windows restart with the new value. M826 showed that the Linux value of `DIO_MEM_PWR_CTRL` does not restore the rate. This fact puts the fault on the interrupt path of the HD Audio controller, not in the GPU-side audio registers"
+    evidence: "[HD Audio interrupt mode](../evidence/windows/2026-10-07-hda-msi/README.md)"
+    edges:
+      - {"type": "uses", "to": "M824"}
+      - {"type": "uses", "to": "M826"}

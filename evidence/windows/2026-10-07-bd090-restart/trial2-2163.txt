@@ -1,0 +1,38 @@
+
+[t2] before: dwm 1940 UnconfirmedStarts 0 GuardBoot 1 rings 11966
+  pnputil: Microsoft PnP Utility
+  pnputil: 
+  pnputil: Restarting device:         PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\<instance-id-removed>
+  pnputil: Device restarted successfully.
+  pnputil: 
+[t2] pnputil returned after 1 s
+[t2] +15s device OK CM_PROB_NONE UnconfirmedStarts 1 StageHistory 10 20 30 31 32 33 34 35 39 50 
+[t2] health ok=False : 
+[t2] dwm now 1940 (was 1940) start 2026-10-07T05:07:08.0498818Z
+[t2] dwm threads: Wait/UserRequestx10 Wait/EventPairLowx14 Wait/LpcReceivex1 Wait/ExecutionDelayx1 Wait/Unknownx1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+--- live ring (guard / CreateDevice)
+    5      0.625 guard: count 0 -> 1 flushed, durable required 1
+    3838     71.760 guard: healthy start confirmation persistence 0x00000000
+    3839     71.761 guard: boot marked confirmed 0x00000000
+--- System events since the restart
+
