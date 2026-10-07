@@ -8,7 +8,7 @@ end-of-pipe behind them never fires. The 500 ms submit watchdog closes node 0, s
 registry switch `HangRecoveryMode`: kill the waves, wait for the fence, and if it retires, report a successful
 engine reset so that dxgkrnl removes only the guilty process's device. None of this has run on the lab yet.
 Whether the kill drains the ring on gfx1013 is an open question, and only a lab trial or the Linux measurement
-(wishlist L38) can answer it.
+(wishlist L43) can answer it.
 
 ## The switch
 
@@ -150,7 +150,7 @@ sequence. The facts are against that:
 - amdgpu's own recovery hangs the machine (M53);
 - a second init in one boot hangs unit A (M55).
 
-If stage 1 does not drain on gfx1013, the next step is the Linux measurement (wishlist L38), not a blind queue
+If stage 1 does not drain on gfx1013, the next step is the Linux measurement (wishlist L43), not a blind queue
 reset.
 
 ## Limits
