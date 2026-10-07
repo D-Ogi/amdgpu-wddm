@@ -561,6 +561,12 @@ static long Rmw(BC250_AZ_IO* Io, BC250_DPAUDIO_STREAM_RESULT* Result, unsigned l
          if (status < 0) return status; } while (0)
 
 // The enable, in this order:
+//   0. The AFMT memories on: DIO_MEM_PWR_CTRL 0, the write dcn201_init_hw makes at every Linux init ("power AFMT HDMI
+//      memory", dcn201_hwseq.c). This driver inherits the firmware's display and never runs that init, and the
+//      firmware leaves every HDMIn_MEM_PWR_FORCE at 3 (0x6DB6D800 on unit A): DP audio then played at 0.33x and
+//      silent (r19), where Linux, with 0 here, played at 1.0x and audibly (L1007b). The register holds only memory
+//      power controls of the DIO (I2C light sleep, the DPx light-sleep disables, the HDMIn memory power), and Linux
+//      writes it whole, so this file does too. The read-back is checked on the two DIG memories' force fields only.
 //   1. The wall DTO, dce_aud_wall_dto_setup's DP branch (dce_audio.c:1113-1148) in its order: DTO_SEL 1 (DTO1),
 //      DTO1 module and phase, then DTO2_USE_512FBR_DTO 1. DCCG_AUDIO_DTO_SOURCE is shared by every audio stream; only
 //      its two named fields change.
@@ -588,6 +594,8 @@ long Bc250DpAudioStreamEnable(BC250_AZ_IO* Io, unsigned long Stream, unsigned lo
         return Result->Status;
     }
     r = &g_StreamRegs[Stream];
+    STEP(AFMT_MEM_POWER, BC250_REG_DMU_DIO_MEM_PWR_CTRL, ALL, 0,
+         DIO_MEM_PWR_CTRL__HDMI0_MEM_PWR_FORCE_MASK | DIO_MEM_PWR_CTRL__HDMI1_MEM_PWR_FORCE_MASK, 0);
     STEP(DTO_SELECT, BC250_REG_DMU_DCCG_AUDIO_DTO_SOURCE, DTO_SEL, FIELD(DCCG_AUDIO_DTO_SOURCE, DCCG_AUDIO_DTO_SEL, 1),
          DTO_SEL, &Result->DtoSource);
     STEP(DTO1_MODULE, BC250_REG_DMU_DCCG_AUDIO_DTO1_MODULE, ALL, DtoModule, ALL, &Result->DtoModule);
