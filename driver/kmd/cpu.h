@@ -59,4 +59,18 @@ typedef struct _BC250_CPU_STATE {
     ULONG Cores, Threads;                   // what Windows reports: all the mask's effect we can observe
     BC250_CPU_SNAP Snap;                    // under SnapLock
     ULONGLONG Generation;                   // start-health generation of this start
+    // The joint power arm (0.7.216.7, docs/design/dpm.md "The joint power arm"). The DPM governor's thread decides
+    // (driver/shim bc250_joint_step) and writes JointWantMHz; this surface's worker alone sends, under Lock, and
+    // publishes the other three for the governor to read. All four are interlocked; nothing else here is shared.
+    volatile LONG JointWantMHz;             // the cap the governor asks for, 0 for none (dpm.c writes it)
+    volatile LONG JointAppliedMHz;          // the arm's cap in the chip now, 0 for none
+    volatile LONG JointReady;               // the surface can take a cap now (CpuJointPublish)
+    volatile LONG JointBaseMHz;             // the limit without the arm: JointBefore's, Applied's or the baseline's
+    volatile LONG JointSends, JointRefusals;    // the arm's changes that went through, and the refused attempts
+    BOOLEAN JointFault;                     // a change of the arm failed its voltage readback: off for this start
+    BOOLEAN JointPaused;                    // CpuPause to CpuResume: no cap across a power transition
+    struct bc250_cpu_settings JointBefore;  // Applied before the arm's first cap: what its release goes back to
+    ULONGLONG JointNextTry;                 // KeQueryInterruptTime units: a refused change is tried again after this
 } BC250_CPU_STATE;
+// A refused change of the arm is tried again this often, as an owed revert is.
+#define BC250_CPU_JOINT_RETRY_MS BC250_CPU_REVERT_RETRY_MS

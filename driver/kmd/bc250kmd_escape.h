@@ -592,6 +592,9 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.207)
 #define BC250_DPM_FLAG_CURVE 2048u           // CurrentMv comes from an operator's V/F curve, not the table (0.7.210)
 #define BC250_DPM_FLAG_CURVE_TRIAL 4096u     // a curve trial runs; RUN_DPM_CURVE says for how much longer (0.7.210)
+// 16384 and 32768 (0.7.216.7), in every ABI: no field moves, so BC250_KMD_VERSION stays. 8192 is ABI 3's, below.
+#define BC250_DPM_FLAG_JOINT 16384u          // the joint power arm runs in this start (DpmJointGovernor 1)
+#define BC250_DPM_FLAG_JOINT_CAP 32768u      // the arm's CPU clock limit is in the chip now (the driver log says which)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;

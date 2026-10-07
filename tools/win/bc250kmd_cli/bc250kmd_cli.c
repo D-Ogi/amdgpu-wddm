@@ -2663,6 +2663,19 @@ static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
            d->IdleHoldMs, d->IdleBusyPermille, d->IdleEntries, d->IdleExits, d->IdleRefusals, d->IdleMs);
 }
 
+// The joint power arm (0.7.216.7), only on a start that runs it: two flag bits, no field of its own. The driver log's
+// "dpm: telemetry joint" lines carry the rest (the cap, the reason, the counters).
+#ifndef BC250_DPM_FLAG_JOINT
+#define BC250_DPM_FLAG_JOINT 16384u
+#define BC250_DPM_FLAG_JOINT_CAP 32768u
+#endif
+static void DpmPrintJoint(const BC250_ESCAPE_DPM *d)
+{
+    if (!(d->Flags & BC250_DPM_FLAG_JOINT)) return;
+    printf("joint: on (DpmJointGovernor 1), CPU clock limit %s\n",
+           (d->Flags & BC250_DPM_FLAG_JOINT_CAP) ? "lowered by the arm now" : "not touched now");
+}
+
 // ---- dpm tune / dpm floor: the governor's thresholds and a runtime floor (BC250_ESCAPE_RUN_DPM_TUNE, 0.7.185.1) ----
 //
 // "dpm tune <up> <target> <down> [hold ms]" sets the thresholds in permille (the hold stays as it is when omitted),
@@ -3397,6 +3410,7 @@ static int Dpm(int argc, WCHAR **argv)
             } else printf("; tune n/a (driver before 0x000700B9)");
             printf("\n");
             DpmPrintIdle(d);
+            DpmPrintJoint(d);
             DpmPrintMetrics(&x);
         }
         DpmPrint(d);

@@ -1026,3 +1026,140 @@ enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s
 	s->floor_ms += dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : dt_ms;
 	return s->floor_ms >= BC250_DPM_SESSION_CLEAR_MS ? BC250_DPM_SESSION_CLEAR : BC250_DPM_SESSION_NONE;
 }
+
+/* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------ */
+
+void bc250_joint_init(struct bc250_joint *j)
+{
+	memset(j, 0, sizeof(*j));
+	j->reason = BC250_JOINT_FREE;
+}
+
+void bc250_joint_read(const struct bc250_dpm_governor *g, const struct bc250_dpm_input *in,
+		      struct bc250_joint_input *out)
+{
+	/* The threshold the soft release raises the cap under; with the soft release off, the hot cap's own release. */
+	int release_mc = g->tune.soft_delta_mc ? (int)BC250_DPM_HOT_MC - (int)g->tune.soft_delta_mc
+					       : BC250_DPM_RELEASE_MC;
+	int valid = in->temperature_valid ? 1 : 0;
+	int clamped = g->thermal_cap < g->max_level;
+	int thermal_throttle = g->throttle == BC250_DPM_THROTTLE_THERMAL_SOFT ||
+			       g->throttle == BC250_DPM_THROTTLE_THERMAL_HARD ||
+			       g->throttle == BC250_DPM_THROTTLE_THERMAL_WARM ||
+			       g->throttle == BC250_DPM_THROTTLE_THERMAL_ZONE;
+	memset(out, 0, sizeof(*out));
+	out->busy_permille = g->avg_permille;
+	out->blind = !valid;
+	out->heat = valid && (g->hot || g->zone || thermal_throttle ||
+			      (clamped && in->temperature_mc >= release_mc));
+	out->cool = valid && !clamped && !g->hot && !g->zone &&
+		    in->temperature_mc < (int)BC250_DPM_HOT_MC - BC250_JOINT_COOL_DELTA_MC;
+	out->dt_ms = in->dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : in->dt_ms;
+}
+
+static void joint_clear(struct bc250_joint *j)
+{
+	if (j->cap_mhz) j->releases++;
+	j->cap_mhz = 0;
+	j->bound_ms = j->free_ms = j->step_ms = j->cool_ms = 0;
+}
+
+void bc250_joint_reset(struct bc250_joint *j)
+{
+	joint_clear(j);
+	j->reason = BC250_JOINT_FREE;
+}
+
+unsigned int bc250_joint_step(struct bc250_joint *j, const struct bc250_joint_input *in)
+{
+	unsigned int dt = in->dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : in->dt_ms;
+	int bound = in->busy_permille >= BC250_JOINT_BOUND_PERMILLE;
+	int free_gpu = in->busy_permille < BC250_JOINT_FREE_PERMILLE;
+
+	if (!in->cpu_ready) {
+		joint_clear(j);
+		j->reason = BC250_JOINT_NO_CPU;
+		return 0;
+	}
+	if (in->base_mhz <= BC250_JOINT_MIN_MHZ) {
+		joint_clear(j);
+		j->reason = BC250_JOINT_NO_ROOM;
+		return 0;
+	}
+	/* The base moved under the cap (the operator's own limit came down): the cap has nothing left to do. */
+	if (j->cap_mhz && j->cap_mhz >= in->base_mhz) {
+		joint_clear(j);
+		j->reason = BC250_JOINT_FREE;
+		return 0;
+	}
+	/* No reading: neither "hot" nor "cool" can be judged, so nothing moves and no timer runs. */
+	if (in->blind) {
+		j->reason = BC250_JOINT_BLIND;
+		return j->cap_mhz;
+	}
+	if (!j->cap_mhz) {
+		if (bound && in->heat) {
+			j->bound_ms = add_ms(j->bound_ms, dt);
+			if (j->bound_ms < BC250_JOINT_ENGAGE_MS) {
+				j->reason = BC250_JOINT_WAIT;
+				return 0;
+			}
+			j->cap_mhz = in->base_mhz - BC250_JOINT_STEP_MHZ;
+			if (j->cap_mhz < BC250_JOINT_MIN_MHZ || in->base_mhz < BC250_JOINT_MIN_MHZ + BC250_JOINT_STEP_MHZ)
+				j->cap_mhz = BC250_JOINT_MIN_MHZ;
+			j->bound_ms = j->free_ms = j->step_ms = j->cool_ms = 0;
+			j->engages++;
+			j->steps_down++;
+			j->reason = BC250_JOINT_CAPPING;
+			return j->cap_mhz;
+		}
+		j->bound_ms = 0;
+		j->reason = BC250_JOINT_FREE;
+		return 0;
+	}
+	/* Capped. The GPU is not the bottleneck any more: the whole cap goes, after FREE_MS of it. */
+	if (free_gpu) {
+		j->step_ms = j->cool_ms = 0;
+		j->free_ms = add_ms(j->free_ms, dt);
+		if (j->free_ms >= BC250_JOINT_FREE_MS) {
+			joint_clear(j);
+			j->reason = BC250_JOINT_FREE;
+			return 0;
+		}
+		j->reason = BC250_JOINT_HOLD;
+		return j->cap_mhz;
+	}
+	j->free_ms = 0;
+	if (bound && in->heat) {
+		j->cool_ms = 0;
+		j->step_ms = add_ms(j->step_ms, dt);
+		if (j->step_ms >= BC250_JOINT_STEP_MS && j->cap_mhz > BC250_JOINT_MIN_MHZ) {
+			j->cap_mhz = j->cap_mhz - BC250_JOINT_MIN_MHZ < BC250_JOINT_STEP_MHZ ? BC250_JOINT_MIN_MHZ
+							: j->cap_mhz - BC250_JOINT_STEP_MHZ;
+			j->step_ms = 0;
+			j->steps_down++;
+			j->reason = BC250_JOINT_CAPPING;
+			return j->cap_mhz;
+		}
+		j->reason = BC250_JOINT_HOLD;
+		return j->cap_mhz;
+	}
+	j->step_ms = 0;
+	if (in->cool) {
+		j->cool_ms = add_ms(j->cool_ms, dt);
+		if (j->cool_ms >= BC250_JOINT_COOL_MS) {
+			j->cool_ms = 0;
+			if (in->base_mhz - j->cap_mhz <= BC250_JOINT_STEP_MHZ) {
+				joint_clear(j);
+				j->reason = BC250_JOINT_FREE;
+				return 0;
+			}
+			j->cap_mhz += BC250_JOINT_STEP_MHZ;
+			j->steps_up++;
+			j->reason = BC250_JOINT_RAISING;
+			return j->cap_mhz;
+		}
+	} else j->cool_ms = 0;
+	j->reason = BC250_JOINT_HOLD;
+	return j->cap_mhz;
+}

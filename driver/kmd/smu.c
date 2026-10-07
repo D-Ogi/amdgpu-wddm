@@ -184,9 +184,40 @@ void SmuCpuEnd(BC250_SMU_OWNER* owner)
     InterlockedExchange(&owner->CpuBusy,0);
 }
 
+static NTSTATUS CpuMessageGated(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
+                                BOOLEAN allowHot,ULONG busyPermille,BOOLEAN busyExempt,ULONG* value,
+                                LONG* temperatureMc,ULONG* firmwareStatus,BOOLEAN* temperatureValid);
 NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
                        BOOLEAN allowHot,ULONG busyPermille,ULONG* value,LONG* temperatureMc,
                        ULONG* firmwareStatus,BOOLEAN* temperatureValid)
+{
+    return CpuMessageGated(owner,queue,message,parameter,write,allowHot,busyPermille,FALSE,value,temperatureMc,
+                           firmwareStatus,temperatureValid);
+}
+// The joint power arm's two messages (0.7.216.7, smu.h): the busy gate alone is lifted, for these two and nothing
+// else; the allowlist, the argument ranges, the sequence flag, the temperature read and the hot gate stay.
+NTSTATUS SmuCpuJointMessage(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
+                            BOOLEAN allowHot,ULONG busyPermille,ULONG* value,LONG* temperatureMc,
+                            ULONG* firmwareStatus,BOOLEAN* temperatureValid)
+{
+    if(!SmuCpuJointAdmitted(queue,message,write)) {
+        if(value)*value=0;
+        if(temperatureMc)*temperatureMc=0;
+        if(firmwareStatus)*firmwareStatus=0;
+        if(temperatureValid)*temperatureValid=FALSE;
+        return STATUS_INVALID_PARAMETER;
+    }
+    return CpuMessageGated(owner,queue,message,parameter,write,allowHot,busyPermille,TRUE,value,temperatureMc,
+                           firmwareStatus,temperatureValid);
+}
+BOOLEAN SmuCpuJointAdmitted(ULONG queue,ULONG message,BOOLEAN write)
+{
+    if(queue!=BC250_CPU_QUEUE_CPU)return FALSE;
+    return (write && message==BC250_CPU_MSG_SET_MAX_MHZ) || (!write && message==BC250_CPU_MSG_READ_CPU_MV);
+}
+static NTSTATUS CpuMessageGated(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
+                                BOOLEAN allowHot,ULONG busyPermille,BOOLEAN busyExempt,ULONG* value,
+                                LONG* temperatureMc,ULONG* firmwareStatus,BOOLEAN* temperatureValid)
 {
     int degrees=0,result;
     unsigned read=0,response=0;
@@ -196,8 +227,11 @@ NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG pa
     if(temperatureValid)*temperatureValid=FALSE;
     if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return STATUS_INVALID_DEVICE_STATE;
     // "No mailbox traffic during sustained compute" (docs/design/rejected-options.md). The caller passes the
-    // governor's own share, so a combined CPU and GPU test applies its values first and loads second.
-    if(busyPermille>=BC250_CPU_GPU_BUSY_PERMILLE)return STATUS_DEVICE_BUSY;
+    // governor's own share, so a combined CPU and GPU test applies its values first and loads second. The joint
+    // arm's two messages are the one exception (0.7.216.7): the arm exists for a bound GPU, and a gate at 500
+    // permille would refuse every message it has. The rule is REPORTED, not measured on this part; the exception is
+    // behind DpmJointGovernor, off by default, and its first lab trial is the positive control the rule never had.
+    if(!busyExempt && busyPermille>=BC250_CPU_GPU_BUSY_PERMILLE)return STATUS_DEVICE_BUSY;
     result=OwnerBegin(owner);
     if(result)return ResultStatus(result);
     // Before every message, not once per sequence: a sequence is several hundred milliseconds long and the part

@@ -23,6 +23,7 @@ static unsigned phase,pending,mhz,vid,command,argument,reply,ramp,ramp_left,ramp
 // write" runs once per queue. cpu_value is what a getter answers; cpu_calls counts queue 3 messages alone.
 static unsigned cur_tmp=536u;
 static unsigned cpu_phase,cpu_pending,cpu_command,cpu_argument,cpu_reply=1u,cpu_value=1050u;
+static unsigned cpu_sent;          // the argument the last queue 3 message carried (cpu_argument becomes the answer)
 static LONG cpu_calls;
 static LONG calls;
 static unsigned smu_version=0x00580600u,version_refuse;
@@ -89,7 +90,7 @@ void NativeWrite(PULONG address,ULONG value) {
     CHECK(OwnerHeld(&owner) && (!pending || offset==BC250_CPU_Q3_MSG_TEST ||
                                offset==BC250_CPU_Q3_RESP_TEST || offset==BC250_CPU_Q3_PARAM_TEST));
     if(offset==BC250_CPU_Q3_RESP_TEST) { CHECK(!cpu_phase && !value);cpu_reply=0;cpu_phase=1; }
-    else if(offset==BC250_CPU_Q3_PARAM_TEST) { CHECK(cpu_phase==1);cpu_argument=value;cpu_phase=2; }
+    else if(offset==BC250_CPU_Q3_PARAM_TEST) { CHECK(cpu_phase==1);cpu_argument=cpu_sent=value;cpu_phase=2; }
     else if(offset==BC250_CPU_Q3_MSG_TEST) {
         CHECK(cpu_phase==2);cpu_command=value;cpu_pending=3;cpu_phase=0;InterlockedIncrement(&cpu_calls);
     }
@@ -275,6 +276,52 @@ int main(void) {
         CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,
                             BC250_CPU_GPU_BUSY_PERMILLE,&value,NULL,NULL)==STATUS_DEVICE_BUSY);
         CHECK(cpu_calls==cpuBefore && !value);
+        // The joint power arm's way in (0.7.216.7): the busy gate is lifted for queue 3's clock limit and its voltage
+        // readback, each in its own direction, and for nothing else.
+        CHECK(SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,TRUE));
+        CHECK(SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,FALSE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,FALSE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,TRUE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,TRUE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CAP_C,TRUE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CORE_MHZ,FALSE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_MAX_MHZ,TRUE));
+        CHECK(!SmuCpuJointAdmitted(BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_CORE_ENABLE_MASK,TRUE));
+        // A message outside the two is refused at any load, and the argument range of the clock limit stays: nothing
+        // reaches either mailbox.
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,
+                                 bc250_cpu_scale_argument(2),TRUE,TRUE,1000,NULL,NULL,NULL,NULL)
+              ==STATUS_INVALID_PARAMETER);
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CAP_C,95,TRUE,FALSE,0,
+                                 NULL,NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CAP_C,0,FALSE,TRUE,1000,
+                                 &value,NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,BC250_CPU_MIN_MHZ-1u,TRUE,
+                                 TRUE,1000,NULL,NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);
+        CHECK(calls==before && cpu_calls==cpuBefore && !value);
+        // The two at a fully busy GPU: each one message on queue 3, queue 0 untouched.
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,3000,TRUE,TRUE,1000,
+                                 NULL,&mc,NULL,NULL)==STATUS_SUCCESS);
+        CHECK(cpu_command==BC250_CPU_MSG_SET_MAX_MHZ && cpu_sent==3000u && cpu_calls==cpuBefore+1 &&
+              calls==before && mc==67000);
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,TRUE,1000,
+                                 &value,NULL,NULL,NULL)==STATUS_SUCCESS);
+        CHECK(value==cpu_value && cpu_calls==cpuBefore+2);
+        // The ordinary path keeps its gate for the very same message.
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,3000,TRUE,BC250_CPU_GPU_BUSY_PERMILLE,
+                     NULL,NULL,NULL)==STATUS_DEVICE_BUSY);
+        CHECK(cpu_calls==cpuBefore+2);
+        // The hot gate is not lifted: at 87 C a change the caller does not name a cooling step or a restore waits,
+        // and one it names goes out.
+        cur_tmp=696u;
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,3200,TRUE,FALSE,1000,
+                                 NULL,&mc,NULL,NULL)==STATUS_DEVICE_POWER_FAILURE);
+        CHECK(cpu_calls==cpuBefore+2 && mc==87000);
+        CHECK(SmuCpuJointMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,2800,TRUE,TRUE,1000,
+                                 NULL,NULL,NULL,NULL)==STATUS_SUCCESS);
+        CHECK(cpu_command==BC250_CPU_MSG_SET_MAX_MHZ && cpu_sent==2800u && cpu_calls==cpuBefore+3);
+        cur_tmp=536u;
+        before=calls;cpuBefore=cpu_calls;
         // A getter on queue 3: one message on queue 3's mailbox, the firmware's response word, the temperature.
         CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,&mc,&fw)
               ==STATUS_SUCCESS);

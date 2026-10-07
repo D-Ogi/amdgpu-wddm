@@ -662,4 +662,84 @@ struct bc250_dpm_session {
 enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s, unsigned int level,
 						     unsigned int dt_ms);
 
+/* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------ */
+
+/* The GPU clock governor above, the CPU surface (bc250_cpu.h) and the fan control each run their own loop, and none
+ * of them knows what the others cost in heat. In a GPU-bound game the package's heat is shared: the CPU's part of it
+ * takes clock from the GPU through the thermal cap and the soft zone, while the CPU itself waits for the GPU. The
+ * joint arm closes that loop in one direction only. When the GPU is the bottleneck AND its clock is held by heat, it
+ * lowers the CPU's maximum boost clock (queue 3 BC250_CPU_MSG_SET_MAX_MHZ, the one CPU control that is a pure
+ * lowering) one step at a time; the GPU gets the headroom back through the governor's own soft release, whose rules
+ * stay exactly as they are. When the GPU is no longer the bottleneck, or the heat is gone, the CPU limit comes back.
+ *
+ * Pure policy, like the rest of this file: the KMD (driver/kmd/dpm.c) feeds one tick of the governor's own state and
+ * the CPU surface's readiness, and publishes the cap it returns; driver/kmd/cpu.c owns every mailbox message. The
+ * arm never names a GPU clock, never touches a thermal rule and never sends anything itself.
+ *
+ *   bound      the governor's busy average at or above BOUND_PERMILLE: the GPU is the bottleneck
+ *   free       the average under FREE_PERMILLE: it is not
+ *   heat       the governor's clock is held by a thermal rule: an 87 C episode, the soft zone, a throttle that names a
+ *              thermal rule (soft, hard, warm, zone), or a lowered thermal cap with the reading still at or above the
+ *              soft-release threshold. A lowered cap under that threshold is the soft release at work, and the arm
+ *              waits for it instead of capping the CPU further.
+ *   cool       a valid reading under BC250_DPM_HOT_MC - COOL_DELTA_MC, the thermal cap released, no episode, no zone
+ *   blind      no temperature reading this tick: the arm holds whatever it has (the governor itself goes to the floor)
+ *
+ * The states, by enum bc250_joint_reason:
+ *   no cap     bound and heat for ENGAGE_MS -> the first cap, base - STEP_MHZ (never under MIN_MHZ)
+ *   capped     bound and heat for another STEP_MS -> one step lower, down to MIN_MHZ
+ *              free for FREE_MS -> released at once, the whole cap
+ *              cool for COOL_MS -> one step higher; reaching base is the release
+ *   any        the CPU surface not ready (CpuTune 0, queue 3 not proven, a trial, a search, an owed revert, a fault),
+ *              or a base that leaves no room under it -> no cap, every timer cleared
+ * The cap never goes above base, and a base that falls to the cap or below releases it. */
+#define BC250_JOINT_BOUND_PERMILLE	850u	/* the governor raises from 900: a bound GPU averages above this */
+#define BC250_JOINT_FREE_PERMILLE	600u	/* well under the governor's own 651 target: a menu or a loading screen */
+#define BC250_JOINT_ENGAGE_MS		2000u	/* bound and hot this long before the first CPU message */
+#define BC250_JOINT_FREE_MS		2000u
+#define BC250_JOINT_STEP_MS		4000u	/* one CPU step per this, at most: the package's heat answers in seconds */
+#define BC250_JOINT_COOL_MS		8000u	/* a step back up waits twice as long as a step down */
+#define BC250_JOINT_STEP_MHZ		200u
+#define BC250_JOINT_MIN_MHZ		2800u	/* BC250_CPU_MIN_MHZ; driver/kmd/cpu.c asserts that they are equal */
+#define BC250_JOINT_COOL_DELTA_MC	6000	/* 81 C: two degrees under the default soft-release threshold of 83 C */
+
+enum bc250_joint_reason {
+	BC250_JOINT_OFF = 0,		/* the arm is off for this start (DpmJointGovernor 0) */
+	BC250_JOINT_NO_CPU = 1,		/* the CPU surface cannot take a cap now */
+	BC250_JOINT_NO_ROOM = 2,	/* the CPU's base clock is at MIN_MHZ already: nothing to lower */
+	BC250_JOINT_FREE = 3,		/* the GPU is not bound, or not held by heat: no cap */
+	BC250_JOINT_WAIT = 4,		/* bound and hot, ENGAGE_MS not yet over */
+	BC250_JOINT_CAPPING = 5,	/* this tick lowered the cap */
+	BC250_JOINT_HOLD = 6,		/* capped, waiting (for a step, for the cool time, at MIN_MHZ) */
+	BC250_JOINT_RAISING = 7,	/* this tick raised the cap one step */
+	BC250_JOINT_BLIND = 8,		/* no temperature reading: everything held */
+	BC250_JOINT_REASON_COUNT
+};
+
+struct bc250_joint_input {
+	unsigned int	busy_permille;		/* the governor's busy average (bc250_dpm_governor.avg_permille) */
+	int		heat, cool, blind;
+	int		cpu_ready;		/* the CPU surface can take a cap now (driver/kmd/cpu.c) */
+	unsigned int	base_mhz;		/* the CPU's limit without the arm: the operator's, or the recorded baseline */
+	unsigned int	dt_ms;
+};
+
+struct bc250_joint {
+	unsigned int	cap_mhz;		/* the CPU limit the arm asks for, 0 for none */
+	unsigned int	reason;			/* enum bc250_joint_reason of the last step */
+	unsigned int	bound_ms, free_ms, step_ms, cool_ms;
+	unsigned int	engages, steps_down, steps_up, releases;
+};
+
+void bc250_joint_init(struct bc250_joint *j);
+/* The tick's heat, cool, blind and busy average out of the governor right after bc250_dpm_step(), and the tick's
+ * input. The caller adds cpu_ready and base_mhz. */
+void bc250_joint_read(const struct bc250_dpm_governor *g, const struct bc250_dpm_input *in,
+		      struct bc250_joint_input *out);
+/* One tick. Returns the CPU limit to ask for, 0 for none; j->reason says why. */
+unsigned int bc250_joint_step(struct bc250_joint *j, const struct bc250_joint_input *in);
+/* The cap is gone outside a tick (a stop, a power transition, the governor gave up): no cap, timers cleared, and a
+ * cap that was in force counts as a release. */
+void bc250_joint_reset(struct bc250_joint *j);
+
 #endif

@@ -44,6 +44,11 @@
 //                   release, the warm zone back at 87 C). It is one switch for a whole start, for bisecting a
 //                   regression against the rules the lab measured before it; the zone's own numbers are tunable at
 //                   run time through RUN_DPM_TUNE ABI 3, and a RESET there turns the zone back on.
+//   DpmJointGovernor  the joint power arm (0.7.216.7, C62): 1 runs it in a governing start, absent or any other value
+//                   leaves it off, which is the default. While the GPU is bound and its clock held by heat, the arm
+//                   lowers the CPU's maximum boost clock (cpu.c) one step at a time and gives it back when either
+//                   ends; it needs CpuTune 1 and a CPU read stage that answered. docs/design/dpm.md says what a lab
+//                   trial must show before the default changes.
 //   DpmLastMode, DpmLastReason   what the last start did, for the tools when the adapter is gone
 //   DpmClosedReason the reason the driver itself wrote DpmMode 0 (3 unconfirmed, 4 unclean, 8 SMU error).
 //                   PersistFallback writes it, the first start that reads a DpmMode other than 0 deletes it,
@@ -79,6 +84,7 @@
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
 #define DPM_SETTING_IDLE_LEAVE L"DpmIdleLeavePermille"
 #define DPM_SETTING_ZONE L"DpmThermalZone"
+#define DPM_SETTING_JOINT L"DpmJointGovernor"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
 #define DPM_SETTING_CLOSED L"DpmClosedReason"
@@ -132,6 +138,10 @@ static const PCWSTR g_CurveSetting[BC250_CURVE_POINTS] = {
 static const char* const g_Throttle[BC250_DPM_THROTTLE_COUNT] = {
     "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed", "thermal-warm",
     "thermal-ramp", "idle", "thermal-zone"
+};
+
+static const char* const g_JointReason[BC250_JOINT_REASON_COUNT] = {
+    "off", "no-cpu", "no-room", "free", "wait", "capping", "hold", "raising", "blind"
 };
 
 static void DpmLock(BC250_DPM_STATE* S)
@@ -496,6 +506,21 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.IdleFastExits = g->idle_fast_exits;
     snap.IdleSlowExits = g->idle_slow_exits;
     if (Running && governing && g->idle) snap.Flags |= BC250_DPM_FLAG_IDLE;
+    // The joint power arm (0.7.216.7): the policy's half from S->Joint, the CPU surface's half from its interlocked
+    // values. JOINT_CAP follows the chip, not the wish: it is set while cpu.c reports the arm's limit applied.
+    snap.JointReason = S->JointOn ? S->Joint.reason : BC250_JOINT_OFF;
+    snap.JointWantMHz = S->JointOn ? S->Joint.cap_mhz : 0;
+    snap.JointAppliedMHz = (ULONG)InterlockedCompareExchange(&Device->Cpu.JointAppliedMHz, 0, 0);
+    snap.JointBaseMHz = (ULONG)InterlockedCompareExchange(&Device->Cpu.JointBaseMHz, 0, 0);
+    snap.JointReady = InterlockedCompareExchange(&Device->Cpu.JointReady, 0, 0) ? TRUE : FALSE;
+    snap.JointSends = (ULONG)InterlockedCompareExchange(&Device->Cpu.JointSends, 0, 0);
+    snap.JointRefusals = (ULONG)InterlockedCompareExchange(&Device->Cpu.JointRefusals, 0, 0);
+    snap.JointEngages = S->Joint.engages;
+    snap.JointStepsDown = S->Joint.steps_down;
+    snap.JointStepsUp = S->Joint.steps_up;
+    snap.JointReleases = S->Joint.releases;
+    if (S->JointOn) snap.Flags |= BC250_DPM_FLAG_JOINT;
+    if (snap.JointAppliedMHz) snap.Flags |= BC250_DPM_FLAG_JOINT_CAP;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
@@ -534,7 +559,6 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
         snap.Flags |= S->Snap.Flags & BC250_DPM_FLAG_HW_BUSY;
         KeReleaseSpinLock(&S->SnapLock, irql);
     }
-    UNREFERENCED_PARAMETER(Device);
     KeAcquireSpinLock(&S->SnapLock, &irql);
     // The curve's own three fields and the voltage it asks for at the level the governor committed (0.7.210).
     // CurrentMv was set from the table above; this is the value that actually reached the hardware.
@@ -577,6 +601,21 @@ static void DpmLogIdleLine(const char* What, const BC250_DPM_SNAP* P)
     // rule, a runtime floor, SetStablePowerState, a stop or a power transition).
     GuardLog("dpm: %s idle leave at %lu permille, exits %lu by a busy tick, %lu by the window", What,
              P->IdleLeavePermille, P->IdleFastExits, P->IdleSlowExits);
+}
+
+// The joint power arm (0.7.216.7) on two lines of its own, only in a start that runs it: a start with
+// DpmJointGovernor 0 logs exactly what 0.7.216.6 logged. The first line is the state, the second the counters: the
+// policy's (engages, steps, releases) and the CPU surface's (changes that went through, refused attempts).
+static void DpmLogJointLine(const char* What, const BC250_DPM_SNAP* P)
+{
+    if (!(P->Flags & BC250_DPM_FLAG_JOINT)) return;
+    // Two lines, by the rule of the guardlog-width gate: one would be some 260 characters at its widest.
+    GuardLog("dpm: %s joint %s, want %lu applied %lu base %lu MHz, CPU ready %lu", What,
+             P->JointReason < BC250_JOINT_REASON_COUNT ? g_JointReason[P->JointReason] : "?", P->JointWantMHz,
+             P->JointAppliedMHz, P->JointBaseMHz, P->JointReady ? 1ul : 0ul);
+    GuardLog("dpm: %s joint engages %lu down %lu up %lu releases %lu, CPU sent %lu refused %lu", What,
+             P->JointEngages, P->JointStepsDown, P->JointStepsUp, P->JointReleases, P->JointSends,
+             P->JointRefusals);
 }
 
 // The curve's state beside the telemetry, only while it is not the table's own line or a trial runs, so a start
@@ -752,6 +791,45 @@ static void DpmHwSample(_In_ PEX_TIMER Timer, _In_opt_ PVOID Context)
         InterlockedIncrement(&s->HwSdmaActive);
 }
 
+// ---- the joint power arm (0.7.216.7, C62) -----------------------------------------------------------------------
+// The policy is bc250_joint_step (driver/shim/bc250_dpm.c); cpu.c's worker owns every message. The cap the policy wants
+// is written every tick, because cpu.c clears its copy at its own start, and the worker is woken on a change.
+
+static void DpmJointPublishWant(BC250_DEVICE* Device, ULONG Want, BOOLEAN Changed)
+{
+    InterlockedExchange(&Device->Cpu.JointWantMHz, (LONG)Want);
+    if (Changed) KeSetEvent(&Device->Cpu.Wake, IO_NO_INCREMENT, FALSE);
+}
+
+// Right after bc250_dpm_step, so the arm reads the governor's state of this very tick. The thread's, under TickLock.
+static void DpmJointTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, const struct bc250_dpm_input* In)
+{
+    struct bc250_joint_input j;
+    ULONG before = S->Joint.cap_mhz, want;
+    LONG t = In->temperature_mc;
+    bc250_joint_read(&S->Gov, In, &j);
+    j.cpu_ready = InterlockedCompareExchange(&Device->Cpu.JointReady, 0, 0) ? 1 : 0;
+    j.base_mhz = (ULONG)InterlockedCompareExchange(&Device->Cpu.JointBaseMHz, 0, 0);
+    want = bc250_joint_step(&S->Joint, &j);
+    DpmJointPublishWant(Device, want, want != before ? TRUE : FALSE);
+    // One line per change of the cap: at most one per ENGAGE_MS, FREE_MS or STEP_MS (the host test's fuzz bound).
+    if (want != before)
+        GuardLog("dpm: joint CPU cap %lu -> %lu MHz (%s): busy avg %lu, %ld.%01ld C, GPU cap %lu MHz", before,
+                 want, S->Joint.reason < BC250_JOINT_REASON_COUNT ? g_JointReason[S->Joint.reason] : "?",
+                 j.busy_permille, t / 1000, (t < 0 ? -t : t) % 1000 / 100,
+                 bc250_dpm_level_mhz(S->Gov.thermal_cap < S->Gov.max_level ? S->Gov.thermal_cap : S->Gov.max_level));
+}
+
+// The cap is gone outside a governing tick: a governor that gave up, a power transition, a stop. Idempotent.
+static void DpmJointEnd(BC250_DEVICE* Device, BC250_DPM_STATE* S, const char* Why)
+{
+    ULONG before = S->Joint.cap_mhz;
+    if (!S->JointOn) return;
+    bc250_joint_reset(&S->Joint);
+    DpmJointPublishWant(Device, 0, before ? TRUE : FALSE);
+    if (before) GuardLog("dpm: joint CPU cap %lu -> 0 MHz (%s)", before, Why);
+}
+
 static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
 {
     ULONGLONG now = KeQueryInterruptTime();
@@ -826,6 +904,8 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         S->Gov.stable = InterlockedCompareExchange(&S->Stable, 0, 0) != 0;
         DpmTakeTune(S);
         target = bc250_dpm_step(&S->Gov, &in);
+        // The joint power arm reads this tick's governor and decides the CPU limit; it never changes target.
+        if (S->JointOn) DpmJointTick(Device, S, &in);
         action = bc250_dpm_session_step(&S->Session, target, dtMs);
         if (action == BC250_DPM_SESSION_SET) {
             // Durable before the first raise, or no raise.
@@ -862,6 +942,8 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // Fixed-lab: the same average, for the telemetry, and nothing else.
         S->Gov.avg_permille = (S->Gov.avg_permille * 3u + T->Permille + 2u) / 4u;
         T->Target = S->Gov.level;
+        // A governor that gave up after SMU failures takes the joint arm's cap with it (0.7.216.7).
+        DpmJointEnd(Device, S, "the governor stopped governing");
     }
     if (now >= T->NextVerify) {
         ULONG mhz = 0, vid = 0;
@@ -909,6 +991,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         KeReleaseSpinLock(&S->SnapLock, irql);
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
+        DpmLogJointLine("telemetry", &snap);
         HwmonLogLine(Device, "telemetry");
         SmuMetricsLogLine(Device, "telemetry");
         FanLogLine(Device, "telemetry");
@@ -984,6 +1067,20 @@ static void DpmConfigureIdle(BC250_DPM_STATE* S, BOOLEAN Dpm)
     GuardLog("dpm: idle DpmIdleLeavePermille %lu%s: leaves at %lu permille over the window, or %lu in one tick",
              (ULONG)leave, leavePresent ? "" : " (absent)", (ULONG)S->Gov.idle_leave_permille,
              (ULONG)BC250_DPM_IDLE_EXIT_PERMILLE);
+}
+
+// The joint power arm's switch (0.7.216.7, C62): DpmJointGovernor 1 in a governing start, and nothing else, runs it.
+// A start that does not govern never reaches bc250_dpm_step, so the arm could not act there and stays off.
+// PASSIVE_LEVEL, under Lock, before the governor thread exists.
+static void DpmConfigureJoint(BC250_DPM_STATE* S, BOOLEAN Dpm)
+{
+    unsigned int value = 0;
+    BOOLEAN present = QueryPresent(DPM_SETTING_JOINT, &value);
+    bc250_joint_init(&S->Joint);
+    S->JointOn = (Dpm && present && value == 1u) ? TRUE : FALSE;
+    GuardLog("dpm: joint power arm DpmJointGovernor %lu%s -> %s", (ULONG)value, present ? "" : " (absent)",
+             S->JointOn ? "on: the CPU limit comes down while the GPU is bound and held by heat"
+                        : (Dpm ? "off" : "off: this start does not govern the clock"));
 }
 
 // The soft thermal zone's one switch (0.7.213, BD-087). DpmThermalZone 0 runs the 0.7.212 thermal rules for this whole
@@ -1142,6 +1239,8 @@ void DpmStart(BC250_DEVICE* Device)
     InterlockedExchange(&s->HwSdmaActive, 0);
     KeClearEvent(&s->StopEvent);
     s->Generation = Device->StartHealth.Generation;
+    s->JointOn = FALSE;                 // DpmConfigureJoint below, in a start that governs
+    bc250_joint_init(&s->Joint);
 
     if (!Device->FullWddm) {
         d->reason = BC250_DPM_REASON_NOT_RUN;
@@ -1197,6 +1296,7 @@ void DpmStart(BC250_DEVICE* Device)
     DpmConfigureZone(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
+    DpmConfigureJoint(s, d->mode == BC250_DPM_MODE_DPM && r.smu_online);
     GuardLog("dpm: DpmMode %lu%s DpmMaxMHz %lu%s -> %s, ceiling %lu MHz, reason %lu%s%s", r.mode,
              r.mode_present ? "" : " (absent)", r.max_mhz, r.max_present ? "" : " (absent)",
              d->mode == BC250_DPM_MODE_DPM ? "DPM" : "fixed-lab", d->max_mhz, d->reason,
@@ -1275,6 +1375,7 @@ void DpmStop(BC250_DEVICE* Device)
         DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "stop"))
         DpmCurveApplied(s, serial);      // the floor apply carried the stored curve's own voltage
     bc250_dpm_idle_leave(&s->Gov);      // the thread is joined; the clock is not at the idle point any more
+    DpmJointEnd(Device, s, "stop");     // cpu.c's stop, which runs first, has taken the cap out of the chip
     // "Not above the floor" ends a start cleanly, the same reading the session marker itself uses
     // (bc250_dpm_session_step): since 0.7.205 the thermal cap can leave the governor at 800 or 900 MHz, and a
     // stop from there is clean. Testing for the floor alone left the marker behind whenever the floor apply
@@ -1302,6 +1403,7 @@ void DpmStop(BC250_DEVICE* Device)
         KeReleaseSpinLock(&s->SnapLock, irql);
         DpmLogLine("stopped", &snap);
         DpmLogIdleLine("stopped", &snap);
+        DpmLogJointLine("stopped", &snap);
         DpmLogCurveLine("stopped", &snap);
     }
     DpmUnlock(s);
@@ -1339,6 +1441,8 @@ void DpmPause(BC250_DEVICE* Device)
     // The thread holds TickLock, so Gov is ours here. Leaving the idle state means the governor after the resume
     // measures a whole quiet window again instead of asking for the point at its first tick.
     bc250_dpm_idle_leave(&s->Gov);
+    // The joint arm starts again from no cap after the resume; CpuPause, which runs first, took it out of the chip.
+    DpmJointEnd(Device, s, "power down");
     KeReleaseMutex(&s->TickLock, FALSE);
 }
 
@@ -1414,6 +1518,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
+    DpmLogJointLine("summary", &snap);
     HwmonLogLine(Device, "summary");
     SmuMetricsLogLine(Device, "summary");
     FanLogLine(Device, "summary");

@@ -15,6 +15,10 @@
 //   3. A SET is a trial. The kernel owns the deadline, so a killed tool, a hung tool, a lost remote session and a
 //      bugcheck all end at the settings that were in force before it. Only a KEEP writes the registry.
 //
+// One more caller since 0.7.216.7: the DPM governor's joint power arm (DpmJointGovernor, default off) asks for a
+// lower clock limit while the GPU is bound and held by heat, and the worker sends it under the same rules, with the
+// busy gate lifted for that one setter and its voltage readback ("the joint power arm" below).
+//
 // Why a thread of its own: a trial's revert and the start's read stage both need PASSIVE_LEVEL and both send
 // several messages BC250_CPU_MESSAGE_GAP_MS apart, which is not something to do in a timer callback and not
 // something to hang on the DPM governor's 25 ms tick. The thread exists only while CpuTune is 1.
@@ -159,8 +163,10 @@ static BOOLEAN CpuAdapterDown(BC250_DEVICE* Device)
 // report about this surface.
 // AllowHot is passed on to the owner (smu.h): TRUE for every getter, for a step bc250_cpu_plan marked cools,
 // and for every restore, so the part can always be brought back to the settings it is known to run at.
-static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULONG Parameter, BOOLEAN Write,
-                           BOOLEAN AllowHot, _Out_opt_ ULONG* Value)
+// Joint (0.7.216.7) marks a message of the joint power arm's own change: it goes through SmuCpuJointMessage, which
+// lifts the busy gate for the clock limit and the voltage readback alone and refuses every other message.
+static NTSTATUS CpuMessageEx(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULONG Parameter, BOOLEAN Write,
+                             BOOLEAN AllowHot, BOOLEAN Joint, _Out_opt_ ULONG* Value)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     ULONG value = 0, firmware = 0;
@@ -170,8 +176,12 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
     KIRQL irql;
 
     if (Value != NULL) *Value = 0;
-    status = SmuCpuMessage(&Device->Smu, Queue, Message, Parameter, Write, AllowHot, CpuBusyPermille(Device),
-                           &value, &temperature, &firmware, &temperatureValid);
+    if (Joint)
+        status = SmuCpuJointMessage(&Device->Smu, Queue, Message, Parameter, Write, AllowHot,
+                                    CpuBusyPermille(Device), &value, &temperature, &firmware, &temperatureValid);
+    else
+        status = SmuCpuMessage(&Device->Smu, Queue, Message, Parameter, Write, AllowHot, CpuBusyPermille(Device),
+                               &value, &temperature, &firmware, &temperatureValid);
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->Snap.LastQueue = Queue;
     s->Snap.LastMessage = Message;
@@ -191,6 +201,12 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
                  Message, Parameter, Write ? "set" : "get", status, firmware);
     if (NT_SUCCESS(status) && Value != NULL) *Value = value;
     return status;
+}
+
+static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULONG Parameter, BOOLEAN Write,
+                           BOOLEAN AllowHot, _Out_opt_ ULONG* Value)
+{
+    return CpuMessageEx(Device, Queue, Message, Parameter, Write, AllowHot, FALSE, Value);
 }
 
 // The baseline this start restores to, from what the firmware has just answered (0.7.211). Until this exists no
@@ -312,8 +328,10 @@ static void CpuSample(BC250_DEVICE* Device, const struct bc250_cpu_settings* Tar
 //
 // The voltage is also read between the steps whenever a step that lowers it is followed by one that raises it
 // (the undervolt before a lab clock): the reading that matters there is the one taken BEFORE the clock goes up.
-static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* To, const char* Why,
-                         enum bc250_cpu_error* Error, BOOLEAN Restore)
+// Joint (0.7.216.7): the joint power arm's own change. Its plan must be the clock limit alone, one step, or nothing
+// is sent; its two messages go through SmuCpuJointMessage (CpuMessageEx).
+static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings* To, const char* Why,
+                           enum bc250_cpu_error* Error, BOOLEAN Restore, BOOLEAN Joint)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     struct bc250_cpu_plan plan;
@@ -334,11 +352,15 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
         return STATUS_SUCCESS;
     }
     if (error != BC250_CPU_OK) return STATUS_INVALID_PARAMETER;
+    if (Joint && (plan.count != 1 || plan.step[0].kind != BC250_CPU_STEP_CLOCK)) {
+        GuardLog("cpu: %s is not the clock limit alone (%lu steps): nothing is sent", Why, plan.count);
+        return STATUS_INVALID_PARAMETER;
+    }
     if (!SmuCpuBegin(&Device->Smu)) return STATUS_DEVICE_BUSY;
     for (i = 0; i < plan.count; i++) {
         if (i) CpuWait(BC250_CPU_MESSAGE_GAP_MS);
-        status = CpuMessage(Device, plan.step[i].queue, plan.step[i].message, plan.step[i].parameter, TRUE,
-                            Restore || plan.step[i].cools ? TRUE : FALSE, NULL);
+        status = CpuMessageEx(Device, plan.step[i].queue, plan.step[i].message, plan.step[i].parameter, TRUE,
+                              Restore || plan.step[i].cools ? TRUE : FALSE, Joint, NULL);
         if (!NT_SUCCESS(status)) break;
         // The chip has this step now, whatever happens to the next one.
         if (plan.step[i].kind == BC250_CPU_STEP_CLOCK) { applied.max_given = 1; applied.max_mhz = To->max_mhz; }
@@ -363,7 +385,7 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
     }
     if (NT_SUCCESS(status)) {
         CpuWait(BC250_CPU_MESSAGE_GAP_MS);
-        status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, &mv);
+        status = CpuMessageEx(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, Joint, &mv);
     }
     SmuCpuEnd(&Device->Smu);
     s->Applied = applied;
@@ -389,6 +411,12 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
     CpuLogSettings(Why, &applied);
     GuardLog("cpu: %s sent %lu of %lu steps, %lu mV back: 0x%08X", Why, i, plan.count, mv, status);
     return status;
+}
+
+static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* To, const char* Why,
+                         enum bc250_cpu_error* Error, BOOLEAN Restore)
+{
+    return CpuApplyEx(Device, To, Why, Error, Restore, FALSE);
 }
 
 // The way back to a named state (0.7.211). *Before is what the caller wants back - the state before a trial, or
@@ -456,6 +484,135 @@ static void CpuRevertRetry(BC250_DEVICE* Device)
         GuardLog("cpu: the owed revert is still refused 0x%08X at attempt %lu", status, attempts);
 }
 
+// ---- the joint power arm (0.7.216.7) ----------------------------------------------------------------------------
+// The DPM governor's thread decides (bc250_joint_step, behind DpmJointGovernor, default off) and writes the cap it
+// wants into JointWantMHz; the worker alone sends it, under Lock, through CpuApplyEx with Joint set. The arm therefore
+// has every rule any other change has - the plan's order, the voltage readback with its refusal line, the hot gate,
+// the sequence flag, the allowlist and the argument range - and one rule lifted: the busy gate, for its two messages
+// alone (smu.h, SmuCpuJointMessage). Applied names the arm's cap while it is in force, because that is what the chip
+// has; JointBefore names what was applied before it, and the release restores exactly that through
+// bc250_cpu_restore_target, as a revert does. The operator comes first: a SET, a RESET and a search release the cap
+// before they run, and the arm takes no cap while a trial, a search or an owed revert is open.
+
+C_ASSERT(BC250_JOINT_MIN_MHZ == BC250_CPU_MIN_MHZ);
+
+// What the governor reads each tick: whether the surface can take a cap now, and the limit the cap is measured from.
+// Under Lock.
+static void CpuJointPublish(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    const struct bc250_cpu_settings* from =
+        InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0) ? &s->JointBefore : &s->Applied;
+    ULONG base = 0;
+    BOOLEAN ready;
+    KIRQL irql;
+    if (from->max_given) base = from->max_mhz;
+    else if (s->BaselineValid && s->Baseline.max_given) base = s->Baseline.max_mhz;
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    ready = s->Enabled && s->Created && s->Proven && !s->OnTrial && !s->RevertOwed && !s->Search.running;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    if (s->JointFault || s->JointPaused || CpuAdapterDown(Device) || base < BC250_CPU_MIN_MHZ) ready = FALSE;
+    InterlockedExchange(&s->JointBaseMHz, (LONG)base);
+    InterlockedExchange(&s->JointReady, ready ? 1 : 0);
+}
+
+// The cap out of the chip: back to JointBefore, as a restore (every step passes the hot gate). JointAppliedMHz is
+// cleared once the chip has the limit back, whatever the readback after it said. Under Lock.
+static NTSTATUS CpuJointRelease(BC250_DEVICE* Device, const char* Why)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    struct bc250_cpu_settings back;
+    NTSTATUS status;
+    if (!InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0)) return STATUS_SUCCESS;
+    RtlZeroMemory(&back, sizeof(back));
+    if (!bc250_cpu_restore_target(&s->Applied, &s->JointBefore, s->BaselineValid ? &s->Baseline : NULL, &back)) {
+        // Not reachable: the arm takes no cap without a base it can name (CpuJointPublish).
+        GuardLog("cpu: %s cannot name the limit to go back to; the cap of %lu MHz stays", Why, s->Applied.max_mhz);
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+    status = CpuApplyEx(Device, &back, Why, NULL, TRUE, TRUE);
+    if (s->Applied.max_given == back.max_given && s->Applied.max_mhz == back.max_mhz) {
+        InterlockedExchange(&s->JointAppliedMHz, 0);
+        RtlZeroMemory(&s->JointBefore, sizeof(s->JointBefore));
+    }
+    return status;
+}
+
+// One piece of the arm's work, from the worker alone, under Lock: the cap the governor wants into the chip, or out of
+// it. A refusal is tried again after BC250_CPU_JOINT_RETRY_MS (the hot gate refuses a step up on a hot part, a
+// timeout passes); a cap whose voltage readback fails turns the arm off for this start and goes out again.
+static void CpuJointService(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    ULONG want, applied, base, refusals;
+    ULONGLONG now = KeQueryInterruptTime();
+    NTSTATUS status;
+
+    CpuJointPublish(Device);
+    if (CpuAdapterDown(Device)) return;
+    want = (ULONG)InterlockedCompareExchange(&s->JointWantMHz, 0, 0);
+    applied = (ULONG)InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0);
+    base = (ULONG)InterlockedCompareExchange(&s->JointBaseMHz, 0, 0);
+    if (!InterlockedCompareExchange(&s->JointReady, 0, 0)) want = 0;        // not ready: a release, or nothing
+    if (want && (want < BC250_CPU_MIN_MHZ || want >= base)) want = 0;      // the policy never asks for this
+    if (want == applied || now < s->JointNextTry) return;
+    if (!want) status = CpuJointRelease(Device, "the joint arm's release");
+    else {
+        struct bc250_cpu_settings to;
+        if (!applied) s->JointBefore = s->Applied;
+        RtlZeroMemory(&to, sizeof(to));
+        to.max_given = 1;
+        to.max_mhz = want;
+        // A lower limit cools and passes the hot gate (bc250_cpu_plan marks it); a step back up waits for a cool part.
+        status = CpuApplyEx(Device, &to, applied && want > applied ? "the joint arm's step up" : "the joint arm's cap",
+                            NULL, FALSE, TRUE);
+        if (s->Applied.max_given && s->Applied.max_mhz == want) {
+            InterlockedExchange(&s->JointAppliedMHz, (LONG)want);
+            if (!NT_SUCCESS(status)) {
+                s->JointFault = TRUE;
+                GuardLog("cpu: the joint arm's cap of %lu MHz failed its readback 0x%08X: the arm is off for this start",
+                         want, status);
+                (void)CpuJointRelease(Device, "the joint arm's fault");
+            }
+        } else if (!applied) RtlZeroMemory(&s->JointBefore, sizeof(s->JointBefore));
+    }
+    if (NT_SUCCESS(status)) {
+        InterlockedIncrement(&s->JointSends);
+        s->JointNextTry = 0;
+    } else {
+        refusals = (ULONG)InterlockedIncrement(&s->JointRefusals);
+        s->JointNextTry = now + 10000ull * BC250_CPU_JOINT_RETRY_MS;
+        if (refusals == 1 || refusals % 10 == 0)
+            GuardLog("cpu: the joint arm's change to %lu MHz is refused 0x%08X (refusal %lu), again in %lu ms", want,
+                     status, refusals, (ULONG)BC250_CPU_JOINT_RETRY_MS);
+    }
+    CpuJointPublish(Device);
+}
+
+// TRUE while the worker owes the arm a change it can make: the poll keeps running until it is made.
+static BOOLEAN CpuJointOwed(BC250_CPU_STATE* S)
+{
+    ULONG want = (ULONG)InterlockedCompareExchange(&S->JointWantMHz, 0, 0);
+    if (S->JointPaused) return FALSE;       // the power path owns the mailbox; CpuResume clears the cap's record
+    if (!InterlockedCompareExchange(&S->JointReady, 0, 0)) want = 0;
+    return want != (ULONG)InterlockedCompareExchange(&S->JointAppliedMHz, 0, 0) ? TRUE : FALSE;
+}
+
+// The operator's SET, RESET and SEARCH_BEGIN take the cap out first, so that what they record as "before" is the
+// operator's own state and never the arm's. Under Lock. FALSE when the cap could not go: the operation is refused.
+static BOOLEAN CpuJointYield(BC250_DEVICE* Device, ULONG Op)
+{
+    NTSTATUS status;
+    if (Op != BC250_CPU_OP_SET && Op != BC250_CPU_OP_RESET && Op != BC250_CPU_OP_SEARCH_BEGIN) return TRUE;
+    if (!InterlockedCompareExchange(&Device->Cpu.JointAppliedMHz, 0, 0)) return TRUE;
+    status = CpuJointRelease(Device, "the operator's request");
+    if (InterlockedCompareExchange(&Device->Cpu.JointAppliedMHz, 0, 0)) {
+        GuardLog("cpu: the joint arm's cap did not go 0x%08X: the operator's op %lu is refused", status, Op);
+        return FALSE;
+    }
+    return TRUE;
+}
+
 // ---- the worker thread ------------------------------------------------------------------------------------------
 // It owns the start sequence (the read stage, the stored values, the core mask) and every trial's deadline. Nothing
 // else in this file sends a message without holding Lock, and the thread holds it for one piece of work at a time.
@@ -477,7 +634,7 @@ static void CpuThread(_In_ PVOID Context)
         return;
     }
     for (;;) {
-        BOOLEAN work, onTrial, over = FALSE, owed;
+        BOOLEAN work, onTrial, over = FALSE, owed, joint;
         KIRQL irql;
         CpuLock(s);
         // While the adapter is paused or the owner is gone, the worker does nothing at all: the start work stays
@@ -541,13 +698,18 @@ static void CpuThread(_In_ PVOID Context)
             CpuRevertRetry(device);
             nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
         }
+        // The joint power arm (0.7.216.7) after the operator's own work: a trial's deadline and an owed revert come
+        // first, and the arm takes no cap while either is open (CpuJointPublish). With DpmJointGovernor 0 nothing
+        // ever writes JointWantMHz, so this publishes the readiness and sends nothing.
+        CpuJointService(device);
         KeAcquireSpinLock(&s->SnapLock, &irql);
         owed = s->RevertOwed;
         KeReleaseSpinLock(&s->SnapLock, irql);
+        joint = CpuJointOwed(s);
         CpuUnlock(s);
         timeout.QuadPart = -10000ll * (LONGLONG)BC250_CPU_POLL_MS;
         if (KeWaitForMultipleObjects(2, objects, WaitAny, Executive, KernelMode, FALSE,
-                                     onTrial || over || owed ? &timeout : NULL, NULL) == STATUS_WAIT_0)
+                                     onTrial || over || owed || joint ? &timeout : NULL, NULL) == STATUS_WAIT_0)
             break;
     }
     PsTerminateSystemThread(STATUS_SUCCESS);
@@ -590,6 +752,17 @@ void CpuStart(BC250_DEVICE* Device)
     s->Generation = Device->StartHealth.Generation;
     s->CoreMask = BC250_CPU_MASK_STOCK;
     s->CoreMaskStored = 0;
+    // The joint power arm starts with no cap and no fault; the governor's thread may already run (DpmStart is first)
+    // and reads JointReady 0 until this start's read stage has answered.
+    InterlockedExchange(&s->JointWantMHz, 0);
+    InterlockedExchange(&s->JointAppliedMHz, 0);
+    InterlockedExchange(&s->JointReady, 0);
+    InterlockedExchange(&s->JointBaseMHz, 0);
+    InterlockedExchange(&s->JointSends, 0);
+    InterlockedExchange(&s->JointRefusals, 0);
+    s->JointFault = s->JointPaused = FALSE;
+    RtlZeroMemory(&s->JointBefore, sizeof(s->JointBefore));
+    s->JointNextTry = 0;
     KeClearEvent(&s->StopEvent);
     (void)CpuQueryPresent(CPU_SETTING_TUNE, &tune);
     (void)CpuQueryPresent(CPU_SETTING_LAB, &lab);
@@ -725,7 +898,16 @@ void CpuStop(BC250_DEVICE* Device)
     if (owed)
         GuardLog("cpu: a revert is still owed at the stop; the applied settings stay in the chip until the "
                  "next cold boot");
+    // The joint arm's cap does not outlive the driver that set it (0.7.216.7). A trial cannot be open at the same
+    // time (the arm takes no cap during one), so this is the only change left to take back.
+    if (InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0) && !CpuAdapterDown(Device)) {
+        NTSTATUS status = CpuJointRelease(Device, "stop");
+        if (InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0))
+            GuardLog("cpu: the joint arm's cap of %lu MHz stays in the chip after the stop 0x%08X; a lower limit "
+                     "is the safe side", (ULONG)InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0), status);
+    }
     s->Proven = FALSE;
+    CpuJointPublish(Device);
     CpuUnlock(s);
     CpuLogSummary(Device);
 }
@@ -749,6 +931,10 @@ void CpuPause(BC250_DEVICE* Device)
         GuardLog("cpu: the trial ends with the power transition; the settings before it come back");
         CpuRevert(Device, "power down");
     } else if (owed) CpuRevertRetry(Device);        // the worker sends nothing in D3: try while the mailbox is ours
+    // The joint arm's cap goes too, while the mailbox is ours, and no new one is taken until CpuResume (0.7.216.7).
+    s->JointPaused = TRUE;
+    if (InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0)) (void)CpuJointRelease(Device, "power down");
+    CpuJointPublish(Device);
     CpuUnlock(s);
 }
 
@@ -774,6 +960,12 @@ void CpuResume(BC250_DEVICE* Device)
     RtlZeroMemory(&s->Search, sizeof(s->Search));
     KeReleaseSpinLock(&s->SnapLock, irql);
     s->StartWork = TRUE;
+    // The joint arm's cap is gone from the chip with the rest; the arm waits for the read stage again (0.7.216.7).
+    InterlockedExchange(&s->JointAppliedMHz, 0);
+    RtlZeroMemory(&s->JointBefore, sizeof(s->JointBefore));
+    s->JointNextTry = 0;
+    s->JointPaused = FALSE;
+    CpuJointPublish(Device);
     CpuUnlock(s);
     KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
     GuardLog("cpu: the power transition is over; the read stage and the stored settings run again");
@@ -831,6 +1023,15 @@ void CpuLogSummary(BC250_DEVICE* Device)
              snap.Reads, snap.Writes, snap.Refusals, snap.Reverts);
     GuardLog("cpu: summary last queue %lu message 0x%02X argument 0x%08X status 0x%08X",
              snap.LastQueue, snap.LastMessage, snap.LastParameter, snap.LastStatus);
+    // The joint power arm (0.7.216.7), only when it ever acted: a start with DpmJointGovernor 0 logs what 0.7.216.6 did.
+    if (InterlockedCompareExchange(&s->JointSends, 0, 0) || InterlockedCompareExchange(&s->JointRefusals, 0, 0) ||
+        InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0) || s->JointFault)
+        GuardLog("cpu: summary joint cap %lu MHz (base %lu), %lu changes, %lu refused%s",
+                 (ULONG)InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0),
+                 (ULONG)InterlockedCompareExchange(&s->JointBaseMHz, 0, 0),
+                 (ULONG)InterlockedCompareExchange(&s->JointSends, 0, 0),
+                 (ULONG)InterlockedCompareExchange(&s->JointRefusals, 0, 0),
+                 s->JointFault ? ", off after a failed readback" : "");
 }
 
 // ---- the escape ------------------------------------------------------------------------------------------------
@@ -910,6 +1111,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
         else if (!s->Enabled || !s->Created) status = STATUS_INVALID_DEVICE_STATE;
         else if (CpuAdapterDown(Device)) status = STATUS_DEVICE_NOT_READY;
         else if (op != BC250_CPU_OP_READBACK && !s->Proven) status = STATUS_DEVICE_NOT_READY;
+        else if (!CpuJointYield(Device, op)) status = STATUS_DEVICE_BUSY;
         else if (op == BC250_CPU_OP_READBACK) {
             // The first full stage of a start keeps the slow rate, whether the worker's own stage answered or
             // not: it is what records the baseline, and it is the first queue 3 traffic this part ever sees.
@@ -1081,6 +1283,10 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
         }
         if (!NT_SUCCESS(status))
             GuardLog("cpu: op %lu refused 0x%08X (error %d)", op, status, (int)error);
+        // A trial, a search or a reset changes what the joint arm may do: the governor reads it at its next tick,
+        // and the worker looks at the arm again now.
+        CpuJointPublish(Device);
+        KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
         CpuUnlock(s);
     }
     // The reply: what is applied, stored and recorded, what the chip answered, and where a trial or a search is.
