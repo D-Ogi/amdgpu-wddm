@@ -141,8 +141,8 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
                 const HRESULT waited=wait_present_value(bridge,bridge.present_value-latency);
                 if (FAILED(waited) && ddi_device_status(waited)==D3DDDIERR_DEVICEREMOVED) return D3DDDIERR_DEVICEREMOVED;
             }
-            // BD-099: the runtime applies a VSync override that lowers the application's interval, but not one
-            // that raises interval 0 (vblank-pacer.h). The shell waits here for the part that the runtime does not give.
+            // BD-099: the runtime gets the VSync override of this interface as interval 0 (x64) or not at all (x86)
+            // (vblank-pacer.h). The shell waits here for the vertical blanks that the runtime does not give.
             owner.vblank_pacer().wait(as::extra_vblanks(vsync,unsigned(args->FlipInterval)));
             owner.frame_limiter().frame(as::frame_rate_limit(settings));
         }

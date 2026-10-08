@@ -70,11 +70,12 @@ interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The shells set `SyncIntervalOverrideV
 the arguments of the Present callback. The D3D11 shell fills `DXGIDDICB_PRESENT`, and the D3D12 shell fills
 `D3D12DDI_PRESENT_0051`.
 
-The x64 D3D11 runtime reads the override. The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM
-2.2.2 interface and later, and the D3D11 shell reports an older interface, but the x64 runtime reads them all the
-same. On unit A the x64 runtime applied the override when it lowered the interval of the application (BD-099). It did
-not apply `VSync` 1 to an application that presents with interval 0. The x86 runtime (WOW64) did not apply the
-override at all.
+The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM 2.2.2 interface and later, and the D3D11 shell
+reports the WDDM 2.0 interface. For an older interface, the D3D11 runtime copies only the older, shorter structure
+into its own `DXGIDDICB_PRESENT` (BD-099). On x64 the copy holds `SyncIntervalOverrideValid`, which is in the tail
+padding of the older structure, but not `SyncIntervalOverride`. Thus each override arrives as interval 0: `VSync` 0
+works, and `VSync` 1 alone gave 873-928 frames/s for the intervals 1 and 2. On x86 (WOW64) the copy holds neither
+field, and the override has no effect. A shell that reports the WDDM 2.2.2 interface gets the full structure.
 
 The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
 `FlipInterval` is 0 for the intervals 0, 1 and 2. Thus with `VSync` 1 the D3D11 shell also waits for one vertical
