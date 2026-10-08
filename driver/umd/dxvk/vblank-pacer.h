@@ -11,7 +11,7 @@
 // D3D_UMD_INTERFACE_VERSION_WDDM2_2_2 and later. The D3D11 runtime gives the whole Present callback only from
 // interface 0xB0023 (WDDM 2.2) build 5 (IS_DXGI1_6_1_BASE_FUNCTIONS in d3d10umddi.h). Below that, d3d11.dll
 // 10.0.22621 gives PresentCB_PreWDDM2_2, which copies only the older, shorter structure into its own
-// DXGIDDICB_PRESENT. On x64 the copy holds SyncIntervalOverrideValid, which is in the tail padding of the older
+// DXGIDDICB_PRESENT (BD-099). On x64 the copy holds SyncIntervalOverrideValid, which is in the tail padding of the older
 // structure, but not SyncIntervalOverride: each override arrives as interval 0. On unit A (59 Hz, d3d11bench in a
 // window, a flip-discard swap chain) an override for VSync 1 gave 873-928 frames/s for the intervals 1 and 2. On x86
 // the copy holds neither field. So on the old callback the shell passes VSync 0 only (d3d11_runtime_override in
