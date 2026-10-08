@@ -61,8 +61,8 @@
 // The thread runs in both modes when the native SMU owner is online. Fixed-lab: it samples busy and
 // temperature and logs them, and sends no SET. DPM: every BC250_DPM_TICK_MS it samples, asks the policy
 // for a level and applies it through SmuSetPoint, the same checked transaction the start uses (voltage up
-// before a raise, down after a lowering, read back). Every change is logged; so is a telemetry line every
-// five seconds, which the game trials' kernel-log stream records.
+// before a raise, down after a lowering, read back). Every change is logged; so is a telemetry block every
+// five seconds, which the game trials' kernel-log stream records, and every minute at the idle point (BD-097).
 //
 // Busy (0.7.177): the share of GRBM_STATUS.GUI_ACTIVE samples, read by a high-resolution timer every
 // BC250_DPM_HW_SAMPLE_US (DpmHwSample) - the graphics engine's own activity, as amdgpu's gfx_v10_0_is_idle reads
@@ -79,6 +79,7 @@
 #define DPM_SETTING_PENDING L"DpmPending"
 #define DPM_SETTING_CONFIRMED L"DpmConfirmed"
 #define DPM_SETTING_SESSION L"DpmSession"
+#define DPM_SETTING_IDLE_LOG L"TelemetryIdleLogMs"
 #define DPM_SETTING_IDLE_MHZ L"DpmIdleMHz"
 #define DPM_SETTING_IDLE_HOLD L"DpmIdleHoldMs"
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
@@ -443,6 +444,8 @@ static ULONGLONG DpmBusyTotal(BC250_DEVICE* Device, BC250_DPM_STATE* S, ULONGLON
 typedef struct _DPM_TICK {
     ULONGLONG Begin, Last, LastBusy, NextVerify, NextLog, Ticks, ClockAt;
     ULONGLONG NextHwmon;                    // the board's hardware monitor, its own cadence (hwmon.c)
+    ULONGLONG LastLog;                      // interrupt time of the last telemetry block in the driver log
+    ULONG IdleLogMs;                        // the block's period at the idle point (BD-097, Parameters\TelemetryIdleLogMs)
     ULONG Permille, ObservedMHz, ObservedVid, Target;
     ULONG SubmitPermille, SdmaPermille, HwSamples;
     enum bc250_dpm_busy_source Source;
@@ -989,6 +992,14 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         snap = S->Snap;
         serial = S->TuneSerial;
         KeReleaseSpinLock(&S->SnapLock, irql);
+        // BD-097: at the idle point the block comes every IdleLogMs instead of every 5 s. Its eleven or so lines a
+        // tick used to fill the 768 wrapping lines of the ring in about five minutes, so an idle desktop lost every
+        // event (a mode set, a refusal) before anyone read it. The check still runs every 5 s, so the first block
+        // after the governor leaves the idle point comes within 5 s, and a trial's stream keeps its cadence.
+        if ((snap.Flags & BC250_DPM_FLAG_IDLE) != 0 && T->IdleLogMs > BC250_DPM_LOG_MS && T->LastLog != 0 &&
+            now < T->LastLog + 10000ull * T->IdleLogMs)
+            return;
+        T->LastLog = now;
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
         DpmLogJointLine("telemetry", &snap);
@@ -1018,6 +1029,16 @@ static void DpmThread(_In_ PVOID Context)
     tick.NextVerify = tick.Begin;
     tick.NextHwmon = tick.Begin;
     tick.NextLog = tick.Begin + 10000ull * BC250_DPM_LOG_MS;
+    // Read once per thread start (PASSIVE_LEVEL here). 0 or a value at or below the 5 s period gives the old cadence;
+    // out of range takes the default, said in the log.
+    tick.IdleLogMs = GuardReadSetting(DPM_SETTING_IDLE_LOG, BC250_DPM_IDLE_LOG_MS);
+    if (tick.IdleLogMs > BC250_DPM_IDLE_LOG_MAX_MS) {
+        GuardLog("dpm: TelemetryIdleLogMs %lu out of range (max %lu), %lu used", tick.IdleLogMs,
+                 BC250_DPM_IDLE_LOG_MAX_MS, BC250_DPM_IDLE_LOG_MS);
+        tick.IdleLogMs = BC250_DPM_IDLE_LOG_MS;
+    }
+    GuardLog("dpm: telemetry in the log every %lu ms, every %lu ms at the idle point", BC250_DPM_LOG_MS,
+             tick.IdleLogMs > BC250_DPM_LOG_MS ? tick.IdleLogMs : BC250_DPM_LOG_MS);
     period.QuadPart = -10000ll * BC250_DPM_TICK_MS;
     while (KeWaitForSingleObject(&s->StopEvent, Executive, KernelMode, FALSE, &period) == STATUS_TIMEOUT) {
         KeWaitForSingleObject(&s->TickLock, Executive, KernelMode, FALSE, NULL);
