@@ -7,6 +7,7 @@
 #include "hosted-instance.h"
 #include "hosted-queue.h"
 #include "heap-import.h"
+#include "frame-latency.h"
 #include "replay-log.h"
 #include "engine-ddi/engine-ddi.h"
 #include <d3dkmthk.h>
@@ -60,6 +61,8 @@ class DeviceEngine final {
     std::unique_ptr<RuntimeHeapImports> imports_;
     std::unique_ptr<QueueEngineRegistry> queues_;
     std::unique_ptr<HostedQueue> queue_bridge_;
+    // The per-application MaxFrameLatency gate of this device's presents (frame-latency.h).
+    FrameLatency frame_latency_;
     // No entry lock: DDI entries of this device run at once on several threads (DeviceEngineScope).
     // active_ turns false once, at close or retain, after the runtime has ended every entry.
     std::atomic<bool> active_{true};
@@ -275,6 +278,7 @@ public:
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
     QueueEngineRegistry* queues() const noexcept {return queues_.get();}
     RuntimeHeapImports* imports() const noexcept {return imports_.get();}
+    void frame_gate(uint32_t latency) noexcept {frame_latency_.frame(dispatch_.progress_source(),latency);}
     bool entered() const noexcept {
         return active_.load(std::memory_order_acquire) && domain_.entered() && bootstrap_.entry()!=nullptr;
     }
@@ -480,6 +484,11 @@ void destroy_device_engine(Device& device) noexcept {
 engine_ddi::DeviceContext* engine_context(Device& device) noexcept {return device.engine?device.engine->context():nullptr;}
 QueueEngineRegistry* engine_queues(Device& device) noexcept {return device.engine?device.engine->queues():nullptr;}
 RuntimeHeapImports* engine_imports(Device& device) noexcept {return device.engine?device.engine->imports():nullptr;}
+// latency 0 is the default of every release: one test, and this present leaves the shell exactly as it did in b23.
+void engine_frame_gate(Device& device,uint32_t latency) noexcept {
+    if(!latency || !device.engine)return;
+    device.engine->frame_gate(latency);
+}
 bool device_engine_entered(Device& device) noexcept {return device.engine && device.engine->entered();}
 void report_device_error(Device& device,HRESULT hr) noexcept {
     stage("DDI-error",hr);

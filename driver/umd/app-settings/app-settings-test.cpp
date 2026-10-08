@@ -199,12 +199,14 @@ void output_tests() {
     const std::string all=effective(s);
     CHECK(has(all,"amdgpu-wddm settings: api=d3d11 app=Game.EXE FrameRateLimit=60/global VSync=1/global "
                   "Anisotropy=16/application MaxFrameLatency=2/global PerformanceOverlay=1/environment RenderOnCpu=unset"));
-    // A shell marks what it does not apply (the D3D12 shell: no overlay, no latency).
-    const unsigned d3d12=as::kAll & ~as::bit(Setting::PerformanceOverlay) & ~as::bit(Setting::MaxFrameLatency) &
-        ~as::bit(Setting::RenderOnCpu);
+    // A shell marks what it does not apply (the D3D12 shell: no overlay, and RenderOnCpu is the router's).
+    const unsigned d3d12=as::kAll & ~as::bit(Setting::PerformanceOverlay) & ~as::bit(Setting::RenderOnCpu);
     const std::string part=effective(s,d3d12);
-    CHECK(has(part,"MaxFrameLatency=2/global/not-applied") && has(part,"PerformanceOverlay=1/environment/not-applied"));
+    CHECK(has(part,"MaxFrameLatency=2/global ") && has(part,"PerformanceOverlay=1/environment/not-applied"));
     CHECK(has(part,"Anisotropy=16/application ") && has(part,"RenderOnCpu=unset"));
+    // A shell that applies neither still marks both, so the line never claims a setting took effect.
+    const std::string none=effective(s,d3d12 & ~as::bit(Setting::MaxFrameLatency));
+    CHECK(has(none,"MaxFrameLatency=2/global/not-applied"));
     CHECK(as::sync_override(s).valid && as::sync_override(s).interval==1);
     // BD-099: on the old present callback the D3D11 shell waits only for the part of VSync that the
     // application's interval does not give.

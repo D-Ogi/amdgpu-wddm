@@ -897,7 +897,7 @@ search.games.sm.terms|src|-|shader model|SM 6.8|SM 6.7|SM 6.6|shader|DirectX 12
 search.games.cpu-render|src|-|Run DirectX 11 on the processor
 search.games.cpu-render.terms|src|-|CPU rendering|software rendering|WARP|processor|DirectX 11|fallback|last resort
 search.display.scaling|src|-|GPU scaling
-help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate.
+help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate. Works in DirectX 11 and DirectX 12 games. A game that already keeps fewer frames ahead is left as it is.
 help.setting.overlay|src|-|Shows the frame rate and frame times in a corner of the game. Works in DirectX 11 games for now.
 help.setting.amd-version|src|-|Some games warn that the graphics driver is old, because they do not know this driver. With this on, the driver reports a version number that these games accept. The driver itself does not change.
 help.setting.vk-present|src|-|How Vulkan games show their frames. Modern is the default and is faster. Compatibility uses an older, slower way; try it when a Vulkan game shows a black or frozen picture.
