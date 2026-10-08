@@ -254,11 +254,49 @@ other three fields stay, so a support report still identifies the build of this 
 
 ### The mechanism
 
-`EnumDisplayDevices` gives the adapter's `Control\Video` key as the `DeviceKey` of each adapter. Unreal Engine
-4 reads the `DriverVersion` value of that key. This key is also the software key that dxgkrnl gives the KMD in
-`DXGK_DEVICE_INFO.DeviceRegistryPath`.
+`EnumDisplayDevices` gives the adapter's video key as the `DeviceKey` of each adapter:
 
-At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of the software key:
+```
+HKLM\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000
+```
+
+Unreal Engine 4 reads the `DriverVersion` value of that key. This key is not the one that dxgkrnl gives the KMD in
+`DXGK_DEVICE_INFO.DeviceRegistryPath`: on unit A that one is the class key
+`Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000`. The first version of this code wrote only to
+`DeviceRegistryPath` and refused that key, so the number never reached Unreal Engine (b23 lab 489).
+
+The KMD finds the video keys of its adapter in two steps:
+
+1. It opens the adapter's hardware key (`IoOpenDeviceRegistryKey` with `PLUGPLAY_REGKEY_DEVICE`) and reads the
+   `VideoID` value, which holds the GUID of the video keys of this adapter.
+2. It opens `Control\Video\{VideoID}` and visits each subkey whose name is four decimal digits. One adapter can have
+   more than one such key, and `HKLM\HARDWARE\DEVICEMAP\VIDEO` names the same keys as `\Device\Video<n>`. The
+   development PC showed four of them for one adapter. The KMD visits at most 16 and says so in the log if there
+   are more.
+
+Each numbered video key is a registry symbolic link: it holds a `REG_LINK` value `SymbolicLinkValue` whose target is
+the class key of the adapter, `Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<nnnn>`. An open that
+does not ask for `OBJ_OPENLINK` follows the link, so the KMD writes the class key through the video path. Three
+results follow:
+
+- The second and later video keys of the adapter find the number in place and write nothing.
+- The write also changes the version that Device Manager gives for the adapter.
+- The write changes the SetupAPI property `DEVPKEY_Device_DriverVersion`, because that property reads the
+  `DriverVersion` value of the same class key. The Microsoft page of that property names its registry value
+  `REGSTR_VAL_DRIVERVERSION`, `DriverVersion`
+  (`windows-driver-docs-pr/install/devpkey-device-driverversion.md`, staging `110f60ea`).
+
+The driver store keeps the INF number, and so does `Bc250DriverVersion`. Because the key that the write reaches is
+not the key that the path names, the KMD guards both: it opens only a path below `Control\Video`, and it reads the
+name of the key that the open gives back and writes only when that name is a video key or one adapter key of
+the adapter class `{4d36e968-e325-11ce-bfc1-08002be10318}`.
+
+The two facts above were measured on the development PC on 2026-10-08, read-only, with
+`RegOpenKeyEx(REG_OPTION_OPEN_LINK)` and `RegQueryValueEx("SymbolicLinkValue")` on the video keys of its graphics
+adapter, and by comparing `DEVPKEY_Device_DriverVersion` of the devnode with the `DriverVersion` value of the class
+key that the link named. All four numbered video keys of that adapter named the same class key.
+
+At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of each video key:
 
 | Value | Content |
 |---|---|
@@ -269,11 +307,12 @@ At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three v
 When the setting goes back to 0, the next start writes the installed number back and deletes the two backup values.
 A new driver installation writes its own number into `DriverVersion`. With the setting on, the next start reports
 the new number in the AMD scheme. With the setting off, the KMD keeps the new number and deletes only the backups.
-The KMD writes only to a key whose path contains `\Control\Video\`.
+The KMD opens only a path that contains `\Control\Video\`, and it writes only when the key behind that path names a
+video key or one adapter key of the adapter class.
 
-The PnP driver key under `Control\Class` and the driver store keep the INF number. The installer and the control
-application read the version from there, so they show the installed number. The code is `driver/kmd/driver_version.c`,
-and `driver/kmd/driver_version.h` holds the decisions that the host test checks.
+The driver store keeps the INF number, and `Bc250DriverVersion` holds it next to the reported number, so a support
+report can give both. The code is `driver/kmd/driver_version.c`, and `driver/kmd/driver_version.h` holds the
+decisions and the path of the key, which the host test checks.
 
 ### What Unreal Engine checks
 
@@ -285,13 +324,21 @@ branches 4.26 and 5.4, read on 2026-10-08.
 | 4.26 | 4 | `DriverVersion` of the `DeviceKey` | `<=22.19.662.4` for all RHIs, `<=26.20.13031.15006` for D3D12 |
 | 5.4 | 5 | `DEVPKEY_Device_DriverVersion` through the SetupAPI | `<27.20.20913.2000` for D3D11, `DriverDate` `<2-19-2024` for D3D12 and Vulkan |
 
-Unreal Engine 4.26 shows its warning only when an entry matches. The number `40.7.216.18` matches neither 4.26
-entry, so a 4.26 game does not show it with the setting on. The Ascent showed this warning on unit A on 2026-10-07.
+Unreal Engine 4.26 shows its warning only when an entry matches. It compares the two numbers as six unsigned
+integers, right-aligned: `0.7.216.18` becomes `0.0.0.7.216.18` and `22.19.662.4` becomes `0.0.22.19.662.4`, so the
+first field decides. The installed `0.7.216.18` is below both entries and the warning appears. The number
+`40.7.216.18` is above both entries, and no entry matches. The Ascent showed this warning on unit A on 2026-10-07 (session 465), with the
+recommended version `19.20.1`, which is the `SuggestedDriverVersion` of `[GPU_AMD]` for D3D12 in the 4.26 file.
 
-Unreal Engine 5.4 reads the PnP driver key, which this setting does not change. Its D3D12 and Vulkan entries
-compare the driver date, and the INF date `10/07/2026` passes them. A 5.4 game on D3D11 still sees `0.7.216.18`
-and shows its warning. The method falls back to the `DeviceKey` only when the SetupAPI finds no adapter with the
-name of the D3D adapter.
+Unreal Engine 4.26 also reads `Catalyst_Version`, `RadeonSoftwareEdition` and `RadeonSoftwareVersion` of the same
+key for the text of its message. The decision uses the number of `DriverVersion`, so this driver does not write
+those three values.
+
+Unreal Engine 5.4 reads the device property through the SetupAPI. That property reads the `DriverVersion` value of
+the class key, which is the key that the symbolic link of the video key leads to, so the setting changes the number
+that method 5 sees as well. Its D3D12 and Vulkan entries compare the driver date, and the INF date of this driver
+passes them. The lab check records the property next to the registry values, to check this on unit A. Method 5
+reads the `DeviceKey` only when the SetupAPI finds no adapter with the name of the D3D adapter.
 
 A future entry that matches all versions from a value upward, with `>=`, would also match the AMD-scheme number.
 
