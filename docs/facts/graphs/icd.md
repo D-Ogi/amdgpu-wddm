@@ -46,6 +46,7 @@ flowchart LR
   M665["M665"]
   M773["M773"]
   M795["M795"]
+  M837["M837<br/>games"]
   M139 --> M50
   M252 --> M253
   M253 --> M166
@@ -57,9 +58,10 @@ flowchart LR
   M583 --> M581
   M665 --> M569
   M795 --> M773
+  M837 --> M795
   M510 --> M508
   M516 --> M515
   classDef other stroke-dasharray:4 3
-  class M50,M496,M510,M516,M546 other
+  class M50,M496,M510,M516,M546,M837 other
 ```
 

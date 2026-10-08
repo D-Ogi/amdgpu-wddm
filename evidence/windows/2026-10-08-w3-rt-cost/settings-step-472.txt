@@ -1,0 +1,93 @@
+settings file dx12user.settings 7402 2026-10-08T00:11:38.3314191Z
+settings file input.settings 110989 2026-10-08T00:07:45.9966321Z
+settings file profile.settings 103 2026-10-08T00:07:45.9782952Z
+settings file user.settings 5308 2026-09-26T18:27:07.9374999Z
+before sha256 AE9C01474ADC57396923317F6E315AFE7A56F5F54C73622FBCC172C4228AE20A
+before [Viewport] Resolution="1280x720"
+before [Viewport] FullScreenMode=0
+before [Engine] LimitFPS=60
+before [Rendering/DRS] Enable=false
+before [Viewport] VSync=true
+before [TextureStreaming] MaxResidentMipMap=6
+before [Rendering] MaxTextureSize=2048
+before [Rendering] MaxAtlasTextureSize=2048
+before [Rendering] TextureDownscale=0
+before [Rendering] DetailTextureDownscale=0
+before [Rendering] AtlasTextureDownscale=0
+before [Rendering] TextureMemoryBudget=800
+before [Rendering] TextureMemoryGUIBudget=80
+before [Rendering] TextureTimeBudget=10
+before [Rendering] TextureInFlightBudget=500
+before [Rendering] MaxTextureAnizotropy=8
+before [Rendering] TextureMipBias=-0.4
+before [Streaming/Textures] CinematicModeMipBias=1
+before [LevelOfDetail] DecalsHideDistance=40
+before [Rendering] MeshLODDistanceScale=1.2
+before [Rendering] MeshRenderingDistanceScale=1.5
+before [Rendering] GlobalOceanTesselationFactor=32
+before [Rendering] UseDynamicWaterSimulation=true
+before [Rendering] TerrainErrorMetricMultiplier=10
+before [Rendering] TerrainScreenSpaceErrorThreshold=2.0
+before [Rendering] TerrainScreenSpaceErrorThresholdFar=5.0
+before [Rendering] CascadeShadowFadeTreshold=1.0
+before [Rendering] CascadeShadowDistanceScale0=1.0
+before [Rendering] CascadeShadowDistanceScale1=1.0
+before [Rendering] CascadeShadowDistanceScale2=1.2
+before [Rendering] CascadeShadowDistanceScale3=1.2
+before [Rendering] CascadeShadowQuality=1
+before [Rendering] CascadeShadowmapSize=2048
+before [Rendering] MaxCascadeCount=4
+before [Rendering] MaxTerrainShadowAtlasCount=4
+before [Rendering] MaxCubeShadowSize=512
+before [Rendering] MaxSpotShadowSize=512
+before [Rendering] HairWorksLevel=0
+before [Rendering] HairWorksAALevel=4
+before [Rendering] HairWorksGlobalStrandSmoothness=3
+before [Rendering] HairWorkstGlobalDensityLimit=2.0
+before [Rendering] HairWorksGlobalDensityQuality=1.0
+before [Rendering] HairWorksGlobalDetailLODFactor=1.0
+before [Rendering] HairWorksGlobalWidthLimit=5.0
+before [Rendering] GrassDensity=3500.0
+before [Foliage] MaxVisibilityDepth=12
+before [Rendering/SpeedTree] FoliageDistanceScale=1.5
+before [Rendering/SpeedTree] GrassDistanceScale=2
+before [Rendering/SpeedTree] GrassRingSize=6291456
+before [Rendering/SpeedTree] FoliageShadowDistanceScale=16.0
+before [Gameplay/EntityPool] SpawnedLimit=130
+before [Rendering/RT/PathTracer] PTHairQualityMode=0
+before [Rendering] SSREnabled=true
+before [PostProcess] SSAOEnabled=3
+before [PostProcess] GTAOQuality=2
+before [Rendering/Shadows] ScreenShadows=true
+before [PostProcess] SharpenAmount=0
+before [PostProcess] AAMode=1
+before [PostProcess] FSRFramegen=0
+before [PostProcess] DLSSGMode=0
+before [PostProcess] XessFrameGeneration=false
+before [Rendering/DRS] Enable=false
+before [Rendering/RT] EnableRT=true
+before [Rendering/RT] RTGIPreset=false
+before [Rendering/RT] EnableRtRadiance=true
+before [Rendering/RT] Shadows=0
+before [Rendering/RT] RTAOEnabled=false
+before [Rendering/RT/PathTracer] PTEnable=false
+preset w3rt-shadow.txt applied 63 lines
+backup C:\BC250\tmp\w3-settings\dx12user.settings.20261008T001648Z
+after sha256 E0150F01E935684FA90157B38687C9B3CBF2C975D9D6BC9945A7F9C3C8661CFA
+after VSync=false
+after Resolution="1920x1080"
+after FullScreenMode=2
+after AAMode=1
+after DLSSGMode=0
+after XessFrameGeneration=false
+after FSRFramegen=0
+after GTAOQuality=2
+after EnableRT=true
+after RTGIPreset=false
+after Shadows=1
+after EnableRtRadiance=false
+after RTAOEnabled=false
+after TextureMemoryBudget=800
+after MaxTextureSize=2048
+after LimitFPS=240
+after DRS Enable=false

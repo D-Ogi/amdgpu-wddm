@@ -1,0 +1,6 @@
+in-trial KMD stream (game-kernel.log): 31950 lines
+lines matching (?i)tdr|reset|fault|hang|removed|timeout|0x116|preempt.*fail: 0
+
+
+mode-set lines: 0
+

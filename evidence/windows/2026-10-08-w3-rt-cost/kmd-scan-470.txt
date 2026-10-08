@@ -1,0 +1,15 @@
+in-trial KMD stream (game-kernel.log): 34817 lines
+lines matching (?i)tdr|reset|fault|hang|removed|timeout|0x116|preempt.*fail: 0
+
+
+mode-set lines: 10
+kmd 1384113  12690.059 display modes: commit 1920x1080 stretched -> 0x00000000
+kmd 1384114  12690.059 display modes: viewport 1920x1080 recout 1920x1200 at 0,0
+kmd 1384115  12690.059 display modes: ratio 0x80000/0x73333 taps 1/4 dscl 1 lb 2
+kmd 1384116  12690.059 display modes: lock 0 us, 66 coefficients, scl 0x00000000 -> 0x00000101, hubp 0x000F1002
+kmd 1384117  12690.059 display: CommitVidPn source 1920x1080 format 21 stride 7680
+kmd 1419662  13035.926 display modes: commit 1920x1200 identity -> 0x00000000, firmware surface first
+kmd 1419663  13035.926 display modes: viewport 1920x1200 recout 1920x1200 at 0,0
+kmd 1419664  13035.926 display modes: ratio 0x80000/0x80000 taps 1/1 dscl 0 lb 1
+kmd 1419665  13035.926 display modes: lock 0 us, 0 coefficients, scl 0x00001101 -> 0x00001100, hubp 0x000F1002
+kmd 1419666  13035.926 display: CommitVidPn source 1920x1200 format 21 stride 7680

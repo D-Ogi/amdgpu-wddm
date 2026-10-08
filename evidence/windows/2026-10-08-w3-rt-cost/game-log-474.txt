@@ -1,0 +1,433 @@
+2026-10-08T00:50:43.0239940Z available_mb_before 4397
+2026-10-08T00:50:43.0730237Z temperature_before 60.9 through dpm read
+2026-10-08T00:50:43.0934502Z experiment none
+2026-10-08T00:50:43.0985482Z pso_log True
+2026-10-08T00:50:43.1026526Z radv_perftest none
+2026-10-08T00:50:43.5590543Z pid 4908 session 1
+2026-10-08T00:50:43.6169088Z module 0s sl.interposer.dll 8C87C9499461DA561EDD529AA9BF7831D67D7B94EBB1C1A5ED54EF4934E1EA4C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\sl.interposer.dll
+2026-10-08T00:50:46.3624135Z module 0s libxess.dll 251659DD84A3E84DE67C886A4186E01F3ECA49B00641906FE38BB6B807E5D5B7 C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\libxess.dll
+2026-10-08T00:50:46.3815746Z module 0s dxgi.dll DDC578A287120BAC2BFCCBAECBDE5EB41E397B023853340204A3B4FAD98BDA3B C:\Windows\SYSTEM32\dxgi.dll
+2026-10-08T00:50:46.3876199Z module 0s d3d12.dll 9992F5B26F9DDE36F3EC911EF6C404CF7C89C94FD56C152815252800CF5140CC C:\Windows\SYSTEM32\d3d12.dll
+2026-10-08T00:50:46.4396428Z t=0 tctl=63.8 ws_mb=84 threads=11 responding=True
+2026-10-08T00:50:49.6425018Z module 6s d3d12core.dll 681C72042ED1691A326C2AADFF47A1957ED998F649158312C155C1B2AB71F44C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\D3D12_0\D3D12Core.dll
+2026-10-08T00:50:49.6685641Z t=6 tctl=63.5 ws_mb=1312 threads=39 responding=True
+2026-10-08T00:50:52.7325597Z t=9 tctl=63.2 ws_mb=1536 threads=39 responding=True
+2026-10-08T00:50:55.7971744Z module 12s amdgpu_wddm_d3d12.dll BBB5803E12AE918CF73F2B074074D669CF492BCD763D9EEDFA0B8BE32B0B063A C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+2026-10-08T00:50:55.8074705Z module 12s amdgpu_wddm_vkd3d.dll 348117F12F97C7DA5FA104825FCA26FE0542F4C819A335AB85E6A9099AA42E1E C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_vkd3d.dll
+2026-10-08T00:50:55.8493705Z module 12s amdgpu_wddm_radv.dll 822134D04E200FD83D5FEEAD8EDF49F6CE49A9CF55BA24FBEF9F55735AEB6648 C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_radv.dll
+2026-10-08T00:50:55.8744364Z window 12s The Witcher 3
+2026-10-08T00:51:00.5089507Z t=12 tctl=65.5 ws_mb=2609 threads=59 responding=True
+2026-10-08T00:51:00.5477742Z menu 12s: dx12user.settings written 2026-10-08T00:50:53.8663728Z
+2026-10-08T00:51:00.5498109Z menu 12s: profile.settings written 2026-10-08T00:50:53.8694429Z
+2026-10-08T00:51:01.0415376Z menu 12s: mean 0 cue none tied run 0
+2026-10-08T00:51:04.0943017Z t=20 tctl=67.9 ws_mb=2658 threads=69 responding=True
+2026-10-08T00:51:07.1570366Z t=24 tctl=67.8 ws_mb=2659 threads=69 responding=True
+2026-10-08T00:51:10.2175721Z t=27 tctl=67.4 ws_mb=2658 threads=69 responding=True
+2026-10-08T00:51:10.5785031Z screenshot 0 at 27s
+2026-10-08T00:51:10.5826042Z menu 27s: dx12user.settings written 2026-10-08T00:51:00.6708333Z
+2026-10-08T00:51:10.5836213Z menu 27s: input.settings written 2026-10-08T00:51:00.6876270Z
+2026-10-08T00:51:10.5846540Z menu 27s: profile.settings written 2026-10-08T00:51:00.6738875Z
+2026-10-08T00:51:10.7832840Z menu 27s: mean 2.1 cue none tied run 0
+2026-10-08T00:51:13.8424961Z t=30 tctl=66.6 ws_mb=2654 threads=69 responding=True
+2026-10-08T00:51:16.9224979Z t=33 tctl=66.1 ws_mb=2654 threads=68 responding=True
+2026-10-08T00:51:19.9779524Z t=36 tctl=65.8 ws_mb=2654 threads=68 responding=True
+2026-10-08T00:51:20.1851867Z menu 36s: mean 6.1 cue none tied run 0
+2026-10-08T00:51:23.2420040Z t=40 tctl=65.2 ws_mb=2656 threads=69 responding=True
+2026-10-08T00:51:26.3039255Z t=43 tctl=66 ws_mb=2656 threads=69 responding=True
+2026-10-08T00:51:29.3547707Z t=46 tctl=65.8 ws_mb=2656 threads=69 responding=True
+2026-10-08T00:51:29.5742742Z menu 46s: mean 17.2 cue none tied run 0
+2026-10-08T00:51:32.6349145Z t=49 tctl=65.5 ws_mb=2656 threads=69 responding=True
+2026-10-08T00:51:35.6959362Z t=52 tctl=65.1 ws_mb=2656 threads=69 responding=True
+2026-10-08T00:51:38.8735428Z t=55 tctl=64.9 ws_mb=2732 threads=68 responding=True
+2026-10-08T00:51:38.8776307Z menu 55s: dx12user.settings written 2026-10-08T00:51:38.5789705Z
+2026-10-08T00:51:38.8786480Z menu 55s: input.settings written 2026-10-08T00:51:38.5944097Z
+2026-10-08T00:51:38.8796687Z menu 55s: profile.settings written 2026-10-08T00:51:38.5810323Z
+2026-10-08T00:51:38.8847682Z menu 55s: settings_write_seen dx12user.settings 2026-10-08T00:51:38.5789705Z
+2026-10-08T00:51:39.1814509Z menu 55s: mean 39.3 cue 55 tied run 1
+2026-10-08T00:51:42.2449640Z t=59 tctl=64.8 ws_mb=2738 threads=68 responding=True
+2026-10-08T00:51:45.3006319Z t=62 tctl=64.5 ws_mb=2738 threads=68 responding=True
+2026-10-08T00:51:48.3567463Z t=65 tctl=64.4 ws_mb=2738 threads=68 responding=True
+2026-10-08T00:51:48.6402821Z menu 65s: mean 29.8 cue 55 tied run 2
+2026-10-08T00:51:48.7520580Z menu 65s: E attempt 1, down 1 up 1 release retries 0
+2026-10-08T00:51:51.8124077Z t=68 tctl=64.4 ws_mb=2850 threads=66 responding=True
+2026-10-08T00:51:54.8773477Z t=71 tctl=64.5 ws_mb=2901 threads=68 responding=True
+2026-10-08T00:51:55.2593756Z screenshot 1 at 71s
+2026-10-08T00:51:58.6817735Z t=75 tctl=65.6 ws_mb=3373 threads=70 responding=True
+2026-10-08T00:51:58.9247855Z menu 75s: mean 18.6 grid diff 16.02
+2026-10-08T00:51:58.9288790Z menu 75s: grid changed, transition candidate
+2026-10-08T00:51:58.9381101Z control 75s: session open
+2026-10-08T00:51:58.9559498Z walk 75s: start
+2026-10-08T00:52:02.2833924Z control 75s: cmd-001.txt tap 39 -> 1/1/0 | wait 1500 | tap 39 -> 1/1/0 | wait 1500 | tap 39 -> 1/1/0
+2026-10-08T00:52:05.7149531Z t=80 tctl=69.1 ws_mb=3263 threads=69 responding=True
+2026-10-08T00:52:06.8231373Z t=83 tctl=68.5 ws_mb=3499 threads=69 responding=True
+2026-10-08T00:52:07.0651244Z menu 83s: mean 5.6 tied True
+2026-10-08T00:52:08.1470593Z t=84 tctl=68.8 ws_mb=3491 threads=69 responding=True
+2026-10-08T00:52:09.2499402Z t=86 tctl=69.2 ws_mb=3493 threads=69 responding=True
+2026-10-08T00:52:10.3202787Z t=87 tctl=69.9 ws_mb=3478 threads=69 responding=True
+2026-10-08T00:52:11.3957033Z t=88 tctl=70.6 ws_mb=3409 threads=69 responding=True
+2026-10-08T00:52:12.5073124Z t=89 tctl=71 ws_mb=3410 threads=69 responding=True
+2026-10-08T00:52:13.6286979Z t=90 tctl=71.4 ws_mb=3409 threads=69 responding=True
+2026-10-08T00:52:14.7191138Z t=91 tctl=71.6 ws_mb=3407 threads=69 responding=True
+2026-10-08T00:52:15.8220447Z t=92 tctl=71.9 ws_mb=3406 threads=69 responding=True
+2026-10-08T00:52:16.0787371Z menu 92s: mean 42.7 tied True
+2026-10-08T00:52:17.1401595Z t=94 tctl=72.4 ws_mb=3406 threads=69 responding=True
+2026-10-08T00:52:18.2109489Z t=95 tctl=73 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:19.2979888Z t=96 tctl=73.4 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:20.4096445Z t=97 tctl=73.6 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:21.5070476Z t=98 tctl=73.8 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:22.5824411Z t=99 tctl=74 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:23.6713928Z t=100 tctl=74.1 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:24.7725753Z t=101 tctl=74.5 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:25.0420598Z menu 101s: mean 42.8 tied True
+2026-10-08T00:52:26.1336677Z t=102 tctl=75.1 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:27.2320940Z t=104 tctl=75.5 ws_mb=3382 threads=69 responding=True
+2026-10-08T00:52:28.3294487Z t=105 tctl=75.5 ws_mb=3383 threads=69 responding=True
+2026-10-08T00:52:29.4233696Z t=106 tctl=75.8 ws_mb=3383 threads=69 responding=True
+2026-10-08T00:52:30.5076864Z t=107 tctl=76 ws_mb=3370 threads=69 responding=True
+2026-10-08T00:52:34.3626878Z control 107s: cmd-002.txt look 40,0 x10 -> 10 | wait 3000 | shot shot-002.jpg 56727
+2026-10-08T00:52:35.4646207Z t=112 tctl=77.4 ws_mb=3215 threads=69 responding=True
+2026-10-08T00:52:35.7379090Z menu 112s: mean 48.6 tied True
+2026-10-08T00:52:36.8441761Z t=113 tctl=77.4 ws_mb=3215 threads=69 responding=True
+2026-10-08T00:52:37.9654606Z t=114 tctl=77.4 ws_mb=3215 threads=69 responding=True
+2026-10-08T00:52:39.1007214Z t=115 tctl=77.4 ws_mb=3215 threads=69 responding=True
+2026-10-08T00:52:40.1786206Z t=117 tctl=77.6 ws_mb=3215 threads=69 responding=True
+2026-10-08T00:52:41.2645720Z t=118 tctl=77.8 ws_mb=3216 threads=69 responding=True
+2026-10-08T00:52:42.3857368Z t=119 tctl=77.9 ws_mb=3216 threads=69 responding=True
+2026-10-08T00:52:43.4456291Z t=120 tctl=77.9 ws_mb=3216 threads=69 responding=True
+2026-10-08T00:52:44.2217624Z screenshot 2 at 120s
+2026-10-08T00:52:44.5425973Z menu 120s: mean 48.9 tied True
+2026-10-08T00:52:45.6488510Z t=122 tctl=78.5 ws_mb=3216 threads=69 responding=True
+2026-10-08T00:52:46.7664108Z t=123 tctl=78.6 ws_mb=3216 threads=69 responding=True
+2026-10-08T00:52:46.7766710Z mark measure A-ctl start
+2026-10-08T00:53:36.7870122Z mark measure A-ctl end
+2026-10-08T00:53:36.9706038Z control 123s: cmd-003.txt note measure A-ctl start | wait 50000 | note measure A-ctl end | shot shot-003.jpg 55814
+2026-10-08T00:53:38.0595183Z t=174 tctl=83.9 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:38.9576640Z screenshot 3 at 174s
+2026-10-08T00:53:39.3038734Z menu 174s: mean 48.3 tied True
+2026-10-08T00:53:40.4278695Z t=177 tctl=84.8 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:41.5564928Z t=178 tctl=85.1 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:42.6780828Z t=179 tctl=85 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:43.7842244Z t=180 tctl=84.9 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:44.9005196Z t=181 tctl=84.8 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:45.9945484Z t=182 tctl=84.5 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:47.0827453Z t=183 tctl=84.4 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:47.4291178Z menu 183s: mean 46.2 tied True
+2026-10-08T00:53:48.5289812Z t=185 tctl=84.2 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:49.6468364Z t=186 tctl=84.1 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:50.7387291Z t=187 tctl=84 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:51.8310107Z t=188 tctl=83.9 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:52.9327357Z t=189 tctl=83.8 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:54.0534257Z t=190 tctl=83.6 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:54.9240725Z screenshot 4 at 190s
+2026-10-08T00:53:55.9878776Z t=192 tctl=83.5 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:53:56.3382707Z menu 192s: mean 45.8 tied True
+2026-10-08T00:53:57.4233494Z t=194 tctl=83.6 ws_mb=3219 threads=69 responding=True
+2026-10-08T00:54:02.3522798Z control 194s: cmd-004.txt tap 01 -> 1/1/0 | wait 1600 | ocr 11 lines 431 ms
+2026-10-08T00:54:03.4247674Z t=200 tctl=83.5 ws_mb=3216 threads=69 responding=True
+2026-10-08T00:54:04.5261939Z t=201 tctl=83.5 ws_mb=3198 threads=69 responding=True
+2026-10-08T00:54:04.8372729Z menu 201s: mean 39.1 tied True
+2026-10-08T00:54:05.9431864Z t=202 tctl=83.6 ws_mb=3188 threads=69 responding=True
+2026-10-08T00:54:11.6819121Z control 202s: cmd-005.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 13 lines 257 ms
+2026-10-08T00:54:12.7719202Z t=209 tctl=84 ws_mb=3143 threads=69 responding=True
+2026-10-08T00:54:13.6068708Z screenshot 5 at 209s
+2026-10-08T00:54:13.9348864Z menu 209s: mean 39.2 tied True
+2026-10-08T00:54:15.0274896Z t=211 tctl=84.1 ws_mb=3125 threads=69 responding=True
+2026-10-08T00:54:16.1733869Z t=212 tctl=83.9 ws_mb=3120 threads=69 responding=True
+2026-10-08T00:54:22.5760778Z control 212s: cmd-006.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 11 lines 227 ms
+2026-10-08T00:54:23.6926235Z t=220 tctl=83 ws_mb=3064 threads=69 responding=True
+2026-10-08T00:54:24.0290462Z menu 220s: mean 39 tied True
+2026-10-08T00:54:25.1377619Z t=221 tctl=82.9 ws_mb=3056 threads=69 responding=True
+2026-10-08T00:54:26.2812344Z t=223 tctl=82.9 ws_mb=3048 threads=69 responding=True
+2026-10-08T00:54:27.4313824Z t=224 tctl=82.8 ws_mb=3041 threads=69 responding=True
+2026-10-08T00:54:31.3312434Z control 224s: cmd-007.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 2200 | ocr 34 lines 112 ms | shot shot-007.jpg 25171
+2026-10-08T00:54:32.3897259Z t=229 tctl=82.6 ws_mb=3000 threads=69 responding=True
+2026-10-08T00:54:32.5863987Z menu 229s: mean 8.2 tied True
+2026-10-08T00:54:33.6736070Z t=230 tctl=82.8 ws_mb=2983 threads=69 responding=True
+2026-10-08T00:54:34.7791968Z t=231 tctl=82.6 ws_mb=2974 threads=69 responding=True
+2026-10-08T00:54:35.8620831Z t=232 tctl=82.6 ws_mb=2965 threads=69 responding=True
+2026-10-08T00:54:36.9902508Z t=233 tctl=82.6 ws_mb=2956 threads=69 responding=True
+2026-10-08T00:54:38.1069311Z t=234 tctl=83 ws_mb=2948 threads=69 responding=True
+2026-10-08T00:54:39.2417853Z t=236 tctl=83.5 ws_mb=2939 threads=69 responding=True
+2026-10-08T00:54:40.3437649Z t=237 tctl=84 ws_mb=2931 threads=69 responding=True
+2026-10-08T00:54:44.9902749Z control 237s: cmd-008.txt tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 500 | tapx 4B -> 1/1/0 | wait 1500 | ocr 34 lines 129 ms | shot shot-008.jpg 24790
+2026-10-08T00:54:46.0457550Z t=242 tctl=83.9 ws_mb=2879 threads=69 responding=True
+2026-10-08T00:54:46.0508850Z menu 242s: dx12user.settings written 2026-10-08T00:54:42.6376571Z
+2026-10-08T00:54:46.0519005Z menu 242s: input.settings written 2026-10-08T00:54:42.6571368Z
+2026-10-08T00:54:46.0519005Z menu 242s: profile.settings written 2026-10-08T00:54:42.6417502Z
+2026-10-08T00:54:46.2593886Z menu 242s: mean 8.1 tied True
+2026-10-08T00:54:47.3824588Z t=244 tctl=83.8 ws_mb=2871 threads=69 responding=True
+2026-10-08T00:54:48.4607761Z t=245 tctl=83.6 ws_mb=2862 threads=69 responding=True
+2026-10-08T00:54:49.6006958Z t=246 tctl=83.5 ws_mb=2845 threads=69 responding=True
+2026-10-08T00:54:50.6681769Z t=247 tctl=83.5 ws_mb=2837 threads=69 responding=True
+2026-10-08T00:54:51.7450492Z t=248 tctl=83.4 ws_mb=2828 threads=69 responding=True
+2026-10-08T00:54:52.8248975Z t=249 tctl=83.4 ws_mb=2821 threads=69 responding=True
+2026-10-08T00:55:03.2213896Z control 249s: cmd-009.txt tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1300 | tap 01 -> 1/1/0 | wait 3000 | ocr 10 lines 181 ms | shot shot-009.jpg 55450
+2026-10-08T00:55:04.3449812Z t=261 tctl=83 ws_mb=2748 threads=69 responding=True
+2026-10-08T00:55:04.3527147Z menu 261s: dx12user.settings written 2026-10-08T00:54:53.0013432Z
+2026-10-08T00:55:04.3532202Z menu 261s: input.settings written 2026-10-08T00:54:53.0158134Z
+2026-10-08T00:55:04.3542334Z menu 261s: profile.settings written 2026-10-08T00:54:53.0033937Z
+2026-10-08T00:55:04.7081086Z menu 261s: mean 48.7 tied True
+2026-10-08T00:55:05.8459498Z t=262 tctl=82.9 ws_mb=2732 threads=69 responding=True
+2026-10-08T00:55:06.9408123Z t=263 tctl=82.8 ws_mb=2724 threads=69 responding=True
+2026-10-08T00:55:08.0803273Z t=264 tctl=82.8 ws_mb=2716 threads=69 responding=True
+2026-10-08T00:55:16.0974916Z mark measure noAO start
+2026-10-08T00:56:06.1090042Z mark measure noAO end
+2026-10-08T00:56:06.3009206Z control 264s: cmd-010.txt wait 8000 | note measure noAO start | wait 50000 | note measure noAO end | shot shot-010.jpg 54927
+2026-10-08T00:56:07.4192410Z t=324 tctl=82.9 ws_mb=2426 threads=69 responding=True
+2026-10-08T00:56:07.7586004Z menu 324s: mean 48.3 tied True
+2026-10-08T00:56:08.8608517Z t=325 tctl=83.1 ws_mb=2414 threads=69 responding=True
+2026-10-08T00:56:09.9386419Z t=326 tctl=83.1 ws_mb=2407 threads=69 responding=True
+2026-10-08T00:56:11.0884017Z t=327 tctl=83 ws_mb=2404 threads=69 responding=True
+2026-10-08T00:56:12.1632312Z t=329 tctl=82.9 ws_mb=2404 threads=69 responding=True
+2026-10-08T00:56:13.2563810Z t=330 tctl=82.8 ws_mb=2404 threads=69 responding=True
+2026-10-08T00:56:14.3315891Z t=331 tctl=82.6 ws_mb=2404 threads=69 responding=True
+2026-10-08T00:56:15.4752200Z t=332 tctl=82.6 ws_mb=2404 threads=69 responding=True
+2026-10-08T00:56:15.8256698Z menu 332s: mean 46.7 tied True
+2026-10-08T00:56:16.9454270Z t=333 tctl=83.2 ws_mb=2404 threads=69 responding=True
+2026-10-08T00:56:21.5855694Z control 333s: cmd-011.txt tap 01 -> 1/1/0 | wait 1600 | ocr 11 lines 178 ms
+2026-10-08T00:56:22.6381009Z t=339 tctl=84.1 ws_mb=2393 threads=69 responding=True
+2026-10-08T00:56:23.7463220Z t=340 tctl=84.4 ws_mb=2393 threads=69 responding=True
+2026-10-08T00:56:24.0664926Z menu 340s: mean 39.7 tied True
+2026-10-08T00:56:25.1544666Z t=342 tctl=84.6 ws_mb=2393 threads=69 responding=True
+2026-10-08T00:56:26.2435877Z t=343 tctl=84.5 ws_mb=2393 threads=69 responding=True
+2026-10-08T00:56:32.0652033Z control 343s: cmd-012.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 12 lines 238 ms
+2026-10-08T00:56:33.1279897Z t=349 tctl=84.4 ws_mb=2386 threads=69 responding=True
+2026-10-08T00:56:33.4500509Z menu 349s: mean 39.7 tied True
+2026-10-08T00:56:34.5789778Z t=351 tctl=84.2 ws_mb=2386 threads=69 responding=True
+2026-10-08T00:56:35.7009346Z t=352 tctl=84.1 ws_mb=2386 threads=69 responding=True
+2026-10-08T00:56:36.8125566Z t=353 tctl=84 ws_mb=2386 threads=69 responding=True
+2026-10-08T00:56:43.1649727Z control 353s: cmd-013.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 9 lines 206 ms
+2026-10-08T00:56:44.2956188Z t=361 tctl=83.2 ws_mb=2386 threads=69 responding=True
+2026-10-08T00:56:44.6479529Z menu 361s: mean 39.6 tied True
+2026-10-08T00:56:45.7590727Z t=362 tctl=83.4 ws_mb=2379 threads=69 responding=True
+2026-10-08T00:56:46.8656829Z t=363 tctl=83.4 ws_mb=2379 threads=69 responding=True
+2026-10-08T00:56:50.8132419Z control 363s: cmd-014.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 2200 | ocr 34 lines 93 ms | shot shot-014.jpg 24691
+2026-10-08T00:56:51.9053651Z t=368 tctl=82.9 ws_mb=2354 threads=69 responding=True
+2026-10-08T00:56:53.0103449Z t=369 tctl=82.8 ws_mb=2354 threads=69 responding=True
+2026-10-08T00:56:53.2155142Z menu 369s: mean 8.2 tied True
+2026-10-08T00:56:54.3026725Z t=371 tctl=83.2 ws_mb=2354 threads=69 responding=True
+2026-10-08T00:56:55.4403918Z t=372 tctl=83.5 ws_mb=2354 threads=69 responding=True
+2026-10-08T00:56:56.5395969Z t=373 tctl=83.4 ws_mb=2345 threads=69 responding=True
+2026-10-08T00:57:00.4794487Z control 373s: cmd-015.txt tapx 48 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 500 | tapx 4B -> 1/1/0 | wait 2000 | ocr 32 lines 109 ms | shot shot-015.jpg 22245
+2026-10-08T00:57:01.5584460Z t=378 tctl=84.1 ws_mb=2311 threads=69 responding=True
+2026-10-08T00:57:01.5636189Z menu 378s: dx12user.settings written 2026-10-08T00:56:57.6438195Z
+2026-10-08T00:57:01.5641234Z menu 378s: input.settings written 2026-10-08T00:56:57.6612176Z
+2026-10-08T00:57:01.5651297Z menu 378s: profile.settings written 2026-10-08T00:56:57.6469080Z
+2026-10-08T00:57:01.7813839Z menu 378s: mean 6.5 tied True
+2026-10-08T00:57:02.8775655Z t=379 tctl=84.1 ws_mb=2311 threads=69 responding=True
+2026-10-08T00:57:03.9507534Z t=380 tctl=83.9 ws_mb=2311 threads=69 responding=True
+2026-10-08T00:57:05.0324515Z t=381 tctl=83.8 ws_mb=2309 threads=69 responding=True
+2026-10-08T00:57:06.1144977Z t=382 tctl=83.6 ws_mb=2309 threads=69 responding=True
+2026-10-08T00:57:07.1955105Z t=384 tctl=83.5 ws_mb=2309 threads=69 responding=True
+2026-10-08T00:57:17.1451149Z control 384s: cmd-016.txt tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1300 | tap 01 -> 1/1/0 | wait 3000 | ocr 9 lines 187 ms | shot shot-016.jpg 47085
+2026-10-08T00:57:18.2081668Z t=395 tctl=82.9 ws_mb=2307 threads=68 responding=True
+2026-10-08T00:57:18.2123214Z menu 395s: dx12user.settings written 2026-10-08T00:57:07.3233772Z
+2026-10-08T00:57:18.2123214Z menu 395s: input.settings written 2026-10-08T00:57:07.3387271Z
+2026-10-08T00:57:18.2143570Z menu 395s: profile.settings written 2026-10-08T00:57:07.3254223Z
+2026-10-08T00:57:18.5325537Z menu 395s: mean 39.6 tied True
+2026-10-08T00:57:19.6234080Z t=396 tctl=82.8 ws_mb=2303 threads=68 responding=True
+2026-10-08T00:57:20.7380499Z t=397 tctl=82.8 ws_mb=2303 threads=68 responding=True
+2026-10-08T00:57:21.8299893Z t=398 tctl=82.8 ws_mb=2303 threads=68 responding=True
+2026-10-08T00:57:29.8561025Z mark measure rt-off start
+2026-10-08T00:58:19.8658310Z mark measure rt-off end
+2026-10-08T00:58:20.0384051Z control 398s: cmd-017.txt wait 8000 | note measure rt-off start | wait 50000 | note measure rt-off end | shot shot-017.jpg 47771
+2026-10-08T00:58:21.1018786Z t=457 tctl=82.1 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:21.4252012Z menu 457s: mean 41.1 tied True
+2026-10-08T00:58:22.5016330Z t=459 tctl=82.1 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:23.5686244Z t=460 tctl=82.5 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:24.6534432Z t=461 tctl=83.1 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:25.7404727Z t=462 tctl=83.1 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:26.8260176Z t=463 tctl=83 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:27.9118680Z t=464 tctl=83.1 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:28.9758935Z t=465 tctl=83 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:30.0651935Z t=466 tctl=83 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:30.3876866Z menu 466s: mean 40.5 tied True
+2026-10-08T00:58:31.4708152Z t=468 tctl=83.8 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:32.5582208Z t=469 tctl=85.1 ws_mb=2146 threads=68 responding=True
+2026-10-08T00:58:36.8548362Z control 469s: cmd-018.txt tap 01 -> 1/1/0 | wait 1600 | ocr 11 lines 193 ms
+2026-10-08T00:58:37.9348876Z t=474 tctl=84.8 ws_mb=2135 threads=68 responding=True
+2026-10-08T00:58:39.0169536Z t=475 tctl=84.6 ws_mb=2135 threads=68 responding=True
+2026-10-08T00:58:39.3297832Z menu 475s: mean 34 tied True
+2026-10-08T00:58:40.4119251Z t=477 tctl=84.6 ws_mb=2135 threads=68 responding=True
+2026-10-08T00:58:45.7926735Z control 477s: cmd-019.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 14 lines 165 ms
+2026-10-08T00:58:46.8615609Z t=483 tctl=83.6 ws_mb=2135 threads=68 responding=True
+2026-10-08T00:58:47.9435777Z t=484 tctl=83.5 ws_mb=2135 threads=68 responding=True
+2026-10-08T00:58:48.2521486Z menu 484s: mean 34.1 tied True
+2026-10-08T00:58:49.3420648Z t=486 tctl=83.5 ws_mb=2135 threads=68 responding=True
+2026-10-08T00:58:55.2249653Z control 486s: cmd-020.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 11 lines 166 ms
+2026-10-08T00:58:56.3011315Z t=493 tctl=82.8 ws_mb=2127 threads=68 responding=True
+2026-10-08T00:58:56.6129577Z menu 493s: mean 33.9 tied True
+2026-10-08T00:58:57.6817635Z t=494 tctl=82.6 ws_mb=2125 threads=68 responding=True
+2026-10-08T00:58:58.7681882Z t=495 tctl=82.5 ws_mb=2122 threads=68 responding=True
+2026-10-08T00:58:59.8312004Z t=496 tctl=82.5 ws_mb=2121 threads=68 responding=True
+2026-10-08T00:59:03.7078753Z control 496s: cmd-021.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 2200 | ocr 32 lines 118 ms | shot shot-021.jpg 22598
+2026-10-08T00:59:04.7672519Z t=501 tctl=83.2 ws_mb=2098 threads=68 responding=True
+2026-10-08T00:59:04.9603582Z menu 501s: mean 6.7 tied True
+2026-10-08T00:59:06.0411502Z t=502 tctl=83.2 ws_mb=2097 threads=68 responding=True
+2026-10-08T00:59:07.1103982Z t=503 tctl=83.5 ws_mb=2094 threads=68 responding=True
+2026-10-08T00:59:08.2030528Z t=505 tctl=83.5 ws_mb=2089 threads=68 responding=True
+2026-10-08T00:59:12.6796618Z control 505s: cmd-022.txt tapx 48 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 500 | tapx 4D -> 1/1/0 | wait 2500 | ocr 34 lines 89 ms | shot shot-022.jpg 24968
+2026-10-08T00:59:13.8073394Z t=510 tctl=83.5 ws_mb=2104 threads=68 responding=True
+2026-10-08T00:59:13.8125157Z menu 510s: dx12user.settings written 2026-10-08T00:59:09.2491643Z
+2026-10-08T00:59:13.8139730Z menu 510s: input.settings written 2026-10-08T00:59:09.2657385Z
+2026-10-08T00:59:13.8139730Z menu 510s: profile.settings written 2026-10-08T00:59:09.2522476Z
+2026-10-08T00:59:14.0057445Z menu 510s: mean 8.3 tied True
+2026-10-08T00:59:15.1390817Z t=511 tctl=83.4 ws_mb=2104 threads=68 responding=True
+2026-10-08T00:59:16.2110671Z t=513 tctl=83.2 ws_mb=2104 threads=68 responding=True
+2026-10-08T00:59:17.3710977Z t=514 tctl=83.1 ws_mb=2104 threads=68 responding=True
+2026-10-08T00:59:18.4987721Z t=515 tctl=83 ws_mb=2104 threads=68 responding=True
+2026-10-08T00:59:19.6449085Z t=516 tctl=83 ws_mb=2104 threads=68 responding=True
+2026-10-08T00:59:26.5018048Z control 516s: cmd-023.txt tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 500 | tapx 4D -> 1/1/0 | wait 1500 | tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 500 | tapx 4D -> 1/1/0 | wait 2000 | ocr 34 lines 101 ms | shot shot-023.jpg 24593
+2026-10-08T00:59:27.5683310Z t=524 tctl=82.5 ws_mb=2101 threads=68 responding=True
+2026-10-08T00:59:27.5723982Z menu 524s: dx12user.settings written 2026-10-08T00:59:20.7120369Z
+2026-10-08T00:59:27.5734100Z menu 524s: input.settings written 2026-10-08T00:59:20.7295301Z
+2026-10-08T00:59:27.5734100Z menu 524s: profile.settings written 2026-10-08T00:59:20.7151135Z
+2026-10-08T00:59:27.7694817Z menu 524s: mean 7.2 tied True
+2026-10-08T00:59:28.8973330Z t=525 tctl=82.4 ws_mb=2099 threads=68 responding=True
+2026-10-08T00:59:30.0341407Z t=526 tctl=82.5 ws_mb=2097 threads=68 responding=True
+2026-10-08T00:59:31.1881164Z t=527 tctl=82.6 ws_mb=2095 threads=68 responding=True
+2026-10-08T00:59:32.3237073Z t=529 tctl=82.8 ws_mb=2095 threads=68 responding=True
+2026-10-08T00:59:33.4409196Z t=530 tctl=82.9 ws_mb=2098 threads=68 responding=True
+2026-10-08T00:59:34.5666516Z t=531 tctl=83.6 ws_mb=2098 threads=68 responding=True
+2026-10-08T00:59:35.7023902Z t=532 tctl=83.6 ws_mb=2099 threads=68 responding=True
+2026-10-08T00:59:35.8896092Z menu 532s: mean 7 tied True
+2026-10-08T00:59:37.0243439Z t=533 tctl=83.8 ws_mb=2098 threads=68 responding=True
+2026-10-08T00:59:39.8165000Z control 533s: cmd-024.txt tapx 4D -> 1/1/0 | wait 2000 | ocr 34 lines 101 ms | shot shot-024.jpg 24173
+2026-10-08T00:59:40.9542014Z t=537 tctl=84.1 ws_mb=2085 threads=68 responding=True
+2026-10-08T00:59:42.0901089Z t=538 tctl=84.1 ws_mb=2081 threads=68 responding=True
+2026-10-08T00:59:43.2318919Z t=540 tctl=84 ws_mb=2078 threads=68 responding=True
+2026-10-08T00:59:44.3743292Z t=541 tctl=84 ws_mb=2073 threads=68 responding=True
+2026-10-08T00:59:44.3778989Z menu 541s: dx12user.settings written 2026-10-08T00:59:37.1136396Z
+2026-10-08T00:59:44.3778989Z menu 541s: input.settings written 2026-10-08T00:59:37.1311584Z
+2026-10-08T00:59:44.3789049Z menu 541s: profile.settings written 2026-10-08T00:59:37.1167227Z
+2026-10-08T00:59:44.5642163Z menu 541s: mean 7 tied True
+2026-10-08T00:59:45.6878164Z t=542 tctl=84.1 ws_mb=2066 threads=68 responding=True
+2026-10-08T00:59:46.8261358Z t=543 tctl=84.2 ws_mb=2064 threads=68 responding=True
+2026-10-08T00:59:47.9491253Z t=544 tctl=84.4 ws_mb=2062 threads=68 responding=True
+2026-10-08T00:59:58.2041174Z control 544s: cmd-025.txt tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1300 | tap 01 -> 1/1/0 | wait 3000 | ocr 8 lines 187 ms | shot shot-025.jpg 55368
+2026-10-08T00:59:59.3053598Z t=556 tctl=84.1 ws_mb=2042 threads=68 responding=True
+2026-10-08T00:59:59.3105463Z menu 556s: dx12user.settings written 2026-10-08T00:59:48.1439401Z
+2026-10-08T00:59:59.3110695Z menu 556s: input.settings written 2026-10-08T00:59:48.1603047Z
+2026-10-08T00:59:59.3116060Z menu 556s: profile.settings written 2026-10-08T00:59:48.1470256Z
+2026-10-08T00:59:59.6641533Z menu 556s: mean 48.2 tied True
+2026-10-08T01:00:00.8258243Z t=557 tctl=84.5 ws_mb=2038 threads=68 responding=True
+2026-10-08T01:00:01.9779954Z t=558 tctl=84.8 ws_mb=2032 threads=68 responding=True
+2026-10-08T01:00:10.0014050Z mark measure gi-q start
+2026-10-08T01:01:00.0117176Z mark measure gi-q end
+2026-10-08T01:01:00.2137243Z control 558s: cmd-026.txt wait 8000 | note measure gi-q start | wait 50000 | note measure gi-q end | shot shot-026.jpg 55221
+2026-10-08T01:01:01.3213930Z t=618 tctl=82.9 ws_mb=1786 threads=69 responding=True
+2026-10-08T01:01:02.4011350Z t=619 tctl=83.1 ws_mb=1781 threads=69 responding=True
+2026-10-08T01:01:03.4876983Z t=620 tctl=83.5 ws_mb=1776 threads=69 responding=True
+2026-10-08T01:01:04.5790810Z t=621 tctl=83.8 ws_mb=1770 threads=69 responding=True
+2026-10-08T01:01:05.6640674Z t=622 tctl=84.4 ws_mb=1767 threads=69 responding=True
+2026-10-08T01:01:06.7397887Z t=623 tctl=84.6 ws_mb=1763 threads=69 responding=True
+2026-10-08T01:01:07.8788006Z t=624 tctl=84.6 ws_mb=1757 threads=69 responding=True
+2026-10-08T01:01:08.9676987Z t=625 tctl=84.5 ws_mb=1754 threads=69 responding=True
+2026-10-08T01:01:10.0965663Z t=626 tctl=84.4 ws_mb=1749 threads=69 responding=True
+2026-10-08T01:01:11.2879950Z t=628 tctl=84.1 ws_mb=1744 threads=69 responding=True
+2026-10-08T01:01:12.3808791Z t=629 tctl=84 ws_mb=1739 threads=69 responding=True
+2026-10-08T01:01:13.4559046Z t=630 tctl=83.8 ws_mb=1738 threads=69 responding=True
+2026-10-08T01:01:14.5460114Z t=631 tctl=83.8 ws_mb=1731 threads=69 responding=True
+2026-10-08T01:01:15.6336001Z t=632 tctl=83.6 ws_mb=1725 threads=69 responding=True
+2026-10-08T01:01:16.7237090Z t=633 tctl=83.5 ws_mb=1720 threads=69 responding=True
+2026-10-08T01:01:17.8279602Z t=634 tctl=83.4 ws_mb=1715 threads=69 responding=True
+2026-10-08T01:01:18.9270969Z t=635 tctl=83.1 ws_mb=1710 threads=69 responding=True
+2026-10-08T01:01:20.0216459Z t=636 tctl=83 ws_mb=1709 threads=69 responding=True
+2026-10-08T01:01:21.2007997Z t=637 tctl=82.9 ws_mb=1704 threads=69 responding=True
+2026-10-08T01:01:22.2937999Z t=639 tctl=83 ws_mb=1701 threads=69 responding=True
+2026-10-08T01:01:23.3781284Z t=640 tctl=83 ws_mb=1698 threads=69 responding=True
+2026-10-08T01:01:28.2987230Z control 640s: cmd-027.txt tap 01 -> 1/1/0 | wait 1600 | ocr 9 lines 190 ms
+2026-10-08T01:01:29.4446071Z t=646 tctl=82.6 ws_mb=1675 threads=69 responding=True
+2026-10-08T01:01:30.5654707Z t=647 tctl=82.5 ws_mb=1667 threads=69 responding=True
+2026-10-08T01:01:31.6971207Z t=648 tctl=82.5 ws_mb=1666 threads=69 responding=True
+2026-10-08T01:01:32.7769215Z t=649 tctl=82.4 ws_mb=1665 threads=69 responding=True
+2026-10-08T01:01:33.9277384Z t=650 tctl=82.4 ws_mb=1663 threads=69 responding=True
+2026-10-08T01:01:35.0553024Z t=651 tctl=82.4 ws_mb=1660 threads=69 responding=True
+2026-10-08T01:01:36.1811294Z t=652 tctl=83.2 ws_mb=1657 threads=69 responding=True
+2026-10-08T01:01:37.2646931Z t=654 tctl=84.1 ws_mb=1654 threads=69 responding=True
+2026-10-08T01:01:41.9591567Z control 654s: cmd-028.txt tap 01 -> 1/1/0 | wait 1600 | ocr 10 lines 219 ms
+2026-10-08T01:01:43.0297911Z t=659 tctl=84.1 ws_mb=1650 threads=69 responding=True
+2026-10-08T01:01:44.1139358Z t=660 tctl=84 ws_mb=1649 threads=69 responding=True
+2026-10-08T01:01:45.2068546Z t=662 tctl=84.1 ws_mb=1649 threads=69 responding=True
+2026-10-08T01:01:46.3004415Z t=663 tctl=83.9 ws_mb=1647 threads=69 responding=True
+2026-10-08T01:01:49.7161232Z control 663s: cmd-029.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 49 lines 157 ms
+2026-10-08T01:01:50.8258409Z t=667 tctl=83.5 ws_mb=1647 threads=69 responding=True
+2026-10-08T01:01:51.9208387Z t=668 tctl=83.4 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:53.0130150Z t=669 tctl=83.2 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:54.1099812Z t=670 tctl=83 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:55.2051951Z t=672 tctl=82.9 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:56.3724822Z t=673 tctl=82.8 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:57.4563795Z t=674 tctl=82.6 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:58.5313423Z t=675 tctl=82.8 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:01:59.6923941Z t=676 tctl=82.6 ws_mb=1645 threads=69 responding=True
+2026-10-08T01:02:04.4800040Z control 676s: cmd-030.txt tap 01 -> 1/1/0 | wait 1500 | ocr 11 lines 171 ms | shot shot-030.jpg 51676
+2026-10-08T01:02:05.5870714Z t=682 tctl=83.2 ws_mb=1622 threads=69 responding=True
+2026-10-08T01:02:06.7310685Z t=683 tctl=83.8 ws_mb=1619 threads=69 responding=True
+2026-10-08T01:02:07.8871967Z t=684 tctl=84 ws_mb=1614 threads=69 responding=True
+2026-10-08T01:02:08.9662913Z t=685 tctl=84 ws_mb=1610 threads=69 responding=True
+2026-10-08T01:02:10.0665628Z t=686 tctl=83.9 ws_mb=1606 threads=69 responding=True
+2026-10-08T01:02:11.1726000Z t=688 tctl=83.8 ws_mb=1603 threads=69 responding=True
+2026-10-08T01:02:12.2749863Z t=689 tctl=83.6 ws_mb=1598 threads=69 responding=True
+2026-10-08T01:02:13.3915369Z t=690 tctl=83.6 ws_mb=1596 threads=69 responding=True
+2026-10-08T01:02:14.5159705Z t=691 tctl=83.5 ws_mb=1592 threads=69 responding=True
+2026-10-08T01:02:15.6273894Z t=692 tctl=83.5 ws_mb=1590 threads=69 responding=True
+2026-10-08T01:02:16.7279844Z t=693 tctl=83.4 ws_mb=1585 threads=69 responding=True
+2026-10-08T01:02:22.0981587Z control 693s: cmd-031.txt tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 14 lines 254 ms | shot shot-031.jpg 52501
+2026-10-08T01:02:23.1570962Z t=700 tctl=84 ws_mb=1578 threads=69 responding=True
+2026-10-08T01:02:24.3311203Z t=701 tctl=83.9 ws_mb=1578 threads=69 responding=True
+2026-10-08T01:02:25.4142922Z t=702 tctl=83.9 ws_mb=1578 threads=69 responding=True
+2026-10-08T01:02:26.4928706Z t=703 tctl=83.8 ws_mb=1578 threads=69 responding=True
+2026-10-08T01:02:30.5991992Z control 703s: cmd-032.txt tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 200 | tapx 50 -> 1/1/0 | wait 400 | tap 12 -> 1/1/0 | wait 1600 | ocr 28 lines 92 ms | shot shot-032.jpg 23564
+2026-10-08T01:02:31.7013296Z t=708 tctl=83.1 ws_mb=1568 threads=69 responding=True
+2026-10-08T01:02:32.7853032Z t=709 tctl=83 ws_mb=1565 threads=69 responding=True
+2026-10-08T01:02:33.8683856Z t=710 tctl=82.9 ws_mb=1561 threads=69 responding=True
+2026-10-08T01:02:34.9613218Z t=711 tctl=82.9 ws_mb=1556 threads=69 responding=True
+2026-10-08T01:02:36.0545382Z t=712 tctl=82.8 ws_mb=1554 threads=69 responding=True
+2026-10-08T01:02:37.1426172Z t=713 tctl=82.8 ws_mb=1551 threads=69 responding=True
+2026-10-08T01:02:38.3279088Z t=715 tctl=83.4 ws_mb=1546 threads=69 responding=True
+2026-10-08T01:02:39.4112961Z t=716 tctl=83.2 ws_mb=1541 threads=69 responding=True
+2026-10-08T01:02:44.2948687Z control 716s: cmd-033.txt tap 01 -> 1/1/0 | wait 1500 | ocr 13 lines 243 ms | shot shot-033.jpg 52700
+2026-10-08T01:02:45.3760306Z t=722 tctl=82.9 ws_mb=1515 threads=69 responding=True
+2026-10-08T01:02:46.4501130Z t=723 tctl=82.8 ws_mb=1513 threads=69 responding=True
+2026-10-08T01:02:47.5337614Z t=724 tctl=82.6 ws_mb=1508 threads=69 responding=True
+2026-10-08T01:02:48.6086224Z t=725 tctl=82.5 ws_mb=1504 threads=69 responding=True
+2026-10-08T01:02:49.7624773Z t=726 tctl=82.4 ws_mb=1501 threads=69 responding=True
+2026-10-08T01:02:50.8819084Z t=727 tctl=82.4 ws_mb=1496 threads=69 responding=True
+2026-10-08T01:02:51.9871800Z t=728 tctl=82.2 ws_mb=1492 threads=69 responding=True
+2026-10-08T01:02:53.0804889Z t=729 tctl=82.2 ws_mb=1490 threads=69 responding=True
+2026-10-08T01:02:54.2201156Z t=731 tctl=82.8 ws_mb=1485 threads=69 responding=True
+2026-10-08T01:02:59.6788187Z control 731s: cmd-034.txt tapx 50 -> 1/1/0 | wait 500 | tap 12 -> 1/1/0 | wait 1600 | ocr 11 lines 224 ms | shot shot-034.jpg 51647
+2026-10-08T01:03:00.7766708Z t=737 tctl=83.8 ws_mb=1462 threads=69 responding=True
+2026-10-08T01:03:01.9185158Z t=738 tctl=83.8 ws_mb=1457 threads=69 responding=True
+2026-10-08T01:03:03.0722139Z t=739 tctl=83.8 ws_mb=1453 threads=69 responding=True
+2026-10-08T01:03:04.2247103Z t=741 tctl=83.8 ws_mb=1449 threads=69 responding=True
+2026-10-08T01:03:08.2762688Z control 741s: cmd-035.txt tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 500 | tap 12 -> 1/1/0 | wait 2200 | ocr 34 lines 93 ms | shot shot-035.jpg 24649
+2026-10-08T01:03:09.3548822Z t=746 tctl=85 ws_mb=1429 threads=69 responding=True
+2026-10-08T01:03:10.4576665Z t=747 tctl=84.9 ws_mb=1425 threads=69 responding=True
+2026-10-08T01:03:11.6015830Z t=748 tctl=84.8 ws_mb=1416 threads=69 responding=True
+2026-10-08T01:03:12.7779133Z t=749 tctl=84.5 ws_mb=1412 threads=69 responding=True
+2026-10-08T01:03:13.8606140Z t=750 tctl=84.5 ws_mb=1408 threads=69 responding=True
+2026-10-08T01:03:15.0453985Z t=751 tctl=84.4 ws_mb=1404 threads=69 responding=True
+2026-10-08T01:03:16.1384909Z t=752 tctl=84.1 ws_mb=1402 threads=69 responding=True
+2026-10-08T01:03:20.9170812Z control 752s: cmd-036.txt tapx 48 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 400 | tapx 50 -> 1/1/0 | wait 300 | tapx 50 -> 1/1/0 | wait 600 | tapx 4B -> 1/1/0 | wait 2000 | ocr 34 lines 101 ms | shot shot-036.jpg 24546
+2026-10-08T01:03:21.9923552Z t=758 tctl=83.8 ws_mb=1381 threads=69 responding=True
+2026-10-08T01:03:23.1390485Z t=759 tctl=83.6 ws_mb=1379 threads=69 responding=True
+2026-10-08T01:03:24.2542810Z t=761 tctl=83.4 ws_mb=1375 threads=69 responding=True
+2026-10-08T01:03:25.4022285Z t=762 tctl=83.2 ws_mb=1375 threads=69 responding=True
+2026-10-08T01:03:26.5595558Z t=763 tctl=83.2 ws_mb=1367 threads=69 responding=True
+2026-10-08T01:03:27.7147539Z t=764 tctl=83.1 ws_mb=1363 threads=69 responding=True
+2026-10-08T01:03:28.8483365Z t=765 tctl=83.1 ws_mb=1359 threads=69 responding=True
+2026-10-08T01:03:29.9851121Z t=766 tctl=83.1 ws_mb=1355 threads=69 responding=True
+2026-10-08T01:03:40.3456930Z control 766s: cmd-037.txt tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1100 | tap 01 -> 1/1/0 | wait 1300 | tap 01 -> 1/1/0 | wait 3000 | ocr 9 lines 187 ms | shot shot-037.jpg 54262
+2026-10-08T01:03:41.4825932Z t=778 tctl=83.1 ws_mb=1350 threads=70 responding=True
+2026-10-08T01:03:42.5748459Z t=779 tctl=83 ws_mb=1348 threads=70 responding=True
+2026-10-08T01:03:43.6559378Z t=780 tctl=83 ws_mb=1347 threads=70 responding=True
+2026-10-08T01:03:44.8003236Z t=781 tctl=82.9 ws_mb=1345 threads=70 responding=True
+2026-10-08T01:03:45.9473744Z t=782 tctl=82.9 ws_mb=1343 threads=70 responding=True
+2026-10-08T01:03:47.1155025Z t=783 tctl=82.8 ws_mb=1341 threads=70 responding=True
+2026-10-08T01:03:48.2003683Z t=785 tctl=82.8 ws_mb=1340 threads=70 responding=True
+2026-10-08T01:03:48.2239051Z control 785s: cmd-038.txt quit
+2026-10-08T01:03:48.2310582Z ending pid 4908
+2026-10-08T01:03:51.2032117Z settings dx12user.settings restored
+2026-10-08T01:03:51.3739480Z temperature_after 82.4
+2026-10-08T01:03:51.4181555Z wrapper end

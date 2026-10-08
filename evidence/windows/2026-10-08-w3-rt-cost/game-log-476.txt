@@ -1,0 +1,276 @@
+2026-10-08T01:24:53.0770369Z available_mb_before 4620
+2026-10-08T01:24:53.1238170Z temperature_before 61.8 through dpm read
+2026-10-08T01:24:53.1447048Z experiment none
+2026-10-08T01:24:53.1488762Z pso_log True
+2026-10-08T01:24:53.1540899Z radv_perftest cswave32
+2026-10-08T01:24:53.5949140Z pid 5280 session 1
+2026-10-08T01:24:53.6408324Z module 0s sl.interposer.dll 8C87C9499461DA561EDD529AA9BF7831D67D7B94EBB1C1A5ED54EF4934E1EA4C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\sl.interposer.dll
+2026-10-08T01:24:56.5611674Z module 0s libxess.dll 251659DD84A3E84DE67C886A4186E01F3ECA49B00641906FE38BB6B807E5D5B7 C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\libxess.dll
+2026-10-08T01:24:56.5813293Z module 0s dxgi.dll DDC578A287120BAC2BFCCBAECBDE5EB41E397B023853340204A3B4FAD98BDA3B C:\Windows\SYSTEM32\dxgi.dll
+2026-10-08T01:24:56.5863552Z module 0s d3d12.dll 9992F5B26F9DDE36F3EC911EF6C404CF7C89C94FD56C152815252800CF5140CC C:\Windows\SYSTEM32\d3d12.dll
+2026-10-08T01:24:56.6408416Z t=0 tctl=63.8 ws_mb=76 threads=11 responding=True
+2026-10-08T01:24:59.9157727Z module 6s d3d12core.dll 681C72042ED1691A326C2AADFF47A1957ED998F649158312C155C1B2AB71F44C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\D3D12_0\D3D12Core.dll
+2026-10-08T01:24:59.9373119Z t=6 tctl=63.9 ws_mb=1138 threads=35 responding=True
+2026-10-08T01:25:02.9990539Z t=9 tctl=64.1 ws_mb=1527 threads=39 responding=True
+2026-10-08T01:25:06.0460036Z module 12s amdgpu_wddm_d3d12.dll BBB5803E12AE918CF73F2B074074D669CF492BCD763D9EEDFA0B8BE32B0B063A C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+2026-10-08T01:25:06.0546592Z module 12s amdgpu_wddm_vkd3d.dll 348117F12F97C7DA5FA104825FCA26FE0542F4C819A335AB85E6A9099AA42E1E C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_vkd3d.dll
+2026-10-08T01:25:06.1085856Z module 12s amdgpu_wddm_radv.dll 822134D04E200FD83D5FEEAD8EDF49F6CE49A9CF55BA24FBEF9F55735AEB6648 C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_radv.dll
+2026-10-08T01:25:06.1300787Z window 12s The Witcher 3
+2026-10-08T01:25:10.9952664Z t=12 tctl=65.6 ws_mb=2648 threads=50 responding=True
+2026-10-08T01:25:11.0437590Z menu 12s: dx12user.settings written 2026-10-08T01:25:03.9074959Z
+2026-10-08T01:25:11.0437590Z menu 12s: profile.settings written 2026-10-08T01:25:03.9105594Z
+2026-10-08T01:25:11.3102002Z menu 12s: mean 16 cue none tied run 0
+2026-10-08T01:25:14.3820716Z t=21 tctl=68 ws_mb=2774 threads=69 responding=True
+2026-10-08T01:25:17.4436234Z t=24 tctl=67.8 ws_mb=2705 threads=69 responding=True
+2026-10-08T01:25:20.4977103Z t=27 tctl=67.2 ws_mb=2703 threads=69 responding=True
+2026-10-08T01:25:20.8228248Z screenshot 0 at 27s
+2026-10-08T01:25:20.8258758Z menu 27s: dx12user.settings written 2026-10-08T01:25:11.5275998Z
+2026-10-08T01:25:20.8269028Z menu 27s: input.settings written 2026-10-08T01:25:11.5445249Z
+2026-10-08T01:25:20.8269028Z menu 27s: profile.settings written 2026-10-08T01:25:11.5306800Z
+2026-10-08T01:25:21.0105579Z menu 27s: mean 2.1 cue none tied run 0
+2026-10-08T01:25:24.0653335Z t=30 tctl=66.4 ws_mb=2700 threads=69 responding=True
+2026-10-08T01:25:27.1250494Z t=33 tctl=66.2 ws_mb=2700 threads=68 responding=True
+2026-10-08T01:25:30.1827899Z t=37 tctl=65.9 ws_mb=2699 threads=68 responding=True
+2026-10-08T01:25:30.3903798Z menu 37s: mean 6.2 cue none tied run 0
+2026-10-08T01:25:33.4641419Z t=40 tctl=65.4 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:36.5992286Z t=43 tctl=65.8 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:39.6586916Z t=46 tctl=66.1 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:39.8938406Z menu 46s: mean 17.1 cue none tied run 0
+2026-10-08T01:25:42.9452554Z t=49 tctl=65.6 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:46.0031852Z t=52 tctl=65.2 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:49.0649725Z t=55 tctl=64.9 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:49.3138199Z menu 55s: mean 18.8 cue none tied run 0
+2026-10-08T01:25:52.3743472Z t=59 tctl=65.4 ws_mb=2701 threads=69 responding=True
+2026-10-08T01:25:55.4304422Z t=62 tctl=65 ws_mb=2669 threads=69 responding=True
+2026-10-08T01:25:58.4850591Z t=65 tctl=64.8 ws_mb=2669 threads=69 responding=True
+2026-10-08T01:25:58.6779587Z menu 65s: mean 11.8 cue none tied run 0
+2026-10-08T01:26:01.7390183Z t=68 tctl=64.4 ws_mb=2669 threads=69 responding=True
+2026-10-08T01:26:04.8086028Z t=71 tctl=64.5 ws_mb=2669 threads=69 responding=True
+2026-10-08T01:26:05.2936459Z screenshot 1 at 71s
+2026-10-08T01:26:08.3511298Z t=75 tctl=64.4 ws_mb=2669 threads=69 responding=True
+2026-10-08T01:26:08.5888383Z menu 75s: mean 53.9 cue none tied run 0
+2026-10-08T01:26:11.6434590Z t=78 tctl=64.2 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:14.6991864Z t=81 tctl=64.1 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:17.7531606Z t=84 tctl=64 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:17.9950647Z menu 84s: mean 47.8 cue none tied run 0
+2026-10-08T01:26:21.0575151Z t=87 tctl=64 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:24.1137326Z t=90 tctl=63.8 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:27.1732338Z t=94 tctl=63.8 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:27.4036240Z menu 94s: mean 54.2 cue none tied run 0
+2026-10-08T01:26:30.4596944Z t=97 tctl=63.9 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:33.5203299Z t=100 tctl=63.8 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:36.5752570Z t=103 tctl=63.9 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:36.8350444Z menu 103s: mean 53.7 cue none tied run 0
+2026-10-08T01:26:39.8908014Z t=106 tctl=63.9 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:42.9791537Z t=109 tctl=65.2 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:46.0388126Z t=112 tctl=65.1 ws_mb=2669 threads=68 responding=True
+2026-10-08T01:26:46.2850985Z menu 112s: mean 29.8 cue none tied run 0
+2026-10-08T01:26:49.3407955Z t=116 tctl=64.9 ws_mb=2670 threads=68 responding=True
+2026-10-08T01:26:52.3965549Z t=119 tctl=64.8 ws_mb=2670 threads=68 responding=True
+2026-10-08T01:26:55.4554100Z t=122 tctl=64.9 ws_mb=2670 threads=68 responding=True
+2026-10-08T01:26:55.9611444Z screenshot 2 at 122s
+2026-10-08T01:26:56.2271047Z menu 122s: mean 44.5 cue none tied run 0
+2026-10-08T01:26:59.2781113Z t=126 tctl=64.9 ws_mb=2670 threads=68 responding=True
+2026-10-08T01:27:02.3349312Z t=129 tctl=64.6 ws_mb=2670 threads=68 responding=True
+2026-10-08T01:27:05.3984294Z t=132 tctl=64.6 ws_mb=2620 threads=68 responding=True
+2026-10-08T01:27:05.6557778Z menu 132s: mean 64.6 cue none tied run 0
+2026-10-08T01:27:08.7084341Z t=135 tctl=65.1 ws_mb=2558 threads=68 responding=True
+2026-10-08T01:27:11.7680334Z t=138 tctl=65.2 ws_mb=2486 threads=68 responding=True
+2026-10-08T01:27:14.8266640Z t=141 tctl=65.2 ws_mb=2454 threads=68 responding=True
+2026-10-08T01:27:15.0390760Z menu 141s: mean 23.8 cue none tied run 0
+2026-10-08T01:27:18.1060547Z t=144 tctl=65.2 ws_mb=2381 threads=68 responding=True
+2026-10-08T01:27:21.1700671Z t=148 tctl=65.8 ws_mb=2326 threads=68 responding=True
+2026-10-08T01:27:24.2236757Z t=151 tctl=65.5 ws_mb=2264 threads=68 responding=True
+2026-10-08T01:27:24.4737226Z menu 151s: mean 47.6 cue none tied run 0
+2026-10-08T01:27:27.5414840Z t=154 tctl=65.4 ws_mb=2198 threads=68 responding=True
+2026-10-08T01:27:30.5933791Z t=157 tctl=65.2 ws_mb=2155 threads=68 responding=True
+2026-10-08T01:27:33.6591449Z t=160 tctl=65.1 ws_mb=2142 threads=68 responding=True
+2026-10-08T01:27:34.1772542Z screenshot 3 at 160s
+2026-10-08T01:27:34.4454080Z menu 160s: mean 21.6 cue none tied run 0
+2026-10-08T01:27:37.5031098Z t=164 tctl=65.6 ws_mb=2076 threads=68 responding=True
+2026-10-08T01:27:40.5568621Z t=167 tctl=65.6 ws_mb=2028 threads=68 responding=True
+2026-10-08T01:27:43.6179252Z t=170 tctl=65.6 ws_mb=1968 threads=68 responding=True
+2026-10-08T01:27:43.8575187Z menu 170s: mean 37.9 cue none tied run 0
+2026-10-08T01:27:46.9264475Z t=173 tctl=65.8 ws_mb=1920 threads=68 responding=True
+2026-10-08T01:27:49.9818526Z t=176 tctl=65.9 ws_mb=1865 threads=68 responding=True
+2026-10-08T01:27:53.0359806Z t=179 tctl=65.6 ws_mb=1812 threads=68 responding=True
+2026-10-08T01:27:53.2664632Z menu 179s: mean 23.1 cue none tied run 0
+2026-10-08T01:27:56.3415263Z t=183 tctl=65.8 ws_mb=1845 threads=68 responding=True
+2026-10-08T01:27:56.3435662Z control: no menu transition after 180 s, channel open to the operator
+2026-10-08T01:27:56.3527297Z control 183s: session open
+2026-10-08T01:27:59.6858097Z control 183s: cmd-001.txt tap 39 -> 1/1/0 | wait 1500 | tap 39 -> 1/1/0 | wait 1500 | tap 39 -> 1/1/0
+2026-10-08T01:28:00.7491641Z t=187 tctl=66.5 ws_mb=1765 threads=68 responding=True
+2026-10-08T01:28:01.8062572Z t=188 tctl=66.5 ws_mb=1764 threads=68 responding=True
+2026-10-08T01:28:01.8109883Z menu 188s: dx12user.settings written 2026-10-08T01:27:55.9613782Z
+2026-10-08T01:28:01.8120062Z menu 188s: input.settings written 2026-10-08T01:27:55.9777686Z
+2026-10-08T01:28:01.8130204Z menu 188s: profile.settings written 2026-10-08T01:27:55.9649741Z
+2026-10-08T01:28:01.8165734Z menu 188s: settings_write_seen dx12user.settings 2026-10-08T01:27:55.9613782Z
+2026-10-08T01:28:02.1176823Z menu 188s: mean 37.7 cue 188 tied run 1
+2026-10-08T01:28:03.1742358Z t=190 tctl=66.4 ws_mb=1749 threads=68 responding=True
+2026-10-08T01:28:03.8510642Z screenshot 4 at 190s
+2026-10-08T01:28:04.9133056Z t=191 tctl=66.6 ws_mb=1715 threads=68 responding=True
+2026-10-08T01:28:05.9737441Z t=192 tctl=66.8 ws_mb=1698 threads=68 responding=True
+2026-10-08T01:28:07.0342704Z t=193 tctl=66.6 ws_mb=1682 threads=68 responding=True
+2026-10-08T01:28:08.0929937Z t=194 tctl=66.5 ws_mb=1666 threads=68 responding=True
+2026-10-08T01:28:09.1536051Z t=196 tctl=66.6 ws_mb=1649 threads=68 responding=True
+2026-10-08T01:28:10.2113861Z t=197 tctl=66.8 ws_mb=1633 threads=68 responding=True
+2026-10-08T01:28:10.5486596Z menu 197s: mean 38.1 cue 188 tied run 2
+2026-10-08T01:28:10.6548647Z menu 197s: E attempt 1, down 1 up 1 release retries 0
+2026-10-08T01:28:11.7097823Z t=198 tctl=67.4 ws_mb=1637 threads=65 responding=True
+2026-10-08T01:28:12.7689947Z t=199 tctl=67.4 ws_mb=1669 threads=65 responding=True
+2026-10-08T01:28:13.8257551Z t=200 tctl=67.2 ws_mb=1717 threads=65 responding=True
+2026-10-08T01:28:14.8759119Z t=201 tctl=67.2 ws_mb=1758 threads=67 responding=True
+2026-10-08T01:28:15.9408681Z t=202 tctl=67.1 ws_mb=1741 threads=67 responding=True
+2026-10-08T01:28:16.9912055Z t=203 tctl=67 ws_mb=1725 threads=67 responding=True
+2026-10-08T01:28:18.0476696Z t=204 tctl=66.9 ws_mb=1913 threads=68 responding=True
+2026-10-08T01:28:19.1181356Z t=205 tctl=67.4 ws_mb=2095 threads=69 responding=True
+2026-10-08T01:28:19.6129035Z screenshot 5 at 205s
+2026-10-08T01:28:19.8723063Z menu 205s: mean 18.8 grid diff 23.84
+2026-10-08T01:28:19.8753873Z menu 205s: grid changed, transition candidate
+2026-10-08T01:28:20.9426615Z t=207 tctl=70 ws_mb=2264 threads=69 responding=True
+2026-10-08T01:28:27.0126585Z t=208 tctl=70.2 ws_mb=2425 threads=69 responding=False
+2026-10-08T01:28:28.1300807Z t=214 tctl=70.1 ws_mb=2526 threads=69 responding=True
+2026-10-08T01:28:28.2835726Z menu 214s: mean 0.1 tied True
+2026-10-08T01:28:29.4376084Z t=216 tctl=70.2 ws_mb=2531 threads=69 responding=True
+2026-10-08T01:28:30.5420601Z t=217 tctl=70.1 ws_mb=2534 threads=69 responding=True
+2026-10-08T01:28:31.6617145Z t=218 tctl=70 ws_mb=2568 threads=69 responding=True
+2026-10-08T01:28:32.7856011Z t=219 tctl=70.2 ws_mb=2659 threads=69 responding=True
+2026-10-08T01:28:33.8527763Z t=220 tctl=70.1 ws_mb=2683 threads=69 responding=True
+2026-10-08T01:28:34.9192501Z t=221 tctl=70 ws_mb=2713 threads=69 responding=True
+2026-10-08T01:28:36.0489574Z t=222 tctl=70 ws_mb=2698 threads=69 responding=True
+2026-10-08T01:28:37.1723923Z t=223 tctl=70.1 ws_mb=2699 threads=69 responding=True
+2026-10-08T01:28:37.5039778Z menu 223s: mean 43.4 tied True
+2026-10-08T01:28:38.6091707Z t=225 tctl=71.4 ws_mb=2699 threads=69 responding=True
+2026-10-08T01:28:39.7284407Z t=226 tctl=72.4 ws_mb=2694 threads=69 responding=True
+2026-10-08T01:28:40.8405791Z t=227 tctl=73.2 ws_mb=2670 threads=69 responding=True
+2026-10-08T01:28:41.9124763Z t=228 tctl=73.6 ws_mb=2650 threads=69 responding=True
+2026-10-08T01:28:43.0001390Z t=229 tctl=74.1 ws_mb=2625 threads=69 responding=True
+2026-10-08T01:28:44.1058227Z t=230 tctl=74.5 ws_mb=2601 threads=69 responding=True
+2026-10-08T01:28:45.1867217Z t=232 tctl=75.2 ws_mb=2601 threads=69 responding=True
+2026-10-08T01:28:45.5178599Z menu 232s: mean 43 tied True
+2026-10-08T01:28:46.6087702Z t=233 tctl=75.9 ws_mb=2602 threads=69 responding=True
+2026-10-08T01:28:47.7124281Z t=234 tctl=76 ws_mb=2602 threads=69 responding=True
+2026-10-08T01:28:48.8109222Z t=235 tctl=76.1 ws_mb=2603 threads=69 responding=True
+2026-10-08T01:28:49.8846492Z t=236 tctl=76.5 ws_mb=2603 threads=69 responding=True
+2026-10-08T01:28:50.9770894Z t=237 tctl=77 ws_mb=2603 threads=69 responding=True
+2026-10-08T01:28:50.9854067Z walk 237s: start
+2026-10-08T01:28:51.6234636Z control 237s: cmd-002.txt look 40,0 x10 -> 10
+2026-10-08T01:28:52.7519545Z t=239 tctl=77.6 ws_mb=2613 threads=69 responding=True
+2026-10-08T01:28:53.8651540Z t=240 tctl=78 ws_mb=2613 threads=69 responding=True
+2026-10-08T01:28:54.1678967Z menu 240s: mean 48.4 tied True
+2026-10-08T01:28:55.3076635Z t=242 tctl=78.2 ws_mb=2613 threads=69 responding=True
+2026-10-08T01:28:56.4467153Z t=243 tctl=78.4 ws_mb=2613 threads=69 responding=True
+2026-10-08T01:28:57.5571364Z t=244 tctl=78.4 ws_mb=2579 threads=69 responding=True
+2026-10-08T01:28:58.6753924Z t=245 tctl=78.4 ws_mb=2564 threads=69 responding=True
+2026-10-08T01:28:59.7460264Z t=246 tctl=78.6 ws_mb=2561 threads=69 responding=True
+2026-10-08T01:29:00.8806421Z t=247 tctl=78.9 ws_mb=2561 threads=69 responding=True
+2026-10-08T01:29:01.9993938Z t=248 tctl=79.1 ws_mb=2561 threads=69 responding=True
+2026-10-08T01:29:02.2778566Z menu 248s: mean 48.8 tied True
+2026-10-08T01:29:03.3544339Z t=250 tctl=79.2 ws_mb=2561 threads=69 responding=True
+2026-10-08T01:29:04.4150977Z t=251 tctl=79.4 ws_mb=2562 threads=69 responding=True
+2026-10-08T01:29:05.5427582Z t=252 tctl=79.4 ws_mb=2562 threads=69 responding=True
+2026-10-08T01:29:06.6641878Z t=253 tctl=79.5 ws_mb=2562 threads=69 responding=True
+2026-10-08T01:29:07.7979011Z t=254 tctl=79.9 ws_mb=2562 threads=69 responding=True
+2026-10-08T01:29:08.8719222Z t=255 tctl=80.1 ws_mb=2563 threads=69 responding=True
+2026-10-08T01:29:09.9312675Z t=256 tctl=80.2 ws_mb=2564 threads=69 responding=True
+2026-10-08T01:29:11.0540704Z t=257 tctl=80.8 ws_mb=2564 threads=69 responding=True
+2026-10-08T01:29:11.3386417Z menu 257s: mean 49.2 tied True
+2026-10-08T01:29:12.4121330Z t=259 tctl=80.8 ws_mb=2564 threads=69 responding=True
+2026-10-08T01:29:13.4768180Z t=260 tctl=80.9 ws_mb=2565 threads=69 responding=True
+2026-10-08T01:29:14.6083773Z t=261 tctl=81 ws_mb=2565 threads=69 responding=True
+2026-10-08T01:29:15.7382499Z t=262 tctl=81.2 ws_mb=2565 threads=69 responding=True
+2026-10-08T01:29:16.8107143Z t=263 tctl=81.4 ws_mb=2565 threads=69 responding=True
+2026-10-08T01:29:17.9413313Z t=264 tctl=81.4 ws_mb=2554 threads=69 responding=True
+2026-10-08T01:29:19.0508625Z t=265 tctl=81.5 ws_mb=2548 threads=69 responding=True
+2026-10-08T01:29:20.1080032Z t=266 tctl=81.6 ws_mb=2543 threads=69 responding=True
+2026-10-08T01:29:20.4022498Z menu 266s: mean 48.1 tied True
+2026-10-08T01:29:21.4876334Z t=268 tctl=81.8 ws_mb=2542 threads=69 responding=True
+2026-10-08T01:29:22.5819159Z t=269 tctl=82.1 ws_mb=2542 threads=69 responding=True
+2026-10-08T01:29:23.6953944Z t=270 tctl=82.2 ws_mb=2542 threads=69 responding=True
+2026-10-08T01:29:24.8269134Z t=271 tctl=82.4 ws_mb=2535 threads=69 responding=True
+2026-10-08T01:29:25.8878566Z t=272 tctl=82.4 ws_mb=2521 threads=69 responding=True
+2026-10-08T01:29:27.0055942Z t=273 tctl=82.5 ws_mb=2514 threads=69 responding=True
+2026-10-08T01:29:28.1337611Z t=274 tctl=82.8 ws_mb=2504 threads=69 responding=True
+2026-10-08T01:29:28.4201087Z menu 274s: mean 49 tied True
+2026-10-08T01:29:29.5009298Z t=276 tctl=82.9 ws_mb=2503 threads=69 responding=True
+2026-10-08T01:29:30.5686475Z t=277 tctl=83 ws_mb=2499 threads=69 responding=True
+2026-10-08T01:29:31.6789133Z t=278 tctl=83.1 ws_mb=2491 threads=69 responding=True
+2026-10-08T01:29:32.8106226Z t=279 tctl=83.4 ws_mb=2480 threads=69 responding=True
+2026-10-08T01:29:33.9495463Z t=280 tctl=83.5 ws_mb=2466 threads=69 responding=True
+2026-10-08T01:29:35.0812996Z t=281 tctl=83.6 ws_mb=2464 threads=69 responding=True
+2026-10-08T01:29:36.2060000Z t=282 tctl=83.6 ws_mb=2465 threads=69 responding=True
+2026-10-08T01:29:36.5036266Z menu 282s: mean 48.6 tied True
+2026-10-08T01:29:37.5721850Z t=284 tctl=83.8 ws_mb=2465 threads=69 responding=True
+2026-10-08T01:29:38.6376358Z t=285 tctl=83.9 ws_mb=2465 threads=69 responding=True
+2026-10-08T01:29:39.7552875Z t=286 tctl=84.1 ws_mb=2465 threads=69 responding=True
+2026-10-08T01:29:40.8848256Z t=287 tctl=84.2 ws_mb=2464 threads=69 responding=True
+2026-10-08T01:29:41.9559032Z t=288 tctl=84.6 ws_mb=2464 threads=69 responding=True
+2026-10-08T01:29:43.0629271Z t=289 tctl=84.5 ws_mb=2467 threads=69 responding=True
+2026-10-08T01:29:44.1860654Z t=290 tctl=84.5 ws_mb=2461 threads=69 responding=True
+2026-10-08T01:29:45.2756657Z t=292 tctl=84.4 ws_mb=2451 threads=69 responding=True
+2026-10-08T01:29:45.5862066Z menu 292s: mean 48.7 tied True
+2026-10-08T01:29:45.7765054Z control 292s: cmd-003.txt shot shot-003.jpg 27065
+2026-10-08T01:29:46.8849657Z t=293 tctl=84.2 ws_mb=2433 threads=69 responding=True
+2026-10-08T01:29:47.9853329Z t=294 tctl=84.1 ws_mb=2430 threads=69 responding=True
+2026-10-08T01:29:49.0657145Z t=295 tctl=84 ws_mb=2415 threads=69 responding=True
+2026-10-08T01:29:50.1750531Z t=296 tctl=83.8 ws_mb=2396 threads=69 responding=True
+2026-10-08T01:29:51.2773810Z t=298 tctl=83.6 ws_mb=2388 threads=69 responding=True
+2026-10-08T01:29:52.3899198Z t=299 tctl=83.5 ws_mb=2379 threads=69 responding=True
+2026-10-08T01:29:53.4677068Z t=300 tctl=83.4 ws_mb=2376 threads=69 responding=True
+2026-10-08T01:29:53.7939617Z menu 300s: mean 48.9 tied True
+2026-10-08T01:29:54.8900065Z t=301 tctl=83.4 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:29:55.9978861Z t=302 tctl=83.2 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:29:57.1041572Z t=303 tctl=83.1 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:29:58.1850790Z t=305 tctl=83 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:29:59.2722392Z t=306 tctl=82.9 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:30:00.3838218Z t=307 tctl=82.9 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:30:01.5008942Z t=308 tctl=82.9 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:30:01.7824809Z menu 308s: mean 49.1 tied True
+2026-10-08T01:30:02.9186016Z t=309 tctl=82.9 ws_mb=2363 threads=70 responding=True
+2026-10-08T01:30:04.0333760Z t=310 tctl=82.9 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:05.1568978Z t=311 tctl=82.9 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:06.2848410Z t=313 tctl=82.9 ws_mb=2366 threads=70 responding=True
+2026-10-08T01:30:07.3606669Z t=314 tctl=83 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:08.4914355Z t=315 tctl=83.8 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:09.6364046Z t=316 tctl=84.6 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:09.9826512Z menu 316s: mean 48.3 tied True
+2026-10-08T01:30:11.0421992Z t=317 tctl=84.9 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:12.1818960Z t=318 tctl=85 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:13.2832444Z t=320 tctl=84.9 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:14.3834904Z t=321 tctl=84.8 ws_mb=2364 threads=70 responding=True
+2026-10-08T01:30:15.4732814Z t=322 tctl=84.5 ws_mb=2359 threads=69 responding=True
+2026-10-08T01:30:16.5372368Z t=323 tctl=84.4 ws_mb=2340 threads=69 responding=True
+2026-10-08T01:30:17.6050063Z t=324 tctl=84.2 ws_mb=2327 threads=69 responding=True
+2026-10-08T01:30:18.6895151Z t=325 tctl=84.1 ws_mb=2325 threads=69 responding=True
+2026-10-08T01:30:18.9667946Z menu 325s: mean 46.3 tied True
+2026-10-08T01:30:20.0509757Z t=326 tctl=83.9 ws_mb=2324 threads=69 responding=True
+2026-10-08T01:30:21.1217794Z t=327 tctl=83.6 ws_mb=2322 threads=69 responding=True
+2026-10-08T01:30:22.1943618Z t=329 tctl=83.5 ws_mb=2322 threads=69 responding=True
+2026-10-08T01:30:23.2730487Z t=330 tctl=83.4 ws_mb=2322 threads=69 responding=True
+2026-10-08T01:30:24.3639853Z t=331 tctl=83.4 ws_mb=2309 threads=69 responding=True
+2026-10-08T01:30:25.4478139Z t=332 tctl=83.2 ws_mb=2299 threads=69 responding=True
+2026-10-08T01:30:26.5970529Z t=333 tctl=83.1 ws_mb=2266 threads=69 responding=True
+2026-10-08T01:30:27.7562521Z t=334 tctl=83 ws_mb=2251 threads=69 responding=True
+2026-10-08T01:30:28.0455921Z menu 334s: mean 45.6 tied True
+2026-10-08T01:30:29.1147086Z t=335 tctl=82.9 ws_mb=2234 threads=69 responding=True
+2026-10-08T01:30:30.2066727Z t=337 tctl=82.8 ws_mb=2214 threads=69 responding=True
+2026-10-08T01:30:31.3658038Z t=338 tctl=82.6 ws_mb=2194 threads=69 responding=True
+2026-10-08T01:30:32.5055598Z t=339 tctl=82.5 ws_mb=2155 threads=69 responding=True
+2026-10-08T01:30:33.6932557Z t=340 tctl=82.5 ws_mb=2135 threads=69 responding=True
+2026-10-08T01:30:34.7941132Z t=341 tctl=82.4 ws_mb=2116 threads=69 responding=True
+2026-10-08T01:30:35.9056299Z t=342 tctl=82.4 ws_mb=2095 threads=69 responding=True
+2026-10-08T01:30:36.2246854Z menu 342s: mean 48.5 tied True
+2026-10-08T01:30:37.3540196Z t=344 tctl=83 ws_mb=2075 threads=69 responding=True
+2026-10-08T01:30:38.4775926Z t=345 tctl=83.4 ws_mb=2069 threads=69 responding=True
+2026-10-08T01:30:39.6123375Z t=346 tctl=84 ws_mb=2046 threads=69 responding=True
+2026-10-08T01:30:40.7092143Z t=347 tctl=84.2 ws_mb=2028 threads=69 responding=True
+2026-10-08T01:30:40.8659925Z control 347s: cmd-004.txt shot shot-004.jpg 25793
+2026-10-08T01:30:41.9509238Z t=348 tctl=84.2 ws_mb=2021 threads=69 responding=True
+2026-10-08T01:30:43.0816024Z t=349 tctl=84.6 ws_mb=2018 threads=69 responding=True
+2026-10-08T01:30:44.1789450Z t=351 tctl=84.5 ws_mb=2007 threads=69 responding=True
+2026-10-08T01:30:44.4661842Z menu 351s: mean 44.9 tied True
+2026-10-08T01:30:44.4754711Z control 351s: cmd-005.txt quit
+2026-10-08T01:30:44.4836877Z ending pid 5280
+2026-10-08T01:30:47.3598346Z settings dx12user.settings restored
+2026-10-08T01:30:47.5314891Z temperature_after 83.8
+2026-10-08T01:30:47.5636867Z wrapper end

@@ -1,0 +1,14 @@
+sparse capture start: the first gap-free 10 s of 11202-present stream begins at 6.4 s
+trace zero 2026-10-08T00:52:00.316920Z, span 601.0 s, first present at 6.4 s
+== A-ctl (45.7..95.7 s, 50 s): GPU busy (DMA union) 99.6 %
+  "Unknown" (4908)               n=  660 rate=  13.2/s median=  75.68 ms p95=  81.05 p99=  86.51 max= 124.39 >50ms=655
+  "Unknown" (8004)               n=  661 rate=  13.2/s median=  75.58 ms p95=  77.90 p99=  78.83 max=  87.14 >50ms=660
+== noAO (195.7..245.7 s, 50 s): GPU busy (DMA union) 99.6 %
+  "Unknown" (4908)               n=  625 rate=  12.5/s median=  81.55 ms p95=  84.91 p99=  86.17 max=  88.49 >50ms=624
+  "Unknown" (8004)               n=  625 rate=  12.5/s median=  81.68 ms p95=  84.68 p99=  85.66 max=  94.32 >50ms=624
+== rt-off (328.7..378.7 s, 50 s): GPU busy (DMA union) 99.3 %
+  "Unknown" (4908)               n= 2201 rate=  44.0/s median=  22.62 ms p95=  25.34 p99=  26.20 max=  29.57 >50ms=0
+  "Unknown" (8004)               n= 2202 rate=  44.0/s median=  22.70 ms p95=  24.85 p99=  25.08 max=  33.24 >50ms=0
+== gi-q (489.7..539.7 s, 50 s): GPU busy (DMA union) 99.7 %
+  "Unknown" (4908)               n=  498 rate=  10.0/s median= 101.27 ms p95= 109.56 p99= 110.48 max= 113.24 >50ms=497
+  "Unknown" (8004)               n=  498 rate=  10.0/s median= 101.31 ms p95= 109.21 p99= 110.81 max= 111.18 >50ms=497

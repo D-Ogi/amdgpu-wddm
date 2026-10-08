@@ -1,0 +1,22 @@
+> 20\payload\d3d12\amdgpu_wddm_radv.dll scratch/m15/native-caps001/plans/plan-475.md scratch/m15/interactive-client018/build/amdgpu_wddm_d3d12_queue.exe
+Local immutable package: P:\BC-250\scratch\m15\native-caps001\attempts\native-caps475\package
+candidate BBB5803E P:\BC-250\scratch\m15\adapter132\amdgpu_wddm_d3d12.dll
+engine 348117F1 P:\BC-250\scratch\train\b22-build\release\amdgpu-wddm-tester-0.7.216.100-tester.20\payload\d3d12\amdgpu_wddm_vkd3d.dll
+icd 822134D0 P:\BC-250\scratch\train\b22-build\release\amdgpu-wddm-tester-0.7.216.100-tester.20\payload\d3d12\amdgpu_wddm_radv.dll
+interactive-client 34CE3554 P:\BC-250\scratch\m15\interactive-client018\build\amdgpu_wddm_d3d12_queue.exe
+plan P:\BC-250\scratch\m15\native-caps001\attempts\native-caps475\PLAN-LOCAL.md
+> C:\Python314\python.exe P:\BC-250\bc250-win\tools\win\bc250mon\mon.py stop?
+no stop request
+> C:\Python314\python.exe P:\BC-250\scratch\m15\native-caps001\run-slot.py native-caps475
+preflight: no STOP, Tctl 58.5
+package flushed
+Prepare Ready
+witness gpu-wddm\tools\bc250kmd_cli.exe
+fresh after 0 s: health abi=1 version=0x000700D8 flags=15 generation=28601282 epoch=149 completed=284 age_ms=199 ready_ms=476060
+Start Running
+game profile: no Drive
+> C:\Python314\python.exe P:\BC-250\scratch\m15\native-caps001\close-attempt.py native-caps475
+{"status": "admission-failed-no-mutation", "tree_closed": true, "baseline_restored": false, "candidate_retained": null, "elapsed": 4.3778174, "errors": ["Capture failed"]}
+task Missing 2026-10-08T01:12:01.8289172Z
+archive 4B04D3F9 27 of 27 files, missing 0 different 0
+reason Capture: Stale RADV_PERFTEST marker: C:\BC250\tools\radv-perftest.txt holds 'rtwave64' written 2026-10-08T01:10:35.1745676Z,
