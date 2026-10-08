@@ -57,6 +57,12 @@
 // already negotiated the adapter's caps with the GPU UMD. Modules are loaded once per path and never unloaded
 // (adapters opened through them may outlive any call here). Every decision is also sent to OutputDebugString (one
 // line per OpenAdapter call). The desktop line is byte-compatible with router 5BBEB783 (the kit parses it).
+//
+// M15.14: in dwm.exe every desktop decision is also written to the session's desktop-route record
+// (driver/contract/bc250_desktop_route.h): gpu, cpu-kill-switch, cpu-switches-off or cpu-fallback. The application
+// shells read it before they ask for a scan-out primary, because the CPU compositor cannot read one, and a fallback
+// to the CPU UMD is visible nowhere else. A HostedClients entry writes nothing: it is a test client, and its route
+// is not the compositor's.
 
 #include <windows.h>
 #pragma warning(push)
@@ -71,6 +77,7 @@
 #include "router-policy.h"
 #include "router-identity.h"
 #include "front-adapter.h"
+#include "../../contract/bc250_desktop_route.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -358,22 +365,53 @@ static void WriteRouteLine(const wchar_t *directory, const wchar_t *exe, const c
 }
 
 // The desktop line. Every field of router 5BBEB783 is in the same place with the same spelling, and M15.14
-// appends exactly one column at the end (front=), so the kit's parser keeps working and an older log and a
-// newer one differ by one field.
+// appends columns at the end only (front=, then record=), so the kit's parser keeps working and an older log and
+// a newer one differ by the last fields.
 static void Report(const Config &c, const wchar_t *exe, const char *entry, const Decision &d, HRESULT hostedHr,
-                   bool fellBack, const wchar_t *module, HRESULT hr, const char *front)
+                   bool fellBack, const wchar_t *module, HRESULT hr, const char *front, const char *record)
 {
     char line[2048];
     int n = _snprintf_s(line, _TRUNCATE,
         "bc250d3d_router pid=%lu exe=%ls entry=%s route=%s reason=%s fallback=%u hosted_hr=%08lx hr=%08lx module=%ls "
         "cpu_source=%s hosted_source=%s force_cpu=%lu require_switches=%lu switch_source=%s blit=%u interop=%u "
-        "front=%s\n",
+        "front=%s record=%s\n",
         GetCurrentProcessId(), exe, entry, d.route == Route::Hosted && !fellBack ? "hosted" : "cpu",
         ReasonName(d.reason), fellBack ? 1u : 0u, (unsigned long)hostedHr, (unsigned long)hr, module,
         c.cpu_source, c.hosted_source, c.force_cpu, c.require_switches, c.switch_source, c.blit_on ? 1u : 0u,
-        c.interop_on ? 1u : 0u, front);
+        c.interop_on ? 1u : 0u, front, record);
     if (n < 0) n = (int)strlen(line);
     WriteRouteLine(c.log_directory, exe, line, n);
+}
+
+// The desktop-route record of this compositor (driver/contract/bc250_desktop_route.h), made at the first desktop
+// decision of dwm.exe and kept, with its section handle, until the process ends. A record that cannot be made is
+// tried again at the next decision; until then the shells read no record and stay composed. What the record
+// column says:
+//   none           not dwm.exe (a HostedClients test client): nothing written
+//   published      this decision is in the record
+//   failed-<n>     the section could not be made or mapped, Win32 error n
+static SRWLOCK RouteRecordLock = SRWLOCK_INIT;
+static bc250_desktop_route *RouteRecord;
+
+static const char *PublishRoute(const wchar_t *exe, unsigned route, HRESULT hostedHr, char *word, size_t chars)
+{
+    if (_wcsicmp(exe, L"dwm.exe")) return "none";
+    DWORD error = 0;
+    AcquireSRWLockExclusive(&RouteRecordLock);
+    if (!RouteRecord) RouteRecord = bc250_desktop_route_create(BC250_DESKTOP_ROUTE_NAME, &error);
+    if (RouteRecord) bc250_desktop_route_store(RouteRecord, route, GetCurrentProcessId(), (unsigned)hostedHr);
+    const bool published = RouteRecord != nullptr;
+    ReleaseSRWLockExclusive(&RouteRecordLock);
+    if (published) return "published";
+    _snprintf_s(word, chars, _TRUNCATE, "failed-%lu", error);
+    return word;
+}
+
+// The record's word for a desktop decision that ended on the CPU UMD.
+static unsigned CpuRouteWord(const Decision &d)
+{
+    if (d.route == Route::Hosted) return BC250_DESKTOP_ROUTE_FALLBACK; // the hosted open failed
+    return d.reason == Reason::KillSwitch ? BC250_DESKTOP_ROUTE_KILL_SWITCH : BC250_DESKTOP_ROUTE_SWITCHES_OFF;
 }
 
 // What the front column says, and what the words mean:
@@ -476,18 +514,22 @@ static HRESULT Forward(const char *entry, D3D10DDIARG_OPENADAPTER *args, size_t 
     if (d.reason == Reason::NotHostedClient) return ForwardApp(c, exeBuffer, exe, entry, args, tableBytes);
     // Desktop: dwm.exe and HostedClients, as router 5BBEB783.
     HRESULT hostedHr = S_FALSE; // not tried
+    char recordWord[32];
     if (d.route == Route::Hosted) {
         hostedHr = TryGpu(c.hosted, entry, args, tableBytes);
         if (SUCCEEDED(hostedHr)) {
             // The front goes on only after the hosted open succeeded, so the hosted table it saves is the
             // real one and a failed hosted open still restores the caller's table untouched (TryGpu).
-            Report(c, exe, entry, d, hostedHr, false, c.hosted, hostedHr, InstallFront(c, entry, args, exe));
+            const char *front = InstallFront(c, entry, args, exe);
+            Report(c, exe, entry, d, hostedHr, false, c.hosted, hostedHr, front,
+                   PublishRoute(exe, BC250_DESKTOP_ROUTE_GPU, hostedHr, recordWord, sizeof(recordWord)));
             return hostedHr;
         }
     }
     const HRESULT hr = ForwardCpu(c, entry, args);
     Report(c, exe, entry, d, hostedHr, d.route == Route::Hosted, c.cpu, hr,
-           c.front == Front::Invalid ? "invalid" : c.front == Front::Requested ? "unavailable" : "off");
+           c.front == Front::Invalid ? "invalid" : c.front == Front::Requested ? "unavailable" : "off",
+           PublishRoute(exe, CpuRouteWord(d), hostedHr, recordWord, sizeof(recordWord)));
     return hr;
 }
 
