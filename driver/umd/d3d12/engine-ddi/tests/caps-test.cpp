@@ -16,6 +16,7 @@
 #include <cstring>
 #include <cwchar>
 #include <io.h>
+#include <iterator>
 
 namespace {
 int failures = 0;
@@ -61,7 +62,10 @@ struct Answers {
     D3D12_FEATURE_DATA_D3D12_OPTIONS11 options11;
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS14 options14;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
+    UINT raw_model;                             // non-zero: SHADER_MODEL answers this whatever was asked
     int unsupported;                            // a D3D12_FEATURE answered DXGI_ERROR_UNSUPPORTED; -1 for none
 };
 
@@ -113,6 +117,7 @@ const Answers* g_answers = nullptr;
 const BC250_VKD3D_DEVICE_CREATE_INFO* g_info_seen = nullptr;
 int g_calls = 0;
 UINT32 g_queries = 0;
+D3D_SHADER_MODEL g_model_asked = static_cast<D3D_SHADER_MODEL>(0);
 
 template <class T> void answer(BC250_VKD3D_FEATURE_QUERY& q, const T& value) {
     if (q.DataSize != sizeof(T)) {
@@ -152,7 +157,9 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
         case D3D12_FEATURE_SHADER_MODEL: {
             if (q.DataSize != sizeof(D3D12_FEATURE_DATA_SHADER_MODEL)) { q.Result = E_INVALIDARG; break; }
             auto* d = static_cast<D3D12_FEATURE_DATA_SHADER_MODEL*>(q.pData);
+            g_model_asked = d->HighestShaderModel;
             if (d->HighestShaderModel > a.max_model) d->HighestShaderModel = a.max_model;
+            if (a.raw_model) d->HighestShaderModel = static_cast<D3D_SHADER_MODEL>(a.raw_model);
             q.Result = S_OK;
             break;
         }
@@ -167,6 +174,8 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
         case D3D12_FEATURE_D3D12_OPTIONS11: answer(q, a.options11); break;
         case D3D12_FEATURE_D3D12_OPTIONS12: answer(q, a.options12); break;
         case D3D12_FEATURE_D3D12_OPTIONS13: answer(q, a.options13); break;
+        case D3D12_FEATURE_D3D12_OPTIONS14: answer(q, a.options14); break;
+        case D3D12_FEATURE_D3D12_OPTIONS21: answer(q, a.options21); break;
         case D3D12_FEATURE_SERIALIZATION: answer(q, a.serialization); break;
         default: break;
         }
@@ -279,7 +288,9 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     const Answers a12_0 = fl12_0();
     engine_ddi::AdapterCaps* caps = query_stub(a12_0, info, "FL12_0 engine");
     if (!caps) return;
-    check(g_queries == 14, "one batch of 14 features (%u)", g_queries);
+    check(g_queries == 16, "one batch of 16 features (%u)", g_queries);
+    check(g_model_asked == D3D_SHADER_MODEL_6_8, "SHADER_MODEL is asked with 6_8 as the highest model (%x)",
+          static_cast<unsigned>(g_model_asked));
 
     // The two calls of M768, exact sizes.
     HRESULT hr = E_FAIL;
@@ -350,7 +361,7 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     const HRESULT hr_list = get(caps, D3D12DDICAPS_TYPE_0011_SHADER_MODELS, list);
     check(hr == S_OK && n == 8 && hr_list == S_OK && cap == 8 && models[0] == D3D12DDI_SHADER_MODEL_5_1_RELEASE_0011 &&
               models[7] == D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082,
-          "1012 SHADER_MODELS, 16 bytes: 8 models, 5_1 to 6_6 (count %u)", n);
+          "1012 SHADER_MODELS, 16 bytes, engine at 6_6: 8 models, 5_1 to 6_6 (count %u)", n);
 
     // 1006 D3D12_OPTIONS: pass-through tiers and the documented clamps.
     D3D12DDI_D3D12_OPTIONS_DATA_0089 o;
@@ -530,6 +541,149 @@ void test_raytracing_tier_reporting(const BC250_VKD3D_DEVICE_CREATE_INFO& info) 
     tier_with(D3D12_RAYTRACING_TIER_NOT_SUPPORTED, "engine without", D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED);
     check(engine_ddi::set_raytracing_tier_reporting(nullptr, true) == E_INVALIDARG,
           "raytracing tier reporting refused: null caps");
+}
+
+// 1012 as a list, read into a buffer of 12 entries: S_OK, the count, and the entries in order.
+struct ModelList { HRESULT hr; UINT count; D3D12DDI_SHADER_MODEL models[12]; };
+ModelList model_list(const engine_ddi::AdapterCaps* caps) {
+    ModelList l;
+    std::memset(&l, 0xEE, sizeof(l));
+    l.count = 12;
+    D3D12DDI_D3D12_SHADER_MODELS_DATA_0011 d{&l.count, l.models};
+    l.hr = get(caps, D3D12DDICAPS_TYPE_0011_SHADER_MODELS, d);
+    return l;
+}
+
+// The list from 5_1 up to `highest`, every release value in order, and nothing written past it.
+bool list_is(const ModelList& l, D3D12DDI_SHADER_MODEL highest) {
+    static const D3D12DDI_SHADER_MODEL all[] = {
+        D3D12DDI_SHADER_MODEL_5_1_RELEASE_0011, D3D12DDI_SHADER_MODEL_6_0_RELEASE_0011, D3D12DDI_SHADER_MODEL_6_1_RELEASE_0033,
+        D3D12DDI_SHADER_MODEL_6_2_RELEASE_0042, D3D12DDI_SHADER_MODEL_6_3_RELEASE_0054, D3D12DDI_SHADER_MODEL_6_4_RELEASE_0062,
+        D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093,
+        D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108};
+    UINT n = 0;
+    while (n < std::size(all) && all[n] <= highest) ++n;
+    if (l.hr != S_OK || l.count != n) return false;
+    for (UINT i = 0; i < n; ++i)
+        if (l.models[i] != all[i]) return false;
+    return untouched(l.models + n, sizeof(l.models) - n * sizeof(l.models[0]));
+}
+
+// 1091 SHADER_MODEL_6_8_OPTIONS_0110 (8 bytes): S_OK and both fields, packed as bits 0 and 1; -1 on a failure.
+int options_1091(const engine_ddi::AdapterCaps* caps) {
+    D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110 d;
+    std::memset(&d, 0xEE, sizeof(d));
+    if (get(caps, D3D12DDICAPS_TYPE_SHADER_MODEL_6_8_OPTIONS_0110, d) != S_OK) return -1;
+    if ((d.SampleCmpGradientAndBiasSupported != 0 && d.SampleCmpGradientAndBiasSupported != 1) ||
+        (d.ExtendedCommandInfoSupported != 0 && d.ExtendedCommandInfoSupported != 1))
+        return -1;
+    return d.SampleCmpGradientAndBiasSupported | (d.ExtendedCommandInfoSupported << 1);
+}
+
+// The shader model: the engine's answer to SHADER_MODEL asked with 6_8, the 1012 list up to it, 1091 from OPTIONS21
+// at 6_8 only, the ceiling of the experiments shader-model-68-off and shader-model-67-off, and the refusals.
+void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    const auto engine_at = [](D3D_SHADER_MODEL model) {
+        Answers a = fl12_0();
+        a.max_model = model;
+        a.options14.AdvancedTextureOpsSupported = TRUE;
+        a.options14.WriteableMSAATexturesSupported = TRUE;
+        a.options21.SampleCmpGradientAndBiasSupported = TRUE;
+        a.options21.ExtendedCommandInfoSupported = TRUE;
+        return a;
+    };
+    struct Case { D3D_SHADER_MODEL engine; D3D12DDI_SHADER_MODEL highest; int expected_1091; const char* what; };
+    const Case cases[] = {
+        {D3D_SHADER_MODEL_6_5, D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071, 0, "engine at 6_5"},
+        {D3D_SHADER_MODEL_6_6, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082, 0, "engine at 6_6"},
+        {D3D_SHADER_MODEL_6_7, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093, 0, "engine at 6_7"},
+        {D3D_SHADER_MODEL_6_8, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, "engine at 6_8"},
+        {D3D_SHADER_MODEL_6_9, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, "engine at 6_9 (asked 6_8)"},
+    };
+    for (const Case& k : cases) {
+        const Answers a = engine_at(k.engine);
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, k.what);
+        if (!caps) continue;
+        const ModelList l = model_list(caps);
+        const int o = options_1091(caps);
+        check(list_is(l, k.highest) && o == k.expected_1091,
+              "shader model, %s: 1012 lists 5_1 to %x (count %u), 1091 SampleCmpGradientAndBias %d, "
+              "ExtendedCommandInfo %d",
+              k.what, static_cast<unsigned>(k.highest), l.count, o & 1, (o >> 1) & 1);
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // 1091 with the engine at 6_8: each field from OPTIONS21 alone, and FALSE when OPTIONS21 is unanswered.
+    Answers a = engine_at(D3D_SHADER_MODEL_6_8);
+    a.options21.SampleCmpGradientAndBiasSupported = FALSE;
+    engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine at 6_8 without SampleCmpGradientAndBias");
+    if (caps) {
+        check(options_1091(caps) == 2, "1091: SampleCmpGradientAndBias FALSE as the engine says, ExtendedCommandInfo TRUE");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    a = engine_at(D3D_SHADER_MODEL_6_8);
+    a.unsupported = D3D12_FEATURE_D3D12_OPTIONS21;
+    caps = query_stub(a, info, "engine at 6_8 without OPTIONS21");
+    if (caps) {
+        check(list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108) && options_1091(caps) == 0,
+              "1091: an unanswered OPTIONS21 reports both FALSE; 1012 still lists 6_8");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // The payload size is exact: 4 and 12 bytes are refused with nothing written.
+    caps = query_stub(engine_at(D3D_SHADER_MODEL_6_8), info, "engine at 6_8, payload sizes");
+    if (caps) {
+        uint8_t raw[16];
+        std::memset(raw, 0xEE, sizeof(raw));
+        D3D12DDIARG_GETCAPS r{D3D12DDICAPS_TYPE_SHADER_MODEL_6_8_OPTIONS_0110, nullptr, raw, 4};
+        const HRESULT hr4 = engine_ddi::build_caps(caps, kDdi, &r);
+        r.DataSize = 12;
+        const HRESULT hr12 = engine_ddi::build_caps(caps, kDdi, &r);
+        check(hr4 == E_INVALIDARG && hr12 == E_INVALIDARG && untouched(raw, sizeof(raw)),
+              "1091 with 4 and 12 bytes: E_INVALIDARG, nothing written");
+
+        // The ceiling: 6_7 (shader-model-68-off), 6_6 (shader-model-67-off, the answer before 2026-10-07), back to 6_8.
+        const HRESULT h67 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_7);
+        const bool at67 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093) && options_1091(caps) == 0;
+        const HRESULT h66 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_6);
+        const bool at66 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082) && options_1091(caps) == 0;
+        const HRESULT h68 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_8);
+        const bool at68 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108) && options_1091(caps) == 3;
+        check(h67 == S_OK && at67 && h66 == S_OK && at66 && h68 == S_OK && at68,
+              "ceiling: 6_7 lists to 6_7 with 1091 FALSE, 6_6 lists to 6_6 (the answer before), 6_8 restores 6_8");
+
+        // Refused ceilings keep the one held before (6_8): a model between rows, one above the table, a null caps.
+        const HRESULT bad52 = engine_ddi::set_shader_model_ceiling(caps, static_cast<D3D_SHADER_MODEL>(0x52));
+        const HRESULT bad69 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_9);
+        const HRESULT bad0 = engine_ddi::set_shader_model_ceiling(caps, static_cast<D3D_SHADER_MODEL>(0));
+        const HRESULT null_caps = engine_ddi::set_shader_model_ceiling(nullptr, D3D_SHADER_MODEL_6_6);
+        check(bad52 == E_INVALIDARG && bad69 == E_INVALIDARG && bad0 == E_INVALIDARG && null_caps == E_INVALIDARG &&
+                  list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108),
+              "ceiling refused: 0x52, 6_9, 0 and a null caps; the ceiling held before stays");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // A ceiling never raises the engine's answer.
+    caps = query_stub(engine_at(D3D_SHADER_MODEL_6_6), info, "engine at 6_6, ceiling 6_8");
+    if (caps) {
+        const HRESULT h = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_8);
+        check(h == S_OK && list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082) && options_1091(caps) == 0,
+              "ceiling 6_8 on an engine at 6_6: 1012 still ends at 6_6, 1091 FALSE");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // An engine answer that is not an answer to the request: above 6_8, below 5_1, or between two models.
+    const UINT bad_answers[] = {D3D_SHADER_MODEL_6_9, 0x50, 0x52, 0x6A};
+    for (const UINT bad : bad_answers) {
+        Answers b = engine_at(D3D_SHADER_MODEL_6_8);
+        b.raw_model = bad;
+        g_answers = &b;
+        const BC250_VKD3D_ENGINE_FUNCS funcs = stub_funcs();
+        engine_ddi::AdapterCaps* out = reinterpret_cast<engine_ddi::AdapterCaps*>(uintptr_t{1});
+        const HRESULT hr = engine_ddi::query_adapter_caps(&funcs, &info, &out);
+        check(hr == E_UNEXPECTED && !out, "an engine answering shader model %x is refused (hr %08lx)", bad,
+              static_cast<unsigned long>(hr));
+    }
 }
 
 void test_policy_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
@@ -781,6 +935,12 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
           "1012, 1006 and 1004 answered: %u shader models, binding tier %d, tiled tier %d, heap tier %d, waves %u-%u",
           n, static_cast<int>(o.ResourceBindingTier), static_cast<int>(o.TiledResourcesTier),
           static_cast<int>(o.ResourceHeapTier), s.WaveLaneCountMin, s.WaveLaneCountMax);
+    const ModelList l = model_list(caps);
+    const int o1091 = options_1091(caps);
+    check(l.hr == S_OK && l.count >= 1 && l.count <= 10 && o1091 >= 0,
+          "1012 ends at %x (%u models); 1091 SampleCmpGradientAndBias %d, ExtendedCommandInfo %d",
+          l.hr == S_OK && l.count >= 1 && l.count <= 10 ? static_cast<unsigned>(l.models[l.count - 1]) : 0u, l.count,
+          o1091 & 1, (o1091 >> 1) & 1);
     check_layout_sets(caps, "engine");
     check_none_types(caps, "engine");
     engine_ddi::free_adapter_caps(caps);
@@ -817,6 +977,7 @@ int wmain(int argc, wchar_t** argv) {
         test_stub(info);
         test_policy_stub(info);
         test_raytracing_tier_reporting(info);
+        test_shader_model(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

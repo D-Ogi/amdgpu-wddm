@@ -48,7 +48,7 @@ flowchart LR
   M795["M795<br/>icd"]
   M807["M807<br/>hardware"]
   M816["M816"]
-  M837["M837"]
+  M842["M842"]
   M789 --> M776
   M807 --> M776
   M792 --> M571
@@ -60,8 +60,8 @@ flowchart LR
   M610 --> M607
   M816 --> M52
   M816 --> M415
-  M837 --> M775
-  M837 --> M795
+  M842 --> M775
+  M842 --> M795
   classDef other stroke-dasharray:4 3
   class M52,M412,M789,M792,M795,M807 other
 ```

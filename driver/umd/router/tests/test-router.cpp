@@ -145,6 +145,30 @@ static void PolicyTests()
         CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%d got %s",
               c.exe, (int)c.mode, (int)c.component, AppReasonName(d.reason));
     }
+
+    // RenderOnCpu (the per-application graphics setting): the CPU UMD after the protected list and before Deny. It
+    // never widens the GPU route: the mode, the protected list and the GPU UMD path keep their answers.
+    struct CpuCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool e102, gpu, cpu; AppRoute route; AppReason reason; };
+    const CpuCase cpu[] = {
+        {L"notepad.exe", Gd, nullptr, nullptr, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"notepad.exe", Gd, nullptr, nullptr, true, true, false, AppRoute::Gpu, AppReason::Default},
+        {L"d3d11mt.exe", Al, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"d3d11bench.exe", Gd, nullptr, deny, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"d3d11bench.exe", Gd, nullptr, deny, true, true, false, AppRoute::Cpu, AppReason::Denied},
+        {L"d3d11mt.exe", AppMode::Cpu, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::ModeCpu},
+        {L"d3d11mt.exe", AppMode::Invalid, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::ModeInvalid},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, true, true, true, AppRoute::Cpu, AppReason::Protected},
+        {L"", Gd, nullptr, nullptr, true, true, true, AppRoute::Cpu, AppReason::NoExe},
+        {L"notepad.exe", Gd, nullptr, nullptr, false, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"notepad.exe", Gd, nullptr, nullptr, true, false, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+    };
+    for (const CpuCase &c : cpu) {
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, Component::No, c.cpu});
+        CHECK(d.route == c.route && d.reason == c.reason, "render-on-cpu exe=%ls mode=%d cpu=%d got %s",
+              c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
+    }
+    CHECK(!strcmp(AppReasonName(AppReason::RenderOnCpu), "app-render-on-cpu"), "reason name %s",
+          AppReasonName(AppReason::RenderOnCpu));
     struct PathCase { const wchar_t *image, *windows; bool component; };
     const PathCase paths[] = {
         {L"C:\\Windows\\System32\\notepad.exe", L"C:\\Windows", true},
@@ -197,6 +221,7 @@ static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t HostedKey[] = L"SOFTWARE\\amdgpu-wddm\\HostedUmd";
 static const wchar_t KmdKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
 static const wchar_t AppKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
+static const wchar_t GraphicsKey[] = L"SOFTWARE\\amdgpu-wddm\\Graphics"; // app-settings-core.h
 // The UMD path values of the router under test and of the other bitness (router.cpp, BD-064): a 32-bit router reads
 // CpuUmdPathWow, HostedUmdPathWow and GpuUmdPathWow and must ignore the 64-bit names, and the other way round.
 #ifdef _WIN64
@@ -870,6 +895,44 @@ static void FrontRuleTests()
         a = client;
         a.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
         run(caps, &a, &compositor, FlipRefusal::format, "a storage row that is not a scan-out row");
+        // M15.14 (0.7.216.20): RGBA8 and RGB10A2 are scan-out rows, but a row that is not the firmware's
+        // own format needs the trailer's PLANE_FORMATS flag, because only that kernel driver programs the
+        // plane's pixel format. With the flag, the client's row may differ from the compositor's BGRA8
+        // row (the swizzle and the address latch in one VUPDATE); FP16 stays refused.
+        bc250_scanout_caps planes = caps;
+        planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        const DXGI_FORMAT newRows[] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM};
+        for (DXGI_FORMAT format : newRows) {
+            a = client;
+            a.format = format;
+            run(caps, &a, &compositor, FlipRefusal::format, "a new scan-out row without PLANE_FORMATS");
+            run(planes, &a, &compositor, FlipRefusal::none, "a new scan-out row with PLANE_FORMATS");
+            Resource b = compositor;
+            b.format = format;
+            run(caps, &a, &b, FlipRefusal::format, "two new rows without PLANE_FORMATS");
+            run(planes, &a, &b, FlipRefusal::none, "two new rows with PLANE_FORMATS");
+            run(planes, &client, &b, FlipRefusal::none, "a BGRA8 client over a new compositor row");
+        }
+        a = client;
+        run(planes, &a, &compositor, FlipRefusal::none, "BGRA8 with PLANE_FORMATS");
+        a.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        a.pitch = HostedSurfacePitch(1920, 8);
+        run(planes, &a, &compositor, FlipRefusal::format, "FP16 with PLANE_FORMATS");
+        a = client;
+        a.format = DXGI_FORMAT_A8_UNORM;
+        run(planes, &a, &compositor, FlipRefusal::format, "A8 with PLANE_FORMATS");
+        a = client;
+        a.format = 0;
+        run(planes, &a, &compositor, FlipRefusal::format, "a format the record and the blob disagree on");
+        {
+            Resource b = compositor;
+            b.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            run(planes, &client, &b, FlipRefusal::format, "an FP16 compositor buffer (an HDR desktop)");
+        }
+        a = client;
+        a.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        a.pitch = 1920 * 4 + 256;
+        run(planes, &a, &compositor, FlipRefusal::pitch, "an RGBA8 client of another pitch");
         a = client;
         a.width = 1280;
         run(caps, &a, &compositor, FlipRefusal::geometry, "a client of another width");
@@ -1247,6 +1310,50 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     device.pfnOpenResource(hDevice, &open, other, rt);
     CHECK(ask(other, compositor, 0) == FALSE, "TRUE for two different pitches");
     CHECK(Has(lastLine(), "answer=0 rule=pitch"), "pitch: %s", lastLine().c_str());
+    // M15.14 (0.7.216.20): an RGBA8 client, the W3 shape of lab session 458. The blob and the v3 record
+    // both say RGBA8. Without PLANE_FORMATS the rule says format; with it the pair flips.
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    lb7a.Format = D3DDDIFMT_A8B8G8R8;
+    e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for RGBA8 without PLANE_FORMATS");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=28"), "RGBA8 no flag: %s",
+          lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
+    CHECK(ask(other, compositor, 0) == TRUE, "RGBA8 with PLANE_FORMATS refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "answer=1 rule=supported") && Has(lastLine(), "caps_flags=00000003") &&
+          Has(lastLine(), "pitch=7680 fmt=28"), "RGBA8 with flag: %s", lastLine().c_str());
+    CHECK(ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "RGBA8 IMMEDIATE refused");
+    // The sRGB view of the same storage in the record is the same row.
+    e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == TRUE, "an RGBA8 sRGB record refused: %s", lastLine().c_str());
+    // A record that names another storage row than the kernel driver's blob is refused, not renamed.
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for a BGRA8 record over an RGBA8 blob");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=0 "), "mismatch: %s",
+          lastLine().c_str());
+    // RGB10A2, the 10-bit swap chain.
+    lb7a.Format = D3DDDIFMT_A2B10G10R10;
+    e26r.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == TRUE, "RGB10A2 with PLANE_FORMATS refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "fmt=24"), "RGB10A2: %s", lastLine().c_str());
+    // FP16 at its own 8-byte pitch: not a scan-out row, with or without the flag.
+    lb7a.Format = D3DDDIFMT_A16B16G16R16F;
+    lb7a.Pitch = width * 8;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    e26r.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for an FP16 client");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=10"), "FP16: %s", lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    lb7a.Format = D3DDDIFMT_A8R8G8B8;
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     // Negative control 7: a destroyed client is forgotten, so a reused handle is never answered from the
     // record of a buffer that is gone.
     device.pfnDestroyResource(hDevice, client);
@@ -2045,7 +2152,40 @@ static void Child(const std::string &s)
             lines = {"route=gpu reason=app-default fallback=0 gpu_hr=00000000", "app_mode=gpu-default mode_source=registry"};
         } else if (s == "app-gpu-default-denied") {
             AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {L"other.exe", Upper(self)});
-            lines = {"route=cpu reason=app-denied fallback=0"};
+            lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=unset"};
+        } else if (s == "app-render-on-cpu-app") {
+            // The per-application graphics setting, in the application key named by the image (any case).
+            AppBase(L"gpu-default");
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + Upper(self)).c_str(), L"RenderOnCpu", 1);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0 gpu_hr=00000001", "render_on_cpu=1/application"};
+        } else if (s == "app-render-on-cpu-global") {
+            AppBase(L"allowlist"); SetMulti(AppKey, L"Allow", {self});
+            SetDw(GraphicsKey, L"RenderOnCpu", 1);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0", "render_on_cpu=1/global"};
+        } else if (s == "app-render-on-cpu-app-off") {
+            // An application 0 wins over a global 1.
+            AppBase(L"gpu-default");
+            SetDw(GraphicsKey, L"RenderOnCpu", 1);
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0", "render_on_cpu=0/application"};
+        } else if (s == "app-render-on-cpu-env") {
+            // AMDGPU_WDDM_RENDER_ON_CPU=1 (scenario environment) wins over an application 0.
+            AppBase(L"gpu-default");
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0", "render_on_cpu=1/environment"};
+        } else if (s == "app-render-on-cpu-invalid") {
+            // Out of range and of another type: ignored, the application decision stands.
+            AppBase(L"gpu-default");
+            SetDw(GraphicsKey, L"RenderOnCpu", 2);
+            SetSz((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", L"1");
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0", "render_on_cpu=unset"};
+        } else if (s == "app-render-on-cpu-deny") {
+            // The old Deny list still keeps an application on the CPU UMD with RenderOnCpu 0.
+            AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {self});
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=0/application"};
         } else if (s == "app-deny-wrong-type") {
             // A Deny list that cannot be read must not widen the GPU route.
             AppBase(L"gpu-default"); SetSz(AppKey, L"Deny", L"other.exe");
@@ -2238,6 +2378,11 @@ static int RunAll(const std::wstring &out)
         {"app-gpu-umd-unset", nullptr, {}}, {"app-gpu-umd-relative", nullptr, {}}, {"app-gpu-umd-wrong-type", nullptr, {}},
         {"app-gpu-fails", nullptr, {}}, {"app-gpu-missing", nullptr, {}}, {"app-gpu-no-export", nullptr, {}},
         {"app-d3d10-entry", nullptr, {}}, {"app-log-dir-fallback", nullptr, {}}, {"app-mode-toggle", nullptr, {}},
+        // RenderOnCpu, the per-application graphics setting (app-settings-core.h).
+        {"app-render-on-cpu-app", nullptr, {}}, {"app-render-on-cpu-global", nullptr, {}},
+        {"app-render-on-cpu-app-off", nullptr, {}},
+        {"app-render-on-cpu-env", nullptr, {{L"AMDGPU_WDDM_RENDER_ON_CPU", L"1"}}},
+        {"app-render-on-cpu-invalid", nullptr, {}}, {"app-render-on-cpu-deny", nullptr, {}},
         {"protected-logonui", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},
@@ -2251,10 +2396,10 @@ static int RunAll(const std::wstring &out)
         std::wstring name(sc.name, sc.name + strlen(sc.name));
         std::wstring exe = sc.exe ? Layout + L"\\" + std::wstring(sc.exe, sc.exe + strlen(sc.exe)) : self;
         std::wstring cmd = L"\"" + exe + L"\" child " + name + L" \"" + Layout + L"\"";
-        // Environment: the parent's without any BC250_ variable, plus the scenario's.
+        // Environment: the parent's without any BC250_ or AMDGPU_WDDM_ variable, plus the scenario's.
         std::vector<std::wstring> vars;
         for (wchar_t *e = GetEnvironmentStringsW(), *p = e; *p; p += wcslen(p) + 1)
-            if (_wcsnicmp(p, L"BC250_", 6)) vars.push_back(p);
+            if (_wcsnicmp(p, L"BC250_", 6) && _wcsnicmp(p, L"AMDGPU_WDDM_", 12)) vars.push_back(p);
         for (auto &kv : sc.env) {
             std::wstring v = kv.second;
             size_t at = v.find(L"<layout>");

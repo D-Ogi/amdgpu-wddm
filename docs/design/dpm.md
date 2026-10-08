@@ -841,7 +841,10 @@ that the machine does not survive costs the curve and not the machine, and the d
   or `power n/a` from a driver before 0.7.215. `bc250kmd_cli telemetry` adds `power_w` and `power_avg_w` to its
   `dpm` line when the table is fresh. The driver log gets two `smu metrics:` lines next to each telemetry line and in
   the summary.
-- The driver log (`bc250kmd_cli log`) gets every transition, a telemetry line every 5 s and a line in the summary.
+- The driver log (`bc250kmd_cli log`) gets every transition, a telemetry block every 5 s and a line in the summary.
+  At the idle point the block comes every 60 s (BD-097). At 5 s the blocks filled the 768 wrapping lines of the ring
+  in about five minutes, and an idle desktop lost its events. `Parameters\TelemetryIdleLogMs` (REG_DWORD, read at the
+  device start, at most 3600000) sets that period. The value 0, or a value up to 5000, gives a block every 5 s again.
   From 0.7.200 these lines show `warm N` after `thermal N`: N is the number of governor ticks in which the warm zone
   stopped a raise. The `RUN_DPM` escape does not carry this counter. A CLI built before 0.7.200 shows throttle 8 as
   `?`.

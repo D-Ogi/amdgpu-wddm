@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <atomic>
 #include <cstdio>
+#include "../d3d12/stdio-log.h"
 namespace bc250::umd {
 inline void adapter_diagnostic(const char *stage,UINT interfaceVersion,UINT version,UINT flags) noexcept {
     char text[192];
@@ -29,7 +30,18 @@ inline void surface_diagnostic(const char *stage,HRESULT status,unsigned format,
     OutputDebugStringA(text);
 }
 inline void APIENTRY engine_diagnostic(void *,UINT32 level,const char *message) noexcept {
-    if(!message || level<1 || level>2)return;
+    if(!message || level<1 || level>3)return;
+    if(level==3){
+        // Info lines only on the AMDGPU_WDDM_LOG sink, when the process asked for one (d3d12/stdio-log.h): DXVK's
+        // "Effective configuration" there shows the options of the per-application settings. Bounded apart from
+        // the errors and warnings below.
+        if(!amdgpu_wddm_log::enabled())return;
+        static std::atomic_uint info{256};
+        unsigned left=info.load(std::memory_order_relaxed);
+        while(left && !info.compare_exchange_weak(left,left-1,std::memory_order_relaxed)){}
+        if(left)amdgpu_wddm_log::print("M14 engine info: %.1024s%s\n",message,left==1?" [info limit reached]":"");
+        return;
+    }
     // No adapter userdata: even a quarantined device can log after CloseAdapter.
     // A process-wide bound prevents a broken title flooding the debug channel.
     static std::atomic_uint remaining{64};
@@ -41,5 +53,6 @@ inline void APIENTRY engine_diagnostic(void *,UINT32 level,const char *message) 
         count==1?" [diagnostic limit reached]":"");
     // Engine log lock is held. Never call engine/Vulkan or runtime callbacks here.
     OutputDebugStringA(text);
+    amdgpu_wddm_log::print("%s",text);
 }
 }

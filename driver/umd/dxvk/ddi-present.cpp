@@ -117,12 +117,35 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
                 shadow=nullptr;
             }
         }
+        // The per-application settings (docs/design/per-app-graphics-settings.md): VSync as the sync interval
+        // override of this Present, then MaxFrameLatency and FrameRateLimit once it is queued.
+        namespace as=amdgpu_wddm::app_settings;
+        const as::Settings &settings=as::process_settings();
+        const as::SyncOverride vsync=as::sync_override(settings);
+        const as::SyncOverride passed=as::d3d11_runtime_override(vsync);
+        PresentSyncOverride sync{};
+        sync.valid=passed.valid;
+        sync.interval=passed.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
         const HRESULT hr=present_runtime(owner.bridge(),presented,
-            destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission);
+            destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission,sync);
         if (shadow && SUCCEEDED(hr)) {
             // This Present reads the slot; the next write of it waits for this value.
             shadow->retire=owner.bridge().present_value;
             owner.present_shadows().next^=1u;
+        }
+        if (SUCCEEDED(hr)) {
+            // At most N Presents queued ahead of the GPU: wait for the one N back to retire, as DXVK's own
+            // swap chain does for its frame latency. Only a lost device makes this Present fail.
+            const UINT64 latency=as::max_frame_latency(settings);
+            auto &bridge=owner.bridge();
+            if (latency && bridge.present_value>latency) {
+                const HRESULT waited=wait_present_value(bridge,bridge.present_value-latency);
+                if (FAILED(waited) && ddi_device_status(waited)==D3DDDIERR_DEVICEREMOVED) return D3DDDIERR_DEVICEREMOVED;
+            }
+            // BD-099: VSync 1 is not passed to the runtime (d3d11_runtime_override, vblank-pacer.h). The shell waits
+            // here for the vertical blanks that the application's interval does not give.
+            owner.vblank_pacer().wait(as::extra_vblanks(vsync,unsigned(args->FlipInterval)));
+            owner.frame_limiter().frame(as::frame_rate_limit(settings));
         }
         return ddi_device_status(hr);
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }

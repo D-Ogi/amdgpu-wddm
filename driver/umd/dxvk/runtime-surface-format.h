@@ -2,6 +2,7 @@
 #pragma once
 #include "runtime-bridge.h"
 #include "../../contract/amdgpu_wddm_surface_format.h"
+#include "../../contract/bc250_scanout_caps.h"
 #include "../../contract/bc250_shared_surface.h"
 #include "../../kmd/gdi_private.h"
 namespace bc250::umd {
@@ -42,16 +43,19 @@ inline const AMDGPU_WDDM_SURFACE_FORMAT *runtime_surface_format(UINT d3dddi,DXGI
     const auto *row=runtime_surface_format(format);
     return row && row->d3dddi==d3dddi ? row : nullptr;
 }
-// The row a surface may be scanned out as: the table's SCANOUT_PRIMARY rows, which on this part are
-// the 8-bit ones the firmware left the plane in. RGB10A2 and RGBA16F are COMPOSED only, so a 10-bit or
-// FP16 swap chain is never a candidate and keeps the composed-primary path (M14.1) unchanged. An sRGB
-// view shares the storage row, as it does for composition.
-inline const AMDGPU_WDDM_SURFACE_FORMAT *runtime_scanout_format(DXGI_FORMAT format) {
+// The row a surface may be scanned out as, by the one user-mode rule bc250_scanout_format_admitted:
+// a SCANOUT_PRIMARY row of the table, and for a row other than the firmware's own format (RGBA8 and
+// RGB10A2 from the kernel driver 0.7.216.20) the trailer's BC250_SCANOUT_CAPS_PLANE_FORMATS as well.
+// scanoutCaps is that trailer's flags word; this shell does not read the trailer, so its caller passes
+// 0 and only the firmware's BGRA8 row is a candidate here. RGBA16F is COMPOSED only, so an FP16 swap
+// chain is never a candidate and keeps the composed-primary path (M14.1) unchanged. An sRGB view shares
+// the storage row, as it does for composition.
+inline const AMDGPU_WDDM_SURFACE_FORMAT *runtime_scanout_format(DXGI_FORMAT format,unsigned scanoutCaps=0) {
     unsigned count=0;
     const auto *rows=amdgpu_wddm_surface_formats(&count);
     for (unsigned i=0;i<count;++i)
         if (rows[i].dxgi && (UINT(format)==rows[i].dxgi || (rows[i].dxgi_srgb && UINT(format)==rows[i].dxgi_srgb)))
-            return amdgpu_wddm_surface_admit(&rows[i],AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
+            return bc250_scanout_format_admitted(&rows[i],scanoutCaps)?&rows[i]:nullptr;
     return nullptr;
 }
 // The pitch of the engine's linear image (RADV on GFX10: a row rounded up to 256 bytes, for

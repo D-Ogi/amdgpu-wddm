@@ -172,3 +172,36 @@ matched and every submission was fenced. Exit 1 otherwise, 2 for a bad command l
 the step that did not return. The build checks that path with `D3D12OVERSUB_TEST_STALL=dxgi`. Positive control
 (development PC, RTX 4090, 2026-10-07): 512 MiB DEFAULT and 256 MiB UPLOAD, 36 of 36 samples matched, and the
 process group's `Requested` was equal to DXGI's `CurrentUsage`.
+
+## Shader model 6.7 and 6.8 client
+
+`amdgpu_wddm_d3d12sm68.exe` reports the shader model that an application sees through the system D3D12 runtime and
+runs one shader of SM 6.7 and two of SM 6.8 with an exact readback. It asks `CheckFeatureSupport(SHADER_MODEL)` from
+the highest model of the SDK headers down, and prints the OPTIONS1, OPTIONS9, OPTIONS14 and OPTIONS21 answers. The
+tests are compute shaders that the SDK's dxc compiles at build time (`sm68\*.hlsl`, embedded in the executable):
+
+| Test | Model | What it checks |
+|---|---|---|
+| `sm67_quad` | 6.7 | `QuadAny` and `QuadAll` over 128 threads |
+| `sm68_wavesize` | 6.8 | `[WaveSize(32, 64)]`: one lane count in the range for the whole dispatch, every lane index |
+| `sm68_samplecmpgrad` | 6.8 | `SampleCmpGrad` on a 4 x 4 R32_FLOAT texture, only when OPTIONS21 reports `SampleCmpGradientAndBiasSupported` |
+
+The client skips a test that the device's shader model or capability does not admit. `--force` tries it and
+records the runtime's answer, which is never a failure. The client loads `d3d12.dll` and `dxgi.dll` from System32
+only. The `-AgilitySdkVersion <n>` build exports `D3D12SDKVersion` and `D3D12SDKPath`, so the system `d3d12.dll`
+loads `.\D3D12_0\D3D12Core.dll` next to the executable, as a game with an Agility SDK core does. The `module` lines
+tell which `D3D12Core.dll` and which `amdgpu_wddm_d3d12.dll` the process loaded.
+
+```
+pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget -Tool d3d12sm68 [-AgilitySdkVersion 619] [-Out <dir>]
+amdgpu_wddm_d3d12sm68[_agility<n>].exe [adapter-index] [--expect 6_6|6_7|6_8] [--force] [--seconds N]
+amdgpu_wddm_d3d12sm68[_agility<n>].exe --blobs
+```
+
+The last line is `result PASS|FAIL highest <model> expect <model> tests <n> failed <n>`. Exit 0 when every test that
+ran passed and the highest model is the `--expect` model (when given). Exit 1 otherwise, 2 for a bad command line,
+and 3 when a step did not return before the deadline (`--seconds`, 60 by default, at most 170). `--blobs` reads the
+program headers of the embedded shaders without a GPU. The build runs it and the two command line refusals.
+
+Positive control (development PC, RTX 4090, 2026-10-08): the inbox runtime 26100 reports 6_8 and the Agility 619
+build reports 6_9, and all three tests pass in both (fact M840).

@@ -1,0 +1,316 @@
+d3d12-ddi OpenAdapter12 0
+0b88:info:vkd3d_config_flags_init_once: Embedder config defaults 'fail_unsupported_state_template'.
+0b88:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+0b88:info:vkd3d_config_flags_init_once: VKD3D_CONFIG=''.
+0b88:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+0b88:info:vkd3d_instance_init: vkd3d-proton - build: 4e9a98e9f882dba.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f8d
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+bc250: deferred destroy: header version=4 destroy=on(default) witness=on(default) cap_mb=512(default) policy=host/00 log=(none)(default) summary_s=30(default) coalesce=on(default) gather_slots=16(default) progress_fence=gpu(default)
+0b88:info:vkd3d_disable_swapchain_extensions: VK_KHR_swapchain is not enabled, not enabling 5 extensions that depend on it.
+0b88:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+0b88:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+0b88:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+0b88:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+0b88:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+bc250: deferred destroy: summary: 0 BOs held (0 MiB), 0 destroyed at once; peak 0 BOs, 0 MiB; longest hold 0 ms; 0 destroyed unretired; 0 allocations retried after 0 CPU waits; 0 cap waits (0 ms in all, longest 0 ms, 0 failed); teardown: 0 CPU waits, 0 ms; 0 host imports destroyed, never held
+bc250: deferred destroy: witness finish destroys=0 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:0/0/0 shader-ring:0/0/0 cpu-upload:0/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:0/0/0 other:0/0/0
+engine-ddi: QueryAdapterCaps: shader model 68; AdvancedTextureOps 1, WriteableMSAATextures 1, SampleCmpGradientAndBias 1, ExtendedCommandInfo 1
+engine-ddi: shader model ceiling 67 (engine 68): reported 67
+d3d12-caps experiment shader-model-68-off result=00000000
+d3d12-ddi GetCaps type=1074 size=8 info_present=0 result=00000000
+d3d12-ddi GetSupportedVersions 0
+d3d12-ddi GetSupportedVersions 1
+d3d12-ddi CloseAdapter 0
+d3d12-ddi OpenAdapter12 0
+0b88:info:vkd3d_config_flags_init_once: Embedder config defaults 'fail_unsupported_state_template'.
+0b88:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+0b88:info:vkd3d_config_flags_init_once: VKD3D_CONFIG=''.
+0b88:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+0b88:info:vkd3d_instance_init: vkd3d-proton - build: 4e9a98e9f882dba.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f8d
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+bc250: deferred destroy: header version=4 destroy=on(default) witness=on(default) cap_mb=512(default) policy=host/00 log=(none)(default) summary_s=30(default) coalesce=on(default) gather_slots=16(default) progress_fence=gpu(default)
+0b88:info:vkd3d_disable_swapchain_extensions: VK_KHR_swapchain is not enabled, not enabling 5 extensions that depend on it.
+0b88:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+0b88:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+0b88:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+0b88:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+0b88:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+bc250: deferred destroy: summary: 0 BOs held (0 MiB), 0 destroyed at once; peak 0 BOs, 0 MiB; longest hold 0 ms; 0 destroyed unretired; 0 allocations retried after 0 CPU waits; 0 cap waits (0 ms in all, longest 0 ms, 0 failed); teardown: 0 CPU waits, 0 ms; 0 host imports destroyed, never held
+bc250: deferred destroy: witness finish destroys=0 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:0/0/0 shader-ring:0/0/0 cpu-upload:0/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:0/0/0 other:0/0/0
+engine-ddi: QueryAdapterCaps: shader model 68; AdvancedTextureOps 1, WriteableMSAATextures 1, SampleCmpGradientAndBias 1, ExtendedCommandInfo 1
+engine-ddi: shader model ceiling 67 (engine 68): reported 67
+d3d12-caps experiment shader-model-68-off result=00000000
+d3d12-ddi GetCaps type=1074 size=8 info_present=0 result=00000000
+d3d12-ddi GetSupportedVersions 0
+d3d12-ddi GetSupportedVersions 1
+d3d12-ddi CalcPrivateDeviceSize-interface 786512
+d3d12-ddi CalcPrivateDeviceSize-version 6029312
+d3d12-ddi CalcPrivateDeviceSize-flags 0
+d3d12-ddi CreateDevice-interface 786512
+d3d12-ddi CreateDevice-version 6029312
+d3d12-ddi CreateDevice-flags 0
+d3d12-engine AdapterEngine result=00000000
+{"event":"clock","frequency":10000000}
+d3d12-engine CreateDevice-begin result=00000000
+0b88:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+0b88:info:vkd3d_instance_init: vkd3d-proton - build: 4e9a98e9f882dba.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f8d
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted paging create identity=0000027566324D90 queue=400007c0 status=00000000
+bc250: deferred destroy: header version=4 destroy=on(default) witness=on(default) cap_mb=512(default) policy=host/00 log=(none)(default) summary_s=30(default) coalesce=on(default) gather_slots=16(default) progress_fence=gpu(default)
+bc250: IB submission: IB2 calls from the gather slot (BC250_IB_NOCOPY=0 copies every IB)
+0b88:info:vkd3d_disable_swapchain_extensions: VK_KHR_swapchain is not enabled, not enabling 5 extensions that depend on it.
+0b88:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+radv_wddm2_winsys_create
+allocation handle=0x40000880
+allocation handle=0x400008c0
+allocation handle=0x40000900
+allocation handle=0x40000940
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000b80
+allocation handle=0x40000bc0
+allocation handle=0x40000c00
+allocation handle=0x40000c40
+allocation handle=0x40000c80
+allocation handle=0x40000cc0
+allocation handle=0x40000d00
+allocation handle=0x40000d40
+allocation handle=0x40000d80
+allocation handle=0x40000dc0
+allocation handle=0x40000e00
+allocation handle=0x40000e40
+allocation handle=0x40000e80
+allocation handle=0x40000ec0
+allocation handle=0x40000f00
+allocation handle=0x40000f40
+d3d12-engine BindQueue result=00000000
+0b88:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+0b88:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+allocation handle=0x40001080
+allocation handle=0x400010c0
+0b88:info:vkd3d_bindless_state_get_bindless_flags: Enabling fast paths for advanced ExecuteIndirect() graphics and compute (EXT_dgc).
+0b88:info:vkd3d_bindless_state_get_bindless_flags: Device supports VK_EXT_mutable_descriptor_type.
+0b88:info:vkd3d_bindless_state_get_bindless_flags: Device supports ultra-fast path for descriptor copies.
+0b88:info:vkd3d_bindless_state_get_bindless_flags: Device supports packed metadata path for descriptor copies.
+0b88:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+0b88:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+0b88:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+0b88:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+0b88:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+0b88:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+0b88:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: C:\Users\bc250\AppData\Local\amdgpu-wddm\vkd3d\vkd3d-proton.amdgpu_wddm_d3d12sm68_agility619.exe.cache.
+0b88:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: C:\Users\bc250\AppData\Local\amdgpu-wddm\vkd3d\vkd3d-proton.amdgpu_wddm_d3d12sm68_agility619.exe.cache.
+0b88:info:vkd3d_pipeline_library_disk_cache_merge: Promoting write cache to read cache. No need to merge any disk caches.
+0b88:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 0.899 ms.
+0b88:info:vkd3d_pipeline_library_disk_cache_initial_setup: Mapping read-only cache took 0.093 ms.
+0b88:info:vkd3d_pipeline_library_disk_cache_initial_setup: Parsing stream archive took 0.026 ms.
+0b88:info:vkd3d_driver_cache_init: Driver cache C:\Users\bc250\AppData\Local\amdgpu-wddm\vkd3d\vkd3d-proton.amdgpu_wddm_d3d12sm68_agility619.exe.cache.driver: 4560 bytes loaded in 0.162 ms.
+0b88:info:vkd3d_pipeline_compile_limiter_init: Pipeline compile limiter: 2 concurrent compiles, cache hits without a slot, thermal band on.
+d3d12-engine CreateDevice-end result=00000000
+d3d12-engine GetVulkanHandles result=00000000
+d3d12-engine HeapImports result=00000000
+d3d12-engine import release policy progress_gate=1 depth=3 count_cap=64 age_ms=250 byte_cap=67108864
+d3d12-engine DeviceContext result=00000000
+engine-ddi: release policy: two-phase retirement 1
+d3d12-engine ReleasePolicy result=00000000
+engine-ddi: retire policy: handoff 1, backlog bound 256, age bound 250 ms
+d3d12-engine RetireHandoff result=00000000
+engine-ddi: replay policy: on, up to 8 rings of 4096 KiB, worker spin 20 us, yield 1000 us, wake at 8 KiB pending, workers at their owner's level and lifted above a waiting drain, long waits from 20 ms, summaries every 10 s (qpc 98019166251, qpf 10000000)
+d3d12-engine DeferredReplay result=00000000
+d3d12-engine RecordingBind result=00000000
+d3d12-ddi GetCaps type=1004 size=64 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1012 size=16 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1012 size=16 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1006 size=124 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1077 size=4 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1078 size=16 info_present=0 result=00000000
+d3d12-ddi GetOptionalDDITables 0
+d3d12-ddi FillDDITable type=0 size=976 number=0 runtime_table_present=0 result=00000000
+d3d12-ddi FillDDITable type=1 size=560 number=0 runtime_table_present=1 result=00000000
+d3d12-ddi FillDDITable type=1 size=560 number=1 runtime_table_present=1 result=00000000
+d3d12-ddi FillDDITable type=2 size=56 number=0 runtime_table_present=0 result=00000000
+d3d12-ddi FillDDITable type=8 size=32 number=0 runtime_table_present=0 result=00000000
+d3d12-ddi GetCaps type=1005 size=4 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1062 size=4 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1067 size=4 info_present=0 result=00000000
+engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 4: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 5: engine 00000000, Support1 0x1010f0, Support2 0; answer 0
+engine-ddi: CheckFormatSupport: format 6: engine 00000000, Support1 0x9013fb, Support2 0; answer 0x4501
+engine-ddi: CheckFormatSupport: format 7: engine 00000000, Support1 0x9011fb, Support2 0; answer 0x500
+engine-ddi: CheckFormatSupport: format 8: engine 00000000, Support1 0x9011fb, Support2 0; answer 0x500
+engine-ddi: CheckFormatSupport: format 9: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 10: engine 00000000, Support1 0x2fcd3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 11: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 12: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 13: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 14: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 15: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 16: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 17: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 18: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 19: engine 00000000, Support1 0x1010b0, Support2 0; answer 0
+engine-ddi: CheckFormatSupport: format 20: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8
+engine-ddi: CheckFormatSupport: format 21: engine 00000000, Support1 0x4d017b0, Support2 0; answer 0x4011
+engine-ddi: CheckFormatSupport: format 22: engine 00000000, Support1 0xd011b0, Support2 0; answer 0x10
+engine-ddi: CheckFormatSupport: format 23: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 24: engine 00000000, Support1 0x3fcd3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 25: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 89: engine 80004005, Support1 0, Support2 0; answer 0x80000000
+engine-ddi: CheckFormatSupport: format 27: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 28: engine 00000000, Support1 0x3fcd3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 29: engine 00000000, Support1 0x1fcd3f1, Support2 0x200; answer 0x1401f
+engine-ddi: CheckFormatSupport: format 30: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 31: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 32: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 33: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 34: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 35: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 36: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 37: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 38: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 39: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 40: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8
+engine-ddi: CheckFormatSupport: format 41: engine 00000000, Support1 0x6f4d7fb, Support2 0x2ff; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 42: engine 00000000, Support1 0x2f051ff, Support2 0x3ff; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 43: engine 00000000, Support1 0x2f051fb, Support2 0x2ff; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 44: engine 00000000, Support1 0x1010b0, Support2 0; answer 0
+engine-ddi: CheckFormatSupport: format 45: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8
+engine-ddi: CheckFormatSupport: format 46: engine 00000000, Support1 0x4d017b0, Support2 0; answer 0x4011
+engine-ddi: CheckFormatSupport: format 47: engine 00000000, Support1 0xd011b0, Support2 0; answer 0x10
+engine-ddi: CheckFormatSupport: format 48: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 49: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 50: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 51: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 52: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 53: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 54: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 55: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8
+engine-ddi: CheckFormatSupport: format 56: engine 00000000, Support1 0x6f4d7f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 57: engine 00000000, Support1 0x2f051f7, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 58: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 59: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 60: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 61: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 62: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a
+engine-ddi: CheckFormatSupport: format 63: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f
+engine-ddi: CheckFormatSupport: format 64: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a
+engine-ddi: CheckFormatSupport: format 70: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 71: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 72: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 73: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 74: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 75: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 76: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 77: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 78: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 79: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 80: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 81: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 82: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 83: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 84: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 90: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 87: engine 00000000, Support1 0x3fcd3f3, Support2 0x2c0; answer 0x1451f
+engine-ddi: CheckFormatSupport: format 91: engine 00000000, Support1 0x1fcd3f1, Support2 0x200; answer 0x1401f
+engine-ddi: CheckFormatSupport: format 92: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x10000
+engine-ddi: CheckFormatSupport: format 88: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x1451f
+engine-ddi: CheckFormatSupport: format 93: engine 00000000, Support1 0xf4d3f1, Support2 0x200; answer 0x1401f
+engine-ddi: CheckFormatSupport: format 94: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 95: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 96: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 97: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000
+engine-ddi: CheckFormatSupport: format 98: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+engine-ddi: CheckFormatSupport: format 99: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001
+d3d12-ddi GetCaps type=1060 size=20 info_present=0 result=00000000
+d3d12-ddi GetCaps type=1002 size=20 info_present=1 result=00000000
+engine-ddi: GetCaps TEXTURE_LAYOUT_SETS: layout 1, functional unit 0: one entry, alignment 1
+d3d12-ddi GetCaps type=1003 size=20 info_present=1 result=00000000
+engine-ddi: GetCaps TEXTURE_LAYOUT_SETS: layout 1, functional unit 1: one entry, alignment 1
+d3d12-ddi GetCaps type=1003 size=20 info_present=1 result=00000000
+engine-ddi: GetCaps TEXTURE_LAYOUT_SETS: layout 1, functional unit 2: one entry, alignment 1
+d3d12-ddi GetCaps type=1003 size=20 info_present=1 result=00000000
+engine-ddi: GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: node 0, flags 0x7
+d3d12-ddi GetCaps type=1059 size=4 info_present=1 result=00000000
+d3d12-ddi GetCaps type=1009 size=4 info_present=1 result=00000000
+d3d12-ddi GetCaps type=1071 size=4 info_present=0 result=00000000
+allocation handle=0x40001300
+allocation handle=0x40001340
+allocation handle=0x40001380
+allocation handle=0x400013c0
+allocation handle=0x40001400
+allocation handle=0x40001440
+allocation handle=0x40001480
+allocation handle=0x400014c0
+allocation handle=0x40001500
+allocation handle=0x40001540
+allocation handle=0x40001580
+allocation handle=0x400015c0
+allocation handle=0x40001600
+allocation handle=0x40001640
+allocation handle=0x40001680
+allocation handle=0x400016c0
+d3d12-engine BindQueue result=00000000
+allocation handle=0x400017c0
+allocation handle=0x40001800
+engine-ddi: replay: ring 0 of 8 for thread 2952, worker level 0
+allocation handle=0x40001a00
+allocation handle=0x40001a40
+allocation handle=0x40001a80
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=2
+allocation handle=0x40001ac0
+bc250: gather capacity=4096 bytes required=64 ibs=2 calls=2 copies=0
+engine-ddi: release 3 recorded (1 so far): phase 1, 0 queues marked, destroy qpc 98019866908
+engine-ddi: release 3 run (1 so far): phase 2, marks 0/0, destroy qpc 98019866908, release qpc 98019870886, status 00000000
+engine-ddi: release 2 recorded (2 so far): phase 1, 0 queues marked, destroy qpc 98019876250
+engine-ddi: release 2 run (2 so far): phase 2, marks 0/0, destroy qpc 98019876250, release qpc 98019880008, status 00000000
+d3d12-engine UnbindQueue result=00000000
+engine-ddi: replay teardown: 1 rings, 14 entries (0 KiB, 14 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 2, sleeps 2, notifies 1 (qpc 98019938301, 0.1 s on)
+engine-ddi: replay teardown drains (calls/waits/us): reset 2/0/0 ecl 1/1/441 destroy 8/0/0 pool 2/0/0 teardown 1/0/0
+engine-ddi: replay teardown long drains (waits of 1/10/50 ms or more, longest us): none
+engine-ddi: replay teardown workers: longest stretch without a finished entry seen by a wait 0 us at rva 0x0; base levels 0; waits that found a worker asleep 0, priority lifts 1, long waits 0
+engine-ddi: replay policy: off
+d3d12-engine DeferredReplay-off result=00000000
+d3d12-engine QueueMetadata result=00000000
+d3d12-engine DeviceContext-close result=00000000 live=0
+d3d12-engine HeapImports-close result=00000000
+0b88:info:vkd3d_pipeline_compile_limiter_cleanup: Pipeline compile limiter: 0 admitted (0 draw-time), 0 waited, 0 ms waited, at most 0 waiting; driver calls: 3 cache hits without a slot, 0 compiles.
+0b88:info:vkd3d_pipeline_compile_limiter_cleanup: Pipeline compile limiter thermal: 0 one-slot bands, 0 ms in them, 0 admissions delayed, 0 failed readings, hottest 0 mC.
+d3d12-engine UnbindQueue result=00000000
+bc250: deferred destroy: summary: 0 BOs held (0 MiB), 44 destroyed at once; peak 0 BOs, 0 MiB; longest hold 0 ms; 0 destroyed unretired; 0 allocations retried after 0 CPU waits; 0 cap waits (0 ms in all, longest 0 ms, 0 failed); teardown: 0 CPU waits, 0 ms; 2 host imports destroyed, never held
+bc250: deferred destroy: witness finish destroys=44 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:36/0/0 shader-ring:3/0/0 cpu-upload:1/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:4/0/0 other:0/0/0
+bc250: deferred destroy: periodic final t=0s deferred: held=0 held_kib=0 peak=0 peak_kib=0 held_total=0 held_total_mib=0 released=0 immediate=44 longest_hold_ms=0 forced=0 destroys=44 borrowed=2 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 cap_waits=0 cap_failed=0 cap_wait_ms=0 retries=0 oom_waits=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:36/0/0 shader-ring:3/0/0 cpu-upload:1/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:4/0/0 other:0/0/0
+bc250: deferred destroy: periodic final t=0s submit: submits=1 progress_separate=0 progress_merged=0 signal_calls=3 signal_objects=4 wait_objects=1 wait_dropped=1 wait_calls=0 wait_skipped=1 gather_slots=16 gather_waits=0 gather_wait_ms=0 gather_wait_max_us=0 coalesce=on progress_fence=gpu progress_gpu=1 kernel_queues=0
+BC250 hosted paging destroy identity=0000027566324D90 queue=400007c0 status=00000000
+d3d12-engine ReleaseDevice result=00000000
+d3d12-engine teardown instance_closed=1 binding_failed=0 unresolved=0
+d3d12-ddi DestroyDevice-unresolved-retired-contexts 0
+d3d12-ddi DestroyDevice-unresolved-active-contexts 0
+d3d12-ddi DestroyDevice-unresolved-retired-memory 0
+d3d12-ddi DestroyDevice-unresolved-active-memory 0
+d3d12-ddi DestroyDevice 0
+d3d12-ddi CloseAdapter 0

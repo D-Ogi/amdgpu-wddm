@@ -5,6 +5,7 @@
 #include <string.h>
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
+#include "plane_format.h"
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
 typedef unsigned UINT;
@@ -24,6 +25,10 @@ typedef struct {
     ULONG DcnFirmwarePitch,DcnCurrentPitch;
     ULONGLONG DcnFirmwareAddress,DcnCurrentAddress;
     volatile long DcnLockTimeouts;
+    /* M15.14: the plane format state (dcn.c DcnCaptureFirmwareFormat). */
+    ULONG DcnFirmwareSurfaceConfig,DcnFirmwareHubpretControl,DcnFirmwareCnvcFormat;
+    BOOLEAN DcnPlaneFormats;
+    ULONG DcnPlaneFormat;
 } BC250_DEVICE;
 #define TRUE 1
 #define FALSE 0
@@ -48,6 +53,7 @@ static unsigned checks,failures;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
 static struct {
     ULONG pitch,flip,surface,high,blank,dbuf;
+    ULONG config,crossbar,cnvc;unsigned format_reads,format_writes;   /* M15.14: the plane format registers */
     ULONGLONG requested,scanned;
     unsigned elapsed,latch_delay,writes;
     int locked,triggered,never_latch;
@@ -65,6 +71,10 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH:*out=model.pitch;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE:*out=(ULONG)model.scanned;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH:*out=(ULONG)(model.scanned>>32);break;
+    /* M15.14: read only when the start captured the firmware's format (d->DcnPlaneFormats). */
+    case BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG:CHECK(d->DcnPlaneFormats);model.format_reads++;*out=model.config;break;
+    case BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL:CHECK(d->DcnPlaneFormats);model.format_reads++;*out=model.crossbar;break;
+    case BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT:CHECK(d->DcnPlaneFormats);model.format_reads++;*out=model.cnvc;break;
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }return STATUS_SUCCESS;
 }
@@ -87,9 +97,17 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
     case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS:
         model.requested=((ULONGLONG)model.high<<32)|value;model.flip|=HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;break;
     case BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG:model.triggered=1;CHECK(!model.locked);break;
+    /* M15.14: written inside the lock, and only when the start captured the firmware's format. */
+    case BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG:CHECK(model.locked && d->DcnPlaneFormats);model.format_writes++;model.config=value;break;
+    case BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL:CHECK(model.locked && d->DcnPlaneFormats);model.format_writes++;model.crossbar=value;break;
+    case BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT:CHECK(model.locked && d->DcnPlaneFormats);model.format_writes++;model.cnvc=value;break;
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }return STATUS_SUCCESS;
 }
+/* Display modes (modeset.c): after the firmware surface is back, the bugcheck screen gets the native viewport.
+ * Counted here; the modeset host suite tests what it writes. It must run only after a successful restore. */
+static unsigned modeset_restores;
+static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset_restores;}
 static void KeStallExecutionProcessor(ULONG us)
 {
     CHECK(us==1 || us==100);model.elapsed+=us;
@@ -117,6 +135,7 @@ int main(void)
     CHECK(d.SystemDisplayReady && width==4 && height==3 && fmt==D3DDDIFMT_X8R8G8B8);
     CHECK(model.scanned==d.DcnFirmwareAddress && model.elapsed==300 && !d.DcnDiverged);
     CHECK(d.DcnCurrentAddress==d.DcnFirmwareAddress && d.DcnCurrentPitch==32);
+    CHECK(modeset_restores==1);
     Bc250SystemDisplayWrite(&d,src,4,2,16,1,1);
     CHECK(fb[9]==1 && fb[10]==2 && fb[11]==3 && fb[17]==5 && fb[18]==6 && fb[19]==7);
     CHECK(fb[8]==0 && fb[12]==0 && fb[20]==0); // preserve pitch padding and clipped right edge
@@ -130,6 +149,7 @@ int main(void)
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_IO_TIMEOUT);
     CHECK(!d.SystemDisplayReady && d.DcnDiverged && width==0 && height==0 && fmt==D3DDDIFMT_UNKNOWN);
     CHECK(model.elapsed==50000 && model.scanned!=d.DcnFirmwareAddress);
+    CHECK(modeset_restores==2); // a failed restore leaves the scaler alone
     Bc250SystemDisplayWrite(&d,src,4,2,16,0,0);CHECK(fb[0]==0);
     init(&d,fb);d.DcnWriteEnabled=0;
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_DEVICE_NOT_READY);
@@ -155,5 +175,31 @@ int main(void)
     CHECK(Bc250SystemDisplayEnable(&d,D3DDDI_ID_UNINITIALIZED,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
     CHECK(d.SystemDisplayReady && model.writes==0);
     Bc250SystemDisplayWrite(&d,src,4,1,8,0,0);CHECK(fb[0]==1 && fb[1]==2 && fb[2]==0);
+    // M15.14: a plane a client flip left in R8G8B8A8 or R10G10B10A2 goes back to the firmware's format with the
+    // firmware's address, in the same locked update, and the bugcheck screen is B8G8R8A8 again.
+    {
+        static const ULONG cfg[3]={8,8,10},xbar[3]={0x00E40000ul,0x00B40000ul,0x00B40000ul},cnv[3]={8,8,10};
+        unsigned i;
+        for(i=0;i<3;i++){
+            init(&d,fb);
+            d.DcnPlaneFormats=TRUE;d.DcnPlaneFormat=i+1;
+            d.DcnFirmwareSurfaceConfig=0x308;d.DcnFirmwareHubpretControl=0x00E4000Ful;d.DcnFirmwareCnvcFormat=8;
+            model.config=0x300|cfg[i];model.crossbar=0x0000000Ful|xbar[i];model.cnvc=cnv[i];
+            CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
+            CHECK(d.SystemDisplayReady && model.scanned==d.DcnFirmwareAddress && !d.DcnDiverged);
+            CHECK(model.config==0x308 && model.crossbar==0x00E4000Ful && model.cnvc==8 && model.format_writes==3);
+            CHECK(d.DcnPlaneFormat==BC250_PLANE_FORMAT_ARGB8888);
+        }
+        // Only the format differs: the address and pitch are the firmware's already, and the check still sees it.
+        init(&d,fb);
+        d.DcnPlaneFormats=TRUE;d.DcnPlaneFormat=BC250_PLANE_FORMAT_ABGR8888;
+        d.DcnFirmwareSurfaceConfig=8;d.DcnFirmwareHubpretControl=0x00E40000ul;d.DcnFirmwareCnvcFormat=8;
+        model.scanned=d.DcnFirmwareAddress;model.pitch=7;model.config=8;model.crossbar=0x00B40000ul;model.cnvc=8;
+        CHECK(DcnRestorePostDisplay(&d)==STATUS_SUCCESS);
+        CHECK(model.crossbar==0x00E40000ul && model.format_writes==3 && d.DcnPlaneFormat==BC250_PLANE_FORMAT_ARGB8888);
+        // Already the firmware's surface in the firmware's format: verified by reads, nothing written.
+        writes=model.writes;
+        CHECK(DcnRestorePostDisplay(&d)==STATUS_SUCCESS);CHECK(model.writes==writes && model.format_reads>=6);
+    }
     printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

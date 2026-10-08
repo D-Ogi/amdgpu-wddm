@@ -258,6 +258,25 @@ int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct
 	return complete;
 }
 
+/* One firmware answer into the running maximum, when it is a clock of this part (bc250_cpu.h). */
+static unsigned int cpu_baseline_take(unsigned int top, unsigned int mhz)
+{
+	if (mhz < BC250_CPU_MIN_MHZ || mhz > BC250_CPU_MAX_MHZ_LAB) return top;
+	return mhz > top ? mhz : top;
+}
+
+unsigned int bc250_cpu_baseline_mhz(const unsigned int *pstate_mhz, unsigned int pstates,
+				    const unsigned int *core_mhz, unsigned int cores, unsigned int previous_mhz)
+{
+	unsigned int i, top = 0u;
+	for (i = 0u; pstate_mhz != NULL && i < pstates; i++) top = cpu_baseline_take(top, pstate_mhz[i]);
+	for (i = 0u; core_mhz != NULL && i < cores; i++) top = cpu_baseline_take(top, core_mhz[i]);
+	if (top > BC250_CPU_MAX_MHZ) top = BC250_CPU_MAX_MHZ;
+	/* previous_mhz came out of this function earlier in the same start, so it is inside the band already. */
+	if (previous_mhz > top) top = previous_mhz;
+	return top;
+}
+
 /* ---- the failure signs -------------------------------------------------------------------------- */
 
 enum bc250_cpu_fail bc250_cpu_check_sample(const struct bc250_cpu_sample *s)

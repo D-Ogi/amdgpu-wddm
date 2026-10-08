@@ -1,4 +1,4 @@
-# Host test for DisplayPort audio steps 0, 1 and 2: driver\kmd\dpaudio_seq.c, the register half the miniport links,
+# Host test for DisplayPort audio steps 0, 1, 2 and 4: driver\kmd\dpaudio_seq.c, the register half the miniport links,
 # compiled as it is and driven against a fake register file (dpaudio_test.c says what it proves).
 #
 #   pwsh driver\kmd\test\run_dpaudio.ps1
@@ -33,7 +33,7 @@ $env:INCLUDE = ''; $env:LIB = ''
 & $cl @('/nologo', '/TC', '/W4', '/WX', '/O2', '/MT',
     "/I$kmd", "/I$repo\third_party\linux-amdgpu", "/I$($msvc.FullName)\include",
     "/I$sdk\Include\$KitVersion\ucrt", "/Fo$obj\", "/Fe$Out\dpaudio_test.exe",
-    (Join-Path $here 'dpaudio_test.c'), (Join-Path $kmd 'dpaudio_seq.c'),
+    (Join-Path $here 'dpaudio_test.c'), (Join-Path $kmd 'dpaudio_seq.c'), (Join-Path $kmd 'edid.c'),
     '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64")
 if ($LASTEXITCODE -ne 0) { throw 'Host build failed' }
 

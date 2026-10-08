@@ -11,6 +11,7 @@
 // and plain integers, like scanout_admit.h, so the host test compiles the production code rather than a copy.
 #pragma once
 #include "bc250kmd_escape.h"
+#include "edid.h"
 
 // NTSTATUS values by number, for a file that includes no WDK header. Anything below zero is a failure.
 #define BC250_AZ_STATUS_SUCCESS 0L
@@ -91,7 +92,33 @@ typedef struct _BC250_DPAUDIO_RESULT {
     unsigned long Writes;                           // register writes this group performed
 } BC250_DPAUDIO_RESULT;
 long Bc250DpAudioHwInit(BC250_AZ_IO* Io, BC250_DPAUDIO_RESULT* Result);                       // endpoint 0
-long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDIO_RESULT* Result);
+
+// Step 4: the sink as its EDID describes it (modeset.c reads the EDID over DP AUX at start). Linux takes these from
+// dm_helpers_parse_edid_caps (amdgpu_dm_helpers.c) into struct audio_info, which dce_aud_az_configure programs.
+#define BC250_DPAUDIO_SINK_NAME_MAX 18u     // MAX_HW_AUDIO_INFO_DISPLAY_NAME_SIZE_IN_CHARS (audio_types.h)
+#define BC250_DPAUDIO_DEFAULT_SPEAKERS 5u   // DEFAULT_SPEAKER_LOCATION (dc_types.h): no speaker allocation block
+#define BC250_DPAUDIO_MAX_CHANNELS 8u       // AUDIO_DESCRIPTOR0.MAX_CHANNELS holds count - 1 in 3 bits
+typedef struct _BC250_DPAUDIO_SINK {
+    unsigned long Manufacturer;             // SINK_INFO0.MANUFACTURER_ID: EDID bytes 8 | 9 << 8
+    unsigned long Product;                  // SINK_INFO0.PRODUCT_ID: EDID bytes 10 | 11 << 8
+    char Name[BC250_DPAUDIO_SINK_NAME_MAX + 1];     // the monitor name descriptor; empty when the EDID has none
+    unsigned long LpcmChannels;             // count, not count - 1
+    unsigned long LpcmRates;                // CTA-861 SAD byte 1: bit 0 = 32 kHz .. bit 6 = 192 kHz
+    unsigned long LpcmSizes;                // CTA-861 SAD byte 2 of LPCM: bit 0 = 16, 1 = 20, 2 = 24 bit
+    unsigned long Speakers;                 // the first byte of the speaker allocation data block
+    unsigned long FromEdid;                 // 0: the fixed set of step 1 (Bc250DpAudioSinkDefault)
+} BC250_DPAUDIO_SINK;
+// The fixed "basic audio" set of step 1: 2-channel LPCM at 32, 44.1 and 48 kHz, 16 bit, FL/FR, "BC-250 DP".
+void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink);
+// The sink from a parsed EDID: identity and name as Linux takes them, and of the LPCM short audio descriptors the one
+// with the most channels (is_audio_format_supported), capped at 8. Returns 1 and FromEdid 1 when the EDID is usable
+// and has an LPCM descriptor; else 0 and the fixed set (a deviation: Linux gives such a sink no audio at all, this
+// driver keeps the endpoint it had before step 4, docs/design/dp-audio.md step 4).
+int Bc250DpAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Sink);
+// Step 1's configure for a sink; Sink NULL is the fixed set.
+long Bc250DpAudioConfigureSink(BC250_AZ_IO* Io, unsigned long Endpoint, const BC250_DPAUDIO_SINK* Sink,
+                               BC250_DPAUDIO_RESULT* Result);
+long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDIO_RESULT* Result);  // the fixed set
 long Bc250DpAudioSetEnabled(BC250_AZ_IO* Io, unsigned long Endpoint, int Enable, BC250_DPAUDIO_RESULT* Result);
 
 // Step 2's two sequences on stream encoder Stream (DIGn, DPn). Every write is a read-modify-write of named fields
@@ -137,6 +164,7 @@ typedef struct _BC250_DPAUDIO_RUN {
     unsigned long Wrote;                    // a write was attempted: the stop path owes the endpoint AUDIO_ENABLED 0
     unsigned long StreamWrote;              // the stream group began
     long Status, UndoStatus;                // the failing write's status; the stop sequence's status
+    const BC250_DPAUDIO_SINK* Sink;         // in: step 4's sink for the configure group; NULL = the fixed set
 } BC250_DPAUDIO_RUN;
 unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run);
 

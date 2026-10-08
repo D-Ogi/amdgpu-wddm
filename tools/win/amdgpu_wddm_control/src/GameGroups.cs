@@ -84,10 +84,15 @@ namespace AmdgpuWddmControl
         }
 
         // The write of an edit, or None when it changes nothing (the settings rule: no names = remove the key).
-        public static ProfileWrite Plan(string image, string stored, IDictionary<string, bool> changes)
+        // shaderModel: the chosen ceiling ("6.8", "6.7", "6.6"), null when the person did not change it.
+        public static ProfileWrite Plan(string image, string stored, IDictionary<string, bool> changes, string shaderModel = null)
         {
-            return Profiles.PlanWrite(image, stored, Apply(stored, changes));
+            var names = Apply(stored, changes);
+            if (shaderModel != null) ShaderModelCeiling.Apply(names, shaderModel);
+            return Profiles.PlanWrite(image, stored, names);
         }
+
+        internal static List<string> NamesOf(string value) { return Names(value); }
 
         // The names that only the support view shows: the diagnostic group and names outside the catalog.
         public static List<string> Hidden(string stored)
@@ -95,5 +100,40 @@ namespace AmdgpuWddmControl
             var v = Profiles.Parse(stored);
             return v.Known.Where(n => All.Any(g => g.SupportOnly && g.Tokens.Contains(n))).Concat(v.Unknown).ToList();
         }
+    }
+
+    // The highest shader model the adapter reports to one game (driver/umd/d3d12/adapter-caps.cpp of branch
+    // m15/shader-model-68): 6.8 by default, 6.7 with shader-model-68-off, 6.6 with shader-model-67-off, which wins
+    // when both are named. One choice of three, for a game that fails with a newer shader model.
+    public static class ShaderModelCeiling
+    {
+        public const string Off68 = "shader-model-68-off", Off67 = "shader-model-67-off", Default = "6.8";
+        public static readonly string[] Choices = { "6.8", "6.7", "6.6" };
+
+        public static string State(string value)
+        {
+            var names = GameGroups.NamesOf(value);
+            return names.Contains(Off67) ? "6.6" : names.Contains(Off68) ? "6.7" : Default;
+        }
+
+        // The names with the choice applied: both switches removed, then the one the choice needs added. Every other
+        // name stays as it is.
+        public static void Apply(List<string> names, string choice)
+        {
+            if (!Choices.Contains(choice)) throw new ArgumentException("not a shader model choice: " + choice);
+            names.RemoveAll(n => n == Off68 || n == Off67);
+            if (choice == "6.7") names.Add(Off68);
+            else if (choice == "6.6") names.Add(Off67);
+        }
+
+        public static ValueOrigin Origin(string stored, string recommended)
+        {
+            if (stored == null) return ValueOrigin.DriverDefault;
+            var now = State(stored);
+            if (recommended != null && State(recommended) != Default && now == State(recommended)) return ValueOrigin.Recommended;
+            return now == Default ? ValueOrigin.DriverDefault : ValueOrigin.ThisGame;
+        }
+
+        public static string Label(string choice) { return Strings.T("games.sm." + choice.Replace(".", "")); }
     }
 }

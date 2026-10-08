@@ -467,6 +467,52 @@ static void test_restore(void)
 	CHECK(p.step[2].kind == BC250_CPU_STEP_TEMP && p.step[2].cools == 0u);
 }
 
+/* The baseline clock (0.7.216.15, K137). Up to 0.7.216.14 it was the P-state table's highest entry alone: unit A
+ * answers 3200 MHz there while the firmware boosts to 3481-3500 MHz, so every revert, reset and release of the
+ * joint arm sent 3200 MHz and held one busy thread at about 3180 MHz until a restart. The per-core clocks are the
+ * firmware's own answer of the boost it gives, so they count; the release bound clamps the result. */
+static void test_baseline(void)
+{
+	unsigned int pstate[BC250_CPU_PSTATES] = { 3200u, 2800u, 1400u, 0u, 0u, 0u, 0u, 0u };
+	unsigned int core[BC250_CPU_CORES] = { 3500u, 3481u, 3490u, 3500u, 3460u, 3500u, 0u, 0u };
+	unsigned int none[BC250_CPU_CORES] = { 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u };
+	unsigned int high[BC250_CPU_CORES] = { 3600u, 3700u, 0u, 0u, 0u, 0u, 0u, 0u };
+	unsigned int idle[BC250_CPU_CORES] = { 1400u, 550u, 0u, 0u, 0u, 0u, 0u, 0u };
+	unsigned int junk[BC250_CPU_CORES] = { 0xFFFFu, 0xFFFFFFFFu, 0u, 0u, 0u, 0u, 0u, 0u };
+	unsigned int low[BC250_CPU_CORES] = { 2780u, 2790u, 0u, 0u, 0u, 0u, 0u, 0u };
+
+	/* The measured cold boot of unit A: P-states 3200 and the cores at 3500 give 3500. */
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, core, BC250_CPU_CORES, 0u) == 3500u);
+	/* No core answered: the P-state table alone, as up to 0.7.216.14. */
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, none, BC250_CPU_CORES, 0u) == 3200u);
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, NULL, 0u, 0u) == 3200u);
+	/* Cores above the release bound: the release bound. A restore never asks for more than stock. */
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, high, BC250_CPU_CORES, 0u) == BC250_CPU_MAX_MHZ);
+	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, high, BC250_CPU_CORES, 0u) == BC250_CPU_MAX_MHZ);
+	/* Idle cores sit under the floor and are no answer; the P-state table still names the clock. */
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, idle, BC250_CPU_CORES, 0u) == 3200u);
+	/* Values that are not clocks of this part are no answer, and they never clamp to the release bound. */
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, junk, BC250_CPU_CORES, 0u) == 3200u);
+	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, junk, BC250_CPU_CORES, 0u) == 0u);
+	/* Nothing plausible at all: no clock limit is named, and the restore says the limit stays. */
+	CHECK(bc250_cpu_baseline_mhz(none, BC250_CPU_PSTATES, none, BC250_CPU_CORES, 0u) == 0u);
+	/* The cores alone (a P-state table that did not answer) still name the boost. */
+	CHECK(bc250_cpu_baseline_mhz(none, BC250_CPU_PSTATES, core, BC250_CPU_CORES, 0u) == 3500u);
+	/* A later read stage of the same start raises the baseline and never lowers it. */
+	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, low, BC250_CPU_CORES, 3200u) == 3200u);
+	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, core, BC250_CPU_CORES, 3200u) == 3500u);
+	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, none, BC250_CPU_CORES, 3500u) == 3500u);
+	/* The held state of K137 (one busy thread at 2.78 GHz) still gives the P-state table's 3200. */
+	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, low, BC250_CPU_CORES, 0u) == 3200u);
+	/* A baseline of 3500 is a restore that the release admits without the lab bound. */
+	{
+		struct bc250_cpu_settings b = set(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, core,
+									  BC250_CPU_CORES, 0u), 0, 100u);
+		b.uv_given = 1;
+		CHECK(bc250_cpu_settings_check(&b, 0) == BC250_CPU_OK);
+	}
+}
+
 /* ---- the failure signs -------------------------------------------------------------------------- */
 
 static struct bc250_cpu_sample sample_ok(void)
@@ -635,6 +681,7 @@ int main(void)
 	test_settings();
 	test_plan();
 	test_restore();
+	test_baseline();
 	test_sample();
 	test_search();
 	test_mask();

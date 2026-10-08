@@ -85,7 +85,8 @@ Queue and extended-feature calls use the same entry policy. Reserved queue
 fields are not treated as callable slots. A trampoline refuses on its own when a
 handle resolves to nothing, when it cannot enter the owner's scope, or when the
 call throws; for a slot of the AllowOutOfMemory category (`allow_out_of_memory`,
-today `pfnCreateHeapAndResource` and `pfnOpenHeapAndResource`) such a refusal is
+today `pfnCreateHeapAndResource`, `pfnOpenHeapAndResource`, `pfnCreateStateObject`
+and `pfnAddToStateObject`) such a refusal is
 clamped to a code the runtime admits, because the runtime cannot tell a
 trampoline's refusal from the driver's own and removes the device for any other
 one (BD-075).

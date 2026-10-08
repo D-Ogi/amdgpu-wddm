@@ -158,7 +158,10 @@ static void HealthSnapshot(const BC250_START_HEALTH_STATE* H, BC250_ESCAPE_START
     Data->Flags=(H->Full ? BC250_START_HEALTH_FULL : 0) |
         (HealthReady(H) ? BC250_START_HEALTH_READY : 0) |
         (H->Visible && H->Mode && !H->Closed ? BC250_START_HEALTH_VISIBLE : 0);
-    if (H->ConfirmedGeneration==H->Generation && H->ConfirmedEpoch==H->Epoch && H->Generation!=0)
+    // CONFIRMED reports the start, not the interval (BD-098): a durably confirmed generation stays confirmed through
+    // the mode sets and visibility changes that advance Epoch. A fault or a close (Closed) takes it away; a resume and
+    // a new start zero ConfirmedGeneration. CONFIRM itself still certifies only the current interval (ExpectedEpoch).
+    if (H->ConfirmedGeneration==H->Generation && H->Generation!=0 && !H->Closed)
         Data->Flags|=BC250_START_HEALTH_CONFIRMED;
     Data->Generation=H->Generation;
     Data->Epoch=H->Epoch;

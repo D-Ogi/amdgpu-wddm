@@ -94,7 +94,8 @@ E_INVALIDARG with nothing written. An unanswered type returns E_NOTIMPL and logs
 Every `D3D12DDICAPS_TYPE` value (H:94-150) that exists at 0092. The version is the suffix of the name; a value
 without one predates the suffixes, except 1069, which H:127-130 lists between 1068 (0061) and 1070 (0073). 1008 and
 1011 are not defined. Left out because they are later than 0092: 1013 (0103), 1075 (0103), 1079 (0093), 1080 (0098),
-1081 (0101), 1082 (0102), 1084-1086 (106), 1087 (0109), 1088 (0110), 1091 (0110); 1083 is reserved (H:142).
+1081 (0101), 1082 (0102), 1084-1086 (106), 1087 (0109), 1088 (0110); 1083 is reserved (H:142). One later value
+is answered: 1091 (0110), because a runtime asks it of a 0092 driver ("Shader model" below).
 
 | Type | Name | Status | Reason |
 |---|---|---|---|
@@ -126,6 +127,7 @@ without one predates the suffixes, except 1069, which H:127-130 lists between 10
 | 1074 | 0081_3DPIPELINESUPPORT1 | answered | table below |
 | 1077 | OPTIONS_0090 | answered | table below |
 | 1078 | OPTIONS_0091 | answered | table below |
+| 1091 | SHADER_MODEL_6_8_OPTIONS_0110 | answered | later than 0092, table below and "Shader model" |
 
 Answered: 19 of the 31 values at 0092, 1061 as a refusal by contract. The 12 left E_NOTIMPL are the deprecated
 1000, 1001, 1010, 1058, 1063, 1064 and 1065, the undocumented 1066, and 1068, 1070, 1072 and 1073, which
@@ -146,7 +148,8 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 |---|---|---|---|---|
 | 1074 3DPIPELINESUPPORT1 | `D3D12DDI_3DPIPELINESUPPORT1_DATA_0081`, 8, H:10415-10420 | MaximumDriverSupportedFeatureLevel | min(L, HighestRuntimeSupportedFeatureLevel) | FEATURE_LEVELS; "highest ... that does not exceed what the runtime understands", H:10377-10378 |
 | 1007 3DPIPELINESUPPORT | `D3D12DDI_3DPIPELINELEVEL` itself, 4, H:2922-2933 | the level | L | FEATURE_LEVELS; never above 12_1, H:10373 |
-| 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, 6_6); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_6 gives M; 6_6 is the last release model at 0092 (6_7 is 0093, H:3478-3500) |
+| 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, C, 6_8); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_8 gives M. C is the shell's ceiling, 6_8 unless an experiment sets one ("Shader model" below). Earlier revisions ended the list at min(M, 6_6) |
+| 1091 SHADER_MODEL_6_8_OPTIONS_0110 | `D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110`, 8, H:13671-13679 | SampleCmpGradientAndBiasSupported, ExtendedCommandInfoSupported | the OPTIONS21 fields when 1012 ends at 6_8, else FALSE. FALSE when the engine does not answer OPTIONS21 | OPTIONS21. Another DataSize is E_INVALIDARG |
 | 1006 D3D12_OPTIONS | `D3D12DDI_D3D12_OPTIONS_DATA_0089`, 124, H:11078-11112 | ResourceBindingTier, ConservativeRasterizationTier, CrossNodeSharingTier, ResourceHeapTier, OutputMergerLogicOp, VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation | same value | OPTIONS; DDI and API enums are equal (static_assert in caps.cpp) |
 | 1006 | | TiledResourcesTier | OPTIONS tier, 4 reported as 3 | OPTIONS; no DDI tier 4 at 0092 (H:709-715). Reserved resources, GetMipPacking, CopyTiles and the engine parts of Q3 and Q4 are implemented ("Tiled resources" below); the queue slots need the shell's hook |
 | 1006 | | CopyQueueTimestampQueriesSupported, BarycentricsSupported | same value | OPTIONS3 |
@@ -157,7 +160,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | WriteBufferImmediateQueueFlags | NONE | pfnWriteBufferImmediate is a fail-safe |
 | 1006 | | ViewInstancingTier | NOT_SUPPORTED | pfnSetViewInstanceMask is a fail-safe |
 | 1006 | | RenderPassTier | NOT_SUPPORTED | engine-ddi fills no render pass table; the runtime emulates render passes |
-| 1006 | | RaytracingTier | the engine's 1_1 or higher as 1_1, else NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), which the pinned engine traces up to the count (upstream traces the first record alone). Two gaps the tier promises: a collection imported with an export list answers E_NOTIMPL, and the runtime's state object description is not yet measured. `set_raytracing_tier_reporting(caps,false)` takes the answer back to NOT_SUPPORTED (the shell's experiment raytracing-tier-off) |
+| 1006 | | RaytracingTier | the engine's 1_1 or higher as 1_1, else NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), which the pinned engine traces up to the count (upstream traces the first record alone). One gap the tier promises: a collection imported with an export list is refused (E_NOTIMPL on the refusal line). The runtime's description of a collection import is measured on the development PC's WARP (fact M837), not yet on unit A's runtime. `set_raytracing_tier_reporting(caps,false)` takes the answer back to NOT_SUPPORTED (the shell's experiment raytracing-tier-off) |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
 | 1006 | | MeshShaderTier, MeshShaderSupportsFullRangeRenderTargetArrayIndex, MSPrimitivesPipelineStatisticIncludesCulledPrimitives | NOT_SUPPORTED, FALSE, FALSE | pfnDispatchMesh and the mesh shader slots are fail-safes |
 | 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe |
@@ -213,6 +216,32 @@ the one implementation in the references and what the engine can honour.
   one copy path for every queue type.
 - ROW_MAJOR textures stay unsupported (1060). If a runtime needs them, the way forward is ROW_MAJOR support in the
   engine, not another constant.
+
+### Shader model
+
+engine-ddi asks the engine's SHADER_MODEL with 6_8 and lists in 1012 every release model from 5_1 up to the lowest
+of the engine's answer, the shell's ceiling and 6_8. The suffix of a DDI value (6_7 release 0093, 6_8 release 0108)
+names the DDI build that defined it. It is not a build the driver must negotiate. Fact M840 reads four runtime cores:
+
+| Runtime core | 6_7 and 6_8 release values | What an application sees from our 0092 shell |
+|---|---|---|
+| 10.0.22621.5415 (unit A's System32) | maps both to 5_1 | at most 6_6 |
+| 10.0.26100.9278, Agility 1.615.1 | maps both, with no check of the negotiated build | up to 6_8, and 26100 also asks 1091 at 6_8 |
+| Agility 1.619.4 (The Witcher 3 5.0) | no public symbols, reports 6_9 for another vendor | up to 6_8 (inference) |
+
+1091 is answered although the shell negotiates 0092, because runtime 26100 asks it of any driver that reports 6_8.
+1079 (OPTIONS_0093: AdvancedTextureOps, WriteableMSAATextures) stays unanswered: runtime 26100 asks it only of a driver
+that negotiated 0093 or later. The engine's OPTIONS14 values appear in the QueryAdapterCaps log line only.
+
+```cpp
+HRESULT engine_ddi::set_shader_model_ceiling(engine_ddi::AdapterCaps* caps, D3D_SHADER_MODEL ceiling) noexcept;
+```
+
+The call lowers the ceiling (default 6_8) before the first GetCaps. It never raises the list above the engine's
+answer. E_INVALIDARG for NULL caps or a model outside 5_1 to 6_8. The shell sets 6_7 under the experiment
+`shader-model-68-off` and 6_6 under `shader-model-67-off` (the second wins), for a bisection of a title that changes
+its shader path with the reported model. With `shader-model-67-off` the answer is that of earlier revisions: a list
+up to 6_6 and no 1091.
 
 ### Memory architecture policy
 
@@ -331,12 +360,14 @@ Two more layers sit above this one and refuse on their own, so each clamps its o
 - the DDI thunk (`ddi-entry.h`), which is what the runtime actually calls. It answers `E_INVALIDARG` for a device
   handle that resolves to nothing, `E_UNEXPECTED` for a scope it could not enter (engine teardown, a nested entry)
   or a missing original, and `E_FAIL` for an exception that is not `bad_alloc` - all of them refusals of a create
-  DDI as far as the runtime can tell. `CoreBinding::allow_out_of_memory` names the two slots of this category, and
+  DDI as far as the runtime can tell. `CoreBinding::allow_out_of_memory` names the four slots of this category
+  (the two above, `pfnCreateStateObject` and `pfnAddToStateObject`), and
   `native12::ddi_admitted_create_failure` is the same rule; `native-tables.cpp` `static_assert`s that the two
   copies answer alike.
 
-Other create slots are not covered yet; the shared-resource plan in `docs/d3d12-shared-resources.md` names the
-audit.
+The two state object slots clamp in this module as well (state-objects.cpp, `create_record`), since The Ascent
+(lab trial 465) lost its device on a refused CreateStateObject. Other create slots are not covered yet. The
+shared-resource plan in `docs/d3d12-shared-resources.md` names the audit.
 
 ## Device
 
@@ -738,13 +769,18 @@ count buffer; the fork's fix (vkd3d-proton fork 4e572c10 and e1ce3e7e, on d0c089
 `vkCmdTraceRaysIndirect2KHR` per record and, with a count buffer, first copies the records into scratch, those at or
 past the count with zero dimensions over a zeroed, aligned table region. Refused:
 an existing collection imported with an export list (E_NOTIMPL, temporarily, below) and work graphs (state object type
-EXECUTABLE). The shell needs no new
+EXECUTABLE). Both slots are creation functions of the AllowOutOfMemory category (engine-ddi.h,
+`admitted_create_failure`): every refusal reaches the runtime as E_OUTOFMEMORY, and its real code is on a
+`log_refusal` line. Any other code makes the runtime remove the device. The Ascent (lab trial 465, Unreal Engine
+4.26) stopped with DXGI_ERROR_DEVICE_REMOVED for that reason, after an E_INVALIDARG from CreateStateObject. The shell needs no new
 resolver for D115 and D116: both carry the device handle first (d3d12umddi.h:9190-9191), which `entry-owner.h`
 already resolves.
 
 CreateStateObject rebuilds the API description from the DDI's (d3d12umddi.h 10.0.26100; DirectX-Specs
 Raytracing.md, "State object DDIs"), subobject by subobject:
-- STATE_OBJECT_CONFIG, NODE_MASK (0 or 1), RAYTRACING_SHADER_CONFIG: copied; unknown flags are E_INVALIDARG.
+- STATE_OBJECT_CONFIG, NODE_MASK (0 or 1), RAYTRACING_SHADER_CONFIG: copied; unknown flags are E_INVALIDARG. A
+  STATE_OBJECT_CONFIG with ALLOW_STATE_OBJECT_ADDITIONS is added in two cases, because the runtime of unit A drops
+  it (fact M839, "State object configuration" below).
 - GLOBAL_ and LOCAL_ROOT_SIGNATURE: the handle's engine root signature; a null handle or another device's is
   E_INVALIDARG.
 - DXIL_LIBRARY: `pDXILLibrary` has no size. Its length is the length the payload claims, checked for internal
@@ -786,8 +822,9 @@ Raytracing.md, "State object DDIs"), subobject by subobject:
 Any other type: E_INVALIDARG, never passed through.
 
 Every count read from the description is bounded: 65536 subobjects, library exports, summary nodes, summary exports in
-all and associations per export, 1M associated names in all. A failed create returns its HRESULT, logs the reason
-and leaves an inert record that DestroyStateObject accepts; nothing is reported through report_device_error. Each
+all and associations per export, 1M associated names in all. A failed create returns E_OUTOFMEMORY, writes the reason
+and the real HRESULT on `log_refusal` lines (on the debugger channel whatever the trace switches say), and leaves an
+inert record that DestroyStateObject accepts. Nothing is reported through report_device_error. Each
 create logs one line with the subobject types, the library form and length, the pipeline configuration and the
 summary's counts, including how many export names were resolved by listed name, mangled and unmangled name.
 
@@ -817,9 +854,23 @@ associations per export (6) would tie with a hit group's there and keep the empt
 used. A COLLECTION is left as it is: there an absent association may be an unresolved dependency, not an absence.
 The create's log line counts the exports concerned.
 
-Inherited associations are not covered. How the runtime describes, in an importer's summary, the associations an
-imported collection made is not measured; the harness's importer restates none of them, and an association with a
-subobject outside the importer's own description stays refused (E_INVALIDARG) and logged, as before.
+Inherited associations (fact M837, measured with `tools/win/d3d12ddicap` on WARP, D3D12Core.dll 10.0.26100.9278 of
+the development PC). The importer's summary lists every export of an imported collection with the subobjects that
+collection associated with it, as pointers into the collection's own DDI array. The runtime also leaves out of the
+importer's array every declared root signature and shader configuration that no export of the importer takes: the
+link of Unreal Engine 4.26's shape arrives as its collections, its state object configuration, its pipeline
+configuration and the summary. A summary also associates the state object configuration with each export, and an
+addition (AddToStateObject) gets a pipeline configuration that the application did not give (fact M838). The
+engine already has those associations in the collection's engine object (`raytracing_pipeline.c`,
+`d3d12_state_object_add_collection`: a compiled collection gives its configurations at priority INHERITED_COLLECTION
+and its global root signatures as pipeline variants, and a deferred one gives its associations, the explicit ones
+still explicit). So engine-ddi makes no API subobject of such an association. Each record keeps the addresses of its own
+DDI array and of the arrays it inherited, from imported collections and from the parent it grew from
+(`StateObjectTranslation::described`). The runtime keeps those arrays alive while the record lives (Raytracing.md,
+"Collection lifetimes" and "AddToStateObject parent lifetimes"). An inherited local root signature makes its export
+local for the empty explicit default. A pointer into no array of the create, of an import or of the parent is
+matched by type and description in those arrays, and else refused. Before this rule, every import in the measured
+shape was refused with E_INVALIDARG ("summary association outside the description").
 
 AddToStateObject translates the addition, a description valid on its own (Raytracing.md:3781), with the same
 translation as a create, and calls the engine's `ID3D12Device7::AddToStateObject` with the parent's engine object;
@@ -844,11 +895,12 @@ The shell's entry thunk enters its device scope from a slot's first handle; for 
 and `state_object_shell` answers its owner from the record (the device's ShellHooks::shell for a live record and for
 the inert record of a failed create, null for storage holding no record, such as after DestroyStateObject).
 
-INFERENCE until a lab run logs a real description (the create's log line is the instrument): that the runtime hands
-over the DDI form the harness builds, in particular that a 0092 driver receives RAYTRACING_PIPELINE_CONFIG as _0075
-(the header names both layouts), that `pDXILLibrary` is a DXIL part with SizeInUint32 as for shaders (a whole
-container is also accepted), and that the summary's subobject pointers point into `pSubobjects` (a pointer elsewhere
-is matched by type and description).
+INFERENCE until a lab run logs a real description (the create's log line is the instrument): that unit A's runtime
+hands over the DDI form the harness builds, in particular that a 0092 driver receives RAYTRACING_PIPELINE_CONFIG as
+_0075 (the header names both layouts, and WARP gets _0075 on the development PC, fact M837), that `pDXILLibrary` is a
+DXIL part with SizeInUint32 as for shaders (a whole container is also accepted), and that unit A's D3D12Core.dll
+10.0.22621.5415 describes collection imports as the development PC's 10.0.26100.9278 does. Measured difference: unit
+A's runtime drops the state object configuration of a link and of an addition (fact M839).
 
 Development PC witness (harness round trip 9, `tests/test-raytracing.cpp`, RuntimeBacked on the stub shell): a dxc
 lib_6_3 library (`tests/fixture-raylib.hlsl`) with raygen, miss and closest, one triangles hit group with a local
@@ -865,7 +917,7 @@ would select. The decoy has no DXIL function behind it, so this shows the naming
 selection among real overloads. The description handed to the engine names closest's local root signature's
 association by closest's mangled name alone and the decoy's by the decoy's, neither by the shared plain name. The same
 decoy without a mangled name, or with both of closest's names, is
-E_INVALIDARG, never a broadened association; a control build that passed plain names made the engine's create fail
+refused (E_OUTOFMEMORY, E_INVALIDARG on the refusal line), never a broadened association. A control build that passed plain names made the engine's create fail
 (8007000e).
 
 The descriptions are checked on the host: a harness-only observer (`harness_set_state_object_observer`, compiled only
@@ -887,10 +939,13 @@ in place writes the global 2 on all 52 misses and the record constant on the 12 
 not discriminate: raygen and miss read none of the trap's registers. A control build without the empty explicit
 default failed the two description checks (no explicit default, one declared local root signature).
 
-A collection-only executable: a COLLECTION of the library, then a pipeline importing it with EXISTING_COLLECTION of
-all exports and no DXIL library. The description handed to the engine carries the collection's engine object with
-NumExports 0, no library, no local root signature, and the global root signature's association naming raygen, miss
-and closest, the names the collection exposed. The same import with an export list is E_NOTIMPL with no engine call.
+A collection-only executable: a COLLECTION of the library, then a pipeline in the measured DDI form (fact M837):
+EXISTING_COLLECTION of all exports, the pipeline configuration, and a summary whose associations point into the
+collection's array. The description handed to the engine carries the collection's engine object with NumExports 0,
+no library, no root signature and no association. The same import with an export list (E_NOTIMPL) and a summary
+association into an array neither held nor imported (E_INVALIDARG) each answer E_OUTOFMEMORY with no engine call and
+the real code on one refusal line. A control build with the state-objects.cpp of bc250-win 3eca5f98 refused the
+measured form (E_INVALIDARG, "summary association outside the description").
 The executable's record adds one public reference to the collection's engine object (2, then 3); the collection's DDI
 object is destroyed before the executable is used, and a dispatch through the executable's table writes its own
 constant on the 12 hits and 2 on the 52 misses, 64 words exact. Growth: a pipeline allowing additions, its
@@ -900,15 +955,59 @@ the parent's, and the description handed to the engine is grown from the parent'
 listing one export and the global association naming `miss_far` alone. The child's record adds one public reference
 to the parent's engine object (2, then 3); the parent's DDI object is destroyed before the child is used, and a
 dispatch through a table of the parent's raygen and hit group identifiers and `miss_far`'s writes the child's constant
-on every hit and 3 on every miss, 64 words exact. Refused growth, one E_INVALIDARG each and no device error: from a
-pipeline without ALLOW_STATE_OBJECT_ADDITIONS (the engine's check, one engine call) and an addition exporting `miss`
-(engine-ddi's check, no engine call). Controls, each built into its own scratch directory and the source restored and
+on every hit and 3 on every miss, 64 words exact. Refused growth, E_OUTOFMEMORY each with E_INVALIDARG on one
+refusal line and no device error: from a pipeline without ALLOW_STATE_OBJECT_ADDITIONS (the engine's check, one
+engine call) and an addition exporting `miss` (engine-ddi's check, no engine call). Controls, each built into its own scratch directory and the source restored and
 compared after: without the stack size copy the child read 0; without collection names as a listing source the
 importer's create failed (E_INVALIDARG); without the collision check the engine accepted the colliding addition (S_OK);
 without the held reference to the collection, or to the parent, the public count stayed 2. The dispatches passed in
 the last two controls: the engine's own internal references keep an imported collection and a parent alive
 (`raytracing_pipeline.c:2762-2769`), so engine-ddi's held references are for the lifetime contract, not the witness's
 pixels.
+
+The shape of Unreal Engine 4.26 (The Ascent, lab trial 465). Sources: the engine's D3D12RHI of 4.26.1-release, and
+the runtime's DDI form (fact M838). UE sets ALLOW_STATE_OBJECT_ADDITIONS on every collection and link when the device
+reports raytracing tier 1.1 and has ID3D12Device7, and engine-ddi reports tier 1.1. Three collections, each of one
+export renamed by the library's export list (`RGS_00000001`, `MS_00000002`, `CHS_00000003` in hit group
+`HitGroup_00000003`) with both configurations, the state object configuration, the global and the local root
+signature, then their link in the measured form. Four creates, three identifiers from the link, and a description
+handed to the engine of the three imports with no association. After the collections' DDI objects are destroyed, a
+dispatch through the link's table writes its own constant on the 12 hits, through the local root signature only
+`CHS_00000003`'s collection associated, and 2 on the 52 misses, 64 words exact.
+UE's addition onto a base pipeline (the pipeline cache finds a base with the same ray generation and miss shaders):
+two new collections in the same shape (`CHS_00000004` in `HitGroup_00000004`, `MS_00000005` renamed from
+`miss_far`), then AddToStateObject onto the link in the measured form (the two imports, the state object
+configuration, the pipeline configuration and the summary). Three creates. The grown object gives the base's
+`RGS_00000001` identifier unchanged and the two new ones. The description handed to the engine is grown from the
+link's engine object, with the two imports and no association. After the new collections' DDI objects are destroyed,
+a dispatch through a table of `RGS_00000001`, `MS_00000005` and `HitGroup_00000004` writes its own constant on the 12
+hits and 3 on the 52 misses, 64 words exact. UE stops on any failure of either call (VERIFYD3D12RESULT), so the
+E_OUTOFMEMORY clamp keeps the device but not the game.
+The same round trip passes with the pinned engine and with the lab's engine 348117F1 (vkd3d-proton fork 4e9a98e9),
+on the development PC's NVIDIA GPU. On unit A's RADV, the pipeline library path of an addition is not yet measured.
+
+State object configuration (fact M839). The runtime of unit A (D3D12Core.dll 10.0.22621.5415) gives a collection its
+state object configuration, but gives a link of collections and an addition none. The application's configuration
+that allows additions does not reach the driver. The development PC's runtime 10.0.26100 gives it (fact M838). The
+engine takes the additions flag only from a configuration subobject (`raytracing_pipeline.c:963-984` of 4e9a98e9).
+`AddToStateObject` is E_INVALIDARG unless the parent and the addition both have the flag (`:2888-2907`). The D3D12
+specification requires the flag on both (Raytracing.md:3785), and a pipeline that allows additions can import only
+collections that allow them (Raytracing.md:3380). So `translate` adds a STATE_OBJECT_CONFIG with
+ALLOW_STATE_OBJECT_ADDITIONS when the description has no configuration and the device has ID3D12Device7, in two
+cases:
+- An addition. The runtime calls AddToStateObject only for an application that asked for additions.
+- A RAYTRACING_PIPELINE with no library and no hit group whose imports are all collections that allow additions
+  (`StateObjectTranslation::additions`, set from the given configuration or from this rule).
+The create's log line says "state object configuration allowing additions synthesized". A pipeline with its own
+library or hit group gets no configuration. That the runtime of unit A forwards the configuration of such a pipeline
+is an INFERENCE from the collections, which keep theirs. Case 7d of the harness sends the UE link and addition in the
+form of unit A: no state object configuration. The engine gets one configuration with flags 4 for the link and for
+each addition. The addition gives S_OK, grows from the link's engine object and keeps the link's `RGS_00000001`
+identifier. A second addition (`MS_00000006`) onto the grown object also gives S_OK. In the same case, collections
+without the flag give a link with no configuration, and an addition onto it is E_OUTOFMEMORY with E_INVALIDARG on one
+refusal line. Case 7c also checks that a forwarded configuration reaches the engine once. A control build with the
+state-objects.cpp of the parent commit failed the three unit A form checks, as unit A did (0 configurations, then
+8007000e and 80004005).
 
 Indirect ray dispatch: a command signature of one DISPATCH_RAYS argument, stride 128 (above the record's 104 bytes),
 no root signature, S_OK. Two records over the first pipeline's table, 8x4 then 8x8, and the count words 1, 2, 0 and
@@ -923,9 +1022,9 @@ records past the count as all zeros: zero shader table addresses lost the device
 although nothing was to be launched (VK_ERROR_DEVICE_LOST in this round trip); the fix names a zeroed, aligned
 scratch region for their tables instead.
 
-Refusals: an unknown subobject type
-(E_INVALIDARG), a ray tracing pipeline named as an existing collection (E_INVALIDARG), DispatchRays on a closed list and SetPipelineState1 with another
-device context's state object (one E_INVALIDARG on the list). `state_object_shell` names the device's shell for a
+Refusals: an unknown subobject type and a ray tracing pipeline named as an existing collection (E_OUTOFMEMORY, with
+E_INVALIDARG on one refusal line), DispatchRays on a closed list and SetPipelineState1 with another device context's
+state object (one E_INVALIDARG on the list). `state_object_shell` names the device's shell for a
 live state object and for a refused create's inert record, and nothing once either is destroyed. VVL with
 synchronization validation clean.
 

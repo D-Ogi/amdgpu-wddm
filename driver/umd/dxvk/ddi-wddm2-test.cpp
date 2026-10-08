@@ -124,14 +124,23 @@ void direct_flip_rule() {
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Format=DXGI_FORMAT_B8G8R8X8_UNORM; }));
     // The sRGB view of the same storage row is the same scan-out row.
     CHECK(!refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; }));
-    // The composed-only rows are never candidates, so a 10-bit or FP16 swap chain keeps its copy
-    // (HDR-ready Present architecture, owner 2026-09-29), and so does a format outside the table.
+    // The composed-only rows are never candidates, so an FP16 swap chain keeps its copy (HDR-ready
+    // Present architecture, owner 2026-09-29), and so does a format outside the table. RGBA8 and
+    // RGB10A2 are SCANOUT_PRIMARY rows from 0.7.216.20, but without the trailer's PLANE_FORMATS flag,
+    // which this shell does not read, bc250_scanout_format_admitted refuses them as well.
     for (auto format:{DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT,
                       DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_R32G32B32A32_FLOAT}) {
         RuntimeSurface a,b; ready_primary(a,format,1920,1200,7680,0);
         ready_primary(b,format,1920,1200,7680,0); b.allocation.allocation=0x2000;
         CHECK(!direct_flip_supported(&a,&b));
     }
+    // The flag is the only difference: with it, the same lookup admits the two new rows and still not FP16.
+    CHECK(runtime_scanout_format(DXGI_FORMAT_R8G8B8A8_UNORM,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+          runtime_scanout_format(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+          runtime_scanout_format(DXGI_FORMAT_R10G10B10A2_UNORM,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+          !runtime_scanout_format(DXGI_FORMAT_R16G16B16A16_FLOAT,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+          !runtime_scanout_format(DXGI_FORMAT_R8G8B8A8_UNORM) &&
+          runtime_scanout_format(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB));
     // The table entry answers from the resources' surfaces, and a resource without one refuses.
     const auto t=make_wddm2_0_device_table();
     CHECK(t.pfnCheckDirectFlipSupport);

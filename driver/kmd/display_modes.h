@@ -14,7 +14,7 @@
 // session native-caps349).
 //
 // The list comes from the shared table, never from a second whitelist:
-//   1. the SCANOUT_PRIMARY rows that DXGI can name (dxgi != 0): the plane the firmware left, BGRA8;
+//   1. the FIRMWARE_PLANE rows that DXGI can name (dxgi != 0): the plane the firmware left, BGRA8;
 //   2. with Composed, the COMPOSED rows that DXGI can name of 4 bytes a pixel or more: RGBA8, RGB10A2,
 //      RGBA16F.
 // The size bound keeps the atlas rows out of the display mode list. A source mode's Stride scales the
@@ -23,8 +23,9 @@
 // display mode of it would name geometry no swap chain can ask for. COMPOSED names every surface the
 // compositor opens, and since 0.7.207 that includes the A8 atlases DirectComposition shares, so the size
 // bound alone keeps A8 out of this list.
-// A mode of step 2 does not change the scan-out. The display keeps the 8-bit plane, SetVidPnSourceAddress keeps
-// refusing allocations without SCANOUT_PRIMARY (wddm.c), and the UMDs present such buffers through composition.
+// A mode of step 2 does not change the scan-out by itself. SetVidPnSourceAddress admits only SCANOUT_PRIMARY
+// rows (wddm.c, scanout_admit.h) and programs the plane's pixel format for each flip (plane_format.h), so an
+// RGBA16F buffer is still presented through composition.
 // The first entry is the GDI format, so a consumer that takes the first mode gets the desktop's format.
 // Composed is FALSE for the display-only table, which copies 4-byte pixels by CPU (display.c CopyRect).
 #define BC250_SOURCE_MODE_MAX 8ul
@@ -37,7 +38,10 @@ static __inline unsigned long Bc250SourceModeFormats(int Composed, unsigned long
     for (pass = 0; pass < 2; ++pass) {
         if (pass == 1 && !Composed) break;
         for (i = 0; i < count; ++i) {
-            const int scanout = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY) != 0;
+            // FIRMWARE_PLANE and not SCANOUT_PRIMARY: from 0.7.216.20 RGBA8 and RGB10A2 are scan-out rows too
+            // (the flip programs the plane's format), but the display-only table copies 4-byte BGRA pixels by
+            // CPU and its desktop stays in the firmware's format. The list is the one it was before.
+            const int scanout = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE) != 0;
             const int composed = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_COMPOSED) != 0;
             if (!rows[i].dxgi || rows[i].bytes_per_pixel < 4) continue;
             if (pass == 0 ? !scanout : (scanout || !composed)) continue;

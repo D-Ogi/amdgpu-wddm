@@ -1,0 +1,128 @@
+exe sha256 B05CCE841A506625DFB7DFD4F1ED5CD1CFBCCC618C7FFF559BBC153CED64AF04
+exit code 
+===== client stdout
+api adapter 0: BC-250 GPU (amdgpu-wddm), vendor 0x1002 device 0x13fe
+api D3D12CreateDevice (hardware): hr 00000000, core table wrapped: no
+api RaytracingTier 11
+== case ue426-add-miss
+api CreateStateObject COLLECTION RayGen_0000000000000001: 8 subobjects
+api CreateStateObject COLLECTION RayGen_0000000000000001: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000003: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000003: hr 00000000
+api CreateStateObject COLLECTION HitGroup_0000000000000004: 9 subobjects
+api CreateStateObject COLLECTION HitGroup_0000000000000004: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE base: 8 subobjects
+api CreateStateObject RAYTRACING_PIPELINE base: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000007: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000007: hr 00000000
+api AddToStateObject grown: 2 subobjects
+api AddToStateObject grown: hr 8007000e
+== case ue426-add-miss: hr 8007000e, device removed reason 00000000
+== case ue426-add-chs
+api CreateStateObject COLLECTION RayGen_0000000000000001: 8 subobjects
+api CreateStateObject COLLECTION RayGen_0000000000000001: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000003: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000003: hr 00000000
+api CreateStateObject COLLECTION HitGroup_0000000000000004: 9 subobjects
+api CreateStateObject COLLECTION HitGroup_0000000000000004: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE base: 8 subobjects
+api CreateStateObject RAYTRACING_PIPELINE base: hr 00000000
+api CreateStateObject COLLECTION HitGroup_0000000000000005: 9 subobjects
+api CreateStateObject COLLECTION HitGroup_0000000000000005: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000007: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000007: hr 00000000
+api AddToStateObject grown: 3 subobjects
+api AddToStateObject grown: hr 8007000e
+== case ue426-add-chs: hr 8007000e, device removed reason 00000000
+== case ue426-ahs-link
+api CreateStateObject COLLECTION RayGen_0000000000000001: 8 subobjects
+api CreateStateObject COLLECTION RayGen_0000000000000001: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000007: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000007: hr 00000000
+api CreateStateObject COLLECTION HitGroup_0000000000000006: 10 subobjects
+api CreateStateObject COLLECTION HitGroup_0000000000000006: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE any hit: 8 subobjects
+api CreateStateObject RAYTRACING_PIPELINE any hit: hr 00000000
+api any hit GetShaderIdentifier RayGen_0000000000000001: found
+api any hit GetShaderIdentifier Miss_0000000000000007: found
+api any hit GetShaderIdentifier HitGroup_0000000000000006: found
+api any hit GetPipelineStackSize 32
+== case ue426-ahs-link: hr 00000000, device removed reason 00000000
+== case ue426-add
+api CreateStateObject COLLECTION RayGen_0000000000000001: 8 subobjects
+api CreateStateObject COLLECTION RayGen_0000000000000001: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000003: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000003: hr 00000000
+api CreateStateObject COLLECTION HitGroup_0000000000000004: 9 subobjects
+api CreateStateObject COLLECTION HitGroup_0000000000000004: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE base: 8 subobjects
+api CreateStateObject RAYTRACING_PIPELINE base: hr 00000000
+api CreateStateObject COLLECTION HitGroup_0000000000000006: 10 subobjects
+api CreateStateObject COLLECTION HitGroup_0000000000000006: hr 00000000
+api CreateStateObject COLLECTION Miss_0000000000000007: 8 subobjects
+api CreateStateObject COLLECTION Miss_0000000000000007: hr 00000000
+api AddToStateObject grown: 3 subobjects
+api AddToStateObject grown: hr 8007000e
+== case ue426-add: hr 8007000e, device removed reason 00000000
+===== driver log: state object lines and engine err/fixme/warn lines
+lines 275
+02bc:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: C:\BC250\tmp\ascent-rt\ddicap3-vkd3d-cache\vkd3d-proton.d3d12ddicap.exe.cache.
+02bc:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: C:\BC250\tmp\ascent-rt\ddicap3-vkd3d-cache\vkd3d-proton.d3d12ddicap.exe.cache.
+02bc:info:vkd3d_pipeline_library_disk_cache_merge: No write cache exists. No need to merge any disk caches.
+02bc:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 0.735 ms.
+02bc:info:vkd3d_pipeline_library_disk_cache_initial_setup: Failed to map read-only cache: C:\BC250\tmp\ascent-rt\ddicap3-vkd3d-cache\vkd3d-proton.d3d12ddicap.exe.cache.
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 462 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 8 subobjects; types 0x5 0xb 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 496 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 3, 5 subobjects; types 0x6 0x6 0x6 0xa 0x100000; summary 3 exports (by listed name 3, mangled 0, unmangled 0), 0 associated names; collection import; collection import; collection import; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: AddToStateObject: type 3, 3 subobjects; grows a live pipeline; types 0x6 0xa 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 0 associated names; collection import; pipeline config depth 1 flags 0x0; hr 80070057 reported as 8007000e
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 462 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 8 subobjects; types 0x5 0xb 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 496 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 3, 5 subobjects; types 0x6 0x6 0x6 0xa 0x100000; summary 3 exports (by listed name 3, mangled 0, unmangled 0), 0 associated names; collection import; collection import; collection import; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 8 subobjects; types 0x5 0xb 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 496 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: AddToStateObject: type 3, 4 subobjects; grows a live pipeline; types 0x6 0x6 0xa 0x100000; summary 2 exports (by listed name 2, mangled 0, unmangled 0), 0 associated names; collection import; collection import; pipeline config depth 1 flags 0x0; hr 80070057 reported as 8007000e
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 462 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 8 subobjects; types 0x5 0xb 0x9 0xa 0x0 0x1 0x2 0x100000; summary 2 exports (by listed name 2, mangled 0, unmangled 0), 8 associated names; library DXIL part of 496 DWORDs, 2 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 3, 5 subobjects; types 0x6 0x6 0x6 0xa 0x100000; summary 4 exports (by listed name 4, mangled 0, unmangled 0), 0 associated names; collection import; collection import; collection import; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 462 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 8 subobjects; types 0x5 0xb 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 496 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 3, 5 subobjects; types 0x6 0x6 0x6 0xa 0x100000; summary 3 exports (by listed name 3, mangled 0, unmangled 0), 0 associated names; collection import; collection import; collection import; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 8 subobjects; types 0x5 0xb 0x9 0xa 0x0 0x1 0x2 0x100000; summary 2 exports (by listed name 2, mangled 0, unmangled 0), 8 associated names; library DXIL part of 496 DWORDs, 2 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: CreateStateObject: type 0, 7 subobjects; types 0x5 0x9 0xa 0x0 0x1 0x2 0x100000; summary 1 exports (by listed name 1, mangled 0, unmangled 0), 4 associated names; library DXIL part of 293 DWORDs, 1 exports; pipeline config depth 1 flags 0x0; hr 00000000
+engine-ddi: AddToStateObject: type 3, 4 subobjects; grows a live pipeline; types 0x6 0x6 0xa 0x100000; summary 3 exports (by listed name 3, mangled 0, unmangled 0), 0 associated names; collection import; collection import; pipeline config depth 1 flags 0x0; hr 80070057 reported as 8007000e
+===== engine pipeline log (VkResult per pipeline)
+-- vkd3d-proton.d3d12ddicap.exe.cache.pso-log.txt
+# pid 2284, driver cache 0 bytes loaded; ms tid path outcome vr driver_us wall_us pso stages key
+88.381 700 gfx miss 0 327 376 cab22568397ce2c4 faa2987e4ddd6cfe -
+89.548 700 comp miss 0 228 231 a9c140b182959a0d f712531a885ac5d4 -
+221.847 700 rt-lib miss 0 499 513 0000000000000001 06f3a6e940c2081e -
+330.435 700 rt-lib miss 0 490 500 0000000000000001 7abecdce7acf3d4c -
+432.070 700 rt-lib miss 0 844 854 0000000000000001 6a48a55cfbde4701 -
+479.469 700 rt miss 0 1150 42840 0000000000000000 cbf29ce484222325 -
+543.683 700 rt-lib hit 0 3 11 0000000000000001 7abecdce7acf3d4c -
+597.408 700 rt-lib hit 0 3 12 0000000000000001 06f3a6e940c2081e -
+619.940 700 rt-lib hit 0 2 9 0000000000000001 7abecdce7acf3d4c -
+643.485 700 rt-lib hit 0 3 11 0000000000000001 6a48a55cfbde4701 -
+665.943 700 rt hit 0 3 811 0000000000000000 cbf29ce484222325 -
+689.512 700 rt-lib hit 0 4 12 0000000000000001 6a48a55cfbde4701 -
+712.816 700 rt-lib hit 0 3 11 0000000000000001 7abecdce7acf3d4c -
+763.120 700 rt-lib hit 0 3 14 0000000000000001 06f3a6e940c2081e -
+786.170 700 rt-lib hit 0 3 11 0000000000000001 7abecdce7acf3d4c -
+810.034 700 rt-lib miss 0 505 515 0000000000000001 0d6a49137d0644df -
+832.873 700 rt miss 0 712 1519 0000000000000000 cbf29ce484222325 -
+904.028 700 rt-lib hit 0 4 13 0000000000000001 06f3a6e940c2081e -
+927.918 700 rt-lib hit 0 3 11 0000000000000001 7abecdce7acf3d4c -
+950.743 700 rt-lib hit 0 3 9 0000000000000001 6a48a55cfbde4701 -
+973.690 700 rt hit 0 4 848 0000000000000000 cbf29ce484222325 -
+998.293 700 rt-lib hit 0 3 11 0000000000000001 0d6a49137d0644df -
+1022.317 700 rt-lib hit 0 3 11 0000000000000001 7abecdce7acf3d4c -
+# 1067.340 saved 17184 bytes in 0.043 ms, written in 1.557 ms by a job
+===== cache directory
+     17248 vkd3d-proton.d3d12ddicap.exe.cache.driver
+      1725 vkd3d-proton.d3d12ddicap.exe.cache.pso-log.txt
+       872 vkd3d-proton.d3d12ddicap.exe.cache.write

@@ -24,6 +24,7 @@ namespace AmdgpuWddmControl
         // the app's own plans).
         public static string LineId(RegWrite w)
         {
+            if (GraphicsSettings.Owns(w)) return GraphicsSettings.LineId(w);
             switch (w.Name)
             {
                 case "EnableGpuPresentBlit":
@@ -39,6 +40,7 @@ namespace AmdgpuWddmControl
 
         static string Line(RegWrite w)
         {
+            if (GraphicsSettings.Owns(w)) return GraphicsSettings.PlainLine(w);
             var id = LineId(w);
             if (id == null) return Strings.T("plan.line.other");
             return id == "plan.line.ceiling" ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
@@ -47,6 +49,8 @@ namespace AmdgpuWddmControl
         public static string GroupList(string value)
         {
             var on = GameGroups.All.Where(g => !g.SupportOnly && GameGroups.State(g, value) != GroupState.Off).Select(g => g.Title).ToList();
+            var sm = ShaderModelCeiling.State(value);
+            if (sm != ShaderModelCeiling.Default) on.Add(Strings.T("plan.game.sm", sm));
             if (GameGroups.Hidden(value).Count > 0) on.Add(Strings.T("plan.game.other"));
             return on.Count == 0 ? Strings.T("plan.game.none") : string.Join(", ", on);
         }
@@ -70,8 +74,10 @@ namespace AmdgpuWddmControl
 
             bool atRestart = p.Effect == "at the next restart of Windows";
             bool atGame = p.Action.StartsWith("game-", StringComparison.Ordinal);
-            var image = p.GameWrites.Keys.FirstOrDefault();
-            d.Notes.Insert(0, atGame && image != null ? Strings.T("plan.when.game", image) : atRestart ? Strings.T("plan.when.restart") : Strings.T("plan.when.now"));
+            bool atGames = p.Effect == "the next time a game starts";
+            var image = p.GameImage ?? p.GameWrites.Keys.FirstOrDefault();
+            d.Notes.Insert(0, atGame && image != null ? Strings.T("plan.when.game", image) : atRestart ? Strings.T("plan.when.restart")
+                : atGames ? Strings.T("plan.when.games") : Strings.T("plan.when.now"));
             if (atGame && image != null) d.Notes.Add(Strings.T("plan.scope.game", image));
             if (p.Action == "reset-defaults") d.Notes.Add(Strings.T(p.GameWrites.Count > 0 ? "plan.scope.games-reset" : "plan.scope.games-kept"));
             if (p.Writes.Any(w => w.Name == "DwmForceCpu" || w.Name == "EnableGpuPresentBlit" || w.Name == "EnableCddDwmInterop"))
@@ -110,6 +116,7 @@ namespace AmdgpuWddmControl
             new Regex(@"(?i)\b(fence|escapes?|exit code|error code|dxgkrnl|registry)\b"),
             new Regex(@"0x[0-9A-Fa-f]+"),
             new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*)\b"),
+            new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };
 

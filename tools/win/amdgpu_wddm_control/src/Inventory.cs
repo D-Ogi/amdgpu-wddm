@@ -276,6 +276,39 @@ namespace AmdgpuWddmControl
                 if (key == null || (key.GetValue(Profiles.ValueName) as string) != value) throw new InvalidOperationException("The profile did not read back as written.");
         }
 
+        // The Graphics and Vulkan settings keys (GraphicsSettings.cs): each root and each game's key below its
+        // Applications key, with every value as it is stored.
+        public static List<GfxKey> ReadGfxKeys()
+        {
+            var list = new List<GfxKey>();
+            foreach (var root in GraphicsSettings.Roots)
+                using (var k = Registry.LocalMachine.OpenSubKey(root))
+                {
+                    if (k == null) continue;
+                    list.Add(ReadGfxKey(k, root));
+                    using (var apps = k.OpenSubKey(GraphicsSettings.AppsKey))
+                        if (apps != null)
+                            foreach (var image in apps.GetSubKeyNames())
+                                using (var a = apps.OpenSubKey(image))
+                                    if (a != null) list.Add(ReadGfxKey(a, GraphicsSettings.AppPath(root, image)));
+                }
+            return list;
+        }
+
+        static GfxKey ReadGfxKey(RegistryKey k, string path)
+        {
+            var g = new GfxKey { Path = path, SubKeys = k.SubKeyCount };
+            foreach (var n in k.GetValueNames())
+            {
+                var kind = k.GetValueKind(n);
+                var data = k.GetValue(n, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                if (kind == RegistryValueKind.DWord && data is int) g.Values[n] = GfxValue.Dword((uint)(int)data);
+                else if (kind == RegistryValueKind.String && data is string) g.Values[n] = GfxValue.Str((string)data);
+                else g.Values[n] = new GfxValue { Type = "Other", Text = kind.ToString() };
+            }
+            return g;
+        }
+
         public static void RemoveProfile(string image)
         {
             if (!Profiles.IsValidImage(image)) throw new ArgumentException("Not an application file name: " + image);

@@ -270,4 +270,91 @@ namespace AmdgpuWddmControl
 
         public uint Value { get { return DpmSettings.CeilingChoices[_index]; } set { var i = Array.IndexOf(DpmSettings.CeilingChoices, value); Index = i >= 0 ? i : Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz); } }
     }
+
+    // A choice of several values in the theme: a flat button that shows the chosen value and opens the list as a menu
+    // (a click, Enter, Space, F4 or Alt+Down). A ComboBox ignores the dark theme in its list style and draws blank in
+    // the render gate. Screen readers get the setting's name with the chosen value, and the role of a combo box.
+    sealed class DropChoice : Button
+    {
+        readonly List<string> _items;
+        readonly string _name;
+        int _index = -1;
+        public event EventHandler SelectionChangeCommitted;
+
+        public DropChoice(IList<string> items, string name, int max)
+        {
+            _items = items.ToList();
+            _name = name;
+            FlatStyle = FlatStyle.Flat; ForeColor = Theme.Text; BackColor = Theme.Nav; Font = Theme.Body; TextAlign = ContentAlignment.MiddleLeft;
+            AutoEllipsis = true; UseMnemonic = false; TabStop = true; Cursor = Cursors.Hand; AccessibleRole = AccessibleRole.ComboBox;
+            Padding = Theme.Pad(6, 0, 24, 0); Margin = Theme.Pad(0, 4, 8, 4);
+            FlatAppearance.BorderColor = Theme.Line;
+            GotFocus += (s, e) => { FlatAppearance.BorderColor = Theme.Focus; FlatAppearance.BorderSize = 2; };
+            LostFocus += (s, e) => { FlatAppearance.BorderColor = Theme.Line; FlatAppearance.BorderSize = 1; };
+            int widest = _items.Count == 0 ? 0 : _items.Max(t => TextRenderer.MeasureText(t, Font).Width);
+            Width = Math.Max(Math.Min(Theme.S(120), max), Math.Min(max, widest + Theme.S(48)));
+            Height = TextRenderer.MeasureText("Ag", Font).Height + Theme.S(12);
+            Click += (s, e) => Open();
+            KeyDown += (s, e) => { if (e.KeyCode == Keys.F4 || (e.Alt && e.KeyCode == Keys.Down)) { e.Handled = true; Open(); } };
+        }
+
+        // The arrow at the right edge, in the padding the text leaves free.
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            TextRenderer.DrawText(e.Graphics, "\u25BE", Font, new Rectangle(Width - Theme.S(24), 0, Theme.S(20), Height), Enabled ? Theme.Text : Theme.Dim,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+        }
+
+        public int SelectedIndex
+        {
+            get { return _index; }
+            set
+            {
+                _index = value >= 0 && value < _items.Count ? value : -1;
+                string shown = _index >= 0 ? _items[_index] : "";
+                Text = shown;
+                AccessibleName = _name + ": " + shown;
+            }
+        }
+
+        void Open()
+        {
+            var menu = new ContextMenuStrip { ShowImageMargin = false, ShowCheckMargin = false, BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.Body, Renderer = new DarkMenu() };
+            menu.AccessibleName = _name;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                int n = i;
+                var item = new ToolStripMenuItem(_items[i]) { ForeColor = Theme.Text, BackColor = Theme.Nav, Font = i == _index ? Theme.Bold : Theme.Body };
+                item.Click += (s, e) =>
+                {
+                    if (n == _index) return;
+                    SelectedIndex = n;
+                    if (SelectionChangeCommitted != null) SelectionChangeCommitted(this, EventArgs.Empty);
+                };
+                menu.Items.Add(item);
+            }
+            menu.Closed += (s, e) => BeginInvoke((Action)menu.Dispose);
+            menu.Show(this, new Point(0, Height));
+            if (_index >= 0) menu.Items[_index].Select();
+        }
+
+        sealed class DarkMenu : ToolStripProfessionalRenderer
+        {
+            public DarkMenu() : base(new Colors()) { RoundedEdges = false; }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) { e.TextColor = Theme.Text; base.OnRenderItemText(e); }
+
+            sealed class Colors : ProfessionalColorTable
+            {
+                public override Color ToolStripDropDownBackground { get { return Theme.Nav; } }
+                public override Color MenuBorder { get { return Theme.Line; } }
+                public override Color MenuItemBorder { get { return Theme.Focus; } }
+                public override Color MenuItemSelected { get { return Theme.CardHi; } }
+                public override Color ImageMarginGradientBegin { get { return Theme.Nav; } }
+                public override Color ImageMarginGradientMiddle { get { return Theme.Nav; } }
+                public override Color ImageMarginGradientEnd { get { return Theme.Nav; } }
+            }
+        }
+    }
 }

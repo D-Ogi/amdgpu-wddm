@@ -253,7 +253,14 @@ static partial class UnitTests
         foreach (var file in Directory.GetFiles(Path.Combine(root, @"driver\umd\d3d12"), "*.cpp").Where(f => !f.EndsWith("-test.cpp")))
             foreach (Match m in Regex.Matches(File.ReadAllText(file), "ddi_experiment(_off)?\\(\"([a-z0-9-]+)\"\\)"))
                 asked.Add(m.Groups[2].Value + (m.Groups[1].Success ? "-off" : ""));
-        foreach (var s in Profiles.Catalog) Check(asked.Contains(s.Token), "catalog switch " + s.Token + " is read by the shell");
+        foreach (var s in Profiles.Catalog)
+        {
+            // A switch of a shell branch that is not on main yet may be missing; once the shell reads it, the entry
+            // in Profiles.AwaitingShell has to go.
+            if (Profiles.AwaitingShell.Contains(s.Token)) Check(!asked.Contains(s.Token), "catalog switch " + s.Token + " is read by the shell now: remove it from Profiles.AwaitingShell");
+            else Check(asked.Contains(s.Token), "catalog switch " + s.Token + " is read by the shell");
+        }
+        foreach (var t in Profiles.AwaitingShell) Check(Profiles.Find(t) != null, "awaiting switch " + t + " is in the catalog");
         foreach (var t in asked) Check(Profiles.Find(t) != null, "shell switch " + t + " is in the catalog");
         var trace = File.ReadAllText(Path.Combine(root, @"driver\umd\d3d12\ddi-trace.h"));
         Check(trace.Contains(@"SOFTWARE\\amdgpu-wddm\\D3D12\\Applications\\"), "profile key path matches the shell");
@@ -1152,6 +1159,7 @@ static partial class UnitTests
         NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
+        GraphicsSettingsTests();
         TunerTests(args[0], header);
         TunerViewTests();
         FanTests(args[0], header);
