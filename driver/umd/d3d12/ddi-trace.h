@@ -77,7 +77,9 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
-// All eight off is the release and reporting behaviour of adapter106 with no ray tracing.
+//   scanout-flip-off: a swap-chain primary is always the composed one, never a scan-out primary
+//     (scanout-mode.h, M15.14 increment 3; trial 478).
+// All nine off is the release and reporting behaviour of adapter106 with no ray tracing.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
