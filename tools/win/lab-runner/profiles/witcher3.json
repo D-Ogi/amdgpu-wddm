@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "witcher3",
-  "title": "The Witcher 3: Wild Hunt (next-gen, D3D12)",
+  "title": "The Witcher 3: Wild Hunt (Remaster, D3D12)",
   "app_id": 292030,
   "api": "d3d12",
   "apis": {
