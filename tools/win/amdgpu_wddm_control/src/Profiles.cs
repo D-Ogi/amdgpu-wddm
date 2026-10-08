@@ -79,10 +79,10 @@ namespace AmdgpuWddmControl
                 "The adapter reports shader model 6.6 at most, as every driver before 2026-10-07 did. Wins over shader-model-68-off."),
         };
 
-        // Catalog switches whose shell is not on main yet (branch m15/shader-model-68 reads the two shader model
-        // switches). ShellTokens lets such a switch be missing from the shell and fails once the shell reads it, so the
-        // entry goes away with the merge.
-        public static readonly string[] AwaitingShell = { "shader-model-68-off", "shader-model-67-off" };
+        // Catalog switches whose shell is not on main yet. ShellTokens lets such a switch be missing from the shell and
+        // fails once the shell reads it, so the entry goes away with the merge. Empty since the b23 train merged
+        // m15/shader-model-68, whose shell reads shader-model-68-off and shader-model-67-off.
+        public static readonly string[] AwaitingShell = { };
 
         static readonly Regex Syntax = new Regex("^[a-z0-9,-]*$", RegexOptions.CultureInvariant);
         static readonly Regex ImageSyntax = new Regex(@"^[A-Za-z0-9 _.()+-]{1,96}\.exe$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
