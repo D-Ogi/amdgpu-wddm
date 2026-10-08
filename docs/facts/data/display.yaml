@@ -940,3 +940,13 @@ facts:
     edges:
       - {"type": "uses", "to": "M824"}
       - {"type": "uses", "to": "M826"}
+  - id: M844
+    status: MEASURED
+    date: "2026-10-08"
+    claim: "On unit A the D3D12 game The Witcher 3 (next-gen) scans out its own swap-chain buffers by independent flip when the scan-out primary of the D3D12 shell is on and the swap chain has the geometry of the committed mode. Exclusive fullscreen at 1920x1200 (the native mode): in 20 s, 2005 game presents, 2003 `IndependentFlip` and 2003 `MMIOFlip` events to 3 addresses, the VSync DPC on the same 3 addresses, 0 presents consumed by DWM, and 2028 of 2028 scan-out flips admitted by the KMD. Borderless window at 1920x1200: 1682 presents, 1679 `IndependentFlip`, 1679 `MMIOFlip`, 0 consumed and 1696 of 1696 admitted. Exclusive fullscreen at 1920x1080 stayed composed: 0 `IndependentFlip`, 1200 presents consumed by DWM and 0 scan-out flips. The shell had the fixed geometry 1920x1200 of its experiment and gave the 1080 chain a composed primary"
+    status_text: "MEASURED (unit A, trial 478, one 20 s ETW window per mode)"
+    detail: "Stack: KMD 0.7.216.20 with `EnableDirectFlipHandshake` 1, the desktop router with `DirectFlipFront` 1, and the D3D12 shell of increment 2 (main `3eca5f98`) with the experiment `scanout-flip-1920x1200`. Preset LOW, VSync off, the lab overlay hidden. Every flip had interval 0, and every `MMIOFlip` had Flags `0x82`. Win32k marked 1970 of 2003 presents in exclusive fullscreen and 1679 of 1679 in borderless with `SkipIndependentFlip`. The kernel events of the same frames record flips, and the kernel witness of `etw-present-mode.py` (commit `46c7503c`) reads them as hardware flips. The router front of DWM answered `answer=1 rule=supported` in all 256 logged checks. Its log budget ran out before the 1080 and borderless modes. The shell line of the 1080 chain gives `source=1920x1200`, which the shell read when the adapter opened. This run therefore does not tell which geometry the KMD gave while the 1080 mode was committed. Not measured: VSync on, a window over the game, D3D11 games, and a start without the experiment"
+    evidence: "[W3 independent flip, trial 478](../evidence/windows/2026-10-08-m15.14-w3/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M65"}
+      - {"type": "uses", "to": "M97"}

@@ -1,0 +1,44 @@
+Trial 478, inc2-game-probe.ps1 output (KMD `log summary` before and after each 20 s ETW window), copied from the
+operator console. The lab probe directories were removed after their gpu.etl was pulled.
+Ring line, seconds since KMD start, text. Witcher 3 pid 6812, DWM pid 1912.
+
+== (a) exclusive fullscreen 1920x1200, tag w3s-a, dir w3s-a-025816, started 02:58:12Z (operator clock)
+before:
+ 49444    733.874 wddm summary: scan-out flips 46125 of 46125 requested candidates; admission ok/no-alloc/not-requested 50917/0/0
+ 49445    733.874 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+ 49590    733.874 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+ 49612    733.874 wddm summary: vidpn flip open: 50910 hardware flips, 0 refused
+ 49613    733.874 wddm summary: vidpn flip vsyncs 1 armed, 43910 acked, 0 refused, 77 completion-deferred, 77 old-buffer-reports
+after:
+ 49850    754.137 wddm summary: scan-out flips 48153 of 48153 requested candidates; admission ok/no-alloc/not-requested 52945/0/0
+ 49851    754.137 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+ 49996    754.138 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+ 50018    754.138 wddm summary: vidpn flip open: 52938 hardware flips, 0 refused
+ 50019    754.138 wddm summary: vidpn flip vsyncs 1 armed, 45125 acked, 0 refused, 86 completion-deferred, 86 old-buffer-reports
+delta over 20.26 s: scan-out flips +2028 (requested +2028), refusals 0, hardware flips +2028, vsyncs acked +1215
+gpu.etl 121634816 bytes
+
+== (b) exclusive fullscreen 1920x1080, tag w3s-b, dir w3s-b-030030, started 03:00:27Z
+before:
+ 58723    868.526 wddm summary: scan-out flips 54500 of 54500 requested candidates; admission ok/no-alloc/not-requested 61796/0/0
+ 58893    868.527 wddm summary: vidpn flip open: 61788 hardware flips, 0 refused
+ 58894    868.527 wddm summary: vidpn flip vsyncs 1 armed, 51983 acked, 0 refused, 98 completion-deferred, 98 old-buffer-reports
+after:
+ 61482    888.726 wddm summary: scan-out flips 54500 of 54500 requested candidates; admission ok/no-alloc/not-requested 63007/0/0
+ 61652    888.726 wddm summary: vidpn flip open: 62999 hardware flips, 0 refused
+ 61653    888.726 wddm summary: vidpn flip vsyncs 1 armed, 53194 acked, 0 refused, 98 completion-deferred, 98 old-buffer-reports
+delta over 20.20 s: scan-out flips +0 (requested +0), hardware flips +1211, vsyncs acked +1211
+gpu.etl 142606336 bytes
+
+== (c) borderless window 1920x1200, tag w3s-c, dir w3s-c-030226, started 03:02:23Z
+before:
+ 72097    984.798 wddm summary: scan-out flips 57516 of 57516 requested candidates; admission ok/no-alloc/not-requested 69550/0/0
+ 72267    984.798 wddm summary: vidpn flip open: 69541 hardware flips, 0 refused
+ 72268    984.798 wddm summary: vidpn flip vsyncs 1 armed, 58953 acked, 0 refused, 106 completion-deferred, 105 old-buffer-reports
+after:
+ 72464   1005.018 wddm summary: scan-out flips 59212 of 59212 requested candidates; admission ok/no-alloc/not-requested 71246/0/0
+ 72465   1005.018 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+ 72634   1005.019 wddm summary: vidpn flip open: 71237 hardware flips, 0 refused
+ 72635   1005.019 wddm summary: vidpn flip vsyncs 1 armed, 60165 acked, 0 refused, 110 completion-deferred, 109 old-buffer-reports
+delta over 20.22 s: scan-out flips +1696 (requested +1696), refusals 0, hardware flips +1696, vsyncs acked +1212
+gpu.etl 100663296 bytes

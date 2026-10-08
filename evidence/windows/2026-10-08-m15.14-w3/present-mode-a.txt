@@ -1,0 +1,119 @@
+xperf dumper: trial 478 mode (a), exclusive fullscreen 1920x1200, gpu.etl of 20 s -> a dumper text, deleted after the run
+trace span 20.081 s, 1058606 events, 115 event kinds
+
+-- present and flip events --
+   79400  Microsoft-Windows-DxgKrnl/QueuePacket/win:Info
+   64731  Microsoft-Windows-DxgKrnl/QueuePacket/win:Stop
+   64692  Microsoft-Windows-DxgKrnl/QueuePacket/win:Start
+   18566  Microsoft-Windows-DxgKrnl/UnwaitQueuePacket/win:Info
+    6051  Microsoft-Windows-Win32k/TokenStateChanged/win:Info
+    4012  Microsoft-Windows-DxgKrnl/PresentHistory/win:Info
+    2006  Microsoft-Windows-DxgKrnl/IndependentFlip/win:Info
+    2006  Microsoft-Windows-DxgKrnl/MMIOFlip/win:Info
+    2006  Microsoft-Windows-DxgKrnl/PresentQueuePacket/win:Stop
+    2006  Microsoft-Windows-DxgKrnl/PresentHistory/win:Stop
+    2005  Microsoft-Windows-Win32k/TokenCompositionSurfaceObject/win:Info
+    2005  Microsoft-Windows-DxgKrnl/PresentHistoryDetailed/win:Start
+    2005  Microsoft-Windows-DxgKrnl/PresentQueuePacket/win:Start
+    2005  Microsoft-Windows-DxgKrnl/Present/win:Info
+    1973  Microsoft-Windows-Win32k/TokenIndependentFlipSkipComplete/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncInterrupt/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncDPCMultiPlane/win:Info
+     100  Microsoft-Windows-DxgKrnl/VSyncWaiterChange/win:Info
+      46  Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT_STATS_DELTAS/win:Info
+      33  Microsoft-Windows-Win32k/CompositionSurfaceObjectUpdate/win:Info
+      33  Microsoft-Windows-Dwm-Core/SCHEDULE_SURFACEUPDATE/win:Info
+
+-- present mode per process --
+"Unknown" (6812): 2005 presents over its own 20.025 s, 100.1/s (2005 D3DKMTPresent calls; trace span 20.081 s)
+    hardware flip (kernel witness; Win32k skip)   1970   98.3%
+    hardware flip (independent)                33    1.6%
+    unclassified                                2    0.1%
+    Present Flags 0x9000 (PresentCountValid+RedirectedFlip)   2005
+    Model 2 (REDIRECTED_FLIP)                  2005  (2005 from PresentHistoryDetailed)
+    Model 0 (UNINITIALIZED)                      54  (0 from PresentHistoryDetailed)
+    TokenStateChanged Completed independent True skip True   1970
+    TokenStateChanged InFrame independent True skip True   1970
+    TokenStateChanged Discarded independent True skip True   1970
+    TokenStateChanged Completed independent True skip False     33
+    TokenStateChanged InFrame independent True skip False     33
+    TokenStateChanged Confirmed independent True skip False     33
+    TokenStateChanged Discarded independent True skip False     33
+    InFrame rows 2003, with IndependentFlip 2003, with SkipIndependentFlip 1970
+    DWM says: no SCHEDULE_SURFACEUPDATE      1972
+    DWM says: direct flip True, independent True, scanout True     33
+    unclassified reasons: {'no TokenStateChanged': 2}
+    (1970 presents Win32k marked SkipIndependentFlip are hardware flips by the kernel witness;
+     see M15.14 KERNEL-WITNESS below)
+
+-- per second (mode: presents) --
+   0  hardware flip (kernel witness; Win32k skip) 99
+   1  hardware flip (kernel witness; Win32k skip) 104
+   2  hardware flip (kernel witness; Win32k skip) 104
+   3  hardware flip (kernel witness; Win32k skip) 103
+   4  hardware flip (kernel witness; Win32k skip) 104
+   5  hardware flip (independent) 2, hardware flip (kernel witness; Win32k skip) 102
+   6  hardware flip (independent) 15, hardware flip (kernel witness; Win32k skip) 88
+   7  hardware flip (kernel witness; Win32k skip) 104
+   8  hardware flip (kernel witness; Win32k skip) 104
+   9  hardware flip (kernel witness; Win32k skip) 104
+  10  hardware flip (kernel witness; Win32k skip) 103
+  11  hardware flip (kernel witness; Win32k skip) 103
+  12  hardware flip (kernel witness; Win32k skip) 99
+  13  hardware flip (kernel witness; Win32k skip) 95
+  14  hardware flip (independent) 8, hardware flip (kernel witness; Win32k skip) 86
+  15  hardware flip (independent) 8, hardware flip (kernel witness; Win32k skip) 86
+  16  hardware flip (kernel witness; Win32k skip) 94
+  17  hardware flip (kernel witness; Win32k skip) 95
+  18  hardware flip (kernel witness; Win32k skip) 94
+  19  hardware flip (kernel witness; Win32k skip) 94
+  20  hardware flip (kernel witness; Win32k skip) 5, unclassified 2
+
+-- per-frame flip witness (kernel side) --
+"Unknown" (6812): 2005 present packets (2005 rows), 2003 independent flips, 2003 reached MMIOFlip, 0 named by a VSync DPC
+    flip intervals: {0: 2003}
+    MMIOFlip FlipImmediate+MoveFlip?                       2003
+    FlipToPhysicalAddress 0x000000F434664000    668
+    FlipToPhysicalAddress 0x000000F43B930000    668
+    FlipToPhysicalAddress 0x000000F43C1FA000    667
+M15.14 VERDICT "Unknown" (6812): packets=2005 independent=2003 mmio=2003 vsync=0 directflip=33/33 result=INDEPENDENT-FLIP
+M15.14 KERNEL-WITNESS "Unknown" (6812): independent_flips=PASS mmio_programmed=PASS vsync_scanned_same_addresses=PASS not_consumed_by_dwm=PASS result=HOLDS relabelled=1970
+    independent_flips                    PASS     2003 of 2005 present packets
+    mmio_programmed                      PASS     2003 of 2003 independent flips reached MMIOFlip
+    vsync_scanned_same_addresses         PASS     all 3 scanned: 0xF434664000, 0xF43B930000, 0xF43C1FA000
+    not_consumed_by_dwm                  PASS     0 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed over 2005 present counts
+M15.14 INCREMENT1 "Unknown" (6812): present_flags_9000=PASS detailed_model_2=PASS dwm_directflip_1_independent_0=FAIL no_independent_flip=FAIL no_plane_for_this_process=FAIL result=MOVED
+    present_flags_9000               PASS     2005 of 2005 calls
+    detailed_model_2                 PASS     2005 of 2005 tokens
+    dwm_directflip_1_independent_0   FAIL     0 of 33 surface updates
+    no_independent_flip              FAIL     2003 naming this process, 3 elsewhere in the trace (another process flipping its own buffers is not this verdict; check which one before reading the capture as a baseline)
+    no_plane_for_this_process        FAIL     2003 packets reached MMIOFlip, 0 named by a VSync DPC
+M15.14 INCREMENT2 "Unknown" (6812): not_consumed_by_dwm=PASS mmio_programmed_an_admitted_address=NO-DATA vsync_scanned_that_address=NO-DATA kernel_counters=NO-DATA result=UNKNOWN
+    not_consumed_by_dwm                  PASS     0 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed over 2005 present counts
+    mmio_programmed_an_admitted_address  NO-DATA  no --admitted-address given; 3 addresses programmed for this process
+    vsync_scanned_that_address           NO-DATA  clause 2 named no address to look for
+    kernel_counters                      NO-DATA  need scanout_flips, scanout_requests and at least one admit_* refusal column in --kmd-counters; have none
+
+-- display side --
+DWM SCHEDULE_PRESENT starts 0
+VSyncDPC ScannedPhysicalAddress: 1202 samples, 3 distinct, 1199 changes (59.7/s)
+    0x000000F43C1FA000     404 samples
+    0x000000F43B930000     401 samples
+    0x000000F434664000     397 samples
+VSyncInterrupt ScannedPhysicalAddress: 1202 samples, 3 distinct, 1199 changes (59.7/s)
+    0x000000F43C1FA000     404 samples
+    0x000000F43B930000     401 samples
+    0x000000F434664000     397 samples
+    (a changing address is what a composing desktop does too; compare a distinct value with an
+     address the kernel driver logged as an admitted scan-out flip, not with the change rate)
+driver-programmed flips: {'MMIOFlip': 2006}
+    FlipToPhysicalAddress   0x000000F434664000    669
+    FlipToPhysicalAddress   0x000000F43B930000    669
+    FlipToPhysicalAddress   0x000000F43C1FA000    668
+    FlipToDriverAllocation  0xFFFFAE0828216280    669
+    FlipToDriverAllocation  0xFFFFAE0828216A60    669
+    FlipToDriverAllocation  0xFFFFAE082821DAE0    668
+independent-flip events: 2006, present packets with one: 2003
+WARNING: an MMIOFlip Flags word carried 0x20, 0x40 or 0x80. the 0x20/0x40/0x80 names come from DXGK_SETVIDPNSOURCEADDRESS_FLAGS and are UNCONFIRMED for this event: they corroborate, they never witness
+text dump deleted (166.0 MB); --keep-dump keeps it

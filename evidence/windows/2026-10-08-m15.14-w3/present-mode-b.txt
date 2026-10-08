@@ -1,0 +1,114 @@
+xperf dumper: trial 478 mode (b), exclusive fullscreen 1920x1080, gpu.etl of 20 s -> a dumper text, deleted after the run
+trace span 20.053 s, 1272935 events, 147 event kinds
+
+-- present and flip events --
+   87946  Microsoft-Windows-DxgKrnl/QueuePacket/win:Info
+   71561  Microsoft-Windows-DxgKrnl/QueuePacket/win:Start
+   71561  Microsoft-Windows-DxgKrnl/QueuePacket/win:Stop
+   19417  Microsoft-Windows-DxgKrnl/UnwaitQueuePacket/win:Info
+    9269  Microsoft-Windows-Win32k/TokenStateChanged/win:Info
+    3055  Microsoft-Windows-DxgKrnl/PresentQueuePacket/win:Start
+    3055  Microsoft-Windows-DxgKrnl/Present/win:Info
+    3055  Microsoft-Windows-DxgKrnl/PresentQueuePacket/win:Stop
+    2403  Microsoft-Windows-DxgKrnl/VSyncWaiterChange/win:Info
+    1853  Microsoft-Windows-Win32k/TokenCompositionSurfaceObject/win:Info
+    1853  Microsoft-Windows-DxgKrnl/PresentHistoryDetailed/win:Start
+    1853  Microsoft-Windows-DxgKrnl/PresentHistory/win:Info
+    1853  Microsoft-Windows-DxgKrnl/PresentHistory/win:Stop
+    1202  Microsoft-Windows-DxgKrnl/VSyncInterrupt/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncDPCMultiPlane/win:Info
+    1202  Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT_STATS_DELTAS/win:Info
+    1202  Microsoft-Windows-Win32k/CompositionSurfaceObjectUpdate/win:Info
+    1202  Microsoft-Windows-Dwm-Core/SCHEDULE_SURFACEUPDATE/win:Info
+    1202  Microsoft-Windows-Dwm-Core/Windowed_Dx_Flip_Consumed/win:Info
+    1202  Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start
+    1202  Microsoft-Windows-DxgKrnl/Flip/win:Info
+    1202  Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop
+    1202  Microsoft-Windows-DxgKrnl/MMIOFlip/win:Info
+       8  Microsoft-Windows-DxgKrnl/PagingQueuePacket/win:Start
+       8  Microsoft-Windows-DxgKrnl/PagingQueuePacket/win:Info
+       8  Microsoft-Windows-DxgKrnl/PagingQueuePacket/win:Stop
+
+-- present mode per process --
+"Unknown" (6812): 1853 presents over its own 20.028 s, 92.5/s (1853 D3DKMTPresent calls; trace span 20.053 s)
+    composed flip (DWM consumed)             1200   64.8%
+    unclassified                              653   35.2%
+    Present Flags 0x9000 (PresentCountValid+RedirectedFlip)   1853
+    Model 2 (REDIRECTED_FLIP)                  1853  (1853 from PresentHistoryDetailed)
+    Model 0 (UNINITIALIZED)                      25  (0 from PresentHistoryDetailed)
+    TokenStateChanged Completed independent False skip False   1851
+    TokenStateChanged InFrame independent False skip False   1851
+    TokenStateChanged Confirmed independent False skip False   1851
+    TokenStateChanged Retired independent False skip False   1849
+    TokenStateChanged Discarded independent False skip False   1849
+    InFrame rows 1851, with IndependentFlip 0, with SkipIndependentFlip 0
+    DWM says: direct flip False, independent False, scanout True   1200
+    DWM says: no SCHEDULE_SURFACEUPDATE       653
+    unclassified reasons: {'state without consumption': 651, 'no TokenStateChanged': 2}
+
+-- per second (mode: presents) --
+   0  composed flip (DWM consumed) 59, unclassified 34
+   1  composed flip (DWM consumed) 60, unclassified 34
+   2  composed flip (DWM consumed) 60, unclassified 35
+   3  composed flip (DWM consumed) 60, unclassified 35
+   4  composed flip (DWM consumed) 60, unclassified 34
+   5  composed flip (DWM consumed) 60, unclassified 35
+   6  composed flip (DWM consumed) 60, unclassified 35
+   7  composed flip (DWM consumed) 60, unclassified 35
+   8  composed flip (DWM consumed) 60, unclassified 34
+   9  composed flip (DWM consumed) 60, unclassified 35
+  10  composed flip (DWM consumed) 60, unclassified 35
+  11  composed flip (DWM consumed) 60, unclassified 35
+  12  composed flip (DWM consumed) 60, unclassified 32
+  13  composed flip (DWM consumed) 60, unclassified 29
+  14  composed flip (DWM consumed) 60, unclassified 29
+  15  composed flip (DWM consumed) 60, unclassified 29
+  16  composed flip (DWM consumed) 59, unclassified 29
+  17  composed flip (DWM consumed) 60, unclassified 29
+  18  composed flip (DWM consumed) 61, unclassified 28
+  19  composed flip (DWM consumed) 59, unclassified 29
+  20  composed flip (DWM consumed) 2, unclassified 3
+
+-- per-frame flip witness (kernel side) --
+"Unknown" (6812): 1853 present packets (1853 rows), 0 independent flips, 0 reached MMIOFlip, 0 named by a VSync DPC
+M15.14 VERDICT "Unknown" (6812): packets=1853 independent=0 mmio=0 vsync=0 directflip=0/1200 result=COMPOSED
+M15.14 KERNEL-WITNESS "Unknown" (6812): independent_flips=FAIL mmio_programmed=NO-DATA vsync_scanned_same_addresses=NO-DATA not_consumed_by_dwm=FAIL result=NOT-HELD relabelled=0
+    independent_flips                    FAIL     0 of 1853 present packets
+    mmio_programmed                      NO-DATA  0 of 0 independent flips reached MMIOFlip
+    vsync_scanned_same_addresses         NO-DATA  no programmed address of this process
+    not_consumed_by_dwm                  FAIL     1200 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed over 1853 present counts
+M15.14 INCREMENT1 "Unknown" (6812): present_flags_9000=PASS detailed_model_2=PASS dwm_directflip_1_independent_0=FAIL no_independent_flip=PASS no_plane_for_this_process=PASS result=MOVED
+    present_flags_9000               PASS     1853 of 1853 calls
+    detailed_model_2                 PASS     1853 of 1853 tokens
+    dwm_directflip_1_independent_0   FAIL     0 of 1200 surface updates
+    no_independent_flip              PASS     0 naming this process, 0 elsewhere in the trace
+    no_plane_for_this_process        PASS     0 packets reached MMIOFlip, 0 named by a VSync DPC
+M15.14 INCREMENT2 "Unknown" (6812): not_consumed_by_dwm=FAIL mmio_programmed_an_admitted_address=NO-DATA vsync_scanned_that_address=NO-DATA kernel_counters=NO-DATA result=REFUTED
+    not_consumed_by_dwm                  FAIL     1200 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed over 1853 present counts
+    mmio_programmed_an_admitted_address  NO-DATA  no --admitted-address given; 0 addresses programmed for this process
+    vsync_scanned_that_address           NO-DATA  clause 2 named no address to look for
+    kernel_counters                      NO-DATA  need scanout_flips, scanout_requests and at least one admit_* refusal column in --kmd-counters; have none
+
+-- display side --
+DWM SCHEDULE_PRESENT starts 1202
+VSyncDPC ScannedPhysicalAddress: 1202 samples, 3 distinct, 1201 changes (59.9/s)
+    0x000000F40B050000     401 samples
+    0x000000F410C10000     401 samples
+    0x000000F403AD0000     400 samples
+VSyncInterrupt ScannedPhysicalAddress: 1202 samples, 3 distinct, 1201 changes (59.9/s)
+    0x000000F40B050000     401 samples
+    0x000000F410C10000     401 samples
+    0x000000F403AD0000     400 samples
+    (a changing address is what a composing desktop does too; compare a distinct value with an
+     address the kernel driver logged as an admitted scan-out flip, not with the change rate)
+driver-programmed flips: {'MMIOFlip': 1202}
+    FlipToPhysicalAddress   0x000000F410C10000    401
+    FlipToPhysicalAddress   0x000000F403AD0000    401
+    FlipToPhysicalAddress   0x000000F40B050000    400
+    FlipToDriverAllocation  0xFFFFAE08232C29F0    401
+    FlipToDriverAllocation  0xFFFFAE08232C31D0    401
+    FlipToDriverAllocation  0xFFFFAE08232B6630    400
+DxgKrnl/Flip Info: {'MMIOFlip True': 1202}
+independent-flip events: 0, present packets with one: 0
+text dump deleted (199.7 MB); --keep-dump keeps it
