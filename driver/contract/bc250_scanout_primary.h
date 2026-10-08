@@ -96,7 +96,7 @@ static __inline unsigned int bc250_scanout_primary_rule(const struct bc250_scano
     if (!width || !height ||
         ((width != caps->post_width || height != caps->post_height) && !offered_mode))
         return BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY;
-    row = amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(dxgi), AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
+    row = amdgpu_wddm_surface_format_by_dxgi(dxgi);
     if (!row || !row->dxgi || !bc250_scanout_format_admitted(row, caps->flags))
         return BC250_SCANOUT_PRIMARY_FORMAT;
     if (!pitch || pitch != bc250_scanout_primary_pitch(width, row->bytes_per_pixel))

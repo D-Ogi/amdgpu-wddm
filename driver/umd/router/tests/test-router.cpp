@@ -1467,6 +1467,15 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     lb7a.Pitch = width * 4;
     lb7a.Size = (unsigned long long)lb7a.Pitch * height;
     e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    // The front-log scenario asks about `other` after this suite and expects the BGRA8 client of negative
+    // control 6, whose pitch differs from the compositor's: open it in that shape again.
+    lb7a.Pitch = width * 4 + 256;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE && Has(lastLine(), "answer=0 rule=pitch"),
+          "the pitch-mismatch client again: %s", lastLine().c_str());
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
     // Negative control 7: a destroyed client is forgotten, so a reused handle is never answered from the
     // record of a buffer that is gone.
     device.pfnDestroyResource(hDevice, client);
@@ -2163,14 +2172,16 @@ static void Child(const std::string &s)
             device.pfnDestroyDevice(create.hDrvDevice);
             if (s == "front-log") {
                 // The destroy summary counts every answer of both suites under its rule: the 300 questions above
-                // are pitch (250) and source-geometry (50), and the lines the change log held back are 0.
+                // are pitch (250) and source-geometry (50), and the lines the change log held back are 0. The
+                // TRUE answers are front-answer's three and the four of its PLANE_FORMATS block (RGBA8, RGBA8
+                // IMMEDIATE, the RGBA8 sRGB record and RGB10A2).
                 const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                                 std::to_wstring(GetCurrentProcessId()) + L".log");
                 const size_t at = frontLog.find("check_direct_flip summary");
                 const std::string line = at == std::string::npos ? std::string()
                                                                  : frontLog.substr(at, frontLog.find('\n', at) - at);
-                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=3 ") &&
-                          Has(line, "source-geometry:51") && Has(line, "pitch:251"),
+                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=7 ") &&
+                          Has(line, "source-geometry:51") && Has(line, "pitch:252"),
                       "the destroy summary: %s", line.c_str());
                 CHECK(frontLog.find("check_direct_flip summary", at + 1) == std::string::npos,
                       "more than one summary line: %s", frontLog.c_str());
