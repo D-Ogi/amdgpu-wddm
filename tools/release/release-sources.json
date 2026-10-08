@@ -1,6 +1,59 @@
 {
-  "schema": 2,
+  "schema": 3,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
+  "recipe_repository": "amdgpu-wddm",
+  "repositories": {
+    "amdgpu-wddm": {
+      "url": "https://github.com/D-Ogi/amdgpu-wddm",
+      "checkouts": [
+        "{repo}"
+      ]
+    },
+    "mesa-amdgpu-wddm": {
+      "url": "https://github.com/D-Ogi/mesa-amdgpu-wddm",
+      "checkouts": [
+        "mesa-wddm",
+        "scratch/forksync/mesa-amdgpu-wddm"
+      ]
+    },
+    "dxvk": {
+      "url": "https://github.com/D-Ogi/dxvk",
+      "checkouts": [
+        "scratch/forksync/dxvk"
+      ],
+      "submodules": {
+        "subprojects/dxbc-spirv": "dxbc-spirv"
+      }
+    },
+    "vkd3d-proton": {
+      "url": "https://github.com/D-Ogi/vkd3d-proton",
+      "checkouts": [
+        "scratch/forksync/vkd3d-proton",
+        "scratch/wow64-d3d12/src/vkd3d-proton"
+      ],
+      "submodules": {
+        "subprojects/dxil-spirv": "dxil-spirv"
+      }
+    },
+    "dxil-spirv": {
+      "url": "https://github.com/D-Ogi/dxil-spirv",
+      "checkouts": [
+        "scratch/forksync/dxil-spirv"
+      ]
+    },
+    "dxbc-spirv": {
+      "url": "https://github.com/D-Ogi/dxbc-spirv",
+      "checkouts": [
+        "scratch/fork-sync-2026-09-30/engines/dxbc-spirv"
+      ]
+    },
+    "Vulkan-Headers": {
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers",
+      "checkouts": [
+        "scratch/forksync/vkd3d-proton/khronos/Vulkan-Headers"
+      ]
+    }
+  },
   "kmd_version": "0.7.216.14",
   "kmd_abi": "0x000700D8",
   "control_app_exe": "amdgpu_wddm_control.exe",
@@ -35,6 +88,12 @@
       "path": "payload/kmd/bc250kmd.inf",
       "source": "scratch/train/b22-build/kmd-r20/a/package/bc250kmd.inf",
       "sha256": "30DE1BBFCFA2C16CFEF61084E12C7DB17D5A600483E06555676D2FDD8C8B9A5B",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "a00da18c2c1c8cf5e2784e0f7b6f402141187fd1",
+        "path": "driver/kmd/bc250kmd.inf"
+      },
+      "release_edits": "build-release.ps1 sets DriverVer to the release version and adds the Reboot directive to each install section",
       "size": 18625,
       "role": "KMD 0.7.216.14 INF (bc250-win a00da18c, train/b22). BD-091: every setting this INF writes is now the released value of tools/release/installer/registry-defaults.json, and it carries NOCLOBBER (flags 0x00010003), so a driver update that the installer does not drive gets the released configuration on a fresh computer and leaves an existing value alone. Until 0.7.216.3 the INF wrote 0 into each Enable* gate and named EnableNativeSmu nowhere, so such an update asked for the SMU owner with no register mapping and the start failed with Code 43. The gate tools/quality/inf_gates.py compares the packaged INF with the defaults table at every release build. Two Parameters values keep the old unconditional write on purpose and each says why at its line: UnconfirmedStarts, because installing the package grants a fresh start budget, and EnableHangBugcheck, because installing a package must disarm a test bugcheck that somebody left armed. EnableMmioWrite and HwmonBasePort carry NOCLOBBER but stand outside the defaults table (inf_gates.py NOT_IN_TABLE): a computer that never had this driver gets the closed value, and an operator's own value survives a reinstall. The memory manager stage 1 switches (ApertureSegmentMegabytes, EnableSharedResidency) are absent on purpose, because a value the INF never writes is one a driver update can never reset. The release re-stamps DriverVer and adds the Reboot directive"
     },
@@ -43,6 +102,21 @@
       "path": "payload/kmd/bc250kmd.sys",
       "source": "scratch/train/b22-build/kmd-r20/a/package/bc250kmd.sys",
       "sha256": "2A8585521E849E8A3C54195E5E9A8A5CDACCB9E82BEE9EB0774EE55D86F7D186",
+      "unsigned_sha256": "70FB2E04D8B93B23579F164C86BDEFEEECF948D9E1A82FDC9EE0AA03B4022FC9",
+      "authenticode_sha256": "3EA883D135F1930B055798169655D31F14003DB72E459927D880DA6773D7CF12",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "a00da18c2c1c8cf5e2784e0f7b6f402141187fd1",
+        "recipe": "driver/kmd/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}"
+        ],
+        "output": "package/bc250kmd.sys",
+        "unsigned_output": "bc250kmd.unsigned.sys"
+      },
       "size": 617360,
       "role": "KMD 0.7.216.14, escape ABI 0x000700D8, unchanged from 0.7.216.1 (bc250-win a00da18c, train/b22: the tester.19 driver 0.7.216.1 with the b22 kernel wagons). New in b22, each one a Parameters value away from the behaviour before it. A runtime restart of the GPU device inside a confirmed boot works: an orderly stop gives the boot-loop guard its start back, a second teardown of the same device is refused by a StopDone guard instead of running twice, the release of the display fills the scanned-out surface with black, and CreateDevice logs the process it answered (BD-090). The DisplayPort audio path reads the Azalia, DIO and DCCG state for the check table and clears DIO_MEM_PWR_CTRL before it enables the stream, as Linux dcn201_init_hw does. The clock governor holds its idle point while the work on the GPU still fits that point (DpmIdleLeavePermille 150), which stops the 500 and 1000 MHz flapping of an idle desktop, and it carries the C62 joint power arm that caps the processor for a bound and hot GPU, behind DpmJointGovernor, which is 0 in this release. Memory manager stage 1: the OS aperture is 384 MiB (ApertureSegmentMegabytes, absent = 384, clamped to 256..447, one fallback to 256 if the GART refuses), a VRAM allocation of the user-mode driver that is neither a scan-out surface nor DISCARDABLE is also resident in the aperture segment so Windows can move it to system memory instead of evicting it (EnableSharedResidency, absent = 1), and the vidmm and paging counters now report what moved. The SMU owner is refused with a log line instead of a failed start when BAR5 is not mapped, and the log ring is kept in one file per device start and per stop under C:/BC250/kmdlog, with 200-file pruning (BD-091). The kernel is built with /Brepro and a sorted object list, and two builds of this head into empty directories gave the same unsigned and signed bytes. The b21 changes against 0.7.213.1 are all here too, each on by every install with one Parameters value that takes it away again. A VMID per page-table root from a pool of up to 14, so a job of another process does not wait for the ring to drain (EnableVmidPool, 0.7.214). The case fan control: the driver takes fan 1 from the BIOS curve while it runs, drives it on its own curve (Standard: 100 % from 80 C) and gives it back to the chip on every exit path, through escape 30 RUN_FAN (EnableFanControl); a leased mode ends with the durable mode from before it. DisplayPort audio steps 0 to 2: the Azalia endpoint of the running DP stream is configured, the audio stream of that DP encoder is started (audio DTO1, AFMT, DP SEC), and only then is the endpoint present to the inbox HD Audio driver, through escape 31 RUN_DPAUDIO ABI 2 (EnableDpAudio, EnableDpAudioEndpoint, EnableDpAudioStream; 0.7.215.1 showed the endpoint with no audio clock, so no sound and video at about 0.7x). The SMU metrics table once a second for the package power, RUN_DPM ABI 3; a 0 mW table is a skipped sample (EnableSmuMetrics). The CPU tuning surface is open by default (CpuTune 1): a change runs only on an administrator's request, as a trial that reverts by itself. Re-signed with the release certificate, code unchanged"
     },
@@ -51,6 +125,45 @@
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
       "source": "scratch/train/b20-build/shells/d3d12-r15/amdgpu_wddm_d3d12.dll",
       "sha256": "477373C1AA590794F189EC9F5FD644664944B561DE7FDC7B74629E6396F11A6A",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "bc1b00a92e6f1a5a2ac2b4112b6f2f4b79fcb54b",
+        "recipe": "tools/build/build-umd-d3d12.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-MesaSource",
+          "{input:mesa}",
+          "-VulkanInclude",
+          "{input:vulkan}/include",
+          "-EngineInclude",
+          "{input:engine}/libs/ddi"
+        ],
+        "inputs": {
+          "mesa": {
+            "repo": "mesa-amdgpu-wddm",
+            "commit": "48546c732a832b5ed0c97d28fdcf335a9960cc06",
+            "paths": [
+              "src/util/bc250_host_bootstrap.h"
+            ]
+          },
+          "vulkan": {
+            "repo": "Vulkan-Headers",
+            "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
+            "paths": [
+              "include"
+            ]
+          },
+          "engine": {
+            "repo": "vkd3d-proton",
+            "commit": "66c98e7246c024964e97b05575de0cacdfefdee7",
+            "paths": [
+              "libs/ddi"
+            ]
+          }
+        },
+        "output": "amdgpu_wddm_d3d12.dll"
+      },
       "size": 1063936,
       "role": "D3D12 shell (bc250-win bc1b00a9, train/b20-setup). It sizes its adapter query BC250_SCANOUT_CAPS_TOTAL, so it reaches the kernel's scan-out caps trailer and reads the new scan-out counters; its E26R record is still 16 bytes of version 2, which the compositor's 64-byte version 3 opener refuses, so the D3D12 client half of route C increment 2 is open (M15.14). It makes a shared texture inside a known shape instead of refusing it, and it counts every second create attempt (BD-075). A command queue accepts a wait on a fence and lets the system do the waiting, where the shell before this one lost the device. Every earlier behaviour of the b19 shell is kept: heap import retries the ownership unlock (BD-045), ClearRootArguments records the real values (BD-046), the direct recording entry of engine-ddi is the default (M15.9), and the shell records each start of an application for the Recent page. Built with /Brepro. A rebuild at 9bc5818f (train/b21) gives the same bytes"
     },
@@ -59,6 +172,26 @@
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
       "source": "scratch/forksync/artifact/amdgpu_wddm_vkd3d.dll",
       "sha256": "348117F12F97C7DA5FA104825FCA26FE0542F4C819A335AB85E6A9099AA42E1E",
+      "built_from": {
+        "repo": "vkd3d-proton",
+        "commit": "4e9a98e9f882dbab1d474b5debb84f67c46dfa33",
+        "recipe_commit": "3c31bd974918737b7d03620e57662166fc430754",
+        "recipe": "tools/build/build-vkd3d.ps1",
+        "args": [
+          "-Config",
+          "ddi-engine-lto",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x64",
+          "-Jobs",
+          "8"
+        ],
+        "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
+      },
+      "unverified": "Built without /Brepro (the vkd3d-proton recipe has it from 841e4018) by an uncommitted copy of the recipe, build-vkd3d-lto.ps1 (SHA-256 0877B6C4 in its recipe.json), with the option set that 3c31bd97 committed as ddi-engine-lto.",
       "size": 3701760,
       "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/upstream-2026-10-05 4e9a98e9: 16 upstream commits merged into the b17 compile limiter 220099f5, submodule dxil-spirv d2d82332 = 14 upstream commits merged into bc773cf2)"
     },
@@ -67,6 +200,24 @@
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
       "source": "scratch/train/b19-build/mesa/ship/d3d12/amdgpu_wddm_radv.dll",
       "sha256": "822134D04E200FD83D5FEEAD8EDF49F6CE49A9CF55BA24FBEF9F55735AEB6648",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "31844893334cd3debb9771105a0612ababe9d0ee",
+        "recipe_commit": "d5593267f04dd8b90819415a4004ee447cf2c1da",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv-mt",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "Built without /Brepro (the Mesa recipe has it from 841e4018) by a build script outside the repository: no recipe.json is next to the shipped file. The image names its PDB in scratch/land-1006/build-icd-x64 and holds source paths of scratch/land-1006/wagon-icd.",
       "size": 22386176,
       "role": "D3D12 ICD (mesa fork amdgpu-wddm/b19-icd 31844893 on upstream-2026-10-05). The shader cache key covers the whole shader state again (BD-068). Handle types and host imports follow the contract (BD-038, BD-039). A buffer object takes the CPU lock for a mapped import (BD-045). Host policy version 2 reads no machine-wide file and writes no shared log. The disk cache stays one file. The file reports git-3184489333 as its Mesa version"
     },
@@ -75,6 +226,19 @@
       "path": "payload/desktop/bc250d3d_router.dll",
       "source": "scratch/train/b21-build/shells/router-x64/bc250d3d_router.dll",
       "sha256": "9A1523FFEC369D370C4E0208E83887989CFDAF6252D975943F565EDF4AF835B1",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "9bc5818f8985c12bc5c9f5b7179b1648117ed089",
+        "recipe": "tools/build/build-umd-router.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x64"
+        ],
+        "output": "bc250d3d_router.dll"
+      },
+      "unverified": "Built at 9bc5818f without /Brepro (the recipe has it from edeff0b9). A rebuild at that commit differs only in the fields that a link without /Brepro writes for each build: the COFF time stamp, the time stamps of the three debug directory entries and the RSDS GUID (tools/build/pe_compare.py, exit 0).",
       "size": 54784,
       "role": "desktop and application router (bc250-win 9bc5818f, train/b21, driver/umd/router). A Direct3D 10.0 application arrives at OpenAdapter10_2 like a Direct3D 11 one, so Mode, Allow and Deny decide for both (BD-081). gpu-default sends Windows components to the GPU UMD like any other image; only an image whose path cannot be resolved stays on the CPU UMD. The Direct3D 11.1 front of route C (M15.14) is on by default: an absent DirectFlipFront means on, 0 is its bisect switch. Host gate: 81 scenarios, 0 failed"
     },
@@ -83,6 +247,26 @@
       "path": "payload/desktop/bc250d3d_zink.dll",
       "source": "scratch/train/b20-build/umd-fix/art-umd-zink-x64/bc250d3d_zink.dll",
       "sha256": "D9C4DF680A96CF6A2F9AF65CB6C477CB068C4DB4DA07E3C0B00BFB3A28C64D4B",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "7eb7861d8d8409817d24642ec928669933b9575e",
+        "recipe_commit": "6a5b6546b108ce6c8a6d1d9e70d49be42290ef26",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "zink-umd",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x64",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
+      },
+      "unverified": "Built without /Brepro by the committed recipe of 6a5b6546 (the recipe file hashes in its recipe.json match that commit). The image names its PDB in scratch/train/b20-build/umd-fix/build-umd-zink-x64 and holds 61 source paths of scratch/land-1006/wagon-hosted-umd-mesa, so a rebuild in another directory cannot give these bytes.",
       "size": 15220224,
       "role": "hosted zink D3D11 UMD for DWM on the GPU (mesa fork amdgpu-wddm/b19-hosted-umd 7eb7861d). The surface setup resumes after a failed step instead of leaking it (BD-037). The composed-surface table accepts one-byte pixels (A8). The shader parser reads past the extended operand token (the minimum-precision hint) that the Direct3D 11.1 front of route C passes on, and the adapter sets the CRT error mode to stderr, so a failed assertion ends the process instead of a message box that nobody sees (the b20 logon hang)"
     },
@@ -91,6 +275,24 @@
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
       "source": "scratch/m15/gpu-dwm-t0/kit/attempts/gpu-dwm-003/amdgpu_wddm_radv.dll",
       "sha256": "66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "48546c732a832b5ed0c97d28fdcf335a9960cc06",
+        "recipe_commit": "b4c74c8696f9795472a70620bd56f3ff46919099",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "Built without /Brepro, and no recipe.json is next to the shipped file. The image names its PDB in scratch/fork-sync-2026-09-30/mesa/build-radv-release and holds source paths of scratch/fork-sync-2026-09-30/mesa/radv-hosted-main.",
       "size": 21508096,
       "role": "hosted ICD for zink"
     },
@@ -99,6 +301,32 @@
       "path": "payload/desktop/bc250d3d.dll",
       "source": "scratch/train/b19-build/mesa/ship/desktop/bc250d3d.dll",
       "sha256": "A57F737603009AD11A2A9B2D9DC46F190A1BF3C5F0C417B9DC5B1A792729B55F",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "76ab2c270a40fe65def27dd86fe897c55b266ee9",
+        "recipe_commit": "d5593267f04dd8b90819415a4004ee447cf2c1da",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "llvmpipe-umd",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Jobs",
+          "8",
+          "-Llvm",
+          "{input:llvm}"
+        ],
+        "inputs": {
+          "llvm": {
+            "workspace": "scratch/llvm2312-build",
+            "version": "LLVM 23.1.2 (llvmorg-23.1.2)"
+          }
+        },
+        "output": "src/gallium/targets/d3d10umd/bc250d3d.dll"
+      },
+      "unverified": "Built without /Brepro, and no recipe.json is next to the shipped file. The image names its PDB in scratch/land-1006/build-umd-cpu-x64 and holds 74 paths of its build tree and of the LLVM headers. It links the LLVM build in scratch/llvm2312-build, which no commit pins.",
       "size": 68616704,
       "role": "CPU D3D11 UMD (mesa fork amdgpu-wddm/b19-desktop-umd 76ab2c27). The surface setup resumes after a failed step instead of leaking it (BD-037). The composed-surface table accepts one-byte pixels (A8). This is the fallback route for the D3D11 applications that the router does not send to the GPU"
     },
@@ -107,6 +335,27 @@
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
       "source": "scratch/train/b20-build/shells/d3d11-x64/amdgpu_wddm_d3d11.dll",
       "sha256": "D42801CC2935DA0C880B6D55F3C8E0178305C412025DF7694993EA81050ED88E",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "bc1b00a92e6f1a5a2ac2b4112b6f2f4b79fcb54b",
+        "recipe": "tools/build/build-umd-dxvk.ps1",
+        "args": [
+          "-DxvkSource",
+          "{input:dxvk}",
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x64"
+        ],
+        "inputs": {
+          "dxvk": {
+            "repo": "dxvk",
+            "commit": "5611118ef0d29d3b3b4bce83bb452694b3975bfb"
+          }
+        },
+        "output": "amdgpu_wddm_d3d11.dll"
+      },
+      "unverified": "Built at bc1b00a9 in scratch/train/b20-build/wt-setup. The image holds that directory in 25 __FILE__ strings, so a rebuild in another directory differs: the rebuild in scratch/repro-builds is 6144 bytes longer. The recipe removes the directory from __FILE__ from 0b909399 on (/FC and /d1trimfile).",
       "size": 722432,
       "role": "GPU D3D11 shell (bc250-win bc1b00a9, train/b20-setup). It sizes its adapter caps query BC250_SCANOUT_CAPS_TOTAL, the last trailer of driver/contract, so that it reaches the kernel's scan-out caps trailer at all (route C increment 2). The 11 host tests of the recipe and the DDI error-policy gate pass against it. Built with /Brepro against DXVK fork 5611118e, which b20 reuses from b19 unchanged"
     },
@@ -115,6 +364,48 @@
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
       "source": "scratch/train/b20-build/shells/config/config-b20-x64.bin",
       "sha256": "0494BA88937D6D568D263C87B72BEC98164B74F08D07AF174D99660C928F23B6",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "bc1b00a92e6f1a5a2ac2b4112b6f2f4b79fcb54b",
+        "recipe": "tools/build/write-umd-config.py",
+        "args": [
+          "--caps",
+          "{input:caps}",
+          "--engine",
+          "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
+          "--icd",
+          "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
+          "--out",
+          "{out}/amdgpu_wddm_d3d11.config"
+        ],
+        "inputs": {
+          "caps": {
+            "inline": {
+              "adapter": "adapter: AMD BC-250 (RADV GFX1013) (api 1.4.363)",
+              "driver": "driver: radv, Mesa 26.3.0-devel (git-05e6c9622e)",
+              "icd_witness": "icd: C:\\BC250\\m14\\fl12caps001\\amdgpu_wddm_radv.dll sha256 D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27",
+              "maximum_feature_level": 49408,
+              "doubles": 1,
+              "compute_raw_structured": 1,
+              "logic_op": 1,
+              "tile_based": 0,
+              "pixel_min_precision": 2,
+              "other_min_precision": 2,
+              "typed_uav_loads": 1,
+              "rovs": 1,
+              "stencil_ref": 1,
+              "tiled_resources_tier": 3,
+              "conservative_tier": 3,
+              "vp_rt_index_any_shader": 1,
+              "engine_sha256": "C242BA6AF895A6A0B3259573E3ECC1BA8652D8A38AF6FFEBD66E057FB52B621C",
+              "icd_sha256": "822134D04E200FD83D5FEEAD8EDF49F6CE49A9CF55BA24FBEF9F55735AEB6648",
+              "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured"
+            }
+          }
+        },
+        "output": "amdgpu_wddm_d3d11.config"
+      },
       "size": 132,
       "role": "GPU D3D11 caps record for engine C242BA6A and ICD 822134D0 (tools/build/write-umd-config.py). The shell refuses an engine or an ICD whose SHA-256 differs from this record. b20 reuses the b19 engine and ICD, so this record is byte for byte the b19 one. Capabilities carried from fl12caps001: FL 12_1, tiled resources tier 3, rasterizer ordered views, conservative rasterization tier 3"
     },
@@ -123,6 +414,24 @@
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
       "source": "scratch/forksync/build-dxvk/x64/src/ddi/amdgpu_wddm_dxvk.dll",
       "sha256": "C242BA6AF895A6A0B3259573E3ECC1BA8652D8A38AF6FFEBD66E057FB52B621C",
+      "built_from": {
+        "repo": "dxvk",
+        "commit": "5611118ef0d29d3b3b4bce83bb452694b3975bfb",
+        "recipe_commit": "693c02b3f1c6b78a9f5cbd20006066bffaf23898",
+        "recipe": "tools/build/build-dxvk.ps1",
+        "args": [
+          "-Config",
+          "ddi-engine",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/ddi/amdgpu_wddm_dxvk.dll"
+      },
+      "unverified": "Built without /Brepro (the DXVK recipe has it from 841e4018) by an uncommitted copy of build-dxvk.ps1 (SHA-256 81CFAFBE and common.ps1 925E8538 in its recipe.json, in no commit). The image names its PDB in scratch/forksync/build-dxvk/x64 and holds 21 source paths of scratch/forksync/dxvk.",
       "size": 4407296,
       "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/upstream-2026-10-05 5611118e: 14 upstream commits merged into the b17 inline-throttle engine ebeadc49, the throttle wait moved to the new upstream wait site, plus the signal-tracker deduplication fix; submodule dxbc-spirv stays at f241996e)"
     },
@@ -131,6 +440,24 @@
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
       "source": "scratch/train/b19-build/mesa/ship/d3d11/amdgpu_wddm_radv.dll",
       "sha256": "822134D04E200FD83D5FEEAD8EDF49F6CE49A9CF55BA24FBEF9F55735AEB6648",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "31844893334cd3debb9771105a0612ababe9d0ee",
+        "recipe_commit": "d5593267f04dd8b90819415a4004ee447cf2c1da",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv-mt",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "The same file as payload/d3d12/amdgpu_wddm_radv.dll (822134D0): built without /Brepro by a build script outside the repository, and the image holds the paths of its build and source trees.",
       "size": 22386176,
       "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/b19-icd 31844893, static CRT). This is the same build as payload/d3d12/amdgpu_wddm_radv.dll. A process that uses D3D11 and D3D12 therefore loads one RADV build"
     },
@@ -139,6 +466,24 @@
       "path": "payload/vulkan/vulkan_radeon.dll",
       "source": "scratch/icd-candidates/vulkan_radeon.CF3948D6.dll",
       "sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "2732f9c889fffb1c892619d056a07fd08815b306",
+        "recipe_commit": "d6176765ac463fca6b5a1eeb38adfd233348469f",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "Built without /Brepro, and no recipe.json is next to the shipped file. The image names its PDB in scratch/mesa-fork-2026-09-27/build-radv and holds 105 paths of that build tree and of scratch/mesa-fork-2026-09-27/wt-radv.",
       "size": 24258560,
       "role": "system Vulkan ICD (mesa fork 2732f9c8, published on branch amdgpu-wddm/gdi-immediate-quiet, the build the lab registers). b19 keeps it. The b19 ICD 822134D0 is newer. Its branch does not carry the work of this build: the IMMEDIATE present on the GDI path without the DwmFlush wait, and host-cached present memory. That work has to come onto the b19 ICD line before the system ICD can move. docs/testing/defaults-audit-2026-10-04.md row 6 names what this build costs: no shader disk cache, and no ICD change after 2026-09-27"
     },
@@ -147,6 +492,11 @@
       "path": "payload/vulkan/radeon_icd.json",
       "source": "scratch/m10/wsi-final/radeon_icd.json",
       "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "df9be61439d03a667e8874e82e0ca67554589eee",
+        "path": "evidence/windows/2026-09-25-E31-m10-acceptance/final/radeon_icd.json"
+      },
       "size": 131,
       "role": "Vulkan ICD manifest"
     },
@@ -155,6 +505,19 @@
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
       "source": "scratch/train/b21-build/shells/router-x86/bc250d3d_router.dll",
       "sha256": "9A91CA919F3D221AD70AF79BDA3488547F8975ED2975C37EEF177410DFA7DCEA",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "9bc5818f8985c12bc5c9f5b7179b1648117ed089",
+        "recipe": "tools/build/build-umd-router.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x86"
+        ],
+        "output": "bc250d3d_router.dll"
+      },
+      "unverified": "Built at 9bc5818f without /Brepro (the recipe has it from edeff0b9). A rebuild at that commit differs only in the fields that a link without /Brepro writes for each build: the COFF time stamp, the time stamps of the three debug directory entries and the RSDS GUID (tools/build/pe_compare.py, exit 0).",
       "size": 155648,
       "role": "x86 application router for 32-bit processes (bc250-win 9bc5818f, train/b21, driver/umd/router). It holds the Wow path values and plain export names, it reads the 64-bit policy keys through KEY_WOW64_64KEY, and it has the static CRT (BD-064). The same BD-081 entry and route C front as the x64 router. Host gate: 82 scenarios, 0 failed"
     },
@@ -163,6 +526,34 @@
       "path": "payload/wow64/desktop/bc250d3d.dll",
       "source": "scratch/train/b19-build/mesa/ship/wow64/desktop/bc250d3d.dll",
       "sha256": "FF33F4B106249FDD42E6BF03D6777DD62A04D56ABB759058FDE49DD1DB3140D5",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "76ab2c270a40fe65def27dd86fe897c55b266ee9",
+        "recipe_commit": "9d4067960c01a731c291cde5da0cb33f660cfe4c",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "llvmpipe-umd",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Jobs",
+          "8",
+          "-Llvm",
+          "{input:llvm}"
+        ],
+        "inputs": {
+          "llvm": {
+            "workspace": "scratch/wow64/llvm2312-x86-build",
+            "version": "LLVM 23.1.2 (llvmorg-23.1.2)"
+          }
+        },
+        "output": "src/gallium/targets/d3d10umd/bc250d3d.dll"
+      },
+      "unverified": "Built without /Brepro, and no recipe.json is next to the shipped file. The image names its PDB in scratch/land-1006/build-umd-cpu-x86 and holds 121 paths of its build tree and of the LLVM headers. It links the LLVM build in scratch/wow64/llvm2312-x86-build, which no commit pins.",
       "size": 56203264,
       "role": "x86 CPU D3D11 UMD for 32-bit processes (mesa fork amdgpu-wddm/b19-desktop-umd 76ab2c27, LLVM 23.1.2 x86): the router's fallback route (BD-064)"
     },
@@ -171,6 +562,27 @@
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
       "source": "scratch/train/b20-build/shells/d3d11-x86/amdgpu_wddm_d3d11.dll",
       "sha256": "D100E93A7DB5DE762DAC15D017DFAC198B6B1D2DBCBC437E97F197DA90D19A15",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "bc1b00a92e6f1a5a2ac2b4112b6f2f4b79fcb54b",
+        "recipe": "tools/build/build-umd-dxvk.ps1",
+        "args": [
+          "-DxvkSource",
+          "{input:dxvk}",
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x86"
+        ],
+        "inputs": {
+          "dxvk": {
+            "repo": "dxvk",
+            "commit": "5611118ef0d29d3b3b4bce83bb452694b3975bfb"
+          }
+        },
+        "output": "amdgpu_wddm_d3d11.dll"
+      },
+      "unverified": "Built at bc1b00a9 in scratch/train/b20-build/wt-setup. The image holds that directory in 26 __FILE__ strings, so a rebuild in another directory differs: the rebuild in scratch/repro-builds is 8704 bytes longer. The recipe removes the directory from __FILE__ from 0b909399 on (/FC and /d1trimfile).",
       "size": 616960,
       "role": "x86 GPU D3D11 shell for 32-bit processes (bc250-win bc1b00a9, train/b20-setup, built with the -Arch x86 recipe and the .def export: no patch). It sizes its adapter caps query like the x64 shell. /Brepro (BD-064 and BD-071)"
     },
@@ -179,6 +591,48 @@
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
       "source": "scratch/train/b20-build/shells/config/config-b20-x86.bin",
       "sha256": "858FDE4F92FE2C17C42DA4FACEAC553EF39AC77A27F92731EBB8A37AB12B93FB",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "bc1b00a92e6f1a5a2ac2b4112b6f2f4b79fcb54b",
+        "recipe": "tools/build/write-umd-config.py",
+        "args": [
+          "--caps",
+          "{input:caps}",
+          "--engine",
+          "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
+          "--icd",
+          "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
+          "--out",
+          "{out}/amdgpu_wddm_d3d11.config"
+        ],
+        "inputs": {
+          "caps": {
+            "inline": {
+              "adapter": "adapter: AMD BC-250 (RADV GFX1013) (api 1.4.363)",
+              "driver": "driver: radv, Mesa 26.3.0-devel (git-05e6c9622e)",
+              "icd_witness": "icd: C:\\BC250\\m14\\fl12caps001\\amdgpu_wddm_radv.dll sha256 D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27",
+              "maximum_feature_level": 49408,
+              "doubles": 1,
+              "compute_raw_structured": 1,
+              "logic_op": 1,
+              "tile_based": 0,
+              "pixel_min_precision": 2,
+              "other_min_precision": 2,
+              "typed_uav_loads": 1,
+              "rovs": 1,
+              "stencil_ref": 1,
+              "tiled_resources_tier": 3,
+              "conservative_tier": 3,
+              "vp_rt_index_any_shader": 1,
+              "engine_sha256": "A42ADB6E9A7CD4F90C8646406737E47B8A5EEF56572DA446B0CF7A6DF3AA2E76",
+              "icd_sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+              "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; engine and ICD hashes replaced by the x86 builds (BD-064), capabilities not re-measured on x86; ICD hash replaced by the b19 x86 ICD F6392B51 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b19: engine pin moved to the b19 x86 engine A42ADB6E (the record of 2026-10-06 04:05Z still pinned the b17 x86 engine 0D4AE659), ICD pin kept (F6392B51), capabilities not re-measured"
+            }
+          }
+        },
+        "output": "amdgpu_wddm_d3d11.config"
+      },
       "size": 132,
       "role": "x86 GPU D3D11 caps record for the x86 engine A42ADB6E and the x86 ICD F6392B51 (tools/build/write-umd-config.py). b20 reuses the b19 x86 engine and ICD, so this record is byte for byte the b19 one. Capabilities carried from fl12caps001, as in the x64 record"
     },
@@ -187,6 +641,26 @@
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
       "source": "scratch/forksync/build-dxvk/x86/src/ddi/amdgpu_wddm_dxvk.dll",
       "sha256": "A42ADB6E9A7CD4F90C8646406737E47B8A5EEF56572DA446B0CF7A6DF3AA2E76",
+      "built_from": {
+        "repo": "dxvk",
+        "commit": "5611118ef0d29d3b3b4bce83bb452694b3975bfb",
+        "recipe_commit": "9d4067960c01a731c291cde5da0cb33f660cfe4c",
+        "recipe": "tools/build/build-dxvk.ps1",
+        "args": [
+          "-Config",
+          "ddi-engine",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/ddi/amdgpu_wddm_dxvk.dll"
+      },
+      "unverified": "Built without /Brepro (the DXVK recipe has it from 841e4018) by an uncommitted copy of build-dxvk.ps1 (SHA-256 81CFAFBE and common.ps1 6840ED9D in its recipe.json, in no commit). The image names its PDB in scratch/forksync/build-dxvk/x86 and holds source paths of scratch/forksync/dxvk.",
       "size": 4009984,
       "role": "x86 GPU D3D11 engine (DXVK fork amdgpu-wddm/upstream-2026-10-05 5611118e, unmodified; BD-064)"
     },
@@ -195,6 +669,26 @@
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
       "source": "scratch/train/b19-build/mesa/ship/wow64/d3d11/amdgpu_wddm_radv.dll",
       "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "31844893334cd3debb9771105a0612ababe9d0ee",
+        "recipe_commit": "9d4067960c01a731c291cde5da0cb33f660cfe4c",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv-mt",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "Built without /Brepro by a build script outside the repository: no recipe.json is next to the shipped file. The image names its PDB in scratch/land-1006/build-icd-x86 and holds 28 paths of that build tree and of scratch/land-1006/wagon-icd.",
       "size": 20150784,
       "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/b19-icd 31844893, x86 build, static CRT): no patch is applied to the tree (BD-064). The file reports git-3184489333 as its Mesa version"
     },
@@ -203,6 +697,47 @@
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
       "source": "scratch/wow64-d3d12/ship/wow64/d3d12/amdgpu_wddm_d3d12.dll",
       "sha256": "077104FE075C0448887C0D7C47D1CD97956645294D581536406A7D1A81B91385",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "41919147448aef5696ea2f3335766449844cd613",
+        "recipe": "tools/build/build-umd-d3d12.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-MesaSource",
+          "{input:mesa}",
+          "-VulkanInclude",
+          "{input:vulkan}/include",
+          "-EngineInclude",
+          "{input:engine}/libs/ddi",
+          "-Arch",
+          "x86"
+        ],
+        "inputs": {
+          "mesa": {
+            "repo": "mesa-amdgpu-wddm",
+            "commit": "31844893334cd3debb9771105a0612ababe9d0ee",
+            "paths": [
+              "src/util/bc250_host_bootstrap.h"
+            ]
+          },
+          "vulkan": {
+            "repo": "Vulkan-Headers",
+            "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
+            "paths": [
+              "include"
+            ]
+          },
+          "engine": {
+            "repo": "vkd3d-proton",
+            "commit": "66c98e7246c024964e97b05575de0cacdfefdee7",
+            "paths": [
+              "libs/ddi"
+            ]
+          }
+        },
+        "output": "amdgpu_wddm_d3d12.dll"
+      },
       "size": 1048064,
       "role": "x86 D3D12 shell for 32-bit processes (bc250-win 41919147, branch umd/wow64-d3d12, built with the -Arch x86 recipe and the .def export: no patch). It exports exactly OpenAdapter12, links the C runtime statically and reads the 64-bit profile keys. Its host bootstrap contract is the src/util of the x86 ICD's Mesa commit 31844893. On a host Vulkan driver it reports the caps of the x64 shell: feature level 12_1 (level 13), 8 shader models, binding tier 3, tiled tier 3. /Brepro. A rebuild at 9bc5818f (train/b21) gives the same bytes"
     },
@@ -211,6 +746,26 @@
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
       "source": "scratch/wow64-d3d12/ship/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
       "sha256": "C00AC53870F1ABCEBACBB67A9DB29086A1812C070E55D9A9A4896754130D7ED8",
+      "built_from": {
+        "repo": "vkd3d-proton",
+        "commit": "bdec00f356f620959d8b93a0a545f4f11c111b0d",
+        "recipe_commit": "3c31bd974918737b7d03620e57662166fc430754",
+        "recipe": "tools/build/build-vkd3d.ps1",
+        "args": [
+          "-Config",
+          "ddi-engine-lto",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Jobs",
+          "8"
+        ],
+        "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
+      },
+      "unverified": "Built without /Brepro by an uncommitted draft of build-vkd3d.ps1 (SHA-256 8F926AC8 in its recipe.json) with the configuration file that 3c31bd97 committed (2ED2253A) and the ddi-engine-lto set.",
       "size": 3255296,
       "role": "x86 D3D12 engine (vkd3d-proton fork amdgpu-wddm/wow64-d3d12 bdec00f3 (published) = the x64 engine's 4e9a98e9 plus one x86 calling convention fix of NtQueryInformationProcess, dxil-spirv d2d82332), the ddi-engine-lto option set of the x64 engine built with -Arch x86. Its offline engine test passes 212 of 212 on a host x86 Vulkan driver"
     },
@@ -219,6 +774,26 @@
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
       "source": "scratch/train/b19-build/mesa/ship/wow64/d3d11/amdgpu_wddm_radv.dll",
       "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "31844893334cd3debb9771105a0612ababe9d0ee",
+        "recipe_commit": "9d4067960c01a731c291cde5da0cb33f660cfe4c",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv-mt",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "The same file as payload/wow64/d3d11/amdgpu_wddm_radv.dll (F6392B51): built without /Brepro by a build script outside the repository, and the image holds the paths of its build and source trees.",
       "size": 20150784,
       "role": "x86 D3D12 ICD: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (mesa fork amdgpu-wddm/b19-icd 31844893, the commit of the x64 D3D12 ICD). The shell loads it from its own folder, so it needs no Vulkan registration"
     },
@@ -227,6 +802,26 @@
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
       "source": "scratch/train/b19-build/mesa/ship/wow64/vulkan/vulkan_radeon.dll",
       "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+      "built_from": {
+        "repo": "mesa-amdgpu-wddm",
+        "commit": "31844893334cd3debb9771105a0612ababe9d0ee",
+        "recipe_commit": "9d4067960c01a731c291cde5da0cb33f660cfe4c",
+        "recipe": "tools/build/build-mesa.ps1",
+        "args": [
+          "-Config",
+          "radv-mt",
+          "-Source",
+          "{src}",
+          "-Build",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Jobs",
+          "8"
+        ],
+        "output": "src/amd/vulkan/vulkan_radeon.dll"
+      },
+      "unverified": "The same file as payload/wow64/d3d11/amdgpu_wddm_radv.dll (F6392B51): built without /Brepro by a build script outside the repository, and the image holds the paths of its build and source trees.",
       "size": 20150784,
       "role": "x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064). The 32-bit Vulkan ICD moves with the D3D11 pair, while the 64-bit one keeps the registered build of the lab"
     },
@@ -235,6 +830,11 @@
       "path": "payload/wow64/vulkan/radeon_icd.json",
       "source": "scratch/m10/wsi-final/radeon_icd.json",
       "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "df9be61439d03a667e8874e82e0ca67554589eee",
+        "path": "evidence/windows/2026-09-25-E31-m10-acceptance/final/radeon_icd.json"
+      },
       "size": 131,
       "role": "x86 Vulkan ICD manifest (the 64-bit manifest: library_path is relative to the manifest)"
     },
@@ -243,6 +843,19 @@
       "path": "payload/tools/bc250kmd_cli.exe",
       "source": "scratch/train/b22-build/control-r20/bc250kmd_cli.exe",
       "sha256": "E7C248E5199CFDA217A79C88976C9647064A31A3F5989243DE0B5663ED385748",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "a00da18c2c1c8cf5e2784e0f7b6f402141187fd1",
+        "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-NoSmoke"
+        ],
+        "output": "bc250kmd_cli.exe"
+      },
       "size": 265216,
       "role": "KMD control CLI from the control-app build (bc250-win a00da18c, train/b22). New in b22: the budget verb, which prints the video-memory budget, the usage and the demoted bytes of one process (by PID or by image name), and vram, which now also prints DedicatedSystemMemorySize and SharedSystemMemorySize, the pool the non-local budget is taken from. Beside the forms of tester.17 it answers fan (state, auto, curve, set, renew: escape 30), dpaudio (the DP audio check table with the stream record: escape 31, RUN_DPAUDIO ABI 2, falling back to ABI 1) and the SMU power reading in dpm and telemetry (RUN_DPM ABI 3, stepping down on a refusal). A cpu trial line names the default window as such. The same bc250kmd_cli.c makes bc250control.dll, and every form of cli-commands.json answers (test-cli-commands.ps1)"
     },
@@ -251,6 +864,19 @@
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
       "source": "scratch/m15/d3d12caps/build/amdgpu_wddm_d3d12caps.exe",
       "sha256": "9EE94801160B6DC981936B7FB32041F24B23C72F8F11555DE295E529F90C3F53",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "0d82a0597e3180ead2ab7519fef7e26be1f30ffd",
+        "recipe": "tools/win/d3d12caps/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}"
+        ],
+        "output": "amdgpu_wddm_d3d12caps.exe"
+      },
+      "unverified": "Built at 0d82a059 without /Brepro (the recipe has it from b03ff4ad). A rebuild at that commit differs only in the COFF time stamp and the time stamp of the debug directory entry (tools/build/pe_compare.py, exit 0).",
       "size": 312832,
       "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify"
     },
@@ -259,6 +885,19 @@
       "path": "payload/control/amdgpu_wddm_control.exe",
       "source": "scratch/train/b22-build/control-r20/amdgpu_wddm_control.exe",
       "sha256": "74833F0974C14C3008C0DEBB1370B4683701F2011AEA3B9BF2E715AD40C42491",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "a00da18c2c1c8cf5e2784e0f7b6f402141187fd1",
+        "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-NoSmoke"
+        ],
+        "output": "amdgpu_wddm_control.exe"
+      },
       "size": 788992,
       "role": "control application 0.6.0.0 (GUI phase 1, bc250-win a00da18c, train/b22). New in b22: the support report names MSISupported of the GPU's HD Audio function for every instance it finds, or says absent, which is the state of a computer before the install (BD-092). The file version stays 0.6.0.0, because the pages and their behaviour are the tester.19 ones. New in b21: the Case fan card on the Performance page (five modes, a curve chart, undo, a 10 s fan test that ends with the chosen mode), Advanced tuning on the Graphics page (the voltage curve and the processor cards, each change a trial), the Power row from the SMU metrics reading, and a fan control line in the support report. The Standard preset is 40:50, 60:70, 70:85, 76:95, 80:100, as in the driver. A start with UnconfirmedStarts 0 and no DPM trial pending counts as confirmed, so Home does not ask again for a start the logon task confirmed. Everything the tester.17 application did is kept"
     },
@@ -267,6 +906,19 @@
       "path": "payload/control/bc250control.dll",
       "source": "scratch/train/b22-build/control-r20/bc250control.dll",
       "sha256": "570A77F4240B79E998382CA1A79FEF084B9239B54AE8BC67F0777DA6655B7E81",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "a00da18c2c1c8cf5e2784e0f7b6f402141187fd1",
+        "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-NoSmoke"
+        ],
+        "output": "bc250control.dll"
+      },
       "size": 159744,
       "role": "control DLL for the control application (bc250-win a00da18c build, static CRT). It exports the fan control, DP audio (RUN_DPAUDIO ABI 2), RUN_DPM ABI 3 and the b22 memory-budget calls beside the earlier ones"
     },
@@ -275,6 +927,19 @@
       "path": "payload/tools/bc250control.dll",
       "source": "scratch/train/b22-build/control-r20/bc250control.dll",
       "sha256": "570A77F4240B79E998382CA1A79FEF084B9239B54AE8BC67F0777DA6655B7E81",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "a00da18c2c1c8cf5e2784e0f7b6f402141187fd1",
+        "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-NoSmoke"
+        ],
+        "output": "bc250control.dll"
+      },
       "size": 159744,
       "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
     },
@@ -283,6 +948,13 @@
       "path": "payload/tools/vulkaninfo.exe",
       "source": "scratch/m8/vulkaninfo.exe",
       "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
+      "third_party": {
+        "url": "https://sdk.lunarg.com/sdk/download/1.4.335.0/windows/VulkanRT-X64-1.4.335.0-Components.zip",
+        "archive_sha256": "4F856DA356FFB1C16FBFC792CAE70F6E6873680E6B62BC132B9D7131CBC97FE2",
+        "archive_path": "VulkanRT-X64-1.4.335.0-Components/x64/vulkaninfo.exe",
+        "version": "1.4.335.0 (KhronosGroup/Vulkan-Tools vulkan-sdk-1.4.335.0, the LunarG build)",
+        "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00"
+      },
       "size": 2925496,
       "role": "vulkaninfo 1.4.335 (Khronos Vulkan-Tools, LunarG-signed), used by the bug report"
     },
@@ -291,6 +963,18 @@
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
       "source": "scratch/train/b20-build/mft/build/amdgpu_wddm_mft_h264.dll",
       "sha256": "D3E29E6ED32446BC61ABD3A7AFC46CB3F4C03D1E029A384CC693FA4C0C9872CA",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "e79f72e06616461cb084925a9abfa0ca6fbc55b9",
+        "recipe": "driver/umd/mft-h264/build.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}"
+        ],
+        "output": "amdgpu_wddm_mft_h264.dll"
+      },
       "size": 510464,
       "role": "H.264 encoder Media Foundation transform (bc250-win 689852a8, train/b20-setup, which carries e52/encoder-perf e4d1f630). The respin does not rebuild it: no commit of the respin touches driver/umd/mft-h264 or the contract headers it includes, so this is the file the tester.14 build staged, and the lab kit of E52 pins it. The encoder holds two pictures at once, it filters a whole picture in one dispatch, and its rate control reads the quantiser the content needs. A client that asks for low latency still gets one picture at a time. BC250_MFT_DEPTH=1, BC250_MFT_DEBLOCK=waves and BC250_MFT_SERIAL_DEBLOCK each select an older part. The conformance sweep is 76 of 76, and 60 of 60 pictures stay bit exact against the inbox decoder. The build matches the hash the wagon recorded"
     }
