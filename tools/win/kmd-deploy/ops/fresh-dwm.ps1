@@ -4,7 +4,8 @@
 # wait for the new ready interval and confirm it, so admission (flags 15, fresh-DWM bound) passes.
 # Bounded: exit 30 s, respawn 15 s, ready 80 s. Never runs next to a transition task.
 $ErrorActionPreference = 'Stop'
-$cli = 'C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'
+# The installed release is the only KMD client (owner, 2026-10-08); InstallRoot is what its installer wrote.
+$cli = Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot) 'tools\bc250kmd_cli.exe'
 function Read-Health {
     $t = & $cli health read | Out-String
     if ($LASTEXITCODE -ne 0) { throw 'Health read failed' }

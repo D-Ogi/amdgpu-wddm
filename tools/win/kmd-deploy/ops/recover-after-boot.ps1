@@ -46,4 +46,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Enable failed' }
 $sw = [Diagnostics.Stopwatch]::StartNew()
 while ($sw.Elapsed.TotalSeconds -lt 60 -and (Prop DEVPKEY_Device_ProblemCode) -ne 0) { Start-Sleep -Milliseconds 500 }
 "after $([int]$sw.Elapsed.TotalSeconds) s: version $(Prop DEVPKEY_Device_DriverVersion) problem $(Prop DEVPKEY_Device_ProblemCode)"
-& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read
+$cli = Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot) 'tools\bc250kmd_cli.exe'
+& $cli health read
