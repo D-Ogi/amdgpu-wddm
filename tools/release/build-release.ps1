@@ -341,11 +341,15 @@ foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object Full
 # The registry defaults: one table (installer\registry-defaults.json) that install.ps1 applies and the control
 # application's reset reads from here.
 $regDefaults = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
-foreach ($g in 'parameters', 'desktop_router', 'app_router', 'd3d12_applications') { if (-not $regDefaults.defaults.$g) { throw "registry-defaults.json: defaults.$g missing" } }
+foreach ($g in 'parameters', 'desktop_router', 'app_router', 'd3d12_applications', 'graphics_drivers') { if (-not $regDefaults.defaults.$g) { throw "registry-defaults.json: defaults.$g missing" } }
 foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz') { if ($null -eq $regDefaults.defaults.parameters.$n) { throw "registry-defaults.json: parameters.$n missing" } }
 if ($null -eq $regDefaults.defaults.desktop_router.DwmForceCpu) { throw 'registry-defaults.json: desktop_router.DwmForceCpu missing' }
+# How long Windows waits for the graphics (BD-079): inside the range the control application offers, or the app would
+# show a release default it cannot choose (tools/win/amdgpu_wddm_control/src/TdrSetting.cs, Min and Max).
+$tdrDefault = $regDefaults.defaults.graphics_drivers.TdrDelay
+if ($null -eq $tdrDefault -or $tdrDefault -lt 2 -or $tdrDefault -gt 60) { throw "registry-defaults.json: graphics_drivers.TdrDelay is '$tdrDefault', not a number of seconds between 2 and 60" }
 if (-not $regDefaults.legacy_applied) { throw 'registry-defaults.json: legacy_applied missing' }
-'  registry defaults: {0} parameters, DwmForceCpu {1}' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu
+'  registry defaults: {0} parameters, DwmForceCpu {1}, TdrDelay {2} s' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu, $tdrDefault
 # The H.264 encoder MFT switch (M15.11): manifest.json carries it, so the package itself says whether the installer
 # registers the transform (installer\mft-h264.ps1, driver/umd/mft-h264/INSTALL.md). The identifiers must be the ones
 # the installer and the DLL use; a release that registers the encoder has to carry its DLL.

@@ -952,3 +952,25 @@ display.result.reverted|mt|ad2c3799|以前のディスプレイ設定に戻し�
 display.result.failed|mt|ab18a02b|Windows はこのディスプレイ設定を受け付けませんでした。何も変更されていません。
 display.result.keep-failed|mt|45a5a6dd|新しいディスプレイ設定は適用されていますが、Windows に保存されませんでした。再起動後に元に戻ることがあります。
 display.result.revert-failed|mt|3d5b3356|以前のディスプレイ設定に戻せませんでした。ここまたは Windows のディスプレイ設定でもう一度選んでください。
+
+# ---- how long Windows waits for the graphics before it resets them (src/TdrSetting.cs, the Help page) ----
+tdr.title|mt-safe|ff352a9c|グラフィックスの待ち時間
+tdr.intro|mt|866aa1cd|ゲームが非常に重い画面を 1 つ要求すると、グラフィックス チップはそれを描き終えるまでに長い時間が必要になることがあります。Windows は決められた秒数だけ待ち、その後グラフィックスが止まったと判断してリセットします。このコンピューターではリセットでゲームが終了し、ブルー スクリーンで Windows が止まることもあります。待ち時間を長くすると、重い画面を最後まで描けます。
+tdr.label|mt-safe|a2aa568e|待ち時間
+tdr.choice.not-set|mt-safe|64c56966|未設定：Windows は {0} 秒待ちます
+tdr.choice.windows|mt-safe|6af5dc29|{0} 秒（Windows が自分で使う値）
+tdr.choice.recommended|mt-safe|4466478a|{0} 秒（このドライバーの推奨）
+tdr.choice.seconds|mt-safe|e549e94b|{0} 秒
+tdr.now|mt-safe|614c5ef2|現在の保存値：{0} 秒。
+tdr.now.absent|mt|448aaa5f|何も保存されていないので、Windows は {0} 秒待ちます。
+tdr.now.not-valid|mt|1b27a5bd|現在の保存値：{0} 秒。これはこのアプリが用意していない値です。置き換えるには一覧から待ち時間を選んでください。
+tdr.after-restart|mt|d4991d13|新しい待ち時間は Windows を再起動した後に働きます。
+tdr.apply|mt-safe|66b53fd5|待ち時間を保存
+tdr.unreadable|mt|7d529569|このコンピューターでは待ち時間を読み取れません。
+tdr.in-main-window|mt|f60b3f14|待ち時間はメイン ウィンドウのヘルプ ページで変更します。
+search.help.tdr|mt-safe|ff352a9c|グラフィックスの待ち時間
+search.help.tdr.terms|mt|c2a4853d|フリーズ|固まる|ハング|ブラック スクリーン|ブルー スクリーン|応答しない|待ち時間|重い画面|タイムアウト
+help.setting.tdr|mt|c224cc97|Windows が重い画面をどれだけの秒数待ってから、グラフィックスが止まったと判断するか。このドライバーには 10 秒が合います。2 秒は Windows が自分で使う値です。新しい待ち時間は Windows を再起動した後に働きます。
+plan.title.tdr-delay|mt-safe|ff352a9c|グラフィックスの待ち時間
+plan.line.tdr|mt|c88deff7|Windows はグラフィックスを {0} 秒待ちます。
+plan.line.tdr-default|mt|e906ce42|待ち時間は Windows が自分で使う値に戻ります。

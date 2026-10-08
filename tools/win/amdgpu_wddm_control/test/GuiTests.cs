@@ -462,6 +462,7 @@ static partial class UnitTests
         {
             { "cu-mode", new Recovery.PlanArgs { Cu = 40 } }, { "reset-defaults", new Recovery.PlanArgs { Games = "reset" } },
             { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off,shader-model-67-off", Gfx = "VSync=unset,Anisotropy=8,FrameRateLimit=144" } },
+            { "tdr-delay", new Recovery.PlanArgs { Tdr = TdrSetting.ReleaseDefault } },
             { "graphics-defaults", new Recovery.PlanArgs { Gfx = "FrameRateLimit=unset,MaxFrameLatency=1,PerformanceOverlay=1,ReportAmdDriverVersion=1,VSync=0" } },
         };
         foreach (var s in fixtures)

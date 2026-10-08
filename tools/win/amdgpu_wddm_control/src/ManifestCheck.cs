@@ -24,6 +24,10 @@ namespace AmdgpuWddmControl
         // "defaults": {"parameters": {name: DWORD}, "desktop_router": {name: DWORD}}, the values install.ps1 writes
         // for a fresh install. null when the manifest has none (releases before the control app's reset).
         public Dictionary<string, long> DefaultParameters, DefaultRouter;
+        // "defaults"."graphics_drivers": {name: DWORD}, the Windows values the installer writes under
+        // SYSTEM\CurrentControlSet\Control\GraphicsDrivers (today TdrDelay, TdrSetting.cs). null when the manifest
+        // has none (releases before the waiting time became the driver's own default).
+        public Dictionary<string, long> DefaultGraphicsDrivers;
         // "defaults"."d3d12_applications": {image: {"Experiment": "..."}}, the per-game switches the installer
         // recommends (origin label "recommended by the installer"). null when the manifest has none.
         public Dictionary<string, string> DefaultApplications;
@@ -63,6 +67,7 @@ namespace AmdgpuWddmControl
                 if (d == null) throw new FormatException("manifest defaults is not an object");
                 m.DefaultParameters = Dwords(d, "parameters");
                 m.DefaultRouter = Dwords(d, "desktop_router");
+                m.DefaultGraphicsDrivers = Dwords(d, "graphics_drivers");
                 m.DefaultApplications = Applications(d);
             }
             return m;

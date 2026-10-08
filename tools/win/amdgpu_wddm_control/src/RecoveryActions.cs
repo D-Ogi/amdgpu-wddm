@@ -70,6 +70,7 @@ namespace AmdgpuWddmControl
             catch (Exception) { s.GameProfiles = null; }
             try { s.GfxKeys = SettingsStore.ReadGfxKeys(); }
             catch (Exception) { s.GfxKeys = null; }
+            ReadTdr(s);
             using (var k = Registry.LocalMachine.OpenSubKey(Recovery.RouterPath))
             {
                 s.RouterInstalled = k != null;
@@ -159,6 +160,29 @@ namespace AmdgpuWddmControl
             return v is int ? (long?)(uint)(int)v : null;
         }
 
+        // How long Windows waits for the graphics (TdrSetting.cs). Windows' own key, so the read is separate from the
+        // driver's Parameters: absent is the normal state of a machine the installer never touched, and a value of
+        // another registry type is named in TdrError instead of passing as absent.
+        public static void ReadTdr(RecoverySnapshot s)
+        {
+            try
+            {
+                using (var k = SettingsStore.Machine.OpenSubKey(TdrSetting.RegistryPath))
+                {
+                    if (k == null) { s.TdrError = "the graphics settings key of Windows does not exist"; return; }
+                    var v = k.GetValue(TdrSetting.ValueName);
+                    if (v == null) return;
+                    if (k.GetValueKind(TdrSetting.ValueName) != RegistryValueKind.DWord)
+                    {
+                        s.TdrError = TdrSetting.ValueName + " has registry type " + k.GetValueKind(TdrSetting.ValueName);
+                        return;
+                    }
+                    s.TdrDelay = (uint)(int)v;
+                }
+            }
+            catch (Exception e) { s.TdrError = e.Message; }
+        }
+
         static void ReadDefaults(RecoverySnapshot s, string installDir)
         {
             if (installDir.Length == 0) { s.DefaultsError = "the release is not installed"; return; }
@@ -166,6 +190,7 @@ namespace AmdgpuWddmControl
             {
                 var m = ManifestCheck.Parse(File.ReadAllText(Path.Combine(installDir, "manifest.json")));
                 s.DefaultParameters = m.DefaultParameters; s.DefaultRouter = m.DefaultRouter; s.DefaultApplications = m.DefaultApplications;
+                s.DefaultGraphicsDrivers = m.DefaultGraphicsDrivers;
                 if (m.DefaultParameters == null || m.DefaultRouter == null) s.DefaultsError = "manifest.json has no \"defaults\"";
             }
             catch (Exception e) { s.DefaultsError = "manifest.json: " + e.Message; }
@@ -634,6 +659,7 @@ namespace AmdgpuWddmControl
                 else if (a == "--fan-profile" && FanPlan.ValidProfileName(args[i + 1])) o.More.FanProfile = args[++i];
                 else if (a == "--fan-curve" && FanCurves.ParseCurve(args[i + 1], out fanC, out fanPct)) o.More.FanCurve = args[++i];
                 else if (a == "--fan-test-pct" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.FanTestPct = n; i++; }
+                else if (a == "--tdr" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Tdr = n; i++; }
                 else return null;
             }
             // set-clocks says what happens to both values ("unset" removes one); no other action takes a mode.
@@ -657,6 +683,8 @@ namespace AmdgpuWddmControl
             if ((o.More.FanProfile != null) != (o.Action == "fan-curve")) return null;
             if ((o.More.FanCurve != null) != (o.More.FanProfile == "custom")) return null;
             if ((o.More.FanTestPct != null) != (o.Action == "fan-test")) return null;
+            // The waiting time for the graphics belongs to its own action only.
+            if ((o.More.Tdr != null) != (o.Action == "tdr-delay")) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
             if (o.RunId == null) o.RunId = Guid.NewGuid().ToString("N").Substring(0, 12);
             return o;
@@ -676,6 +704,7 @@ namespace AmdgpuWddmControl
                 Console.Error.WriteLine("       --action cpu-trial [--cpu-clock MHz] [--cpu-uv steps] [--cpu-temp C] [--window ms] ...   --action core-mask --cores 6|8 ...");
                 Console.Error.WriteLine("       --action fan-auto ...   --action fan-curve --fan-profile standard|quiet|performance|custom [--fan-curve C:pct,...] ...");
                 Console.Error.WriteLine("       --action fan-test --fan-test-pct 30..100 ...   (one duty for 10 s, then the choice in force again)");
+                Console.Error.WriteLine("       --action tdr-delay --tdr " + TdrSetting.Min + ".." + TdrSetting.Max + "   (seconds Windows waits for the graphics; applies at the next restart of Windows)");
                 Console.Error.WriteLine("       --action " + Recovery.OperatorEscape + " --accept-bd060   (operator escape for a desktop that does not respond; see README)");
                 return Usage;
             }
@@ -766,6 +795,7 @@ namespace AmdgpuWddmControl
                 (o.More.Curve != null ? " curve " + o.More.Curve : "") + (o.More.Window != null ? " window " + o.More.Window : "") +
                 (o.More.CpuClock != null ? " cpu-clock " + o.More.CpuClock : "") + (o.More.CpuUv != null ? " cpu-uv " + o.More.CpuUv : "") +
                 (o.More.CpuTemp != null ? " cpu-temp " + o.More.CpuTemp : "") + (o.More.Cores != null ? " cores " + o.More.Cores : "") +
+                (o.More.Tdr != null ? " tdr " + o.More.Tdr : "") +
                 ", " + Program.ProductName + " " + Program.VersionText);
             try
             {
@@ -897,7 +927,7 @@ namespace AmdgpuWddmControl
         // One value as found before an action. diagnosis: an unexpected type is recorded, not refused.
         static BackupValue Saved(string path, string name, bool diagnosis)
         {
-            using (var k = Registry.LocalMachine.OpenSubKey(path))
+            using (var k = SettingsStore.Machine.OpenSubKey(path))
             {
                 var v = new BackupValue { Path = path, Name = name };
                 object data = k == null ? null : k.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
@@ -1279,8 +1309,8 @@ namespace AmdgpuWddmControl
             // The graphics settings keys are the app's own: a write creates its key, a removal from a key that does
             // not exist has nothing to do. The driver's keys must exist.
             bool gfx = GraphicsSettings.Allowed(w.Path, w.Name);
-            var key = Registry.LocalMachine.OpenSubKey(w.Path, true);
-            if (key == null && gfx && !w.Delete) key = Registry.LocalMachine.CreateSubKey(w.Path, true);
+            var key = SettingsStore.Machine.OpenSubKey(w.Path, true);
+            if (key == null && gfx && !w.Delete) key = SettingsStore.Machine.CreateSubKey(w.Path, true);
             using (var k = key)
             {
                 if (k == null && gfx && w.Delete) return;
@@ -1300,7 +1330,7 @@ namespace AmdgpuWddmControl
             if (!GraphicsSettings.KeyRemovalAllowed(path)) throw new InvalidOperationException("the key " + path + " is not one this app may remove");
             int cut = path.LastIndexOf('\\');
             string parentPath = path.Substring(0, cut), name = path.Substring(cut + 1);
-            using (var parent = Registry.LocalMachine.OpenSubKey(parentPath, true))
+            using (var parent = SettingsStore.Machine.OpenSubKey(parentPath, true))
             {
                 if (parent == null) return;
                 using (var k = parent.OpenSubKey(name))
@@ -1314,8 +1344,8 @@ namespace AmdgpuWddmControl
 
         static bool ReadsBack(RegWrite w)
         {
-            if (w.DeleteKey) using (var gone = Registry.LocalMachine.OpenSubKey(w.Path)) return gone == null;
-            using (var k = Registry.LocalMachine.OpenSubKey(w.Path))
+            if (w.DeleteKey) using (var gone = SettingsStore.Machine.OpenSubKey(w.Path)) return gone == null;
+            using (var k = SettingsStore.Machine.OpenSubKey(w.Path))
             {
                 object v = k == null ? null : k.GetValue(w.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
                 if (w.Delete) return v == null;
