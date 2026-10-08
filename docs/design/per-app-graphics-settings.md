@@ -42,7 +42,7 @@ key. The KMD reads `ReportAmdDriverVersion` at each adapter start.
 | Value | Environment variable | Accepted | D3D11 | D3D12 |
 |---|---|---|---|---|
 | `FrameRateLimit` | `AMDGPU_WDDM_FRAME_RATE_LIMIT` | 0, 20-300 | works | works |
-| `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | implemented, lab check open | implemented, lab check open |
+| `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | works | works |
 | `Anisotropy` | `AMDGPU_WDDM_ANISOTROPY` | 1, 2, 4, 8, 16 | works | works |
 | `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | not applied |
 | `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied |
@@ -66,13 +66,30 @@ of the device, so no other queue operation of the device waits with the Present.
 ### VSync
 
 The value 0 forces the sync interval 0 (`DXGI_DDI_FLIP_INTERVAL_IMMEDIATE`). The value 1 forces the sync
-interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The shells set `SyncIntervalOverrideValid` and `SyncIntervalOverride` in
-the arguments of the Present callback. The D3D11 shell fills `DXGIDDICB_PRESENT`, and the D3D12 shell fills
-`D3D12DDI_PRESENT_0051`.
+interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The D3D12 shell sets `SyncIntervalOverrideValid` and
+`SyncIntervalOverride` in `D3D12DDI_PRESENT_0051` for both values. The D3D11 shell sets them in `DXGIDDICB_PRESENT`
+for `VSync` 0 only, and does `VSync` 1 with its own waits.
 
-The WDK declares the two `DXGIDDICB_PRESENT` fields for the WDDM 2.2.2 interface and later. The D3D11 shell reports
-an older interface to the runtime. The lab must show whether DXGI reads the override from this shell. With
-`VSync` 1 the frame rate of an uncapped client must drop to the refresh rate of the monitor.
+The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM 2.2.2 interface and later, and the D3D11 shell
+reports the WDDM 2.0 interface. The D3D11 runtime gives the full Present callback only from interface 0xB0023
+(WDDM 2.2) build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS` in `d3d10umddi.h`). Below that, `d3d11.dll` 10.0.22621 gives
+`PresentCB_PreWDDM2_2`, which copies only the older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On
+x64 the copy holds `SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not
+`SyncIntervalOverride`. Thus each override arrives as interval 0. An override for `VSync` 1 gave 873-928 frames/s
+for the intervals 1 and 2. On x86 (WOW64) the copy holds neither field, and the override has no effect.
+
+The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
+`FlipInterval` is 0 for the intervals 0, 1 and 2. Thus with `VSync` 1 the D3D11 shell waits for one vertical blank
+after each Present (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`), and the runtime keeps the interval of the
+application. It waits on the desktop output of the adapter, the primary output first. The DDI does not name the
+window, so with several outputs of different refresh rates the wait follows that one output. A shell that reports the
+WDDM 2.2.2 interface gets the full structure and can pass both values to the runtime.
+
+On unit A at 59 Hz, the x64 d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and
+30 frames/s for interval 2. With `VSync` 0 it gave 857-873 frames/s for the intervals 1 and 2. The x86 d3d11bench
+gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774
+frames/s for interval 0, 60 frames/s for interval 1 and 30 frames/s for interval 2. Thus `VSync` 1 does not shorten
+interval 2, and for an x86 application `VSync` 0 does not shorten interval 1 or 2.
 
 ### Anisotropy
 

@@ -6,6 +6,7 @@
 #include "engine-error.h"
 #include "runtime-surface.h"
 #include "present-shadow.h"
+#include "vblank-pacer.h"
 #include "../app-settings/app-settings.h"
 #include <memory>
 #include <vector>
@@ -46,6 +47,8 @@ public:
     PresentShadows &present_shadows() { return present_shadows_; }
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).
     amdgpu_wddm::app_settings::FrameLimiter &frame_limiter() { return frame_limiter_; }
+    // BD-099: the per-application VSync of this device's presents as vertical-blank waits.
+    VBlankPacer &vblank_pacer() { return vblank_pacer_; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -65,6 +68,7 @@ private:
     std::vector<std::unique_ptr<RuntimeSurface>> surfaces_;
     PresentShadows present_shadows_{};
     amdgpu_wddm::app_settings::FrameLimiter frame_limiter_;
+    VBlankPacer vblank_pacer_;
     RuntimeDevice runtime_;
     HostBridge bridge_{};
     HostedInstance instance_;
