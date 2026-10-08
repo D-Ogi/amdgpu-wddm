@@ -959,6 +959,65 @@ static void FrontRuleTests()
     CHECK(zero(read), "a null buffer decoded");
     // And the read through the adapter: no adapter, or one without a callback, is E_POINTER and zero.
     CHECK(ReadScanoutCaps(nullptr, &read) == E_POINTER && zero(read), "a read with no adapter");
+
+    // M15.14 increment 3: the flip log (front-flip-log.h). A key that repeats writes no line, a changed key
+    // writes one, the budget bounds the lines and counts the changes past it, every answer is counted under
+    // its rule, and the periodic summary is due once per interval of the caller's clock.
+    FlipLog log;
+    memset(&log, 0, sizeof(log));
+    const unsigned long long k1 = FlipKeyAdd(FlipKeyStart(), 1), k2 = FlipKeyAdd(FlipKeyStart(), 2);
+    CHECK(k1 && k2 && k1 != k2, "two words gave one key");
+    CHECK(FlipLogAnswer(&log, 0, false, k1) == FlipLine::change, "the first answer wrote no line");
+    for (int i = 0; i < 99; ++i)
+        CHECK(FlipLogAnswer(&log, 0, i % 2 == 0, k1) == FlipLine::none, "a repeated key wrote a line");
+    CHECK(FlipLogAnswer(&log, (unsigned)FlipRefusal::source_geometry, false, k2) == FlipLine::change,
+          "a changed key wrote no line");
+    CHECK(FlipLogAnswer(&log, 0, false, k1) == FlipLine::change, "a key that came back wrote no line");
+    CHECK(FlipLogAnswer(&log, 0, false, 0) == FlipLine::change && FlipLogAnswer(&log, 0, false, 0) == FlipLine::none,
+          "the zero key is not a key of its own");
+    FlipTotals totals = FlipLogTotals(&log);
+    CHECK(totals.calls == 104 && totals.supported == 103 && totals.refused == 1 && totals.lines == 4 &&
+              !totals.suppressed && log.unchanged == 100 && log.immediate == 50,
+          "totals calls=%ld true=%ld false=%ld lines=%ld suppressed=%ld unchanged=%ld immediate=%ld", totals.calls,
+          totals.supported, totals.refused, totals.lines, totals.suppressed, (long)log.unchanged, (long)log.immediate);
+    char rules[256];
+    FlipLogRules(&log, rules, sizeof(rules));
+    CHECK(!strcmp(rules, "supported:103,source-geometry:1"), "rules text: %s", rules);
+    FlipLog empty;
+    memset(&empty, 0, sizeof(empty));
+    FlipLogRules(&empty, rules, sizeof(rules));
+    CHECK(!strcmp(rules, "none"), "rules text of no call: %s", rules);
+    char tiny[8];
+    FlipLogRules(&log, tiny, sizeof(tiny));
+    CHECK(strlen(tiny) < sizeof(tiny), "a short buffer was overrun");
+    // An answer that alternates forever: the lines stop at the budget, the changes do not.
+    FlipLog flood;
+    memset(&flood, 0, sizeof(flood));
+    unsigned written = 0, held = 0;
+    for (LONG i = 0; i < kFlipChangeLines + 44; ++i) {
+        const FlipLine line = FlipLogAnswer(&flood, (unsigned)(i % 2 ? FlipRefusal::pitch : FlipRefusal::none), false,
+                                            i % 2 ? k1 : k2);
+        if (line == FlipLine::change) ++written;
+        if (line == FlipLine::suppressed) ++held;
+    }
+    totals = FlipLogTotals(&flood);
+    CHECK(written == (unsigned)kFlipChangeLines && held == 44 && totals.lines == kFlipChangeLines &&
+              totals.suppressed == 44 && flood.rules[(unsigned)FlipRefusal::pitch] == (kFlipChangeLines + 44) / 2,
+          "budget: written=%u held=%u lines=%ld suppressed=%ld", written, held, totals.lines, totals.suppressed);
+    // The rule index past the enum is counted nowhere and faults nowhere.
+    FlipLogAnswer(&flood, kFlipRules + 3, false, k1);
+    CHECK(FlipLogTotals(&flood).calls == totals.calls, "an unknown rule index was counted");
+    // The periodic summary: the first call starts the period, then one summary per interval, and only one
+    // caller wins a period.
+    FlipLog timed;
+    memset(&timed, 0, sizeof(timed));
+    CHECK(!FlipLogSummaryDue(&timed, 1000, 30000), "a summary was due at the first call");
+    CHECK(!FlipLogSummaryDue(&timed, 30999, 30000), "a summary was due before the interval");
+    CHECK(FlipLogSummaryDue(&timed, 31000, 30000), "no summary after the interval");
+    CHECK(!FlipLogSummaryDue(&timed, 31000, 30000), "two summaries in one period");
+    CHECK(!FlipLogSummaryDue(&timed, 60999, 30000) && FlipLogSummaryDue(&timed, 61000, 30000) &&
+              timed.summaries == 2,
+          "the second period: summaries=%ld", (long)timed.summaries);
 }
 
 // ---------------------------------------------------------------- the records and the resource map (pure)
@@ -1255,6 +1314,49 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     ScanoutTrailer = false;
 }
 
+// M15.14 increment 3, the front-log scenario: the change lines and the summary of CheckDirectFlipSupport over
+// the double. FrontAnswerChecks has run first, so the device holds the compositor's buffer (0x41000000) and
+// an opened client (0x41000200) whose pitch differs from it, and the log already holds one line per change of
+// that suite. The compositor asks the same question many times per second, and only a change writes a line.
+static void FrontLogChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDEVICE hDevice)
+{
+    const std::wstring logPath = Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                 std::to_wstring(GetCurrentProcessId()) + L".log";
+    auto lines = [&]() {
+        const std::string log = ReadAll(logPath);
+        size_t n = 0;
+        for (size_t at = log.find("check_direct_flip call="); at != std::string::npos;
+             at = log.find("check_direct_flip call=", at + 1))
+            ++n;
+        return n;
+    };
+    D3D10DDI_HRESOURCE compositor, client;
+    compositor.pDrvPrivate = (void *)(UINT_PTR)0x41000000;
+    client.pDrvPrivate = (void *)(UINT_PTR)0x41000200;
+    auto ask = [&](unsigned times) {
+        for (unsigned i = 0; i < times; ++i) {
+            BOOL supported = 2;
+            device.pfnCheckDirectFlipSupport(hDevice, client, compositor, 0, &supported);
+            CHECK(supported == FALSE, "the pitch-mismatch pair answered %d", supported);
+        }
+    };
+    ScanoutTrailer = true;
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    ScanoutWidth = 1920;
+    ScanoutHeight = 1200;
+    const size_t before = lines();
+    ask(200);
+    CHECK(lines() == before + 1, "200 equal answers wrote %Iu lines, expected 1", lines() - before);
+    // The source mode moves, and back: one line each, however many questions follow.
+    ScanoutHeight = 1080;
+    ask(50);
+    CHECK(lines() == before + 2, "a mode change wrote %Iu lines in all, expected 2", lines() - before);
+    ScanoutHeight = 1200;
+    ask(50);
+    CHECK(lines() == before + 3, "the mode's return wrote %Iu lines in all, expected 3", lines() - before);
+    ScanoutTrailer = false;
+}
+
 static void Child(const std::string &s)
 {
     if (s == "policy") { PolicyTests(); return; }
@@ -1513,7 +1615,7 @@ static void Child(const std::string &s)
         if (s == "front-cpu-route") SetDw(RouterKey, L"DwmForceCpu", 1);
         // front-answer is front-on with the scan-out caps trailer of a start that admits a client flip; the
         // adapter open sees it too, and its install line says so.
-        if (s == "front-answer") {
+        if (s == "front-answer" || s == "front-log") {
             ScanoutTrailer = true;
             ScanoutWidth = 1920;
             ScanoutHeight = 1200;
@@ -1857,9 +1959,24 @@ static void Child(const std::string &s)
         CHECK((void *)device.pfnCheckDirectFlipSupport != nullptr, "pfnCheckDirectFlipSupport is null");
 
         // M15.14 increment 2: the TRUE answer and its controls, over surfaces the front recorded itself.
-        if (s == "front-answer") {
+        if (s == "front-answer" || s == "front-log") {
             FrontAnswerChecks(device, create.hDrvDevice, record, recordReset);
+            if (s == "front-log") FrontLogChecks(device, create.hDrvDevice);
             device.pfnDestroyDevice(create.hDrvDevice);
+            if (s == "front-log") {
+                // The destroy summary counts every answer of both suites under its rule: the 300 questions above
+                // are pitch (250) and source-geometry (50), and the lines the change log held back are 0.
+                const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                                std::to_wstring(GetCurrentProcessId()) + L".log");
+                const size_t at = frontLog.find("check_direct_flip summary");
+                const std::string line = at == std::string::npos ? std::string()
+                                                                 : frontLog.substr(at, frontLog.find('\n', at) - at);
+                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=3 ") &&
+                          Has(line, "source-geometry:51") && Has(line, "pitch:251"),
+                      "the destroy summary: %s", line.c_str());
+                CHECK(frontLog.find("check_direct_flip summary", at + 1) == std::string::npos,
+                      "more than one summary line: %s", frontLog.c_str());
+            }
             CHECK(o.funcs.pfnCloseAdapter && o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
             return;
         }
@@ -2229,6 +2346,7 @@ static int RunAll(const std::wstring &out)
         {"front-absent", nullptr, {}}, {"front-zero", nullptr, {}}, {"front-wrong-type", nullptr, {}},
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
         {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}}, {"front-answer", nullptr, {}},
+        {"front-log", nullptr, {}},
         // Application policy (AppRouter).
         {"app-absent-key", nullptr, {}}, {"app-mode-absent", nullptr, {}}, {"app-mode-cpu", nullptr, {}},
         {"app-mode-invalid", nullptr, {}}, {"app-mode-wrong-type", nullptr, {}},

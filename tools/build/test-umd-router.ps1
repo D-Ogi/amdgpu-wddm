@@ -20,6 +20,11 @@
 # FALSE of a start without the trailer. 82 scenarios, 0 failed on 2026-10-07 with the tester.20 hosted UMD, CPU UMD
 # and D3D11 package.
 #
+# M15.14 increment 3 adds front-log: after front-answer's suite, 300 more questions over one pair write one line
+# per change of the answer (three), and the destroy summary counts every answer under its rule. front-rule also
+# drives the change log, its budget and the periodic summary on its own clock (front-flip-log.h). 83 scenarios,
+# 0 failed on 2026-10-08 with the tester.20 hosted UMD, CPU UMD and D3D11 package.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(
