@@ -193,17 +193,24 @@ void __hipUnregisterFatBinary(void** modules) {
     std::lock_guard<std::mutex> guard(state().lock);
     bc250hip::State& s = state();
     Module* module = reinterpret_cast<Module*>(modules);
-    bool known = false;
+    size_t at = s.modules.size();
     for (size_t i = 0; i < s.modules.size(); ++i) {
         if (s.modules[i] == module) {
-            s.modules.erase(s.modules.begin() + static_cast<ptrdiff_t>(i));
-            known = true;
+            at = i;
             break;
         }
     }
-    if (!known) {
+    if (at == s.modules.size()) {
         return;
     }
+    if (module->registrations > 1) {
+        // The same wrapper is still registered. Take one registration away and keep the module
+        // and its kernels: one unregister must not destroy what another registration uses.
+        module->registrations--;
+        return;
+    }
+    module->registrations = 0;
+    s.modules.erase(s.modules.begin() + static_cast<ptrdiff_t>(at));
     if (module->wrapper != nullptr) {
         s.module_by_wrapper.erase(module->wrapper);
     }

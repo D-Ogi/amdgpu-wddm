@@ -122,6 +122,47 @@ if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Host "  $_" }; throw
 Write-Host '  tools\run-lab.ps1 parses'
 
 # ---------------------------------------------------------------------------------------------
+# Gate 3: the fixtures are hash pinned, so the pin must hold. Every size and SHA-256 that
+# tests\data\PROVENANCE.txt and PROVENANCE-runtime.txt state about a file of that directory is
+# compared with the file. A fixture is a measurement, and an edit that leaves its record behind
+# makes the record worthless: pm4_vadd.golden.txt once carried a stale pin that nothing read.
+# ---------------------------------------------------------------------------------------------
+$pinned = 0
+$leaves = @{}
+foreach ($file in Get-ChildItem -LiteralPath $dataDir -File) { $leaves[$file.Name] = $file.FullName }
+foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt')) {
+    $notePath = Join-Path $dataDir $note
+    if (-not (Test-Path $notePath)) { throw "$notePath is missing" }
+    $current = $null
+    foreach ($line in (Get-Content -LiteralPath $notePath)) {
+        # The longest name a line holds, so that one file name inside another does not win.
+        $named = $null
+        foreach ($name in $leaves.Keys) {
+            if ($line -match [regex]::Escape($name)) {
+                if ($null -eq $named -or $name.Length -gt $named.Length) { $named = $name }
+            }
+        }
+        if ($named) { $current = $named }
+        if ($line -notmatch 'sha256\s+([0-9A-Fa-f]{64})') { continue }
+        $stated = $Matches[1]
+        if (-not $current) { throw "$note states a SHA-256 before it names a file: $line" }
+        $actual = (Get-FileHash -Algorithm SHA256 $leaves[$current]).Hash
+        if ($actual -ne $stated.ToUpperInvariant()) {
+            throw "$note pins $current at sha256 $stated, the file is $actual"
+        }
+        if ($line -match '(\d+)\s+bytes') {
+            $bytes = (Get-Item -LiteralPath $leaves[$current]).Length
+            if ([int64]$Matches[1] -ne $bytes) {
+                throw "$note pins $current at $($Matches[1]) bytes, the file is $bytes bytes"
+            }
+        }
+        $pinned++
+    }
+}
+if ($pinned -eq 0) { throw 'the PROVENANCE notes of tests\data pin no fixture at all' }
+Write-Host "  $pinned fixture hashes of tests\data match PROVENANCE.txt and PROVENANCE-runtime.txt"
+
+# ---------------------------------------------------------------------------------------------
 # The test code objects. Committed under tests\data so the gate runs with no AMDGPU compiler.
 # ---------------------------------------------------------------------------------------------
 $kernelSource = Join-Path $dataDir 'm16_kernels.hip'

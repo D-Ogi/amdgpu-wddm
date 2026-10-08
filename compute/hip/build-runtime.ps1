@@ -103,8 +103,21 @@ $warn = @('/nologo', '/W4', '/WX', '/O2', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS'
 
 function Invoke-Cl([string[]]$Arguments, [string]$What) {
     $env:INCLUDE = ''; $env:LIB = ''
-    & $cl @Arguments | ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.(c|cpp)$|^\s+Creating library') { Write-Host "  $_" } }
+    $spoken = @()
+    & $cl @Arguments | ForEach-Object {
+        $spoken += $_
+        if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.(c|cpp)$|^\s+Creating library') { Write-Host "  $_" }
+    }
     if ($LASTEXITCODE -ne 0) { throw "cl failed for $What ($LASTEXITCODE)" }
+    # /WX makes the compiler strict; the linker needs its own rule. LNK4098 is a C runtime
+    # mismatch: one input asks for the static runtime and another for the dynamic one, so the
+    # module ends with two C runtimes, two heaps and two copies of errno. The code is
+    # locale independent, the message beside it is not.
+    foreach ($line in $spoken) {
+        if ($line -match 'LNK4098') {
+            throw "the link of $What mixes two C runtimes (LNK4098): $line"
+        }
+    }
 }
 
 $runtimeSources = @('hip_device.cpp', 'hip_error.cpp', 'hip_event.cpp', 'hip_launch.cpp',
@@ -174,7 +187,12 @@ if ($Bc250hsaLib -and (Test-Path $Bc250hsaLib)) {
     New-Item -ItemType Directory -Force $productObjDir | Out-Null
     # gdi32.lib holds the D3DKMT* entry points that bc250hsa.lib calls. The mock build does not
     # need it, which is why the product link is the first one to ask for it.
-    Invoke-Cl ($warn + @('/LD', '/MD', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
+    #
+    # /MT and not /MD, for two reasons. First, build.ps1 of layer 1 builds bc250hsa.lib with
+    # /MT, so a /MD link of this DLL pulls LIBCMT and MSVCRT into one module: the linker says
+    # LNK4098 and the module gets two C runtimes, each with its own heap. Second, the DLL goes
+    # to the lab beside a program: a /MT module needs no Visual C runtime on the target.
+    Invoke-Cl ($warn + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
         $includes + $runtimeSources + @($dllSource, $Bc250hsaLib) +
         @('/link', "/DEF:$def") + $libpaths + @('gdi32.lib')) 'amdhip64.dll (bc250hsa)'
 } else {

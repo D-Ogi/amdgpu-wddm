@@ -37,8 +37,11 @@
      (((uint32_t)(n) & 0x3FFFu) << 16))
 /* Bit 1 of a type-3 header is the shader-type bit: it tells the command processor
  * that the SET_SH_REG writes which follow name the COMPUTE register space and not
- * the graphics one. libdrm sets it on every packet of this sequence except the one
- * uconfig write (driver/shim/bc250_dispatch.c, BC250_PACKET3_COMPUTE). */
+ * the graphics one. Three packet kinds of this sequence carry it, and no other:
+ * SET_SH_REG, SET_SH_REG_INDEX and DISPATCH_DIRECT. CONTEXT_CONTROL, ACQUIRE_MEM,
+ * SET_UCONFIG_REG, EVENT_WRITE and RELEASE_MEM use the plain header. That is what
+ * driver/shim/bc250_dispatch.c emits: BC250_PACKET3_COMPUTE for those three kinds
+ * and PACKET3 for the others. Section 3.7 of the design states the same. */
 #define BC250HSA_PACKET3_COMPUTE(op, n) (BC250HSA_PACKET3(op, n) | (1u << 1))
 /* The pad dword all three GFX10 command processor ring types use
  * (driver/shim/bc250_gfx.c, BC250_CP_NOP, which is amdgpu's gfx_v10_0.c value). It is

@@ -67,7 +67,10 @@ struct Module {
     bc250hsa_status   bundle_status = BC250HSA_OK;
     bc250hsa_status   load_status = BC250HSA_OK;
     bool              load_tried = false;
-    int               registrations = 0;   // how often clang registered this wrapper
+    // How often this wrapper is registered now. __hipUnregisterFatBinary takes one away and
+    // tears the module down at zero, so a wrapper that registered twice survives the first
+    // unregister. It is a count of live registrations and not a total.
+    int               registrations = 0;
     std::vector<Var>  vars;
 };
 

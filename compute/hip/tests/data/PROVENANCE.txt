@@ -6,6 +6,11 @@ committed so that the host gate runs on a machine with no AMDGPU compiler and wi
 BC-250 adapter. `pwsh compute/hip/build.ps1 -Rebuild` builds the two binary files again
 and compares the SHA-256; it reports a difference and keeps the new file.
 
+Every size and SHA-256 below is a gate. `build.ps1` compares each one with the file on every
+run, this note and PROVENANCE-runtime.txt together, and the build stops at the first one that
+does not hold. An edit of a fixture therefore stops the build until this note says the new
+numbers.
+
 Compiler
 --------
 
@@ -67,7 +72,7 @@ Files
     readelf -hlSrd --dyn-syms of the code object: the segment table, the section table
     and the dynamic symbols, with the descriptor and entry addresses the tests assert.
 
-  pm4_vadd.golden.txt        4983 bytes  sha256 9534272744d0602c52f2be4bc6b8f58ee486c9b247948679ed3100aac812223e
+  pm4_vadd.golden.txt        5264 bytes  sha256 eb6918f3b76855b70fdd961066614fdf178571cbbe5a5508d68e5b68d5791152
     The expected PM4 dword stream of one dispatch. It was written by hand from the
     packet table of section 3.7 of the design and then compared with the builder. It is
     not a dump of the builder's output, so a change of the builder fails the test.

@@ -145,7 +145,9 @@ ABCD3008  fence_va low
 00000001  fence_value high
 00000000  INT_CTXID
 
-# 19. The indirect buffer padding of the graphics ring: a type-2 NOP to a multiple of 8.
+# 19. The indirect buffer padding of the graphics ring, to a multiple of 8. The pad dword is a
+# type-3 NOP whose count field is the maximum (PACKET3(NOP, 0x3FFF)), and not a PACKET2, whatever
+# the comment of amdgpu and of our shim calls it.
 # 83 dwords so far, so five pad dwords follow and the stream is 88 dwords in all.
 FFFF1000
 FFFF1000

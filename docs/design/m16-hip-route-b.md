@@ -313,7 +313,7 @@ bytes and a 256-byte block). Measured offsets of that kernel:
 
 | `.value_kind` | `.offset` | `.size` | What the packer writes |
 |---|---|---|---|
-| `hidden_block_count_x/y/z` | 12, 16, 20 | 4 | the work-group count per dimension, which is `bc250hsa_launch.grid` unchanged |
+| `hidden_block_count_x/y/z` | 8, 12, 16 | 4 | the work-group count per dimension, which is `bc250hsa_launch.grid` unchanged |
 | `hidden_group_size_x/y/z` | 20, 22, 24 | 2 | the workgroup size, per dimension |
 | `hidden_remainder_x/y/z` | 26, 28, 30 | 2 | 0, because a HIP grid is a whole number of workgroups and has no partial one |
 | `hidden_global_offset_x/y/z` | 48, 56, 64 | 8 | 0, because HIP has no global offset |
@@ -328,13 +328,18 @@ packer that multiplies the grid by the block here gives every kernel `gridDim.x 
 `gridDim.x` computes wrong numbers with no fault and no message. `hidden_remainder_*` is the size of
 the partial last workgroup, which this interface cannot express, so it is 0 and not a modulo.
 
-Note that `hidden_block_count_z` and `hidden_group_size_x` share offset 20 in this kernel, because
-the kernel reads only some fields and the compiler packs what it needs. That is the measured reason
-why no fixed structure may describe the block.
+Note where the block starts and where it stops. In this kernel it starts at offset 8, behind the one
+explicit argument, so no offset of the table is the offset of the same field in another kernel: the
+same `hidden_block_count_x` sits at 32 in the four-argument `vadd` of the layer-2 fixture. The block
+also has holes, because the compiler writes an entry only for a field the kernel reads: bytes 32 to
+47 of this kernel are named by no entry at all. Both are the measured reason why no fixed structure
+may describe the block, and why the packer reads the list.
 
-Every hidden kind that this build does not fill is zeroed and counted:
+`hidden_dynamic_lds_size` takes `bc250hsa_launch.dynamic_group_bytes`, which is the same number that
+decision 3 adds to `COMPUTE_PGM_RSRC2.LDS_SIZE`. Every other hidden kind that this build does not
+fill is zeroed and counted:
 `hidden_hostcall_buffer`, `hidden_printf_buffer`, `hidden_heap_v1`, `hidden_multigrid_sync_arg`,
-`hidden_queue_ptr`, `hidden_private_base`, `hidden_shared_base`, `hidden_dynamic_lds_size`,
+`hidden_queue_ptr`, `hidden_private_base`, `hidden_shared_base`,
 `hidden_default_queue` and `hidden_completion_action`. An unknown key is zeroed, counted and named in
 the log, and the dispatch continues, because a later code object version may add a key. A non-zero
 `hostcall_buffer_requests` counter is the measurement that answers kill criterion K4, which is
@@ -389,7 +394,7 @@ the shader-type bit, which is bit 1 of a type-3 header and selects the compute r
 | 16 | `DISPATCH_DIRECT` | `grid.x`, `grid.y`, `grid.z` in workgroups, then the initiator | the initiator is `COMPUTE_SHADER_EN` plus `CS_W32_EN` when the kernel descriptor says wave32, which every kernel of this build does. `FORCE_START_AT_000` with `BC250HSA_DISPATCH_START_AT_000` |
 | 17 | `EVENT_WRITE` | `EVENT_TYPE(CS_PARTIAL_FLUSH)`, `EVENT_INDEX(4)` | the command processor waits for the waves |
 | 18 | `RELEASE_MEM` | the 8-dword completion write of section 3.8 | this dispatch's fence value |
-| 19 | type-2 `NOP` | as many as needed | the graphics ring pads an indirect buffer to 8 dwords |
+| 19 | type-3 `NOP`, count field 0x3FFF | as many as needed | the graphics ring pads an indirect buffer to 8 dwords. amdgpu and the shim call `BC250HSA_CP_NOP` a PACKET2 NOP. It is a type-3 NOP |
 
 Packets 1 to 17 without the user data are the 72 dwords of fact M49 plus the graphics-ring
 `CONTEXT_CONTROL`. Packets 7 and 8 are the first to drop if the command processor refuses the
