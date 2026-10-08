@@ -4,7 +4,7 @@
 // The shell sets DXGIDDICB_PRESENT.SyncIntervalOverride, and the runtime reads it, although the WDK declares the field
 // only for D3D_UMD_INTERFACE_VERSION_WDDM2_2_2 and later and this shell offers the D3D11.1 and WDDM 2.0 interfaces
 // (ddi-negotiation.h). On unit A (59 Hz, d3d11bench in a window, a flip-discard swap chain) the override lowered the
-// interval of the application: VSync 0 with the intervals 1 and 2 gave 858-888 frames/s, VSync 1 with interval 2 gave
+// interval of the application: VSync 0 with the intervals 1 and 2 gave 868-888 frames/s, VSync 1 with interval 2 gave
 // 60 frames/s. VSync 1 with interval 0 stayed uncapped (854-892 frames/s). The DDI arguments do not show the interval
 // of the application on that path: FlipInterval is 0 and Flags is Blt for the intervals 0, 1 and 2. Where VSync asks
 // for a longer interval than FlipInterval, the Present path therefore waits for the missing vertical blanks after the

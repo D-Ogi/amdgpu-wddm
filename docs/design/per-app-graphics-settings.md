@@ -42,7 +42,7 @@ key. The KMD reads `ReportAmdDriverVersion` at each adapter start.
 | Value | Environment variable | Accepted | D3D11 | D3D12 |
 |---|---|---|---|---|
 | `FrameRateLimit` | `AMDGPU_WDDM_FRAME_RATE_LIMIT` | 0, 20-300 | works | works |
-| `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | implemented, lab check open | implemented, lab check open |
+| `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | works | works |
 | `Anisotropy` | `AMDGPU_WDDM_ANISOTROPY` | 1, 2, 4, 8, 16 | works | works |
 | `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | not applied |
 | `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied |
@@ -70,9 +70,19 @@ interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The shells set `SyncIntervalOverrideV
 the arguments of the Present callback. The D3D11 shell fills `DXGIDDICB_PRESENT`, and the D3D12 shell fills
 `D3D12DDI_PRESENT_0051`.
 
-The WDK declares the two `DXGIDDICB_PRESENT` fields for the WDDM 2.2.2 interface and later. The D3D11 shell reports
-an older interface to the runtime. The lab must show whether DXGI reads the override from this shell. With
-`VSync` 1 the frame rate of an uncapped client must drop to the refresh rate of the monitor.
+The D3D11 runtime reads the override. The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM 2.2.2
+interface and later, and the D3D11 shell reports an older interface, but the runtime reads them all the same. On
+unit A the runtime applied the override when it lowered the interval of the application (BD-099). It did not apply
+`VSync` 1 to an application that presents with interval 0.
+
+The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
+`FlipInterval` is 0 for the intervals 0, 1 and 2. Thus with `VSync` 1 the D3D11 shell also waits for one vertical
+blank after each Present (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`). It waits on the desktop output of the
+adapter, the primary output first. The DDI does not name the window, so with several outputs of different refresh
+rates the wait follows that one output.
+
+On unit A at 59 Hz, d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0, 1 and 2. With
+`VSync` 0 it gave 858-888 frames/s for the same intervals.
 
 ### Anisotropy
 
