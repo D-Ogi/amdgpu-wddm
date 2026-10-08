@@ -29,6 +29,10 @@ $mutants = [ordered]@{
                                               'SendEscape(BC250_DEFAULT_HWID, &log, sizeof(log), &status)')
     'no-sentinel-fixup' = $source.Replace('if (from == BC250_LOG_FROM_SUMMARY) from = log.From;', '')
     'no-count-line' = $source.Replace('escapes: %lu without adapter synchronization, %lu with HardwareAccess\n', 'escapes: %lu, %lu\n')
+    # BD-097: the block beside the ring is held one at a time. A tool that does not compare the block it pages
+    # with the one the driver holds now prints a short block as if it were whole.
+    'block-never-replaced' = $source.Replace('log.SummaryFrom >= BC250_LOG_SUMMARY_SEQ && log.SummaryFrom != block',
+                                             'log.SummaryFrom >= BC250_LOG_SUMMARY_SEQ && log.SummaryFrom == block')
 }
 $results = @()
 foreach ($name in $mutants.Keys) {
@@ -38,8 +42,14 @@ foreach ($name in $mutants.Keys) {
     # Same relative include path as the tree: <dir>\tools\win\bc250kmd_cli with driver\kmd beside it.
     $mcli = Join-Path $dir 'tools\win\bc250kmd_cli'
     $mkmd = Join-Path $dir 'driver\kmd'
-    New-Item -ItemType Directory -Force $mcli, $mkmd | Out-Null
+    # The tool includes three files of the tree by the same relative path. Two of them came later than this
+    # script (regs.generated.h with KMD 0.7.216.17, the DCN field masks), and without them every mutant stopped
+    # at a missing include: a control that does not compile proves nothing.
+    $mthird = Join-Path $dir 'third_party\linux-amdgpu'
+    New-Item -ItemType Directory -Force $mcli, $mkmd, $mthird | Out-Null
     Copy-Item -LiteralPath (Join-Path $Tree 'driver\kmd\bc250kmd_escape.h') -Destination $mkmd -Force
+    Copy-Item -LiteralPath (Join-Path $Tree 'driver\kmd\regs.generated.h') -Destination $mkmd -Force
+    Copy-Item -LiteralPath (Join-Path $Tree 'third_party\linux-amdgpu\dcn_2_0_1_sh_mask.h') -Destination $mthird -Force
     Copy-Item -LiteralPath (Join-Path $cliDir 'log_test.c') -Destination $mcli -Force
     [IO.File]::WriteAllText((Join-Path $mcli 'bc250kmd_cli.c'), $mutants[$name])
     & $cl @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
@@ -58,3 +68,7 @@ $results
 if (@($results | Where-Object { $_ -notmatch '^unchanged ' -and $_ -match ', 0 failures, 0 FAIL lines$' })) {
     throw 'a mutant passed log_test: the test does not see the defect it is there to catch'
 }
+if ($results[0] -notmatch '^unchanged : exit 0, log_test: \d+ checks, 0 failures, 0 FAIL lines$') {
+    throw 'the unchanged source does not pass log_test: this run proves nothing about the mutants'
+}
+exit 0      # the last mutant's own exit code is not this script's answer

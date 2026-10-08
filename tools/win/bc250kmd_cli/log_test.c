@@ -206,9 +206,11 @@ NTSTATUS APIENTRY FakeD3DKMTEscape(const D3DKMT_ESCAPE *escape)
                 line->Milliseconds = 1000 + i;
                 sprintf_s(line->Text, BC250_LOG_TEXT, "wddm summary: line %lu", i);
             }
-        // Another caller's summary, between two pages of this reader's block.
-        if (g_driver.StealAfterPages && g_driver.BesidePages >= g_driver.StealAfterPages)
+        // Another caller's summary, once, between two pages of this reader's block.
+        if (g_driver.StealAfterPages && g_driver.BesidePages >= g_driver.StealAfterPages) {
             g_driver.Block = (g_driver.Block + 1) % BC250_LOG_SUMMARY_BLOCKS;
+            g_driver.StealAfterPages = 0;
+        }
         summaryFrom = BC250_LOG_SUMMARY_SEQ + g_driver.Block * BC250_LOG_SUMMARY_LINES;
     } else
     // GuardLogRead without the wrap: from .. Total, a page at most; Next never past the end.
