@@ -17,18 +17,18 @@ namespace bc250::umd {
 //   - both are primaries of the same video present source - a surface the runtime never gave a
 //     primary descriptor is a window buffer, not a front buffer;
 //   - both asked the kernel driver for scan-out, through their own resource record's SCANOUT bit.
-//     This is the clause that keeps the answer honest while the shell does not yet set that bit: a
-//     primary without it is aperture-resident, the display core cannot read the aperture, and
-//     SetVidPnSourceAddress would be given an address DcnTranslateCardAddress refuses - after the
-//     runtime had already stopped copying. So today the shell answers FALSE, as it did before
-//     M15.14, and the rule is in place for the increment that moves the placement. Changing the
-//     answer without changing the placement is the one thing this function must not do;
+//     This is the clause that keeps the answer honest: a primary without the bit is
+//     aperture-resident, the display core cannot read the aperture, and SetVidPnSourceAddress would
+//     be given an address DcnTranslateCardAddress refuses - after the runtime had already stopped
+//     copying. The shell sets the bit only under the opt-in switch of scanout-primary.h (M15.14
+//     increment 3), so by default it answers FALSE, as it did before M15.14. Changing the answer
+//     without changing the placement is the one thing this function must not do;
 //   - both carry a format the shared surface format table enables for SCANOUT_PRIMARY and that
 //     bc250_scanout_format_admitted admits without the trailer's PLANE_FORMATS flag, which this shell
 //     does not read: BGRA8 only. RGBA8 and RGB10A2 are SCANOUT_PRIMARY rows from the kernel driver
 //     0.7.216.20, but the kernel driver programs their plane format only when its trailer says so, so
-//     this dormant rule keeps them on the composed-primary path of M14.1 until the shell reads the
-//     trailer, and an FP16 swap chain stays there in any case;
+//     this rule keeps them on the composed-primary path of M14.1 until the shell reads the trailer,
+//     and an FP16 swap chain stays there in any case;
 //   - the two layouts agree exactly: width, height, pitch, and the same storage row of that table. A
 //     flip substitutes one allocation for the other under one display mode; a difference in any of
 //     them would be a different mode. The row and not the DXGI format, so that a BGRA8_UNORM front

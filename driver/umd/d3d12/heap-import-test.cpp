@@ -27,6 +27,39 @@ static bool resident_pending=false,fail_wait=false,fail_evict=false;
 static bool fail_lock=false,fail_unlock=false;  // BD-045: the kernel refuses Lock2 or Unlock2
 static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
+static unsigned scanout_surfaces=0;           // M15.14: primaries created with the v3 scan-out record
+static unsigned scanout_block_composed=0;     // the composed primaries the M15.14 block made
+// M15.14 increment 3: the adapter's QueryAdapterInfo, answering with the trailer of "now". The geometry
+// moves between calls exactly as a committed source mode does when a game changes the display mode.
+static unsigned trailer_queries=0;
+static uint32_t trailer_width=0,trailer_height=0,trailer_flags=0;
+static bool trailer_fail=false;
+static HRESULT APIENTRY trailer_query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* request){
+ assert(adapter==handle<HANDLE>(0x4321) && request->PrivateDriverDataSize==BC250_SCANOUT_CAPS_TOTAL);
+ ++trailer_queries;
+ if(trailer_fail)return E_FAIL;
+ bc250_scanout_caps caps{BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,sizeof(bc250_scanout_caps),
+     trailer_flags,trailer_width,trailer_height};
+ std::memcpy(static_cast<unsigned char*>(request->pPrivateDriverData)+BC250_SCANOUT_CAPS_OFFSET,&caps,sizeof(caps));
+ return S_OK;
+}
+// The compositor's desktop-route record of "now", in place of the session's record that only dwm.exe can write.
+static unsigned desktop_reads=0,desktop_route=BC250_DESKTOP_ROUTE_GPU,desktop_status=BC250_DESKTOP_ROUTE_READ_OK;
+static unsigned desktop_double(bc250_desktop_route* record) noexcept {
+ ++desktop_reads;
+ *record=bc250_desktop_route{};
+ if(desktop_status!=BC250_DESKTOP_ROUTE_READ_OK)return desktop_status;
+ *record={BC250_DESKTOP_ROUTE_MAGIC,BC250_DESKTOP_ROUTE_VERSION,BC250_DESKTOP_ROUTE_BYTES,desktop_route,77,0,1,0};
+ return BC250_DESKTOP_ROUTE_READ_OK;
+}
+// The kernel driver's mode list of "now" (C71), in place of D3DKMTGetDisplayModeList: one offered geometry.
+static unsigned mode_reads=0;
+static uint32_t offered_width=0,offered_height=0;
+static UINT64 mode_luid=0;
+static ScanoutModeList mode_double(UINT64 luid,unsigned width,unsigned height) noexcept {
+ ++mode_reads;mode_luid=luid;
+ return width==offered_width && height==offered_height?ScanoutModeList::Offered:ScanoutModeList::NotOffered;
+}
 static unsigned long surface_format=0;
 static uint32_t surface_width=256;            // LB7A.Width the next primary must carry
 // BD-075, what the next shared create must publish: the LB7A geometry and the E26R v3 texture beside it.
@@ -63,6 +96,19 @@ static UINT64 held_bytes(){return msaa_alignment?msaa_alignment:UINT64_C(65536);
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
  assert(a->NumAllocations==1);
+ if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==64 &&
+    a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY){
+  // M15.14, the scan-out primary: the same LB7A v1 description at the scan-out pitch, PRIMARY on the scan-out
+  // video present source, under the 64-byte E26R v3 record with Access PRIMARY|SCANOUT.
+  assert(a->pPrivateDriverData && a->pAllocationInfo->VidPnSourceId==BC250_SCANOUT_VIDPN_SOURCE);
+  uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
+  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==surface_width && w[3]==64 && w[4]==1024);
+  assert(w[5]==surface_format && w[6]==65536 && w[7]==0);
+  uint32_t r[16];std::memcpy(r,a->pPrivateDriverData,sizeof(r));
+  assert(r[0]==0x52363245u && r[1]==3 && r[2]==1 && r[3]==5);
+  assert(r[4]==surface_width && r[5]==64 && r[6]==1 && r[7]==1 && r[8]==DXGI_FORMAT_B8G8R8A8_UNORM);
+  ++scanout_surfaces;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
+ }
  if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==64){
   // BD-075, the shared surface: the same 32-byte LB7A v1 description, but an ordinary allocation (no
   // PRIMARY intent, video present source 0) under the 64-byte E26R v3 record. Read as the words on the
@@ -814,24 +860,107 @@ int main(){
   // The pitch pin: a wider pitch is a valid composed primary and not a scan-out one.
   assert(direct.prepare_surface(1920,1200,7936,D3DDDIFMT_A8R8G8B8,7936ull*1200u,handle<void*>(2),false,true,true)==E_INVALIDARG);
   assert(direct.prepare_surface(1920,1200,7936,D3DDDIFMT_A8R8G8B8,7936ull*1200u,handle<void*>(2))==S_OK);
-  // What the constructor took from the adapter and the registry (M15.14 increment 2). A device with no
-  // adapter - every owner of this suite - keeps the closed answer, so no allocation here asks for
-  // scan-out whatever the machine's registry says; a device whose adapter published the trailer carries it.
+  // M15.14 increment 3: the trailer is read for every primary, so the geometry clause follows the source
+  // mode of the moment of the create. A device with no adapter - every other owner of this suite - has no
+  // trailer, so no other allocation here asks for scan-out whatever the machine's registry says.
   {
    RuntimeHeapImports closed(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),
        handle<VkInstance>(5),gipa,identity,ImportReleasePolicy::off());
-   assert(!device.adapter && !closed.scanout_caps().flags && !closed.scanout_caps().post_width);
-   Adapter probe{};
-   auto& caps=probe.contract.scanout;
-   caps.magic=BC250_SCANOUT_CAPS_MAGIC;caps.version=BC250_SCANOUT_CAPS_VERSION;caps.size=sizeof(caps);
-   caps.flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;caps.post_width=1280;caps.post_height=720;
+   assert(!device.adapter && !closed.scanout_caps_now().flags && !closed.scanout_caps_now().post_width);
+   Adapter probe{};probe.runtime.handle=handle<HANDLE>(0x4321);probe.callbacks.pfnQueryAdapterInfoCb=trailer_query;
+   // The copy taken at the adapter's open says 1920x1200; the allocation path must not read it.
+   probe.contract.scanout={BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,sizeof(bc250_scanout_caps),
+       BC250_SCANOUT_CAPS_DIRECT_FLIP,1920,1200};
    Device published{};published.runtime=device.runtime;published.callbacks=device.callbacks;
    published.kernel_callbacks=device.kernel_callbacks;published.adapter=&probe;
    RuntimeHeapImports carried(published,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),
        handle<VkInstance>(5),gipa,identity,ImportReleasePolicy::off());
-   assert(carried.scanout_caps().flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
-   assert(carried.scanout_caps().post_width==1280 && carried.scanout_caps().post_height==720);
    assert(carried.force_cpu()==native12::scanout_force_cpu());
+   trailer_flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;trailer_width=1280;trailer_height=720;trailer_queries=0;
+   assert(carried.scanout_caps_now().post_width==1280 && carried.scanout_caps_now().post_height==720);
+   trailer_width=1920;trailer_height=1080;
+   assert(carried.scanout_caps_now().post_width==1920 && carried.scanout_caps_now().post_height==1080);
+   assert(carried.scanout_caps_now().flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && trailer_queries==5);
+   // A failed query is no trailer, never the copy from the open.
+   trailer_fail=true;assert(!carried.scanout_caps_now().flags && !carried.scanout_caps_now().post_width);
+   trailer_fail=false;
+   // Through allocate(): a 256x64 chain on a committed 256x64 mode, with the compositor on the GPU route, is a
+   // scan-out primary (unless the machine that runs the test has DwmForceCpu set, or a D3D12 experiment list
+   // that turns scan-out off; then the shell's own answer must be the composed primary, and that is what is
+   // asserted). The compositor's record comes from the double: the session's own record, which only dwm.exe
+   // writes, is the production reader, and this machine's compositor runs no router.
+   {bc250_desktop_route r{};const unsigned status=carried.desktop_route_now(&r);
+    assert(status<=BC250_DESKTOP_ROUTE_READ_SHAPE && (status==BC250_DESKTOP_ROUTE_READ_OK || (!r.magic && !r.route)));}
+   carried.read_desktop_route_with(&desktop_double);
+   assert(carried.initialize()==S_OK);
+   constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
+   D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
+   target.DepthOrArraySize=1;target.MipLevels=1;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.SampleDesc={1,0};
+   heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY);
+   heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;
+   engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=primary;s.byte_size=65536;s.alignment=128;
+   s.memory_type_bits=1;s.surface_row_pitch=1024;s.surface_layout_size=65536;expected_type=0;
+   surface_width=256;surface_format=D3DDDIFMT_A8R8G8B8;
+   const bool shell_on=scanout_switch(ddi_experiment_name())!=ScanoutSwitch::Off &&
+       !ddi_experiment("present-cached") && !ddi_experiment("present-noprimary") && !carried.force_cpu();
+   auto create=[&](bool scanout){
+    const unsigned before_scanout=scanout_surfaces,before_composed=surfaces,before_queries=trailer_queries;
+    const unsigned before_reads=desktop_reads;
+    engine_ddi::ImportedMemory surface{};events.clear();
+    {OwnerScope scope(&carried,0);assert(carried.allocate(&s,&surface)==S_OK && events=="AMZI");}
+    {OwnerScope scope(&carried,surface.allocation);assert(carried.free(&surface)==S_OK && events=="AMZIVEUR");}
+    assert(scanout_surfaces==before_scanout+(scanout?1u:0u) && surfaces==before_composed+(scanout?0u:1u));
+    // One query and one read of the compositor's record per primary, and none at all when the off switch
+    // is listed.
+    const unsigned per=scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off?0u:1u;
+    assert(trailer_queries==before_queries+per && desktop_reads==before_reads+per);
+   };
+   const unsigned composed_before=surfaces;
+   trailer_width=256;trailer_height=64;create(shell_on);
+   // The game changes the mode: the same chain is now the wrong geometry, and the next primary is composed.
+   trailer_width=1920;trailer_height=1080;create(false);
+   // The mode comes back: scan-out again, without a new device.
+   trailer_width=256;trailer_height=64;create(shell_on);
+   // The kernel driver's switch closes (DIRECT_FLIP clear), and a failed query: composed both times.
+   trailer_flags=0;create(false);trailer_flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;
+   trailer_fail=true;create(false);trailer_fail=false;
+   // The compositor falls back to the CPU UMD (the router's fallback=1), and then has no record at all (a
+   // restart in progress, an older router): composed both times on the mode and the trailer that admit the
+   // chain. The GPU route comes back: scan-out again, without a new device.
+   trailer_width=256;trailer_height=64;
+   desktop_route=BC250_DESKTOP_ROUTE_FALLBACK;create(false);
+   desktop_route=BC250_DESKTOP_ROUTE_GPU;desktop_status=BC250_DESKTOP_ROUTE_READ_ABSENT;create(false);
+   desktop_status=BC250_DESKTOP_ROUTE_READ_OK;create(shell_on);
+   // C71 (session 480): the game makes its chain before the mode commit, so the trailer still says the old mode.
+   // Through the shell's reader a device whose adapter has no LUID asks no list and reads Failed. Through the
+   // double: the kernel driver offers the chain's geometry, so it is a scan-out primary after one list read; it
+   // offers another one, so the chain is composed. A chain that is the committed mode reads no list, and nor
+   // does a chain that an earlier clause stands down: an offered geometry turns the geometry clause only.
+   assert(carried.mode_list_now(256,64)==ScanoutModeList::Failed);
+   carried.read_mode_list_with(&mode_double);probe.contract.luid=0x1234;
+   const unsigned list_reads=shell_on?1u:0u;
+   trailer_width=1920;trailer_height=1080;offered_width=256;offered_height=64;
+   unsigned reads=mode_reads;create(shell_on);assert(mode_reads==reads+list_reads);
+   assert(!shell_on || mode_luid==0x1234);
+   offered_width=1280;offered_height=720;reads=mode_reads;create(false);assert(mode_reads==reads+list_reads);
+   trailer_width=256;trailer_height=64;reads=mode_reads;create(shell_on);assert(mode_reads==reads);
+   trailer_width=1920;trailer_height=1080;offered_width=256;offered_height=64;
+   desktop_route=BC250_DESKTOP_ROUTE_FALLBACK;reads=mode_reads;create(false);assert(mode_reads==reads);
+   desktop_route=BC250_DESKTOP_ROUTE_GPU;trailer_width=256;trailer_height=64;
+   // A format with no scan-out row on a matching mode stays composed: FP16 is eight bytes a pixel, so 128
+   // pixels fill the same 1024-byte pitch.
+   target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;target.Width=128;surface_width=128;
+   surface_format=D3DDDIFMT_A16B16G16R16F;trailer_width=128;create(false);
+   // An offered geometry does not admit a format with no scan-out row either: one list read, then the format.
+   trailer_width=1920;trailer_height=1080;offered_width=128;offered_height=64;
+   reads=mode_reads;create(false);assert(mode_reads==reads+list_reads);
+   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.Width=256;surface_width=256;surface_format=D3DDDIFMT_A8R8G8B8;
+   assert(carried.close_after_engine_retirement()==S_OK && carried.discard_metadata()==0);
+   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
+   scanout_block_composed=surfaces-composed_before;
+   assert(scanout_block_composed==(shell_on?9u:14u) && scanout_surfaces==(shell_on?5u:0u));
+   std::printf("scan-out primaries %u (shell %s), trailer queries %u, desktop-route reads %u, mode-list reads %u\n",
+               scanout_surfaces,shell_on?"on":"off",trailer_queries,desktop_reads,mode_reads);
   }
  }
  // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a
@@ -933,7 +1062,7 @@ int main(){
           defaults.quarantine_age_ms==250 && defaults.quarantine_byte_cap==(64ull<<20) && defaults.holds());
    assert(!ImportReleasePolicy::off().holds());
   }
-  assert(surfaces==13);
+  assert(surfaces==13+scanout_block_composed);
  }
  // ---- BD-101: a heap that asks for the 4 MiB MSAA placement alignment -----------------------------------------
  // The request DXRPathTracer makes for a 4x MSAA 1536x864 R16G16B16A16_FLOAT render target: the runtime's heap
@@ -996,5 +1125,8 @@ int main(){
   "callback, no quarantine, no backing to lend, one record per allocation handle), "
   "BD-101 (the 4 MiB MSAA placement alignment: one reservation of held+alignment, the map at its aligned offset, "
   "the whole reservation freed with the import, a refused reservation and a wrong answer both giving it back, and "
-  "an address that does not satisfy the request refused by name at ImportStage::AddressAlignment)");
+  "an address that does not satisfy the request refused by name at ImportStage::AddressAlignment), "
+  "M15.14 scan-out primary from the trailer of the moment (one query per primary, a mode change both ways, "
+  "the kernel driver's switch closed, a failed query and a format without a scan-out row all composed; a chain "
+  "made before the mode commit admitted only on a geometry the mode list offers)");
 }

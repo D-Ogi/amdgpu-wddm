@@ -9,11 +9,13 @@
 namespace native12 {
 struct AdapterContract {
     bc250_umd_private caps{};
-    // M15.14 increment 2: the kernel driver's start-latched answer about a client scan-out flip, from the
-    // optional trailer behind the adapter identity. Every field zero is the correct reading of three
-    // states that must behave alike - a kernel driver older than the trailer, a start whose operator
+    // M15.14 increment 2: the kernel driver's answer about a client scan-out flip at the adapter's open,
+    // from the optional trailer behind the adapter identity. Every field zero is the correct reading of
+    // three states that must behave alike - a kernel driver older than the trailer, a start whose operator
     // switch is off, and a query that wrote less than the whole trailer - and in all three this shell
-    // must behave as 0.7.207.1 did: no scan-out request leaves it.
+    // must behave as 0.7.207.1 did: no scan-out request leaves it. The allocation path does not read this
+    // copy (increment 3): it asks again with query_scanout_caps, because the geometry is the source mode
+    // at the moment of the question.
     bc250_scanout_caps scanout{};
     UINT64 luid{};
 };
@@ -62,5 +64,19 @@ inline HRESULT query_contract(D3D12DDI_HRTADAPTER adapter,
     // none leaves the tail of this zero-initialized buffer alone and the shell keeps its old behaviour.
     candidate.scanout=decode_scanout_caps(data,sizeof(data));
     output=candidate;return S_OK;
+}
+// M15.14 increment 3: the scan-out trailer alone, as the kernel driver publishes it now. A kernel driver that
+// publishes the committed source mode (display modes) answers each query with the mode of that moment; one
+// that publishes the POST mode answers the same trailer every time, and the caller behaves exactly as with
+// the copy taken at the adapter's open. The rest of the buffer was validated at that open and is not read
+// again. A failed query is no trailer: the caller then keeps the composed primary, which is always correct.
+inline bc250_scanout_caps query_scanout_caps(D3D12DDI_HRTADAPTER adapter,
+                                             PFND3DDDI_QUERYADAPTERINFOCB query) noexcept {
+    if(!adapter.handle || !query)return {};
+    unsigned char data[BC250_SCANOUT_CAPS_TOTAL]{};
+    D3DDDICB_QUERYADAPTERINFO request{};
+    request.pPrivateDriverData=data;request.PrivateDriverDataSize=sizeof(data);
+    if(FAILED(query(adapter.handle,&request)))return {};
+    return decode_scanout_caps(data,sizeof(data));
 }
 }

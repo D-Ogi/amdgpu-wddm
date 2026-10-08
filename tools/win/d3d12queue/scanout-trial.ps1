@@ -14,12 +14,15 @@
 # it. Three minutes is the standing limit for a lab trial that does not start a game.
 #
 #   pwsh -File scanout-trial.ps1 -Client C:\BC250\flip\amdgpu_wddm_d3d12_queue.exe `
-#        -Cli C:\BC250\bc250kmd_cli.exe -Directory C:\BC250\tmp\flip-001 -Experiment scanout-flip-1920x1200
+#        -Cli C:\BC250\bc250kmd_cli.exe -Directory C:\BC250\tmp\flip-001 -Experiment scanout-flip
 #
-# -Experiment is the per-instance switch the D3D12 shell reads from AMDGPU_WDDM_D3D12_EXPERIMENT. The scan-out
-# mode names the geometry it is for, because the kernel driver admits a flip at the POST geometry alone. Without
-# -Experiment the shell keeps the registered composed-primary path, which is the control arm of this trial: the
-# client must then present every frame exactly and the scan-out counters must not move.
+# -Experiment is the per-instance switch the D3D12 shell reads from AMDGPU_WDDM_D3D12_EXPERIMENT, and it names
+# the arm. M15.14 increment 3 made the scan-out primary the shell's default, so an empty list names no arm: it is
+# the control arm on an increment-2 shell and the scan-out arm on an increment-3 one. The script therefore
+# refuses an empty list. scanout-flip-off is the control arm on both shells: the client must present every
+# frame exactly and the scan-out counters must not move. scanout-flip, or scanout-flip-<width>x<height>, is the
+# scan-out arm; an increment-2 shell needs the spelling with the geometry, an increment-3 shell reads both and
+# compares the chain with the source mode the kernel driver publishes.
 param(
     [string]$Client,
     [string]$Cli,
@@ -46,9 +49,19 @@ $ErrorActionPreference = 'Stop'
 if (-not $SelfTest) {
     foreach ($path in $Client, $Cli) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "not found: $path" } }
 }
-if ($Experiment -and ($Experiment -split ',') -contains 'scanout-flip') {
-    throw 'the scan-out mode names its geometry: scanout-flip-<width>x<height>, e.g. scanout-flip-1920x1200'
+# The arm the list names: 'control', 'scanout' or '' (none). The off switch wins, as it does in the shell.
+function Get-Arm { param([string]$List)
+    $items = @($List -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($items -contains 'scanout-flip-off') { return 'control' }
+    if (@($items | Where-Object { $_ -eq 'scanout-flip' -or $_ -match '^scanout-flip-\d+x\d+$' }).Count) { return 'scanout' }
+    return ''
 }
+$armName = Get-Arm $Experiment
+if (-not $SelfTest -and -not $armName) {
+    throw 'name the arm: -Experiment scanout-flip-off for the control arm, scanout-flip for the scan-out arm (the shell default changed in M15.14 increment 3)'
+}
+# Write-Verdict reads an empty arm as the control arm.
+$Arm = if ($armName -eq 'scanout') { $Experiment } else { '' }
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = ''
 if (-not $SelfTest) {
@@ -218,7 +231,7 @@ function Write-Verdict {
             Write-Output ("  the OS asked for: {0} mode changes, {1} immediate, {2} shared-primary transitions, {3} independent-flip exclusive; {4} presents went through the desktop" -f
                 $Delta.flip_mode_change, $Delta.flip_immediate, $Delta.flip_shared_transition, $Delta.flip_independent, $Delta.redirected_presents)
         }
-        Write-Output '  For a borderless chain that layer is the compositor: DWM decides DirectFlip through its own UMD, which has no CheckDirectFlipSupport entry (see docs/design/scanout-admission.md, "What is still missing").'
+        Write-Output '  For a borderless chain that layer is the compositor: DWM decides DirectFlip through its own UMD. Its answer is in the router front log (front-dwm.exe-<pid>.log, the check_direct_flip lines and summaries; see docs/design/direct-flip-handshake.md).'
         Write-Output '  A D3D12 chain in the fullscreen state is no exception: DXGI keeps it under the compositor. On unit A (2026-10-05) DWM consumed 599 of its 600 presents as windowed flips and scanned out its own three buffers throughout, with GetFullscreenState exclusive (etw-present-mode.py on a -PresentMode capture).'
     }
 }
@@ -323,11 +336,19 @@ vidpn flip on: 4600 hardware flips, 0 refused
     if ((Judge $v1 $v1 'scanout-flip-1920x1200') -match 'DirectFlip handshake|created for scan-out|independent-flip') {
         $failures++; Write-Host 'FAIL older driver: the verdict claimed a witness the driver does not print'
     } else { Write-Host 'ok   older driver claims no witness' }
-    # The geometry has to be named: a bare scanout-flip is refused before anything runs.
-    try { & $PSCommandPath -SelfTest:$false -Client $PSCommandPath -Cli $PSCommandPath -Directory (Join-Path $env:TEMP 'scanout-selftest-unused') -Experiment 'scanout-flip' | Out-Null
-          $failures++; Write-Host 'FAIL bare scanout-flip was accepted' }
-    catch { if ($_.Exception.Message -match 'names its geometry') { Write-Host 'ok   bare scanout-flip refused' }
-            else { $failures++; Write-Host "FAIL bare scanout-flip: $($_.Exception.Message)" } }
+    # The arm a list names. The off switch wins over an on in the same list, as it does in the shell.
+    foreach ($case in @(@('scanout-flip-off', 'control'), @('scanout-flip', 'scanout'), @('scanout-flip-1920x1200', 'scanout'),
+                        @('replay-log, scanout-flip', 'scanout'), @('scanout-flip,scanout-flip-off', 'control'),
+                        @('', ''), @('replay-log', ''), @('scanout-flip-1920', ''), @('scanout-flipper', ''))) {
+        $got = Get-Arm $case[0]
+        if ($got -ne $case[1]) { $failures++; Write-Host "FAIL arm of '$($case[0])': '$got', expected '$($case[1])'" }
+        else { Write-Host "ok   arm of '$($case[0])' is '$($case[1])'" }
+    }
+    # A list that names no arm is refused before anything runs.
+    try { & $PSCommandPath -SelfTest:$false -Client $PSCommandPath -Cli $PSCommandPath -Directory (Join-Path $env:TEMP 'scanout-selftest-unused') -Experiment 'replay-log' | Out-Null
+          $failures++; Write-Host 'FAIL a list without an arm was accepted' }
+    catch { if ($_.Exception.Message -match 'name the arm') { Write-Host 'ok   a list without an arm is refused' }
+            else { $failures++; Write-Host "FAIL a list without an arm: $($_.Exception.Message)" } }
     Write-Host ("scanout-trial self-test: {0} failure(s)" -f $failures)
     if ($failures) { exit 1 } else { exit 0 }
 }
@@ -349,7 +370,7 @@ $published = if ($before.values.Contains('directflip_handshake')) { $before.valu
 # the start-latched facts the flip path needs refused, and the driver's own "DirectFlip handshake inputs"
 # line in the kernel log names which one. Only a value of 0 is the operator having closed it.
 $handshakeNote = "EnableDirectFlipHandshake $(if ($null -eq $setting) { 'absent (default 1 from 0.7.213)' } else { $setting }), driver publishes $published"
-if ($Experiment -and $published -eq 'off') {
+if ($Arm -and $published -eq 'off') {
     $handshakeNote += $(if ($null -ne $setting -and $setting -eq 0) {
                             ' - CLOSED BY THE OPERATOR: this arm can only end "not reached"; remove the value or set it to 1 and restart the adapter' }
                         else { ' - the switch is open, so a start-latched input refused: read the "DirectFlip handshake inputs" line of the kernel log (EnableVidPnFlip, VRAM, alignment, POST geometry)' })
@@ -362,8 +383,7 @@ $stdout = Join-Path $root 'client.out'
 $stderr = Join-Path $root 'client.err'
 $wrapper = Join-Path $root 'run-client.cmd'
 $lines = @('@echo off')
-if ($Experiment) { $lines += "set AMDGPU_WDDM_D3D12_EXPERIMENT=$Experiment" }
-else { $lines += 'set AMDGPU_WDDM_D3D12_EXPERIMENT=' }
+$lines += "set AMDGPU_WDDM_D3D12_EXPERIMENT=$Experiment"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_FRAMES=$Frames"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_BUFFERS=$Buffers"
 $lines += "`"$Client`" --interactive `"$root`" --deadline $Seconds > `"$stdout`" 2> `"$stderr`""
@@ -439,6 +459,7 @@ $trialResult = [pscustomobject]@{
     utc          = $started.ToUniversalTime().ToString('o')
     client       = (Get-FileHash -LiteralPath $Client).Hash
     experiment   = $Experiment
+    arm          = $armName
     seconds      = $Seconds
     frames       = $Frames
     buffers      = $Buffers
@@ -459,5 +480,5 @@ $trialResult | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Report -Encod
 Write-Host "delta: $($delta | ConvertTo-Json -Compress)"
 Write-Host "report: $Report"
 
-Write-Verdict $before $after $delta $Experiment | ForEach-Object { Write-Host $_ }
+Write-Verdict $before $after $delta $Arm | ForEach-Object { Write-Host $_ }
 if ($exit -ne 0) { exit 1 }

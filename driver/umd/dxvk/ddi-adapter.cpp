@@ -24,6 +24,9 @@ struct Adapter {
     EngineModules modules;
     std::mutex mutex;
     std::vector<DdiDeviceHandle> failed;
+    // M15.14: the runtime's adapter query and the scan-out switches, read once at the open. The runtime's
+    // adapter handle stays valid until CloseAdapter, and every device is destroyed before that.
+    ScanoutSource scanout;
 };
 Adapter *adapter(D3D10DDI_HADAPTER handle) {return static_cast<Adapter *>(handle.pDrvPrivate);}
 // The settings this shell applies; RenderOnCpu is the router's (driver/umd/router), so a set value shows here as
@@ -134,7 +137,8 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
         HRESULT hr=S_OK;
         {
             const as::ScopedEnv options("DXVK_CONFIG",as::dxvk_config(settings),as::ScopedEnv::Mode::Append);
-            hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags);
+            hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags,
+                &a->scanout);
         }
         if (!a->failed.back().owner) a->failed.pop_back();
         if(FAILED(hr))failure_diagnostic("CreateDevice",hr);
@@ -173,6 +177,7 @@ HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &args,const AdapterConfigura
             a->luid,sparse,a->unresolved_policy_adapter);
         a->policy_flags=policy==S_OK && sparse ? BC250_HOST_POLICY_SPARSE : 0;
         a->caps=adapter_caps_for_policy(config.caps,a->policy_flags);
+        a->scanout=read_scanout_source(args.hRTAdapter.handle,args.pAdapterCallbacks->pfnQueryAdapterInfoCb);
         D3D10_2DDI_ADAPTERFUNCS table{};
         table.pfnCalcPrivateDeviceSize=device_size;table.pfnCreateDevice=create;
         table.pfnCloseAdapter=close;table.pfnGetSupportedVersions=versions;table.pfnGetCaps=caps;

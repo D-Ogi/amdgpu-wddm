@@ -1,0 +1,109 @@
+xperf dumper: trial 478 mode (c), borderless window 1920x1200, gpu.etl of 20 s -> a dumper text, deleted after the run
+trace span 20.088 s, 883510 events, 57 event kinds
+
+-- present and flip events --
+   66321  Microsoft-Windows-DxgKrnl/QueuePacket/win:Info
+   54235  Microsoft-Windows-DxgKrnl/QueuePacket/win:Start
+   54234  Microsoft-Windows-DxgKrnl/QueuePacket/win:Stop
+   15559  Microsoft-Windows-DxgKrnl/UnwaitQueuePacket/win:Info
+    5043  Microsoft-Windows-Win32k/TokenStateChanged/win:Info
+    3362  Microsoft-Windows-DxgKrnl/PresentHistory/win:Info
+    1682  Microsoft-Windows-Win32k/TokenCompositionSurfaceObject/win:Info
+    1681  Microsoft-Windows-DxgKrnl/PresentHistoryDetailed/win:Start
+    1681  Microsoft-Windows-DxgKrnl/PresentQueuePacket/win:Start
+    1681  Microsoft-Windows-DxgKrnl/Present/win:Info
+    1681  Microsoft-Windows-DxgKrnl/IndependentFlip/win:Info
+    1681  Microsoft-Windows-DxgKrnl/MMIOFlip/win:Info
+    1681  Microsoft-Windows-DxgKrnl/PresentQueuePacket/win:Stop
+    1681  Microsoft-Windows-DxgKrnl/PresentHistory/win:Stop
+    1681  Microsoft-Windows-Win32k/TokenIndependentFlipSkipComplete/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncInterrupt/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info
+    1202  Microsoft-Windows-DxgKrnl/VSyncDPCMultiPlane/win:Info
+
+-- present mode per process --
+"Unknown" (6812): 1682 presents over its own 20.040 s, 83.9/s (1681 D3DKMTPresent calls; trace span 20.088 s)
+    hardware flip (kernel witness; Win32k skip)   1679   99.8%
+    unclassified                                3    0.2%
+    Present Flags 0x9000 (PresentCountValid+RedirectedFlip)   1681
+    Model 2 (REDIRECTED_FLIP)                  1681  (1681 from PresentHistoryDetailed)
+    Model 0 (UNINITIALIZED)                      44  (0 from PresentHistoryDetailed)
+    TokenStateChanged Completed independent True skip True   1679
+    TokenStateChanged InFrame independent True skip True   1679
+    TokenStateChanged Discarded independent True skip True   1679
+    InFrame rows 1679, with IndependentFlip 1679, with SkipIndependentFlip 1679
+    DWM says: no SCHEDULE_SURFACEUPDATE      1682
+    unclassified reasons: {'no TokenStateChanged': 3}
+    (1679 presents Win32k marked SkipIndependentFlip are hardware flips by the kernel witness;
+     see M15.14 KERNEL-WITNESS below)
+
+-- per second (mode: presents) --
+   0  hardware flip (kernel witness; Win32k skip) 74
+   1  hardware flip (kernel witness; Win32k skip) 78
+   2  hardware flip (kernel witness; Win32k skip) 77
+   3  hardware flip (kernel witness; Win32k skip) 78
+   4  hardware flip (kernel witness; Win32k skip) 78
+   5  hardware flip (kernel witness; Win32k skip) 77
+   6  hardware flip (kernel witness; Win32k skip) 78
+   7  hardware flip (kernel witness; Win32k skip) 84
+   8  hardware flip (kernel witness; Win32k skip) 83
+   9  hardware flip (kernel witness; Win32k skip) 83
+  10  hardware flip (kernel witness; Win32k skip) 84
+  11  hardware flip (kernel witness; Win32k skip) 89
+  12  hardware flip (kernel witness; Win32k skip) 89
+  13  hardware flip (kernel witness; Win32k skip) 89
+  14  hardware flip (kernel witness; Win32k skip) 88
+  15  hardware flip (kernel witness; Win32k skip) 89
+  16  hardware flip (kernel witness; Win32k skip) 89
+  17  hardware flip (kernel witness; Win32k skip) 89
+  18  hardware flip (kernel witness; Win32k skip) 89
+  19  hardware flip (kernel witness; Win32k skip) 89
+  20  hardware flip (kernel witness; Win32k skip) 5, unclassified 3
+
+-- per-frame flip witness (kernel side) --
+"Unknown" (6812): 1681 present packets (1681 rows), 1679 independent flips, 1679 reached MMIOFlip, 0 named by a VSync DPC
+    flip intervals: {0: 1679}
+    MMIOFlip FlipImmediate+MoveFlip?                       1679
+    FlipToPhysicalAddress 0x000000F43C1FA000    560
+    FlipToPhysicalAddress 0x000000F459B60000    560
+    FlipToPhysicalAddress 0x000000F43B930000    559
+M15.14 VERDICT "Unknown" (6812): packets=1681 independent=1679 mmio=1679 vsync=0 directflip=0/0 result=INDEPENDENT-FLIP
+M15.14 KERNEL-WITNESS "Unknown" (6812): independent_flips=PASS mmio_programmed=PASS vsync_scanned_same_addresses=PASS not_consumed_by_dwm=PASS result=HOLDS relabelled=1679
+    independent_flips                    PASS     1679 of 1681 present packets
+    mmio_programmed                      PASS     1679 of 1679 independent flips reached MMIOFlip
+    vsync_scanned_same_addresses         PASS     all 3 scanned: 0xF43B930000, 0xF43C1FA000, 0xF459B60000
+    not_consumed_by_dwm                  PASS     0 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed over 1682 present counts
+M15.14 INCREMENT1 "Unknown" (6812): present_flags_9000=PASS detailed_model_2=PASS dwm_directflip_1_independent_0=NO-DATA no_independent_flip=FAIL no_plane_for_this_process=FAIL result=MOVED
+    present_flags_9000               PASS     1681 of 1681 calls
+    detailed_model_2                 PASS     1681 of 1681 tokens
+    dwm_directflip_1_independent_0   NO-DATA  0 of 0 surface updates
+    no_independent_flip              FAIL     1679 naming this process, 2 elsewhere in the trace (another process flipping its own buffers is not this verdict; check which one before reading the capture as a baseline)
+    no_plane_for_this_process        FAIL     1679 packets reached MMIOFlip, 0 named by a VSync DPC
+M15.14 INCREMENT2 "Unknown" (6812): not_consumed_by_dwm=PASS mmio_programmed_an_admitted_address=NO-DATA vsync_scanned_that_address=NO-DATA kernel_counters=NO-DATA result=UNKNOWN
+    not_consumed_by_dwm                  PASS     0 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed over 1682 present counts
+    mmio_programmed_an_admitted_address  NO-DATA  no --admitted-address given; 3 addresses programmed for this process
+    vsync_scanned_that_address           NO-DATA  clause 2 named no address to look for
+    kernel_counters                      NO-DATA  need scanout_flips, scanout_requests and at least one admit_* refusal column in --kmd-counters; have none
+
+-- display side --
+DWM SCHEDULE_PRESENT starts 0
+VSyncDPC ScannedPhysicalAddress: 1202 samples, 3 distinct, 1201 changes (59.8/s)
+    0x000000F43B930000     414 samples
+    0x000000F459B60000     397 samples
+    0x000000F43C1FA000     391 samples
+VSyncInterrupt ScannedPhysicalAddress: 1202 samples, 3 distinct, 1201 changes (59.8/s)
+    0x000000F43B930000     414 samples
+    0x000000F459B60000     397 samples
+    0x000000F43C1FA000     391 samples
+    (a changing address is what a composing desktop does too; compare a distinct value with an
+     address the kernel driver logged as an admitted scan-out flip, not with the change rate)
+driver-programmed flips: {'MMIOFlip': 1681}
+    FlipToPhysicalAddress   0x000000F459B60000    561
+    FlipToPhysicalAddress   0x000000F43B930000    560
+    FlipToPhysicalAddress   0x000000F43C1FA000    560
+    FlipToDriverAllocation  0xFFFFAE082320F7E0    561
+    FlipToDriverAllocation  0xFFFFAE082320C8A0    560
+    FlipToDriverAllocation  0xFFFFAE082320DE00    560
+independent-flip events: 1681, present packets with one: 1679
+WARNING: an MMIOFlip Flags word carried 0x20, 0x40 or 0x80. the 0x20/0x40/0x80 names come from DXGK_SETVIDPNSOURCEADDRESS_FLAGS and are UNCONFIRMED for this event: they corroborate, they never witness
+text dump deleted (139.0 MB); --keep-dump keeps it

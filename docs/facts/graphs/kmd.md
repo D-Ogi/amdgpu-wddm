@@ -112,6 +112,7 @@ flowchart LR
   M832["M832"]
   M833["M833"]
   M834["M834"]
+  M844["M844<br/>display"]
   M63 --> M62
   M63 --> M64
   M64 --> M62
@@ -184,9 +185,10 @@ flowchart LR
   M84 --> M73
   M99 --> M77
   M202 --> M190
+  M844 --> M65
   M40 --> M38
   classDef other stroke-dasharray:4 3
-  class M30,M40,M55,M57,M60,M68,M84,M99,M202,M817 other
+  class M30,M40,M55,M57,M60,M68,M84,M99,M202,M817,M844 other
 ```
 
 ### Part 2

@@ -8,6 +8,7 @@
 #include "present-shadow.h"
 #include "vblank-pacer.h"
 #include "../app-settings/app-settings.h"
+#include "scanout-primary.h"
 #include <memory>
 #include <vector>
 namespace bc250::umd {
@@ -54,6 +55,9 @@ public:
     // (IS_DXGI1_6_1_BASE_FUNCTIONS). Below it the runtime copies a shorter structure, the override field is
     // not in it, and VSync needs the vertical-blank waits of the shell instead.
     bool full_present_callback() const { return full_present_callback_; }
+    // M15.14: the adapter's scan-out source, copied at CreateDevice (scanout-primary.h).
+    const ScanoutSource &scanout() const { return scanout_; }
+    void set_scanout(const ScanoutSource &source) { scanout_=source; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -74,6 +78,7 @@ private:
     PresentShadows present_shadows_{};
     amdgpu_wddm::app_settings::FrameLimiter frame_limiter_;
     VBlankPacer vblank_pacer_;
+    ScanoutSource scanout_{};
     RuntimeDevice runtime_;
     HostBridge bridge_{};
     HostedInstance instance_;

@@ -44,6 +44,7 @@
 #include <d3d10umddi.h>
 #pragma warning(pop)
 #include "../../contract/bc250_scanout_caps.h"
+#include "front-flip-log.h"
 
 namespace bc250front {
 
@@ -107,7 +108,7 @@ struct Device {
     // Witnesses. Every one of them is a count, so a trial reads one line and knows what happened.
     volatile LONG direct_flip_calls;
     volatile LONG direct_flip_true;
-    volatile LONG direct_flip_logged;      // lines already written for CheckDirectFlipSupport
+    FlipLog flip_log;                      // CheckDirectFlipSupport's change lines and counters (increment 3)
     volatile LONG clear_view_calls;
     volatile LONG clear_view_rect_calls;   // amendment 4: the pass condition is that this stays 0
     volatile LONG refusals;                // entries a 10_0 pipeline cannot reach, called anyway

@@ -23,6 +23,14 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   `tools/win/d3d10probe --trace-entry` shows the entry and the interface for one process;
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
 
+In `dwm.exe`, the router also writes each desktop decision into the session's desktop-route record
+(`driver/contract/bc250_desktop_route.h`, M15.14): `gpu`, `cpu-kill-switch`, `cpu-switches-off` or `cpu-fallback`.
+The record is a named section, `Local\bc250-desktop-route`. Its owner is the compositor's account, and the record
+ends when `dwm.exe` ends. The D3D12 and D3D11 shells read the record before they ask for a scan-out primary: the
+CPU compositor cannot read a scan-out primary, and the fallback after a failed hosted open is visible nowhere
+else. The desktop route line ends with `record=published`, `record=failed-<Win32 error>` (no record, so the shells
+keep the composed primary) or `record=none` (a `HostedClients` entry, which writes nothing).
+
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's
 `InteropLastState`) is documented value by value at the top of `router.cpp`. The decisions themselves are free of
 I/O in `router-policy.h`, so the host tests drive them directly; the path resolution in `router-identity.h` is
@@ -57,7 +65,10 @@ five UMD doubles from `tests/fake-umd.cpp` and the harness `tests/test-router.cp
 with its config) and runs `test-router.exe`: each scenario in its own process on a private application hive, so no
 machine state is touched and no device is opened. The gate of `674AD261` ran 68 scenarios with 0 failures (hosted
 UMD `E6B944CF`, CPU UMD `4176D1DF`, shell `E748418C` with config `A9B498ED`); the old router `5BBEB783` fails 26 of
-them, the application-policy ones.
+them, the application-policy ones. The desktop-route scenarios run the harness as `<layout>\dwm\dwm.exe`. They
+read the record with the harness's own account as the owner, and the shells' rule over it: `route-dwm-name` (GPU,
+admitted), `route-dwm-name-kill` and `route-dwm-name-fallback` (the rule stands down on the record alone, with
+its `DwmForceCpu` argument 0) and `desktop-dwm-unchanged` (the last of three decisions).
 
 ## Reproducing 674AD261
 

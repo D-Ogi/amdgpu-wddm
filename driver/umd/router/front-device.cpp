@@ -685,9 +685,24 @@ VOID APIENTRY CreateGeometryShaderWithStreamOutput(
         Translate(dev, "pfnCreateGeometryShaderWithStreamOutput", signatures, &buffer, &once));
 }
 
+// The summary of CheckDirectFlipSupport (front-flip-log.h): every counter, in one line a trial greps for.
+// `at` says why it was written: "periodic" while the compositor asks, "destroy" at the end of the device.
+static void LogFlipSummary(Device *dev, void *handle, const char *at)
+{
+    const FlipTotals t = FlipLogTotals(&dev->flip_log);
+    char rules[512];
+    FlipLogRules(&dev->flip_log, rules, sizeof(rules));
+    LogPrintf(dev->adapter ? &dev->adapter->log : nullptr,
+              "bc250d3d_front check_direct_flip summary device=%p at=%s calls=%ld true=%ld false=%ld "
+              "immediate=%ld lines=%ld unchanged=%ld suppressed=%ld rules=%s\n",
+              handle, at, t.calls, t.supported, t.refused, (long)dev->flip_log.immediate, t.lines,
+              (long)dev->flip_log.unchanged, t.suppressed, rules);
+}
+
 VOID APIENTRY DestroyDevice(D3D10DDI_HDEVICE hDevice)
 {
     FRONT_DEVICE(hDevice, )
+    if (dev->direct_flip_calls) LogFlipSummary(dev, hDevice.pDrvPrivate, "destroy");
     LogPrintf(dev->adapter ? &dev->adapter->log : nullptr,
               "bc250d3d_front device=%p destroy direct_flip_calls=%ld direct_flip_true=%ld "
               "clear_view_calls=%ld clear_view_rect_calls=%ld refusals=%ld recorded_resources=%u\n",
@@ -822,10 +837,28 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
     const bool answer = reason == FlipRefusal::none;
     if (answer) InterlockedIncrement(&dev->direct_flip_true);
     if (supported) *supported = answer ? TRUE : FALSE;
-    // The log is bounded: the compositor asks at least once per swap-chain creation and after every mode
-    // change, and a flood would cost more than it tells. The counters above are never bounded, and the
-    // device's destroy line prints them.
-    if (InterlockedIncrement(&dev->direct_flip_logged) <= 256)
+    // The log writes what changes and counts the rest (front-flip-log.h): the compositor asks at every present
+    // of a chain it may flip, and increment 2's line per call spent its budget in the first seconds of trial 478.
+    // The key is every field the line prints except the call number and the two handles.
+    unsigned long long key = FlipKeyStart();
+    const unsigned long long words[] = {
+        answer ? 1ull : 0ull, (unsigned long long)reason, checkFlags, (unsigned long)query, caps.flags,
+        caps.post_width, caps.post_height, found_client ? 1ull : 0ull,
+        client ? ((client->opened ? 1ull : 0ull) | (client->primary ? 2ull : 0ull) | (client->shared ? 4ull : 0ull))
+               : 8ull,
+        client ? client->width : 0u, client ? client->height : 0u, client ? client->pitch : 0u,
+        client ? client->format : 0u, client ? client->record.Version : 0ul, client ? client->record.Access : 0ul,
+        found_compositor ? 1ull : 0ull,
+        compositor ? ((compositor->opened ? 1ull : 0ull) | (compositor->primary ? 2ull : 0ull) |
+                      (compositor->shared ? 4ull : 0ull))
+                   : 8ull,
+        compositor ? compositor->width : 0u, compositor ? compositor->height : 0u,
+        compositor ? compositor->pitch : 0u, compositor ? compositor->format : 0u,
+        compositor ? compositor->record.Version : 0ul, compositor ? compositor->record.Access : 0ul};
+    for (const unsigned long long word : words) key = FlipKeyAdd(key, word);
+    const FlipLine line = FlipLogAnswer(&dev->flip_log, static_cast<unsigned>(reason),
+                                        (checkFlags & D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) != 0, key);
+    if (line == FlipLine::change)
         LogPrintf(dev->adapter ? &dev->adapter->log : nullptr,
                   "bc250d3d_front check_direct_flip call=%ld flags=%08x answer=%u rule=%s "
                   "caps_query=%08lx caps_flags=%08x source=%ux%u "
@@ -846,6 +879,8 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
                   compositor ? compositor->pitch : 0u, compositor ? compositor->format : 0u,
                   compositor ? compositor->record.Version : 0ul,
                   compositor ? compositor->record.Access : 0ul);
+    if (FlipLogSummaryDue(&dev->flip_log, GetTickCount64(), kFlipSummaryMs))
+        LogFlipSummary(dev, hDevice.pDrvPrivate, "periodic");
 }
 
 // ---------------------------------------------------------------- the refusals

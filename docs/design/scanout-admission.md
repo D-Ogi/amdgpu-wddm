@@ -181,10 +181,11 @@ and `WddmStart` logs which way it read.
 
 The switch exists for the release train, not for the feature: b18 carries three driver changes in one
 revision and one lab session checks them together, so a failure must point to one of them
-without a rebuild (`scratch/train/TRAIN-b18.md` rule 4). It is not the whole lever for this wagon. No
-shipped shell asks for scan-out unless the operator sets `AMDGPU_WDDM_D3D12_EXPERIMENT`
-(`scanout-flip-1920x1200`), so the user-mode variable turns the path off for an application while this
-value turns it off for the driver, including for anything that asks without being told to.
+without a rebuild (`scratch/train/TRAIN-b18.md` rule 4). It is not the whole lever for this wagon. From
+M15.14 increment 3 the D3D12 shell asks for scan-out by default, and the experiment `scanout-flip-off`
+turns that off for an application or, as the machine value, for every application. The D3D11 shell asks
+only when the operator turns it on (`AMDGPU_WDDM_D3D11_SCANOUT=1`). This value turns the path off for the
+driver, including for anything that asks without being told to.
 
 The flip gates of `driver/kmd/mmio.c` - `EnableMmio`, `EnableDcnWrite`, `EnableVidPnFlip` - are not this
 switch. They remove every hardware flip, DWM's own primary included.
@@ -224,11 +225,17 @@ rather than of the moment. That is a deliberate choice between two bad answers:
 - failing the call tells the truth. `d3dkmddi` permits any `NTSTATUS` here, dxgkrnl's reaction is its
   own, and the counters carry the diagnosis (`admit_segment`, `admit_alignment`, `admit_geometry`).
 
-What follows from it: the experiment must not be left on for a chain the rule cannot admit. The D3D12
-shell therefore asks for scan-out only when the operator named the mode and the chain matches it
-exactly, and the refusal path has its own guard-log budget so the one line that says which clause
-refused the surface is not spent at the frame rate. The 0x116 exposure of a sustained refusal stream is
-not measured. Until it is, the operator ends a trial that reports `admit_*` refusals rather than extends it.
+What follows from it: a shell must not ask for scan-out for a chain the rule cannot admit. Both shells
+therefore ask the rule first, in user mode, from the same words (`driver/contract/bc250_scanout_primary.h`).
+A shell asks for scan-out only when the chain has the geometry of the source mode in the caps trailer,
+a `SCANOUT_PRIMARY` format and the one scan-out pitch. In every other case it makes the composed primary.
+The D3D12 shell also accepts the geometry of a mode that the kernel driver offers for source 0 but has
+not committed yet (see "The mode list" below). That primary asks for scan-out early, and the admission
+here still decides each flip against the committed mode.
+The refusal path has its own guard-log budget, so the one line that says which clause refused the
+surface is not spent at the frame rate. Trial 478 had no refusal in 2028 and 1696 scan-out flips (M844).
+The 0x116 exposure of a sustained refusal stream is not measured. Until it is, the operator ends a trial
+that reports `admit_*` refusals rather than extends it.
 
 ## What the counters mean
 
@@ -321,8 +328,26 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
 
 ## What is still missing
 
-- **The mode list.** `display.c` offers the inherited POST mode only, so a game that asks for 1080p
-  cannot mode-set and is scaled and composed. A trial must therefore run at the POST geometry.
+- **The mode list.** Up to 0.7.216.18, `display.c` offered the inherited POST mode only, so a game that
+  asked for 1080p could not mode-set and was scaled and composed. The kernel driver of 0.7.216.100-tester.21
+  and later offers more modes and writes the committed mode into the caps trailer (`wddm.c`). The shells of
+  increment 3 follow the trailer.
+  Session 480 proved that this is not sufficient. The Witcher 3 creates its exclusive 1080p chain before
+  the mode commit, so the trailer was one mode behind the chain at primary creation (`chain=1920x1080
+  source=1920x1200`, and after the change back `chain=1920x1200 source=1920x1080`). The rule stood the
+  chain down, and the compositor composed it for the full run. The scan-out property is fixed when the
+  primary is created, so a check at a later Present cannot change it. Thus the D3D12 shell reads the
+  kernel driver's mode list (`D3DKMTGetDisplayModeList`, source 0) when the only failed clause is the
+  geometry. If the list offers the chain's geometry, the shell asks for scan-out (`modes=offered` in the
+  `M15.14 scanout` line). This is safe because the scan-out request does not admit a flip. Before the
+  commit, the trailer still has the old mode, so the router's front answers FALSE at each
+  `CheckDirectFlipSupport` and the compositor composes the chain with the GPU. After the commit, both the
+  front and `Bc250ScanoutAdmit` compare the chain with the new mode. A list that the shell cannot read
+  (`failed`) or that does not offer the geometry (`not-offered`) keeps the composed primary. A D3D11
+  primary names its own mode in `pPrimaryDesc->ModeDesc`. `D3DKMT_SETDISPLAYMODE` takes that primary as
+  input, so the runtime sets this mode after the create. The D3D11 shell therefore compares the chain
+  with that mode and does not read the list (`mode=WxH` in its line). No lab run has measured a flip at a
+  committed mode that is not the POST mode yet.
 - **FP16 and HDR scan-out.** See [Why FP16 is not admitted](#why-fp16-is-not-admitted) and
   [Colour space](#colour-space).
 - **Multi-plane overlay.** There is no `DxgkDdiCheckMultiPlaneOverlaySupport` and no plane path, so the
@@ -342,22 +367,32 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
   whatever the kernel driver admitted. A borderless chain's flip and a fullscreen chain's flip are the same
   decision and DWM makes both, so a verdict of "the request stopped in user mode" must name DWM as the
   layer, not the client's shell. Increment 2 reads the kernel half below and is the first revision which
-  answers TRUE. The route is in `docs/design/direct-flip-handshake.md`.
+  answers TRUE. The route is in `docs/design/direct-flip-handshake.md`. With it, The Witcher 3 (D3D12)
+  flipped independently at the native mode in exclusive fullscreen and in borderless (M844).
 - **The composed fallback on the CPU desktop route.** A scan-out surface is VRAM-resident and not CPU
   visible. The record still shares it, so the compositor may open it, but the CPU compositor route
   (llvmpipe, the KMD-swap fallback) composes by reading the surface with the CPU and has no mapping to
   read. On the GPU DWM route - the lab's default since 2026-10-01 - composition reads it with the GPU
   and the fallback holds. M15.14's second sentence ("DWM composes again when a window overlaps") is
   therefore route-dependent for the chains this mode enables, and the overlap case is not yet measured
-  on either route. Until it is, scan-out stays a selected mode that the operator turns on.
-- **A producer for the E26R scan-out record.** Neither shell writes one the compositor's opener takes. The
-  D3D11 shell's `convert_runtime_resource` builds a 64-byte v3 record with the access word `PRIMARY` only,
-  never `SCANOUT` (`driver/umd/dxvk/ddi-resource.cpp:138`). The D3D12 shell's `prepare_surface` does set
-  `SCANOUT`, behind the operator's experiment value, in its own 16-byte record (v1 or v2,
-  `driver/umd/d3d12/allocation-request.h:100-136`). The compositor's opener takes nothing but v3 at
-  exactly 64 bytes, so a D3D12 swap-chain buffer cannot reach the compositor's device at all. Both halves
-  are M15.14 increment 2 parts 4 and 5 and nobody wrote either one. Until somebody does, every arm of a
-  trial reproduces "nothing asked".
+  on either route. Increment 3 makes the D3D12 scan-out primary the default, so the shared rule's first
+  clause stands down when the router's kill switch `DwmForceCpu` is on, read as the router reads it.
+  The KMD swap uses that switch, so its chains get the composed primary. A router that falls back to the
+  CPU UMD by itself (`fallback=1` in the route line) does not set the switch, and no registry value
+  records that fallback. The router in `dwm.exe` therefore writes each desktop decision into the session's
+  desktop-route record (`driver/contract/bc250_desktop_route.h`), and the shared rule's second clause,
+  `desktop-route`, stands down unless that record says `gpu`. The record is a named section in the
+  session namespace. It ends with the `dwm.exe` that wrote it, and a reader accepts it only when the
+  compositor's account, `Window Manager\DWM-<session>`, owns it. No record, a router older than this one,
+  an unreadable record and every CPU route read as "stand down". The router host gate runs the fallback
+  as `dwm.exe` and asks the shared rule over the record (`route-dwm-name-fallback`). A process in an app
+  container sees its own namespace and no record, so it keeps the composed primary. No lab run has shown
+  `record=published` from the lab's `dwm.exe` yet.
+- **The E26R scan-out record.** Increment 2 gave the D3D12 shell the 64-byte v3 record with the SCANOUT
+  bit, which the compositor's opener takes (`driver/umd/d3d12/allocation-request.h`). Increment 3 gave
+  the D3D11 shell the same bit, off by default (`driver/umd/dxvk/scanout-primary.h`). The runtime creates
+  some D3D11 window buffers as DISPLAYABLE without a primary description (M746). Such a buffer has no
+  video present source and cannot ask.
 - **A producer for BC2A version 3.** Nothing writes `BC250_UMD_A_SCANOUT`: no shell, no ICD and no winsys
   patch. Both shells ask through the E26R record of the bullet above, which is the type-0 path. The named
   user of the BC2A half is the Mesa/RADV winsys (`driver/icd/mesa-wddm2-bc250.patch`), where an
