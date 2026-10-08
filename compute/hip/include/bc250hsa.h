@@ -150,7 +150,14 @@ typedef struct bc250hsa_open_params {
 
 /* Opens the adapter, creates the device, the paging queue, one node-0 context and one
  * unshared monitored fence, and allocates the command ring and the zero page that backs
- * the private segment buffer. params NULL takes every default. */
+ * the private segment buffer. params NULL takes every default.
+ *
+ * A note for a caller that tells a device pointer from a host pointer by its value,
+ * which is what layer 2 does for hipMemcpyDefault: while the GPU address window lies
+ * inside the host user address space of a 64-bit Windows process (0 to
+ * 0x00007FFFFFFFFFFF), a GPU virtual address can hold the same value as a host pointer
+ * of the same process. A window above that range removes the ambiguity. Until the
+ * window is there, the caller must pass the direction of a copy and must not guess it. */
 bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_device** out);
 
 /* Waits for the last submission under the default bound, frees every allocation this
@@ -213,7 +220,15 @@ bc250hsa_status bc250hsa_alloc(bc250hsa_device* dev, uint64_t bytes, uint64_t al
 bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem);
 
 /* A host mapping for an allocation made without one. Refuses BC250HSA_MEM_DEVICE
- * without BC250HSA_MEM_MAPPABLE, with BC250HSA_EUNSUPPORTED. */
+ * without BC250HSA_MEM_MAPPABLE, with BC250HSA_EUNSUPPORTED.
+ *
+ * out is the one result of this call. On BC250HSA_OK the mapping is in *out, and
+ * out NULL is BC250HSA_EINVAL. This implementation also stores the pointer in
+ * mem->host, but that field is an implementation detail: a caller reads *out and
+ * keeps the pointer in its own copy of the handle. A caller that reads mem->host
+ * after a map instead of *out works with this implementation of the header and can
+ * fail with the next. bc250hsa_unmap takes the mapping back, and it clears
+ * mem->host of the handle the caller gave it. */
 bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out);
 bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem);
 
