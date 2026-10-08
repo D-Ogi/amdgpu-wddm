@@ -133,4 +133,133 @@ machine that does not start. The shell is cheaper to try and should go first.
   without these flags. They cannot be reproduced bit for bit, and that stays true. What can be done for them is
   what the integration branch already does: prove the per-file source manifest is identical to the deployed
   build's, which fixes the sources exactly even though it does not fix the bytes.
-- The Mesa ICD and the vkd3d-proton engine are built by Meson and are not covered here.
+- The Meson builds of Mesa, DXVK and vkd3d-proton are in the next section.
+
+## The release payload, 2026-10-08
+
+The sections above cover the kernel driver and the 64-bit D3D12 shell. The release package has 33 payload files
+from 13 recipes. This section gives the result for each recipe that builds a payload file. It also lists the
+shipped files that do not reproduce, with the reason for each. The machine-checked record of each file is in
+`tools/release/release-sources.json`, and `tools/release/README.md` ("Provenance") describes its fields and gate.
+
+### Two more causes
+
+The images of the KMD and the D3D12 shell hold no path of the build tree. The images of other recipes hold one in
+two forms, and `/Brepro` removes neither of them.
+
+| # | cause | where it was measured | fix |
+|---|---|---|---|
+| 7 | `__FILE__` holds the absolute path of the source file, and logging and `assert` put it into the image | the two D3D11 shells: 25 strings with the path of the build tree | `/FC` makes every `__FILE__` absolute. `/d1trimfile:<dir>` then removes that directory from the start of the path |
+| 8 | the name of an anonymous namespace holds a hash of the absolute path of its source file (`?A0x` and eight hex digits) | `d3d11bench.exe`: three differing ranges. `mfthost.exe`: other function order, because the linker orders COMDATs by these names | the same `/d1trimfile` switch. The compiler then makes the hash from the trimmed path |
+
+`/d1trimfile` is not documented. It works with MSVC 14.44.35207 (`cl.exe` 19.44.35221), and it accepts more
+than one directory. `/pathmap` changes only the paths in the debug information, not `__FILE__`. A recipe gives one
+`/d1trimfile` for each root directory of its sources and generated files.
+
+### The MSVC recipes of this repository
+
+Each recipe built two times, from two work trees of one commit, into two output directories with paths of
+different lengths. "Before" is main `9c03c35c`. "After" is the branch `build/release-from-branches` at `10a4d091`.
+A hash is the first 8 hex digits of the SHA-256.
+
+| recipe | payload file | added switches | before: build 1, build 2 | after: both builds |
+|---|---|---|---|---|
+| `tools/build/build-umd-router.ps1 -Arch x64` | `bc250d3d_router.dll` | `/Brepro`, `/FC`, `/d1trimfile`, `/link /Brepro` | `B7227BDB`, `9554303A` | `F1E43918` |
+| `tools/build/build-umd-router.ps1 -Arch x86` | `bc250d3d_router.dll` (x86) | the same | `0D902587`, `0D80F110` | `E93AFEFA` |
+| `tools/win/bc250kmd_cli/build.ps1` | `bc250kmd_cli.exe`, `bc250control.dll` | the same | `CC50685E`, `5932B785` and `A0362B03`, `56F08918` | `E7C248E5` and `570A77F4` |
+| `tools/win/amdgpu_wddm_control/build.ps1` | `amdgpu_wddm_control.exe`, `bc250control.dll`, `bc250kmd_cli.exe` | a sorted list of C# sources and resources | `74833F09`, `570A77F4`, `E7C248E5` in both | the same |
+| `tools/win/amdgpu_wddm_setup/build.ps1` | `amdgpu_wddm_setup.exe` | a sorted list of C# sources and resources | `09F6A040` in both | `09F6A040` |
+| `tools/win/d3d12caps/build.ps1` | `amdgpu_wddm_d3d12caps.exe` | `/Brepro`, `/FC`, `/d1trimfile`, `/link /Brepro` | `56A01BE6`, `D437AF35` | `4C9032BC` |
+| `tools/win/d3d11bench/build.ps1` | `d3d11bench.exe` (not in the package now) | the same | `188CA4C7`, `C6E33241` | `D27DA5DE` |
+| `driver/umd/mft-h264/build.ps1` | `amdgpu_wddm_mft_h264.dll` | `/FC`, `/d1trimfile` | `D3E29E6E` in both (`mfthost.exe`: `5B47BBDF`, `E316E891`) | `D3E29E6E` (`mfthost.exe`: `5B47BBDF`) |
+| `tools/build/build-umd-dxvk.ps1 -Arch x64` | `amdgpu_wddm_d3d11.dll` | `/FC`, `/d1trimfile` | `90F3C6D2`, `DB3A920F` | `6EF1E349` |
+| `tools/build/build-umd-dxvk.ps1 -Arch x86` | `amdgpu_wddm_d3d11.dll` (x86) | the same | `BF7E139E`, `710F2E21` | `DECDFE58` |
+| `tools/build/build-umd-d3d12.ps1 -Arch x64` | `amdgpu_wddm_d3d12.dll` | `/FC`, `/d1trimfile` | `A3F8E2A8` in both | `A3F8E2A8` |
+| `tools/build/build-umd-d3d12.ps1 -Arch x86` | `amdgpu_wddm_d3d12.dll` (x86) | the same | `0A9BD879` in both | `0A9BD879` |
+| `driver/kmd/build.ps1` | `bc250kmd.sys` | none | unsigned `32F97DDC`, signed `CFBD8A64` in both | the same |
+
+The control application and the setup window are C# programs. `csc /deterministic+` already gives the same bytes
+in another directory, and the sorted lists only remove a dependence on the order of a directory listing. The two
+D3D11 shells are 11 KB smaller after the change, because each `__FILE__` string is shorter.
+
+Two outputs that are not payload files still differ between two builds of the D3D12 shell recipe: `engine-ddi.lib`
+and the host test programs that link it. `lib.exe` writes the absolute path of each object file into the archive,
+and the objects carry their own path in the debug information. The shell DLL does not change, because the linker
+copies neither of them into the image.
+
+### The Meson recipes of the forks
+
+The recipes `tools/build/build-mesa.ps1`, `build-dxvk.ps1` and `build-vkd3d.ps1` configure Meson. From `841e4018` on,
+each recipe calls `Add-ReproducibleMesonOptions` in `tools/build/common.ps1`. This function adds
+`/Brepro /FC /d1trimfile:<source> /d1trimfile:<build>` to `c_args` and `cpp_args`. It adds
+`/Brepro /PDBALTPATH:%_PDB%` to `c_link_args` and `cpp_link_args`. Meson keeps only the last `-D` value of an
+option, so the function adds the switches to the value that the recipe gives and does not give a second value.
+The configure gate of each recipe then compares the "Build Options" line of Meson with the merged set. The source
+and build directories must not contain white space, because Meson divides `c_args` at white space.
+
+`rebuild-check.ps1 -Twice` built one payload entry of each fork two times with 8 parallel jobs. The two builds used
+two copies of one commit and two output directories with paths of different lengths. "Before" is the recipe of
+the commit that the manifest of main names (`3c31bd97`, `d5593267`, `693c02b3`). "After" is the recipe of
+`841e4018`.
+
+| fork commit | recipe | payload file | before: build 1, build 2 | what differs before | after: both builds |
+|---|---|---|---|---|---|
+| vkd3d-proton `4e9a98e9` | `build-vkd3d.ps1 -Config ddi-engine-lto -Arch x64` | `d3d12/amdgpu_wddm_vkd3d.dll` | `4C304B6B`, `ADC5AD40` | 4 bytes: the COFF time stamp, the debug directory time stamp and the CheckSum | `59AB2573` |
+| Mesa `31844893` | `build-mesa.ps1 -Config radv-mt` | `d3d12/amdgpu_wddm_radv.dll` | `FCE3AB59`, `59D6C87E` | 102 bytes: the time stamps, the CheckSum, the RSDS GUID, the PDB path and one absolute source path of 39 bytes | `88A8F594` |
+| DXVK `5611118e` | `build-dxvk.ps1 -Config ddi-engine` | `d3d11/amdgpu_wddm_dxvk.dll` | `D7A65A98`, `A45F1F2C` | 434222 bytes in 9664 ranges, most of them in `.text` and `.rdata`: the functions are in another order | `E506862E` |
+
+The DXVK image holds the name of one anonymous namespace, and its path hash (cause 8) is different in the two
+builds before the change. After the change the two builds are equal. The recipes of the other fork entries (x86,
+`zink-umd`, `llvmpipe-umd`, `radv`) use the same function, but this measurement did not build them.
+
+A build with the new recipes is a new artifact. It does not give the bytes of a shipped fork file, because the
+shipped files were built without `/Brepro`:
+
+- The vkd3d-proton engine `348117F1` is equal to its rebuild with the recipe of `3c31bd97`, apart from the time
+  stamps and the CheckSum. `pe_compare.py` accepts this, but `/Brepro` changes 169981 bytes of the image.
+- The RADV ICD `822134D0` is 3072 bytes longer than its rebuild with the recipe of `d5593267`. Its 472 `__FILE__`
+  strings start with `../wagon-icd/src`, the name of the source tree of the original build, where the rebuild
+  has `../src/src`. The `.text` section has the same size, 9874208 bytes.
+- The DXVK engine `C242BA6A` differs from its rebuild in 855204 bytes. The function order depends on the path of
+  the original build tree, so a rebuild in another directory cannot give these bytes.
+
+What remains for the forks:
+
+1. The next release train builds each fork file with the recipe of `841e4018` or later, from its published commit.
+   Then `rebuild-check.ps1` can tie the file, and the manifest entry can drop its `unverified` field.
+2. Each fork file must have a `recipe.json` that names a committed recipe. Some shipped files came from an
+   uncommitted copy of the recipe or from a build script outside the repository.
+3. The `llvmpipe-umd` builds link a local LLVM build (`scratch/llvm2312-build` and its x86 copy). A rebuild needs an
+   LLVM build that a commit or a download record identifies.
+
+### The shipped files
+
+`tools/release/rebuild-check.ps1` built each payload entry of main `9c03c35c` again from the commit that its
+`built_from` record names, in new work trees under `scratch\repro-builds`. Ten files gave the shipped bytes:
+
+| payload file | commit | SHA-256 |
+|---|---|---|
+| `kmd/bc250kmd.sys`, signed | `a00da18c` | `2A858552` |
+| `d3d12/amdgpu_wddm_d3d12.dll` | `bc1b00a9` | `477373C1` |
+| `wow64/d3d12/amdgpu_wddm_d3d12.dll` | `41919147` | `077104FE` |
+| `d3d11/amdgpu_wddm_d3d11.config` | `bc1b00a9` | `0494BA88` |
+| `wow64/d3d11/amdgpu_wddm_d3d11.config` | `bc1b00a9` | `858FDE4F` |
+| `tools/bc250kmd_cli.exe` | `a00da18c` | `E7C248E5` |
+| `control/amdgpu_wddm_control.exe` | `a00da18c` | `74833F09` |
+| `control/bc250control.dll`, `tools/bc250control.dll` | `a00da18c` | `570A77F4` |
+| `mft/amdgpu_wddm_mft_h264.dll` | `e79f72e0` | `D3E29E6E` |
+
+The other 19 built files have an `unverified` field in the manifest that gives the reason. The reasons are of three
+kinds:
+
+1. Built without `/Brepro`, from a commit that the record names. The rebuild is equal apart from the fields that a
+   link without `/Brepro` writes for each build. `tools/build/pe_compare.py` shows this for the two routers
+   (`9bc5818f`) and for `amdgpu_wddm_d3d12caps.exe` (`0d82a059`).
+2. Built in a directory whose path is in the image. The two D3D11 shells hold the path of their build tree in 25 and
+   26 `__FILE__` strings, so a rebuild in another directory has another length.
+3. The fork builds (Mesa, DXVK, vkd3d-proton). None of them had `/Brepro`. Most images hold the paths of their
+   build tree, and most of them came from a copy of the recipe that is not in a commit. The `recipe.json` next to the
+   shipped file gives the hashes of that copy, where it exists.
+
+A file of kinds 1 and 2 reproduces when the next release builds it again with the recipes of this branch. A fork
+file reproduces when it is built with the recipes of this branch and its commit is on a published branch.
