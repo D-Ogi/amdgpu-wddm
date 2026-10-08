@@ -1,0 +1,48 @@
+; The export list of amdhip64.dll for step 2 of M16 (design docs/design/m16-hip-route-b.md,
+; section 4.1). One name per line, no decoration: every HIP entry point is extern "C", so the
+; exported name equals the C name on x64 Windows.
+;
+; 38 names. build-runtime.ps1 counts them, and it compares this list with the exports of the
+; built DLL. The import library amdhip64.lib comes from this file through llvm-dlltool, and its
+; name must be exactly amdhip64.lib, because clang's HIP driver appends that name to the
+; Windows link line by itself.
+LIBRARY amdhip64.dll
+EXPORTS
+__hipPopCallConfiguration
+__hipPushCallConfiguration
+__hipRegisterFatBinary
+__hipRegisterFunction
+__hipRegisterManagedVar
+__hipRegisterVar
+__hipUnregisterFatBinary
+hipDeviceSynchronize
+hipEventCreate
+hipEventCreateWithFlags
+hipEventDestroy
+hipEventElapsedTime
+hipEventRecord
+hipEventSynchronize
+hipFree
+hipGetDevice
+hipGetDeviceCount
+hipGetDeviceProperties
+hipGetErrorName
+hipGetErrorString
+hipGetLastError
+hipHostFree
+hipHostMalloc
+hipInit
+hipLaunchKernel
+hipMalloc
+hipMemGetInfo
+hipMemcpy
+hipMemcpyAsync
+hipMemset
+hipMemsetAsync
+hipPeekAtLastError
+hipSetDevice
+hipStreamCreate
+hipStreamCreateWithFlags
+hipStreamDestroy
+hipStreamSynchronize
+hipStreamWaitEvent
