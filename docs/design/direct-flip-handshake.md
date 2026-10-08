@@ -285,7 +285,10 @@ changes these items:
   experiment `scanout-flip-off` turns it off. The shell reads the trailer again for every primary that it
   creates. The rule that both application shells share (`driver/contract/bc250_scanout_primary.h`)
   compares the chain with the trailer's source geometry, not with a geometry that the operator names.
-  The spellings `scanout-flip` and `scanout-flip-1920x1200` still read as on.
+  The spellings `scanout-flip` and `scanout-flip-1920x1200` still read as on. Session 480 proved that a
+  game can create its chain before the mode commit. Thus, when only the geometry fails, the shell also
+  accepts a geometry that the kernel driver's mode list offers (`modes=offered`). The front still
+  answers by the committed mode in the trailer, so the compositor composes that chain until the commit.
 - **The front logs by change and by count** (`driver/umd/router/front-flip-log.h`). An answer writes a
   line only when its key differs from the last line of the device. The key is every field of the line
   except the call number and the two handles. The change lines have a budget of 256, and the changes

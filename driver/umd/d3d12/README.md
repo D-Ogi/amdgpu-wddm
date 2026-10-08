@@ -244,13 +244,20 @@ trailer again, and the rule that both application shells share
 mode in that trailer. The rule also reads the compositor's desktop-route record
 (`driver/contract/bc250_desktop_route.h`) again for each primary, and stands the
 chain down (`desktop-route`) unless the router in `dwm.exe` wrote `gpu` there: the
-CPU compositor cannot read a scan-out primary. A chain that the rule cannot admit
-gets the composed primary, in the shared aperture with its CPU mapping, and never
-a failure. Each change of the answer writes one `M15.14 scanout` line to the
+CPU compositor cannot read a scan-out primary. A game can create its chain before
+the mode commit, so the trailer can be one mode behind the chain (session 480).
+When the geometry is the only clause that fails, `RuntimeHeapImports::mode_list_now`
+reads the kernel driver's mode list for source 0 (`D3DKMTGetDisplayModeList`). If
+the list offers the chain's geometry, the chain gets the scan-out primary. The
+flip itself waits for the commit: the router's front and the kernel driver compare
+each flip with the committed mode. A chain that the rule cannot admit gets the
+composed primary, in the shared aperture with its CPU mapping, and never a
+failure. Each change of the answer writes one `M15.14 scanout` line to the
 debugger channel, with the reason, the chain, the trailer's geometry, the kill
-switch and the record (`desktop=gpu`, `desktop=cpu-fallback`, `desktop=absent`
-and the other words of `bc250_desktop_route_text`). The process writes at most
-64 such lines, and the last one ends in `budget-spent`.
+switch, the record (`desktop=gpu`, `desktop=cpu-fallback`, `desktop=absent` and
+the other words of `bc250_desktop_route_text`) and the mode list (`modes=not-read`,
+`offered`, `not-offered` or `failed`). The process writes at most 64 such lines,
+and the last one ends in `budget-spent`.
 
 ## Registration between sessions
 

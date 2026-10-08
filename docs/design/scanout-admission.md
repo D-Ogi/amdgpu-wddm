@@ -147,6 +147,9 @@ What follows from it: a shell must not ask for scan-out for a chain the rule can
 therefore ask the rule first, in user mode, from the same words (`driver/contract/bc250_scanout_primary.h`).
 A shell asks for scan-out only when the chain has the geometry of the source mode in the caps trailer,
 a `SCANOUT_PRIMARY` format and the one scan-out pitch. In every other case it makes the composed primary.
+The D3D12 shell also accepts the geometry of a mode that the kernel driver offers for source 0 but has
+not committed yet (see "The mode list" below). That primary asks for scan-out early, and the admission
+here still decides each flip against the committed mode.
 The refusal path has its own guard-log budget, so the one line that says which clause refused the
 surface is not spent at the frame rate. Trial 478 had no refusal in 2028 and 1696 scan-out flips (M844).
 The 0x116 exposure of a sustained refusal stream is not measured. Until it is, the operator ends a trial
@@ -245,8 +248,22 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
 
 - **The mode list.** In `main`, `display.c` offers the inherited POST mode only, so a game that asks for
   1080p cannot mode-set and is scaled and composed. The display-modes branch offers more modes and writes
-  the committed mode into the caps trailer (`wddm.c`). The shells of increment 3 follow the trailer. No
-  lab run has measured a flip at a committed mode that is not the POST mode yet.
+  the committed mode into the caps trailer (`wddm.c`). The shells of increment 3 follow the trailer.
+  Session 480 proved that this is not sufficient. The Witcher 3 creates its exclusive 1080p chain before
+  the mode commit, so the trailer was one mode behind the chain at primary creation (`chain=1920x1080
+  source=1920x1200`, and after the change back `chain=1920x1200 source=1920x1080`). The rule stood the
+  chain down, and the compositor composed it for the full run. The scan-out property is fixed when the
+  primary is created, so a check at a later Present cannot change it. Thus the D3D12 shell reads the
+  kernel driver's mode list (`D3DKMTGetDisplayModeList`, source 0) when the only failed clause is the
+  geometry. If the list offers the chain's geometry, the shell asks for scan-out (`modes=offered` in the
+  `M15.14 scanout` line). This is safe because the scan-out request does not admit a flip. Before the
+  commit, the trailer still has the old mode, so the router's front answers FALSE at each
+  `CheckDirectFlipSupport` and the compositor composes the chain with the GPU. After the commit, both the
+  front and `Bc250ScanoutAdmit` compare the chain with the new mode. A list that the shell cannot read
+  (`failed`) or that does not offer the geometry (`not-offered`) keeps the composed primary. The D3D11
+  shell keeps the committed mode only: a D3D11 primary names its mode in `pPrimaryDesc`, and the D3D11
+  arm will use that name. No lab run has measured a flip at a committed mode that is not the POST mode
+  yet.
 - **Multi-plane overlay.** There is no `DxgkDdiCheckMultiPlaneOverlaySupport` and no plane path, so the
   "DWM composes again when a window overlaps" half of M15.14 is handled by the OS falling back to
   composition, not by a driver plane.
