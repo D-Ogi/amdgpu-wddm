@@ -191,7 +191,7 @@
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "unverified": "Built without /Brepro (the vkd3d-proton recipe has it from 841e4018) by an uncommitted copy of the recipe, build-vkd3d-lto.ps1 (SHA-256 0877B6C4 in its recipe.json), with the option set that 3c31bd97 committed as ddi-engine-lto.",
+      "unverified": "Built without /Brepro (the vkd3d-proton recipe has it from 841e4018) by an uncommitted copy of the recipe, build-vkd3d-lto.ps1 (SHA-256 0877B6C4 in its recipe.json), with the option set that 3c31bd97 committed as ddi-engine-lto. A rebuild at 4e9a98e9 with the recipe of 3c31bd97 differs only in the COFF time stamp, the debug directory time stamp and the CheckSum that covers them (tools/build/pe_compare.py, exit 0).",
       "size": 3701760,
       "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/upstream-2026-10-05 4e9a98e9: 16 upstream commits merged into the b17 compile limiter 220099f5, submodule dxil-spirv d2d82332 = 14 upstream commits merged into bc773cf2)"
     },
@@ -431,7 +431,7 @@
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
-      "unverified": "Built without /Brepro (the DXVK recipe has it from 841e4018) by an uncommitted copy of build-dxvk.ps1 (SHA-256 81CFAFBE and common.ps1 925E8538 in its recipe.json, in no commit). The image names its PDB in scratch/forksync/build-dxvk/x64 and holds 21 source paths of scratch/forksync/dxvk.",
+      "unverified": "Built without /Brepro (the DXVK recipe has it from 841e4018) by an uncommitted copy of build-dxvk.ps1 (SHA-256 81CFAFBE and common.ps1 925E8538 in its recipe.json, in no commit). The image names its PDB in scratch/forksync/build-dxvk/x64 and holds 21 source paths of scratch/forksync/dxvk. Two rebuilds at 5611118e in two directories differ in 434222 bytes, because the compiler puts a hash of the source path into the names of anonymous namespaces, and that changes the order of the functions. Only a build in the original directories could give these bytes.",
       "size": 4407296,
       "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/upstream-2026-10-05 5611118e: 14 upstream commits merged into the b17 inline-throttle engine ebeadc49, the throttle wait moved to the new upstream wait site, plus the signal-tracker deduplication fix; submodule dxbc-spirv stays at f241996e)"
     },
