@@ -217,7 +217,7 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "unverified": "Built without /Brepro (the Mesa recipe has it from 841e4018) by a build script outside the repository: no recipe.json is next to the shipped file. The image names its PDB in scratch/land-1006/build-icd-x64 and holds source paths of scratch/land-1006/wagon-icd.",
+      "unverified": "Built without /Brepro (the Mesa recipe has it from 841e4018) by a build script outside the repository: no recipe.json is next to the shipped file. The image names its PDB in scratch/land-1006/build-icd-x64 and holds source paths of scratch/land-1006/wagon-icd. A rebuild at 31844893 with the recipe of d5593267 is 3072 bytes shorter: 472 __FILE__ strings of the shipped file start with ../wagon-icd/src, where the rebuild has ../src/src. The .text section has the same size (9874208 bytes).",
       "size": 22386176,
       "role": "D3D12 ICD (mesa fork amdgpu-wddm/b19-icd 31844893 on upstream-2026-10-05). The shader cache key covers the whole shader state again (BD-068). Handle types and host imports follow the contract (BD-038, BD-039). A buffer object takes the CPU lock for a mapped import (BD-045). Host policy version 2 reads no machine-wide file and writes no shared log. The disk cache stays one file. The file reports git-3184489333 as its Mesa version"
     },
@@ -431,7 +431,7 @@
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
-      "unverified": "Built without /Brepro (the DXVK recipe has it from 841e4018) by an uncommitted copy of build-dxvk.ps1 (SHA-256 81CFAFBE and common.ps1 925E8538 in its recipe.json, in no commit). The image names its PDB in scratch/forksync/build-dxvk/x64 and holds 21 source paths of scratch/forksync/dxvk. Two rebuilds at 5611118e in two directories differ in 434222 bytes, because the compiler puts a hash of the source path into the names of anonymous namespaces, and that changes the order of the functions. Only a build in the original directories could give these bytes.",
+      "unverified": "Built without /Brepro (the DXVK recipe has it from 841e4018) by an uncommitted copy of build-dxvk.ps1 (SHA-256 81CFAFBE and common.ps1 925E8538 in its recipe.json, in no commit). The image names its PDB in scratch/forksync/build-dxvk/x64 and holds 21 source paths of scratch/forksync/dxvk. Two rebuilds at 5611118e with the recipe of 693c02b3, in two directories, differ in 434222 bytes: the functions are in another order. The names of anonymous namespaces hold a hash of the source path. With the switches of 841e4018 (/d1trimfile) two rebuilds give the same bytes, so a rebuild in other directories does not give the shipped bytes.",
       "size": 4407296,
       "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/upstream-2026-10-05 5611118e: 14 upstream commits merged into the b17 inline-throttle engine ebeadc49, the throttle wait moved to the new upstream wait site, plus the signal-tracker deduplication fix; submodule dxbc-spirv stays at f241996e)"
     },
