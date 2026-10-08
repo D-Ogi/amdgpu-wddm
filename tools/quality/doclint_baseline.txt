@@ -133,7 +133,7 @@
 6	driver/shim/test/README.md
 26	driver/shim/test/sdma_faults_report.md
 24	driver/umd/d3d12/README.md
-215	driver/umd/d3d12/engine-ddi/INTEGRATION.md
+211	driver/umd/d3d12/engine-ddi/INTEGRATION.md
 29	driver/umd/d3d12/engine-ddi/README.md
 31	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md

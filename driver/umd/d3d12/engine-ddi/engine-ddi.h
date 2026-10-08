@@ -630,6 +630,13 @@ HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitectu
 // Same calling rule as set_memory_architecture_policy. E_INVALIDARG for a null caps.
 HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept;
 
+// The shader model build_caps reports (1012, and 1091 for 6_8) is the engine's answer to SHADER_MODEL asked with
+// 6_8, clamped to a ceiling that is 6_8 by default. This lowers the ceiling, for the experiments
+// shader-model-68-off (6_7) and shader-model-67-off (6_6, the answer before 2026-10-07); the engine's answer is
+// never raised. E_INVALIDARG for a null caps or a ceiling that is not a release model from 5_1 to 6_8. Same
+// calling rule as set_memory_architecture_policy.
+HRESULT set_shader_model_ceiling(AdapterCaps* caps, D3D_SHADER_MODEL ceiling) noexcept;
+
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases
 // what the record holds (or hands heap memory to the release sequence) and sets `tag` to Poisoned. The storage

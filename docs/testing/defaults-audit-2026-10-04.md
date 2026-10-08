@@ -30,6 +30,14 @@ The router's `OpenAdapter10` path is reached by no measured runtime; it stays on
 changes. The check on unit A is one run of `tools/win/d3d10probe --trace-entry`: the route line must read
 `entry=OpenAdapter10_2 route=gpu` and the probe PASS.
 
+Status note (2026-10-08, row 20): branch `m15/shader-model-68` raises the ceiling. The shell lists every release
+model up to the engine's answer, at most 6.8, and answers DDI type 1091 (`engine-ddi/INTEGRATION.md` "Shader
+model"). The runtime decides what an application sees (fact M840). Unit A's System32 runtime 10.0.22621 does not
+know the 6.7 and 6.8 release values, so an application without an Agility SDK core still sees 6.6. A game with
+an Agility SDK core of 1.615 or later, such as The Witcher 3 5.0 (1.619.4), sees up to 6.8. The experiments
+`shader-model-68-off` and `shader-model-67-off` set the ceiling back to 6.7 and 6.6. Not yet measured on unit A:
+`tools/win/d3d12caps` `d3d12sm68` is the check.
+
 ## Gaps, sorted by severity
 
 | # | Gap | What a user gets today | Evidence | Sev | What exists already | Smallest fix |

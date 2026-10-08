@@ -1,0 +1,152 @@
+# engine-ddi harness round trip 9 (ray tracing pipeline), development PC, 2026-10-07
+pinned engine sha256 D8BB19C34D33C1F4D25E96C56CFD924B533A010A7AD6596B692F08ED8DCA0317
+lab engine sha256 348117F12F97C7DA5FA104825FCA26FE0542F4C819A335AB85E6A9099AA42E1E
+
+## fixed engine-ddi, pinned engine (run-plain)
+harness sha256 1D0D1940BB9618A9ED579DF592028343729E1A6651991A6062AAD01723180F2D
+adapter: NVIDIA GeForce RTX 4090, LUID 00000000:000243c1
+ok    raytracing pipeline: GetVulkanHandles and the stub shell's Vulkan entry points
+ok    raytracing pipeline: device context in RuntimeBacked mode (hr 00000000)
+ok    raytracing pipeline: the scene's UPLOAD, structure, scratch, output and READBACK buffers
+ok    raytracing pipeline: CreateStateObject from the DDI form: global and local root signature by handle, the dxc lib_6_3 library's DXIL part (668 DWORDs, three named exports), shader and pipeline configuration, a triangles hit group, a summary of three exports and no association (hr 00000000 00000000)
+ok    raytracing pipeline: the description handed to the engine: closest's local root signature associated with "closest", as the library lists it; raygen and miss in no local root association; one more local root signature, declared last, with an association of no export, the explicit default (1 creates seen, 2 local root signatures, 1 explicit defaults)
+ok    raytracing pipeline: GetShaderIdentifier of raygen, miss and hitgroup: 32 bytes each, not all zero, all three different
+ok    raytracing pipeline: stack sizes raygen 0, miss 0, hitgroup::closesthit 0 bytes, UINT_MAX for an unknown export; pipeline stack size 0, set to 64 and read back as 64
+ok    raytracing pipeline: the library as the whole dxc container (1442 DWORDs, NumExports 0) with a decoy export sharing the plain name "closest" under a mangled name of its own and a second local root signature: CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the decoy pipeline handed to the engine: closest's local root signature associated with closest's mangled name, the decoy's with the decoy's mangled name, neither with the plain "closest"; raygen and miss fall to the same empty explicit default
+ok    raytracing pipeline: a local root signature associated with closest alone, raygen and miss associated with none: CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the trap pipeline handed to the engine: the trap associated with "closest" alone, raygen and miss in no local root association, and the empty local root signature of the first create declared last as the explicit default (2 local root signatures, 1 explicit defaults)
+ok    raytracing pipeline: a library listing closest by its mangled name alone before a library with no export list (miss_far): CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the mixed-library pipeline, the listing library first, handed to the engine: libraries of 3 and 0 exports; closest's local root signature associated with the listed mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (4 names), the empty explicit default for the rest
+ok    raytracing pipeline: a library listing closest by its mangled name alone after a library with no export list (miss_far): CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the mixed-library pipeline, the listing library second, handed to the engine: libraries of 0 and 3 exports; closest's local root signature associated with the listed mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (4 names), the empty explicit default for the rest
+ok    raytracing pipeline: a COLLECTION of the library, its root signatures, configurations and hit group, then a collection-only executable (EXISTING_COLLECTION of all exports, the pipeline configuration, and a summary that points into the collection's DDI array, as the runtime gives it): both creates and three identifiers from the executable (hr 00000000 00000000)
+ok    raytracing pipeline: the description of the collection-only executable handed to the engine: the collection's engine object with NumExports 0, no DXIL library, no local root signature, no association (1 imports, 0 associations)
+ok    raytracing pipeline: an import of the collection with an export list, temporarily unsupported: 8007000e before the engine, 80004001 on one refusal line, no device error (hr 8007000e, 1 lines)
+ok    raytracing pipeline: a summary association into a description neither held nor imported: 8007000e before the engine, 80070057 on one refusal line, no device error (hr 8007000e, 1 lines)
+ok    raytracing pipeline: the executable's record holds one reference to the collection's engine object, the refused imports none (public references 2, then 3)
+ok    raytracing pipeline: the UE 4.26 shape, three collections of one renamed export each (RGS_00000001, MS_00000002, CHS_00000003 in HitGroup_00000003), then their link of the three imports and the pipeline configuration, its summary pointing into the collections' DDI arrays: four creates and three identifiers from the link (hr 00000000 00000000)
+ok    raytracing pipeline: the description of the UE 4.26 link handed to the engine: the three collections' engine objects with NumExports 0, no DXIL library, no local root signature, no association (3 imports, 0 associations)
+ok    raytracing pipeline: a pipeline allowing additions, three identifiers, its pipeline stack size set to 4096 (hr 00000000)
+ok    raytracing pipeline: AddToStateObject with fixture-raylib-b listing miss_far: S_OK, an identifier for miss_far, and the parent's raygen identifier unchanged in the child (hr 00000000)
+ok    raytracing pipeline: the child's pipeline stack size before any set is the parent's setting, 4096 (read 4096)
+ok    raytracing pipeline: the description of the addition handed to the engine: grown from the parent's engine object, one library listing one export, no local root signature, the global root signature associated with miss_far alone
+ok    raytracing pipeline: AddToStateObject from a pipeline without ALLOW_STATE_OBJECT_ADDITIONS: 8007000e, 80070057 from the engine on one refusal line, no device error (hr 8007000e, 1 lines, 1 engine calls)
+ok    raytracing pipeline: AddToStateObject with an export named miss, as the parent's: 8007000e, 80070057 before the engine on one refusal line, no device error (hr 8007000e, 1 lines, 0 engine calls)
+ok    raytracing pipeline: the child's record holds one reference to the parent's engine object, the refused growth none (public references 2, then 3)
+ok    raytracing pipeline: MapHeap of the UPLOAD heap (hr 00000000)
+ok    raytracing pipeline: CreateCommandSignature of one DISPATCH_RAYS argument, stride 128, no root signature: S_OK; two records, the counts and the prefill in an UPLOAD buffer, a DEFAULT buffer for their copy, an output and a READBACK buffer (hr 00000000)
+ok    raytracing pipeline: COMPUTE engine queue and a COMPUTE list on the compute table (hr 00000000)
+ok    raytracing pipeline: bottom and top level, SetPipelineState1 and DispatchRays 8x8 over a shader table in the UPLOAD buffer, once for each pipeline, and the indirect dispatches, executed (hr 00000000, 0 list errors, 0 device errors)
+ok    raytracing pipeline: engine fence signalled on the engine queue completes (SetEventOnCompletion(1, NULL) hr 00000000, completed value 1)
+ok    raytracing pipeline: MapHeap of the READBACK heap (hr 00000000)
+ok    raytracing pipeline: DispatchRays writes the 64 expected words, 12 hits with the hit group's local root constant b0253c09 and 52 misses with 2 (0 differ, first at 64)
+ok    raytracing pipeline: the pipeline with the decoy resolved by mangled name writes its 64 expected words, every hit with the word its own local root signature places after the identifier, b0253c0a, not the next one (b0253cff), where the decoy's has that register; the decoy is a summary export with no DXIL function behind it (0 differ, first at 64)
+ok    raytracing pipeline: the trap pipeline, with the empty explicit default in place, writes its 64 expected words: 52 misses the global root constant 2 and 12 hits the trap's first constant b0253c0b (0 differ, first at 64; 0 words b0253cff)
+ok    raytracing pipeline: the mixed-library pipeline, the listing library first, writes its 64 expected words, every hit with closest's local root constant b0253c0c: the association by the listed mangled name reached closest (0 differ, first at 64)
+ok    raytracing pipeline: the mixed-library pipeline, the listing library second, writes its 64 expected words, every hit with closest's local root constant b0253c0d: the association by the listed mangled name reached closest (0 differ, first at 64)
+ok    raytracing pipeline: the collection-only executable, used after its collection's DestroyStateObject, writes its 64 expected words, 12 hits with b0253c0e and 52 misses with 2 (0 differ, first at 64)
+ok    raytracing pipeline: the grown pipeline, used after its parent's DestroyStateObject, over a table of the parent's raygen and hit group identifiers and the new miss_far's writes its 64 expected words, 12 hits with b0253c0f and 52 misses with miss_far's 3 (0 differ, first at 64)
+ok    raytracing pipeline: the UE 4.26 link, used after its collections' DestroyStateObject, writes its 64 expected words, 12 hits with b0253c10 through CHS_00000003's local root signature, which only its collection associated, and 52 misses with 2 (0 differ, first at 64)
+ok    raytracing pipeline: MapHeap of the indirect dispatches' READBACK heap (hr 00000000)
+ok    raytracing pipeline: indirect DispatchRays, one 8x4 record, no count buffer: rows 0 to 3 as DispatchRays writes them, rows 4 to 7 at the prefill, from the UPLOAD records and from their DEFAULT copy (0 and 0 words differ)
+SKIP  raytracing pipeline: indirect DispatchRays: the engine traces the first record alone and nothing with a count buffer (vkd3d-proton upstream; the amdgpu-wddm engine fork traces every record up to the count)
+ok    raytracing pipeline: a subobject of an unknown type (4, unused in the DDI): CreateStateObject answers 8007000e, 80070057 on one refusal line (hr 8007000e, 1 lines, 0 device errors), the inert record's state_object_shell names the device's shell (yes), then none once destroyed (yes)
+ok    raytracing pipeline: a ray tracing pipeline named as an existing collection: CreateStateObject answers 8007000e, 80070057 on one refusal line (hr 8007000e, 1 lines, 0 device errors), the inert record's state_object_shell names the device's shell (yes), then none once destroyed (yes)
+ok    raytracing pipeline: two summary exports sharing the plain name "closest" with different local root signatures, the second without a mangled name: CreateStateObject answers 8007000e, 80070057 on one refusal line, never a broadened association (hr 8007000e, 1 lines, 0 device errors)
+ok    raytracing pipeline: two summary exports sharing the plain name "closest" with different local root signatures, both with the same mangled name: CreateStateObject answers 8007000e, 80070057 on one refusal line, never a broadened association (hr 8007000e, 1 lines, 0 device errors)
+ok    raytracing pipeline: DispatchRays on a closed list: one E_INVALIDARG on the calling list (1 errors, last 80070057)
+ok    raytracing pipeline: the same state object on a second device context (hr 00000000)
+ok    raytracing pipeline: SetPipelineState1 with a state object of another device context: one E_INVALIDARG on the calling list (1 errors, last 80070057)
+ok    raytracing pipeline: the second device context closes with no live object (hr 00000000, 0 live)
+ok    raytracing pipeline: destroy_engine_queue reports Retired
+ok    raytracing pipeline: state_object_shell names the device's shell for a live state object, none after DestroyStateObject
+ok    raytracing pipeline: destroy_device_context S_OK with no live object, 10 of 10 allocations freed, no error but the refusals' (hr 00000000, 0 live, 0 device, 0 list errors)
+PASSED
+stderr: engine-ddi: CreateStateObject: subobject 2: summary association outside the description and every imported one (hr 80070057)
+
+## fixed engine-ddi, lab engine 348117F1 (vkd3d-proton fork 4e9a98e9)
+harness sha256 1D0D1940BB9618A9ED579DF592028343729E1A6651991A6062AAD01723180F2D
+adapter: NVIDIA GeForce RTX 4090, LUID 00000000:000243c1
+ok    raytracing pipeline: GetVulkanHandles and the stub shell's Vulkan entry points
+ok    raytracing pipeline: device context in RuntimeBacked mode (hr 00000000)
+ok    raytracing pipeline: the scene's UPLOAD, structure, scratch, output and READBACK buffers
+ok    raytracing pipeline: CreateStateObject from the DDI form: global and local root signature by handle, the dxc lib_6_3 library's DXIL part (668 DWORDs, three named exports), shader and pipeline configuration, a triangles hit group, a summary of three exports and no association (hr 00000000 00000000)
+ok    raytracing pipeline: the description handed to the engine: closest's local root signature associated with "closest", as the library lists it; raygen and miss in no local root association; one more local root signature, declared last, with an association of no export, the explicit default (1 creates seen, 2 local root signatures, 1 explicit defaults)
+ok    raytracing pipeline: GetShaderIdentifier of raygen, miss and hitgroup: 32 bytes each, not all zero, all three different
+ok    raytracing pipeline: stack sizes raygen 0, miss 0, hitgroup::closesthit 0 bytes, UINT_MAX for an unknown export; pipeline stack size 0, set to 64 and read back as 64
+ok    raytracing pipeline: the library as the whole dxc container (1442 DWORDs, NumExports 0) with a decoy export sharing the plain name "closest" under a mangled name of its own and a second local root signature: CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the decoy pipeline handed to the engine: closest's local root signature associated with closest's mangled name, the decoy's with the decoy's mangled name, neither with the plain "closest"; raygen and miss fall to the same empty explicit default
+ok    raytracing pipeline: a local root signature associated with closest alone, raygen and miss associated with none: CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the trap pipeline handed to the engine: the trap associated with "closest" alone, raygen and miss in no local root association, and the empty local root signature of the first create declared last as the explicit default (2 local root signatures, 1 explicit defaults)
+ok    raytracing pipeline: a library listing closest by its mangled name alone before a library with no export list (miss_far): CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the mixed-library pipeline, the listing library first, handed to the engine: libraries of 3 and 0 exports; closest's local root signature associated with the listed mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (4 names), the empty explicit default for the rest
+ok    raytracing pipeline: a library listing closest by its mangled name alone after a library with no export list (miss_far): CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the mixed-library pipeline, the listing library second, handed to the engine: libraries of 0 and 3 exports; closest's local root signature associated with the listed mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (4 names), the empty explicit default for the rest
+ok    raytracing pipeline: a COLLECTION of the library, its root signatures, configurations and hit group, then a collection-only executable (EXISTING_COLLECTION of all exports, the pipeline configuration, and a summary that points into the collection's DDI array, as the runtime gives it): both creates and three identifiers from the executable (hr 00000000 00000000)
+ok    raytracing pipeline: the description of the collection-only executable handed to the engine: the collection's engine object with NumExports 0, no DXIL library, no local root signature, no association (1 imports, 0 associations)
+ok    raytracing pipeline: an import of the collection with an export list, temporarily unsupported: 8007000e before the engine, 80004001 on one refusal line, no device error (hr 8007000e, 1 lines)
+ok    raytracing pipeline: a summary association into a description neither held nor imported: 8007000e before the engine, 80070057 on one refusal line, no device error (hr 8007000e, 1 lines)
+ok    raytracing pipeline: the executable's record holds one reference to the collection's engine object, the refused imports none (public references 2, then 3)
+ok    raytracing pipeline: the UE 4.26 shape, three collections of one renamed export each (RGS_00000001, MS_00000002, CHS_00000003 in HitGroup_00000003), then their link of the three imports and the pipeline configuration, its summary pointing into the collections' DDI arrays: four creates and three identifiers from the link (hr 00000000 00000000)
+ok    raytracing pipeline: the description of the UE 4.26 link handed to the engine: the three collections' engine objects with NumExports 0, no DXIL library, no local root signature, no association (3 imports, 0 associations)
+ok    raytracing pipeline: a pipeline allowing additions, three identifiers, its pipeline stack size set to 4096 (hr 00000000)
+ok    raytracing pipeline: AddToStateObject with fixture-raylib-b listing miss_far: S_OK, an identifier for miss_far, and the parent's raygen identifier unchanged in the child (hr 00000000)
+ok    raytracing pipeline: the child's pipeline stack size before any set is the parent's setting, 4096 (read 4096)
+ok    raytracing pipeline: the description of the addition handed to the engine: grown from the parent's engine object, one library listing one export, no local root signature, the global root signature associated with miss_far alone
+ok    raytracing pipeline: AddToStateObject from a pipeline without ALLOW_STATE_OBJECT_ADDITIONS: 8007000e, 80070057 from the engine on one refusal line, no device error (hr 8007000e, 1 lines, 1 engine calls)
+ok    raytracing pipeline: AddToStateObject with an export named miss, as the parent's: 8007000e, 80070057 before the engine on one refusal line, no device error (hr 8007000e, 1 lines, 0 engine calls)
+ok    raytracing pipeline: the child's record holds one reference to the parent's engine object, the refused growth none (public references 2, then 3)
+ok    raytracing pipeline: MapHeap of the UPLOAD heap (hr 00000000)
+ok    raytracing pipeline: CreateCommandSignature of one DISPATCH_RAYS argument, stride 128, no root signature: S_OK; two records, the counts and the prefill in an UPLOAD buffer, a DEFAULT buffer for their copy, an output and a READBACK buffer (hr 00000000)
+ok    raytracing pipeline: COMPUTE engine queue and a COMPUTE list on the compute table (hr 00000000)
+ok    raytracing pipeline: bottom and top level, SetPipelineState1 and DispatchRays 8x8 over a shader table in the UPLOAD buffer, once for each pipeline, and the indirect dispatches, executed (hr 00000000, 0 list errors, 0 device errors)
+ok    raytracing pipeline: engine fence signalled on the engine queue completes (SetEventOnCompletion(1, NULL) hr 00000000, completed value 1)
+ok    raytracing pipeline: MapHeap of the READBACK heap (hr 00000000)
+ok    raytracing pipeline: DispatchRays writes the 64 expected words, 12 hits with the hit group's local root constant b0253c09 and 52 misses with 2 (0 differ, first at 64)
+ok    raytracing pipeline: the pipeline with the decoy resolved by mangled name writes its 64 expected words, every hit with the word its own local root signature places after the identifier, b0253c0a, not the next one (b0253cff), where the decoy's has that register; the decoy is a summary export with no DXIL function behind it (0 differ, first at 64)
+ok    raytracing pipeline: the trap pipeline, with the empty explicit default in place, writes its 64 expected words: 52 misses the global root constant 2 and 12 hits the trap's first constant b0253c0b (0 differ, first at 64; 0 words b0253cff)
+ok    raytracing pipeline: the mixed-library pipeline, the listing library first, writes its 64 expected words, every hit with closest's local root constant b0253c0c: the association by the listed mangled name reached closest (0 differ, first at 64)
+ok    raytracing pipeline: the mixed-library pipeline, the listing library second, writes its 64 expected words, every hit with closest's local root constant b0253c0d: the association by the listed mangled name reached closest (0 differ, first at 64)
+ok    raytracing pipeline: the collection-only executable, used after its collection's DestroyStateObject, writes its 64 expected words, 12 hits with b0253c0e and 52 misses with 2 (0 differ, first at 64)
+ok    raytracing pipeline: the grown pipeline, used after its parent's DestroyStateObject, over a table of the parent's raygen and hit group identifiers and the new miss_far's writes its 64 expected words, 12 hits with b0253c0f and 52 misses with miss_far's 3 (0 differ, first at 64)
+ok    raytracing pipeline: the UE 4.26 link, used after its collections' DestroyStateObject, writes its 64 expected words, 12 hits with b0253c10 through CHS_00000003's local root signature, which only its collection associated, and 52 misses with 2 (0 differ, first at 64)
+ok    raytracing pipeline: MapHeap of the indirect dispatches' READBACK heap (hr 00000000)
+ok    raytracing pipeline: indirect DispatchRays, one 8x4 record, no count buffer: rows 0 to 3 as DispatchRays writes them, rows 4 to 7 at the prefill, from the UPLOAD records and from their DEFAULT copy (0 and 0 words differ)
+ok    raytracing pipeline: indirect DispatchRays, stride 128, every record up to the smaller of count and maximum: max 2 with count 1 rows 0 to 3, with count 2, count 3 and no count buffer all 64 words, with count 0 none, from the UPLOAD records (patched ahead of the list) and from their DEFAULT copy after an INDIRECT_ARGUMENT transition
+ok    raytracing pipeline: a subobject of an unknown type (4, unused in the DDI): CreateStateObject answers 8007000e, 80070057 on one refusal line (hr 8007000e, 1 lines, 0 device errors), the inert record's state_object_shell names the device's shell (yes), then none once destroyed (yes)
+ok    raytracing pipeline: a ray tracing pipeline named as an existing collection: CreateStateObject answers 8007000e, 80070057 on one refusal line (hr 8007000e, 1 lines, 0 device errors), the inert record's state_object_shell names the device's shell (yes), then none once destroyed (yes)
+ok    raytracing pipeline: two summary exports sharing the plain name "closest" with different local root signatures, the second without a mangled name: CreateStateObject answers 8007000e, 80070057 on one refusal line, never a broadened association (hr 8007000e, 1 lines, 0 device errors)
+ok    raytracing pipeline: two summary exports sharing the plain name "closest" with different local root signatures, both with the same mangled name: CreateStateObject answers 8007000e, 80070057 on one refusal line, never a broadened association (hr 8007000e, 1 lines, 0 device errors)
+ok    raytracing pipeline: DispatchRays on a closed list: one E_INVALIDARG on the calling list (1 errors, last 80070057)
+ok    raytracing pipeline: the same state object on a second device context (hr 00000000)
+ok    raytracing pipeline: SetPipelineState1 with a state object of another device context: one E_INVALIDARG on the calling list (1 errors, last 80070057)
+ok    raytracing pipeline: the second device context closes with no live object (hr 00000000, 0 live)
+ok    raytracing pipeline: destroy_engine_queue reports Retired
+ok    raytracing pipeline: state_object_shell names the device's shell for a live state object, none after DestroyStateObject
+ok    raytracing pipeline: destroy_device_context S_OK with no live object, 10 of 10 allocations freed, no error but the refusals' (hr 00000000, 0 live, 0 device, 0 list errors)
+PASSED
+stderr: engine-ddi: CreateStateObject: subobject 2: summary association outside the description and every imported one (hr 80070057)
+
+## control: state-objects.cpp of bc250-win 3eca5f98, the new tests, pinned engine
+harness sha256 7FDEAF7F7D730B5BA25907496CBC369B2975D514CBF845DBB12765B406A33CF7
+adapter: NVIDIA GeForce RTX 4090, LUID 00000000:000243c1
+ok    raytracing pipeline: GetVulkanHandles and the stub shell's Vulkan entry points
+ok    raytracing pipeline: device context in RuntimeBacked mode (hr 00000000)
+ok    raytracing pipeline: the scene's UPLOAD, structure, scratch, output and READBACK buffers
+ok    raytracing pipeline: CreateStateObject from the DDI form: global and local root signature by handle, the dxc lib_6_3 library's DXIL part (668 DWORDs, three named exports), shader and pipeline configuration, a triangles hit group, a summary of three exports and no association (hr 00000000 00000000)
+ok    raytracing pipeline: the description handed to the engine: closest's local root signature associated with "closest", as the library lists it; raygen and miss in no local root association; one more local root signature, declared last, with an association of no export, the explicit default (1 creates seen, 2 local root signatures, 1 explicit defaults)
+ok    raytracing pipeline: GetShaderIdentifier of raygen, miss and hitgroup: 32 bytes each, not all zero, all three different
+ok    raytracing pipeline: stack sizes raygen 0, miss 0, hitgroup::closesthit 0 bytes, UINT_MAX for an unknown export; pipeline stack size 0, set to 64 and read back as 64
+ok    raytracing pipeline: the library as the whole dxc container (1442 DWORDs, NumExports 0) with a decoy export sharing the plain name "closest" under a mangled name of its own and a second local root signature: CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the decoy pipeline handed to the engine: closest's local root signature associated with closest's mangled name, the decoy's with the decoy's mangled name, neither with the plain "closest"; raygen and miss fall to the same empty explicit default
+ok    raytracing pipeline: a local root signature associated with closest alone, raygen and miss associated with none: CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the trap pipeline handed to the engine: the trap associated with "closest" alone, raygen and miss in no local root association, and the empty local root signature of the first create declared last as the explicit default (2 local root signatures, 1 explicit defaults)
+ok    raytracing pipeline: a library listing closest by its mangled name alone before a library with no export list (miss_far): CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the mixed-library pipeline, the listing library first, handed to the engine: libraries of 3 and 0 exports; closest's local root signature associated with the listed mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (4 names), the empty explicit default for the rest
+ok    raytracing pipeline: a library listing closest by its mangled name alone after a library with no export list (miss_far): CreateStateObject and three identifiers (hr 00000000)
+ok    raytracing pipeline: the description of the mixed-library pipeline, the listing library second, handed to the engine: libraries of 0 and 3 exports; closest's local root signature associated with the listed mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (4 names), the empty explicit default for the rest
+FAIL  raytracing pipeline: a COLLECTION of the library, its root signatures, configurations and hit group, then a collection-only executable (EXISTING_COLLECTION of all exports, the pipeline configuration, and a summary that points into the collection's DDI array, as the runtime gives it): both creates and three identifiers from the executable (hr 00000000 80070057)
+FAIL  raytracing pipeline: the description of the collection-only executable handed to the engine: the collection's engine object with NumExports 0, no DXIL library, no local root signature, no association (0 imports, 4 associations)
+FAILED
+stderr: engine-ddi: CreateStateObject: subobject 2: summary association outside the description (hr 80070057)

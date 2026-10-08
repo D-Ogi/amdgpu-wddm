@@ -1,0 +1,24 @@
+D3D12Core.dll 10.0.26100.9278, public symbols from the Microsoft symbol server (scripts/sm-map.py notes).
+
+GetD3D12ShaderModel: the highest DDI value of the 1012 list (r14d) is clamped to 6_8 release (0x60085) and converted;
+[r13+0x104] is the API shader model the device reports.
+FUNCTION 1f6618 ?GetD3D12ShaderModel@VersionedDeviceData@@QEAAXAEAI@Z (to 1f698a)
+  1f692c: mov eax, 0x60085
+  1f6931: cmp r14d, eax
+  1f6934: cmovl eax, r14d
+  1f6938: mov dword ptr [rbp - 0x39], eax
+  1f693b: lea rcx, [rbp - 0x39]
+  1f693f: call 0x94ad8  ; ?ConvertShaderModelFromDDI@@YA?AW4D3D_SHADER_MODEL@@AEBW4D3D12DDI_SHADER_MODEL@@@Z
+  1f6944: mov dword ptr [r13 + 0x104], eax
+
+QueryShaderModel66AndLater: type 1091 (0x443, SHADER_MODEL_6_8_OPTIONS_0110) is asked when that API model is at least 6_8 (0x68).
+FUNCTION 1f6a74 ?QueryShaderModel66AndLater@VersionedDeviceData@@QEAAXI@Z (to 1f6dce)
+  1f6b11: cmp dword ptr [rbx + 0x104], 0x68
+  1f6b18: jge 0x1f6b22
+  1f6b1a: mov dword ptr [rbx + 0xf8], ebp
+  1f6b20: jmp 0x1f6b54  ; ?QueryShaderModel66AndLater@VersionedDeviceData@@QEAAXI@Z+e0
+  1f6b22: lea r9, [rbx + 0x148]
+  1f6b29: mov dword ptr [rsp + 0x20], 8
+  1f6b31: mov edx, 0x443
+  1f6b36: mov rcx, rbx
+  1f6b39: call 0x1f6090  ; ?DDIGetCaps@VersionedDeviceData@@AEAAJW4D3D12DDICAPS_TYPE@@PEAX1I@Z

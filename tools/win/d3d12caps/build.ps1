@@ -6,8 +6,8 @@ param(
     # next to the executable, as a game that ships one does. 0 builds the plain variant without those exports.
     [ValidateRange(0, 100000)][int]$AgilitySdkVersion = 0,
     # d3d12caps: the capability dump; d3d12allocprobe: the probe of textures the driver cannot size; d3d12oversub: the
-    # over-commit probe of the memory manager (README.md).
-    [ValidateSet('d3d12caps', 'd3d12allocprobe', 'd3d12oversub')][string]$Tool = 'd3d12caps',
+    # over-commit probe of the memory manager; d3d12sm68: the shader model 6.7/6.8 client (README.md).
+    [ValidateSet('d3d12caps', 'd3d12allocprobe', 'd3d12oversub', 'd3d12sm68')][string]$Tool = 'd3d12caps',
     # x86: a 32-bit build, which a WoW64 process runs, so that the dump shows what the UserModeDriverNameWow D3D12
     # entry reports. Pass another -Out: the file name does not change.
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
@@ -43,6 +43,19 @@ if (Test-Path -LiteralPath $previous) {
 
 $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($AgilitySdkVersion) { $variant = @("/DCAPS_AGILITY_SDK_VERSION=$AgilitySdkVersion") }
+if ($Tool -eq 'd3d12sm68') {
+    # The test shaders, compiled by the SDK's dxc (x64 host) into headers the client embeds; dxil.dll next to dxc.exe
+    # signs them, so the runtime accepts them without a development-mode switch.
+    $dxc = Join-Path $sdk "bin\$KitVersion\x64\dxc.exe"
+    $shaders = Join-Path $Out 'sm68-shaders'
+    New-Item -ItemType Directory -Force $shaders | Out-Null
+    foreach ($s in @(@('sm67_quad', 'cs_6_7'), @('sm68_wavesize', 'cs_6_8'), @('sm68_samplecmpgrad', 'cs_6_8'))) {
+        & $dxc -nologo -T $s[1] -E main -Fh (Join-Path $shaders "$($s[0]).h") -Vn "g_$($s[0])" (Join-Path $here "sm68\$($s[0]).hlsl")
+        if ($LASTEXITCODE -ne 0) { throw "dxc $($s[0]) failed ($LASTEXITCODE)" }
+    }
+    Write-Host "  shaders: $(& $dxc --version)"
+    $variant += "/I$shaders"
+}
 # d3d12.dll and dxgi.dll are loaded at run time by name, so that an application-local runtime (the per-application
 # route) is used exactly as the game would use it; neither import library is linked.
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
@@ -66,6 +79,16 @@ if ($imports -match '(?im)^\s+(d3d12|dxgi)\.dll\s*$') { throw 'd3d12.dll or dxgi
 if ($LASTEXITCODE -ne 0) { throw 'help check failed' }
 & "$Out\$name.exe" not-a-number 2>$null
 if ($LASTEXITCODE -ne 2) { throw 'invalid adapter index accepted' }
+if ($Tool -eq 'd3d12sm68') {
+    # The embedded blobs are compute shaders of SM 6.7 and 6.8 (read from their DXIL program headers, no GPU), and
+    # the options out of range are refused.
+    & "$Out\$name.exe" --blobs
+    if ($LASTEXITCODE -ne 0) { throw 'embedded shader blobs check failed' }
+    & "$Out\$name.exe" --expect 7_0 2>$null
+    if ($LASTEXITCODE -ne 2) { throw 'an unknown --expect model accepted' }
+    & "$Out\$name.exe" --seconds 171 2>$null
+    if ($LASTEXITCODE -ne 2) { throw 'a deadline above 170 s accepted' }
+}
 if ($Tool -eq 'd3d12allocprobe') {
     # The deadline: a main thread stuck in its first step, before any device, still leaves a document naming the
     # step, and exit code 3.

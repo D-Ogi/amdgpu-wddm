@@ -77,7 +77,11 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
-// All eight off is the release and reporting behaviour of adapter106 with no ray tracing.
+//   shader-model-68-off: the adapter reports shader model 6.7 at most, and no 1091 answer (adapter-caps.cpp,
+//     engine-ddi set_shader_model_ceiling, M840).
+//   shader-model-67-off: the adapter reports shader model 6.6 at most, the answer of earlier builds; it wins over
+//     shader-model-68-off.
+// All ten off is the release and reporting behaviour of adapter106 with no ray tracing.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl

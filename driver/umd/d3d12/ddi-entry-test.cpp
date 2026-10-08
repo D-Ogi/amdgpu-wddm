@@ -547,8 +547,8 @@ int main() {
     resource.Layout=D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE;
     assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_NOTIMPL);
     assert(ObservedPolicy::heap_observations==3 && !ObservedPolicy::row_pitch);
-    // AllowOutOfMemory (CoreBinding::allow_out_of_memory, BD-075): the two heap-and-resource slots are the only
-    // ones whose own refusals the thunk clamps, because the runtime removes the application's device for any
+    // AllowOutOfMemory (CoreBinding::allow_out_of_memory, BD-075): the two heap-and-resource slots and the two state
+    // object slots are the only ones whose own refusals the thunk clamps, because the runtime removes the application's device for any
     // other code out of a creation function. What the slot itself returns is its own answer and is never
     // rewritten (E_NOTIMPL above); only a refusal the thunk decided is. Policy::failure keeps the real code.
     b.allowed=false;
@@ -567,6 +567,13 @@ int main() {
     assert(observed_core.pfnOpenHeapAndResource(hb,&open,{},{},{},{})==E_OUTOFMEMORY);
     assert(b.last_error.load()==E_UNEXPECTED);b.allowed=true;
     assert(observed_core.pfnOpenHeapAndResource({},&open,{},{},{},{})==E_OUTOFMEMORY);
+    // The state object slots, since The Ascent (lab trial 465): a thunk refusal of a state object create is a failed
+    // create, not a removed device.
+    const D3D12DDIARG_CREATE_STATE_OBJECT_0054 state_object{};
+    b.allowed=false;
+    assert(observed_core.pfnCreateStateObject(hb,&state_object,{},{})==E_OUTOFMEMORY);
+    assert(b.last_error.load()==E_UNEXPECTED);b.allowed=true;
+    assert(observed_core.pfnCreateStateObject({},&state_object,{},{})==E_OUTOFMEMORY);
     assert(native12::ddi_admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED)==native12::kDdiDriverDeviceRemoved);
     assert(native12::ddi_admitted_create_failure(E_OUTOFMEMORY)==E_OUTOFMEMORY);
     assert(native12::ddi_admitted_create_failure(S_FALSE)==S_FALSE);

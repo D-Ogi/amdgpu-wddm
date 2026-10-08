@@ -1,0 +1,23 @@
+tool d3d12sm68 agility none
+tool headers D3D_HIGHEST_SHADER_MODEL 6_9
+blob sm67_quad 3368 bytes kind 5 model 6_7 ok
+blob sm68_wavesize 3552 bytes kind 5 model 6_8 ok
+blob sm68_samplecmpgrad 4000 bytes kind 5 model 6_8 ok
+adapter 0 "BC-250 GPU (amdgpu-wddm)" vendor 0x1002 device 0x13fe
+device D3D12CreateDevice hr 0x00000000 level 0xc100
+module d3d12.dll system32 6.2.22621.5415
+module D3D12Core.dll system32 6.2.22621.5415
+module amdgpu_wddm_d3d12.dll other no-version
+shader_model asked 6_9 hr 0x80070057 answer -
+shader_model asked 6_8 hr 0x80070057 answer -
+shader_model asked 6_7 hr 0x00000000 answer 6_6
+shader_model highest 6_6
+options1 hr 0x00000000 WaveOps 1 WaveLaneCountMin 32 WaveLaneCountMax 64 TotalLaneCount 2560 Int64ShaderOps 1
+options9 hr 0x00000000 AtomicInt64OnTypedResourceSupported 1 AtomicInt64OnGroupSharedSupported 1 WaveMMATier 0
+options14 hr 0x80070057 AdvancedTextureOpsSupported 0 WriteableMSAATexturesSupported 0 IndependentFrontAndBackStencilRefMaskSupported 0
+options21 hr 0x80070057 WorkGraphsTier 0 ExecuteIndirectTier 0 SampleCmpGradientAndBiasSupported 0 ExtendedCommandInfoSupported 0
+test sm67_quad skipped (device shader model below 6_7)
+test sm68_wavesize skipped (device shader model below 6_8)
+test sm68_samplecmpgrad skipped (device shader model below 6_8)
+device GetDeviceRemovedReason 0x00000000
+result PASS highest 6_6 expect 6_6 tests 0 failed 0

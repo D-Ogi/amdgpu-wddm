@@ -1,0 +1,40 @@
+installed shell 189E9FA3
+== A-installed exit  shell 189E9FA3
+api D3D12CreateDevice (hardware): hr 00000000, core table wrapped: no
+== case ue426
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 887a0005
+== case ue426: hr 887a0005, device removed reason 887a0020
+== case ue426-5
+api CreateStateObject COLLECTION ue426 raygen: hr 887a0005
+== case ue426-5: hr 887a0005, device removed reason 887a0020
+== B-fixed exit  shell 3ED15929
+api D3D12CreateDevice (hardware): hr 00000000, core table wrapped: no
+== case ue426
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 00000000
+== case ue426: hr 00000000, device removed reason 00000000
+== case ue426-5
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject COLLECTION ue426 miss 2: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group 2: hr 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 00000000
+== case ue426-5: hr 00000000, device removed reason 00000000
+== C-fixed-idle120 exit  shell 3ED15929
+api D3D12CreateDevice (hardware): hr 00000000, core table wrapped: no
+== case ue426-5
+api CreateStateObject COLLECTION ue426 raygen: hr 00000000
+api CreateStateObject COLLECTION ue426 miss: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group: hr 00000000
+api CreateStateObject COLLECTION ue426 miss 2: hr 00000000
+api CreateStateObject COLLECTION ue426 hit group 2: hr 00000000
+api device removed reason after the idle: 00000000
+api CreateStateObject RAYTRACING_PIPELINE ue426 link: hr 00000000
+== case ue426-5: hr 00000000, device removed reason 00000000
+restored shell 189E9FA3
