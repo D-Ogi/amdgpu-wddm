@@ -111,7 +111,8 @@ inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanou
     return out;
 }
 // The desktop router's kill switch, read the way the router itself reads it (driver/umd/router/router.cpp
-// ReadConfig): absent is 0, a DWORD is its value, any other type counts as set. Read once per process,
+// ReadDword): absent is 0, a DWORD is its value, anything else - another type, a longer value
+// (ERROR_MORE_DATA), a value the process may not read - counts as set. Read once per process,
 // like every other switch of this shell: the router reads it at the compositor's adapter open and a change
 // takes a new dwm.exe anyway, so a later value could not describe the compositor this process is talking to.
 // The 64-bit view on both images (ddi_detail::registry_view): the router lives in the 64-bit compositor, so
@@ -120,8 +121,8 @@ inline unsigned long scanout_force_cpu_read() noexcept {
     DWORD value=0,bytes=sizeof(value),type=0;
     const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\amdgpu-wddm\\DesktopRouter",
                                       L"DwmForceCpu",RRF_RT_ANY|ddi_detail::registry_view,&type,&value,&bytes);
-    if(status!=ERROR_SUCCESS)return 0;                       // absent, or unreadable: the router's 0
-    if(type!=REG_DWORD || bytes!=sizeof(value))return 1;     // fail safe, exactly as the router does
+    if(status==ERROR_FILE_NOT_FOUND)return 0;                // absent: the router's 0
+    if(status!=ERROR_SUCCESS || type!=REG_DWORD || bytes!=sizeof(value))return 1;  // fail safe, as the router
     return value;
 }
 inline unsigned long scanout_force_cpu() noexcept {
