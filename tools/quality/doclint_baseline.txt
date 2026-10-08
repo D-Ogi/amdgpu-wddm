@@ -108,7 +108,7 @@
 364	docs/research/m9-dma-contract-audit.md
 13	docs/research/m9-system-paging.md
 22	docs/testing/INSTALL.md
-14	docs/testing/THIRD-PARTY.md
+13	docs/testing/THIRD-PARTY.md
 73	docs/testing/defaults-audit-2026-10-04.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md
