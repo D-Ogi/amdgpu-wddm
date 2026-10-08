@@ -10,11 +10,17 @@
 //                                       Bc250ReportedDriverVersion  REG_SZ, the number this driver wrote
 //
 // The key of the last three values is the one that EnumDisplayDevices gives as the DeviceKey of the adapter, and
-// Unreal Engine 4 reads DriverVersion there. It is not the key of DXGK_DEVICE_INFO.DeviceRegistryPath: on unit A
+// Unreal Engine 4 reads DriverVersion there. It is not the path of DXGK_DEVICE_INFO.DeviceRegistryPath: on unit A
 // that one is the class key, and b23 lab 489 showed this code refuse to write because of it. The GUID of the video
 // keys is the VideoID value of the adapter's hardware key (IoOpenDeviceRegistryKey, PLUGPLAY_REGKEY_DEVICE), and
-// each four-digit subkey below it is one video key of the adapter. Windows makes those keys show the same values as
-// the class key, so a write through this path also changes the version that Device Manager shows for the adapter.
+// each four-digit subkey below it is one video key of the adapter.
+//
+// Each of those video keys is a registry symbolic link to the display class key of the adapter, and an open that
+// does not ask for OBJ_OPENLINK follows it, so this file writes the class key through the video path. Two results
+// follow: the second and later video keys of one adapter find the number already in place and write nothing, and
+// the write also changes the version that Device Manager shows and the SetupAPI property DEVPKEY_Device_DriverVersion
+// of the adapter. The guard is therefore in two halves: only a path below Control\Video is opened, and the key that
+// the open gives back must name a video key or one adapter key of the display class (DriverVersionIsAdapterKey).
 //
 // It runs once per adapter start, at PASSIVE_LEVEL, and never fails the start: a key it cannot open or a value it
 // cannot read leaves everything as it is, with one log line. The control application writes the setting; a change
@@ -27,6 +33,9 @@
 #define DRIVER_VERSION_READ_CHARS 40u       // the longest value this file reads: a GUID with its terminator
 #define DRIVER_VERSION_KEYS 16u             // the most video keys of one adapter this code visits
 #define DRIVER_VERSION_NAME_CHARS 32u       // room for the name of a subkey: "0000" needs four
+// Room for the name of an open key. The longest name this code admits is the class key of an adapter,
+// "\REGISTRY\MACHINE\SYSTEM\ControlSet001\Control\Class\{<38>}\0000": 95 characters.
+#define DRIVER_VERSION_KEYNAME_CHARS 160u
 
 // What one start did, for the counts and the numbers of the summary line.
 typedef struct _DRIVER_VERSION_RUN {
@@ -97,6 +106,23 @@ static NTSTATUS DeleteValue(HANDLE Key, PCWSTR Name)
     return status == STATUS_OBJECT_NAME_NOT_FOUND ? STATUS_SUCCESS : status;
 }
 
+// 1 when the key behind Key is a key that this file may write the number in, by the name that the object manager
+// gives it. A numbered video key is a symbolic link to the display class key and the open follows it, so the name
+// read back is normally the class key, not the path that was asked for (DriverVersionIsAdapterKey). A name that
+// does not fit the buffer, or that ZwQueryKey does not give, is refused: the write target must be known.
+static int KeyIsAdapterKey(HANDLE Key)
+{
+    UCHAR buffer[sizeof(KEY_NAME_INFORMATION) + DRIVER_VERSION_KEYNAME_CHARS * sizeof(WCHAR)];
+    PKEY_NAME_INFORMATION info = (PKEY_NAME_INFORMATION)buffer;
+    ULONG length = 0;
+    NTSTATUS status;
+
+    status = ZwQueryKey(Key, KeyNameInformation, info, (ULONG)sizeof(buffer), &length);
+    if (!NT_SUCCESS(status)) return 0;
+    if (info->NameLength > DRIVER_VERSION_KEYNAME_CHARS * sizeof(WCHAR)) return 0;
+    return DriverVersionIsAdapterKey(info->Name, info->NameLength / sizeof(WCHAR));
+}
+
 // ReportAmdDriverVersion: 1 enabled, 0 not. Absent, unreadable and out-of-range values all mean 0, the last two
 // with one log line (the user-mode settings log theirs the same way).
 static ULONG ReadReportSetting(void)
@@ -163,7 +189,7 @@ static void ApplyToKey(_In_z_ PCWSTR Path, ULONG Enabled, _Inout_ DRIVER_VERSION
     DRIVER_VERSION_PLAN plan;
 
     Run->Keys++;
-    // The guard of this file: a path outside Control\Video is never written, whatever the registry held.
+    // The first half of the guard of this file: only a path below Control\Video is opened.
     if (!DriverVersionIsVideoKey(Path, StringChars(Path, DRIVER_VERSION_PATH_CHARS))) {
         Run->Failed++;
         GuardLog("driver version: a key outside Control\\Video was refused");
@@ -176,6 +202,13 @@ static void ApplyToKey(_In_z_ PCWSTR Path, ULONG Enabled, _Inout_ DRIVER_VERSION
         Run->Failed++;
         GuardLog("driver version: a video key was not opened (0x%08X), ReportAmdDriverVersion=%u not applied there",
                  status, Enabled);
+        return;
+    }
+    // The second half: the open followed a symbolic link, so the key it gave back must be named as well.
+    if (!KeyIsAdapterKey(key)) {
+        Run->Failed++;
+        GuardLog("driver version: the video key led to a key that is not an adapter key; nothing was written");
+        ZwClose(key);
         return;
     }
     currentStatus = ReadVersionString(key, L"DriverVersion", current);
@@ -226,8 +259,8 @@ static void ApplyToKey(_In_z_ PCWSTR Path, ULONG Enabled, _Inout_ DRIVER_VERSION
     }
 }
 
-// Every numbered subkey of Control\Video\{Guid}. Windows makes them show the same values, so the second and later
-// keys normally find the number in place and write nothing.
+// Every numbered subkey of Control\Video\{Guid}. Each one is a symbolic link to the same class key, so the second
+// and later keys normally find the number in place and write nothing.
 static void ApplyToVideoKeys(_In_z_ PCWSTR Guid, ULONG GuidChars, ULONG Enabled, _Inout_ DRIVER_VERSION_RUN* Run)
 {
     OBJECT_ATTRIBUTES attributes;
@@ -273,6 +306,10 @@ static void ApplyToVideoKeys(_In_z_ PCWSTR Guid, ULONG GuidChars, ULONG Enabled,
         }
         ApplyToKey(keyPath, Enabled, Run);
     }
+    if (index == DRIVER_VERSION_KEYS) {
+        GuardLog("driver version: the Control\\Video key of this adapter holds more than %u subkeys; the rest were "
+                 "not visited", DRIVER_VERSION_KEYS);
+    }
     ZwClose(root);
 }
 
@@ -304,7 +341,9 @@ void DriverVersionStart(BC250_DEVICE* Device)
         return;
     }
 
-    if (!run.Keys) {
+    // A failure counted outside a key (a name that gives no path, an enumeration that stopped) still has to reach
+    // the log, so the summary is skipped only when there was nothing at all to report.
+    if (!run.Keys && !run.Failed) {
         if (enabled) GuardLog("driver version: ReportAmdDriverVersion=1 not applied: this adapter has no video key");
         return;
     }

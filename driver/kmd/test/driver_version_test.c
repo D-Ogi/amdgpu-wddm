@@ -153,6 +153,31 @@ int main(void)
               "no buffer refused");
     }
 
+    // The name of the key that the open gives back. A numbered video key is a symbolic link to the display class
+    // key of the adapter, and an open that does not ask for OBJ_OPENLINK follows it, so the name read back names
+    // the class key. Both names are admitted, and nothing else.
+    {
+        static const wchar_t video[] = L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Control\\Video\\"
+                                       L"{0F1E2D3C-4B5A-6C7D-8E9F-A1B2C3D4E5F6}\\0000";
+        static const wchar_t cls[] = L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Control\\Class\\"
+                                     L"{4d36e968-e325-11ce-bfc1-08002be10318}\\0001";
+        static const wchar_t other[] = L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Control\\Class\\"
+                                       L"{4d36e97d-e325-11ce-bfc1-08002be10318}\\0001";
+        static const wchar_t top[] = L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Control\\Class\\"
+                                     L"{4d36e968-e325-11ce-bfc1-08002be10318}";
+        static const wchar_t run[] = L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+        Check(DriverVersionIsAdapterKey(video, (unsigned long)wcslen(video)), "a video key accepted");
+        Check(DriverVersionIsAdapterKey(cls, (unsigned long)wcslen(cls)),
+              "the display class key of one adapter accepted");
+        Check(!DriverVersionIsAdapterKey(other, (unsigned long)wcslen(other)),
+              "the key of another device class refused");
+        Check(!DriverVersionIsAdapterKey(top, (unsigned long)wcslen(top)),
+              "the display class key without an adapter below it refused");
+        Check(!DriverVersionIsAdapterKey(run, (unsigned long)wcslen(run)), "a key outside both places refused");
+        Check(!DriverVersionIsAdapterKey(cls, 30), "a counted length that stops early is honoured");
+        Check(!DriverVersionIsAdapterKey(NULL, 10), "no name refused");
+    }
+
     printf("driver_version_test: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

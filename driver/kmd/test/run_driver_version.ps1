@@ -50,7 +50,7 @@ $code = $LASTEXITCODE
 Write-Host 'compile-check (kernel flags, the header alone)'
 $probe = Join-Path $Out 'driver_version_kernel.c'
 Set-Content -Path $probe -Value '#include <ntddk.h>', '#include "driver_version.h"',
-    'int DriverVersionProbe(const wchar_t* Path, unsigned long Chars) { DRIVER_VERSION_PLAN plan; wchar_t out[DRIVER_VERSION_PATH_CHARS]; DriverVersionDecide(1, Path, NULL, NULL, &plan); return (int)plan.Action + DriverVersionIsVideoKey(Path, Chars) + DriverVersionIsGuidText(Path, Chars) + DriverVersionIsInstanceName(Path, Chars) + (int)DriverVersionVideoPath(Path, Chars, Path, Chars, out, DRIVER_VERSION_PATH_CHARS); }' -Encoding ascii
+    'int DriverVersionProbe(const wchar_t* Path, unsigned long Chars) { DRIVER_VERSION_PLAN plan; wchar_t out[DRIVER_VERSION_PATH_CHARS]; DriverVersionDecide(1, Path, NULL, NULL, &plan); return (int)plan.Action + DriverVersionIsVideoKey(Path, Chars) + DriverVersionIsGuidText(Path, Chars) + DriverVersionIsInstanceName(Path, Chars) + (int)DriverVersionVideoPath(Path, Chars, Path, Chars, out, DRIVER_VERSION_PATH_CHARS) + DriverVersionIsAdapterKey(Path, Chars); }' -Encoding ascii
 Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zp8',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
