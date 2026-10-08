@@ -47,6 +47,27 @@
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "recorded_script": "none yet: the radv set plus -Db_vscrt=mt, first built 2026-10-01"
     },
+    "radv-system": {
+      "description": "RADV Vulkan ICD for the system Vulkan loader (payload/vulkan/vulkan_radeon.dll): the radv set of d6176765, without -Db_ndebug=true, so NDEBUG is not defined and the asserts stay on. The system ICD line (2732f9c8, 308a5e33) builds only with this set: with NDEBUG, vtn_cmat.c of that line has a variable that only assert reads, and /we4189 stops the build",
+      "needs_llvm": false,
+      "glslang": "required",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=amd",
+        "-Dgallium-drivers=[]",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "recorded_script": "the radv set of d6176765 (experiments/E27-m9-inference/radv-main/build.cmd), which built CF3948D6 and the b23 system ICD A6562DAF"
+    },
     "llvmpipe-umd": {
       "description": "Desktop D3D10 UMD: Gallium d3d10umd frontend on llvmpipe/softpipe, statically linked LLVM, static CRT",
       "needs_llvm": true,
