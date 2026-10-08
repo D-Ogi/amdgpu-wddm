@@ -40,3 +40,8 @@ tools/win/etw/testdata/*.txt -text
 
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary
+
+# The HIP test fixtures are hash pinned: compute/hip/tests/data/PROVENANCE.txt records the
+# SHA-256 of every file of that directory, and build.ps1 -Rebuild compares the two device
+# artifacts byte for byte. Line-ending normalization would break those sums on checkout.
+compute/hip/tests/data/** -text
