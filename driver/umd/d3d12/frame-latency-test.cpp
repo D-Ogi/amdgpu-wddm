@@ -3,9 +3,15 @@
 // counters. No GPU and no runtime: a substitute progress source answers the gate.
 #include "frame-latency.h"
 #include <cstdio>
+#include <cstring>
+#include <share.h>
+#include <string>
 #include <vector>
 
 namespace {
+// The witness lines must reach the AMDGPU_WDDM_LOG sink of the shell, not the debugger alone: a lab trial reads
+// that file and has no debugger. stdio-log.h reads the switch once, on its first use, so main() sets it first.
+constexpr char kLogName[]="frame-latency-test-witness.log";
 int failures=0;
 void check(bool ok,const char* what) {
     std::printf("%s %s\n",ok?"PASS":"FAIL",what);
@@ -159,7 +165,10 @@ void test_ring() {
         gate.frame(fake.source(),1,4000);
         const uint64_t spent=native12::latency_now_us()-before;
         check(gate.timeouts()==1u && gate.waits()==1u,"FrameLatency: an unretired gate counts a timeout");
-        check(spent<2000000u,"FrameLatency: the timeout keeps the present bounded");
+        // The given budget, not the one second default: the loop checks the clock after every poll, so the only
+        // overshoot is one sleep. 500 ms leaves room for a loaded machine and still fails a run that waited the
+        // default budget.
+        check(spent<500000u,"FrameLatency: the timeout keeps the present inside the budget it was given");
         std::printf("note: the 4 ms budget took %llu us\n",static_cast<unsigned long long>(spent));
     }
     // An incomplete snapshot proves nothing, so it is not a gate: no wait, and the frame is counted as skipped.
@@ -178,12 +187,45 @@ void test_ring() {
         check(b>=a && a>0,"latency_now_us: a monotonic microsecond clock");
     }
 }
+
+// Every witness line of the gate, read back from the log sink of the shell. A lab trial reads that file and has
+// no debugger. The notes are bounded to the first event of each kind in the process, so the tests above produced
+// exactly one of each.
+void test_witness_lines() {
+    std::string text;
+    // _fsopen, not fopen_s: the shell's sink still holds this file open for append, and fopen_s asks for
+    // exclusive access.
+    FILE* const file=_fsopen(kLogName,"rb",_SH_DENYNO);
+    check(file!=nullptr,"witness: the log file of this process opens for reading");
+    if(file){
+        char buffer[4096];
+        for(size_t read=0;(read=std::fread(buffer,1,sizeof(buffer),file))!=0;)text.append(buffer,read);
+        std::fclose(file);
+    }
+    const auto holds=[&](const char* what){return text.find(what)!=std::string::npos;};
+    check(holds("the present waited after"),"witness: the wait reaches the log sink");
+    check(holds("the present gave up after"),"witness: the timeout reaches the log sink");
+    check(holds("the present proved nothing"),"witness: an unproven gate reaches the log sink");
+    check(holds("BC250 MaxFrameLatency=1:"),"witness: every line names the setting and its value");
+    // Bounded: one line of each kind, whatever the number of events.
+    size_t lines=0;
+    for(size_t at=text.find("BC250 MaxFrameLatency=");at!=std::string::npos;at=text.find("BC250 MaxFrameLatency=",at+1))
+        ++lines;
+    check(lines==3,"witness: three lines in the whole process, one of each kind");
+    if(lines!=3)std::printf("note: the log holds %zu lines:\n%s",lines,text.c_str());
+}
 }
 
 int main() {
+    // Before anything logs: stdio-log.h reads AMDGPU_WDDM_LOG once, on the first line it prints.
+    DeleteFileA(kLogName);
+    const std::string sink=std::string("file:")+kLogName;
+    if(!SetEnvironmentVariableA("AMDGPU_WDDM_LOG",sink.c_str()))
+        check(false,"witness: the log switch is set for this process");
     test_slot();
     test_wait_loop();
     test_ring();
+    test_witness_lines();
     std::printf("%s frame-latency: %d failures\n",failures?"FAIL":"PASS",failures);
     return failures?1:0;
 }

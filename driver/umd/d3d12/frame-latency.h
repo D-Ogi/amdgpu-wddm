@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "device-progress.h"
+#include "stdio-log.h"
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +22,10 @@ namespace native12 {
 // finds the gate retired and waits for nothing. The shell adds no second wait to such an application.
 //
 // Nothing happens when the setting is absent (latency 0). That is the behaviour of every release up to b23.
+//
+// Each witness line goes to both sinks of this shell, as every other witness line does (ddi-trace.h,
+// adapter.cpp): the log of AMDGPU_WDDM_LOG (stdio-log.h) and the debugger. A lab trial reads the log file, so a
+// line that only reached the debugger would prove nothing there.
 inline constexpr uint32_t kMaxFrameLatencySlots=3;      // the setting's range is 1-3 (app-settings-core.h)
 inline constexpr uint64_t kFrameLatencyBudgetUs=1000000;// the wait gives up after this, and never fails a Present
 inline constexpr uint64_t kFrameLatencySpins=8;         // polls that spin before the first sleep
@@ -111,7 +116,11 @@ public:
         frames_.fetch_add(1,std::memory_order_relaxed);
         if(!gated)return;                       // the first frames of the ring have nothing behind them
         if(!gate.complete){                     // more unretired fences than marks fit: it proves nothing
-            skipped_.fetch_add(1,std::memory_order_relaxed);return;
+            skipped_.fetch_add(1,std::memory_order_relaxed);
+            // Named, because the gate then costs a snapshot and gives no limit. Without this line a trial cannot
+            // tell a gate that found the frame finished from a gate that could prove nothing.
+            note(Note::Unproven,latency,"the present proved nothing: more unretired fences than the snapshot holds");
+            return;
         }
         const LatencyWait result=latency_wait(
             [&]() noexcept {return source.retired(source.owner,&gate);},
@@ -119,13 +128,18 @@ public:
             [timer](uint64_t poll) noexcept {latency_idle(poll,timer);},
             budget_us);
         polls_.fetch_add(result.polls,std::memory_order_relaxed);
+        char tail[96];
         if(result.polls>1){
             waits_.fetch_add(1,std::memory_order_relaxed);
-            report(false,latency,result.polls);
+            std::snprintf(tail,sizeof(tail),"the present waited after %llu checks",
+                static_cast<unsigned long long>(result.polls));
+            note(Note::Waited,latency,tail);
         }
         if(!result.retired){
             timeouts_.fetch_add(1,std::memory_order_relaxed);
-            report(true,latency,result.polls);
+            std::snprintf(tail,sizeof(tail),"the present gave up after %llu checks",
+                static_cast<unsigned long long>(result.polls));
+            note(Note::GaveUp,latency,tail);
         }
     }
     uint64_t frames() const noexcept {return frames_.load(std::memory_order_relaxed);}
@@ -135,17 +149,16 @@ public:
     uint64_t skipped() const noexcept {return skipped_.load(std::memory_order_relaxed);}
 private:
     struct Slot {ProgressSnapshot progress{};bool recorded{};};
-    // The witness of the gate on the lab, bounded: the first wait and the first timeout of the process.
-    void report(bool timeout,uint32_t latency,uint64_t polls) noexcept {
-        static std::atomic<unsigned> waited{0},gave_up{0};
-        std::atomic<unsigned>& seen=timeout?gave_up:waited;
-        if(seen.fetch_add(1,std::memory_order_relaxed))return;
-        char text[192];
-        std::snprintf(text,sizeof(text),
-            "BC250 MaxFrameLatency=%u: the present %s after %llu checks (frame %llu)\n",
-            latency,timeout?"gave up":"waited",static_cast<unsigned long long>(polls),
+    enum class Note : unsigned {Waited,GaveUp,Unproven,Count};
+    // The witness of the gate on the lab, bounded: the first event of each kind in the process, on both sinks.
+    void note(Note kind,uint32_t latency,const char* what) noexcept {
+        static std::atomic<unsigned> seen[static_cast<unsigned>(Note::Count)]{};
+        if(seen[static_cast<unsigned>(kind)].fetch_add(1,std::memory_order_relaxed))return;
+        char text[224];
+        std::snprintf(text,sizeof(text),"BC250 MaxFrameLatency=%u: %s (frame %llu)\n",latency,what,
             static_cast<unsigned long long>(frames_.load(std::memory_order_relaxed)));
         OutputDebugStringA(text);
+        amdgpu_wddm_log::print("%s",text);
     }
     SRWLOCK lock_=SRWLOCK_INIT;
     Slot slots_[kMaxFrameLatencySlots]{};

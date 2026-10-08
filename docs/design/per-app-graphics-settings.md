@@ -139,14 +139,20 @@ every native submit (`radv_wddm2_cs.c`, `BC250_HOST_PUBLISH_PROGRESS`). An ICD t
 empty snapshot, which is retired at once, so the setting does nothing. The lab check reads the witness line to
 prove that the gate waited, and not only that the value reached the shell.
 
-The D3D12 shell writes two lines at most per process, as the witness that the gate is in force:
+The D3D12 shell writes three lines at most per process, one of each kind, as the witness that the gate is in
+force. Each line goes to the log of `AMDGPU_WDDM_LOG` and to the debugger, as the settings line does, so a lab
+trial reads them from the log file:
 
 ```
 BC250 MaxFrameLatency=1: the present waited after 9 checks (frame 42)
 BC250 MaxFrameLatency=1: the present gave up after 4005 checks (frame 1180)
+BC250 MaxFrameLatency=1: the present proved nothing: more unretired fences than the snapshot holds (frame 7)
 ```
 
-The second line is a defect report: it means that a frame did not finish within one second.
+The first line is the proof that the gate is in force. The second line is a defect report: a frame did not finish
+within one second. The third line says that the device had more unretired fences than the snapshot holds (8), so
+the gate could prove nothing and let that frame through. It separates a gate that found the frame finished from a
+gate that could not look.
 
 ### PerformanceOverlay
 
