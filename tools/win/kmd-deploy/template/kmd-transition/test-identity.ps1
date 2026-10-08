@@ -3,6 +3,11 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot\transition-policy.ps1"
 . "$PSScriptRoot\confirmed-present-start.ps1"
 function Must-Reject([scriptblock]$Action){$failed=$false;try{& $Action|Out-Null}catch{$failed=$true};if(!$failed){throw 'False acceptance'}}
+# A refusal of this gate is read by hand out of an attempt's receipt, so each rule has to name itself.
+function Must-Reject-With([string]$Message,[scriptblock]$Action){
+ $seen='accepted';try{& $Action|Out-Null}catch{$seen=[string]$_.Exception.Message}
+ if($seen -cne $Message){throw "Refusal message: expected '$Message', got '$seen'"}
+}
 # Identity values are well formed and name exactly one promotion.
 # A version is 0.7.R.B: R the ABI revision, B the build counter (B >= 1; a release package has its own B). The two
 # versions differ; the ABIs differ exactly when the revisions differ.
@@ -60,6 +65,11 @@ Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -r
 Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'flags=15','flags=31') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
 Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'completed=7','completed=0') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
 if($KmdCandidateAbi -ne $KmdRollbackAbi){Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdRollbackAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}}
+# Each of the three ways to refuse a short ready age names its own rule.
+Must-Reject-With 'An admitted interval needs its generation and no pinned epoch' {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ConfirmedEpoch 6}
+Must-Reject-With 'An admitted interval needs its generation and no pinned epoch' {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ExpectedEpoch 9 -ConfirmedEpoch 6}
+Must-Reject-With 'Confirmed interval precedes the admitted start' {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 12}
+Must-Reject-With 'Confirmed health has insufficient ready age' {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 9}
 # The admitted interval itself keeps the 60 s rule, with and without a pinned epoch.
 if(!(Get-ConfirmedPresentStart -Health ($line -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6).launch){throw 'Admitted interval rejected'}
 if(!(Get-ConfirmedPresentStart -Health ($line -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ExpectedEpoch 6).launch){throw 'Pinned confirmed interval rejected'}

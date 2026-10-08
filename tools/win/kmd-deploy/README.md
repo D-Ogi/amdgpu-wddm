@@ -186,13 +186,17 @@ filter of the competing-task gates, and `kmdcommon.heartbeat` refuses if it does
 `CONFIRMED` flag follows the start, that is its generation, while every mode set and every visibility change
 advances the epoch and sets `ready_ms` back to zero (`driver/kmd/start_health.c`, `HealthInvalidate`). A game's
 exit mode commit therefore leaves flags 15 with a ready age of a few seconds, and the old rule
-`confirmed and ready_ms < 60000` refused it. W3 483-485 and The Ascent 489 of the b23 validation all closed
-`recovery-unverified` for this reason alone. `Get-ConfirmedPresentStart` now takes `-ConfirmedEpoch`, the epoch
+`confirmed and ready_ms < 60000` refused it. W3 483, 484 and 485 of the b23 validation closed
+`recovery-unverified` on this rule alone. The Ascent 489 closed the same way on another rule for the same epoch
+advance, the epoch equality of the game kit's own health comparison, which is a different caller and is not
+fixed here. `Get-ConfirmedPresentStart` now takes `-ConfirmedEpoch`, the epoch
 of a witness of the same start that a caller already admitted with the full ready age, together with
 `-ExpectedGeneration`. A later epoch of that generation may then carry a short ready age. `postflight` reads
 that epoch from this attempt's own `*-health-acceptance.json` receipts (`Get-KmdAcceptedConfirmedEpoch`) and
 refuses when no record names the live generation. A new generation, a witness older than 15 s, an unknown flag
-bit and a wrong ABI are refused as before.
+bit and a wrong ABI are refused as before. The kit serves every KMD revision, and on one older than BD-098 the
+same mode commit clears `CONFIRMED` instead of advancing the epoch alone: the witness then reads flags 7, the
+relaxation does not apply and the refusal is `Confirmed CPU baseline required`, as it was under tester.20.
 
 ## bounded-child output files
 

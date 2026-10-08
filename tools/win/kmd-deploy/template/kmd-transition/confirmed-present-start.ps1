@@ -29,7 +29,8 @@ function Get-ConfirmedPresentStart {
  # a caller already admitted with the full ready age, and it must be given with the generation it belongs to.
  # A later interval of that start may then show a short ready age; the admitted interval itself may not, and an
  # earlier one is impossible within a generation.
- if($ConfirmedEpoch -and (!$ExpectedGeneration -or $ExpectedEpoch -or $epoch -lt $ConfirmedEpoch)){throw 'Confirmed interval precedes the admitted start'}
+ if($ConfirmedEpoch -and (!$ExpectedGeneration -or $ExpectedEpoch)){throw 'An admitted interval needs its generation and no pinned epoch'}
+ if($ConfirmedEpoch -and $epoch -lt $ConfirmedEpoch){throw 'Confirmed interval precedes the admitted start'}
  if($confirmed -and $ready -lt 60000 -and !($ConfirmedEpoch -and $epoch -gt $ConfirmedEpoch)){throw 'Confirmed health has insufficient ready age'}
  return @{launch=$confirmed;flags=[int]$flags;flag_names=$flags.ToString();generation=$generation;epoch=$epoch;completed=$completed;ready_ms=$ready;age_ms=$age;confirmed_since_epoch=$ConfirmedEpoch}
 }

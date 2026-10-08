@@ -134,6 +134,9 @@ function Get-KmdAcceptedConfirmedEpoch {
   if($null -eq $health -or $null -eq $health.generation -or $null -eq $health.epoch){throw 'Acceptance record without a witness'}
   if([UInt64]$health.generation -ne $Generation){continue}
   if([int]$health.flags -ne 15 -or [UInt64]$health.ready_ms -lt 60000){throw 'Acceptance record is not a confirmed start with a full ready age'}
+  # The whole admission Verify made before it wrote the record, not the ready age alone (phase.ps1 asserts
+  # Assert-KmdFreshWork and Assert-KmdConfirmedHealth on the same witness).
+  Assert-KmdFreshWork $health
   $epochs+=[UInt64]$health.epoch
  }
  if(!$epochs.Count){return [UInt64]0}
