@@ -47,6 +47,123 @@ static HRESULT APIENTRY wait_gpu(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATIONO
     // The mock only queues the wait. It deliberately does not advance the fence.
     return wait_result;
 }
+// ---- BD-101: the alignment of a mapping's GPU virtual address ------------------------------------------------
+// Own callbacks, so that the cases below can name their own sizes and addresses without touching the
+// expectations of the mocks above.
+static UINT64 reserve_base=0x300040000ull;      // 64 KiB aligned, deliberately not 4 MiB aligned
+static UINT64 reserved_size,mapped_base,freed_base,freed_size;
+static unsigned reserves,aligned_maps,aligned_frees;
+static HRESULT reserve_result=S_OK,aligned_map_result=S_OK;
+static UINT64 map_answers_address;              // 0: the mock answers the base it was given
+static bool reserve_gives_nothing;              // an acceptance that places no range
+static HRESULT APIENTRY reserve_a(HANDLE d,D3DDDI_RESERVEGPUVIRTUALADDRESS* a){
+    // Nothing of the reservation is pinned: no base, no window, and a size that is a whole number of 64 KiB
+    // pages, as D3DDDI_RESERVEGPUVIRTUALADDRESS requires.
+    assert(d==owner && !a->BaseAddress && !a->MinimumAddress && !a->MaximumAddress);
+    assert(a->Size && !(a->Size&(65536-1)));
+    ++reserves;reserved_size=a->Size;
+    if(FAILED(reserve_result)) return reserve_result;
+    a->VirtualAddress=reserve_gives_nothing?0:reserve_base;
+    return reserve_result;
+}
+static HRESULT APIENTRY map_a(HANDLE d,D3DDDI_MAPGPUVIRTUALADDRESS* a){
+    assert(d==owner && a->hPagingQueue==5 && a->hAllocation==9 && a->Protection.Write);
+    ++aligned_maps;mapped_base=a->BaseAddress;
+    if(FAILED(aligned_map_result)) return aligned_map_result;
+    a->VirtualAddress=map_answers_address?map_answers_address:
+        (a->BaseAddress?a->BaseAddress:0x400000000ull);
+    a->PagingFenceValue=0;
+    return S_OK;
+}
+static HRESULT APIENTRY free_a(HANDLE d,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){
+    assert(d==owner);++aligned_frees;freed_base=a->BaseAddress;freed_size=a->Size;return S_OK;
+}
+static void alignment_cases(){
+    D3DDDI_DEVICECALLBACKS cb{};cb.pfnCreatePagingQueueCb=create;cb.pfnDestroyPagingQueueCb=destroy;
+    cb.pfnMapGpuVirtualAddressCb=map_a;cb.pfnFreeGpuVirtualAddressCb=free_a;
+    cb.pfnReserveGpuVirtualAddressCb=reserve_a;
+    native12::PagingDomain d({owner},cb);assert(d.open()==S_OK);
+    UINT64 address=0;
+    constexpr UINT64 k64=65536,k4M=4ull<<20,bytes=46137344;   // the 4x MSAA target of BD-101, 44 MiB
+    // 64 KiB: the request of every heap of this driver before BD-101. No reservation is taken, the map is
+    // asked for no base, and the release frees the mapped range alone - the behaviour this change must not
+    // alter.
+    {
+        native12::GpuMapping m;completed=0;reserves=0;aligned_maps=0;aligned_frees=0;mapped_base=1;
+        assert(d.map(9,k64,m,k64)==S_OK && !reserves && aligned_maps==1 && !mapped_base);
+        assert(d.ready(m,&address)==S_OK && address==0x400000000ull && !d.reservations());
+        assert(d.unmap_after_gpu_retirement(m)==S_OK && aligned_frees==1);
+        assert(freed_base==0x400000000ull && freed_size==k64);
+    }
+    // 4 MiB (D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT): one reservation of bytes + alignment, rounded
+    // to 64 KiB, the map at the first 4 MiB boundary inside it, and the address the engine is given is that
+    // boundary. The reservation base is 64 KiB aligned and not 4 MiB aligned, so the offset is not zero.
+    {
+        native12::GpuMapping m;completed=0;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,bytes,m,k4M)==S_OK);
+        assert(reserves==1 && reserved_size==bytes+k4M && d.reservations()==1 && !d.reservation_failures());
+        const UINT64 aligned=(reserve_base+k4M-1)&~(k4M-1);
+        assert(aligned>reserve_base && aligned+bytes<=reserve_base+reserved_size);
+        assert(aligned_maps==1 && mapped_base==aligned);
+        assert(d.ready(m,&address)==S_OK && address==aligned && !(address&(k4M-1)));
+        // One free, of the whole reservation: the two pieces outside the mapping go back with it.
+        assert(d.unmap_after_gpu_retirement(m)==S_OK && aligned_frees==1);
+        assert(freed_base==reserve_base && freed_size==bytes+k4M);
+        // The second release of the same mapping does nothing.
+        assert(d.unmap_after_gpu_retirement(m)==S_OK && aligned_frees==1);
+    }
+    // A reservation base the runtime placed on a 4 KiB boundary, which no page of the DDI forbids: the
+    // aligned window is still inside the range, because the span is bytes plus the alignment.
+    {
+        const UINT64 saved=reserve_base;reserve_base=UINT64_C(0x300041000);
+        native12::GpuMapping m;completed=0;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,bytes,m,k4M)==S_OK && reserves==1 && reserved_size==bytes+k4M);
+        const UINT64 aligned=(reserve_base+k4M-1)&~(k4M-1);
+        assert(mapped_base==aligned && d.ready(m,&address)==S_OK && address==aligned);
+        assert(d.unmap_after_gpu_retirement(m)==S_OK && aligned_frees==1);
+        assert(freed_base==reserve_base && freed_size==bytes+k4M);
+        reserve_base=saved;
+    }
+    // Negative controls.
+    {
+        native12::GpuMapping m;completed=0;
+        // An alignment that is not a power of two is refused before any callback.
+        reserves=0;aligned_maps=0;
+        assert(d.map(9,k64,m,96)==E_INVALIDARG && !reserves && !aligned_maps);
+        // A refused reservation: the request fails with the runtime's own code, no map is attempted, and
+        // nothing is freed.
+        reserve_result=E_OUTOFMEMORY;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,bytes,m,k4M)==E_OUTOFMEMORY && reserves==1 && !aligned_maps && !aligned_frees);
+        reserve_result=S_OK;
+        // An acceptance that placed no range: nothing to map and nothing to free.
+        reserve_gives_nothing=true;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,bytes,m,k4M)==E_UNEXPECTED && reserves==1 && !aligned_maps && !aligned_frees);
+        reserve_gives_nothing=false;
+        // A refused map gives the reservation back at once.
+        aligned_map_result=E_OUTOFMEMORY;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,bytes,m,k4M)==E_OUTOFMEMORY && reserves==1 && aligned_maps==1);
+        assert(aligned_frees==1 && freed_base==reserve_base && freed_size==bytes+k4M);
+        aligned_map_result=S_OK;
+        // An accepted map that answers another address than the base it was given is not a mapping: the
+        // reservation goes back and the mapping is left empty, so the caller's release has nothing to do.
+        map_answers_address=reserve_base;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,bytes,m,k4M)==E_UNEXPECTED && reserves==1 && aligned_maps==1 && aligned_frees==1);
+        assert(d.ready(m,&address)==E_INVALIDARG && !address);
+        assert(d.unmap_after_gpu_retirement(m)==S_OK && aligned_frees==1);
+        map_answers_address=0;
+        // Without the reservation callback an alignment above the granularity cannot be asked for at all,
+        // and no map is attempted on a promise the domain cannot keep.
+        D3DDDI_DEVICECALLBACKS bare=cb;bare.pfnReserveGpuVirtualAddressCb=nullptr;
+        native12::PagingDomain nr({owner},bare);native12::GpuMapping n;
+        assert(nr.open()==S_OK);reserves=0;aligned_maps=0;
+        assert(nr.map(9,bytes,n,k4M)==E_UNEXPECTED && !reserves && !aligned_maps);
+        // The same domain still maps a 64 KiB request.
+        completed=0;assert(nr.map(9,k64,n,k64)==S_OK && aligned_maps==1);
+        assert(nr.unmap_after_gpu_retirement(n)==S_OK && nr.close()==S_OK);
+    }
+    assert(d.close()==S_OK);
+}
+
 int main(){
     D3DDDI_DEVICECALLBACKS cb{};cb.pfnCreatePagingQueueCb=create;cb.pfnDestroyPagingQueueCb=destroy;
     cb.pfnMapGpuVirtualAddressCb=map;cb.pfnFreeGpuVirtualAddressCb=free_va;
@@ -157,7 +274,10 @@ int main(){
     native12::PagingDomain nr({owner},bare);assert(nr.open()==S_OK && nr.map(9,65536,held)==S_OK);
     assert(nr.make_resident(held)==E_UNEXPECTED);completed=7;
     assert(nr.unmap_after_gpu_retirement(held)==S_OK && nr.close()==S_OK);
+    alignment_cases();
     puts("paging ownership, context GPU waits, pending VA, loss and callback lifetime gates passed; "
          "own residency reference (CantTrimFurther) joins the fence, CPU wait for the largest value, evicted before "
-         "the VA is freed, a failed eviction does not hold the VA");
+         "the VA is freed, a failed eviction does not hold the VA; BD-101: 64 KiB maps as before, 4 MiB maps at an "
+         "aligned offset inside a reservation of bytes+alignment and frees the whole reservation, and every refusal "
+         "of that route gives the reservation back");
 }

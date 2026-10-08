@@ -133,7 +133,11 @@ struct AllocationRequest final {
         blob.version=BC250_UMD_ALLOC_VERSION_CACHE_POLICY;blob.size=sizeof(blob);
         blob.alloc_size=rounded;blob.phys_alignment=alignment;
         blob.preferred_heap=heap;blob.gem_flags=flags;blob.va_size=rounded;
-        // VA is mapped separately through the runtime; no exact-VA promise here.
+        // phys_alignment is the physical alignment of the allocation the kernel driver makes. The GPU virtual
+        // address is a separate request, made by the mapping (paging.h, PagingDomain::map): the DDI's map
+        // structure has no alignment field, so an alignment above the runtime's own granularity is obtained
+        // from a reservation and the mapping is placed at the aligned offset inside it (BD-101). Nothing here
+        // promises an address.
         info.pPrivateDriverData=&blob;info.PrivateDriverDataSize=sizeof(blob);
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=rounded;
