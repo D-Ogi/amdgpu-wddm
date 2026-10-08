@@ -123,6 +123,35 @@
         "src/gallium/targets/libgl-gdi/opengl32.dll"
       ],
       "recorded_script": null
+    },
+    "lavapipe": {
+      "description": "Lavapipe Vulkan ICD (vulkan_lvp.dll, Mesa's CPU Vulkan driver on llvmpipe) for the CPU (shell, DXVK, lavapipe) pair of the D3D11 shell (BD-088 option b): statically linked LLVM, static C runtime, one ICD manifest name for both architectures",
+      "needs_llvm": true,
+      "glslang": "required",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=enabled",
+        "-Dshared-llvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=swrast",
+        "-Dgallium-drivers=[]",
+        "-Dopengl=false",
+        "-Db_vscrt=mt",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled",
+        "-Dvulkan-manifest-per-architecture=false"
+      ],
+      "targets": [
+        "src/gallium/targets/lavapipe/vulkan_lvp.dll",
+        "src/gallium/targets/lavapipe/lvp_icd.json"
+      ],
+      "recorded_script": "tools/build/build-lavapipe.ps1, first built 2026-10-07"
     }
   }
 }

@@ -28,7 +28,7 @@ pwsh tools\build\build-mesa.ps1 -Config llvmpipe-umd -Source <tree> -Build <dir>
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('radv', 'radv-mt', 'llvmpipe-umd', 'zink-umd', 'zink-gl')][string]$Config,
+    [Parameter(Mandatory)][ValidateSet('radv', 'radv-mt', 'llvmpipe-umd', 'zink-umd', 'zink-gl', 'lavapipe')][string]$Config,
     [Parameter(Mandatory)][string]$Source,
     [Parameter(Mandatory)][string]$Build,
     # Directory whose bin\llvm-config.exe describes the LLVM to link: the -Build directory of build-llvm.ps1.
