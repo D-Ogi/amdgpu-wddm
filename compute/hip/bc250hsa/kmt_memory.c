@@ -263,6 +263,14 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
     map.hAllocation = record->handle;
     map.SizeInPages = phys_bytes / 4096u;
     map.Protection.Write = 1;
+    /* The shader image is fetched as instructions. Our page table writer does honour
+     * DXGK_PTE.NoExecute (driver/shim/bc250_pte.c clears AMDGPU_PTE_EXECUTABLE for
+     * it), and RADV maps its shader buffers with Write alone and executes them on
+     * this driver, so dxgkrnl does not derive NoExecute from this field today. The
+     * bit states the intent at no cost, for the day it does. */
+    if ((flags & BC250HSA_MEM_EXEC) != 0u) {
+        map.Protection.Execute = 1;
+    }
     status = D3DKMTMapGpuVirtualAddress(&map);
     if (!NT_SUCCESS(status)) {
         result = bc250hsa_os_status("MapGpuVirtualAddress", status);
