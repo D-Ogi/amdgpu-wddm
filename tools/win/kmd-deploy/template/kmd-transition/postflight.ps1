@@ -8,11 +8,16 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\parameters.ps1"
 . "$PSScriptRoot\confirmed-present-start.ps1"
 . "$PSScriptRoot\verify-cpu.ps1"
+. "$PSScriptRoot\release.ps1"
 $Directory = [IO.Path]::GetFullPath($Directory)
 if ($Directory -notmatch $KmdDirectoryPattern) { throw 'Unexpected directory' }
 $result = [ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); read_only = $true }
 $result.stop = [bool](Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 3).stop
 if ($result.stop) { throw 'Owner STOP requested' }
+# Every KMD query goes through the installed release's client, with its usage read once.
+$cli = Resolve-KmdClient (Get-KmdReleaseClientPath) @('info', 'health read', 'clock read', 'log summary')
+$result.cli = $cli
+$result.cli_sha256 = (Get-FileHash -LiteralPath $cli).Hash
 $saved = Get-Content "$Directory\baseline.json" -Raw | ConvertFrom-Json
 $boundary = Get-Content "$Directory\boundary.json" -Raw | ConvertFrom-Json
 $watch = Get-Content "$Directory\watch-result.json" -Raw | ConvertFrom-Json
@@ -55,11 +60,11 @@ $result.running_tasks = @(Get-ScheduledTask | Where-Object { $_.State -eq 'Runni
 $result.watch_task = if (Get-ScheduledTask -TaskName $KmdTaskName -ErrorAction SilentlyContinue) { 'Present' } else { 'Missing' }
 $result.legacy_clock_state = [string](Get-ScheduledTask -TaskName 'BC250 GPU clock 1000MHz 820mV').State
 if ($result.legacy_clock_state -ne 'Disabled') { throw 'Legacy writer enabled' }
-$result.info = (& C:\BC250\m8\bc250kmd_cli.exe info | Out-String)
+$result.info = (& $cli info | Out-String)
 if ($LASTEXITCODE -ne 0 -or $result.info -notmatch $KmdCandidateAbi -or $result.info -notmatch 'FULL WDDM TABLE') { throw 'Unexpected loaded KMD' }
-$result.health = (& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read | Out-String)
+$result.health = (& $cli health read | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Health query failed' }
-$result.clock = (& C:\BC250\m9\candidate07136\client\bc250kmd_cli.exe clock read | Out-String)
+$result.clock = (& $cli clock read | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Clock query failed' }
 $result.temperature = (& C:\BC250\bc250rd\bc250rd_cli.exe temp 1 1 | Out-String)
 if ($LASTEXITCODE -ne 0 -or $result.temperature -notmatch 'Tctl\s+([0-9]+(?:\.[0-9]+)?)') { throw 'Temperature unavailable' }
@@ -68,7 +73,7 @@ $parameters = [ordered]@{}
 $key = Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 foreach ($name in $key.GetValueNames()) { $parameters[$name] = @{ value = $key.GetValue($name); kind = $key.GetValueKind($name).ToString() } }
 $result.parameters = $parameters
-$result.driver_log = (& C:\BC250\m8\bc250kmd_cli.exe log summary | Out-String)
+$result.driver_log = (& $cli log summary | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Log query failed' }
 $result.confirmed = Get-ConfirmedPresentStart -Health $result.health -ElapsedSeconds 0 -Abi $KmdCandidateAbi
 if (!$result.confirmed.launch) { throw 'Confirmed CPU baseline required' }

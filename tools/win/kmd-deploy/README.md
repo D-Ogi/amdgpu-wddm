@@ -73,6 +73,25 @@ first promotion over a release as a `--mode rehearsal` attempt.
 `<BC250_ROOT>/scratch/m15/native-caps001/lab-baseline.json` is the deployed baseline. The rollback must be the
 KMD it names, and it supplies the desktop UMD and ICD pins that `preflight`, `Verify` and `postflight` require.
 
+## The installed release
+
+The lab runs a release install since tester.10 (owner, 2026-10-03), and the kit reads the lab from that install
+alone. The release installer writes `InstallRoot` into `HKLM\SOFTWARE\amdgpu-wddm\Release`.
+
+- The KMD client is `<InstallRoot>\tools\bc250kmd_cli.exe`, and no other copy is used.
+  `kmd-transition/release.ps1` finds it and reads the client's own usage for each query form the caller needs
+  (`info`, `health read`, `health confirm`, `clock read`, `log`, `log summary`). A release that is not installed, a
+  client that is not there, and a form the usage does not name are refused, each with its cause. Every `ops`
+  runner holds the same rule in one line, because each of them runs alone on the lab.
+- The desktop UMD, the system ICD and the desktop route come from `lab-baseline.json`, which `release-baseline.py`
+  derives from the release manifest. `freeze` writes them into the attempt's own `identity.ps1`. No file of the kit
+  holds the hash of one release.
+- `lab-baseline.json` must have its `desktop` block. The release installer registers the desktop router, so a
+  baseline without that block cannot describe the lab, and `freeze` refuses it.
+- `check-offline.py` has the check `legacy lab paths`. No file of the kit may name `C:\BC250\m8` to `C:\BC250\m14`,
+  and no file may name a KMD client by its path. Those lab directories go away (owner, 2026-10-08), and a second
+  client copy can answer about a driver other than the one on the GPU.
+
 `freeze` writes each attempt's own `kmd-transition/identity.ps1` from these inputs and then runs
 `test-identity.ps1` on it: no version, ABI, label, hash or lab path literal may appear in any other script. The
 template's `identity.ps1` is only a host-test fixture. Attempts live in
@@ -83,7 +102,7 @@ rewritten. Any change is a new freeze. The steps below write `kmdRRR-deployNNN` 
 
 | # | Command | Pass |
 |---|---------|------|
-| 1 | `python check-offline.py` | 42/42. `--quick` 39/39, measured 2026-10-07 from this copy |
+| 1 | `python check-offline.py` | 44/44. `--quick` 41/41, measured 2026-10-08 from this copy |
 | 2 | `python stage.py freeze --package <dir> --rollback <dir>` (`--rollback-build <dir>` with a release package, `--mode rehearsal` always rolls back) | prints the attempt name and the manifest hash |
 | 3 | LAB `mon.py status "KMD<R> promotion: staging" info`, then `mon.py stop?` | STOP clear |
 | 4 | LAB `python stage.py push kmdRRR-deployNNN` | exit 0: a 30 s bounded child checks the rollback baseline, and the candidate enters the DriverStore without an install |
@@ -99,6 +118,24 @@ Recovery, the rollback semantics and the result table are those of the kmd173 ru
 as `preflight.ps1`. The optional fresh-DWM pre-step is `ops\fresh-dwm-run.ps1`.
 
 ## The lessons, each paid for by a failed attempt
+
+**A candidate over an installed release.** `<BC250_ROOT>\scratch\dp-audio\deploy-candidate.ps1` is the by-hand
+route: it puts a candidate on the GPU over the release install in three steps, and each step names a trap the kit
+must answer.
+
+1. It installs with `UpdateDriverForPlugAndPlayDevices` and `INSTALLFLAG_FORCE`, because the release INF has a
+   higher version than a candidate and wins the rank. The kit does not rank at all. `select-driver.exe
+   --install-deferred` builds the driver list from the candidate INF alone (`DI_ENUMSINGLEINF`), it needs exactly
+   one compatible node, and it selects that node on the disabled adapter.
+2. It applies `registry-defaults.json` again after the install, because an INF install closed every gate the INF
+   names (BD-091). The `Configure` phase writes the whole capture of `Parameters` back, which covers that shape and
+   any other. It records what the install changed in `<receipt>-parameters-after-install.json`, and it writes
+   `UnconfirmedStarts` 0, so the candidate always starts with a fresh start budget (BD-090).
+3. It then restarts Windows and never the device, because a live device restart over the release ends at Code 43
+   (BD-090). The kit does not restart the live device either. It disables the adapter, installs, configures and
+   enables it, and it runs on the CPU desktop route with the present heartbeat, which is the path measured since
+   revision 173. An attempt that needs a restart ends `recovery-required`, and the by-hand steps below put the lab
+   back.
 
 **The candidate budget is 122 s, not 107 s.** A candidate is retained only when its start health reaches
 `ready_ms >= 60000` inside the candidate `Verify` phase. kmd179-deploy002 failed because the driver enable took 15 s
@@ -167,14 +204,14 @@ Values that exist live but not in the capture are listed in `parameters_added`. 
 ## Host tests
 
 ```
-python tools\win\kmd-deploy\check-offline.py            42 checks, about 3 minutes
-python tools\win\kmd-deploy\check-offline.py --quick    39 checks, without the bounded-child tests
+python tools\win\kmd-deploy\check-offline.py            44 checks, about 3 minutes
+python tools\win\kmd-deploy\check-offline.py --quick    41 checks, without the bounded-child tests
 python tools\win\kmd-deploy\tools\test_versions.py      the version rules, also part of both runs above
 python tools\win\kmd-deploy\tools\test_accept.py <dry-run attempt dir>    11 checks on a scratch copy
 ```
 
 `tools/quality/quick.ps1` runs `--quick` as the check `kmd-deploy`. The gate compiles every Python file, parses
-all 89 PowerShell scripts with the Windows PowerShell 5.1 parser, proves that the kmd168 helpers in the template
+all 87 PowerShell scripts with the Windows PowerShell 5.1 parser, proves that the kmd168 helpers in the template
 are the 171 stage's own files byte for byte, and runs every transition host test. The bounded-child tests start
 short-lived hidden `powershell.exe` children inside a job that the helper kills. Nothing resident and no window.
 

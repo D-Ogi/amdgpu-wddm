@@ -92,14 +92,15 @@ HASH_RE = re.compile(r'^[0-9A-F]{64}$')
 
 def desktop_pins(baseline):
     """The desktop a KMD promotion runs under, from lab-baseline.json: the latched interop switches (0 or 1), the
-    exact driver-module hash set DWM holds, and the router key when a router is registered. Without a desktop block
-    (before the GPU DWM ladder's T3) that is the CPU UMD alone with both switches 0, as every promotion up to 182.
-    With one, the promotion runs on its CPU route: router + CPU UMD, DwmForceCpu 1 (`route.py NNN cpu` first),
-    because the kit's Verify needs one known module set and the CPU route is the stop path measured since 173."""
+    exact driver-module hash set DWM holds, and the registered router's key. The promotion runs on the CPU route,
+    router + CPU UMD with DwmForceCpu 1 (`route.py release cpu` first), because the kit's Verify needs one known
+    module set and the CPU route is the stop path measured since 173. A baseline with no desktop block is refused:
+    release-baseline.py derives one from every release manifest, and the pre-router shape it would stand for (the
+    CPU UMD alone, both switches 0) cannot describe an installed release, whose installer registers the router."""
     umd = baseline['umd_sha256'].upper()
     desktop = baseline.get('desktop')
     if desktop is None:
-        return {'switches': '0', 'modules': [umd], 'router_key': ''}
+        fail('lab-baseline.json has no desktop block: derive it from the installed release with release-baseline.py')
     switches = desktop.get('switches')
     modules = sorted({h.upper() for h in desktop.get('dwm_routes', {}).get('cpu', [])})
     registered = str(desktop.get('registered_sha256', '')).upper()

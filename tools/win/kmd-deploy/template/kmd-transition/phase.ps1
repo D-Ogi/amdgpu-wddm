@@ -14,6 +14,7 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot\registration.ps1"
 . "$PSScriptRoot\hang-detector.ps1"
 . "$PSScriptRoot\parameters.ps1"
+. "$PSScriptRoot\release.ps1"
 $directoryPath=[IO.Path]::GetFullPath($Directory)
 if($directoryPath -notmatch $KmdDirectoryPattern){throw 'Unexpected trial directory'}
 $out=$directoryPath
@@ -154,7 +155,18 @@ if($Phase -eq 'Capture'){
    # The interop record (interop.c) is the KMD's own: writing a captured InteropSession back would plant a session
    # marker, and the stop already wrote InteropLastEnd. Only the operator's switches are restored (just below).
    $skip=@('UnconfirmedStarts','LastStage','StageHistory')+@(Get-KmdHangDetectorNames)+@(Get-KmdInteropWrittenNames)
+   # What the install did to Parameters, before this write-back undoes it: an INF install used to close every gate
+   # the INF names (BD-091), and the release INF now writes each at its released value with NOCLOBBER. The
+   # write-back of the capture covers both shapes, so this receipt is what says which one the lab had.
+   $installed=[ordered]@{}
+   $installedKey=Get-Item $reg
+   foreach($name in $installedKey.GetValueNames()){$installed[$name]=@{value=$installedKey.GetValue($name);kind=$installedKey.GetValueKind($name).ToString()}}
+   Write-DurableText "$out\$Receipt-parameters-after-install.json" ((Compare-KmdCapturedParameters -Saved $saved.parameters -Live $installed -Skip @(Get-KmdInteropWrittenNames))|ConvertTo-Json -Depth 6)
    foreach($item in $saved.parameters.PSObject.Properties){if($item.Name -in $skip){continue};New-ItemProperty $reg -Name $item.Name -Value $item.Value.value -PropertyType $item.Value.kind -Force|Out-Null}
+   # A fresh start budget for the driver this phase configures (guard.c). The INF writes this 0 at every install and
+   # deploy-candidate.ps1 writes it by hand for the same reason: a count left at BC250_MAX_UNCONFIRMED_STARTS
+   # refuses the next start with Code 43, which inside the bounded window costs the whole attempt (BD-090).
+   New-ItemProperty $reg -Name UnconfirmedStarts -Value 0 -PropertyType DWord -Force|Out-Null
    # Detector values are written with absence as a state and read back before the device can start.
    $parametersKey=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters',$true)
    if(!$parametersKey){throw 'Driver registry key absent'}
@@ -189,6 +201,9 @@ if($Phase -eq 'Capture'){
   }
   'Verify' {
    if($version -ne $expectedVersion -or $actual -ne $manifest.$label.'bc250kmd.sys' -or $gpu.Status -ne 'OK'){throw 'Active identity mismatch'}
+   # Every KMD query of this phase goes through the installed release's client, with its usage read once. The
+   # client is the release's, never a staged copy: a candidate's own client would answer about itself.
+   $cli=Resolve-KmdClient (Get-KmdReleaseClientPath) @('info','health read','health confirm','log')
    $umd=(Get-FileHash -LiteralPath $KmdDesktopUmdPath).Hash
    $icd=(Get-FileHash -LiteralPath $KmdIcdPath).Hash
    if($umd -ne $saved.umd_sha256 -or $icd -ne $saved.icd_sha256){throw 'CPU baseline files changed'}
@@ -213,7 +228,7 @@ if($Phase -eq 'Capture'){
    $abi=if($Arm -eq 'candidate' -and $mode -ne $KmdSameMode){$KmdCandidateAbi}else{$KmdRollbackAbi}
    $script:lastHealthText=''
    $readHealth={
-    $text=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
+    $text=& $cli health read|Out-String
     $script:lastHealthText="exit $LASTEXITCODE`r`n$text"
     if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}
     Get-KmdReadyHealth $text $abi
@@ -228,7 +243,7 @@ if($Phase -eq 'Capture'){
     # keep the last raw health answer and the KMD log ring (best effort, the original error is rethrown).
     try {
      Write-DurableText "$out\$Receipt-health-last.txt" ([string]$script:lastHealthText)
-     $failLog=& C:\BC250\m8\bc250kmd_cli.exe log|Out-String
+     $failLog=& $cli log|Out-String
      Write-DurableText "$out\$Receipt-kmdlog-failed.txt" ("exit $LASTEXITCODE`r`n"+$failLog)
     } catch {}
     throw
@@ -236,13 +251,13 @@ if($Phase -eq 'Capture'){
    $startHealth=$ready.health
    $observed=$ready.observed
    Write-DurableText "$out\$Receipt-readiness.json" ($ready|ConvertTo-Json -Depth 10)
-   $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
+   $health=& $cli health read|Out-String
    if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}
    $before=Get-KmdReadyHealth $health $abi
    Assert-KmdSameHealthStart $startHealth $before
    if($Arm -eq 'candidate'){Assert-KmdFreshWork $before}
    Write-DurableText "$out\$Receipt-health-before.txt" $health
-   $info=& C:\BC250\m8\bc250kmd_cli.exe info|Out-String
+   $info=& $cli info|Out-String
    if($LASTEXITCODE -ne 0 -or $info -notmatch $abi -or $info -notmatch 'FULL WDDM TABLE'){throw 'Loaded KMD identity mismatch'}
    # Registration, its files and the detector, checked while the ready interval runs, not after it.
    $classKey=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Class\'+$driverKey)
@@ -258,7 +273,7 @@ if($Phase -eq 'Capture'){
    Assert-KmdHangDetectorClosed $detector
    # hang.c logs this line when it arms; the ring holds this start's lines unless it wrapped (the registry
    # readback above is the primary witness).
-   $log=& C:\BC250\m8\bc250kmd_cli.exe log|Out-String
+   $log=& $cli log|Out-String
    if($LASTEXITCODE -ne 0){throw 'Log query failed'}
    if($log -match 'hang: detector ARMED'){throw 'Hang detector armed at start'}
    # The ring's lines carry milliseconds since the driver load: where a slow start spent its time (the
@@ -275,12 +290,12 @@ if($Phase -eq 'Capture'){
    }
    if($requireConfirmed -and $before.flags -eq 7){
     Assert-KmdConfirmEligible $before
-    $confirmed=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health confirm $before.generation $before.epoch|Out-String
+    $confirmed=& $cli health confirm $before.generation $before.epoch|Out-String
     if($LASTEXITCODE -ne 0){throw 'Checked health confirmation failed'}
     Assert-KmdConfirmedHealth $before (Get-KmdReadyHealth $confirmed $abi)
     Write-DurableText "$out\$Receipt-health-confirm.txt" $confirmed
    }
-   $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
+   $health=& $cli health read|Out-String
    if($LASTEXITCODE -ne 0){throw 'Final health read failed'}
    $finalHealth=Get-KmdReadyHealth $health $abi
    Assert-KmdSameHealthStart $startHealth $finalHealth

@@ -1,5 +1,6 @@
 # Confirm the current KMD start (health flags 7 -> 15) on a fresh witness; heartbeat must be running.
-$cli = 'C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'
+# The installed release is the only KMD client (owner, 2026-10-08); InstallRoot is what its installer wrote.
+$cli = Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot) 'tools\bc250kmd_cli.exe'
 $sw = [Diagnostics.Stopwatch]::StartNew()
 while ($sw.Elapsed.TotalSeconds -lt 50) {
     $h = & $cli health read

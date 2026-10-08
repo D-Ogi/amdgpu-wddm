@@ -1,6 +1,6 @@
 """Offline gates of the generic KMD transition tool, on the development PC only (no lab access).
 
-    python check-offline.py            py_compile, PowerShell 5.1 parse, literal gate and every host test
+    python check-offline.py            py_compile, PowerShell 5.1 parse, literal gates and every host test
     python check-offline.py --quick    the same without the tests that launch bounded-child.exe
 
 The bounded-child tests start short-lived hidden powershell.exe children inside a Job that the helper kills (at
@@ -12,6 +12,7 @@ Outputs go to host-tests/<UTC stamp>/ under this directory, never to C:.
 import argparse
 import json
 import py_compile
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -24,8 +25,43 @@ PURE = ['test-identity', 'test-hang-detector', 'test-child-closure', 'test-cpu-s
         'test-health-order', 'test-health-wait', 'test-install-observation', 'test-logged-transition',
         'test-package-cleanup', 'test-pnp-idle', 'test-readiness-health', 'test-readiness', 'test-registered-package',
         'test-setup-log', 'test-verify-cpu', 'test-parameters']
-WITH_OUT = ['test-registration', 'test-stage', 'test-transition-policy']
+WITH_OUT = ['test-registration', 'test-release', 'test-stage', 'test-transition-policy']
 WITH_TOOL = ['test-arm-helper', 'test-supervisor']
+# The kit runs on the installed release and needs nothing from the old lab directories C:\BC250\m8 to m14, which go
+# away (owner, 2026-10-08). The KMD client is the release's, resolved through InstallRoot: a kit file that names a
+# client by path has a copy of its own, which can answer about another driver than the one on the GPU.
+LEGACY_DIRECTORY = re.compile(r'(?i)C:\\BC250\\m(?:8|9|1[0-4])\\')
+CLIENT_BY_PATH = re.compile(r'(?i)[a-z]:\\[^\s"\']*bc250kmd_cli\.exe')
+SCANNED = ('.py', '.ps1', '.md', '.json', '.cpp', '.c')
+# This file states both rules; every other file of the kit must satisfy them.
+SCAN_EXEMPT = ('check-offline.py',)
+# The kit's own files: its Python drivers and its README, and everything under these three directories. The
+# operator copy holds more beside them (its frozen attempts, its host-test output and its own one-off scripts).
+# A frozen attempt is never rewritten: it names what the lab was when it was frozen, and that is its purpose.
+SCAN_DIRECTORIES = ('ops', 'template', 'tools')
+
+
+def kit_files():
+    """The kit's own files with a text suffix this gate reads, in one sorted list."""
+    found = [path for path in BASE.glob('*.py')] + [BASE / 'README.md']
+    for name in SCAN_DIRECTORIES:
+        found += [path for path in (BASE / name).rglob('*')
+                  if path.is_file() and '__pycache__' not in path.parts]
+    return sorted(path for path in found
+                  if path.is_file() and path.suffix.lower() in SCANNED and path.name not in SCAN_EXEMPT)
+
+
+def legacy_paths():
+    """Every kit file that names an old lab directory or a KMD client by path, as 'name:line rule' rows."""
+    hits = []
+    for path in kit_files():
+        rel = path.relative_to(BASE).as_posix()
+        for number, line in enumerate(path.read_text(encoding='utf-8', errors='replace').splitlines(), 1):
+            if LEGACY_DIRECTORY.search(line):
+                hits.append(f'{rel}:{number} old lab directory')
+            if CLIENT_BY_PATH.search(line):
+                hits.append(f'{rel}:{number} KMD client by path')
+    return hits
 
 
 def ps(script, *args, timeout=120):
@@ -54,6 +90,9 @@ def main():
             record('py_compile ' + py.name, False, str(error))
     r = ps(OPS / 'parse-check.ps1', '-Root', f'{TEMPLATE};{OPS}')
     record('parse-check', r.returncode == 0, r.stdout + r.stderr)
+    hits = legacy_paths()
+    record('legacy lab paths', not hits, '\n'.join(hits[:10]) if hits else 'no kit file names C:\\BC250\\m8..m14 '
+           'or a KMD client by path')
 
     transition = TEMPLATE / 'kmd-transition'
     kmd168 = TEMPLATE / 'kmd168-transition'

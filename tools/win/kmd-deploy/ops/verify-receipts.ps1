@@ -8,7 +8,9 @@ foreach ($f in @('candidate-verify-health-before.txt', 'candidate-verify-health-
 "--- newest verify files"
 Get-ChildItem -LiteralPath $d -File | Where-Object { $_.Name -match 'verify' } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 6 | ForEach-Object { "=== $($_.Name) $($_.LastWriteTimeUtc.ToString('HH:mm:ss'))"; (Get-Content -LiteralPath $_.FullName -Raw) -replace '\s+', ' ' | ForEach-Object { $_.Substring(0, [Math]::Min(700, $_.Length)) } }
 "--- health now"
-& 'C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe' health read 2>&1 | Select-Object -First 1
+# The installed release is the only KMD client (owner, 2026-10-08); InstallRoot is what its installer wrote.
+$cli = Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot) 'tools\bc250kmd_cli.exe'
+& $cli health read 2>&1 | Select-Object -First 1
 "--- heartbeat task"
 Get-ScheduledTask -TaskName 'Lab-Present-Heartbeat' -ErrorAction SilentlyContinue | ForEach-Object { '{0} {1}' -f $_.TaskName, $_.State }
 "--- session"

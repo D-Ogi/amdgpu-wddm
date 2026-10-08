@@ -17,9 +17,11 @@ function New-FakeKey([hashtable]$Values){
  return $key
 }
 function RoundTrip($Value){$Value|ConvertTo-Json -Depth 8|ConvertFrom-Json}
-# The deployed shape: a four-entry UserModeDriverName (D3D12 slot last) and a one-entry VulkanDriverName.
-$umd=[string[]]@('bc250umd.dll','C:\BC250\m11\resource-close\bc250d3d.dll','C:\BC250\m11\resource-close\bc250d3d.dll','C:\BC250\m15\registration002\amdgpu_wddm_d3d12.dll')
-$icd=[string[]]@('C:\BC250\m10\wsi-final\radeon_icd.json')
+# The deployed shape, as the release installer writes it (lab-baseline.json registration, derived from the release
+# manifest): a four-entry UserModeDriverName with the D3D12 shell last, and a one-entry VulkanDriverName. Slot 1 is
+# the D3D9 stub's, empty since 0.7.215.100-tester.18; this fixture keeps a name there to exercise the bare-name case.
+$umd=[string[]]@('bc250umd.dll','C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll','C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll','C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll')
+$icd=[string[]]@('C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json')
 $key=New-FakeKey @{UserModeDriverName=@{kind='MultiString';value=$umd};VulkanDriverName=@{kind='MultiString';value=$icd};DriverDesc=@{kind='String';value='BC-250 GPU'};OpenGLFlags=@{kind='DWord';value=3}}
 $capture=Read-KmdGraphicsRegistration $key
 if(@($capture.Keys).Count -ne 3 -or $capture.Contains('DriverDesc')){throw 'Wrong value family captured'}
