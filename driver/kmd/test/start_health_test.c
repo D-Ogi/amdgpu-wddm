@@ -106,6 +106,13 @@ int main(void)
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
     r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==1 && flushes==1 && cuConfirms==1 && dpmConfirms==1);
     CHECK(StartHealthIsReady(&d,&generation) && generation==d.StartHealth.Generation);
+    // BD-098: a mode set and a visibility change advance the epoch, and the confirmed start stays confirmed.
+    epoch=d.StartHealth.Epoch;old=writes;
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,FALSE);StartHealthLeave(&d);
+    r=query(&d,0);CHECK(d.StartHealth.Epoch>epoch && (r.Flags&BC250_START_HEALTH_CONFIRMED) && !(r.Flags&BC250_START_HEALTH_VISIBLE));
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthVisibilityLocked(&d,FALSE);StartHealthVisibilityLocked(&d,TRUE);StartHealthLeave(&d);
+    r=query(&d,0);CHECK(r.Flags==15 && writes==old);
+    StartHealthCompleted(&d,24); // the primary of the new interval, repeated below
     // Unchanged visibility and one repeated primary cannot manufacture progress.
     epoch=d.StartHealth.Epoch;count=d.StartHealth.Completed;
     StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
@@ -131,6 +138,10 @@ int main(void)
     healthy(&d);r=query(&d,0);r.Op=1;old=writes;StartHealthRequest(&d,&r,FALSE,1);CHECK(r.Status==3 && writes==old);
     r=query(&d,0);r.Op=1;StartHealthRequest(&d,&r,TRUE,9);CHECK(r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && writes==old);
     r=query(&d,0);r.AbiVersion=2;StartHealthRequest(&d,&r,TRUE,8);CHECK(r.Status==2);
+    healthy(&d);r=query(&d,1);CHECK(r.Flags==15);
+    // BD-098: a close after a mode set takes CONFIRMED away, although the generation was confirmed.
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,FALSE);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    StartHealthClose(&d);r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_CONFIRMED) && !(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,1);CHECK(r.Flags==15);
     generation=d.StartHealth.Generation;epoch=d.StartHealth.Epoch;old=writes;
     StartHealthClose(&d);StartHealthResumeReady(&d,TRUE);r=query(&d,0);
