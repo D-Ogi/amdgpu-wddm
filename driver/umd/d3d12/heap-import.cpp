@@ -22,24 +22,29 @@ HRESULT from_vk(VkResult r) noexcept {
 // increment 3). A game that recreates the same chain at the same mode adds nothing; a resize, a mode change,
 // a format change or a different answer adds one line. The budget bounds a game that alternates forever,
 // and the last line of the budget says that it ran out, so a quiet log is never mistaken for a quiet game.
+// desktop is the word of bc250_desktop_route_text for the compositor's record ("not-read" when the off
+// switch stopped the decision before it), and desktop_pid the compositor that wrote it.
 void scanout_note(const ScanoutDecision& decision,const bc250_scanout_caps& caps,unsigned long force_cpu,
+                  const char* desktop,unsigned desktop_pid,
                   unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
-    const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,
-        pitch,dxgi,caps.flags,caps.post_width,caps.post_height,force_cpu};
     unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
+    const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,
+        pitch,dxgi,caps.flags,caps.post_width,caps.post_height,force_cpu,desktop_pid};
     for(const unsigned long long word:words)
         for(unsigned i=0;i<8;++i)key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
+    for(const char* c=desktop;*c;++c)key=(key^static_cast<unsigned char>(*c))*1099511628211ull;
     static std::atomic<unsigned long long> last{0};
     static std::atomic_int budget{64};
     if(last.exchange(key,std::memory_order_relaxed)==key)return;
     const int left=budget.fetch_sub(1,std::memory_order_relaxed);
     if(left<=0)return;
-    char text[256];
+    char text[288];
     std::snprintf(text,sizeof(text),
-        "M15.14 scanout %s switch=%s chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu%s\n",
+        "M15.14 scanout %s switch=%s chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu "
+        "desktop=%s desktop_pid=%u%s\n",
         scanout_stand_down_text(decision.reason),scanout_switch_text(decision.switch_state),width,height,
         pitch,dxgi,static_cast<unsigned long>(caps.flags),caps.post_width,caps.post_height,force_cpu,
-        left==1?" budget-spent":"");
+        desktop,desktop_pid,left==1?" budget-spent":"");
     OutputDebugStringA(text);
 }
 }
@@ -105,6 +110,7 @@ RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& doma
     // for every primary (scanout_caps_now); a device without an adapter - the host tests - has none.
     adapter_=d.adapter;
     force_cpu_=scanout_force_cpu();
+    desktop_route_reader_=&scanout_desktop_route_read;
 }
 bc250_scanout_caps RuntimeHeapImports::scanout_caps_now() const noexcept {
     if(!adapter_)return {};
@@ -464,16 +470,21 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // Every reason not to ask for scan-out stands the request down to this composed primary instead
         // of failing the allocation; the clauses and why each one exists are in scanout-mode.h. They
         // include the operator's switches on both sides (scanout-flip-off, the kernel driver's published
-        // trailer, the desktop route's DwmForceCpu), the source mode's geometry and the pitch, because a
-        // request the kernel driver would refuse at flip time is worse than no request: the buffer would
-        // be in VRAM with no CPU mapping, and the refusal would come after SharedPrimaryTransition.
+        // trailer, the desktop route's DwmForceCpu), the compositor's own route, the source mode's
+        // geometry and the pitch, because a request the kernel driver would refuse at flip time, or one
+        // the compositor could not read, is worse than no request: the buffer would be in VRAM with no
+        // CPU mapping, and the refusal would come after SharedPrimaryTransition.
         if(primary){
-            // The trailer of this moment: the geometry clause compares the chain with the source mode the
-            // kernel driver has committed now, which a game may have changed since the device was made.
-            // The off switch is asked first, so a start that turned scan-out off makes no query at all.
-            const bc250_scanout_caps caps=scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off?
-                bc250_scanout_caps{}:scanout_caps_now();
+            // The trailer and the compositor's record of this moment: the geometry clause compares the
+            // chain with the source mode the kernel driver has committed now, which a game may have changed
+            // since the device was made, and dwm.exe may have restarted on another route since then. The
+            // off switch is asked first, so a start that turned scan-out off reads neither.
+            const bool off=scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off;
+            const bc250_scanout_caps caps=off?bc250_scanout_caps{}:scanout_caps_now();
+            bc250_desktop_route desktop{};
+            const unsigned desktop_status=off?BC250_DESKTOP_ROUTE_READ_ABSENT:desktop_route_now(&desktop);
             const ScanoutDecision decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,
+                bc250_desktop_route_gpu(desktop_status,&desktop)!=0,
                 unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
             if(decision.admitted){
                 const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
@@ -482,8 +493,9 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                 // the two lookups, and the composed primary is the safe answer to that as well.
                 if(direct){row=direct;surface_scanout=true;}
             }
-            scanout_note(decision,caps,force_cpu_,unsigned(r->Format),unsigned(r->Width),r->Height,
-                         request->surface_row_pitch);
+            scanout_note(decision,caps,force_cpu_,
+                         off?"not-read":bc250_desktop_route_text(desktop_status,desktop.route),desktop.pid,
+                         unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
         }
         if(!row)return refuse(primary?"primary format":"shared surface format",E_NOTIMPL,*request);
         surface_format=static_cast<D3DDDIFORMAT>(row->d3dddi);

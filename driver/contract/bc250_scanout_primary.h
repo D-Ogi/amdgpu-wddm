@@ -17,6 +17,11 @@
 //                    reads every primary on the CPU, it has no CheckDirectFlipSupport and no flip exists,
 //                    and the request alone would cost that reader its write-combined aperture mapping
 //                    (experiments 104 and 107).
+//   DESKTOP_ROUTE    the compositor did not publish the GPU route (bc250_desktop_route.h): the router in
+//                    dwm.exe sent it to the CPU UMD (the kill switch, the kernel driver's desktop switches,
+//                    or a hosted open that failed), or no record from the compositor's account exists. The
+//                    stand-down has the reason of FORCE_CPU. This clause also covers the fallback, which no
+//                    registry value shows.
 //   CAPS_CLOSED      the kernel driver published no scan-out trailer, or one without
 //                    BC250_SCANOUT_CAPS_DIRECT_FLIP: an older driver, or an operator switch that is off.
 //   SOURCE_GEOMETRY  the chain is not the geometry of the source mode that the trailer carries, which is
@@ -40,6 +45,7 @@
 #define BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY 3u
 #define BC250_SCANOUT_PRIMARY_FORMAT          4u
 #define BC250_SCANOUT_PRIMARY_PITCH           5u
+#define BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE   6u   /* asked second; numbered last so the older numbers stay */
 
 // The byte pitch of a scan-out row, and the only one every component derives on its own: the compositor's
 // hosted driver rounds a row (width * bytes_per_pixel) up to 256 bytes (the router's HostedSurfacePitch),
@@ -55,13 +61,16 @@ static __inline unsigned int bc250_scanout_primary_pitch(unsigned int width, uns
 }
 
 // caps is the trailer as read for this primary (all zero when there is none), force_cpu the desktop
-// router's kill switch as that router reads it (any non-zero value is on), dxgi the chain's DXGI format,
-// width, height and pitch the chain's buffer as the shell describes it to the kernel driver.
+// router's kill switch as that router reads it (any non-zero value is on), desktop_gpu whether the
+// compositor's record says GPU (bc250_desktop_route_gpu, read for this primary), dxgi the chain's DXGI
+// format, width, height and pitch the chain's buffer as the shell describes it to the kernel driver.
 static __inline unsigned int bc250_scanout_primary_rule(const struct bc250_scanout_caps* caps,
-    unsigned long force_cpu, unsigned int dxgi, unsigned int width, unsigned int height, unsigned int pitch)
+    unsigned long force_cpu, int desktop_gpu, unsigned int dxgi, unsigned int width, unsigned int height,
+    unsigned int pitch)
 {
     const AMDGPU_WDDM_SURFACE_FORMAT* row;
     if (force_cpu) return BC250_SCANOUT_PRIMARY_FORCE_CPU;
+    if (!desktop_gpu) return BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE;
     if (!caps || caps->magic != BC250_SCANOUT_CAPS_MAGIC || caps->version != BC250_SCANOUT_CAPS_VERSION ||
         !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP))
         return BC250_SCANOUT_PRIMARY_CAPS_CLOSED;
@@ -83,6 +92,7 @@ static __inline const char* bc250_scanout_primary_text(unsigned int reason)
     case BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY: return "source-geometry";
     case BC250_SCANOUT_PRIMARY_FORMAT: return "format";
     case BC250_SCANOUT_PRIMARY_PITCH: return "pitch";
+    case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE: return "desktop-route";
     default: return "unknown";
     }
 }

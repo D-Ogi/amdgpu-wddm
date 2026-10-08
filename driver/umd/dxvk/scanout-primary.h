@@ -22,18 +22,20 @@
 //                that a trial can say which shape a game uses.
 //   VidPnSource  the descriptor names a video present source other than the one this adapter has
 //                (BC250_SCANOUT_VIDPN_SOURCE).
-//   then the shared rule: ForceCpu, CapsClosed, SourceGeometry, Format, Pitch.
+//   then the shared rule: ForceCpu, DesktopRoute (the compositor's record, driver/contract/bc250_desktop_route.h,
+//   read for every primary), CapsClosed, SourceGeometry, Format, Pitch.
 //
 // Every answer except Admitted keeps the composed primary this shell has always made: same record without
 // the SCANOUT bit, same aperture placement. A stand-down is never a failure of CreateResource.
 #include "adapter-identity.h"
 #include "../../contract/bc250_scanout_primary.h"
+#include "../../contract/bc250_desktop_route.h"
 #include "../../kmd/surface_resource_private.h"
 #include <cstring>
 namespace bc250::umd {
 inline constexpr bool kScanoutPrimaryDefaultOn=false;
 enum class ScanoutPrimaryReason : unsigned {
-    Admitted,Off,NotPrimary,VidPnSource,ForceCpu,CapsClosed,SourceGeometry,Format,Pitch
+    Admitted,Off,NotPrimary,VidPnSource,ForceCpu,DesktopRoute,CapsClosed,SourceGeometry,Format,Pitch
 };
 inline const char *scanout_primary_reason_text(ScanoutPrimaryReason reason) noexcept {
     switch (reason) {
@@ -42,6 +44,7 @@ inline const char *scanout_primary_reason_text(ScanoutPrimaryReason reason) noex
     case ScanoutPrimaryReason::NotPrimary: return "not-primary";
     case ScanoutPrimaryReason::VidPnSource: return "vidpn-source";
     case ScanoutPrimaryReason::ForceCpu: return "force-cpu";
+    case ScanoutPrimaryReason::DesktopRoute: return "desktop-route";
     case ScanoutPrimaryReason::CapsClosed: return "caps-closed";
     case ScanoutPrimaryReason::SourceGeometry: return "source-geometry";
     case ScanoutPrimaryReason::Format: return "format";
@@ -100,14 +103,20 @@ inline DWORD scanout_primary_registry_dword(const wchar_t *key,const wchar_t *na
     status=RegGetValueW(HKEY_LOCAL_MACHINE,key,name,RRF_RT_ANY|kScanoutPrimaryRegistryView,&type,&value,&bytes);
     return value;
 }
+// The compositor's desktop-route record of this session, from the compositor's account only.
+inline unsigned scanout_primary_desktop_route_read(bc250_desktop_route *record) noexcept {
+    return bc250_desktop_route_read_session(record);
+}
 // What the device needs to decide: the adapter query of the runtime's adapter (valid until CloseAdapter,
-// after every device is gone) and the two switches, read once at the adapter's open.
+// after every device is gone), the two switches, read once at the adapter's open, and the reader of the
+// compositor's record, called for every primary (a host test puts a double there).
 struct ScanoutSource {
     HANDLE adapter=nullptr;
     PFND3DDDI_QUERYADAPTERINFOCB query=nullptr;
     ScanoutPrimarySwitch switch_state=kScanoutPrimaryDefaultOn ? ScanoutPrimarySwitch::Default :
                                                                  ScanoutPrimarySwitch::Off;
     unsigned long force_cpu=0;
+    unsigned (*desktop_route)(bc250_desktop_route *) noexcept=&scanout_primary_desktop_route_read;
 };
 inline ScanoutSource read_scanout_source(HANDLE adapter,PFND3DDDI_QUERYADAPTERINFOCB query) noexcept {
     ScanoutSource source{};
@@ -130,6 +139,9 @@ struct ScanoutPrimaryDecision {
     bool admitted=false;
     ScanoutPrimarySwitch switch_state=ScanoutPrimarySwitch::Off;
     bc250_scanout_caps caps{};    // the trailer this decision read; zero when it read none
+    bool desktop_read=false;      // whether the decision read the compositor's record
+    unsigned desktop_status=BC250_DESKTOP_ROUTE_READ_ABSENT;
+    bc250_desktop_route desktop{};
 };
 // primary is whether the runtime gave a primary descriptor, vidpn_source the descriptor's source, dxgi the
 // chain's DXGI format, width, height and pitch the LB7A description this shell writes. The switch is asked
@@ -143,9 +155,13 @@ inline ScanoutPrimaryDecision scanout_primary_decide(const ScanoutSource *source
     if (!primary) { out.reason=ScanoutPrimaryReason::NotPrimary; return out; }
     if (vidpn_source!=BC250_SCANOUT_VIDPN_SOURCE) { out.reason=ScanoutPrimaryReason::VidPnSource; return out; }
     out.caps=query_scanout_caps(source->adapter,source->query);
-    switch (bc250_scanout_primary_rule(&out.caps,source->force_cpu,dxgi,width,height,pitch)) {
+    out.desktop_read=source->desktop_route!=nullptr;
+    if (out.desktop_read) out.desktop_status=source->desktop_route(&out.desktop);
+    switch (bc250_scanout_primary_rule(&out.caps,source->force_cpu,bc250_desktop_route_gpu(out.desktop_status,&out.desktop),
+                                       dxgi,width,height,pitch)) {
     case BC250_SCANOUT_PRIMARY_ADMITTED: out.reason=ScanoutPrimaryReason::Admitted; out.admitted=true; break;
     case BC250_SCANOUT_PRIMARY_FORCE_CPU: out.reason=ScanoutPrimaryReason::ForceCpu; break;
+    case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE: out.reason=ScanoutPrimaryReason::DesktopRoute; break;
     case BC250_SCANOUT_PRIMARY_CAPS_CLOSED: out.reason=ScanoutPrimaryReason::CapsClosed; break;
     case BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY: out.reason=ScanoutPrimaryReason::SourceGeometry; break;
     case BC250_SCANOUT_PRIMARY_FORMAT: out.reason=ScanoutPrimaryReason::Format; break;

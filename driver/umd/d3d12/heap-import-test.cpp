@@ -41,6 +41,15 @@ static HRESULT APIENTRY trailer_query(HANDLE adapter,const D3DDDICB_QUERYADAPTER
  std::memcpy(static_cast<unsigned char*>(request->pPrivateDriverData)+BC250_SCANOUT_CAPS_OFFSET,&caps,sizeof(caps));
  return S_OK;
 }
+// The compositor's desktop-route record of "now", in place of the session's record that only dwm.exe can write.
+static unsigned desktop_reads=0,desktop_route=BC250_DESKTOP_ROUTE_GPU,desktop_status=BC250_DESKTOP_ROUTE_READ_OK;
+static unsigned desktop_double(bc250_desktop_route* record) noexcept {
+ ++desktop_reads;
+ *record=bc250_desktop_route{};
+ if(desktop_status!=BC250_DESKTOP_ROUTE_READ_OK)return desktop_status;
+ *record={BC250_DESKTOP_ROUTE_MAGIC,BC250_DESKTOP_ROUTE_VERSION,BC250_DESKTOP_ROUTE_BYTES,desktop_route,77,0,1,0};
+ return BC250_DESKTOP_ROUTE_READ_OK;
+}
 static unsigned long surface_format=0;
 static uint32_t surface_width=256;            // LB7A.Width the next primary must carry
 // BD-075, what the next shared create must publish: the LB7A geometry and the E26R v3 texture beside it.
@@ -825,9 +834,14 @@ int main(){
    // A failed query is no trailer, never the copy from the open.
    trailer_fail=true;assert(!carried.scanout_caps_now().flags && !carried.scanout_caps_now().post_width);
    trailer_fail=false;
-   // Through allocate(): a 256x64 chain on a committed 256x64 mode is a scan-out primary (unless the machine
-   // that runs the test has DwmForceCpu set, or a D3D12 experiment list that turns scan-out off; then the
-   // shell's own answer must be the composed primary, and that is what is asserted).
+   // Through allocate(): a 256x64 chain on a committed 256x64 mode, with the compositor on the GPU route, is a
+   // scan-out primary (unless the machine that runs the test has DwmForceCpu set, or a D3D12 experiment list
+   // that turns scan-out off; then the shell's own answer must be the composed primary, and that is what is
+   // asserted). The compositor's record comes from the double: the session's own record, which only dwm.exe
+   // writes, is the production reader, and this machine's compositor runs no router.
+   {bc250_desktop_route r{};const unsigned status=carried.desktop_route_now(&r);
+    assert(status<=BC250_DESKTOP_ROUTE_READ_SHAPE && (status==BC250_DESKTOP_ROUTE_READ_OK || (!r.magic && !r.route)));}
+   carried.read_desktop_route_with(&desktop_double);
    assert(carried.initialize()==S_OK);
    constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
    D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
@@ -841,12 +855,15 @@ int main(){
        !ddi_experiment("present-cached") && !ddi_experiment("present-noprimary") && !carried.force_cpu();
    auto create=[&](bool scanout){
     const unsigned before_scanout=scanout_surfaces,before_composed=surfaces,before_queries=trailer_queries;
+    const unsigned before_reads=desktop_reads;
     engine_ddi::ImportedMemory surface{};events.clear();
     {OwnerScope scope(&carried,0);assert(carried.allocate(&s,&surface)==S_OK && events=="AMZI");}
     {OwnerScope scope(&carried,surface.allocation);assert(carried.free(&surface)==S_OK && events=="AMZIVEUR");}
     assert(scanout_surfaces==before_scanout+(scanout?1u:0u) && surfaces==before_composed+(scanout?0u:1u));
-    // One query per primary, and none at all when the off switch is listed.
-    assert(trailer_queries==before_queries+(scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off?0u:1u));
+    // One query and one read of the compositor's record per primary, and none at all when the off switch
+    // is listed.
+    const unsigned per=scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off?0u:1u;
+    assert(trailer_queries==before_queries+per && desktop_reads==before_reads+per);
    };
    const unsigned composed_before=surfaces;
    trailer_width=256;trailer_height=64;create(shell_on);
@@ -857,6 +874,13 @@ int main(){
    // The kernel driver's switch closes (DIRECT_FLIP clear), and a failed query: composed both times.
    trailer_flags=0;create(false);trailer_flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;
    trailer_fail=true;create(false);trailer_fail=false;
+   // The compositor falls back to the CPU UMD (the router's fallback=1), and then has no record at all (a
+   // restart in progress, an older router): composed both times on the mode and the trailer that admit the
+   // chain. The GPU route comes back: scan-out again, without a new device.
+   trailer_width=256;trailer_height=64;
+   desktop_route=BC250_DESKTOP_ROUTE_FALLBACK;create(false);
+   desktop_route=BC250_DESKTOP_ROUTE_GPU;desktop_status=BC250_DESKTOP_ROUTE_READ_ABSENT;create(false);
+   desktop_status=BC250_DESKTOP_ROUTE_READ_OK;create(shell_on);
    // A format with no scan-out row on a matching mode stays composed: FP16 is eight bytes a pixel, so 128
    // pixels fill the same 1024-byte pitch.
    target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;target.Width=128;surface_width=128;
@@ -865,9 +889,9 @@ int main(){
    assert(carried.close_after_engine_retirement()==S_OK && carried.discard_metadata()==0);
    heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
    scanout_block_composed=surfaces-composed_before;
-   assert(scanout_block_composed==(shell_on?4u:6u) && scanout_surfaces==(shell_on?2u:0u));
-   std::printf("scan-out primaries %u (shell %s), trailer queries %u\n",scanout_surfaces,shell_on?"on":"off",
-               trailer_queries);
+   assert(scanout_block_composed==(shell_on?6u:9u) && scanout_surfaces==(shell_on?3u:0u));
+   std::printf("scan-out primaries %u (shell %s), trailer queries %u, desktop-route reads %u\n",scanout_surfaces,
+               shell_on?"on":"off",trailer_queries,desktop_reads);
   }
  }
  // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a

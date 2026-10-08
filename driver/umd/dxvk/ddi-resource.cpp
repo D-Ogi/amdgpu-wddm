@@ -14,24 +14,28 @@ namespace {
 void scanout_primary_note(const ScanoutPrimaryDecision &decision,const ScanoutSource *source,bool displayable,
     UINT vidpn_source,unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
     const unsigned long force_cpu=source ? source->force_cpu : 0;
+    // The compositor's record as this decision read it; "not-read" when an earlier clause decided first.
+    const char *desktop=decision.desktop_read ?
+        bc250_desktop_route_text(decision.desktop_status,decision.desktop.route) : "not-read";
     const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,pitch,
         dxgi,decision.caps.flags,decision.caps.post_width,decision.caps.post_height,force_cpu,displayable ? 1u : 0u,
-        vidpn_source};
+        vidpn_source,decision.desktop.pid};
     unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
     for (const unsigned long long word:words)
         for (unsigned i=0;i<8;++i) key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
+    for (const char *c=desktop;*c;++c) key=(key^static_cast<unsigned char>(*c))*1099511628211ull;
     static std::atomic<unsigned long long> last{0};
     static std::atomic_int budget{64};
     if (last.exchange(key,std::memory_order_relaxed)==key) return;
     const int left=budget.fetch_sub(1,std::memory_order_relaxed);
     if (left<=0) return;
-    char text[256];
+    char text[320];
     std::snprintf(text,sizeof(text),
         "M15.14 d3d11 scanout %s switch=%s chain=%ux%u pitch=%u format=%u displayable=%u vidpn=%u caps=%08X "
-        "source=%ux%u forcecpu=%lu%s\n",
+        "source=%ux%u forcecpu=%lu desktop=%s desktop_pid=%u%s\n",
         scanout_primary_reason_text(decision.reason),scanout_primary_switch_text(decision.switch_state),width,
         height,pitch,dxgi,displayable ? 1u : 0u,vidpn_source,decision.caps.flags,decision.caps.post_width,
-        decision.caps.post_height,force_cpu,left==1 ? " budget-spent" : "");
+        decision.caps.post_height,force_cpu,desktop,decision.desktop.pid,left==1 ? " budget-spent" : "");
     OutputDebugStringA(text);
 }
 }

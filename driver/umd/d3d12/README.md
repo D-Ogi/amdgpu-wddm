@@ -241,11 +241,16 @@ off (`ddi-trace.h`). `scanout-mode.h` holds the decision. For each primary,
 `RuntimeHeapImports::scanout_caps_now` reads the kernel driver's scan-out caps
 trailer again, and the rule that both application shells share
 (`driver/contract/bc250_scanout_primary.h`) compares the chain with the source
-mode in that trailer. A chain that the rule cannot admit gets the composed
-primary, in the shared aperture with its CPU mapping, and never a failure. Each
-change of the answer writes one `M15.14 scanout` line to the debugger channel,
-with the reason, the chain, the trailer's geometry and the kill switch. The
-process writes at most 64 such lines, and the last one ends in `budget-spent`.
+mode in that trailer. The rule also reads the compositor's desktop-route record
+(`driver/contract/bc250_desktop_route.h`) again for each primary, and stands the
+chain down (`desktop-route`) unless the router in `dwm.exe` wrote `gpu` there: the
+CPU compositor cannot read a scan-out primary. A chain that the rule cannot admit
+gets the composed primary, in the shared aperture with its CPU mapping, and never
+a failure. Each change of the answer writes one `M15.14 scanout` line to the
+debugger channel, with the reason, the chain, the trailer's geometry, the kill
+switch and the record (`desktop=gpu`, `desktop=cpu-fallback`, `desktop=absent`
+and the other words of `bc250_desktop_route_text`). The process writes at most
+64 such lines, and the last one ends in `budget-spent`.
 
 ## Registration between sessions
 

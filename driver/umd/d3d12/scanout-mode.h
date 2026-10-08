@@ -27,6 +27,9 @@
 //                  intent for the same buffer (a cached CPU reader, or no primary at all).
 //   then the rule both application shells share (driver/contract/bc250_scanout_primary.h):
 //   ForceCpu       the desktop route's kill switch DwmForceCpu is on, so the compositor is the CPU UMD.
+//   DesktopRoute   the compositor's record (driver/contract/bc250_desktop_route.h, read for every primary)
+//                  does not say GPU: the router in dwm.exe took the CPU UMD, including the fallback after a
+//                  failed hosted open, or there is no record from the compositor's account.
 //   CapsClosed     the kernel driver published no scan-out trailer, or one without DIRECT_FLIP.
 //   SourceGeometry the chain is not the geometry of the source mode the trailer carries now.
 //   Format         the chain's format is not a SCANOUT_PRIMARY row with a DXGI name.
@@ -40,6 +43,7 @@
 #include "ddi-trace.h"
 #include "../../contract/bc250_scanout_caps.h"
 #include "../../contract/bc250_scanout_primary.h"
+#include "../../contract/bc250_desktop_route.h"
 namespace native12 {
 // The train rule (owner, 2026-10-05): a finished, measured feature is on by default, with a switch to turn
 // it off. Measured: the plan A client 600 of 600 frames at FlipOnNextVSync (K227), The Witcher 3 2028 of
@@ -47,7 +51,7 @@ namespace native12 {
 // 0 refusals, and a mode change away from a flipping chain without a black output (trial 478).
 inline constexpr bool kScanoutDefaultOn=true;
 enum class ScanoutStandDown : unsigned {
-    Admitted,ModeOff,OtherIntent,ForceCpu,CapsClosed,SourceGeometry,Format,Pitch,Count
+    Admitted,ModeOff,OtherIntent,ForceCpu,DesktopRoute,CapsClosed,SourceGeometry,Format,Pitch,Count
 };
 inline const char* scanout_stand_down_text(ScanoutStandDown reason) noexcept {
     switch(reason){
@@ -55,6 +59,7 @@ inline const char* scanout_stand_down_text(ScanoutStandDown reason) noexcept {
     case ScanoutStandDown::ModeOff:return "mode-off";
     case ScanoutStandDown::OtherIntent:return "other-intent";
     case ScanoutStandDown::ForceCpu:return "force-cpu";
+    case ScanoutStandDown::DesktopRoute:return "desktop-route";
     case ScanoutStandDown::CapsClosed:return "caps-closed";
     case ScanoutStandDown::SourceGeometry:return "source-geometry";
     case ScanoutStandDown::Format:return "format";
@@ -87,11 +92,11 @@ struct ScanoutDecision {
     ScanoutSwitch switch_state{ScanoutSwitch::Off};
 };
 // width, height and pitch are the chain's as engine-ddi described it; dxgi is D3D12DDIARG_CREATERESOURCE's
-// Format. caps is the trailer as read for this primary (all zero when there is none) and force_cpu the
+// Format. caps is the trailer as read for this primary (all zero when there is none), force_cpu the
 // desktop router's kill switch as that router reads it (any non-zero value, and any value of the wrong
-// type, is on).
+// type, is on) and desktop_gpu whether the compositor's record, read for this primary, says GPU.
 inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanout_caps& caps,
-                                      unsigned long force_cpu,unsigned dxgi,
+                                      unsigned long force_cpu,bool desktop_gpu,unsigned dxgi,
                                       unsigned width,unsigned height,unsigned pitch) noexcept {
     ScanoutDecision out{};
     out.switch_state=scanout_switch(experiments);
@@ -100,9 +105,10 @@ inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanou
        ddi_experiment_listed(experiments,"present-noprimary")){
         out.reason=ScanoutStandDown::OtherIntent;return out;
     }
-    switch(bc250_scanout_primary_rule(&caps,force_cpu,dxgi,width,height,pitch)){
+    switch(bc250_scanout_primary_rule(&caps,force_cpu,desktop_gpu?1:0,dxgi,width,height,pitch)){
     case BC250_SCANOUT_PRIMARY_ADMITTED:out.reason=ScanoutStandDown::Admitted;out.admitted=true;break;
     case BC250_SCANOUT_PRIMARY_FORCE_CPU:out.reason=ScanoutStandDown::ForceCpu;break;
+    case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE:out.reason=ScanoutStandDown::DesktopRoute;break;
     case BC250_SCANOUT_PRIMARY_CAPS_CLOSED:out.reason=ScanoutStandDown::CapsClosed;break;
     case BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY:out.reason=ScanoutStandDown::SourceGeometry;break;
     case BC250_SCANOUT_PRIMARY_FORMAT:out.reason=ScanoutStandDown::Format;break;
@@ -128,5 +134,12 @@ inline unsigned long scanout_force_cpu_read() noexcept {
 inline unsigned long scanout_force_cpu() noexcept {
     static const unsigned long value=scanout_force_cpu_read();
     return value;
+}
+// The compositor's desktop-route record, read for every primary like the trailer and never cached: dwm.exe
+// can restart while a game runs, and its route with it (the kernel driver swap does exactly that). The
+// caller holds the reader as a function pointer so that the host tests can put a double in place of the
+// compositor; the shell itself only ever reads the session's record from the compositor's account.
+inline unsigned scanout_desktop_route_read(bc250_desktop_route* record) noexcept {
+    return bc250_desktop_route_read_session(record);
 }
 }

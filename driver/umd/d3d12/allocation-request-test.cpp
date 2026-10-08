@@ -9,7 +9,9 @@ extern "C" {
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <initializer_list>
+#include <vector>
 using namespace native12;
 namespace {
 unsigned checks=0;
@@ -234,51 +236,59 @@ int main() {
         const bc250_scanout_caps on=caps_on(),off{};
         const unsigned bgra=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM,pitch=7680;
         const char* none="";
-        struct Case { const char* list;bc250_scanout_caps caps;unsigned long force;unsigned dxgi,w,h,pitch;
-                      ScanoutStandDown reason;ScanoutSwitch state; };
+        struct Case { const char* list;bc250_scanout_caps caps;unsigned long force;bool desktop;
+                      unsigned dxgi,w,h,pitch;ScanoutStandDown reason;ScanoutSwitch state; };
         const Case cases[]={
-            {none,on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
-            {"none",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
-            {"raytracing-tier",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {"none",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {"raytracing-tier",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
             // The increment-2 spellings are an explicit on, and the geometry they name is not compared.
-            {"scanout-flip",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Named},
-            {"scanout-flip-1920x1200",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Named},
-            {"scanout-flip-1920x1200",caps_on(1920,1080),0,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,
+            {"scanout-flip",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Named},
+            {"scanout-flip-1920x1200",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Named},
+            {"scanout-flip-1920x1200",caps_on(1920,1080),0,true,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,
              ScanoutSwitch::Named},
             // A token that only looks like the mode is no switch, so the default answers.
-            {"scanout-flip-1920",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {"scanout-flip-1920",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
             // The off switch, alone or with the explicit on: the off switch wins, in either order.
-            {"scanout-flip-off",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
-            {"scanout-flip,scanout-flip-off",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
-            {"scanout-flip-off,scanout-flip-1920x1200",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,
+            {"scanout-flip-off",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
+            {"scanout-flip,scanout-flip-off",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
+            {"scanout-flip-off,scanout-flip-1920x1200",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,
              ScanoutSwitch::Off},
-            {"present-cached",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent,ScanoutSwitch::Default},
-            {"scanout-flip,present-noprimary",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent,
+            {"present-cached",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent,ScanoutSwitch::Default},
+            {"scanout-flip,present-noprimary",on,0,true,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent,
              ScanoutSwitch::Named},
-            {none,on,1,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
-            {none,on,7,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
-            {none,off,0,bgra,1920,1200,pitch,ScanoutStandDown::CapsClosed,ScanoutSwitch::Default},
+            {none,on,1,true,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
+            {none,on,7,true,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
+            // The compositor's record does not say GPU (a CPU route, the fallback, or no record): the chain the
+            // trailer admits stands down, under the default and under the explicit on alike. The kill switch is
+            // asked first, and the operator's off switch before both.
+            {none,on,0,false,bgra,1920,1200,pitch,ScanoutStandDown::DesktopRoute,ScanoutSwitch::Default},
+            {"scanout-flip",on,0,false,bgra,1920,1200,pitch,ScanoutStandDown::DesktopRoute,ScanoutSwitch::Named},
+            {none,on,1,false,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
+            {"scanout-flip-off",on,0,false,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
+            {none,off,0,false,bgra,1920,1200,pitch,ScanoutStandDown::DesktopRoute,ScanoutSwitch::Default},
+            {none,off,0,true,bgra,1920,1200,pitch,ScanoutStandDown::CapsClosed,ScanoutSwitch::Default},
             // The source mode, not the native one: 478's exclusive 1080 chain on a committed 1080 mode admits,
             // and the same chain on a 1200 mode (the mode change has not reached the kernel driver) stands down.
-            {none,caps_on(1920,1080),0,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
-            {none,on,0,bgra,1920,1080,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
-            {none,caps_on(1920,1080),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
-            {none,caps_on(1280,720),0,bgra,1280,720,5120,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
-            {none,caps_on(1280,720),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
-            {none,on,0,bgra,1200,1920,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
-            {none,on,0,bgra,0,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,caps_on(1920,1080),0,true,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,1920,1080,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,caps_on(1920,1080),0,true,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,caps_on(1280,720),0,true,bgra,1280,720,5120,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,caps_on(1280,720),0,true,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,1200,1920,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,0,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
             // The increment-2 token names 1920x1200 but the source mode is 1280x720: the trailer decides.
-            {"scanout-flip-1920x1200",caps_on(1280,720),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,
+            {"scanout-flip-1920x1200",caps_on(1280,720),0,true,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,
              ScanoutSwitch::Named},
-            {none,on,0,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,pitch,ScanoutStandDown::Format,
+            {none,on,0,true,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,pitch,ScanoutStandDown::Format,
              ScanoutSwitch::Default},
-            {none,on,0,0,1920,1200,pitch,ScanoutStandDown::Format,ScanoutSwitch::Default},
-            {none,on,0,bgra,1920,1200,0,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
-            {none,on,0,bgra,1920,1200,7600,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
-            {none,on,0,bgra,1920,1200,7936,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
+            {none,on,0,true,0,1920,1200,pitch,ScanoutStandDown::Format,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,1920,1200,0,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,1920,1200,7600,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
+            {none,on,0,true,bgra,1920,1200,7936,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
         };
         for(const auto& c:cases) {
-            const ScanoutDecision d=scanout_decide(c.list,c.caps,c.force,c.dxgi,c.w,c.h,c.pitch);
+            const ScanoutDecision d=scanout_decide(c.list,c.caps,c.force,c.desktop,c.dxgi,c.w,c.h,c.pitch);
             if(d.reason!=c.reason || d.switch_state!=c.state)
                 std::printf("case '%s' %ux%u: got %s/%s\n",c.list,c.w,c.h,scanout_stand_down_text(d.reason),
                             scanout_switch_text(d.switch_state));
@@ -298,21 +308,21 @@ int main() {
         // trailer with the flag but a wrong header is no trailer either (the decoder zeroes it; the rule
         // checks again, so a caller that skips the decoder cannot open the path).
         bc250_scanout_caps flagless=on;flagless.flags=0;
-        CHECK(scanout_decide(none,flagless,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        CHECK(scanout_decide(none,flagless,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
         bc250_scanout_caps unsigned_caps=on;unsigned_caps.magic=0;
-        CHECK(scanout_decide(none,unsigned_caps,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        CHECK(scanout_decide(none,unsigned_caps,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
         bc250_scanout_caps newer=on;newer.version=BC250_SCANOUT_CAPS_VERSION+1;
-        CHECK(scanout_decide(none,newer,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
-        CHECK(bc250_scanout_primary_rule(nullptr,0,bgra,1920,1200,pitch)==BC250_SCANOUT_PRIMARY_CAPS_CLOSED);
+        CHECK(scanout_decide(none,newer,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        CHECK(bc250_scanout_primary_rule(nullptr,0,1,bgra,1920,1200,pitch)==BC250_SCANOUT_PRIMARY_CAPS_CLOSED);
         // A null list is the same as an empty one: the default.
-        CHECK(scanout_decide(nullptr,on,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::Admitted);
+        CHECK(scanout_decide(nullptr,on,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::Admitted);
         // The contract's pitch is the shell's pitch for every 4-byte width, so the rule that the D3D11 shell
         // shares cannot pin a different row than the one prepare_surface pins here.
         for(unsigned width=1;width<=4096;++width)
             CHECK(bc250_scanout_primary_pitch(width,4)==scanout_row_pitch(width));
         CHECK(!bc250_scanout_primary_pitch(0,4) && !bc250_scanout_primary_pitch(1920,0));
         CHECK(!bc250_scanout_primary_pitch(0xffffffffu,4));
-        for(unsigned reason=BC250_SCANOUT_PRIMARY_ADMITTED;reason<=BC250_SCANOUT_PRIMARY_PITCH;++reason)
+        for(unsigned reason=BC250_SCANOUT_PRIMARY_ADMITTED;reason<=BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE;++reason)
             CHECK(std::strcmp(bc250_scanout_primary_text(reason),"unknown")!=0);
         CHECK(!std::strcmp(bc250_scanout_primary_text(99),"unknown"));
         // Every admitted decision describes a surface prepare_surface then accepts: the two are one rule.
@@ -351,7 +361,79 @@ int main() {
         const unsigned long once=scanout_force_cpu();
         CHECK(once==scanout_force_cpu() && once==scanout_force_cpu());
     }
+    // (g) The compositor's desktop-route record (driver/contract/bc250_desktop_route.h), through the one writer
+    // the router uses and the one reader both shells use, under a name of this test's own. The owner a reader
+    // trusts is a parameter: this process's default owner here, the compositor's account in the shells.
+    {
+        HANDLE token=nullptr;DWORD bytes=0;
+        CHECK(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token)!=0);
+        GetTokenInformation(token,TokenOwner,nullptr,0,&bytes);
+        std::vector<unsigned char> info(bytes?bytes:1);
+        CHECK(bytes && GetTokenInformation(token,TokenOwner,info.data(),bytes,&bytes));
+        CloseHandle(token);
+        const PSID self=reinterpret_cast<TOKEN_OWNER*>(info.data())->Owner;
+        wchar_t name[96];
+        swprintf(name,96,L"Local\\bc250-desktop-route-test-%lu",GetCurrentProcessId());
+        bc250_desktop_route record{};
+        CHECK(bc250_desktop_route_read(name,self,&record)==BC250_DESKTOP_ROUTE_READ_ABSENT && !record.magic);
+        DWORD error=0;
+        bc250_desktop_route* view=bc250_desktop_route_create(name,&error);
+        CHECK(view!=nullptr && !error);
+        if(view){
+            // Made, no decision yet: a whole header and route NONE, which is not GPU.
+            unsigned status=bc250_desktop_route_read(name,self,&record);
+            CHECK(status==BC250_DESKTOP_ROUTE_READ_OK && record.route==BC250_DESKTOP_ROUTE_NONE && !bc250_desktop_route_gpu(status,&record));
+            CHECK(!std::strcmp(bc250_desktop_route_text(status,record.route),"none"));
+            bc250_desktop_route_store(view,BC250_DESKTOP_ROUTE_GPU,4242,0);
+            status=bc250_desktop_route_read(name,self,&record);
+            CHECK(status==BC250_DESKTOP_ROUTE_READ_OK && bc250_desktop_route_gpu(status,&record) && record.pid==4242 &&
+                  record.decisions==1 && record.size==BC250_DESKTOP_ROUTE_BYTES);
+            CHECK(!std::strcmp(bc250_desktop_route_text(status,record.route),"gpu"));
+            // Every CPU route reads as not GPU, with its own word for the trace.
+            const struct { unsigned route;const char* word; } cpu[]={
+                {BC250_DESKTOP_ROUTE_KILL_SWITCH,"cpu-kill-switch"},{BC250_DESKTOP_ROUTE_SWITCHES_OFF,"cpu-switches-off"},
+                {BC250_DESKTOP_ROUTE_FALLBACK,"cpu-fallback"},{99,"unknown"}};
+            for(const auto& c:cpu){
+                bc250_desktop_route_store(view,c.route,4242,0x80004005u);
+                status=bc250_desktop_route_read(name,self,&record);
+                CHECK(status==BC250_DESKTOP_ROUTE_READ_OK && record.route==c.route && !bc250_desktop_route_gpu(status,&record));
+                CHECK(!std::strcmp(bc250_desktop_route_text(status,record.route),c.word));
+            }
+            CHECK(record.decisions==5 && record.hosted_hr==0x80004005u);
+            // The trust clause: the same record read with the compositor's account as the owner is refused, and
+            // so it is for the session reader, whose record (if any) this test did not write.
+            bc250_desktop_route_store(view,BC250_DESKTOP_ROUTE_GPU,4242,0);
+            SE_SID dwm{};DWORD session=0;
+            CHECK(ProcessIdToSessionId(GetCurrentProcessId(),&session) && bc250_desktop_route_compositor_sid(session,&dwm));
+            status=bc250_desktop_route_read(name,&dwm.Sid,&record);
+            CHECK(status==BC250_DESKTOP_ROUTE_READ_OWNER && !record.route && !bc250_desktop_route_gpu(status,&record));
+            CHECK(!std::strcmp(bc250_desktop_route_text(status,record.route),"foreign-owner"));
+            CHECK(bc250_desktop_route_read(name,nullptr,&record)==BC250_DESKTOP_ROUTE_READ_OWNER);
+            // S-1-5-90-0-<session>: Window Manager\DWM-<session>.
+            CHECK(*GetSidSubAuthorityCount(&dwm.Sid)==3 && *GetSidSubAuthority(&dwm.Sid,0)==90 &&
+                  *GetSidSubAuthority(&dwm.Sid,1)==0 && *GetSidSubAuthority(&dwm.Sid,2)==session);
+            // A header of another version, or torn, is no record: GPU in the route word does not count.
+            view->version=BC250_DESKTOP_ROUTE_VERSION+1;
+            status=bc250_desktop_route_read(name,self,&record);
+            CHECK(status==BC250_DESKTOP_ROUTE_READ_SHAPE && !record.route && !bc250_desktop_route_gpu(status,&record));
+            CHECK(!std::strcmp(bc250_desktop_route_text(status,record.route),"bad-record"));
+            view->version=BC250_DESKTOP_ROUTE_VERSION;view->magic=0;
+            CHECK(bc250_desktop_route_read(name,self,&record)==BC250_DESKTOP_ROUTE_READ_SHAPE);
+            view->magic=BC250_DESKTOP_ROUTE_MAGIC;
+            CHECK(bc250_desktop_route_gpu(bc250_desktop_route_read(name,self,&record),&record));
+            // A status other than OK never reads as GPU, whatever the record holds.
+            CHECK(!bc250_desktop_route_gpu(BC250_DESKTOP_ROUTE_READ_DENIED,&record));
+            CHECK(!std::strcmp(bc250_desktop_route_text(BC250_DESKTOP_ROUTE_READ_DENIED,0),"denied"));
+            CHECK(!std::strcmp(bc250_desktop_route_text(BC250_DESKTOP_ROUTE_READ_ABSENT,0),"absent"));
+        }
+        // The shells' production reader on this machine: whatever it finds, it never reads GPU from a record
+        // that the compositor's account did not write, and it never fails open.
+        bc250_desktop_route s{};
+        const unsigned session_status=scanout_desktop_route_read(&s);
+        CHECK(session_status<=BC250_DESKTOP_ROUTE_READ_SHAPE);
+        if(session_status!=BC250_DESKTOP_ROUTE_READ_OK)CHECK(!s.magic && !s.route);
+    }
     std::printf("native allocation request: %u checks, 0 failures\n",checks);
     std::puts("KMD parser, cache/rounding/refusal gates, shared surface records, scan-out v3 record, pitch pin, "
-              "stand-down table and the adapter scan-out trailer passed");
+              "stand-down table, the adapter scan-out trailer and the desktop-route record passed");
 }

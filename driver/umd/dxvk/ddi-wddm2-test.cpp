@@ -47,6 +47,15 @@ HRESULT APIENTRY adapter_query(HANDLE,const D3DDDICB_QUERYADAPTERINFO *args) {
     std::memcpy(static_cast<unsigned char *>(args->pPrivateDriverData)+BC250_SCANOUT_CAPS_OFFSET,&scanout,sizeof(scanout));
     return S_OK;
 }
+// The compositor's desktop-route record of the moment, in place of the session's record, which only dwm.exe
+// writes. scanout_primary() moves the route between creates and counts the reads.
+unsigned desktopRoute=BC250_DESKTOP_ROUTE_GPU,desktopReads;
+unsigned desktop_double(bc250_desktop_route *record) noexcept {
+    ++desktopReads;
+    *record=bc250_desktop_route{BC250_DESKTOP_ROUTE_MAGIC,BC250_DESKTOP_ROUTE_VERSION,BC250_DESKTOP_ROUTE_BYTES,
+        desktopRoute,77,0,1,0};
+    return BC250_DESKTOP_ROUTE_READ_OK;
+}
 bool policySparse; HRESULT policyResult; UINT64 policyLuid;
 HRESULT policy(UINT64 luid,bool &sparse,D3DKMT_HANDLE &unresolved) noexcept {
     policyLuid=luid; sparse=policySparse; unresolved=0; return policyResult;
@@ -481,7 +490,10 @@ void scanout_primary() {
     desc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED;
     DXGI_DDI_PRIMARY_DESC primary{}; primary.VidPnSourceId=0; desc.pPrimaryDesc=&primary;
     int runtimeResource=0;
+    // The production reader is the default of a source: the session's record from the compositor's account.
+    CHECK(ScanoutSource{}.desktop_route==&scanout_primary_desktop_route_read);
     ScanoutSource on{}; on.adapter=&adapterIdentity; on.query=adapter_query; on.switch_state=W::On;
+    on.desktop_route=desktop_double;
     RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
     const auto convert=[&](const ScanoutSource *source) {
         request={}; texture={};
@@ -528,6 +540,23 @@ void scanout_primary() {
     // The shared rule, one clause at a time, against the trailer of the create.
     ScanoutSource cpu=on; cpu.force_cpu=1;
     CHECK(composed(&cpu) && scanout_primary_decide(&cpu,true,0,87,1920,1200,7680).reason==R::ForceCpu);
+    // The compositor's record, read for every primary: a CPU route (the fallback after a failed hosted open
+    // among them) stands the chain down with DwmForceCpu at 0, and so does a source with no reader at all.
+    // The GPU route admits again without a new adapter.
+    unsigned reads=desktopReads;
+    for (unsigned route:{BC250_DESKTOP_ROUTE_FALLBACK,BC250_DESKTOP_ROUTE_KILL_SWITCH,BC250_DESKTOP_ROUTE_SWITCHES_OFF,
+                         BC250_DESKTOP_ROUTE_NONE}) {
+        desktopRoute=route;
+        CHECK(composed(&on));
+        const ScanoutPrimaryDecision decision=scanout_primary_decide(&on,true,0,87,1920,1200,7680);
+        CHECK(decision.reason==R::DesktopRoute && decision.desktop_read && decision.desktop.route==route &&
+              decision.desktop_status==BC250_DESKTOP_ROUTE_READ_OK);
+    }
+    CHECK(desktopReads==reads+8);
+    ScanoutSource unread=on; unread.desktop_route=nullptr;
+    CHECK(composed(&unread) && scanout_primary_decide(&unread,true,0,87,1920,1200,7680).reason==R::DesktopRoute);
+    desktopRoute=BC250_DESKTOP_ROUTE_GPU;
+    CHECK(convert(&on)==S_OK && request.scanout);
     trailerFlags=0;
     CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1200,7680).reason==R::CapsClosed);
     trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP; trailerFail=true;

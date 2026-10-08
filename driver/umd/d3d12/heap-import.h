@@ -5,6 +5,7 @@
 #include "device-progress.h"
 #include "paging.h"
 #include "../../contract/bc250_scanout_caps.h"
+#include "../../contract/bc250_desktop_route.h"
 #include <atomic>
 namespace native12 {
 struct Device;
@@ -114,9 +115,12 @@ class RuntimeHeapImports final {
     // whether the compositor is the CPU UMD and therefore whether any flip exists; it is taken once, in the
     // constructor, because the compositor reads it once. The kernel driver's trailer is not taken once
     // (increment 3): its geometry is the source mode committed now, and a game changes the mode between the
-    // device and its chain, so the adapter is kept and the trailer is read for every primary.
+    // device and its chain, so the adapter is kept and the trailer is read for every primary. The
+    // compositor's desktop-route record is read for every primary as well, through desktop_route_reader_
+    // (scanout_desktop_route_read, or a host test's double).
     Adapter* adapter_{};
     unsigned long force_cpu_{};
+    unsigned (*desktop_route_reader_)(bc250_desktop_route*) noexcept{};
     ProgressSource progress_{};
     std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
     std::atomic<bool> active_{true},paging_open_{};
@@ -155,6 +159,15 @@ public:
     bc250_scanout_caps scanout_caps_now() const noexcept;
     // What the constructor took from the registry, for the tests and the trace.
     unsigned long force_cpu() const noexcept {return force_cpu_;}
+    // The compositor's desktop-route record as it is now: the read status (BC250_DESKTOP_ROUTE_READ_*) and
+    // the record. allocate() calls it once per primary, after the off switch.
+    unsigned desktop_route_now(bc250_desktop_route* record) const noexcept {
+        return desktop_route_reader_(record);
+    }
+    // The host tests' seam: a reader in place of the session's record, which only dwm.exe can write.
+    void read_desktop_route_with(unsigned (*reader)(bc250_desktop_route*) noexcept) noexcept {
+        desktop_route_reader_=reader;
+    }
     // What the quarantine holds now, for tests and the trace.
     uint32_t held_count() const noexcept;
     uint64_t held_bytes() const noexcept;
