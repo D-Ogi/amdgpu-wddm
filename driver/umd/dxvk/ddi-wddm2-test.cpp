@@ -13,6 +13,7 @@
 #include "ddi-query.h"
 #include "ddi-direct-flip.h"
 #include "ddi-resource.h"
+#include "scanout-primary.h"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -26,16 +27,23 @@ namespace {
 unsigned reported; HRESULT lastReported;
 void APIENTRY count_error(D3D10DDI_HRTCORELAYER,HRESULT hr) { ++reported; lastReported=hr; }
 int adapterIdentity;
+// The scan-out trailer the fake writes: the source mode of the moment, as a kernel driver with display modes
+// publishes it. scanout_primary() moves it between creates, and counts the queries.
+UINT trailerWidth=1920,trailerHeight=1200,trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP;
+bool trailerFail;
+unsigned adapterQueries;
 HRESULT APIENTRY adapter_query(HANDLE,const D3DDDICB_QUERYADAPTERINFO *args) {
     // The kernel driver writes an optional trailer only when all of it fits, so the asked-for size is the
     // whole contract between the two halves. This stands in for a driver that writes the last trailer the
     // contract defines: the check above refuses a buffer the write below would overrun.
     CHECK(args && args->PrivateDriverDataSize==BC250_SCANOUT_CAPS_TOTAL);
+    ++adapterQueries;
+    if (trailerFail) return E_FAIL;
     bc250_adapter_identity identity{BC250_ADAPTER_IDENTITY_MAGIC,BC250_ADAPTER_IDENTITY_VERSION,
         sizeof(bc250_adapter_identity),77,0,0};
     std::memcpy(static_cast<unsigned char *>(args->pPrivateDriverData)+BC250_ADAPTER_IDENTITY_OFFSET,&identity,sizeof(identity));
     bc250_scanout_caps scanout{BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,
-        sizeof(bc250_scanout_caps),BC250_SCANOUT_CAPS_DIRECT_FLIP,1920,1200};
+        sizeof(bc250_scanout_caps),trailerFlags,trailerWidth,trailerHeight};
     std::memcpy(static_cast<unsigned char *>(args->pPrivateDriverData)+BC250_SCANOUT_CAPS_OFFSET,&scanout,sizeof(scanout));
     return S_OK;
 }
@@ -438,13 +446,124 @@ void adapter_policy() {
         without_fl12(fl12_1_caps()),BC250_HOST_POLICY_SPARSE)==E_INVALIDARG && !handle.owner && !failed.owner);
 }
 }
+// M15.14 increment 3: the D3D11 shell's scan-out primary (scanout-primary.h). The switch and the router's
+// DwmForceCpu reading, then a fullscreen primary through convert_runtime_resource against the trailer of
+// each create, one stand-down per clause, and the record the compositor's side must take.
+void scanout_primary() {
+    using S=ScanoutPrimarySetting; using W=ScanoutPrimarySwitch; using R=ScanoutPrimaryReason;
+    CHECK(scanout_primary_environment_setting(nullptr)==S::Absent);
+    CHECK(scanout_primary_environment_setting("1")==S::On);
+    for (const char *text:{"0","","2","on","1 ","yes"}) CHECK(scanout_primary_environment_setting(text)==S::Off);
+    CHECK(scanout_primary_machine_setting(ERROR_FILE_NOT_FOUND,0,0,0)==S::Absent);
+    CHECK(scanout_primary_machine_setting(ERROR_SUCCESS,REG_DWORD,4,1)==S::On);
+    CHECK(scanout_primary_machine_setting(ERROR_SUCCESS,REG_DWORD,4,0)==S::Off);
+    CHECK(scanout_primary_machine_setting(ERROR_SUCCESS,REG_DWORD,4,2)==S::Off);
+    CHECK(scanout_primary_machine_setting(ERROR_SUCCESS,REG_SZ,4,1)==S::Off);
+    CHECK(scanout_primary_machine_setting(ERROR_MORE_DATA,REG_QWORD,8,1)==S::Off);
+    CHECK(scanout_primary_machine_setting(ERROR_ACCESS_DENIED,0,0,0)==S::Off);
+    CHECK(scanout_primary_switch(S::Absent,S::Absent)==W::Default);
+    CHECK(scanout_primary_requested(W::Default)==kScanoutPrimaryDefaultOn && !kScanoutPrimaryDefaultOn);
+    CHECK(scanout_primary_switch(S::Absent,S::On)==W::On && scanout_primary_requested(W::On));
+    CHECK(scanout_primary_switch(S::Off,S::On)==W::Off && !scanout_primary_requested(W::Off));
+    CHECK(scanout_primary_switch(S::On,S::Off)==W::On);
+    CHECK(scanout_primary_force_cpu_setting(ERROR_FILE_NOT_FOUND,0,0,0)==0);
+    CHECK(scanout_primary_force_cpu_setting(ERROR_SUCCESS,REG_DWORD,4,0)==0);
+    CHECK(scanout_primary_force_cpu_setting(ERROR_SUCCESS,REG_DWORD,4,3)==3);
+    CHECK(scanout_primary_force_cpu_setting(ERROR_MORE_DATA,REG_SZ,10,0)==1);
+    CHECK(scanout_primary_force_cpu_setting(ERROR_SUCCESS,REG_SZ,4,0)==1);
+
+    // A fullscreen primary of a flip-model chain: 1920x1200 BGRA8, shared, source 0.
+    D3D11DDIARG_CREATERESOURCE desc{};
+    D3D10DDI_MIPINFO mip{}; mip.TexelWidth=1920; mip.TexelHeight=1200; mip.TexelDepth=1;
+    desc.pMipInfoList=&mip; desc.MipLevels=desc.ArraySize=1; desc.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D;
+    desc.SampleDesc.Count=1; desc.Usage=D3D10_DDI_USAGE_DEFAULT; desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.BindFlags=D3D10_DDI_BIND_PRESENT|D3D10_DDI_BIND_RENDER_TARGET|D3D10_DDI_BIND_SHADER_RESOURCE;
+    desc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED;
+    DXGI_DDI_PRIMARY_DESC primary{}; primary.VidPnSourceId=0; desc.pPrimaryDesc=&primary;
+    int runtimeResource=0;
+    ScanoutSource on{}; on.adapter=&adapterIdentity; on.query=adapter_query; on.switch_state=W::On;
+    RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
+    const auto convert=[&](const ScanoutSource *source) {
+        request={}; texture={};
+        return convert_runtime_resource(desc,&runtimeResource,request,texture,source);
+    };
+    const auto composed=[&](const ScanoutSource *source) {
+        return convert(source)==S_OK && !request.scanout && request.primary &&
+            request.texture.Access==BC250_SURFACE_RESOURCE_PRIMARY;
+    };
+    unsigned queries=adapterQueries;
+    CHECK(convert(&on)==S_OK && request.scanout && request.primary && request.vidpn_source==0 &&
+          request.texture.Access==(BC250_SURFACE_RESOURCE_PRIMARY|BC250_SURFACE_RESOURCE_SCANOUT) &&
+          request.surface.Pitch==7680 && request.surface.Format==D3DDDIFMT_A8R8G8B8 &&
+          request.surface.Pitch==bc250_scanout_primary_pitch(1920,4) && adapterQueries==queries+1);
+    // The record the compositor's side reads: the front's client-scannable clause and the opener both take it,
+    // and the composed record of the same chain is not scannable (the front answers FALSE for it).
+    CHECK(WddmGdiRecordScannable(&request.texture,sizeof(request.texture)));
+    D3DDDI_OPENALLOCATIONINFO2 openAllocation{};
+    D3D10DDIARG_OPENRESOURCE openArgs{}; openArgs.NumAllocations=1; openArgs.pOpenAllocationInfo2=&openAllocation;
+    openAllocation.hAllocation=31; openAllocation.pPrivateDriverData=&request.surface;
+    openAllocation.PrivateDriverDataSize=sizeof(request.surface);
+    openArgs.pPrivateDriverData=&request.texture; openArgs.PrivateDriverDataSize=sizeof(request.texture);
+    BC250_WDDM_ALLOCATION_PRIVATE decodedSurface{}; D3D11_TEXTURE2D_DESC1 decodedDesc{};
+    CHECK(decode_open_resource(openArgs,decodedSurface,decodedDesc)==S_OK && decodedDesc.Width==1920 &&
+          decodedSurface.Pitch==7680);
+    CHECK(composed(nullptr) && !WddmGdiRecordScannable(&request.texture,sizeof(request.texture)));
+    // No source, the off switch and the default make no query at all.
+    queries=adapterQueries;
+    ScanoutSource off=on; off.switch_state=W::Off;
+    ScanoutSource byDefault=on; byDefault.switch_state=W::Default;
+    CHECK(composed(nullptr) && composed(&off) && composed(&byDefault) && adapterQueries==queries);
+    CHECK(scanout_primary_decide(&off,true,0,87,1920,1200,7680).reason==R::Off);
+    // A buffer without a primary descriptor (a windowed flip-model chain, M746) and a foreign video present
+    // source stand down before the query too.
+    CHECK(scanout_primary_decide(&on,false,0,87,1920,1200,7680).reason==R::NotPrimary);
+    primary.VidPnSourceId=1;
+    CHECK(composed(&on) && request.vidpn_source==1 && adapterQueries==queries);
+    CHECK(scanout_primary_decide(&on,true,1,87,1920,1200,7680).reason==R::VidPnSource);
+    primary.VidPnSourceId=0;
+    auto window=desc; window.pPrimaryDesc=nullptr;
+    window.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE;
+    CHECK(convert_runtime_resource(window,&runtimeResource,request,texture,&on)==S_OK && !request.scanout &&
+          !request.primary && request.displayable && !request.texture.Access && adapterQueries==queries);
+    // The shared rule, one clause at a time, against the trailer of the create.
+    ScanoutSource cpu=on; cpu.force_cpu=1;
+    CHECK(composed(&cpu) && scanout_primary_decide(&cpu,true,0,87,1920,1200,7680).reason==R::ForceCpu);
+    trailerFlags=0;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1200,7680).reason==R::CapsClosed);
+    trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP; trailerFail=true;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1200,7680).reason==R::CapsClosed);
+    trailerFail=false;
+    // Trial 478 (b), from the other side: a 1920x1080 mode is committed. The 1200 chain stands down, and a
+    // chain made at the committed mode asks - the geometry follows the trailer of each create.
+    trailerHeight=1080;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1200,7680).reason==R::SourceGeometry);
+    mip.TexelHeight=1080;
+    CHECK(convert(&on)==S_OK && request.scanout && request.surface.Height==1080 && request.surface.Pitch==7680);
+    trailerHeight=1200;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1080,7680).reason==R::SourceGeometry);
+    mip.TexelHeight=1200;
+    // A 10-bit chain keeps its composed primary (HDR-ready Present, owner 2026-09-29), and so does the sRGB
+    // view, because the front compares the storage column alone and would refuse the pair.
+    for (auto format:{DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB}) {
+        desc.Format=format;
+        CHECK(composed(&on));
+        CHECK(scanout_primary_decide(&on,true,0,UINT(format),1920,1200,request.surface.Pitch).reason==R::Format);
+    }
+    desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    // The pitch clause, which the conversion cannot reach for a 4-byte row: the rule checks the equality
+    // rather than assuming it.
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1200,7936).reason==R::Pitch);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1200,7680).reason==R::Admitted);
+    CHECK(trailerWidth==1920 && trailerHeight==1200 && trailerFlags==BC250_SCANOUT_CAPS_DIRECT_FLIP && !trailerFail);
+}
 void test_wddm2_0_ddi() {
     negotiation();
     direct_flip_rule();
+    scanout_primary();
     planar_views();
     plane_from_view_format();
     device_table();
     dxgi_table();
     adapter_policy();
-    std::cout << "PASS WDDM 2.0 DDI: negotiation, device and DXGI 1.4 tables, sparse policy gate, direct-flip rule, plane views, plane from the view format, tiled entries (no GPU)\n";
+    std::cout << "PASS WDDM 2.0 DDI: negotiation, device and DXGI 1.4 tables, sparse policy gate, direct-flip rule, scan-out primary, plane views, plane from the view format, tiled entries (no GPU)\n";
 }

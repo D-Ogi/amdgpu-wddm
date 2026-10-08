@@ -270,7 +270,23 @@ allocation with D3DDDI_ID_UNINITIALIZED, lab session 343). Admission as a primar
 permission to scan out: the kernel driver's SetVidPnSourceAddress takes only the 8-bit
 scan-out rows, and direct scan-out of RGB10A2/RGBA16F remains unsupported; this revision
 does not establish when the OS promotes such a buffer. The Ascent's UE 4.26 borderless
-swap chain is an RGB10A2 primary. Other layouts remain implementation work. Checks avoid row-footprint
+swap chain is an RGB10A2 primary.
+
+M15.14 increment 3 (`scanout-primary.h`) lets an 8-bit primary ask for scan-out. The
+E26R v3 record then carries `SCANOUT` next to `PRIMARY`, and the kernel driver places
+the buffer in the local segment, which the display core can read. The request is off by
+default until a D3D11 game is measured with it. `AMDGPU_WDDM_D3D11_SCANOUT=1` in the
+environment, or the REG_DWORD `ScanoutPrimary=1` under `HKLM\SOFTWARE\amdgpu-wddm\D3D11`,
+turns it on. The environment wins over the machine value, and any other value is off.
+The clauses are those of the D3D12 shell (`driver/contract/bc250_scanout_primary.h`):
+source mode geometry from the scan-out caps trailer of each create, the format row,
+the pitch and the router's DwmForceCpu. This shell adds two: the buffer must have a
+primary descriptor, and the descriptor must name video present source 0. A swap-chain
+buffer without a primary descriptor (a DISPLAYABLE window buffer, M746) cannot ask,
+because the record's PRIMARY bit comes from that descriptor. Each change of the answer
+writes one `M15.14 d3d11 scanout` line through OutputDebugString.
+
+Other layouts remain implementation work. Checks avoid row-footprint
 integer overflow. Failure destroys the image and releases any failed-bind memory
 wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
 Mock tests cover pitch mismatch, bind failure, success, teardown and oversized

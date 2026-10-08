@@ -7,14 +7,15 @@ using namespace bc250::umd;
 namespace {
 int deviceIdentity,resourceIdentity; unsigned allocates=0,deallocates=0;
 bool failAllocate=false,failFree=false,resourceClose=true,extendedPrivate=false;
-UINT expectPitch=256; UINT64 expectSize=4096;
+UINT expectPitch=256; UINT64 expectSize=4096; UINT expectAccess=2; bool expectPrimary=false;
 void check(bool b) { if (!b) std::abort(); }
 HRESULT APIENTRY allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
     ++allocates; check(h==&deviceIdentity && a->NumAllocations==1 && a->PrivateDriverDataSize==(extendedPrivate ? 64u : 16u));
     auto *words=static_cast<const UINT *>(a->pPrivateDriverData);
-    check(words[0]==0x52363245u && words[1]==(extendedPrivate ? 3u : 2u) && words[2]==1 && words[3]==2);
+    check(words[0]==0x52363245u && words[1]==(extendedPrivate ? 3u : 2u) && words[2]==1 && words[3]==expectAccess);
     auto *s=static_cast<const BC250_WDDM_ALLOCATION_PRIVATE *>(a->pAllocationInfo2[0].pPrivateDriverData);
-    check(s->Pitch==expectPitch && s->Size==expectSize && !a->pAllocationInfo2[0].Flags.Primary);
+    check(s->Pitch==expectPitch && s->Size==expectSize && bool(a->pAllocationInfo2[0].Flags.Primary)==expectPrimary &&
+          (!expectPrimary || a->pAllocationInfo2[0].VidPnSourceId==0));
     if (failAllocate) return E_OUTOFMEMORY;
     a->pAllocationInfo2[0].hAllocation=41; a->hKMResource=42; return S_OK;
 }
@@ -156,5 +157,24 @@ int main() {
     request.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,64,16,256,D3DDDIFMT_X8R8G8B8,4096};
     expectPitch=256; expectSize=4096;
     check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
-    std::cout << "PASS runtime surface allocation ABI, domain, failure retention and resource-handle close\n";
+    // M15.14 increment 3: a scan-out primary. The v3 record carries PRIMARY|SCANOUT and the allocation is a
+    // primary of source 0. A torn intent - the bit in the record and not in the request, or the other way
+    // round, a scan-out of a non-primary, a scan-out with a cached CPU reader, a scan-out without the v3
+    // record - is refused before the callback.
+    extendedPrivate=true; expectAccess=5; expectPrimary=true;
+    request.runtime_resource=&resourceIdentity; resourceClose=true;
+    request.primary=true; request.cpu_read=false; request.scanout=true; request.vidpn_source=0;
+    request.texture={BC250_SURFACE_RESOURCE_MAGIC,3,1,5,64,16,1,1,87,1,0,0,40,0,0,0};
+    request.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,64,16,256,D3DDDIFMT_A8R8G8B8,4096};
+    check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
+    const unsigned beforeScanout=allocates;
+    request.texture.Access=1; check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.texture.Access=5; request.scanout=false; check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.scanout=true; request.primary=false; request.texture.Access=4;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.primary=true; request.cpu_read=true; request.texture.Access=7;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.cpu_read=false; request.texture={};
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeScanout);
+    std::cout << "PASS runtime surface allocation ABI, domain, failure retention, resource-handle close and the scan-out record\n";
 }

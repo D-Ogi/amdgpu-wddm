@@ -17,12 +17,12 @@ namespace bc250::umd {
 //   - both are primaries of the same video present source - a surface the runtime never gave a
 //     primary descriptor is a window buffer, not a front buffer;
 //   - both asked the kernel driver for scan-out, through their own resource record's SCANOUT bit.
-//     This is the clause that keeps the answer honest while the shell does not yet set that bit: a
-//     primary without it is aperture-resident, the display core cannot read the aperture, and
-//     SetVidPnSourceAddress would be given an address DcnTranslateCardAddress refuses - after the
-//     runtime had already stopped copying. So today the shell answers FALSE, as it did before
-//     M15.14, and the rule is in place for the increment that moves the placement. Changing the
-//     answer without changing the placement is the one thing this function must not do;
+//     This is the clause that keeps the answer honest: a primary without the bit is
+//     aperture-resident, the display core cannot read the aperture, and SetVidPnSourceAddress would
+//     be given an address DcnTranslateCardAddress refuses - after the runtime had already stopped
+//     copying. The shell sets the bit only under the opt-in switch of scanout-primary.h (M15.14
+//     increment 3), so by default it answers FALSE, as it did before M15.14. Changing the answer
+//     without changing the placement is the one thing this function must not do;
 //   - both carry a format the shared surface format table enables for SCANOUT_PRIMARY. On this part
 //     that is the 8-bit rows only, which is also what the kernel driver admits, so a 10-bit or FP16
 //     swap chain keeps the composed-primary path of M14.1;

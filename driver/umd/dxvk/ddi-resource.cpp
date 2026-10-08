@@ -6,6 +6,35 @@
 #include <utility>
 #include <cstring>
 namespace bc250::umd {
+namespace {
+// One line for every change of the scan-out answer, as the D3D12 shell writes it (heap-import.cpp,
+// scanout_note): a trial must be able to read which clause decided each chain a game made. A game that
+// recreates the same chain at the same mode adds nothing; the budget bounds a game that alternates forever,
+// and the last line of the budget says that it ran out.
+void scanout_primary_note(const ScanoutPrimaryDecision &decision,const ScanoutSource *source,bool displayable,
+    UINT vidpn_source,unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
+    const unsigned long force_cpu=source ? source->force_cpu : 0;
+    const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,pitch,
+        dxgi,decision.caps.flags,decision.caps.post_width,decision.caps.post_height,force_cpu,displayable ? 1u : 0u,
+        vidpn_source};
+    unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
+    for (const unsigned long long word:words)
+        for (unsigned i=0;i<8;++i) key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
+    static std::atomic<unsigned long long> last{0};
+    static std::atomic_int budget{64};
+    if (last.exchange(key,std::memory_order_relaxed)==key) return;
+    const int left=budget.fetch_sub(1,std::memory_order_relaxed);
+    if (left<=0) return;
+    char text[256];
+    std::snprintf(text,sizeof(text),
+        "M15.14 d3d11 scanout %s switch=%s chain=%ux%u pitch=%u format=%u displayable=%u vidpn=%u caps=%08X "
+        "source=%ux%u forcecpu=%lu%s\n",
+        scanout_primary_reason_text(decision.reason),scanout_primary_switch_text(decision.switch_state),width,
+        height,pitch,dxgi,displayable ? 1u : 0u,vidpn_source,decision.caps.flags,decision.caps.post_width,
+        decision.caps.post_height,force_cpu,left==1 ? " budget-spent" : "");
+    OutputDebugStringA(text);
+}
+}
 HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription &out) {
     // Shared/primary ownership belongs to the runtime allocation/import path.
     // Never silently create an engine-private replacement for these resources.
@@ -113,7 +142,7 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     out=std::move(d); return S_OK;
 }
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE runtimeHandle,
-    RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc) {
+    RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc,const ScanoutSource *scanout) {
     if (!runtimeHandle || input.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D ||
         input.MipLevels!=1 || input.ArraySize!=1 || input.SampleDesc.Count!=1 || input.SampleDesc.Quality ||
         input.Usage!=D3D10_DDI_USAGE_DEFAULT || input.MapFlags) return E_NOTIMPL;
@@ -154,6 +183,17 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,
         result.Width,result.Height,result.MipLevels,result.ArraySize,UINT(result.Format),result.SampleDesc.Count,
         result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
+    // M15.14 increment 3: a swap-chain buffer asks for scan-out when every clause of scanout-primary.h holds.
+    // The LB7A description does not change: its pitch is already the scan-out pitch for a 4-byte row
+    // (runtime_surface_pitch rounds a row up to 256 bytes, as bc250_scanout_primary_pitch does), and the
+    // rule checks that equality instead of assuming it. Only the record's SCANOUT bit is added, which moves
+    // the allocation to the local segment; every other answer keeps the composed primary.
+    if (r.primary || r.displayable) {
+        const ScanoutPrimaryDecision decision=scanout_primary_decide(scanout,r.primary,r.vidpn_source,
+            UINT(d.Format),d.Width,d.Height,pitch);
+        if (decision.admitted) { r.scanout=true; r.texture.Access|=BC250_SURFACE_RESOURCE_SCANOUT; }
+        scanout_primary_note(decision,scanout,r.displayable,r.vidpn_source,UINT(d.Format),d.Width,d.Height,pitch);
+    }
     request=r; desc=result; return S_OK;
 }
 // The shared-surface wire format has one reader (driver/contract/bc250_shared_surface.h); this is the
@@ -207,7 +247,8 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         if (desc->pPrimaryDesc || (desc->BindFlags&D3D10_DDI_BIND_PRESENT) ||
             (desc->MiscFlags&(D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) {
             RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
-            HRESULT hr=convert_runtime_resource(*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),request,texture);
+            HRESULT hr=convert_runtime_resource(*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),request,texture,
+                &owner.scanout());
             if (FAILED(hr)) {
                 // Record the rejected runtime descriptor, not pointers or memory.
                 // Swap-chain admission must be fixed against the actual request.

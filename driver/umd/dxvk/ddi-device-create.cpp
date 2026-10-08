@@ -8,7 +8,7 @@ namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     PFN_vkGetInstanceProcAddr get,const BC250_DXVK_ENGINE_FUNCS &funcs,D3D_FEATURE_LEVEL level,
     const BC250_DXVK_SHELL_SERVICES &services,DdiDeviceHandle &failedCleanup,const AdapterCaps &advertised,
-    UINT32 policy_flags) noexcept {
+    UINT32 policy_flags,const ScanoutSource *scanout) noexcept {
     if (failedCleanup.owner) return E_UNEXPECTED;
     const bool wddm2_0=args.Interface==D3DWDDM2_0_DDI_INTERFACE_VERSION;
     // The two unions alias: p11_1DeviceFuncs/pWDDM2_0DeviceFuncs, pDXGIDDIBaseFunctions3/5.
@@ -26,6 +26,7 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         level>advertised.maximum) return E_INVALIDARG;
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;
     if (!owner) return E_OUTOFMEMORY;
+    if (scanout) owner->set_scanout(*scanout);
     HRESULT hr=E_FAIL,cleanup=S_OK;
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);
