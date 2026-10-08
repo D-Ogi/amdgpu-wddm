@@ -209,8 +209,28 @@ the commit that the manifest of main names (`3c31bd97`, `d5593267`, `693c02b3`).
 | DXVK `5611118e` | `build-dxvk.ps1 -Config ddi-engine` | `d3d11/amdgpu_wddm_dxvk.dll` | `D7A65A98`, `A45F1F2C` | 434222 bytes in 9664 ranges, most of them in `.text` and `.rdata`: the functions are in another order | `E506862E` |
 
 The DXVK image holds the name of one anonymous namespace, and its path hash (cause 8) is different in the two
-builds before the change. After the change the two builds are equal. The recipes of the other fork entries (x86,
-`zink-umd`, `llvmpipe-umd`, `radv`) use the same function, but this measurement did not build them.
+builds before the change. After the change the two builds are equal.
+
+The other fork entries of the manifest, built two times in the same way with the recipe of `841e4018`:
+
+| fork commit | recipe | payload file | after: both builds |
+|---|---|---|---|
+| Mesa `7eb7861d` | `build-mesa.ps1 -Config zink-umd -Arch x64` | `desktop/bc250d3d_zink.dll` | `6C3134EB` |
+| Mesa `48546c73` | `build-mesa.ps1 -Config radv` | `desktop/amdgpu_wddm_radv.dll` | `D0CBD7F2` |
+| Mesa `76ab2c27` | `build-mesa.ps1 -Config llvmpipe-umd` | `desktop/bc250d3d.dll` | `DF43D302` |
+| Mesa `76ab2c27` | `build-mesa.ps1 -Config llvmpipe-umd -Arch x86` | `wow64/desktop/bc250d3d.dll` | `F28F7A04` |
+| Mesa `31844893` | `build-mesa.ps1 -Config radv-mt -Arch x86` | the three x86 RADV files in `wow64/` | `0863C0AC` |
+| DXVK `5611118e` | `build-dxvk.ps1 -Config ddi-engine -Arch x86` | `wow64/d3d11/amdgpu_wddm_dxvk.dll` | `7F48A72E` |
+| vkd3d-proton `bdec00f3` | `build-vkd3d.ps1 -Config ddi-engine-lto -Arch x86` | `wow64/d3d12/amdgpu_wddm_vkd3d.dll` | `3DE7A5C7` |
+| Mesa `2732f9c8` | `build-mesa.ps1 -Config radv` | `vulkan/vulkan_radeon.dll` | the build stops |
+
+The two `llvmpipe-umd` builds read the same local LLVM build. This measurement does not show that an LLVM build in
+another directory gives the same bytes.
+
+The `radv` option set has `-Db_ndebug=true` from `b4c74c86` on. With `NDEBUG`, line 714 of
+`src/compiler/spirv/vtn_cmat.c` at `2732f9c8` declares a variable that only `assert` reads. Mesa makes warning
+C4189 an error (`/we4189`), so the build stops. The shipped file was built with the option set of `d6176765`,
+which does not set `b_ndebug`. The later commit `48546c73` builds with the new option set.
 
 A build with the new recipes is a new artifact. It does not give the bytes of a shipped fork file, because the
 shipped files were built without `/Brepro`:
@@ -231,6 +251,8 @@ What remains for the forks:
    uncommitted copy of the recipe or from a build script outside the repository.
 3. The `llvmpipe-umd` builds link a local LLVM build (`scratch/llvm2312-build` and its x86 copy). A rebuild needs an
    LLVM build that a commit or a download record identifies.
+4. `vulkan/vulkan_radeon.dll` needs a Mesa commit that the `radv` recipe can build, because `2732f9c8` does not
+   build with `-Db_ndebug=true`.
 
 ### The shipped files
 
