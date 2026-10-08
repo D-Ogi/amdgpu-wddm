@@ -8,7 +8,8 @@
 // Everything is written below the working directory (the build output) and below one test key
 // HKCU\Software\amdgpu-wddm-test\recent-launch-<pid>, removed at the end; the real switch is only read.
 //   recent-launch-test.exe                 all tests, exit 0 when every check passed
-//   recent-launch-test.exe child-commit <store dir> <switch key> <exe path> <api>    (exit code = Outcome)
+//   recent-launch-test.exe child-commit <store dir> <switch key> <exe path> <api> [lock wait ms]
+//                                                                                   (exit code = Outcome)
 //   recent-launch-test.exe child-gather                                             (exit code = Outcome, 100 = ok)
 #include "recent-launch.h"
 #include <aclapi.h>
@@ -520,7 +521,10 @@ void test_lock_bound() {
     CHECK(rl::commit(in,rl::ApiD3D12)==rl::Outcome::Busy);
     const double waited=ms_since(t0);
     std::printf("lock: busy after %.1f ms (bound %lu ms)\n",waited,static_cast<unsigned long>(rl::kLockWaitMs));
-    CHECK(waited>=rl::kLockWaitMs-5 && waited<rl::kLockWaitMs+100);
+    // The bound itself is the lower check: the worker waited the whole kLockWaitMs before it dropped the entry.
+    // The upper check only proves that the wait ends; its slack is a loaded host's late wake-up (1172 ms seen on
+    // 2026-10-08 at 70-90 % CPU), and a wait that a wrong constant made 10 s or infinite still fails it.
+    CHECK(waited>=rl::kLockWaitMs-5 && waited<rl::kLockWaitMs+1000);
     CHECK(!exists(store+L'\\'+rl::kStoreName));
 }
 
@@ -539,6 +543,11 @@ int run_child(const wchar_t* cmdline,DWORD flags,STARTUPINFOEXW* si,PROCESS_INFO
     return int(code);
 }
 
+// The children queue on one lock and hold it a few milliseconds each. On a loaded host, 24 process starts and
+// commits take longer than the driver's 1000 ms wait, and the late children dropped their notes as Busy (21-22 of 24
+// at 70-90 % CPU, 2026-10-08). This test checks that simultaneous commits serialize and lose nothing, so its children
+// wait 10 s. test_lock_bound checks the driver's bound.
+constexpr DWORD kProcessesLockWaitMs=10000;
 void test_processes() {
     const std::wstring store=fresh(L"processes"),same=L"C:\\Games\\same.exe";
     delete_switch();
@@ -548,7 +557,7 @@ void test_processes() {
     for(int i=0;i<N;++i){
         paths[i]=i%2?same:L"C:\\Games\\distinct-"+std::to_wstring(i)+L".exe";
         const std::wstring cmd=L"\""+g_self+L"\" child-commit \""+store+L"\" \""+g_switch_key+L"\" \""+paths[i]+L"\" "+
-            std::to_wstring(i%3?rl::ApiD3D12:rl::ApiD3D11);
+            std::to_wstring(i%3?rl::ApiD3D12:rl::ApiD3D11)+L" "+std::to_wstring(kProcessesLockWaitMs);
         CHECK(run_child(cmd.c_str(),CREATE_SUSPENDED,nullptr,&pis[i])==0);
     }
     for(auto& pi:pis)ResumeThread(pi.hThread); // all at once
@@ -696,10 +705,11 @@ uint64_t process_start() {
 int wmain(int argc,wchar_t** argv) {
     g_self=rl::normalize(rl::detail::grow([](wchar_t* p,DWORD n){return GetModuleFileNameW(nullptr,p,n);}));
     g_windows=rl::normalize(rl::detail::grow([](wchar_t* p,DWORD n){return GetSystemWindowsDirectoryW(p,n);}));
-    if(argc==6 && !wcscmp(argv[1],L"child-commit")){
+    if((argc==6 || argc==7) && !wcscmp(argv[1],L"child-commit")){
         rl::Inputs in;
         in.store_dir=argv[2];g_switch_key=argv[3];in.switch_key=g_switch_key.c_str();in.exe=argv[4];
         in.windows_dir=g_windows;in.pid=GetCurrentProcessId();in.start=process_start();
+        if(argc==7)in.lock_wait_ms=DWORD(_wtoi(argv[6]));
         return int(rl::commit(in,uint32_t(_wtoi(argv[5]))));
     }
     if(argc==2 && !wcscmp(argv[1],L"child-gather")){
