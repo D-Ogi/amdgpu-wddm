@@ -245,14 +245,14 @@ static NTSTATUS PagingJournalEscape(_In_ const BC250_DEVICE* device, _In_ const 
 // this adapter, which is the same guarantee WddmSummary is called under.
 static BC250_LOG_RATE g_SummaryNoteRate;
 
-static void LogSummaryNote(ULONG Lines, ULONG Dropped, ULONG RingSeq)
+static void LogSummaryNote(ULONG First, ULONG Lines, ULONG Dropped, ULONG RingSeq)
 {
     BC250_LOG_RATE_NOTE note;
     ULONG outcome = Bc250LogRateDecide(&g_SummaryNoteRate, GuardLogMilliseconds(), &note);
 
     if (outcome == BC250_LOG_RATE_LINE)
-        GuardLog("log: summary of %lu lines beside the ring at seq %lu (%lu did not fit), read from 0x%X",
-                 Lines, RingSeq, Dropped, (ULONG)BC250_LOG_SUMMARY_SEQ);
+        GuardLog("log: summary of %lu lines beside the ring at seq %lu (%lu did not fit), read from %lu",
+                 Lines, RingSeq, Dropped, First);
     else if (outcome == BC250_LOG_RATE_SUMMARY)
         GuardLog("log: summary of %lu lines beside the ring at seq %lu: %lu taken in %llu ms, %lu of %lu silent",
                  Lines, RingSeq, note.Pending, note.ElapsedMs, note.Skipped, note.Calls);
@@ -313,13 +313,15 @@ static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* 
 
         if (beside)
         {
-            ULONG lines = 0, dropped = 0, ringSeq = 0;
+            ULONG first = BC250_LOG_SUMMARY_SEQ, lines = 0, dropped = 0, ringSeq = 0;
 
             WddmSummary(device);
-            GuardLogSummaryEnd(&lines, &dropped, &ringSeq);
-            summaryFrom = BC250_LOG_SUMMARY_SEQ;
+            // The block's own first sequence, not the constant: each summary answers from the next block of the
+            // space, so that a reader of the block before it is refused instead of given a page of each.
+            GuardLogSummaryEnd(&first, &lines, &dropped, &ringSeq);
+            summaryFrom = first;
             from = summaryFrom;
-            LogSummaryNote(lines, dropped, ringSeq);
+            LogSummaryNote(first, lines, dropped, ringSeq);
         }
         else
         {
@@ -334,6 +336,13 @@ static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* 
     else if (from == BC250_LOG_FROM_SUMMARY)
     {
         from = 0;                       // the sentinel means nothing without a summary; do not read past the end
+    }
+    else if (from >= BC250_LOG_SUMMARY_SEQ)
+    {
+        // A page read inside the summary space. It answers the block the driver holds now, so that a caller
+        // whose own block was replaced by a newer summary reads that from the same escape instead of seeing an
+        // empty page it cannot tell from the end of its block (BD-097).
+        summaryFrom = GuardLogSummaryBase();
     }
     log->SummaryFrom = summaryFrom;
     log->NtStatus = 0;

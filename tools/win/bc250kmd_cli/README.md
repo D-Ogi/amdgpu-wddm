@@ -64,10 +64,12 @@ idles the GPU for it and a running game waits: BD-054 was the overlay polling a 
 M is above 1, or when the line is missing.
 
 From KMD 0.7.216.23 `log summary only` costs the ring one line instead of about 320: the driver keeps the block
-beside the ring and answers `SummaryFrom` as `BC250_LOG_SUMMARY_SEQ`, which pages exactly like a ring sequence
-(BD-097, `docs/design/kmd-log-ring.md`). `log summary` without a position still writes the block into the ring,
-where a reader of the whole trail wants it. The tool needs no change for either: it asks for the sequence the
-driver answered with.
+beside the ring and answers `SummaryFrom` as the sequence of the block's first line, which pages exactly like a
+ring sequence (BD-097, `docs/design/kmd-log-ring.md`). `log summary` without a position still writes the block
+into the ring, where a reader of the whole trail wants it. The tool asks for the sequence the driver answered
+with, and it says one thing more: the driver holds one block at a time, so a summary that another caller takes
+between two pages ends this read, and the tool prints that the block was replaced instead of printing a page of
+each summary.
 
 `log_test.c` holds that contract against a fake driver and `build.ps1` runs it before it compiles the tool.
 `mutate-log-test.ps1` is its mutation control: the CLI of KMD 196, paging through `SendEscape`, no sentinel

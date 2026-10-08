@@ -496,10 +496,12 @@ struct _BC250_LOG_LINE;
 ULONG GuardLogSequence(void);                                   // the sequence number the next line will get
 ULONGLONG GuardLogMilliseconds(void);                           // the stamp a line written now would get; any IRQL
 // BD-097: the log summary's own lines, beside the ring. Between Begin (TRUE) and End every GuardLog of THIS
-// thread goes into that storage instead of the ring, and BC250_LOG_SUMMARY_SEQ addresses it in GuardLogRead.
-// FALSE from Begin means another thread holds it and the lines go into the ring, as they always did.
+// thread, outside a DPC, goes into that storage instead of the ring, and End says which sequence number
+// GuardLogRead reads the block from. FALSE from Begin means another thread holds it and the lines go into the
+// ring, as they always did. GuardLogSummaryBase is the block held now, for a page read of that space.
 BOOLEAN GuardLogSummaryBegin(void);
-void GuardLogSummaryEnd(_Out_ ULONG* Lines, _Out_ ULONG* Dropped, _Out_ ULONG* RingSeq);
+void GuardLogSummaryEnd(_Out_ ULONG* First, _Out_ ULONG* Lines, _Out_ ULONG* Dropped, _Out_ ULONG* RingSeq);
+ULONG GuardLogSummaryBase(void);
 void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);

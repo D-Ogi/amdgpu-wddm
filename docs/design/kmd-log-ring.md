@@ -54,16 +54,30 @@ the summary that way until KMD 0.7.213, and the b23 lab read found the cost in t
 From KMD 0.7.216.23 the polling form of the escape writes the block beside the ring:
 
 - `bc250kmd_cli log summary only` sends `From` as `BC250_LOG_FROM_SUMMARY`. The driver writes the
-  block into storage of its own, answers `SummaryFrom` as `BC250_LOG_SUMMARY_SEQ`, and adds one
-  rate-limited line to the ring. That line says how many lines the block holds and at which ring
-  sequence the caller took it.
+  block into storage of its own, answers `SummaryFrom` as the sequence of the block's first line,
+  and adds one rate-limited line to the ring. That line says how many lines the block holds, at
+  which ring sequence the caller took it, and the sequence to read it from.
 - `bc250kmd_cli log summary` sends a position of its own. The driver writes the block into the ring,
   where a reader of the whole trail wants it, between the lines around it.
 
 `BC250_ESCAPE_GET_LOG` reads the block exactly as it reads the ring. The caller asks for the
 sequence that the driver answered with, pages on with `Next`, and stops when `Returned` is 0. The
-sequence numbers of the block start at `BC250_LOG_SUMMARY_SEQ`, above every sequence that the ring
-can give, so no line of the block reads as a ring line.
+sequence numbers of the block are above every sequence that the ring can give, so no line of the
+block reads as a ring line.
+
+Two rules keep the block from taking evidence out of the ring:
+
+- A line of a DPC always goes into the ring. The driver diverts the lines of the thread that asked
+  for the summary, but a DPC runs in the context of the thread that its processor was running. The
+  watchdog DPCs write the `FENCE TIMEOUT` lines, which are the evidence of a hang, so the driver
+  sends a line to the ring if `KeIsExecutingDpc` is true, whoever the current thread is.
+- The driver holds one block at a time, and each summary answers from the next block of the summary
+  space (`BC250_LOG_SUMMARY_BLOCKS` of them before the numbers start again). A page read is not
+  serialized against the summary escape, because the pages go without adapter synchronization, so
+  one caller can take a summary while another caller pages the block before it. That reader gets an
+  empty page, and the escape answers `SummaryFrom` as the block that the driver holds now.
+  `bc250kmd_cli` prints one line to say that the block was replaced. A page of one summary together
+  with a page of the next is never printed.
 
 The shipped overlay polls `log 0`, which is `BC250_ESCAPE_GET_LOG` and writes no line at all. It
 asks for a summary only for the `graphics.summary` action of its table.

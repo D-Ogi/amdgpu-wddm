@@ -2380,7 +2380,7 @@ static int Confirm(void)
 static int Log(const WCHAR *fromText, int summary)
 {
     static BC250_ESCAPE_LOG log;        // 10 KB: a static, not a frame this tool has no reason to grow
-    unsigned long from = 0, printed = 0;
+    unsigned long from = 0, printed = 0, block = 0;     // block: the summary block being paged, 0 = the ring
     int first = 1;
     NTSTATUS status;
     WCHAR *end;
@@ -2429,6 +2429,16 @@ static int Log(const WCHAR *fromText, int summary)
         }
         // The sentinel is no position to compare with: the driver answers the sequence it actually read from.
         if (from == BC250_LOG_FROM_SUMMARY) from = log.From;
+        // BD-097: a read inside the summary space pages one block, and the driver holds one block at a time. An
+        // empty page whose SummaryFrom names another block is a block that a newer summary replaced, not the end
+        // of this one, so a short block is never printed as if it were whole. A driver before 0.7.216.23 answers
+        // SummaryFrom 0 for a page read and says nothing of the kind.
+        if (from >= BC250_LOG_SUMMARY_SEQ)
+            block = BC250_LOG_SUMMARY_SEQ +
+                    (from - BC250_LOG_SUMMARY_SEQ) / BC250_LOG_SUMMARY_LINES * BC250_LOG_SUMMARY_LINES;
+        if (log.Returned == 0 && block != 0 && log.SummaryFrom >= BC250_LOG_SUMMARY_SEQ && log.SummaryFrom != block)
+            printf("             the block beside the ring was replaced by a newer summary after %lu lines; the "
+                   "one held now reads from %lu\n", printed, log.SummaryFrom);
         if (log.Returned == 0 || log.Next <= from) break;   // the end, or a driver that is not moving on
         from = log.Next;
         // A driver that keeps logging while we read would keep us here: the ring is 1024 lines, so anything past

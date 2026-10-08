@@ -112,6 +112,10 @@ typedef struct {
     unsigned long SummaryStart, SummaryEnd; // the lines of the ring the last summary wrote
     int Note;                               // those lines are the one note of a block beside the ring
     unsigned long Summaries;
+    unsigned long Block;                    // the block of the summary space the driver holds (BD-097)
+    int BlockTaken;                         // one block has been written, so the next summary takes the next one
+    unsigned long BesidePages;              // page reads answered inside the summary space
+    unsigned long StealAfterPages;          // after that many pages another caller's summary replaces the block
 } FAKE_DRIVER;
 
 static FAKE_DRIVER g_driver;
@@ -166,7 +170,11 @@ NTSTATUS APIENTRY FakeD3DKMTEscape(const D3DKMT_ESCAPE *escape)
         // BC250_LOG_SUMMARY_SEQ, and the ring gets one line saying where it was taken. The evidence form (a
         // position of its own) still writes the block into the ring.
         if (g_driver.Beside && from == BC250_LOG_FROM_SUMMARY) {
-            summaryFrom = BC250_LOG_SUMMARY_SEQ;
+            // Each summary answers from the next block of the summary space, so that a reader of the block
+            // before it is refused instead of given a page of each (guard.c GuardLogSummaryBegin).
+            if (g_driver.BlockTaken) g_driver.Block = (g_driver.Block + 1) % BC250_LOG_SUMMARY_BLOCKS;
+            g_driver.BlockTaken = 1;
+            summaryFrom = BC250_LOG_SUMMARY_SEQ + g_driver.Block * BC250_LOG_SUMMARY_LINES;
             g_driver.SummaryStart = g_driver.Total;     // the one ring line of this summary
             g_driver.SummaryEnd = ++g_driver.Total;
             g_driver.Note = 1;
@@ -184,13 +192,24 @@ NTSTATUS APIENTRY FakeD3DKMTEscape(const D3DKMT_ESCAPE *escape)
     }
     if (from >= BC250_LOG_SUMMARY_SEQ) {
         // The summary space: the block's own lines, and a read past them returns nothing and does not move on.
-        for (unsigned long i = from - BC250_LOG_SUMMARY_SEQ;
-             i < g_driver.SummaryLines && returned < BC250_LOG_MAX_LINES; i++, returned++) {
-            BC250_LOG_LINE *line = &log->Lines[returned];
-            line->Sequence = BC250_LOG_SUMMARY_SEQ + i;
-            line->Milliseconds = 1000 + i;
-            sprintf_s(line->Text, BC250_LOG_TEXT, "wddm summary: line %lu", i);
-        }
+        // A read of a block the driver no longer holds returns nothing either, and answers the block it does
+        // hold, which is how the tool tells a replaced block from the end of its own (BD-097).
+        unsigned long base = BC250_LOG_SUMMARY_SEQ + g_driver.Block * BC250_LOG_SUMMARY_LINES;
+        unsigned long asked = (from - BC250_LOG_SUMMARY_SEQ) / BC250_LOG_SUMMARY_LINES;
+
+        if (!summary) g_driver.BesidePages++;
+        if (asked == g_driver.Block)
+            for (unsigned long i = (from - BC250_LOG_SUMMARY_SEQ) % BC250_LOG_SUMMARY_LINES;
+                 i < g_driver.SummaryLines && returned < BC250_LOG_MAX_LINES; i++, returned++) {
+                BC250_LOG_LINE *line = &log->Lines[returned];
+                line->Sequence = base + i;
+                line->Milliseconds = 1000 + i;
+                sprintf_s(line->Text, BC250_LOG_TEXT, "wddm summary: line %lu", i);
+            }
+        // Another caller's summary, between two pages of this reader's block.
+        if (g_driver.StealAfterPages && g_driver.BesidePages >= g_driver.StealAfterPages)
+            g_driver.Block = (g_driver.Block + 1) % BC250_LOG_SUMMARY_BLOCKS;
+        summaryFrom = BC250_LOG_SUMMARY_SEQ + g_driver.Block * BC250_LOG_SUMMARY_LINES;
     } else
     // GuardLogRead without the wrap: from .. Total, a page at most; Next never past the end.
     for (unsigned long s = from; s < g_driver.Total && returned < BC250_LOG_MAX_LINES; s++, returned++) {
@@ -320,6 +339,21 @@ int main(void)
     Check(HasLine(300, "wddm summary: line 0") && HasLine(399, "wddm summary: line 99") && HasLine(0, "trail 0"),
           "beside, evidence form: the block inside the ring");
     Check(g_driver.Hard == 1 && g_driver.Summaries == 1, "beside, evidence form: one HardwareAccess escape");
+
+    // Another caller's summary between two pages of this reader's block (the escapes are not serialized: the
+    // pages go without adapter synchronization). The reader gets the pages it asked for before the block was
+    // replaced, no line of the newer summary, and a line that says the block is gone - never a page of each.
+    Reset(0, 300, 200);         // a block of 200 lines, so that the pages after the replacement are visibly gone
+    g_driver.Beside = 1;
+    g_driver.StealAfterPages = 1;
+    rc = Run(L"only", 1);
+    Check(rc == 0, "overtaken: exit 0");
+    Check(Contains("             128 lines printed\n"), "overtaken: the lines of the block itself, and no more");
+    Check(HasBesideLine(0, "wddm summary: line 0") && HasBesideLine(127, "wddm summary: line 127") &&
+          !Contains("wddm summary: line 128"), "overtaken: nothing of the newer summary");
+    Check(Contains("the block beside the ring was replaced by a newer summary after 128 lines"),
+          "overtaken: the tool says the block is gone");
+    Check(g_driver.Block == 1 && g_driver.Summaries == 1, "overtaken: the driver holds the newer block");
 
     // BD-054's shape: a driver up to 0.7.183.1 refuses the unsynchronized page once, and every read after it goes
     // with HardwareAccess. The count line is how a poller sees it.

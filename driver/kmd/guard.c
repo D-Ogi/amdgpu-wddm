@@ -72,11 +72,33 @@ static ULONG LogSlot(ULONG Sequence)
 // lines of its own escape and nothing else, because another processor logging a device event at the same moment
 // must not have its line taken out of the ring. A caller that finds the claim taken writes to the ring, as
 // before - two summaries at once is not a case worth a second buffer.
+//
+// The thread is not enough by itself. A DPC runs in the context of whatever thread its processor was running, so
+// KeGetCurrentThread() inside the submit or paging watchdog DPC answers the escape's own thread while the escape
+// writes its summary on that processor. Those DPCs log the FENCE TIMEOUT lines, which are the evidence a hang is
+// read from, and the diversion would move them out of the ring and into a block that the next summary overwrites.
+// A line of a DPC therefore stays in the ring, whoever the current thread is, and the summary thread's own lines
+// are diverted whether it holds a lock or not (WddmSummary logs some of its tables at DISPATCH_LEVEL, so the IRQL
+// does not tell the two apart; KeIsExecutingDpc does).
+//
+// Each claim answers a block of its own in the summary space (g_SummaryBlock, BC250_LOG_SUMMARY_BLOCKS of them).
+// The escapes that read a block are not serialized against the escape that writes one - GET_LOG pages go without
+// adapter synchronization - so a reader can be half way through a block when the next summary starts. With a
+// block number inside the sequence that reader's next page is refused and its paging ends; without it the page
+// would be half of one summary and half of the next, with nothing to say so.
 static BC250_LOG_LINE g_Summary[BC250_LOG_SUMMARY_LINES];
 static PVOID g_SummaryThread;           // the thread whose GuardLog calls go to g_Summary; NULL = nobody's
 static ULONG g_SummaryWritten;          // lines of the last (or running) summary that are in g_Summary
 static ULONG g_SummaryDropped;          // lines of it that did not fit; the escape reports them
 static ULONG g_SummaryRingSeq;          // the ring sequence the summary was taken at, for the one ring line
+static ULONG g_SummaryBlock;            // the block of the summary space g_Summary answers as
+static BOOLEAN g_SummaryTaken;          // a summary has been taken, so the next claim moves to the next block
+
+// The first sequence number of the block in g_Summary. Callers hold g_LogLock.
+static ULONG SummaryBase(void)
+{
+    return BC250_LOG_SUMMARY_SEQ + g_SummaryBlock * BC250_LOG_SUMMARY_LINES;
+}
 
 ULONGLONG GuardLogMilliseconds(void)
 {
@@ -286,13 +308,14 @@ void GuardLog(_In_z_ const char* Format, ...)
     KeAcquireSpinLock(&g_LogLock, &irql);
     now = KeQueryInterruptTime();       // inside the lock, so that the times rise with the sequence numbers
     // BD-097: a summary's own lines go beside the ring, for the thread that claimed the diversion and for no
-    // other. Their sequence numbers are the summary space's, so a reader can tell them from a ring line.
-    if (g_SummaryThread != NULL && g_SummaryThread == (PVOID)KeGetCurrentThread())
+    // other. Their sequence numbers are the summary space's, so a reader can tell them from a ring line. A DPC
+    // of that same thread's processor is not that thread's work: its line stays in the ring (see the claim above).
+    if (g_SummaryThread != NULL && g_SummaryThread == (PVOID)KeGetCurrentThread() && !KeIsExecutingDpc())
     {
         if (g_SummaryWritten < BC250_LOG_SUMMARY_LINES)
         {
             entry = &g_Summary[g_SummaryWritten];
-            entry->Sequence = BC250_LOG_SUMMARY_SEQ + g_SummaryWritten;
+            entry->Sequence = SummaryBase() + g_SummaryWritten;
             entry->Milliseconds = (ULONG)((now - g_LogStart) / 10000ull);
             RtlCopyMemory(entry->Text, line, sizeof(entry->Text));
             g_SummaryWritten++;
@@ -321,6 +344,10 @@ BOOLEAN GuardLogSummaryBegin(void)
     KeAcquireSpinLock(&g_LogLock, &irql);
     if (g_SummaryThread == NULL)
     {
+        // The next block of the summary space, so that a reader of the last one is refused instead of mixed.
+        // The first summary of a driver load keeps block 0, which is BC250_LOG_SUMMARY_SEQ itself.
+        if (g_SummaryTaken) g_SummaryBlock = (g_SummaryBlock + 1u) % BC250_LOG_SUMMARY_BLOCKS;
+        g_SummaryTaken = TRUE;
         g_SummaryThread = (PVOID)KeGetCurrentThread();
         g_SummaryWritten = 0;
         g_SummaryDropped = 0;
@@ -331,19 +358,34 @@ BOOLEAN GuardLogSummaryBegin(void)
     return claimed;
 }
 
-// Release the claim and say what the summary wrote: Lines is what BC250_LOG_SUMMARY_SEQ now addresses, Dropped
-// the lines that did not fit the buffer (0 unless the summary outgrows BC250_LOG_SUMMARY_LINES), RingSeq the
-// ring sequence the summary was taken at, which is what places the block in the ring's own trail.
-void GuardLogSummaryEnd(_Out_ ULONG* Lines, _Out_ ULONG* Dropped, _Out_ ULONG* RingSeq)
+// Release the claim and say what the summary wrote: First is the sequence number of its first line, which is the
+// one to read it from, Lines how many lines it holds, Dropped the lines that did not fit the buffer (0 unless the
+// summary outgrows BC250_LOG_SUMMARY_LINES), RingSeq the ring sequence the summary was taken at, which is what
+// places the block in the ring's own trail.
+void GuardLogSummaryEnd(_Out_ ULONG* First, _Out_ ULONG* Lines, _Out_ ULONG* Dropped, _Out_ ULONG* RingSeq)
 {
     KIRQL irql;
 
     KeAcquireSpinLock(&g_LogLock, &irql);
+    *First = SummaryBase();
     *Lines = g_SummaryWritten;
     *Dropped = g_SummaryDropped;
     *RingSeq = g_SummaryRingSeq;
     if (g_SummaryThread == (PVOID)KeGetCurrentThread()) g_SummaryThread = NULL;
     KeReleaseSpinLock(&g_LogLock, irql);
+}
+
+// The sequence number the block in the summary buffer is read from now. A page read of the summary space answers
+// it, so that a caller whose block has been replaced learns that from the same escape (BC250_ESCAPE_LOG.SummaryFrom).
+ULONG GuardLogSummaryBase(void)
+{
+    KIRQL irql;
+    ULONG base;
+
+    KeAcquireSpinLock(&g_LogLock, &irql);
+    base = SummaryBase();
+    KeReleaseSpinLock(&g_LogLock, irql);
+    return base;
 }
 
 // The sequence number the next line will get. Racy by nature and that is fine: its only use is to stamp "the
@@ -389,10 +431,15 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
     // its lines run out the count is 0 and Next does not move, which is what ends the caller's paging loop.
     if (From >= BC250_LOG_SUMMARY_SEQ)
     {
+        ULONG offset;
+
         KeAcquireSpinLock(&g_LogLock, &irql);
-        sequence = From - BC250_LOG_SUMMARY_SEQ;
-        // Not while another thread is writing one: the buffer is then half of this summary and half of the last.
-        if (g_SummaryThread == NULL)
+        offset = From - BC250_LOG_SUMMARY_SEQ;
+        sequence = offset % BC250_LOG_SUMMARY_LINES;
+        // Nothing while another thread is writing a summary: the buffer is then half of this one and half of the
+        // last. Nothing either for a block the buffer no longer holds, which is a reader that another caller's
+        // summary overtook: a short read is an answer, a page of two summaries is not.
+        if (g_SummaryThread == NULL && offset / BC250_LOG_SUMMARY_LINES == g_SummaryBlock)
             while (count < Max && sequence < g_SummaryWritten) Lines[count++] = g_Summary[sequence++];
         KeReleaseSpinLock(&g_LogLock, irql);
         *Next = From + count;
