@@ -66,8 +66,10 @@ function File-Hash([string]$Path) {
 # value, and the form of every call below is listed in tools/release/cli-commands.json.
 function Release-Client {
     try {
-        $key = Get-ItemProperty -Path 'HKLM:\SOFTWARE\amdgpu-wddm' -Name 'Release InstallRoot' -ErrorAction Stop
-        $root = $key.'Release InstallRoot'
+        # Key HKLM\SOFTWARE\amdgpu-wddm\Release, value InstallRoot, as the installer writes it and as
+        # kmd-deploy's Get-KmdReleaseRoot reads it.
+        $key = Get-ItemProperty -Path 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name 'InstallRoot' -ErrorAction Stop
+        $root = $key.InstallRoot
     } catch {
         return ''
     }
