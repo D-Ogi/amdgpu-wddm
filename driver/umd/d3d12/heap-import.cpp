@@ -23,13 +23,14 @@ HRESULT from_vk(VkResult r) noexcept {
 // a format change or a different answer adds one line. The budget bounds a game that alternates forever,
 // and the last line of the budget says that it ran out, so a quiet log is never mistaken for a quiet game.
 // desktop is the word of bc250_desktop_route_text for the compositor's record ("not-read" when the off
-// switch stopped the decision before it), and desktop_pid the compositor that wrote it.
+// switch stopped the decision before it), and desktop_pid the compositor that wrote it. modes is what the
+// kernel driver's mode list said about a chain that is not the committed mode (scanout_mode_list_text).
 void scanout_note(const ScanoutDecision& decision,const bc250_scanout_caps& caps,unsigned long force_cpu,
-                  const char* desktop,unsigned desktop_pid,
+                  const char* desktop,unsigned desktop_pid,ScanoutModeList modes,
                   unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
     unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
     const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,
-        pitch,dxgi,caps.flags,caps.post_width,caps.post_height,force_cpu,desktop_pid};
+        pitch,dxgi,caps.flags,caps.post_width,caps.post_height,force_cpu,desktop_pid,unsigned(modes)};
     for(const unsigned long long word:words)
         for(unsigned i=0;i<8;++i)key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
     for(const char* c=desktop;*c;++c)key=(key^static_cast<unsigned char>(*c))*1099511628211ull;
@@ -38,13 +39,13 @@ void scanout_note(const ScanoutDecision& decision,const bc250_scanout_caps& caps
     if(last.exchange(key,std::memory_order_relaxed)==key)return;
     const int left=budget.fetch_sub(1,std::memory_order_relaxed);
     if(left<=0)return;
-    char text[288];
+    char text[320];
     std::snprintf(text,sizeof(text),
         "M15.14 scanout %s switch=%s chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu "
-        "desktop=%s desktop_pid=%u%s\n",
+        "desktop=%s desktop_pid=%u modes=%s%s\n",
         scanout_stand_down_text(decision.reason),scanout_switch_text(decision.switch_state),width,height,
         pitch,dxgi,static_cast<unsigned long>(caps.flags),caps.post_width,caps.post_height,force_cpu,
-        desktop,desktop_pid,left==1?" budget-spent":"");
+        desktop,desktop_pid,scanout_mode_list_text(modes),left==1?" budget-spent":"");
     OutputDebugStringA(text);
 }
 }
@@ -111,6 +112,10 @@ RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& doma
     adapter_=d.adapter;
     force_cpu_=scanout_force_cpu();
     desktop_route_reader_=&scanout_desktop_route_read;
+    mode_list_reader_=&scanout_mode_list_read;
+}
+ScanoutModeList RuntimeHeapImports::mode_list_now(unsigned width,unsigned height) const noexcept {
+    return mode_list_reader_(adapter_?adapter_->contract.luid:0,width,height);
 }
 bc250_scanout_caps RuntimeHeapImports::scanout_caps_now() const noexcept {
     if(!adapter_)return {};
@@ -483,9 +488,19 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             const bc250_scanout_caps caps=off?bc250_scanout_caps{}:scanout_caps_now();
             bc250_desktop_route desktop{};
             const unsigned desktop_status=off?BC250_DESKTOP_ROUTE_READ_ABSENT:desktop_route_now(&desktop);
-            const ScanoutDecision decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,
-                bc250_desktop_route_gpu(desktop_status,&desktop)!=0,
+            const bool desktop_gpu=bc250_desktop_route_gpu(desktop_status,&desktop)!=0;
+            ScanoutDecision decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,desktop_gpu,
                 unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
+            // C71: a chain made before the mode commit is not the trailer's geometry yet. The kernel driver's
+            // mode list is asked only then, and only a geometry it offers turns the answer; every later
+            // clause still applies, and the flip itself still waits for the commit (bc250_scanout_primary.h).
+            ScanoutModeList modes=ScanoutModeList::NotRead;
+            if(decision.reason==ScanoutStandDown::SourceGeometry){
+                modes=mode_list_now(unsigned(r->Width),r->Height);
+                if(modes==ScanoutModeList::Offered)
+                    decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,desktop_gpu,unsigned(r->Format),
+                                            unsigned(r->Width),r->Height,request->surface_row_pitch,true);
+            }
             if(decision.admitted){
                 const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                                              AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
@@ -494,7 +509,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                 if(direct){row=direct;surface_scanout=true;}
             }
             scanout_note(decision,caps,force_cpu_,
-                         off?"not-read":bc250_desktop_route_text(desktop_status,desktop.route),desktop.pid,
+                         off?"not-read":bc250_desktop_route_text(desktop_status,desktop.route),desktop.pid,modes,
                          unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
         }
         if(!row)return refuse(primary?"primary format":"shared surface format",E_NOTIMPL,*request);

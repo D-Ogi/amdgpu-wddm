@@ -31,7 +31,9 @@
 //                  does not say GPU: the router in dwm.exe took the CPU UMD, including the fallback after a
 //                  failed hosted open, or there is no record from the compositor's account.
 //   CapsClosed     the kernel driver published no scan-out trailer, or one without DIRECT_FLIP.
-//   SourceGeometry the chain is not the geometry of the source mode the trailer carries now.
+//   SourceGeometry the chain is not the geometry of the source mode the trailer carries now, and not a
+//                  source mode the kernel driver offers either (the mode list, asked only for such a chain;
+//                  why in bc250_scanout_primary.h).
 //   Format         the chain's format is not a SCANOUT_PRIMARY row with a DXGI name.
 //   Pitch          the engine's row pitch is not the one pitch every component derives (scanout_row_pitch).
 //
@@ -44,6 +46,10 @@
 #include "../../contract/bc250_scanout_caps.h"
 #include "../../contract/bc250_scanout_primary.h"
 #include "../../contract/bc250_desktop_route.h"
+#include <d3dkmthk.h>
+#include <cstring>
+#include <memory>
+#include <new>
 namespace native12 {
 // The train rule (owner, 2026-10-05): a finished, measured feature is on by default, with a switch to turn
 // it off. Measured: the plan A client 600 of 600 frames at FlipOnNextVSync (K227), The Witcher 3 2028 of
@@ -94,10 +100,13 @@ struct ScanoutDecision {
 // width, height and pitch are the chain's as engine-ddi described it; dxgi is D3D12DDIARG_CREATERESOURCE's
 // Format. caps is the trailer as read for this primary (all zero when there is none), force_cpu the
 // desktop router's kill switch as that router reads it (any non-zero value, and any value of the wrong
-// type, is on) and desktop_gpu whether the compositor's record, read for this primary, says GPU.
+// type, is on), desktop_gpu whether the compositor's record, read for this primary, says GPU, and
+// offered_mode whether the kernel driver's mode list holds width x height (scanout_mode_offered). The
+// caller asks the list only after a first answer of SourceGeometry with offered_mode false.
 inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanout_caps& caps,
                                       unsigned long force_cpu,bool desktop_gpu,unsigned dxgi,
-                                      unsigned width,unsigned height,unsigned pitch) noexcept {
+                                      unsigned width,unsigned height,unsigned pitch,
+                                      bool offered_mode=false) noexcept {
     ScanoutDecision out{};
     out.switch_state=scanout_switch(experiments);
     if(out.switch_state==ScanoutSwitch::Off){out.reason=ScanoutStandDown::ModeOff;return out;}
@@ -105,7 +114,7 @@ inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanou
        ddi_experiment_listed(experiments,"present-noprimary")){
         out.reason=ScanoutStandDown::OtherIntent;return out;
     }
-    switch(bc250_scanout_primary_rule(&caps,force_cpu,desktop_gpu?1:0,dxgi,width,height,pitch)){
+    switch(bc250_scanout_primary_rule(&caps,force_cpu,desktop_gpu?1:0,dxgi,width,height,pitch,offered_mode?1:0)){
     case BC250_SCANOUT_PRIMARY_ADMITTED:out.reason=ScanoutStandDown::Admitted;out.admitted=true;break;
     case BC250_SCANOUT_PRIMARY_FORCE_CPU:out.reason=ScanoutStandDown::ForceCpu;break;
     case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE:out.reason=ScanoutStandDown::DesktopRoute;break;
@@ -141,5 +150,85 @@ inline unsigned long scanout_force_cpu() noexcept {
 // compositor; the shell itself only ever reads the session's record from the compositor's account.
 inline unsigned scanout_desktop_route_read(bc250_desktop_route* record) noexcept {
     return bc250_desktop_route_read_session(record);
+}
+// The kernel driver's mode list, for a chain that is not the committed mode (C71, session 480: a game
+// makes its exclusive-fullscreen chain before the mode commit). The answer, for the clause and the trace:
+//   NotRead     the list was not asked: the chain is the committed mode, or another clause decided first
+//   Offered     the video present source offers a source mode of the chain's width and height
+//   NotOffered  the list was read and holds no such mode
+//   Failed      the adapter could not be opened or closed, or the list could not be read
+// Failed and NotOffered both keep the composed primary.
+enum class ScanoutModeList : unsigned {NotRead,Offered,NotOffered,Failed};
+inline const char* scanout_mode_list_text(ScanoutModeList value) noexcept {
+    switch(value){
+    case ScanoutModeList::NotRead:return "not-read";
+    case ScanoutModeList::Offered:return "offered";
+    case ScanoutModeList::NotOffered:return "not-offered";
+    case ScanoutModeList::Failed:return "failed";
+    default:return "unknown";
+    }
+}
+struct ScanoutModeKmt {
+    PFND3DKMT_OPENADAPTERFROMLUID open{};
+    PFND3DKMT_GETDISPLAYMODELIST list{};
+    PFND3DKMT_CLOSEADAPTER close{};
+};
+// A list longer than this is not read (tools/win/dxgimodes has the same cap). The kernel driver offers a few
+// geometries in a few formats, so a real list is short.
+inline constexpr UINT kScanoutModeListMax=4096;
+// One question: does BC250_SCANOUT_VIDPN_SOURCE of the adapter with this LUID offer a width x height source
+// mode now. The list is counted first and then read; a list that grew between the two calls
+// (STATUS_BUFFER_TOO_SMALL) is counted once more. Only the geometry is compared: the format clause and the
+// kernel driver decide the format, and the list has one entry per format and refresh rate. The adapter handle
+// is this function's own and is closed before it returns; a close that fails makes the answer Failed.
+inline ScanoutModeList scanout_mode_offered(const LUID& luid,const ScanoutModeKmt& kmt,
+                                            unsigned width,unsigned height) noexcept {
+    if(!kmt.open || !kmt.list || !kmt.close || !width || !height)return ScanoutModeList::Failed;
+    constexpr NTSTATUS buffer_too_small=static_cast<NTSTATUS>(0xC0000023L);   // STATUS_BUFFER_TOO_SMALL
+    D3DKMT_OPENADAPTERFROMLUID opened{};opened.AdapterLuid=luid;
+    const NTSTATUS open_status=kmt.open(&opened);
+    if(open_status<0)return ScanoutModeList::Failed;
+    ScanoutModeList answer=ScanoutModeList::Failed;
+    for(int attempt=0;open_status==0 && opened.hAdapter && attempt<2;++attempt){
+        D3DKMT_GETDISPLAYMODELIST query{};
+        query.hAdapter=opened.hAdapter;query.VidPnSourceId=BC250_SCANOUT_VIDPN_SOURCE;
+        if(kmt.list(&query)!=0 || query.ModeCount>kScanoutModeListMax)break;
+        if(!query.ModeCount){answer=ScanoutModeList::NotOffered;break;}
+        const UINT count=query.ModeCount;
+        std::unique_ptr<D3DKMT_DISPLAYMODE[]> modes(new(std::nothrow) D3DKMT_DISPLAYMODE[count]{});
+        if(!modes)break;
+        query.pModeList=modes.get();
+        const NTSTATUS status=kmt.list(&query);
+        if(status==buffer_too_small)continue;
+        if(status!=0 || query.ModeCount>count)break;
+        answer=ScanoutModeList::NotOffered;
+        for(UINT i=0;i<query.ModeCount;++i)
+            if(modes[i].Width==width && modes[i].Height==height){answer=ScanoutModeList::Offered;break;}
+        break;
+    }
+    if(opened.hAdapter){
+        D3DKMT_CLOSEADAPTER closed{};closed.hAdapter=opened.hAdapter;
+        if(kmt.close(&closed)!=0)return ScanoutModeList::Failed;
+    }
+    return answer;
+}
+// The shell's reader: gdi32's entries, the adapter's LUID. Like the desktop-route record, the caller holds
+// it as a function pointer so that the host tests can answer for the kernel driver.
+inline ScanoutModeList scanout_mode_list_read(UINT64 luid,unsigned width,unsigned height) noexcept {
+    if(!luid)return ScanoutModeList::Failed;
+    HMODULE gdi=LoadLibraryExW(L"gdi32.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!gdi)return ScanoutModeList::Failed;
+    ScanoutModeKmt kmt{};
+    const auto entry=[gdi](auto& function,const char* name) noexcept {
+        const FARPROC address=GetProcAddress(gdi,name);
+        static_assert(sizeof(function)==sizeof(address));std::memcpy(&function,&address,sizeof(function));
+    };
+    entry(kmt.open,"D3DKMTOpenAdapterFromLuid");
+    entry(kmt.list,"D3DKMTGetDisplayModeList");
+    entry(kmt.close,"D3DKMTCloseAdapter");
+    LUID adapter{};std::memcpy(&adapter,&luid,sizeof(adapter));
+    const ScanoutModeList answer=scanout_mode_offered(adapter,kmt,width,height);
+    FreeLibrary(gdi);
+    return answer;
 }
 }

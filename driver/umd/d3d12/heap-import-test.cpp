@@ -50,6 +50,14 @@ static unsigned desktop_double(bc250_desktop_route* record) noexcept {
  *record={BC250_DESKTOP_ROUTE_MAGIC,BC250_DESKTOP_ROUTE_VERSION,BC250_DESKTOP_ROUTE_BYTES,desktop_route,77,0,1,0};
  return BC250_DESKTOP_ROUTE_READ_OK;
 }
+// The kernel driver's mode list of "now" (C71), in place of D3DKMTGetDisplayModeList: one offered geometry.
+static unsigned mode_reads=0;
+static uint32_t offered_width=0,offered_height=0;
+static UINT64 mode_luid=0;
+static ScanoutModeList mode_double(UINT64 luid,unsigned width,unsigned height) noexcept {
+ ++mode_reads;mode_luid=luid;
+ return width==offered_width && height==offered_height?ScanoutModeList::Offered:ScanoutModeList::NotOffered;
+}
 static unsigned long surface_format=0;
 static uint32_t surface_width=256;            // LB7A.Width the next primary must carry
 // BD-075, what the next shared create must publish: the LB7A geometry and the E26R v3 texture beside it.
@@ -881,17 +889,36 @@ int main(){
    desktop_route=BC250_DESKTOP_ROUTE_FALLBACK;create(false);
    desktop_route=BC250_DESKTOP_ROUTE_GPU;desktop_status=BC250_DESKTOP_ROUTE_READ_ABSENT;create(false);
    desktop_status=BC250_DESKTOP_ROUTE_READ_OK;create(shell_on);
+   // C71 (session 480): the game makes its chain before the mode commit, so the trailer still says the old mode.
+   // Through the shell's reader a device whose adapter has no LUID asks no list and reads Failed. Through the
+   // double: the kernel driver offers the chain's geometry, so it is a scan-out primary after one list read; it
+   // offers another one, so the chain is composed. A chain that is the committed mode reads no list, and nor
+   // does a chain that an earlier clause stands down: an offered geometry turns the geometry clause only.
+   assert(carried.mode_list_now(256,64)==ScanoutModeList::Failed);
+   carried.read_mode_list_with(&mode_double);probe.contract.luid=0x1234;
+   const unsigned list_reads=shell_on?1u:0u;
+   trailer_width=1920;trailer_height=1080;offered_width=256;offered_height=64;
+   unsigned reads=mode_reads;create(shell_on);assert(mode_reads==reads+list_reads);
+   assert(!shell_on || mode_luid==0x1234);
+   offered_width=1280;offered_height=720;reads=mode_reads;create(false);assert(mode_reads==reads+list_reads);
+   trailer_width=256;trailer_height=64;reads=mode_reads;create(shell_on);assert(mode_reads==reads);
+   trailer_width=1920;trailer_height=1080;offered_width=256;offered_height=64;
+   desktop_route=BC250_DESKTOP_ROUTE_FALLBACK;reads=mode_reads;create(false);assert(mode_reads==reads);
+   desktop_route=BC250_DESKTOP_ROUTE_GPU;trailer_width=256;trailer_height=64;
    // A format with no scan-out row on a matching mode stays composed: FP16 is eight bytes a pixel, so 128
    // pixels fill the same 1024-byte pitch.
    target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;target.Width=128;surface_width=128;
    surface_format=D3DDDIFMT_A16B16G16R16F;trailer_width=128;create(false);
+   // An offered geometry does not admit a format with no scan-out row either: one list read, then the format.
+   trailer_width=1920;trailer_height=1080;offered_width=128;offered_height=64;
+   reads=mode_reads;create(false);assert(mode_reads==reads+list_reads);
    target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.Width=256;surface_width=256;surface_format=D3DDDIFMT_A8R8G8B8;
    assert(carried.close_after_engine_retirement()==S_OK && carried.discard_metadata()==0);
    heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
    scanout_block_composed=surfaces-composed_before;
-   assert(scanout_block_composed==(shell_on?6u:9u) && scanout_surfaces==(shell_on?3u:0u));
-   std::printf("scan-out primaries %u (shell %s), trailer queries %u, desktop-route reads %u\n",scanout_surfaces,
-               shell_on?"on":"off",trailer_queries,desktop_reads);
+   assert(scanout_block_composed==(shell_on?9u:14u) && scanout_surfaces==(shell_on?5u:0u));
+   std::printf("scan-out primaries %u (shell %s), trailer queries %u, desktop-route reads %u, mode-list reads %u\n",
+               scanout_surfaces,shell_on?"on":"off",trailer_queries,desktop_reads,mode_reads);
   }
  }
  // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a
@@ -1002,5 +1029,6 @@ int main(){
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
   "callback, no quarantine, no backing to lend, one record per allocation handle), "
   "M15.14 scan-out primary from the trailer of the moment (one query per primary, a mode change both ways, "
-  "the kernel driver's switch closed, a failed query and a format without a scan-out row all composed)");
+  "the kernel driver's switch closed, a failed query and a format without a scan-out row all composed; a chain "
+  "made before the mode commit admitted only on a geometry the mode list offers)");
 }

@@ -427,7 +427,7 @@ static unsigned RuleOverRecord()
     const bc250_scanout_caps caps = {BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION, sizeof(caps),
                                      BC250_SCANOUT_CAPS_DIRECT_FLIP, 1920, 1200};
     return bc250_scanout_primary_rule(&caps, 0, bc250_desktop_route_gpu(status, &record), 87, 1920, 1200,
-                                      bc250_scanout_primary_pitch(1920, 4));
+                                      bc250_scanout_primary_pitch(1920, 4), 0);
 }
 // The record this process wrote: status OK, the given route, this pid, the hosted HRESULT and the decision count.
 static void CheckRecord(unsigned route, HRESULT hostedHr, unsigned decisions)

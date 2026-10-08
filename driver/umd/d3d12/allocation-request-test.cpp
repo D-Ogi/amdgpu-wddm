@@ -52,6 +52,53 @@ void check_scanout_record(const AllocationRequest& r,unsigned width,unsigned hei
     CHECK(WddmGdiRecordScannable(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize));
     CHECK(WddmGdiCreatedScannable(r.args.pPrivateDriverData,r.args.PrivateDriverDataSize));
 }
+// A kernel driver's mode list for scanout_mode_offered (C71): the entries the three D3DKMT calls see, and
+// what each call does. grow makes the first read find one entry more than the count said
+// (STATUS_BUFFER_TOO_SMALL), as a list that changed between the two calls.
+struct FakeKmt {
+    std::vector<D3DKMT_DISPLAYMODE> modes;
+    NTSTATUS open_status=0,count_status=0,read_status=0,close_status=0;
+    D3DKMT_HANDLE handle=0x40;
+    unsigned grow=0;
+    unsigned opens=0,counts=0,reads=0,closes=0;
+    LUID luid{};
+    D3DDDI_VIDEO_PRESENT_SOURCE_ID source=99;
+} kmt_fake;
+NTSTATUS APIENTRY fake_open(D3DKMT_OPENADAPTERFROMLUID* args) {
+    ++kmt_fake.opens;kmt_fake.luid=args->AdapterLuid;
+    if(kmt_fake.open_status>=0)args->hAdapter=kmt_fake.handle;
+    return kmt_fake.open_status;
+}
+NTSTATUS APIENTRY fake_list(D3DKMT_GETDISPLAYMODELIST* args) {
+    CHECK(args->hAdapter==kmt_fake.handle);
+    kmt_fake.source=args->VidPnSourceId;
+    if(!args->pModeList){
+        ++kmt_fake.counts;
+        if(kmt_fake.count_status)return kmt_fake.count_status;
+        args->ModeCount=UINT(kmt_fake.modes.size());
+        return 0;
+    }
+    ++kmt_fake.reads;
+    if(kmt_fake.read_status)return kmt_fake.read_status;
+    if(kmt_fake.grow){
+        --kmt_fake.grow;
+        D3DKMT_DISPLAYMODE extra{};extra.Width=1280;extra.Height=720;
+        kmt_fake.modes.push_back(extra);
+    }
+    if(args->ModeCount<kmt_fake.modes.size())return static_cast<NTSTATUS>(0xC0000023L);
+    for(size_t i=0;i<kmt_fake.modes.size();++i)args->pModeList[i]=kmt_fake.modes[i];
+    args->ModeCount=UINT(kmt_fake.modes.size());
+    return 0;
+}
+NTSTATUS APIENTRY fake_close(const D3DKMT_CLOSEADAPTER* args) {
+    CHECK(args->hAdapter==kmt_fake.handle);
+    ++kmt_fake.closes;
+    return kmt_fake.close_status;
+}
+D3DKMT_DISPLAYMODE mode(unsigned width,unsigned height,D3DDDIFORMAT format=D3DDDIFMT_A8R8G8B8) {
+    D3DKMT_DISPLAYMODE m{};m.Width=width;m.Height=height;m.Format=format;
+    return m;
+}
 }
 int main() {
     HANDLE owner=reinterpret_cast<HANDLE>(UINT_PTR(0x123));
@@ -313,9 +360,33 @@ int main() {
         CHECK(scanout_decide(none,unsigned_caps,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
         bc250_scanout_caps newer=on;newer.version=BC250_SCANOUT_CAPS_VERSION+1;
         CHECK(scanout_decide(none,newer,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
-        CHECK(bc250_scanout_primary_rule(nullptr,0,1,bgra,1920,1200,pitch)==BC250_SCANOUT_PRIMARY_CAPS_CLOSED);
+        CHECK(bc250_scanout_primary_rule(nullptr,0,1,bgra,1920,1200,pitch,1)==BC250_SCANOUT_PRIMARY_CAPS_CLOSED);
         // A null list is the same as an empty one: the default.
         CHECK(scanout_decide(nullptr,on,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::Admitted);
+        // C71, session 480: the chain made before the mode commit. W3's exclusive 1080 chain on a trailer that
+        // still says 1200, and its 1200 chain on the way back on a trailer that still says 1080, admit when the
+        // kernel driver's mode list offers their geometry, and stay composed when it does not.
+        const bc250_scanout_caps on1080=caps_on(1920,1080);
+        CHECK(scanout_decide(none,on,0,true,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::Admitted);
+        CHECK(scanout_decide(none,on1080,0,true,bgra,1920,1200,pitch,true).reason==ScanoutStandDown::Admitted);
+        CHECK(scanout_decide(none,on,0,true,bgra,1920,1080,pitch,false).reason==ScanoutStandDown::SourceGeometry);
+        CHECK(scanout_decide(none,on1080,0,true,bgra,1920,1200,pitch).reason==ScanoutStandDown::SourceGeometry);
+        CHECK(scanout_decide(none,caps_on(1280,720),0,true,bgra,1920,1080,pitch,true).admitted);
+        // An offered mode turns the geometry clause only. Every other clause still answers first or after it.
+        CHECK(scanout_decide("scanout-flip-off",on,0,true,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::ModeOff);
+        CHECK(scanout_decide("present-cached",on,0,true,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::OtherIntent);
+        CHECK(scanout_decide(none,on,1,true,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::ForceCpu);
+        CHECK(scanout_decide(none,on,0,false,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::DesktopRoute);
+        CHECK(scanout_decide(none,off,0,true,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::CapsClosed);
+        CHECK(scanout_decide(none,flagless,0,true,bgra,1920,1080,pitch,true).reason==ScanoutStandDown::CapsClosed);
+        CHECK(scanout_decide(none,on,0,true,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1080,15360,true).reason==
+              ScanoutStandDown::Format);
+        CHECK(scanout_decide(none,on,0,true,bgra,1920,1080,7936,true).reason==ScanoutStandDown::Pitch);
+        CHECK(scanout_decide(none,on,0,true,bgra,0,1080,pitch,true).reason==ScanoutStandDown::SourceGeometry);
+        CHECK(scanout_decide(none,on,0,true,bgra,1920,0,pitch,true).reason==ScanoutStandDown::SourceGeometry);
+        CHECK(bc250_scanout_primary_rule(&on,0,1,bgra,1920,1080,pitch,1)==BC250_SCANOUT_PRIMARY_ADMITTED);
+        CHECK(bc250_scanout_primary_rule(&on,0,1,bgra,1920,1080,pitch,0)==BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY);
+        CHECK(bc250_scanout_primary_rule(&on,0,1,bgra,1920,0,pitch,1)==BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY);
         // The contract's pitch is the shell's pitch for every 4-byte width, so the rule that the D3D11 shell
         // shares cannot pin a different row than the one prepare_surface pins here.
         for(unsigned width=1;width<=4096;++width)
@@ -432,6 +503,63 @@ int main() {
         const unsigned session_status=scanout_desktop_route_read(&s);
         CHECK(session_status<=BC250_DESKTOP_ROUTE_READ_SHAPE);
         if(session_status!=BC250_DESKTOP_ROUTE_READ_OK)CHECK(!s.magic && !s.route);
+    }
+    // (h) The kernel driver's mode list (C71), through D3DKMT doubles: the shape of the three calls, the
+    // geometry match, and every failure reading as "not offered" or "failed", never as "offered".
+    {
+        const ScanoutModeKmt kmt{&fake_open,&fake_list,&fake_close};
+        LUID luid{};luid.LowPart=0x1234;luid.HighPart=7;
+        const auto reset=[](std::initializer_list<D3DKMT_DISPLAYMODE> modes){
+            kmt_fake=FakeKmt{};kmt_fake.modes.assign(modes.begin(),modes.end());
+        };
+        // The lab's kind of list: the native mode and scaled ones, each in more than one format.
+        reset({mode(1920,1200),mode(1920,1200,D3DDDIFMT_A8B8G8R8),mode(1920,1080),mode(1920,1080,D3DDDIFMT_A2B10G10R10),
+               mode(1280,720)});
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Offered);
+        CHECK(kmt_fake.opens==1 && kmt_fake.counts==1 && kmt_fake.reads==1 && kmt_fake.closes==1);
+        CHECK(kmt_fake.luid.LowPart==0x1234 && kmt_fake.luid.HighPart==7 && kmt_fake.source==BC250_SCANOUT_VIDPN_SOURCE);
+        CHECK(scanout_mode_offered(luid,kmt,1920,1200)==ScanoutModeList::Offered);
+        CHECK(scanout_mode_offered(luid,kmt,1280,720)==ScanoutModeList::Offered);
+        // Width and height both: a transposed or a one-sided match is no mode.
+        CHECK(scanout_mode_offered(luid,kmt,1200,1920)==ScanoutModeList::NotOffered);
+        CHECK(scanout_mode_offered(luid,kmt,1920,1000)==ScanoutModeList::NotOffered);
+        CHECK(scanout_mode_offered(luid,kmt,1600,900)==ScanoutModeList::NotOffered);
+        CHECK(kmt_fake.opens==kmt_fake.closes);
+        // An empty list offers nothing and reads nothing.
+        reset({});
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::NotOffered && !kmt_fake.reads && kmt_fake.closes==1);
+        // A list that grew between the count and the read is counted once more.
+        reset({mode(1920,1200),mode(1920,1080)});kmt_fake.grow=1;
+        CHECK(scanout_mode_offered(luid,kmt,1280,720)==ScanoutModeList::Offered);
+        CHECK(kmt_fake.counts==2 && kmt_fake.reads==2 && kmt_fake.closes==1);
+        // ... but only once: a list that keeps growing is a failure, not a loop.
+        reset({mode(1920,1200),mode(1920,1080)});kmt_fake.grow=5;
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed);
+        CHECK(kmt_fake.counts==2 && kmt_fake.closes==1);
+        // Failures: open, count, read and close, and a list above the cap.
+        reset({mode(1920,1080)});kmt_fake.open_status=static_cast<NTSTATUS>(0xC000000DL);
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed && !kmt_fake.counts && !kmt_fake.closes);
+        reset({mode(1920,1080)});kmt_fake.count_status=static_cast<NTSTATUS>(0xC0000001L);
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed && kmt_fake.closes==1);
+        reset({mode(1920,1080)});kmt_fake.read_status=static_cast<NTSTATUS>(0xC0000001L);
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed && kmt_fake.closes==1);
+        reset({mode(1920,1080)});kmt_fake.close_status=static_cast<NTSTATUS>(0xC0000008L);
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed && kmt_fake.closes==1);
+        reset({});kmt_fake.modes.resize(kScanoutModeListMax+1,mode(1920,1080));
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed && !kmt_fake.reads && kmt_fake.closes==1);
+        // An informational open status with a handle: the handle is closed and nothing is read.
+        reset({mode(1920,1080)});kmt_fake.open_status=1;
+        CHECK(scanout_mode_offered(luid,kmt,1920,1080)==ScanoutModeList::Failed && !kmt_fake.counts && kmt_fake.closes==1);
+        // A missing entry or an empty geometry asks nothing.
+        reset({mode(1920,1080)});
+        CHECK(scanout_mode_offered(luid,ScanoutModeKmt{&fake_open,nullptr,&fake_close},1920,1080)==ScanoutModeList::Failed);
+        CHECK(scanout_mode_offered(luid,kmt,0,1080)==ScanoutModeList::Failed);
+        CHECK(scanout_mode_offered(luid,kmt,1920,0)==ScanoutModeList::Failed && !kmt_fake.opens);
+        // The shell's reader with no adapter LUID asks nothing.
+        CHECK(scanout_mode_list_read(0,1920,1080)==ScanoutModeList::Failed);
+        for(unsigned value=0;value<=unsigned(ScanoutModeList::Failed);++value)
+            CHECK(std::strcmp(scanout_mode_list_text(ScanoutModeList(value)),"unknown")!=0);
+        CHECK(!std::strcmp(scanout_mode_list_text(ScanoutModeList::Offered),"offered"));
     }
     std::printf("native allocation request: %u checks, 0 failures\n",checks);
     std::puts("KMD parser, cache/rounding/refusal gates, shared surface records, scan-out v3 record, pitch pin, "

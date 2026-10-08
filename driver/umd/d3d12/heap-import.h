@@ -10,6 +10,7 @@
 namespace native12 {
 struct Device;
 struct Adapter;
+enum class ScanoutModeList : unsigned;          // scanout-mode.h
 // Calls run inside the owner's DeviceScope, including hosted GIPA and RuntimeDomain scopes, on any
 // number of the device's DDI threads at once. lock_ guards the record list and every record's flags
 // and is a leaf: no runtime callback, Vulkan call or paging operation runs under it. A record in a
@@ -117,10 +118,12 @@ class RuntimeHeapImports final {
     // (increment 3): its geometry is the source mode committed now, and a game changes the mode between the
     // device and its chain, so the adapter is kept and the trailer is read for every primary. The
     // compositor's desktop-route record is read for every primary as well, through desktop_route_reader_
-    // (scanout_desktop_route_read, or a host test's double).
+    // (scanout_desktop_route_read, or a host test's double). The kernel driver's mode list is asked through
+    // mode_list_reader_ (scanout_mode_list_read, or a double) for a chain that is not the committed mode.
     Adapter* adapter_{};
     unsigned long force_cpu_{};
     unsigned (*desktop_route_reader_)(bc250_desktop_route*) noexcept{};
+    ScanoutModeList (*mode_list_reader_)(UINT64 luid,unsigned width,unsigned height) noexcept{};
     ProgressSource progress_{};
     std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
     std::atomic<bool> active_{true},paging_open_{};
@@ -167,6 +170,14 @@ public:
     // The host tests' seam: a reader in place of the session's record, which only dwm.exe can write.
     void read_desktop_route_with(unsigned (*reader)(bc250_desktop_route*) noexcept) noexcept {
         desktop_route_reader_=reader;
+    }
+    // Whether the adapter's video present source offers a width x height source mode now. allocate() calls
+    // it only for a primary whose first answer was SourceGeometry (C71); a device without an adapter asks
+    // with LUID 0, which the shell's reader answers Failed.
+    ScanoutModeList mode_list_now(unsigned width,unsigned height) const noexcept;
+    // The host tests' seam: a reader in place of the kernel driver's mode list.
+    void read_mode_list_with(ScanoutModeList (*reader)(UINT64,unsigned,unsigned) noexcept) noexcept {
+        mode_list_reader_=reader;
     }
     // What the quarantine holds now, for tests and the trace.
     uint32_t held_count() const noexcept;

@@ -157,8 +157,10 @@ inline ScanoutPrimaryDecision scanout_primary_decide(const ScanoutSource *source
     out.caps=query_scanout_caps(source->adapter,source->query);
     out.desktop_read=source->desktop_route!=nullptr;
     if (out.desktop_read) out.desktop_status=source->desktop_route(&out.desktop);
+    // offered_mode 0: this shell keeps the committed mode as the only geometry until the D3D11 arm measures
+    // which shape a D3D11 chain has (C71 is the D3D12 shell's; a D3D11 primary names its mode in pPrimaryDesc).
     switch (bc250_scanout_primary_rule(&out.caps,source->force_cpu,bc250_desktop_route_gpu(out.desktop_status,&out.desktop),
-                                       dxgi,width,height,pitch)) {
+                                       dxgi,width,height,pitch,0)) {
     case BC250_SCANOUT_PRIMARY_ADMITTED: out.reason=ScanoutPrimaryReason::Admitted; out.admitted=true; break;
     case BC250_SCANOUT_PRIMARY_FORCE_CPU: out.reason=ScanoutPrimaryReason::ForceCpu; break;
     case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE: out.reason=ScanoutPrimaryReason::DesktopRoute; break;

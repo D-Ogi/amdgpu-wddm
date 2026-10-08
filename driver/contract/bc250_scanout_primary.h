@@ -24,11 +24,21 @@
 //                    registry value shows.
 //   CAPS_CLOSED      the kernel driver published no scan-out trailer, or one without
 //                    BC250_SCANOUT_CAPS_DIRECT_FLIP: an older driver, or an operator switch that is off.
-//   SOURCE_GEOMETRY  the chain is not the geometry of the source mode that the trailer carries, which is
-//                    the one geometry Bc250ScanoutAdmit admits a flip at. The caller reads the trailer
-//                    again for every primary it creates, so the clause follows the source mode that the
-//                    kernel driver has committed at that moment (display modes) and never a size of the
-//                    caller's own. The router's front applies the same clause on the compositor's side.
+//   SOURCE_GEOMETRY  the chain is neither the geometry of the source mode that the trailer carries, which is
+//                    the one geometry Bc250ScanoutAdmit admits a flip at, nor a source mode that the
+//                    kernel driver offers for the video present source (offered_mode). The caller reads the
+//                    trailer again for every primary it creates, so the clause follows the source mode that
+//                    the kernel driver has committed at that moment (display modes) and never a size of the
+//                    caller's own. The router's front applies the committed half on the compositor's side.
+//                    The offered half exists because a game can make its chain before the mode commit: in
+//                    session 480 The Witcher 3 made its exclusive 1920x1080 chain while the trailer still
+//                    said 1920x1200, and its 1920x1200 chain on the way back while the trailer said
+//                    1920x1080, so both stayed composed. Admitting such a chain moves no flip forward:
+//                    the scan-out property is fixed at creation, and every flip of the chain is decided
+//                    later by two checks that read the committed mode at that moment, the front's
+//                    CheckDirectFlipSupport answer and Bc250ScanoutAdmit. Until the commit, the compositor
+//                    composes the chain with the GPU, as it composes a scan-out chain under a window. A
+//                    geometry the kernel driver does not offer can never be committed, so it stays here.
 //   FORMAT           the chain's format is not a SCANOUT_PRIMARY row of the shared table, or is a row with
 //                    no DXGI name (the compositor's opener could not take its record).
 //   PITCH            the row pitch is not bc250_scanout_primary_pitch. Nothing downstream can check a pitch
@@ -63,10 +73,13 @@ static __inline unsigned int bc250_scanout_primary_pitch(unsigned int width, uns
 // caps is the trailer as read for this primary (all zero when there is none), force_cpu the desktop
 // router's kill switch as that router reads it (any non-zero value is on), desktop_gpu whether the
 // compositor's record says GPU (bc250_desktop_route_gpu, read for this primary), dxgi the chain's DXGI
-// format, width, height and pitch the chain's buffer as the shell describes it to the kernel driver.
+// format, width, height and pitch the chain's buffer as the shell describes it to the kernel driver, and
+// offered_mode whether width x height is a source mode that the kernel driver offers for this video present
+// source now (the D3D12 shell asks D3DKMTGetDisplayModeList, and only for a chain that is not the committed
+// mode; 0 keeps the committed mode as the only geometry).
 static __inline unsigned int bc250_scanout_primary_rule(const struct bc250_scanout_caps* caps,
     unsigned long force_cpu, int desktop_gpu, unsigned int dxgi, unsigned int width, unsigned int height,
-    unsigned int pitch)
+    unsigned int pitch, int offered_mode)
 {
     const AMDGPU_WDDM_SURFACE_FORMAT* row;
     if (force_cpu) return BC250_SCANOUT_PRIMARY_FORCE_CPU;
@@ -74,7 +87,8 @@ static __inline unsigned int bc250_scanout_primary_rule(const struct bc250_scano
     if (!caps || caps->magic != BC250_SCANOUT_CAPS_MAGIC || caps->version != BC250_SCANOUT_CAPS_VERSION ||
         !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP))
         return BC250_SCANOUT_PRIMARY_CAPS_CLOSED;
-    if (!width || width != caps->post_width || height != caps->post_height)
+    if (!width || !height ||
+        ((width != caps->post_width || height != caps->post_height) && !offered_mode))
         return BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY;
     row = amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(dxgi), AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
     if (!row || !row->dxgi) return BC250_SCANOUT_PRIMARY_FORMAT;
