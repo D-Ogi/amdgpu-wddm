@@ -1,0 +1,180 @@
+/* internal.h - what the translation units of bc250hsa share.
+ *
+ * Layer 1 of docs/design/m16-hip-route-b.md. Nothing here is public: the public
+ * interface is compute/hip/include/bc250hsa.h and it does not change.
+ *
+ * Three groups:
+ *   1. the log hook and the process counters (status.c),
+ *   2. the module structure that the loader fills and the dispatch reads
+ *      (co_loader.c, co_metadata.c, kernarg.c, pm4_dispatch.c),
+ *   3. the device structure that the Windows half owns (kmt_device.c,
+ *      kmt_memory.c, submit.c).
+ *
+ * A host test links group 1 and group 2 and never group 3. That is why the
+ * device structure is an incomplete type here and is declared in kmt_device.h.
+ */
+#ifndef BC250HSA_INTERNAL_H
+#define BC250HSA_INTERNAL_H
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#include "bc250hsa.h"
+
+/* --------------------------------------------------------------------------
+ * Small helpers
+ * ------------------------------------------------------------------------ */
+
+#define BC250HSA_ARRAY_COUNT(a) ((uint32_t)(sizeof(a) / sizeof((a)[0])))
+
+static __inline uint64_t bc250hsa_align_up_u64(uint64_t value, uint64_t alignment)
+{
+    if (alignment <= 1u) {
+        return value;
+    }
+    return (value + alignment - 1u) / alignment * alignment;
+}
+
+static __inline uint32_t bc250hsa_align_up_u32(uint32_t value, uint32_t alignment)
+{
+    if (alignment <= 1u) {
+        return value;
+    }
+    return (value + alignment - 1u) / alignment * alignment;
+}
+
+static __inline int bc250hsa_is_power_of_two_u64(uint64_t value)
+{
+    return value != 0u && (value & (value - 1u)) == 0u;
+}
+
+/* Every public call that takes a caller-filled structure starts with this. Rule 4
+ * of the header: an unknown size is BC250HSA_EINVAL, never a guess. */
+static __inline int bc250hsa_struct_bytes_ok(uint32_t given, size_t known)
+{
+    return given == (uint32_t)known;
+}
+
+/* --------------------------------------------------------------------------
+ * Log and counters (status.c)
+ * ------------------------------------------------------------------------ */
+
+void bc250hsa_log(uint32_t level, const char* format, ...);
+void bc250hsa_log_enabled_set(void);   /* test hook: no-op in the product build */
+
+/* The counter fields, named so that a caller cannot pass the wrong one. */
+typedef enum bc250hsa_counter {
+    BC250HSA_C_MODULES_LOADED = 0,
+    BC250HSA_C_DISPATCHES_BUILT,
+    BC250HSA_C_SUBMISSIONS,
+    BC250HSA_C_SUBMISSIONS_REFUSED,
+    BC250HSA_C_WAITS,
+    BC250HSA_C_WAITS_FAST,
+    BC250HSA_C_WAITS_TIMED_OUT,
+    BC250HSA_C_DEVICE_LOSSES,
+    BC250HSA_C_HIDDEN_ARGS_ZEROED,
+    BC250HSA_C_UNKNOWN_ARG_KINDS,
+    BC250HSA_C_HOSTCALL_BUFFER_REQUESTS,
+    BC250HSA_C_DYNAMIC_STACK_REFUSALS,
+    BC250HSA_C_COUNT
+} bc250hsa_counter;
+
+void bc250hsa_count_add(bc250hsa_counter which, uint64_t delta);
+
+/* The last failed Windows call of this thread, for bc250hsa_last_os_status(). */
+void bc250hsa_set_os_status(int32_t status);
+
+/* --------------------------------------------------------------------------
+ * The loaded module (co_loader.c, co_metadata.c)
+ * ------------------------------------------------------------------------ */
+
+/* The 64-byte kernel descriptor, as section 3.5 of the design measured it. The
+ * loader keeps a copy per kernel, so a failure report can print it without
+ * reading device memory again. */
+typedef struct bc250hsa_kernel_descriptor {
+    uint32_t group_segment_fixed_size;
+    uint32_t private_segment_fixed_size;
+    uint32_t kernarg_size;
+    uint32_t reserved0;
+    uint64_t kernel_code_entry_byte_offset;
+    uint8_t  reserved1[20];
+    uint32_t compute_pgm_rsrc3;
+    uint32_t compute_pgm_rsrc1;
+    uint32_t compute_pgm_rsrc2;
+    uint16_t kernel_code_properties;
+    uint16_t kernarg_preload;
+    uint32_t reserved2;
+} bc250hsa_kernel_descriptor;
+
+/* KERNEL_CODE_PROPERTIES bits, AMDGPUUsage.rst "Kernel Descriptor". The order of
+ * the first seven is also the order the user SGPRs are placed in. */
+#define BC250HSA_KCP_PRIVATE_SEGMENT_BUFFER 0x0001u
+#define BC250HSA_KCP_DISPATCH_PTR           0x0002u
+#define BC250HSA_KCP_QUEUE_PTR              0x0004u
+#define BC250HSA_KCP_KERNARG_SEGMENT_PTR    0x0008u
+#define BC250HSA_KCP_DISPATCH_ID            0x0010u
+#define BC250HSA_KCP_FLAT_SCRATCH_INIT      0x0020u
+#define BC250HSA_KCP_PRIVATE_SEGMENT_SIZE   0x0040u
+#define BC250HSA_KCP_WAVEFRONT_SIZE32       0x0400u
+#define BC250HSA_KCP_USES_DYNAMIC_STACK     0x0800u
+/* Everything this build refuses to see set. */
+#define BC250HSA_KCP_KNOWN_MASK                                                  \
+    (BC250HSA_KCP_PRIVATE_SEGMENT_BUFFER | BC250HSA_KCP_DISPATCH_PTR |           \
+     BC250HSA_KCP_QUEUE_PTR | BC250HSA_KCP_KERNARG_SEGMENT_PTR |                 \
+     BC250HSA_KCP_DISPATCH_ID | BC250HSA_KCP_FLAT_SCRATCH_INIT |                 \
+     BC250HSA_KCP_PRIVATE_SEGMENT_SIZE | BC250HSA_KCP_WAVEFRONT_SIZE32 |         \
+     BC250HSA_KCP_USES_DYNAMIC_STACK)
+/* The items this build actually programs into COMPUTE_USER_DATA: the private
+ * segment buffer and the kernel argument pointer. Everything else enabled is
+ * BC250HSA_EUNSUPPORTED (section 3.5 of the design). */
+#define BC250HSA_KCP_PROGRAMMED_MASK                                             \
+    (BC250HSA_KCP_PRIVATE_SEGMENT_BUFFER | BC250HSA_KCP_KERNARG_SEGMENT_PTR)
+
+/* COMPUTE_PGM_RSRC2.USER_SGPR, bits 5:1. */
+#define BC250HSA_RSRC2_USER_SGPR_SHIFT 1u
+#define BC250HSA_RSRC2_USER_SGPR_MASK  0x1Fu
+/* COMPUTE_PGM_RSRC2.LDS_SIZE, bits 23:15, in units of 512 bytes on gfx10.1. */
+#define BC250HSA_RSRC2_LDS_SIZE_SHIFT  15u
+#define BC250HSA_RSRC2_LDS_SIZE_MASK   0x1FFu
+#define BC250HSA_LDS_GRANULE_BYTES     512u
+
+typedef struct bc250hsa_kernel_internal {
+    bc250hsa_kernel            pub;      /* what the caller sees */
+    bc250hsa_kernel_descriptor descriptor;
+    char*                      name;     /* owned; pub.name points at it */
+    bc250hsa_arg*              args;     /* owned; pub.args points at it */
+    char                       symbol[128]; /* the metadata .symbol, "<name>.kd" */
+} bc250hsa_kernel_internal;
+
+struct bc250hsa_module {
+    bc250hsa_allocator        alloc;     /* the allocator this module was loaded with */
+    bc250hsa_mem              image;     /* the one executable range */
+    uint64_t                  lowest_vaddr;  /* the ELF p_vaddr the range starts at */
+    uint32_t                  kernel_count;
+    bc250hsa_kernel_internal* kernels;
+    /* .dynsym and .dynstr, copied so that bc250hsa_module_symbol() works after
+     * the caller's image buffer is gone. */
+    uint8_t*                  dynsym;
+    size_t                    dynsym_bytes;
+    char*                     dynstr;
+    size_t                    dynstr_bytes;
+};
+
+/* co_metadata.c: the MessagePack note to bc250hsa_kernel_internal. */
+bc250hsa_status bc250hsa_metadata_parse(const uint8_t* note, size_t note_bytes,
+                                        struct bc250hsa_module* mod);
+/* co_metadata.c: the descriptor bytes to the fields of one kernel. */
+bc250hsa_status bc250hsa_descriptor_read(const uint8_t* bytes, size_t byte_count,
+                                        bc250hsa_kernel_internal* kernel);
+
+/* --------------------------------------------------------------------------
+ * The host allocator the loader tests use, and the kernarg/pm4 seams
+ * ------------------------------------------------------------------------ */
+
+/* pm4_dispatch.c, shared with submit.c. */
+bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
+                                            uint32_t lds_bytes_per_workgroup);
+
+#endif /* BC250HSA_INTERNAL_H */
