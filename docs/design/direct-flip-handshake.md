@@ -302,6 +302,11 @@ changes these items:
   `SkipIndependentFlip`, but the kernel events of the same frames record the flip.
   `tools/win/etw/etw-present-mode.py` now reads such a frame as a hardware flip when four clauses hold
   (`tools/win/etw/README.md`).
+- **The router writes the compositor's route for the shells.** The CPU compositor cannot read a
+  scan-out primary. A hosted open that fails in `dwm.exe` sends the desktop to the CPU UMD
+  (`fallback=1`), and no registry value records it. The router in `dwm.exe` writes each desktop decision
+  into the session's desktop-route record (`driver/contract/bc250_desktop_route.h`). Both shells stand
+  a chain down (`desktop-route`) unless that record says `gpu` and the compositor's account owns it.
 
 The rollback ladder for the shell's half: `scanout-flip-off` as the machine value `Experiment` under
 `HKLM\SOFTWARE\amdgpu-wddm\D3D12`, then `DirectFlipFront = 0`, then `EnableDirectFlipHandshake = 0`.
@@ -310,9 +315,9 @@ The rollback ladder for the shell's half: `scanout-flip-off` as the machine valu
 
 `tools/build/build-umd-router.ps1` compiles the front into the router and into `test-router.exe`, so the
 host gate drives the production table fills and the production rule. `tools/build/test-umd-router.ps1`
-runs 83 scenarios, each in its own process on a private application hive.
+runs 84 scenarios, each in its own process on a private application hive.
 
-Thirteen of them are M15.14's:
+Thirteen of them are the front's:
 
 | Scenario | What it settles |
 | --- | --- |
@@ -327,6 +332,11 @@ Thirteen of them are M15.14's:
 | `front-d3d10-interface` | the front forwards a device created at the D3D10.0 interface whole, and writes nothing past either table or past the hosted private block |
 | `front-cpu-route` | the kill switch keeps the front out of the path |
 | `front-stack` | the front over the real hosted UMD, with its own version list and caps |
+
+Four more check the desktop-route record, with the harness started as `dwm.exe`: `route-dwm-name`,
+`route-dwm-name-kill`, `route-dwm-name-fallback` (new in this revision) and `desktop-dwm-unchanged`. The
+fallback scenario fails the hosted open, so the router falls back to the CPU UMD. It then asks the shells'
+shared rule over the record, and the rule stands the chain down although `DwmForceCpu` is 0.
 
 `tools/quality/quick.ps1` runs the suites that need nothing from the lab, as the `router-front` gate. The
 rest of the router's host gate needs three binaries that are not in this repository, so it runs as

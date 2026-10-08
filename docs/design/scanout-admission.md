@@ -274,11 +274,17 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
   therefore route-dependent for the chains this mode enables, and the overlap case is not yet measured
   on either route. Increment 3 makes the D3D12 scan-out primary the default, so the shared rule's first
   clause stands down when the router's kill switch `DwmForceCpu` is on, read as the router reads it.
-  The KMD swap uses that switch, so its chains get the composed primary. One case stays open: a router
-  that falls back to the CPU UMD by itself (`fallback=1` in the route line) does not set the switch, and
-  a shell cannot see that fallback. A game started on such a desktop gets a scan-out primary that the
-  CPU compositor cannot read. The machine value `scanout-flip-off` is the remedy until the router
-  publishes its route.
+  The KMD swap uses that switch, so its chains get the composed primary. A router that falls back to the
+  CPU UMD by itself (`fallback=1` in the route line) does not set the switch, and no registry value
+  records that fallback. The router in `dwm.exe` therefore writes each desktop decision into the session's
+  desktop-route record (`driver/contract/bc250_desktop_route.h`), and the shared rule's second clause,
+  `desktop-route`, stands down unless that record says `gpu`. The record is a named section in the
+  session namespace. It ends with the `dwm.exe` that wrote it, and a reader accepts it only when the
+  compositor's account, `Window Manager\DWM-<session>`, owns it. No record, a router older than this one,
+  an unreadable record and every CPU route read as "stand down". The router host gate runs the fallback
+  as `dwm.exe` and asks the shared rule over the record (`route-dwm-name-fallback`). A process in an app
+  container sees its own namespace and no record, so it keeps the composed primary. No lab run has shown
+  `record=published` from the lab's `dwm.exe` yet.
 - **The E26R scan-out record.** Increment 2 gave the D3D12 shell the 64-byte v3 record with the SCANOUT
   bit, which the compositor's opener takes (`driver/umd/d3d12/allocation-request.h`). Increment 3 gave
   the D3D11 shell the same bit, off by default (`driver/umd/dxvk/scanout-primary.h`). The runtime creates
