@@ -50,6 +50,8 @@ if (-not $EngineSource) { $EngineSource = Join-Path $root ($pin.source_checkout 
 if (-not $VulkanInclude) { $VulkanInclude = Join-Path $EngineSource ($pin.vulkan_headers_path -replace '/', '\') }
 if (-not $EngineDll) { $EngineDll = Join-Path (Join-Path $root ($pin.engine_dll_dir -replace '/', '\')) $pin.engine_dll }
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
+# Full paths: /d1trimfile below cuts these prefixes from the source paths the compiler sees.
+$EngineSource = [IO.Path]::GetFullPath($EngineSource); $VulkanInclude = [IO.Path]::GetFullPath($VulkanInclude)
 
 # Step 0: the pinned engine header, included by path.
 $engineHeader = Join-Path $EngineSource ($pin.header_path -replace '/', '\')
@@ -77,9 +79,10 @@ try {
     $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
     # /O2: the library holds the hot per-draw DDIs (draw, submit, descriptor copy, barriers) and compiled at the
     # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol
-    # gate below reads the library with dumpbin, which cannot read /GL objects.
+    # gate below reads the library with dumpbin, which cannot read /GL objects. /FC with /d1trimfile: __FILE__ and
+    # the anonymous-namespace names see the path below each tree only, so the place of a tree is not in the image.
     $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', '/external:W0', '/MT', '/DNOMINMAX', '/Zi',
-        '/Brepro',
+        '/Brepro', '/FC', "/d1trimfile:$repo", "/d1trimfile:$EngineSource", "/d1trimfile:$VulkanInclude",
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
