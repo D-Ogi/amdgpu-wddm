@@ -2,6 +2,7 @@
 #define BC250_SCANOUT_ADMIT_H
 #include "dcn_translate.h"
 #include "surface_format.h"
+#include "plane_format.h"
 
 // M15.14: which allocation SetVidPnSourceAddress may hand to the display pipeline.
 //
@@ -69,23 +70,33 @@ static __inline int Bc250ScanoutAdmit(const BC250_SCANOUT_CANDIDATE* Candidate,
     unsigned long* Pitch, unsigned long long* Bytes)
 {
     unsigned long long bytes;
+    unsigned long bpp;
+    const BC250_PLANE_ENCODING* plane;
     if (!Candidate || !Pitch || !Bytes) return BC250_SCANOUT_NO_ALLOCATION;
     if (Candidate->UmdAlloc && !Candidate->ScanoutRequested) return BC250_SCANOUT_NOT_REQUESTED;
-    // The plane programs an address and a pitch, never a pixel format (dcn.c), so the format decides
-    // nothing at the hardware and everything about what the monitor shows: only a row the shared table
-    // enables for SCANOUT_PRIMARY is the format the firmware left the plane in.
-    if (WddmSurfaceFormatBpp(Candidate->Format, BC250_SURFACE_SCANOUT) != 4) return BC250_SCANOUT_FORMAT;
+    // Since 0.7.216.20 the flip programs the plane's pixel format as well as its address and pitch (dcn.c,
+    // plane_format.h), so the format clause asks two things: a row the shared table enables for
+    // SCANOUT_PRIMARY, and a plane encoding of the same size. The second is the guard against a table that
+    // gains a SCANOUT_PRIMARY row before this driver can program it: such a row is refused here, before
+    // any register is touched, and scanout_admit_test.c fails the build until both agree. Whether this
+    // start may change the plane's format at all (the firmware's registers decoded at start) is dcn.c's
+    // question, asked again at the flip; this rule is about the surface only.
+    bpp = WddmSurfaceFormatBpp(Candidate->Format, BC250_SURFACE_SCANOUT);
+    plane = Bc250PlaneEncoding(Bc250PlaneFormatOf(Candidate->Format));
+    if (!bpp || !plane || plane->BytesPerPixel != bpp) return BC250_SCANOUT_FORMAT;
     // One VidPN source mode exists, the inherited POST one (display.c), so a surface of any other
     // geometry would be scanned out at the wrong stride or past the end of the buffer.
     if (Candidate->Width != PostWidth || Candidate->Height != PostHeight) return BC250_SCANOUT_GEOMETRY;
-    if (!DcnSurfaceBytes(Candidate->Width, Candidate->Height, Candidate->Pitch, &bytes))
+    // The pitch in the row's own bytes a pixel: a whole number of pixels that holds the row. The plane's
+    // pitch field counts pixels of the programmed format (DcnFlipWriteSequence), so nothing here assumes 4.
+    if (!DcnLinearSurfaceBytes(Candidate->Width, Candidate->Height, Candidate->Pitch, bpp, &bytes))
         return BC250_SCANOUT_PITCH;
     if (bytes > Candidate->Size) return BC250_SCANOUT_SIZE;
     if (Candidate->ScanoutRequested) {
         // Everything from here is new and applies to application surfaces alone. dxgkrnl's own shared
         // primary is admitted by the four checks above, exactly as it was before M15.14. A pitch that
-        // is not a whole number of 4-byte pixels needs no clause here: DcnSurfaceBytes already refuses
-        // it, which is what keeps HUBPREQ0_DCSURF_SURFACE_PITCH (pitch/4 - 1) exact.
+        // is not a whole number of pixels needs no clause here: DcnLinearSurfaceBytes already refuses
+        // it, which is what keeps HUBPREQ0_DCSURF_SURFACE_PITCH (pitch/bpp - 1) exact.
         //
         // The plane's address field is a 4 KiB page number on this generation; VidMm gives an
         // application allocation page granularity anyway, so a misaligned address means the candidate

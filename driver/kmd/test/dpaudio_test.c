@@ -1,5 +1,5 @@
-// Host test of DisplayPort audio steps 0, 1 and 2: driver/kmd/dpaudio_seq.c is compiled as it is, the very file the
-// miniport links, and driven against a fake register file. Gate "dpaudio" of tools/quality/quick.ps1.
+// Host test of DisplayPort audio steps 0, 1, 2 and 4: driver/kmd/dpaudio_seq.c is compiled as it is, the very file
+// the miniport links, and driven against a fake register file. Gate "dpaudio" of tools/quality/quick.ps1.
 //
 // What it has to prove, in the order the risk runs:
 //   1. Nothing is written unless every precondition holds. Each refusal gets its own case, and each case checks
@@ -17,6 +17,9 @@
 //      AFMT clock off, then AUDIO_ENABLED 0; DP_SEC info-frame bits stay, with their master enable.
 //   6. Every indirect access selects its index first, on the endpoint it means.
 //   7. The tables refuse every other offset and index, so no caller can reach past them.
+//   8. Step 4: the sink from an EDID (edid.c parses the lab monitor's redacted EDID) is Linux's audio_info:
+//      identity in Linux's byte order, the monitor name, the LPCM descriptor with the most channels capped at 8,
+//      the speaker byte or DEFAULT_SPEAKER_LOCATION; an EDID without LPCM, a bad one or none gives the fixed set.
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +27,7 @@
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include "dpaudio_seq.h"
+#include "edid_lab_redacted.h"
 
 static unsigned checks, failures;
 #define CHECK(x) do { ++checks; if (!(x)) { ++failures; printf("FAIL line %d: %s\n", __LINE__, #x); } } while (0)
@@ -831,6 +835,98 @@ typedef char StepNoneIsZero[BC250_DPAUDIO_STEP_NONE == 0 ? 1 : -1];
 typedef char Abi1Prefix[(offsetof(BC250_ESCAPE_DPAUDIO, SwitchStream) == BC250_DPAUDIO_ABI1_SIZE &&
                          sizeof(BC250_ESCAPE_DPAUDIO) == 480) ? 1 : -1];
 
+
+// ---- step 4: the sink from the EDID -----------------------------------------------------------------------------
+
+// Configure with a sink on endpoint e of a fresh unit A; the endpoint's registers as the group left them.
+static void ConfigureWith(const BC250_DPAUDIO_SINK* sink, unsigned long e)
+{
+    BC250_AZ_IO io;
+    BC250_DPAUDIO_RESULT r;
+
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    CHECK(Bc250DpAudioConfigureSink(&io, e, sink, &r) == 0);
+    CHECK(g_Fake.Protocol == 0);
+}
+
+static void StepFour(void)
+{
+    static BC250_EDID_INFO info;
+    static unsigned char tv[256];
+    BC250_DPAUDIO_SINK sink, fixed;
+    BC250_AZ_IO io;
+    unsigned long i;
+
+    // The lab monitor: LEN (bytes 0x30 0xAE), product 0x1144, LPCM 2 channels, 32-192 kHz, 16/20/24 bit, FL/FR.
+    CHECK(Bc250EdidParse(g_LabEdid, sizeof(g_LabEdid), &info) == BC250_EDID_OK);
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1 && sink.FromEdid == 1);
+    CHECK(sink.Manufacturer == 0xAE30ul && sink.Product == 0x1144ul);
+    CHECK(strcmp(sink.Name, "LEN LT2452pwC") == 0);
+    CHECK(sink.LpcmChannels == 2 && sink.LpcmRates == 0x7F && sink.LpcmSizes == 0x07 && sink.Speakers == 0x01);
+    ConfigureWith(&sink, 1);
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_CHANNEL_SPEAKER] == 0xFCFAFF81ul);       // the speaker byte is 1, as the fixed set
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_AUDIO_DESCRIPTOR0] == 0x7F077F01ul);     // stereo rates, byte 2, rates, channels - 1
+    for (i = 1; i < 14; i++) CHECK(g_Fake.Ix[1][BC250_AZ_IX_AUDIO_DESCRIPTOR0 + i] == 0);
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO0] == 0x1144AE30ul);            // PRODUCT_ID 31:16, MANUFACTURER_ID 15:0
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO1] == 14);                      // 13 characters and the terminator
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO4] == 0x204E454Cul);            // 'L' 'E' 'N' ' '
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO5] == 0x3432544Cul);            // 'L' 'T' '2' '4'
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO6] == 0x77703235ul);            // '5' '2' 'p' 'w'
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO7] == 0x00000043ul);            // 'C'
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO8] == 0);
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_RESPONSE_HBR] == 0xFFFFFFFEul);          // HBR_CAPABLE 0 whatever the sink says
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO0] == 0);                       // the other endpoint is not touched
+
+    // A whole run with the sink: the configure group carries it, nothing else changes.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    g_Run.Sink = &sink;
+    CHECK(Bc250DpAudioRun(&io, &g_Run) == BC250_DPAUDIO_REASON_OK);
+    g_Run.Sink = 0;
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_AUDIO_DESCRIPTOR0] == 0x7F077F01ul && g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO0] == 0x1144AE30ul);
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE) != 0);
+
+    // The fixed set: Sink NULL and Bc250DpAudioSinkDefault give the same writes as step 1 (ExpectConfigure).
+    Bc250DpAudioSinkDefault(&fixed);
+    CHECK(fixed.FromEdid == 0 && strcmp(fixed.Name, "BC-250 DP") == 0 && fixed.LpcmChannels == 2 &&
+          fixed.LpcmRates == 0x07 && fixed.LpcmSizes == 0x01 && fixed.Speakers == 0x01 && fixed.Manufacturer == 0);
+    ConfigureWith(&fixed, 0);
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_AUDIO_DESCRIPTOR0] == 0x07010701ul && g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO0] == 0 &&
+          g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO1] == 10 && g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO4] == 0x322D4342ul);
+
+    // An 8-channel LPCM descriptor after a 2-channel one: the most channels win; a 7-speaker byte is kept.
+    info.Sads[1] = info.Sads[0];
+    info.Sads[1].Channels = 8;
+    info.Sads[1].Rates = 0x07;
+    info.SadCount = 2;
+    info.Speaker = 0x7F;
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1 && sink.LpcmChannels == 8 && sink.LpcmRates == 0x07 &&
+          sink.Speakers == 0x7F);
+    ConfigureWith(&sink, 0);
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_AUDIO_DESCRIPTOR0] & 0x7ul) == 7);      // MAX_CHANNELS = 8 - 1
+    // More than 8 channels cannot be described: capped (3-bit field).
+    info.Sads[1].Channels = 9;
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1 && sink.LpcmChannels == 8);
+    // No speaker allocation block: DEFAULT_SPEAKER_LOCATION.
+    info.HasSpeaker = 0;
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1 && sink.Speakers == 5);
+    // No name descriptor: an empty name, length 1 as Linux counts it.
+    info.HasName = 0;
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1 && sink.Name[0] == '\0');
+    ConfigureWith(&sink, 0);
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO1] == 1 && g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO4] == 0);
+
+    // Negative controls: the fixed set and a return of 0.
+    CHECK(Bc250DpAudioSinkFromEdid(0, &sink) == 0 && sink.FromEdid == 0 && sink.LpcmRates == 0x07);
+    for (i = 0; i < info.SadCount; i++) info.Sads[i].Format = 2;    // AC-3 only: no LPCM descriptor
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 0 && sink.FromEdid == 0 && sink.Speakers == 0x01);
+    memcpy(tv, g_LabEdid, sizeof(tv));
+    tv[127] ^= 0x01;                                                    // the base block checksum breaks
+    CHECK(Bc250EdidParse(tv, sizeof(tv), &info) == BC250_EDID_CHECKSUM);
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 0 && sink.FromEdid == 0);
+}
+
 int main(void)
 {
     Gate();
@@ -845,6 +941,7 @@ int main(void)
     StopBestEffort();
     Tables();
     Texts();
+    StepFour();
     printf("dpaudio: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

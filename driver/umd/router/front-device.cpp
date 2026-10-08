@@ -367,9 +367,19 @@ void FillOpenedResource(const D3D10DDIARG_OPENRESOURCE *args, Resource *out)
             if (width) out->width = width;
             if (height) out->height = height;
             out->pitch = pitch;
-            // The storage format of record and blob must agree; the blob is the kernel driver's own view.
+            // The storage format of record and blob must agree; the blob is the kernel driver's own view,
+            // and the format the kernel driver programs into the plane at the flip (0.7.216.20). A v3 record
+            // may name the storage format or its sRGB view of the same storage; any other disagreement
+            // leaves the format 0, which the rule refuses under "format" (a record that says BGRA8 over
+            // a blob that says RGBA8 would otherwise be admitted under the wrong name).
             const AMDGPU_WDDM_SURFACE_FORMAT *row = amdgpu_wddm_surface_format_by_d3dddi(d3dddi);
-            if (row && row->dxgi) out->format = row->dxgi;
+            if (row && row->dxgi) {
+                const unsigned int named = out->format;
+                out->format = (!named || named == row->dxgi || (row->dxgi_srgb && named == row->dxgi_srgb))
+                    ? row->dxgi : 0u;
+            } else {
+                out->format = 0u;
+            }
         }
     }
 }

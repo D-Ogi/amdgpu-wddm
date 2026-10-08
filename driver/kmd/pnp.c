@@ -20,6 +20,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     HwmonInitialize(&device->Hwmon);
     FanInitialize(device);
     DpAudioInitialize(device);
+    ModesetInitialize(device);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
@@ -150,6 +151,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         (void)Bc250StopDevice(device);
         goto failed;
     }
+    // Display modes (modeset.c): the EDID over DP AUX, the monitor descriptor, the source mode list. After the
+    // inherited timing, which is the native size, and before DP audio, which programs the EDID's audio data. Never
+    // fails the start: without an EDID the driver offers the one inherited mode, as before.
+    ModesetStart(device);
     // The seamless-boot point: the firmware's DP stream is now ours, and Linux adds audio to such a stream here
     // (link_dpms.c). Never fails the start; refuses and writes nothing unless its preconditions hold (dpaudio.c).
     DpAudioStart(device);
@@ -276,12 +281,19 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
 
 void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
 {
-    // Called at high IRQL on the way to a bugcheck or hibernate. We never changed the mode: nothing to restore
-    // there. The case fan is the one thing this driver takes from the board, so it goes back here, with port writes
-    // only (fan.c).
+    // Called at high IRQL on the way to a bugcheck or hibernate. The timing never changes; a smaller source mode
+    // (modeset.c) changed the viewport and scaler of pipe 0, so the firmware surface and the native shape go back
+    // here, with checked MMIO and bounded stalls only, as SystemDisplayEnable does. The case fan is the other thing
+    // this driver takes from the board, so it goes back here too, with port writes only (fan.c).
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
-    if (device != NULL) FanResetDevice(device);
+    if (device == NULL) return;
+    if (device->Modeset.PipeChanged)
+    {
+        (void)DcnRestorePostDisplay(device);
+        ModesetRestoreQuiet(device);
+    }
+    FanResetDevice(device);
 }
 
 NTSTATUS Bc250DispatchIoRequest(_In_ const PVOID MiniportDeviceContext, _In_ ULONG VidPnSourceId,
@@ -400,11 +412,10 @@ NTSTATUS Bc250QueryChildStatus(_In_ const PVOID MiniportDeviceContext, _Inout_ P
 NTSTATUS Bc250QueryDeviceDescriptor(_In_ const PVOID MiniportDeviceContext, _In_ ULONG ChildUid,
                                     _Inout_ PDXGK_DEVICE_DESCRIPTOR DeviceDescriptor)
 {
-    // No EDID in M3: reading it needs the AUX channel, which is display-core MMIO (facts M24).
-    UNREFERENCED_PARAMETER(MiniportDeviceContext);
-    UNREFERENCED_PARAMETER(ChildUid);
-    UNREFERENCED_PARAMETER(DeviceDescriptor);
-    return STATUS_MONITOR_NO_DESCRIPTOR;
+    // The EDID of the monitor as modeset.c read it over DP AUX at start (EnableDisplayModes 1 or 2), in the pieces
+    // dxgkrnl and Monitor.sys ask for; STATUS_MONITOR_NO_DESCRIPTOR without one, as before display modes.
+    if (ChildUid != BC250_CHILD_UID) return STATUS_INVALID_PARAMETER;
+    return ModesetQueryDescriptor((BC250_DEVICE*)MiniportDeviceContext, DeviceDescriptor);
 }
 
 NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG DeviceUid,
@@ -423,9 +434,14 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         if (DevicePowerState!=PowerDeviceD0) {
             HangDetectorPause(); CpuPause(device); DpmPause(device); FanPause(device);
             DpAudioStop(device);    // AUDIO_ENABLED 0 before the display block goes down
+            ModesetPowerDown(device);   // the firmware surface and the native shape (modeset.c)
         }
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
+        // A failed transition down keeps the device in D0 with the desktop up: the committed shape goes back at once,
+        // or the smaller surface of that desktop would be read through the native viewport.
+        if (DevicePowerState!=PowerDeviceD0 && !NT_SUCCESS(status)) ModesetPowerUp(device);
         if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
+            ModesetPowerUp(device);     // the shape of the committed source mode again, if the pipe allows it
             DpmResume(device);
             FanResume(device);
             CpuResume(device);  // nothing of the CPU surface survives D3 in the chip: read it again (0.7.211)

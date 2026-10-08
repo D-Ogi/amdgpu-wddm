@@ -16,10 +16,10 @@ unsigned checks=0;
 // Not assert: the gate must not depend on NDEBUG, and a count of checks makes a test that silently ran
 // nothing visible in the build log.
 #define CHECK(expr) do{++checks;if(!(expr)){std::printf("FAIL %s:%d %s\n",__FILE__,__LINE__,#expr);std::fflush(stdout);std::abort();}}while(0)
-bc250_scanout_caps caps_on(unsigned width=1920,unsigned height=1200) {
+bc250_scanout_caps caps_on(unsigned width=1920,unsigned height=1200,unsigned extra=0) {
     bc250_scanout_caps caps{};
     caps.magic=BC250_SCANOUT_CAPS_MAGIC;caps.version=BC250_SCANOUT_CAPS_VERSION;caps.size=sizeof(caps);
-    caps.flags=BC250_SCANOUT_CAPS_DIRECT_FLIP;caps.post_width=width;caps.post_height=height;
+    caps.flags=BC250_SCANOUT_CAPS_DIRECT_FLIP|extra;caps.post_width=width;caps.post_height=height;
     return caps;
 }
 // The record on the wire, read as the words the kernel driver and the compositor's opener read.
@@ -215,9 +215,22 @@ int main() {
         const unsigned width=1920,height=1200,pitch=7680;const uint64_t size=uint64_t(pitch)*height;
         AllocationRequest c;
         CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,owner,false,true,true)==E_NOTIMPL);
-        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8B8G8R8,size,owner,false,true,true)==E_NOTIMPL);
-        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A2B10G10R10,size,owner,false,true,true)==E_NOTIMPL);
+        // M15.14 (0.7.216.20): RGBA8 and RGB10A2 are SCANOUT_PRIMARY rows, so the record names their own
+        // DXGI format and the blob their own D3DDDIFORMAT. Whether the kernel driver's caps admit them is
+        // scanout_decide's question (d), not this function's.
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8B8G8R8,size,owner,false,true,true)==S_OK);
+        check_scanout_record(c,width,height,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM);
+        CHECK(c.surface.format==AMDGPU_WDDM_D3DDDI_A8B8G8R8 && c.surface.pitch==pitch);
+        CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A2B10G10R10,size,owner,false,true,true)==S_OK);
+        check_scanout_record(c,width,height,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM);
+        CHECK(c.surface.format==AMDGPU_WDDM_D3DDDI_A2B10G10R10);
+        // The pin follows the row's bytes per pixel and not a constant: an RGBA8 pitch that is not the
+        // pinned one is refused like a BGRA8 one.
+        CHECK(c.prepare_surface(width,height,7936,D3DDDIFMT_A8B8G8R8,7936ull*height,owner,false,true,true)==E_INVALIDARG);
+        // FP16 stays COMPOSED only: refused at its own 8-byte pin as well as at the 4-byte one.
+        static_assert(scanout_row_pitch(1920,8)==15360);
         CHECK(c.prepare_surface(width,height,15360,D3DDDIFMT_A16B16G16R16F,15360ull*height,owner,false,true,true)==E_NOTIMPL);
+        CHECK(c.prepare_surface(width,height,15360,D3DDDIFMT_A16B16G16R16F,15360ull*height,owner)==S_OK);
         CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8,size,owner,false,true,true)==E_NOTIMPL);
         // Scan-out contradicts the other two intents and is refused rather than silently reduced.
         CHECK(c.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,true,true,true)==E_INVALIDARG);
@@ -230,7 +243,8 @@ int main() {
     // (d) The stand-down decision, one case per clause. Every refusal leaves the composed primary, so the
     // test asserts the reason and not a failure.
     {
-        const bc250_scanout_caps on=caps_on(),off{};
+        const bc250_scanout_caps on=caps_on(),off{},planes=caps_on(1920,1200,BC250_SCANOUT_CAPS_PLANE_FORMATS);
+        bc250_scanout_caps planes_only=planes;planes_only.flags=BC250_SCANOUT_CAPS_PLANE_FORMATS;
         const unsigned bgra=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM,pitch=7680;
         const char* mode="scanout-flip-1920x1200";
         struct Case { const char* list;bc250_scanout_caps caps;unsigned long force;unsigned dxgi,w,h,pitch;
@@ -252,9 +266,20 @@ int main() {
             // The source mode is the trailer's, whatever it is: a 1280x720 mode named and published admits.
             {"scanout-flip-1280x720",caps_on(1280,720),0,bgra,1280,720,5120,ScanoutStandDown::Admitted},
             {"scanout-flip-1280x720",on,0,bgra,1280,720,5120,ScanoutStandDown::SourceGeometry},
+            // M15.14: RGBA8 and RGB10A2 need the trailer's PLANE_FORMATS flag; a kernel driver without it
+            // would refuse their flip only after SharedPrimaryTransition. FP16 is refused with the flag too.
             {mode,on,0,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::Format},
             {mode,on,0,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Format},
             {mode,on,0,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,pitch,ScanoutStandDown::Format},
+            {mode,planes,0,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::Admitted},
+            {mode,planes,0,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Admitted},
+            {mode,planes,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted},
+            {mode,planes,0,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,15360,ScanoutStandDown::Format},
+            {mode,planes,0,AMDGPU_WDDM_DXGI_A8_UNORM,1920,1200,2048,ScanoutStandDown::Format},
+            {mode,planes,0,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,7936,ScanoutStandDown::Pitch},
+            {mode,planes,0,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,15360,ScanoutStandDown::Pitch},
+            // The flag alone is not DIRECT_FLIP: without it the trailer is closed.
+            {mode,planes_only,0,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::CapsClosed},
             {mode,on,0,0,1920,1200,pitch,ScanoutStandDown::Format},
             {mode,on,0,bgra,1920,1200,0,ScanoutStandDown::Pitch},
             {mode,on,0,bgra,1920,1200,7936,ScanoutStandDown::Pitch},
@@ -281,6 +306,13 @@ int main() {
         // Every admitted decision describes a surface prepare_surface then accepts: the two are one rule.
         AllocationRequest d;
         CHECK(d.prepare_surface(1920,1200,pitch,D3DDDIFMT_A8R8G8B8,uint64_t(pitch)*1200,owner,false,true,true)==S_OK);
+        for(const auto& c:cases) {
+            if(c.reason!=ScanoutStandDown::Admitted)continue;
+            const auto* row=amdgpu_wddm_surface_format_by_dxgi(c.dxgi);
+            CHECK(row && d.prepare_surface(c.w,c.h,c.pitch,D3DDDIFORMAT(row->d3dddi),uint64_t(c.pitch)*c.h,owner,
+                                           false,true,true)==S_OK);
+            check_scanout_record(d,c.w,c.h,c.dxgi);
+        }
     }
     // (e) The adapter trailer as query_contract decodes it: the header must be whole, and anything else
     // reads as no trailer, so a shell on an older kernel driver asks for nothing.

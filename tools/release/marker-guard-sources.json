@@ -27,6 +27,7 @@
     { "name": "kmd/audio-controller-reads", "commit": "084c2bf8cd72bdd6827aec644eb5d114e413c287" },
     { "name": "kmd/dpm-c62", "commit": "9e62b3f22720e02dec43f0298910c2541b046df4" },
     { "name": "kmd/memmgr-stage1", "commit": "a5cb4a2b9dd821c09a9b623c1301c3bcb2b29192" },
-    { "name": "installer/hda-msi-gates", "commit": "c252b0ec788839783eae1247dd07b1ca55d8ef01" }
+    { "name": "installer/hda-msi-gates", "commit": "c252b0ec788839783eae1247dd07b1ca55d8ef01" },
+    { "name": "integ/display-modes-scanout-formats", "commit": "75420d2335ea1d29839b9e44c06154a79935faeb" }
   ]
 }

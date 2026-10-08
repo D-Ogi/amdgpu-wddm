@@ -116,6 +116,7 @@ static void RecordStream(_Inout_ BC250_DPAUDIO* Audio, _In_ const BC250_DPAUDIO_
 // What a start or resume did, collected under the lock and logged after it.
 typedef struct _DPAUDIO_START {
     BC250_DPAUDIO_RUN Seq;                  // dpaudio_seq.c: observation, decision, the write groups
+    BC250_DPAUDIO_SINK Sink;                // step 4: the sink from the EDID, or the fixed set
     ULONG Gate;                             // the switches and the mapping, before any register
     ULONG Reason;                           // Bc250DpAudioRun's result when the gate was open
 } DPAUDIO_START;
@@ -174,8 +175,13 @@ static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
         GuardLog("dpaudio: hw_init done on endpoint 0: rates 0x%08lX power 0x%08lX hpc 0x%08lX, %lu writes",
                  run->Init.SizeRates, run->Init.PowerStates, run->Init.HotPlugAfter, run->Init.Writes);
     if (run->Groups >= 2)
-        GuardLog("dpaudio: configure done on endpoint %lu: FL/FR, DP, LPCM 2 ch 32/44.1/48 kHz 16 bit, BC-250 DP, %lu writes",
-                 run->Plan.Endpoint, run->Config.Writes);
+    {
+        GuardLog("dpaudio: configure done on endpoint %lu (%s), %lu writes, speakers 0x%02lX", run->Plan.Endpoint,
+                 Start->Sink.FromEdid ? "EDID" : "fixed set", run->Config.Writes, Start->Sink.Speakers);
+        GuardLog("dpaudio: LPCM %lu ch rates 0x%02lX sizes 0x%lX, sink 0x%04lX/0x%04lX '%s'", Start->Sink.LpcmChannels,
+                 Start->Sink.LpcmRates, Start->Sink.LpcmSizes, Start->Sink.Manufacturer, Start->Sink.Product,
+                 Start->Sink.Name);
+    }
     if (run->Groups >= 3) {
         GuardLog("dpaudio: stream on DP%lu: DTO_SOURCE 0x%08lX DTO1 %lu/%lu, AUD_N 0x%08lX timestamp 0x%lX, %lu writes",
                  run->Plan.Stream, s->DtoSource, s->DtoPhase, s->DtoModule, s->AudN, s->Timestamp, s->Writes);
@@ -212,6 +218,9 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
         return;
     }
     IoOpen(Device, &io);
+    // Step 4: the EDID that modeset.c read at this start, or the fixed set of step 1 without one (dpaudio_seq.h).
+    (void)Bc250DpAudioSinkFromEdid(ModesetEdidForAudio(Device), &start->Sink);
+    start->Seq.Sink = &start->Sink;
     start->Gate = Bc250DpAudioGate(Device->Mmio != NULL, enable, endpointSwitch, streamSwitch);
     KeAcquireSpinLock(&audio->Lock, &irql);
     if (Resume) audio->Resumes++; else audio->Starts++;

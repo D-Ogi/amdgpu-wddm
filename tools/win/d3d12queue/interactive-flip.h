@@ -2,8 +2,8 @@
 // Fullscreen variant of the interactive client (build.ps1 -Flip). Included by interactive.h inside namespace
 // interactive, after Session. The "copy" verb then creates a window that covers the whole output - borderless,
 // or an exclusive-fullscreen chain with -FlipFullscreen - and a flip-model swap chain of -FlipBuffers buffers at
-// the output's own size in B8G8R8A8_UNORM, and presents -FlipFrames frames, each cleared to its own exact
-// colour. After every frame it compares a probe of the back buffer it is about to present, and at the first and
+// the output's own size in B8G8R8A8_UNORM (or the format AMDGPU_WDDM_D3D12_FLIP_FORMAT names, see
+// flip_format_from), and presents -FlipFrames frames, each cleared to its own exact colour. After every frame it compares a probe of the back buffer it is about to present, and at the first and
 // the last frame every texel of it. It then reports DXGI's present statistics.
 //
 // This is the M15.14 client: the case in which a buffer the application owns may be scanned out instead of
@@ -41,6 +41,37 @@ inline UINT flip_count_from(const char* variable,UINT fallback,UINT low,UINT hig
     return value>=low?value:fallback;
 }
 
+// M15.14 (kernel driver 0.7.216.20): the swap chain's format, as its DXGI number, so one binary drives the
+// BGRA8 control and one arm per plane format. 87 B8G8R8A8_UNORM (the default and the control), 28
+// R8G8B8A8_UNORM (the format of The Witcher 3's chain in lab session 458), 24 R10G10B10A2_UNORM, and 10
+// R16G16B16A16_FLOAT (scRGB; the kernel driver does not scan it out, so that arm must stay composed). Any
+// other value leaves the default in place, and the plan line says which format the run used.
+struct FlipFormat { DXGI_FORMAT format; UINT bytes; const char* name; };
+inline FlipFormat flip_format_from(const char* variable){
+    switch(flip_count_from(variable,87u,1u,200u)){
+    case 28u:return {DXGI_FORMAT_R8G8B8A8_UNORM,4u,"R8G8B8A8"};
+    case 24u:return {DXGI_FORMAT_R10G10B10A2_UNORM,4u,"R10G10B10A2"};
+    case 10u:return {DXGI_FORMAT_R16G16B16A16_FLOAT,8u,"R16G16B16A16F"};
+    default:return {DXGI_FORMAT_B8G8R8A8_UNORM,4u,"B8G8R8A8"};
+    }
+}
+// The texel a clear of every channel to 0.0 or 1.0 (alpha 1.0) gives in that format's memory layout, read as
+// one little-endian word of the format's size. No channel value has a rounding tie in any of the four formats.
+inline UINT64 flip_texel_of(DXGI_FORMAT format,bool r,bool g,bool b){
+    switch(format){
+    case DXGI_FORMAT_R8G8B8A8_UNORM:      // R in the low byte, A in the high one
+        return (r?0xffull:0ull)|(g?0xff00ull:0ull)|(b?0xff0000ull:0ull)|0xff000000ull;
+    case DXGI_FORMAT_R10G10B10A2_UNORM:   // R in bits 0-9, G 10-19, B 20-29, A 30-31
+        return (r?0x3ffull:0ull)|(g?0x3ffull<<10:0ull)|(b?0x3ffull<<20:0ull)|(3ull<<30);
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:  // four halves, R first; 1.0 is 0x3c00
+        return (r?0x3c00ull:0ull)|(g?0x3c00ull<<16:0ull)|(b?0x3c00ull<<32:0ull)|(0x3c00ull<<48);
+    default:                              // B8G8R8A8: B in the low byte, A in the high one
+        return (b?0xffull:0ull)|(g?0xff00ull:0ull)|(r?0xff0000ull:0ull)|0xff000000ull;
+    }
+}
+static_assert(DXGI_FORMAT_R8G8B8A8_UNORM==28 && DXGI_FORMAT_R10G10B10A2_UNORM==24 &&
+              DXGI_FORMAT_R16G16B16A16_FLOAT==10 && DXGI_FORMAT_B8G8R8A8_UNORM==87);
+
 inline LRESULT CALLBACK flip_window_proc(HWND window,UINT message,WPARAM w,LPARAM l){
     // The chain owns what is on screen; nothing is painted from the message loop. WM_CLOSE is ignored: the
     // session ends on its own command, its deadline or abort.request, never because a stray click closed it.
@@ -72,10 +103,12 @@ inline HRESULT flip(Session& s){
     if(!s.queue || !s.factory || s.pending || s.copy_success)return E_UNEXPECTED;
     const UINT buffers=flip_count_from("AMDGPU_WDDM_D3D12_FLIP_BUFFERS",INTERACTIVE_FLIP_BUFFERS,2,INTERACTIVE_FLIP_MAX_BUFFERS);
     const UINT frames=flip_count_from("AMDGPU_WDDM_D3D12_FLIP_FRAMES",INTERACTIVE_FLIP_FRAMES,1,20000);
-    constexpr DXGI_FORMAT format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    const FlipFormat chosen=flip_format_from("AMDGPU_WDDM_D3D12_FLIP_FORMAT");
+    const DXGI_FORMAT format=chosen.format;const UINT bpp=chosen.bytes;
     ID3D12Device* device=s.device.Get();
     HRESULT hr=S_OK;
-    {char label[112]{};sprintf_s(label,"Flip plan: %u buffers, %u frames, present interval 1",buffers,frames);s.event("after",label);}
+    {char label[128]{};sprintf_s(label,"Flip plan: %u buffers, %u frames, present interval 1, format %s (%d)",
+        buffers,frames,chosen.name,static_cast<int>(format));s.event("after",label);}
 
     // The output's desktop rectangle is the only size at which a scan-out candidate can match the POST mode, so
     // the client never picks a size of its own.
@@ -118,7 +151,7 @@ inline HRESULT flip(Session& s){
     desc.Flags=DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 #endif
     ComPtr<IDXGISwapChain1> chain1;ComPtr<IDXGISwapChain3> chain;
-    {char label[96]{};sprintf_s(label,"CreateSwapChainForHwnd FLIP_DISCARD B8G8R8A8 %u buffers %ux%u",buffers,width,height);
+    {char label[112]{};sprintf_s(label,"CreateSwapChainForHwnd FLIP_DISCARD %s %u buffers %ux%u",chosen.name,buffers,width,height);
      hr=s.api(label,[&]{return s.factory->CreateSwapChainForHwnd(s.queue.Get(),window,&desc,nullptr,nullptr,&chain1);});}
     if(FAILED(hr)){s.event("after","GetDeviceRemovedReason after swap chain",device->GetDeviceRemovedReason());return hr;}
     hr=s.api("MakeWindowAssociation",[&]{return s.factory->MakeWindowAssociation(window,DXGI_MWA_NO_ALT_ENTER);});if(FAILED(hr))return hr;
@@ -175,14 +208,12 @@ inline HRESULT flip(Session& s){
         s.pending=false;return S_OK;
     };
 
-    // Frame content: every channel is 0.0 or 1.0, so the clear has no rounding tie and the BGRA8 word of a
-    // frame is fully determined. The eight combinations cycle, so a frame that is still the previous one on
-    // screen, or a buffer presented twice, differs in at least one channel from what is expected.
+    // Frame content: every channel is 0.0 or 1.0, so the clear has no rounding tie and the texel of a frame
+    // is fully determined in each format. The eight combinations cycle, so a frame that is still the previous
+    // one on screen, or a buffer presented twice, differs in at least one channel from what is expected.
     const auto colour_of=[](UINT frame,UINT channel)->FLOAT{return (frame>>channel)&1u?1.0f:0.0f;};
-    const auto word_of=[&](UINT frame)->UINT32{
-        // B8G8R8A8 in memory, read as one little-endian word: B in the low byte, A in the high one.
-        const UINT32 b=colour_of(frame,2)!=0.0f?0xffu:0u,g=colour_of(frame,1)!=0.0f?0xffu:0u,r=colour_of(frame,0)!=0.0f?0xffu:0u;
-        return b|(g<<8)|(r<<16)|0xff000000u;
+    const auto word_of=[&](UINT frame)->UINT64{
+        return flip_texel_of(format,colour_of(frame,0)!=0.0f,colour_of(frame,1)!=0.0f,colour_of(frame,2)!=0.0f);
     };
 
     // One READBACK buffer for a whole back buffer. At 1920x1200 that is about 9 MB; the probe reads a window of
@@ -190,7 +221,7 @@ inline HRESULT flip(Session& s){
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed{};UINT rows=0;UINT64 row_bytes=0,total=0;
     {const D3D12_RESOURCE_DESC d=back[0]->GetDesc();
      device->GetCopyableFootprints(&d,0,1,0,&placed,&rows,&row_bytes,&total);
-     const bool good=total && rows==height && row_bytes==UINT64{width}*4 && placed.Footprint.RowPitch>=width*4;
+     const bool good=total && rows==height && row_bytes==UINT64{width}*bpp && placed.Footprint.RowPitch>=width*bpp;
      char label[160]{};sprintf_s(label,"GetCopyableFootprints %ux%u row pitch %u rows %u row bytes %llu total %llu",
         width,height,placed.Footprint.RowPitch,rows,row_bytes,total);
      s.event("after",label,good?S_OK:E_UNEXPECTED);
@@ -244,23 +275,23 @@ inline HRESULT flip(Session& s){
             result=s.readback->Map(0,&whole_range,&data);
             if(FAILED(result) || !data){s.event("after","Map READBACK",FAILED(result)?result:E_POINTER);return FAILED(result)?result:E_POINTER;}
             const auto* bytes=static_cast<const BYTE*>(data)+placed.Offset;
-            const UINT32 expected=word_of(index);
+            const UINT64 expected=word_of(index);
             const UINT from_row=whole?0u:band_top,to_row=whole?height:band_top+band;
-            UINT64 good=0,texels=0;UINT32 found=expected+1u;
+            UINT64 good=0,texels=0;UINT64 found=expected+1u;
             for(UINT y=from_row;y<to_row;++y)for(UINT x=0;x<width;++x){
-                UINT32 w=0;memcpy(&w,bytes+SIZE_T{y}*placed.Footprint.RowPitch+SIZE_T{x}*4,sizeof(w));
+                UINT64 w=0;memcpy(&w,bytes+SIZE_T{y}*placed.Footprint.RowPitch+SIZE_T{x}*bpp,bpp);
                 if(!texels)found=w;
                 ++texels;good+=w==expected;
             }
             const D3D12_RANGE none{0,0};s.readback->Unmap(0,&none);
             if(good!=texels){
                 ++mismatched;
-                char label[176]{};sprintf_s(label,"Frame %u buffer %u rows %u..%u first word %08x expected %08x exact %llu of %llu",
+                char label[192]{};sprintf_s(label,"Frame %u buffer %u rows %u..%u first word %llx expected %llx exact %llu of %llu",
                     index+1,current,from_row,to_row,found,expected,good,texels);
                 s.event("after",label,E_FAIL);
                 if(SUCCEEDED(first_failure))first_failure=E_FAIL;
             }else if(whole){
-                char label[144]{};sprintf_s(label,"Frame %u buffer %u every texel of %ux%u is %08x",index+1,current,width,height,expected);
+                char label[144]{};sprintf_s(label,"Frame %u buffer %u every texel of %ux%u is %llx",index+1,current,width,height,expected);
                 s.event("after",label);
             }
         }
@@ -329,7 +360,7 @@ inline HRESULT flip(Session& s){
     // present is not a failure of this driver path, but it is not a presented frame either, so it fails the run
     // and says so in the trace: a covered fullscreen window is a lab condition to fix, not a result.
     if(SUCCEEDED(hr) && (presented!=frames || mismatched || refused))hr=E_FAIL;
-    {char label[144]{};sprintf_s(label,"Fullscreen flip: %u of %u frames presented exact at %ux%u in %u buffers",
-        presented,frames,width,height,buffers);s.event("after",label,hr);}
+    {char label[160]{};sprintf_s(label,"Fullscreen flip: %u of %u frames presented exact at %ux%u in %u buffers of %s",
+        presented,frames,width,height,buffers,chosen.name);s.event("after",label,hr);}
     s.copy_success=hr==S_OK;return hr;   // the guard restores the desktop and takes the window down
 }

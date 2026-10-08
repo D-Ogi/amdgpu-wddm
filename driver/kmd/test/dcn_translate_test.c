@@ -146,7 +146,9 @@ static void SurfaceFormats(void)
     s.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;s.Version=1;
     for(f=0;f<256;f++) {
         CHECK(WddmSurfaceFormatBpp(f,BC250_SURFACE_GDI)==PixelBytesBeforeTable(f));
-        CHECK(WddmSurfaceFormatBpp(f,BC250_SURFACE_SCANOUT)==(f==21 || f==22 ? 4ul : 0ul));
+        /* M15.14 (0.7.216.20): A8B8G8R8 (32) and A2B10G10R10 (31) scan out too; the flip programs the plane's
+         * pixel format (plane_format.h). FP16 (113) and A8 (28) stay composed only. */
+        CHECK(WddmSurfaceFormatBpp(f,BC250_SURFACE_SCANOUT)==(f==21 || f==22 || f==31 || f==32 ? 4ul : 0ul));
         CHECK(!WddmSurfaceFormatBpp(f,0));
     }
     /* Shapes: the DXGI shared-surface layout at 4 and 8 bytes a pixel, GDI's
@@ -192,7 +194,7 @@ static void SurfaceFormats(void)
     CHECK(WddmSurfaceFormatBpp(28,BC250_SURFACE_COMPOSED)==1 && WddmSurfaceFormatBpp(28,BC250_SURFACE_GDI)==1);
     CHECK(!WddmSurfaceFormatBpp(28,BC250_SURFACE_SCANOUT));
     CHECK(WddmSurfaceFormatBpp(31,BC250_SURFACE_COMPOSED)==4);
-    CHECK(!WddmSurfaceFormatBpp(31,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(31,BC250_SURFACE_SCANOUT));
+    CHECK(!WddmSurfaceFormatBpp(31,BC250_SURFACE_GDI) && WddmSurfaceFormatBpp(31,BC250_SURFACE_SCANOUT)==4);
     CHECK(WddmSurfaceFormatBpp(113,BC250_SURFACE_COMPOSED)==8);
     CHECK(!WddmSurfaceFormatBpp(113,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(113,BC250_SURFACE_SCANOUT));
     /* A8 (D3DDDIFMT_A8, DXGI A8_UNORM) has a COMPOSED row at 1 byte a pixel since the shared table gained it,
