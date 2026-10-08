@@ -48,7 +48,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs' |
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
@@ -243,6 +243,36 @@ if (-not $NoSmoke) {
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }
     Write-Host "  tuning dry runs: $($tune.Count) plans, 4 refusals, 10 usage errors"
+    # The graphics settings for games (src/GraphicsSettings.cs): a setting for all games, a value stored already, a
+    # value removed, one game's Vulkan value removed together with its key left empty, a game value next to its
+    # switches, and a reading without the keys (the BD-059 snapshot has none); then the usage errors.
+    $graphicsKey = 'HKLM\SOFTWARE\amdgpu-wddm\Graphics'
+    $w3Vulkan = 'HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe'
+    $gfx = [ordered]@{
+        'all-vsync'  = @(@('graphics-defaults', '--gfx', 'VSync=1,Anisotropy=16'), $tuned, 0, "set $graphicsKey VSync = 1 (DWord)", "set $graphicsKey Anisotropy = 16 (DWord)",
+                         'takes effect: the next time a game starts', 'undo: yes')
+        'all-stored' = @(@('graphics-defaults', '--gfx', 'FrameRateLimit=60'), $tuned, 3, 'refused: These settings for all games are stored already.')
+        'all-unset'  = @(@('graphics-defaults', '--gfx', 'FrameRateLimit=unset'), $tuned, 0, "delete $graphicsKey FrameRateLimit")
+        'game-unset' = @(@('game-profile', '--image', 'witcher3.exe', '--gfx', 'WsiRoute=unset'), $tuned, 0, "delete $w3Vulkan WsiRoute", "delete key $w3Vulkan (empty)",
+                         'takes effect: the next time witcher3.exe starts')
+        'game-both'  = @(@('game-profile', '--image', 'witcher3.exe', '--value', 'shader-model-68-off', '--gfx', 'MemoryOverflow=strict'), $tuned, 0,
+                         "set $w3Vulkan MemoryOverflow = `"strict`" (String)", 'shader-model-68-off')
+        'unreadable' = @(@('graphics-defaults', '--gfx', 'VSync=1'), $snapshot, 3, 'refused: The graphics settings cannot be read')
+    }
+    foreach ($e in $gfx.GetEnumerator()) {
+        $r = Invoke-DryRun (@('--action') + $e.Value[0] + @('--dry-run', '--snapshot', $e.Value[1])) "gfx-$($e.Key)"
+        if ($r.Code -ne $e.Value[2]) { throw "dry run gfx $($e.Key): exit $($r.Code), $($e.Value[2]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 3) {
+            if (-not $r.Text.Contains($want)) { throw "dry run gfx $($e.Key): '$want' missing: $($r.Text)" }
+        }
+    }
+    foreach ($bad in @(@('graphics-defaults'), @('graphics-defaults', '--gfx', 'VSync=2'), @('graphics-defaults', '--gfx', 'Bogus=1'), @('graphics-defaults', '--gfx', 'VSync=1,VSync=0'),
+            @('graphics-defaults', '--gfx', 'WsiRoute=GDI'), @('graphics-defaults', '--image', 'witcher3.exe', '--gfx', 'VSync=1'), @('reset-defaults', '--gfx', 'VSync=1'),
+            @('game-profile', '--image', 'witcher3.exe'), @('game-undo', '--image', 'witcher3.exe', '--gfx', 'VSync=1'))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $tuned)) ('usage-gfx-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
+    Write-Host "  graphics dry runs: $($gfx.Count) plans and refusals, 9 usage errors"
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'

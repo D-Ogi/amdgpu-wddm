@@ -149,7 +149,7 @@
 48	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
-74	tools/win/amdgpu_wddm_control/README.md
+64	tools/win/amdgpu_wddm_control/README.md
 7	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md
 39	tools/win/bc250mon/README.md

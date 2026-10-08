@@ -61,6 +61,27 @@ namespace AmdgpuWddmControl
             }
             _game = "witcher3.exe";
             _gameEdits["witcher3.exe"] = new Dictionary<string, bool> { { "cpu", true } };
+            // The graphics settings at their widest: a frame rate limit and the compatibility route for all games, an
+            // overlay value outside the contract (drawn as not valid), witcher3 with values of its own (one not
+            // valid), a changed shader model, and one edit in each scope. A fixture with keys of its own keeps them.
+            if (_snap.GfxKeys == null)
+            {
+                _snap.GfxKeys = new List<GfxKey>();
+                var all = new GfxKey { Path = GraphicsSettings.GraphicsPath, SubKeys = 1 };
+                all.Values["FrameRateLimit"] = GfxValue.Dword(60); all.Values["PerformanceOverlay"] = GfxValue.Dword(7);
+                var vk = new GfxKey { Path = GraphicsSettings.VulkanPath };
+                vk.Values["WsiRoute"] = GfxValue.Str("gdi");
+                var w3 = new GfxKey { Path = GraphicsSettings.AppPath(GraphicsSettings.GraphicsPath, "witcher3.exe") };
+                w3.Values["VSync"] = GfxValue.Dword(1); w3.Values["Anisotropy"] = GfxValue.Dword(7);
+                var w3vk = new GfxKey { Path = GraphicsSettings.AppPath(GraphicsSettings.VulkanPath, "witcher3.exe") };
+                w3vk.Values["MemoryOverflow"] = GfxValue.Str("strict");
+                _snap.GfxKeys.AddRange(new[] { all, vk, w3, w3vk });
+            }
+            _gfxGlobalEdits["MaxFrameLatency"] = "1";
+            _gfxGameEdits["witcher3.exe"] = new Dictionary<string, string> { { "FrameRateLimit", "144" } };
+            _smEdits["witcher3.exe"] = "6.7";
+            var monitor = DisplayInfo.Current().FirstOrDefault();
+            if (monitor != null) _displayEdits[monitor.Device] = new DisplayEdit { Width = monitor.Width, Height = monitor.Height, RefreshHz = monitor.RefreshHz, Scaling = "center" };
             _ceilEdited = true; _ceilEdit = 1800;
             // The fan card at its widest: the driver runs the standard curve (stored), the person has dragged a curve of
             // six points on the chart and applied a choice before (so Undo shows), and the ring marks 61.5 C at 72 % (the standard curve there).
