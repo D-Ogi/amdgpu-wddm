@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT
 // BD-099: the per-application VSync of the D3D11 shell as vertical-blank waits.
 //
-// The shell sets DXGIDDICB_PRESENT.SyncIntervalOverride, but the WDK declares the field only for
-// D3D_UMD_INTERFACE_VERSION_WDDM2_2_2 and later, and this shell offers the D3D11.1 and WDDM 2.0 interfaces
-// (ddi-negotiation.h). For an older interface the D3D11 runtime copies only the older, shorter structure into its own
-// DXGIDDICB_PRESENT (BD-099, d3d11.dll 10.0.22621). On x64 the copy holds SyncIntervalOverrideValid, which is in the
-// tail padding of the older structure, but not SyncIntervalOverride: each override arrives as interval 0, and on unit A
-// (59 Hz, d3d11bench in a window, a flip-discard swap chain) VSync 1 with the intervals 1 and 2 gave 873-928 frames/s.
-// On x86 the copy holds neither field. The DDI arguments do not show the interval of the application either:
-// FlipInterval is 0 and Flags is Blt for the intervals 0, 1 and 2. For VSync 1 the Present path therefore waits for the
-// missing vertical blanks after the Present callback (extra_vblanks in app-settings.h). With this wait, VSync 1 gave
-// 60 frames/s for the intervals 0, 1 and 2 (docs/design/per-app-graphics-settings.md).
+// The WDK declares DXGIDDICB_PRESENT.SyncIntervalOverride only for D3D_UMD_INTERFACE_VERSION_WDDM2_2_2 and later, and
+// this shell offers the D3D11.1 and WDDM 2.0 interfaces (ddi-negotiation.h). The D3D11 runtime gives the full Present
+// callback only from interface 0xB0023 (WDDM 2.2) build 5 (IS_DXGI1_6_1_BASE_FUNCTIONS in d3d10umddi.h). Below that,
+// d3d11.dll 10.0.22621 gives PresentCB_PreWDDM2_2, which copies only the older, shorter structure into its own
+// DXGIDDICB_PRESENT (BD-099). On x64 the copy holds SyncIntervalOverrideValid, which is in the tail padding of the older
+// structure, but not SyncIntervalOverride: each override arrives as interval 0. On unit A (59 Hz, d3d11bench in a
+// window, a flip-discard swap chain) an override for VSync 1 gave 873-928 frames/s for the intervals 1 and 2. On x86
+// the copy holds neither field. So the shell passes VSync 0 only (d3d11_runtime_override in app-settings.h). The DDI
+// arguments do not show the interval of the application either: FlipInterval is 0 and Flags is Blt for the intervals
+// 0, 1 and 2. For VSync 1 the Present path therefore waits for the missing vertical blanks after the Present callback
+// (extra_vblanks in app-settings.h), and the runtime keeps the interval of the application
+// (docs/design/per-app-graphics-settings.md).
 //
 // The output is the desktop output of this adapter that EnumDisplayDevices lists first, the primary one when it is on
 // this adapter. The DDI does not name the window, so on a desktop with several outputs of different refresh rates the

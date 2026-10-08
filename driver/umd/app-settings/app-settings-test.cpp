@@ -210,6 +210,10 @@ void output_tests() {
     CHECK(as::extra_vblanks(as::sync_override(s),0)==1 && as::extra_vblanks(as::sync_override(s),1)==0);
     CHECK(as::extra_vblanks(as::sync_override(s),2)==0 && as::extra_vblanks(as::SyncOverride{false,0u},0)==0);
     CHECK(as::extra_vblanks(as::SyncOverride{true,0u},0)==0 && as::extra_vblanks(as::SyncOverride{true,0u},1)==0);
+    // BD-099: the D3D11 shell passes VSync 0 to the runtime, and VSync 1 or no VSync not at all.
+    CHECK(!as::d3d11_runtime_override(as::sync_override(s)).valid);
+    CHECK(!as::d3d11_runtime_override(as::SyncOverride{false,0u}).valid);
+    CHECK(as::d3d11_runtime_override(as::SyncOverride{true,0u}).valid && as::d3d11_runtime_override(as::SyncOverride{true,0u}).interval==0);
     CHECK(as::frame_rate_limit(s)==60 && as::max_frame_latency(s)==2);
     CHECK(as::dxvk_config(s)=="d3d11.samplerAnisotropy = 16;dxvk.hud = fps,frametimes,gpuload,api");
     CHECK(as::vkd3d_anisotropy(s)=="16");

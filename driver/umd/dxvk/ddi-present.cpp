@@ -122,9 +122,10 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
         namespace as=amdgpu_wddm::app_settings;
         const as::Settings &settings=as::process_settings();
         const as::SyncOverride vsync=as::sync_override(settings);
+        const as::SyncOverride passed=as::d3d11_runtime_override(vsync);
         PresentSyncOverride sync{};
-        sync.valid=vsync.valid;
-        sync.interval=vsync.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
+        sync.valid=passed.valid;
+        sync.interval=passed.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
         const HRESULT hr=present_runtime(owner.bridge(),presented,
             destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission,sync);
         if (shadow && SUCCEEDED(hr)) {
@@ -141,8 +142,8 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
                 const HRESULT waited=wait_present_value(bridge,bridge.present_value-latency);
                 if (FAILED(waited) && ddi_device_status(waited)==D3DDDIERR_DEVICEREMOVED) return D3DDDIERR_DEVICEREMOVED;
             }
-            // BD-099: the runtime gets the VSync override of this interface as interval 0 (x64) or not at all (x86)
-            // (vblank-pacer.h). The shell waits here for the vertical blanks that the runtime does not give.
+            // BD-099: VSync 1 is not passed to the runtime (d3d11_runtime_override, vblank-pacer.h). The shell waits
+            // here for the vertical blanks that the application's interval does not give.
             owner.vblank_pacer().wait(as::extra_vblanks(vsync,unsigned(args->FlipInterval)));
             owner.frame_limiter().frame(as::frame_rate_limit(settings));
         }
