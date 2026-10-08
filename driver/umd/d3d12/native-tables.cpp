@@ -278,6 +278,10 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12D
         if(hr!=S_OK)return hr;
     }
     stage=5;
+    // The per-application VSync setting as the sync interval override of this present.
+    const auto vsync=amdgpu_wddm::app_settings::sync_override(amdgpu_wddm::app_settings::process_settings());
+    from.sync_override_valid=vsync.valid;
+    from.sync_override=vsync.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
     hr=fill_present(from,result,contexts,queues);
     if(hr==S_OK)stage=0;
     return hr;
@@ -288,6 +292,10 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     // The entry path experiment's frame clock and arms (engine-ddi.h, "Entry path"); nothing without its knobs.
     engine_ddi::entry_frame();
     const auto device=EntryPolicy::resolve(list);
+    // The per-application FrameRateLimit (docs/design/per-app-graphics-settings.md): the wait comes before the
+    // queue domain, so that no other queue operation of the device waits with this present.
+    if(device)device->frame_limiter.frame(
+        amdgpu_wddm::app_settings::frame_rate_limit(amdgpu_wddm::app_settings::process_settings()));
     // A queue operation: its context must not be executing on another thread (QueueDomainScope).
     QueueDomainScope serial(device);
     unsigned stage=1;

@@ -5,6 +5,7 @@
 #include <atomic>
 #include "adapter-contract.h"
 #include "ddi-trace.h"
+#include "../app-settings/app-settings.h"
 namespace native12 {
 struct AdapterCapsOwner;
 class DeviceEngine;
@@ -41,6 +42,9 @@ struct Device {
     std::atomic<bool> lost{false};
     // The queue domain: one queue operation of this device at a time (QueueDomainScope).
     SRWLOCK queue_domain=SRWLOCK_INIT;
+    // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md),
+    // taken before the queue domain.
+    amdgpu_wddm::app_settings::FrameLimiter frame_limiter;
     // Every failing DDI reports, also after the loss: pfnSetErrorCb fails the runtime's current API call
     // on the calling thread, so a call left unreported would return S_OK to the application. DDI threads
     // run at once; the callback is the runtime's per-call error state.
