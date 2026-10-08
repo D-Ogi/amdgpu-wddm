@@ -5,7 +5,8 @@ New-Item -ItemType Directory -Path $OutputDir | Out-Null
 $meta=[ordered]@{SchemaVersion=1;Status='error';CapturedUtc=[DateTime]::UtcNow.ToString('o');Error='Capture did not finish'}
 try {
  if((Invoke-RestMethod http://127.0.0.1:2250/state).stop){throw 'Owner STOP requested'}
- $tool='C:\BC250\m8\vulkaninfo.exe'
+ # The pinned vulkaninfo.exe ships next to this script, never from an old lab directory.
+ $tool=Join-Path $PSScriptRoot 'vulkaninfo.exe'
  # The ICD the adapter registers (display class key VulkanDriverName), not a pinned lab copy: the panel must
  # describe the driver that applications get. The library path comes from the manifest, next to it.
  $class=Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue |

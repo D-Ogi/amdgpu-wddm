@@ -50,19 +50,18 @@ function Stop-Requested{try{[bool](Invoke-RestMethod http://127.0.0.1:2250/flags
 # The KMD's own temperature; -1 means unreadable, never a temperature (066 and 067 read -1 from the other tool).
 # The release client (tester.10 on): HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe; "clock read"
 # goes to the client Resolve-KmdClient names, resolved at the first reading.
-# No Release key (the offline dry run on the development PC): no release client; Resolve-KmdClient falls back.
+# No Release key (the offline dry run on the development PC): no release client; Resolve-KmdClient refuses and
+# Temp-Now goes on to the overlay.
 $releaseRoot=[string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction SilentlyContinue).InstallRoot
 $script:ReleaseCli=if($releaseRoot){Join-Path $releaseRoot 'tools\bc250kmd_cli.exe'}else{''}
-# tester.10's release bc250kmd_cli.exe (built from the KMD branch) has no "health" or "clock" command. A query
-# form its usage does not list goes to the client that answered that form before the release layout (07147: health,
-# 07136: clock), until a release client carries every form (release/tester11-cli).
+# The installed release's bc250kmd_cli.exe is the only KMD client (owner, 2026-10-08: the harness needs nothing
+# from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
 function Resolve-KmdClient([string]$Release,[string]$Form){
+ if(!$Release -or !(Test-Path -LiteralPath $Release)){throw "No release KMD client '$Release' (HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe)"}
  $ErrorActionPreference='Continue'
  $usage=try{& $Release 2>&1|Out-String}catch{''}
  if($usage.Contains($Form)){return $Release}
- $legacy=if($Form -like 'clock *'){'C:\BC250\m9\candidate07136\client\bc250kmd_cli.exe'}else{'C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'}
- if(Test-Path -LiteralPath $legacy){return $legacy}
- throw "No KMD client answers '$Form': $Release does not list it and $legacy is absent"
+ throw "The release KMD client $Release does not list '$Form'"
 }
 $script:ClockCli=''
 # The release KMD (tester.11, 0.7.199.1) refuses "clock read" to a non-elevated caller (STATUS_ACCESS_DENIED), and the

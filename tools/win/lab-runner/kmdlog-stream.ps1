@@ -14,16 +14,14 @@ $cli=Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -
 $file=New-Object IO.FileStream($out,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
 $encoding=New-Object Text.UTF8Encoding($false)
 function Put([string]$text){$b=$encoding.GetBytes(('{0:HH:mm:ss.fff} {1}' -f [DateTime]::UtcNow,$text)+"`n");$file.Write($b,0,$b.Length);$file.Flush($true)}
-# tester.10's release bc250kmd_cli.exe (built from the KMD branch) has no "health" or "clock" command. A query
-# form its usage does not list goes to the client that answered that form before the release layout (07147: health,
-# 07136: clock), until a release client carries every form (release/tester11-cli).
+# The installed release's bc250kmd_cli.exe is the only KMD client (owner, 2026-10-08: the harness needs nothing
+# from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
 function Resolve-KmdClient([string]$Release,[string]$Form){
+ if(!$Release -or !(Test-Path -LiteralPath $Release)){throw "No release KMD client '$Release' (HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe)"}
  $ErrorActionPreference='Continue'
  $usage=try{& $Release 2>&1|Out-String}catch{''}
  if($usage.Contains($Form)){return $Release}
- $legacy=if($Form -like 'clock *'){'C:\BC250\m9\candidate07136\client\bc250kmd_cli.exe'}else{'C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'}
- if(Test-Path -LiteralPath $legacy){return $legacy}
- throw "No KMD client answers '$Form': $Release does not list it and $legacy is absent"
+ throw "The release KMD client $Release does not list '$Form'"
 }
 $clock=try{Resolve-KmdClient $cli 'clock read'}catch{Put ('lost clock client: '+$_.Exception.Message);$cli}
 Put ('clock client '+$clock)
