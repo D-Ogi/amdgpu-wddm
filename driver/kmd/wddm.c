@@ -2399,6 +2399,13 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // D5: a quiet log must never be read as a quiet ring, so the lines HotSubmitLog left out are counted here.
     GuardLog("wddm profile: hot submit log lines left out: %lu (HotSubmitLog off)",
              GfxHotSubmitLinesSkipped(Wddm->Device));
+    // BD-097: and the same for the paging submit line, which is rate limited rather than gated (log_rate.h).
+    {
+        ULONG submits = 0, skipped = 0, summaries = 0;
+        GfxPagingLogCounts(Wddm->Device, &submits, &skipped, &summaries);
+        GuardLog("wddm profile: paging submit lines: %lu submits, %lu with no line, %lu summary lines",
+                 submits, skipped, summaries);
+    }
     // KMD214: the VMID pool. RuleRefusals must be 0: a refusal is a root change of a VMID with a live job that
     // the rule check caught. Busy is the old wait, now only when no VMID of the pool is free.
     {

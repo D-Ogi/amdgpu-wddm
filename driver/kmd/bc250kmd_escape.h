@@ -1562,6 +1562,19 @@ typedef struct _BC250_ESCAPE_FENCE {
 #define BC250_LOG_RING_LINES 1024           // the whole ring: the head above plus a wrapping tail
 #define BC250_LOG_MAX_LINES 64              // lines one escape returns
 
+// The summary's own lines, beside the ring (0.7.216.23, BD-097). One summary is about 320 lines, 42 % of the
+// ring's rotating tail, so a caller that asks for one every few seconds used to rotate the whole ring in about
+// 12 s and push out the events every other line of the trail is kept for. BC250_ESCAPE_LOG_SUMMARY with `From`
+// BC250_LOG_FROM_SUMMARY therefore writes its block into storage of its own and leaves the ring alone (it adds
+// one rate-limited ring line that says where the block was taken). It answers SummaryFrom
+// BC250_LOG_SUMMARY_SEQ, and BC250_ESCAPE_GET_LOG reads that space exactly as it reads the ring: ask for the
+// sequence the driver answered with, page on with Next, and the read ends when Returned is 0. Sequence numbers
+// in the block are BC250_LOG_SUMMARY_SEQ + the line's index, so no line of it can be mistaken for a ring line.
+// A summary asked for with any other `From` (`bc250kmd_cli log summary`, which prints the whole ring) still
+// writes into the ring, where the block belongs between the lines it is read with.
+#define BC250_LOG_SUMMARY_LINES 512         // the block's room; lines past it are counted, never silently lost
+#define BC250_LOG_SUMMARY_SEQ 0xF0000000u   // the first sequence number of the block; above every ring sequence
+
 // As `From` with BC250_ESCAPE_LOG_SUMMARY: start at the first line this summary itself wrote, so that asking for
 // a summary does not reprint the whole run. The driver answers the real number in SummaryFrom either way.
 // `bc250kmd_cli log summary` does not send it (it prints the whole ring, which is what an evidence file wants);
@@ -1601,6 +1614,7 @@ typedef struct _BC250_ESCAPE_LOG {
     unsigned long Next;                     // out: the sequence to ask for next; Returned 0 means the end
     unsigned long HeadLines, RingLines;     // out: the shape of the ring, so the tool need not assume it
     unsigned long SummaryFrom;              // out, LOG_SUMMARY only: the sequence its first line was given
+                                            // (BC250_LOG_SUMMARY_SEQ when the block went beside the ring)
     BC250_LOG_LINE Lines[BC250_LOG_MAX_LINES];
 } BC250_ESCAPE_LOG;
 
