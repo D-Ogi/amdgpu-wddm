@@ -274,7 +274,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250Escape",
-       "source": "driver/kmd/display.c:362",
+       "source": "driver/kmd/display.c:371",
        "done": true,
        "reason": "does work"
       },
@@ -548,7 +548,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250SystemDisplayEnable",
-       "source": "driver/kmd/display.c:1152",
+       "source": "driver/kmd/display.c:1161",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -558,7 +558,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250SystemDisplayWrite",
-       "source": "driver/kmd/display.c:1178",
+       "source": "driver/kmd/display.c:1187",
        "done": true,
        "reason": "does work"
       },
