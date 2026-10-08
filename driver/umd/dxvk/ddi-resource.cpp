@@ -10,16 +10,18 @@ namespace {
 // One line for every change of the scan-out answer, as the D3D12 shell writes it (heap-import.cpp,
 // scanout_note): a trial must be able to read which clause decided each chain a game made. A game that
 // recreates the same chain at the same mode adds nothing; the budget bounds a game that alternates forever,
-// and the last line of the budget says that it ran out.
+// and the last line of the budget says that it ran out. mode is the primary descriptor's ModeDesc (0x0
+// without a descriptor).
 void scanout_primary_note(const ScanoutPrimaryDecision &decision,const ScanoutSource *source,bool displayable,
-    UINT vidpn_source,unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
+    UINT vidpn_source,unsigned dxgi,unsigned width,unsigned height,unsigned pitch,unsigned mode_width,
+    unsigned mode_height) noexcept {
     const unsigned long force_cpu=source ? source->force_cpu : 0;
     // The compositor's record as this decision read it; "not-read" when an earlier clause decided first.
     const char *desktop=decision.desktop_read ?
         bc250_desktop_route_text(decision.desktop_status,decision.desktop.route) : "not-read";
     const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,pitch,
         dxgi,decision.caps.flags,decision.caps.post_width,decision.caps.post_height,force_cpu,displayable ? 1u : 0u,
-        vidpn_source,decision.desktop.pid};
+        vidpn_source,decision.desktop.pid,mode_width,mode_height};
     unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
     for (const unsigned long long word:words)
         for (unsigned i=0;i<8;++i) key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
@@ -32,10 +34,11 @@ void scanout_primary_note(const ScanoutPrimaryDecision &decision,const ScanoutSo
     char text[320];
     std::snprintf(text,sizeof(text),
         "M15.14 d3d11 scanout %s switch=%s chain=%ux%u pitch=%u format=%u displayable=%u vidpn=%u caps=%08X "
-        "source=%ux%u forcecpu=%lu desktop=%s desktop_pid=%u%s\n",
+        "source=%ux%u mode=%ux%u forcecpu=%lu desktop=%s desktop_pid=%u%s\n",
         scanout_primary_reason_text(decision.reason),scanout_primary_switch_text(decision.switch_state),width,
         height,pitch,dxgi,displayable ? 1u : 0u,vidpn_source,decision.caps.flags,decision.caps.post_width,
-        decision.caps.post_height,force_cpu,desktop,decision.desktop.pid,left==1 ? " budget-spent" : "");
+        decision.caps.post_height,mode_width,mode_height,force_cpu,desktop,decision.desktop.pid,
+        left==1 ? " budget-spent" : "");
     OutputDebugStringA(text);
 }
 }
@@ -192,11 +195,15 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     // (runtime_surface_pitch rounds a row up to 256 bytes, as bc250_scanout_primary_pitch does), and the
     // rule checks that equality instead of assuming it. Only the record's SCANOUT bit is added, which moves
     // the allocation to the local segment; every other answer keeps the composed primary.
+    // C71: the mode the descriptor names, which the runtime sets after this create (scanout-primary.h).
     if (r.primary || r.displayable) {
+        const UINT mode_width=input.pPrimaryDesc ? input.pPrimaryDesc->ModeDesc.Width : 0;
+        const UINT mode_height=input.pPrimaryDesc ? input.pPrimaryDesc->ModeDesc.Height : 0;
         const ScanoutPrimaryDecision decision=scanout_primary_decide(scanout,r.primary,r.vidpn_source,
-            UINT(d.Format),d.Width,d.Height,pitch);
+            UINT(d.Format),d.Width,d.Height,pitch,mode_width,mode_height);
         if (decision.admitted) { r.scanout=true; r.texture.Access|=BC250_SURFACE_RESOURCE_SCANOUT; }
-        scanout_primary_note(decision,scanout,r.displayable,r.vidpn_source,UINT(d.Format),d.Width,d.Height,pitch);
+        scanout_primary_note(decision,scanout,r.displayable,r.vidpn_source,UINT(d.Format),d.Width,d.Height,pitch,
+                             mode_width,mode_height);
     }
     request=r; desc=result; return S_OK;
 }

@@ -260,10 +260,11 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
   commit, the trailer still has the old mode, so the router's front answers FALSE at each
   `CheckDirectFlipSupport` and the compositor composes the chain with the GPU. After the commit, both the
   front and `Bc250ScanoutAdmit` compare the chain with the new mode. A list that the shell cannot read
-  (`failed`) or that does not offer the geometry (`not-offered`) keeps the composed primary. The D3D11
-  shell keeps the committed mode only: a D3D11 primary names its mode in `pPrimaryDesc`, and the D3D11
-  arm will use that name. No lab run has measured a flip at a committed mode that is not the POST mode
-  yet.
+  (`failed`) or that does not offer the geometry (`not-offered`) keeps the composed primary. A D3D11
+  primary names its own mode in `pPrimaryDesc->ModeDesc`. `D3DKMT_SETDISPLAYMODE` takes that primary as
+  input, so the runtime sets this mode after the create. The D3D11 shell therefore compares the chain
+  with that mode and does not read the list (`mode=WxH` in its line). No lab run has measured a flip at a
+  committed mode that is not the POST mode yet.
 - **Multi-plane overlay.** There is no `DxgkDdiCheckMultiPlaneOverlaySupport` and no plane path, so the
   "DWM composes again when a window overlaps" half of M15.14 is handled by the OS falling back to
   composition, not by a driver plane.

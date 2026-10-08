@@ -280,7 +280,12 @@ environment, or the REG_DWORD `ScanoutPrimary=1` under `HKLM\SOFTWARE\amdgpu-wdd
 turns it on. The environment wins over the machine value, and any other value is off.
 The clauses are those of the D3D12 shell (`driver/contract/bc250_scanout_primary.h`):
 source mode geometry from the scan-out caps trailer of each create, the format row,
-the pitch and the router's DwmForceCpu. This shell adds two: the buffer must have a
+the pitch and the router's DwmForceCpu. The runtime creates the primary of a mode
+change before it sets that mode, so the trailer still names the previous mode at the
+create (session 480). Thus a chain also passes the geometry clause when the primary
+descriptor's `ModeDesc` has the chain's width and height (`mode=WxH` in the line).
+The flips still wait for the commit, because the router's front and the kernel
+driver compare each flip with the committed mode. This shell adds two: the buffer must have a
 primary descriptor, and the descriptor must name video present source 0. A swap-chain
 buffer without a primary descriptor (a DISPLAYABLE window buffer, M746) cannot ask,
 because the record's PRIMARY bit comes from that descriptor. Each change of the answer

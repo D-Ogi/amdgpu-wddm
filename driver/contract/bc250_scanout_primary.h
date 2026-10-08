@@ -76,7 +76,8 @@ static __inline unsigned int bc250_scanout_primary_pitch(unsigned int width, uns
 // format, width, height and pitch the chain's buffer as the shell describes it to the kernel driver, and
 // offered_mode whether width x height is a source mode that the kernel driver offers for this video present
 // source now (the D3D12 shell asks D3DKMTGetDisplayModeList, and only for a chain that is not the committed
-// mode; 0 keeps the committed mode as the only geometry).
+// mode; the D3D11 shell compares the primary descriptor's ModeDesc, the mode the runtime sets with this
+// primary; 0 keeps the committed mode as the only geometry).
 static __inline unsigned int bc250_scanout_primary_rule(const struct bc250_scanout_caps* caps,
     unsigned long force_cpu, int desktop_gpu, unsigned int dxgi, unsigned int width, unsigned int height,
     unsigned int pitch, int offered_mode)

@@ -144,10 +144,12 @@ struct ScanoutPrimaryDecision {
     bc250_desktop_route desktop{};
 };
 // primary is whether the runtime gave a primary descriptor, vidpn_source the descriptor's source, dxgi the
-// chain's DXGI format, width, height and pitch the LB7A description this shell writes. The switch is asked
-// before the adapter query, so a start with the request off makes no query at all.
+// chain's DXGI format, width, height and pitch the LB7A description this shell writes, and mode_width and
+// mode_height the descriptor's ModeDesc (0 without a descriptor). The switch is asked before the adapter
+// query, so a start with the request off makes no query at all.
 inline ScanoutPrimaryDecision scanout_primary_decide(const ScanoutSource *source,bool primary,UINT vidpn_source,
-    unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
+    unsigned dxgi,unsigned width,unsigned height,unsigned pitch,unsigned mode_width=0,
+    unsigned mode_height=0) noexcept {
     ScanoutPrimaryDecision out{};
     if (!source) return out;
     out.switch_state=source->switch_state;
@@ -157,10 +159,13 @@ inline ScanoutPrimaryDecision scanout_primary_decide(const ScanoutSource *source
     out.caps=query_scanout_caps(source->adapter,source->query);
     out.desktop_read=source->desktop_route!=nullptr;
     if (out.desktop_read) out.desktop_status=source->desktop_route(&out.desktop);
-    // offered_mode 0: this shell keeps the committed mode as the only geometry until the D3D11 arm measures
-    // which shape a D3D11 chain has (C71 is the D3D12 shell's; a D3D11 primary names its mode in pPrimaryDesc).
+    // C71: D3DKMT_SETDISPLAYMODE takes the new mode's primary as input, so the runtime creates that primary
+    // before the mode commit and the trailer still names the previous mode. A D3D11 primary names its own
+    // mode in the descriptor's ModeDesc, and the runtime sets only a mode that the kernel driver offers: that
+    // mode at the chain's geometry is the offered mode of the shared rule. The flips still wait for the commit.
+    const int offered_mode=width && mode_width==width && mode_height==height;
     switch (bc250_scanout_primary_rule(&out.caps,source->force_cpu,bc250_desktop_route_gpu(out.desktop_status,&out.desktop),
-                                       dxgi,width,height,pitch,0)) {
+                                       dxgi,width,height,pitch,offered_mode)) {
     case BC250_SCANOUT_PRIMARY_ADMITTED: out.reason=ScanoutPrimaryReason::Admitted; out.admitted=true; break;
     case BC250_SCANOUT_PRIMARY_FORCE_CPU: out.reason=ScanoutPrimaryReason::ForceCpu; break;
     case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE: out.reason=ScanoutPrimaryReason::DesktopRoute; break;

@@ -570,6 +570,31 @@ void scanout_primary() {
     CHECK(convert(&on)==S_OK && request.scanout && request.surface.Height==1080 && request.surface.Pitch==7680);
     trailerHeight=1200;
     CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1080,7680).reason==R::SourceGeometry);
+    // C71 (session 480): the runtime creates the primary of a mode change before it sets the mode, so the
+    // trailer still names the previous mode. The descriptor's own ModeDesc at the chain's geometry admits the
+    // chain; a ModeDesc of another geometry, or none, does not, and the named mode overrides no other clause.
+    primary.ModeDesc.Width=1920; primary.ModeDesc.Height=1080;
+    CHECK(convert(&on)==S_OK && request.scanout && request.surface.Height==1080 && request.surface.Pitch==7680);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1080,7680,1920,1080).reason==R::Admitted);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1080,7680,1920,1200).reason==R::SourceGeometry);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1080,7680,1080,1920).reason==R::SourceGeometry);
+    CHECK(scanout_primary_decide(&on,true,0,87,0,1080,7680,0,1080).reason==R::SourceGeometry);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,0,7680,1920,0).reason==R::SourceGeometry);
+    CHECK(composed(&cpu) && scanout_primary_decide(&cpu,true,0,87,1920,1080,7680,1920,1080).reason==R::ForceCpu);
+    CHECK(composed(&unread) && scanout_primary_decide(&unread,true,0,87,1920,1080,7680,1920,1080).reason==R::DesktopRoute);
+    CHECK(scanout_primary_decide(&off,true,0,87,1920,1080,7680,1920,1080).reason==R::Off);
+    CHECK(scanout_primary_decide(&on,false,0,87,1920,1080,7680,1920,1080).reason==R::NotPrimary);
+    CHECK(scanout_primary_decide(&on,true,1,87,1920,1080,7680,1920,1080).reason==R::VidPnSource);
+    CHECK(scanout_primary_decide(&on,true,0,UINT(DXGI_FORMAT_R10G10B10A2_UNORM),1920,1080,7680,1920,1080).reason==
+          R::Format);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1080,7936,1920,1080).reason==R::Pitch);
+    trailerFlags=0;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1080,7680,1920,1080).reason==R::CapsClosed);
+    trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    primary.ModeDesc.Height=1200;
+    CHECK(composed(&on));
+    primary.ModeDesc={};
+    CHECK(composed(&on));
     mip.TexelHeight=1200;
     // A 10-bit chain keeps its composed primary (HDR-ready Present, owner 2026-09-29), and so does the sRGB
     // view, because the front compares the storage column alone and would refuse the pair.
