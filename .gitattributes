@@ -40,3 +40,9 @@ tools/win/etw/testdata/*.txt -text
 
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary
+
+# HIP device sources of compute/hip, and the committed gfx1013 code object of the layer-2 host
+# test. The code object is hash pinned in compute/hip/tests/data/PROVENANCE-runtime.txt, so it
+# is stored byte for byte.
+*.hip text eol=lf
+compute/hip/tests/data/*.fatbin -text

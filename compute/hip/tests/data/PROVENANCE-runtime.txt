@@ -1,0 +1,44 @@
+PROVENANCE of the test fixtures of layer 2 (M16 route B, branch m16/hip-runtime)
+================================================================================
+
+These files are our own build output. No third party owns them. They are committed because the
+host test of layer 2 must run in a build gate on a machine with no AMDGPU compiler.
+
+hip_test_kernels.hip
+  Source of the fixture. Three kernels with C linkage: vadd, scale and reduce256. C linkage
+  keeps the device names in the metadata readable, because the test calls
+  __hipRegisterFunction by hand and a mangled C++ name would move with every change of a
+  parameter type.
+
+hip_test_kernels.gfx1013.fatbin
+  A clang offload bundle with two entries: the host entry of size 0 and the gfx1013 code
+  object. Size 12064 bytes.
+  sha256 64390A42D7FE06204A86008171219FCD5FCBADF2A95404A568F6B1DBD40EA08E
+
+  Compiler: clang 22.1.8, the portable MSYS2 package at
+  toolchain\llvm-amdgpu-22.1.8\mingw64\bin (provenance and hashes of the package itself are in
+  the research directory of the M16 spike).
+  clang version 22.1.8 (https://github.com/msys2/MINGW-packages d34feaaa1d0aff624c870910b6f2589aa40d20de)
+
+  Command, run from the repository root:
+    clang -x hip --offload-arch=gfx1013 --offload-device-only -nogpuinc -nogpulib -O2
+          -std=c++17 -I compute/hip/include
+          -o compute/hip/tests/data/hip_test_kernels.gfx1013.fatbin
+          compute/hip/tests/data/hip_test_kernels.hip
+
+  -nogpuinc and -nogpulib keep the ROCm headers and the ROCm device library out, so the result
+  depends on no AMD installation. The kernels call no function of the device library.
+  --no-gpu-bundle-output is left out on purpose here: the test needs the bundle, because the
+  bundle is what __hipRegisterFatBinary receives in a real program.
+
+MEASURED properties of the code object, which the host test asserts:
+  ELF64, OS/ABI AMDGPU_HSA (0x40), ABIVersion 4 (code object v6), machine EM_AMDGPU,
+  e_flags 0x142 (EF_AMDGPU_MACH_AMDGCN_GFX1013 0x42 with XNACK_ANY).
+  vadd:      kernarg_segment_size 288, align 8, four explicit arguments at 0, 8, 16 and 24,
+             hidden_block_count_x at 32, hidden_group_size_x at 44, group segment 0.
+  scale:     kernarg_segment_size 272, arguments at 0 (pointer), 8 (float), 12 (int).
+  reduce256: kernarg_segment_size 16, group_segment_fixed_size 1024.
+
+To rebuild and compare, run compute/hip/build-runtime.ps1 with the AMDGPU clang present and
+compare the hash above. A different clang writes a different object; that is a new fixture and
+a new line here, not a silent replacement.
