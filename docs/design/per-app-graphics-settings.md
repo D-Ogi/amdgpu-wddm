@@ -122,7 +122,9 @@ frames in flight of such an application, never raise them.
   The snapshot names each monitored fence of the device that the GPU has not reached yet, so everything that
   every context of the device submitted before that Present has retired once the snapshot is retired. The shell
   keeps a ring of N snapshots, one per device, and before Present N returns it waits for the snapshot of Present
-  N-k. The code is `FrameLatency` in `driver/umd/d3d12/frame-latency.h`.
+  N-k. The code is `FrameLatency` in `driver/umd/d3d12/frame-latency.h`. The snapshot covers the work that
+  produced that frame. It does not cover the kernel present, which the runtime makes after the shell returns, so
+  the number of flips that the compositor still holds stays a matter for DXGI.
 
 The D3D12 wait runs after the shell releases the device's queue domain, as the frame rate limit runs before it
 (`device-state.h`, `QueueDomainScope`), so no other queue operation of the device waits with the present. A
@@ -130,8 +132,12 @@ refused present gets no wait. The wait polls the snapshot: a short spin first, t
 a high-resolution timer. It gives up after one second, counts the event and lets the frame through, so a fence
 that never retires cannot stop the application inside the driver. After 8 frames that spend the whole budget the
 gate stops for the life of the device. A fence that never retires would otherwise cost a budget in every Present,
-which is one frame per second for as long as the application runs. A lost device reports the value
-`0xFFFFFFFFFFFFFFFF` on its fences, which counts as retired, so a loss also ends the wait.
+which is one frame per second for as long as the application runs.
+
+A lost device reports the value `0xFFFFFFFFFFFFFFFF` on the fences that the kernel wrote, and that value counts as
+retired. A loss that leaves a fence below its published value instead ends the wait on the budget, and the stop
+above ends the gate. The shell's own flag for a lost device is not read here, because the gate has no business
+failing a present.
 
 One device that presents on several queues shares one ring, as it shares one frame rate clock. The setting
 belongs to the application, not to one swap chain.
