@@ -366,6 +366,20 @@ HRESULT RuntimeHeapImports::refuse(const char* why,HRESULT hr,const engine_ddi::
                 r?r->SampleDesc.Count:0u,r?unsigned(r->Layout):0u,r?unsigned(r->Flags):0u);
     return hr;
 }
+// BD-101: a refusal decided after the allocation and the mapping exist, where the request's own shape is no
+// longer the answer - the address is. The caller releases the record as it did before; this records the reason
+// and writes the one line, so that a refusal at this stage is as readable as one taken before the callback. It
+// is deliberately a second function and not a widening of refuse(): refuse() names a check of the request and
+// may run only before anything was allocated, and the two must not be confused in a log.
+HRESULT RuntimeHeapImports::refuse_address(const char* why,HRESULT hr,uint64_t bytes,uint64_t alignment,
+                                           uint64_t address) noexcept {
+    report_.refusal=why;
+    ddi_refusal("heap import refused (%s): %08lx; %llu bytes, alignment %llu, address %llx (off by %llu)",
+                why,static_cast<unsigned long>(hr),static_cast<unsigned long long>(bytes),
+                static_cast<unsigned long long>(alignment),static_cast<unsigned long long>(address),
+                static_cast<unsigned long long>(alignment?address&(alignment-1):0ull));
+    return hr;
+}
 
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
@@ -576,7 +590,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // device, which is the fail-fast part and has no switch.
     const bool share_required=hr==E_INVALIDARG && shareable && !surface && !ddi_experiment("shared-create-retry-off");
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
-    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
+    // BD-101: the mapping carries the request's alignment, so a heap that asks for more than the address the
+    // runtime picks by itself (the 4 MiB MSAA placement alignment) is mapped inside a reservation at an
+    // aligned offset instead of being refused below.
+    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping,alignment);}
     // The runtime makes a new heap resident only after this DDI returns, on its own paging queue,
     // and makes only its queues' contexts wait for that. The engine also submits on contexts the
     // runtime never sees, so its VA must not leave here before the allocation is resident and its
@@ -588,7 +605,14 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // The mapping itself was accepted: let it complete so that the release below can free it.
         UINT64 ignored=0;(void)paging_.wait_ready(record->mapping,&ignored);
     }
-    if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
+    if(hr==S_OK){
+        report_.stage=ImportStage::AddressAlignment;report_.address=address;
+        // The backstop of the reservation route above: the address must satisfy the request whichever way it
+        // was obtained. BD-101: this check held and returned hr directly, so report_.refusal stayed empty and
+        // no line said which stage declined; it now answers through the module's refusal, like every other one.
+        if(address&(alignment-1))
+            hr=refuse_address("address alignment",E_INVALIDARG,allocation.held,alignment,address);
+    }
     if(hr==S_OK){
         report_.stage=ImportStage::Import;
         bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
@@ -677,14 +701,18 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     }
     HRESULT hr=record->allocation.adopt(request->allocation);
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
-    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping);}
+    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping,alignment);}
     if(hr==S_OK){report_.stage=ImportStage::Resident;hr=paging_.make_resident(record->mapping);}
     UINT64 address=0;
     if(hr==S_OK){report_.stage=ImportStage::MapReady;hr=paging_.wait_ready(record->mapping,&address);}
     else if(report_.stage==ImportStage::Resident){
         UINT64 ignored=0;(void)paging_.wait_ready(record->mapping,&ignored);
     }
-    if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
+    if(hr==S_OK){
+        report_.stage=ImportStage::AddressAlignment;report_.address=address;
+        if(address&(alignment-1))
+            hr=refuse_address("address alignment",E_INVALIDARG,request->byte_size,alignment,address);
+    }
     if(hr==S_OK){
         report_.stage=ImportStage::Import;
         bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
