@@ -43,10 +43,14 @@ if (Test-Path -LiteralPath $previous) {
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+# /Brepro on cl and link: a content hash where they write a time. /FC with /d1trimfile: __FILE__ and the name that
+# MSVC gives an anonymous namespace (a hash of the source path) see only the path below the repository. Two builds
+# of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
+$repro = @('/Brepro', '/FC', "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
+& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d11bench.obj",
-    "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link',
+    "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link', '/Brepro',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
