@@ -160,6 +160,11 @@ for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/m
 `amdgpu-wddm/icd-v3-0004b`, dec624fe "radv: Exclude the C runtime the build does not use, by b_vscrt"): before it,
 the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120).
 
+`-Config radv-system` is the `radv` set without `-Db_ndebug=true`. It builds the system Vulkan ICD
+(`payload/vulkan/vulkan_radeon.dll`), whose Mesa line (`2732f9c8`, `308a5e33`) was built with this set. That
+line does not build with `NDEBUG`: line 714 of `src/compiler/spirv/vtn_cmat.c` declares a variable that only
+`assert` reads, and Mesa makes warning C4189 an error.
+
 #### Host gate after every pull of the Mesa fork
 
 Run both RADV host tests on the new build before the ICD goes to the lab. They need no GPU and no lab unit:
