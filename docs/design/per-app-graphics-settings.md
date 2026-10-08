@@ -128,7 +128,9 @@ The D3D12 wait runs after the shell releases the device's queue domain, as the f
 (`device-state.h`, `QueueDomainScope`), so no other queue operation of the device waits with the present. A
 refused present gets no wait. The wait polls the snapshot: a short spin first, then sleeps of 250 microseconds on
 a high-resolution timer. It gives up after one second, counts the event and lets the frame through, so a fence
-that never retires cannot stop the application inside the driver. A lost device reports the value
+that never retires cannot stop the application inside the driver. After 8 frames that spend the whole budget the
+gate stops for the life of the device. A fence that never retires would otherwise cost a budget in every Present,
+which is one frame per second for as long as the application runs. A lost device reports the value
 `0xFFFFFFFFFFFFFFFF` on its fences, which counts as retired, so a loss also ends the wait.
 
 One device that presents on several queues shares one ring, as it shares one frame rate clock. The setting
@@ -139,20 +141,21 @@ every native submit (`radv_wddm2_cs.c`, `BC250_HOST_PUBLISH_PROGRESS`). An ICD t
 empty snapshot, which is retired at once, so the setting does nothing. The lab check reads the witness line to
 prove that the gate waited, and not only that the value reached the shell.
 
-The D3D12 shell writes three lines at most per process, one of each kind, as the witness that the gate is in
-force. Each line goes to the log of `AMDGPU_WDDM_LOG` and to the debugger, as the settings line does, so a lab
-trial reads them from the log file:
+The D3D12 shell writes four lines at most per process, one of each kind, as the witness that the gate is in force.
+Each line goes to the log of `AMDGPU_WDDM_LOG` and to the debugger, as the settings line does, so a lab trial
+reads them from the log file:
 
 ```
 BC250 MaxFrameLatency=1: the present waited after 9 checks (frame 42)
 BC250 MaxFrameLatency=1: the present gave up after 4005 checks (frame 1180)
 BC250 MaxFrameLatency=1: the present proved nothing: more unretired fences than the snapshot holds (frame 7)
+BC250 MaxFrameLatency=1: the gate stopped: too many frames did not finish inside the budget (frame 1310)
 ```
 
 The first line is the proof that the gate is in force. The second line is a defect report: a frame did not finish
 within one second. The third line says that the device had more unretired fences than the snapshot holds (8), so
 the gate could prove nothing and let that frame through. It separates a gate that found the frame finished from a
-gate that could not look.
+gate that could not look. The fourth line says that the gate stopped itself.
 
 ### PerformanceOverlay
 

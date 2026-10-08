@@ -30,6 +30,10 @@ inline constexpr uint32_t kMaxFrameLatencySlots=3;      // the setting's range i
 inline constexpr uint64_t kFrameLatencyBudgetUs=1000000;// the wait gives up after this, and never fails a Present
 inline constexpr uint64_t kFrameLatencySpins=8;         // polls that spin before the first sleep
 inline constexpr uint32_t kFrameLatencySleepUs=250;     // one sleep of the poll loop
+// Frames that spent the whole budget, after which the gate stops for the life of the device. A fence that never
+// retires would otherwise cost a full budget in every Present, which turns the application into one frame per
+// second for as long as it runs. The gate is a convenience of one setting, so it steps aside instead.
+inline constexpr uint64_t kFrameLatencyGiveUps=8;
 
 // The ring slot of frame `frame` in a ring of `latency` slots. The slot holds frame `frame-latency`, which the
 // gate reads, and then takes this frame. A ring of exactly `latency` slots is enough because the read comes
@@ -88,10 +92,11 @@ public:
     ~FrameLatency() {if(timer_)CloseHandle(timer_);}
     FrameLatency(const FrameLatency&)=delete;
     FrameLatency& operator=(const FrameLatency&)=delete;
-    // One Present. latency 0 or a source that cannot answer: nothing is taken and nothing waits.
+    // One Present. latency 0, a source that cannot answer, or a gate that stopped itself: nothing is taken and
+    // nothing waits.
     void frame(const ProgressSource& source,uint32_t latency,
                uint64_t budget_us=kFrameLatencyBudgetUs) noexcept {
-        if(!latency || !source.usable())return;
+        if(!latency || stopped_.load(std::memory_order_relaxed) || !source.usable())return;
         if(latency>kMaxFrameLatencySlots)latency=kMaxFrameLatencySlots;
         // Outside the lock: the snapshot takes the progress source's own lock.
         ProgressSnapshot taken{};
@@ -136,12 +141,15 @@ public:
             note(Note::Waited,latency,tail);
         }
         if(!result.retired){
-            timeouts_.fetch_add(1,std::memory_order_relaxed);
+            const uint64_t spent=timeouts_.fetch_add(1,std::memory_order_relaxed)+1;
             std::snprintf(tail,sizeof(tail),"the present gave up after %llu checks",
                 static_cast<unsigned long long>(result.polls));
             note(Note::GaveUp,latency,tail);
+            if(spent>=kFrameLatencyGiveUps && !stopped_.exchange(true,std::memory_order_relaxed))
+                note(Note::Stopped,latency,"the gate stopped: too many frames did not finish inside the budget");
         }
     }
+    bool stopped() const noexcept {return stopped_.load(std::memory_order_relaxed);}
     uint64_t frames() const noexcept {return frames_.load(std::memory_order_relaxed);}
     uint64_t waits() const noexcept {return waits_.load(std::memory_order_relaxed);}
     uint64_t polls() const noexcept {return polls_.load(std::memory_order_relaxed);}
@@ -149,7 +157,7 @@ public:
     uint64_t skipped() const noexcept {return skipped_.load(std::memory_order_relaxed);}
 private:
     struct Slot {ProgressSnapshot progress{};bool recorded{};};
-    enum class Note : unsigned {Waited,GaveUp,Unproven,Count};
+    enum class Note : unsigned {Waited,GaveUp,Unproven,Stopped,Count};
     // The witness of the gate on the lab, bounded: the first event of each kind in the process, on both sinks.
     void note(Note kind,uint32_t latency,const char* what) noexcept {
         static std::atomic<unsigned> seen[static_cast<unsigned>(Note::Count)]{};
@@ -166,6 +174,7 @@ private:
     uint32_t latency_{};                        // the modulus the ring holds (0: nothing recorded yet)
     HANDLE timer_{};
     bool timer_tried_{};
+    std::atomic<bool> stopped_{false};          // kFrameLatencyGiveUps frames spent their budget: no gate again
     std::atomic<uint64_t> frames_{0},waits_{0},polls_{0},timeouts_{0},skipped_{0};
 };
 }

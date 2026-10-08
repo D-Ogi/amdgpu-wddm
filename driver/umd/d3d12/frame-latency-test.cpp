@@ -169,7 +169,21 @@ void test_ring() {
         // overshoot is one sleep. 500 ms leaves room for a loaded machine and still fails a run that waited the
         // default budget.
         check(spent<500000u,"FrameLatency: the timeout keeps the present inside the budget it was given");
+        check(!gate.stopped(),"FrameLatency: one timeout does not stop the gate");
         std::printf("note: the 4 ms budget took %llu us\n",static_cast<unsigned long long>(spent));
+    }
+    // A fence that never retires: the gate gives up kFrameLatencyGiveUps times and then stops for this device,
+    // instead of spending a budget in every Present for as long as the application runs.
+    {
+        FakeProgress fake;fake.answer=false;
+        native12::FrameLatency gate;
+        for(int i=0;i<40 && !gate.stopped();++i)gate.frame(fake.source(),1,1000);
+        check(gate.stopped() && gate.timeouts()==native12::kFrameLatencyGiveUps,
+              "FrameLatency: the gate stops after the given number of frames gave up");
+        const unsigned asked=fake.asked,snapshots=fake.snapshots;
+        for(int i=0;i<5;++i)gate.frame(fake.source(),1,1000);
+        check(fake.asked==asked && fake.snapshots==snapshots,
+              "FrameLatency: a stopped gate takes no snapshot and asks nothing");
     }
     // An incomplete snapshot proves nothing, so it is not a gate: no wait, and the frame is counted as skipped.
     {
@@ -206,13 +220,14 @@ void test_witness_lines() {
     check(holds("the present waited after"),"witness: the wait reaches the log sink");
     check(holds("the present gave up after"),"witness: the timeout reaches the log sink");
     check(holds("the present proved nothing"),"witness: an unproven gate reaches the log sink");
+    check(holds("the gate stopped"),"witness: the stop reaches the log sink");
     check(holds("BC250 MaxFrameLatency=1:"),"witness: every line names the setting and its value");
-    // Bounded: one line of each kind, whatever the number of events.
+    // Bounded: one line of each of the four kinds, whatever the number of events.
     size_t lines=0;
     for(size_t at=text.find("BC250 MaxFrameLatency=");at!=std::string::npos;at=text.find("BC250 MaxFrameLatency=",at+1))
         ++lines;
-    check(lines==3,"witness: three lines in the whole process, one of each kind");
-    if(lines!=3)std::printf("note: the log holds %zu lines:\n%s",lines,text.c_str());
+    check(lines==4,"witness: four lines in the whole process, one of each kind");
+    if(lines!=4)std::printf("note: the log holds %zu lines:\n%s",lines,text.c_str());
 }
 }
 
