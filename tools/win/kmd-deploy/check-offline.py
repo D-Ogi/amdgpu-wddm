@@ -35,16 +35,26 @@ CLIENT_BY_PATH = re.compile(r'(?i)[a-z]:\\[^\s"\']*bc250kmd_cli\.exe')
 SCANNED = ('.py', '.ps1', '.md', '.json', '.cpp', '.c')
 # This file states both rules; every other file of the kit must satisfy them.
 SCAN_EXEMPT = ('check-offline.py',)
+# The kit's own files: its Python drivers and its README, and everything under these three directories. The
+# operator copy holds more beside them (its frozen attempts, its host-test output and its own one-off scripts).
+# A frozen attempt is never rewritten: it names what the lab was when it was frozen, and that is its purpose.
+SCAN_DIRECTORIES = ('ops', 'template', 'tools')
+
+
+def kit_files():
+    """The kit's own files with a text suffix this gate reads, in one sorted list."""
+    found = [path for path in BASE.glob('*.py')] + [BASE / 'README.md']
+    for name in SCAN_DIRECTORIES:
+        found += [path for path in (BASE / name).rglob('*')
+                  if path.is_file() and '__pycache__' not in path.parts]
+    return sorted(path for path in found
+                  if path.is_file() and path.suffix.lower() in SCANNED and path.name not in SCAN_EXEMPT)
 
 
 def legacy_paths():
     """Every kit file that names an old lab directory or a KMD client by path, as 'name:line rule' rows."""
     hits = []
-    for path in sorted(BASE.rglob('*')):
-        if not path.is_file() or path.suffix.lower() not in SCANNED or path.name in SCAN_EXEMPT:
-            continue
-        if '__pycache__' in path.parts:
-            continue
+    for path in kit_files():
         rel = path.relative_to(BASE).as_posix()
         for number, line in enumerate(path.read_text(encoding='utf-8', errors='replace').splitlines(), 1):
             if LEGACY_DIRECTORY.search(line):
