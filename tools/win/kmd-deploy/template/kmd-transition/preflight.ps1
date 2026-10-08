@@ -2,9 +2,14 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\registration.ps1"
 . "$PSScriptRoot\hang-detector.ps1"
+. "$PSScriptRoot\release.ps1"
 $result = [ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); read_only = $true }
 $result.stop = [bool](Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 3).stop
 if ($result.stop) { throw 'Owner STOP requested' }
+# Every KMD query of this capture goes through the installed release's client, with its usage read once.
+$cli = Resolve-KmdClient (Get-KmdReleaseClientPath) @('info', 'health read', 'clock read', 'log')
+$result.cli = $cli
+$result.cli_sha256 = (Get-FileHash -LiteralPath $cli).Hash
 $hashes = Get-Content "$PSScriptRoot\..\package-hashes.json" -Raw | ConvertFrom-Json
 $rollback = $hashes.$KmdRollbackLabel
 if ($rollback.'bc250kmd.sys' -ne $KmdRollbackSysSha256 -or $rollback.'bc250kmd.inf' -ne $KmdRollbackInfSha256 -or $rollback.'bc250kmd.cat' -ne $KmdRollbackCatSha256) { throw 'Rollback package pins changed' }
@@ -46,11 +51,11 @@ $result.test_processes = @(Get-Process | Where-Object { $_.ProcessName -match 'd
 $result.running_tasks = @(Get-ScheduledTask | Where-Object { $_.State -eq 'Running' -and $_.TaskName -match 'BC250|DWM|G0|WSI' } | Select-Object TaskName,State)
 $result.legacy_clock_state = [string](Get-ScheduledTask -TaskName 'BC250 GPU clock 1000MHz 820mV').State
 if ($result.legacy_clock_state -ne 'Disabled') { throw 'Legacy writer enabled' }
-$result.info = (& C:\BC250\m8\bc250kmd_cli.exe info | Out-String)
+$result.info = (& $cli info | Out-String)
 if ($LASTEXITCODE -ne 0 -or $result.info -notmatch $KmdRollbackAbi -or $result.info -notmatch 'FULL WDDM TABLE') { throw 'Unexpected loaded KMD' }
-$result.health = (& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read | Out-String)
+$result.health = (& $cli health read | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Health query failed' }
-$result.clock = (& C:\BC250\m9\candidate07136\client\bc250kmd_cli.exe clock read | Out-String)
+$result.clock = (& $cli clock read | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Clock query failed' }
 $result.temperature = (& C:\BC250\bc250rd\bc250rd_cli.exe temp 1 1 | Out-String)
 if ($LASTEXITCODE -ne 0 -or $result.temperature -notmatch 'Tctl\s+([0-9]+(?:\.[0-9]+)?)') { throw 'Temperature unavailable' }
@@ -64,7 +69,7 @@ $parametersKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\Cur
 if (!$parametersKey) { throw 'Driver registry key absent' }
 try { $result.hang_detector = Read-KmdHangDetector $parametersKey } finally { $parametersKey.Dispose() }
 Assert-KmdHangDetectorBaseline $result.hang_detector
-$result.driver_log = (& C:\BC250\m8\bc250kmd_cli.exe log | Out-String)
+$result.driver_log = (& $cli log | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Log query failed' }
 if ($result.health -notmatch ('version=' + [regex]::Escape($KmdRollbackAbi) + ' flags=15')) { throw 'Baseline not confirmed healthy' }
 if ($result.clock -notmatch 'MHz=1000 VID=116 temperature_mc=(\d+) ready=1' -or [int]$Matches[1] -ge 85000) { throw 'Clock operating point mismatch' }
