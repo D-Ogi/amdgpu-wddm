@@ -115,9 +115,18 @@ static bc250hsa_status find_adapter(const bc250hsa_open_params* params,
             return bc250hsa_os_status("OpenAdapterFromLuid", status);
         }
         dev->adapter = open.hAdapter;
-        if (NT_SUCCESS(query_caps(dev->adapter, dev->caps)) && caps_are_ours(dev->caps)) {
-            dev->caps_valid = 1;
+        /* A named adapter is checked exactly as an enumerated one is. An adapter that
+         * does not answer the BC-250 capability blob is another vendor's, and a
+         * submission built for this part must not reach it. */
+        if (!NT_SUCCESS(query_caps(dev->adapter, dev->caps)) || !caps_are_ours(dev->caps)) {
+            bc250hsa_log(BC250HSA_LOG_ERROR,
+                         "the adapter of the given LUID does not answer the BC-250"
+                         " capability blob");
+            close_adapter(dev->adapter);
+            dev->adapter = 0u;
+            return BC250HSA_ENODEV;
         }
+        dev->caps_valid = 1;
         return BC250HSA_OK;
     }
 
@@ -247,6 +256,26 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
         goto failed;
     }
 
+    /* The window this library asks MapGpuVirtualAddress for must lie inside the range
+     * the kernel driver states for user mode: device.virtual_address_offset and
+     * device.virtual_address_max of the capability blob (0x10000 and 2^47 on unit A).
+     * A window the driver does not back is refused here, where the message names the
+     * two numbers, and not later as an opaque MapGpuVirtualAddress failure. */
+    if (dev->caps_valid) {
+        const uint64_t driver_start = caps_u64(dev->caps, BC250HSA_CAPS_OFF_VA_OFFSET);
+        const uint64_t driver_end = caps_u64(dev->caps, BC250HSA_CAPS_OFF_VA_MAX);
+        if (driver_end <= driver_start || dev->va_window_start < driver_start ||
+            dev->va_window_end > driver_end) {
+            bc250hsa_log(BC250HSA_LOG_ERROR,
+                         "the %u GiB address window at 0x%llx is outside the range the kernel"
+                         " driver states for user mode (0x%llx to 0x%llx)",
+                         (unsigned)va_window_gib, (unsigned long long)dev->va_window_start,
+                         (unsigned long long)driver_start, (unsigned long long)driver_end);
+            result = BC250HSA_EUNSUPPORTED;
+            goto failed;
+        }
+    }
+
     memset(&create_device, 0, sizeof(create_device));
     create_device.hAdapter = dev->adapter;
     status = D3DKMTCreateDevice(&create_device);
@@ -368,8 +397,6 @@ void bc250hsa_close(struct bc250hsa_device* dev)
 
 bc250hsa_status bc250hsa_props_read(struct bc250hsa_device* dev, bc250hsa_props* out)
 {
-    uint32_t cu_per_sh;
-
     if (dev == NULL || out == NULL) {
         return BC250HSA_EINVAL;
     }
@@ -396,8 +423,9 @@ bc250hsa_status bc250hsa_props_read(struct bc250hsa_device* dev, bc250hsa_props*
     /* The local memory a workgroup may ask for on this part. It is a property of
      * gfx10.1 and not of the capability blob, which carries no local memory size. */
     out->lds_bytes_per_workgroup = 65536u;
-    cu_per_sh = caps_u32(dev->caps, BC250HSA_CAPS_OFF_NUM_CU_PER_SH);
-    out->waves_per_cu = (cu_per_sh != 0u) ? 32u : 32u;
+    /* A property of gfx10.1 and not of the capability blob, which carries no wave
+     * slot count: 32 wave32 slots per compute unit (16 per SIMD, two SIMDs). */
+    out->waves_per_cu = 32u;
     out->vram_bytes = caps_u64(dev->caps, BC250HSA_CAPS_OFF_VRAM_TOTAL);
     out->visible_vram_bytes = caps_u64(dev->caps, BC250HSA_CAPS_OFF_VIS_VRAM_TOTAL);
     out->gtt_bytes = caps_u64(dev->caps, BC250HSA_CAPS_OFF_GTT_TOTAL);

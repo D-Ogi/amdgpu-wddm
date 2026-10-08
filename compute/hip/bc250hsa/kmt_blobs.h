@@ -139,7 +139,6 @@ static __inline uint32_t bc250hsa_pdata_checksum(const uint32_t* data, uint32_t 
 #define BC250HSA_CAPS_OFF_VA_MAX           (BC250HSA_CAPS_OFF_DEVICE + 152u) /* u64 */
 #define BC250HSA_CAPS_OFF_VRAM_BIT_WIDTH   (BC250HSA_CAPS_OFF_DEVICE + 180u)
 #define BC250HSA_CAPS_OFF_WAVE_FRONT_SIZE  (BC250HSA_CAPS_OFF_DEVICE + 240u)
-#define BC250HSA_CAPS_OFF_NUM_CU_PER_SH    (BC250HSA_CAPS_OFF_DEVICE + 248u)
 /* struct drm_amdgpu_memory_info: three 32-byte heaps, each starting with
  * total_heap_size. */
 #define BC250HSA_CAPS_OFF_MEMORY           464u
@@ -158,7 +157,9 @@ static __inline uint32_t bc250hsa_pdata_checksum(const uint32_t* data, uint32_t 
 
 /* The GPU address window this library allocates from. It is this device's own and is
  * never shared with the Vulkan driver in the same process, whose own heap starts at
- * 0x0000000200000000 (radv_wddm2_bo.h, RADV_WDDM2_HEAP_START). */
+ * 0x0000000200000000 (radv_wddm2_bo.h, RADV_WDDM2_HEAP_START). bc250hsa_open refuses
+ * a window that does not lie inside BC250HSA_CAPS_OFF_VA_OFFSET to
+ * BC250HSA_CAPS_OFF_VA_MAX, the range the kernel driver states for user mode. */
 #define BC250HSA_VA_WINDOW_START 0x0000004000000000ull
 
 #endif /* BC250HSA_KMT_BLOBS_H */
