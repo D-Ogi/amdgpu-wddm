@@ -17,6 +17,7 @@
 //                         offer, and takes any other value as gdi (radv_wddm2_wsi_route.h)
 //     MemoryOverflow      allow (the default) or strict; any other value selects allow (radv_wddm2_mem_overflow.h)
 //     Case does not matter and an empty string counts as absent.
+//   The two Vulkan values are not offered in this release (AwaitingIcd below).
 //
 // An absent value is "Application decides" (the driver's default); a game's own value wins over the one for all
 // games. The settings rule (owner, 2026-10-03): nothing is written for "Application decides" or "Same as all games",
@@ -120,6 +121,15 @@ namespace AmdgpuWddmControl
             new GfxSetting { Name = "PerformanceOverlay", Id = "overlay", Root = GraphicsPath, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             new GfxSetting { Name = "RenderOnCpu", Id = "cpu-render", Root = GraphicsPath, GameFirst = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             new GfxSetting { Name = "ReportAmdDriverVersion", Id = "amd-version", Root = GraphicsPath, GlobalOnly = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
+        };
+
+        // The Vulkan settings wait for the ICD that reads them: the vk-wsi-dxgi line and the per-application keys of the
+        // Mesa fork, which the b23 release does not carry. No ICD of b23 reads WsiRoute, and the 64-bit system Vulkan ICD
+        // does not read MemoryOverflow. The owner's GUI rule is no control that does nothing or works only for some
+        // programs, so they are not in All: no row, no search entry, no write and no --gfx name. The support report
+        // still lists their stored values. They go back into All with the train that carries that ICD line.
+        public static readonly GfxSetting[] AwaitingIcd =
+        {
             new GfxSetting { Name = "WsiRoute", Id = "vk-present", Root = VulkanPath, Text = true, SameAsAbsent = "dxgi", AbsentTextId = "gfx.choice.modern-default",
                 Presets = new[] { "dxgi", "gdi" }, InvalidMeans = "gdi", OtherValid = new[] { "dxgi-composition" } },
             new GfxSetting { Name = "MemoryOverflow", Id = "vk-memory", Root = VulkanPath, Text = true, SameAsAbsent = "allow", AbsentTextId = "gfx.choice.sysmem-default",

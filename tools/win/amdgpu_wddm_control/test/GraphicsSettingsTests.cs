@@ -23,6 +23,12 @@ static partial class UnitTests
 
     static string WriteText(IEnumerable<RegWrite> writes) { return string.Join("; ", writes.Select(w => w.ToString())); }
 
+    // A setting of the contract, offered or waiting for its ICD (GraphicsSettings.AwaitingIcd): the pure readers take it.
+    static GfxSetting AnySetting(string name)
+    {
+        return GraphicsSettings.Find(name) ?? GraphicsSettings.AwaitingIcd.First(s => s.Name == name);
+    }
+
     static void GraphicsSettingsTests()
     {
         Strings.Language = "en";
@@ -39,9 +45,12 @@ static partial class UnitTests
     // Every value of the contract: what is valid, how it reads and what it is called.
     static void GfxContract()
     {
-        Equal(9, GraphicsSettings.All.Length, "contract: nine settings");
-        Equal(GraphicsSettings.All.Length, GraphicsSettings.All.Select(s => s.Id).Distinct().Count(), "contract: the ids are unique");
-        foreach (var s in GraphicsSettings.All)
+        Equal(7, GraphicsSettings.All.Length, "contract: seven settings offered");
+        Equal(2, GraphicsSettings.AwaitingIcd.Length, "contract: two Vulkan settings wait for their ICD");
+        Check(GraphicsSettings.AwaitingIcd.All(s => GraphicsSettings.Find(s.Name) == null && s.Root == GraphicsSettings.VulkanPath), "contract: a Vulkan setting that waits is not offered");
+        var contract = GraphicsSettings.All.Concat(GraphicsSettings.AwaitingIcd).ToArray();
+        Equal(contract.Length, contract.Select(s => s.Id).Distinct().Count(), "contract: the ids are unique");
+        foreach (var s in contract)
         {
             Check(s.Root == (s.Text ? GraphicsSettings.VulkanPath : GraphicsSettings.GraphicsPath), "contract: " + s.Name + " is under its root");
             Check(Strings.Has("search." + s.SearchId) && Strings.Has(s.AbsentTextId), "contract: " + s.Name + " has its texts");
@@ -81,8 +90,8 @@ static partial class UnitTests
         Equal("Always on", GraphicsSettings.Label(GraphicsSettings.Find("VSync"), "1"), "label: vsync on");
 
         // The Vulkan strings: case does not matter, an empty string is absent, dxgi-composition is valid but not offered.
-        var route = GraphicsSettings.Find("WsiRoute");
-        var mem = GraphicsSettings.Find("MemoryOverflow");
+        var route = AnySetting("WsiRoute");
+        var mem = AnySetting("MemoryOverflow");
         Check(GraphicsSettings.Read(route, GfxValue.Str("GDI")).Value == "gdi", "WsiRoute: GDI reads as gdi");
         Equal(GfxState.Absent, GraphicsSettings.Read(route, GfxValue.Str("")).State, "WsiRoute: an empty string is absent");
         Equal(GfxState.Other, GraphicsSettings.Read(route, GfxValue.Str("DXGI-Composition")).State, "WsiRoute: dxgi-composition is set outside this app");
@@ -101,11 +110,13 @@ static partial class UnitTests
         // The allow-lists: a setting's own name under its own root, per game unless it is for all games only.
         Check(GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "FrameRateLimit") && GraphicsSettings.Allowed(W3G, "FrameRateLimit"), "Allowed: FrameRateLimit for all games and one game");
         Check(GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "ReportAmdDriverVersion") && !GraphicsSettings.Allowed(W3G, "ReportAmdDriverVersion"), "Allowed: ReportAmdDriverVersion for all games only");
-        Check(GraphicsSettings.Allowed(W3V, "WsiRoute") && !GraphicsSettings.Allowed(W3G, "WsiRoute") && !GraphicsSettings.Allowed(W3V, "VSync"), "Allowed: each name under its own root only");
+        Check(GraphicsSettings.Allowed(W3G, "VSync") && !GraphicsSettings.Allowed(W3V, "VSync"), "Allowed: each name under its own root only");
+        Check(!GraphicsSettings.Allowed(W3V, "WsiRoute") && !GraphicsSettings.Allowed(GraphicsSettings.VulkanPath, "MemoryOverflow") && !GraphicsSettings.Allowed(W3G, "WsiRoute"),
+            "Allowed: no Vulkan name while it waits for its ICD");
         Check(!GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "Other") && !GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath + @"\Applications", "VSync") &&
             !GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath + @"\Applications\..\x.exe", "VSync") && !GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath + @"\Other\witcher3.exe", "VSync") &&
             !GraphicsSettings.Allowed(@"SOFTWARE\amdgpu-wddm\Applications\witcher3.exe", "VSync"), "Allowed: nothing else");
-        Check(Recovery.Allowed(W3V, "MemoryOverflow") && !Recovery.Allowed(W3V, "Bogus"), "Recovery.Allowed takes the graphics settings");
+        Check(Recovery.Allowed(W3G, "VSync") && !Recovery.Allowed(W3V, "MemoryOverflow") && !Recovery.Allowed(W3V, "Bogus"), "Recovery.Allowed takes the offered graphics settings");
         Check(GraphicsSettings.KeyRemovalAllowed(W3G) && GraphicsSettings.KeyRemovalAllowed(W3V), "KeyRemovalAllowed: one game's keys");
         Check(!GraphicsSettings.KeyRemovalAllowed(GraphicsSettings.GraphicsPath) && !GraphicsSettings.KeyRemovalAllowed(GraphicsSettings.VulkanPath) &&
             !GraphicsSettings.KeyRemovalAllowed(GraphicsSettings.GraphicsPath + @"\Applications") && !GraphicsSettings.KeyRemovalAllowed(Profiles.RegistryPath + @"\witcher3.exe"),
@@ -123,7 +134,7 @@ static partial class UnitTests
             GKey(W3G, 0, "FrameRateLimit", 144, "Anisotropy", 7),
             GKey(W3V, 0, "WsiRoute", "dxgi-composition"),
         };
-        Func<string, string, GfxView> view = (name, image) => GraphicsSettings.View(GraphicsSettings.Find(name), keys, image);
+        Func<string, string, GfxView> view = (name, image) => GraphicsSettings.View(AnySetting(name), keys, image);
         var v = view("FrameRateLimit", "witcher3.exe");
         Check(v.Source == "game" && v.Effective == "144", "precedence: the game's 144 wins over 60");
         Equal("Set for this game", GraphicsSettings.OriginText(v, false), "origin: the game's own");
@@ -152,11 +163,11 @@ static partial class UnitTests
         Check(v.Game.State == GfxState.Absent, "precedence: a setting for all games only has no game value");
         // A game's invalid value wins even over a valid one for all games (the readers stop at the first source).
         var k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "dxgi"), GKey(W3V, 0, "WsiRoute", "bogus") };
-        v = GraphicsSettings.View(GraphicsSettings.Find("WsiRoute"), k2, "witcher3.exe");
+        v = GraphicsSettings.View(AnySetting("WsiRoute"), k2, "witcher3.exe");
         Check(v.Source == "game-invalid" && v.Effective == "gdi", "precedence: the game's invalid route wins and means gdi");
         // An empty text for the game is absent: the value for all games applies.
         k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "gdi"), GKey(W3V, 0, "WsiRoute", "") };
-        v = GraphicsSettings.View(GraphicsSettings.Find("WsiRoute"), k2, "witcher3.exe");
+        v = GraphicsSettings.View(AnySetting("WsiRoute"), k2, "witcher3.exe");
         Check(v.Source == "global" && v.Effective == "gdi", "precedence: an empty text is absent");
         Check(GraphicsSettings.View(GraphicsSettings.Find("VSync"), null, "witcher3.exe").Source == "default", "precedence: no keys at all");
 
@@ -164,8 +175,9 @@ static partial class UnitTests
         var report = GraphicsSettings.Report(keys);
         foreach (var want in new[] { @"[HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe]", "FrameRateLimit = 144 (DWord)", "MemoryOverflow = \"nonsense\" (String)",
             "effective, all games:", "effective, witcher3.exe:", "FrameRateLimit = 144 (game)", "Anisotropy = not known (game-invalid, stored value not valid (7))",
-            "PerformanceOverlay = not known (global-invalid, stored value for all games not valid (7))", "WsiRoute = dxgi-composition (game)", "MaxFrameLatency = application decides (default)" })
+            "PerformanceOverlay = not known (global-invalid, stored value for all games not valid (7))", "WsiRoute = \"dxgi-composition\" (String)", "MaxFrameLatency = application decides (default)" })
             Check(report.Contains(want), "report: " + want);
+        Check(!report.Contains("WsiRoute = dxgi-composition (game)") && !report.Contains("  MemoryOverflow ="), "report: stored Vulkan values, but no effective line while they wait for their ICD");
         Check(GraphicsSettings.Report(null).Contains("unreadable"), "report: unreadable keys");
         Check(GraphicsSettings.Report(new List<GfxKey>()).Contains("no Graphics or Vulkan settings keys"), "report: no keys");
         CollectionEqual(new[] { "witcher3.exe" }, GraphicsSettings.Games(keys), "Games: the games with keys");
@@ -218,7 +230,7 @@ static partial class UnitTests
         Equal("60", edits["FrameRateLimit"], "choose: 60");
 
         // Set outside this app (dxgi-composition): kept and shown as such.
-        var route = GraphicsSettings.View(GraphicsSettings.Find("WsiRoute"), keys, "witcher3.exe");
+        var route = GraphicsSettings.View(AnySetting("WsiRoute"), keys, "witcher3.exe");
         var rItems = GraphicsSettings.Items(route);
         Check(rItems.Last().Kept && rItems.Last().Text == "Set outside this app", "items: dxgi-composition is set outside this app");
         Check(rItems.Any(i => i.Value == "dxgi") && rItems.Any(i => i.Value == "gdi"), "items: a game can pick Modern or Compatibility");
@@ -259,10 +271,9 @@ static partial class UnitTests
         Equal("", plan(null, new Dictionary<string, string> { { "VSync", null } }), "plan: Application decides on an absent value writes nothing");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics PerformanceOverlay = 1 (DWord)", plan(null, new Dictionary<string, string> { { "PerformanceOverlay", "1" } }), "plan: the invalid 7 is rewritten only on a choice");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics ReportAmdDriverVersion = 1 (DWord)", plan(null, new Dictionary<string, string> { { "ReportAmdDriverVersion", "1" } }), "plan: ReportAmdDriverVersion for all games");
-        Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Vulkan WsiRoute = ""gdi"" (String)", plan(null, new Dictionary<string, string> { { "WsiRoute", "gdi" } }), "plan: a Vulkan text");
-        // A stored "GDI" means gdi: choosing gdi writes nothing, the case is left as it is (no rewrite by looking).
-        Equal("", plan("witcher3.exe", new Dictionary<string, string> { { "WsiRoute", "gdi" } }), "plan: GDI stored, gdi chosen: no write");
-        Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe WsiRoute = ""dxgi"" (String)", plan("witcher3.exe", new Dictionary<string, string> { { "WsiRoute", "dxgi" } }), "plan: a game's route");
+        // The Vulkan names wait for their ICD (GraphicsSettings.AwaitingIcd): no write, for all games or for a game.
+        Throws<ArgumentException>(() => GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "WsiRoute", "gdi" } }), "plan: a Vulkan name is refused while it waits");
+        Throws<ArgumentException>(() => GraphicsSettings.PlanWrites(keys, "witcher3.exe", new Dictionary<string, string> { { "MemoryOverflow", null } }), "plan: a game's Vulkan value is refused while it waits");
         // A value of the other type is rewritten when chosen.
         var typed = new List<GfxKey> { GKey(GraphicsSettings.GraphicsPath, 0, "VSync", GfxValue.Str("1")) };
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics VSync = 1 (DWord)", WriteText(GraphicsSettings.PlanWrites(typed, null, new Dictionary<string, string> { { "VSync", "1" } })), "plan: a text 1 becomes a DWORD 1 on a choice");
@@ -270,13 +281,10 @@ static partial class UnitTests
         // Per game: the last value removed takes the empty key with it; a key with a subkey or another value stays.
         Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe FrameRateLimit; delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)",
             plan("witcher3.exe", new Dictionary<string, string> { { "FrameRateLimit", null } }), "plan: the game's last value and its key");
-        Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe WsiRoute", plan("witcher3.exe", new Dictionary<string, string> { { "WsiRoute", null } }), "plan: a key with another value stays");
         Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\game.exe VSync", plan("game.exe", new Dictionary<string, string> { { "VSync", null } }), "plan: a key with a subkey stays");
         Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\cyber.exe VSync", plan("cyber.exe", new Dictionary<string, string> { { "VSync", null } }), "plan: a key with a value this app does not know stays");
         Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe FrameRateLimit; set HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe VSync = 0 (DWord)",
             plan("witcher3.exe", new Dictionary<string, string> { { "FrameRateLimit", null }, { "VSync", "0" } }), "plan: a value removed and one written keep the key");
-        Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe WsiRoute; delete HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe MemoryOverflow; delete key HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe (empty)",
-            plan("witcher3.exe", new Dictionary<string, string> { { "WsiRoute", null }, { "MemoryOverflow", null } }), "plan: both Vulkan values and the key");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\new.exe RenderOnCpu = 1 (DWord)", plan("new.exe", new Dictionary<string, string> { { "RenderOnCpu", "1" } }), "plan: a new game key");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\new.exe PerformanceOverlay = 0 (DWord)", plan("new.exe", new Dictionary<string, string> { { "PerformanceOverlay", "0" } }), "plan: Off for one game is written (it overrides On for all games)");
         Equal("", plan("new.exe", new Dictionary<string, string> { { "VSync", null } }), "plan: Same as all games on a game without a key writes nothing");
@@ -293,8 +301,9 @@ static partial class UnitTests
             "reset: the values for all games; the unknown value stays");
         var reset = WriteText(GraphicsSettings.ResetWrites(keys, true));
         foreach (var want in new[] { @"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe FrameRateLimit", @"delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)",
-            @"delete key HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe (empty)", @"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\cyber.exe VSync" })
+            @"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\cyber.exe VSync" })
             Check(reset.Contains(want), "reset with games: " + want);
+        Check(!reset.Contains(@"amdgpu-wddm\Vulkan"), "reset with games: the Vulkan values that wait for their ICD stay, and so does their key");
         Check(!reset.Contains(@"delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\game.exe") && !reset.Contains(@"delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\cyber.exe") &&
             !reset.Contains("Unknown") && !reset.Contains("Mine"), "reset with games: keys with a subkey or a foreign value stay, foreign values stay");
         Equal(0, GraphicsSettings.ResetWrites(null, true).Count, "reset: no keys, no writes");
@@ -303,8 +312,8 @@ static partial class UnitTests
         foreach (var lang in Strings.Languages)
         {
             Strings.Language = lang;
-            foreach (var w in GraphicsSettings.PlanWrites(keys, "witcher3.exe", new Dictionary<string, string> { { "FrameRateLimit", null }, { "WsiRoute", null }, { "MemoryOverflow", null } })
-                .Concat(GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "FrameRateLimit", null }, { "WsiRoute", "gdi" }, { "ReportAmdDriverVersion", "1" } })))
+            foreach (var w in GraphicsSettings.PlanWrites(keys, "witcher3.exe", new Dictionary<string, string> { { "FrameRateLimit", null } })
+                .Concat(GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "FrameRateLimit", null }, { "VSync", "1" }, { "ReportAmdDriverVersion", "1" } })))
             {
                 var line = GraphicsSettings.PlainLine(w);
                 Check(!line.StartsWith("[", StringComparison.Ordinal) && !PlainWords.Findings(new[] { line }).Any(), "plain line " + lang + ": " + line);
@@ -313,22 +322,23 @@ static partial class UnitTests
         }
         Strings.Language = "en";
         Equal("All games, Frame rate limit: Application decides.", GraphicsSettings.PlainLine(RegWrite.Remove(GraphicsSettings.GraphicsPath, "FrameRateLimit")), "plain: all games back to Application decides");
-        Equal("witcher3.exe, Vulkan presentation: Same as all games.", GraphicsSettings.PlainLine(RegWrite.Remove(W3V, "WsiRoute")), "plain: a game back to Same as all games");
-        Equal("witcher3.exe, Vulkan presentation: Compatibility.", GraphicsSettings.PlainLine(RegWrite.Str(W3V, "WsiRoute", "gdi")), "plain: a game's route");
-        Equal("witcher3.exe has no graphics settings of its own any more.", GraphicsSettings.PlainLine(RegWrite.RemoveKey(W3V)), "plain: the key");
-        Equal("All games: FrameRateLimit = 30. witcher3.exe: WsiRoute removed. Removes the empty key of witcher3.exe.",
-            GraphicsSettings.Describe(new[] { RegWrite.Dword(GraphicsSettings.GraphicsPath, "FrameRateLimit", 30), RegWrite.Remove(W3V, "WsiRoute"), RegWrite.RemoveKey(W3V) }), "describe: English for the log");
+        Equal("witcher3.exe, Frame rate limit: Same as all games.", GraphicsSettings.PlainLine(RegWrite.Remove(W3G, "FrameRateLimit")), "plain: a game back to Same as all games");
+        Equal("witcher3.exe, Vertical sync (VSync): Always on.", GraphicsSettings.PlainLine(RegWrite.Dword(W3G, "VSync", 1)), "plain: a game's own value");
+        Equal("witcher3.exe has no graphics settings of its own any more.", GraphicsSettings.PlainLine(RegWrite.RemoveKey(W3G)), "plain: the key");
+        Equal("All games: FrameRateLimit = 30. witcher3.exe: VSync removed. Removes the empty key of witcher3.exe.",
+            GraphicsSettings.Describe(new[] { RegWrite.Dword(GraphicsSettings.GraphicsPath, "FrameRateLimit", 30), RegWrite.Remove(W3G, "VSync"), RegWrite.RemoveKey(W3G) }), "describe: English for the log");
     }
 
     // The helper's --gfx argument: exact, one entry per setting, unset for a removal.
     static void GfxArguments()
     {
-        var e = GraphicsSettings.ParseEdits("FrameRateLimit=60,WsiRoute=gdi,VSync=unset");
-        Check(e != null && e.Count == 3 && e["FrameRateLimit"] == "60" && e["WsiRoute"] == "gdi" && e["VSync"] == null, "parse: three settings");
-        Equal("FrameRateLimit=60,VSync=unset,WsiRoute=gdi", GraphicsSettings.FormatEdits(e), "format: in the contract's order");
-        Equal("FrameRateLimit=60,VSync=unset,WsiRoute=gdi", GraphicsSettings.FormatEdits(GraphicsSettings.ParseEdits(GraphicsSettings.FormatEdits(e))), "format: round trip");
+        var e = GraphicsSettings.ParseEdits("FrameRateLimit=60,Anisotropy=16,VSync=unset");
+        Check(e != null && e.Count == 3 && e["FrameRateLimit"] == "60" && e["Anisotropy"] == "16" && e["VSync"] == null, "parse: three settings");
+        Equal("FrameRateLimit=60,VSync=unset,Anisotropy=16", GraphicsSettings.FormatEdits(e), "format: in the contract's order");
+        Equal("FrameRateLimit=60,VSync=unset,Anisotropy=16", GraphicsSettings.FormatEdits(GraphicsSettings.ParseEdits(GraphicsSettings.FormatEdits(e))), "format: round trip");
+        // WsiRoute=gdi and MemoryOverflow=allow are in the contract but wait for their ICD (GraphicsSettings.AwaitingIcd).
         foreach (var bad in new[] { null, "", "FrameRateLimit", "FrameRateLimit=", "=60", "FrameRateLimit=19", "FrameRateLimit=060", "Bogus=1", "VSync=1,VSync=0", "WsiRoute=GDI",
-            "WsiRoute=dxgi-composition", "framerate limit=60", "VSync=1,", ",VSync=1", "VSync=1;Anisotropy=2", "FrameRateLimit=60 ", new string('x', 513) })
+            "WsiRoute=dxgi-composition", "WsiRoute=gdi", "MemoryOverflow=allow", "framerate limit=60", "VSync=1,", ",VSync=1", "VSync=1;Anisotropy=2", "FrameRateLimit=60 ", new string('x', 513) })
             Equal(null, GraphicsSettings.ParseEdits(bad), "parse refuses '" + (bad != null && bad.Length > 40 ? bad.Substring(0, 40) + "..." : bad) + "'");
         var every = string.Join(",", GraphicsSettings.All.Select(s => s.Name + "=" + s.Presets.Last()));
         Check(GraphicsSettings.ParseEdits(every) != null && every.Length <= 512, "parse: every setting at once fits");
@@ -361,12 +371,15 @@ static partial class UnitTests
         Check(Recovery.Plan("graphics-defaults", none, more: new Recovery.PlanArgs { Gfx = "VSync=1" }).Refused, "graphics-defaults: refused without the driver");
 
         // game-profile with graphics settings only, with switches only, and with both.
-        p = Recovery.Plan("game-profile", snap(), more: new Recovery.PlanArgs { Image = "witcher3.exe", Gfx = "WsiRoute=unset" });
+        var gp = snap();
+        gp.GfxKeys.Add(GKey(W3G, 0, "VSync", 1));
+        p = Recovery.Plan("game-profile", gp, more: new Recovery.PlanArgs { Image = "witcher3.exe", Gfx = "VSync=unset" });
         Check(!p.Refused && p.GameWrites.Count == 0 && p.GameImage == "witcher3.exe" && p.Effect == "the next time witcher3.exe starts", "game-profile gfx: a game change");
-        Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe WsiRoute; delete key HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe (empty)", WriteText(p.Writes), "game-profile gfx: value and key");
+        Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe VSync; delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)", WriteText(p.Writes), "game-profile gfx: value and key");
         d = PlainPlan.Describe(p);
         Check(d.Notes[0] == Strings.T("plan.when.game", "witcher3.exe") && d.Notes.Contains(Strings.T("plan.scope.game", "witcher3.exe")), "game-profile gfx dialog: when and scope");
-        Check(Recovery.Plan("game-profile", snap(), more: new Recovery.PlanArgs { Image = "witcher3.exe", Gfx = "WsiRoute=gdi" }).Refusal.Contains("stored already"), "game-profile gfx: no change is refused");
+        Check(Recovery.Plan("game-profile", gp, more: new Recovery.PlanArgs { Image = "witcher3.exe", Gfx = "VSync=1" }).Refusal.Contains("stored already"), "game-profile gfx: no change is refused");
+        Check(Recovery.Plan("game-profile", snap(), more: new Recovery.PlanArgs { Image = "witcher3.exe", Gfx = "WsiRoute=unset" }).Refused, "game-profile gfx: a Vulkan name that waits for its ICD is refused");
         Check(Recovery.Plan("game-profile", snap(), more: new Recovery.PlanArgs { Image = "witcher3.exe" }).Refused, "game-profile: neither switches nor settings");
         Check(Recovery.Plan("game-profile", snap(), more: new Recovery.PlanArgs { Image = "witcher3.exe", Gfx = "ReportAmdDriverVersion=1" }).Refused, "game-profile: a setting for all games only is refused");
         var both = Recovery.Plan("game-profile", snap(), more: new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off", Gfx = "FrameRateLimit=144" });
@@ -382,17 +395,19 @@ static partial class UnitTests
         rec.Values = new List<BackupValue>
         {
             new BackupValue { Path = W3G, Name = "FrameRateLimit", Existed = false },
-            new BackupValue { Path = W3V, Name = "WsiRoute", Existed = true, Kind = "String", Text = "dxgi" },
         };
         var after = snap();
         after.GfxKeys.Add(GKey(W3G, 0, "FrameRateLimit", 144));
         p = Recovery.Plan("game-undo", after, backups: new[] { rec }, more: new Recovery.PlanArgs { Image = "witcher3.exe" });
         Check(!p.Refused && p.GameWrites.Count == 0 && p.Effect == "the next time witcher3.exe starts", "game-undo gfx: a game change");
-        Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe FrameRateLimit; set HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe WsiRoute = ""dxgi"" (String); delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)",
-            WriteText(p.Writes), "game-undo gfx: the old values and the empty key");
+        Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe FrameRateLimit; delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)",
+            WriteText(p.Writes), "game-undo gfx: the old value and the empty key");
+        rec.Values.Add(new BackupValue { Path = W3V, Name = "WsiRoute", Existed = true, Kind = "String", Text = "dxgi" });
+        Check(Recovery.Plan("game-undo", after, backups: new[] { rec }, more: new Recovery.PlanArgs { Image = "witcher3.exe" }).Refused, "game-undo: a Vulkan value that waits for its ICD is refused");
+        rec.Values.RemoveAt(1);
         rec.Values.Add(new BackupValue { Path = W3G, Name = "NotOurs", Existed = false });
         Check(Recovery.Plan("game-undo", after, backups: new[] { rec }, more: new Recovery.PlanArgs { Image = "witcher3.exe" }).Refused, "game-undo: a value outside the contract is refused");
-        rec.Values.RemoveAt(2);
+        rec.Values.RemoveAt(1);
         rec.Values.Add(new BackupValue { Path = GraphicsSettings.GraphicsPath, Name = "FrameRateLimit", Existed = true, Kind = "DWord", Number = 30 });
         p = Recovery.Plan("game-undo", after, backups: new[] { rec }, more: new Recovery.PlanArgs { Image = "witcher3.exe" });
         Check(!p.Writes.Any(w => w.Path == GraphicsSettings.GraphicsPath), "game-undo: the setting for all games is not this game's");
@@ -414,8 +429,8 @@ static partial class UnitTests
         Check(p.Change.Contains("graphics settings for games: 1 changes"), "reset-defaults: the change counts them: " + p.Change);
         p = Recovery.Plan("reset-defaults", rs, more: new Recovery.PlanArgs { Games = "reset" });
         var rt = WriteText(p.Writes);
-        Check(rt.Contains(@"delete HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\witcher3.exe WsiRoute") && rt.Contains(@"delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)"),
-            "reset-defaults reset: the games' own values and keys");
+        Check(rt.Contains(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe VSync") && rt.Contains(@"delete key HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe (empty)")
+            && !rt.Contains(@"amdgpu-wddm\Vulkan"), "reset-defaults reset: the games' own values and keys; the Vulkan values that wait for their ICD stay");
         foreach (var w in p.Writes) Check(PlainPlan.LineId(w) != null, "reset-defaults: a plain sentence for " + w);
         var rsUnread = snap(); rsUnread.GfxKeys = null;
         p = Recovery.Plan("reset-defaults", rsUnread, more: new Recovery.PlanArgs { Games = "keep" });

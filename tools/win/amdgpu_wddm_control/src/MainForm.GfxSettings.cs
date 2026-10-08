@@ -18,7 +18,9 @@ namespace AmdgpuWddmControl
         readonly Dictionary<string, string> _smEdits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         static readonly string[] GfxGraphicsNames = { "FrameRateLimit", "VSync", "Anisotropy", "MaxFrameLatency", "PerformanceOverlay", "RenderOnCpu", "ReportAmdDriverVersion" };
-        static readonly string[] GfxVulkanNames = { "WsiRoute", "MemoryOverflow" };
+        // Empty while WsiRoute and MemoryOverflow wait for their ICD (GraphicsSettings.AwaitingIcd); with no name the
+        // Vulkan section is not shown.
+        static readonly string[] GfxVulkanNames = { };
 
         List<RegWrite> GfxGlobalWrites()
         {
@@ -136,7 +138,7 @@ namespace AmdgpuWddmControl
                 if (s.GameFirst && GraphicsSettings.View(s, _snap.GfxKeys, null).Global.State == GfxState.Absent && !_gfxGlobalEdits.ContainsKey(s.Name)) continue;
                 AddGfxRow(c, s, null);
             }
-            c.Add(Ui.Label(Strings.T("gfx.section.vulkan"), Theme.Bold, null, c.Inner));
+            if (GfxVulkanNames.Length > 0) c.Add(Ui.Label(Strings.T("gfx.section.vulkan"), Theme.Bold, null, c.Inner));
             foreach (var name in GfxVulkanNames) AddGfxRow(c, GraphicsSettings.Find(name), null);
             return c;
         }
@@ -170,7 +172,7 @@ namespace AmdgpuWddmControl
             c.Add(SectionLabel(Strings.T("games.section.graphics"), c.Inner));
             if (_snap.GfxKeys == null) { c.Add(Ui.Dim(Strings.T("gfx.unreadable"), c.Inner)); return; }
             foreach (var name in GfxGraphicsNames.Where(n => !GraphicsSettings.Find(n).GlobalOnly)) AddGfxRow(c, GraphicsSettings.Find(name), game.Image);
-            c.Add(SectionLabel(Strings.T("gfx.section.vulkan"), c.Inner));
+            if (GfxVulkanNames.Length > 0) c.Add(SectionLabel(Strings.T("gfx.section.vulkan"), c.Inner));
             foreach (var name in GfxVulkanNames) AddGfxRow(c, GraphicsSettings.Find(name), game.Image);
         }
 

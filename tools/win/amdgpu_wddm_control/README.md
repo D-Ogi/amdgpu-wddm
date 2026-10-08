@@ -66,8 +66,15 @@ only these names, only under these keys, and only values inside the contract:
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
 | | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
 | `Graphics` only | `ReportAmdDriverVersion` | DWORD | 1 on, 0 off | Report an AMD driver version (a check box) |
-| `Vulkan`, `Vulkan\Applications\<exe>` | `WsiRoute` | REG_SZ | `dxgi` (default), `gdi` | Vulkan presentation: Modern, Compatibility |
-| | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full: use system memory, or report out of memory |
+| `Vulkan`, `Vulkan\Applications\<exe>` | `WsiRoute` | REG_SZ | `dxgi` (default), `gdi` | Vulkan presentation: Modern, Compatibility (not shown now, see below) |
+| | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full: use system memory, or report out of memory (not shown now, see below) |
+
+The two Vulkan values wait for the ICD that reads them (`GraphicsSettings.AwaitingIcd`). The b23 release does not carry
+the Mesa line with the Vulkan WSI through DXGI and the per-application keys: no ICD of b23 reads `WsiRoute`, and the
+64-bit system Vulkan ICD does not read `MemoryOverflow`. A control that does nothing, or that works only for some
+programs, is not shown. So the window has no Vulkan rows, the search has no Vulkan entries, and `--gfx` refuses both
+names. The support report still lists their stored values. Both rows come back with the train that carries that ICD
+line.
 
 An absent value is "Application decides" or the default that the window names. A game's own value wins over the value
 for all games. The settings rule applies. "Application decides" and "Same as all games" write nothing and remove a

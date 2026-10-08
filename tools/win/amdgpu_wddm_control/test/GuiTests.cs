@@ -240,7 +240,7 @@ static partial class UnitTests
         Equal("games.sm", first("shader model", "en"), "the shader model is a game setting");
         Equal("display.scaling", first("GPU scaling", "en"), "GPU scaling is on the Display page");
         Equal("display.resolution", first("refresh rate", "en"), "the refresh rate is the resolution setting");
-        Equal("graphics.vk-memory", first("VRAM", "en"), "VRAM finds the Vulkan memory setting");
+        Check(!SettingsSearch.Index.Any(x => x.Id.StartsWith("graphics.vk-", StringComparison.Ordinal)), "no search entry for a Vulkan setting that waits for its ICD");
         foreach (var e in SettingsSearch.Index.Where(x => x.Id.StartsWith("later.", StringComparison.Ordinal)))
             Check(!new[] { "vsync", "fps", "af", "scaling", "mode", "fps-counter" }.Contains(e.Id.Substring(6)), "no Coming-later row for a setting that exists: " + e.Id);
         Equal(SettingsSearch.Normalize("カタカナ"), SettingsSearch.Normalize("かたかな"), "hiragana folds to katakana");
@@ -461,8 +461,8 @@ static partial class UnitTests
         var more = new Dictionary<string, Recovery.PlanArgs>
         {
             { "cu-mode", new Recovery.PlanArgs { Cu = 40 } }, { "reset-defaults", new Recovery.PlanArgs { Games = "reset" } },
-            { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off,shader-model-67-off", Gfx = "VSync=unset,Anisotropy=8,MemoryOverflow=strict" } },
-            { "graphics-defaults", new Recovery.PlanArgs { Gfx = "FrameRateLimit=unset,MaxFrameLatency=1,PerformanceOverlay=1,ReportAmdDriverVersion=1,WsiRoute=dxgi,MemoryOverflow=strict" } },
+            { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off,shader-model-67-off", Gfx = "VSync=unset,Anisotropy=8,FrameRateLimit=144" } },
+            { "graphics-defaults", new Recovery.PlanArgs { Gfx = "FrameRateLimit=unset,MaxFrameLatency=1,PerformanceOverlay=1,ReportAmdDriverVersion=1,VSync=0" } },
         };
         foreach (var s in fixtures)
             foreach (var a in Recovery.Actions)

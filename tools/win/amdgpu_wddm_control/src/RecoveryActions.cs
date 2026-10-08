@@ -671,7 +671,7 @@ namespace AmdgpuWddmControl
                 Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
                 Console.Error.WriteLine("       --action cu-mode --cu 24|40 ...   --action reset-defaults [--games keep|reset] ...");
                 Console.Error.WriteLine("       --action game-profile --image <name.exe> [--value <switches or \"\">] [--gfx <settings>] ...   --action game-undo|game-redo --image <name.exe> ...");
-                Console.Error.WriteLine("       --action graphics-defaults --gfx <settings> ...   (settings: Name=value,... or Name=unset, for example FrameRateLimit=60,WsiRoute=gdi)");
+                Console.Error.WriteLine("       --action graphics-defaults --gfx <settings> ...   (settings: Name=value,... or Name=unset, for example FrameRateLimit=60,VSync=unset)");
                 Console.Error.WriteLine("       --action tune-trial --curve <11 values in mV> [--window ms] ...   --action tune-keep|tune-stop|tune-reset ...");
                 Console.Error.WriteLine("       --action cpu-trial [--cpu-clock MHz] [--cpu-uv steps] [--cpu-temp C] [--window ms] ...   --action core-mask --cores 6|8 ...");
                 Console.Error.WriteLine("       --action fan-auto ...   --action fan-curve --fan-profile standard|quiet|performance|custom [--fan-curve C:pct,...] ...");

@@ -30,7 +30,8 @@ namespace AmdgpuWddmControl
             E("graphics.tuning", "graphics"), E("graphics.cpu-tuning", "graphics"), E("graphics.cpu-cores", "graphics"),
             // The settings for all games (GraphicsSettings.cs); a game's own ones are on the Games page.
             E("graphics.fps", "graphics"), E("graphics.vsync", "graphics"), E("graphics.af", "graphics"), E("graphics.latency", "graphics"),
-            E("graphics.overlay", "graphics"), E("graphics.amd-version", "graphics"), E("graphics.vk-present", "graphics"), E("graphics.vk-memory", "graphics"),
+            // graphics.vk-present and graphics.vk-memory come back with their rows (GraphicsSettings.AwaitingIcd).
+            E("graphics.overlay", "graphics"), E("graphics.amd-version", "graphics"),
             E("games.rt", "games"), E("games.present", "games"), E("games.cpu", "games"), E("games.sm", "games"), E("games.cpu-render", "games"),
             E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.scaling", "display"), E("display.identify", "display"), E("display.scale", "display"),
