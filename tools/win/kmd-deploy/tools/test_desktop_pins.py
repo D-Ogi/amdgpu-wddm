@@ -2,8 +2,8 @@
 
     python tools/test_desktop_pins.py
 
-Cases: the live lab-baseline.json; a baseline without a desktop block (the CPU desktop of every promotion up to 182);
-a router baseline as the GPU DWM ladder wrote it; refusals for a malformed block. Prints PASS and exits 0.
+Cases: the live lab-baseline.json; the installed release's desktop block, which registers the router; refusals for a
+malformed block and for a baseline with no desktop block at all. Prints PASS and exits 0.
 """
 import copy
 import json
@@ -20,12 +20,14 @@ CPU = '4176D1DF5E93DB284A3FADF8E406AF98E4346966E15682015D7B5BA0ED7C8544'
 ROUTER = '5BBEB7837AFA65F846B525019BFE6627C43C3BD07AA9EDC8D1CBA9746231DC71'
 ZINK = 'E6B944CF6E1250E63920D7E4498D628B2CF97E53E143C69341EC8A689A6C69F7'
 ICD = '66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200'
-LEGACY = {'kmd_version': '0.7.182.1', 'kmd_sys_sha256': 'A' * 64, 'kmd_abi': '0x000700B6',
-          'umd_path': 'C:\\BC250\\m15\\desktop-umd173-007\\bc250d3d.dll', 'umd_sha256': CPU,
-          'icd_path': 'C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll', 'icd_sha256': 'B' * 64}
-ROUTED = dict(LEGACY, desktop={'registered_path': 'C:\\BC250\\m15\\gpu-dwm-003\\bc250d3d_router.dll',
-                               'registered_sha256': ROUTER, 'switches': 1, 'default_route': 'gpu',
-                               'dwm_routes': {'cpu': [ROUTER, CPU], 'gpu': [ROUTER, ZINK, ICD]}})
+INSTALL_ROOT = 'C:\\Program Files\\amdgpu-wddm'
+# The release layout: every path below <InstallRoot>, as release-baseline.py derives it from the release manifest.
+NO_DESKTOP = {'kmd_version': '0.7.216.20', 'kmd_sys_sha256': 'A' * 64, 'kmd_abi': '0x000700D8',
+              'umd_path': INSTALL_ROOT + '\\desktop\\bc250d3d.dll', 'umd_sha256': CPU,
+              'icd_path': INSTALL_ROOT + '\\vulkan\\vulkan_radeon.dll', 'icd_sha256': 'B' * 64}
+ROUTED = dict(NO_DESKTOP, desktop={'registered_path': INSTALL_ROOT + '\\desktop\\bc250d3d_router.dll',
+                                   'registered_sha256': ROUTER, 'switches': 1, 'default_route': 'gpu',
+                                   'dwm_routes': {'cpu': [ROUTER, CPU], 'gpu': [ROUTER, ZINK, ICD]}})
 
 
 def refused(baseline):
@@ -52,9 +54,7 @@ def main():
         if not ok:
             raise SystemExit('FAIL: ' + name)
 
-    legacy = stage.desktop_pins(LEGACY)
-    check('no desktop block: switches 0, CPU UMD alone, no router key',
-          legacy == {'switches': '0', 'modules': [CPU], 'router_key': ''})
+    check('refused: no desktop block (the installed release always has one)', refused(NO_DESKTOP))
     routed = stage.desktop_pins(ROUTED)
     check('router block: switches 1, CPU route = router + CPU UMD sorted, router key',
           routed == {'switches': '1', 'modules': sorted([ROUTER, CPU]), 'router_key': 'SOFTWARE\\amdgpu-wddm\\DesktopRouter'})

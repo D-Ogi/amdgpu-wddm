@@ -151,11 +151,16 @@ def synthetic():
     ident = stage.generated_identity(dict(cand, commit='1' * 40, abi='0x000700D8'),
                                      dict(roll, commit='2' * 40, abi='0x000700D8',
                                           files={'bc250kmd.sys': 'B' * 64, 'bc250kmd.inf': 'D' * 64, 'bc250kmd.cat': 'E' * 64}),
-                                     {'umd_path': 'u', 'umd_sha256': 'F' * 64, 'icd_path': 'i', 'icd_sha256': '0' * 64},
+                                     {'umd_path': 'u', 'umd_sha256': 'F' * 64, 'icd_path': 'i', 'icd_sha256': '0' * 64,
+                                      'desktop': {'registered_sha256': 'A' * 64, 'switches': 1,
+                                                  'dwm_routes': {'cpu': ['A' * 64, 'F' * 64]}}},
                                      'kmd216-16-deploy')
     check('generated labels candidate216-16 / rollback216-100 and the kmd216-16 pattern',
           "$KmdCandidateLabel='candidate216-16'" in ident and "$KmdRollbackLabel='rollback216-100'" in ident
           and 'kmd216-16-deploy[0-9]{3}$' in ident and '0.7.216.16 (commit 11111111)' in ident)
+    check('generated identity pins the release desktop: switches 1, the CPU route and the router key',
+          "$KmdDesktopSwitches='1'" in ident and "$KmdDesktopRouterKey='SOFTWARE\\amdgpu-wddm\\DesktopRouter'" in ident
+          and "$KmdDesktopModules='" + 'A' * 64 + ',' + 'F' * 64 + "'" in ident)
 
 
 def live():
