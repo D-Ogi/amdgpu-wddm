@@ -13,6 +13,8 @@ if(!$EngineInclude){
 if(!$MesaSource){$MesaSource=Join-Path $root 'scratch\m12\mesa-current-src'}
 if(!$VulkanInclude){$VulkanInclude=Join-Path $root 'scratch\m15\vkd3d\khronos\Vulkan-Headers\include'}
 if(!$OutputDir){$OutputDir=Join-Path $root 'scratch\build\d3d12-adapter'}
+# Full paths: /d1trimfile below cuts each of these prefixes from the source paths the compiler sees.
+$MesaSource=[IO.Path]::GetFullPath($MesaSource);$VulkanInclude=[IO.Path]::GetFullPath($VulkanInclude);$EngineInclude=[IO.Path]::GetFullPath($EngineInclude)
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir|Out-Null
 $engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
@@ -38,7 +40,8 @@ try {
  # /O2 /GL /arch:AVX2 game run (trial 171, adapter100) corrupted the player character with no error, and
  # the review (scratch/m15/entry-lock/CORRUPTION-ANALYSIS.md, local) found no cause; /O2 carries the measured
  # gain, the other two have none measured in a forwarding layer. They return one at a time with a measurement.
- $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/external:W0','/MT','/DNOMINMAX','/Brepro',"/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
+ $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/external:W0','/MT','/DNOMINMAX','/Brepro','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){
