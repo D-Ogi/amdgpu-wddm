@@ -28,6 +28,8 @@ if ($LASTEXITCODE -ne 0) { throw 'DDI error policy mutation controls failed' }
 & "$PSScriptRoot\test-umd-ddi-draw.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\ddi-table') -VsInstall $VsInstall -Arch $Arch
 # The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
 & "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
+# The per-application graphics settings that the adapter and the Present path read.
+& "$PSScriptRoot\test-umd-app-settings.ps1" -OutputDir (Join-Path $OutputDir 'quality\app-settings') -VsInstall $VsInstall -Arch $Arch
 $saved=Save-ProcessEnvironment
 try {
     $env:TEMP=$OutputDir; $env:TMP=$OutputDir
