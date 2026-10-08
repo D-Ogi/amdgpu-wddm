@@ -169,6 +169,16 @@ static partial class UnitTests
             var text = Regex.Replace(File.ReadAllText(f), @"//[^\n]*", "");
             Check(!text.Contains("\"TdrDelay\""), "G-SRC: " + Path.GetFileName(f) + " does not name the value itself");
         }
+
+        // G-ARG: the window plans in its own process, then runs the elevated helper with a command line. Every option
+        // of Recovery.PlanArgs that RecoveryActions.Parse reads has to be written on that command line by the window,
+        // or the helper plans without it and refuses the action as a usage error. The waiting time was such a case:
+        // the card called the action with Tdr and the window sent no --tdr.
+        var parse = File.ReadAllText(Path.Combine(src, "RecoveryActions.cs"));
+        var emit = string.Concat(new[] { "MainForm.Actions.cs", "TunerPlan.cs", "FanPlan.cs" }.Select(f => File.ReadAllText(Path.Combine(src, f))));
+        var options = Regex.Matches(parse, @"a == ""(--[a-z0-9-]+)""[^\n]*o\.More\.").Cast<Match>().Select(x => x.Groups[1].Value).Distinct().ToList();
+        Check(options.Contains("--tdr") && options.Count >= 12, "G-ARG: the helper's options of PlanArgs: " + string.Join(" ", options));
+        foreach (var opt in options) Check(emit.Contains("\"" + opt + "\""), "G-ARG: the window writes " + opt + " on the helper's command line");
     }
 
     // A snapshot the reset accepts: the driver runs, the release's table is there, and the stored values differ from it.
