@@ -1,4 +1,5 @@
-# Shared helpers for build-llvm.ps1 and build-mesa.ps1. Dot-sourced by them, not a command of its own.
+# Shared helpers for build-llvm.ps1, build-mesa.ps1, build-dxvk.ps1 and build-vkd3d.ps1. Dot-sourced by them, not
+# a command of its own.
 #
 # Only the build environment lives here: the workspace root, the Visual Studio developer environment, tool
 # versions, source identity and the recipe.json record. The recipes themselves (options, targets) stay in the
@@ -189,6 +190,28 @@ function Get-RecipeIdentity([string]$Repo, [string[]]$Files) {
     $hashes = [ordered]@{}
     foreach ($f in $Files) { $hashes[(Split-Path -Leaf $f)] = Get-FileSha256 $f }
     return [ordered]@{ repository_commit = $commit; files_sha256 = $hashes }
+}
+
+# The MSVC switches that make a meson build give the same bytes from the same commit in another directory
+# (docs/design/reproducible-builds.md). /Brepro: no clock in the objects and the image. /PDBALTPATH:%_PDB%: the
+# CodeView record names the PDB file only. /FC with /d1trimfile: __FILE__ and the hash in the name of an anonymous
+# namespace start below the source or the build directory, not at the drive. The switches go at the end of an option
+# the set already has, because a second -D for the same option replaces the first. The configure gate then compares
+# the Build Options line with the merged set.
+function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build) {
+    foreach ($dir in $Source, $Build) {
+        if ($dir -match '\s') { throw "$dir contains white space: meson splits c_args at white space, so /d1trimfile cannot name it" }
+    }
+    $compile = "/Brepro /FC /d1trimfile:$Source /d1trimfile:$Build"
+    $add = [ordered]@{ c_args = $compile; cpp_args = $compile; c_link_args = '/Brepro /PDBALTPATH:%_PDB%'; cpp_link_args = '/Brepro /PDBALTPATH:%_PDB%' }
+    $merged = [Collections.Generic.List[string]]::new()
+    foreach ($o in $Options) { $merged.Add($o) }
+    foreach ($name in $add.Keys) {
+        $i = 0
+        while ($i -lt $merged.Count -and -not $merged[$i].StartsWith("-D$name=")) { $i++ }
+        if ($i -lt $merged.Count) { $merged[$i] = "$($merged[$i]) $($add[$name])" } else { $merged.Add("-D$name=$($add[$name])") }
+    }
+    return @($merged)
 }
 
 function Write-Recipe([string]$Path, $Recipe) {
