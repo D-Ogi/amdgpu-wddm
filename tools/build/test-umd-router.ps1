@@ -25,6 +25,11 @@
 # drives the change log, its budget and the periodic summary on its own clock (front-flip-log.h). 83 scenarios,
 # 0 failed on 2026-10-08 with the tester.20 hosted UMD, CPU UMD and D3D11 package.
 #
+# The desktop-route record (driver/contract/bc250_desktop_route.h) adds route-dwm-name-fallback: the harness runs as
+# dwm.exe, the hosted open fails and the router falls back to the CPU UMD, the record says so, and the shells' shared
+# rule stands down over it. route-dwm-name, route-dwm-name-kill and desktop-dwm-unchanged read the record too.
+# 84 scenarios, 0 failed on 2026-10-08 with the same tester.20 binaries.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(
