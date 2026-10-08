@@ -94,7 +94,12 @@ $includes = @("/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVer
     "/I$(Join-Path $hip 'tests\host')")
 $libpaths = @("/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64",
     "/LIBPATH:$sdkLib\um\x64")
-$warn = @('/nologo', '/W4', '/WX', '/O2', '/D_CRT_SECURE_NO_WARNINGS', '/DBC250_HIP_BUILD_DLL')
+# /Brepro on the compiler and on the linker, as build.ps1 of layer 1 does: the artifacts carry
+# no build timestamp, so the hash of a DLL names its source and not the hour. MEASURED: without
+# it, two builds of the same commit gave two hashes of amdhip64.dll, which makes the hash in a
+# lab kit worthless.
+$libpaths = @('/Brepro') + $libpaths
+$warn = @('/nologo', '/W4', '/WX', '/O2', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS', '/DBC250_HIP_BUILD_DLL')
 
 function Invoke-Cl([string[]]$Arguments, [string]$What) {
     $env:INCLUDE = ''; $env:LIB = ''
@@ -258,6 +263,11 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     # C runtime DLL while clang still links the static libucrt, which the linker answers with
     # LNK4098 and LNK4217. The static C runtime is the default and it links clean. Our DLL has
     # its own C runtime, and nothing of the C runtime crosses the interface.
+    # The sample is not byte reproducible, and -Xlinker /Brepro does not make it so. MEASURED:
+    # two builds of the same source differ in 84 bytes, which are the unique __hip_cuid_<16 hex>
+    # symbol that clang writes into every HIP compilation (twice in the image) and four bytes of
+    # the PE header. The hash printed for vadd.exe therefore names one build of it. The hashes of
+    # amdhip64.dll and of the tests do not have this property: they are reproducible.
     $flags = @('-x', 'hip', '--offload-arch=gfx1013', '--target=x86_64-pc-windows-msvc',
         '-nogpuinc', '-O2', '-std=c++17', "-I$(Join-Path $hip 'include')")
     if ($DeviceLibPath -and (Test-Path $DeviceLibPath)) {
