@@ -1,8 +1,23 @@
 # Design: the Vulkan WSI presents through DXGI on a D3D12 device
 
-Date: 2026-10-07. Status: implemented offline, not measured on unit A. The DXGI route is the default (owner
-decision, 2026-10-07: a route that must be switched on gets forgotten). GDI is the explicit rollback and the
-automatic fallback when the DXGI route fails. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
+Date: 2026-10-07, brought to the b23 release line on 2026-10-08. Status: implemented offline, not measured on
+unit A. The DXGI route is the default (owner decision, 2026-10-07: a route that must be switched on gets
+forgotten). GDI is the explicit rollback and the automatic fallback when the DXGI route fails.
+
+This route is how the M15.14 criterion is met for Vulkan. The owner put Vulkan into M15.14 on 2026-10-08
+(independent flip: the display pipeline scans out a fullscreen or borderless game from the game's own
+swap-chain buffer, and DWM does not compose its frames). The registered system Vulkan ICD presents with `D3DKMTPresent` and a blit, so DWM
+composes every Vulkan frame today. A DXGI flip-model chain on a D3D12 device of our adapter has the shape the
+D3D12 shell's scan-out rule admits, so the Vulkan chain can reach the same flip as a native D3D12 game.
+Step 5 and step 7 of the lab plan are that measurement. See the M15.14 row of
+[the M15 reconciliation](../m15-reconciliation.md).
+
+**Two ICD lines, and this work sits on one of them.** The release carries two 64-bit RADV builds. The D3D ICD
+line (`amdgpu-wddm/b23-icd`) belongs to our D3D11 and D3D12 shells, which load it in hosted mode. There the shell presents
+and the ICD has no WSI role at all. The system Vulkan ICD line (`amdgpu-wddm/b23-system-icd`) is
+`payload/vulkan/vulkan_radeon.dll`, which the Vulkan loader gives to every pure Vulkan process. This WSI work
+belongs to the second line, and the branch for the b23 trial is `amdgpu-wddm/vk-wsi-dxgi-b23`: the b23 system
+line plus the six route commits, so the candidate differs from the installed file by the route alone. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
 D3D11 and KMT plans of [the engine present note](wsi-engine-present.md) for the WSI side. Nothing here is a
 measured result unless it cites a `facts.md` row.
 
@@ -165,13 +180,14 @@ shared surface (`driver/contract/amdgpu_wddm_surface_format.h`). Nothing in the 
 
 | Repository, branch | Change |
 |---|---|
-| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi` | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
+| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi-b23`, which is the b23 system ICD line `amdgpu-wddm/b23-system-icd` plus the six route commits. `amdgpu-wddm/vk-wsi-dxgi` is the same work on the D3D ICD line | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
 | | `radv_wddm2_bo.c`: the import of 10-bit and FP16 surfaces |
 | | `radv_wddm2_wsi.c`: the hooks, the presenter device with the System32 binding, the layout check |
 | | `wsi_common.c`: the blit hook of each swapchain and the CPU wait |
 | | `wsi_common_win32.cpp`: the route, the init failure and its HRESULT |
 | | `u_win32_library.h`: the search for dependencies in System32 only |
-| bc250-win, `wsi/vk-dxgi` | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
+| | `amdgpu_wddm_stdio.h` and `u_amdgpu_wddm_stdio.c`: the named log stream the route lines use. On the D3D ICD line that pair also redirects the whole process's stdio. On the system line it declares the log and nothing else. The ICD's stdio therefore stays as the registered build has it |
+| bc250-win, `wsi/vk-dxgi-b23` (`wsi/vk-dxgi` is the same note on the b19 base) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 
 Two upstream defects are fixed on the way. The device-wide `wsi_device::blit` hook skipped the own blit of a CPU
 swapchain on a DXGI-capable device. The CPU-image present waited for the GPU only on software devices. Swapchain
@@ -202,11 +218,26 @@ destroy also leaked each image's D3D12 resource, command list and allocator.
 
 ## Lab plan
 
-Each step is one trial of at most three minutes. The Vulkan game step is a game session under the game bound.
-Each step uses the installed release with only `vulkan_radeon.dll` replaced by the candidate. The rollback is
-`AMDGPU_WDDM_VK_WSI=gdi` for one process or the registry value `gdi` for all. Capture ETW with the present-mode
-provider set of `tools/win/lab-runner/etw/etw-capture.ps1 -PresentMode`, and read it with
-`tools/win/etw/etw-present-mode.py`.
+The kit that runs it is `scratch/b24/vk-wsi-dxgi-kit/lab/` (local, outside this repository): one PowerShell 5.1
+script per step, `install-candidate.ps1` and `rollback-candidate.ps1` for the file swap, `EXPECTED.md` with the
+expected line of every step, and `selftest.ps1` for the reading logic. Nothing of it has run.
+
+Each step is one trial of at most 170 s, which holds the three-minute rule. The Vulkan game step runs the game's
+own timedemo and ends by itself, so it keeps the same bound. An interactive game session under the owner's game
+rules is a separate run. It is not part of this plan.
+
+Each step uses the installed b23 release with one file replaced: `vulkan\vulkan_radeon.dll` under the install
+root, the system Vulkan ICD. The manifest beside it names `.\vulkan_radeon.dll`, so that one file is the whole
+install, and the shells keep their own ICD. The kit keeps the b23 file by hash and restores it by hash. The route's own
+rollback is `AMDGPU_WDDM_VK_WSI=gdi` for one process or the registry value `gdi` for all.
+
+Each client runs as a one-shot scheduled task of the interactive session. An SSH session on this lab has
+elevation but lives in session 0, where a window is on no monitor and no interactive DWM composes it, so a present from
+there could never be composed or flipped. Window work (borderless for step 5, the resize in step 3) happens in
+that session too, because a window of session 1 cannot be moved from session 0.
+
+Capture ETW with the present-mode provider set of `tools/win/lab-runner/etw/etw-capture.ps1 -PresentMode`, and
+read it with `tools/win/etw/etw-present-mode.py`.
 
 1. **vkcube, window, no variable and no registry value set, 60 s.** Collect `BC250_WSI_PRESENT_LOG`, the
    amdgpu-wddm log and ETW. Pass: the init line `BC250 WSI: route=dxgi asked=dxgi source=default ... reason=ok`,
@@ -225,13 +256,28 @@ provider set of `tools/win/lab-runner/etw/etw-capture.ps1 -PresentMode`, and rea
 4. **vkcube with an upstream DXVK `dxgi.dll` next to a copy of `vkcube.exe`, 60 s.** Pass: as step 1,
    and the init line has `app-local=dxgi.dll(file) bound=System32` (`loaded` if something in the process loaded
    it). The presenter line has `impl=system`. No vkcube window error and no `CPU images` line.
-5. **vkcube, fullscreen 1920x1200, 60 s, with `AMDGPU_WDDM_D3D12_EXPERIMENT=scanout-flip-1920x1200`.** Pass:
-   the router front logs `answer=1 rule=supported`, and `etw-present-mode.py gpu.etl vkcube --admitted-address
-   ... --kmd-counters ...` prints the `M15.14 INCREMENT2 vkcube` line with its pass result (all four clauses PASS). A COMPOSED verdict here is
-   the M15.14 result for native D3D12 as well, not a WSI defect.
+5. **vkcube, borderless 1920x1200, 70 s, with no experiment and the overlay hidden.** This step is the M15.14
+   Vulkan criterion. Sessions 479 and 480 (2026-10-08) gave the native path an independent flip with no experiment at
+   1920x1200: exclusive and borderless both read INDEPENDENT FLIP with the release defaults, so
+   `AMDGPU_WDDM_D3D12_EXPERIMENT` stays empty. The overlay window must be hidden, because a topmost window
+   over the output makes DWM compose (479/480 arm d). Pass: `etw-present-mode.py gpu.etl vkcube
+   --admitted-address ... --kmd-counters ...` prints `M15.14 VERDICT vkcube ... result=INDEPENDENT-FLIP` and
+   `M15.14 INCREMENT2 vkcube ... result=CONFIRMED`, the KMD scan-out flip and request counters both move, and
+   every admission refusal column stays at zero. The front's `answer=1 rule=supported` line is evidence only
+   when `RouteLogDirectory` was already set when DWM started, because the front reads that value at
+   `OpenAdapter`. Its absence is not a failure of the step. A control arm with the overlay shown must read
+   COMPOSED with no scan-out flip. A COMPOSED verdict with nothing over the output is the M15.14 result for
+   native D3D12 as well, not a WSI defect.
 6. **vkcube, `dxgi-composition`, 60 s.** Pass: as step 1, with the `composition swap chain` line.
-7. **A Vulkan game, borderless at 1920x1200, no variable set.** Pass: as steps 1 and 5 for the game process, the
-   game's own frame rate against the same session on `gdi`, and no swapchain fallback line.
+7. **Quake II RTX 1.8.1, borderless at 1920x1200, no variable set.** It is the one Vulkan game the workspace
+   stages for unit A (`scratch/pathtrace/pkg/q2rtx`, pushed to `C:\BC250\pathtrace` by `pt-session.py push`
+   during the b23 validation), and it is path-traced, so it exercises ray tracing and the WSI at once. The run
+   is its own timedemo through `scratch/pathtrace/lab/pt-run.ps1 -Demo q2rtx-timedemo`, which already holds the
+   interactive task, the Tctl gate and the thermal stop. Pass: as steps 1 and 5 for the game process, a frame
+   rate in the game's log that is not below the same run on `gdi`, and no swapchain fallback line. Q2RTX may
+   also fail for a ray-tracing reason that has nothing to do with this WSI, and nothing has run it on unit A
+   yet: the route lines appear before the game picks a device, so an early failure still names which route was
+   chosen.
 
 If a step fails on the DXGI route, the release notes keep `gdi` as the named workaround
 (`docs/testing/release-notes/pending/vk-wsi-dxgi.md`), and the failure gets a GitHub issue.
