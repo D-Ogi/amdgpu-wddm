@@ -15,7 +15,7 @@ these scripts are its executable half.
 | `vkd3d-configs.json` | the three vkd3d-proton option sets and their ninja targets |
 | `build-umd-router.ps1` | cl for the UMD router `bc250d3d_router.dll` (`driver/umd/router`), its UMD doubles and its host-test harness |
 | `test-umd-router.ps1` | the router's host gate on that output, with the hosted UMD, the CPU UMD and the DXVK shell named by parameter |
-| `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link |
+| `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link, and the CheckSum that covers them |
 | `build-radv-queue-tests.ps1`, `radv-queue-tests.py` | host tests of the hosted queue winsys in a built RADV tree ([driver/icd/mesa-wddm2-runtime-queues](../../driver/icd/mesa-wddm2-runtime-queues/README.md)) |
 | `build-radv-unorm10-export-test.ps1`, `radv-unorm10-export-test.py` | host test of the 10-bit UNORM colour export rounding (BD-049) in a built RADV tree: the epilog key, the NIR export and the ACO epilog over about 1.3 million inputs, and a negative control without the rounding that must fail |
 | `common.ps1` | shared helpers: workspace root, Visual Studio environment, tool versions, source identity |
