@@ -45,6 +45,9 @@
       "RequireKmdSwitches": 1,
       "DirectFlipFront": 1
     },
+    "graphics_drivers": {
+      "TdrDelay": 10
+    },
     "app_router": {
       "Mode": "gpu-default",
       "Allow": [],

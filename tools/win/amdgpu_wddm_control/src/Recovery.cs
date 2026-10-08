@@ -44,7 +44,14 @@ namespace AmdgpuWddmControl
         public string ConfirmLogLast { get; set; }
         public Dictionary<string, long> DefaultParameters { get; set; }     // manifest.json "defaults"; null: none
         public Dictionary<string, long> DefaultRouter { get; set; }
+        public Dictionary<string, long> DefaultGraphicsDrivers { get; set; }
         public string DefaultsError { get; set; }
+        // How long Windows waits for the graphics before it resets them (TdrSetting.cs): the stored number of seconds,
+        // null when nothing is stored (Windows waits TdrSetting.WindowsDefault then). TdrError names why the value
+        // could not be read; null means it was read. An old recorded snapshot has neither member, which reads as
+        // "nothing stored, read without trouble" and plans the release default, as a fresh machine does.
+        public long? TdrDelay { get; set; }
+        public string TdrError { get; set; }
         // The desktop compositor of the active interactive session (BD-060): what is running now, and every DWM the
         // observers saw in this session of this boot, this reading included.
         public DwmReading DwmNow { get; set; }
@@ -85,6 +92,13 @@ namespace AmdgpuWddmControl
         {
             long v;
             return Parameters != null && Parameters.TryGetValue(name, out v) ? (uint?)(uint)v : null;
+        }
+
+        // The stored waiting time for the graphics as a DWORD, or null when nothing is stored or the number is outside
+        // the DWORD range (a value of another type is reported through TdrError instead).
+        public uint? Tdr()
+        {
+            return TdrDelay != null && TdrDelay.Value >= 0 && TdrDelay.Value <= uint.MaxValue ? (uint?)(uint)TdrDelay.Value : null;
         }
 
         public bool DriverRunning { get { return DriverError == null && (Interop != null || Health != null || Dpm != null); } }
@@ -350,12 +364,15 @@ namespace AmdgpuWddmControl
             // The case fan card of the Performance page: one escape each, and the driver stores the choice.
             "fan-auto", "fan-curve", "fan-test",
             // The graphics settings for all games (the Graphics page); a game's own ones go with game-profile.
-            "graphics-defaults" };
+            "graphics-defaults",
+            // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079).
+            "tdr-delay" };
 
         public static bool Allowed(string path, string name)
         {
             if (string.Equals(path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return ParameterNames.Contains(name);
             if (string.Equals(path, RouterPath, StringComparison.OrdinalIgnoreCase)) return RouterNames.Contains(name);
+            if (TdrSetting.Allowed(path, name)) return true;
             return GraphicsSettings.Allowed(path, name);
         }
 
@@ -959,6 +976,20 @@ namespace AmdgpuWddmControl
                 cuWarn ? "warn" : cuView.Class == CuClass.Standard || cuView.Class == CuClass.Confirmed ? "ok" : "info",
                 cuView.OfferConfirm ? "cu-confirm" : null, cuView.OfferConfirm ? "Confirm now" : null);
 
+            // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). No action is
+            // offered here, because the action carries the chosen number; the Help page's card does that.
+            long tdrWanted = 0;
+            bool tdrKnown = s.DefaultGraphicsDrivers != null && s.DefaultGraphicsDrivers.TryGetValue(TdrSetting.ValueName, out tdrWanted);
+            string tdrRelease = tdrKnown ? " The release writes " + tdrWanted + "." : "";
+            if (s.TdrError != null)
+                add("Graphics waiting time", "The waiting time cannot be read: " + s.TdrError + "." + tdrRelease, "warn", null, null);
+            else if (s.Tdr() == null)
+                add("Graphics waiting time", TdrSetting.ValueName + " is absent, so Windows waits " + TdrSetting.WindowsDefault + " s." + tdrRelease,
+                    tdrKnown && tdrWanted > TdrSetting.WindowsDefault ? "warn" : "info", null, null);
+            else
+                add("Graphics waiting time", TdrSetting.ValueName + " " + s.Tdr().Value + " s." + tdrRelease,
+                    tdrKnown && s.Tdr().Value < tdrWanted ? "warn" : "ok", null, null);
+
             // The installer's start-confirm task.
             if (!s.TaskFound)
                 add("Start confirmation task", "The release's logon task is not installed. Run the release installer again.", "warn", null, null);
@@ -1097,6 +1128,13 @@ namespace AmdgpuWddmControl
                     p.Writes.Add(RegWrite.Dword(RouterPath, "DwmForceCpu", (uint)cpu));
                     if (s.DefaultParameters["EnableGpuPresentBlit"] == 1 && s.DefaultParameters["EnableCddDwmInterop"] == 1 && s.P("InteropClosedReason") != null)
                         p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
+                    // The waiting time for the graphics, when the installed release names one (manifest.json
+                    // defaults.graphics_drivers). A release that names none, or a number outside the range this app
+                    // accepts, leaves the value as it is: the reset never writes a waiting time nobody chose.
+                    long tdrDefault;
+                    if (s.DefaultGraphicsDrivers != null && s.DefaultGraphicsDrivers.TryGetValue(TdrSetting.ValueName, out tdrDefault) &&
+                        tdrDefault >= 0 && tdrDefault <= uint.MaxValue && TdrSetting.IsValid((uint)tdrDefault) && s.TdrError == null)
+                        p.Writes.AddRange(TdrSetting.PlanWrites(s.Tdr(), (uint)tdrDefault));
                     int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k));
                     if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
                     // The tuning page's settings are not in manifest.json, because the driver stores them itself
@@ -1254,6 +1292,26 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case "tdr-delay":
+                {
+                    // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). Windows
+                    // reads the value when it starts, so the change applies at the next restart of Windows. The
+                    // driver does not have to be running for this: it is a Windows setting, and a tester whose
+                    // picture already broke must be able to lengthen the wait.
+                    p.Title = "Waiting time for the graphics";
+                    p.Effect = "at the next restart of Windows";
+                    p.Undoable = true;
+                    if (more.Tdr == null) return Refuse(p, "No waiting time given.");
+                    if (!TdrSetting.IsValid(more.Tdr.Value))
+                        return Refuse(p, "The waiting time must be between " + TdrSetting.Min + " and " + TdrSetting.Max + " seconds.");
+                    if (s.TdrError != null) return Refuse(p, "The waiting time for the graphics cannot be read, so it is not changed: " + s.TdrError);
+                    p.Writes.AddRange(TdrSetting.PlanWrites(s.Tdr(), more.Tdr.Value));
+                    if (p.Writes.Count == 0) return Refuse(p, "Windows waits " + more.Tdr.Value + " seconds for the graphics already.");
+                    p.Change = TdrSetting.Describe(s.Tdr(), more.Tdr.Value);
+                    p.OfferRestart = true;
+                    break;
+                }
+
                 case "tune-trial":
                 case "tune-keep":
                 case "tune-stop":
@@ -1327,6 +1385,8 @@ namespace AmdgpuWddmControl
             // clock, undervolt steps, temperature cap and core count.
             public string Curve;
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
+            // tdr-delay: the waiting time in seconds that the person chose (TdrSetting.Choices).
+            public uint? Tdr;
             // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".
             public string FanProfile, FanCurve;
             public uint? FanTestPct;            // fan-test: the duty of the short test

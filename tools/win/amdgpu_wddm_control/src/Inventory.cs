@@ -233,9 +233,15 @@ namespace AmdgpuWddmControl
     // this program (Program.RunElevated), which calls the same methods.
     public static class SettingsStore
     {
+        // The machine's keys in the 64-bit view, the view CuRegistry.cs opens with KEY_WOW64_64KEY and the one the
+        // router and the driver write. This application is built for x64, where Registry.LocalMachine is already that
+        // view, so naming the view changes nothing today and keeps the two paths the same if that ever changes. The
+        // base key lives as long as the process, like Registry.LocalMachine itself, so nothing disposes it.
+        public static readonly RegistryKey Machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+
         public static uint? ReadDword(string path, string name)
         {
-            using (var key = Registry.LocalMachine.OpenSubKey(path))
+            using (var key = Machine.OpenSubKey(path))
             {
                 var v = key == null ? null : key.GetValue(name);
                 return v is int ? (uint?)(uint)(int)v : null;

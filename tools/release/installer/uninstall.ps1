@@ -97,6 +97,31 @@ else {
     }
 }
 
+Write-Step 'Graphics waiting time'
+# TdrDelay under Windows' own GraphicsDrivers key: how long Windows waits for the graphics before it resets them
+# (BD-079, install.ps1). Back as it was, or removed when there was none. A value that is not the one this release
+# wrote belongs to whoever wrote it (the tester, or the control application's Help page) and stays, the same rule the
+# HD Audio interrupt follows above. Before the driver package goes, while the value still matters for this boot.
+$tdrRecord = $null
+if ($state -and $state.PSObject.Properties['tdr_delay'] -and ($null -ne $state.tdr_delay)) { $tdrRecord = $state.tdr_delay }
+if (-not $tdrRecord) { Write-Info 'no record of a change to the graphics waiting time in the installer state: nothing to put back' }
+else {
+    $tdrNow = Read-RegistryValues $script:GraphicsDriversKey
+    $has = $tdrNow.ContainsKey('TdrDelay')
+    $now = $(if ($has) { $tdrNow['TdrDelay'] } else { $null })
+    if (-not (Test-RegistryValueSame $now $tdrRecord.wrote)) {
+        Write-Info "TdrDelay is $(if ($has) { Format-RegistryValue $now } else { 'absent' }), not the $(Format-RegistryValue $tdrRecord.wrote) this release wrote: kept"
+    } elseif ($tdrRecord.present) {
+        Invoke-Change "$($script:GraphicsDriversKey): TdrDelay back to $(Format-RegistryValue $tdrRecord.previous), the value from before the install" {
+            New-ItemProperty -LiteralPath $script:GraphicsDriversKey -Name TdrDelay -Value ([int]$tdrRecord.previous) -PropertyType DWord -Force | Out-Null
+        } | Out-Null
+    } else {
+        Invoke-Change "$($script:GraphicsDriversKey): remove TdrDelay (there was none before the install, so Windows waits its own 2 seconds again)" {
+            Remove-ItemProperty -LiteralPath $script:GraphicsDriversKey -Name TdrDelay -ErrorAction SilentlyContinue
+        } | Out-Null
+    }
+}
+
 Write-Step 'Graphics registration and driver'
 $dev = @(Get-Bc250Device)
 if ($dev.Count -eq 1) {

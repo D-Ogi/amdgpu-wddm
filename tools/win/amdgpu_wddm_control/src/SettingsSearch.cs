@@ -40,6 +40,9 @@ namespace AmdgpuWddmControl
             E("settings.language", "settings"), E("settings.update-start", "settings"), E("settings.recent", "settings"), E("settings.nagi", "settings"),
             E("settings.tips", "settings"), E("settings.animations", "settings"), E("settings.support", "settings"), E("settings.data", "settings"),
             E("help.repair", "help"), E("help.report", "help"), E("help.restart", "help"), E("help.guides", "help"),
+            // How long Windows waits for the graphics (TdrSetting.cs): on the Help page, with the other things a
+            // person reaches for when the picture broke.
+            E("help.tdr", "help"),
             L("later.sharpen", "graphics"), L("later.aa", "graphics"),
             L("later.hdr", "display"), L("later.vrr", "display"),
             L("later.power", "performance"), L("later.cache-clear", "performance"),

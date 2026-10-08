@@ -187,3 +187,32 @@ No result is stored as a plain "current" flag; the app decides on every read:
   both until the next successful check.
 - "Update available" when the candidate is newer than the installed release read now (the installed release must
   be readable).
+
+## 6. The waiting time for the graphics (installer and control app share one value)
+
+`HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers` `TdrDelay` (REG_DWORD, seconds) holds how long Windows
+waits for the graphics before it resets them. It is Windows' own value. The Windows driver documentation gives it in
+`display/tdr-registry-keys.md`. An absent value means 2 seconds. Windows reads the value when it starts. Every change
+of it applies at the next restart of Windows. BD-079 and issue #12 are why this release owns the value. This part has
+no working GPU reset, so a picture that needs more time than the wait ends as a stopped machine.
+
+`install.ps1` writes the release's number. The number is `defaults.graphics_drivers.TdrDelay` of
+`registry-defaults.json`, which is 10. The upgrade rule is the one of every other default. An absent value is set. A
+value equal to what the previous installer wrote is updated. Any other value is kept. The value from before the first
+write goes into the installer state as `tdr_delay`, with the fields `present`, `previous` and `wrote`.
+
+`uninstall.ps1` writes the recorded value again. It removes the value when there was none before the installation. It
+does either only while the current value is the one this release wrote.
+
+The control app reads the value into the snapshot as `TdrDelay` and `TdrError`. It shows the value on the Help page,
+under "Waiting time for the graphics", and in the recovery view. It writes a chosen number through the planned action
+`tdr-delay` (`--action tdr-delay --tdr <seconds>`).
+
+`manifest.json` carries the same table as `defaults.graphics_drivers`. The app's "Restore default graphics settings"
+reads it.
+
+`src/TdrSetting.cs` holds the rules of the app. It accepts 2 to 60 seconds. It offers the numbers 2, 5, 10, 20, 30
+and 60. A stored number outside that list stays as it is until the person makes a choice. The chosen number is always
+written. The app never removes the value. An absent value would get the release default again at the next
+installation, against the release-notes rule "The installation keeps the settings that you changed". The app writes
+no other value of that key.

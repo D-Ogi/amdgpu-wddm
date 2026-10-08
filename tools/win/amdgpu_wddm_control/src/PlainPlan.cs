@@ -34,6 +34,9 @@ namespace AmdgpuWddmControl
                 case "DpmMode": return !w.Delete && w.Number == 1 ? "plan.line.auto-on" : "plan.line.auto-off";
                 case "DpmMaxMHz": return w.Delete ? "plan.line.ceiling-default" : "plan.line.ceiling";
                 case "CpuTune": return w.Delete || w.Number == 0 ? "plan.line.cpu-tune-off" : "plan.line.cpu-tune-on";
+                // The waiting time for the graphics (TdrSetting.cs). The app only ever writes a number; the delete
+                // form is here for an undo of a backup taken before the value existed.
+                case TdrSetting.ValueName: return w.Delete ? "plan.line.tdr-default" : "plan.line.tdr";
                 default: return null;
             }
         }
@@ -43,7 +46,7 @@ namespace AmdgpuWddmControl
             if (GraphicsSettings.Owns(w)) return GraphicsSettings.PlainLine(w);
             var id = LineId(w);
             if (id == null) return Strings.T("plan.line.other");
-            return id == "plan.line.ceiling" ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
+            return id == "plan.line.ceiling" || id == "plan.line.tdr" ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
         }
 
         public static string GroupList(string value)
@@ -115,7 +118,7 @@ namespace AmdgpuWddmControl
             new Regex(@"\b(KMD|UMD|ICD|DWM|DDI|WDDM|SMU|DPM|IOCTL|HKLM|HKCU|HKEY_\w+)\b"),
             new Regex(@"(?i)\b(fence|escapes?|exit code|error code|dxgkrnl|registry)\b"),
             new Regex(@"0x[0-9A-Fa-f]+"),
-            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*)\b"),
+            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*)\b"),
             new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };
