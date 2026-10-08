@@ -907,11 +907,16 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 #define BC250_CPU_ABI 1u
 #define BC250_CPU_CORE_SLOTS 8u
 // What a caller must know to form a request, under names of this header alone: the two core masks the driver
-// admits and the deepest step of the guided search. driver/shim/include/bc250_cpu.h is the authority for all
-// three, and driver/kmd/cpu.c asserts at compile time that these numbers still equal its own.
+// admits, the deepest step of the guided search and how many reasons Error can carry.
+// driver/shim/include/bc250_cpu.h is the authority for all four, and driver/kmd/cpu.c asserts at compile time
+// that these numbers still equal its own. A tool that prints a reason per Error value sizes its table on
+// BC250_CPU_REQUEST_ERROR_COUNT and asserts the same way, so a new reason cannot reach a caller as "?".
 #define BC250_CPU_REQUEST_MASK_STOCK 0x77u     // 6 of the 8 cores: the mask this part ships with
 #define BC250_CPU_REQUEST_MASK_FULL 0xFFu      // all eight
 #define BC250_CPU_REQUEST_SEARCH_STEPS 8u      // the deepest undervolt step the search tries
+#define BC250_CPU_REQUEST_ERROR_COUNT 7u       // enum bc250_cpu_error, 0 to 6 (0.7.216.23 added NO_CEILING)
+#define BC250_CPU_REQUEST_ERROR_NO_CEILING 6u  // the one reason a caller acts on: the clock control is refused
+                                               // for this start, the undervolt and the cap still work (BD-094)
 #define BC250_CPU_OP_READ 0u                 // software state only: what is applied, stored, recorded
 #define BC250_CPU_OP_READBACK 1u             // send the getters of both queues; no setter
 #define BC250_CPU_OP_SET 2u                  // in: Given, MaxMHz, UvSteps, TempC, TrialMs

@@ -140,7 +140,9 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
 - While the boost ceiling of a start is unknown, the clock limit is refused and not taken
   (`BC250_CPU_ERROR_NO_CEILING`, which the user interface reads as `BC250_CPU_FLAG_BOOST_KNOWN`). This is the rule of the
   whole surface in one line: the driver takes no control that it cannot give back. The undervolt and the
-  temperature cap are not affected, and the joint power arm takes no cap in that state either.
+  temperature cap are not affected, and the joint power arm takes no cap in that state either. A request that
+  asks for the clock limit together with them is refused whole, because an operator sent it and must see why.
+  The stored settings of the start are the one exception. They go in without their clock limit.
 
 ### The allowlist
 

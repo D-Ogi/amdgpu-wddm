@@ -118,11 +118,15 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   the firmware answer it: it keeps one core busy for `BC250_CPU_BOOST_PROBE_MS` (25 ms) and reads the per-core
   clocks again, at most `BC250_CPU_BOOST_PROBE_ROUNDS` (2) times, and it stops at the first answer inside the band.
   The probe sends the getter `0x43` and no other message, it runs only while the driver has applied nothing, and it
-  costs one core of six about a fifth of a second at worst, once per start.
+  costs one core of six about a fifth of a second at worst, once per start. It does not run at or above 87 C
+  (`BC250_CLOCK_HOT_MC`): the probe makes heat, and the only thing it buys is the clock control, which the start
+  can refuse. The read stage of a later `readback` probes again when the part is cool.
 - The clock limit is refused while the boost ceiling of the start is unknown (`BC250_CPU_ERROR_NO_CEILING`,
   `BC250_CPU_FLAG_BOOST_KNOWN`): the driver takes no control it could give back only as the P-state table's top.
   The undervolt and the temperature cap are not affected, the joint power arm takes no cap in that state, and a
-  restart is the way out. A restore always goes out, because nothing else takes a change out of the chip.
+  restart is the way out. A restore always goes out, because nothing else takes a change out of the chip. The
+  stored settings of such a start go in without their clock limit, and keep their undervolt and their cap: one
+  refused control must not cost the other two.
 - Clock stretching: an unstable CPU undervolt shows first as the effective core clock (`0x43`) falling about
   200 MHz or more under the clock asked for (`BC250_CPU_STRETCH_MHZ`), before it shows as a hang. It counts only
   over a sample the caller marks as loaded, because an idle core sits under its limit for no bad reason. That is a

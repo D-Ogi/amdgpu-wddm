@@ -72,6 +72,8 @@ C_ASSERT(sizeof(ULONG) == sizeof(unsigned int));  // the read stage's ULONG arra
 C_ASSERT(BC250_CPU_REQUEST_MASK_STOCK == BC250_CPU_MASK_STOCK);
 C_ASSERT(BC250_CPU_REQUEST_MASK_FULL == BC250_CPU_MASK_FULL);
 C_ASSERT(BC250_CPU_REQUEST_SEARCH_STEPS == BC250_CPU_SEARCH_MAX_STEPS);
+C_ASSERT(BC250_CPU_REQUEST_ERROR_COUNT == BC250_CPU_ERROR_COUNT);
+C_ASSERT(BC250_CPU_REQUEST_ERROR_NO_CEILING == BC250_CPU_ERROR_NO_CEILING);
 C_ASSERT(BC250_CPU_CORE_SLOTS == BC250_CPU_CORES);
 C_ASSERT(BC250_CPU_CORE_SLOTS == BC250_CPU_PSTATES);
 C_ASSERT(BC250_CPU_ERROR_COUNT == 7);
@@ -797,7 +799,24 @@ static void CpuThread(_In_ PVOID Context)
                 // from its own firmware as ours.
                 if (s->Stored.max_given || s->Stored.uv_given || s->Stored.temp_given) {
                     enum bc250_cpu_error error = BC250_CPU_OK;
-                    status = CpuApply(device, &s->Stored, "the stored settings", &error, FALSE);
+                    struct bc250_cpu_settings stored = s->Stored;
+                    // A clock limit this start could not give back is left OUT of the plan, and the rest of the
+                    // stored settings still go in (0.7.216.23, BD-094). CpuApplyEx refuses a whole plan that
+                    // carries such a step, which is right for a request an operator sent and wrong here: the
+                    // undervolt and the temperature cap of the registry have nothing to do with the ceiling, and
+                    // losing them would turn one refused control into three. s->Stored itself does not move, so
+                    // the surface still reports what is on disk.
+                    if (stored.max_given && !(s->BaselineValid && s->BaselineRead.boost_given)) {
+                        GuardLog("cpu: the stored clock limit of %lu MHz is left out: this start does not know "
+                                 "the firmware's own ceiling (BD-094); the rest of the stored settings go in",
+                                 stored.max_mhz);
+                        stored.max_given = 0;
+                        stored.max_mhz = 0;
+                    }
+                    if (!stored.max_given && !stored.uv_given && !stored.temp_given)
+                        GuardLog("cpu: the stored settings were that clock limit alone: nothing is sent");
+                    else
+                        status = CpuApply(device, &stored, "the stored settings", &error, FALSE);
                     if (NT_SUCCESS(status)) CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_OK);
                     else {
                         struct bc250_cpu_settings none;

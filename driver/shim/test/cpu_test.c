@@ -658,6 +658,21 @@ static void test_baseline_starts(void)
 	start_stage(&st, pstate, sleepy, 1);
 	CHECK(st.probes == 2 && start_admits_clock(&st) == 0);
 	CHECK(st.baseline.uv_given && st.baseline.temp_given);
+	/* The stored settings of that start still go in, without their clock limit alone: one refused control must
+	 * not cost the other two (driver/kmd/cpu.c, the stored settings of CpuStart). The plan then carries the
+	 * undervolt and the cap, and no clock step, so nothing of it can be refused for the missing ceiling. */
+	{
+		struct bc250_cpu_settings none, stored = set(3300u, 6u, 85u);
+		struct bc250_cpu_plan p;
+		unsigned int i, clocks = 0;
+		if (!start_admits_clock(&st)) { stored.max_given = 0; stored.max_mhz = 0; }
+		CHECK(!stored.max_given && stored.uv_given && stored.uv_steps == 6u && stored.temp_c == 85u);
+		memset(&none, 0, sizeof(none));
+		memset(&p, 0, sizeof(p));
+		CHECK(bc250_cpu_plan(&none, &stored, 0, &p) == BC250_CPU_OK && p.count == 2);
+		for (i = 0; i < p.count; i++) if (p.step[i].kind == BC250_CPU_STEP_CLOCK) clocks++;
+		CHECK(clocks == 0);
+	}
 }
 
 /* ---- the failure signs -------------------------------------------------------------------------- */
