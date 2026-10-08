@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
-// M15.14 increment 2: whether this shell asks for a scan-out primary, in one function the host test can
-// drive through every answer.
+// M15.14: whether this shell asks for a scan-out primary, in one function the host test can drive through
+// every answer.
 //
 // The decision is a stand-down, never a failure. Everything it can refuse is a property of the start, of
 // the operator's switches or of the chain's geometry, and in every one of those cases the right outcome is
@@ -11,42 +11,49 @@
 // local segment with no CPU access for a flip the kernel driver would refuse (and refuse after the OS has
 // taken SharedPrimaryTransition, which does not fall back to composition seamlessly - a black output).
 //
-// The clauses, in the order they are asked:
-//   ModeOff        AMDGPU_WDDM_D3D12_EXPERIMENT does not name the scan-out mode. The driver's default.
-//   OtherIntent    the same list also names present-cached or present-noprimary, which describe the
-//                  opposite intent for the same buffer (a cached CPU reader, or no primary at all).
-//   ModeGeometry   the chain is not the geometry the mode names ("scanout-flip-1920x1200").
-//   ForceCpu       the desktop route's kill switch DwmForceCpu is on, so the compositor is the CPU UMD,
-//                  which reads every primary on the CPU to compose it. There is no CheckDirectFlipSupport
-//                  on that route and no flip to be had, while the request alone would cost that reader its
-//                  write-combined aperture mapping (experiments 104 and 107).
-//   CapsClosed     the kernel driver published no scan-out trailer, or published one without
-//                  BC250_SCANOUT_CAPS_DIRECT_FLIP: an older driver, or an operator switch that is off.
-//   SourceGeometry the chain is not the geometry of the source mode the trailer carries, which is the one
-//                  geometry Bc250ScanoutAdmit admits a flip at. The clause compares against the trailer
-//                  and never against a size of its own, so it follows whatever source mode the kernel
-//                  driver offers (the same rule the router's front applies on the compositor's side).
-//   Format         the chain's format is not a SCANOUT_PRIMARY row of the shared table, or is a row with
-//                  no DXGI name (so the compositor's opener could not take its record).
-//   Pitch          the engine's row pitch is not the one pitch every component derives
-//                  (scanout_row_pitch). Nothing downstream could check a pitch only this shell knows.
+// Increment 3 (2026-10-08). The scan-out primary is the driver's default, and the geometry it is asked for
+// is the source mode the kernel driver has committed, not a size the operator names. Trial 478 is why:
+// The Witcher 3 scanned out its own buffers at the native mode in exclusive fullscreen and in borderless,
+// and stayed composed in exclusive fullscreen at 1920x1080 only because increment 2's experiment named
+// 1920x1200 while the kernel driver had committed a real 1080 mode. The caller reads the trailer again for
+// every primary it creates (RuntimeHeapImports::scanout_caps_now), so the geometry clause follows a mode
+// change of a running game.
 //
-// ModeGeometry sits before the switches on purpose: a start with the mode named for another monitor must
-// read as "this chain is not the one" and not as "the kernel driver said no", or a trial would chase a
-// switch that was never the reason.
+// The clauses, in the order they are asked:
+//   ModeOff        the operator's off switch: the experiment list (AMDGPU_WDDM_D3D12_EXPERIMENT, the
+//                  application's profile or the machine value under HKLM\SOFTWARE\amdgpu-wddm\D3D12) names
+//                  "scanout-flip-off", as every default of this shell is turned off (ddi_experiment_off).
+//   OtherIntent    the same list names present-cached or present-noprimary, which describe the opposite
+//                  intent for the same buffer (a cached CPU reader, or no primary at all).
+//   then the rule both application shells share (driver/contract/bc250_scanout_primary.h):
+//   ForceCpu       the desktop route's kill switch DwmForceCpu is on, so the compositor is the CPU UMD.
+//   CapsClosed     the kernel driver published no scan-out trailer, or one without DIRECT_FLIP.
+//   SourceGeometry the chain is not the geometry of the source mode the trailer carries now.
+//   Format         the chain's format is not a SCANOUT_PRIMARY row with a DXGI name.
+//   Pitch          the engine's row pitch is not the one pitch every component derives (scanout_row_pitch).
+//
+// The increment-2 spelling "scanout-flip-1920x1200" still reads as an explicit on, and so does a bare
+// "scanout-flip": a lab script written for increment 2 keeps working. The named geometry is not compared
+// any more. A geometry named by the operator is a guess about the mode, and the kernel driver's trailer is
+// the mode itself; the guess is what kept 478's 1080 chain composed.
 #include "allocation-request.h"
 #include "ddi-trace.h"
 #include "../../contract/bc250_scanout_caps.h"
+#include "../../contract/bc250_scanout_primary.h"
 namespace native12 {
+// The train rule (owner, 2026-10-05): a finished, measured feature is on by default, with a switch to turn
+// it off. Measured: the plan A client 600 of 600 frames at FlipOnNextVSync (K227), The Witcher 3 2028 of
+// 2028 flips in exclusive fullscreen and 1696 of 1696 in borderless at the native mode with FlipImmediate,
+// 0 refusals, and a mode change away from a flipping chain without a black output (trial 478).
+inline constexpr bool kScanoutDefaultOn=true;
 enum class ScanoutStandDown : unsigned {
-    Admitted,ModeOff,OtherIntent,ModeGeometry,ForceCpu,CapsClosed,SourceGeometry,Format,Pitch,Count
+    Admitted,ModeOff,OtherIntent,ForceCpu,CapsClosed,SourceGeometry,Format,Pitch,Count
 };
 inline const char* scanout_stand_down_text(ScanoutStandDown reason) noexcept {
     switch(reason){
     case ScanoutStandDown::Admitted:return "admitted";
     case ScanoutStandDown::ModeOff:return "mode-off";
     case ScanoutStandDown::OtherIntent:return "other-intent";
-    case ScanoutStandDown::ModeGeometry:return "mode-geometry";
     case ScanoutStandDown::ForceCpu:return "force-cpu";
     case ScanoutStandDown::CapsClosed:return "caps-closed";
     case ScanoutStandDown::SourceGeometry:return "source-geometry";
@@ -55,48 +62,64 @@ inline const char* scanout_stand_down_text(ScanoutStandDown reason) noexcept {
     default:return "unknown";
     }
 }
+// Where the on or off came from, for the trace: the default, a list that names the mode, or the off switch.
+enum class ScanoutSwitch : unsigned {Default,Named,Off};
+inline const char* scanout_switch_text(ScanoutSwitch value) noexcept {
+    switch(value){
+    case ScanoutSwitch::Default:return "default";
+    case ScanoutSwitch::Named:return "named";
+    case ScanoutSwitch::Off:return "off";
+    default:return "unknown";
+    }
+}
+// The off switch wins over everything, because a switch may only subtract from the validated default.
+// With kScanoutDefaultOn false, Default reads as Off and only a named mode turns the request on.
+inline ScanoutSwitch scanout_switch(const char* experiments) noexcept {
+    if(ddi_experiment_listed(experiments,"scanout-flip-off"))return ScanoutSwitch::Off;
+    unsigned width=0,height=0;
+    if(ddi_experiment_listed(experiments,"scanout-flip") || ddi_experiment_scanout(experiments,&width,&height))
+        return ScanoutSwitch::Named;
+    return kScanoutDefaultOn?ScanoutSwitch::Default:ScanoutSwitch::Off;
+}
 struct ScanoutDecision {
     ScanoutStandDown reason{ScanoutStandDown::ModeOff};
     bool admitted{};                            // reason==Admitted
-    // What the mode named, for the trace: 0 when the list named no mode.
-    unsigned mode_width{},mode_height{};
+    ScanoutSwitch switch_state{ScanoutSwitch::Off};
 };
 // width, height and pitch are the chain's as engine-ddi described it; dxgi is D3D12DDIARG_CREATERESOURCE's
-// Format. caps is the adapter's published trailer (all zero when there is none) and force_cpu the desktop
-// router's kill switch as that router reads it (any non-zero value, and any value of the wrong type, is on).
+// Format. caps is the trailer as read for this primary (all zero when there is none) and force_cpu the
+// desktop router's kill switch as that router reads it (any non-zero value, and any value of the wrong
+// type, is on).
 inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanout_caps& caps,
                                       unsigned long force_cpu,unsigned dxgi,
                                       unsigned width,unsigned height,unsigned pitch) noexcept {
     ScanoutDecision out{};
-    if(!ddi_experiment_scanout(experiments,&out.mode_width,&out.mode_height)){
-        out.reason=ScanoutStandDown::ModeOff;return out;
-    }
+    out.switch_state=scanout_switch(experiments);
+    if(out.switch_state==ScanoutSwitch::Off){out.reason=ScanoutStandDown::ModeOff;return out;}
     if(ddi_experiment_listed(experiments,"present-cached") ||
        ddi_experiment_listed(experiments,"present-noprimary")){
         out.reason=ScanoutStandDown::OtherIntent;return out;
     }
-    if(width!=out.mode_width || height!=out.mode_height){
-        out.reason=ScanoutStandDown::ModeGeometry;return out;
+    switch(bc250_scanout_primary_rule(&caps,force_cpu,dxgi,width,height,pitch)){
+    case BC250_SCANOUT_PRIMARY_ADMITTED:out.reason=ScanoutStandDown::Admitted;out.admitted=true;break;
+    case BC250_SCANOUT_PRIMARY_FORCE_CPU:out.reason=ScanoutStandDown::ForceCpu;break;
+    case BC250_SCANOUT_PRIMARY_CAPS_CLOSED:out.reason=ScanoutStandDown::CapsClosed;break;
+    case BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY:out.reason=ScanoutStandDown::SourceGeometry;break;
+    case BC250_SCANOUT_PRIMARY_FORMAT:out.reason=ScanoutStandDown::Format;break;
+    default:out.reason=ScanoutStandDown::Pitch;break;
     }
-    if(force_cpu){out.reason=ScanoutStandDown::ForceCpu;return out;}
-    if(!(caps.flags&BC250_SCANOUT_CAPS_DIRECT_FLIP)){out.reason=ScanoutStandDown::CapsClosed;return out;}
-    if(width!=caps.post_width || height!=caps.post_height){
-        out.reason=ScanoutStandDown::SourceGeometry;return out;
-    }
-    const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(dxgi),
-                                              AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
-    if(!row || !row->dxgi){out.reason=ScanoutStandDown::Format;return out;}
-    if(!pitch || pitch!=scanout_row_pitch(width)){out.reason=ScanoutStandDown::Pitch;return out;}
-    out.reason=ScanoutStandDown::Admitted;out.admitted=true;return out;
+    return out;
 }
 // The desktop router's kill switch, read the way the router itself reads it (driver/umd/router/router.cpp
 // ReadConfig): absent is 0, a DWORD is its value, any other type counts as set. Read once per process,
 // like every other switch of this shell: the router reads it at the compositor's adapter open and a change
 // takes a new dwm.exe anyway, so a later value could not describe the compositor this process is talking to.
+// The 64-bit view on both images (ddi_detail::registry_view): the router lives in the 64-bit compositor, so
+// the value that steers it is the 64-bit one, and the x86 shell of a 32-bit game must read that one too.
 inline unsigned long scanout_force_cpu_read() noexcept {
     DWORD value=0,bytes=sizeof(value),type=0;
     const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\amdgpu-wddm\\DesktopRouter",
-                                      L"DwmForceCpu",RRF_RT_ANY,&type,&value,&bytes);
+                                      L"DwmForceCpu",RRF_RT_ANY|ddi_detail::registry_view,&type,&value,&bytes);
     if(status!=ERROR_SUCCESS)return 0;                       // absent, or unreadable: the router's 0
     if(type!=REG_DWORD || bytes!=sizeof(value))return 1;     // fail safe, exactly as the router does
     return value;

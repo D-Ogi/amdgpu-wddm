@@ -17,20 +17,29 @@ HRESULT from_vk(VkResult r) noexcept {
     if(r==VK_ERROR_DEVICE_LOST)return DXGI_ERROR_DEVICE_REMOVED;
     return E_FAIL;
 }
-// One line per distinct scan-out answer, at most once each, and nothing at all unless the operator named
-// the mode: a trial that selected scan-out and did not get it must be able to read which clause stood the
-// request down, without a log that grows with the swap chains a game creates (M15.14 increment 2).
+// One line for every change of the scan-out answer: a trial must be able to read which clause decided each
+// chain a game made, now that the request is the default and every primary asks the question (M15.14
+// increment 3). A game that recreates the same chain at the same mode adds nothing; a resize, a mode change,
+// a format change or a different answer adds one line. The budget bounds a game that alternates forever,
+// and the last line of the budget says that it ran out, so a quiet log is never mistaken for a quiet game.
 void scanout_note(const ScanoutDecision& decision,const bc250_scanout_caps& caps,unsigned long force_cpu,
                   unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
-    if(decision.reason==ScanoutStandDown::ModeOff)return;
-    static std::atomic_uint logged{0};
-    const unsigned mask=1u<<unsigned(decision.reason);
-    if(logged.fetch_or(mask,std::memory_order_relaxed)&mask)return;
+    const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,
+        pitch,dxgi,caps.flags,caps.post_width,caps.post_height,force_cpu};
+    unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
+    for(const unsigned long long word:words)
+        for(unsigned i=0;i<8;++i)key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
+    static std::atomic<unsigned long long> last{0};
+    static std::atomic_int budget{64};
+    if(last.exchange(key,std::memory_order_relaxed)==key)return;
+    const int left=budget.fetch_sub(1,std::memory_order_relaxed);
+    if(left<=0)return;
     char text[256];
     std::snprintf(text,sizeof(text),
-        "M15.14 scanout %s mode=%ux%u chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu\n",
-        scanout_stand_down_text(decision.reason),decision.mode_width,decision.mode_height,width,height,
-        pitch,dxgi,static_cast<unsigned long>(caps.flags),caps.post_width,caps.post_height,force_cpu);
+        "M15.14 scanout %s switch=%s chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu%s\n",
+        scanout_stand_down_text(decision.reason),scanout_switch_text(decision.switch_state),width,height,
+        pitch,dxgi,static_cast<unsigned long>(caps.flags),caps.post_width,caps.post_height,force_cpu,
+        left==1?" budget-spent":"");
     OutputDebugStringA(text);
 }
 }
@@ -92,10 +101,14 @@ RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& doma
     :runtime_(d.runtime),callbacks_(d.callbacks),kernel_(d.kernel_callbacks),domain_(domain),
      paging_(d.runtime,d.kernel_callbacks),physical_(physical),device_(device),instance_(instance),gipa_(gipa),identity_(identity),
      policy_(policy) {
-    // The adapter's published scan-out trailer and the desktop route's kill switch, once per device
-    // (M15.14 increment 2). A device without an adapter - the host tests - keeps the closed answer.
-    if(d.adapter)scanout_caps_=d.adapter->contract.scanout;
+    // The desktop route's kill switch, once per device (M15.14 increment 2). The scan-out trailer is read
+    // for every primary (scanout_caps_now); a device without an adapter - the host tests - has none.
+    adapter_=d.adapter;
     force_cpu_=scanout_force_cpu();
+}
+bc250_scanout_caps RuntimeHeapImports::scanout_caps_now() const noexcept {
+    if(!adapter_)return {};
+    return query_scanout_caps(adapter_->runtime,adapter_->callbacks.pfnQueryAdapterInfoCb);
 }
 RuntimeHeapImports::~RuntimeHeapImports(){discard_metadata();}
 uint32_t RuntimeHeapImports::held_count() const noexcept {
@@ -450,12 +463,17 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         const auto* row=composed;
         // Every reason not to ask for scan-out stands the request down to this composed primary instead
         // of failing the allocation; the clauses and why each one exists are in scanout-mode.h. They
-        // include the operator's switches on both sides (the mode itself, the kernel driver's published
+        // include the operator's switches on both sides (scanout-flip-off, the kernel driver's published
         // trailer, the desktop route's DwmForceCpu), the source mode's geometry and the pitch, because a
         // request the kernel driver would refuse at flip time is worse than no request: the buffer would
         // be in VRAM with no CPU mapping, and the refusal would come after SharedPrimaryTransition.
         if(primary){
-            const ScanoutDecision decision=scanout_decide(ddi_experiment_name(),scanout_caps_,force_cpu_,
+            // The trailer of this moment: the geometry clause compares the chain with the source mode the
+            // kernel driver has committed now, which a game may have changed since the device was made.
+            // The off switch is asked first, so a start that turned scan-out off makes no query at all.
+            const bc250_scanout_caps caps=scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off?
+                bc250_scanout_caps{}:scanout_caps_now();
+            const ScanoutDecision decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,
                 unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
             if(decision.admitted){
                 const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
@@ -464,7 +482,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                 // the two lookups, and the composed primary is the safe answer to that as well.
                 if(direct){row=direct;surface_scanout=true;}
             }
-            scanout_note(decision,scanout_caps_,force_cpu_,unsigned(r->Format),unsigned(r->Width),r->Height,
+            scanout_note(decision,caps,force_cpu_,unsigned(r->Format),unsigned(r->Width),r->Height,
                          request->surface_row_pitch);
         }
         if(!row)return refuse(primary?"primary format":"shared surface format",E_NOTIMPL,*request);

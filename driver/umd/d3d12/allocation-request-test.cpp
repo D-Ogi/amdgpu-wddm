@@ -228,59 +228,97 @@ int main() {
         CHECK(c.prepare_surface(width,0,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==E_INVALIDARG);
     }
     // (d) The stand-down decision, one case per clause. Every refusal leaves the composed primary, so the
-    // test asserts the reason and not a failure.
+    // test asserts the reason and not a failure. Increment 3: no list is the default, which is on, and the
+    // geometry is the trailer's source mode at the moment of the decision, whatever a list names.
     {
         const bc250_scanout_caps on=caps_on(),off{};
         const unsigned bgra=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM,pitch=7680;
-        const char* mode="scanout-flip-1920x1200";
+        const char* none="";
         struct Case { const char* list;bc250_scanout_caps caps;unsigned long force;unsigned dxgi,w,h,pitch;
-                      ScanoutStandDown reason; };
+                      ScanoutStandDown reason;ScanoutSwitch state; };
         const Case cases[]={
-            {mode,on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted},
-            {"",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
-            {"none",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
-            {"scanout-flip",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
-            {"scanout-flip-1920",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff},
-            {"present-cached,scanout-flip-1920x1200",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent},
-            {"scanout-flip-1920x1200,present-noprimary",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent},
-            {mode,on,0,bgra,1280,720,5120,ScanoutStandDown::ModeGeometry},
-            {mode,on,1,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu},
-            {mode,on,7,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu},
-            {mode,off,0,bgra,1920,1200,pitch,ScanoutStandDown::CapsClosed},
-            {mode,caps_on(1280,720),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry},
-            {mode,caps_on(1920,1080),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry},
-            // The source mode is the trailer's, whatever it is: a 1280x720 mode named and published admits.
-            {"scanout-flip-1280x720",caps_on(1280,720),0,bgra,1280,720,5120,ScanoutStandDown::Admitted},
-            {"scanout-flip-1280x720",on,0,bgra,1280,720,5120,ScanoutStandDown::SourceGeometry},
-            {mode,on,0,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::Format},
-            {mode,on,0,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Format},
-            {mode,on,0,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,pitch,ScanoutStandDown::Format},
-            {mode,on,0,0,1920,1200,pitch,ScanoutStandDown::Format},
-            {mode,on,0,bgra,1920,1200,0,ScanoutStandDown::Pitch},
-            {mode,on,0,bgra,1920,1200,7936,ScanoutStandDown::Pitch},
+            {none,on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {"none",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {"raytracing-tier",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            // The increment-2 spellings are an explicit on, and the geometry they name is not compared.
+            {"scanout-flip",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Named},
+            {"scanout-flip-1920x1200",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Named},
+            {"scanout-flip-1920x1200",caps_on(1920,1080),0,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,
+             ScanoutSwitch::Named},
+            // A token that only looks like the mode is no switch, so the default answers.
+            {"scanout-flip-1920",on,0,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            // The off switch, alone or with the explicit on: the off switch wins, in either order.
+            {"scanout-flip-off",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
+            {"scanout-flip,scanout-flip-off",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
+            {"scanout-flip-off,scanout-flip-1920x1200",on,0,bgra,1920,1200,pitch,ScanoutStandDown::ModeOff,
+             ScanoutSwitch::Off},
+            {"present-cached",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent,ScanoutSwitch::Default},
+            {"scanout-flip,present-noprimary",on,0,bgra,1920,1200,pitch,ScanoutStandDown::OtherIntent,
+             ScanoutSwitch::Named},
+            {none,on,1,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
+            {none,on,7,bgra,1920,1200,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
+            {none,off,0,bgra,1920,1200,pitch,ScanoutStandDown::CapsClosed,ScanoutSwitch::Default},
+            // The source mode, not the native one: 478's exclusive 1080 chain on a committed 1080 mode admits,
+            // and the same chain on a 1200 mode (the mode change has not reached the kernel driver) stands down.
+            {none,caps_on(1920,1080),0,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,on,0,bgra,1920,1080,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,caps_on(1920,1080),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,caps_on(1280,720),0,bgra,1280,720,5120,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,caps_on(1280,720),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,on,0,bgra,1200,1920,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,on,0,bgra,0,1200,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            // The increment-2 token names 1920x1200 but the source mode is 1280x720: the trailer decides.
+            {"scanout-flip-1920x1200",caps_on(1280,720),0,bgra,1920,1200,pitch,ScanoutStandDown::SourceGeometry,
+             ScanoutSwitch::Named},
+            {none,on,0,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,pitch,ScanoutStandDown::Format,
+             ScanoutSwitch::Default},
+            {none,on,0,0,1920,1200,pitch,ScanoutStandDown::Format,ScanoutSwitch::Default},
+            {none,on,0,bgra,1920,1200,0,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
+            {none,on,0,bgra,1920,1200,7600,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
+            {none,on,0,bgra,1920,1200,7936,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
         };
         for(const auto& c:cases) {
             const ScanoutDecision d=scanout_decide(c.list,c.caps,c.force,c.dxgi,c.w,c.h,c.pitch);
-            if(d.reason!=c.reason)std::printf("case %s %ux%u: got %s\n",c.list,c.w,c.h,scanout_stand_down_text(d.reason));
+            if(d.reason!=c.reason || d.switch_state!=c.state)
+                std::printf("case '%s' %ux%u: got %s/%s\n",c.list,c.w,c.h,scanout_stand_down_text(d.reason),
+                            scanout_switch_text(d.switch_state));
             CHECK(d.reason==c.reason);
+            CHECK(d.switch_state==c.state);
             CHECK(d.admitted==(c.reason==ScanoutStandDown::Admitted));
             CHECK(std::strcmp(scanout_stand_down_text(d.reason),"unknown")!=0);
         }
         for(unsigned reason=0;reason<unsigned(ScanoutStandDown::Count);++reason)
             CHECK(std::strcmp(scanout_stand_down_text(ScanoutStandDown(reason)),"unknown")!=0);
         CHECK(!std::strcmp(scanout_stand_down_text(ScanoutStandDown::SourceGeometry),"source-geometry"));
+        for(unsigned state=0;state<=unsigned(ScanoutSwitch::Off);++state)
+            CHECK(std::strcmp(scanout_switch_text(ScanoutSwitch(state)),"unknown")!=0);
+        CHECK(kScanoutDefaultOn);
         // A trailer with the right header and the flag clear reads exactly as no trailer at all, which is
-        // what a start with the operator's switch off and an older kernel driver must have in common.
+        // what a start with the operator's switch off and an older kernel driver must have in common. A
+        // trailer with the flag but a wrong header is no trailer either (the decoder zeroes it; the rule
+        // checks again, so a caller that skips the decoder cannot open the path).
         bc250_scanout_caps flagless=on;flagless.flags=0;
-        CHECK(scanout_decide(mode,flagless,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
-        // A null list is the same as no mode, and the mode's geometry is reported for the trace.
-        CHECK(scanout_decide(nullptr,on,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::ModeOff);
-        const ScanoutDecision named=scanout_decide(mode,on,1,bgra,1920,1200,pitch);
-        CHECK(named.mode_width==1920 && named.mode_height==1200);
-        CHECK(!scanout_decide("",on,0,bgra,1920,1200,pitch).mode_width);
+        CHECK(scanout_decide(none,flagless,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        bc250_scanout_caps unsigned_caps=on;unsigned_caps.magic=0;
+        CHECK(scanout_decide(none,unsigned_caps,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        bc250_scanout_caps newer=on;newer.version=BC250_SCANOUT_CAPS_VERSION+1;
+        CHECK(scanout_decide(none,newer,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::CapsClosed);
+        CHECK(bc250_scanout_primary_rule(nullptr,0,bgra,1920,1200,pitch)==BC250_SCANOUT_PRIMARY_CAPS_CLOSED);
+        // A null list is the same as an empty one: the default.
+        CHECK(scanout_decide(nullptr,on,0,bgra,1920,1200,pitch).reason==ScanoutStandDown::Admitted);
+        // The contract's pitch is the shell's pitch for every 4-byte width, so the rule that the D3D11 shell
+        // shares cannot pin a different row than the one prepare_surface pins here.
+        for(unsigned width=1;width<=4096;++width)
+            CHECK(bc250_scanout_primary_pitch(width,4)==scanout_row_pitch(width));
+        CHECK(!bc250_scanout_primary_pitch(0,4) && !bc250_scanout_primary_pitch(1920,0));
+        CHECK(!bc250_scanout_primary_pitch(0xffffffffu,4));
+        for(unsigned reason=BC250_SCANOUT_PRIMARY_ADMITTED;reason<=BC250_SCANOUT_PRIMARY_PITCH;++reason)
+            CHECK(std::strcmp(bc250_scanout_primary_text(reason),"unknown")!=0);
+        CHECK(!std::strcmp(bc250_scanout_primary_text(99),"unknown"));
         // Every admitted decision describes a surface prepare_surface then accepts: the two are one rule.
         AllocationRequest d;
         CHECK(d.prepare_surface(1920,1200,pitch,D3DDDIFMT_A8R8G8B8,uint64_t(pitch)*1200,owner,false,true,true)==S_OK);
+        CHECK(d.prepare_surface(1920,1080,pitch,D3DDDIFMT_A8R8G8B8,uint64_t(pitch)*1080,owner,false,true,true)==S_OK);
     }
     // (e) The adapter trailer as query_contract decodes it: the header must be whole, and anything else
     // reads as no trailer, so a shell on an older kernel driver asks for nothing.

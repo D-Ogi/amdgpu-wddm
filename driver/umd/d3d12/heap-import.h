@@ -8,6 +8,7 @@
 #include <atomic>
 namespace native12 {
 struct Device;
+struct Adapter;
 // Calls run inside the owner's DeviceScope, including hosted GIPA and RuntimeDomain scopes, on any
 // number of the device's DDI threads at once. lock_ guards the record list and every record's flags
 // and is a leaf: no runtime callback, Vulkan call or paging operation runs under it. A record in a
@@ -109,12 +110,12 @@ class RuntimeHeapImports final {
     uint64_t held_bytes_{},deposits_{};
     bool draining_{};
     ImportReleasePolicy policy_{};
-    // M15.14 increment 2: the two start-time facts the scan-out decision needs, taken once in the
-    // constructor so no allocation path reads the registry or the adapter again. The caps are the kernel
-    // driver's published trailer (all zero when there is none, which is the answer of every driver before
-    // this increment and of a start whose operator switch is off); force_cpu_ is the desktop route's kill
-    // switch, which decides whether the compositor is the CPU UMD and therefore whether any flip exists.
-    bc250_scanout_caps scanout_caps_{};
+    // M15.14: what the scan-out decision needs. force_cpu_ is the desktop route's kill switch, which decides
+    // whether the compositor is the CPU UMD and therefore whether any flip exists; it is taken once, in the
+    // constructor, because the compositor reads it once. The kernel driver's trailer is not taken once
+    // (increment 3): its geometry is the source mode committed now, and a game changes the mode between the
+    // device and its chain, so the adapter is kept and the trailer is read for every primary.
+    Adapter* adapter_{};
     unsigned long force_cpu_{};
     ProgressSource progress_{};
     std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
@@ -148,8 +149,11 @@ public:
     // owner that has it (device-engine.cpp); without it progress_gate holds nothing.
     void bind_progress(const ProgressSource& source) noexcept {progress_=source;}
     const ImportReleasePolicy& policy() const noexcept {return policy_;}
-    // What the constructor took from the adapter and the registry, for the tests and the trace.
-    const bc250_scanout_caps& scanout_caps() const noexcept {return scanout_caps_;}
+    // The scan-out trailer as the kernel driver publishes it at this moment: all zero for a device with no
+    // adapter (the host tests), for a kernel driver without the trailer and for a query that fails, which
+    // all read as "no scan-out". One kernel query per call; allocate() calls it once per primary.
+    bc250_scanout_caps scanout_caps_now() const noexcept;
+    // What the constructor took from the registry, for the tests and the trace.
     unsigned long force_cpu() const noexcept {return force_cpu_;}
     // What the quarantine holds now, for tests and the trace.
     uint32_t held_count() const noexcept;
