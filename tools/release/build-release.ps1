@@ -12,7 +12,9 @@
 # install location, file version and SHA256 (the control application reads it from the install root).
 # Gates: the work ledger (every check rule, plus no finished but unlanded work for a component of this release;
 # override with -AllowLedgerDebt -LedgerDebtReason, or -NoLedger -NoLedgerReason in a workspace without the
-# ledger; manifest.json records which of the three happened), every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
+# ledger; manifest.json records which of the three happened), every source hash, the provenance of every payload file
+# (provenance.py: a published commit and a recipe, or a download record; -RebuildCheck also rebuilds the files with
+# rebuild-check.ps1 and compares the bytes), signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
 # packaged CLI, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
 # kernel compile (driver\kmd and driver\shim build with the WDK of this workspace: test-kmd-compile.ps1). Nothing here
@@ -28,7 +30,8 @@ param(
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
     [switch]$NoLedger,                           # build in a workspace that has no work ledger at all
-    [string]$NoLedgerReason                      # required with -NoLedger: recorded in the build log and manifest
+    [string]$NoLedgerReason,                     # required with -NoLedger: recorded in the build log and manifest
+    [switch]$RebuildCheck                        # also rebuild every payload file that claims a bit-identical rebuild (slow)
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
@@ -111,6 +114,23 @@ foreach ($f in $sources.files) {
     [void][IO.Directory]::CreateDirectory((Split-Path $dst))
     Copy-Item -LiteralPath $src -Destination $dst
     '  {0}  {1,-12} {2}' -f $h.Substring(0, 8), $f.component, $f.path
+}
+# Provenance gate (provenance.py): every payload file names the published commit and the recipe it was built from,
+# or the download it came from, and the gate checks it offline. -RebuildCheck also builds those files again from
+# their commits (rebuild-check.ps1) and compares the bytes; that takes hours with the Mesa builds, so it is off by
+# default.
+Write-Host 'provenance'
+$pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $pythonExe) { throw 'python is not on PATH: the provenance gate cannot run' }
+$provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--root', $Root, '--repo', $repo)
+$r = Invoke-Headless -File $pythonExe -Arguments $provenanceArgs -TimeoutSeconds 300
+$r.text
+if ($r.code -ne 0) { throw 'provenance: a payload file has no published commit, recipe or download record (see above)' }
+if ($RebuildCheck) {
+    $pwshExe = (Get-Process -Id $PID).Path
+    $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
+    $r.text
+    if ($r.code -ne 0) { throw 'rebuild check: a payload file that claims a bit-identical rebuild did not rebuild to its bytes (see above)' }
 }
 # The D3D11 shell refuses an engine or ICD whose SHA-256 differs from its caps record (adapter-config.h,
 # AdapterConfigRecord2: engine_sha256 at byte 68, icd_sha256 at byte 100) before it loads them. b15 shipped a new ICD
@@ -270,6 +290,11 @@ if ($forbidden.Count) { throw "private-key material in the package: $($forbidden
 $blobs = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
 if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
 '  no private-key material, no firmware file'
+# The packaged copies against release-sources.json: each is its source byte for byte, the re-signed kernel driver keeps
+# its recorded Authenticode digest, and only an entry that names its "release_edits" (the INF) differs otherwise.
+$r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
+$r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
+if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-parse51.ps1'), '-Directory', $inst) -TimeoutSeconds 120
 $r.text
