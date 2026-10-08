@@ -182,6 +182,18 @@ The presenter is `ops\heartbeat.ps1`: a small top-most window in the owner's ses
 `dispatch Start` and `postflight` start it themselves. Its task name must stay outside the `BC250|DWM|G0|WSI`
 filter of the competing-task gates, and `kmdcommon.heartbeat` refuses if it does not.
 
+**A mode change after `Verify` restarts the ready clock, and that is not a refusal.** Since BD-098 the
+`CONFIRMED` flag follows the start, that is its generation, while every mode set and every visibility change
+advances the epoch and sets `ready_ms` back to zero (`driver/kmd/start_health.c`, `HealthInvalidate`). A game's
+exit mode commit therefore leaves flags 15 with a ready age of a few seconds, and the old rule
+`confirmed and ready_ms < 60000` refused it. W3 483-485 and The Ascent 489 of the b23 validation all closed
+`recovery-unverified` for this reason alone. `Get-ConfirmedPresentStart` now takes `-ConfirmedEpoch`, the epoch
+of a witness of the same start that a caller already admitted with the full ready age, together with
+`-ExpectedGeneration`. A later epoch of that generation may then carry a short ready age. `postflight` reads
+that epoch from this attempt's own `*-health-acceptance.json` receipts (`Get-KmdAcceptedConfirmedEpoch`) and
+refuses when no record names the live generation. A new generation, a witness older than 15 s, an unknown flag
+bit and a wrong ABI are refused as before.
+
 ## bounded-child output files
 
 `bounded-child.exe` creates its stdout and stderr files with `CREATE_NEW` and exits 125 before starting anything

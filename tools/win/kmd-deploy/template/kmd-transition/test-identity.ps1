@@ -42,6 +42,31 @@ if(!(Get-ConfirmedPresentStart -Health ($line -f $KmdCandidateAbi) -ElapsedSecon
 if($KmdCandidateAbi -ne $KmdRollbackAbi){Must-Reject {Get-ConfirmedPresentStart -Health ($line -f $KmdRollbackAbi) -ElapsedSeconds 0}}
 Must-Reject {Get-ConfirmedPresentStart -Health ($line -f '0x0007FFFF') -ElapsedSeconds 0}
 if(!(Get-ConfirmedPresentStart -Health ($line -f $KmdRollbackAbi) -ElapsedSeconds 0 -Abi $KmdRollbackAbi).launch){throw 'Explicit ABI ignored'}
+# A mode commit of the running desktop (a game leaving exclusive fullscreen, a resolution change) advances the
+# epoch and restarts the ready clock while the start stays confirmed (BD-098). The gate admits that witness only
+# when the caller names the generation and the interval it already admitted with the full ready age, and it admits
+# nothing else: not an unpinned generation, not the admitted interval itself, not an earlier one, and not a stale,
+# unknown-flag or wrong-ABI witness.
+$commit='health abi=1 version={0} flags=15 generation=5 epoch=9 completed=7 age_ms=1200 ready_ms=8000'
+$accepted=Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6
+if(!$accepted.launch -or $accepted.epoch -ne 9 -or $accepted.confirmed_since_epoch -ne 6){throw 'Mode-commit witness rejected'}
+Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0}
+Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ConfirmedEpoch 6}
+Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 4 -ConfirmedEpoch 6}
+Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 9}
+Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 12}
+Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ExpectedEpoch 9 -ConfirmedEpoch 6}
+Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'age_ms=1200','age_ms=15001') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
+Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'flags=15','flags=31') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
+Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'completed=7','completed=0') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
+if($KmdCandidateAbi -ne $KmdRollbackAbi){Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdRollbackAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}}
+# The admitted interval itself keeps the 60 s rule, with and without a pinned epoch.
+if(!(Get-ConfirmedPresentStart -Health ($line -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6).launch){throw 'Admitted interval rejected'}
+if(!(Get-ConfirmedPresentStart -Health ($line -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ExpectedEpoch 6).launch){throw 'Pinned confirmed interval rejected'}
+Must-Reject {Get-ConfirmedPresentStart -Health (($line -f $KmdCandidateAbi) -replace 'ready_ms=60000','ready_ms=59999') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
+# An unconfirmed witness (flags 7) never needed the ready age and still does not.
+$unconfirmed=Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'flags=15','flags=7') -ElapsedSeconds 0
+if($unconfirmed.launch){throw 'Unconfirmed witness accepted as a start'}
 # No version, ABI, package label, hash or lab path literal outside identity.ps1 (tests aside): the template
 # serves every KMD revision, and each attempt's generated identity.ps1 is its only version-specific file.
 $stale='(?i)0x0007[0-9A-F]{4}|0\.7\.[0-9]+\.[0-9]|\b(candidate|rollback|deploy|same)[0-9]{3}\b|m13\\|kmd1(?!68)[0-9]{2}|(pre|post)flight[0-9]|exact1[0-9]{2}|[0-9A-F]{64}|resource-close|desktop-umd[0-9]|wsi-final'
@@ -61,4 +86,4 @@ foreach($file in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File)
  }
 }
 if($hits.Count){throw "Literal outside identity.ps1: $($hits -join ', ')"}
-'PASS: identity well formed, version/ABI agree, modes match ValidateSet, present-start ABI default, no stray literals'
+'PASS: identity well formed, version/ABI agree, modes match ValidateSet, present-start ABI default and mode-commit supersession, no stray literals'

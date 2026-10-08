@@ -118,6 +118,28 @@ function Assert-KmdConfirmEligible {
  }
 }
 
+# The confirmed start a finished Verify already admitted. Each Verify writes <receipt>-health-acceptance.json with
+# the witness it accepted: scope '<arm>-confirmed' carries flags 15 and the full 60 s ready age. A later reader of
+# the same attempt directory (postflight) needs the epoch of that witness, because a mode set or a visibility
+# change after Verify advances the epoch and restarts the ready clock without ending the confirmed start
+# (driver/kmd/start_health.c HealthInvalidate, BD-098). Only a record of the live generation counts: 0 means this
+# start was never admitted here, and the caller then keeps the unrelaxed ready-age rule or refuses.
+function Get-KmdAcceptedConfirmedEpoch {
+ param($Records,[UInt64]$Generation)
+ if(!$Generation){throw 'Live generation required'}
+ $epochs=@()
+ foreach($record in @($Records)) {
+  if([string]$record.scope -notmatch '-confirmed$'){continue}
+  $health=$record.health
+  if($null -eq $health -or $null -eq $health.generation -or $null -eq $health.epoch){throw 'Acceptance record without a witness'}
+  if([UInt64]$health.generation -ne $Generation){continue}
+  if([int]$health.flags -ne 15 -or [UInt64]$health.ready_ms -lt 60000){throw 'Acceptance record is not a confirmed start with a full ready age'}
+  $epochs+=[UInt64]$health.epoch
+ }
+ if(!$epochs.Count){return [UInt64]0}
+ return [UInt64](($epochs|Measure-Object -Maximum).Maximum)
+}
+
 function Assert-KmdSameHealthStart {
  param($Before,$After)
  if($After.generation -ne $Before.generation -or $After.epoch -ne $Before.epoch){throw 'Health start changed during verification'}
