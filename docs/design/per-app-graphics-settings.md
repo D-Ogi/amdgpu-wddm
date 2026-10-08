@@ -205,7 +205,9 @@ results follow:
 - The second and later video keys of the adapter find the number in place and write nothing.
 - The write also changes the version that Device Manager gives for the adapter.
 - The write changes the SetupAPI property `DEVPKEY_Device_DriverVersion`, because that property reads the
-  `DriverVersion` value of the same class key.
+  `DriverVersion` value of the same class key. The Microsoft page of that property names its registry value
+  `REGSTR_VAL_DRIVERVERSION`, `DriverVersion`
+  (`windows-driver-docs-pr/install/devpkey-device-driverversion.md`, staging `110f60ea`).
 
 The driver store keeps the INF number, and so does `Bc250DriverVersion`. Because the key that the write reaches is
 not the key that the path names, the KMD guards both: it opens only a path below `Control\Video`, and it reads the
