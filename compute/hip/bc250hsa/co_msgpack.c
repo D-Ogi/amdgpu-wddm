@@ -150,12 +150,21 @@ int bc250hsa_mp_next(bc250hsa_mp_reader* r, bc250hsa_mp_value* out)
     }
 }
 
-int bc250hsa_mp_skip(bc250hsa_mp_reader* r)
+/* The deepest nesting this reader steps over. The measured notes of this part are three
+ * containers deep. A note is an application's file in layer 2, and one container tag per
+ * byte would otherwise cost one stack frame per byte, so the depth is bounded here and a
+ * deeper note is refused. */
+#define BC250HSA_MP_MAX_DEPTH 32u
+
+static int skip_at_depth(bc250hsa_mp_reader* r, uint32_t depth)
 {
     bc250hsa_mp_value v;
     uint32_t          i;
     uint32_t          children;
 
+    if (depth >= BC250HSA_MP_MAX_DEPTH) {
+        return fail(r);
+    }
     if (!bc250hsa_mp_next(r, &v)) {
         return 0;
     }
@@ -170,11 +179,16 @@ int bc250hsa_mp_skip(bc250hsa_mp_reader* r)
         return 1;
     }
     for (i = 0; i < children; i++) {
-        if (!bc250hsa_mp_skip(r)) {
+        if (!skip_at_depth(r, depth + 1u)) {
             return 0;
         }
     }
     return 1;
+}
+
+int bc250hsa_mp_skip(bc250hsa_mp_reader* r)
+{
+    return skip_at_depth(r, 0u);
 }
 
 int bc250hsa_mp_str_is(const bc250hsa_mp_value* v, const char* key)

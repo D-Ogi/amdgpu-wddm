@@ -160,7 +160,8 @@ void bc250hsa_mp_init(bc250hsa_mp_reader* r, const void* bytes, size_t byte_coun
  * array or a map value reports its element count only; the caller then reads the
  * elements, or calls bc250hsa_mp_skip() to step over the whole container. */
 int  bc250hsa_mp_next(bc250hsa_mp_reader* r, bc250hsa_mp_value* out);
-/* Steps over one complete value, container and all. */
+/* Steps over one complete value, container and all. It refuses a value nested deeper
+ * than 32 containers, so a crafted note cannot cost one stack frame per byte. */
 int  bc250hsa_mp_skip(bc250hsa_mp_reader* r);
 /* True when the value is a string equal to key. */
 int  bc250hsa_mp_str_is(const bc250hsa_mp_value* v, const char* key);
