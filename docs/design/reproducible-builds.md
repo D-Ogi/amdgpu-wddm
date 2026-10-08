@@ -230,8 +230,10 @@ another directory gives the same bytes.
 The `radv` option set has `-Db_ndebug=true` from `b4c74c86` on. With `NDEBUG`, line 714 of
 `src/compiler/spirv/vtn_cmat.c` at `2732f9c8` declares a variable that only `assert` reads. Mesa makes warning
 C4189 an error (`/we4189`), so the build stops. The shipped file was built with the option set of `d6176765`,
-which does not set `b_ndebug`. The system ICD stays on its Mesa line, so `build-mesa.ps1 -Config radv-system`
-(`1eb9ddc3`) names that option set: the `radv` set without `-Db_ndebug=true`.
+which does not set `b_ndebug`. The system ICD stayed on its Mesa line, so `build-mesa.ps1 -Config radv-system`
+(`1eb9ddc3`) named that option set: the `radv` set without `-Db_ndebug=true`. From Mesa `a7f44c96`, which
+relaxes C4189 in MSVC `NDEBUG` builds, the `radv-system` set has `-Db_ndebug=true` as well, and the two
+measurements below describe the b23 file, not a file built with the current set.
 
 The b23 system ICD `A6562DAF` is Mesa `308a5e33` (`2732f9c8` and one BD-096 fix), built with the recipe of
 `d6176765`. Two measurements:
@@ -264,8 +266,8 @@ What remains for the forks:
    uncommitted copy of the recipe or from a build script outside the repository.
 3. The `llvmpipe-umd` builds link a local LLVM build (`scratch/llvm2312-build` and its x86 copy). A rebuild needs an
    LLVM build that a commit or a download record identifies.
-4. `vulkan/vulkan_radeon.dll` builds with `-Config radv-system`, because its Mesa line does not build with
-   `-Db_ndebug=true`.
+4. `vulkan/vulkan_radeon.dll` builds with `-Config radv-system`. Up to b23 that set had no `-Db_ndebug=true`,
+   because its Mesa line did not build with `NDEBUG`. From Mesa `a7f44c96` the set has it.
 
 ### The shipped files
 

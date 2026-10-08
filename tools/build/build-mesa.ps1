@@ -8,7 +8,7 @@ Configures and builds one of the lab's Mesa components with its recorded meson o
 
   radv          RADV Vulkan ICD (vulkan_radeon.dll)
   radv-mt       the same with the static C runtime (-Db_vscrt=mt), for ICDs loaded into games
-  radv-system   the system Vulkan ICD: the radv set without -Db_ndebug=true (asserts on)
+  radv-system   the system Vulkan ICD: the radv set (asserts off, Mesa a7f44c96 or later)
   llvmpipe-umd  desktop D3D10 UMD on llvmpipe (bc250d3d.dll), needs -Llvm
   zink-umd      native D3D10 UMD on Zink (bc250d3d_zink.dll)
   zink-gl       OpenGL on Zink (libgallium_wgl.dll, opengl32.dll)
