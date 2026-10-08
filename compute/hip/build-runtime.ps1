@@ -20,8 +20,19 @@
 # its SHA-256 with the hash in tests\data\PROVENANCE-runtime.txt. It is off by default, because
 # the fixture exists so that the host test runs on a machine with no AMDGPU compiler.
 
+# $Root is the workspace that holds toolchain\nuget and scratch. The repository is checked out
+# both as itself and as worktrees under scratch, so the depth from this script to the workspace
+# is not fixed: the default walks up until it finds the toolchain, as build.ps1 of layer 1 does.
 param(
-    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path }),
+    [string]$Root = $(
+        if ($env:BC250_ROOT) { $env:BC250_ROOT } else {
+            $probe = $PSScriptRoot
+            while ($probe -and -not (Test-Path (Join-Path $probe 'toolchain\nuget'))) {
+                $probe = Split-Path -Parent $probe
+            }
+            if ($probe) { $probe } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path }
+        }
+    ),
     [string]$Kits = '',
     [string]$Out = '',
     [string]$KitVersion = '10.0.26100.0',
@@ -156,9 +167,11 @@ $productDll = Join-Path $Out 'amdhip64.dll'
 if ($Bc250hsaLib -and (Test-Path $Bc250hsaLib)) {
     $productObjDir = Join-Path $Out 'obj-product'
     New-Item -ItemType Directory -Force $productObjDir | Out-Null
+    # gdi32.lib holds the D3DKMT* entry points that bc250hsa.lib calls. The mock build does not
+    # need it, which is why the product link is the first one to ask for it.
     Invoke-Cl ($warn + @('/LD', '/MD', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
         $includes + $runtimeSources + @($dllSource, $Bc250hsaLib) +
-        @('/link', "/DEF:$def") + $libpaths) 'amdhip64.dll (bc250hsa)'
+        @('/link', "/DEF:$def") + $libpaths + @('gdi32.lib')) 'amdhip64.dll (bc250hsa)'
 } else {
     Write-Host '  amdhip64.dll over bc250hsa: skipped, -Bc250hsaLib names no library of layer 1'
 }

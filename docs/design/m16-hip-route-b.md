@@ -54,7 +54,7 @@ the registration ABI was therefore measured against clang 22.1.8 itself, with a 
    +----|--------------------------------------------------+
         |  bc250hsa.h, and nothing else of the submission path
    +----v--------------------------------------------------+
-   | Layer 1: bc250hsa (static library) + hipdispatch tool  |  branch m16/hip-dispatch
+   | Layer 1: bc250hsa (static library) + hipprobe tool     |  branch m16/hip-dispatch
    |  device, memory, loader, kernarg, PM4, fence, wait     |  C11
    +----|--------------------------------------------------+
         |  D3DKMT, with our three private blobs
@@ -110,7 +110,7 @@ its decision and names it below.
 | PM4 dispatch builder, the buffer resource and the user SGPR plan | `pm4_dispatch.c` | 400 | no |
 | Submission, the command ring, the bounded wait, the fault query | `submit.c` | 350 | yes |
 | Status strings, counters, the log hook | `status.c` | 120 | no |
-| Step-1 tool `hipdispatch` | `tools/hipdispatch.c` | 450 | yes, except `--selftest` |
+| Step-1 tool `hipprobe` | `tools/hipprobe.c` | 450 | yes, except `--selftest` |
 
 About 3200 lines in all, and about 1800 of them are testable with no GPU. The MessagePack reader
 stays small because the metadata note uses maps, arrays, strings, integers and booleans only.
@@ -687,11 +687,12 @@ bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem);
  * without BC250HSA_MEM_MAPPABLE, with BC250HSA_EUNSUPPORTED.
  *
  * out is the one result of this call. On BC250HSA_OK the mapping is in *out, and
- * out NULL is BC250HSA_EINVAL. The library does not write mem->host: the caller
- * stores the pointer into its own copy of the handle. A caller that reads
- * mem->host after a map instead of *out works with one implementation of this
- * header and fails with the next. bc250hsa_unmap takes the mapping back and
- * clears mem->host. */
+ * out NULL is BC250HSA_EINVAL. This implementation also stores the pointer in
+ * mem->host, but that field is an implementation detail: a caller reads *out and
+ * keeps the pointer in its own copy of the handle. A caller that reads mem->host
+ * after a map instead of *out works with this implementation of the header and can
+ * fail with the next. bc250hsa_unmap takes the mapping back, and it clears
+ * mem->host of the handle the caller gave it. */
 bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out);
 bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem);
 
@@ -1276,7 +1277,7 @@ compute/
         m16_kernels.metadata.txt  the metadata note, as a reference for the test
         pm4_vadd.golden.txt       the expected dispatch stream, dword by dword, with comments
     tools/
-      hipdispatch.c               the step-1 tool
+      hipprobe.c                  the step-1 tool
       run-lab.ps1                 the step-1 trial of section 6
 ```
 
@@ -1316,8 +1317,8 @@ DECIDED, and this is the same answer for both layers.
    against the Mesa fork's progress write, the `SET_SH_REG` offsets of `pm4_regs.h` against
    `third_party/linux-amdgpu/gc_10_1_0_offset.h`, and the private blob magic values against
    `driver/contract/bc250_umd_submit.h`. A copy that drifts is a build failure.
-4. Build `bc250hsa.lib`, then the five host tests, then `hipdispatch.exe`.
-5. Run every host test and `hipdispatch.exe --selftest`, which runs the loader, the packer and the PM4
+4. Build `bc250hsa.lib`, then the five host tests, then `hipprobe.exe`.
+5. Run every host test and `hipprobe.exe --selftest`, which runs the loader, the packer and the PM4
    builder with no device and no GPU.
 6. Parse `tools/run-lab.ps1`, because it runs under Windows PowerShell 5.1 on the lab.
 7. Print the size and the SHA256 of every artifact.
@@ -1376,7 +1377,7 @@ on node 0, a fence, and the expected bytes in memory.
   and check `Tctl` below 87 C before the first run.
 - No held SSH session before the trial runs. Open the sampler only after the tool prints that it
   started.
-- Copy `hipdispatch.exe`, `m16_kernels.gfx1013.co` and `run-lab.ps1` to the lab scratch directory
+- Copy `hipprobe.exe`, `m16_kernels.gfx1013.co` and `run-lab.ps1` to the lab scratch directory
   through the normal target tool. Total about 300 KB.
 
 ### 6.2 The runs, with their bounds
@@ -1385,12 +1386,12 @@ on node 0, a fence, and the expected bytes in memory.
 
 | Run | Command | Bound |
 |---|---|---|
-| 0 | `hipdispatch --selftest` | host only, under 2 s |
-| 1 | `hipdispatch --info` | opens the device, prints `bc250hsa_props`, closes, under 3 s |
-| 2 | `hipdispatch vadd --n 1048576 --wait-slice 1000 --wait-total 10000` | under 15 s |
-| 3 | `hipdispatch reduce256 --n 65536 --wait-slice 1000 --wait-total 10000` | under 15 s |
-| 4 | `hipdispatch writeGridSize --grid 7,3,2 --block 64,2,1 --wait-slice 1000 --wait-total 10000` | under 15 s |
-| 5 | `bc250kmd_cli log` and a second `hipdispatch --info` | under 10 s |
+| 0 | `hipprobe --selftest` | host only, under 2 s |
+| 1 | `hipprobe --info` | opens the device, prints `bc250hsa_props`, closes, under 3 s |
+| 2 | `hipprobe vadd --n 1048576 --wait-slice 1000 --wait-total 10000` | under 15 s |
+| 3 | `hipprobe reduce256 --n 65536 --wait-slice 1000 --wait-total 10000` | under 15 s |
+| 4 | `hipprobe writeGridSize --grid 7,3,2 --block 64,2,1 --wait-slice 1000 --wait-total 10000` | under 15 s |
+| 5 | `bc250kmd_cli log` and a second `hipprobe --info` | under 10 s |
 
 Every wait is bounded: the tool passes 1000 ms slices and a 10000 ms total, instead of the library's
 120 s default, because each kernel is microseconds of work and the trial must stay short. The tool
@@ -1413,7 +1414,7 @@ All of these, from step 1 of the route document:
 5. The kernel driver log ring holds no "umd submit fence N not run" line, no memory fault and no
    timeout.
 6. No TDR: no bugcheck, no device loss reported by `bc250hsa_query_fault()`, and the second
-   `hipdispatch --info` of run 5 still opens the device.
+   `hipprobe --info` of run 5 still opens the device.
 7. `hostcall_buffer_requests` is 0 for these three kernels, which is the expected value and the first
    data point for kill criterion K4.
 
