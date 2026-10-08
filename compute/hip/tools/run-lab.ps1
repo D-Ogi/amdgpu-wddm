@@ -147,6 +147,34 @@ function Lines([string]$Text) {
     return @($Text -split "`r?`n" | Where-Object { $_ -ne '' })
 }
 
+# The number of lines this driver load wrote, from the header of 'log 0', or -1.
+function Log-Count([string]$Header) {
+    if ($Header -match 'log\s+(\d+) lines since') { return [long]$Matches[1] }
+    return -1
+}
+
+# The three TDR counters of the last '*** TDR:' summary line, or zeros when there is none.
+# They count from the driver load, so only a rise across the session is an event of it.
+function Tdr-Counters([string]$Text) {
+    $c = @(0, 0, 0)
+    foreach ($line in (Lines $Text)) {
+        if ($line -match 'ResetEngine (\d+), ResetFromTimeout (\d+), RestartFromTimeout (\d+)') {
+            $c = @([long]$Matches[1], [long]$Matches[2], [long]$Matches[3])
+        }
+    }
+    return $c
+}
+
+# A driver log line that names a submission that did not run, a fault, a timeout, a reset or
+# a TDR. A counter that reads 0 ("0 timeouts", "timeouts 0") names no event, and the
+# cumulative TDR summary line is judged by Tdr-Counters instead.
+function Suspect-Line([string]$Line) {
+    if ($Line -match '\*\*\* TDR: ResetEngine') { return $false }
+    $rest = $Line -replace '\b0 (timeouts?|faults?|resets?|TDRs?)\b', '' `
+                  -replace '\b(timeouts?|faults?|resets?|TDRs?) 0\b', ''
+    return ($rest -match 'not run|fault|timeout|TDR|reset')
+}
+
 # The session clock starts here, in front of the first call of the release client, so that
 # every bound below is taken out of one measured budget and record.session_seconds covers
 # the whole run.
@@ -190,6 +218,9 @@ $record = [ordered]@{
     kmd_log_pulled        = $false
     kmd_log_lines         = 0
     kmd_log_suspect       = @()
+    kmd_log_start         = -1
+    tdr_before            = $null
+    tdr_after             = $null
     criteria              = $null
     session_seconds       = 0
     verdict               = 'not run'
@@ -200,6 +231,10 @@ if ($cli) {
     $record.kmd_info = Client-Text $cli @('info') (Call-Bound 10 $TailReserveSeconds)
     $record.clock_before = Client-Text $cli @('clock', 'read') (Call-Bound 10 $TailReserveSeconds)
     $record.temp_start_c = Temp-C $record.clock_before
+    if (-not $SkipKmdLog) {
+        $record.kmd_log_start = Log-Count (Client-Text $cli @('log', '0') (Call-Bound 10 $TailReserveSeconds))
+        $record.tdr_before = Tdr-Counters (Client-Text $cli @('log', 'summary') (Call-Bound 10 $TailReserveSeconds))
+    }
 }
 
 # The 87 C rule of this workspace: a trial does not start on a hot part, and it does not
@@ -335,11 +370,25 @@ if ($cli) {
         }
         $tail = Client-Text $cli @('log', [string]$from) (Call-Bound 15 0)
         Set-Content -LiteralPath (Join-Path $WorkDir 'kmd-log.txt') -Value $tail -Encoding UTF8
-        Set-Content -LiteralPath (Join-Path $WorkDir 'kmd-summary.txt') `
-            -Value (Client-Text $cli @('log', 'summary') (Call-Bound 10 0)) -Encoding UTF8
+        $summary = Client-Text $cli @('log', 'summary') (Call-Bound 10 0)
+        Set-Content -LiteralPath (Join-Path $WorkDir 'kmd-summary.txt') -Value $summary -Encoding UTF8
+        # Only the lines this session wrote count: the ring also holds older events of the
+        # same driver load. A line without a leading number is the header and is skipped.
         $bad = @()
         foreach ($line in (Lines $tail)) {
-            if ($line -match 'not run|fault|timeout|TDR|reset') { $bad += $line }
+            if ($line -notmatch '^\s*(\d+)\s') { continue }
+            if ($record.kmd_log_start -ge 0 -and [long]$Matches[1] -lt $record.kmd_log_start) { continue }
+            if (Suspect-Line $line) { $bad += $line }
+        }
+        $record.tdr_after = Tdr-Counters ($summary + "`n" + $tail)
+        if ($null -ne $record.tdr_before) {
+            for ($i = 0; $i -lt 3; $i++) {
+                if ($record.tdr_after[$i] -gt $record.tdr_before[$i]) {
+                    $bad += ('TDR counters rose in this session: before ' + ($record.tdr_before -join ',') +
+                        ', after ' + ($record.tdr_after -join ','))
+                    break
+                }
+            }
         }
         $record.kmd_log_pulled = $true
         $record.kmd_log_lines = (Lines $tail).Count
