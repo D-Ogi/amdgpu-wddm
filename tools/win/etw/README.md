@@ -42,11 +42,12 @@ answered `bDirectFlip 1` for 600 presents and then consumed all of them itself.
 
 ## The verdict lines
 
-A trial greps three lines instead of reading the tables.
+A trial greps four lines instead of reading the tables.
 
 | Line | What it answers | Values |
 |---|---|---|
 | `M15.14 VERDICT` | the per-frame counts, and the compositor's DirectFlip answer | `INDEPENDENT-FLIP`, `COMPOSED`, `NO-DATA` |
+| `M15.14 KERNEL-WITNESS` | whether the kernel's own events prove that the process's buffers went to the plane, so that the Win32k skip label does not apply | `HOLDS`, `NOT-HELD`, `NO-DATA` |
 | `M15.14 INCREMENT1` | the inert control: the front asks the DirectFlip question and answers FALSE, so the capture must still equal the composed baseline | `INERT`, `MOVED`, `NO-DATA` |
 | `M15.14 INCREMENT2` | the four-clause conjunction, because DirectFlip without independent flip has no unique ETW event | `CONFIRMED`, `REFUTED`, `UNKNOWN` |
 
@@ -60,6 +61,32 @@ ones that reach the plane, so the compositor reads `MOVED` by construction. The 
 Every clause of the control is about this process. A capture holds the whole desktop, so an independent flip
 of another process is a count on the clause line and not a verdict about the client: a trace-wide test would
 send a lead rolling back a route that never moved.
+
+## The kernel witness
+
+Trial 478 (The Witcher 3, D3D12, 2026-10-08) gave a shape that the first rules read wrongly. Win32k marked every
+InFrame token of the game with `IndependentFlip` true and `SkipIndependentFlip` true. The rules read that pair
+as "composed flip (independent skipped)". The kernel events of the same frames said the opposite. Each present
+packet became an `IndependentFlip` and an `MMIOFlip`. The VSync DPC scanned the same three addresses. DWM consumed
+none of the presents.
+
+`KERNEL-WITNESS` is the rule for that shape. It has four clauses for one process:
+
+| Clause | `PASS` when |
+|---|---|
+| `independent_flips` | at least one present packet of the process became an `IndependentFlip` |
+| `mmio_programmed` | at least one of those flips reached `MMIOFlip` |
+| `vsync_scanned_same_addresses` | a VSync DPC scanned every physical address those flips programmed |
+| `not_consumed_by_dwm` | DWM consumed no present of the process, and every consumption row decoded |
+
+`HOLDS` needs all four. Then, and only then, a present with the skip pair and with no consumption reads as
+`hardware flip (kernel witness; Win32k skip)`. The witness moves no other label. A present that DWM consumed stays
+composed, and a present without a token state stays unclassified. One `FAIL` gives `NOT-HELD`, and a missing input
+gives `NO-DATA`. Neither of them moves a label. `relabelled` on the line counts the presents that moved.
+
+The witness is per process and per capture. One consumed present of the process stops the relabel for all of its
+presents in that capture. That is the safe direction: a capture that mixes a composed segment with a flipping
+segment reads as composed, and the per-second table still separates the two segments.
 
 `INCREMENT2` reads two of its clauses from numbers outside the trace:
 
@@ -112,12 +139,17 @@ bPresent) come from PresentMon's generated model of this provider: `ref/presentm
 ## The self-test
 
 `etw-present-mode-test.py` runs on the development PC and needs no capture of its own. `tools/quality/quick.ps1`
-runs it as the `present-mode` gate. It uses two fixtures:
+runs it as the `present-mode` gate. It uses these fixtures:
 
 - `testdata/base-composed-excerpt.txt`, one second of the composed baseline. Every shape in it is a real shape
   of this driver. Increment 1 must read `INERT` on it, and increment 2 must read `REFUTED`.
+- `testdata/w3-exclusive-flip-excerpt.txt`, one second of trial 478 in exclusive fullscreen at the native mode.
+  The kernel witness must read `HOLDS` and relabel 102 presents.
+- `testdata/w3-exclusive-1080-composed-excerpt.txt`, one second of trial 478 at 1920x1080, where DWM composed the
+  game. The kernel witness must read `NOT-HELD`, and no label may move.
 - dumper texts the test writes itself, in the real header shapes, for the branches that no capture of this
-  driver took yet. A hardware independent flip is one of them.
+  driver took yet. A hardware independent flip is one of them. The negative controls of the kernel witness are
+  others: one consumed present, a DPC that scanned other addresses, and no `IndependentFlip` event.
 
 Set `BC250_ETW_TEST_ETL` to a present-mode `.etl` to also exercise the xperf path and the dump deletion. The
 test skips that case when the variable is absent, because no `.etl` belongs in this repository.
