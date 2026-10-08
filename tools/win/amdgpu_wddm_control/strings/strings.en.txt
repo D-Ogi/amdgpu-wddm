@@ -93,7 +93,7 @@ guide.update-available|src|-|A newer driver release is available. The Driver pag
 guide.all-good|src|-|Everything looks good. Ready to play.
 guide.tip.settings|src|-|Your choices here stay when the driver is updated.
 guide.tip.display|src|-|If the window gets lost after a monitor change, it comes back to a visible screen by itself.
-guide.tip.graphics|src|-|Changes on this page apply after the next restart of Windows.
+guide.tip.graphics|src|-|Clock and core changes apply after the next restart of Windows. The settings for all games apply the next time a game starts.
 
 # ---- status card on Home (WU-007, WU-052, WU-061) ----
 status.title.problem|src|-|Something needs your attention
@@ -270,7 +270,7 @@ search.games.undo.terms|src|-|undo|redo|revert
 search.games.add|src|-|Add a game
 search.games.add.terms|src|-|add|game|program|exe
 search.display.resolution|src|-|Resolution and refresh rate
-search.display.resolution.terms|src|-|resolution|refresh|Hz|1080p|monitor
+search.display.resolution.terms|src|-|resolution|refresh|Hz|1080p|monitor|change resolution|set refresh|mode|144 Hz
 search.display.identify|src|-|Identify the monitor
 search.display.identify.terms|src|-|identify|which screen|monitor number
 search.display.scale|src|-|Scale, layout and orientation
@@ -307,20 +307,10 @@ search.help.restart|src|-|Restart Windows
 search.help.restart.terms|src|-|restart|reboot|driver restart|reset
 search.help.guides|src|-|Help for common problems
 search.help.guides.terms|src|-|black screen|crash|slow|stutter|mouse|problem|help
-search.later.vsync|src|-|Vertical sync (VSync)
-search.later.vsync.terms|src|-|VSync|vertical sync|tearing
-search.later.fps|src|-|Frame rate limit
-search.later.fps.terms|src|-|FPS|FPS limit|frame limiter|FPS cap|frame rate
 search.later.sharpen|src|-|Image sharpening
 search.later.sharpen.terms|src|-|sharpen|sharpness|RIS|CAS
 search.later.aa|src|-|Anti-aliasing
 search.later.aa.terms|src|-|AA|MSAA|antialiasing|jaggies
-search.later.af|src|-|Texture filtering
-search.later.af.terms|src|-|AF|anisotropic|filtering|textures
-search.later.scaling|src|-|Image scaling
-search.later.scaling.terms|src|-|scaling|upscaling|integer scaling|aspect ratio|stretch
-search.later.mode|src|-|Choose resolution and refresh rate
-search.later.mode.terms|src|-|change resolution|set refresh|mode|144 Hz
 search.later.hdr|src|-|HDR
 search.later.hdr.terms|src|-|HDR|10-bit|colour depth|color
 search.later.vrr|src|-|Variable refresh rate
@@ -329,8 +319,6 @@ search.later.power|src|-|Power limit
 search.later.power.terms|src|-|power limit|watts|TDP
 search.perf.fan|src|-|Fan control
 search.perf.fan.terms|src|-|fan|fan curve|noise|cooling
-search.later.fps-counter|src|-|Frame rate display
-search.later.fps-counter.terms|src|-|FPS counter|frame time|overlay|frames per second
 search.later.cache-clear|src|-|Clear the shader cache
 search.later.cache-clear.terms|src|-|clear cache|delete cache
 
@@ -380,9 +368,9 @@ page.home.intro|src|-|What your PC is doing now, and what needs your attention.
 page.games.title|src|-|Games
 page.games.intro|src|-|Settings for one game. They apply the next time the game starts.
 page.graphics.title|src|-|Graphics
-page.graphics.intro|src|-|Clock speed and graphics cores for all games. Changes apply after the next restart of Windows.
+page.graphics.intro|src|-|Clock speed, graphics cores and the settings for all games. Clock and core changes apply after the next restart of Windows; the settings for all games apply the next time a game starts.
 page.display.title|src|-|Display
-page.display.intro|src|-|Your monitors and what they show now.
+page.display.intro|src|-|Your monitors, what they show now and the modes you can choose.
 page.performance.title|src|-|Performance
 page.performance.intro|src|-|Live readings of the graphics chip, and the shader caches.
 page.driver.title|src|-|Driver
@@ -468,7 +456,7 @@ graphics.cores.40|src|-|All (40)
 graphics.not-installed|src|-|The driver is not installed, so there is nothing to set here.
 graphics.unsaved|src|-|You have changes that are not applied yet.
 graphics.saved|src|-|No unsaved changes.
-graphics.reset.text|src|-|Sets the clock speed and graphics cores back to the release's settings.
+graphics.reset.text|src|-|Sets the clock speed and graphics cores back to the release's settings, and the settings for all games back to "Application decides".
 graphics.reset.keep-games|src|-|Keep the settings of each game
 graphics.reset.button|src|-|Restore defaults...
 graphics.undo|src|-|Undo the last change...
@@ -483,7 +471,7 @@ display.refresh|src|-|Refresh rate
 display.size|src|-|{0} x {1}
 display.mode|src|-|{0} x {1} at {2} Hz
 display.mode.no-rate|src|-|{0} x {1}
-display.mode-note|src|-|You can see these values here. Changing them from this app comes later.
+display.mode-note|src|-|Windows lists the modes this monitor can show. A new setting applies at once and stays only when you keep it within 15 seconds.
 display.identify|src|-|Identify
 display.windows.title|src|-|Windows display settings
 display.windows.text|src|-|Scale, layout, orientation and the main monitor are set in Windows.
@@ -598,8 +586,8 @@ recovery.actions|src|-|What you can do
 # ---- explanations next to each page and setting (WU-064) ----
 help.page.home|src|-|Home shows one status card: whether everything is ready, and if not, what to do next. Below it are your recent games and a short summary.
 help.page.games|src|-|Each game can have its own settings. They are stored by the program's file name and read when the game starts.
-help.page.graphics|src|-|These settings apply to all games. The driver reads them when Windows starts, so they apply after the next restart.
-help.page.display|src|-|This page shows what each monitor displays now. Windows sets the resolution, scale and layout.
+help.page.graphics|src|-|These settings apply to all games. The clock speed and the graphics cores apply after the next restart of Windows. The settings for all games apply the next time a game starts; a game's own setting on the Games page wins over them.
+help.page.display|src|-|Choose the resolution, refresh rate and scaling of each monitor. A new setting stays only when you keep it within 15 seconds. Windows sets the scale and the layout.
 help.page.performance|src|-|Live readings of the graphics chip. "No reading" means the driver cannot measure this value yet.
 help.page.driver|src|-|The installed release, whether it is checked, and whether a newer release is available.
 help.page.settings|src|-|How this app behaves for you. Nothing here changes the driver.
@@ -614,7 +602,7 @@ help.setting.cpu|src|-|Spreads the driver's work over more processor cores. This
 help.setting.diag|src|-|Switches for tests by the developers. Use them only when they ask you to.
 help.setting.undo|src|-|Goes back to the settings of this game before your last change. Redo returns your change.
 help.setting.add|src|-|Choose the game's program file (.exe) to give it its own settings before you start it.
-help.setting.resolution|src|-|The number of pixels and the refresh rate of each monitor. Windows sets them.
+help.setting.resolution|src|-|The number of pixels and the refresh rate of each monitor. Only the modes Windows lists are offered. A new mode applies at once and stays only when you keep it within 15 seconds.
 help.setting.identify|src|-|Shows the monitor's number on that monitor for 3 seconds.
 help.setting.scale|src|-|Windows sets the size of text and apps, the layout of monitors and the orientation.
 help.setting.sensors|src|-|Load, temperature, clock speed and video memory of the graphics chip, every 2 seconds.
@@ -633,18 +621,16 @@ help.setting.repair|src|-|Installs the same release again from the copy on this 
 help.setting.report|src|-|Makes a zip file with information for the developers. You decide whether to send it.
 help.setting.restart|src|-|Restarts Windows. Restarting only the graphics driver is not available.
 help.setting.guides|src|-|Step-by-step help for common problems.
-help.setting.vsync|src|-|Makes a game wait for the monitor before it shows a new frame. Coming later.
-help.setting.fps|src|-|Limits how many frames a game draws each second. Coming later.
+help.setting.vsync|src|-|Makes a game wait for the monitor before it shows a new frame. This stops tearing, but can add a little delay. "Application decides" leaves it to the game's own setting.
+help.setting.fps|src|-|Limits how many frames a game draws each second. A limit keeps the graphics chip cooler and quieter. "No limit" for one game removes a limit set for all games.
 help.setting.sharpen|src|-|Makes the picture look sharper. Coming later.
 help.setting.aa|src|-|Smooths jagged edges. Coming later.
-help.setting.af|src|-|Makes textures at an angle look sharper. Coming later.
-help.setting.scaling|src|-|How a lower resolution fills the screen. Coming later.
-help.setting.mode|src|-|Choose the resolution and refresh rate from this app. Coming later.
+help.setting.af|src|-|Makes textures at an angle look sharper. Higher values cost a little speed.
+help.setting.scaling|src|-|How a picture with a lower resolution than the monitor's fills the screen: stretched to full screen, enlarged with the aspect ratio kept, or centred without scaling. A change stays only when you keep it within 15 seconds.
 help.setting.hdr|src|-|High dynamic range: brighter highlights and more colours. Coming later.
 help.setting.vrr|src|-|The monitor follows the game's frame rate for smoother motion. Coming later.
 help.setting.power|src|-|The most power the chip may use. Coming later.
 help.setting.fan|src|-|Chooses who runs the case fan. Automatic leaves it to the board's BIOS setting. The driver curve turns the fan a little faster than the board's standard setting when the chip is hot. Quiet is slower below 80 °C, Performance is faster everywhere. From 87 °C the fan always runs at full speed.
-help.setting.fps-counter|src|-|Shows the frame rate. Coming later.
 help.setting.cache-clear|src|-|Deletes the shader cache. Coming later.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|src|-|Advanced tuning
@@ -887,3 +873,100 @@ perf.fan.refuse.bad-test|src|-|That test speed is not offered.
 perf.fan.refuse.busy|src|-|A test is not possible now, because the driver is not running the fan in the normal way at the moment.
 plan.line.fan-test|src|-|The fan runs at {0} % for {1} seconds, then goes back to the setting in use. Nothing is saved.
 plan.title.fan-test|src|-|Test the fan
+
+# ---- graphics settings for games, shader model, display modes (2026-10-08) ----
+search.graphics.vsync|src|-|Vertical sync (VSync)
+search.graphics.vsync.terms|src|-|VSync|vertical sync|tearing
+search.graphics.fps|src|-|Frame rate limit
+search.graphics.fps.terms|src|-|FPS|FPS limit|frame limiter|FPS cap|frame rate
+search.graphics.af|src|-|Texture filtering
+search.graphics.af.terms|src|-|AF|anisotropic|filtering|textures
+search.display.scaling.terms|src|-|scaling|upscaling|integer scaling|aspect ratio|stretch|GPU scaling|display scaling|centre|center
+search.graphics.overlay.terms|src|-|FPS counter|frame time|overlay|frames per second|HUD|OSD|performance overlay
+search.graphics.latency|src|-|Low latency
+search.graphics.latency.terms|src|-|latency|input lag|frames ahead|render queue|Anti-Lag|Reflex|max frame latency
+search.graphics.overlay|src|-|Performance overlay
+search.graphics.amd-version|src|-|Report an AMD driver version
+search.graphics.amd-version.terms|src|-|driver version|old driver|outdated driver|driver warning|AMD|unsupported driver
+search.graphics.vk-present|src|-|Vulkan presentation
+search.graphics.vk-present.terms|src|-|Vulkan|present|presentation|black screen|frozen picture|compatibility
+search.graphics.vk-memory|src|-|When video memory is full
+search.graphics.vk-memory.terms|src|-|VRAM|video memory|out of memory|memory full|system memory|Vulkan
+search.games.sm|src|-|Highest shader model
+search.games.sm.terms|src|-|shader model|SM 6.8|SM 6.7|SM 6.6|shader|DirectX 12
+search.games.cpu-render|src|-|Run DirectX 11 on the processor
+search.games.cpu-render.terms|src|-|CPU rendering|software rendering|WARP|processor|DirectX 11|fallback|last resort
+search.display.scaling|src|-|GPU scaling
+help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate.
+help.setting.overlay|src|-|Shows the frame rate and frame times in a corner of the game. Works in DirectX 11 games for now.
+help.setting.amd-version|src|-|Some games warn that the graphics driver is old, because they do not know this driver. With this on, the driver reports a version number that these games accept. The driver itself does not change.
+help.setting.vk-present|src|-|How Vulkan games show their frames. Modern is the default and is faster. Compatibility uses an older, slower way; try it when a Vulkan game shows a black or frozen picture.
+help.setting.vk-memory|src|-|What a Vulkan game gets when the video memory is full. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
+help.setting.sm|src|-|The highest shader model the driver reports to a DirectX 12 game. 6.8 is the default. Some games fail with a newer shader model; for such a game, choose 6.7 or 6.6.
+help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower. Use it only as a last resort for a game that fails on the graphics chip.
+gfx.choice.app|src|-|Application decides
+gfx.choice.inherit|src|-|Same as all games: {0}
+gfx.choice.inherit-short|src|-|Same as all games
+gfx.choice.invalid|src|-|Stored value not valid ({0})
+gfx.choice.invalid-type|src|-|Stored value not valid
+gfx.choice.other|src|-|Set outside this app
+gfx.choice.no-limit|src|-|No limit
+gfx.choice.fps|src|-|{0} fps
+gfx.choice.always-off|src|-|Always off
+gfx.choice.always-on|src|-|Always on
+gfx.choice.af-off|src|-|1x (off)
+gfx.choice.af|src|-|{0}x
+gfx.choice.latency-1|src|-|1 frame ahead (lowest latency)
+gfx.choice.latency|src|-|{0} frames ahead
+gfx.choice.on|src|-|On
+gfx.choice.off|src|-|Off
+gfx.choice.modern|src|-|Modern
+gfx.choice.modern-default|src|-|Modern (default)
+gfx.choice.compat|src|-|Compatibility
+gfx.choice.sysmem|src|-|Use system memory (slower, keeps running)
+gfx.choice.sysmem-default|src|-|Use system memory (default, slower, keeps running)
+gfx.choice.oom|src|-|Report out of memory (the game can lower its settings)
+gfx.origin.means|src|-|The driver uses: {0}.
+gfx.origin.invalid-global|src|-|The value stored for all games is not valid and is kept as it is.
+gfx.origin.invalid-game|src|-|The value stored for this game is not valid and is kept as it is.
+gfx.origin.default|src|-|Not set: {0}.
+gfx.origin.stored|src|-|Stored for all games.
+gfx.origin.global|src|-|From the settings for all games: {0}.
+gfx.note.overlay|src|-|Works in DirectX 11 games for now.
+gfx.note.cpu-render|src|-|Much slower. A last resort for a DirectX 11 game that fails on the graphics chip.
+gfx.note.amd-version|src|-|For games that warn about an old graphics driver.
+gfx.note.vk-present|src|-|Compatibility is slower. Try it when a Vulkan game shows a black or frozen picture.
+gfx.note.sm|src|-|Some games fail with a newer shader model. Choose a lower one only for such a game.
+gfx.global.title|src|-|Settings for all games
+gfx.global.intro|src|-|These apply to every game. A game's own setting on the Games page wins over them. Changes apply the next time a game starts.
+gfx.unreadable|src|-|These settings cannot be read now.
+gfx.section.vulkan|src|-|Vulkan games
+games.section.d3d12|src|-|DirectX 12 compatibility
+games.section.graphics|src|-|Graphics
+games.sm.68|src|-|6.8 (default)
+games.sm.67|src|-|6.7
+games.sm.66|src|-|6.6
+plan.title.graphics-defaults|src|-|Settings for all games
+plan.line.gfx-set|src|-|All games, {0}: {1}.
+plan.line.gfx-game-set|src|-|{0}, {1}: {2}.
+plan.line.gfx-key|src|-|{0} has no graphics settings of its own any more.
+plan.game.sm|src|-|highest shader model {0}
+plan.when.games|src|-|Applies the next time a game starts. A game that is running keeps the old settings until it starts again.
+display.rate|src|-|{0} Hz
+display.modes.none|src|-|Windows lists no modes for this monitor.
+display.scaling.unknown|src|-|The scaling of this monitor cannot be read.
+display.scaling.full|src|-|Full screen (stretched)
+display.scaling.aspect|src|-|Keep the aspect ratio
+display.scaling.center|src|-|Centred (no scaling)
+display.scaling.windows|src|-|As Windows set it
+display.scaling.note|src|-|How a picture with a lower resolution than the monitor's fills the screen.
+display.changed|src|-|Changed, not applied yet. Now: {0}.
+display.keep.title|src|-|Keep these display settings?
+display.keep.text|src|-|Going back to the previous display settings in {0} s.
+display.keep.keep|src|-|Keep changes
+display.keep.revert|src|-|Revert
+display.result.kept|src|-|The new display settings are kept.
+display.result.reverted|src|-|The previous display settings are back.
+display.result.failed|src|-|Windows did not accept this display setting. Nothing changed.
+display.result.keep-failed|src|-|The new display settings apply now, but Windows did not save them. They can go back after a restart.
+display.result.revert-failed|src|-|The previous display settings did not come back. Choose them again here or in the Windows display settings.

@@ -1,6 +1,7 @@
 // Games (WU-012..WU-015, WU-028, WU-054) and Graphics (B5 clock now vs after restart, the CU section of section 7,
 // WU-055 restore defaults). Edits stay in the window until Apply; leaving with edits asks Save / Discard / Keep.
-// Every write is one planned action through the elevated helper (game-profile, set-clocks, cu-mode, reset-defaults).
+// Every write is one planned action through the elevated helper (game-profile, set-clocks, cu-mode, reset-defaults,
+// graphics-defaults). The graphics settings rows are in MainForm.GfxSettings.cs.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -31,7 +32,20 @@ namespace AmdgpuWddmControl
             public DateTime? LastLaunch;
             public bool D3D12;
             public bool Hidden;
+            public bool OwnGfx;                         // has graphics or Vulkan settings of its own
         }
+
+        // The changes of one game that Apply sends as one game-profile action: its switches, its graphics settings or both.
+        sealed class GamePending
+        {
+            public string Image;
+            public ProfileWrite Profile;                // null: the switches do not change
+            public Dictionary<string, string> Gfx;      // null: the graphics settings do not change
+        }
+
+        bool GameEdited(string image) { return _gameEdits.ContainsKey(image) || _smEdits.ContainsKey(image) || _gfxGameEdits.ContainsKey(image); }
+
+        bool AnyGameEdits { get { return _gameEdits.Count > 0 || _smEdits.Count > 0 || _gfxGameEdits.Count > 0; } }
 
         // One entry per file name: profiles are per file name (B3), so two folders with the same exe share one entry.
         List<GameEntry> GameList()
@@ -51,8 +65,10 @@ namespace AmdgpuWddmControl
             }
             if (_snap.GameProfiles != null) foreach (var kv in _snap.GameProfiles) if (Profiles.IsValidImage(kv.Key)) get(kv.Key).Stored = kv.Value.Length == 0 ? null : kv.Value;
             if (_snap.DefaultApplications != null) foreach (var kv in _snap.DefaultApplications) if (Profiles.IsValidImage(kv.Key)) get(kv.Key).Recommended = kv.Value;
+            if (_snap.GfxKeys != null)
+                foreach (var image in GraphicsSettings.Games(_snap.GfxKeys)) if (GraphicsSettings.HasOwn(_snap.GfxKeys, image)) get(image).OwnGfx = true;
             foreach (var a in _addedGames) get(a);
-            foreach (var g in _gameEdits.Keys) get(g);
+            foreach (var g in _gameEdits.Keys.Concat(_smEdits.Keys).Concat(_gfxGameEdits.Keys)) get(g);
             var hidden = _prefs.HiddenGames;
             foreach (var e in map.Values) e.Hidden = hidden.Contains(e.Image);
             var list = map.Values.ToList();
@@ -73,25 +89,41 @@ namespace AmdgpuWddmControl
             return _snap.DefaultApplications != null && _snap.DefaultApplications.TryGetValue(image, out v) ? v : null;
         }
 
-        // The pending writes of the Games page, one per edited game that changes something.
-        List<ProfileWrite> GameWrites()
+        // The pending changes of the Games page, one per edited game that changes something.
+        List<GamePending> GamePendings()
         {
-            var writes = new List<ProfileWrite>();
-            foreach (var kv in _gameEdits)
+            var list = new List<GamePending>();
+            var images = new HashSet<string>(_gameEdits.Keys.Concat(_smEdits.Keys).Concat(_gfxGameEdits.Keys), StringComparer.OrdinalIgnoreCase);
+            foreach (var image in images.OrderBy(i => i, StringComparer.OrdinalIgnoreCase))
             {
-                try { var w = GameGroups.Plan(kv.Key, StoredOf(kv.Key), kv.Value); if (w.Kind != ProfileWriteKind.None) writes.Add(w); }
+                var g = new GamePending { Image = image };
+                Dictionary<string, bool> changes;
+                _gameEdits.TryGetValue(image, out changes);
+                string sm;
+                _smEdits.TryGetValue(image, out sm);
+                try
+                {
+                    var w = GameGroups.Plan(image, StoredOf(image), changes ?? new Dictionary<string, bool>(), sm);
+                    if (w.Kind != ProfileWriteKind.None) g.Profile = w;
+                }
                 catch (ArgumentException) { }
+                if (GfxGameWrites(image).Count > 0) g.Gfx = _gfxGameEdits[image];
+                if (g.Profile != null || g.Gfx != null) list.Add(g);
             }
-            return writes;
+            return list;
         }
 
         bool ApplyGames()
         {
             bool all = true;
-            foreach (var w in GameWrites())
+            foreach (var g in GamePendings())
             {
-                bool ok = RunActionAndWait("game-profile", new Recovery.PlanArgs { Image = w.Image, Value = w.Kind == ProfileWriteKind.Set ? w.Value : "" });
-                if (ok) _gameEdits.Remove(w.Image); else { all = false; break; }
+                var more = new Recovery.PlanArgs { Image = g.Image };
+                if (g.Profile != null) more.Value = g.Profile.Kind == ProfileWriteKind.Set ? g.Profile.Value : "";
+                if (g.Gfx != null) more.Gfx = GraphicsSettings.FormatEdits(g.Gfx);
+                bool ok = RunActionAndWait("game-profile", more);
+                if (ok) { _gameEdits.Remove(g.Image); _smEdits.Remove(g.Image); _gfxGameEdits.Remove(g.Image); }
+                else { all = false; break; }
             }
             ShowPage(_page, null, false);
             return all;
@@ -112,6 +144,9 @@ namespace AmdgpuWddmControl
             string rec = recommended ? RecommendedOf(image) : null;
             foreach (var g in GameGroups.All.Where(x => !x.SupportOnly || _prefs.ShowSupportOptions))
                 EditGroup(image, g, rec != null && GameGroups.State(g, rec) != GroupState.Off);
+            var sm = rec != null ? ShaderModelCeiling.State(rec) : ShaderModelCeiling.Default;
+            if (sm == ShaderModelCeiling.State(StoredOf(image))) _smEdits.Remove(image); else _smEdits[image] = sm;
+            if (!recommended) ResetGameGfx(image);
             ShowPage(_page, null, false);
         }
 
@@ -134,11 +169,11 @@ namespace AmdgpuWddmControl
             {
                 if (g.Hidden && !_showHidden) continue;
                 var entry = g;
-                var name = Ui.Button(entry.Image + (_gameEdits.ContainsKey(entry.Image) ? "  *" : ""), (s, e) => { _game = entry.Image; ShowPage(_page, null, false); }, entry.Image.Equals(_game, StringComparison.OrdinalIgnoreCase));
+                var name = Ui.Button(entry.Image + (GameEdited(entry.Image) ? "  *" : ""), (s, e) => { _game = entry.Image; ShowPage(_page, null, false); }, entry.Image.Equals(_game, StringComparison.OrdinalIgnoreCase));
                 name.MinimumSize = new Size(Math.Min(Theme.S(200), list.Inner / 3), 0);
                 name.TextAlign = ContentAlignment.MiddleLeft;
-                name.AccessibleName = entry.Image + (_gameEdits.ContainsKey(entry.Image) ? ", " + Strings.T("games.unsaved") : "");
-                string about = entry.LastLaunch != null ? Strings.T("games.launched", When(entry.LastLaunch.Value), Strings.T(entry.D3D12 ? "games.api.d3d12" : "games.api.d3d11")) : entry.Stored != null ? Strings.T("games.has-settings") : Strings.T("games.no-settings");
+                name.AccessibleName = entry.Image + (GameEdited(entry.Image) ? ", " + Strings.T("games.unsaved") : "");
+                string about = entry.LastLaunch != null ? Strings.T("games.launched", When(entry.LastLaunch.Value), Strings.T(entry.D3D12 ? "games.api.d3d12" : "games.api.d3d11")) : entry.Stored != null || entry.OwnGfx ? Strings.T("games.has-settings") : Strings.T("games.no-settings");
                 int infoWidth = Math.Max(Theme.S(120), list.Inner - Math.Min(Theme.S(200), list.Inner / 3) - Theme.S(130));
                 var info = Ui.Dim(about, infoWidth);
                 info.MinimumSize = new Size(Math.Min(infoWidth, Theme.S(220)), 0);
@@ -180,6 +215,7 @@ namespace AmdgpuWddmControl
             _gameEdits.TryGetValue(game.Image, out changes);
             var now = GameGroups.Apply(game.Stored, changes);
             string nowValue = string.Join(",", now);
+            c.Add(SectionLabel(Strings.T("games.section.d3d12"), c.Inner));
             foreach (var g in GameGroups.All)
             {
                 if (g.SupportOnly && !_prefs.ShowSupportOptions) continue;
@@ -202,15 +238,17 @@ namespace AmdgpuWddmControl
                 if (other.Count > 0) c.Add(Ui.Dim(Strings.T("games.other-kept", string.Join(", ", other)), c.Inner));
             }
             else if (GameGroups.Hidden(nowValue).Count > 0) c.Add(Ui.Dim(Strings.T("games.hidden-kept"), c.Inner));
+            AddShaderModel(c, game);
+            AddGameGfx(c, game);
             c.Add(Ui.Dim(Strings.T("games.when", game.Image), c.Inner));
 
-            var writes = GameWrites();
+            var writes = GamePendings();
             bool dirty = writes.Any(w => w.Image.Equals(game.Image, StringComparison.OrdinalIgnoreCase));
-            if (_gameEdits.Count > 0) c.Add(Ui.Label(Strings.T(writes.Count > 0 ? "games.unsaved.count" : "games.unsaved.none", writes.Count), null, writes.Count > 0 ? Theme.Warn : Theme.Dim, c.Inner));
+            if (AnyGameEdits) c.Add(Ui.Label(Strings.T(writes.Count > 0 ? "games.unsaved.count" : "games.unsaved.none", writes.Count), null, writes.Count > 0 ? Theme.Warn : Theme.Dim, c.Inner));
             var apply = Ui.Button(Strings.T("ui.apply"), (s, e) => ApplyGames(), true);
             apply.Enabled = writes.Count > 0;
-            var discard = Ui.Button(Strings.T("ui.discard"), (s, e) => { _gameEdits.Clear(); ShowPage(_page, null, false); });
-            discard.Enabled = _gameEdits.Count > 0;
+            var discard = Ui.Button(Strings.T("ui.discard"), (s, e) => { DiscardPage("games"); ShowPage(_page, null, false); });
+            discard.Enabled = AnyGameEdits;
             c.Add(Ui.WrapRow(c.Inner, apply, discard));
 
             var backups = RecoveryProbe.Backups();
@@ -262,8 +300,9 @@ namespace AmdgpuWddmControl
 
         bool ApplyGraphics()
         {
-            bool ok = true;
-            if (ClockWrites().Count > 0)
+            // The settings for all games first: they need no restart.
+            bool ok = ApplyGfxGlobal();
+            if (ok && ClockWrites().Count > 0)
             {
                 ok = RunActionAndWait("set-clocks", null, AutoChosen ? 1u : (uint?)null, CeilingChosen, true);
                 if (ok) { _autoEdit = null; _ceilEdited = false; _ceilEdit = null; }
@@ -330,9 +369,11 @@ namespace AmdgpuWddmControl
             }
             p.Controls.Add(cores);
 
-            // Apply / Discard for the clock and the cores (two planned actions when both changed).
+            p.Controls.Add(BuildGfxGlobalCard(width));
+
+            // Apply / Discard for the clock, the cores and the settings for all games (one planned action each).
             var save = new CardPanel(null, width);
-            int pending = ClockWrites().Count + (CuChoiceChanged ? 1 : 0);
+            int pending = ClockWrites().Count + (CuChoiceChanged ? 1 : 0) + GfxGlobalWrites().Count;
             save.Add(Ui.Label(Strings.T(pending > 0 ? "graphics.unsaved" : "graphics.saved"), null, pending > 0 ? Theme.Warn : Theme.Dim, save.Inner));
             var apply = Ui.Button(Strings.T("ui.apply"), (s, e) => ApplyGraphics(), true);
             apply.Enabled = installed && pending > 0;
@@ -363,7 +404,7 @@ namespace AmdgpuWddmControl
             reset.Add(Ui.Dim(undoTarget == null ? Strings.T("graphics.undo.none") : Strings.T("graphics.undo.when", UndoWhen(undoTarget.Utc)), reset.Inner));
             p.Controls.Add(reset);
 
-            p.Controls.Add(LaterCard(width, "later.vsync", "later.fps", "later.sharpen", "later.aa", "later.af"));
+            p.Controls.Add(LaterCard(width, "later.sharpen", "later.aa"));
             return p;
         }
 

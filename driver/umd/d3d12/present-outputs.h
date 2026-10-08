@@ -28,6 +28,10 @@ struct PresentSources {
     D3DKMT_HANDLE destination{};                // 0: the call named no destination
     uint64_t destination_offset{};
     HANDLE context{};
+    // The per-application VSync setting (docs/design/per-app-graphics-settings.md): when sync_override_valid, the
+    // runtime presents with sync_override in place of the application's sync interval.
+    bool sync_override_valid{};
+    DXGI_DDI_FLIP_INTERVAL_TYPE sync_override{DXGI_DDI_FLIP_INTERVAL_IMMEDIATE};
 };
 // The surface is the whole allocation from its first byte: an offset is a surface this driver did not make.
 inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* result,
@@ -40,7 +44,8 @@ inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* re
     result->BroadcastDstAllocation[0]=from.destination;
     result->AddedGpuWork=FALSE;
     result->BackBufferMultiplicity=1;
-    result->SyncIntervalOverrideValid=FALSE;
+    result->SyncIntervalOverrideValid=from.sync_override_valid ? TRUE : FALSE;
+    result->SyncIntervalOverride=from.sync_override_valid ? from.sync_override : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
     contexts->hContext=from.context;
     contexts->BroadcastContextCount=0;
     return S_OK;

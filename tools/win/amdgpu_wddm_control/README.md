@@ -11,9 +11,9 @@ goes only into the support report and the Support page (shown when "Show support
 | Page | What it shows or changes |
 |---|---|
 | Home | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
-| Games | One entry per game file name (recent launches, stored profiles, the release's defaults, added games); per game the D3D12 application profile as grouped check boxes with origin and cost, Apply/Discard, Undo/Redo and "Recommended" |
-| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid), the compute unit choice (section 7 of the plan), "Advanced tuning" (closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count, each change a trial the driver takes back by itself unless kept; `docs/design/tuner.md`), Restore defaults (keep or reset the games) with undo; features the driver cannot do yet as "Coming later" |
-| Display | The monitors Windows reports, Identify, a link to the Windows display settings; mode, scaling, HDR and VRR as "Coming later" |
+| Games | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
+| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
+| Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
 | Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
 | Settings | Language, update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
@@ -47,9 +47,53 @@ never on a schedule. DPM settings are
 or unconfirmed start; the page shows the last start's reason.
 
 The window runs as the invoking user. A change starts an elevated copy of the program (one UAC prompt) with one verb,
-`--action <name>` (a game's settings: `--action game-profile --image <name.exe> --value <switches>`, an empty value
-removes the game's key; `game-undo` and `game-redo` take `--image`), which checks its arguments with the same
-functions as the window and reads the value back.
+`--action <name>`. The copy checks its arguments with the same functions as the window and reads the value back. A
+game's settings use `--action game-profile --image <name.exe>`. Add `--value <switches>` for its switches (an empty
+value removes the game's key), `--gfx <settings>` for its graphics settings, or both. `game-undo` and `game-redo` take
+`--image`. The settings for all games use `--action graphics-defaults --gfx <settings>`.
+
+## Graphics settings for games
+
+The registry contract of 2026-10-08 (`src/GraphicsSettings.cs`). The driver's readers own the meaning. This app writes
+only these names, only under these keys, and only values inside the contract:
+
+| Key (below `HKLM\SOFTWARE\amdgpu-wddm`) | Value | Type | Values | In the window |
+|---|---|---|---|---|
+| `Graphics`, `Graphics\Applications\<exe>` | `FrameRateLimit` | DWORD | 0 (no limit), 20-300 | Frame rate limit |
+| | `VSync` | DWORD | 0, 1 | Vertical sync (VSync): Always off, Always on |
+| | `Anisotropy` | DWORD | 1, 2, 4, 8, 16 | Texture filtering |
+| | `MaxFrameLatency` | DWORD | 1-3 | Low latency: frames ahead |
+| | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
+| | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
+| `Graphics` only | `ReportAmdDriverVersion` | DWORD | 1 on, 0 off | Report an AMD driver version (a check box) |
+| `Vulkan`, `Vulkan\Applications\<exe>` | `WsiRoute` | REG_SZ | `dxgi` (default), `gdi` | Vulkan presentation: Modern, Compatibility |
+| | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full: use system memory, or report out of memory |
+
+An absent value is "Application decides" or the default that the window names. A game's own value wins over the value
+for all games. The settings rule applies. "Application decides" and "Same as all games" write nothing and remove a
+stored value. The helper removes a game's key when it has no value and no subkey left (`delete key`). It removes no
+other key. A stored value outside the contract shows as "Stored value not valid". It stays as it is until the person
+chooses another value. The reader takes `WsiRoute` `dxgi-composition`, but this app does not offer it, so it shows as
+"Set outside this app". The Vulkan readers ignore case and take an empty string as absent. They take an invalid
+`WsiRoute` as `gdi` and an invalid `MemoryOverflow` as `allow`, and the window says so. What the Graphics readers do
+with an invalid DWORD is not known here, so the window does not guess. The changes apply the next time a game starts,
+without a restart of Windows.
+
+The highest shader model of a game is two switches of its D3D12 profile. `shader-model-68-off` gives 6.7.
+`shader-model-67-off` gives 6.6 and wins when both are named. 6.8 removes both. Until the shell that reads them is
+merged, `Profiles.AwaitingShell` names them. The ShellTokens test then checks that the shell does not read them yet.
+
+## Display modes
+
+The Display page offers only the modes that `EnumDisplaySettingsEx` lists for a monitor at its current colour depth,
+without interlaced modes. It offers three GPU scaling choices: full screen (`DISPLAYCONFIG_SCALING_STRETCHED`), keep
+the aspect ratio (`ASPECTRATIOCENTEREDMAX`) and centred (`CENTERED`). Another scaling that Windows chose shows as "As
+Windows set it", and the page never writes it. Apply works as the display settings of Windows. First
+`ChangeDisplaySettingsEx` with `CDS_TEST`. Then the change without saving it, and `SetDisplayConfig` without
+`SDC_SAVE_TO_DATABASE` for the scaling. Then "Keep these display settings?" with a 15 s countdown. Keep saves the
+change (`CDS_UPDATEREGISTRY`, `SDC_SAVE_TO_DATABASE`). Revert, closing the question or the end of the countdown puts back
+the display configuration from before the change. These are per-user settings: no elevation, no backup and no Recovery
+action. `src/DisplayModes.cs` is the only file that changes a display setting (G-SRC).
 
 ## Settings rule
 
@@ -112,12 +156,13 @@ observed in this session while the GPU route is selected.
 | `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD); not undoable | at once | the driver is not running; confirmed already; not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s; the helper retries the reading for 10 s) |
 | `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid; stored already |
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
-| `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason`; Standard (24) graphics cores; with `--games reset` every game profile set to the release's recommendation or removed | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; `--games reset` without the release's game list; all at their defaults already |
-| `undo` | the values the newest undoable backup found (not per-game changes, not the graphics-core part) | next restart (offered) | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
+| `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason`; Standard (24) graphics cores. Every graphics setting for all games removed. With `--games reset`, every game profile set to the release's recommendation or removed, and every game's graphics settings removed with their empty keys | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; `--games reset` without the release's game list; all at their defaults already |
+| `undo` | the values the newest undoable backup found (not per-game changes, not the graphics-core part) | next restart (offered), or the next game start when it puts back only graphics settings | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
 | `cu-mode --cu 24\|40` | the graphics-core values through `CuMode.Plan` (plan section 7); not undoable, the old values are kept for diagnosis | next restart (offered) | no choice; the stored state cannot be read or is the choice already |
 | `cu-confirm` | the start-health confirmation of a 40-core start | at once | the driver is not running; no 40-core start waits |
-| `game-profile --image <exe> --value <list>` | `Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` (an empty list removes the key) | next start of the game | not a file name or a catalog list; stored already |
-| `game-undo\|game-redo --image <exe>` | the game's value before its newest change (undo) or before its newest undo (redo) | next start of the game | nothing to undo or redo for that game |
+| `game-profile --image <exe> [--value <list>] [--gfx <settings>]` | `Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` (an empty list removes the key), and the game's graphics settings (`Name=value` or `Name=unset`, comma-separated) | next start of the game | not a file name, not a catalog list, not a list of settings in the contract, the settings cannot be read, or stored already |
+| `game-undo\|game-redo --image <exe>` | the game's values before its newest change (undo) or before its newest undo (redo), its graphics settings included | next start of the game | nothing to undo or redo for that game |
+| `graphics-defaults --gfx <settings>` | the graphics settings for all games under `Graphics` and `Vulkan` (as `--gfx` above) | next game start | not a list of settings in the contract, the settings cannot be read, or stored already |
 | `restart-compositor --accept-bd060` | nothing; stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
@@ -208,7 +253,8 @@ gates use it, so a build records nothing in the profile of the PC that builds).
 
 `driver-state.txt` (the snapshots above), `driver-log.txt` (the whole log ring), `installed-files.txt` (Device
 Manager status and problem code, the display driver key, every component with version and SHA-256), `settings.txt`
-(the driver's `Parameters` values and the D3D12 profiles), `system.txt` (Windows build, test signing, app version),
+(the driver's `Parameters` values, the D3D12 profiles, and the stored and effective graphics settings for all games
+and per game), `system.txt` (Windows build, test signing, app version),
 `events.txt` (System events of the display stack and Application crash records that name it, last 24 hours),
 `manifest-check.txt` (every component of `<InstallDir>\manifest.json` hashed and marked OK, MISMATCH, MISSING or
 UNRESOLVED), `release/start-confirm.log`, `release/installer-state.json` and the three newest `install-*.log` and

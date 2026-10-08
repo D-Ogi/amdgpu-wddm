@@ -421,6 +421,9 @@ NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 
+// driver_version.c: the per-application graphics setting ReportAmdDriverVersion, at each adapter start
+void DriverVersionStart(BC250_DEVICE* Device);
+
 // hwmon.c
 struct _BC250_ESCAPE_HWMON;
 void HwmonInitialize(BC250_HWMON_OWNER* Owner);

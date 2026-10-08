@@ -1,5 +1,5 @@
 {
-  "_comment": "A recorded reading for the dry runs of the tuning page (build.ps1): a running driver that governs the clock, the default voltage curve in force with nothing stored, and the processor surface on with one readback behind it. No PC is named here; every value is made up to exercise one plan each.",
+  "_comment": "A recorded reading for the dry runs of the tuning page (build.ps1): a running driver that governs the clock, the default voltage curve in force with nothing stored, the processor surface on with one readback behind it, and two graphics settings for games (a frame-rate limit for all games, one game's Vulkan presentation). No PC is named here; every value is made up to exercise one plan each.",
   "DriverInstalled": true,
   "RouterInstalled": true,
   "Parameters": {
@@ -7,6 +7,11 @@
   },
   "DwmForceCpu": 0,
   "RequireKmdSwitches": 1,
+  "GfxKeys": [
+    { "Path": "SOFTWARE\\amdgpu-wddm\\Graphics", "SubKeys": 0, "Values": { "FrameRateLimit": { "Type": "DWord", "Number": 60 } } },
+    { "Path": "SOFTWARE\\amdgpu-wddm\\Vulkan", "SubKeys": 1, "Values": { } },
+    { "Path": "SOFTWARE\\amdgpu-wddm\\Vulkan\\Applications\\witcher3.exe", "SubKeys": 0, "Values": { "WsiRoute": { "Type": "String", "Text": "gdi" } } }
+  ],
   "DriverError": null,
   "Interop": { "Version": 458949, "Flags": 21, "Requested": 3, "Effective": 3, "Reason": 0, "ClosedReason": 0, "Users": 1, "LastEnd": 0 },
   "Health": { "Version": 458949, "Flags": 7, "Generation": 5, "Epoch": 2, "Completed": 40, "LastCompletionAgeMs": 800, "ReadyAgeMs": 70000 },

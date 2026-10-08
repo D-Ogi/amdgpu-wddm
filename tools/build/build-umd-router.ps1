@@ -36,6 +36,9 @@ New-Item -ItemType Directory -Force $obj | Out-Null
 # once for the exe, with different switches, and one /Fo directory for both would mix the two.
 New-Item -ItemType Directory -Force (Join-Path $obj 'host') | Out-Null
 
+# The per-application settings reader that ForwardApp compiles in (RenderOnCpu), with the router's flags.
+& "$PSScriptRoot\test-umd-app-settings.ps1" -OutputDir (Join-Path $OutputDir 'quality\app-settings') -VsInstall $VsInstall -Arch $Arch
+
 $saved = Save-ProcessEnvironment
 try {
     $env:TEMP = $OutputDir; $env:TMP = $OutputDir

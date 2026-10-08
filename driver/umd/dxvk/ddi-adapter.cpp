@@ -5,6 +5,8 @@
 #include "diagnostics.h"
 #include "../d3d12/instance-policy.h"
 #include "../recent-launch/recent-launch.h"
+#include "../app-settings/app-settings.h"
+#include "../d3d12/stdio-log.h"
 #include <mutex>
 #include <string>
 #include <memory>
@@ -23,6 +25,18 @@ struct Adapter {
     std::vector<DdiDeviceHandle> failed;
 };
 Adapter *adapter(D3D10DDI_HADAPTER handle) {return static_cast<Adapter *>(handle.pDrvPrivate);}
+// The settings this shell applies; RenderOnCpu is the router's (driver/umd/router), so a set value shows here as
+// not applied: the router kept the application on the GPU (a protected application, for example).
+constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::kAll &
+    ~amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::RenderOnCpu);
+void log_app_settings(const amdgpu_wddm::app_settings::Settings &settings) noexcept {
+    amdgpu_wddm::app_settings::log_once(settings,"d3d11",kAppliedSettings,[](const char *line) {
+        char text[1100];
+        std::snprintf(text,sizeof(text),"%s\n",line);
+        OutputDebugStringA(text);
+        amdgpu_wddm_log::print("%s",text);
+    });
+}
 bool compatible_device(const Adapter &a,UINT interfaceVersion,UINT version,UINT flags,D3D_FEATURE_LEVEL &level) {
     const bool d3d11_1=interfaceVersion==D3D11_1_DDI_INTERFACE_VERSION && (version>>16)==D3D11_1_DDI_BUILD_VERSION;
     // The WDDM 2.0 table is offered only by an FL12 adapter (supported_ddi_versions).
@@ -88,7 +102,16 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
         // Allocate retention storage before any callback can create live state.
         a->failed.emplace_back();
         BC250_DXVK_SHELL_SERVICES services{};services.Size=sizeof(services);services.Log=engine_diagnostic;
-        HRESULT hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags);
+        // The per-application settings: once per process, the effective values in the log; Anisotropy and
+        // PerformanceOverlay as DXVK user options, which the engine's DXVK instance reads in this call only.
+        namespace as=amdgpu_wddm::app_settings;
+        const as::Settings &settings=as::process_settings();
+        log_app_settings(settings);
+        HRESULT hr=S_OK;
+        {
+            const as::ScopedEnv options("DXVK_CONFIG",as::dxvk_config(settings),as::ScopedEnv::Mode::Append);
+            hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags);
+        }
         if (!a->failed.back().owner) a->failed.pop_back();
         if(FAILED(hr))failure_diagnostic("CreateDevice",hr);
         // The outer device exists: note the launch once per process, off this thread (recent-launch.h).

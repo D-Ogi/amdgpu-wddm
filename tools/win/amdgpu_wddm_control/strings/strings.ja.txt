@@ -94,7 +94,7 @@ guide.update-available|mt|9ba22dcf|新しいドライバー リリースが利�
 guide.all-good|mt|f523ac28|すべて問題ありません。プレイの準備ができました。
 guide.tip.settings|mt|d4c81f93|ここでの選択は、ドライバーを更新してもそのまま残ります。
 guide.tip.display|mt|fff5e425|モニターを変更した後にウィンドウが見えなくなっても、表示されている画面に自動的に戻ります。
-guide.tip.graphics|mt|69913a1e|このページの変更は、次回 Windows を再起動した後に適用されます。
+guide.tip.graphics|mt|bce30225|クロックとコアの変更は、次回 Windows を再起動した後に適用されます。すべてのゲームの設定は、次にゲームを起動したときに適用されます。
 # ---- status card on Home (WU-007, WU-052, WU-061) ----
 status.title.problem|mt|4241fd03|確認が必要な項目があります
 status.title.attention|mt|2908a908|これを確認してください
@@ -264,7 +264,7 @@ search.games.undo.terms|mt|f63a6cb8|元に戻す|やり直し|やり直す|取�
 search.games.add|mt-safe|37b1384f|ゲームを追加
 search.games.add.terms|mt|94d2c8d7|追加|ゲーム|プログラム|exe|登録
 search.display.resolution|mt-safe|c12b3df8|解像度とリフレッシュ レート
-search.display.resolution.terms|mt|0e2e3e69|解像度|リフレッシュ レート|リフレッシュレート|Hz|1080p|モニター|ディスプレイ
+search.display.resolution.terms|mt|d9eeed60|解像度|リフレッシュ レート|リフレッシュレート|Hz|1080p|モニター|ディスプレイ|解像度の変更|リフレッシュ レートの設定|モード|表示モード|144 Hz
 search.display.identify|mt-safe|3def2f6d|モニターの識別
 search.display.identify.terms|mt|6a71b05e|識別|どの画面|モニター番号|画面番号
 search.display.scale|mt|1cf201de|拡大縮小、レイアウト、向き
@@ -301,20 +301,10 @@ search.help.restart|mt-safe|1ef47f1f|Windows を再起動
 search.help.restart.terms|mt|7ad6427b|再起動|リブート|ドライバーの再起動|リセット
 search.help.guides|mt-safe|6ef2d14b|よくある問題のヘルプ
 search.help.guides.terms|mt|031dd644|黒い画面|ブラック スクリーン|ブラックアウト|クラッシュ|落ちる|遅い|カクつき|マウス|問題|ヘルプ|トラブル
-search.later.vsync|mt-safe|86146f8a|垂直同期 (VSync)
-search.later.vsync.terms|mt|352b1574|VSync|垂直同期|V-Sync|ティアリング
-search.later.fps|mt-safe|3217f73e|フレーム レート制限
-search.later.fps.terms|mt|226d00fd|FPS|FPS limit|フレーム制限|FPS 上限|フレーム レート|フレームレート|fps制限
 search.later.sharpen|mt-safe|65319812|画像のシャープ化
 search.later.sharpen.terms|mt|9e551a61|シャープ|シャープネス|鮮明|RIS|CAS
 search.later.aa|mt-safe|c77c3af2|アンチエイリアス
 search.later.aa.terms|mt|99479753|AA|MSAA|アンチエイリアス|アンチエイリアシング|ジャギー|ギザギザ
-search.later.af|mt-safe|527a4439|テクスチャ フィルタリング
-search.later.af.terms|mt|ef806f34|AF|異方性|異方性フィルタリング|フィルタリング|テクスチャ
-search.later.scaling|mt-safe|7f3a6f5d|画像のスケーリング
-search.later.scaling.terms|mt|485400f8|スケーリング|拡大|アップスケーリング|整数スケーリング|アスペクト比|縦横比|引き伸ばし
-search.later.mode|mt|90ed46c7|解像度とリフレッシュ レートを選択
-search.later.mode.terms|mt|6088b5a8|解像度の変更|リフレッシュ レートの設定|モード|表示モード|144 Hz
 search.later.hdr|mt-safe|60790181|HDR
 search.later.hdr.terms|mt|e0f32e0b|HDR|10 ビット|10bit|色深度|色|カラー
 search.later.vrr|mt-safe|2939546a|可変リフレッシュ レート
@@ -323,8 +313,6 @@ search.later.power|mt-safe|fba85679|電力制限
 search.later.power.terms|mt|db72d2b0|電力制限|消費電力|ワット|TDP|パワー リミット
 search.perf.fan|mt-safe|8c9a2877|ファン制御
 search.perf.fan.terms|mt|f8a14c23|ファン|ファン カーブ|騒音|静音|冷却
-search.later.fps-counter|mt-safe|8e4f7029|フレーム レートの表示
-search.later.fps-counter.terms|mt|40353cf6|FPS カウンター|フレーム時間|フレーム タイム|オーバーレイ|フレーム毎秒|FPS
 search.later.cache-clear|mt-safe|6b923412|シェーダー キャッシュを消去
 search.later.cache-clear.terms|mt|bd9dc929|キャッシュの消去|キャッシュの削除|キャッシュ クリア|削除
 # ---- window frame (WU-008, WU-011) ----
@@ -373,9 +361,9 @@ page.home.intro|mt|05aa30e0|PC の現在の状態と、対応が必要な項目�
 page.games.title|mt-safe|d9dae781|ゲーム
 page.games.intro|mt|7bac98dd|ゲームごとの設定です。次回そのゲームを起動したときに適用されます。
 page.graphics.title|mt-safe|a874fca8|グラフィックス
-page.graphics.intro|mt|e2b681e7|すべてのゲームに共通のクロック速度とグラフィックス コアです。変更は次回 Windows を再起動した後に適用されます。
+page.graphics.intro|mt|83130cfc|クロック速度、グラフィックス コア、すべてのゲームの設定です。クロックとコアの変更は次回 Windows を再起動した後に、すべてのゲームの設定は次にゲームを起動したときに適用されます。
 page.display.title|mt-safe|34e108c0|ディスプレイ
-page.display.intro|mt|799bfbb0|お使いのモニターと、現在の表示内容です。
+page.display.intro|mt|00622054|お使いのモニター、現在の表示内容、選べるモードです。
 page.performance.title|mt-safe|442aded8|パフォーマンス
 page.performance.intro|mt|b072238e|グラフィックス チップのリアルタイムの読み取り値と、シェーダー キャッシュです。
 page.driver.title|mt-safe|9fe4c68e|ドライバー
@@ -457,7 +445,7 @@ graphics.cores.40|mt-safe|908ab6d1|すべて (40)
 graphics.not-installed|mt|17713c9c|ドライバーがインストールされていないため、ここで設定できるものはありません。
 graphics.unsaved|mt|fdb121dc|まだ適用されていない変更があります。
 graphics.saved|mt|75d79f0a|保存されていない変更はありません。
-graphics.reset.text|mt|e6fe86ec|クロック速度とグラフィックス コアを、リリースの設定に戻します。
+graphics.reset.text|mt|2ddb47cc|クロック速度とグラフィックス コアをリリースの設定に戻し、すべてのゲームの設定を「アプリケーションに任せる」に戻します。
 graphics.reset.keep-games|mt|4ef40ca5|各ゲームの設定を保持する
 graphics.reset.button|mt-safe|cf98ec90|既定に戻す...
 graphics.undo|mt-safe|766450ec|最後の変更を元に戻す...
@@ -471,7 +459,7 @@ display.refresh|mt-safe|1c04ebff|リフレッシュ レート
 display.size|mt-safe|cae2c3d9|{0} x {1}
 display.mode|mt|f4307cf3|{0} x {1}、{2} Hz
 display.mode.no-rate|mt-safe|cae2c3d9|{0} x {1}
-display.mode-note|mt|2b5a8898|ここではこれらの値を確認できます。このアプリからの変更は今後対応予定です。
+display.mode-note|mt|f9c30388|Windows がこのモニターで表示できるモードを示します。新しい設定はすぐに適用され、15 秒以内に保持を選んだ場合にのみ残ります。
 display.identify|mt-safe|4786cd51|識別
 display.windows.title|mt-safe|a597577a|Windows のディスプレイ設定
 display.windows.text|mt|49237ecd|拡大縮小、レイアウト、向き、メイン モニターは Windows で設定します。
@@ -580,8 +568,8 @@ recovery.actions|mt-safe|f42148c5|実行できること
 # ---- explanations next to each page and setting (WU-064) ----
 help.page.home|mt|37fa8758|ホームには状態カードが 1 枚表示されます。すべての準備ができているかどうか、できていない場合は次に何をすればよいかを示します。その下には最近のゲームと簡単な概要があります。
 help.page.games|mt|ea40fa7a|ゲームごとに独自の設定を持つことができます。設定はプログラムのファイル名で保存され、ゲームの起動時に読み込まれます。
-help.page.graphics|mt|42618ee2|これらの設定はすべてのゲームに適用されます。ドライバーは Windows の起動時に設定を読み込むため、次回の再起動後に適用されます。
-help.page.display|mt|0d0b6ad7|このページには、各モニターの現在の表示内容が表示されます。解像度、拡大縮小、レイアウトは Windows で設定します。
+help.page.graphics|mt|c6ff7fd8|これらの設定はすべてのゲームに適用されます。クロック速度とグラフィックス コアは、次回 Windows を再起動した後に適用されます。すべてのゲームの設定は次にゲームを起動したときに適用され、「ゲーム」ページのゲームごとの設定が優先されます。
+help.page.display|mt|f914a5ac|各モニターの解像度、リフレッシュ レート、スケーリングを選びます。新しい設定は 15 秒以内に保持を選んだ場合にのみ残ります。拡大縮小とレイアウトは Windows で設定します。
 help.page.performance|mt|ef1ac3a4|グラフィックス チップのリアルタイムの読み取り値です。「読み取り値なし」は、ドライバーがまだその値を測定できないことを意味します。
 help.page.driver|mt|a2700547|インストールされているリリース、チェック済みかどうか、新しいリリースが利用可能かどうかを示します。
 help.page.settings|mt|b5b868fe|このアプリの動作に関する、あなた用の設定です。ここで何を変更してもドライバーは変わりません。
@@ -596,7 +584,7 @@ help.setting.cpu|mt|b2c75482|ドライバーの処理をより多くのプロセ
 help.setting.diag|mt|f2712639|開発者によるテスト用のスイッチです。開発者から依頼された場合にのみ使用してください。
 help.setting.undo|mt|a64f5f62|このゲームの設定を、最後に変更する前の状態に戻します。「やり直し」を選ぶと変更が戻ります。
 help.setting.add|mt|c3f487f7|ゲームのプログラム ファイル (.exe) を選択すると、起動する前にそのゲーム独自の設定を作成できます。
-help.setting.resolution|mt|aa573835|各モニターのピクセル数とリフレッシュ レートです。Windows で設定します。
+help.setting.resolution|mt|8b860a88|各モニターのピクセル数とリフレッシュ レートです。Windows が示すモードだけを選べます。新しいモードはすぐに適用され、15 秒以内に保持を選んだ場合にのみ残ります。
 help.setting.identify|mt|83ce03d0|モニターの番号を、そのモニター上に 3 秒間表示します。
 help.setting.scale|mt|dac4615e|テキストやアプリのサイズ、モニターの配置、向きは Windows で設定します。
 help.setting.sensors|mt|462f8d49|グラフィックス チップの負荷、温度、クロック速度、ビデオ メモリを 2 秒ごとに表示します。
@@ -615,18 +603,16 @@ help.setting.repair|mt|7bd6d691|この PC にあるコピーから、同じリ�
 help.setting.report|mt|77f4acdf|開発者向けの情報を含む zip ファイルを作成します。送信するかどうかはあなたが決めます。
 help.setting.restart|mt|f4c0e8b6|Windows を再起動します。グラフィックス ドライバーだけを再起動することはできません。
 help.setting.guides|mt|e75ebef4|よくある問題の解決手順です。
-help.setting.vsync|mt|368cb9db|ゲームが新しいフレームを表示する前に、モニターを待つようにします。今後対応予定です。
-help.setting.fps|mt|0b744582|ゲームが 1 秒間に描画するフレーム数を制限します。今後対応予定です。
+help.setting.vsync|mt|321b1cca|ゲームが新しいフレームを表示する前にモニターを待つようにします。ティアリングがなくなりますが、わずかな遅延が加わることがあります。「アプリケーションに任せる」では、ゲーム自身の設定に従います。
+help.setting.fps|mt|9453113b|ゲームが 1 秒間に描画するフレーム数を制限します。制限するとグラフィックス チップの温度と騒音が下がります。1 つのゲームで「制限なし」を選ぶと、すべてのゲーム用の制限が解除されます。
 help.setting.sharpen|mt|f351a4a8|画像をよりシャープに見せます。今後対応予定です。
 help.setting.aa|mt|2f6e7807|ギザギザした輪郭を滑らかにします。今後対応予定です。
-help.setting.af|mt|b1771bc6|斜めから見たテクスチャをよりシャープに見せます。今後対応予定です。
-help.setting.scaling|mt|fab3d8f8|低い解像度を画面にどのように表示するかを設定します。今後対応予定です。
-help.setting.mode|mt|16a81243|このアプリから解像度とリフレッシュ レートを選択します。今後対応予定です。
+help.setting.af|mt|4c6456a0|斜めから見たテクスチャをより鮮明にします。値を大きくすると少し遅くなります。
+help.setting.scaling|mt|9b2c7d59|モニターより低い解像度の画像を画面にどう表示するかを選びます。全画面に引き伸ばす、縦横比を保って拡大する、またはスケーリングせずに中央に表示します。変更は 15 秒以内に保持を選んだ場合にのみ残ります。
 help.setting.hdr|mt|af54494e|ハイ ダイナミック レンジ：明るい部分がより明るく、色がより豊かになります。今後対応予定です。
 help.setting.vrr|mt|4662d04f|モニターがゲームのフレーム レートに合わせて動作し、動きが滑らかになります。今後対応予定です。
 help.setting.power|mt|3659317e|チップが使用できる最大電力です。今後対応予定です。
 help.setting.fan|mt|e5088079|ケース ファンを誰が制御するかを選びます。自動はボードの BIOS 設定に任せます。ドライバーのカーブは、チップが熱いときにボードの標準設定より少し速くファンを回します。静音は 80 °C 未満で遅く、パフォーマンスは全体で速くなります。87 °C 以上ではファンは常に全速で回ります。
-help.setting.fps-counter|mt|929ada50|フレーム レートを表示します。今後対応予定です。
 help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|mt|e6d2df01|詳細な調整
@@ -869,3 +855,100 @@ perf.fan.refuse.bad-test|mt|31d68f2f|そのテスト速度は選べません。
 perf.fan.refuse.busy|mt|d56c3708|現在ドライバーがファンを通常どおり制御していないため、今はテストできません。
 plan.line.fan-test|mt|e34087ea|ファンを {0} % で {1} 秒間回し、その後使用中の設定に戻します。何も保存されません。
 plan.title.fan-test|mt|86153b93|ファンのテスト
+
+# ---- graphics settings for games, shader model, display modes (2026-10-08) ----
+search.graphics.vsync|mt-safe|86146f8a|垂直同期 (VSync)
+search.graphics.vsync.terms|mt|352b1574|VSync|垂直同期|V-Sync|ティアリング
+search.graphics.fps|mt-safe|3217f73e|フレーム レート制限
+search.graphics.fps.terms|mt|226d00fd|FPS|FPS limit|フレーム制限|FPS 上限|フレーム レート|フレームレート|fps制限
+search.graphics.af|mt-safe|527a4439|テクスチャ フィルタリング
+search.graphics.af.terms|mt|ef806f34|AF|異方性|異方性フィルタリング|フィルタリング|テクスチャ
+search.display.scaling.terms|mt|4245cba4|スケーリング|拡大|アップスケーリング|整数スケーリング|アスペクト比|縦横比|引き伸ばし|GPU スケーリング|画面のスケーリング|中央
+search.graphics.overlay.terms|mt|72342a7f|FPS カウンター|フレーム時間|フレーム タイム|オーバーレイ|フレーム毎秒|FPS|パフォーマンス オーバーレイ|HUD|OSD
+search.graphics.latency|mt-safe|f3bcef3c|低遅延
+search.graphics.latency.terms|mt|5b07cf0e|遅延|入力遅延|インプットラグ|先行フレーム|レンダー キュー|Anti-Lag|Reflex
+search.graphics.overlay|mt-safe|37d49e6c|パフォーマンス オーバーレイ
+search.graphics.amd-version|mt-safe|e9b65d7d|AMD ドライバーのバージョンを報告
+search.graphics.amd-version.terms|mt|a3215411|ドライバーのバージョン|古いドライバー|ドライバーの警告|AMD|未対応のドライバー
+search.graphics.vk-present|mt-safe|cdee9cc4|Vulkan の表示方式
+search.graphics.vk-present.terms|mt|93c9bf20|Vulkan|表示|黒い画面|画面が止まる|互換性
+search.graphics.vk-memory|mt-safe|542ed595|ビデオ メモリが一杯のとき
+search.graphics.vk-memory.terms|mt|ac5d910a|VRAM|ビデオ メモリ|メモリ不足|システム メモリ|Vulkan
+search.games.sm|mt-safe|0dbc5bc7|最高シェーダー モデル
+search.games.sm.terms|mt|ab586346|シェーダー モデル|shader model|SM 6.8|SM 6.7|SM 6.6|シェーダー
+search.games.cpu-render|mt-safe|bf157885|DirectX 11 をプロセッサーで実行
+search.games.cpu-render.terms|mt|927301e2|CPU レンダリング|ソフトウェア レンダリング|WARP|プロセッサー|DirectX 11|最後の手段
+search.display.scaling|mt-safe|22b1cb79|GPU スケーリング
+help.setting.latency|mt|6f3206a0|プロセッサーがグラフィックス チップより先に準備できるフレーム数です。少ないほどマウスやキーボードへの反応が速くなりますが、フレーム レートが下がることがあります。
+help.setting.overlay|mt|78ee0e43|ゲームの隅にフレーム レートとフレーム時間を表示します。現在は DirectX 11 のゲームでのみ動作します。
+help.setting.amd-version|mt|7604c528|一部のゲームは、このドライバーを知らないため、グラフィックス ドライバーが古いと警告します。オンにすると、ドライバーはそれらのゲームが受け付けるバージョン番号を報告します。ドライバー自体は変わりません。
+help.setting.vk-present|mt|e892e511|Vulkan ゲームがフレームを表示する方法です。モダンが既定で、より高速です。互換性は古くて遅い方法を使います。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
+help.setting.vk-memory|mt|ec2dc30f|ビデオ メモリが一杯になったときに Vulkan ゲームに返す内容です。「システムメモリを使う」ではゲームは動作を続けますが遅くなります。「メモリ不足を報告する」ではゲームに知らせ、ゲームが設定を下げられるようにします。
+help.setting.sm|mt|f3b2ff18|ドライバーが DirectX 12 ゲームに報告する最高のシェーダー モデルです。既定は 6.8 です。新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームでは 6.7 または 6.6 を選んでください。
+help.setting.cpu-render|mt|527d8d82|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅くなります。グラフィックス チップで動作しないゲームの最後の手段としてだけ使ってください。
+gfx.choice.app|mt-safe|e7f551b6|アプリケーションに任せる
+gfx.choice.inherit|mt-safe|efd0e1d0|すべてのゲームと同じ: {0}
+gfx.choice.inherit-short|mt-safe|1123f3b7|すべてのゲームと同じ
+gfx.choice.invalid|mt-safe|5a02ac31|保存された値が無効 ({0})
+gfx.choice.invalid-type|mt-safe|28ddf6e4|保存された値が無効
+gfx.choice.other|mt-safe|fe8e078f|このアプリの外で設定
+gfx.choice.no-limit|mt-safe|f7fcff0d|制限なし
+gfx.choice.fps|mt-safe|88471b01|{0} fps
+gfx.choice.always-off|mt-safe|4afd2db4|常にオフ
+gfx.choice.always-on|mt-safe|044ba8a9|常にオン
+gfx.choice.af-off|mt-safe|9d03458d|1x (オフ)
+gfx.choice.af|mt-safe|17c1da00|{0}x
+gfx.choice.latency-1|mt-safe|4928c007|1 フレーム先行 (最小の遅延)
+gfx.choice.latency|mt-safe|ae07b17c|{0} フレーム先行
+gfx.choice.on|mt-safe|13001175|オン
+gfx.choice.off|mt-safe|ca7981b4|オフ
+gfx.choice.modern|mt-safe|eef6c7f6|モダン
+gfx.choice.modern-default|mt-safe|8716b3e7|モダン (既定)
+gfx.choice.compat|mt-safe|b37ddf1f|互換性
+gfx.choice.sysmem|mt|c50a771a|システムメモリを使う (遅くなるが動作を続ける)
+gfx.choice.sysmem-default|mt|5c867377|システムメモリを使う (既定、遅くなるが動作を続ける)
+gfx.choice.oom|mt|2cd3164e|メモリ不足を報告する (ゲームが設定を下げられる)
+gfx.origin.means|mt|74467f34|ドライバーは次を使います: {0}。
+gfx.origin.invalid-global|mt|b6a732e5|すべてのゲーム用に保存された値は無効です。そのまま残します。
+gfx.origin.invalid-game|mt|4cc07720|このゲーム用に保存された値は無効です。そのまま残します。
+gfx.origin.default|mt-safe|04e6cbc0|未設定: {0}。
+gfx.origin.stored|mt-safe|2b5c4aeb|すべてのゲーム用に保存済み。
+gfx.origin.global|mt|6617fcee|すべてのゲームの設定から: {0}。
+gfx.note.overlay|mt|a4263f23|現在は DirectX 11 のゲームでのみ動作します。
+gfx.note.cpu-render|mt|0b9bf5df|大幅に遅くなります。グラフィックス チップで動作しない DirectX 11 ゲームの最後の手段です。
+gfx.note.amd-version|mt|7f26a73f|古いグラフィックス ドライバーについて警告するゲーム向けです。
+gfx.note.vk-present|mt|3d7eec4c|互換性は遅くなります。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
+gfx.note.sm|mt|3efcfd20|新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームにだけ低いものを選んでください。
+gfx.global.title|mt-safe|c750f458|すべてのゲームの設定
+gfx.global.intro|mt|20a33c5c|すべてのゲームに適用されます。「ゲーム」ページのゲームごとの設定が優先されます。変更は次にゲームを起動したときに適用されます。
+gfx.unreadable|mt|ff488b79|現在これらの設定を読み取れません。
+gfx.section.vulkan|mt-safe|81ede1da|Vulkan ゲーム
+games.section.d3d12|mt-safe|3cf6f600|DirectX 12 互換性
+games.section.graphics|mt-safe|a874fca8|グラフィックス
+games.sm.68|mt-safe|6f32da37|6.8 (既定)
+games.sm.67|mt-safe|01a6025a|6.7
+games.sm.66|mt-safe|66bc4f39|6.6
+plan.title.graphics-defaults|mt-safe|c750f458|すべてのゲームの設定
+plan.line.gfx-set|mt-safe|71aab4a2|すべてのゲーム、{0}: {1}。
+plan.line.gfx-game-set|mt-safe|c54706e6|{0}、{1}: {2}。
+plan.line.gfx-key|mt|220286cf|{0} には独自のグラフィックス設定がなくなります。
+plan.game.sm|mt-safe|c1663251|最高シェーダー モデル {0}
+plan.when.games|mt|b0bc763f|次にゲームを起動したときに適用されます。実行中のゲームは、再起動するまで以前の設定のままです。
+display.rate|mt-safe|5fb6a929|{0} Hz
+display.modes.none|mt|7ed3bcf3|Windows はこのモニターのモードを示していません。
+display.scaling.unknown|mt|c574918b|このモニターのスケーリングを読み取れません。
+display.scaling.full|mt-safe|d133925f|全画面 (引き伸ばし)
+display.scaling.aspect|mt-safe|2c3e2511|縦横比を保持
+display.scaling.center|mt-safe|eb28a6b5|中央 (スケーリングなし)
+display.scaling.windows|mt-safe|71ae8940|Windows の設定のまま
+display.scaling.note|mt|c33519ca|モニターより低い解像度の画像を画面にどう表示するかを選びます。
+display.changed|mt|4889b3fe|変更済み、まだ適用されていません。現在: {0}。
+display.keep.title|mt-safe|b3e16247|このディスプレイ設定を維持しますか?
+display.keep.text|mt|29e4a10e|{0} 秒後に以前のディスプレイ設定に戻ります。
+display.keep.keep|mt-safe|6ab75428|変更を維持する
+display.keep.revert|mt-safe|0026c505|元に戻す
+display.result.kept|mt|66c7a50f|新しいディスプレイ設定を維持しました。
+display.result.reverted|mt|ad2c3799|以前のディスプレイ設定に戻しました。
+display.result.failed|mt|ab18a02b|Windows はこのディスプレイ設定を受け付けませんでした。何も変更されていません。
+display.result.keep-failed|mt|45a5a6dd|新しいディスプレイ設定は適用されていますが、Windows に保存されませんでした。再起動後に元に戻ることがあります。
+display.result.revert-failed|mt|3d5b3356|以前のディスプレイ設定に戻せませんでした。ここまたは Windows のディスプレイ設定でもう一度選んでください。

@@ -48,7 +48,7 @@ namespace AmdgpuWddmControl
             var inventory = Inventory.Read(true);
             Add("installed-files.txt", "Driver files with versions and SHA-256", Inventory.Report(inventory));
             Add("manifest-check.txt", "Installed files against the release manifest (SHA-256)", Manifest(inventory));
-            Add("settings.txt", "Driver settings in the registry and D3D12 application profiles", Settings());
+            Add("settings.txt", "Driver settings in the registry, D3D12 application profiles and the graphics settings for games", Settings());
             progress("Reading the release logs");
             AddReleaseLogs();
             Add("system.txt", "Windows version, test signing, this application's version", SystemInfo());
@@ -237,6 +237,11 @@ namespace AmdgpuWddmControl
             w.AppendLine("[HKLM\\" + Profiles.RegistryPath + "]");
             try { foreach (var kv in SettingsStore.ReadProfiles()) w.AppendLine(kv.Key + " Experiment = " + kv.Value); }
             catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
+            // The graphics and Vulkan settings for games: every stored value as it is, then the value in force for all
+            // games and for each game with its own key, and where it comes from (GraphicsSettings.Report).
+            w.AppendLine();
+            try { w.Append(GraphicsSettings.Report(SettingsStore.ReadGfxKeys())); }
+            catch (Exception e) { w.AppendLine("graphics settings unreadable: " + e.Message); }
             w.AppendLine();
             w.AppendLine(AudioInterrupt());
             return w.ToString();

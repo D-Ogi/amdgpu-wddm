@@ -145,6 +145,30 @@ static void PolicyTests()
         CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%d got %s",
               c.exe, (int)c.mode, (int)c.component, AppReasonName(d.reason));
     }
+
+    // RenderOnCpu (the per-application graphics setting): the CPU UMD after the protected list and before Deny. It
+    // never widens the GPU route: the mode, the protected list and the GPU UMD path keep their answers.
+    struct CpuCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool e102, gpu, cpu; AppRoute route; AppReason reason; };
+    const CpuCase cpu[] = {
+        {L"notepad.exe", Gd, nullptr, nullptr, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"notepad.exe", Gd, nullptr, nullptr, true, true, false, AppRoute::Gpu, AppReason::Default},
+        {L"d3d11mt.exe", Al, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"d3d11bench.exe", Gd, nullptr, deny, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"d3d11bench.exe", Gd, nullptr, deny, true, true, false, AppRoute::Cpu, AppReason::Denied},
+        {L"d3d11mt.exe", AppMode::Cpu, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::ModeCpu},
+        {L"d3d11mt.exe", AppMode::Invalid, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::ModeInvalid},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, true, true, true, AppRoute::Cpu, AppReason::Protected},
+        {L"", Gd, nullptr, nullptr, true, true, true, AppRoute::Cpu, AppReason::NoExe},
+        {L"notepad.exe", Gd, nullptr, nullptr, false, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"notepad.exe", Gd, nullptr, nullptr, true, false, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+    };
+    for (const CpuCase &c : cpu) {
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, Component::No, c.cpu});
+        CHECK(d.route == c.route && d.reason == c.reason, "render-on-cpu exe=%ls mode=%d cpu=%d got %s",
+              c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
+    }
+    CHECK(!strcmp(AppReasonName(AppReason::RenderOnCpu), "app-render-on-cpu"), "reason name %s",
+          AppReasonName(AppReason::RenderOnCpu));
     struct PathCase { const wchar_t *image, *windows; bool component; };
     const PathCase paths[] = {
         {L"C:\\Windows\\System32\\notepad.exe", L"C:\\Windows", true},
@@ -197,6 +221,7 @@ static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t HostedKey[] = L"SOFTWARE\\amdgpu-wddm\\HostedUmd";
 static const wchar_t KmdKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
 static const wchar_t AppKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
+static const wchar_t GraphicsKey[] = L"SOFTWARE\\amdgpu-wddm\\Graphics"; // app-settings-core.h
 // The UMD path values of the router under test and of the other bitness (router.cpp, BD-064): a 32-bit router reads
 // CpuUmdPathWow, HostedUmdPathWow and GpuUmdPathWow and must ignore the 64-bit names, and the other way round.
 #ifdef _WIN64
@@ -2127,7 +2152,40 @@ static void Child(const std::string &s)
             lines = {"route=gpu reason=app-default fallback=0 gpu_hr=00000000", "app_mode=gpu-default mode_source=registry"};
         } else if (s == "app-gpu-default-denied") {
             AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {L"other.exe", Upper(self)});
-            lines = {"route=cpu reason=app-denied fallback=0"};
+            lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=unset"};
+        } else if (s == "app-render-on-cpu-app") {
+            // The per-application graphics setting, in the application key named by the image (any case).
+            AppBase(L"gpu-default");
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + Upper(self)).c_str(), L"RenderOnCpu", 1);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0 gpu_hr=00000001", "render_on_cpu=1/application"};
+        } else if (s == "app-render-on-cpu-global") {
+            AppBase(L"allowlist"); SetMulti(AppKey, L"Allow", {self});
+            SetDw(GraphicsKey, L"RenderOnCpu", 1);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0", "render_on_cpu=1/global"};
+        } else if (s == "app-render-on-cpu-app-off") {
+            // An application 0 wins over a global 1.
+            AppBase(L"gpu-default");
+            SetDw(GraphicsKey, L"RenderOnCpu", 1);
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0", "render_on_cpu=0/application"};
+        } else if (s == "app-render-on-cpu-env") {
+            // AMDGPU_WDDM_RENDER_ON_CPU=1 (scenario environment) wins over an application 0.
+            AppBase(L"gpu-default");
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0", "render_on_cpu=1/environment"};
+        } else if (s == "app-render-on-cpu-invalid") {
+            // Out of range and of another type: ignored, the application decision stands.
+            AppBase(L"gpu-default");
+            SetDw(GraphicsKey, L"RenderOnCpu", 2);
+            SetSz((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", L"1");
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0", "render_on_cpu=unset"};
+        } else if (s == "app-render-on-cpu-deny") {
+            // The old Deny list still keeps an application on the CPU UMD with RenderOnCpu 0.
+            AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {self});
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=0/application"};
         } else if (s == "app-deny-wrong-type") {
             // A Deny list that cannot be read must not widen the GPU route.
             AppBase(L"gpu-default"); SetSz(AppKey, L"Deny", L"other.exe");
@@ -2320,6 +2378,11 @@ static int RunAll(const std::wstring &out)
         {"app-gpu-umd-unset", nullptr, {}}, {"app-gpu-umd-relative", nullptr, {}}, {"app-gpu-umd-wrong-type", nullptr, {}},
         {"app-gpu-fails", nullptr, {}}, {"app-gpu-missing", nullptr, {}}, {"app-gpu-no-export", nullptr, {}},
         {"app-d3d10-entry", nullptr, {}}, {"app-log-dir-fallback", nullptr, {}}, {"app-mode-toggle", nullptr, {}},
+        // RenderOnCpu, the per-application graphics setting (app-settings-core.h).
+        {"app-render-on-cpu-app", nullptr, {}}, {"app-render-on-cpu-global", nullptr, {}},
+        {"app-render-on-cpu-app-off", nullptr, {}},
+        {"app-render-on-cpu-env", nullptr, {{L"AMDGPU_WDDM_RENDER_ON_CPU", L"1"}}},
+        {"app-render-on-cpu-invalid", nullptr, {}}, {"app-render-on-cpu-deny", nullptr, {}},
         {"protected-logonui", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},
@@ -2333,10 +2396,10 @@ static int RunAll(const std::wstring &out)
         std::wstring name(sc.name, sc.name + strlen(sc.name));
         std::wstring exe = sc.exe ? Layout + L"\\" + std::wstring(sc.exe, sc.exe + strlen(sc.exe)) : self;
         std::wstring cmd = L"\"" + exe + L"\" child " + name + L" \"" + Layout + L"\"";
-        // Environment: the parent's without any BC250_ variable, plus the scenario's.
+        // Environment: the parent's without any BC250_ or AMDGPU_WDDM_ variable, plus the scenario's.
         std::vector<std::wstring> vars;
         for (wchar_t *e = GetEnvironmentStringsW(), *p = e; *p; p += wcslen(p) + 1)
-            if (_wcsnicmp(p, L"BC250_", 6)) vars.push_back(p);
+            if (_wcsnicmp(p, L"BC250_", 6) && _wcsnicmp(p, L"AMDGPU_WDDM_", 12)) vars.push_back(p);
         for (auto &kv : sc.env) {
             std::wstring v = kv.second;
             size_t at = v.find(L"<layout>");

@@ -20,6 +20,11 @@
 # FALSE of a start without the trailer. 82 scenarios, 0 failed on 2026-10-07 with the tester.20 hosted UMD, CPU UMD
 # and D3D11 package.
 #
+# The per-application RenderOnCpu setting (docs/design/per-app-graphics-settings.md) adds six hive scenarios: the
+# application key, the global key, an application 0 over a global 1, the environment over the registry, ignored
+# values (out of range, a wrong type) and the Deny list over an application 0. 88 scenarios, 0 failed on 2026-10-08
+# with the same tester.20 binaries.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(

@@ -25,6 +25,8 @@ $engineLib=Join-Path $engineBuild 'engine-ddi.lib'
 if(!(Test-Path -LiteralPath $engineLib)){throw 'Native engine-ddi library missing'}
 # The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
 & "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
+# The per-application graphics settings that CreateDevice and Present read.
+& "$PSScriptRoot\test-umd-app-settings.ps1" -OutputDir (Join-Path $OutputDir 'quality\app-settings') -VsInstall $VsInstall -Arch $Arch
 $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir

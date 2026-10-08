@@ -141,7 +141,7 @@ namespace AmdgpuWddmControl
             return m.RefreshHz > 1 ? Strings.T("display.mode", m.Width, m.Height, m.RefreshHz) : Strings.T("display.mode.no-rate", m.Width, m.Height);
         }
 
-        // ---- Display (WU-030, WU-031 read-only, WU-034 links) -------------------------------------------------------
+        // ---- Display (WU-030, WU-031, WU-034 links) -----------------------------------------------------------------
 
         Control BuildDisplay(int width)
         {
@@ -151,10 +151,10 @@ namespace AmdgpuWddmControl
             foreach (var m in modes)
             {
                 n++;
-                var c = new CardPanel(Strings.T(m.Primary ? "display.name.main" : "display.name", n), width);
+                string title = Strings.T(m.Primary ? "display.name.main" : "display.name", n);
+                var c = new CardPanel(title, width);
                 if (n == 1) Mark("display.resolution", c);
-                c.Pair(Strings.T("display.resolution"), Strings.T("display.size", m.Width, m.Height));
-                c.Pair(Strings.T("display.refresh"), m.RefreshHz > 1 ? m.RefreshHz + " Hz" : Strings.T("perf.no-reading"));
+                AddDisplayChoices(c, m, n, title);
                 c.Add(Ui.Dim(Strings.T("display.mode-note"), c.Inner));
                 var screen = m.Bounds;
                 int number = n;
@@ -171,7 +171,7 @@ namespace AmdgpuWddmControl
             Mark("display.scale", open);
             win.Add(Ui.Row(open, Explain("scale", Strings.T("display.windows.open"))));
             p.Controls.Add(win);
-            p.Controls.Add(LaterCard(width, "later.mode", "later.scaling", "later.hdr", "later.vrr"));
+            p.Controls.Add(LaterCard(width, "later.hdr", "later.vrr"));
             return p;
         }
 
@@ -215,7 +215,7 @@ namespace AmdgpuWddmControl
             foreach (var c in CacheInventory.Read(CacheInventory.D3D12Directory())) caches.Pair(c.Name, c.Text);
             caches.Add(Ui.Dim(Strings.T("perf.cache.note"), caches.Inner));
             p.Controls.Add(caches);
-            p.Controls.Add(LaterCard(width, "later.power", "later.fps-counter", "later.cache-clear"));
+            p.Controls.Add(LaterCard(width, "later.power", "later.cache-clear"));
             return p;
         }
 

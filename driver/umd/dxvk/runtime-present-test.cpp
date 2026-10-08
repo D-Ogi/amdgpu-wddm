@@ -9,6 +9,7 @@ int identity, context, render, dxgi;
 UINT64 cpu=0;
 std::string trace;
 HRESULT flush_result, wait_result, present_result, signal_result;
+BOOL seen_override_valid=FALSE; DXGI_DDI_FLIP_INTERVAL_TYPE seen_override=DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
 HRESULT flush(void *p) {
     trace+='F';
     auto *b=static_cast<HostBridge *>(p);
@@ -27,6 +28,7 @@ HRESULT APIENTRY wait(HANDLE h, const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMG
 HRESULT APIENTRY present(HANDLE h, DXGIDDICB_PRESENT *p) {
     check(h==&identity && p->hContext==&context && p->hSrcAllocation==71 && p->hDstAllocation==72);
     check(p->pDXGIContext==&dxgi && p->BroadcastContextCount==0);
+    seen_override_valid=p->SyncIntervalOverrideValid; seen_override=p->SyncIntervalOverride;
     trace+='P'; return present_result;
 }
 HRESULT APIENTRY alternate_present(HANDLE h,DXGIDDICB_PRESENT *p) {
@@ -84,5 +86,15 @@ void test_runtime_present() {
     HostBridge absent{}; absent.device=&d;
     RuntimeDomain::Scope scope(d.domain);
     check(present_runtime(absent,71,72,&dxgi,flush,&absent)==E_NOTIMPL);
+    // The per-application VSync setting: no override unless asked for, then the asked interval.
+    d.DXGICallbacks=&callbacks; callbacks.pfnPresentCb=present;
+    const PresentSyncOverride overrides[]={{},{true,DXGI_DDI_FLIP_INTERVAL_IMMEDIATE},{true,DXGI_DDI_FLIP_INTERVAL_ONE}};
+    for (const auto &o:overrides) {
+        HostBridge b{}; b.device=&d; b.contexts[0]=&render; trace.clear();
+        seen_override_valid=2; seen_override=DXGI_DDI_FLIP_INTERVAL_FOUR;
+        check(present_runtime(b,71,72,&dxgi,flush,&b,o)==S_OK && trace=="FCWPS");
+        check(seen_override_valid==(o.valid ? TRUE : FALSE));
+        check(seen_override==(o.valid ? o.interval : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE));
+    }
 
 }
