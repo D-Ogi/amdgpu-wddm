@@ -25,12 +25,17 @@ bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel, uin
     return BC250HSA_OK;
 }
 
-/* The grid in work items, which is what hidden_block_count_* carries: HIP's grid is
- * in workgroups, the implicit block is in work items. */
-static uint32_t grid_items(const bc250hsa_launch* launch, uint32_t dim)
+/* What hidden_block_count_* carries. AMDGPUUsage.rst, the code object v5 kernel argument
+ * metadata table, is exact about this field: "The grid dispatch work-group count for the
+ * X dimension is passed in the kernarg ... This is not the same as the value in the AQL
+ * dispatch packet, which has the grid size in work-items." So this is the number of
+ * workgroups, which is exactly bc250hsa_launch.grid, and not the grid in work items.
+ *
+ * A kernel of the usual "if (i < n)" shape never notices the difference, because it
+ * reads only the work-item identifier. Every kernel that reads gridDim does. */
+static uint32_t block_count(const bc250hsa_launch* launch, uint32_t dim)
 {
-    const uint64_t items = (uint64_t)launch->grid[dim] * (uint64_t)launch->block[dim];
-    return (items > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (uint32_t)items;
+    return launch->grid[dim];
 }
 
 static uint32_t grid_dims(const bc250hsa_launch* launch)
@@ -122,7 +127,7 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
         case BC250HSA_ARG_HIDDEN_BLOCK_COUNT_Z: {
             const uint32_t dim = (uint32_t)arg->kind - (uint32_t)BC250HSA_ARG_HIDDEN_BLOCK_COUNT_X;
             if (arg->size != 4u) { return BC250HSA_EBADMETADATA; }
-            write_u32(at, grid_items(launch, dim));
+            write_u32(at, block_count(launch, dim));
             break;
         }
         case BC250HSA_ARG_HIDDEN_GROUP_SIZE_X:
@@ -135,16 +140,14 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
         }
         case BC250HSA_ARG_HIDDEN_REMAINDER_X:
         case BC250HSA_ARG_HIDDEN_REMAINDER_Y:
-        case BC250HSA_ARG_HIDDEN_REMAINDER_Z: {
-            const uint32_t dim = (uint32_t)arg->kind - (uint32_t)BC250HSA_ARG_HIDDEN_REMAINDER_X;
-            const uint32_t block = launch->block[dim];
+        case BC250HSA_ARG_HIDDEN_REMAINDER_Z:
             if (arg->size != 2u) { return BC250HSA_EBADMETADATA; }
-            /* The grid is an exact multiple of the group here, because grid is in
-             * workgroups, so the remainder is 0. The field exists for a partial
-             * last workgroup, which this interface cannot express. */
-            write_u16(at, (block == 0u) ? 0u : (grid_items(launch, dim) % block));
+            /* 0, always. The field holds the size of a partial last workgroup, which
+             * only a language such as OpenCL has. A HIP grid is a count of whole
+             * workgroups, so no workgroup of this interface is partial. */
+            write_u16(at, 0u);
             break;
-        }
+
         case BC250HSA_ARG_HIDDEN_GLOBAL_OFFSET_X:
         case BC250HSA_ARG_HIDDEN_GLOBAL_OFFSET_Y:
         case BC250HSA_ARG_HIDDEN_GLOBAL_OFFSET_Z:
