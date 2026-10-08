@@ -35,6 +35,11 @@
 //                                    A Deny or Allow value that cannot be read (other kind, too long) makes the mode
 //                                    invalid (fail safe: CPU).
 //     RouteLogDirectory   REG_SZ     application route lines go there; absent = DesktopRouter's RouteLogDirectory
+//   HKLM\SOFTWARE\amdgpu-wddm\Graphics and Graphics\Applications\<image>   (applications only; app-settings-core.h)
+//     RenderOnCpu         REG_DWORD  1 = the CPU UMD (reason app-render-on-cpu), checked after the protected list
+//                                    and before Deny; the environment variable AMDGPU_WDDM_RENDER_ON_CPU wins over
+//                                    the application key, which wins over the global key. It adds to Deny, which
+//                                    keeps working as before; 0 never moves an application off the CPU UMD.
 //   Built in: logonui.exe, consent.exe, lockapp.exe, credentialuibroker.exe and winlogon.exe always stay on the CPU
 //   UMD (router-policy.h IsProtectedApp). OpenAdapter10 always goes to the CPU UMD: the application GPU UMD
 //   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
@@ -71,6 +76,7 @@
 #include "router-policy.h"
 #include "router-identity.h"
 #include "front-adapter.h"
+#include "../app-settings/app-settings-core.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -392,17 +398,23 @@ static const char *InstallFront(const Config &c, const char *entry, D3D10DDIARG_
     return bc250front::Install(args, c.log_directory, exe) ? "on" : "unavailable";
 }
 
-// The application line: the same leading fields, gpu_hr in place of hosted_hr, then the AppRouter state.
+// The application line: the same leading fields, gpu_hr in place of hosted_hr, then the AppRouter state, then the
+// RenderOnCpu setting ("unset" or <value>/<source>).
 static void ReportApp(const Config &c, const AppConfig &a, const wchar_t *exe, const char *entry, const AppDecision &d,
-                      HRESULT gpuHr, bool fellBack, const wchar_t *module, HRESULT hr)
+                      HRESULT gpuHr, bool fellBack, const wchar_t *module, HRESULT hr,
+                      const amdgpu_wddm::app_settings::Value &renderOnCpu)
 {
+    char setting[48] = "unset";
+    if (renderOnCpu.set())
+        _snprintf_s(setting, _TRUNCATE, "%u/%s", renderOnCpu.value,
+                    amdgpu_wddm::app_settings::source_name(renderOnCpu.source));
     char line[2048];
     int n = _snprintf_s(line, _TRUNCATE,
         "bc250d3d_router pid=%lu exe=%ls entry=%s route=%s reason=%s fallback=%u gpu_hr=%08lx hr=%08lx module=%ls "
-        "app_mode=%s mode_source=%s gpu_source=%s cpu_source=%s\n",
+        "app_mode=%s mode_source=%s gpu_source=%s cpu_source=%s render_on_cpu=%s\n",
         GetCurrentProcessId(), exe, entry, d.route == AppRoute::Gpu && !fellBack ? "gpu" : "cpu",
         AppReasonName(d.reason), fellBack ? 1u : 0u, (unsigned long)gpuHr, (unsigned long)hr, module,
-        AppModeName(a.mode), a.mode_source, a.gpu_source, c.cpu_source);
+        AppModeName(a.mode), a.mode_source, a.gpu_source, c.cpu_source, setting);
     if (n < 0) n = (int)strlen(line);
     WriteRouteLine(a.log_directory[0] ? a.log_directory : c.log_directory, exe, line, n);
 }
@@ -450,17 +462,23 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     const UINT wn = GetSystemWindowsDirectoryW(windows, PathChars);
     if (!wn || wn >= PathChars) windows[0] = 0; // ClassifyComponent: Unknown, which keeps gpu-default on the CPU UMD
     const Component component = ClassifyComponent(image, windows);
-    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component});
+    // Read at every call, as the AppRouter key is (the shells read the other settings once per process).
+    namespace as = amdgpu_wddm::app_settings;
+    as::Settings settings;
+    as::resolve(exe, as::system_sources(), settings);
+    const as::Value renderOnCpu = settings[as::Setting::RenderOnCpu];
+    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component,
+                                     as::render_on_cpu(settings)});
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {
         gpuHr = TryGpu(a.gpu, entry, args, tableBytes);
         if (SUCCEEDED(gpuHr)) {
-            ReportApp(c, a, exe, entry, d, gpuHr, false, a.gpu, gpuHr);
+            ReportApp(c, a, exe, entry, d, gpuHr, false, a.gpu, gpuHr, renderOnCpu);
             return gpuHr;
         }
     }
     const HRESULT hr = ForwardCpu(c, entry, args);
-    ReportApp(c, a, exe, entry, d, gpuHr, d.route == AppRoute::Gpu, c.cpu, hr);
+    ReportApp(c, a, exe, entry, d, gpuHr, d.route == AppRoute::Gpu, c.cpu, hr, renderOnCpu);
     return hr;
 }
 

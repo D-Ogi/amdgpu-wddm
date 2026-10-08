@@ -81,6 +81,7 @@ enum class AppReason {
     ModeCpu,      // Mode absent or "cpu": the application kill switch
     ModeInvalid,  // Mode present but not one of the three names (fail safe: CPU)
     Protected,    // a logon or secure-desktop process (built-in list below), never routed to the GPU UMD
+    RenderOnCpu,  // the per-application graphics setting RenderOnCpu is 1 (docs/design/per-app-graphics-settings.md)
     Denied,       // listed in Deny (both modes; Deny wins over Allow)
     NotAllowed,   // allowlist mode and not listed in Allow
     ComponentUnknown, // gpu-default mode, the image or the Windows directory could not be resolved, not in Allow
@@ -104,6 +105,7 @@ struct AppInputs {
     bool entry_10_2;       // the call is OpenAdapter10_2 (D3D10.1/D3D11 runtimes)
     bool gpu_umd_set;      // GpuUmdPath is an absolute path
     Component component = Component::No; // ClassifyComponent (router-identity.h) of the process image
+    bool render_on_cpu = false; // RenderOnCpu of HKLM\SOFTWARE\amdgpu-wddm\Graphics (app-settings.h) is 1
 };
 
 struct AppDecision {
@@ -168,6 +170,9 @@ inline AppDecision DecideApp(const AppInputs &in)
     if (in.mode == AppMode::Cpu) return {AppRoute::Cpu, AppReason::ModeCpu};
     if (in.mode != AppMode::Allowlist && in.mode != AppMode::GpuDefault) return {AppRoute::Cpu, AppReason::ModeInvalid};
     if (IsProtectedApp(in.exe_base)) return {AppRoute::Cpu, AppReason::Protected};
+    // The graphics setting adds to the AppRouter Deny list, which stays as it was: either one keeps the application
+    // on the CPU UMD. A RenderOnCpu of 0 never moves an application off the CPU UMD that the policy chose.
+    if (in.render_on_cpu) return {AppRoute::Cpu, AppReason::RenderOnCpu};
     if (InList(in.exe_base, in.deny)) return {AppRoute::Cpu, AppReason::Denied};
     if (in.mode == AppMode::Allowlist && !InList(in.exe_base, in.allow)) return {AppRoute::Cpu, AppReason::NotAllowed};
     if (in.mode == AppMode::GpuDefault && in.component == Component::Unknown && !InList(in.exe_base, in.allow))
@@ -195,6 +200,7 @@ inline const char *AppReasonName(AppReason r)
     case AppReason::ModeCpu: return "app-mode-cpu";
     case AppReason::ModeInvalid: return "app-mode-invalid";
     case AppReason::Protected: return "app-protected";
+    case AppReason::RenderOnCpu: return "app-render-on-cpu";
     case AppReason::Denied: return "app-denied";
     case AppReason::NotAllowed: return "app-not-allowed";
     case AppReason::ComponentUnknown: return "app-component-unknown";
