@@ -163,12 +163,12 @@ static void record_line(const bc250hsa_mock_record* record) {
     if (g_record_file == NULL) {
         return;
     }
-    fprintf(g_record_file, "%s kernel=%s grid=%u,%u,%u block=%u,%u,%u lds=%u va=0x%llx bytes=%llu value=%llu kernarg=%u",
+    fprintf(g_record_file, "%s kernel=%s grid=%u,%u,%u block=%u,%u,%u lds=%u va=0x%llx bytes=%llu value=%llu wait=%u/%u kernarg=%u",
             bc250hsa_mock_kind_name(record->kind), record->kernel[0] != '\0' ? record->kernel : "-",
             record->grid[0], record->grid[1], record->grid[2], record->block[0], record->block[1],
             record->block[2], record->dynamic_group_bytes, (unsigned long long)record->va,
             (unsigned long long)record->bytes, (unsigned long long)record->value,
-            record->kernarg_bytes);
+            record->wait_slice_ms, record->wait_total_ms, record->kernarg_bytes);
     if (record->kernarg_bytes != 0u) {
         uint32_t n = record->kernarg_bytes;
         uint32_t i;
@@ -452,7 +452,7 @@ bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem) {
 
 bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out) {
     mock_allocation* allocation;
-    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL) {
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL || out == NULL) {
         return BC250HSA_EINVAL;
     }
     if (mem->flags == BC250HSA_MEM_DEVICE) {
@@ -467,11 +467,10 @@ bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out
     if (allocation == NULL) {
         return BC250HSA_EINVAL;
     }
-    mem->host = allocation->raw;
-    allocation->mem.host = allocation->raw;
-    if (out != NULL) {
-        *out = allocation->raw;
-    }
+    /* Only *out, which is the one result that bc250hsa.h promises of this call. The handle of
+     * the caller stays as it was on purpose: a caller that reads mem->host after a map instead
+     * of *out must fail here and not on the lab. */
+    *out = allocation->raw;
     return BC250HSA_OK;
 }
 
@@ -1713,17 +1712,19 @@ uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev) {
 
 bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t slice_ms,
                               uint32_t total_ms) {
-    (void)slice_ms;
-    (void)total_ms;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
         return BC250HSA_EINVAL;
     }
     g_counters.waits++;
     g_counters.waits_fast++;
     {
+        /* The bound is recorded, not obeyed: nothing here can block. A test reads it to see
+         * that layer 2 passes its own wait policy into every wait. */
         bc250hsa_mock_record* record = record_new(BC250HSA_MOCK_WAIT);
         if (record != NULL) {
             record->value = value;
+            record->wait_slice_ms = slice_ms;
+            record->wait_total_ms = total_ms;
             record_line(record);
         }
     }

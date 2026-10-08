@@ -22,6 +22,15 @@
 #ifndef BC250_HIP_RUNTIME_H
 #define BC250_HIP_RUNTIME_H
 
+// __launch_bounds__ takes one or two arguments in CUDA and in HIP. The first is the largest
+// block this kernel is written for, which is amdgpu_flat_work_group_size(1, max). The second is
+// the smallest number of waves per execution unit, which only steers occupancy; this build
+// accepts it and ignores it, because the right mapping of that number needs a measurement on
+// this part. MEASURED: a plain __VA_ARGS__ in the attribute gives
+// "'amdgpu_flat_work_group_size' attribute requires exactly 2 arguments" for the two-argument
+// form, so the macro takes the first argument out.
+#define BC250_HIP_FIRST_ARG(first, ...) first
+
 #if defined(__HIP__)
 #define __device__ __attribute__((device))
 #define __host__ __attribute__((host))
@@ -30,7 +39,8 @@
 #define __constant__ __attribute__((constant))
 #define __managed__ __attribute__((managed))
 #define __forceinline__ inline __attribute__((always_inline))
-#define __launch_bounds__(...) __attribute__((amdgpu_flat_work_group_size(1, __VA_ARGS__)))
+#define __launch_bounds__(...) \
+  __attribute__((amdgpu_flat_work_group_size(1, BC250_HIP_FIRST_ARG(__VA_ARGS__, 0))))
 #else
 #define __device__
 #define __host__
@@ -109,9 +119,9 @@ typedef struct ihipModuleSymbol_t *hipFunction_t;
 #define hipEventDisableTiming 0x02
 #define hipHostMallocDefault 0x00
 
-// The fields that llama.cpp and a normal HIP program read. The order follows AMD's
-// hip_runtime_api.h so that a program compiled against the ROCm header keeps working. The
-// runtime fills only the fields it knows.
+// The fields that llama.cpp and a normal HIP program read. The runtime fills only the fields it
+// knows, and a program that reads one of the others gets 0. Every program of this route is
+// compiled against this header, so the field order only has to agree with itself.
 typedef struct hipDeviceProp_t {
   char name[256];
   char gcnArchName[256];

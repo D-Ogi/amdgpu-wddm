@@ -5,7 +5,13 @@
 // answers at once, because the first open records its status.
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 #include "runtime_internal.h"
 
@@ -15,6 +21,40 @@ State& state() {
     static State s;
     return s;
 }
+
+namespace {
+
+// One wait bound of the process, read one time at the first device open. bc250hsa.h rule 6
+// keeps policy out of layer 1, and design decision 10 asks a short trial to pass a smaller
+// total than the library's 120 s default. A HIP program has no API for this, so the policy
+// arrives in the environment: BC250_HIP_WAIT_TOTAL_MS and BC250_HIP_WAIT_SLICE_MS, both in
+// milliseconds, 0 or absent taking the library default.
+//
+// MEASURED: this must be the operating system's environment and not getenv. A program that
+// links the static C runtime and this DLL that links the dynamic one have two C runtime
+// instances, and each one copies the environment when it starts. A _putenv_s of the program
+// therefore never reaches a getenv of this DLL, while GetEnvironmentVariable reads the one
+// block that both of them write.
+uint32_t read_ms(const char* name) {
+    char text[32];
+#if defined(_WIN32)
+    const DWORD bytes = GetEnvironmentVariableA(name, text, sizeof(text));
+    if (bytes == 0 || bytes >= sizeof(text)) {
+        return 0;
+    }
+#else
+    const char* found = std::getenv(name);
+    if (found == nullptr) {
+        return 0;
+    }
+    std::strncpy(text, found, sizeof(text) - 1);
+    text[sizeof(text) - 1] = '\0';
+#endif
+    const unsigned long value = std::strtoul(text, nullptr, 10);
+    return value > 0xFFFFFFFFul ? 0xFFFFFFFFu : static_cast<uint32_t>(value);
+}
+
+}  // namespace
 
 double host_now_ms() {
     using clock = std::chrono::steady_clock;
@@ -26,6 +66,8 @@ hipError_t device(bc250hsa_device** out) {
     State& s = state();
     if (!s.open_tried) {
         s.open_tried = true;
+        s.wait_slice_ms = read_ms("BC250_HIP_WAIT_SLICE_MS");
+        s.wait_total_ms = read_ms("BC250_HIP_WAIT_TOTAL_MS");
         // The interface version of the library we were built against. A different major value
         // means the contract moved, and a wrong contract must not reach the hardware.
         if (bc250hsa_abi_version_major() != BC250HSA_ABI_VERSION_MAJOR) {
@@ -54,10 +96,23 @@ hipError_t device(bc250hsa_device** out) {
     return hipSuccess;
 }
 
+hipError_t wait_fence(bc250hsa_device* dev, uint64_t value) {
+    State& s = state();
+    const bc250hsa_status status = bc250hsa_wait(dev, value, s.wait_slice_ms, s.wait_total_ms);
+    if (status == BC250HSA_OK) {
+        events_stamp_retired(dev);
+    }
+    return translate(status);
+}
+
 void memory_info(size_t* free_bytes, size_t* total_bytes) {
     State& s = state();
     uint64_t total = s.props_valid ? s.props.vram_bytes : 0;
     uint64_t used = 0;
+    // Every allocation of the process counts, host visible ones as well: the memory of this
+    // part is one DRAM pool behind a carve-out, so a host-visible allocation takes the same
+    // physical memory as a device-local one. The leak criterion of the step-2 trial compares
+    // two of these numbers, and it therefore sees a leak of either kind.
     for (const auto& entry : s.by_va) {
         used += entry.second.mem.bytes;
     }
@@ -197,9 +252,7 @@ hipError_t hipDeviceSynchronize(void) {
     if (value == 0) {
         return hipSuccess;
     }
-    // Slice and total 0 take the library defaults, which are the measured values of our Vulkan
-    // driver (1000 ms slices, 120000 ms in all).
-    return fail(bc250hip::translate(bc250hsa_wait(dev, value, 0, 0)));
+    return fail(bc250hip::wait_fence(dev, value));
 }
 
 }  // extern "C"

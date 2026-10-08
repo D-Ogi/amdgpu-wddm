@@ -13,6 +13,12 @@
 // with the argument --expect-compute, because the mock backend of the host tests records a
 // dispatch and runs no instruction. On the real device the lab runner passes that argument
 // (the step-2 section of the lab README).
+//
+// --wait-total <ms> shortens every wait of the runtime. The runtime reads the bound one time,
+// at its first call, from BC250_HIP_WAIT_TOTAL_MS, so the switch sets that variable before the
+// first HIP call. A lab trial must stay inside three minutes, and the default of the library is
+// 120 seconds for one wait (design decision 10): a dispatch that never retires would hold the
+// lab far longer than the trial allows.
 
 #include "hip/hip_runtime.h"
 
@@ -24,14 +30,18 @@
 #define N 65536
 #define BLOCK 256
 
-__global__ void vadd(const float* a, const float* b, float* c, int n) {
+// Both forms of __launch_bounds__ are here on purpose: the clang build of this sample is the
+// gate of the macro in hip/hip_runtime.h, and the two-argument form is the one a real HIP
+// program uses.
+__global__ void __launch_bounds__(BLOCK, 1) vadd(const float* a, const float* b, float* c,
+                                                 int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         c[i] = a[i] + b[i];
     }
 }
 
-__global__ void scale(float* c, float factor, int n) {
+__global__ void __launch_bounds__(BLOCK) scale(float* c, float factor, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         c[i] = c[i] * factor;
@@ -50,6 +60,19 @@ static void check(hipError_t err, const char* what) {
 static int g_expect_compute = 0;
 static clock_t g_start = 0;
 static int g_first_launch_reported = 0;
+
+// The wait bound of the runtime, which it reads one time from the environment at its first
+// call. This runs before the first HIP call of the program.
+static int set_wait_total(const char* ms) {
+    if (ms == NULL || ms[0] == '\0') {
+        return 0;
+    }
+#if defined(_WIN32)
+    return _putenv_s("BC250_HIP_WAIT_TOTAL_MS", ms) == 0;
+#else
+    return setenv("BC250_HIP_WAIT_TOTAL_MS", ms, 1) == 0;
+#endif
+}
 
 // Milliseconds since main() started. The route document asks for the start time of the process
 // and the time to the first kernel, because the code object load path is new.
@@ -91,6 +114,9 @@ static int run_once(int pass) {
     check(hipMemcpy(device_b, host_b, sizeof(float) * N, hipMemcpyHostToDevice), "copy b");
     check(hipMemsetAsync(device_c, 0, sizeof(float) * N, stream), "memset c");
 
+    // The per-thread error state is sticky, so a failure of one of the calls above would be
+    // read again as a launch failure. Discard it, then ask about the launch itself.
+    (void)hipGetLastError();
     vadd<<<N / BLOCK, BLOCK, 0, stream>>>(device_a, device_b, device_c, N);
     check(hipGetLastError(), "vadd launch");
     if (!g_first_launch_reported) {
@@ -102,6 +128,7 @@ static int run_once(int pass) {
     // another stream, through an event wait.
     check(hipEventRecord(done, stream), "hipEventRecord");
     check(hipStreamWaitEvent(second, done, 0), "hipStreamWaitEvent");
+    (void)hipGetLastError();
     scale<<<N / BLOCK, BLOCK, 0, second>>>(device_c, 1.0f, N);
     check(hipGetLastError(), "scale launch");
 
@@ -155,8 +182,16 @@ int main(int argc, char** argv) {
     for (i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--expect-compute") == 0) {
             g_expect_compute = 1;
+        } else if (strcmp(argv[i], "--wait-total") == 0 && i + 1 < argc) {
+            ++i;
+            if (!set_wait_total(argv[i])) {
+                printf("vadd: cannot set the wait bound to '%s'\n", argv[i]);
+                return 2;
+            }
+            printf("vadd: every wait of the runtime is bounded to %s ms in all\n", argv[i]);
         } else {
             printf("vadd: unknown argument '%s'\n", argv[i]);
+            printf("vadd: usage: vadd.exe [--expect-compute] [--wait-total <ms>]\n");
             return 2;
         }
     }

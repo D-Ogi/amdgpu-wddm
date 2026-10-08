@@ -38,8 +38,9 @@ struct ihipEvent_t {
     uint32_t magic;
     unsigned flags;
     int      recorded;
+    int      pending;        // 1: the value has not retired yet, so host_ms is still open
     uint64_t fence_value;    // the stream's last value at the time of the record
-    double   host_ms;        // the host timestamp of the record, in milliseconds
+    double   host_ms;        // the host time at which this value retired, in milliseconds
 };
 
 namespace bc250hip {
@@ -80,7 +81,6 @@ struct Function {
 
 struct Allocation {
     bc250hsa_mem mem{};
-    bool         host_allocation = false;  // made by hipHostMalloc
 };
 
 // A kernel argument buffer of the pool. The buffer stays in the pool after the launch and is
@@ -104,8 +104,15 @@ struct State {
     std::map<uint64_t, Allocation>          by_va;         // ordered, for a range lookup
     std::unordered_map<const void*, uint64_t> va_by_host;
     std::vector<KernargBuffer>              kernargs;
+    std::vector<ihipEvent_t*>               pending_events; // recorded, value not retired yet
     ihipStream_t                            null_stream{};
     int                                     current_device = 0;
+    // The wait policy of the process, which bc250hsa.h rule 6 puts on layer 2. 0 and 0 take
+    // the library defaults (1000 ms slices, 120000 ms in all). A short trial sets
+    // BC250_HIP_WAIT_TOTAL_MS, so that a dispatch which never retires cannot hold the lab for
+    // two minutes per wait (design decision 10).
+    uint32_t                                wait_slice_ms = 0;
+    uint32_t                                wait_total_ms = 0;
 };
 
 State& state();
@@ -136,9 +143,26 @@ inline hipError_t fail_status(bc250hsa_status status) { return fail(translate(st
 const Allocation* find_allocation(uint64_t va, uint64_t bytes, uint64_t* offset);
 const Allocation* find_allocation_ptr(const void* ptr, uint64_t bytes, uint64_t* offset);
 
+// Every wait of layer 2 goes through this one function, so that the process has one wait
+// policy and no entry point can wait without the bound that State holds. The caller holds the
+// lock.
+hipError_t wait_fence(bc250hsa_device* dev, uint64_t value);
+
 // The default stream of the process. A HIP program passes a null stream handle for it.
 ihipStream_t* resolve_stream(hipStream_t stream);
 bool          stream_valid(const ihipStream_t* stream);
+bool          is_null_stream(const ihipStream_t* stream);
+
+// The fence value that a program sees as "everything this stream owes". It covers the work of
+// the stream and the event wait that the stream still carries. The legacy null stream owes the
+// work of the whole device, which is what HIP says of it.
+uint64_t stream_target_value(bc250hsa_device* dev, const ihipStream_t* stream);
+
+// Stamps every recorded event whose value the device has reached. Every wait calls it, so an
+// event carries the host time of the moment its value retired and not the time a program asked
+// about it.
+void events_stamp_retired(bc250hsa_device* dev);
+void events_forget(ihipEvent_t* event);
 
 // Waits for everything this stream owes, then clears its pending wait. The caller holds the
 // lock.

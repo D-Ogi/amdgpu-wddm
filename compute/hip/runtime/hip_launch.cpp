@@ -90,10 +90,10 @@ hipError_t kernarg_acquire(uint32_t bytes, uint32_t alignment, KernargBuffer** o
         return translate(BC250HSA_ENOMEM);
     }
     // The pool is full and every buffer is still in flight. Wait for the oldest one under the
-    // library's bound instead of growing without a limit.
-    const bc250hsa_status status = bc250hsa_wait(dev, oldest->fence, 0, 0);
-    if (status != BC250HSA_OK) {
-        return translate(status);
+    // wait policy of the process instead of growing without a limit.
+    const hipError_t waited = wait_fence(dev, oldest->fence);
+    if (waited != hipSuccess) {
+        return waited;
     }
     oldest->busy = true;
     *out = oldest;

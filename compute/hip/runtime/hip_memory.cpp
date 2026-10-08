@@ -18,6 +18,11 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include "runtime_internal.h"
 
 namespace bc250hip {
@@ -86,22 +91,25 @@ const Allocation* find_host_allocation(const void* ptr, uint64_t bytes, uint64_t
     return nullptr;
 }
 
-// Waits for everything that this stream submitted. Build 1 makes every copy synchronous, so
-// this is what keeps a copy behind the kernel that writes its source.
+// Waits for everything that this stream owes. Build 1 makes every copy synchronous, so this is
+// what keeps a copy behind the kernel that writes its source. It covers the event wait that the
+// stream still carries, and for the legacy null stream it covers the whole device.
 hipError_t wait_for_stream(ihipStream_t* stream) {
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
         return err;
     }
-    const hipError_t pending = bc250hip::stream_drain_pending(stream);
-    if (pending != hipSuccess) {
-        return pending;
-    }
-    if (stream->last_fence == 0) {
+    const uint64_t value = bc250hip::stream_target_value(dev, stream);
+    if (value == 0) {
         return hipSuccess;
     }
-    return bc250hip::translate(bc250hsa_wait(dev, stream->last_fence, 0, 0));
+    const hipError_t waited = bc250hip::wait_fence(dev, value);
+    if (waited != hipSuccess) {
+        return waited;
+    }
+    stream->pending_wait = 0;
+    return hipSuccess;
 }
 
 hipError_t wait_for_device() {
@@ -114,11 +122,22 @@ hipError_t wait_for_device() {
     if (value == 0) {
         return hipSuccess;
     }
-    return bc250hip::translate(bc250hsa_wait(dev, value, 0, 0));
+    return bc250hip::wait_fence(dev, value);
 }
 
-// The copy itself, after the wait. It takes the kind that the caller asked for, or finds the
-// kind from the table when the caller said hipMemcpyDefault.
+// Is this pointer one that hipHostMalloc returned? A host mapping and a GPU virtual address
+// share one numeric space, so this question comes first whenever the runtime has to guess a
+// direction. The GPU window of layer 1 may lie inside the host user address space
+// (bc250hsa.h, section 4), and then a device virtual address can hold the value of a host
+// pointer of the same process.
+bool known_host_pointer(const void* ptr) {
+    return ptr != nullptr && state().va_by_host.find(ptr) != state().va_by_host.end();
+}
+
+// The copy itself, after the wait. An explicit kind is the caller's word and the runtime does
+// not argue with it: it looks up only the side that the kind calls device memory. Only
+// hipMemcpyDefault makes the runtime guess, and then a host mapping wins over a numerically
+// equal device address.
 hipError_t copy_now(void* dst, const void* src, size_t bytes, hipMemcpyKind kind) {
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
@@ -127,10 +146,16 @@ hipError_t copy_now(void* dst, const void* src, size_t bytes, hipMemcpyKind kind
     }
     uint64_t dst_offset = 0;
     uint64_t src_offset = 0;
-    const Allocation* dst_device = bc250hip::find_allocation_ptr(dst, bytes, &dst_offset);
-    const Allocation* src_device = bc250hip::find_allocation_ptr(src, bytes, &src_offset);
+    const Allocation* dst_device = nullptr;
+    const Allocation* src_device = nullptr;
 
     if (kind == hipMemcpyDefault) {
+        if (!known_host_pointer(dst)) {
+            dst_device = bc250hip::find_allocation_ptr(dst, bytes, &dst_offset);
+        }
+        if (!known_host_pointer(src)) {
+            src_device = bc250hip::find_allocation_ptr(src, bytes, &src_offset);
+        }
         if (dst_device != nullptr && src_device != nullptr) {
             kind = hipMemcpyDeviceToDevice;
         } else if (dst_device != nullptr) {
@@ -139,6 +164,13 @@ hipError_t copy_now(void* dst, const void* src, size_t bytes, hipMemcpyKind kind
             kind = hipMemcpyDeviceToHost;
         } else {
             kind = hipMemcpyHostToHost;
+        }
+    } else {
+        if (kind == hipMemcpyHostToDevice || kind == hipMemcpyDeviceToDevice) {
+            dst_device = bc250hip::find_allocation_ptr(dst, bytes, &dst_offset);
+        }
+        if (kind == hipMemcpyDeviceToHost || kind == hipMemcpyDeviceToDevice) {
+            src_device = bc250hip::find_allocation_ptr(src, bytes, &src_offset);
         }
     }
 
@@ -181,24 +213,54 @@ hipError_t copy_now(void* dst, const void* src, size_t bytes, hipMemcpyKind kind
 
 hipError_t fill_now(void* dst, int value, size_t bytes) {
     uint64_t offset = 0;
-    const Allocation* allocation = bc250hip::find_allocation_ptr(dst, bytes, &offset);
+    // hipMemset takes one pointer and no kind, so the runtime has to guess here as well. A host
+    // mapping wins over a numerically equal device address, which is why this lookup comes
+    // first and not second.
+    const Allocation* allocation = find_host_allocation(dst, bytes, &offset);
     unsigned char* base = nullptr;
-    if (allocation != nullptr) {
+    if (allocation == nullptr) {
+        allocation = bc250hip::find_allocation_ptr(dst, bytes, &offset);
+        if (allocation == nullptr) {
+            return hipErrorInvalidDevicePointer;
+        }
         if (allocation->mem.host == nullptr) {
             // A fill kernel is later work, named in the design.
             return hipErrorNotSupported;
         }
-        base = static_cast<unsigned char*>(allocation->mem.host) + offset;
-    } else {
-        allocation = find_host_allocation(dst, bytes, &offset);
-        if (allocation == nullptr) {
-            return hipErrorInvalidDevicePointer;
-        }
-        base = static_cast<unsigned char*>(allocation->mem.host) + offset;
     }
+    base = static_cast<unsigned char*>(allocation->mem.host) + offset;
     std::memset(base, value, bytes);
     bc250hsa_write_barrier();
     return hipSuccess;
+}
+
+// A HIP device pointer is a GPU virtual address, and a Windows process addresses its own image
+// and heap with numbers of the same size. When the GPU address window of layer 1 lies inside
+// the host user address space, one number can mean both things, and then hipMemcpyDefault and
+// hipMemset cannot tell them apart (bc250hsa.h, section 4). This asks the operating system
+// whether the address is already part of this process, and says so one time. A program that
+// passes the direction of every copy is not affected.
+void warn_on_address_collision(uint64_t va) {
+    static bool said = false;
+    if (said || va == 0) {
+        return;
+    }
+#if defined(_WIN32)
+    MEMORY_BASIC_INFORMATION info;
+    std::memset(&info, 0, sizeof(info));
+    if (VirtualQuery(reinterpret_cast<void*>(static_cast<uintptr_t>(va)), &info, sizeof(info)) ==
+            0 ||
+        info.State == MEM_FREE) {
+        return;
+    }
+#else
+    return;
+#endif
+    said = true;
+    std::fprintf(stderr, "amdhip64: the GPU address window overlaps the host address space of "
+                         "this process. Pass the direction of every copy, because "
+                         "hipMemcpyDefault cannot tell a device pointer from a host pointer "
+                         "here\n");
 }
 
 // hipMalloc. It asks for device-local memory that a mapping may reach, and falls back to a
@@ -215,6 +277,12 @@ hipError_t allocate_device(size_t bytes, Allocation* out) {
     if (status == BC250HSA_OK && mem.host == nullptr) {
         void* host = nullptr;
         const bc250hsa_status mapped = bc250hsa_map(dev, &mem, &host);
+        if (mapped == BC250HSA_OK) {
+            // The out parameter is the only result that bc250hsa.h promises, so the handle of
+            // this runtime carries what the call returned and never what the library may have
+            // written into the handle itself.
+            mem.host = host;
+        }
         if (mapped != BC250HSA_OK) {
             static bool said = false;
             if (!said) {
@@ -231,8 +299,8 @@ hipError_t allocate_device(size_t bytes, Allocation* out) {
     if (status != BC250HSA_OK) {
         return bc250hip::translate(status);
     }
+    warn_on_address_collision(mem.va);
     out->mem = mem;
-    out->host_allocation = false;
     return hipSuccess;
 }
 
@@ -287,7 +355,6 @@ hipError_t hipHostMalloc(void** ptr, size_t size, unsigned int flags) {
         bc250hsa_free(dev, &allocation.mem);
         return fail(hipErrorOutOfMemory);
     }
-    allocation.host_allocation = true;
     state().by_va[allocation.mem.va] = allocation;
     state().va_by_host[allocation.mem.host] = allocation.mem.va;
     *ptr = allocation.mem.host;

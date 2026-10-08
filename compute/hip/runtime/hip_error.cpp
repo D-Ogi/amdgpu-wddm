@@ -4,6 +4,8 @@
 // judgement. BC250HSA_EDEVICELOST is the one code that asks a question first, because HIP tells
 // a page fault from a dead context by different error codes.
 
+#include <cstring>
+
 #include "runtime_internal.h"
 
 namespace bc250hip {
@@ -37,6 +39,11 @@ hipError_t translate(bc250hsa_status status) {
         State& s = state();
         if (s.dev != nullptr) {
             bc250hsa_fault fault;
+            // Zeroed first: the header does not promise that a query fills every field, and a
+            // faulted_va of stack rubbish would name an illegal access where the context is
+            // only gone. This part has no working GPU reset (fact M53), so the first
+            // diagnosis has to be the right one.
+            std::memset(&fault, 0, sizeof(fault));
             fault.struct_bytes = static_cast<uint32_t>(sizeof(fault));
             if (bc250hsa_query_fault(s.dev, &fault) == BC250HSA_OK && fault.faulted_va != 0) {
                 return hipErrorIllegalAddress;

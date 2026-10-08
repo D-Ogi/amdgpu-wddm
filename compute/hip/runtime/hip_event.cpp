@@ -1,21 +1,66 @@
 // hip_event.cpp - events over the stream fence values.
 //
-// Design docs/design/m16-hip-route-b.md section 4.5: an event records the stream's last fence
-// value and a host timestamp, and hipEventElapsedTime is the difference of two host timestamps,
-// each taken when its value retired. A GPU timestamp through a second RELEASE_MEM is the better
-// answer; it is named in section 7 of the design and it needs one cost measurement.
+// Design docs/design/m16-hip-route-b.md section 4.5: an event records a fence value, and its
+// host timestamp is taken at the moment that value retires. A GPU timestamp through a second
+// RELEASE_MEM is the better answer; it is named in section 7 of the design and it needs one
+// cost measurement.
+//
+// Why the timestamp cannot wait for the first question about the event: hipEventElapsedTime
+// asks about two events one after the other, and both values have usually retired long before.
+// A timestamp taken at that moment would be the time of the question and not the time of the
+// work, so the two stamps would be microseconds apart whatever the kernels did. An event whose
+// value has not retired yet therefore goes on a pending list, and every wait and every fence
+// read of layer 2 stamps the events the device has passed (events_stamp_retired).
+
+#include <algorithm>
 
 #include "runtime_internal.h"
 
+namespace bc250hip {
+
+void events_stamp_retired(bc250hsa_device* dev) {
+    State& s = state();
+    if (s.pending_events.empty() || dev == nullptr) {
+        return;
+    }
+    const uint64_t retired = bc250hsa_fence_read(dev);
+    if (retired == UINT64_MAX) {
+        return;  // a lost device retires nothing; the fault path reports it
+    }
+    const double now = host_now_ms();
+    for (auto it = s.pending_events.begin(); it != s.pending_events.end();) {
+        ihipEvent_t* event = *it;
+        if (event != nullptr && event->fence_value <= retired) {
+            event->host_ms = now;
+            event->pending = 0;
+            it = s.pending_events.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void events_forget(ihipEvent_t* event) {
+    State& s = state();
+    s.pending_events.erase(
+        std::remove(s.pending_events.begin(), s.pending_events.end(), event),
+        s.pending_events.end());
+}
+
+}  // namespace bc250hip
+
 namespace {
 
-// Waits for the event's value, then takes the host timestamp one time. The caller holds the
-// lock.
+bool valid(const ihipEvent_t* event) {
+    return event != nullptr && event->magic == BC250_HIP_EVENT_MAGIC;
+}
+
+// Waits for the event's value, so that its timestamp exists. The caller holds the lock.
 hipError_t retire(ihipEvent_t* event) {
     if (event->recorded == 0) {
         return hipErrorInvalidHandle;
     }
-    if (event->host_ms > 0.0) {
+    if (event->pending == 0) {
         return hipSuccess;
     }
     bc250hsa_device* dev = nullptr;
@@ -23,18 +68,18 @@ hipError_t retire(ihipEvent_t* event) {
     if (err != hipSuccess) {
         return err;
     }
-    if (event->fence_value != 0) {
-        const bc250hsa_status status = bc250hsa_wait(dev, event->fence_value, 0, 0);
-        if (status != BC250HSA_OK) {
-            return bc250hip::translate(status);
-        }
+    const hipError_t waited = bc250hip::wait_fence(dev, event->fence_value);
+    if (waited != hipSuccess) {
+        return waited;
     }
-    event->host_ms = bc250hip::host_now_ms();
+    // wait_fence stamps every event the device has passed, this one among them. The fallback
+    // covers an implementation of layer 1 whose fence read lags its own wait.
+    if (event->pending != 0) {
+        event->host_ms = bc250hip::host_now_ms();
+        event->pending = 0;
+        bc250hip::events_forget(event);
+    }
     return hipSuccess;
-}
-
-bool valid(const ihipEvent_t* event) {
-    return event != nullptr && event->magic == BC250_HIP_EVENT_MAGIC;
 }
 
 }  // namespace
@@ -56,6 +101,7 @@ hipError_t hipEventCreateWithFlags(hipEvent_t* event, unsigned int flags) {
     created->magic = BC250_HIP_EVENT_MAGIC;
     created->flags = flags;
     created->recorded = 0;
+    created->pending = 0;
     created->fence_value = 0;
     created->host_ms = 0.0;
     *event = created;
@@ -70,6 +116,8 @@ hipError_t hipEventDestroy(hipEvent_t event) {
     if (!valid(event)) {
         return fail(hipErrorInvalidHandle);
     }
+    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::events_forget(event);
     event->magic = 0;
     delete event;
     return hipSuccess;
@@ -80,17 +128,29 @@ hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream) {
         return fail(hipErrorInvalidHandle);
     }
     std::lock_guard<std::mutex> guard(state().lock);
+    bc250hsa_device* dev = nullptr;
+    const hipError_t err = bc250hip::device(&dev);
+    if (err != hipSuccess) {
+        return fail(err);
+    }
     ihipStream_t* target = bc250hip::resolve_stream(stream);
     if (target == nullptr) {
         return fail(hipErrorInvalidHandle);
     }
-    event->fence_value = target->last_fence;
+    bc250hip::events_forget(event);
+    // The event covers everything the stream owes, the event wait it carries among it. The
+    // legacy null stream owes the work of the whole device.
+    event->fence_value = bc250hip::stream_target_value(dev, target);
     event->recorded = 1;
     event->host_ms = 0.0;
-    if (event->fence_value == 0) {
-        // Nothing is in flight on this stream, so the event is complete at once.
+    event->pending = 0;
+    if (event->fence_value == 0 || event->fence_value <= bc250hsa_fence_read(dev)) {
+        // Nothing of this stream is in flight, so the event is complete at once.
         event->host_ms = bc250hip::host_now_ms();
+        return hipSuccess;
     }
+    event->pending = 1;
+    state().pending_events.push_back(event);
     return hipSuccess;
 }
 

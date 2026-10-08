@@ -40,8 +40,11 @@ uint64_t read_u64(const unsigned char* p) {
 
 // The size of the bundle, from its own header. The wrapper gives a pointer and no length, so
 // the reader must find the end itself: it is the largest offset plus size of any entry, and
-// never less than the header. The entry count is capped, so a wrong pointer cannot send this
-// walk into another allocation.
+// never less than the header. The caps keep the result bounded, but they cannot make the walk
+// safe: the entry table is read before any cap can refuse it, so a wrapper that names a wrong
+// or freed image can send this function up to 64 x (24 + 1024) bytes past the pointer. Only
+// clang's own module constructor passes this pointer, and it passes the image of the same
+// binary, which is the whole defence we have.
 bool bundle_extent(const void* blob, size_t* out_bytes) {
     const unsigned char* p = static_cast<const unsigned char*>(blob);
     if (std::memcmp(p, kBundleMagic, kBundleMagicBytes) != 0) {

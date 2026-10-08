@@ -53,11 +53,17 @@ product DLL needs that library.
    `bc250hsa.h`. A new call into layer 1 that the contract does not carry is a build failure.
 3. The built DLL exports exactly the names of `amdhip64.def`, no more and no fewer.
 4. `test_hip_mock.exe` passes: registration, argument packing, stream order across an event
-   wait, no allocation leak on a second run, and the fixed properties of the design.
+   wait, event timing, no allocation leak on a second run, the fixed properties of the design,
+   the memory entry points with an explicit kind and with `hipMemcpyDefault`, the null stream,
+   the per-thread error state, and a second fat binary in one process.
 5. A real HIP program, compiled by clang against `hip_runtime.h` and linked against
    `amdhip64.lib`, imports `amdhip64.dll`, runs against the mock build, and records the
    dispatches that its two `<<<>>>` calls asked for, with the measured grid, block and kernel
-   argument size.
+   argument size. Every wait of that run carries the bound that `--wait-total` gave it.
+6. With `-Rebuild`: the code object fixture of the host test, built again from its own source,
+   and the host test run against the result. The fixture is not reproducible byte for byte,
+   because clang writes a unique `__hip_cuid_*` symbol into every compilation
+   (`tests/data/PROVENANCE-runtime.txt`).
 
 ## The mock build
 
@@ -77,9 +83,18 @@ have their own tests against the same code objects.
   once, which is legal and slow.
 - `hipMemset` fills through the host mapping. A fill kernel and the copy engine are later work.
 - A device-to-device copy needs a host mapping on both sides.
-- `hipEventElapsedTime` is the difference of two host timestamps, each taken when its fence
-  value retired. A GPU timestamp through a second `RELEASE_MEM` is better and needs one cost
-  measurement.
+- `hipEventElapsedTime` is the difference of two host timestamps, each taken at the moment its
+  fence value retired: `hipEventRecord` stamps an event whose value has already retired, and
+  every later wait stamps the events the device has passed. A GPU timestamp through a second
+  `RELEASE_MEM` is better and needs one cost measurement.
+- `hipMemcpyDefault` and `hipMemset` have to guess whether a pointer is device memory, because a
+  GPU virtual address and a host pointer are numbers of the same size. A host mapping of this
+  process wins over a numerically equal device address, and an explicit `hipMemcpyKind` is the
+  caller's word, which the runtime does not argue with. When the GPU address window of layer 1
+  overlaps the address space of the process, the runtime says so one time on the error stream.
+- One lock holds the whole process state, the waits among them, so a second thread cannot call
+  the runtime while the first one waits. The owner asks for multithreading to be measured with
+  our own clients first, so a multi-threaded client comes before step 3.
 - `__hipRegisterManagedVar` reports a missing capability. Managed memory needs page migration.
 - A kernel that asks for a host call buffer (device-side `printf`) is refused by name. The
   counter of layer 1 answers kill criterion K4 of the route document.

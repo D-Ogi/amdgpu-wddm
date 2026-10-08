@@ -49,6 +49,8 @@ typedef struct bc250hsa_mock_record {
     uint64_t va;                    /* the allocation, the kernel argument buffer or the copy */
     uint64_t bytes;
     uint64_t value;                 /* the fence value of a dispatch or of a wait */
+    uint32_t wait_slice_ms;         /* the bound that the caller passed to a wait */
+    uint32_t wait_total_ms;
     uint32_t kernarg_bytes;
     unsigned char kernarg[BC250HSA_MOCK_KERNARG_MAX]; /* the packed buffer, as submitted */
 } bc250hsa_mock_record;

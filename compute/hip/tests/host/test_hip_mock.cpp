@@ -5,22 +5,36 @@
 //   2. a launch packs the arguments at the offsets of the metadata, explicit and hidden;
 //   3. stream order survives an event wait;
 //   4. a second run of the same work in one process leaks no allocation;
-//   5. the fixed properties of design section 4.1 reach the program.
+//   5. the fixed properties of design section 4.1 reach the program;
+//   6. the memory entry points move the bytes they are given, with an explicit kind and with
+//      hipMemcpyDefault, and a host pointer never becomes a device pointer;
+//   7. the legacy null stream waits for the work of other streams, and so does a stream that
+//      carries nothing but an event wait;
+//   8. an event timestamp is the time its value retired, so two events report the gap between
+//      them and not zero;
+//   9. the error state belongs to the thread that made the error;
+//  10. a second fat binary in the same process registers and launches on its own.
 //
 // It needs no GPU and no AMDGPU compiler: the code object comes from the committed fixture
 // compute/hip/tests/data/hip_test_kernels.gfx1013.fatbin.
 //
 // Usage: test_hip_mock.exe [<path of the fatbin fixture>]
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <thread>
 
 #include "bc250hsa.h"
 #include "hip/hip_runtime.h"
 #include "hipmock_backend.h"
 
 namespace {
+
+// The wait bound that this test gives the runtime, in milliseconds. Every wait that layer 2
+// performs must carry it, which is what makes a short lab trial possible (design decision 10).
+const char* const kWaitTotalMs = "7000";
 
 int g_checks = 0;
 int g_failures = 0;
@@ -145,6 +159,53 @@ uint16_t rd_u16(const unsigned char* p) {
     return v;
 }
 
+// The wait record that names this value, or nullptr. The index tells a caller where it sits in
+// the record, so that a test can state an order.
+const bc250hsa_mock_record* wait_of_value(uint64_t value, uint32_t* index) {
+    for (uint32_t i = 0; i < bc250hsa_mock_record_count(); ++i) {
+        const bc250hsa_mock_record* record = bc250hsa_mock_record_at(i);
+        if (record != nullptr && record->kind == BC250HSA_MOCK_WAIT && record->value == value) {
+            if (index != nullptr) {
+                *index = i;
+            }
+            return record;
+        }
+    }
+    return nullptr;
+}
+
+// Every wait of the record must carry the wait policy of the process.
+void check_wait_bounds(const char* what) {
+    uint32_t waits = 0;
+    uint32_t wrong = 0;
+    const uint32_t want = static_cast<uint32_t>(std::strtoul(kWaitTotalMs, nullptr, 10));
+    for (uint32_t i = 0; i < bc250hsa_mock_record_count(); ++i) {
+        const bc250hsa_mock_record* record = bc250hsa_mock_record_at(i);
+        if (record == nullptr || record->kind != BC250HSA_MOCK_WAIT) {
+            continue;
+        }
+        waits++;
+        if (record->wait_total_ms != want) {
+            wrong++;
+        }
+    }
+    check(waits > 0u, what);
+    check_u64(wrong, 0u, "every wait carries the wait bound of the process");
+}
+
+// A host spin of about this many milliseconds. The mock retires a fence at once, so a real
+// sleep is the only way to put a measurable gap between two events.
+void spin_ms(double ms) {
+    const auto start = std::chrono::steady_clock::now();
+    for (;;) {
+        const std::chrono::duration<double, std::milli> gone =
+            std::chrono::steady_clock::now() - start;
+        if (gone.count() >= ms) {
+            return;
+        }
+    }
+}
+
 // One full run of the same work, for the leak test.
 void run_sequence(int n) {
     float* a = nullptr;
@@ -174,6 +235,13 @@ void run_sequence(int n) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    // Before the first HIP call: the runtime reads its wait policy one time, at its first
+    // call, so a test that sets it later would measure nothing.
+#if defined(_WIN32)
+    _putenv_s("BC250_HIP_WAIT_TOTAL_MS", kWaitTotalMs);
+#else
+    setenv("BC250_HIP_WAIT_TOTAL_MS", kWaitTotalMs, 1);
+#endif
     const char* path = argc > 1 ? argv[1]
                                 : "compute/hip/tests/data/hip_test_kernels.gfx1013.fatbin";
     size_t fatbin_bytes = 0;
@@ -252,6 +320,22 @@ int main(int argc, char** argv) {
     check(std::strcmp(prop.gcnArchName, "gfx1013") == 0, "gcnArchName is gfx1013");
     check_u64(static_cast<uint64_t>(prop.warpSize), 32u, "warpSize");
     check_u64(prop.sharedMemPerBlock, 65536u, "sharedMemPerBlock");
+
+    int device_count = 0;
+    int current_device = -1;
+    check(hipInit(0) == hipSuccess, "hipInit");
+    check(hipInit(1) == hipErrorInvalidValue, "hipInit refuses an unknown flag");
+    (void)hipGetLastError();
+    check(hipGetDeviceCount(&device_count) == hipSuccess, "hipGetDeviceCount");
+    check_u64(static_cast<uint64_t>(device_count), 1u, "one device");
+    check(hipSetDevice(0) == hipSuccess, "hipSetDevice 0");
+    check(hipSetDevice(1) == hipErrorInvalidDevice, "hipSetDevice refuses a second device");
+    (void)hipGetLastError();
+    check(hipGetDevice(&current_device) == hipSuccess, "hipGetDevice");
+    check_u64(static_cast<uint64_t>(current_device), 0u, "the current device is 0");
+    check(std::strcmp(hipGetErrorName(hipErrorNotSupported), "hipErrorNotSupported") == 0,
+          "hipGetErrorName");
+    check(std::strcmp(hipGetErrorString(hipSuccess), "no error") == 0, "hipGetErrorString");
 
     // A stub that nothing registered must not reach the device.
     check(hipLaunchKernel(&g_stub_unknown, dim3(1u, 1u, 1u), dim3(1u, 1u, 1u), nullptr, 0,
@@ -341,15 +425,33 @@ int main(int argc, char** argv) {
                   "the wait names the fence value of the first dispatch");
     }
     check(hipEventSynchronize(done) == hipSuccess, "hipEventSynchronize");
+    check_wait_bounds("the event wait reached the device with a bound");
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 4. event timing is the gap between the two records\n");
+    // Two events around a measured host gap, asked about much later. A timestamp taken at the
+    // question instead of at the moment the value retired answers 0 here.
+    hipEvent_t t0 = nullptr;
+    hipEvent_t t1 = nullptr;
     float elapsed = -1.0f;
-    hipEvent_t start_event = nullptr;
-    check(hipEventCreate(&start_event) == hipSuccess, "hipEventCreate start");
-    check(hipEventRecord(start_event, first) == hipSuccess, "hipEventRecord start");
-    check(hipEventSynchronize(start_event) == hipSuccess, "hipEventSynchronize start");
-    check(hipEventElapsedTime(&elapsed, start_event, done) == hipSuccess,
-          "hipEventElapsedTime");
-    check(elapsed <= 0.0f || elapsed > 0.0f, "hipEventElapsedTime answers a number");
-    check(hipEventDestroy(start_event) == hipSuccess, "hipEventDestroy start");
+    check(hipEventCreate(&t0) == hipSuccess, "hipEventCreate t0");
+    check(hipEventCreate(&t1) == hipSuccess, "hipEventCreate t1");
+    check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args, 0, first) ==
+              hipSuccess,
+          "launch before t0");
+    check(hipEventRecord(t0, first) == hipSuccess, "hipEventRecord t0");
+    spin_ms(6.0);
+    check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args, 0, first) ==
+              hipSuccess,
+          "launch before t1");
+    check(hipEventRecord(t1, first) == hipSuccess, "hipEventRecord t1");
+    check(hipStreamSynchronize(first) == hipSuccess, "hipStreamSynchronize before the question");
+    spin_ms(20.0);
+    check(hipEventElapsedTime(&elapsed, t0, t1) == hipSuccess, "hipEventElapsedTime");
+    check(elapsed >= 4.0f, "the elapsed time holds the gap between the two records");
+    check(elapsed < 1000.0f, "the elapsed time is not the age of the question");
+    check(hipEventDestroy(t1) == hipSuccess, "hipEventDestroy t1");
+    check(hipEventDestroy(t0) == hipSuccess, "hipEventDestroy t0");
     check(hipEventDestroy(done) == hipSuccess, "hipEventDestroy");
     check(hipStreamDestroy(second) == hipSuccess, "hipStreamDestroy second");
     check(hipStreamDestroy(first) == hipSuccess, "hipStreamDestroy first");
@@ -358,7 +460,7 @@ int main(int argc, char** argv) {
     check(hipFree(device_a) == hipSuccess, "hipFree a");
 
     // ---------------------------------------------------------------------------------------
-    std::printf("test_hip_mock: 4. a second run leaks no allocation\n");
+    std::printf("test_hip_mock: 5. a second run leaks no allocation\n");
     run_sequence(4096);
     const uint32_t live_after_first = bc250hsa_mock_live_allocations();
     const uint64_t bytes_after_first = bc250hsa_mock_live_bytes();
@@ -372,7 +474,174 @@ int main(int argc, char** argv) {
     check_u64(bytes_after_second, bytes_after_first, "the live bytes after run 2");
 
     // ---------------------------------------------------------------------------------------
-    std::printf("test_hip_mock: 5. the module unregisters\n");
+    std::printf("test_hip_mock: 6. memory, with an explicit kind and with hipMemcpyDefault\n");
+    {
+        const int elements = 256;
+        const size_t span = sizeof(float) * static_cast<size_t>(elements);
+        float* device = nullptr;
+        float* pinned = nullptr;
+        float source[256];
+        float back[256];
+        int i = 0;
+        for (i = 0; i < elements; ++i) {
+            source[i] = static_cast<float>(i) + 0.5f;
+            back[i] = -1.0f;
+        }
+        check(hipMalloc(reinterpret_cast<void**>(&device), span) == hipSuccess,
+              "hipMalloc for the copy test");
+        check(hipHostMalloc(reinterpret_cast<void**>(&pinned), span, hipHostMallocDefault) ==
+                  hipSuccess,
+              "hipHostMalloc");
+        size_t free_bytes = 0;
+        size_t total_bytes = 0;
+        check(hipMemGetInfo(&free_bytes, &total_bytes) == hipSuccess, "hipMemGetInfo");
+        check(total_bytes > 0u && free_bytes <= total_bytes, "hipMemGetInfo answers a range");
+
+        // An explicit kind, in both directions, through the host mapping that hipMalloc kept
+        // from bc250hsa_map. A runtime that dropped that mapping cannot copy at all.
+        check(hipMemcpy(device, source, span, hipMemcpyHostToDevice) == hipSuccess,
+              "hipMemcpy host to device");
+        check(hipMemcpy(back, device, span, hipMemcpyDeviceToHost) == hipSuccess,
+              "hipMemcpy device to host");
+        check(std::memcmp(back, source, span) == 0, "the bytes came back unchanged");
+
+        // hipMemset and hipMemsetAsync on device memory.
+        check(hipMemset(device, 0, span) == hipSuccess, "hipMemset on device memory");
+        check(hipMemcpy(back, device, span, hipMemcpyDeviceToHost) == hipSuccess,
+              "hipMemcpy after the fill");
+        check(back[0] == 0.0f && back[elements - 1] == 0.0f, "the fill reached the device memory");
+        hipStream_t copy_stream = nullptr;
+        check(hipStreamCreate(&copy_stream) == hipSuccess, "hipStreamCreate for the copies");
+        check(hipMemsetAsync(device, 0, span, copy_stream) == hipSuccess, "hipMemsetAsync");
+        check(hipMemcpyAsync(device, source, span, hipMemcpyHostToDevice, copy_stream) ==
+                  hipSuccess,
+              "hipMemcpyAsync host to device");
+        check(hipMemcpyAsync(back, device, span, hipMemcpyDeviceToHost, copy_stream) ==
+                  hipSuccess,
+              "hipMemcpyAsync device to host");
+        check(std::memcmp(back, source, span) == 0, "the asynchronous copies moved the bytes");
+
+        // hipMemcpyDefault must not read a host pointer as a device pointer. A pointer of
+        // hipHostMalloc is the hard case, because it belongs to an allocation of the table.
+        check(hipMemcpy(pinned, source, span, hipMemcpyDefault) == hipSuccess,
+              "hipMemcpyDefault into a host allocation");
+        check(std::memcmp(pinned, source, span) == 0, "the host allocation holds the bytes");
+        std::memset(back, 0, span);
+        check(hipMemcpy(back, pinned, span, hipMemcpyDefault) == hipSuccess,
+              "hipMemcpyDefault out of a host allocation");
+        check(std::memcmp(back, source, span) == 0, "the bytes came back from host memory");
+        check(hipMemset(pinned, 0, span) == hipSuccess, "hipMemset on a host allocation");
+        check(pinned[0] == 0.0f && pinned[elements - 1] == 0.0f, "the fill reached the host memory");
+        check(hipMemcpy(device, pinned, span, hipMemcpyDefault) == hipSuccess,
+              "hipMemcpyDefault from host memory to device memory");
+
+        // A pointer of neither table is not device memory.
+        check(hipMemset(source, 0, span) == hipErrorInvalidDevicePointer,
+              "hipMemset refuses a pointer of no allocation");
+        (void)hipGetLastError();
+
+        check(hipStreamDestroy(copy_stream) == hipSuccess, "hipStreamDestroy of the copies");
+        check(hipHostFree(pinned) == hipSuccess, "hipHostFree");
+        check(hipFree(device) == hipSuccess, "hipFree of the copy test");
+        check(hipDeviceSynchronize() == hipSuccess, "hipDeviceSynchronize");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 7. the null stream and a stream that only carries a wait\n");
+    {
+        hipStream_t work = nullptr;
+        hipEvent_t mark = nullptr;
+        check(hipStreamCreate(&work) == hipSuccess, "hipStreamCreate for the null stream test");
+
+        // A copy on the null stream must wait for work that another stream submitted. HIP says
+        // the legacy null stream synchronises with every other stream.
+        bc250hsa_mock_reset();
+        check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                              work) == hipSuccess,
+              "launch on the other stream");
+        const int at_work = index_of_dispatch("vadd");
+        check(at_work >= 0, "the launch reached the device");
+        uint64_t work_value = 0;
+        if (at_work >= 0) {
+            const bc250hsa_mock_record* record =
+                bc250hsa_mock_record_at(static_cast<uint32_t>(at_work));
+            work_value = record != nullptr ? record->value : 0;
+        }
+        check(work_value != 0u, "the dispatch has a fence value");
+        check(hipStreamSynchronize(nullptr) == hipSuccess, "hipStreamSynchronize of the null stream");
+        check(wait_of_value(work_value, nullptr) != nullptr,
+              "the null stream waits for the work of the other stream");
+
+        // A stream that carries nothing but an event wait owes that event.
+        bc250hsa_mock_reset();
+        check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                              work) == hipSuccess,
+              "a second launch on the other stream");
+        const int at_second = index_of_dispatch("vadd");
+        uint64_t second_value = 0;
+        if (at_second >= 0) {
+            const bc250hsa_mock_record* record =
+                bc250hsa_mock_record_at(static_cast<uint32_t>(at_second));
+            second_value = record != nullptr ? record->value : 0;
+        }
+        check(hipEventCreate(&mark) == hipSuccess, "hipEventCreate mark");
+        check(hipEventRecord(mark, work) == hipSuccess, "hipEventRecord on the other stream");
+        hipStream_t idle = nullptr;
+        check(hipStreamCreate(&idle) == hipSuccess, "hipStreamCreate idle");
+        check(hipStreamWaitEvent(idle, mark, 0) == hipSuccess, "hipStreamWaitEvent on the idle stream");
+        check(hipStreamSynchronize(idle) == hipSuccess, "hipStreamSynchronize of the idle stream");
+        check(wait_of_value(second_value, nullptr) != nullptr,
+              "the idle stream waits for the event it carries");
+        check_wait_bounds("the waits of the null stream test carry a bound");
+
+        check(hipEventDestroy(mark) == hipSuccess, "hipEventDestroy mark");
+        check(hipStreamDestroy(idle) == hipSuccess, "hipStreamDestroy idle");
+        check(hipStreamDestroy(work) == hipSuccess, "hipStreamDestroy of the null stream test");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 8. the error state belongs to one thread\n");
+    {
+        (void)hipGetLastError();
+        hipError_t inside = hipSuccess;
+        std::thread worker([&inside]() {
+            (void)hipLaunchKernel(&g_stub_unknown, dim3(1u, 1u, 1u), dim3(1u, 1u, 1u), nullptr, 0,
+                                  nullptr);
+            inside = hipPeekAtLastError();
+            int count = 0;
+            (void)hipGetDeviceCount(&count);
+        });
+        worker.join();
+        check(inside == hipErrorInvalidDeviceFunction, "the worker thread sees its own error");
+        check(hipPeekAtLastError() == hipSuccess, "the error of the worker does not leak here");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 9. a second fat binary of the same process\n");
+    {
+        FatBinWrapper other = wrapper;
+        void** other_handle = __hipRegisterFatBinary(&other);
+        check(other_handle != nullptr, "a second wrapper registers");
+        check(other_handle != handle, "the second wrapper is its own module");
+        static char stub_other = 0;
+        check(__hipRegisterFunction(other_handle, &stub_other, const_cast<char*>("vadd"), "vadd",
+                                    -1, nullptr, nullptr, nullptr, nullptr, nullptr) == 0,
+              "__hipRegisterFunction of the second module");
+        check(hipLaunchKernel(&stub_other, dim3(4u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                              nullptr) == hipSuccess,
+              "a launch through the second module");
+        __hipUnregisterFatBinary(other_handle);
+        check(hipLaunchKernel(&stub_other, dim3(4u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                              nullptr) == hipErrorInvalidDeviceFunction,
+              "the stub of the second module is gone with it");
+        (void)hipGetLastError();
+        check(hipLaunchKernel(&g_stub_vadd, dim3(4u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                              nullptr) == hipSuccess,
+              "the first module still launches");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 10. the module unregisters\n");
     const uint32_t live_before_unregister = bc250hsa_mock_live_allocations();
     __hipUnregisterFatBinary(handle);
     check(bc250hsa_mock_live_allocations() < live_before_unregister,
