@@ -49,6 +49,17 @@ static bool progress_retired_cb(void*,const ProgressSnapshot* snapshot) noexcept
  return snapshot && snapshot->count==1 && snapshot->marks[0].value==7 && progress_retired_flag;
 }
 static char mapped[65536];
+// BD-101: the 4 MiB MSAA placement alignment. Zero for every request of the suite, which asks for 64 KiB and
+// whose expectations below are unchanged. Set, the mocks expect the documented reservation route: a reservation
+// of held + alignment, the map at the first aligned address inside it, and one free of the whole reservation.
+static UINT64 msaa_alignment=0;
+static UINT64 reserve_base=UINT64_C(0x180040000);   // 64 KiB aligned and deliberately not 4 MiB aligned
+static UINT64 reserved_span=0,aligned_va=0;
+static unsigned reserves=0;
+static HRESULT reserve_result=S_OK;
+static UINT64 map_answer=0;                          // the address the map mock answers, 0: the ordinary one
+// What the allocation holds: the request's 4096 bytes rounded up to the alignment asked for.
+static UINT64 held_bytes(){return msaa_alignment?msaa_alignment:UINT64_C(65536);}
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
  assert(a->NumAllocations==1);
@@ -86,7 +97,7 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
  assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && !a->pAllocationInfo->VidPnSourceId);
  assert(a->pAllocationInfo->PrivateDriverDataSize==sizeof(bc250_umd_alloc_private));
  auto blob=static_cast<const bc250_umd_alloc_private*>(a->pAllocationInfo->pPrivateDriverData);
- assert(blob->alloc_size==65536 && blob->phys_alignment==65536);
+ assert(blob->alloc_size==held_bytes() && blob->phys_alignment==held_bytes());
  assert(blob->preferred_heap==uint32_t(expected_type?AMDGPU_GEM_DOMAIN_GTT:AMDGPU_GEM_DOMAIN_VRAM));
  assert(blob->gem_flags==(expected_type==0?uint64_t(AMDGPU_GEM_CREATE_NO_CPU_ACCESS):
      expected_type==1?uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED|AMDGPU_GEM_CREATE_CPU_GTT_USWC):
@@ -107,9 +118,29 @@ static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLO
 }
 static HRESULT APIENTRY paging_create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){assert(d==handle<void*>(1));++creates;a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&completed;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE*){events+='P';return S_OK;}
-static HRESULT APIENTRY map_cb(HANDLE d,D3DDDI_MAPGPUVIRTUALADDRESS* a){assert(d==handle<void*>(1) && a->SizeInPages==16);events+='M';a->VirtualAddress=gpu_address;a->PagingFenceValue=20;return pending?E_PENDING:S_OK;}
+// S: the GPU virtual address reservation an alignment above the runtime's own granularity needs (BD-101).
+static HRESULT APIENTRY reserve_cb(HANDLE d,D3DDDI_RESERVEGPUVIRTUALADDRESS* a){
+ assert(d==handle<void*>(1) && !a->BaseAddress && !a->MinimumAddress && !a->MaximumAddress);
+ assert(a->Size && !(a->Size&UINT64_C(65535)));
+ ++reserves;reserved_span=a->Size;events+='S';
+ if(FAILED(reserve_result))return reserve_result;
+ a->VirtualAddress=reserve_base;
+ aligned_va=(reserve_base+msaa_alignment-1)&~(msaa_alignment-1);
+ return S_OK;
+}
+// The address the engine is given: the reservation's aligned offset when one was taken, else the one the
+// runtime picks by itself.
+static UINT64 import_va(){return map_answer?map_answer:msaa_alignment?aligned_va:gpu_address;}
+static HRESULT APIENTRY map_cb(HANDLE d,D3DDDI_MAPGPUVIRTUALADDRESS* a){
+ assert(d==handle<void*>(1) && a->SizeInPages==held_bytes()/4096);
+ assert(a->BaseAddress==(msaa_alignment?aligned_va:UINT64_C(0)));
+ events+='M';a->VirtualAddress=import_va();a->PagingFenceValue=20;return pending?E_PENDING:S_OK;}
 static UINT64 memory_va_bias=0;
-static HRESULT APIENTRY unmap_cb(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){assert(a->BaseAddress==gpu_address+memory_va_bias && a->Size==65536);events+='U';return fail_free?E_FAIL:S_OK;}
+static HRESULT APIENTRY unmap_cb(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){
+ // One free of the whole reservation when there was one; otherwise the mapped range alone, as before.
+ if(msaa_alignment)assert(a->BaseAddress==reserve_base && a->Size==reserved_span);
+ else assert(a->BaseAddress==gpu_address+memory_va_bias && a->Size==65536);
+ events+='U';return fail_free?E_FAIL:S_OK;}
 // Z: the import's own residency reference, on its paging queue, for the allocation it just mapped.
 // E: that reference released before the VA. W: the CPU wait for the largest pending value.
 static HRESULT APIENTRY make_cb(HANDLE d,D3DDDI_MAKERESIDENT* a){
@@ -148,12 +179,12 @@ static VkResult VKAPI_CALL buffer_create(VkDevice d,const VkBufferCreateInfo* in
 static void VKAPI_CALL buffer_destroy(VkDevice,VkBuffer,const VkAllocationCallbacks*){}
 static void VKAPI_CALL buffer_requirements(VkDevice,VkBuffer,VkMemoryRequirements* out){*out={65536,65536,15};}
 static VkResult VKAPI_CALL memory_allocate(VkDevice d,const VkMemoryAllocateInfo* info,const VkAllocationCallbacks*,VkDeviceMemory* out){
- assert(d==handle<VkDevice>(4) && info->allocationSize==65536 && info->memoryTypeIndex==expected_type);
+ assert(d==handle<VkDevice>(4) && info->allocationSize==held_bytes() && info->memoryTypeIndex==expected_type);
  auto flags=static_cast<const VkMemoryAllocateFlagsInfo*>(info->pNext);
  assert(flags->sType==VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO && flags->flags==VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
  auto host=static_cast<const bc250_host_import*>(flags->pNext);
  assert(host->sType==BC250_HOST_IMPORT_FLAGS_STYPE && !host->pNext && host->identity==identity && host->allocation==next_allocation);
- assert(host->va==gpu_address && host->size==65536);
+ assert(host->va==import_va() && host->size==held_bytes());
  // Only a CPU-visible heap asks the ICD to map it; type 0 is the GPU-only policy.
  assert(host->flags==(info->memoryTypeIndex?BC250_HOST_IMPORT_CPU_MAP:0u));
  events+='I';if(fail_import)return VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -176,7 +207,8 @@ static PFN_vkVoidFunction VKAPI_CALL gipa(VkInstance i,const char* name){
 int main(){
  Device device{};device.runtime={handle<void*>(1)};device.callbacks.pfnAllocateCb=allocate_cb;device.callbacks.pfnDeallocateCb=deallocate_cb;
  auto& k=device.kernel_callbacks;k.pfnCreatePagingQueueCb=paging_create;k.pfnDestroyPagingQueueCb=paging_destroy;k.pfnMapGpuVirtualAddressCb=map_cb;
- k.pfnFreeGpuVirtualAddressCb=unmap_cb;k.pfnMakeResidentCb=make_cb;k.pfnLock2Cb=lock_actual;k.pfnUnlock2Cb=unlock_cb;
+ k.pfnFreeGpuVirtualAddressCb=unmap_cb;k.pfnReserveGpuVirtualAddressCb=reserve_cb;
+ k.pfnMakeResidentCb=make_cb;k.pfnLock2Cb=lock_actual;k.pfnUnlock2Cb=unlock_cb;
  k.pfnEvictCb=evict_cb;k.pfnWaitForSynchronizationObjectFromCpuCb=wait_cpu_cb;
  bc250::umd::RuntimeDomain domain;
  // The whole suite below runs with the release gate off (ImportReleasePolicy::off(), the two experiment
@@ -903,10 +935,66 @@ int main(){
   }
   assert(surfaces==13);
  }
+ // ---- BD-101: a heap that asks for the 4 MiB MSAA placement alignment -----------------------------------------
+ // The request DXRPathTracer makes for a 4x MSAA 1536x864 R16G16B16A16_FLOAT render target: the runtime's heap
+ // carries D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT, and the address the runtime picks by itself is
+ // 64 KiB aligned, so the import was refused and the application read E_OUTOFMEMORY with 8 GB free.
+ {
+  expected_type=0;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
+  // Every mock back to its plain answer, whatever the suite above left set.
+  pending=false;fail_free=false;fail_import=false;unlock_on_free=false;fail_deallocate=false;
+  resident_pending=false;fail_wait=false;fail_evict=false;fail_lock=false;fail_unlock=false;
+  refuse_shareable_create=false;resident_result=S_OK;memory_va_bias=0;map_answer=0;completed=10;
+  RuntimeHeapImports msaa(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                          identity,ImportReleasePolicy::off());
+  assert(msaa.initialize()==S_OK);
+  engine_ddi::MemoryRequest m=req;m.alignment=UINT64_C(4)<<20;
+  msaa_alignment=m.alignment;
+  engine_ddi::ImportedMemory big{};
+  events.clear();reserves=0;
+  assert(msaa.allocate(&m,&big)==S_OK && events=="ASMZI" && reserves==1);
+  // One reservation of held + alignment, and the import's address is the first aligned one inside it.
+  assert(reserved_span==held_bytes()+m.alignment && aligned_va>reserve_base);
+  assert(big.gpu_va==aligned_va && !(big.gpu_va&(m.alignment-1)) && big.byte_size==held_bytes());
+  assert(msaa.last_report().stage==ImportStage::Done && !msaa.last_report().refusal);
+  assert(msaa.last_report().alignment==m.alignment && msaa.last_report().address==aligned_va);
+  // The release frees the whole reservation (checked in unmap_cb) and deallocates.
+  events.clear();assert(msaa.free(&big)==S_OK && events=="VEUD");
+  // Negative control 1: the runtime refuses the reservation. The request fails with the runtime's own code,
+  // no map is attempted, and the record is released.
+  reserve_result=E_OUTOFMEMORY;events.clear();reserves=0;
+  assert(msaa.allocate(&m,&big)==E_OUTOFMEMORY && events=="ASD" && reserves==1);
+  assert(msaa.last_report().stage==ImportStage::Map && !msaa.last_report().refusal);
+  reserve_result=S_OK;
+  // Negative control 2: the runtime answers an address other than the base of the reservation. The mapping is
+  // not the one that was asked for, the reservation goes straight back, and nothing is imported.
+  map_answer=reserve_base;events.clear();reserves=0;
+  assert(msaa.allocate(&m,&big)==E_UNEXPECTED && events=="ASMUD" && reserves==1);
+  map_answer=0;
+  assert(msaa.close_after_engine_retirement()==S_OK && msaa.discard_metadata()==0);
+  // Negative control 3, the diagnosability half of BD-101: a 64 KiB request whose address the runtime places
+  // on a 4 KiB boundary. No reservation is taken for that alignment, so the check in the import names it -
+  // and before this fix that site returned E_INVALIDARG with report_.refusal empty and no line at all.
+  msaa_alignment=0;
+  RuntimeHeapImports odd(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                         identity,ImportReleasePolicy::off());
+  assert(odd.initialize()==S_OK);
+  map_answer=gpu_address+4096;memory_va_bias=4096;
+  engine_ddi::ImportedMemory bad{};events.clear();reserves=0;
+  assert(odd.allocate(&req,&bad)==E_INVALIDARG && !reserves && events=="AMZEUD");
+  assert(odd.last_report().stage==ImportStage::AddressAlignment);
+  assert(odd.last_report().refusal && !std::strcmp(odd.last_report().refusal,"address alignment"));
+  assert(odd.last_report().address==gpu_address+4096 && odd.last_report().alignment==65536);
+  map_answer=0;memory_va_bias=0;
+  assert(odd.close_after_engine_retirement()==S_OK && odd.discard_metadata()==0);
+ }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release), "
   "BD-075 shared resources (the shareable envelope unchanged, kShareRequired only from the runtime's refusal of a shareable create, the shared surface's "
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
-  "callback, no quarantine, no backing to lend, one record per allocation handle)");
+  "callback, no quarantine, no backing to lend, one record per allocation handle), "
+  "BD-101 (the 4 MiB MSAA placement alignment: one reservation of held+alignment, the map at its aligned offset, "
+  "the whole reservation freed with the import, a refused reservation and a wrong answer both giving it back, and "
+  "an address that does not satisfy the request refused by name at ImportStage::AddressAlignment)");
 }

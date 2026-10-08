@@ -128,6 +128,11 @@ class RuntimeHeapImports final {
     // hr unchanged. Only for a refusal taken before any callback, probe or allocation.
     static HRESULT refuse(const char* why,HRESULT hr,const engine_ddi::MemoryRequest& request,
                           uint32_t unimplemented_heap_flags=0) noexcept;
+    // The same for a refusal decided after the allocation and the mapping exist, where the address and not the
+    // request's shape is the answer (BD-101, ImportStage::AddressAlignment). The caller still releases the
+    // record; this writes the reason and the line.
+    static HRESULT refuse_address(const char* why,HRESULT hr,uint64_t bytes,uint64_t alignment,
+                                  uint64_t address) noexcept;
     HRESULT release(Record&) noexcept;
     HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
     HRESULT unlock_for_release(Record&) noexcept;               // a CPU lock the ICD left on it
