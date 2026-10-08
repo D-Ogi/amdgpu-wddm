@@ -17,7 +17,8 @@ line (`amdgpu-wddm/b23-icd`) belongs to our D3D11 and D3D12 shells, which load i
 and the ICD has no WSI role at all. The system Vulkan ICD line (`amdgpu-wddm/b23-system-icd`) is
 `payload/vulkan/vulkan_radeon.dll`, which the Vulkan loader gives to every pure Vulkan process. This WSI work
 belongs to the second line, and the branch for the b23 trial is `amdgpu-wddm/vk-wsi-dxgi-b23`: the b23 system
-line plus the six route commits, so the candidate differs from the installed file by the route alone. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
+line, the six route commits, and one commit that gives this line the log stream the route lines write to. The
+candidate therefore differs from the installed file by the route and by that log stream. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
 D3D11 and KMT plans of [the engine present note](wsi-engine-present.md) for the WSI side. Nothing here is a
 measured result unless it cites a `facts.md` row.
 
@@ -137,7 +138,12 @@ the encoding. The DXGI color space follows the swapchain (`SetColorSpace1`), als
 `vkSetHdrMetadataEXT` reaches `IDXGISwapChain4::SetHDRMetaData`. The LB7A import takes the pixel size from the
 format (4 bytes for BGRA8, RGBA8 and RGB10A2, 8 for RGBA16F), the same rows the contract table admits for a
 shared surface (`driver/contract/amdgpu_wddm_surface_format.h`). Nothing in the route assumes 8 bits. Scan-out of
-10-bit and FP16 primaries is a matter for the kernel driver and the shell's scan-out rules, not for the WSI.
+10-bit and FP16 primaries is a matter for the kernel driver and the shell's scan-out rules, not for the WSI. The
+contract table admits RGB10A2 for composition and for a scan-out primary, and RGBA16F for composition only.
+
+**No lab run covers the four rows below the 8-bit rows.** The lab plan runs vkcube, which takes the first format
+the surface reports, and that is an 8-bit one. These rows are the readiness the owner asked for on 2026-09-29, not
+a tested capability, and the release notes must say so until a client asks for a named format.
 
 ## The switch and the fallback
 
@@ -180,7 +186,7 @@ shared surface (`driver/contract/amdgpu_wddm_surface_format.h`). Nothing in the 
 
 | Repository, branch | Change |
 |---|---|
-| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi-b23`, which is the b23 system ICD line `amdgpu-wddm/b23-system-icd` plus the six route commits. `amdgpu-wddm/vk-wsi-dxgi` is the same work on the D3D ICD line | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
+| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi-b23`, which is the b23 system ICD line `amdgpu-wddm/b23-system-icd`, the six route commits and the log-stream commit. `amdgpu-wddm/vk-wsi-dxgi` is the same work on the D3D ICD line | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
 | | `radv_wddm2_bo.c`: the import of 10-bit and FP16 surfaces |
 | | `radv_wddm2_wsi.c`: the hooks, the presenter device with the System32 binding, the layout check |
 | | `wsi_common.c`: the blit hook of each swapchain and the CPU wait |
@@ -189,9 +195,19 @@ shared surface (`driver/contract/amdgpu_wddm_surface_format.h`). Nothing in the 
 | | `amdgpu_wddm_stdio.h` and `u_amdgpu_wddm_stdio.c`: the named log stream the route lines use. On the D3D ICD line that pair also redirects the whole process's stdio. On the system line it declares the log and nothing else. The ICD's stdio therefore stays as the registered build has it |
 | bc250-win, `wsi/vk-dxgi-b23` (`wsi/vk-dxgi` is the same note on the b19 base) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 
-Two upstream defects are fixed on the way. The device-wide `wsi_device::blit` hook skipped the own blit of a CPU
-swapchain on a DXGI-capable device. The CPU-image present waited for the GPU only on software devices. Swapchain
-destroy also leaked each image's D3D12 resource, command list and allocator.
+The route reaches 64-bit processes only. The release carries two Vulkan ICDs: `payload/vulkan/vulkan_radeon.dll`
+from the system line, which this branch changes, and `payload/wow64/vulkan/vulkan_radeon.dll`, which is the x86
+build of the D3D ICD line `amdgpu-wddm/b23-icd`. One build serves the 32-bit D3D11 shell and 32-bit Vulkan, which
+[the third-party list](../testing/THIRD-PARTY.md) records. A b24 release that rebuilds the system line only leaves
+a 32-bit Vulkan application on the CPU path. Nothing in the code is 64-bit specific. The x86 build of the route
+needs the route commits on the D3D ICD line and its own trial. Until then the release notes must say so.
+
+Three upstream defects are fixed on the way. The device-wide `wsi_device::blit` hook took the DXGI blit for a CPU
+swapchain on a DXGI-capable device, and that blit reads a fence array which only a DXGI swapchain has. The present
+of a CPU image waited for the GPU on a software device only, so the CPU could read an image the GPU had not
+finished. Swapchain destroy also leaked each image's D3D12 resource, command list and allocator. The first two
+defects are on the path of this route, because a swapchain of this route falls back to CPU images on a device that
+keeps the DXGI hooks.
 
 ## Risks
 
@@ -199,10 +215,24 @@ destroy also leaked each image's D3D12 resource, command list and allocator.
   often pays the creation once only, but the device stays for the life of the process.
 - The linear application image costs render bandwidth compared with a tiled one. A tiled image with a
   Vulkan-side copy into the linear shared resource is the alternative if the lab measures the cost.
-- The DXGI path of `wsi_common_win32.cpp` has two images (upstream limit). An application that asks for three
-  gets two.
+- The DXGI path of `wsi_common_win32.cpp` has two images (upstream limit). It reports `minImageCount` and
+  `maxImageCount` as 2, and nothing clamps the count an application asks for. An application that needs three
+  images cannot get them on this route, and `gdi` is its answer.
 - `DwmFlush` completes `vkWaitForPresentKHR` at the next composition, which is a bound, not a measure of the
-  flip that put the frame on the screen.
+  flip that put the frame on the screen. A call with timeout 0 therefore returns `VK_TIMEOUT` for a present that
+  DXGI has already queued, and an application that polls with timeout 0 alone never sees the present complete.
+  Neither DXVK nor vkd3d-proton polls that way. A client that does needs the completion boundary to move.
+- **The route offers three surface formats that the registered driver does not offer at all**, and no lab run has
+  made a swapchain of one of them: `R8G8B8A8_SRGB`, `A2B10G10R10_UNORM_PACK32` and `R16G16B16A16_SFLOAT`. They are
+  offered on the DXGI route only and have no CPU path, so such a swapchain cannot fall back. It fails with
+  `VK_ERROR_INITIALIZATION_FAILED` when the DXGI route cannot make it. An application that picks the deepest format
+  the surface reports therefore meets untested code. The switch for it is the route switch, not one of its own.
+  Step 1 of the lab plan reads the offered list with the installed `vulkaninfo`, so the trial says which pairs the
+  route offers. A client that asks for one of them is the test this work still needs.
+- The route creates every chain with `DXGI_SCALING_STRETCH`, which upstream Mesa uses for its composition chain.
+  A native D3D12 game creates a window chain with `DXGI_SCALING_NONE`. The source and the destination have the same
+  size on this route, so stretch should not force composition, but no measurement says so on this hardware. It is
+  the first thing to change if step 5 reads `COMPOSED` with nothing over the output.
 - The route runs its copy on the D3D12 shell's queue, so the shell's hosted device and the application's RADV
   device share the GPU through two contexts. Their order is the shared fences only.
 - The route is the default before any lab run. A defect that the fallbacks do not catch (a wrong picture, a
@@ -245,7 +275,9 @@ read it with `tools/win/etw/etw-present-mode.py`.
    with path `dxgi` and `copy_us` 0, and no `CPU images` line. `etw-present-mode.py gpu.etl vkcube` reports
    present-history tokens with model REDIRECTED_FLIP and `Present` flags 0x9000 for vkcube, and no "no
    present-history token" presents. The KMD CPU blit counter does not advance. Also record the private bytes of
-   vkcube before and after the first swapchain and the time of `vkCreateSwapchainKHR`.
+   vkcube before and after the first swapchain and the time of `vkCreateSwapchainKHR`. Before the client, record the
+   surface format and present-mode lists with the installed `vulkaninfo`. The 8-bit pair must be there. The
+   deep-colour pairs are evidence of what the route offers, and no step makes a swapchain of one.
 2. **vkcube, window, `AMDGPU_WDDM_VK_WSI=gdi`, 30 s (rollback check).** Pass: `route=gdi asked=gdi source=env
    reason=asked`, present log rows with path `gdi`, no `D3D12 presenter device` line, and the ETW present of
    the GDI path. Then set the registry value `WsiRoute=gdi` with no variable for 20 s: `source=registry`, the
@@ -268,7 +300,9 @@ read it with `tools/win/etw/etw-present-mode.py`.
    `OpenAdapter`. Its absence is not a failure of the step. A control arm with the overlay shown must read
    COMPOSED with no scan-out flip. A COMPOSED verdict with nothing over the output is the M15.14 result for
    native D3D12 as well, not a WSI defect.
-6. **vkcube, `dxgi-composition`, 60 s.** Pass: as step 1, with the `composition swap chain` line.
+6. **vkcube, `dxgi-composition`, 60 s.** Pass: as step 1, with the `composition swap chain` line, and present log
+   rows with path `dxgi-composition`. The present log names the path from the chain's target, so the window route
+   writes `dxgi` there and this route writes `dxgi-composition`. A `dxgi` row in this step is the finding.
 7. **Quake II RTX 1.8.1, borderless at 1920x1200, no variable set.** It is the one Vulkan game the workspace
    stages for unit A (`scratch/pathtrace/pkg/q2rtx`, pushed to `C:\BC250\pathtrace` by `pt-session.py push`
    during the b23 validation), and it is path-traced, so it exercises ray tracing and the WSI at once. The run

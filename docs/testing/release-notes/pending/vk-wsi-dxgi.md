@@ -12,7 +12,6 @@ The release step copies the lines into
   each picture on the processor into the window. Now the GPU copies it, and the desktop shows it the same way
   as the picture of a DirectX 12 game. A fullscreen Vulkan game can therefore use the same direct path to the
   screen as a DirectX 12 game.
-- Vulkan applications can now use 10-bit colour, and HDR when the screen is in HDR mode.
 
 ## Known behaviour
 
@@ -20,6 +19,13 @@ The release step copies the lines into
   says why. The application keeps its picture.
 - The first window of a Vulkan application can open a little later, because the driver starts a second,
   DirectX 12 part for the pictures.
+- The driver now offers Vulkan applications 10-bit colour, and HDR when the screen is in HDR mode. **We have not
+  tested these yet.** No test picture of this release used them. An application that asks for 10-bit colour or HDR
+  can therefore fail to open its window. If that happens, use the old path below and send us the support report.
+  An application that asks for the usual 8-bit colour is not affected.
+- A Vulkan application that needs three pictures in its window queue cannot use the new path. The driver offers
+  two. Use the old path for such an application.
+- A 32-bit Vulkan application keeps the old path in this release.
 
 ## If something goes wrong
 
