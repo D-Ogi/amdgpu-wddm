@@ -39,8 +39,12 @@ struct HostBridge {
 // own error class, so the bridge must not report it a second time.
 inline void latch_device_lost(HostBridge &bridge) { bridge.device_lost=true; bridge.lost_reported=true; }
 using FlushEngine = HRESULT (*)(void *);
+// The per-application VSync setting (docs/design/per-app-graphics-settings.md): when valid, the Present callback
+// carries interval as DXGIDDICB_PRESENT.SyncIntervalOverride in place of the application's sync interval.
+struct PresentSyncOverride { bool valid=false; DXGI_DDI_FLIP_INTERVAL_TYPE interval=DXGI_DDI_FLIP_INTERVAL_IMMEDIATE; };
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
-    D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine);
+    D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
+    PresentSyncOverride sync=PresentSyncOverride{});
 HRESULT queue_present_wait(HostBridge &bridge);
 HRESULT signal_present(HostBridge &bridge);
 // Destruction/readback only. Steady-state Present uses GPU waits above.

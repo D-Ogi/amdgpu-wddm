@@ -6,6 +6,7 @@
 #include "engine-error.h"
 #include "runtime-surface.h"
 #include "present-shadow.h"
+#include "../app-settings/app-settings.h"
 #include <memory>
 #include <vector>
 namespace bc250::umd {
@@ -43,6 +44,8 @@ public:
     size_t surface_count() const { return surfaces_.size(); }
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.
     PresentShadows &present_shadows() { return present_shadows_; }
+    // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).
+    amdgpu_wddm::app_settings::FrameLimiter &frame_limiter() { return frame_limiter_; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -61,6 +64,7 @@ private:
     VkPhysicalDeviceMemoryProperties surface_memory_{};
     std::vector<std::unique_ptr<RuntimeSurface>> surfaces_;
     PresentShadows present_shadows_{};
+    amdgpu_wddm::app_settings::FrameLimiter frame_limiter_;
     RuntimeDevice runtime_;
     HostBridge bridge_{};
     HostedInstance instance_;
