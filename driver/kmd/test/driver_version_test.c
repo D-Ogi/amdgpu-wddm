@@ -98,6 +98,61 @@ int main(void)
         Check(!DriverVersionIsVideoKey(NULL, 10), "no path refused");
     }
 
+    // The GUID of the video keys, as the VideoID value of the hardware key holds it. The GUID below is made up:
+    // a real VideoID names one installation of Windows on one machine, and such a value stays out of this repo.
+    {
+        static const wchar_t upper[] = L"{0F1E2D3C-4B5A-6C7D-8E9F-A1B2C3D4E5F6}";
+        static const wchar_t lower[] = L"{0f1e2d3c-4b5a-6c7d-8e9f-a1b2c3d4e5f6}";
+        static const wchar_t nobrace[] = L"0F1E2D3C-4B5A-6C7D-8E9F-A1B2C3D4E5F6";
+        static const wchar_t dash[] = L"{0F1E2D3C-4B5A-6C7D-8E9FA1B2C3D4E5F6-}";
+        static const wchar_t hex[] = L"{0F1E2D3G-4B5A-6C7D-8E9F-A1B2C3D4E5F6}";
+        Check(DriverVersionIsGuidText(upper, 38), "GUID accepted");
+        Check(DriverVersionIsGuidText(lower, 38), "GUID accepted in lower case");
+        Check(!DriverVersionIsGuidText(upper, 37), "GUID of the wrong length refused");
+        Check(!DriverVersionIsGuidText(nobrace, 36), "GUID without braces refused");
+        Check(!DriverVersionIsGuidText(dash, 38), "GUID with a dash out of place refused");
+        Check(!DriverVersionIsGuidText(hex, 38), "GUID with a character that is not hexadecimal refused");
+        Check(!DriverVersionIsGuidText(NULL, 38), "no GUID refused");
+    }
+
+    // The name of a video key: four decimal digits.
+    {
+        Check(DriverVersionIsInstanceName(L"0000", 4), "0000 accepted");
+        Check(DriverVersionIsInstanceName(L"0013", 4), "0013 accepted");
+        Check(!DriverVersionIsInstanceName(L"Video", 5), "Video refused");
+        Check(!DriverVersionIsInstanceName(L"000", 3), "three digits refused");
+        Check(!DriverVersionIsInstanceName(L"00000", 5), "five digits refused");
+        Check(!DriverVersionIsInstanceName(L"00a0", 4), "a name that is not decimal refused");
+        Check(!DriverVersionIsInstanceName(NULL, 4), "no name refused");
+    }
+
+    // The path of a video key, and the guard applied to the path this code builds.
+    {
+        static const wchar_t guid[] = L"{0F1E2D3C-4B5A-6C7D-8E9F-A1B2C3D4E5F6}";
+        static const wchar_t want[] = L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Video\\"
+                                      L"{0F1E2D3C-4B5A-6C7D-8E9F-A1B2C3D4E5F6}\\0000";
+        wchar_t path[DRIVER_VERSION_PATH_CHARS];
+        unsigned long chars = DriverVersionVideoPath(guid, 38, L"0000", 4, path, DRIVER_VERSION_PATH_CHARS);
+        Check(chars == (unsigned long)wcslen(want) && wcscmp(path, want) == 0, "the path of a video key");
+        Check(DriverVersionIsVideoKey(path, chars), "the path this code builds passes the Control\\Video guard");
+        chars = DriverVersionVideoPath(guid, 38, NULL, 0, path, DRIVER_VERSION_PATH_CHARS);
+        Check(chars == (unsigned long)wcslen(want) - 5 && wcsncmp(path, want, chars) == 0,
+              "the path of the key that holds the video keys");
+        // That key is only read, to enumerate the video keys; it is below Control\Video like the keys themselves.
+        Check(DriverVersionIsVideoKey(path, chars), "the key that holds the video keys is also below Control\\Video");
+        Check(!DriverVersionVideoPath(guid, 38, L"Video", 5, path, DRIVER_VERSION_PATH_CHARS) && !path[0],
+              "a subkey that is not four digits gives no path");
+        Check(!DriverVersionVideoPath(L"not a guid", 10, L"0000", 4, path, DRIVER_VERSION_PATH_CHARS) && !path[0],
+              "a VideoID that is not a GUID gives no path");
+        Check(!DriverVersionVideoPath(guid, 38, L"0000", 4, path, (unsigned long)wcslen(want)) && !path[0],
+              "a path that does not fit the buffer is not written");
+        Check(DriverVersionVideoPath(guid, 38, L"0000", 4, path, (unsigned long)wcslen(want) + 1) ==
+                  (unsigned long)wcslen(want),
+              "a buffer of exactly the path and its terminator is enough");
+        Check(!DriverVersionVideoPath(guid, 38, L"0000", 4, NULL, DRIVER_VERSION_PATH_CHARS),
+              "no buffer refused");
+    }
+
     printf("driver_version_test: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
