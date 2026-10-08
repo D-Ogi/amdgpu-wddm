@@ -190,6 +190,11 @@ try {
   if($LASTEXITCODE){throw 'Present outputs test build failed'}
   & .\present-outputs-test.exe
   if($LASTEXITCODE){throw 'Present outputs tests failed'}
+  # The per-application MaxFrameLatency gate of Present: the ring, the poll loop and the counters.
+  & cl.exe @flags /analyze /analyze:external- /Fe:frame-latency-test.exe "$repo\driver\umd\d3d12\frame-latency-test.cpp"
+  if($LASTEXITCODE){throw 'Frame latency test build failed'}
+  & .\frame-latency-test.exe
+  if($LASTEXITCODE){throw 'Frame latency tests failed'}
   & cl.exe @flags /analyze /analyze:external- /Fe:shell-core-ddi-test.exe "$repo\driver\umd\d3d12\shell-core-ddi-test.cpp"
   if($LASTEXITCODE){throw 'Shell core DDI test build failed'}
   & .\shell-core-ddi-test.exe

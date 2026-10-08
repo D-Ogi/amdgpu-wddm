@@ -45,6 +45,9 @@ struct Device {
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md),
     // taken before the queue domain.
     amdgpu_wddm::app_settings::FrameLimiter frame_limiter;
+    // The per-application MaxFrameLatency of this device's presents lives with the engine, not here
+    // (device-engine.h, engine_frame_gate): its ring of progress snapshots is half a kilobyte, and the runtime
+    // allocates this structure for every device it creates.
     // Every failing DDI reports, also after the loss: pfnSetErrorCb fails the runtime's current API call
     // on the calling thread, so a call left unreported would return S_OK to the application. DDI threads
     // run at once; the callback is the runtime's per-call error state.

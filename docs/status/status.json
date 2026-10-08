@@ -1911,49 +1911,49 @@
       {
        "name": "pfnCalcPrivateDeviceSize",
        "function": "device_size",
-       "source": "driver/umd/d3d12/adapter.cpp:32",
+       "source": "driver/umd/d3d12/adapter.cpp:33",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateDevice",
        "function": "create_device",
-       "source": "driver/umd/d3d12/adapter.cpp:38",
+       "source": "driver/umd/d3d12/adapter.cpp:39",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCloseAdapter",
        "function": "close_adapter",
-       "source": "driver/umd/d3d12/adapter.cpp:73",
+       "source": "driver/umd/d3d12/adapter.cpp:74",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetSupportedVersions",
        "function": "versions",
-       "source": "driver/umd/d3d12/adapter.cpp:79",
+       "source": "driver/umd/d3d12/adapter.cpp:80",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetCaps",
        "function": "caps",
-       "source": "driver/umd/d3d12/adapter.cpp:87",
+       "source": "driver/umd/d3d12/adapter.cpp:88",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetOptionalDDITables",
        "function": "optional_tables",
-       "source": "driver/umd/d3d12/adapter.cpp:139",
+       "source": "driver/umd/d3d12/adapter.cpp:140",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
       {
        "name": "pfnFillDDITable",
        "function": "fill_table",
-       "source": "driver/umd/d3d12/adapter.cpp:143",
+       "source": "driver/umd/d3d12/adapter.cpp:144",
        "done": true,
        "reason": "forwards to fill_native_tables: does work",
        "partial": true
@@ -1961,7 +1961,7 @@
       {
        "name": "pfnDestroyDevice",
        "function": "destroy_device",
-       "source": "driver/umd/d3d12/adapter.cpp:149",
+       "source": "driver/umd/d3d12/adapter.cpp:150",
        "done": true,
        "reason": "does work"
       }
