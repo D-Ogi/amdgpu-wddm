@@ -183,7 +183,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250StopDevice",
-       "source": "driver/kmd/pnp.c:184",
+       "source": "driver/kmd/pnp.c:187",
        "done": true,
        "reason": "does work"
       },
@@ -201,7 +201,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250DispatchIoRequest",
-       "source": "driver/kmd/pnp.c:287",
+       "source": "driver/kmd/pnp.c:290",
        "done": false,
        "reason": "every return is a failure constant"
       },
@@ -210,7 +210,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250SetPowerState",
-       "source": "driver/kmd/pnp.c:410",
+       "source": "driver/kmd/pnp.c:413",
        "done": true,
        "reason": "does work"
       },
@@ -228,7 +228,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250ResetDevice",
-       "source": "driver/kmd/pnp.c:277",
+       "source": "driver/kmd/pnp.c:280",
        "done": true,
        "reason": "forwards to FanResetDevice: forwards to FanBlind: does work"
       },
@@ -237,7 +237,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250Unload",
-       "source": "driver/kmd/pnp.c:451",
+       "source": "driver/kmd/pnp.c:454",
        "done": true,
        "reason": "does work"
       },
@@ -292,7 +292,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250StopDeviceAndReleasePostDisplayOwnership",
-       "source": "driver/kmd/pnp.c:250",
+       "source": "driver/kmd/pnp.c:253",
        "done": true,
        "reason": "does work"
       },
@@ -342,7 +342,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250InterruptRoutine",
-       "source": "driver/kmd/pnp.c:325",
+       "source": "driver/kmd/pnp.c:328",
        "done": true,
        "reason": "returns the answer"
       },
@@ -351,7 +351,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250DpcRoutine",
-       "source": "driver/kmd/pnp.c:340",
+       "source": "driver/kmd/pnp.c:343",
        "done": true,
        "reason": "does work"
       },
@@ -1911,49 +1911,49 @@
       {
        "name": "pfnCalcPrivateDeviceSize",
        "function": "device_size",
-       "source": "driver/umd/d3d12/adapter.cpp:27",
+       "source": "driver/umd/d3d12/adapter.cpp:32",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateDevice",
        "function": "create_device",
-       "source": "driver/umd/d3d12/adapter.cpp:33",
+       "source": "driver/umd/d3d12/adapter.cpp:38",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCloseAdapter",
        "function": "close_adapter",
-       "source": "driver/umd/d3d12/adapter.cpp:51",
+       "source": "driver/umd/d3d12/adapter.cpp:73",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetSupportedVersions",
        "function": "versions",
-       "source": "driver/umd/d3d12/adapter.cpp:57",
+       "source": "driver/umd/d3d12/adapter.cpp:79",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetCaps",
        "function": "caps",
-       "source": "driver/umd/d3d12/adapter.cpp:65",
+       "source": "driver/umd/d3d12/adapter.cpp:87",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetOptionalDDITables",
        "function": "optional_tables",
-       "source": "driver/umd/d3d12/adapter.cpp:117",
+       "source": "driver/umd/d3d12/adapter.cpp:139",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
       {
        "name": "pfnFillDDITable",
        "function": "fill_table",
-       "source": "driver/umd/d3d12/adapter.cpp:121",
+       "source": "driver/umd/d3d12/adapter.cpp:143",
        "done": true,
        "reason": "forwards to fill_native_tables: does work",
        "partial": true
@@ -1961,7 +1961,7 @@
       {
        "name": "pfnDestroyDevice",
        "function": "destroy_device",
-       "source": "driver/umd/d3d12/adapter.cpp:127",
+       "source": "driver/umd/d3d12/adapter.cpp:149",
        "done": true,
        "reason": "does work"
       }
@@ -3941,7 +3941,7 @@
       {
        "name": "pfnPresent",
        "function": "present",
-       "source": "driver/umd/d3d12/native-tables.cpp:285",
+       "source": "driver/umd/d3d12/native-tables.cpp:289",
        "done": true,
        "reason": "does work"
       },
