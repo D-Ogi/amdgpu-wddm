@@ -207,8 +207,22 @@ foreach ($s in ($hostSources + $osSources)) {
     $allObjects += (Join-Path $objDir ([IO.Path]::ChangeExtension($s, 'obj')))
 }
 # /Brepro here as well, or the archive member headers carry the hour of the build and the
-# library's SHA-256 changes with no change of its content.
-& $lib /nologo /Brepro "/OUT:$Out\bc250hsa.lib" @allObjects | Out-Null
+# library's SHA-256 changes with no change of its content. The archive member names are the
+# object paths as they are written on the command line, so the call runs in the object
+# directory and names the leaves, and no build path reaches the archive directory.
+#
+# This does not make bc250hsa.lib the same bytes at every -Out. Each object records its own
+# absolute path in its .debug$S section, which the compiler writes even with no debug
+# information asked for and with a relative /Fo (measured both ways, 2026-10-08). The seven
+# programs and the two device artifacts are the same bytes at any -Out; the library's hash
+# belongs to the directory it was built in, which the line below prints beside it.
+$libObjects = @($allObjects | ForEach-Object { Split-Path -Leaf $_ })
+Push-Location $objDir
+try {
+    & $lib /nologo /Brepro "/OUT:$Out\bc250hsa.lib" @libObjects | Out-Null
+} finally {
+    Pop-Location
+}
 if ($LASTEXITCODE -ne 0) { throw "lib failed ($LASTEXITCODE)" }
 Write-Host '  bc250hsa.lib built'
 
@@ -249,6 +263,7 @@ if (-not $SkipTests) {
     Write-Host '  every host test and hipprobe --selftest passed'
 }
 
+Write-Host "  artifacts in $Out (bc250hsa.lib's hash belongs to this directory, see above)"
 foreach ($f in (@('bc250hsa.lib', 'hipprobe.exe') + ($tests | ForEach-Object { [IO.Path]::ChangeExtension($_, 'exe') }))) {
     $item = Get-Item (Join-Path $Out $f)
     $hash = (Get-FileHash -Algorithm SHA256 $item.FullName).Hash
