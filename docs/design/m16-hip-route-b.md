@@ -37,6 +37,10 @@ primary source in this workspace. DECIDED: a design choice of this document. OPE
 Line numbers move. This document names a file and a symbol, and it names a line only where the spike
 notes already recorded one.
 
+`clang/lib/CodeGen/CGCUDANV.cpp` is an upstream file. This workspace holds no copy of it, because the
+local `ref/llvm-project` checkout is sparse and carries no `clang` source. Every statement here about
+the registration ABI was therefore measured against clang 22.1.8 itself, with a compiled program.
+
 ---
 
 ## 1. The two layers and the seam
@@ -75,13 +79,13 @@ Three properties of the seam, and each one is a rule for both builders.
 
 | # | Design A said | Design B said | DECIDED | Why |
 |---|---|---|---|---|
-| 1 | User-mode WDDM submission. No kernel driver change. | The kernel driver escape takes seven values instead of its fixed shader. | **User-mode WDDM submission. The kernel driver does not change.** | A read the submit path and found no refusal: `WddmSubmitUmdImpl()` parses only the private blob, whose whole output is `num_ibs`, `ib_va`, `ib_bytes` and `single_ib` (`driver/kmd/umd_blob.h`), and the only conditions are that the blob parses, that it names one indirect buffer and that the node is node 0. Fact M80 is the measurement. B wrote its sentence from the route document's step 1, which was drafted before anyone read that path. The seven values of B survive as the fields of `bc250hsa_dispatch`. |
-| 2 | The dispatch rides the gfx ring on node 0, with `CONTEXT_CONTROL` added. | The dispatch rides the escape's compute rings `BC250_FENCE_RING_COMPUTE0 + 0..7`. | **Node 0, the graphics ring.** | Three independent statements: fact M50 (Mesa sees no COMPUTE IP on this part), the Mesa fork's `radv_wddm2_cs.c` returns at once for any hardware IP that is not GFX and forces node 0, and `driver/contract/bc250_umd_submit.h` states that `AMDGPU_HW_IP_GFX` is the only choice. The compute rings exist, but only inside the kernel-owned escape of decision 1, which this design does not take. |
+| 1 | User-mode WDDM submission. No kernel driver change. | The kernel driver escape takes seven values instead of its fixed shader. | **User-mode WDDM submission. The kernel driver does not change.** | A read of the submit path found no refusal. `WddmSubmitUmdImpl()` parses only the private blob, whose whole output is `num_ibs`, `ib_va`, `ib_bytes` and `single_ib` (`driver/kmd/umd_blob.h`). It has three conditions only: the blob parses, it names one indirect buffer, and the node is node 0. Fact M80 is the measurement. B wrote its sentence from the route document's step 1, which was drafted before anyone read that path. The seven values of B survive as the fields of `bc250hsa_dispatch`. |
+| 2 | The dispatch rides the gfx ring on node 0, with `CONTEXT_CONTROL` added. | The dispatch rides the escape's compute rings `BC250_FENCE_RING_COMPUTE0 + 0..7`. | **Node 0, the graphics ring.** | Three independent statements. Fact M50 says that Mesa sees no COMPUTE IP on this part. The Mesa fork's `radv_wddm2_cs.c` returns at once for any hardware IP that is not GFX, and it forces node 0. `driver/contract/bc250_umd_submit.h` states that `AMDGPU_HW_IP_GFX` is the only choice. The compute rings exist, but only inside the kernel-owned escape of decision 1, which this design does not take. |
 | 3 | `COMPUTE_PGM_RSRC2.LDS_SIZE` must be computed by the host. | The dispatch copies `COMPUTE_PGM_RSRC1` to `3` out of the kernel descriptor instead of computing them. | **Both, in this order: copy `RSRC1` and `RSRC3` unchanged, copy `RSRC2` and then write the computed `LDS_SIZE` field into bits 23:15.** | MEASURED: `reduce256` has 1024 bytes of local memory and its descriptor's `GRANULATED_LDS_SIZE` is 0, because the command processor normally writes that field from the AQL packet. There is no AQL packet here. A host that copies `RSRC2` unchanged runs the kernel with no local memory. `bc250hsa_lds_size_field()` is the one place that computes it. |
 | 4 | The kernel argument buffer is aligned to `.kernarg_segment_align`. | It is aligned to at least 16 bytes, which is the stricter documented rule. | **`max(.kernarg_segment_align, 16)`, reported as `kernarg_align`.** | The measured metadata gives 8 for `vadd`, and `AMDGPUUsage.rst` requires at least 16 for the allocation. The stricter rule wins and the field carries the result, so no caller repeats the arithmetic. |
 | 5 | Two headers, `bc250_gpu.h` for the device and `bc250_co_loader.h` for the loader, with their own prefixes and their own error enumerations. | The same split, from the other side. | **One public header, `bc250hsa.h`, one prefix `bc250hsa_`, one status enumeration.** | Two headers with two error spaces would make layer 2 translate twice. The loader keeps its allocator seam as `bc250hsa_allocator` and `bc250hsa_module_load_alloc()`, which is what made B's split useful: the loader test runs with no device. |
 | 6 | Negative integer error macros. | A positive enumeration of loader errors. | **One `bc250hsa_status` enumeration, zero for success and negative values for failure, with the loader codes in their own range at -20 and below.** | One rule for every call, and `bc250hsa_status_string()` names them all. |
-| 7 | The caller unbundles the fat binary, because the HIP runtime already walks it. | The unbundler belongs beside the loader. | **The unbundler is a separate call in the same header, `bc250hsa_unbundle()`, and `bc250hsa_module_load()` takes a plain ELF image.** | Both notes wanted the same shape. Layer 2 calls the unbundler, keeps the view and loads it lazily on the first launch. |
+| 7 | The caller unbundles the fat binary, because the HIP runtime already walks it. | The unbundler belongs beside the loader. | **The unbundler is a separate call in the same header, `bc250hsa_unbundle()`, and `bc250hsa_module_load()` takes a plain ELF image.** | Both notes wanted the same shape. Layer 2 calls the unbundler, keeps the view and loads it lazily when the program starts its first kernel. |
 | 8 | The loader asks the caller for memory through `BC250_CO_ALLOC_*` flags. | The device memory flags are `BC250_GPU_MEM_*`. | **One flag set, `BC250HSA_MEM_*`, used by the device path and by the loader.** | One vocabulary. `BC250HSA_MEM_EXEC` carries the 4096-byte base and the rule that code is never write combined. |
 | 9 | About 600 lines for the D3DKMT layer, about 1200 lines for the whole step-1 tool. | About 1000 lines for the loader and about 200 for a MessagePack reader. | **The size table of section 3.1.** | The two notes measured different parts. Together they are about 2900 lines of C for layer 1, tests apart. |
 | 10 | The wait slices are 1 second to a total of 120 seconds. | Not addressed. | **The library keeps 1000 and 120000 as its defaults, and the step-1 tool passes 1000 and 10000.** | The long default exists because a healthy wait can sit behind another process's engine reset, measured at 14.6 seconds (defect K225). A lab trial must stay under three minutes, so the tool shortens the total by hand, which the interface allows. |
@@ -230,7 +234,7 @@ relocations adds `RELA`, `RELASZ`, `RELAENT` and `RELACOUNT`.
 The offload bundle reader, about 80 lines. The format is a 24-byte magic string
 `__CLANG_OFFLOAD_BUNDLE__`, an 8-byte entry count, then per entry an 8-byte offset, an 8-byte size,
 an 8-byte identifier length and the identifier, then the code objects. Three MEASURED traps that a
-naive reader gets wrong:
+naive reader does not see:
 
 1. The host entry has size 0.
 2. The host entry has the **same** offset as the device entry. A reader that keys entries by offset,
@@ -302,18 +306,27 @@ a local array. The packer walks the list and the array in step: for each entry t
 kind, copy `entry.size` bytes from `args[j]` to `kernarg + entry.offset` and advance `j`. A
 `global_buffer` entry takes the device pointer by value, which is why its size is 8.
 
-The hidden arguments. MEASURED: a kernel that does not read the implicit argument pointer gets no
+The hidden arguments. MEASURED: a kernel that does not read the implicit argument pointer has no
 implicit block at all (`vadd` has `kernarg_segment_size` 28, the four explicit arguments only), and
 when the block exists the metadata states its layout (`writeGridSize` has 264, which is 8 explicit
 bytes and a 256-byte block). Measured offsets of that kernel:
 
 | `.value_kind` | `.offset` | `.size` | What the packer writes |
 |---|---|---|---|
-| `hidden_block_count_x/y/z` | 12, 16, 20 | 4 | the grid size in work items, per dimension |
+| `hidden_block_count_x/y/z` | 12, 16, 20 | 4 | the work-group count per dimension, which is `bc250hsa_launch.grid` unchanged |
 | `hidden_group_size_x/y/z` | 20, 22, 24 | 2 | the workgroup size, per dimension |
-| `hidden_remainder_x/y/z` | 26, 28, 30 | 2 | grid size modulo group size, per dimension |
+| `hidden_remainder_x/y/z` | 26, 28, 30 | 2 | 0, because a HIP grid is a whole number of workgroups and has no partial one |
 | `hidden_global_offset_x/y/z` | 48, 56, 64 | 8 | 0, because HIP has no global offset |
 | `hidden_grid_dims` | 72 | 2 | 1, 2 or 3 |
+
+Read the first row twice. `hidden_block_count_*` is **not** the grid size in work items.
+`AMDGPUUsage.rst` states it for code object v5: "The grid dispatch work-group count for the X
+dimension is passed in the kernarg ... This is not the same as the value in the AQL dispatch packet,
+which has the grid size in work-items" (lines 5726 to 5750 of the revision in section Sources). A
+packer that multiplies the grid by the block here gives every kernel `gridDim.x * blockDim.x` for
+`gridDim.x`. A kernel of the `if (i < n)` shape hides that error, and a kernel that divides work by
+`gridDim.x` computes wrong numbers with no fault and no message. `hidden_remainder_*` is the size of
+the partial last workgroup, which this interface cannot express, so it is 0 and not a modulo.
 
 Note that `hidden_block_count_z` and `hidden_group_size_x` share offset 20 in this kernel, because
 the kernel reads only some fields and the compiler packs what it needs. That is the measured reason
@@ -323,9 +336,9 @@ Every hidden kind that this build does not fill is zeroed and counted:
 `hidden_hostcall_buffer`, `hidden_printf_buffer`, `hidden_heap_v1`, `hidden_multigrid_sync_arg`,
 `hidden_queue_ptr`, `hidden_private_base`, `hidden_shared_base`, `hidden_dynamic_lds_size`,
 `hidden_default_queue` and `hidden_completion_action`. An unknown key is zeroed, counted and named in
-the log, and the launch continues, because a later code object version may add a key. A non-zero
+the log, and the dispatch continues, because a later code object version may add a key. A non-zero
 `hostcall_buffer_requests` counter is the measurement that answers kill criterion K4, which is
-device-side `printf`. We get that answer from a counter and not from a crash.
+device-side `printf`. We read that answer from a counter and not from a crash.
 
 ### 3.7 The PM4 dispatch stream
 
@@ -423,8 +436,8 @@ The wait, and this is the one piece of policy that layer 1 keeps for itself:
 Why slices and not one long wait: when another process hangs the engine, this device's work waits
 behind it until the scheduler resets the engine and resubmits. That took 14.6 seconds in lab trial D1
 of kernel driver 0.7.216.17 with `TdrDelay` 10, and a single 10-second wait turned a healthy wait into
-a lost device (defect K225). A runtime that copies the naive form reports a launch timeout on healthy
-work. Defaults 1000 and 120000 therefore stay in the library.
+a lost device (defect K225). A runtime that copies the naive form reports `hipErrorLaunchTimeOut` on
+healthy work. Defaults 1000 and 120000 therefore stay in the library.
 
 A defect not to copy: the older Mesa tree's fence wait reads an `ExecutionState` field without ever
 calling `D3DKMTGetDeviceState`. Copy the `b19-icd` form.
@@ -601,7 +614,14 @@ typedef struct bc250hsa_open_params {
 
 /* Opens the adapter, creates the device, the paging queue, one node-0 context and one
  * unshared monitored fence, and allocates the command ring and the zero page that backs
- * the private segment buffer. params NULL takes every default. */
+ * the private segment buffer. params NULL takes every default.
+ *
+ * A note for a caller that tells a device pointer from a host pointer by its value,
+ * which is what layer 2 does for hipMemcpyDefault: while the GPU address window lies
+ * inside the host user address space of a 64-bit Windows process (0 to
+ * 0x00007FFFFFFFFFFF), a GPU virtual address can hold the same value as a host pointer
+ * of the same process. A window above that range removes the ambiguity. Until the
+ * window is there, the caller must pass the direction of a copy and must not guess it. */
 bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_device** out);
 
 /* Waits for the last submission under the default bound, frees every allocation this
@@ -664,7 +684,14 @@ bc250hsa_status bc250hsa_alloc(bc250hsa_device* dev, uint64_t bytes, uint64_t al
 bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem);
 
 /* A host mapping for an allocation made without one. Refuses BC250HSA_MEM_DEVICE
- * without BC250HSA_MEM_MAPPABLE, with BC250HSA_EUNSUPPORTED. */
+ * without BC250HSA_MEM_MAPPABLE, with BC250HSA_EUNSUPPORTED.
+ *
+ * out is the one result of this call. On BC250HSA_OK the mapping is in *out, and
+ * out NULL is BC250HSA_EINVAL. The library does not write mem->host: the caller
+ * stores the pointer into its own copy of the handle. A caller that reads
+ * mem->host after a map instead of *out works with one implementation of this
+ * header and fails with the next. bc250hsa_unmap takes the mapping back and
+ * clears mem->host. */
 bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out);
 bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem);
 
@@ -995,7 +1022,7 @@ bc250hsa_status bc250hsa_last_ib(bc250hsa_device* dev, const uint32_t** dwords,
 DECIDED. 38 exported names. MEASURED against a real program: a plain HIP vector addition compiles and
 links against exactly this set with no ROCm and no AMD driver on the machine.
 
-Registration and launch, which clang's code generation emits and which no application calls directly:
+Registration and kernel start, which clang's code generation emits and which no application calls directly:
 
 | Name | Signature, from clang's HIP code generation |
 |---|---|
@@ -1041,8 +1068,13 @@ So step 3 is 52 exported functions, 5 of them honest stubs.
 
 ### 4.2 The registration ABI
 
-MEASURED. The 24 bytes of `.hipFatBinSegment` are `{ int magic; int version; void* gpu_binary;
-void* unused; }` with magic 0x48495046 ("HIPF"), version 1 and a null fourth field.
+MEASURED. The 24 bytes of `.hipFatBinSegment` are these four fields, with magic 0x48495046
+("HIPF"), version 1 and a null fourth field:
+
+```c
+struct { int magic; int version; void* gpu_binary; void* unused; };
+```
+
 `__hipRegisterFatBinary` receives the address of this wrapper and **not** the fat binary. The runtime
 checks the magic, refuses the CUDA magic 0x466243b1 with a clear message, and follows the third field
 to the bundle.
@@ -1056,7 +1088,7 @@ one process with several translation units registers one time.
 
 DECIDED. `__hipRegisterFatBinary` returns an opaque module handle that layer 2 owns. It calls
 `bc250hsa_unbundle()` at once, because a wrong target must be reported early, and it calls
-`bc250hsa_module_load()` lazily on the first launch, so a process that never starts a kernel pays
+`bc250hsa_module_load()` lazily at the first kernel start, so a process that never starts one pays
 nothing. `__hipRegisterFunction` records the mapping from the host stub address to the device kernel
 name, because `hipLaunchKernel` receives the host stub address as its first argument and must find the
 kernel from it.
@@ -1125,15 +1157,29 @@ work and not runtime work.
 | `hipHostMalloc` | `bc250hsa_alloc()` with `BC250HSA_MEM_HOST` |
 | `hipMemcpy`, `hipMemcpyAsync` | `bc250hsa_copy_to_device()` or `_from_device()`, after a wait on the stream's last fence value. Asynchronous copies are synchronous in build 1, which is legal and slow |
 | `hipMemset` | a host fill through the mapping in build 1, a fill kernel later |
-| `__hipRegisterFatBinary` | `bc250hsa_unbundle()`, then `bc250hsa_module_load()` on the first launch |
+| `__hipRegisterFatBinary` | `bc250hsa_unbundle()`, then `bc250hsa_module_load()` at the first kernel start |
 | `__hipRegisterFunction` | the stub-to-name map |
 | `hipLaunchKernel` | `bc250hsa_kernarg_requirements()`, a kernarg buffer from a per-stream pool, `bc250hsa_kernarg_pack()`, then `bc250hsa_dispatch_submit()`. The returned fence value becomes the stream's last value |
 | `hipStreamCreate` | a software stream: an ordered list of submissions and one last fence value. One hardware queue stays underneath |
-| `hipStreamSynchronize`, `hipDeviceSynchronize` | `bc250hsa_wait()` on that value |
+| `hipStreamSynchronize`, `hipDeviceSynchronize` | `bc250hsa_wait()` on that value. The legacy null stream waits for the whole device, and a stream waits for the event it still carries |
 | `hipStreamWaitEvent` | a host wait on the recorded value before the next submission of this stream, because there is one hardware queue and submissions are already ordered |
-| `hipEventRecord` | records the stream's last fence value and a host timestamp |
-| `hipEventElapsedTime` | the difference of two host timestamps, each taken when its value retired. A GPU timestamp is later work, named in section 7 |
+| `hipEventRecord` | records what the stream owes and, when that value already retired, a host timestamp |
+| `hipEventElapsedTime` | the difference of two host timestamps. Each one is taken at the moment its fence value retired, which is the first wait or fence read that passes it. A GPU timestamp is later work, named in section 7 |
 | `hipGetLastError` | the per-thread error state, written by the status translation below |
+
+Two rules of this table that a reader can read wrongly. First, the value a stream owes is not always
+its own last submission: the legacy null stream owes the last submission of the device, because HIP
+says that it synchronises with every other stream, and a stream that carries an event wait and
+nothing else owes that event. Second, an event's host timestamp belongs to the moment its value
+retired. A timestamp taken when a program asks about the event would make every measurement of two
+retired events microseconds apart, whatever the kernels did.
+
+Layer 2 owns the wait policy, because `bc250hsa.h` rule 6 keeps policy out of layer 1. One bound
+holds for the process, and every wait of layer 2 passes it. It is read one time, at the first call,
+from the environment variables `BC250_HIP_WAIT_TOTAL_MS` and `BC250_HIP_WAIT_SLICE_MS`. Absent or 0
+takes the library defaults of 1000 and 120000 milliseconds. A lab trial must stay inside three
+minutes, so the step-2 program takes `--wait-total <ms>` and sets the variable before its first HIP
+call.
 
 The status translation, one table and no judgement: `BC250HSA_OK` to `hipSuccess`, `EINVAL` to
 `hipErrorInvalidValue`, `ENOMEM` to `hipErrorOutOfMemory`, `ENODEV` to `hipErrorNoDevice`, `ETIMEOUT`
@@ -1285,12 +1331,12 @@ the AMDGPU clang is present, compiles and links the HIP sample and checks its im
 
 | Test | Input | It fails when |
 |---|---|---|
-| `test_loader` | the committed code object | a segment is not copied, `.bss` is not zeroed, a relocation type is accepted wrongly, a descriptor address is wrong (the measured 0xC80 and 0x1E00), or an ABI version check is wrong |
-| `test_unbundle` | the committed fat binary, and three hand-made bad ones | the host entry of size 0 is chosen, the repeated offset confuses the reader, the host triple is matched, or a `CCOB` bundle is not refused by name |
-| `test_kernarg` | the committed metadata and a launch of known numbers | an explicit argument lands at the wrong offset, a hidden field is written from a fixed structure instead of the list, a hidden kind is not zeroed, or the hostcall counter does not rise for a kernel that asks for it |
-| `test_descriptor` | the three committed descriptors | `RSRC1` or `RSRC3` is modified, `LDS_SIZE` is not written for `reduce256`, the user SGPR count is not read from `RSRC2`, or a reserved field is not checked |
-| `test_pm4` | a dispatch of known numbers | the packet order changes, a register offset changes, the shader-type bit is lost, the entry address shift is wrong, the fence dwords change, or the padding is wrong |
-| `test_hip_mock` | layer 2 over the mock device | registration does not find a kernel from its host stub, a launch packs the wrong arguments, stream order is lost across an event wait, the per-thread error state leaks between threads, or a second module in one process registers twice |
+| `test_loader` | the committed code object | a segment is not copied, `.bss` is not zeroed, or a relocation type is accepted wrongly. It also fails when a descriptor address is wrong (the measured 0xC80 and 0x1E00) or an ABI version check is wrong |
+| `test_unbundle` | the committed fat binary, and three hand-made bad ones | the host entry of size 0 is chosen, or the repeated offset confuses the reader. It also fails when the host triple is matched, or a `CCOB` bundle is not refused by name |
+| `test_kernarg` | the committed metadata and a kernel start of known numbers | an explicit argument lands at the wrong offset, or a hidden field is written from a fixed structure instead of the list. It also fails when a hidden kind is not zeroed, or the hostcall counter does not rise for a kernel that asks for it |
+| `test_descriptor` | the three committed descriptors | `RSRC1` or `RSRC3` is modified, or `LDS_SIZE` is not written for `reduce256`. It also fails when the user SGPR count is not read from `RSRC2`, or a reserved field is not checked |
+| `test_pm4` | a dispatch of known numbers | the packet order changes, a register offset changes, or the shader-type bit is lost. It also fails when the entry address shift is wrong, the fence dwords change, or the padding is wrong |
+| `test_hip_mock` | layer 2 over the mock device | registration does not find a kernel from its host stub, or the packer writes the wrong arguments. It also fails when stream order is lost across an event wait. It fails as well when the per-thread error state leaks between threads, or when a second module in one process registers twice |
 
 The mock device implements `bc250hsa.h` over host memory with a synthetic GPU address base, and it
 links the real loader, the real packer and the real PM4 builder. Only the device, the submission and
@@ -1360,9 +1406,9 @@ All of these, from step 1 of the route document:
 2. The fence retires one time per dispatch: the value the tool read equals the value it was promised,
    and `waits_fast` or `waits` rose by exactly one.
 3. `reduce256` gives the reference reduction of its input. This is the measurement that proves the
-   computed `LDS_SIZE`, which is decision 3 of section 2. A wrong value here, with `vadd` correct, is
-   the local memory path and nothing else.
-4. `writeGridSize` writes the grid numbers that the launch asked for. This proves the hidden argument
+   computed `LDS_SIZE`, which is decision 3 of section 2. A wrong value here, while `vadd` gives the right
+   numbers, is the local memory path and nothing else.
+4. `writeGridSize` writes the grid numbers that the dispatch asked for. This proves the hidden argument
    block.
 5. The kernel driver log ring holds no "umd submit fence N not run" line, no memory fault and no
    timeout.
