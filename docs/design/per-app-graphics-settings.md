@@ -86,7 +86,7 @@ On unit A at 59 Hz, the x64 d3d11bench in a window gave 60 frames/s with `VSync`
 With `VSync` 0 it gave 858-888 frames/s for the same intervals. The x86 d3d11bench gave 60 frames/s with `VSync` 1
 for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774 frames/s for interval 0, 60
 frames/s for interval 1 and 30 frames/s for interval 2. Thus for an x86 application, `VSync` 1 does not shorten
-interval 2, and `VSync` 0 does not remove the wait of interval 1 or 2.
+interval 2, and `VSync` 0 does not shorten interval 1 or 2.
 
 ### Anisotropy
 
