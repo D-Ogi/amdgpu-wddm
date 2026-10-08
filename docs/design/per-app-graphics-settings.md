@@ -2,7 +2,8 @@
 
 Status: implemented on bc250-win branch `umd/per-app-graphics-settings` and on branch
 `amdgpu-wddm/per-app-graphics-settings` of the DXVK and vkd3d-proton forks. The host gates pass on the
-development PC (2026-10-08). No lab trial on unit A has run yet.
+development PC (2026-10-08). No lab trial on unit A has run yet. The D3D12 half of `MaxFrameLatency` came later,
+on branch `d3d12/frame-latency` for train b24, and waits for its own lab check.
 
 The control application writes these settings into the registry. The driver reads them and applies them to one
 application or to all applications. This document is the contract between the two sides. The Vulkan ICD settings
@@ -44,7 +45,7 @@ key. The KMD reads `ReportAmdDriverVersion` at each adapter start.
 | `FrameRateLimit` | `AMDGPU_WDDM_FRAME_RATE_LIMIT` | 0, 20-300 | works | works |
 | `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | works | works |
 | `Anisotropy` | `AMDGPU_WDDM_ANISOTROPY` | 1, 2, 4, 8, 16 | works | works |
-| `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | not applied |
+| `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | works |
 | `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied |
 | `RenderOnCpu` | `AMDGPU_WDDM_RENDER_ON_CPU` | 0, 1 | works, also for D3D10 | no CPU route |
 | `ReportAmdDriverVersion` | none | 0, 1 | global key only | global key only |
@@ -105,12 +106,47 @@ made it.
 
 ### MaxFrameLatency
 
-The value is the number of Presents that the D3D11 shell lets wait for the GPU. After each Present the shell waits
-until the Present that is N places back has completed. The wait uses the present fence of the shell, as the swap
-chain of DXVK does for its own frame latency. Only a lost device makes the Present fail.
+The value is the number of Presents that a shell lets wait for the GPU. After each Present the shell waits until
+the frame that is N places back has finished on the GPU. Both shells apply it.
 
-The D3D12 shell does not apply this value. A D3D12 application controls its frame latency with its own fences and
-with `SetMaximumFrameLatency` of its swap chain.
+The limit is a ceiling and never a floor. The first check of the wait costs no wait at all. An application that
+keeps fewer frames in flight than the value, with its own fences or with the frame-latency waitable object of its
+swap chain, finds the frame already finished. The shell then adds no wait of its own. The setting can lower the
+frames in flight of such an application, never raise them.
+
+- D3D11: the wait uses the present fence of the shell, as the swap chain of DXVK does for its own frame latency.
+  It waits for the Present that is N places back. Only a lost device makes the Present fail. The code is in
+  `driver/umd/dxvk/ddi-present.cpp`.
+- D3D12: the runtime makes the kernel present call, so the shell holds no present fence. Its proof that a frame
+  finished is a device progress snapshot (`driver/umd/d3d12/device-progress.h`), which it takes at each Present.
+  The snapshot names each monitored fence of the device that the GPU has not reached yet, so everything that
+  every context of the device submitted before that Present has retired once the snapshot is retired. The shell
+  keeps a ring of N snapshots, one per device, and before Present N returns it waits for the snapshot of Present
+  N-k. The code is `FrameLatency` in `driver/umd/d3d12/frame-latency.h`.
+
+The D3D12 wait runs after the shell releases the device's queue domain, as the frame rate limit runs before it
+(`device-state.h`, `QueueDomainScope`), so no other queue operation of the device waits with the present. A
+refused present gets no wait. The wait polls the snapshot: a short spin first, then sleeps of 250 microseconds on
+a high-resolution timer. It gives up after one second, counts the event and lets the frame through, so a fence
+that never retires cannot stop the application inside the driver. A lost device reports the value
+`0xFFFFFFFFFFFFFFFF` on its fences, which counts as retired, so a loss also ends the wait.
+
+One device that presents on several queues shares one ring, as it shares one frame rate clock. The setting
+belongs to the application, not to one swap chain.
+
+The snapshot holds only what the Vulkan ICD publishes. The ICD publishes the value of its monitored fence after
+every native submit (`radv_wddm2_cs.c`, `BC250_HOST_PUBLISH_PROGRESS`). An ICD that publishes nothing gives an
+empty snapshot, which is retired at once, so the setting does nothing. The lab check reads the witness line to
+prove that the gate waited, and not only that the value reached the shell.
+
+The D3D12 shell writes two lines at most per process, as the witness that the gate is in force:
+
+```
+BC250 MaxFrameLatency=1: the present waited after 9 checks (frame 42)
+BC250 MaxFrameLatency=1: the present gave up after 4005 checks (frame 1180)
+```
+
+The second line is a defect report: it means that a frame did not finish within one second.
 
 ### PerformanceOverlay
 
@@ -147,7 +183,7 @@ apply:
 
 ```
 amdgpu-wddm settings: api=d3d12 app=game.exe FrameRateLimit=60/application VSync=unset Anisotropy=16/global
-MaxFrameLatency=2/global/not-applied PerformanceOverlay=unset RenderOnCpu=unset
+MaxFrameLatency=2/global PerformanceOverlay=unset RenderOnCpu=unset
 ```
 
 The line above is one line in the log. An ignored value gives a line before it:
