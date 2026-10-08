@@ -879,7 +879,7 @@ search.games.sm.terms|mt|ab586346|model shaderów|shader model|SM 6.8|SM 6.7|SM 
 search.games.cpu-render|mt-safe|bf157885|Uruchamiaj DirectX 11 na procesorze
 search.games.cpu-render.terms|mt|927301e2|renderowanie na CPU|renderowanie programowe|WARP|procesor|DirectX 11|ostateczność
 search.display.scaling|mt-safe|22b1cb79|Skalowanie GPU
-help.setting.latency|mt|6f3206a0|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę.
+help.setting.latency|mt|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|mt|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
 help.setting.amd-version|mt|7604c528|Niektóre gry ostrzegają, że sterownik graficzny jest stary, bo nie znają tego sterownika. Po włączeniu sterownik podaje numer wersji, który te gry akceptują. Sam sterownik się nie zmienia.
 help.setting.vk-present|mt|e892e511|Sposób, w jaki gry Vulkan wyświetlają klatki. Tryb nowoczesny jest domyślny i szybszy. Tryb zgodności używa starszej, wolniejszej metody; wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.

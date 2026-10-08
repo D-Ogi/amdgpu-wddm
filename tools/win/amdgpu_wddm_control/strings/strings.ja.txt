@@ -879,7 +879,7 @@ search.games.sm.terms|mt|ab586346|シェーダー モデル|shader model|SM 6.8|
 search.games.cpu-render|mt-safe|bf157885|DirectX 11 をプロセッサーで実行
 search.games.cpu-render.terms|mt|927301e2|CPU レンダリング|ソフトウェア レンダリング|WARP|プロセッサー|DirectX 11|最後の手段
 search.display.scaling|mt-safe|22b1cb79|GPU スケーリング
-help.setting.latency|mt|6f3206a0|プロセッサーがグラフィックス チップより先に準備できるフレーム数です。少ないほどマウスやキーボードへの反応が速くなりますが、フレーム レートが下がることがあります。
+help.setting.latency|mt|a684f1ab|プロセッサーがグラフィックス チップより先に準備できるフレーム数です。少ないほどマウスやキーボードへの反応が速くなりますが、フレーム レートが下がることがあります。DirectX 11 と DirectX 12 のゲームで動作します。すでに先行フレーム数が少ないゲームはそのままです。
 help.setting.overlay|mt|78ee0e43|ゲームの隅にフレーム レートとフレーム時間を表示します。現在は DirectX 11 のゲームでのみ動作します。
 help.setting.amd-version|mt|7604c528|一部のゲームは、このドライバーを知らないため、グラフィックス ドライバーが古いと警告します。オンにすると、ドライバーはそれらのゲームが受け付けるバージョン番号を報告します。ドライバー自体は変わりません。
 help.setting.vk-present|mt|e892e511|Vulkan ゲームがフレームを表示する方法です。モダンが既定で、より高速です。互換性は古くて遅い方法を使います。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
