@@ -72,6 +72,14 @@ void APIENTRY relocate22(D3D10DDI_HDEVICE h,D3DWDDM2_2DDI_DEVICEFUNCS *destinati
 // correct answer is to pass it on: AcquireResourceCb before the commands that use the resource, and
 // ReleaseResourceCb after they are submitted. Both entries return nothing and their reference pages name no
 // status of their own, so a refusal from the kernel costs the device (the baseline of handling-errors.md).
+//
+// What the release order rests on, so that a later reader can measure it instead of trusting it: the shell
+// submits through the engine's own contexts, which the hosted ICD owns and does not name to the shell, and
+// D3DDDICB_SYNCTOKEN names no context either (BroadcastContextArray is for a link adapter). The flush below
+// therefore gives the right order only while the kernel puts the token release behind the work every context
+// of this device has already submitted. No shared-surface client of the lab exercises this path yet, so it is
+// untested there. Below the WDDM 2.1 interface the runtime called these callbacks itself with no flush of the
+// driver at all, so this is not weaker than what the shell did before.
 void APIENTRY acquire_resource(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE,HANDLE token) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &o=owner22(h);
@@ -109,17 +117,12 @@ SAME_DXGI_OFFSET(pfnPresent1,pfnPresent1); SAME_DXGI_OFFSET(pfnTrimResidencySet,
 SAME_DXGI_OFFSET(pfnPresentMultiplaneOverlay1,pfnPresentMultiplaneOverlay1);
 #undef SAME_DXGI_OFFSET
 const DXGI1_4_DDI_BASE_FUNCTIONS &dxgi1_4_base() { static const auto table=make_dxgi1_4_device_table(); return table; }
-// One surface is the Present of DXGI 1.2 (dirty rectangles are hints, and so is the rotation hint: this
-// shell presents the buffer as the application wrote it and rotates nothing). Several surfaces per Present
-// belong to stereo and multi-plane swap chains, which this driver does not create.
+// One surface is the Present of DXGI 1.2. present_arguments_1_6_1 (ddi-wddm22.h) carries the arguments over and
+// the host test reads every field it carries.
 HRESULT APIENTRY present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENT *a) {
     if (!a || !a->hDevice) return E_INVALIDARG;
-    if (a->SurfacesToPresent!=1 || !a->phSurfacesToPresent) return DXGI_ERROR_UNSUPPORTED;
     DXGI_DDI_ARG_PRESENT p{};
-    p.hDevice=a->hDevice; p.hSurfaceToPresent=a->phSurfacesToPresent[0].hSurface;
-    p.SrcSubResourceIndex=a->phSurfacesToPresent[0].SubResourceIndex;
-    p.hDstResource=a->hDstResource; p.DstSubResourceIndex=a->DstSubResourceIndex;
-    p.pDXGIContext=a->pDXGIContext; p.Flags=a->Flags; p.FlipInterval=a->FlipInterval;
+    if (!present_arguments_1_6_1(*a,p)) return DXGI_ERROR_UNSUPPORTED;
     return dxgi1_4_base().pfnPresent(&p);
 }
 HRESULT APIENTRY overlay_present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENTMULTIPLANEOVERLAY *) { return DXGI_ERROR_UNSUPPORTED; }

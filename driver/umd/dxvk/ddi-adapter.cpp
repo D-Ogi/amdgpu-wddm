@@ -84,15 +84,24 @@ HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *value
     auto *a=adapter(handle);
     if (!a) return E_INVALIDARG;
     const bool wddm2_2=wddm2_2_offered();
-    // The offered set, once per adapter: the runtime asks twice (count, then array).
-    if (values && !(a->observations.fetch_or(4,std::memory_order_relaxed)&4)) {
-        char text[160];
-        std::snprintf(text,sizeof(text),"M14 DDI versions: 11_1 + WDDM2_0%s (BD-099 experiment d3d11-wddm20-ddi=%u)\n",
-            wddm2_2 ? " + WDDM2_2" : "",unsigned(!wddm2_2));
+    const HRESULT hr=supported_ddi_versions(a->caps.maximum,wddm2_2,entries,values);
+    // The offered set, once per adapter, read out of the array the shell just filled: the runtime asks twice
+    // (count, then array), and an FL11 adapter offers the D3D11.1 table alone.
+    if (SUCCEEDED(hr) && values && !(a->observations.fetch_or(4,std::memory_order_relaxed)&4)) {
+        char list[64]{}; size_t used=0;
+        for (UINT32 i=0;i<*entries;++i) {
+            const char *parts[2]={i ? " + " : "",ddi_version_name(values[i])};
+            for (const char *part:parts)
+                for (const char *p=part;*p && used+1<sizeof(list);++p) list[used++]=*p;
+        }
+        list[used]=0;
+        char text[192];
+        std::snprintf(text,sizeof(text),"M14 DDI versions: %s (BD-099 experiment wddm22-ddi-off=%u)\n",
+            list,unsigned(!wddm2_2));
         OutputDebugStringA(text);
         amdgpu_wddm_log::print("%s",text);
     }
-    return supported_ddi_versions(a->caps.maximum,wddm2_2,entries,values);
+    return hr;
 }
 HRESULT APIENTRY caps(D3D10DDI_HADAPTER handle,const D3D10_2DDIARG_GETCAPS *args) {
     auto *a=adapter(handle);

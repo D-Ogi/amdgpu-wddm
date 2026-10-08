@@ -363,10 +363,11 @@ What the new entries do:
   with `RequestRuntimeShaderCache` FALSE, because the engine keeps its own pipeline cache, so the
   runtime creates no session. A call is a broken contract: the entry says so once and loses the device.
 
-The process switch `AMDGPU_WDDM_D3D11_EXPERIMENT=d3d11-wddm20-ddi` withholds the WDDM 2.2 offer and
+The process switch `AMDGPU_WDDM_D3D11_EXPERIMENT=wddm22-ddi-off` withholds the WDDM 2.2 offer and
 leaves the WDDM 2.0 table as the newest one (`ddi-experiment.h`, the shape of the D3D12 shell's
-switch, with the same registry fall-backs). The recommended default is the WDDM 2.2 offer, which is
-what the shell does with no switch named.
+switch, with the same registry fall-backs). The name ends in `-off` because the shells share one
+rule: a validated behaviour is the default, and a switch only ever turns one off again. The
+recommended default is the WDDM 2.2 offer, which is what the shell does with no switch named.
 
 The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability

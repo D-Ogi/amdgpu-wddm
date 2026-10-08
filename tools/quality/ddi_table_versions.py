@@ -96,7 +96,8 @@ def dxgi_entries(text, name):
 def compare(kind, old, new, old_count, new_count, retyped, appended, failures):
     """Rules 1-3 for one pair of tables. retyped maps a new entry name to what it replaces."""
     if old is None or new is None:
-        failures.append("%s: %s or %s is not in the header" % (kind, DEVICE_OLD, DEVICE_NEW))
+        names = (DXGI_OLD, DXGI_NEW) if kind == "DXGI" else (DEVICE_OLD, DEVICE_NEW)
+        failures.append("%s: %s or %s is not in the header" % (kind, names[0], names[1]))
         return
     for label, entries, expected in ((kind + " older", old, old_count), (kind + " newer", new, new_count)):
         if len(entries) != expected:

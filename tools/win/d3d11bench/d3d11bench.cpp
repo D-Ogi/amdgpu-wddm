@@ -52,6 +52,10 @@ struct Options {
 };
 
 double g_deadline = 0.0;
+// BD-099: the application's own present sync interval in window mode. The per-application VSync of the driver
+// overrides it, so the acceptance matrix of BD-099 needs a client that can ask for 0, 1 and 2
+// (docs/design/per-app-graphics-settings.md). 0 is what this program always asked for before.
+UINT g_syncInterval = 0;
 bool g_expired = false;
 
 double NowMs() {
@@ -714,7 +718,7 @@ bool BeginFrame(Target &t, ID3D11DeviceContext *ctx, UINT frame) {
 bool EndFrame(Target &t, ID3D11DeviceContext *ctx, UINT frame) {
   if (t.swap) {
     // An occluded window skips frames, which would make the numbers meaningless: treat it as a failure.
-    const HRESULT hr = t.swap->Present(0, 0);
+    const HRESULT hr = t.swap->Present(g_syncInterval, 0);
     if (hr != S_OK) {
       printf("FAIL Present hr=0x%08lx\n", static_cast<unsigned long>(hr));
       return false;
@@ -1118,6 +1122,7 @@ const char kUsage[] =
     "  --adapter warp    Microsoft's software rasterizer, a CPU reference image on any Windows machine\n"
     "  --deadline S      whole-run limit in seconds, at most 170 (default 120)\n"
     "  --out FILE        write the result JSON there instead of standard output\n"
+    "  --sync-interval N Present sync interval in window mode, 0..4 (default 0)\n"
     "  --dump DIR        also write each scene's checksummed image to DIR\\<scene>.pam (existing directory)\n"
     "Exit: 0 measured, 1 API failure, 2 bad arguments, 3 deadline, 4 device removed.\n"
     "--mode window needs an interactive session with DWM; offscreen runs anywhere.\n";
@@ -1194,6 +1199,9 @@ bool ParseArgs(int argc, wchar_t **argv, Options &o) {
       if (!ParseUint(v, 1, UINT(kMaxDeadlineSeconds), s))
         return false;
       o.deadlineSeconds = double(s);
+    } else if (a == L"--sync-interval") {
+      if (!ParseUint(v, 0, 4, g_syncInterval))
+        return false;
     } else if (a == L"--out") {
       o.out = v;
     } else if (a == L"--dump") {
@@ -1315,7 +1323,11 @@ int Run(const Options &o) {
       Quote(result == kPass ? "measured" : "failed") + ",\"exit\":" + std::to_string(result) + ",\"mode\":" +
       Quote(o.window ? "window" : "offscreen") + ",\"width\":" + std::to_string(o.width) +
       ",\"height\":" + std::to_string(o.height) + ",\"feature_level\":" + Quote(LevelName(level)) +
-      ",\"frame_latency\":" + std::to_string(latency) + ",\"adapter\":{\"vendor\":" + Quote(Hex(desc.VendorId, 4)) +
+      ",\"frame_latency\":" + std::to_string(latency) +
+      // The interval this run really presented at: offscreen mode has no swap chain, so the option does nothing
+      // there. compare.py reads it as a setting of the workload (BD-099).
+      ",\"sync_interval\":" + std::to_string(o.window ? g_syncInterval : 0u) +
+      ",\"adapter\":{\"vendor\":" + Quote(Hex(desc.VendorId, 4)) +
       ",\"device\":" + Quote(Hex(desc.DeviceId, 4)) + ",\"description\":" + Quote(Utf8(desc.Description)) +
       "},\"d3d11\":" + Quote(d3d11Location) + ",\"modules\":" + modules + ",\"icds\":" + icds +
       ",\"environment\":" + EnvironmentJson() +

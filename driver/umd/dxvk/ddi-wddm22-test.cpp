@@ -85,14 +85,24 @@ void negotiation() {
     D3D_FEATURE_LEVEL level=D3D_FEATURE_LEVEL_9_1;
     CHECK(requested_feature_level(flags_for(D3DWDDM2_0DDI_3DPIPELINELEVEL_12_1),level,
         D3DWDDM2_2_DDI_INTERFACE_VERSION)==S_OK && level==D3D_FEATURE_LEVEL_12_1);
-    // The switch parser, on lists the resolver may give.
-    CHECK(native12::ddi_experiment_listed("d3d11-wddm20-ddi","d3d11-wddm20-ddi"));
-    CHECK(native12::ddi_experiment_listed("a,d3d11-wddm20-ddi,b","d3d11-wddm20-ddi"));
-    CHECK(!native12::ddi_experiment_listed("d3d11-wddm20-ddi-x","d3d11-wddm20-ddi"));
-    CHECK(!native12::ddi_experiment_listed("","d3d11-wddm20-ddi"));
+    // The switch parser, on lists the resolver may give. The name ends in "-off", as every switch of the two
+    // shells does: a switch only ever turns a validated default off again.
+    CHECK(native12::ddi_experiment_listed("wddm22-ddi-off","wddm22-ddi-off"));
+    CHECK(native12::ddi_experiment_listed("a,wddm22-ddi-off,b","wddm22-ddi-off"));
+    CHECK(!native12::ddi_experiment_listed("wddm22-ddi-off-x","wddm22-ddi-off"));
+    CHECK(!native12::ddi_experiment_listed("wddm22-ddi","wddm22-ddi-off"));
+    CHECK(!native12::ddi_experiment_listed("","wddm22-ddi-off"));
+    // The "-off" suffix comes from the reader, not from the caller, and an empty name is no switch.
+    CHECK(!d3d11_experiment_off(""));
+    CHECK(d3d11_experiment_off("wddm22-ddi")==d3d11_experiment("wddm22-ddi-off"));
     // The recommended default: with no switch named, the shell offers the WDDM 2.2 interface.
     if (!d3d11_experiment_name()[0]) CHECK(wddm2_2_offered());
-    CHECK(wddm2_2_offered()!=d3d11_experiment("d3d11-wddm20-ddi"));
+    CHECK(wddm2_2_offered()!=d3d11_experiment_off("wddm22-ddi"));
+    // The version names of the log, which must name the set the shell really offered.
+    CHECK(!std::strcmp(ddi_version_name(D3D11_1_DDI_SUPPORTED),"11_1") &&
+          !std::strcmp(ddi_version_name(D3DWDDM2_0_DDI_SUPPORTED),"WDDM2_0") &&
+          !std::strcmp(ddi_version_name(D3DWDDM2_2_DDI_SUPPORTED),"WDDM2_2") &&
+          !std::strcmp(ddi_version_name(D3DWDDM2_1_DDI_SUPPORTED),"?"));
 }
 
 // The WDDM 2.2 device table is the WDDM 2.0 table with one entry retyped and six appended.
@@ -165,6 +175,27 @@ void dxgi_table() {
     present.RotationHint=DXGI_DDI_MODE_ROTATION_ROTATE90;
     CHECK(t.pfnPresent1(nullptr)==E_INVALIDARG && t.pfnPresent1(&present)==DXGI_ERROR_UNSUPPORTED);
     CHECK(t.pfnPresentMultiplaneOverlay1(nullptr)==DXGI_ERROR_UNSUPPORTED);
+    // The one-surface conversion, field by field: every argument the DXGI 1.2 Present reads is the one the
+    // runtime gave, and the rotation hint is not one of them. Two surfaces and a missing array carry nothing.
+    DXGI_DDI_ARG_PRESENT carried{};
+    CHECK(!present_arguments_1_6_1(present,carried)); // SurfacesToPresent is 2 here
+    present.SurfacesToPresent=1;
+    surfaces[0].hSurface=DXGI_DDI_HRESOURCE(0x30);
+    surfaces[0].SubResourceIndex=4;
+    present.hDstResource=DXGI_DDI_HRESOURCE(0x40);
+    present.DstSubResourceIndex=7;
+    present.pDXGIContext=&device;
+    present.Flags.Blt=1; present.Flags.AllowTearing=1;
+    present.FlipInterval=DXGI_DDI_FLIP_INTERVAL_TWO;
+    std::memset(&carried,0xA5,sizeof(carried));
+    CHECK(present_arguments_1_6_1(present,carried));
+    CHECK(carried.hDevice==present.hDevice && carried.hSurfaceToPresent==surfaces[0].hSurface &&
+          carried.SrcSubResourceIndex==4 && carried.hDstResource==present.hDstResource &&
+          carried.DstSubResourceIndex==7 && carried.pDXGIContext==static_cast<void *>(&device) &&
+          carried.Flags.Value==present.Flags.Value && carried.FlipInterval==DXGI_DDI_FLIP_INTERVAL_TWO);
+    present.phSurfacesToPresent=nullptr;
+    CHECK(!present_arguments_1_6_1(present,carried));
+    present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=2;
     CHECK(t.pfnOfferResources1(nullptr)==E_INVALIDARG && t.pfnReclaimResources1(nullptr)==E_INVALIDARG);
     // Offer and Reclaim of an engine-private resource: a hint, as the DXGI 1.2 entries treat it. Its memory
     // stays as it is, and Reclaim reports its content kept. Refusing them would cost the device.

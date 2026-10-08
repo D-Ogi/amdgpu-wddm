@@ -78,7 +78,7 @@ Present path passes the whole override while it is true.
 
 Below that interface the shell passes `VSync` 0 only, and does `VSync` 1 with its own waits. Two cases keep it
 there: an FL11 adapter, which offers the D3D11.1 interface alone, and the process switch
-`d3d11-wddm20-ddi` of `AMDGPU_WDDM_D3D11_EXPERIMENT` (`driver/umd/dxvk/ddi-experiment.h`), which withholds the
+`wddm22-ddi-off` of `AMDGPU_WDDM_D3D11_EXPERIMENT` (`driver/umd/dxvk/ddi-experiment.h`), which withholds the
 WDDM 2.2 offer for a comparison. Then `d3d11.dll` 10.0.22621 gives `PresentCB_PreWDDM2_2`, which copies only the
 older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On x64 the copy holds
 `SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not `SyncIntervalOverride`.

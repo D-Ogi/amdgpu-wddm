@@ -34,6 +34,14 @@ inline HRESULT supported_ddi_versions(D3D_FEATURE_LEVEL maximum,bool wddm2_2,UIN
     if (count>2) versions[2]=D3DWDDM2_2_DDI_SUPPORTED;
     return S_OK;
 }
+// The name of one offered version, for the log of ddi-adapter.cpp. The log must name the set the shell really
+// offered: an FL11 adapter offers the D3D11.1 table alone, and a fixed text would state an offer it never made.
+inline const char *ddi_version_name(UINT64 supported) {
+    if (supported==D3D11_1_DDI_SUPPORTED) return "11_1";
+    if (supported==D3DWDDM2_0_DDI_SUPPORTED) return "WDDM2_0";
+    if (supported==D3DWDDM2_2_DDI_SUPPORTED) return "WDDM2_2";
+    return "?";
+}
 inline HRESULT requested_feature_level(UINT flags,D3D_FEATURE_LEVEL &out,
     UINT interfaceVersion=D3D11_1_DDI_INTERFACE_VERSION) {
     D3D_FEATURE_LEVEL result;
