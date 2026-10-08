@@ -3,7 +3,9 @@
 #include <cstdio>
 #include <cstdlib>
 using namespace bc250::umd;
-#define CHECK(x) do { if(!(x)) { std::printf("FAIL line %d\n",__LINE__);std::abort(); } } while(0)
+// The line is flushed before the abort: a redirected stdout is fully buffered, and a lost message turns a
+// one-line failure into a debugger session.
+#define CHECK(x) do { if(!(x)) { std::printf("FAIL line %d\n",__LINE__);std::fflush(stdout);std::abort(); } } while(0)
 int main() {
     AdapterCaps good{}; good.maximum=D3D_FEATURE_LEVEL_11_1;
     good.doubles.DoublePrecisionFloatShaderOps=TRUE;
@@ -144,18 +146,27 @@ int main() {
         {D3DWDDM2_0DDICAPS_MEMORY_ARCHITECTURE,8,FALSE,FALSE},
         {D3DWDDM2_0DDICAPS_TEXTURE_LAYOUT,12,0,0},
         {D3DWDDM2_0DDICAPS_D3D11_OPTIONS3,4,TRUE,0},
-        {D3DWDDM2_0DDICAPS_GPUVA_CAPS,4,40,0}};
+        {D3DWDDM2_0DDICAPS_GPUVA_CAPS,4,40,0},
+        // BD-099: the two queries of the WDDM 2.2 interface. No runtime shader cache is asked for, and no
+        // device-dependent layout, swizzle, 64 KB standard swizzle or indexable pattern is offered.
+        {D3DWDDM2_2DDICAPS_SHADERCACHE,4,FALSE,0},
+        {D3DWDDM2_2DDICAPS_TEXTURE_LAYOUT,16,0,0}};
     for(const auto &a:answers) {
-        UINT words[4]={99,99,99,99};D3D10_2DDIARG_GETCAPS args{};args.Type=a.type;args.pData=words;args.DataSize=a.size;
-        CHECK(get_adapter_caps(fl12,args)==S_OK && words[0]==a.first && words[3]==99);
+        // The word after the answer stays 99: an entry that writes more than its structure is a buffer overrun.
+        UINT words[5]={99,99,99,99,99};D3D10_2DDIARG_GETCAPS args{};args.Type=a.type;args.pData=words;args.DataSize=a.size;
+        CHECK(get_adapter_caps(fl12,args)==S_OK && words[0]==a.first && words[a.size/4]==99);
         if(a.size>=8)CHECK(words[1]==a.second);
+        if(a.size>=16)CHECK(!words[2] && !words[3]);
         args.DataSize=a.size+1;CHECK(get_adapter_caps(fl12,args)==E_INVALIDARG);
     }
     D3D11DDI_3DPIPELINESUPPORT_CAPS pipeline12{};D3D10_2DDIARG_GETCAPS pipelineArgs{};
     pipelineArgs.Type=D3D11DDICAPS_3DPIPELINESUPPORT;pipelineArgs.pData=&pipeline12;pipelineArgs.DataSize=sizeof(pipeline12);
     auto fl12_0=fl12;fl12_0.maximum=D3D_FEATURE_LEVEL_12_0;
     CHECK(get_adapter_caps(fl12_0,pipelineArgs)==S_OK && pipeline12.Caps==0x8F);
-    unknown.Type=D3DWDDM2_2DDICAPS_SHADERCACHE;CHECK(get_adapter_caps(fl12,unknown)==E_NOTIMPL && marker==99);
+    // BD-099: the swizzle-pattern queries stay unanswered. Both layout counts are zero, so the runtime asks for
+    // no pattern, and a pattern is never invented.
+    unknown.Type=D3DWDDM2_0DDICAPS_SWIZZLE_PATTERN;CHECK(get_adapter_caps(fl12,unknown)==E_NOTIMPL && marker==99);
+    unknown.Type=D3DWDDM2_2DDICAPS_SWIZZLE_PATTERN;CHECK(get_adapter_caps(fl12,unknown)==E_NOTIMPL && marker==99);
     // The system runtime asks type 151 of an FL12 adapter (fl12native002). WDK 10.0.26100 defines no caps type
     // 151 (d3d10umddi.h jumps from SWIZZLE_PATTERN 150 to OPTIONS3 152), so there is no layout to fill: it stays
     // E_NOTIMPL with the output untouched, and the runtime created the FL12_1 device regardless.

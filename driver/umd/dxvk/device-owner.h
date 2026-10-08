@@ -49,6 +49,11 @@ public:
     amdgpu_wddm::app_settings::FrameLimiter &frame_limiter() { return frame_limiter_; }
     // BD-099: the per-application VSync of this device's presents as vertical-blank waits.
     VBlankPacer &vblank_pacer() { return vblank_pacer_; }
+    // BD-099: true where the runtime copies the whole DXGIDDICB_PRESENT, with SyncIntervalOverrideValid and
+    // SyncIntervalOverride in it. That is the WDDM 2.2 interface at build 5 and later
+    // (IS_DXGI1_6_1_BASE_FUNCTIONS). Below it the runtime copies a shorter structure, the override field is
+    // not in it, and VSync needs the vertical-blank waits of the shell instead.
+    bool full_present_callback() const { return full_present_callback_; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -78,6 +83,6 @@ private:
     ID3D11DeviceContext4 *context_=nullptr;
     HMODULE modules_[3]{};
     EngineErrorState errors_;
-    bool initialized_=false,closing_=false;
+    bool initialized_=false,closing_=false,full_present_callback_=false;
 };
 }

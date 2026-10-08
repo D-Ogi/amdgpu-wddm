@@ -66,30 +66,39 @@ of the device, so no other queue operation of the device waits with the Present.
 ### VSync
 
 The value 0 forces the sync interval 0 (`DXGI_DDI_FLIP_INTERVAL_IMMEDIATE`). The value 1 forces the sync
-interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The D3D12 shell sets `SyncIntervalOverrideValid` and
-`SyncIntervalOverride` in `D3D12DDI_PRESENT_0051` for both values. The D3D11 shell sets them in `DXGIDDICB_PRESENT`
-for `VSync` 0 only, and does `VSync` 1 with its own waits.
+interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). Both shells set `SyncIntervalOverrideValid` and `SyncIntervalOverride`
+for both values: the D3D12 shell in `D3D12DDI_PRESENT_0051`, and the D3D11 shell in `DXGIDDICB_PRESENT`.
 
-The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM 2.2.2 interface and later, and the D3D11 shell
-reports the WDDM 2.0 interface. The D3D11 runtime gives the full Present callback only from interface 0xB0023
-(WDDM 2.2) build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS` in `d3d10umddi.h`). Below that, `d3d11.dll` 10.0.22621 gives
-`PresentCB_PreWDDM2_2`, which copies only the older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On
-x64 the copy holds `SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not
-`SyncIntervalOverride`. Thus each override arrives as interval 0. An override for `VSync` 1 gave 873-928 frames/s
-for the intervals 1 and 2. On x86 (WOW64) the copy holds neither field, and the override has no effect.
+The D3D11 shell gets those two fields only at the interface it negotiates. The WDK declares them only for the
+WDDM 2.2.2 interface and later. The D3D11 runtime copies the whole structure only from interface 0xB0023
+(WDDM 2.2) build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS` in `d3d10umddi.h`). The shell therefore offers the WDDM 2.2
+interface to an FL12 adapter, with the WDDM 2.2 device table and the DXGI 1.6.1 table that go with it
+(`driver/umd/dxvk/ddi-wddm22.h`). `DeviceOwner::full_present_callback` holds the answer for the device, and the
+Present path passes the whole override while it is true.
+
+Below that interface the shell passes `VSync` 0 only, and does `VSync` 1 with its own waits. Two cases keep it
+there: an FL11 adapter, which offers the D3D11.1 interface alone, and the process switch
+`wddm22-ddi-off` of `AMDGPU_WDDM_D3D11_EXPERIMENT` (`driver/umd/dxvk/ddi-experiment.h`), which withholds the
+WDDM 2.2 offer for a comparison. Then `d3d11.dll` 10.0.22621 gives `PresentCB_PreWDDM2_2`, which copies only the
+older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On x64 the copy holds
+`SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not `SyncIntervalOverride`.
+Thus each override arrives as interval 0. An override for `VSync` 1 gave 873-928 frames/s for the intervals 1
+and 2. On x86 (WOW64) the copy holds neither field, and the override has no effect.
 
 The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
-`FlipInterval` is 0 for the intervals 0, 1 and 2. Thus with `VSync` 1 the D3D11 shell waits for one vertical blank
-after each Present (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`), and the runtime keeps the interval of the
-application. It waits on the desktop output of the adapter, the primary output first. The DDI does not name the
-window, so with several outputs of different refresh rates the wait follows that one output. A shell that reports the
-WDDM 2.2.2 interface gets the full structure and can pass both values to the runtime.
+`FlipInterval` is 0 for the intervals 0, 1 and 2. Thus on the old callback the shell waits for one vertical blank
+after each Present with `VSync` 1 (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`), and the runtime keeps the
+interval of the application. It waits on the desktop output of the adapter, the primary output first. The DDI does
+not name the window, so with several outputs of different refresh rates the wait follows that one output. On the
+whole callback the runtime paces the frame and the shell waits for nothing.
 
-On unit A at 59 Hz, the x64 d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and
-30 frames/s for interval 2. With `VSync` 0 it gave 857-873 frames/s for the intervals 1 and 2. The x86 d3d11bench
-gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774
-frames/s for interval 0, 60 frames/s for interval 1 and 30 frames/s for interval 2. Thus `VSync` 1 does not shorten
-interval 2, and for an x86 application `VSync` 0 does not shorten interval 1 or 2.
+The measurements below come from the shell on the old callback (the vertical-blank waits). On unit A at 59 Hz, the
+x64 d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval
+2. With `VSync` 0 it gave 857-873 frames/s for the intervals 1 and 2. The x86 d3d11bench gave 60 frames/s with
+`VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774 frames/s for
+interval 0, 60 frames/s for interval 1 and 30 frames/s for interval 2. Thus on that callback `VSync` 1 does not
+shorten interval 2, and for an x86 application `VSync` 0 does not shorten interval 1 or 2. The shell on the whole
+callback is measured in the b24 lab validation.
 
 ### Anisotropy
 

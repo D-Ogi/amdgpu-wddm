@@ -4,21 +4,29 @@
 # the artifact, the receipt a lab runner pins against.
 #
 #   pwsh tools\win\d3d11bench\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\d3d11bench
+#
+# -Arch x86 builds the 32-bit client from the same source, into an x86\ directory beside the x64 one. The lab needs
+# it because the D3D11 shell has two architectures, and both clients must come from this one source (BD-099).
 
 param(
     [Parameter(Mandatory)][string]$Kits,
-    [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\d3d11bench",
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+    [string]$Out,
     [string]$KitVersion = '10.0.26100.0'
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $Out) {
+    $base = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\d3d11bench"
+    $Out = if ($Arch -eq 'x64') { $base } else { "$base\$Arch" }
+}
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
-$sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
+$sdkLib = Join-Path $Kits "microsoft.windows.sdk.cpp.$Arch\c"
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+$cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 New-Item -ItemType Directory -Force $Out | Out-Null
 $root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
 $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
@@ -47,11 +55,17 @@ $env:INCLUDE = ''; $env:LIB = ''
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d11bench.obj",
     "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link',
-    "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
+    "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
     'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 
 & "$Out\d3d11bench.exe" --help | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'help check failed' }
+# The image really is of the asked architecture: a wrong library path otherwise shows only on the lab.
+$dumpbin = Get-ChildItem (Join-Path $msvc.FullName 'bin\Hostx64\x64\dumpbin.exe')
+$expected = if ($Arch -eq 'x64') { '8664 machine (x64)' } else { '14C machine (x86)' }
+$machine = (& $dumpbin.FullName /nologo /headers "$Out\d3d11bench.exe" | Select-String 'machine \(') -join ' '
+if (-not $machine.Contains($expected)) { throw "image is not $Arch ($machine)" }
+Write-Host "  header: $($machine.Trim())"
 Get-Item "$Out\d3d11bench.exe" | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }
