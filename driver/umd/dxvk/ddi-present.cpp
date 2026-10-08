@@ -125,6 +125,16 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
         PresentSyncOverride sync{};
         sync.valid=vsync.valid;
         sync.interval=vsync.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
+        {   // BD-099 witness: what the runtime passes with the first Presents of the process.
+            static std::atomic_uint seen{0};
+            if (seen.fetch_add(1,std::memory_order_relaxed)<3) {
+                char text[160];
+                std::snprintf(text,sizeof(text),"BC250 BD-099: Present FlipInterval=%u Flags=0x%08X VSync valid=%u interval=%u\n",
+                    unsigned(args->FlipInterval),unsigned(args->Flags.Value),unsigned(vsync.valid),vsync.interval);
+                OutputDebugStringA(text);
+                amdgpu_wddm_log::print("%s",text);
+            }
+        }
         const HRESULT hr=present_runtime(owner.bridge(),presented,
             destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission,sync);
         if (shadow && SUCCEEDED(hr)) {
