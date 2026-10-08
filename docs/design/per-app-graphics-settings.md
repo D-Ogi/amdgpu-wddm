@@ -70,10 +70,11 @@ interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The shells set `SyncIntervalOverrideV
 the arguments of the Present callback. The D3D11 shell fills `DXGIDDICB_PRESENT`, and the D3D12 shell fills
 `D3D12DDI_PRESENT_0051`.
 
-The D3D11 runtime reads the override. The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM 2.2.2
-interface and later, and the D3D11 shell reports an older interface, but the runtime reads them all the same. On
-unit A the runtime applied the override when it lowered the interval of the application (BD-099). It did not apply
-`VSync` 1 to an application that presents with interval 0.
+The x64 D3D11 runtime reads the override. The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM
+2.2.2 interface and later, and the D3D11 shell reports an older interface, but the x64 runtime reads them all the
+same. On unit A the x64 runtime applied the override when it lowered the interval of the application (BD-099). It did
+not apply `VSync` 1 to an application that presents with interval 0. The x86 runtime (WOW64) did not apply the
+override at all.
 
 The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
 `FlipInterval` is 0 for the intervals 0, 1 and 2. Thus with `VSync` 1 the D3D11 shell also waits for one vertical
@@ -81,8 +82,11 @@ blank after each Present (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`). It
 adapter, the primary output first. The DDI does not name the window, so with several outputs of different refresh
 rates the wait follows that one output.
 
-On unit A at 59 Hz, d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0, 1 and 2. With
-`VSync` 0 it gave 858-888 frames/s for the same intervals.
+On unit A at 59 Hz, the x64 d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0, 1 and 2.
+With `VSync` 0 it gave 858-888 frames/s for the same intervals. The x86 d3d11bench gave 60 frames/s with `VSync` 1
+for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774 frames/s for interval 0, 60
+frames/s for interval 1 and 30 frames/s for interval 2. Thus for an x86 application, `VSync` 1 does not shorten
+interval 2, and `VSync` 0 does not remove the wait of interval 1 or 2.
 
 ### Anisotropy
 
