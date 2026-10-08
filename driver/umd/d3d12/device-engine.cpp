@@ -484,7 +484,11 @@ void destroy_device_engine(Device& device) noexcept {
 engine_ddi::DeviceContext* engine_context(Device& device) noexcept {return device.engine?device.engine->context():nullptr;}
 QueueEngineRegistry* engine_queues(Device& device) noexcept {return device.engine?device.engine->queues():nullptr;}
 RuntimeHeapImports* engine_imports(Device& device) noexcept {return device.engine?device.engine->imports():nullptr;}
-void engine_frame_gate(Device& device,uint32_t latency) noexcept {if(device.engine)device.engine->frame_gate(latency);}
+// latency 0 is the default of every release: one test, and this present leaves the shell exactly as it did in b23.
+void engine_frame_gate(Device& device,uint32_t latency) noexcept {
+    if(!latency || !device.engine)return;
+    device.engine->frame_gate(latency);
+}
 bool device_engine_entered(Device& device) noexcept {return device.engine && device.engine->entered();}
 void report_device_error(Device& device,HRESULT hr) noexcept {
     stage("DDI-error",hr);
