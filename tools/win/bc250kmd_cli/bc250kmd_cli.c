@@ -3366,6 +3366,10 @@ static void CpuPrint(const BC250_ESCAPE_CPU *c)
                "driver repeats it every second; a cold start is the last backstop\n");
     if (!(c->Flags & BC250_CPU_FLAG_TEMP_VALID))
         printf("cpu: the temperature above was NOT read on the last message, so it is older than the rest\n");
+    if ((c->Flags & BC250_CPU_FLAG_QUEUE3_PROVEN) && !(c->Flags & BC250_CPU_FLAG_BOOST_KNOWN))
+        printf("cpu: the firmware's own boost ceiling has NOT answered in this start, so the clock limit is "
+               "refused: a limit could only be given back as the P-state top, which is under the boost "
+               "(BD-094). The undervolt and the temperature cap are unaffected\n");
 }
 
 // What the caller knows about the load it ran over this sample (0.7.211). The driver judges clock stretching

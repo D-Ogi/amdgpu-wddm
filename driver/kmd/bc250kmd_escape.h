@@ -942,6 +942,11 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 #define BC250_CPU_FLAG_BUSY 1024u            // another CPU sequence runs: this request was refused, nothing changed
 #define BC250_CPU_FLAG_REVERT_OWED 2048u     // a revert was refused and is retried: the chip still has the trial
 #define BC250_CPU_FLAG_TEMP_VALID 4096u      // TemperatureMc was read; without this nothing judges the part cold
+#define BC250_CPU_FLAG_BOOST_KNOWN 8192u     // the firmware's own boost ceiling answered in this start, so
+                                             // BaselineMaxMHz can be given back and a clock limit is admitted.
+                                             // Without it the clock control is refused (BC250_CPU_ERROR_NO_CEILING,
+                                             // 0.7.216.23): a limit could only be given back as the P-state top,
+                                             // under the boost (BD-094). No field moves, so the ABI stays
 typedef struct _BC250_ESCAPE_CPU {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;

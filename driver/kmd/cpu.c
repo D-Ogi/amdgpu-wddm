@@ -65,8 +65,8 @@
 // window with the clock transaction and the first frames.
 #define CPU_START_DELAY_MS 2000u
 
-C_ASSERT(sizeof(BC250_ESCAPE_CPU) == 296);
-C_ASSERT(sizeof(ULONG) == sizeof(unsigned int));  // the read stage's ULONG arrays go to bc250_cpu_baseline_mhz        // ABI 1; 272 up to 0.7.210, before the sample's three inputs
+C_ASSERT(sizeof(BC250_ESCAPE_CPU) == 296);        // ABI 1; 272 up to 0.7.210, before the sample's three inputs
+C_ASSERT(sizeof(ULONG) == sizeof(unsigned int));  // the read stage's ULONG arrays go to bc250_cpu_baseline_read
 // The escape header carries three of the shim's numbers for callers that cannot include the shim
 // (tools/win/bc250kmd_cli, bc250control.dll). They are the same numbers or this does not build.
 C_ASSERT(BC250_CPU_REQUEST_MASK_STOCK == BC250_CPU_MASK_STOCK);
@@ -74,7 +74,7 @@ C_ASSERT(BC250_CPU_REQUEST_MASK_FULL == BC250_CPU_MASK_FULL);
 C_ASSERT(BC250_CPU_REQUEST_SEARCH_STEPS == BC250_CPU_SEARCH_MAX_STEPS);
 C_ASSERT(BC250_CPU_CORE_SLOTS == BC250_CPU_CORES);
 C_ASSERT(BC250_CPU_CORE_SLOTS == BC250_CPU_PSTATES);
-C_ASSERT(BC250_CPU_ERROR_COUNT == 6);
+C_ASSERT(BC250_CPU_ERROR_COUNT == 7);
 C_ASSERT(BC250_CPU_FAIL_COUNT == 6);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_CPU, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_CPU, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
@@ -94,6 +94,19 @@ static void CpuWait(ULONG Ms)
     LARGE_INTEGER delay;
     delay.QuadPart = -10000ll * (LONGLONG)Ms;
     (void)KeDelayExecutionThread(KernelMode, FALSE, &delay);
+}
+
+// The same wait, spent busy on this processor instead of asleep: the boost probe alone uses it (0.7.216.23,
+// BD-094). The firmware answers the clock of the moment on message 0x43, so a sleeping thread reads an idle core
+// and the probe would measure nothing. KeStallExecutionProcessor takes 50 us at a time, which is the documented
+// bound for one call; the thread stays at PASSIVE_LEVEL and preemptible, so this costs one core's time and
+// delays nothing else. Nothing but the probe may wait this way: every other wait of this file is a wait for the
+// firmware and belongs asleep.
+#define CPU_BUSY_SLICE_US 50u
+static void CpuBusyWait(ULONG Ms)
+{
+    ULONG slices = Ms * (1000u / CPU_BUSY_SLICE_US), i;
+    for (i = 0; i < slices; i++) KeStallExecutionProcessor(CPU_BUSY_SLICE_US);
 }
 
 static BOOLEAN CpuQueryPresent(PCWSTR Name, ULONG* Value)
@@ -215,7 +228,7 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
 // raise sold as a restore. Recorded only while this driver has sent nothing in this start:
 //   the cap        message 0x40 when it is inside the admitted range, the firmware's own default otherwise
 //   the undervolt  always 0 steps: nothing of the curve scale persists in the chip across a boot
-//   the clock      the highest clock the firmware itself answered (bc250_cpu_baseline_mhz): the P-state table of
+//   the clock      the highest clock the firmware itself answered (bc250_cpu_baseline_read): the P-state table of
 //                  message 0x3B and the per-core clocks of message 0x43, each inside the admitted band, the result
 //                  clamped to the release bound BC250_CPU_MAX_MHZ. With no plausible answer max_given stays 0, and
 //                  a restore then says the limit stays.
@@ -224,24 +237,33 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
 // alone made every revert, reset and joint-arm release a 0x8F 3200 that held the processor near 3180 MHz until a
 // restart. That is a cut sold as a restore, the mirror image of the 0.7.210 defect. The number is still an answer
 // and not a constant this driver chose: the release bound only clamps it.
+// Why the table alone is not enough either (0.7.216.23, BD-094): message 0x43 answers the clock of the moment, so
+// an idle start reads 900 to 1400 MHz, the band refuses those, and the baseline falls back to the table's 3200 MHz
+// - the very cut K137 removed. The lab met exactly that in the b23 validation (arm A of the BD-094 test: a revert
+// on an idle machine capped the processor at 3200 MHz until a restart; arm B, with one busy thread during the read
+// stage, recorded 3500 MHz and restored it). The read stage therefore makes the firmware answer the ceiling
+// itself, with a short busy window (CpuBoostProbe), and a clock limit the start could not give back is refused
+// (BC250_CPU_ERROR_NO_CEILING) instead of taken and then cut back to the table.
 // The full read stage records the cap and the clock; a later read stage of the same start (READBACK, a search step)
 // may raise the clock while the driver has still sent nothing, so the baseline is the highest boost the firmware
 // showed before the first setter. Pstate is NULL for a stage that did not read the P-state table.
 static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULONG* Pstate, const ULONG* CoreMHz)
 {
     struct bc250_cpu_settings b;
-    ULONG top, previous;
+    struct bc250_cpu_baseline read;
+    ULONG previous;
     if (s->Applied.max_given || s->Applied.uv_given || s->Applied.temp_given) return;
     if (!s->BaselineValid && Pstate == NULL) return;    // the full stage records first: it has the cap and the table
     previous = (s->BaselineValid && s->Baseline.max_given) ? s->Baseline.max_mhz : 0u;
-    top = bc250_cpu_baseline_mhz((const unsigned int*)Pstate, Pstate != NULL ? BC250_CPU_PSTATES : 0u,
-                                 (const unsigned int*)CoreMHz, BC250_CPU_CORES, previous);
+    bc250_cpu_baseline_read((const unsigned int*)Pstate, Pstate != NULL ? BC250_CPU_PSTATES : 0u,
+                            (const unsigned int*)CoreMHz, BC250_CPU_CORES, &s->BaselineRead, &read);
+    s->BaselineRead = read;
     if (s->BaselineValid) {
-        if (top <= previous) return;
+        if (read.mhz <= previous) return;
         s->Baseline.max_given = 1;
-        s->Baseline.max_mhz = top;
+        s->Baseline.max_mhz = read.mhz;
         GuardLog("cpu: the baseline clock of this start rises to %lu MHz (was %lu): the firmware's own boost",
-                 top, previous);
+                 read.mhz, previous);
         return;
     }
     RtlZeroMemory(&b, sizeof(b));
@@ -249,21 +271,84 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
     b.temp_c = (Cap >= BC250_CPU_TEMP_MIN_C && Cap <= BC250_CPU_TEMP_MAX_C) ? Cap : BC250_CPU_TEMP_MAX_C;
     b.uv_given = 1;
     b.uv_steps = 0;
-    if (top) { b.max_given = 1; b.max_mhz = top; }
+    if (read.mhz) { b.max_given = 1; b.max_mhz = read.mhz; }
     s->Baseline = b;
     s->BaselineValid = TRUE;
-    // The clock a loaded core is judged against when no limit is applied stays the P-state table's top, as up to
-    // 0.7.216.14: the boost of one busy core is not what every core reaches under the search's load, and judging
-    // stretching against 3500 MHz would fail the first step of every undervolt search on an all-core clock.
-    s->StretchRefMHz = bc250_cpu_baseline_mhz((const unsigned int*)Pstate, BC250_CPU_PSTATES, NULL, 0u, 0u);
+    // The clock a loaded core is judged against when no limit is applied stays the P-state table's top
+    // (BaselineRead.table_mhz), as up to 0.7.216.14: the boost of one busy core is not what every core reaches
+    // under the search's load, and judging stretching against 3500 MHz would fail the first step of every
+    // undervolt search on an all-core clock.
     GuardLog("cpu: the baseline of this start is clock %s%lu MHz, undervolt 0 steps, cap %lu C",
              b.max_given ? "" : "(not answered) ", b.max_mhz, b.temp_c);
-    {
-        ULONG i, ptop = 0, ctop = 0;
-        for (i = 0; i < BC250_CPU_PSTATES; i++) if (Pstate[i] > ptop) ptop = Pstate[i];
-        for (i = 0; i < BC250_CPU_CORES; i++) if (CoreMHz[i] > ctop) ctop = CoreMHz[i];
-        GuardLog("cpu: the baseline's answers: P-state table top %lu MHz, per-core top %lu MHz", ptop, ctop);
+    GuardLog("cpu: the baseline's answers: P-state table top %lu MHz, per-core (boost) top %s%lu MHz",
+             read.table_mhz, read.boost_given ? "" : "(not answered) ", read.boost_mhz);
+}
+
+// The boost probe (0.7.216.23, BD-094). The read allowlist of docs/hardware.md carries no message that answers the
+// firmware's boost ceiling: 0x3B answers the named P-states (3200 MHz on unit A, under the boost) and 0x43 answers
+// the clock of the moment, which on an idle machine is 900 to 1400 MHz. So the stage makes the firmware answer the
+// ceiling: it keeps one core busy for BC250_CPU_BOOST_PROBE_MS and reads the per-core clocks again. One busy thread
+// is enough - the lab measured 3500 MHz on every core of arm B of the b23 BD-094 test with a single busy thread -
+// and the probe stops at the first answer inside the band.
+// Cost and bounds: one core of six busy for about a fifth of a second at worst, once per start, and only on a start
+// whose cores all read under the band. The thread holds this processor (KeSetSystemAffinityThreadEx, which the user
+// thread of a READBACK escape also admits) so the load cannot wander between cores. It stays at PASSIVE_LEVEL and
+// preemptible, and it sends nothing: every message here is the
+// getter 0x43, which changes nothing in the chip and passes the hot gate. The caller holds the SMU owner lock, so
+// the probe adds no mailbox traffic of any other kind and keeps the documented one-getter-per-10-ms rate. The
+// stage's slow 100 ms rate is for the FIRST traffic of a start, which has answered 11 messages by now.
+// CoreMHz carries the stage's own answers in and the highest of both out: a probe that measures less than the
+// stage did changes nothing.
+static void CpuBoostProbe(BC250_DEVICE* Device, ULONG* CoreMHz)
+{
+    ULONG round, i, value, answered = 0, probed = 0, top = 0;
+    KAFFINITY affinity = (KAFFINITY)1 << KeGetCurrentProcessorNumber(), previous;
+
+    previous = KeSetSystemAffinityThreadEx(affinity);
+    for (round = 0; round < BC250_CPU_BOOST_PROBE_ROUNDS && !answered; round++) {
+        CpuBusyWait(BC250_CPU_BOOST_PROBE_MS);
+        for (i = 0; i < BC250_CPU_CORES && !answered; i++) {
+            value = 0;
+            if (NT_SUCCESS(CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CORE_MHZ, i, FALSE, TRUE,
+                                      &value))) {
+                probed++;
+                if (value > CoreMHz[i]) CoreMHz[i] = value;
+                if (value >= BC250_CPU_MIN_MHZ && value <= BC250_CPU_MAX_MHZ_LAB) answered = value;
+            }
+            CpuBusyWait(BC250_CPU_GETTER_GAP_MS);
+        }
     }
+    KeRevertToUserAffinityThreadEx(previous);
+    for (i = 0; i < BC250_CPU_CORES; i++) if (CoreMHz[i] > top) top = CoreMHz[i];
+    GuardLog("cpu: the boost probe kept one core busy and read %lu core clocks: %s%lu MHz", probed,
+             answered ? "the firmware's own boost is " : "still no clock inside the band, highest ", top);
+}
+
+// Whether the stage owes a probe: the firmware's ceiling is still unknown and this driver has sent nothing, so a
+// clock limit taken now could only be given back from the P-state table, which is the BD-094 cut. A hot part owes
+// nothing either: the probe makes heat, and the only thing it would buy is the clock control, which the start can
+// refuse. The next read stage of the same start probes again when the part is cool. Under Lock.
+static BOOLEAN CpuBoostUnknown(BC250_CPU_STATE* s, _In_opt_ const ULONG* Pstate, const ULONG* CoreMHz)
+{
+    struct bc250_cpu_baseline read;
+    KIRQL irql;
+    LONG temperature;
+    BOOLEAN hot;
+    if (s->Applied.max_given || s->Applied.uv_given || s->Applied.temp_given) return FALSE;
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    temperature = s->Snap.TemperatureMc;
+    hot = (s->Snap.TemperatureValid && temperature >= BC250_CLOCK_HOT_MC) ? TRUE : FALSE;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    bc250_cpu_baseline_read((const unsigned int*)Pstate, Pstate != NULL ? BC250_CPU_PSTATES : 0u,
+                            (const unsigned int*)CoreMHz, BC250_CPU_CORES, &s->BaselineRead, &read);
+    if (!bc250_cpu_boost_probe_needed(&read)) return FALSE;
+    if (hot) {
+        GuardLog("cpu: the boost probe is not run at %ld.%ld C (gate %lu C): the clock control stays refused",
+                 temperature / 1000, (temperature < 0 ? -temperature : temperature) % 1000 / 100,
+                 (ULONG)(BC250_CLOCK_HOT_MC / 1000));
+        return FALSE;
+    }
+    return TRUE;
 }
 
 // The read stage: everything the surface can answer without changing anything. It is also the gate: until it has
@@ -302,6 +387,9 @@ static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full, ULONG GapMs)
             CpuWait(GapMs);
             (void)CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_GET_ENABLED_FEATURES, 0, FALSE, TRUE,
                              &features);
+            // The P-state table has answered, so the two tops of this stage are known: with no boost answer among
+            // them the stage owes the probe (BD-094), and it runs inside this same sequence.
+            if (CpuBoostUnknown(s, pstate, coreMHz)) CpuBoostProbe(Device, coreMHz);
         }
     }
     SmuCpuEnd(&Device->Smu);
@@ -342,7 +430,7 @@ static void CpuSample(BC250_DEVICE* Device, const struct bc250_cpu_settings* Tar
     Sample->temperature_valid = s->Snap.TemperatureValid ? 1 : 0;
     KeReleaseSpinLock(&s->SnapLock, irql);
     Sample->cores = BC250_CPU_CORES;
-    Sample->target_mhz = Target->max_given ? Target->max_mhz : (s->BaselineValid ? s->StretchRefMHz : 0u);
+    Sample->target_mhz = Target->max_given ? Target->max_mhz : (s->BaselineValid ? s->BaselineRead.table_mhz : 0u);
     Sample->loaded = Loaded ? 1 : 0;
     Sample->whea_events = Whea;
     Sample->checksum_errors = Checksum;
@@ -382,6 +470,24 @@ static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings
         return STATUS_SUCCESS;
     }
     if (error != BC250_CPU_OK) return STATUS_INVALID_PARAMETER;
+    // Never take a control this start could not give back (0.7.216.23, BD-094). A clock limit is given back from
+    // the baseline, and a baseline without a per-core answer names the P-state table's top alone, which is UNDER
+    // the firmware's own boost: sending it back is the cut that held unit A at 3200 MHz until a restart. The read
+    // stage makes the firmware answer the ceiling (CpuBoostProbe); when even that failed, the limit is refused
+    // here instead, and the processor keeps the clocks its own firmware chooses. A restore always goes out: it is
+    // the way back out of the chip, and nothing else would take a change out of it.
+    if (!Restore) {
+        for (i = 0; i < plan.count; i++) {
+            if (plan.step[i].kind != BC250_CPU_STEP_CLOCK) continue;
+            if (s->BaselineValid && s->BaselineRead.boost_given) break;
+            if (Error != NULL) *Error = BC250_CPU_ERROR_NO_CEILING;
+            GuardLog("cpu: %s asks for a clock limit of %lu MHz and this start does not know the firmware's own "
+                     "ceiling", Why, To->max_given ? To->max_mhz : 0u);
+            GuardLog("cpu: %s is refused: the way back could only be the P-state top %lu MHz, under the boost "
+                     "(BD-094)", Why, s->BaselineValid ? s->BaselineRead.table_mhz : 0u);
+            return STATUS_INVALID_DEVICE_STATE;
+        }
+    }
     if (Joint && (plan.count != 1 || plan.step[0].kind != BC250_CPU_STEP_CLOCK)) {
         GuardLog("cpu: %s is not the clock limit alone (%lu steps): nothing is sent", Why, plan.count);
         return STATUS_INVALID_PARAMETER;
@@ -541,6 +647,10 @@ static void CpuJointPublish(BC250_DEVICE* Device)
     KeAcquireSpinLock(&s->SnapLock, &irql);
     ready = s->Enabled && s->Created && s->Proven && !s->OnTrial && !s->RevertOwed && !s->Search.running;
     KeReleaseSpinLock(&s->SnapLock, irql);
+    // The arm takes no cap it could only release as the P-state table's top (0.7.216.23, BD-094): with no limit
+    // applied the release goes back to the baseline, and a baseline without a per-core answer is under the
+    // firmware's own boost. CpuApplyEx refuses such a cap as well; this keeps the governor from asking.
+    if (!from->max_given && !(s->BaselineValid && s->BaselineRead.boost_given)) ready = FALSE;
     if (s->JointFault || s->JointPaused || CpuAdapterDown(Device) || base < BC250_CPU_MIN_MHZ) ready = FALSE;
     InterlockedExchange(&s->JointBaseMHz, (LONG)base);
     InterlockedExchange(&s->JointReady, ready ? 1 : 0);
@@ -775,6 +885,7 @@ void CpuStart(BC250_DEVICE* Device)
     RtlZeroMemory(&s->Applied, sizeof(s->Applied));
     RtlZeroMemory(&s->Stored, sizeof(s->Stored));
     RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
+    RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
     RtlZeroMemory(&s->Search, sizeof(s->Search));
     s->BaselineValid = s->Proven = s->OnTrial = s->RevertOwed = FALSE;
     s->Pending = s->Confirmed = s->CorePending = s->CoreConfirmed = FALSE;
@@ -981,6 +1092,7 @@ void CpuResume(BC250_DEVICE* Device)
     CpuLock(s);
     RtlZeroMemory(&s->Applied, sizeof(s->Applied));
     RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
+    RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
     s->BaselineValid = s->Proven = FALSE;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->OnTrial = FALSE;
@@ -1097,7 +1209,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     enum bc250_cpu_error error = BC250_CPU_OK;
     BC250_CPU_SNAP snap;
     ULONG trialMs = 0, remaining = 0, serial, i, searchStep = 0, searchBest = 0, searchFail = 0, searchTested = 0;
-    BOOLEAN onTrial, searching = FALSE, revertOwed = FALSE;
+    BOOLEAN onTrial, searching = FALSE, revertOwed = FALSE, boostKnown = FALSE;
     KIRQL irql;
 
     RtlZeroMemory(&request, sizeof(request));
@@ -1267,7 +1379,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 // the firmware's own ceiling from the read stage and not 0 (0.7.210 passed 0 and the sign died).
                 bc250_cpu_search_begin(&s->Search, steps, BC250_CPU_SEARCH_LOAD_MS, s->Snap.VoltageMv,
                                        s->Applied.max_given ? s->Applied.max_mhz
-                                       : (s->BaselineValid ? s->StretchRefMHz : 0u));
+                                       : (s->BaselineValid ? s->BaselineRead.table_mhz : 0u));
                 if (!s->OnTrial) s->TrialBefore = s->Applied;
                 KeReleaseSpinLock(&s->SnapLock, irql);
                 (void)bc250_cpu_search_next(&s->Search, NULL);       // asks for step 1
@@ -1323,6 +1435,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     applied = s->Applied;
     stored = s->Stored;
     baseline = s->Baseline;
+    boostKnown = (s->BaselineValid && s->BaselineRead.boost_given) ? TRUE : FALSE;
     trialMs = s->TrialMs;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     snap = s->Snap;
@@ -1398,7 +1511,8 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                   (s->CoreConfirmed ? BC250_CPU_FLAG_CORE_CONFIRMED : 0) |
                   (status == STATUS_DEVICE_BUSY ? BC250_CPU_FLAG_BUSY : 0) |
                   (revertOwed ? BC250_CPU_FLAG_REVERT_OWED : 0) |
-                  (snap.TemperatureValid ? BC250_CPU_FLAG_TEMP_VALID : 0);
+                  (snap.TemperatureValid ? BC250_CPU_FLAG_TEMP_VALID : 0) |
+                  (boostKnown ? BC250_CPU_FLAG_BOOST_KNOWN : 0);
     Data->NtStatus = (ULONG)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
