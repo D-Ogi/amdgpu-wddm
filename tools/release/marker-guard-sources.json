@@ -33,6 +33,7 @@
     { "name": "kmd/bd098-confirmed-generation", "commit": "62908d6325f8b24378ff51e30758c34fe4e0fbc8" },
     { "name": "m15/shader-model-68", "commit": "da9c4bef1fcf5da8f48bacb225a7ed644296c360" },
     { "name": "umd/per-app-graphics-settings", "commit": "4338d14c197fb42acb7fe9aac7b24060f4744d62" },
-    { "name": "gui/per-app-graphics-settings", "commit": "28bd93c955b89b9225e8286ac218cc5c7558e120" }
+    { "name": "gui/per-app-graphics-settings", "commit": "28bd93c955b89b9225e8286ac218cc5c7558e120" },
+    { "name": "main (b23 base, with kmd/hang-recovery-b22 5e10c2bf, b23 wagon 1)", "commit": "9c03c35cfbb79046fd4cce629082f51f5a43ed2b" }
   ]
 }
