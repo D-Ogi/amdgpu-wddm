@@ -135,10 +135,20 @@
 #define BC250HSA_RELEASE_MEM_DWORDS 8u
 
 /* ---- DISPATCH_DIRECT initiator ---------------------------------------------- */
-/* COMPUTE_SHADER_EN and nothing else, the value measured on this silicon
- * (driver/shim/bc250_dispatch.c, BC250_DISPATCH_INITIATOR, fact M49). */
+/* The three bits of COMPUTE_DISPATCH_INITIATOR this library writes. Every value is
+ * the mask of gc_10_1_0_sh_mask.h, and test_pm4.c compares all three with that
+ * header.
+ *
+ *   SHADER_EN     bit 0,  the one bit of the control dispatch measured on this
+ *                 silicon (driver/shim/bc250_dispatch.c, BC250_DISPATCH_INITIATOR,
+ *                 fact M49), whose shader is wave64.
+ *   CS_W32_EN     bit 15, the only place a GFX10 compute dispatch selects wave32.
+ *                 clang builds this part's kernels wave32, so the builder sets it
+ *                 from the kernel descriptor and never from a measured constant.
+ *   FORCE_START_0 bit 2,  not bit 4: bit 4 is ORDERED_APPEND_MODE. */
 #define BC250HSA_DISPATCH_INITIATOR_SHADER_EN     0x00000001u
-#define BC250HSA_DISPATCH_INITIATOR_FORCE_START_0 0x00000010u
+#define BC250HSA_DISPATCH_INITIATOR_FORCE_START_0 0x00000004u
+#define BC250HSA_DISPATCH_INITIATOR_CS_W32_EN     0x00008000u
 
 /* ---- the private segment buffer resource ------------------------------------ */
 /* Word 3 of a 128-bit raw buffer resource on gfx10.1: DST_SEL X,Y,Z,W, FORMAT 0x4B
@@ -149,7 +159,10 @@
 /* ---- CONTEXT_CONTROL -------------------------------------------------------- */
 /* The graphics ring needs it in front of the first state write of an indirect
  * buffer; it is a no-operation on a compute ring. Both dwords are libdrm's and
- * RADV's own value: load and shadow everything. */
+ * RADV's own value (ref/libdrm/tests/amdgpu/shader_test_util.c): bit 31 is
+ * UPDATE_LOAD_ENABLES in the first dword and UPDATE_SHADOW_ENABLES in the second,
+ * and every per-type enable bit is clear, so the packet says "the enable set is
+ * now this one, and it is empty": load nothing and shadow nothing. */
 #define BC250HSA_CONTEXT_CONTROL_DW 0x80000000u
 
 /* The indirect buffer padding of the GFX queue on this part. */

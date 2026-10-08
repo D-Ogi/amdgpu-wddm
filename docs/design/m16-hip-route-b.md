@@ -373,7 +373,7 @@ the shader-type bit, which is bit 1 of a type-3 header and selects the compute r
 | 13 | `SET_SH_REG` 0x207, 3 | `block.x`, `block.y`, `block.z` | `COMPUTE_NUM_THREAD_X/Y/Z` |
 | 14 | `SET_SH_REG` 0x240, n | the user data plan of section 3.5 | one packet per run of consecutive registers |
 | 15 | `SET_SH_REG` 0x215, 1 | 0 | `COMPUTE_RESOURCE_LIMITS` |
-| 16 | `DISPATCH_DIRECT` | `grid.x`, `grid.y`, `grid.z` in workgroups, then the initiator | the initiator is `COMPUTE_SHADER_EN`, the value measured on this silicon. `FORCE_START_AT_000` with `BC250HSA_DISPATCH_START_AT_000` |
+| 16 | `DISPATCH_DIRECT` | `grid.x`, `grid.y`, `grid.z` in workgroups, then the initiator | the initiator is `COMPUTE_SHADER_EN` plus `CS_W32_EN` when the kernel descriptor says wave32, which every kernel of this build does. `FORCE_START_AT_000` with `BC250HSA_DISPATCH_START_AT_000` |
 | 17 | `EVENT_WRITE` | `EVENT_TYPE(CS_PARTIAL_FLUSH)`, `EVENT_INDEX(4)` | the command processor waits for the waves |
 | 18 | `RELEASE_MEM` | the 8-dword completion write of section 3.8 | this dispatch's fence value |
 | 19 | type-2 `NOP` | as many as needed | the graphics ring pads an indirect buffer to 8 dwords |

@@ -156,6 +156,23 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
     if (group_bytes / BC250HSA_LDS_GRANULE_BYTES > BC250HSA_RSRC2_LDS_SIZE_MASK) {
         return BC250HSA_EINVAL;
     }
+    /* The wave size of a GFX10 compute dispatch is selected in
+     * COMPUTE_DISPATCH_INITIATOR.CS_W32_EN and nowhere else. A wave64 kernel
+     * therefore needs a dispatch this build does not write, and a kernel whose two
+     * statements of its own wave size disagree is not understood at all: both are
+     * refused by name instead of launched in the wrong wave size, where EXEC is half
+     * the width the code manages and every lane mask is wrong. */
+    if ((k->kernel_code_properties & BC250HSA_KCP_WAVEFRONT_SIZE32) == 0u) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "kernel %s is wave64, which this build does not dispatch", k->name);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    if (k->wave_size != 32u) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "kernel %s says wavefront size %u in its metadata and wave32 in its"
+                     " descriptor", k->name, (unsigned)k->wave_size);
+        return BC250HSA_EUNSUPPORTED;
+    }
     /* A kernel that spills needs a scratch ring, the waves and wave size encoding of
      * COMPUTE_TMPRING_SIZE at this part's 1024-byte granularity, and a private
      * segment buffer with the right stride and swizzle bits. None of that is
@@ -305,8 +322,14 @@ bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
     /* 15. COMPUTE_RESOURCE_LIMITS, 0 as the reference writes it. */
     set_sh1(&w, BC250HSA_REG_COMPUTE_RESOURCE_LIMITS, 0u);
 
-    /* 16. The dispatch itself, in workgroups. */
+    /* 16. The dispatch itself, in workgroups. CS_W32_EN comes from the kernel and not
+     *     from the measured control dispatch, whose shader is wave64: this is the one
+     *     register field that selects the wave size of the waves the command processor
+     *     starts. bc250hsa_pm4_check_dispatch has already refused everything else. */
     initiator = BC250HSA_DISPATCH_INITIATOR_SHADER_EN;
+    if ((k->kernel_code_properties & BC250HSA_KCP_WAVEFRONT_SIZE32) != 0u) {
+        initiator |= BC250HSA_DISPATCH_INITIATOR_CS_W32_EN;
+    }
     if ((env->flags & BC250HSA_DISPATCH_START_AT_000) != 0u) {
         initiator |= BC250HSA_DISPATCH_INITIATOR_FORCE_START_0;
     }

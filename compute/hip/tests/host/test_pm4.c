@@ -34,6 +34,7 @@
 
 #include "cyan_skillfish_ip_offset.h"
 #include "gc_10_1_0_offset.h"
+#include "gc_10_1_0_sh_mask.h"
 #include "navi10_enum.h"
 
 /* --------------------------------------------------------------------------------
@@ -119,6 +120,32 @@ static void check_against_linux_headers(void)
     CHECK_U64(BC250HSA_EVENT_TYPE(BC250HSA_EVENT_CS_PARTIAL_FLUSH) |
                   BC250HSA_EVENT_INDEX(BC250HSA_EVENT_INDEX_CS_PARTIAL_FLUSH),
               (uint32_t)(EVENT_TYPE(CS_PARTIAL_FLUSH) | EVENT_INDEX(4)));
+
+    /* Every bit field this library restates, against gc_10_1_0_sh_mask.h. Without
+     * these lines the register offsets were gated and the bits inside the registers
+     * were not, which is how a FORCE_START_AT_000 on the wrong bit and a missing
+     * CS_W32_EN both reached a green build. */
+    CHECK_U64(BC250HSA_DISPATCH_INITIATOR_SHADER_EN,
+              (uint32_t)COMPUTE_DISPATCH_INITIATOR__COMPUTE_SHADER_EN_MASK);
+    CHECK_U64(BC250HSA_DISPATCH_INITIATOR_FORCE_START_0,
+              (uint32_t)COMPUTE_DISPATCH_INITIATOR__FORCE_START_AT_000_MASK);
+    CHECK_U64(BC250HSA_DISPATCH_INITIATOR_CS_W32_EN,
+              (uint32_t)COMPUTE_DISPATCH_INITIATOR__CS_W32_EN_MASK);
+    /* The three are distinct bits, so a copy of one constant into another name is a
+     * failure as well. */
+    CHECK_U64(BC250HSA_DISPATCH_INITIATOR_SHADER_EN &
+                  (BC250HSA_DISPATCH_INITIATOR_FORCE_START_0 |
+                   BC250HSA_DISPATCH_INITIATOR_CS_W32_EN), 0u);
+    CHECK_U64(BC250HSA_DISPATCH_INITIATOR_FORCE_START_0 &
+                  BC250HSA_DISPATCH_INITIATOR_CS_W32_EN, 0u);
+    /* COMPUTE_PGM_RSRC2: the two fields the builder reads and writes. A shift and a
+     * mask are restated, so both are compared with the header's own mask. */
+    CHECK_U64(BC250HSA_RSRC2_USER_SGPR_SHIFT, COMPUTE_PGM_RSRC2__USER_SGPR__SHIFT);
+    CHECK_U64((uint32_t)BC250HSA_RSRC2_USER_SGPR_MASK << BC250HSA_RSRC2_USER_SGPR_SHIFT,
+              (uint32_t)COMPUTE_PGM_RSRC2__USER_SGPR_MASK);
+    CHECK_U64(BC250HSA_RSRC2_LDS_SIZE_SHIFT, COMPUTE_PGM_RSRC2__LDS_SIZE__SHIFT);
+    CHECK_U64((uint32_t)BC250HSA_RSRC2_LDS_SIZE_MASK << BC250HSA_RSRC2_LDS_SIZE_SHIFT,
+              (uint32_t)COMPUTE_PGM_RSRC2__LDS_SIZE_MASK);
 }
 
 /* --------------------------------------------------------------------------------
@@ -339,14 +366,24 @@ static void check_variants(void)
                  BC250HSA_OK);
     CHECK(out[0] != BC250HSA_PACKET3(BC250HSA_PKT3_CONTEXT_CONTROL, 1u));
 
+    /* The initiator of the golden stream: the shader enable and the wave size of this
+     * kernel, and no other bit. The dword is read out of the stream and not out of
+     * the builder's own constants. */
+    golden_inputs(&d, &env, &k);
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
+                 BC250HSA_OK);
+    CHECK_U64(out[72], (uint32_t)COMPUTE_DISPATCH_INITIATOR__COMPUTE_SHADER_EN_MASK |
+                           (uint32_t)COMPUTE_DISPATCH_INITIATOR__CS_W32_EN_MASK);
+
     /* FORCE_START_AT_000 only changes the initiator. */
     golden_inputs(&d, &env, &k);
     env.flags = BC250HSA_DISPATCH_GFX_RING | BC250HSA_DISPATCH_START_AT_000;
     CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
                  BC250HSA_OK);
     CHECK_U64(written, baseline);
-    CHECK_U64(out[72], BC250HSA_DISPATCH_INITIATOR_SHADER_EN |
-                           BC250HSA_DISPATCH_INITIATOR_FORCE_START_0);
+    CHECK_U64(out[72], (uint32_t)COMPUTE_DISPATCH_INITIATOR__COMPUTE_SHADER_EN_MASK |
+                           (uint32_t)COMPUTE_DISPATCH_INITIATOR__CS_W32_EN_MASK |
+                           (uint32_t)COMPUTE_DISPATCH_INITIATOR__FORCE_START_AT_000_MASK);
 
     /* Decision 3: the local memory size is computed by the host and written into
      * COMPUTE_PGM_RSRC2, because the kernel descriptor holds 0. reduce256 has 1024
@@ -430,6 +467,21 @@ static void check_refusals(void)
                  BC250HSA_EUNSUPPORTED);
     golden_kernel(&k);
     k.uses_dynamic_stack = 1u;
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
+                 BC250HSA_EUNSUPPORTED);
+
+    /* A wave64 kernel, and a kernel whose metadata and descriptor disagree about its
+     * own wave size. CS_W32_EN is the only place a dispatch states the wave size, so
+     * neither is launched with a guess. */
+    golden_kernel(&k);
+    golden_inputs(&d, &env, &k);
+    k.kernel_code_properties = 0x0409u & ~(uint16_t)BC250HSA_KCP_WAVEFRONT_SIZE32;
+    k.wave_size = 64u;
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
+                 BC250HSA_EUNSUPPORTED);
+    golden_kernel(&k);
+    golden_inputs(&d, &env, &k);
+    k.wave_size = 64u;
     CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
                  BC250HSA_EUNSUPPORTED);
 

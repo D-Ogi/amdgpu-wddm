@@ -16,7 +16,7 @@
 #   grid (workgroups)     4096, 1, 1
 #   block (work items)    256, 1, 1
 #   compute_pgm_rsrc1     0xE0AF0000   compute_pgm_rsrc2 0x0000008C   rsrc3 0
-#   kernel_code_properties 0x0409      user_sgpr_count 6
+#   kernel_code_properties 0x0409      user_sgpr_count 6   (bit 10 is wave32)
 #   group_segment_bytes   0            dynamic_group_bytes 0
 #   flags                 BC250HSA_DISPATCH_GFX_RING
 #
@@ -28,8 +28,8 @@
 
 # 1. CONTEXT_CONTROL, the graphics ring only. PACKET3(0x28, 1), no shader-type bit.
 C0012800
-80000000  LOAD_CONTROL: everything
-80000000  SHADOW_CONTROL: everything
+80000000  UPDATE_LOAD_ENABLES, every per-type enable bit clear: load nothing
+80000000  UPDATE_SHADOW_ENABLES, every per-type enable bit clear: shadow nothing
 
 # 2. ACQUIRE_MEM. PACKET3(0x58, 6), no shader-type bit.
 C0065800
@@ -129,7 +129,7 @@ C0031502
 00001000  grid x
 00000001  grid y
 00000001  grid z
-00000001  DISPATCH_INITIATOR: COMPUTE_SHADER_EN and nothing else
+00008001  DISPATCH_INITIATOR: COMPUTE_SHADER_EN and CS_W32_EN (the kernel is wave32)
 
 # 17. EVENT_WRITE CS_PARTIAL_FLUSH. PACKET3(0x46, 0), no shader-type bit.
 C0004600
