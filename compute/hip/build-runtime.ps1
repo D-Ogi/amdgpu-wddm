@@ -10,10 +10,15 @@
 #
 #   pwsh bc250-win\compute\hip\build-runtime.ps1
 #   pwsh bc250-win\compute\hip\build-runtime.ps1 -Bc250hsaLib P:\bc-250\scratch\build\m16-hip\bc250hsa.lib
+#   pwsh bc250-win\compute\hip\build-runtime.ps1 -Rebuild
 #
 # -Bc250hsaLib names the static library of layer 1 (branch m16/hip-dispatch). Without it the
 # script builds the mock DLL and every test, and it says that the product DLL needs that
 # library.
+#
+# -Rebuild compiles the committed code object fixture again with the AMDGPU clang and compares
+# its SHA-256 with the hash in tests\data\PROVENANCE-runtime.txt. It is off by default, because
+# the fixture exists so that the host test runs on a machine with no AMDGPU compiler.
 
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path }),
@@ -24,7 +29,8 @@ param(
     [string]$ClangBin = '',
     [string]$DeviceLibPath = '',
     [switch]$SkipClang,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$Rebuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -209,6 +215,31 @@ if ($SkipClang -or -not (Test-Path $clang)) {
         if ($_ -match '^Path=(.*)$') { $env:PATH = "$ClangBin;$($Matches[1])" }
     }
 
+    # The fixture of the host test, built again from its own source and checked by the host
+    # test itself. MEASURED, which is why this is not a hash comparison: clang writes a unique
+    # __hip_cuid_<16 hex> symbol into every compilation, so two runs of the same command on the
+    # same compiler differ in 38 bytes (the symbol, the hash table it feeds and the symbol
+    # order). The fixture is reproducible in what the test reads of it, not byte for byte.
+    if ($Rebuild) {
+        $again = Join-Path $Out 'hip_test_kernels.gfx1013.fatbin'
+        & $clang '-x' 'hip' '--offload-arch=gfx1013' '--offload-device-only' '-nogpuinc' `
+            '-nogpulib' '-O2' '-std=c++17' "-I$(Join-Path $hip 'include')" '-o' $again `
+            (Join-Path $hip 'tests\data\hip_test_kernels.hip')
+        if ($LASTEXITCODE -ne 0) { $env:PATH = $savedPath; throw "clang failed for the fixture ($LASTEXITCODE)" }
+        $builtSize = (Get-Item $again).Length
+        $committedSize = (Get-Item $fixture).Length
+        Write-Host "  the fixture rebuilt: $builtSize bytes, sha256 $((Get-FileHash -Algorithm SHA256 $again).Hash)"
+        Write-Host "  the committed one:   $committedSize bytes, sha256 $((Get-FileHash -Algorithm SHA256 $fixture).Hash)"
+        $testExe = Join-Path $Out 'test_hip_mock.exe'
+        if (Test-Path $testExe) {
+            & $testExe $again
+            if ($LASTEXITCODE -ne 0) { $env:PATH = $savedPath; throw "the host test fails on the rebuilt fixture ($LASTEXITCODE)" }
+            Write-Host '  the host test passes on the rebuilt fixture as well'
+        } else {
+            Write-Host '  the host test was not built (-SkipTests), so the rebuilt fixture is unchecked'
+        }
+    }
+
     $sampleExe = Join-Path $Out 'mock\vadd.exe'
     # MEASURED: -fms-runtime-lib=dll makes the host object import printf and malloc from the
     # C runtime DLL while clang still links the static libucrt, which the linker answers with
@@ -231,12 +262,16 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     $imports | ForEach-Object { Write-Host "  $($_.Line.Trim())" }
     if (-not ($imports -match 'amdhip64.dll')) { $env:PATH = $savedPath; throw 'the sample does not import amdhip64.dll' }
 
-    # Run it against the mock DLL, which sits next to the executable.
+    # The lab takes the sample from the output root, next to the product DLL. The mock build of
+    # the DLL stays in mock\ and must never reach the lab: it runs no instruction, so a green
+    # run of it would prove nothing about the hardware.
+    Copy-Item $sampleExe (Join-Path $Out 'vadd.exe') -Force
+
+    # Run it against the mock DLL, which sits next to the executable in mock\. --wait-total is
+    # the switch that a lab trial uses to keep every wait short, so the build exercises it.
     $record = Join-Path $Out 'mock\record.txt'
     $env:BC250_HIP_MOCK_RECORD = $record
-    # The mock runs no instruction, so the sample must not ask for the sums.
-    $env:BC250_HIP_EXPECT_COMPUTE = ''
-    $sampleOut = & $sampleExe 2>&1
+    $sampleOut = & $sampleExe '--wait-total' '10000' 2>&1
     $sampleExit = $LASTEXITCODE
     $env:PATH = $savedPath
     $sampleOut | ForEach-Object { Write-Host "  $_" }
@@ -261,7 +296,11 @@ if ($SkipClang -or -not (Test-Path $clang)) {
         throw "the first dispatch does not carry 288 kernel argument bytes: $($dispatches[0])"
     }
     $waits = ($lines | Where-Object { $_ -match '^wait ' }).Count
-    Write-Host "  the sample recorded $waits waits"
+    $bounded = ($lines | Where-Object { $_ -match '^wait .* wait=0/10000 ' }).Count
+    Write-Host "  the sample recorded $waits waits, $bounded of them with the bound it was given"
+    if ($waits -eq 0 -or $bounded -ne $waits) {
+        throw "--wait-total did not reach every wait: $bounded of $waits carry the 10000 ms bound"
+    }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -270,7 +309,7 @@ if ($SkipClang -or -not (Test-Path $clang)) {
 Write-Host ''
 foreach ($file in @((Join-Path $Out 'mock\amdhip64.dll'), (Join-Path $Out 'amdhip64.dll'),
         (Join-Path $Out 'amdhip64.lib'), (Join-Path $Out 'test_hip_mock.exe'),
-        (Join-Path $Out 'mock\vadd.exe'))) {
+        (Join-Path $Out 'vadd.exe'), (Join-Path $Out 'mock\vadd.exe'))) {
     if (-not (Test-Path $file)) { continue }
     $item = Get-Item $file
     $label = $item.FullName.Substring($Out.Length).TrimStart('\')

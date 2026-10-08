@@ -39,6 +39,14 @@ MEASURED properties of the code object, which the host test asserts:
   scale:     kernarg_segment_size 272, arguments at 0 (pointer), 8 (float), 12 (int).
   reduce256: kernarg_segment_size 16, group_segment_fixed_size 1024.
 
-To rebuild and compare, run compute/hip/build-runtime.ps1 with the AMDGPU clang present and
-compare the hash above. A different clang writes a different object; that is a new fixture and
-a new line here, not a silent replacement.
+To rebuild and check, run compute/hip/build-runtime.ps1 -Rebuild with the AMDGPU clang present.
+It builds the fixture again from hip_test_kernels.hip, prints both hashes, and runs the host
+test against the result.
+
+The hash above identifies this file and is not a reproducibility claim. MEASURED: clang writes
+a unique __hip_cuid_<16 hex> symbol into every compilation, so two runs of the same command on
+the same compiler give two different files of the same size. The differences measured between
+two such runs are 38 bytes: the symbol name, the .gnu.hash table that it feeds, and the order
+of two symbols. The fixture is therefore reproducible in everything the host test reads of it,
+and not byte for byte. A different clang can change more than that. Such a result is a new fixture
+and a new line here, not a silent replacement.
