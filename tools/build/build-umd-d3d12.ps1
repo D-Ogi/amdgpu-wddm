@@ -3,6 +3,11 @@
 param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64')
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
+# Windows installer detection asks for elevation (a UAC prompt on the desktop of the build PC) before it starts a
+# 32-bit exe without a manifest whose name holds "patch", "setup", "install" or "update". hosted-dispatch-test.exe
+# below is one ("dis-patch"): the -Arch x86 build waited on two prompts on 2026-10-08. No host gate here needs
+# elevation, so every child of this recipe starts as the invoker.
+$env:__COMPAT_LAYER='RunAsInvoker'
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root=Get-Bc250Root $repo
 if(!$EngineInclude){
