@@ -1,0 +1,2 @@
+c0ced0393b76614d4377e350418a86178413b592d19cd0a82cecccc488ca4610  x64/d3d9probe.exe (tools/win/d3d9probe at 9c03c35c, build.ps1)
+da42a1832719c53ec3088fdb4078a180c6fe040ae98a161d7029d986e31c02b1  x86/d3d9probe.exe (tools/win/d3d9probe at 9c03c35c, build.ps1 -Arch x86)
