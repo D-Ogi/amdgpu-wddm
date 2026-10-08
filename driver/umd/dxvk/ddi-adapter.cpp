@@ -2,6 +2,7 @@
 #include "ddi-adapter.h"
 #include "adapter-identity.h"
 #include "ddi-negotiation.h"
+#include "ddi-experiment.h"
 #include "diagnostics.h"
 #include "../d3d12/instance-policy.h"
 #include "../recent-launch/recent-launch.h"
@@ -39,9 +40,13 @@ void log_app_settings(const amdgpu_wddm::app_settings::Settings &settings) noexc
 }
 bool compatible_device(const Adapter &a,UINT interfaceVersion,UINT version,UINT flags,D3D_FEATURE_LEVEL &level) {
     const bool d3d11_1=interfaceVersion==D3D11_1_DDI_INTERFACE_VERSION && (version>>16)==D3D11_1_DDI_BUILD_VERSION;
-    // The WDDM 2.0 table is offered only by an FL12 adapter (supported_ddi_versions).
-    const bool wddm2_0=wddm2_0_ddi(interfaceVersion,version) && a.caps.maximum>=D3D_FEATURE_LEVEL_12_0;
-    return (d3d11_1 || wddm2_0) &&
+    const bool fl12=a.caps.maximum>=D3D_FEATURE_LEVEL_12_0;
+    // The WDDM 2.0 and WDDM 2.2 tables are offered only by an FL12 adapter (supported_ddi_versions). A
+    // runtime that asks for the WDDM 2.2 interface which the process switch withholds gets no device from
+    // this table: it asks again for the newest interface the adapter did offer.
+    const bool wddm2_0=wddm2_0_ddi(interfaceVersion,version) && fl12;
+    const bool wddm2_2=wddm2_2_ddi(interfaceVersion,version) && fl12 && wddm2_2_offered();
+    return (d3d11_1 || wddm2_0 || wddm2_2) &&
         SUCCEEDED(requested_feature_level(flags,level,interfaceVersion)) && level<=a.caps.maximum;
 }
 template<typename T> T system_entry(HMODULE module,const char *name) noexcept {
@@ -78,7 +83,16 @@ SIZE_T APIENTRY device_size(D3D10DDI_HADAPTER handle,const D3D10DDIARG_CALCPRIVA
 HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *values) {
     auto *a=adapter(handle);
     if (!a) return E_INVALIDARG;
-    return supported_ddi_versions(a->caps.maximum,entries,values);
+    const bool wddm2_2=wddm2_2_offered();
+    // The offered set, once per adapter: the runtime asks twice (count, then array).
+    if (values && !(a->observations.fetch_or(4,std::memory_order_relaxed)&4)) {
+        char text[160];
+        std::snprintf(text,sizeof(text),"M14 DDI versions: 11_1 + WDDM2_0%s (BD-099 experiment d3d11-wddm20-ddi=%u)\n",
+            wddm2_2 ? " + WDDM2_2" : "",unsigned(!wddm2_2));
+        OutputDebugStringA(text);
+        amdgpu_wddm_log::print("%s",text);
+    }
+    return supported_ddi_versions(a->caps.maximum,wddm2_2,entries,values);
 }
 HRESULT APIENTRY caps(D3D10DDI_HADAPTER handle,const D3D10_2DDIARG_GETCAPS *args) {
     auto *a=adapter(handle);
@@ -89,7 +103,8 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
     if (!a || !args) return E_INVALIDARG;
     if(!(a->observations.fetch_or(2,std::memory_order_relaxed)&2))
         adapter_diagnostic("CreateDevice",args->Interface,args->Version,args->Flags);
-    // p11_1DeviceFuncs, pWDDM2_0DeviceFuncs and pDXGIDDIBaseFunctions3/5 share their unions.
+    // p11_1DeviceFuncs, pWDDM2_0DeviceFuncs, pWDDM2_2DeviceFuncs and pDXGIDDIBaseFunctions3/5/6_1 share
+    // their unions, so one null check covers whichever member the negotiated interface names.
     if (!compatible_device(*a,args->Interface,args->Version,args->Flags,level) ||
         !args->hDrvDevice.pDrvPrivate || !args->p11_1DeviceFuncs || !args->DXGIBaseDDI.pDXGIDDIBaseFunctions3) return E_INVALIDARG;
     static_cast<DdiDeviceHandle *>(args->hDrvDevice.pDrvPrivate)->owner=nullptr;

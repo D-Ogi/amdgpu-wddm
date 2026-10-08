@@ -6,6 +6,7 @@
 #include "ddi-dxgi-table.h"
 #include "ddi-adapter.h"
 #include "ddi-negotiation.h"
+#include "ddi-experiment.h"
 #include "adapter-identity.h"
 #include "ddi-srv.h"
 #include "ddi-rtv.h"
@@ -59,13 +60,15 @@ UINT flags_for(UINT pipeline) {
         ((pipeline&24)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT2);
 }
 void negotiation() {
+    // The WDDM 2.0 table as the newest offer: the shell without the WDDM 2.2 interface (ddi-wddm22-test.cpp
+    // takes the other value of the switch).
     UINT32 count=0; UINT64 versions[3]={1,2,3};
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,&count,nullptr)==S_OK && count==2);
+    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,false,&count,nullptr)==S_OK && count==2);
     count=1;
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_0,&count,versions)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
+    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_0,false,&count,versions)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
           count==1 && versions[0]==1);
     count=3;
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,&count,versions)==S_OK && count==2 &&
+    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,false,&count,versions)==S_OK && count==2 &&
           versions[0]==D3D11_1_DDI_SUPPORTED && versions[1]==D3DWDDM2_0_DDI_SUPPORTED && versions[2]==3);
     CHECK(wddm2_0_ddi(D3DWDDM2_0_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_0_DDI_BUILD_VERSION)<<16));
     CHECK(!wddm2_0_ddi(D3DWDDM2_0_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_0_DDI_BUILD_VERSION-1)<<16));
@@ -417,8 +420,11 @@ void adapter_policy() {
         CHECK(open_render_adapter(args,configuration)==S_OK && policyLuid==77);
         // FL12 needs the policy's sparse binding; off or unreadable leaves the adapter at FL11_1.
         const bool fl12=sparse==1;
+        // BD-099: an FL12 adapter offers the WDDM 2.2 interface as well, unless the process switch withholds it
+        // (ddi-experiment.h). ddi-wddm22-test.cpp checks both offers entry by entry.
+        const UINT32 newest=fl12 ? (wddm2_2_offered() ? 3u : 2u) : 1u;
         UINT32 count=0;
-        CHECK(table.pfnGetSupportedVersions(args.hAdapter,&count,nullptr)==S_OK && count==(fl12 ? 2u : 1u));
+        CHECK(table.pfnGetSupportedVersions(args.hAdapter,&count,nullptr)==S_OK && count==newest);
         D3D11DDI_3DPIPELINESUPPORT_CAPS pipelines{}; D3D10_2DDIARG_GETCAPS caps{};
         caps.Type=D3D11DDICAPS_3DPIPELINESUPPORT; caps.pData=&pipelines; caps.DataSize=sizeof(pipelines);
         CHECK(table.pfnGetCaps(args.hAdapter,&caps)==S_OK && pipelines.Caps==(fl12 ? 0x18Fu : 15u));

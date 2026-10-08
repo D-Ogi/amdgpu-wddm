@@ -88,6 +88,50 @@ HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
         return hr;
     });
 }
+// DXGI 1.6.1 (BD-099). OfferResources1 adds D3DDDI_OFFER_FLAGS, whose one flag is AllowDecommit: the
+// kernel may then give the pages back and the resource comes back without its contents, which Reclaim
+// reports as D3DDDI_RECLAIM_RESULT_NOT_COMMITTED. The shell does not take that offer. It reclaims with the
+// synchronous WDDM 2.0 callback, which has no paging fence of its own to wait for and no "not committed"
+// answer, so a decommitted allocation would have no result it could report. The offer itself, which is the
+// work of the entry, goes to the kernel as before: the priority stays, and the allocation stays committed.
+// A flag the shell does not take is not a reason to refuse the offer: DXGI turns a failed Offer into
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR and removes the device (see the batch helper above). The flags are
+// dropped, which keeps every offered allocation committed.
+HRESULT APIENTRY offer_resources1(DXGI_DDI_ARG_OFFERRESOURCES1 *args) {
+    if (!args) return E_INVALIDARG;
+    DXGI_DDI_ARG_OFFERRESOURCES older{};
+    older.hDevice=args->hDevice; older.pResources=args->pResources;
+    older.Resources=args->Resources; older.Priority=args->Priority;
+    return offer(&older);
+}
+// ReclaimResources1 answers with a result per resource. The kernel callback is the WDDM 2.0 one, which
+// answers with a discarded flag per allocation: a reclaimed resource is OK, a discarded one DISCARDED.
+// NOT_COMMITTED cannot arise, because no offer of this shell allows a decommit (offer_resources1). An
+// engine-private resource is a hint only, as in the batch helper above, so it reports OK.
+HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
+    if (!args) return E_INVALIDARG;
+    return entry(args->hDevice,[&](DeviceOwner &owner) {
+        std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
+        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
+        if (FAILED(hr)) return hr;
+        std::vector<BOOL> discarded(handles.size(),FALSE);
+        if (!handles.empty()) {
+            auto &runtime=owner.runtime();
+            if (!runtime.KTCallbacks.pfnReclaimAllocationsCb) return E_NOTIMPL;
+            D3DDDICB_RECLAIMALLOCATIONS request{};
+            // BIND_PRESENT resources must be reclaimed by allocation handle.
+            request.HandleList=handles.data(); request.NumAllocations=UINT(handles.size());
+            request.pDiscarded=discarded.data();
+            hr=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+            if (FAILED(hr)) return hr;
+        }
+        if (args->pResults)
+            for (UINT i=0;i<args->Resources;++i)
+                args->pResults[i]=slot[i]!=UINT_MAX && discarded[slot[i]] ?
+                    D3DDDI_RECLAIM_RESULT_DISCARDED : D3DDDI_RECLAIM_RESULT_OK;
+        return hr;
+    });
+}
 HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {
     if (!args) return E_INVALIDARG;
     return entry(args->hDevice,[&](DeviceOwner &owner) {
@@ -179,5 +223,9 @@ void install_dxgi_resource_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &table) {
     table.pfnSetResourcePriority=priority;
     table.pfnQueryResourceResidency=residency;
     table.pfnResolveSharedResource=resolve;
+}
+void install_dxgi1_6_1_resource_ddi(DXGI1_6_1_DDI_BASE_FUNCTIONS &table) {
+    table.pfnOfferResources1=offer_resources1;
+    table.pfnReclaimResources1=reclaim_resources1;
 }
 }

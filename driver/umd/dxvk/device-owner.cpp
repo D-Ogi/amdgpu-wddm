@@ -31,6 +31,10 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     runtime_.KTCallbacks=*args.pKTCallbacks;
     runtime_.UMCallbacks=*args.pUMCallbacks;
     runtime_.DXGICallbacks=args.DXGIBaseDDI.pDXGIBaseCallbacks;
+    // BD-099: the runtime's own rule for the size of DXGIDDICB_PRESENT that it copies, from the WDK header,
+    // on the interface and version this device negotiated. It decides where the per-application VSync acts:
+    // in the runtime, through the override field, or in this shell, through vertical-blank waits.
+    full_present_callback_=IS_DXGI1_6_1_BASE_FUNCTIONS(args.Interface,args.Version);
     D3DDDICB_CREATECONTEXTVIRTUAL create{}; create.EngineAffinity=1;
     HRESULT hr=runtime_.KTCallbacks.pfnCreateContextVirtualCb(runtime_.hDevice,&create);
     if (FAILED(hr)) return hr;
