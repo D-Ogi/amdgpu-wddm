@@ -232,10 +232,15 @@ case creates the AppContainer profile `amdgpu-wddm.recent-launch-test` and delet
 | no memory with the temporary file open: the next note succeeds in this process and in another one | `test_allocation_failure` |
 | Off + Clear while a writer is in flight (before and inside the lock), Clear alone in both orders | `test_off_clear_in_flight` |
 | prune/read race: 600 writes against three readers, one holding the file open | `test_prune_read_race` |
-| lock bound: busy after the wait, nothing written | `test_lock_bound` |
-| 24 processes created at once, 12 of them for the same path | `test_processes` |
+| lock bound: busy after the whole wait, the wait ends, nothing written | `test_lock_bound` |
+| 24 processes created at once, 12 of them for the same path (each waits 10 s for the lock) | `test_processes` |
 | an AppContainer child records nothing | `test_app_container` |
 | `note_outer_device` end to end and the timing above | `test_note_and_timing` |
+
+The gate must give the same result on a loaded host. The 24 processes therefore wait 10 s for the lock, and not
+the 1000 ms of the driver, because this test checks that no note is lost. The timing budgets (creating thread
+99th percentile under 2 ms, whole helper 95th percentile under 25 ms) must hold in one of three measurements,
+because other builds on the same host make a measurement slower although the code did not change.
 
 Failed outer creation: `driver/umd/dxvk/ddi-draw-test.cpp` checks that a `CreateDevice` without its engine modules
 takes no note; `driver/umd/d3d12/adapter-test.cpp` points `LOCALAPPDATA` at its build directory and checks that its
