@@ -93,7 +93,9 @@ if ($LASTEXITCODE -ne 2 -or -not ($usage -match '^usage: bc250kmd_cli ')) { thro
 Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
 
 # 3. The application, with the string tables embedded.
-$resources = @(Get-ChildItem "$here\strings\strings.*.txt" | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+# The lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
+# the file system, which the recipe does not own.
+$resources = @(Get-ChildItem "$here\strings\strings.*.txt" | Sort-Object Name | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
 if ($NagiArt) {
     $guide = Get-Content (Join-Path $here 'src\Guide.cs') -Raw
     $map = [regex]::Matches($guide, '\{ "(?<expr>\d\d-[a-z-]+)", "(?<file>[a-z-]+)" \}')
@@ -108,7 +110,7 @@ if ($NagiArt) {
     Write-Host "  guide art: 9 expressions x 2 sizes embedded from -NagiArt"
 }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources (Get-ChildItem "$here\src\*.cs").FullName
+    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 # The exe declares its framework (A5: SecurityProtocolType.SystemDefault means the OS's TLS choice only for a 4.7+ target).
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe"))
