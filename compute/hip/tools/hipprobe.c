@@ -439,9 +439,17 @@ typedef struct run_state {
     uint32_t                wait_total_ms;
 } run_state;
 
-/* Packs, submits and waits. It fills the report and returns 0 on any failure. On a
- * timeout it sets the dangling flag, which the caller turns into a refusal to free
- * anything. */
+/* Packs, submits and waits. It fills the report and returns 0 on any failure.
+ *
+ * On a timeout it sets the dangling flag: a submission is still in flight, so this
+ * process makes no further call that unmaps or destroys the memory the command
+ * processor may still read. It does not keep anything alive beyond this process. The
+ * operating system destroys the device, unmaps every virtual address and frees every
+ * allocation when the process ends; the flag only keeps this process from doing it
+ * first, one allocation at a time, under a running dispatch.
+ *
+ * A lost device is not dangling: dxgkrnl has already destroyed the device, so nothing
+ * reads that memory any more and the ordinary teardown is correct. */
 static int dispatch_and_wait(run_state* st, const bc250hsa_kernel* k,
                              const bc250hsa_launch* launch, void* const* args,
                              uint32_t arg_count, kernel_report* report)
@@ -524,7 +532,6 @@ static int dispatch_and_wait(run_state* st, const bc250hsa_kernel* k,
     if (status == BC250HSA_EDEVICELOST) {
         report->status = "device-lost";
         report->detail = bc250hsa_status_string(status);
-        report->dangling = 1;
         g_device_lost = 1;
         return 0;
     }
@@ -870,13 +877,15 @@ static int run_device(const options* opt)
     print_counters();
 
     if (g_timeout) {
-        /* A submission is still in flight. Nothing is freed and the device is not
-         * closed: bc250hsa_close waits for the last submission, and the memory the
-         * command processor may still read stays mapped until this process ends and
-         * the kernel driver tears the device down. */
-        fprintf(stderr, "hipprobe: a submission is still in flight; the device is left open"
-                        " and nothing is freed. Restart the display driver or the machine"
-                        " before the next trial.\n");
+        /* A submission is still in flight. This process frees nothing and does not
+         * close the device: it issues no unmap and no destroy under a running
+         * dispatch, and bc250hsa_close would wait for that submission again. The
+         * operating system reclaims the allocations, the addresses and the device
+         * when this process ends, a moment later. */
+        fprintf(stderr, "hipprobe: a submission is still in flight; this process unmaps and"
+                        " frees nothing and leaves the device to the operating system."
+                        " Restart the display driver or the machine before the next"
+                        " trial.\n");
         free(file);
         return EXIT_TIMEOUT;
     }

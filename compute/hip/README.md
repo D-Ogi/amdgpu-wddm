@@ -104,17 +104,22 @@ checks.
 
 Every wait is at most ten seconds, and the tool never ends a timeout quietly: it prints the fence
 values, the execution state and the dword count of the indirect buffer that is still in flight, says
-that the submission is still in flight, and then frees nothing and closes nothing, because the command
-processor may still be reading.
+that the submission is still in flight, and then frees nothing and closes nothing: it issues no unmap
+and no destroy while the command processor may still be reading. It keeps nothing alive past its own
+exit. The operating system reclaims the allocations, the addresses and the device when the process
+ends, a moment later.
 
 Exit codes: 0 all right, 1 usage, 2 host failure, 3 timeout, 4 device lost, 5 result mismatch, 6 the
 adapter did not open.
 
 On the lab, `tools/run-lab.ps1` performs the six runs of section 6.2 of the design in one session,
 under a 150-second bound, and writes `result.json`, the driver log tail and the clock readings beside
-it. The record ends with the seven pass criteria of section 6.3, each one `pass`, `FAIL` or
-`unknown`, so a reader does not have to judge. It refuses to start at or above 87 C, and after a
-timeout or a lost device it stops the session and submits nothing again. The kit that drives it, the
+it. The bound covers the whole session, from the first call of the release client to the last line of
+the driver log tail: every single call is bounded by the time that is left, so the printed bound is
+the real one. The record ends with the seven pass criteria of section 6.3, each one `pass`, `FAIL` or
+`unknown`, so a reader does not have to judge. It refuses to start at or above 87 C and when it
+cannot read Tctl at all, and after a timeout or a lost device it stops the session and submits
+nothing again. The kit that drives it, the
 push list and the evidence to pull are in `scratch/m16-hip/lab/` of the workspace, which stays
 outside this repository because it names lab paths.
 

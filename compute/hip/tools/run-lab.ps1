@@ -11,10 +11,15 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File run-lab.ps1
 #   powershell -NoProfile -ExecutionPolicy Bypass -File run-lab.ps1 -Only selftest
 #
-# The bound is the whole session. A non-game lab trial is limited to three minutes, so
-# the default 150 s leaves time for the record and the driver log tail. Every run also
-# carries its own bound, and the session stops at once after a timeout or a lost device:
-# stop rule K5 of the design says do not resubmit after a hang.
+# The bound is the whole session, from the first call of the release client to the last
+# line of the driver log tail. A non-game lab trial is limited to three minutes, so the
+# default is 150 s. Every single call is bounded by the time that is left, so no sum of
+# slow answers can carry the session past the bound: the printed bound is the real one.
+# -TailReserveSeconds is held back for the clock reading and the log tail, which is the
+# evidence of a hung dispatch and must still fit after the last run.
+#
+# The session also stops at once after a timeout or a lost device: stop rule K5 of the
+# design says do not resubmit after a hang.
 
 param(
     [string]$WorkDir = 'C:\BC250\m16\step1',
@@ -29,6 +34,7 @@ param(
     [int]$WaitSliceMs = 1000,
     [int]$WaitTotalMs = 10000,
     [int]$KmdLogTail = 400,
+    [int]$TailReserveSeconds = 45,
     [int]$MaxStartTempC = 87,
     [string]$Only = '',
     [switch]$SkipKmdLog,
@@ -122,14 +128,39 @@ function Client-Text([string]$Cli, [string[]]$Arguments, [int]$Seconds) {
     return ($r.stdout + $r.stderr)
 }
 
+# Tctl in degrees, or -1 for "unknown". The client prints a negative temperature_mc when
+# the read fails (bc250kmd_cli.c), so the sign is part of the pattern and a negative
+# reading is unknown and not a cold part.
 function Temp-C([string]$Text) {
-    if ($Text -match 'temperature_mc=(\d+)') { return [double]$Matches[1] / 1000 }
+    if ($Text -match 'temperature_mc=(-?\d+)') {
+        $c = [double]$Matches[1] / 1000
+        if ($c -le 0) { return -1 }
+        return $c
+    }
     return -1
 }
 
 function Lines([string]$Text) {
     if (-not $Text) { return @() }
     return @($Text -split "`r?`n" | Where-Object { $_ -ne '' })
+}
+
+# The session clock starts here, in front of the first call of the release client, so that
+# every bound below is taken out of one measured budget and record.session_seconds covers
+# the whole run.
+$session = [Diagnostics.Stopwatch]::StartNew()
+
+# The seconds left of the session bound, minus a reserve that later work still needs.
+function Seconds-Left([int]$Reserve) {
+    $left = $TimeoutSeconds - [int]$session.Elapsed.TotalSeconds - $Reserve
+    if ($left -lt 0) { return 0 }
+    return $left
+}
+# A per-call bound: what the call wants, or all that is left, whichever is smaller.
+function Call-Bound([int]$Want, [int]$Reserve) {
+    $left = Seconds-Left $Reserve
+    if ($left -lt $Want) { return $left }
+    return $Want
 }
 
 $cli = Release-Client
@@ -146,6 +177,7 @@ $record = [ordered]@{
     release_client        = $cli
     release_client_sha256 = (File-Hash $cli)
     bound_seconds         = $TimeoutSeconds
+    tail_reserve_seconds  = $TailReserveSeconds
     kmd_info              = ''
     clock_before          = ''
     clock_after           = ''
@@ -163,16 +195,30 @@ $record = [ordered]@{
 }
 
 if ($cli) {
-    $record.kmd_info = Client-Text $cli @('info') 10
-    $record.clock_before = Client-Text $cli @('clock', 'read') 10
+    $record.kmd_info = Client-Text $cli @('info') (Call-Bound 10 $TailReserveSeconds)
+    $record.clock_before = Client-Text $cli @('clock', 'read') (Call-Bound 10 $TailReserveSeconds)
     $record.temp_start_c = Temp-C $record.clock_before
 }
 
-# The 87 C rule of this workspace: a trial does not start on a hot part.
-if ($record.temp_start_c -ge $MaxStartTempC) {
-    $record.verdict = 'refused: Tctl ' + $record.temp_start_c + ' C is at or above the ' +
+# The 87 C rule of this workspace: a trial does not start on a hot part, and it does not
+# start on a part whose temperature nobody can read either.
+$refusal = ''
+if ($record.temp_start_c -lt 0) {
+    if ($cli) {
+        $refusal = 'refused: the release client did not report Tctl, so the ' +
+            $MaxStartTempC + ' C start limit cannot be checked'
+    } else {
+        $refusal = 'refused: no release client is registered, so Tctl cannot be read and the ' +
+            $MaxStartTempC + ' C start limit cannot be checked'
+    }
+} elseif ($record.temp_start_c -ge $MaxStartTempC) {
+    $refusal = 'refused: Tctl ' + $record.temp_start_c + ' C is at or above the ' +
         $MaxStartTempC + ' C start limit'
+}
+if ($refusal) {
+    $record.verdict = $refusal
     $record.exit_code = 4
+    $record.session_seconds = [Math]::Round($session.Elapsed.TotalSeconds, 3)
     $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Result -Encoding UTF8
     Write-Host $record.verdict
     exit 4
@@ -196,13 +242,12 @@ $plan = @(
     [ordered]@{ label = 'info-after';    bound = 20; arguments = @('--info') + $common }
 )
 
-$session = [Diagnostics.Stopwatch]::StartNew()
 $runs = New-Object Collections.Generic.List[object]
 $stopped = ''
 $stopCode = 5
 foreach ($step in $plan) {
     if ($Only -and $Only -ne $step.label) { continue }
-    $left = $TimeoutSeconds - [int]$session.Elapsed.TotalSeconds - 15
+    $left = Seconds-Left $TailReserveSeconds
     if ($left -le 1) {
         $stopped = 'the session bound left no time for ' + $step.label
         $stopCode = 6
@@ -257,7 +302,6 @@ foreach ($step in $plan) {
         break
     }
 }
-$session.Stop()
 $record.runs = $runs.ToArray()
 
 # The counters of the last run that printed them. Each run is its own process, so the
@@ -273,22 +317,24 @@ foreach ($entry in $record.runs) {
     }
 }
 
+# The tail now spends the reserve, so each of its calls is bounded by the time that is
+# left of the whole session and not by a number of its own.
 if ($cli) {
-    $record.clock_after = Client-Text $cli @('clock', 'read') 10
+    $record.clock_after = Client-Text $cli @('clock', 'read') (Call-Bound 10 0)
     $record.temp_end_c = Temp-C $record.clock_after
     if (-not $SkipKmdLog) {
         # The tail of the driver log ring: the header first, which states how many lines
         # this driver load wrote, then the last $KmdLogTail of them.
-        $header = Client-Text $cli @('log', '0') 15
+        $header = Client-Text $cli @('log', '0') (Call-Bound 10 0)
         $from = 0
         if ($header -match 'log\s+(\d+) lines since') {
             $from = [int]$Matches[1] - $KmdLogTail
             if ($from -lt 0) { $from = 0 }
         }
-        $tail = Client-Text $cli @('log', [string]$from) 25
+        $tail = Client-Text $cli @('log', [string]$from) (Call-Bound 15 0)
         Set-Content -LiteralPath (Join-Path $WorkDir 'kmd-log.txt') -Value $tail -Encoding UTF8
         Set-Content -LiteralPath (Join-Path $WorkDir 'kmd-summary.txt') `
-            -Value (Client-Text $cli @('log', 'summary') 15) -Encoding UTF8
+            -Value (Client-Text $cli @('log', 'summary') (Call-Bound 10 0)) -Encoding UTF8
         $bad = @()
         foreach ($line in (Lines $tail)) {
             if ($line -match 'not run|fault|timeout|TDR|reset') { $bad += $line }
@@ -380,6 +426,7 @@ if ($stopped) {
     $record.verdict = 'PASS: all seven pass criteria of section 6.3 hold'
     $record.exit_code = 0
 }
+$session.Stop()
 $record.session_seconds = [Math]::Round($session.Elapsed.TotalSeconds, 3)
 
 $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Result -Encoding UTF8
