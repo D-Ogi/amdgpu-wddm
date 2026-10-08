@@ -29,6 +29,7 @@
     { "name": "kmd/memmgr-stage1", "commit": "a5cb4a2b9dd821c09a9b623c1301c3bcb2b29192" },
     { "name": "installer/hda-msi-gates", "commit": "c252b0ec788839783eae1247dd07b1ca55d8ef01" },
     { "name": "integ/display-modes-scanout-formats", "commit": "75420d2335ea1d29839b9e44c06154a79935faeb" },
-    { "name": "kmd/bd097-telemetry-cadence", "commit": "e3c7afacbf4dd0735c00ea39dbce9975b6853f94" }
+    { "name": "kmd/bd097-telemetry-cadence", "commit": "e3c7afacbf4dd0735c00ea39dbce9975b6853f94" },
+    { "name": "kmd/bd098-confirmed-generation", "commit": "62908d6325f8b24378ff51e30758c34fe4e0fbc8" }
   ]
 }
