@@ -206,6 +206,10 @@ void output_tests() {
     CHECK(has(part,"MaxFrameLatency=2/global/not-applied") && has(part,"PerformanceOverlay=1/environment/not-applied"));
     CHECK(has(part,"Anisotropy=16/application ") && has(part,"RenderOnCpu=unset"));
     CHECK(as::sync_override(s).valid && as::sync_override(s).interval==1);
+    // BD-099: the D3D11 shell waits only for the part of VSync that the application's interval does not give.
+    CHECK(as::extra_vblanks(as::sync_override(s),0)==1 && as::extra_vblanks(as::sync_override(s),1)==0);
+    CHECK(as::extra_vblanks(as::sync_override(s),2)==0 && as::extra_vblanks(as::SyncOverride{false,0u},0)==0);
+    CHECK(as::extra_vblanks(as::SyncOverride{true,0u},0)==0 && as::extra_vblanks(as::SyncOverride{true,0u},1)==0);
     CHECK(as::frame_rate_limit(s)==60 && as::max_frame_latency(s)==2);
     CHECK(as::dxvk_config(s)=="d3d11.samplerAnisotropy = 16;dxvk.hud = fps,frametimes,gpuload,api");
     CHECK(as::vkd3d_anisotropy(s)=="16");

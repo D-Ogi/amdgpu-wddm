@@ -80,6 +80,12 @@ inline SyncOverride sync_override(const Settings& s) noexcept {
     const Value& v=s[Setting::VSync];
     return v.set() ? SyncOverride{true,v.value ? 1u : 0u} : SyncOverride{false,0u};
 }
+// BD-099: the vertical blanks a shell waits for itself after a Present, where the runtime does not read the override
+// (the D3D11 shell, vblank-pacer.h): the part of the VSync interval that the application's own interval does not
+// give. Never negative: an override below the application's interval cannot be done by waiting.
+inline unsigned extra_vblanks(SyncOverride o,unsigned application_interval) noexcept {
+    return o.valid && o.interval>application_interval ? o.interval-application_interval : 0u;
+}
 // The frame rate cap in frames per second, 0 for none.
 inline uint32_t frame_rate_limit(const Settings& s) noexcept {
     const Value& v=s[Setting::FrameRateLimit];

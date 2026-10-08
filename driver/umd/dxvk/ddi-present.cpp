@@ -141,6 +141,9 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
                 const HRESULT waited=wait_present_value(bridge,bridge.present_value-latency);
                 if (FAILED(waited) && ddi_device_status(waited)==D3DDDIERR_DEVICEREMOVED) return D3DDDIERR_DEVICEREMOVED;
             }
+            // BD-099: the runtime does not read the override from this shell (vblank-pacer.h), so the part of
+            // VSync that the application's own interval does not give is waited for here.
+            owner.vblank_pacer().wait(as::extra_vblanks(vsync,unsigned(args->FlipInterval)));
             owner.frame_limiter().frame(as::frame_rate_limit(settings));
         }
         return ddi_device_status(hr);

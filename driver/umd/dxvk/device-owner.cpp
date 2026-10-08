@@ -36,6 +36,7 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     if (FAILED(hr)) return hr;
     runtime_.present_context=create.hContext;
     if (!runtime_.present_context) return E_FAIL;
+    vblank_pacer_.set_luid(luid);
     auto host=host_descriptor(bridge_,luid);
     hr=retain_code_modules(reinterpret_cast<const void *>(funcs.CreateDevice),reinterpret_cast<const void *>(get));
     if (SUCCEEDED(hr)) hr=instance_.open(get,host,policy_flags);
