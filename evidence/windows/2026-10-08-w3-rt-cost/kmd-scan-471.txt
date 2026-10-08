@@ -1,0 +1,10 @@
+in-trial KMD stream (game-kernel.log): 32011 lines
+lines matching (?i)tdr|reset|fault|hang|removed|timeout|0x116|preempt.*fail: 0
+
+
+mode-set lines: 5
+kmd 1434455  13479.714 display modes: commit 1920x1080 stretched -> 0x00000000
+kmd 1434456  13479.714 display modes: viewport 1920x1080 recout 1920x1200 at 0,0
+kmd 1434457  13479.714 display modes: ratio 0x80000/0x73333 taps 1/4 dscl 1 lb 2
+kmd 1434458  13479.714 display modes: lock 0 us, 66 coefficients, scl 0x00001100 -> 0x00001001, hubp 0x000F1002
+kmd 1434459  13479.714 display: CommitVidPn source 1920x1080 format 21 stride 7680

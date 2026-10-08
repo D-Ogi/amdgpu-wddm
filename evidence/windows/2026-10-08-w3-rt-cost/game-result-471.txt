@@ -1,0 +1,30 @@
+{
+  "pid": 13384,
+  "launch": "direct",
+  "experiment": "",
+  "radv_perftest": "",
+  "stop_reason": "operator-quit",
+  "errors": [],
+  "has_exited": false,
+  "exit_code": null,
+  "responding_last": true,
+  "application_events": 0,
+  "elapsed_seconds": 356,
+  "exe_version": "5.0.0.1044392(Build Machine)"
+}
+
+dx12user.settings as the game left it (RT and output keys):
+VSync=false
+Resolution="1920x1080"
+FullScreenMode=2
+PTEnable=false
+AAMode=1
+DLSSGMode=0
+XessFrameGeneration=false
+FSRFramegen=0
+EnableRT=true
+RTGIPreset=false
+Shadows=0
+EnableRtRadiance=true
+RTAOEnabled=false
+LimitFPS=240
