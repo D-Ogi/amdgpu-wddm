@@ -230,7 +230,20 @@ another directory gives the same bytes.
 The `radv` option set has `-Db_ndebug=true` from `b4c74c86` on. With `NDEBUG`, line 714 of
 `src/compiler/spirv/vtn_cmat.c` at `2732f9c8` declares a variable that only `assert` reads. Mesa makes warning
 C4189 an error (`/we4189`), so the build stops. The shipped file was built with the option set of `d6176765`,
-which does not set `b_ndebug`. The later commit `48546c73` builds with the new option set.
+which does not set `b_ndebug`. The system ICD stays on its Mesa line, so `build-mesa.ps1 -Config radv-system`
+(`1eb9ddc3`) names that option set: the `radv` set without `-Db_ndebug=true`.
+
+The b23 system ICD `A6562DAF` is Mesa `308a5e33` (`2732f9c8` and one BD-096 fix), built with the recipe of
+`d6176765`. Two measurements:
+
+- Two builds of `308a5e33` with `-Config radv-system` give `24EC5444`. This image is 35840 bytes shorter than
+  `A6562DAF`, because `/FC` and `/d1trimfile` make the `__FILE__` strings shorter. The `.text` section has the
+  same size, 10814464 bytes.
+- One build of `308a5e33` with the recipe of `d6176765`, in directories whose paths have the same lengths as the
+  b23 directories, has the size of `A6562DAF`. The differences are the per-build fields and the directory name in
+  85 path strings: 8 in 8-bit characters, including the PDB path, and 77 in UTF-16, from `assert`. With the
+  b23 directory name in those strings and the per-build fields of `A6562DAF`, the result is `A6562DAF`. The
+  CheckSum of the result is equal to the CheckSum of `A6562DAF`.
 
 A build with the new recipes is a new artifact. It does not give the bytes of a shipped fork file, because the
 shipped files were built without `/Brepro`:
@@ -251,8 +264,8 @@ What remains for the forks:
    uncommitted copy of the recipe or from a build script outside the repository.
 3. The `llvmpipe-umd` builds link a local LLVM build (`scratch/llvm2312-build` and its x86 copy). A rebuild needs an
    LLVM build that a commit or a download record identifies.
-4. `vulkan/vulkan_radeon.dll` needs a Mesa commit that the `radv` recipe can build, because `2732f9c8` does not
-   build with `-Db_ndebug=true`.
+4. `vulkan/vulkan_radeon.dll` builds with `-Config radv-system`, because its Mesa line does not build with
+   `-Db_ndebug=true`.
 
 ### The shipped files
 
