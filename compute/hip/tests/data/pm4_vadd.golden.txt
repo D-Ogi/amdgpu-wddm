@@ -1,0 +1,154 @@
+# pm4_vadd.golden.txt - the expected PM4 dword stream of one gfx1013 compute dispatch.
+#
+# Section 3.7 of docs/design/m16-hip-route-b.md states the 19 packets. This file states
+# the dwords that they must become, so that a change of the order, of a register offset,
+# of the shader-type bit, of the entry address shift, of the fence dwords or of the
+# padding fails tests/host/test_pm4.c. It was written by hand from the design table and
+# then compared with the builder, not dumped from it.
+#
+# The inputs that tests/host/test_pm4.c passes (all synthetic, no device). Every address
+# has bit 40 set and no byte of it repeats, so a wrong shift or a swapped dword shows:
+#   entry_va              0x00000140ABCD1E00   (256-byte aligned, as COMPUTE_PGM_LO needs)
+#   kernarg_va            0x00000140ABCD2000
+#   fence_va              0x00000140ABCD3008
+#   fence_value           0x0000000100000007
+#   private segment rsrc  0x00001000 0x00000040 0x00010000 0x1104BFAC
+#   grid (workgroups)     4096, 1, 1
+#   block (work items)    256, 1, 1
+#   compute_pgm_rsrc1     0xE0AF0000   compute_pgm_rsrc2 0x0000008C   rsrc3 0
+#   kernel_code_properties 0x0409      user_sgpr_count 6   (bit 10 is wave32)
+#   group_segment_bytes   0            dynamic_group_bytes 0
+#   flags                 BC250HSA_DISPATCH_GFX_RING
+#
+# One hexadecimal dword per line, 8 digits. A line that starts with # is a comment, and
+# text after the dword is a comment as well.
+#
+# "Gdzie drwa rabia, tam wiory leca" - where wood is chopped, chips fly: a packet stream
+# with no golden file is how the chips end up in the shader fetch.
+
+# 1. CONTEXT_CONTROL, the graphics ring only. PACKET3(0x28, 1), no shader-type bit.
+C0012800
+80000000  UPDATE_LOAD_ENABLES, every per-type enable bit clear: load nothing
+80000000  UPDATE_SHADOW_ENABLES, every per-type enable bit clear: shadow nothing
+
+# 2. ACQUIRE_MEM. PACKET3(0x58, 6), no shader-type bit.
+C0065800
+00000000  CP_COHER_CNTL
+FFFFFFFF  CP_COHER_SIZE
+00FFFFFF  CP_COHER_SIZE_HI
+00000000  CP_COHER_BASE
+00000000  CP_COHER_BASE_HI
+0000000A  POLL_INTERVAL
+0000C3B1  GCR_CNTL: GL2 inv+wb, GLM inv+wb, GL1 inv, GLV inv, GLK inv, GLI inv
+
+# 3. COMPUTE_START_X/Y/Z. PACKET3_COMPUTE(0x76, 3): the shader-type bit is bit 1.
+C0037602
+00000204  mmCOMPUTE_START_X - 0x19A0
+00000000
+00000000
+00000000
+
+# 4. COMPUTE_SHADER_CHKSUM.
+C0017602
+0000022A  mmCOMPUTE_SHADER_CHKSUM - 0x19A0
+00000000
+
+# 5. COMPUTE_REQ_CTRL and the five registers behind it.
+C0067602
+00000222  mmCOMPUTE_REQ_CTRL - 0x19A0
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+
+# 6. CP_COHER_START_DELAY, the one uconfig write and the one packet with no shader bit.
+C0017900
+0000007B  mmCP_COHER_START_DELAY - 0x2000
+00000020
+
+# 7. COMPUTE_STATIC_THREAD_MGMT_SE0 and SE1, through index 3.
+C0029B02
+30000216  index 3 in bits 31:28, mmCOMPUTE_STATIC_THREAD_MGMT_SE0 - 0x19A0
+FFFFFFFF
+FFFFFFFF
+
+# 8. COMPUTE_STATIC_THREAD_MGMT_SE2 and SE3, through index 3.
+C0029B02
+30000219  index 3, mmCOMPUTE_STATIC_THREAD_MGMT_SE2 - 0x19A0
+FFFFFFFF
+FFFFFFFF
+
+# 9. COMPUTE_PGM_LO and _HI: the entry address shifted right by 8, then bits 47:40.
+C0027602
+0000020C  mmCOMPUTE_PGM_LO - 0x19A0
+40ABCD1E  entry_va >> 8
+00000001  (entry_va >> 40) & 0xFF
+
+# 10. COMPUTE_PGM_RSRC1 and _RSRC2. LDS_SIZE is 0 here: this kernel has no local memory.
+C0027602
+00000212  mmCOMPUTE_PGM_RSRC1 - 0x19A0
+E0AF0000
+0000008C  USER_SGPR 6 in bits 5:1, LDS_SIZE 0 in bits 23:15
+
+# 11. COMPUTE_PGM_RSRC3, copied unchanged.
+C0017602
+00000228  mmCOMPUTE_PGM_RSRC3 - 0x19A0
+00000000
+
+# 12. COMPUTE_TMPRING_SIZE. No scratch in this build.
+C0017602
+00000218  mmCOMPUTE_TMPRING_SIZE - 0x19A0
+00000000
+
+# 13. COMPUTE_NUM_THREAD_X/Y/Z, the workgroup size in work items.
+C0037602
+00000207  mmCOMPUTE_NUM_THREAD_X - 0x19A0
+00000100
+00000001
+00000001
+
+# 14. COMPUTE_USER_DATA_0 upward: the private segment buffer, then the kernarg pointer.
+C0067602
+00000240  mmCOMPUTE_USER_DATA_0 - 0x19A0
+00001000  private segment buffer word 0
+00000040  word 1
+00010000  word 2: NUM_RECORDS in bytes
+1104BFAC  word 3: the gfx10.1 raw buffer resource
+ABCD2000  kernarg_va low
+00000140  kernarg_va high
+
+# 15. COMPUTE_RESOURCE_LIMITS.
+C0017602
+00000215  mmCOMPUTE_RESOURCE_LIMITS - 0x19A0
+00000000
+
+# 16. DISPATCH_DIRECT, in workgroups. PACKET3_COMPUTE(0x15, 3).
+C0031502
+00001000  grid x
+00000001  grid y
+00000001  grid z
+00008001  DISPATCH_INITIATOR: COMPUTE_SHADER_EN and CS_W32_EN (the kernel is wave32)
+
+# 17. EVENT_WRITE CS_PARTIAL_FLUSH. PACKET3(0x46, 0), no shader-type bit.
+C0004600
+00000407  event type 0x07 in bits 5:0, event index 4 in bits 11:8
+
+# 18. RELEASE_MEM, the 64-bit fence write. PACKET3(0x49, 6).
+C0064900
+06603514  CACHE_FLUSH_AND_INV_TS at event index 5, GLM wb+inv, GL2 wb, SEQ, policy 3
+40000000  DATA_SEL 2 (64-bit), INT_SEL 0, DST_SEL 0
+ABCD3008  fence_va low
+00000140  fence_va high
+00000007  fence_value low
+00000001  fence_value high
+00000000  INT_CTXID
+
+# 19. The indirect buffer padding of the graphics ring: a type-2 NOP to a multiple of 8.
+# 83 dwords so far, so five pad dwords follow and the stream is 88 dwords in all.
+FFFF1000
+FFFF1000
+FFFF1000
+FFFF1000
+FFFF1000

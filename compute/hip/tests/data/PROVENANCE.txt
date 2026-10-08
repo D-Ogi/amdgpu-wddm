@@ -1,0 +1,88 @@
+PROVENANCE of compute/hip/tests/data
+====================================
+
+These files are test fixtures of layer 1 of docs/design/m16-hip-route-b.md. They are
+committed so that the host gate runs on a machine with no AMDGPU compiler and with no
+BC-250 adapter. `pwsh compute/hip/build.ps1 -Rebuild` builds the two binary files again
+and compares the SHA-256; it reports a difference and keeps the new file.
+
+Compiler
+--------
+
+  clang version 22.1.8
+  https://github.com/msys2/MINGW-packages d34feaaa1d0aff624c870910b6f2589aa40d20de
+  Target: x86_64-w64-windows-gnu
+  Local path: toolchain/llvm-amdgpu-22.1.8/mingw64/bin/clang.exe
+
+The compiler is the portable AMDGPU clang of this workspace. It builds device code only.
+The library, the host tests and hipprobe are built by the Microsoft C compiler.
+
+Commands
+--------
+
+  clang -x hip --offload-arch=gfx1013 --offload-device-only --no-gpu-bundle-output \
+      -nogpuinc -nogpulib -O2 -std=c++17 -o m16_kernels.gfx1013.co m16_kernels.hip
+
+  clang -x hip --offload-arch=gfx1013 --offload-device-only \
+      -nogpuinc -nogpulib -O2 -std=c++17 -o m16_kernels.fatbin m16_kernels.hip
+
+-nogpuinc and -nogpulib keep the ROCm headers and the ROCm device library out: the
+kernels use clang builtins only, so layer 1 needs nothing of ROCm to build its fixtures.
+
+The two commands run with the working directory set to this directory, and the output
+path is the committed file itself. That matters: clang names the module identifier symbol
+__hip_cuid_<hash>, and the hash follows the output path. The same source built into
+another directory gives a code object of the same size whose .dynstr and whose two hash
+tables differ (measured, 2026-10-08). This is also why the device entry of the fat binary
+is not byte for byte the standalone code object: the two clang invocations write two
+different output names. tests/host/test_unbundle.c therefore compares what the entry
+holds, not its bytes.
+
+The hash does not follow the content of the source. A change that touches only the
+comments of m16_kernels.hip leaves both artifacts byte for byte the same, which is why the
+source hash below can move while the two artifact hashes stay (measured, 2026-10-08).
+
+Files
+-----
+
+  m16_kernels.hip            2917 bytes  sha256 f25f03ddc68e791c2e8e62028b2ac1dc5e2dadbe45e9aa7464034554aadae6ce
+    The source of the three kernels. It is the only input of the two binary files.
+
+  m16_kernels.gfx1013.co     7128 bytes  sha256 a275344d28ea93b867e7541dd2de64a882a14403a113eea8198f1839c1047183
+    The linked gfx1013 code object. ELF64, OS/ABI AMDGPU HSA, ABI version 4 (code
+    object v6), e_flags 0x142 (gfx1013, xnack any), four PT_LOAD segments, no
+    relocation. tests/host/test_loader.c, test_kernarg.c and test_descriptor.c read it.
+
+  m16_kernels.fatbin        11224 bytes  sha256 a78ab53efdcf44a871de9b4ef3dd9622f82a99ebe8ef3bb48c48eebf1f15c219
+    The clang offload bundle of the same object. It holds the three measured traps that
+    tests/host/test_unbundle.c pins: the host entry has size 0, it has the same offset
+    (0x1000) as the device entry, and its identifier names the fixed placeholder triple
+    "host-x86_64-unknown-linux-gnu-" although clang ran on Windows.
+
+  m16_kernels.metadata.txt   3789 bytes  sha256 e097aee3c853925051f8e4ea28eeb23698b0910b536e412eeb05bc2f7a873267
+    llvm-readobj --elf-output-style=GNU --notes of the code object. It is the readable
+    record of the .args lists that the host tests state their expectations from.
+
+  m16_kernels.elf.txt        5269 bytes  sha256 68336ddb881e476a5ad4bab1f721497493089af78b5ba18c5fbb59d37560eef5
+    readelf -hlSrd --dyn-syms of the code object: the segment table, the section table
+    and the dynamic symbols, with the descriptor and entry addresses the tests assert.
+
+  pm4_vadd.golden.txt        4983 bytes  sha256 9534272744d0602c52f2be4bc6b8f58ee486c9b247948679ed3100aac812223e
+    The expected PM4 dword stream of one dispatch. It was written by hand from the
+    packet table of section 3.7 of the design and then compared with the builder. It is
+    not a dump of the builder's output, so a change of the builder fails the test.
+
+Why these three kernels
+-----------------------
+
+Each one answers one question of the step-1 lab trial:
+
+  vadd           a clang-built code object runs at all, with explicit arguments only.
+  reduce256      the computed COMPUTE_PGM_RSRC2.LDS_SIZE is right (decision 3 of the
+                 design): the kernel uses 1024 bytes of local memory and the kernel
+                 descriptor holds LDS_SIZE 0.
+  writeGridSize  the implicit argument block is filled from the metadata list and not
+                 from a structure: the block of this kernel holds 13 hidden fields, and
+                 two of them meet at one byte boundary. The kernel returns
+                 block_count_x, _y and _z, which is the work-group count of the
+                 dispatch (AMDGPUUsage.rst: not the grid in work items).
