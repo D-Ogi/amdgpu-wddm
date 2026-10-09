@@ -15,8 +15,9 @@
 # run once this task is no longer Running, is the independent receipt.
 # FPS mode (owner, 2026-09-30: Full HD frame-rate tests): -GpuOnly records only the DxgKrnl session (no PerfView
 # CPU profile, so the measurement does not load the CPU and stops in seconds); -SkipA drops window A; -WorldLog
-# starts window B when the game log shows the walk phase ("walk Ns: start", the world is up) and B then lasts
-# -SecondsB or what the deadline leaves, whichever is shorter.
+# starts window B when the game log carries a verified walk marker ("walk Ns: start (world verified: ...)", the
+# grammar of world-rule.ps1) and B then lasts -SecondsB or what the deadline leaves, whichever is shorter. An
+# unverified marker is noted and holds the window, because it says that nothing checked the picture.
 # Present-mode mode (M15.14): -PresentMode adds Microsoft-Windows-Win32k and Microsoft-Windows-Dwm-Core to the
 # DxgKrnl session, with narrow keyword masks, so that etw-present-mode.py can say per frame whether a present was
 # scanned out or composed. It is off by default and changes nothing else about a window.
@@ -288,6 +289,8 @@ $script:worldRulePath = Join-Path (Split-Path -Parent $PSCommandPath) 'world-rul
 $script:worldRule = [bool](Test-Path -LiteralPath $script:worldRulePath)
 if ($script:worldRule) { . $script:worldRulePath }
 $script:worldRuleNoted = $false
+$script:worldMarkNoted = $false
+$script:worldLogNoted = $false
 function World-Now {
     if (!$WorldTelemetry) { return @{ world = $false; telemetry = $false; why = 'no -WorldTelemetry' } }
     if (!$script:worldRule) {
@@ -331,14 +334,25 @@ while ($true) {
     if (!(Get-Process -Name $gameNames -ErrorAction SilentlyContinue)) { Note 'window B skipped: game gone'; break }
     if ($WorldLog) {
         # game-runtime.ps1 keeps its log open for writing (FileShare.Read): read it with ReadWrite sharing.
-        $world = $null
+        $text = ''
         try {
             $fs = New-Object IO.FileStream($WorldLog, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
             try { $text = (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() }
-            $m = [regex]::Match($text, 'walk [0-9]+s: start')
-            if ($m.Success) { $world = $m.Value }
         } catch {}
-        if ($world) { Start-B ('world: ' + $world); break }
+        # Only a marker that says the world was verified opens the window here (BD-107, H1 of the 2026-10-10
+        # audit). The automatic walk of a session whose sampler says nothing writes the unverified form, and a
+        # runtime older than the grammar writes a bare marker: both are noted once and neither is a world. The
+        # window then waits for the world band, or for the time bound below, which says so in its own note.
+        $mark = if ($script:worldRule) { Find-WorldMarker -Text $text } else { @{ verified = ''; unverified = '' } }
+        if (!$script:worldRule -and !$script:worldLogNoted) {
+            $script:worldLogNoted = $true
+            Note 'world rule not staged: the walk marker cannot be read, window B waits for the time bound'
+        }
+        if ($mark.verified) { Start-B ('world: ' + $mark.verified); break }
+        if ($mark.unverified -and !$script:worldMarkNoted) {
+            $script:worldMarkNoted = $true
+            Note ('walk marker not verified, window B holds: ' + $mark.unverified)
+        }
     } else {
         $pct = DwmPct ([ref]$prev)
         if ($pct -ge $DwmPct) { $hits++ } else { $hits = 0 }

@@ -218,6 +218,72 @@ Check 'the world rule waits out the settle time and refuses stale or absent tele
     $missing = Test-WorldTelemetry -Path (Join-Path $env:TEMP ('bc250-no-such-sampler-' + [guid]::NewGuid().ToString('N') + '.txt')) -Now $now
     if ($missing.world -or $missing.telemetry -or $missing.why -ne 'no telemetry file') { throw "a missing sampler file gave: $($missing.why)" }
 }
+Check 'the held band resets across a sampler gap' {
+    # H2 of the 2026-10-10 audit, with the fixture that found it: seven world samples from five minutes ago and
+    # one fresh world sample returned world=true with band_seconds=300, because the loop counted samples and
+    # never looked at the time between them. Nothing was observed in those five minutes.
+    $now = [datetime]'2026-10-09T16:31:09'
+    $gapped = (Band $now.AddSeconds(-294) 7 1500 99.0) + "`n" + (Band $now 1 1500 99.0)
+    $r = Test-WorldSignal -Samples (Get-WorldSamples -Text $gapped -Reference $now) -Now $now
+    if ($r.world) { throw "a band with a 294 s hole passed as the world: $($r.why)" }
+    if ($r.run -ne 1 -or $r.gap_seconds -ne 294.0) { throw "the gap was not read: run $($r.run), gap $($r.gap_seconds) s" }
+    if ($r.why -notlike '*after a 294.0 s sampler gap') { throw "the refusal does not name the gap: $($r.why)" }
+    # A sampler that stopped and came back: the band after the gap is judged on its own, and a long enough one
+    # is still the world.
+    $resumed = (Band $now.AddSeconds(-120) 20 1500 99.0) + "`n" + (Band $now 40 1500 99.0)
+    $r2 = Test-WorldSignal -Samples (Get-WorldSamples -Text $resumed -Reference $now) -Now $now
+    if (!$r2.world) { throw "a 40-sample band after the gap was refused: $($r2.why)" }
+    if ($r2.run -ne 40 -or $r2.gap_seconds -ne 81.0) { throw "the resumed band read run $($r2.run), gap $($r2.gap_seconds) s" }
+    # And a single missed sample is not a gap: the sampler's own interval may slip.
+    $lines = @((Band $now 40 1500 99.0) -split "`n")
+    $hole = (($lines[0..19] + $lines[21..39]) -join "`n")
+    $r3 = Test-WorldSignal -Samples (Get-WorldSamples -Text $hole -Reference $now) -Now $now
+    if (!$r3.world) { throw "one missed sample ended the band: $($r3.why)" }
+}
+Check 'the walk marker says whether anything verified the world' {
+    # H1 of the 2026-10-10 audit: the automatic walk of a session without telemetry wrote the same marker as a
+    # measured world, and the capture read it as a world. Producer and consumer are both here.
+    $good = New-WorldMarker -Seconds 42 -Why 'world band 30.0 s, 1500 MHz busy 100.0%' -Verified
+    if ($good -ne 'walk 42s: start (world verified: world band 30.0 s, 1500 MHz busy 100.0%)') { throw "the verified marker reads: $good" }
+    $bad = New-WorldMarker -Seconds 50 -Why 'no telemetry (the 25 s rule)'
+    if ($bad -ne 'walk 50s: start (world unverified: no telemetry the 25 s rule)') { throw "the unverified marker reads: $bad" }
+    $log = "12:00:00 window 1s`n" + $bad + "`n12:00:51 walk 51s: W 3 s -> 2"
+    $m = Find-WorldMarker -Text $log
+    if ($m.verified) { throw "an unverified marker was read as the world: $($m.verified)" }
+    if ($m.unverified -ne $bad) { throw "the unverified marker was not found: $($m.unverified)" }
+    # The operator marks the world later in the same session: the verified marker is then found.
+    $mark = New-WorldMarker -Seconds 70 -Why 'operator mark' -Verified
+    $m2 = Find-WorldMarker -Text ($log + "`n" + $mark)
+    if ($m2.verified -ne $mark) { throw "the operator mark was not found: $($m2.verified)" }
+    # A runtime older than this grammar writes a bare marker; it carries no world evidence either.
+    $m3 = Find-WorldMarker -Text '12:00:50 walk 50s: start'
+    if ($m3.verified -or $m3.unverified -notlike 'walk 50s: start (no world state*') { throw "a bare marker gave: $($m3.unverified)" }
+    if ((Find-WorldMarker -Text '').verified -or (Find-WorldMarker -Text 'nothing here').unverified) { throw 'a log without a marker is not empty' }
+}
+Check 'the capture opens window B only on a verified walk marker' {
+    Needs 'etw-capture.ps1' @('$mark = if ($script:worldRule) { Find-WorldMarker -Text $text }',
+        'if ($mark.verified) { Start-B (''world: '' + $mark.verified); break }',
+        'walk marker not verified, window B holds')
+    $text = Text 'etw-capture.ps1'
+    if ($text -match "regex\]::Match\(\`$text, 'walk \[0-9\]\+s: start'\)") { throw 'the capture still reads any walk marker as the world' }
+}
+Check 'the runner writes the marker in the grammar of the rule' {
+    # The game runtime is the producer. The copy in this repository has no telemetry rule, so its automatic walk
+    # and its input-command cue may only write the unverified form; the operator's note:world is the one world it
+    # can verify. The template kit keeps its own copy of the runner and the same grammar.
+    $runner = Join-Path (Split-Path -Parent $here) 'game-runtime.ps1'
+    if (!(Test-Path -LiteralPath $runner)) { throw 'game-runtime.ps1 is no longer next to the capture' }
+    $text = Get-Content -LiteralPath $runner -Raw
+    foreach ($m in [regex]::Matches($text, "'walk '\+\`$t\+'s: start[^']*'")) {
+        $line = $m.Value
+        if ($line -eq "'walk '+`$t+'s: start ('") { continue }   # the marker is built from a reason variable
+        if ($line -notmatch 'world (un)?verified: ') { throw "a marker without a world state: $line" }
+    }
+    if (-not $text.Contains('world verified: operator mark')) { throw 'the operator mark is no longer a verified world' }
+    if (-not $text.Contains('s: start (world unverified: no telemetry rule in this runner')) {
+        throw 'the automatic walk no longer writes an unverified marker'
+    }
+}
 Check 'the time bound no longer opens window B by itself' {
     Needs 'etw-capture.ps1' @('[string]$WorldTelemetry', '[int]$WorldSettleSeconds = 25',
         'if ($w.world) { Start-B (''time, world: '' + $w.why); break }',

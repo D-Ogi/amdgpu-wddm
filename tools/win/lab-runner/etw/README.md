@@ -24,8 +24,10 @@ on the lab. `etw-closure.ps1` is the operator's receipt and runs once the task i
 1. **Two windows, A and B.** Window A starts `-StartA` seconds after the game appears and lasts `-Seconds`,
    because DWM misbehaves from the start of a game. Window B starts when dwm.exe takes more than `-DwmPct` per
    cent of the machine in two consecutive 2 s samples, or at `-LatestB` seconds after the game appeared,
-   whichever comes first. `-SkipA` drops window A. `-WorldLog` starts window B from the game's own log, when
-   the world is up.
+   whichever comes first. `-SkipA` drops window A. `-WorldLog` starts window B from the game's own log, from a
+   walk marker that says the world was verified. A marker that says it was not verified only holds the window
+   and goes into the notes, because the game runtime also writes one when its telemetry says nothing
+   (`world-rule.ps1` holds both the marker grammar and the world rule of BD-107).
 2. **One deadline bounds everything.** `-NotAfterQpc` is the trial's own runtime cutoff on the shared QPC
    clock. `etw-start.ps1` reads the trial's `start.json` and computes it, so operator delay before the call
    cannot extend the capture. The capture starts a window only when the collection plus the cleanup reserve

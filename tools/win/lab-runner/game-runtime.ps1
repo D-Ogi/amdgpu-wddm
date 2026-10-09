@@ -309,11 +309,16 @@ function Menu-Step([int]$t){
 # a full turn, a look up and down, strafes, backwards; each step at most 3 s so the sampling above goes on.
 # The world is assumed 25 s after the transition candidate (140: loading took ~50 s after it; the game ignores
 # input while loading). Same foreground guard as Press-E; scan codes W 0x11, A 0x1E, S 0x1F, D 0x20.
+# BD-107: "25 s after a changed brightness grid" is not a world. The main menu of the Witcher 3 Remaster is a lit
+# 3D scene, so it passes the grid test, and in the b26 validation three world arms of four measured the menu or
+# the loading screen. This copy of the runner carries no telemetry rule, so its automatic walk writes the
+# unverified form of the walk marker (the grammar is in etw\world-rule.ps1) and the ETW capture does not open
+# measurement window B on it. Only the operator's explicit mark is a verified world here.
 $walk=[ordered]@{started_at=$null;steps=0;refusals=0;inputs=@();errors=@()}
 function Walk-Step([int]$t){
  if(!$menu.changed -or $t-$menu.changed_at -lt 25){return}
  if(!(Focus-Game)){$walk.refusals++;if($walk.refusals -le 3){Note ('walk '+$t+'s: game not foreground, no input')};return}
- if($null -eq $walk.started_at){$walk.started_at=$t;Note ('walk '+$t+'s: start')}
+ if($null -eq $walk.started_at){$walk.started_at=$t;Note ('walk '+$t+'s: start (world unverified: no telemetry rule in this runner, the 25 s rule after the transition candidate)')}
  $r=$null;$what=''
  switch($walk.steps % 8){
   0{$r=[Bc.Input]::Hold(0x11,3000);$what='W 3 s'}
@@ -343,7 +348,7 @@ function Walk-Step([int]$t){
 # readiness.control_after_window_seconds after the game's first window (launchers, dialogs and menus are the
 # operator's), there a command of only shot/ocr/note/wait/quit runs without taking the foreground, and note:world
 # marks the world (the walk marker below).
-$control=[ordered]@{enabled=[bool]$stageConfig.interactive_game;dir='';commands=0;actions=0;shots=0;refusals=0;quit=$false;walk_marked=$false;errors=@()}
+$control=[ordered]@{enabled=[bool]$stageConfig.interactive_game;dir='';commands=0;actions=0;shots=0;refusals=0;quit=$false;walk_marked=$false;walk_mark_reason='';errors=@()}
 if($control.enabled){$control.dir=Join-Path 'C:\BC250\tmp\control' (Split-Path $d -Leaf);if(!$DryRun){$null=New-Item -ItemType Directory -Force -Path $control.dir;. "$d\ocr-frame.ps1"}}
 function Run-Action([string]$a){
  $p=$a -split ':'
@@ -399,7 +404,14 @@ function Control-Step([int]$t){
   # Game runner: a generic profile's channel opens before its menus, so its first input is a menu press; there the
   # operator marks the world with the action note:world once a shot shows it.
   $walkCue=if($witcherMenu -and $menu.changed){'^(hold|tap|look|click):'}else{'^note:world$'}  # 367: an operator-driven menu marks the world with note:world
-  if(!$control.walk_marked -and @($actions|Where-Object{$_.Trim() -match $walkCue}).Count){$control.walk_marked=$true;Note ('walk '+$t+'s: start');Set-GamePriority}
+  # BD-107: the explicit mark is a verified world, because the operator has the picture; an input command alone is
+  # not, and this copy of the runner has no telemetry rule to ask instead. The two forms of the marker are the
+  # grammar of etw\world-rule.ps1, and only the verified one opens measurement window B.
+  if(!$control.walk_marked -and @($actions|Where-Object{$_.Trim() -match $walkCue}).Count){
+   $control.walk_marked=$true
+   $marked=@($actions|Where-Object{$_.Trim() -match '^note:world$'}).Count
+   $control.walk_mark_reason=if($marked){'world verified: operator mark'}else{'world unverified: an input command after the menu transition, no telemetry rule in this runner'}
+   Note ('walk '+$t+'s: start ('+$control.walk_mark_reason+')');Set-GamePriority}
   $viewOnly=!$witcherMenu -and !@($actions|Where-Object{$_.Trim() -and $_.Trim() -notmatch '^(shot|ocr|note|wait|quit)(:|$)'}).Count
   if(!$viewOnly -and !(Focus-Game)){$control.refusals++;$lines+=,'refused: game not foreground'}
   else{

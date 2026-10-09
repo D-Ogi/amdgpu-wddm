@@ -15,6 +15,7 @@ HERE = Path(__file__).resolve().parent
 PROFILES = sorted((HERE / 'profiles').glob('*.json'))
 RUNTIME = (HERE / 'game-runtime.ps1').read_text(encoding='utf-8', errors='replace')
 STREAM = (HERE / 'kmdlog-stream.ps1').read_text(encoding='utf-8', errors='replace')
+WORLD_RULE = (HERE / 'etw/world-rule.ps1').read_text(encoding='utf-8', errors='replace')
 # Where the stream's polling loop begins. Everything after it runs every interval of a game session.
 STREAM_LOOP = 'while($timer.Elapsed.TotalSeconds -lt $streamLimit'
 
@@ -73,6 +74,37 @@ class OwnerRules(unittest.TestCase):
     def test_an_unreadable_temperature_does_not_clear_the_hot_run(self):
         # A failed read is -1, never a temperature: only a readable sample below 87 C ends the hot stretch.
         self.assertRegex(RUNTIME, r'elseif\(\$temp\s+-ge\s+0\)\{\$hotSince=\$null\}')
+
+    def test_the_walk_marker_says_whether_anything_verified_the_world(self):
+        # BD-107, and H1 of the 2026-10-10 audit: the marker that opens ETW measurement window B must say what
+        # verified the world. This copy of the runner has no telemetry rule, so only the operator's explicit mark
+        # may write the verified form; the automatic walk and an input command write the unverified one. The
+        # grammar itself lives in etw/world-rule.ps1, and the two files must agree on its words.
+        verified = re.search(r"\$script:Bc250WorldMarkerVerified = '(.+)'", WORLD_RULE)
+        unverified = re.search(r"\$script:Bc250WorldMarkerUnverified = '(.+)'", WORLD_RULE)
+        self.assertTrue(verified and unverified, 'etw/world-rule.ps1 no longer names the two marker forms')
+        states = {'world verified: ': verified.group(1), 'world unverified: ': unverified.group(1)}
+        for state, pattern in states.items():
+            self.assertIn(state, pattern, 'the rule and the runner must spell the same state')
+        # Every marker the runner writes, as the note's own string literal.
+        markers = re.findall(r"'walk '\+\$t\+'s: start([^']*)'", RUNTIME)
+        self.assertTrue(markers, 'the runner writes no walk marker any more')
+        for marker in markers:
+            if marker == ' (':
+                continue    # built from a reason variable, checked below
+            self.assertRegex(marker, r' \((world verified|world unverified): ',
+                             'a walk marker without a world state')
+        self.assertIn("'walk '+$t+'s: start (world unverified: no telemetry rule in this runner", RUNTIME,
+                      'the automatic walk must mark its world unverified')
+        self.assertIn("'world verified: operator mark'", RUNTIME, 'the operator mark is the one verified world here')
+        self.assertNotRegex(RUNTIME, r"'walk '\+\$t\+'s: start'",
+                            'a bare marker: the ETW capture must not read this as a verified world')
+
+    def test_the_world_rule_resets_its_band_across_a_sampler_gap(self):
+        # H2: the held band was counted in samples only, so two ends of a five-minute hole became a 300 s band.
+        self.assertRegex(WORLD_RULE, r'\[double\]\$MaxGapSeconds = 5')
+        self.assertIn('if ($step -gt $MaxGapSeconds) { $gap = [Math]::Round($step, 1); break }', WORLD_RULE)
+        self.assertIn('-MaxGapSeconds $MaxGapSeconds', WORLD_RULE, 'the file reader must pass the gap bound on')
 
     def test_no_profile_asks_for_an_upscaler_or_dynamic_resolution(self):
         for path in PROFILES:
