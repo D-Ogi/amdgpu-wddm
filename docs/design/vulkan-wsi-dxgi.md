@@ -1,8 +1,9 @@
 # Design: the Vulkan WSI presents through DXGI on a D3D12 device
 
-Date: 2026-10-07, brought to the b23 release line on 2026-10-08. Status: implemented offline, not measured on
-unit A. The DXGI route is the default (owner decision, 2026-10-07: a route that must be switched on gets
-forgotten). GDI is the explicit rollback and the automatic fallback when the DXGI route fails.
+Date: 2026-10-07. Ported to the b23 release line on 2026-10-08 and to the shipped b25 system ICD line on
+2026-10-09. Status: implemented offline, not measured on unit A. The DXGI route is the default (owner
+decision, 2026-10-07: a route that must be switched on gets forgotten). GDI is the explicit rollback and the
+automatic fallback when the DXGI route fails.
 
 This route is how the M15.14 criterion is met for Vulkan. The owner put Vulkan into M15.14 on 2026-10-08
 (independent flip: the display pipeline scans out a fullscreen or borderless game from the game's own
@@ -13,12 +14,17 @@ Step 5 and step 7 of the lab plan are that measurement. See the M15.14 row of
 [the M15 reconciliation](../m15-reconciliation.md).
 
 **Two ICD lines, and this work sits on one of them.** The release carries two 64-bit RADV builds. The D3D ICD
-line (`amdgpu-wddm/b23-icd`) belongs to our D3D11 and D3D12 shells, which load it in hosted mode. There the shell presents
-and the ICD has no WSI role at all. The system Vulkan ICD line (`amdgpu-wddm/b23-system-icd`) is
+line (the triplet line) belongs to our D3D11 and D3D12 shells, which load it in hosted mode. There the shell
+presents and the ICD has no WSI role at all. The system Vulkan ICD line is
 `payload/vulkan/vulkan_radeon.dll`, which the Vulkan loader gives to every pure Vulkan process. This WSI work
-belongs to the second line, and the branch for the b23 trial is `amdgpu-wddm/vk-wsi-dxgi-b23`: the b23 system
-line, the six route commits, and one commit that gives this line the log stream the route lines write to. The
-candidate therefore differs from the installed file by the route and by that log stream. This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
+belongs to the second line. The branch for the trial is `amdgpu-wddm/b26-vk-wsi-dxgi`: the shipped system ICD
+line of 0.7.216.100-tester.23 (`amdgpu-wddm/b25-system-icd` `d3da6d0a`), the six route commits, and one commit
+that gives this line the log stream the route lines write to. The candidate therefore differs from the
+installed file by the route and by that log stream, and by nothing else. The port keeps the three fixes that
+line already ships: the Windows shader disk cache, the BD-102 BVH node address, and the fence-wait shape that
+reads the device state only when the wait needs it.
+
+This note follows [ADR 0018](../adr/0018-engine-present-for-vulkan-wsi.md) and replaces the
 D3D11 and KMT plans of [the engine present note](wsi-engine-present.md) for the WSI side. Nothing here is a
 measured result unless it cites a `facts.md` row.
 
@@ -186,19 +192,19 @@ a tested capability, and the release notes must say so until a client asks for a
 
 | Repository, branch | Change |
 |---|---|
-| Mesa fork, `amdgpu-wddm/vk-wsi-dxgi-b23`, which is the b23 system ICD line `amdgpu-wddm/b23-system-icd`, the six route commits and the log-stream commit. `amdgpu-wddm/vk-wsi-dxgi` is the same work on the D3D ICD line | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
+| Mesa fork, `amdgpu-wddm/b26-vk-wsi-dxgi`, which is the shipped system ICD line `amdgpu-wddm/b25-system-icd` `d3da6d0a`, the six route commits and the log-stream commit. `amdgpu-wddm/vk-wsi-dxgi-b23` and `amdgpu-wddm/vk-wsi-dxgi` are the same work on the earlier b23 system line and on the D3D ICD line | `radv_wddm2_wsi_route.h` and its host test: the switch, the report of application-local modules, the D3D12 implementation check, the LB7A rules |
 | | `radv_wddm2_bo.c`: the import of 10-bit and FP16 surfaces |
 | | `radv_wddm2_wsi.c`: the hooks, the presenter device with the System32 binding, the layout check |
 | | `wsi_common.c`: the blit hook of each swapchain and the CPU wait |
 | | `wsi_common_win32.cpp`: the route, the init failure and its HRESULT |
 | | `u_win32_library.h`: the search for dependencies in System32 only |
 | | `amdgpu_wddm_stdio.h` and `u_amdgpu_wddm_stdio.c`: the named log stream the route lines use. On the D3D ICD line that pair also redirects the whole process's stdio. On the system line it declares the log and nothing else. The ICD's stdio therefore stays as the registered build has it |
-| bc250-win, `wsi/vk-dxgi-b23` (`wsi/vk-dxgi` is the same note on the b19 base) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
+| bc250-win, `wsi/b26-vk-dxgi` (`wsi/vk-dxgi-b23` and `wsi/vk-dxgi` are the same note on the earlier bases) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 
 The route reaches 64-bit processes only. The release carries two Vulkan ICDs: `payload/vulkan/vulkan_radeon.dll`
 from the system line, which this branch changes, and `payload/wow64/vulkan/vulkan_radeon.dll`, which is the x86
-build of the D3D ICD line `amdgpu-wddm/b23-icd`. One build serves the 32-bit D3D11 shell and 32-bit Vulkan, which
-[the third-party list](../testing/THIRD-PARTY.md) records. A b24 release that rebuilds the system line only leaves
+build of the D3D ICD line. One build serves the 32-bit D3D11 shell and 32-bit Vulkan, which
+[the third-party list](../testing/THIRD-PARTY.md) records. A release that rebuilds the system line only leaves
 a 32-bit Vulkan application on the CPU path. Nothing in the code is 64-bit specific. The x86 build of the route
 needs the route commits on the D3D ICD line and its own trial. Until then the release notes must say so.
 
@@ -250,16 +256,27 @@ keeps the DXGI hooks.
 
 The kit that runs it is `scratch/b24/vk-wsi-dxgi-kit/lab/` (local, outside this repository): one PowerShell 5.1
 script per step, `install-candidate.ps1` and `rollback-candidate.ps1` for the file swap, `EXPECTED.md` with the
-expected line of every step, and `selftest.ps1` for the reading logic. Nothing of it has run.
+expected line of every step, and `selftest.ps1` for the reading logic. Nothing of it has run. The kit takes the
+candidate file and its hash as parameters, so the b26 candidate needs no new kit.
 
-Each step is one trial of at most 170 s, which holds the three-minute rule. The Vulkan game step runs the game's
-own timedemo and ends by itself, so it keeps the same bound. An interactive game session under the owner's game
-rules is a separate run. It is not part of this plan.
+**The base of the plan is 0.7.216.100-tester.23 and the b26 candidate ICD.** The lab holds that release. Each
+step uses it with one file replaced: `vulkan\vulkan_radeon.dll` under the install root, the system Vulkan ICD.
+The manifest beside it names `.\vulkan_radeon.dll`, so that one file is the whole install, and the shells keep
+their own ICD. The kit keeps the tester.23 file by hash and restores it by hash. The route's own rollback is
+`AMDGPU_WDDM_VK_WSI=gdi` for one process, or the registry value `gdi` for all.
 
-Each step uses the installed b23 release with one file replaced: `vulkan\vulkan_radeon.dll` under the install
-root, the system Vulkan ICD. The manifest beside it names `.\vulkan_radeon.dll`, so that one file is the whole
-install, and the shells keep their own ICD. The kit keeps the b23 file by hash and restores it by hash. The route's own
-rollback is `AMDGPU_WDDM_VK_WSI=gdi` for one process or the registry value `gdi` for all.
+**Steps 1 to 6 are non-game arms of at most 170 s each, which holds the three-minute rule.** Step 7 is the one
+game arm. It runs under the owner's game-session rules of 2026-10-01 and ends within 1200 s. The operator owns
+the timer and ends the arm when its readings are in hand. No other step starts a game.
+
+**Step 0, the control arm, comes first.** Run step 1 on the installed tester.23 file, with no replacement and no
+variable. It must give the CPU present path: no `BC250 WSI: route=` line at all, no `D3D12 presenter device`
+line, and the GDI present in ETW. This arm proves that each reading of steps 1 to 7 belongs to the candidate
+bytes and not to the release. Record the hash of the installed file in the same record.
+
+**The shipped fixes keep their own arms.** The candidate carries the Windows shader disk cache and the BD-102
+BVH node address of tester.23. Step 7 is therefore a regression arm for the Q2RTX release gate as well as a
+present arm: a hang or a wrong picture there fails the candidate even when every present reading passes.
 
 Each client runs as a one-shot scheduled task of the interactive session. An SSH session on this lab has
 elevation but lives in session 0, where a window is on no monitor and no interactive DWM composes it, so a present from
@@ -303,15 +320,35 @@ read it with `tools/win/etw/etw-present-mode.py`.
 6. **vkcube, `dxgi-composition`, 60 s.** Pass: as step 1, with the `composition swap chain` line, and present log
    rows with path `dxgi-composition`. The present log names the path from the chain's target, so the window route
    writes `dxgi` there and this route writes `dxgi-composition`. A `dxgi` row in this step is the finding.
-7. **Quake II RTX 1.8.1, borderless at 1920x1200, no variable set.** It is the one Vulkan game the workspace
-   stages for unit A (`scratch/pathtrace/pkg/q2rtx`, pushed to `C:\BC250\pathtrace` by `pt-session.py push`
-   during the b23 validation), and it is path-traced, so it exercises ray tracing and the WSI at once. The run
-   is its own timedemo through `scratch/pathtrace/lab/pt-run.ps1 -Demo q2rtx-timedemo`, which already holds the
-   interactive task, the Tctl gate and the thermal stop. Pass: as steps 1 and 5 for the game process, a frame
-   rate in the game's log that is not below the same run on `gdi`, and no swapchain fallback line. Q2RTX may
-   also fail for a ray-tracing reason that has nothing to do with this WSI, and nothing has run it on unit A
-   yet: the route lines appear before the game picks a device, so an early failure still names which route was
-   chosen.
+7. **Quake II RTX 1.8.1, borderless at 1920x1200, no variable set. The one game arm, at most 1200 s.** It is
+   the only Vulkan game the workspace stages for unit A (`scratch/pathtrace/pkg/q2rtx`, pushed to
+   `C:\BC250\pathtrace` by `pt-session.py push`), and it is path-traced, so it exercises ray tracing and the
+   WSI at once. The other games of the lab (The Witcher 3, Rise of the Tomb Raider, The Ascent, Factorio) have
+   no Vulkan path, so none of them can test this route. The run is its own timedemo through
+   `scratch/pathtrace/lab/pt-run.ps1 -Demo q2rtx-timedemo`, which already holds the interactive task, the Tctl
+   gate and the thermal stop. Run the timedemo on the candidate, then the same timedemo with
+   `AMDGPU_WDDM_VK_WSI=gdi` as the paired control, both inside the one session. Pass, in four parts: the
+   readings of steps 1 and 5 for the game process, a frame rate of the candidate arm that is not below the
+   `gdi` arm of the same session, no swapchain fallback line, and no TDR and no bugcheck in either arm. The
+   release baseline for this game on
+   tester.22 bytes is 59.4 frames per second for the pipeline API and 60.6 for the query API. A result below
+   that baseline on `gdi` says the session, not the route, is the cause, so read the pair and not the absolute
+   number. Q2RTX may also fail for a ray-tracing reason that has nothing to do with this WSI: the route lines
+   appear before the game picks a device, so an early failure still names which route was chosen.
 
 If a step fails on the DXGI route, the release notes keep `gdi` as the named workaround
-(`docs/testing/release-notes/pending/vk-wsi-dxgi.md`), and the failure gets a GitHub issue.
+(`docs/testing/release-notes/pending/vk-wsi-dxgi.md`), and the failure gets a GitHub issue. A failure of
+step 7 blocks the wagon in any case: Quake II RTX is a release gate (owner, 2026-10-08).
+
+### What runs offline before the lab
+
+| Gate | What it proves |
+|---|---|
+| The five build gates of the system ICD recipe | The candidate has the shader disk cache, no live assert, the x64 machine, no static `dxgi`/`d3d11`/`d3d12`/`d3d12core`/`dcomp` import, and the git sha of the branch head. The import gate is the one that keeps the route on System32 modules |
+| `tools/build/build-radv-wsi-route-test.ps1` | The route rules: the switch and its three sources, the report of application-local modules, the D3D12 implementation check, and the LB7A import rules. Its negative control must fail every case |
+| The pipeline stage-cover host test of this line | The ported tree still builds and passes the host test the shipped line carries |
+| The fence-wait shape check and the BVH node address check | The port did not undo the two BD-102 fixes of tester.23. Each check reads its rule out of the tree first, and each one has a negative control |
+
+The queue, sync and memory host tests belong to the D3D ICD line (`src/amd/vulkan/winsys/wddm2/tests/` on that
+line). The system line has no source for them, so they cannot run on this candidate. The lab arms and the route
+test take their place.

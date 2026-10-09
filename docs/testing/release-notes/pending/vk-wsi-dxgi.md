@@ -1,7 +1,8 @@
 # Pending release-notes lines: Vulkan applications present on the GPU (Vulkan ICD)
 
 This file is not a release. It holds the tester-facing lines for the next tester release notes that ship the
-Vulkan driver of branch `amdgpu-wddm/vk-wsi-dxgi-b23`, which is the b23 system Vulkan ICD line plus the route.
+Vulkan driver of branch `amdgpu-wddm/b26-vk-wsi-dxgi`, which is the shipped system Vulkan ICD line plus the
+route.
 The release step copies the lines into
 `docs/testing/release-notes/<version>-tester.N.md` and deletes this file. The design is
 `docs/design/vulkan-wsi-dxgi.md`.
