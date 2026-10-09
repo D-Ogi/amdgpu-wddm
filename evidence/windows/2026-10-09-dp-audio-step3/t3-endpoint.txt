@@ -7,7 +7,7 @@
    {1da5d803-d492-4edd-8c23-e0c0ffee7f0e},7      1
    {1da5d803-d492-4edd-8c23-e0c0ffee7f0e},8      {D1B9CC2A-F519-417F-91C9-55FA65481001}
    {1e94c58f-3e40-4ddb-b10c-a86d8b870a31},2      bytes[10] 02000000010000000000
-   {233164c8-1b2c-4c7d-bc68-b671687a2567},1      {2}.\\?\hdaudio#func_01&ven_1002&dev_aa01&subsys_00aa0100&rev_1007#5&103e1f89&0&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\ehdmioutwave
+   {233164c8-1b2c-4c7d-bc68-b671687a2567},1      {2}.\\?\hdaudio#func_01&ven_1002&dev_aa01&subsys_00aa0100&rev_1007#<instance-id-removed>#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\ehdmioutwave
    {24dbb0fc-9311-4b3d-9cf0-18ff155639d4},1      bytes[12] 0B0000000100000000000000
    {259abffc-50a7-47ce-af08-68c9a7d73366},12     %windir%\system32\mmres.dll,-3017
    {3d6e1656-2e50-4c4c-8d85-d0acae3c6c68},2      bytes[48] 4100000001000000FEFF020044AC00002062050008002000
@@ -28,10 +28,10 @@
    {83da6326-97a6-4088-9453-a1923f573b29},3      hdaudio.inf:db04a16ce4e8d6ee:HdAudModel:10.0.22621.2506:HDAUDIO\FUNC_01
    {840b8171-b0ad-410f-8581-cccc0382cfef},0      bytes[316] 41000000010000000100000030010000000001007B003200
    {8943b373-388c-4395-b557-bc6dbaffafdb},2      bytes[12] 0B00000001000000FFFF0000
-   {8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c},2      bytes[24] 4800000001000000EA13F87B3478625CA11F3801B82DC181
+   {8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c},2      bytes[24] 4800000001000000<container-id-removed>
    {908dba32-edff-4c28-8e45-c918561f6748},2      bytes[84] 41000000010000000200005A000000000000000000000000
    {913bc9a7-624b-4a30-96ac-5064a9fc6589},2      bytes[10] 02000000010000000500
-   {9637b4b9-11ee-4c35-b43c-7b2452c993cc},1      {3404C7E8-02F7-4AA9-BC66-ECB9799CEC86}
+   {9637b4b9-11ee-4c35-b43c-7b2452c993cc},1      {<per-endpoint-guid-removed>}
    {9855c4cd-df8c-449c-a181-8191b68bd06c},0      bytes[16] 41000000010000000000000000000000
    {9a82a7db-3ebb-41b4-83ba-18b7311718fc},1      65536
    {9c119480-ddc2-4954-a150-5bd240d454ad},1      \\?\SWD#MMDEVAPI#{0.0.0.00000000}.{<endpoint-0-guid-removed>}#{e6327cad-dcec-4949-ae8a-991e976a79d2}
@@ -53,7 +53,7 @@
    {b3f8fa53-0004-438e-9003-51a46e139bfc},0      1
    {b3f8fa53-0004-438e-9003-51a46e139bfc},1      bytes[80] 4100000001000000A87FA4D5986DD111A21A00A0C9223196
    {b3f8fa53-0004-438e-9003-51a46e139bfc},10     0
-   {b3f8fa53-0004-438e-9003-51a46e139bfc},11     {2}.\\?\hdaudio#func_01&ven_1002&dev_aa01&subsys_00aa0100&rev_1007#5&103e1f89&0&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\ehdmiouttopo
+   {b3f8fa53-0004-438e-9003-51a46e139bfc},11     {2}.\\?\hdaudio#func_01&ven_1002&dev_aa01&subsys_00aa0100&rev_1007#<instance-id-removed>#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\ehdmiouttopo
    {b3f8fa53-0004-438e-9003-51a46e139bfc},12     65537
    {b3f8fa53-0004-438e-9003-51a46e139bfc},15     bytes[24] 4100000001000000EA070900010015000A00210026001E02
    {b3f8fa53-0004-438e-9003-51a46e139bfc},2      {1}.HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS_00AA0100&REV_1007\<instance-id-removed>
@@ -80,8 +80,8 @@
    {83da6326-97a6-4088-9453-a1923f573b29},100    bytes[16] 4000000001000000A22F8F9BB449DD01
    {83da6326-97a6-4088-9453-a1923f573b29},3      hdaudio.inf:db04a16ce4e8d6ee:HdAudModel:10.0.22621.2506:HDAUDIO\FUNC_01
    {840b8171-b0ad-410f-8581-cccc0382cfef},0      bytes[316] 41000000010000000100000030010000000001007B003200
-   {8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c},2      bytes[24] 48000000010000008C99D6C464B1DA528528FEAC9E3ADC36
-   {9637b4b9-11ee-4c35-b43c-7b2452c993cc},1      {D9BF4DF8-9334-4852-B128-2493D052894B}
+   {8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c},2      bytes[24] 4800000001000000<container-id-removed>
+   {9637b4b9-11ee-4c35-b43c-7b2452c993cc},1      {<per-endpoint-guid-removed>}
    {9f61a8f3-b687-44e4-9033-f3919327806c},1      bytes[60] 4100000001000000BD04EFFE0000010000000A00E20E5D58
    {a45c254e-df1c-4efd-8020-67d146a850e0},2     PKEY_Device_FriendlyName Digital Audio (HDMI)
    {a45c254e-df1c-4efd-8020-67d146a850e0},24     HDAUDIO
@@ -90,7 +90,7 @@
    {a8b865dd-2e3d-4094-ad97-e593a70c75d6},8      HDAUDIO\FUNC_01
    {b3f8fa53-0004-438e-9003-51a46e139bfc},1      bytes[80] 4100000001000000A87FA4D5986DD111A21A00A0C9223196
    {b3f8fa53-0004-438e-9003-51a46e139bfc},10     -72483923
-   {b3f8fa53-0004-438e-9003-51a46e139bfc},11     {2}.\\?\hdaudio#func_01&ven_1002&dev_aa01&subsys_00aa0100&rev_1007#5&103e1f89&0&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\ehdmiout2topo
+   {b3f8fa53-0004-438e-9003-51a46e139bfc},11     {2}.\\?\hdaudio#func_01&ven_1002&dev_aa01&subsys_00aa0100&rev_1007#<instance-id-removed>#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\ehdmiout2topo
    {b3f8fa53-0004-438e-9003-51a46e139bfc},12     65537
    {b3f8fa53-0004-438e-9003-51a46e139bfc},15     bytes[24] 4100000001000000EA070900010015000A0021002C002E00
    {b3f8fa53-0004-438e-9003-51a46e139bfc},2      {1}.HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS_00AA0100&REV_1007\<instance-id-removed>
