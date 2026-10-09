@@ -1,13 +1,13 @@
 # Design: the Vulkan WSI presents through DXGI on a D3D12 device
 
 Date: 2026-10-07. Ported to the b23 release line on 2026-10-08 and to the shipped b25 system ICD line on
-2026-10-09. Status after the first lab trial of 2026-10-09: **the route has never presented a frame on unit A.
-It froze every client that used it before its first present, with the GPU idle and no TDR (BD-105), so the
-route is opt-in and GDI is the default again.** GDI is also the explicit rollback and the automatic fallback
-when the DXGI route fails. The owner's decision of 2026-10-07 (a route that must be switched on gets
+2026-10-09. Status after the second lab trial of 2026-10-09: **the route has never presented a frame on unit A.
+Its first present now runs to the end, and the client then stops in the acquire of the next frame, with the
+GPU idle and no TDR (BD-105). The route is therefore opt-in and GDI is the default again.** GDI is also the
+explicit rollback and the automatic fallback when the DXGI route fails. The owner's decision of 2026-10-07 (a route that must be switched on gets
 forgotten) returns in the train whose lab arm presents a frame through this route.
 
-What the first trial measured, and what the branch does about it, is the section
+What the two trials measured, and what the branch does about it, is the section
 [Deadlines and the retired route](#deadlines-and-the-retired-route-bd-105).
 
 This route is how the M15.14 criterion is met for Vulkan. The owner put Vulkan into M15.14 on 2026-10-08
@@ -209,8 +209,15 @@ renderer init and vkcube after its swap chain was made. Both processes stayed al
 and presented nothing. The GPU was at its 500 MHz idle state throughout, the flip count was the idle desktop
 rate, and there was no GPU fault, no fence timeout and no TDR at `TdrDelay=10`. A packet that never completes
 stops Windows within ten seconds, so 120 seconds without a TDR proves that no packet was outstanding: the
-block was a CPU wait with no GPU work behind it. The blocking call is not named yet. The measurement that
-names it is a user-mode stack of the frozen client, which needs the lab.
+block was a CPU wait with no GPU work behind it.
+
+The second trial of the same day named the call. With the deadlines of this section in the ICD, the first
+present of the route ran to `present1-returned` for the first time in this defect's history, and the client
+then stopped one frame later. The user-mode stack of the frozen process reads
+`vk_common_WaitForFences` under `wsi_win32_acquire_next_image` under `wsi_AcquireNextImageKHR`, on the
+application's message-pump thread, which is why the window stopped answering. That wait had no deadline,
+because `route.presented` was set the moment `Present1` returned, and `Present1` only queues a present. The
+answer to that is below, under "The route has presented when a present completed".
 
 Whatever that call turns out to be, a wait of this route may not be unbounded. The rules are plain C in
 `src/vulkan/wsi/wsi_win32_deadline.h` of the Mesa fork, with no Windows or Vulkan header, so the host test of
@@ -243,10 +250,54 @@ this lane drives the production rules:
 - **The D3D12 queue's own `Wait()` takes no deadline.** It is a GPU-side wait, and it is covered from the
   other end, because the acquire that waits for that copy is bounded now.
 - **A first present logs the stage it enters**: `images` (the swapchain's images and their D3D12 blit
-  contexts are ready), `queue-wait`, `execute`, `queue-signal`, `present1`, `present1-returned`. One line
-  each, for the first present of the route only, so a freeze names the call that did not return without a
-  debugger on the machine. The b26 evidence stopped at the swap chain line, which left the image creation and
-  the whole first present open as one window.
+  contexts are ready), `queue-wait`, `execute`, `queue-signal`, `present1`, `present1-returned`, and then
+  `acquire-wait` for the acquire of the next frame. One line each per swapchain, so a freeze names the call
+  that did not return without a debugger on the machine. The b26 evidence stopped at the swap chain line,
+  which left the image creation and the whole first present open as one window.
+
+### The route has presented when a present completed
+
+The second lab trial of 2026-10-09 measured what the flag above was worth. `route.presented` was set at the end
+of `wsi_win32_queue_present_dxgi`, the moment `IDXGISwapChain3::Present1` returned, and
+`wsi_win32_acquire_timeout_ns` hands the application's `UINT64_MAX` straight back once that flag is true.
+`Present1` queues a present. Neither the GPU copy the route asked for before it nor the flip need have run.
+So the one flag that disabled the route's only deadline was set by a call that proves nothing about
+completion, and from the second frame on the acquire was unbounded again.
+
+`presented` now means a present of this route **completed** and an acquire after it returned.
+
+Completion is read from the image's **shared blit fence**. `wsi_dxgi_blit` signals
+`d3d12_blit_fences[i]` to `base.blit.timeline_values[i]` after `ExecuteCommandLists` of the copy into the back
+buffer, and that fence is the D3D12 side of the Vulkan timeline semaphore of the same image. So
+`GetCompletedValue() >= that value` says, in one read of an object the chain already holds, that the presenter
+queue's `Wait` for the application's own signal was satisfied, that the copy executed and that the queue
+retired the `Signal`. That is the end of the route's own GPU work, and it is exactly what the trial says never
+happens: the kernel driver counted `blits 0` while both driver stacks waited.
+
+Two candidates were rejected from the code, not on taste. DXGI frame statistics
+(`IDXGISwapChain::GetFrameStatistics`) describe the presentation engine and not our copy, are documented to
+fail with `DXGI_ERROR_FRAME_STATISTICS_DISJOINT` on a first call, and report nothing useful for the
+composition swap chains this file also makes. A fresh present fence signalled on the presenter queue after
+`Present1` proves only that the queue drained past the copy, which the blit fence already proves, and
+`wsi_win32_flush_d3d12_queue` names the per-frame cost of an object, an event and a wait.
+
+Both halves of the rule are needed, and each covers the other's blind spot. The completed present says the
+presenter's GPU work ran at all, which the return of `Present1` did not. The returned acquire says the very
+wait that `presented` would disable can finish, which a fence value on its own does not. A route that a wait
+already retired is never revived.
+
+What the blit fence does not prove is that DWM or the screen scanned the frame out. The proof that would is
+`DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` with `GetFrameLatencyWaitableObject`, and that is a
+change at swap-chain creation with a buffer count to match. It belongs to the round after the route copies a
+frame at all.
+
+**And the expired acquire now writes the measurement the next trial needs**, so that no debugger has to:
+`image <i> blit fence have <have> want <want>, queued present image <p> value <v>`. `want` is one past the
+value the application's own queue signals, and three readings decide the cause. `have < want - 1`: the
+application's own signal never reached the GPU, which is our submission path and not the presenter's.
+`have == want - 1`: the application signalled, the presenter's `Wait` was satisfied, and the `Signal` after
+the copy did not retire, which is the mutual-wait shape the frozen stack supports. `have >= want`: the copy
+completed and the fence is done, and the Vulkan fence wait on our own side is the defect.
 
 **What the deadlines do not cover.** Two waits are bounded: the queue flush and the first acquire. Everything
 in `wsi_win32_image_init` has no deadline in front of it, which is `GetBuffer`, the shared blit resource
@@ -270,10 +321,10 @@ lane experiment and a release defect. If it is not, the change has still named t
 | | `wsi_common_win32.cpp`: the route, the init failure and its HRESULT |
 | | `u_win32_library.h`: the search for dependencies in System32 only |
 | | `amdgpu_wddm_stdio.h` and `u_amdgpu_wddm_stdio.c`: the named log stream the route lines use. On the D3D ICD line that pair also redirects the whole process's stdio. On the system line it declares the log and nothing else. The ICD's stdio therefore stays as the registered build has it |
-| Mesa fork, `amdgpu-wddm/b27-vk-wsi-dxgi`, which is `amdgpu-wddm/b26-vk-wsi-dxgi` plus the answer to BD-105 | `wsi_win32_deadline.h`: the deadlines, the retired route and the stage names, as plain C the host test drives |
-| | `wsi_common_win32.cpp`: the bounded queue flush, the capped first acquire, the stage lines, the refusal of the route after an expired wait |
+| Mesa fork, `amdgpu-wddm/b27-vk-wsi-dxgi`, which is `amdgpu-wddm/b26-vk-wsi-dxgi` plus the answer to BD-105 | `wsi_win32_deadline.h`: the deadlines, the completion rule, the retired route and the stage names, as plain C the host test drives |
+| | `wsi_common_win32.cpp`: the bounded queue flush, the capped acquire, the stage lines, the refusal of the route after an expired wait. Two blit-fence readings: the one that lifts the deadlines, and the one an expiry logs |
 | | `radv_wddm2_wsi_route.h`: the default route back to `gdi` |
-| | `tests/radv_wddm2_wsi_route_test.c`: two more cases, the deadline rules and the b26 failure played through them |
+| | `tests/radv_wddm2_wsi_route_test.c`: four more cases, the deadline rules, the completion rule, the stage bits, and the b26 failure played through them |
 | | `9974c121` after the offline review. The two-second bound says what it rests on. The GDI path's 3.18 ms is the only measured present. A retired route promises a window only for the waits it covers. The fence of an expired queue wait stays with the queue, which still has its `Signal` outstanding. `wsi_win32_route_wait_expired` is read into a local, not into a log argument |
 | | `8f0bfdfb` after round 2 of the review. The route test's own deadline comment had kept the present cost that was never measured |
 | bc250-win, `wsi/b26-vk-dxgi` (`wsi/vk-dxgi-b23` and `wsi/vk-dxgi` are the same note on the earlier bases) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
@@ -340,8 +391,9 @@ keeps the DXGI hooks.
 freeze, as it did in the b26 trial. It needs no game and it fits in 170 s, so it is the arm that says whether
 the route presents at all. Three answers are all a result. The route presents, and the stage lines run to
 `present1-returned`. Or the deadline catches the freeze, the last stage line names the call, and the client
-falls back to CPU images inside the same arm. Or the freeze is in a call no deadline covers, and then the same
-arm takes the user-mode stack of the frozen client with the portable `cdb` that is already on the lab. Only
+falls back to CPU images inside the same arm, with the blit-fence reading in the log. Or the freeze is in a
+call no deadline covers, and then the same arm takes the user-mode stack of the frozen client with the
+portable `cdb` that is already on the lab. Only
 after that arm presents does a game arm mean anything. The game arms run at **1280x720**, the resolution
 of the released Quake II RTX numbers: the b26 gate compared a 1920x1200 run with 720p numbers and read a
 halving that was 2.5 times the pixels. The 1920x1200 borderless run keeps its own baseline as the M15.14 arm.
