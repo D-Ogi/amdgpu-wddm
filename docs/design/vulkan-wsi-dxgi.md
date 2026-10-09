@@ -327,6 +327,7 @@ lane experiment and a release defect. If it is not, the change has still named t
 | | `tests/radv_wddm2_wsi_route_test.c`: four more cases, the deadline rules, the completion rule, the stage bits, and the b26 failure played through them |
 | | `9974c121` after the offline review. The two-second bound says what it rests on. The GDI path's 3.18 ms is the only measured present. A retired route promises a window only for the waits it covers. The fence of an expired queue wait stays with the queue, which still has its `Signal` outstanding. `wsi_win32_route_wait_expired` is read into a local, not into a log argument |
 | | `8f0bfdfb` after round 2 of the review. The route test's own deadline comment had kept the present cost that was never measured |
+| | `b433f564`, `281fbbcb` and `0c0ffa4c` after the second lab trial. `route.presented` follows a completed present and an acquire that returned. The seventh stage name is `acquire-wait`, and the stage log is gated per chain. The present log flushes a row of an unproved route at once. An expired acquire writes the blit-fence reading. The fence that proves the route is the acquired image's own. The chain's last present belongs to another image and lags by one frame for ever |
 | bc250-win, `wsi/b26-vk-dxgi` (`wsi/vk-dxgi-b23` and `wsi/vk-dxgi` are the same note on the earlier bases) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 | bc250-win, `wsi/b27-vk-dxgi` | This note's BD-105 sections, and `radv-wsi-route-test.py` hashing the second header into its record |
 
