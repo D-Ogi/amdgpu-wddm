@@ -1,0 +1,19 @@
+The one-line edit that isolates the dp4a inline assembly, against llama.cpp b86d2f075.
+
+It renames the condition of one branch of ggml_cuda_dp4a to a macro that nothing defines, so the
+generic C byte loop is compiled while every other reader of RDNA1 in the translation unit still
+sees the macro. It is a measurement instrument, not a proposed change: it is applied on top of
+hip-rdna1-gfx1013.diff (evidence/m16/gfx1013-dp4a-2026-10-09), so RDNA1 is defined for gfx1013
+and only the assembly is out of the way.
+
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -714,7 +714,7 @@ static __device__ __forceinline__ int ggml_cuda_dp4a(const int a, const int b, i
+     c = __builtin_amdgcn_sdot4(a, b, c, false);
+ #elif defined(RDNA3) || defined(RDNA4)
+     c = __builtin_amdgcn_sudot4( true, a, true, b, c, false);
+-#elif defined(RDNA1) || defined(__gfx900__)
++#elif defined(BC250_DP4A_ASM_NEVER)
+     int tmp1;
+     int tmp2;
+     asm("\n \

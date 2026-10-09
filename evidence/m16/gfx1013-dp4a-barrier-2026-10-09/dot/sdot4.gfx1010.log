@@ -1,0 +1,9 @@
+# probe: __builtin_amdgcn_sdot4 for gfx1010, BC250_PROBE=1
+# clang: llvm-amdgpu 22.1.8
+$ clang++ -x hip --offload-arch=gfx1010 --offload-device-only --no-gpu-bundle-output \
+    -nogpuinc -nogpulib -O2 -std=c++17 -DBC250_PROBE=1 -c -o probe.o probe-dot.hip
+P:\bc-250\scratch\m16-hip\step3\build\probe-dot.hip:16:8: error: '__builtin_amdgcn_sdot4' needs target feature dot1-insts
+   16 |   *c = __builtin_amdgcn_sdot4(*a, *b, *c, false);
+      |        ^
+1 error generated when compiling for gfx1010.
+# exit status: 1
