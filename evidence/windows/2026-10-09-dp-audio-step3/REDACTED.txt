@@ -1,0 +1,19 @@
+Changed before the first commit (docs/01-evidence-rules.md). Counts only. No copy of the removed values exists
+in this repository. scratch\dp-audio\step3\redact-for-repo.py of the workspace made the copies and refuses to
+write a file in which an address, a MAC or a device instance suffix is left.
+
+- t1-observe.txt, t2-tone.txt, t3-endpoint.txt: 11 occurrences of the MMDevice endpoint id of the active render
+  endpoint replaced by {<endpoint-0-guid-removed>}, and 3 of the second, unplugged endpoint by
+  {<endpoint-1-guid-removed>}. These are per-install identifiers.
+- t1-observe.txt, t3-endpoint.txt: 2 device instance suffixes (the part after REV_1007 in the HD Audio codec's
+  instance path) replaced by <instance-id-removed>. The scripts already print <inst> for the two PCI devices.
+- t1-observe.txt, t5-leave-as-found.txt: 2 occurrences of the lab host name replaced by <lab-host>.
+- The screenshot of the lab desktop after the trials and the WAV files the scripts generate on the lab are not
+  copied. They are in the workspace evidence directory, outside this repository.
+
+Checked and found clean: every other file of this directory. No MAC address, no serial number, no IPv4 address
+and no user name. The other GUIDs in t3-endpoint.txt are Windows property keys and interface identifiers
+(PKEY_*, the MMDevice interfaces), which are constants of the operating system, not device identifiers. The
+driver version 0.7.216.100 has the shape of an IPv4 address and is not one. The monitor's model name and its
+EDID manufacturer and product codes are kept: they are already in the repository (M810, M819 and the lab EDID of
+driver/kmd/test).
