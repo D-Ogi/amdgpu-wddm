@@ -125,11 +125,24 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
 - The 87 C gate has two exceptions, both of them the rule the GPU clock path already carries: a getter, and a
   step that lowers the dissipation. The way back from a trial must not be refused because the part is hot,
   since nothing else would ever take the trial out of the chip (`AllowHot` in `SmuCpuMessage`).
-- The clock limit of a restore is the baseline of the start (`bc250_cpu_baseline_mhz`, 0.7.216.15). It is the
+- The clock limit of a restore is the baseline of the start (`bc250_cpu_baseline_read`, 0.7.216.15). It is the
   highest clock that the firmware answered in the read stage, over the P-state clocks (`0x3B`) and the core clocks
   (`0x43`), clamped to `BC250_CPU_MAX_MHZ`. The core clock counts because it is the firmware's own answer of the boost
   it gives. On unit A the P-state table stops at 3200 MHz while the cores boost to 3500 MHz, so a baseline of the
   table alone made each restore a cut. The number is still an answer of the chip, not a constant of the driver.
+- The record keeps the two answers apart (0.7.216.23, BD-094), because they are not the same number: `table_mhz`
+  is what a loaded core is judged against in the undervolt search, and `boost_mhz` is the ceiling a restore asks
+  for. A core answers the clock of the moment, so an idle start gets no boost answer at all: the read stage then
+  keeps one core busy for a short window and reads the core clocks again (the boost probe), because no message of
+  the allowlist answers the ceiling itself. The lab met the cut in the b23 validation of 0.7.216.22: on an idle
+  start the baseline was the table's 3200 MHz and a revert from the user interface held the processor there until
+  a restart. With one busy thread during the read stage the same build recorded and restored 3500 MHz.
+- While the boost ceiling of a start is unknown, the clock limit is refused and not taken
+  (`BC250_CPU_ERROR_NO_CEILING`, which the user interface reads as `BC250_CPU_FLAG_BOOST_KNOWN`). This is the rule of the
+  whole surface in one line: the driver takes no control that it cannot give back. The undervolt and the
+  temperature cap are not affected, and the joint power arm takes no cap in that state either. A request that
+  asks for the clock limit together with them is refused whole, because an operator sent it and must see why.
+  The stored settings of the start are the one exception. They go in without their clock limit.
 
 ### The allowlist
 
