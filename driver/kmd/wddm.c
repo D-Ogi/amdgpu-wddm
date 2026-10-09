@@ -7331,6 +7331,9 @@ C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) ==
          FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetInterruptTargetPresentId) + sizeof(PVOID));
 #define BC250_WDDM_TABLE_TAIL_START \
     (FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID))
+// GetChildContainerId is a WDDM 1.2 member and this table fills it (step 4 of DP audio), so it has to sit before
+// that tail, or WddmCheckReserved would report it as a member of a version this driver does not declare.
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetChildContainerId) < BC250_WDDM_TABLE_TAIL_START);
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -7383,7 +7386,8 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
 // counters are file-scope because the child DDIs may run before BC250_WDDM exists. All of these DDIs are
 // PASSIVE_LEVEL ones; the IRQL test only guards the log's spin lock against an annotation being wrong.
 typedef enum _BC250_WDDM_TRACED {
-    TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedIsSupportedVidPn,
+    TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedGetChildContainerId,
+    TracedIsSupportedVidPn,
     TracedRecommendFunctionalVidPn, TracedEnumVidPnCofuncModality, TracedSetVidPnSourceVisibility, TracedCommitVidPn,
     TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability, TracedCount
 } BC250_WDDM_TRACED;
@@ -7418,6 +7422,14 @@ static DXGKDDI_QUERY_DEVICE_DESCRIPTOR Bc250WddmQueryDeviceDescriptor;
 static NTSTATUS Bc250WddmQueryDeviceDescriptor(_In_ const PVOID Context, _In_ ULONG ChildUid, _Inout_ PDXGK_DEVICE_DESCRIPTOR Descriptor)
 {
     return WddmTraced(TracedQueryDeviceDescriptor, "QueryDeviceDescriptor", Bc250QueryDeviceDescriptor(Context, ChildUid, Descriptor), ChildUid);
+}
+
+static DXGKDDI_GET_CHILD_CONTAINER_ID Bc250WddmGetChildContainerId;
+static NTSTATUS Bc250WddmGetChildContainerId(_In_ const PVOID Context, _In_ ULONG ChildUid,
+                                             _Inout_ PDXGK_CHILD_CONTAINER_ID ContainerId)
+{
+    return WddmTraced(TracedGetChildContainerId, "GetChildContainerId",
+                      Bc250GetChildContainerId(Context, ChildUid, ContainerId), ChildUid);
 }
 
 #define BC250_WDDM_TRACED_DDI(DdiType, Name, ArgType)                                                          \
@@ -7457,6 +7469,10 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiQueryChildRelations = Bc250WddmQueryChildRelations;
     Data->DxgkDdiQueryChildStatus = Bc250WddmQueryChildStatus;
     Data->DxgkDdiQueryDeviceDescriptor = Bc250WddmQueryDeviceDescriptor;
+    // WDDM 1.2, inside the WDDM 2.0 block this table fills (the assert near WddmCheckReserved says so). It keeps
+    // dxgkrnl's default container ID and takes the child's port ID for the ELD of the DP audio endpoint
+    // (pnp.c Bc250GetChildContainerId, docs/design/dp-audio.md step 4).
+    Data->DxgkDdiGetChildContainerId = Bc250WddmGetChildContainerId;
     Data->DxgkDdiSetPowerState = Bc250SetPowerState;
     Data->DxgkDdiUnload = Bc250Unload;
     Data->DxgkDdiStopDeviceAndReleasePostDisplayOwnership = Bc250StopDeviceAndReleasePostDisplayOwnership;
@@ -7526,9 +7542,9 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
     // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
     // version alone obliges none of them; WDDMVersion stays 2.0 (ADR 0019 B1). QueryInterface, ControlEtwLogging,
-    // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, GetChildContainerId, SetPowerComponentFState,
+    // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
-    // display-only table today. ControlInterrupt and GetScanLine are **not** in this list any more: the flip
-    // path above sets both. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
+    // display-only table today. ControlInterrupt, GetScanLine and GetChildContainerId are **not** in this list
+    // any more: the flip path above sets the first two, and step 4 of DP audio sets the third. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
     WddmCheckReserved(Data);
 }

@@ -234,7 +234,7 @@ has an LPCM short audio descriptor, the endpoint gets:
 - The speaker allocation, or FL, FR and FC when the EDID has none (5, Linux `DEFAULT_SPEAKER_LOCATION`).
 
 Without an EDID or without LPCM, the endpoint gets the fixed set of steps 1 and 2. [dp-audio.md](dp-audio.md) has
-the details. `HBR_CAPABLE` stays 0. The port ID stays Linux's constant until the container ID work.
+the details. `HBR_CAPABLE` stays 0. The port ID of the ELD is the container ID's, from KMD 0.7.216.25.
 
 ### Deviations from Linux
 

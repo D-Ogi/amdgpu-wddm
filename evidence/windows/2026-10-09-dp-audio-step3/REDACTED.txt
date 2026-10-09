@@ -1,0 +1,29 @@
+Changed before the commit (docs/01-evidence-rules.md). Counts only. No copy of the removed values exists in this
+repository. scratch\dp-audio\step3\redact-for-repo.py of the workspace made the copies and refuses to write a
+file in which an address, a MAC, a device instance suffix or a device container ID is left.
+
+- t1-observe.txt, t2-tone.txt, t3-endpoint.txt: 11 occurrences of the MMDevice endpoint id of the active render
+  endpoint replaced by {<endpoint-0-guid-removed>}, and 3 of the second, unplugged endpoint by
+  {<endpoint-1-guid-removed>}. These are per-install identifiers.
+- t1-observe.txt, t3-endpoint.txt: 5 device instance suffixes (the part after REV_1007 in the HD Audio codec's
+  instance path) replaced by <instance-id-removed>: 2 of the PnP spelling with backslashes, and 3 of the
+  MMDevice device-interface spelling with number signs, in t3-endpoint.txt. The scripts already print <inst>
+  for the two PCI devices.
+- t3-endpoint.txt: 2 device container IDs (DEVPKEY_Device_ContainerId, one per endpoint, printed as the last
+  16 bytes of the property value) replaced by <container-id-removed>, and 2 values of the one other GUID-valued
+  property that differs between the two endpoints ({9637b4b9-...},1) by {<per-endpoint-guid-removed>}. The
+  property type header before each value is kept.
+- t1-observe.txt, t5-leave-as-found.txt: 2 occurrences of the lab host name replaced by <lab-host>.
+- The screenshot of the lab desktop after the trials and the WAV files the scripts generate on the lab are not
+  copied. They are in the workspace evidence directory, outside this repository.
+
+Checked and found clean: every other file of this directory. No MAC address, no serial number, no IPv4 address
+and no user name. The remaining GUIDs in t3-endpoint.txt are Windows property keys and interface identifiers
+(PKEY_*, the MMDevice interfaces), which are constants of the operating system, not device identifiers; their
+values are byte strings that hold formats, counts and times. The driver version 0.7.216.100 has the shape of an
+IPv4 address and is not one. The monitor's model name and its EDID manufacturer and product codes are kept: they
+are already in the repository (M810, M819 and the lab EDID of driver/kmd/test).
+
+History: the first commit of this directory, c3b54a8e, carried the 5 instance suffixes with their value and the
+2 container IDs, because the rule and the guard of the script both looked for the backslash spelling only. The
+offline review of 2026-10-09 found them, widened both and rewrote the files from the immutable lab copies.

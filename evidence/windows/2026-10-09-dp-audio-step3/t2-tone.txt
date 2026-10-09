@@ -1,0 +1,260 @@
+Error formatting a string: Input string was not in a correct format..
+At C:\BC250\tmp\t2-tone.ps1:106 char:7
++       "    $k tag=0x{0:X4} ch={1} rate={2} bits={3}" -f ([BitConverte ...
++       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (    {f19f064d-0...te={2} bits={3}:String) [], Ru 
+   ntimeException
+    + FullyQualifiedErrorId : FormatError
+ 
+
+=== setup  t+0.0s  utc 09:20:27.583
+host <lab-host> utc 2026-10-09T09:20:27.5889745Z
+probe C:\BC250\tmp\dpaudio-step3\wasapi-probe.exe sha256 4F8A8D44
+interactive explorer session: 1
+read 0x59800 6CDB0FEF
+
+
+=== registers before  t+0.5s  utc 09:20:28.090
+mmDCCG_AUDIO_DTO_SOURCE                            00100010
+mmDCCG_AUDIO_DTO1_MODULE                           005B8D80
+mmDCCG_AUDIO_DTO1_PHASE                            0003A980
+mmDIG0_AFMT_CNTL                                   00000101
+mmDIG0_AFMT_AUDIO_SRC_CONTROL                      00000000
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL                   00000801
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL2                  00000300
+mmDIG0_AFMT_STATUS                                 40000010
+mmDIG0_AFMT_60958_0                                00000000
+mmDIG0_AFMT_INFOFRAME_CONTROL0                     00000000
+mmDP0_DP_SEC_CNTL                                  00001111
+mmDP0_DP_SEC_AUD_N                                 00008000
+mmDP0_DP_SEC_AUD_M_READBACK                        00000AB4
+mmDP0_DP_SEC_TIMESTAMP                             00000001
+mmAZALIA_AUDIO_DTO                                 00640018
+mmAZALIA_AUDIO_DTO_CONTROL                         00000000
+mmAZALIA_CYCLIC_BUFFER_SYNC                        00000000
+mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER     00000000
+mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL             00080008
+mmAZALIA_DATA_DMA_CONTROL                          0000000A
+mmAZALIA_BDL_DMA_CONTROL                           0000000A
+mmDIO_MEM_PWR_CTRL                                 00000000
+mmCLK4_0_CLK4_CLK2_CURRENT_CNT                     00001770
+
+=== start the one-shot interactive task  t+0.9s  utc 09:20:28.479
+started, waiting for the first arm
+arm 1 began at 2026-10-09T09:20:29.9062660Z
+
+=== registers during arm 1 (excl-poll 48 kHz, about 2 s in)  t+4.4s  utc 09:20:31.985
+mmDCCG_AUDIO_DTO_SOURCE                            00100010
+mmDCCG_AUDIO_DTO1_MODULE                           005B8D80
+mmDCCG_AUDIO_DTO1_PHASE                            0003A980
+mmDIG0_AFMT_CNTL                                   00000101
+mmDIG0_AFMT_AUDIO_SRC_CONTROL                      00000000
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL                   00000801
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL2                  00000300
+mmDIG0_AFMT_STATUS                                 40000010
+mmDIG0_AFMT_60958_0                                00000000
+mmDIG0_AFMT_INFOFRAME_CONTROL0                     00000000
+mmDP0_DP_SEC_CNTL                                  00001111
+mmDP0_DP_SEC_AUD_N                                 00008000
+mmDP0_DP_SEC_AUD_M_READBACK                        00000BA8
+mmDP0_DP_SEC_TIMESTAMP                             00000001
+mmAZALIA_AUDIO_DTO                                 00640018
+mmAZALIA_AUDIO_DTO_CONTROL                         00000000
+mmAZALIA_CYCLIC_BUFFER_SYNC                        00000000
+mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER     00000000
+mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL             00080008
+mmAZALIA_DATA_DMA_CONTROL                          0000000A
+mmAZALIA_BDL_DMA_CONTROL                           0000000A
+mmDIO_MEM_PWR_CTRL                                 00000000
+mmCLK4_0_CLK4_CLK2_CURRENT_CNT                     00001770
+
+=== DP_SEC_AUD_M_READBACK repeated (during arm 1)  t+4.8s  utc 09:20:32.332
+i=0 M=00000BA4 APP_POS=00000000 read_ms=28
+i=1 M=00000BA4 APP_POS=00000000 read_ms=33
+i=2 M=00000BA4 APP_POS=00000000 read_ms=33
+i=3 M=00000BA8 APP_POS=00000000 read_ms=28
+i=4 M=00000BA8 APP_POS=00000000 read_ms=33
+i=5 M=00000BA8 APP_POS=00000000 read_ms=26
+playsync arm began at 2026-10-09T09:21:04.4938218Z
+
+=== registers during the PlaySync arm  t+38.4s  utc 09:21:06.018
+mmDCCG_AUDIO_DTO_SOURCE                            00100010
+mmDCCG_AUDIO_DTO1_MODULE                           005B8D80
+mmDCCG_AUDIO_DTO1_PHASE                            0003A980
+mmDIG0_AFMT_CNTL                                   00000101
+mmDIG0_AFMT_AUDIO_SRC_CONTROL                      00000000
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL                   00000801
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL2                  00000300
+mmDIG0_AFMT_STATUS                                 40000010
+mmDIG0_AFMT_60958_0                                00000000
+mmDIG0_AFMT_INFOFRAME_CONTROL0                     00000000
+mmDP0_DP_SEC_CNTL                                  00001111
+mmDP0_DP_SEC_AUD_N                                 00008000
+mmDP0_DP_SEC_AUD_M_READBACK                        00000AB4
+mmDP0_DP_SEC_TIMESTAMP                             00000001
+mmAZALIA_AUDIO_DTO                                 00640018
+mmAZALIA_AUDIO_DTO_CONTROL                         00000000
+mmAZALIA_CYCLIC_BUFFER_SYNC                        00000000
+mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER     00000000
+mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL             00080008
+mmAZALIA_DATA_DMA_CONTROL                          0000000A
+mmAZALIA_BDL_DMA_CONTROL                           0000000A
+mmDIO_MEM_PWR_CTRL                                 00000000
+mmCLK4_0_CLK4_CLK2_CURRENT_CNT                     00001770
+
+=== DP_SEC_AUD_M_READBACK repeated (during the PlaySync arm)  t+38.8s  utc 09:21:06.345
+i=0 M=00000AB4 APP_POS=00000000 read_ms=27
+i=1 M=00000AB4 APP_POS=00000000 read_ms=33
+i=2 M=00000AB4 APP_POS=00000000 read_ms=34
+i=3 M=00000AB4 APP_POS=00000000 read_ms=33
+i=4 M=00000AB4 APP_POS=00000000 read_ms=33
+
+=== wait for the child  t+41.0s  utc 09:21:08.539
+done.json present: True
+Ready
+
+
+TaskName           : DP audio tone step 3
+LastRunTime        : 10/9/2026 11:20:20 AM
+LastTaskResult     : 0
+NumberOfMissedRuns : 0
+
+
+
+
+
+=== registers after  t+48.0s  utc 09:21:15.561
+mmDCCG_AUDIO_DTO_SOURCE                            00100010
+mmDCCG_AUDIO_DTO1_MODULE                           005B8D80
+mmDCCG_AUDIO_DTO1_PHASE                            0003A980
+mmDIG0_AFMT_CNTL                                   00000101
+mmDIG0_AFMT_AUDIO_SRC_CONTROL                      00000000
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL                   00000801
+mmDIG0_AFMT_AUDIO_PACKET_CONTROL2                  00000300
+mmDIG0_AFMT_STATUS                                 40000010
+mmDIG0_AFMT_60958_0                                00000000
+mmDIG0_AFMT_INFOFRAME_CONTROL0                     00000000
+mmDP0_DP_SEC_CNTL                                  00001111
+mmDP0_DP_SEC_AUD_N                                 00008000
+mmDP0_DP_SEC_AUD_M_READBACK                        00000AB4
+mmDP0_DP_SEC_TIMESTAMP                             00000001
+mmAZALIA_AUDIO_DTO                                 00640018
+mmAZALIA_AUDIO_DTO_CONTROL                         00000000
+mmAZALIA_CYCLIC_BUFFER_SYNC                        00000000
+mmAZALIA_APPLICATION_POSITION_IN_CYCLIC_BUFFER     00000000
+mmAZALIA_OUTPUT_STREAM_ARBITER_CONTROL             00080008
+mmAZALIA_DATA_DMA_CONTROL                          0000000A
+mmAZALIA_BDL_DMA_CONTROL                           0000000A
+mmDIO_MEM_PWR_CTRL                                 00000000
+mmCLK4_0_CLK4_CLK2_CURRENT_CNT                     00001770
+
+=== child output  t+48.3s  utc 09:21:15.876
+child session=1 user=bc250 utc=2026-10-09T09:20:29.8782920Z
+
+### arm excl-poll-48000  wasapi-probe excl-poll -rate 48000 -secs 10  utc 09:20:29.903
+device={0.0.0.00000000}.{<endpoint-0-guid-removed>}
+activate_ms=3.0 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=excl-poll format tag=0xFFFE ch=2 rate=48000 bits=16 align=4 float=False init_ms=34.3 buffer_frames=1024 latency_100ns=101667 clock_freq=48000 period_100ns=101587
+start_ms=1.3 start_hr=0x00000000
+result mode=excl-poll rate=48000 elapsed_s=10.018 written_s=10.036 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=9.1 events=0 timeouts=0 mean_gap_ms=0.00 max_gap_ms=0.0 write_fails=0
+wall_s=10.722 exit=
+
+### arm excl-event-48000  wasapi-probe excl-event -rate 48000 -secs 10  utc 09:20:40.647
+device={0.0.0.00000000}.{<endpoint-0-guid-removed>}
+activate_ms=2.6 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+realigned_period_100ns=106667
+mode=excl-event format tag=0xFFFE ch=2 rate=48000 bits=16 align=4 float=False init_ms=4.5 buffer_frames=512 latency_100ns=106667 clock_freq=48000 period_100ns=106667
+start_ms=1.4 start_hr=0x00000000
+result mode=excl-event rate=48000 elapsed_s=10.007 written_s=10.027 device_rate_all=1.0000 device_rate_after2s=1.0000 first_move_ms=1.4 events=939 timeouts=0 mean_gap_ms=10.65 max_gap_ms=11.1 write_fails=0
+gap_hist_ms <2:1 <5:0 <15:938 <25:0 <35:0 <60:0 <150:0 >=150:0
+wall_s=10.143 exit=
+
+### arm shared-event  wasapi-probe shared-event -secs 10  utc 09:20:50.812
+device={0.0.0.00000000}.{<endpoint-0-guid-removed>}
+activate_ms=2.7 device_period_default_100ns=101587 min_100ns=29025 mix tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True
+mode=shared-event format tag=0xFFFE ch=2 rate=44100 bits=32 align=8 float=True init_ms=29.7 buffer_frames=984 latency_100ns=0 clock_freq=352800 period_100ns=101587
+start_ms=3.5 start_hr=0x00000000
+result mode=shared-event rate=44100 elapsed_s=10.008 written_s=10.039 device_rate_all=0.9991 device_rate_after2s=1.0000 first_move_ms=252.3 events=986 timeouts=0 mean_gap_ms=10.15 max_gap_ms=11.0 write_fails=0
+gap_hist_ms <2:1 <5:0 <15:985 <25:0 <35:0 <60:0 <150:0 >=150:0
+wall_s=10.167 exit=
+
+### arm playsync-wav  utc 09:21:01.003
+wav bytes=1920044 sha256=247D7E4A nominal_s=10.000
+load_s=0.004 playsync_s=10.131 ratio_vs_10s=1.0132
+done utc=2026-10-09T09:21:14.6387236Z
+
+=== MMDevice state after the tone  t+48.3s  utc 09:21:15.879
+--- id={<endpoint-0-guid-removed>} state=1 name='Digital Audio (HDMI)'
+--- id={<endpoint-1-guid-removed>} state=8 name='Digital Audio (HDMI)'
+
+=== dpaudio record after the tone  t+48.4s  utc 09:21:15.956
+dpaudio state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, driver 0x000700D8, mmio mapped
+record of the last start:
+  state enabled, reason: stream on and endpoint enabled
+  stream DP0, endpoint 0, notes  unsolicited-enabled
+  switches EnableDpAudio 1, EnableDpAudioEndpoint 1, EnableDpAudioStream 1 (default 1)
+  codec 0x1002AA01, config default 0x185600F0, HOT_PLUG_CONTROL 0x00000000 -> 0x80000000, last NTSTATUS 0x00000000
+  starts 1 resumes 0 stops 0 refusals 0 failures 0 path-on 0 path-off 0
+  accesses: indirect reads 41, indirect writes 31, direct writes 20, refused by the tables 0
+  stream on, step NONE, NTSTATUS 0x00000000; on 1 off 0 undone 0
+  reference clock 6000 (100 kHz units), DTO1 module 6000000 phase 240000, DTO_SOURCE 0x00100010
+  read back: DP_SEC_CNTL 0x00001111 AFMT_CNTL 0x00000101 PACKET_CONTROL 0x04000801 PACKET_CONTROL2 0x00000300
+
+=== KMD log: dpaudio and refusal lines  t+48.4s  utc 09:21:15.972
+   196      1.412 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00010201/0x00100200 be 0x00000100/0x00010000 hpd 0x12/0x0
+   197      1.412 dpaudio: ep0 cfg 0x185600F0 hpc 0x00000000 unsol 0x80 sense 0x7FFFFFFF; ep1 cfg 0x185600F0 hpc 0x00000000; first fail 0x00000000
+   198      1.412 dpaudio: sec 0x00000000/0x00000000 dto src 0x00000030 dto1 0/1 afmt 0x00000100/0x00000000 pkt 0x04000800/0x04000800
+   199      1.412 dpaudio: DP reference clock count 6000 (100 kHz units): DTO1 module 6000000, phase 240000, for a 24 MHz wall clock
+   200      1.412 dpaudio: preconditions hold: stream DP0, endpoint 0, notes 0x8
+   201      1.412 dpaudio: hw_init done on endpoint 0: rates 0x00020070 power 0xC0000009 hpc 0x00000000, 4 writes
+   202      1.412 dpaudio: configure done on endpoint 0 (EDID), 27 writes, speakers 0x01
+   203      1.412 dpaudio: LPCM 2 ch rates 0x7F sizes 0x7, sink 0xAE30/0x1144 'LEN LT2452pwC'
+   204      1.412 dpaudio: stream on DP0: DTO_SOURCE 0x00100010 DTO1 240000/6000000, AUD_N 0x00008000 timestamp 0x1, 18 writes
+   205      1.412 dpaudio: stream on DP0: AFMT_CNTL 0x00000101 SRC 0x0 PACKET 0x04000801 PACKET2 0x00000300 SEC_CNTL 0x00001111
+   206      1.412 dpaudio: AUDIO_ENABLED set on endpoint 0: hpc 0x00000000 -> 0x80000000
+  5626   3715.208 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 5 exits 5 refusals 0, 3265989 ms at the point
+  5630   3715.208 hwmon: telemetry 3667 samples 0 errors 0 retries 0 refusals
+  5640   3720.209 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 5 exits 5 refusals 0, 3265989 ms at the point
+  5644   3720.209 hwmon: telemetry 3672 samples 0 errors 0 retries 0 refusals
+  5868   3730.217 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 6 exits 6 refusals 0, 3272921 ms at the point
+  5872   3730.217 hwmon: telemetry 3681 samples 0 errors 0 retries 0 refusals
+  6040   3735.231 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 6 exits 6 refusals 0, 3272921 ms at the point
+  6044   3735.231 hwmon: telemetry 3686 samples 0 errors 0 retries 0 refusals
+  6053   3740.239 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 6 exits 6 refusals 0, 3272921 ms at the point
+  6057   3740.239 hwmon: telemetry 3691 samples 0 errors 0 retries 0 refusals
+  6070   3800.521 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3328982 ms at the point
+  6074   3800.521 hwmon: telemetry 3751 samples 0 errors 0 retries 0 refusals
+  6086   3860.856 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3388074 ms at the point
+  6090   3860.856 hwmon: telemetry 3810 samples 0 errors 0 retries 0 refusals
+  6102   3921.169 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3447177 ms at the point
+  6106   3921.169 hwmon: telemetry 3870 samples 0 errors 0 retries 0 refusals
+  6116   3981.532 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3506305 ms at the point
+  6120   3981.532 hwmon: telemetry 3930 samples 0 errors 0 retries 0 refusals
+  6132   4041.892 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3565427 ms at the point
+  6136   4041.892 hwmon: telemetry 3989 samples 0 errors 0 retries 0 refusals
+  6148   4102.257 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3624549 ms at the point
+  6152   4102.257 hwmon: telemetry 4049 samples 0 errors 0 retries 0 refusals
+  6164   4162.622 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3683672 ms at the point
+  6168   4162.622 hwmon: telemetry 4108 samples 0 errors 0 retries 0 refusals
+  6180   4222.947 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3742785 ms at the point
+  6184   4222.947 hwmon: telemetry 4168 samples 0 errors 0 retries 0 refusals
+  6196   4283.264 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3801882 ms at the point
+  6200   4283.264 hwmon: telemetry 4228 samples 0 errors 0 retries 0 refusals
+  6212   4343.567 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3860957 ms at the point
+  6216   4343.567 hwmon: telemetry 4287 samples 0 errors 0 retries 0 refusals
+  6228   4403.931 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3920081 ms at the point
+  6232   4403.931 hwmon: telemetry 4347 samples 0 errors 0 retries 0 refusals
+  6244   4464.272 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 3979221 ms at the point
+  6248   4464.272 hwmon: telemetry 4406 samples 0 errors 0 retries 0 refusals
+  6260   4524.634 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 4038346 ms at the point
+  6264   4524.634 hwmon: telemetry 4466 samples 0 errors 0 retries 0 refusals
+  6276   4584.918 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 7 exits 6 refusals 0, 4097441 ms at the point
+  6280   4584.918 hwmon: telemetry 4526 samples 0 errors 0 retries 0 refusals
+
+=== temperature and clock  t+48.5s  utc 09:21:16.041
+
+
+=== remove the one-shot task  t+48.5s  utc 09:21:16.056
+task present after removal: False
+
+=== end  t+49.9s  utc 09:21:17.442

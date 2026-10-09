@@ -23,6 +23,13 @@ typedef struct _BC250_DPAUDIO {
     ULONG MismatchOffset, MismatchExpected, MismatchActual;
     ULONG DtoSource, SecCntl, AfmtCntl, PacketControl, PacketControl2;
     ULONG StreamOn, StreamOff, StreamUndos;
+    // Step 4, the container ID (BC250_ESCAPE_DPAUDIO ABI 3 fields of the same names). PortId survives a stop: the
+    // operating system gives it once per child enumeration, and every later start has to put it in the ELD.
+    ULONGLONG PortId, PortIdInEld;
+    ULONG OsManufacturer, OsProduct, SwitchContainerId;
+    ULONG ContainerCalls, PortIdWrites, PortIdSkips, PortIdCycles;
+    LONG PortIdStatus;
+    ULONG SinkFromEdid;
     BOOLEAN Written;                        // this start wrote the endpoint: the stop path must clear AUDIO_ENABLED
     BOOLEAN StreamWritten;                  // the stream is on: the stop path must turn it off first
 } BC250_DPAUDIO;
@@ -34,6 +41,9 @@ void DpAudioStart(struct _BC250_DEVICE* Device);                        // Start
 void DpAudioResume(struct _BC250_DEVICE* Device);                       // back in D0
 void DpAudioStop(struct _BC250_DEVICE* Device);                         // StopDevice before WddmStop/DcnStop; D3
 void DpAudioPathPower(struct _BC250_DEVICE* Device, BOOLEAN On);        // CommitVidPn path power transition
+// Step 4's container ID: DxgkDdiGetChildContainerId (pnp.c) hands over the port ID and identity the operating
+// system made for the child, after DxgkDdiStartDevice has returned. PASSIVE_LEVEL.
+void DpAudioContainerId(struct _BC250_DEVICE* Device, ULONGLONG PortId, USHORT Manufacturer, USHORT Product);
 // Size: BC250_DPAUDIO_ABI1_SIZE or sizeof(BC250_ESCAPE_DPAUDIO), checked by display.c; nothing past it is touched.
 void DpAudioRequest(struct _BC250_DEVICE* Device, struct _BC250_ESCAPE_DPAUDIO* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
