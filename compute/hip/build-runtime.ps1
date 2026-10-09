@@ -71,7 +71,7 @@ $fixture = Join-Path $hip 'tests\data\hip_test_kernels.gfx1013.fatbin'
 # ---------------------------------------------------------------------------------------------
 # 1. The export list: the module definition file, the header and the built DLL must agree.
 # ---------------------------------------------------------------------------------------------
-$expectedExports = 51
+$expectedExports = 53
 $defNames = Get-Content $def | Where-Object { $_ -match '^[A-Za-z_]' -and $_ -notmatch '^(LIBRARY|EXPORTS)' } | ForEach-Object { $_.Trim() }
 Write-Host "  amdhip64.def holds $($defNames.Count) names"
 if ($defNames.Count -ne $expectedExports) {

@@ -1429,6 +1429,62 @@ that one file, our include directory and the bitcode directory, `--rocm-path` ma
 as it does against a product installation, and the device library links by itself. The file
 belongs in `compute/hip/include/hip` as soon as the device headers of section 4.10 are written.
 
+### 4.12 Both walls of 4.10 are down, and the one wall that is left
+
+MEASURED 2026-10-09, offline, no lab unit.
+
+**Wall 1 is down.** `compute/hip/cmake` holds `hip-config.cmake`, `hip-config-version.cmake`,
+`hipblas-config.cmake` and `rocblas-config.cmake`, and `compute/hip/tools/make-rocm-root.py`
+assembles them with our include directory, our import library and the device library bitcode into
+one ROCm-shaped root. With `CMAKE_PREFIX_PATH` and `ROCM_PATH` on that root, llama.cpp's configure
+prints "HIP and hipBLAS found" and goes on. `hip_VERSION` is 6.2.0, which is what
+`include/hip/hip_version.h` states: above the 6.1 floor of `ggml/src/ggml-hip/CMakeLists.txt` line
+55, and below the 6.3 at which the backend starts to include `hip/hip_fp8.h`.
+
+One option of `hip::device` decides whether the whole backend compiles, and it is worth stating
+why. clang force-includes `__clang_hip_runtime_wrapper.h` only when it recognises the
+`--rocm-path` root as a product installation, and ours is not one: no `bin/hipconfig`, no
+`.hipVersion`. Without that wrapper every call of the mathematics library fails to resolve, which
+is 1431 of the 1993 errors of the first whole-tree build. `hip::device` therefore carries
+`-include __clang_hip_runtime_wrapper.h`, and the failing translation units fell from 144 to 44 on
+that one option alone.
+
+**Wall 2 is down.** `compute/hip/include/hip` now holds `hip_version.h`, `hip_vector_types.h`,
+`hip_fp16.h`, `hip_bf16.h` and `hip_cooperative_groups.h` beside `hip_runtime.h`, and
+`compute/hip/include/hipblas/hipblas.h` holds the BLAS interface. Every include of the backend
+resolves, and all 144 translation units of `ggml-hip` compile for gfx1013 (60 MB of objects). Five
+traps the headers had to answer, each one found by a failed build and written into the header that
+answers it:
+
+1. MSVC compiles the host half of the runtime, so the vector types need `__declspec(align(n))` and
+   not `__attribute__((aligned(n)))`, with the alignment of each type written out.
+2. `warpSize` is a `static constexpr int`, not a macro. As a macro it rewrote `prop.warpSize` in
+   our own sample.
+3. `__half` offers one implicit conversion, to `float`. With `operator _Float16()` as well,
+   `int32_t(x)` in `convert.cuh` is ambiguous.
+4. The host side of the float-to-half conversion is integer arithmetic, because this toolchain
+   ships no compiler-rt builtins for x86-64 Windows and `_Float16` arithmetic on the host asks for
+   `__truncsfhf2`. The device side still uses `v_cvt_f16_f32`.
+5. `__hgt2_mask` is absent on purpose. ggml defines it itself for HIP (`common.cuh:704`), so a
+   second definition is an error.
+
+Two host entry points joined the 13 of section 4.9 for reasons the backend does not state in its
+own guards. `hipOccupancyMaxActiveBlocksPerMultiprocessor` is called from
+`fattn-common.cuh:1137`, which compiles even with FlashAttention off. `hipStreamBeginCapture` is
+called at `ggml-cuda.cu:4598`, outside the `#ifdef USE_CUDA_GRAPH` block that ends at line 4589:
+an upstream portability defect, answered here with `hipErrorNotSupported`. The module definition
+file is therefore 53 names.
+
+**The wall that is left: hipBLAS has no implementation.** The link of `ggml-hip.dll` asks for ten
+names: `hipblasCreate`, `hipblasDestroy`, `hipblasSetStream`, `hipblasGemmEx`,
+`hipblasGemmBatchedEx`, `hipblasGemmStridedBatchedEx`, `hipblasSgemm`, `hipblasSgemmBatched`,
+`hipblasSgemmStridedBatched` and `hipblasStrsmBatched`. The header answers the compiler, and
+nothing answers the linker yet. `compute/hipblas/README.md` holds the route chosen for it, the
+measurement behind the choice and the smallest next step. One note for that work, because it is
+easy to make a mistake with: with `GGML_CUDA_NO_FA=1` the attention matrix multiplies go through
+`hipblasGemmStridedBatchedEx`, so the GEMM must really compute. FlashAttention on moves attention
+onto ggml's own kernels instead.
+
 ---
 
 ## 5. Repository placement, build and tests

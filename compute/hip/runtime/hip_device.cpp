@@ -395,4 +395,74 @@ hipError_t hipDeviceSynchronize(void) {
     return fail(guard.wait(dev, value));
 }
 
+// How many workgroups of this kernel a compute unit can hold at once.
+//
+// Why it is here and not among the launch entry points: it reads no queue and submits nothing.
+// It answers from this part's properties and the kernel's own descriptor, which is where
+// hipGetDeviceProperties already looks.
+//
+// What is modelled, and what is not. Two limits are real and measured: the local memory a
+// workgroup needs (the kernel's static group segment plus the dynamic request) against the local
+// memory of a compute unit, and the number of waves a workgroup needs against the waves a
+// compute unit holds, both from bc250hsa_props. The register file is NOT modelled: this build
+// has no figure for the vector register file of a SIMD of this part, and a number invented here
+// would be a guess inside an API that a backend uses to size its own parallelism. The answer is
+// therefore an upper bound: a kernel that is register-bound gets a number that is too large.
+// llama.cpp's flash attention path is the caller (ggml/src/ggml-cuda/fattn-common.cuh:1137), and
+// it uses the number to choose how many blocks work on one head in parallel.
+//
+// TODO (docs/linux-session-wishlist.md): read the VGPR file size of gfx1013 under Linux, from
+// amdgpu's own occupancy calculation, and add the register limit here.
+hipError_t hipOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, const void* func,
+                                                        int blockSize, size_t dynamicSMemSize) {
+    if (numBlocks == nullptr || func == nullptr || blockSize <= 0) {
+        return fail(hipErrorInvalidValue);
+    }
+
+    hipDeviceProp_t prop;
+    const hipError_t props_err = hipGetDeviceProperties(&prop, 0);
+    if (props_err != hipSuccess) {
+        return props_err;  // hipGetDeviceProperties already recorded it
+    }
+    if (prop.warpSize <= 0 || prop.sharedMemPerBlock == 0) {
+        return fail(hipErrorNotInitialized);
+    }
+
+    bc250hip::Guard guard;
+    bc250hip::State& s = state();
+    const auto found = s.functions.find(func);
+    if (found == s.functions.end()) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+
+    size_t group_bytes = dynamicSMemSize;
+    if (found->second.kernel != nullptr) {
+        group_bytes += static_cast<size_t>(found->second.kernel->group_segment_bytes);
+    }
+    if (group_bytes > prop.sharedMemPerBlock || blockSize > prop.maxThreadsPerBlock) {
+        // The kernel does not fit at all. CUDA and HIP both answer 0 here instead of an error.
+        *numBlocks = 0;
+        return hipSuccess;
+    }
+
+    const int waves_per_block = (blockSize + prop.warpSize - 1) / prop.warpSize;
+    const int waves_per_cu = prop.maxThreadsPerMultiProcessor > 0
+                                 ? prop.maxThreadsPerMultiProcessor / prop.warpSize
+                                 : waves_per_block;
+    int blocks = waves_per_block > 0 ? waves_per_cu / waves_per_block : 1;
+
+    if (group_bytes > 0 && prop.maxSharedMemoryPerMultiProcessor > 0) {
+        const int by_lds =
+            static_cast<int>(prop.maxSharedMemoryPerMultiProcessor / group_bytes);
+        if (by_lds < blocks) {
+            blocks = by_lds;
+        }
+    }
+    if (blocks < 1) {
+        blocks = 1;  // it fits, so at least one workgroup runs
+    }
+    *numBlocks = blocks;
+    return hipSuccess;
+}
+
 }  // extern "C"

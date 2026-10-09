@@ -13,6 +13,10 @@ path, and comes on its own branch.
 |---|---|
 | `include/bc250hsa.h` | the frozen interface of layer 1. Section 3.9 of the design holds the same text, and `build.ps1 -CheckDoc` compares them byte for byte |
 | `include/hip/hip_runtime.h` | the minimal HIP header of section 4.4. Layer 2 owns it, on branch `m16/hip-runtime`, and layer 1 does not include it |
+| `include/hip/hip_version.h`, `hip_vector_types.h`, `hip_fp16.h`, `hip_bf16.h`, `hip_cooperative_groups.h` | the device-side header set that llama.cpp's `ggml-hip` backend includes. Section 4.12 of the design says what each one answers and which failed build asked for it |
+| `include/hipblas/hipblas.h` | the ten BLAS entry points the backend links against. The route and the missing implementation are in `compute/hipblas/README.md` |
+| `cmake/` | our own `find_package` answer for `hip`, `hipblas` and `rocblas`, with `hip::host` and `hip::device` |
+| `tools/make-rocm-root.py` | assembles the include tree, the CMake packages, the import library and the device library bitcode into one ROCm-shaped root, which `--rocm-path` and `CMAKE_PREFIX_PATH` then name |
 | `bc250hsa/` | the library. The table below gives its file-by-file shape |
 | `tests/host/` | five tests that need no GPU and no BC-250 adapter |
 | `tests/data/` | the committed code object, fat binary, metadata dumps and the golden PM4 stream, with `PROVENANCE.txt` |
