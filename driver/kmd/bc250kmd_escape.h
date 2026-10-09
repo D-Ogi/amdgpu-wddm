@@ -39,7 +39,7 @@
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
 #define BC250_ESCAPE_RUN_FAN 30u                // case fan control: read, board, curve, fixed duty under a lease, renew
-#define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation, steps 1 and 2 state (BC250_ESCAPE_DPAUDIO below)
+#define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation, the state of steps 1, 2 and 4 (BC250_ESCAPE_DPAUDIO below)
 #define BC250_KMD_VERSION 0x000700D8u       // revision 216 (INF 0.7.216.1, on 215.1): DP audio step 2, the
                                             // stream half (dpaudio.c: wall DTO, AFMT, DP_SEC). One escape
                                             // grows, and that is why this word moves: RUN_DPAUDIO ABI 2,
@@ -1754,15 +1754,19 @@ typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_
 // of stop and MMIO unmap, and STATE takes the same word so that the two cannot be told apart by a sampler. An
 // operator's tool, never a poller's: no shipped component sends it on a schedule. Administrators only.
 //
-// Two sizes (0.7.216). ABI 2 is the whole structure: the ABI 1 layout, unchanged, followed by the record of the
+// Three sizes. ABI 3 is the whole structure: the ABI 2 layout, unchanged, followed by the record of the container
+// ID (step 4). ABI 2 is its first BC250_DPAUDIO_ABI2_SIZE bytes: the ABI 1 layout followed by the record of the
 // stream half (step 2). ABI 1 is its first BC250_DPAUDIO_ABI1_SIZE bytes, the 0.7.215 layout, and the driver
-// writes nothing past them. A size that is not its AbiVersion's is refused. A driver before 0.7.216 fails the
-// ABI 2 size itself with STATUS_INVALID_PARAMETER: a tool asks with ABI 2 and repeats with ABI 1 on that answer.
+// writes nothing past them. A size that is not its AbiVersion's is refused. A driver that does not know an ABI
+// fails that size itself with STATUS_INVALID_PARAMETER: a tool asks with the newest ABI and repeats with the one
+// below on that answer, down to ABI 1.
 // Slots, reasons and steps only grow at the end, so an ABI 1 reader keeps the meaning of every number it knows.
 
-#define BC250_DPAUDIO_ABI 2u
+#define BC250_DPAUDIO_ABI 3u
+#define BC250_DPAUDIO_ABI_2 2u
 #define BC250_DPAUDIO_ABI_1 1u
 #define BC250_DPAUDIO_ABI1_SIZE 408u         // the ABI 1 prefix of BC250_ESCAPE_DPAUDIO (dpaudio.c checks the offset)
+#define BC250_DPAUDIO_ABI2_SIZE 480u         // the ABI 2 prefix, which ended with the stream counters
 #define BC250_DPAUDIO_OP_OBSERVE 1u
 #define BC250_DPAUDIO_OP_STATE 2u
 
@@ -1782,7 +1786,8 @@ typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_
     X(EP1_CONFIG_DEFAULT) X(EP1_HOT_PLUG_CONTROL) X(EP1_PIN_SENSE) X(EP1_UNSOLICITED_RESPONSE) \
     X(EP1_WIDGET_CONTROL) X(EP1_CHANNEL_SPEAKER) X(EP1_AUDIO_DESCRIPTOR0) X(EP1_SINK_INFO1) \
     X(REFCLK_COUNT) X(DIG0_AFMT_INFOFRAME_CONTROL0) X(DIG0_AFMT_60958_0) \
-    X(DIG1_AFMT_INFOFRAME_CONTROL0) X(DIG1_AFMT_60958_0)
+    X(DIG1_AFMT_INFOFRAME_CONTROL0) X(DIG1_AFMT_60958_0) \
+    X(EP0_SINK_INFO2) X(EP0_SINK_INFO3) X(EP1_SINK_INFO2) X(EP1_SINK_INFO3)
 
 #define BC250_DPAUDIO_OBS_ENUM(n) BC250_DPAUDIO_OBS_##n,
 enum bc250_dpaudio_obs { BC250_DPAUDIO_OBS_LIST(BC250_DPAUDIO_OBS_ENUM) BC250_DPAUDIO_OBS_COUNT };
@@ -1825,6 +1830,7 @@ enum bc250_dpaudio_reason { BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_ENUM)
 #define BC250_DPAUDIO_NOTE_INHERITED 2u      // AUDIO_ENABLED was already 1 before this start wrote anything
 #define BC250_DPAUDIO_NOTE_REVISION 4u       // codec revision is not M819's 0x00100700 (logged, not a refusal)
 #define BC250_DPAUDIO_NOTE_UNSOLICITED 8u    // the pin's UNSOLICITED_RESPONSE.ENABLE was set before the write (U3)
+#define BC250_DPAUDIO_NOTE_OS_IDENTITY 16u   // step 4: the OS EldInfo identity differs from the EDID's (logged only)
 
 #define BC250_DPAUDIO_NO_SWITCH 0xFFFFFFFFu  // SwitchEnable/SwitchEndpoint/SwitchStream before any start read them
 
@@ -1880,6 +1886,22 @@ typedef struct _BC250_ESCAPE_DPAUDIO {
     unsigned long DtoSource, SecCntl, AfmtCntl;     // read back by the last stream sequence (enable or stop)
     unsigned long PacketControl, PacketControl2;    // DIGn_AFMT_AUDIO_PACKET_CONTROL and _CONTROL2, the same
     unsigned long StreamOn, StreamOff, StreamUndos; // enables that ran whole, stop sequences, undone enables
-} BC250_ESCAPE_DPAUDIO; // 480 bytes on Windows, ABI 2 (ABI 1: the first 408)
-typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 480) ? 1 : -1];
+    // ABI 3 from here (step 4's container ID): what DxgkDdiGetChildContainerId gave for the one child, and what
+    // the ELD of the chosen endpoint carries. 0 until the operating system calls that DDI, which it does after
+    // DxgkDdiStartDevice returns, so the first start of a boot writes Linux's constant port ID and the refresh
+    // below replaces it (docs/design/dp-audio.md, "The container ID").
+    unsigned long long PortId;              // EldInfo.PortId of the child; 0 = the DDI has not been called yet
+    unsigned long long PortIdInEld;         // SINK_INFO2 | SINK_INFO3 << 32 as the last write of the ELD left them
+    unsigned long OsManufacturer, OsProduct;    // EldInfo.ManufacturerName and .ProductCode (0 = not called yet)
+    unsigned long SwitchContainerId;        // EnableDpAudioContainerId as the last start or DDI call read it
+    unsigned long ContainerCalls;           // calls of DxgkDdiGetChildContainerId
+    unsigned long PortIdWrites;             // ELD port-ID refreshes that wrote (the ID had changed)
+    unsigned long PortIdSkips;              // calls that wrote nothing: the ELD already held that port ID, or no
+                                            // endpoint of this driver is configured yet (the log lines differ)
+    unsigned long PortIdCycles;             // refreshes that cycled AUDIO_ENABLED 0 -> 1 so the ELD is read again
+    unsigned long PortIdStatus;             // NTSTATUS of the last refresh (0 for none or success)
+    unsigned long SinkFromEdid;             // 1 when the last configure used the EDID sink, 0 the fixed set
+    unsigned long Abi3Pad;                  // 0
+} BC250_ESCAPE_DPAUDIO; // 536 bytes on Windows, ABI 3 (ABI 2: the first 480, ABI 1: the first 408)
+typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 536) ? 1 : -1];
 typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUDIO_OBS_SLOTS) ? 1 : -1];

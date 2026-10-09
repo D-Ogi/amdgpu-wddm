@@ -17,6 +17,8 @@ The environment is the one the recorded cmd scripts set up: vcvars64.bat, the WD
 front of INCLUDE, win_flex/win_bison and glslangValidator on PATH, meson and mako from PYTHONPATH, and for
 llvmpipe the LLVM_CONFIG variable naming the llvm-config.exe of the LLVM build tree. After configure the
 script compares the new log's "Build Options:" line with the option set and stops on any difference.
+The set the script passes is the configured set plus the reproducible-build switches of
+Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
 
 The source tree must already carry the component's patches (the companion Mesa repository branch, or an
 upstream checkout with the experiment's patch applied); this script does not patch anything.
@@ -76,6 +78,7 @@ if (-not $Glslang) { $Glslang = Join-Path $root 'scratch\glslang\bin' }
 if (-not $Temp) { $Temp = Join-Path $root 'scratch\tmp' }
 $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
+$options = Add-ReproducibleMesonOptions $options $Source $Build
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'meson.build'))) { throw "$Source is not a Mesa source tree (no meson.build)" }
 $llvmConfig = $null

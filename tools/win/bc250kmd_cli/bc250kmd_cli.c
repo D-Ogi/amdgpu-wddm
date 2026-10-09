@@ -3658,11 +3658,12 @@ static const char *DpAudioReasonText(unsigned long reason)
 
 static void DpAudioNotes(unsigned long notes, char *text, size_t size)
 {
-    _snprintf_s(text, size, _TRUNCATE, "%s%s%s%s%s", notes ? "" : "none",
+    _snprintf_s(text, size, _TRUNCATE, "%s%s%s%s%s%s", notes ? "" : "none",
                 (notes & BC250_DPAUDIO_NOTE_HPD_LOW) ? " hpd-sense-low" : "",
                 (notes & BC250_DPAUDIO_NOTE_INHERITED) ? " audio-enabled-inherited" : "",
                 (notes & BC250_DPAUDIO_NOTE_REVISION) ? " codec-revision-differs" : "",
-                (notes & BC250_DPAUDIO_NOTE_UNSOLICITED) ? " unsolicited-enabled" : "");
+                (notes & BC250_DPAUDIO_NOTE_UNSOLICITED) ? " unsolicited-enabled" : "",
+                (notes & BC250_DPAUDIO_NOTE_OS_IDENTITY) ? " os-identity-differs" : "");
 }
 
 #define DPA(slot) d->Regs[BC250_DPAUDIO_OBS_##slot]
@@ -3762,6 +3763,18 @@ static void DpAudioPrintObserve(const BC250_ESCAPE_DPAUDIO *d)
                 DPA(REFCLK_COUNT) % 10, DPA(REFCLK_COUNT) * 1000ul);
     DpAudioCheck("CLK4_CLK2_CURRENT_CNT", DPA_OK(REFCLK_COUNT), DPA(REFCLK_COUNT), "5000..7000",
                  DPA(REFCLK_COUNT) >= 5000 && DPA(REFCLK_COUNT) <= 7000, detail);
+    // Step 4's container ID, as the two ELD words hold it now. Linux DC's constant says that no container ID has
+    // reached the endpoint yet (docs/design/dp-audio.md, "The container ID").
+    for (n = 0; n < 2; n++) {
+        unsigned long low = n ? BC250_DPAUDIO_OBS_EP1_SINK_INFO2 : BC250_DPAUDIO_OBS_EP0_SINK_INFO2;
+        unsigned long high = n ? BC250_DPAUDIO_OBS_EP1_SINK_INFO3 : BC250_DPAUDIO_OBS_EP0_SINK_INFO3;
+        unsigned long long eld = ((unsigned long long)d->Regs[high] << 32) | (unsigned long long)d->Regs[low];
+        int constant = d->Regs[low] == 0x5558859eul && d->Regs[high] == 0x0d989449ul;
+
+        _snprintf_s(detail, sizeof(detail), _TRUNCATE, "endpoint %lu ELD port id 0x%016llX%s", n, eld,
+                    eld == 0 ? " (never written)" : (constant ? " (Linux's constant: no container ID)" : ""));
+        printf("  %s\n", detail);
+    }
     DpAudioNotes(d->ObsNotes, notes, sizeof(notes));
     printf("decision now (the driver's Bc250DpAudioDecide over these reads): %s; stream DP%lu, endpoint %lu, notes %s\n",
            DpAudioReasonText(d->ObsReason), d->ObsStream, d->ObsEndpoint, notes);
@@ -3772,13 +3785,15 @@ static void DpAudioPrintObserve(const BC250_ESCAPE_DPAUDIO *d)
     }
 }
 
-static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi2)
+static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi)
 {
-    char notes[96], sw[3][16];
+    char notes[96], sw[4][16];
     unsigned long i;
-    const unsigned long sws[3] = { d->SwitchEnable, d->SwitchEndpoint, abi2 ? d->SwitchStream : BC250_DPAUDIO_NO_SWITCH };
+    const unsigned long sws[4] = { d->SwitchEnable, d->SwitchEndpoint,
+                                   abi >= 2 ? d->SwitchStream : BC250_DPAUDIO_NO_SWITCH,
+                                   abi >= 3 ? d->SwitchContainerId : BC250_DPAUDIO_NO_SWITCH };
 
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < 4; i++) {
         if (sws[i] == BC250_DPAUDIO_NO_SWITCH) strcpy_s(sw[i], sizeof(sw[i]), "not read yet");
         else _snprintf_s(sw[i], sizeof(sw[i]), _TRUNCATE, "%lu", sws[i]);
     }
@@ -3787,8 +3802,8 @@ static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi2)
     printf("  state %s, reason: %s\n", d->State < sizeof(g_DpAudioState) / sizeof(g_DpAudioState[0]) ?
            g_DpAudioState[d->State] : "?", DpAudioReasonText(d->Reason));
     printf("  stream DP%lu, endpoint %lu, notes %s\n", d->Stream, d->Endpoint, notes);
-    if (abi2) printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s, EnableDpAudioStream %s (default 1)\n",
-                     sw[0], sw[1], sw[2]);
+    if (abi >= 2) printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s, EnableDpAudioStream %s, "
+                         "EnableDpAudioContainerId %s (default 1)\n", sw[0], sw[1], sw[2], sw[3]);
     else printf("  switches EnableDpAudio %s, EnableDpAudioEndpoint %s (default 1)\n", sw[0], sw[1]);
     printf("  codec 0x%08lX, config default 0x%08lX, HOT_PLUG_CONTROL 0x%08lX -> 0x%08lX, last NTSTATUS 0x%08lX\n",
            d->CodecId, d->ConfigDefault, d->HotPlugBefore, d->HotPlugAfter, d->LastStatus);
@@ -3796,7 +3811,7 @@ static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi2)
            d->Starts, d->Resumes, d->Stops, d->Refusals, d->Failures, d->PathOn, d->PathOff);
     printf("  accesses: indirect reads %lu, indirect writes %lu, direct writes %lu, refused by the tables %lu\n",
            d->IndirectReads, d->IndirectWrites, d->DirectWrites, d->AccessRefusals);
-    if (!abi2) { printf("  stream: not reported (driver before 0.7.216, DP audio ABI 1)\n"); return; }
+    if (abi < 2) { printf("  stream: not reported (driver before 0.7.216, DP audio ABI 1)\n"); return; }
     printf("  stream %s, step %s, NTSTATUS 0x%08lX; on %lu off %lu undone %lu\n",
            d->StreamState < sizeof(g_DpAudioStreamState) / sizeof(g_DpAudioStreamState[0]) ?
            g_DpAudioStreamState[d->StreamState] : "?",
@@ -3809,28 +3824,43 @@ static void DpAudioPrintState(const BC250_ESCAPE_DPAUDIO *d, int abi2)
     if (d->MismatchOffset)
         printf("  mismatch at 0x%05lX: wrote 0x%08lX, read 0x%08lX\n", d->MismatchOffset, d->MismatchExpected,
                d->MismatchActual);
+    if (abi < 3) { printf("  container ID: not reported (driver before 0.7.216.25, DP audio ABI 2)\n"); return; }
+    printf("  container ID: port 0x%016llX from the OS, ELD holds 0x%016llX, identity 0x%04lX/0x%04lX, sink %s\n",
+           d->PortId, d->PortIdInEld, d->OsManufacturer, d->OsProduct, d->SinkFromEdid ? "from the EDID" : "fixed set");
+    printf("  container ID: calls %lu, ELD writes %lu, already held %lu, presence cycles %lu, NTSTATUS 0x%08lX\n",
+           d->ContainerCalls, d->PortIdWrites, d->PortIdSkips, d->PortIdCycles, d->PortIdStatus);
+    if (d->PortId == 0)
+        printf("  container ID: the OS has not called GetChildContainerId yet; the ELD carries Linux's constant\n");
+    else if (d->PortIdInEld != d->PortId)
+        printf("  container ID: the ELD does NOT carry the port ID of the child; the next start writes it\n");
 }
 
 static int DpAudio(int argc, WCHAR **argv)
 {
     static BC250_ESCAPE_DPAUDIO d;
+    static const unsigned g_Abi1Size = BC250_DPAUDIO_ABI1_SIZE, g_Abi2Size = BC250_DPAUDIO_ABI2_SIZE;
     unsigned long op = BC250_DPAUDIO_OP_OBSERVE;
     NTSTATUS status = 0;
-    int abi2;
-    typedef char DpAudioAbiSizeCheck[(sizeof(BC250_ESCAPE_DPAUDIO) == 480 && BC250_DPAUDIO_ABI1_SIZE == 408) ? 1 : -1];
+    int abi;
+    typedef char DpAudioAbiSizeCheck[(sizeof(BC250_ESCAPE_DPAUDIO) == 536 && BC250_DPAUDIO_ABI2_SIZE == 480 &&
+                                      BC250_DPAUDIO_ABI1_SIZE == 408) ? 1 : -1];
     (void)sizeof(DpAudioAbiSizeCheck);
 
     if (argc == 3 && !_wcsicmp(argv[2], L"state")) op = BC250_DPAUDIO_OP_STATE;
     else if (argc != 2) { fprintf(stderr, "usage: bc250kmd_cli dpaudio [state]\n"); return 2; }
-    for (abi2 = 1; abi2 >= 0; abi2--) {
+    // Newest first, one step down on each refusal of the size: a 0.7.216.25 driver answers ABI 3, a 0.7.216.1 one
+    // ABI 2, and a 0.7.215 one ABI 1. Anything else is the driver's own answer and ends the loop.
+    for (abi = BC250_DPAUDIO_ABI; abi >= (int)BC250_DPAUDIO_ABI_1; abi--) {
+        unsigned size = abi >= 3 ? (unsigned)sizeof(d) : (abi == 2 ? g_Abi2Size : g_Abi1Size);
+
         memset(&d, 0, sizeof(d));
         d.Magic = BC250_ESCAPE_MAGIC;
         d.Command = BC250_ESCAPE_RUN_DPAUDIO;
-        d.AbiVersion = abi2 ? BC250_DPAUDIO_ABI : BC250_DPAUDIO_ABI_1;
+        d.AbiVersion = (unsigned long)abi;
         d.Op = op;
-        if (SendEscape(BC250_DEFAULT_HWID, &d, abi2 ? (unsigned)sizeof(d) : BC250_DPAUDIO_ABI1_SIZE, &status)) return 1;
-        // A driver before 0.7.216 takes only the 408-byte ABI 1 record and refuses the size.
-        if (!(abi2 && status == (NTSTATUS)0xC000000Dl)) break;
+        if (SendEscape(BC250_DEFAULT_HWID, &d, size, &status)) return 1;
+        // A driver that does not know this ABI refuses the size itself with STATUS_INVALID_PARAMETER.
+        if (!(abi > (int)BC250_DPAUDIO_ABI_1 && status == (NTSTATUS)0xC000000Dl)) break;
     }
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
     if (d.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
@@ -3842,8 +3872,7 @@ static int DpAudio(int argc, WCHAR **argv)
            d.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", d.NtStatus, StatusName((NTSTATUS)d.NtStatus),
            d.Version, (d.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "not mapped (EnableMmio)");
     if (op == BC250_DPAUDIO_OP_OBSERVE && d.ValidMask) DpAudioPrintObserve(&d);
-    if (abi2 && d.AbiVersion == BC250_DPAUDIO_ABI) DpAudioPrintState(&d, 1);
-    else if (!abi2 && d.AbiVersion == BC250_DPAUDIO_ABI_1) DpAudioPrintState(&d, 0);
+    if (d.AbiVersion == (unsigned long)abi) DpAudioPrintState(&d, abi);
     return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 #undef DPA

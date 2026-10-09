@@ -35,7 +35,7 @@ and NOTICE in the package root).
 | | with SPIRV-Headers, KhronosGroup/SPIRV-Headers @ `f88a2d766840fc825af1fc065977953ba1fa4a91` and `c63848ecf2200425511319fd8bf2c17b751e501e`, and Vulkan-Headers, KhronosGroup/Vulkan-Headers @ `ee2ec5fd83dafce291024683b50dc89219333076` | `SPIRV-Headers-LICENSE.txt`; Apache-2.0 OR MIT: `Vulkan-Headers-LICENSE.md`, `Vulkan-Headers-Apache-2.0.txt`, `Vulkan-Headers-MIT.txt` |
 | `d3d11\amdgpu_wddm_dxvk.dll` | DXVK, D-Ogi/dxvk @ `0898891fccbed3d0ccbc1cbf1499954c36a06002` (branch `amdgpu-wddm/per-app-graphics-settings`: `5611118ef0d29d3b3b4bce83bb452694b3975bfb` of `amdgpu-wddm/upstream-2026-10-05` plus the HUD in the presented surface; upstream doitsujin/dxvk) | zlib: `DXVK-zlib.txt` |
 | | with dxbc-spirv, D-Ogi/dxbc-spirv @ `f241996e050d4c04091dd5c03cb84fc5523611c8`; the OpenVR API header (ValveSoftware/openvr, copy in DXVK `include/openvr`); SPIRV-Headers @ `04f10f650d514df88b76d25e83db360142c7b174` and Vulkan-Headers @ `8864cdc896bbc2a9b6eb36b3218fc9ef57908d77` | MIT: `dxbc-spirv-MIT.txt`; BSD-3-Clause: `OpenVR-BSD-3-Clause.txt`; `SPIRV-Headers-LICENSE.txt`, `Vulkan-Headers-LICENSE.md`, `Vulkan-Headers-Apache-2.0.txt`, `Vulkan-Headers-MIT.txt` |
-| `vulkan\vulkan_radeon.dll`, `vulkan\radeon_icd.json` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `468ca20d05f72d3c3b46b4488f6ad08cf6ca9661` (branch `amdgpu-wddm/rottr486-null-vs-system`: `2732f9c889fffb1c892619d056a07fd08815b306` plus the BD-096 residency flags and the BD-100 pipeline fix, upstream gitlab.freedesktop.org/mesa/mesa) | Mesa: `Mesa-license.rst`, `Mesa-MIT.txt`, `Mesa-BSL-1.0.txt`, `Mesa-SGI-B-2.0.txt`, `Mesa-Apache-2.0.txt` |
+| `vulkan\vulkan_radeon.dll`, `vulkan\radeon_icd.json` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `d3da6d0ac57230e8b6fccb1d64e3bd4d993549e4` (branch `amdgpu-wddm/b25-system-icd`: `amdgpu-wddm/b25-system` `aa1bd395048dcb8f61da99e2db236091b612078b` over `amdgpu-wddm/bd102-system` `31d3f39008ad8d140a2f64f05f4cf14664af3fb6`, with the dispatch-table generator fix `amdgpu-wddm/b25-gen-x86` `eca7adc94843500835a957939a11dfb9ace60b16` merged, upstream gitlab.freedesktop.org/mesa/mesa) | Mesa: `Mesa-license.rst`, `Mesa-MIT.txt`, `Mesa-BSL-1.0.txt`, `Mesa-SGI-B-2.0.txt`, `Mesa-Apache-2.0.txt` |
 | `d3d12\amdgpu_wddm_radv.dll` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `aca2c81b3c8a52c4f9fd00a2765a8ea7b76e57b3` (branch `amdgpu-wddm/rottr486-null-vs`: `8c110468f37eeaafecace964bd83488903a08487` of branch `amdgpu-wddm/b23-icd` plus the BD-100 pipeline fix), with zlib 1.3.1 (madler/zlib @ `v1.3.1`, Meson wrap) | Mesa texts as above; Zlib: `zlib-LICENSE.txt` |
 | `d3d11\amdgpu_wddm_radv.dll` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `aca2c81b3c8a52c4f9fd00a2765a8ea7b76e57b3`, the same build as `d3d12\amdgpu_wddm_radv.dll` | Mesa texts as above |
 | `desktop\amdgpu_wddm_radv.dll` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `9ddfcbe2fc657bfaa6794a5e47f5749e012a5de4` (branch `amdgpu-wddm/radv-wddm2-hosted-main`) | Mesa texts as above |
@@ -51,9 +51,9 @@ and NOTICE in the package root).
 The Mesa licence texts are the same files at all five Mesa commits above.
 
 The Mesa files of this release come from worktrees with no local change at the commits named: the two RADV
-builds of the D3D drivers (`aca2c81b`), the system Vulkan ICD (`468ca20d`), the hosted RADV (`9ddfcbe2`), the zink
+builds of the D3D drivers (`aca2c81b`), the system Vulkan ICD (`d3da6d0a`), the hosted RADV (`9ddfcbe2`), the zink
 UMD (`ea876500`) and the two llvmpipe UMD builds (`76ab2c27`, kept from the earlier releases). The two RADV builds
-of the D3D drivers give `git-aca2c81b3c` as their Mesa version, and the system Vulkan ICD gives `git-468ca20d05`.
+of the D3D drivers give `git-aca2c81b3c` as their Mesa version, and the system Vulkan ICD gives `git-d3da6d0ac5`.
 No file of this release needs a patch on top of its commit.
 
 ## Not part of this package

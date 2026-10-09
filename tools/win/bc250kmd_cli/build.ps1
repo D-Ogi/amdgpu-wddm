@@ -19,6 +19,11 @@ $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
 $cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
 New-Item -ItemType Directory -Force $Out | Out-Null
+$repo = (Resolve-Path (Join-Path $here '..\..\..')).Path
+# /Brepro on cl and link: a content hash where they write a time. /FC with /d1trimfile: __FILE__ and the name that
+# MSVC gives an anonymous namespace (a hash of the source path) see only the path below the repository. Two builds
+# of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
+$repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
 
 # bc250kmd_cli.c repeats the driver's BC250_STAGE numbers. Refuse to build a tool that names them wrongly.
 if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -39,10 +44,10 @@ $env:INCLUDE = ''; $env:LIB = ''
 # Refuse to build a tool whose `log summary` would again idle the GPU once per page.
 $testOut = Join-Path $Out 'test'
 New-Item -ItemType Directory -Force $testOut | Out-Null
-& $cl @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$testOut\log_test.obj", "/Fe$testOut\log_test.exe",
-    (Join-Path $here 'log_test.c'), '/link', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    (Join-Path $here 'log_test.c'), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
     "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
@@ -50,20 +55,20 @@ if ($LASTEXITCODE -ne 0) { throw "cl failed on log_test.c ($LASTEXITCODE)" }
 & "$testOut\log_test.exe" 2>&1 | ForEach-Object { Write-Host "  $_" }
 if ($LASTEXITCODE -ne 0) { throw 'log_test.c failed: the log paging no longer reads as the driver expects' }
 
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
-    (Join-Path $here 'bc250kmd_cli.c'), '/link', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    (Join-Path $here 'bc250kmd_cli.c'), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
     "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 
 # The monitor uses the same adapter selection and typed request code in-process.
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250control.obj", "/Fe$Out\bc250control.dll",
-    (Join-Path $here 'bc250kmd_cli.c'), '/link', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    (Join-Path $here 'bc250kmd_cli.c'), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
     "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64", 'gdi32.lib', 'setupapi.lib', 'advapi32.lib')
 if ($LASTEXITCODE -ne 0) { throw "control DLL build failed ($LASTEXITCODE)" }
 

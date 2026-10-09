@@ -13,6 +13,7 @@ the replay method are described in `driver/shim/README.md`; this file covers the
 | `run_sdma_faults.ps1` | `sdma_faults.c` | what the SDMA bring-up does when things fail. |
 | `run_sdma_copy.ps1` | `sdma_copy_packets.c` | ADR 0013: does `bc250_sdma_copy.c` write the same copy/fill packets amdgpu's `sdma_v5_0_emit_copy_buffer()`/`emit_fill_buffer()` would, dword for dword, split where they would split? |
 | `run_paging.ps1` | `paging_packets.c` | ADR 0008 stage D: does `bc250_sdma_paging.c` write the same TRANSFER_VIRTUAL/FILL_VIRTUAL packets into a caller-owned buffer, and does the room check answer `BC250_SDMA_PAGING_INSUFFICIENT` - writing nothing - when the buffer is too small? |
+| `run_gfx_vm_flush.ps1` | `gfx_vm_flush.c` | `docs/design/gfx-submit-root-serialization.md` option (b). Is the gfx job frame the same 23 dwords as 0.7.216.24? Are the 29 dwords in front of it what `gmc_v10_0_emit_flush_gpu_tlb()` emits, per VMID and per engine? `-WrongAckMask` is its negative control. |
 
 The five replays all ask one question - does the shim write what unit A's Linux driver wrote, in that
 order - and they ask it on the path where everything works. Their verdict is EXACT MATCH or nothing.

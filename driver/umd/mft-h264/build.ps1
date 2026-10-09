@@ -107,9 +107,12 @@ $inc = @("/I$(Join-Path $msvc.FullName 'include')",
          "/I$sdk\Include\$KitVersion\shared",
          "/I$sdk\Include\$KitVersion\winrt",
          "/I$src", "/I$shaderDir")
-# /Brepro removes the timestamp from the object and the image, so the same sources give the same bytes.
+# /Brepro removes the timestamp from the object and the image, so the same sources give the same bytes. /FC with
+# /d1trimfile: the names of anonymous namespaces hash the source path below the repository only; with the full path
+# in the hash, mfthost.exe of two trees of one commit placed two functions in another order.
 $cflags = @('/nologo', '/c', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/GR-',
-            '/DUNICODE', '/D_UNICODE', '/DWIN32_LEAN_AND_MEAN', '/Brepro', '/Zc:inline')
+            '/DUNICODE', '/D_UNICODE', '/DWIN32_LEAN_AND_MEAN', '/Brepro', '/Zc:inline', '/FC',
+            "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
 $libpath = @("/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
              "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64")
 $libs = @('mfplat.lib', 'mfuuid.lib', 'mf.lib', 'mfreadwrite.lib', 'd3d11.lib', 'dxgi.lib',

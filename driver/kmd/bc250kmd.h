@@ -829,6 +829,9 @@ typedef struct _BC250_GFX_VMID_COUNTERS {
     USHORT Members;             // the pool, a VMID bit mask
     USHORT Excluded;            // found programmed at bring-up
     ULONG Claims, Reuses, Busy, RuleRefusals, Flushes, FlushVmids;
+    BOOLEAN RingFlushGate;      // EnableRingVmFlush (docs/design/gfx-submit-root-serialization.md section 3)
+    ULONG RingFlushes;          // jobs whose root write and invalidation were packets, not MMIO
+    ULONG RingFlushSame;        // of those, the jobs whose VMID already held the root
 } BC250_GFX_VMID_COUNTERS;
 void GfxVmidReport(_In_ const BC250_DEVICE* Device, _In_z_ const char* Who, ULONG Vmid);
 void GfxVmidCounters(_In_ const BC250_DEVICE* Device, _Out_ BC250_GFX_VMID_COUNTERS* Counters);
@@ -989,6 +992,7 @@ DXGKDDI_DPC_ROUTINE Bc250DpcRoutine;
 DXGKDDI_QUERY_CHILD_RELATIONS Bc250QueryChildRelations;
 DXGKDDI_QUERY_CHILD_STATUS Bc250QueryChildStatus;
 DXGKDDI_QUERY_DEVICE_DESCRIPTOR Bc250QueryDeviceDescriptor;
+DXGKDDI_GET_CHILD_CONTAINER_ID Bc250GetChildContainerId;
 DXGKDDI_SET_POWER_STATE Bc250SetPowerState;
 DXGKDDI_UNLOAD Bc250Unload;
 DXGKDDI_STOP_DEVICE_AND_RELEASE_POST_DISPLAY_OWNERSHIP Bc250StopDeviceAndReleasePostDisplayOwnership;

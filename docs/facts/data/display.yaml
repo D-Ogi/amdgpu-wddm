@@ -950,3 +950,36 @@ facts:
     edges:
       - {"type": "uses", "to": "M65"}
       - {"type": "uses", "to": "M97"}
+  - id: M850
+    status: MEASURED
+    date: "2026-10-09"
+    claim: "DP audio of this driver runs at the right rate on unit A under Windows. On the installed `0.7.216.100-tester.23` package (KMD 0.7.216.24, release defaults, no register written by the operator) a 1 kHz tone played from the interactive session gives device position / `QueryPerformanceCounter` = 1.0000 in exclusive poll mode and 1.0000 in exclusive event mode at 48 000 Hz 16 bit stereo, and 0.9991 over the whole run of the shared 44 100 Hz 32 bit float mix (1.0000 after the first 2 s). The exclusive event arm got 939 notifications, mean gap 10.65 ms, longest 11.1 ms, 0 timeouts; the shared arm 986 events and 0 timeouts. `SoundPlayer.PlaySync` of a generated 10.000 s WAV returned in 10.131 s. Stream initialization took 4.5, 29.7 and 34.3 ms"
+    status_text: "MEASURED (unit A, one probe set per mode, about 10 s per arm)"
+    detail: "The bound of the trial was 0.5 %; the device-rate figures are printed to four decimals, so the exclusive arms hold to better than 0.01 %. The probe is `wasapi-probe.cs` of M830 on the same endpoint. `written_s` exceeds `elapsed_s` by one buffer in every arm, which is the pre-filled buffer. The `PlaySync` arm carries the start and the stop of a whole winmm stream inside its 10.131 s; the same call took 30.6 s under release r19 (M824), where initialization took 7.1 to 9.6 s. The whole stream state was read before the tone, twice during it and after it and is identical in all four sets except `AUD_M_READBACK` (M851), `AFMT_AUDIO_FIFO_OVERFLOW` 0 at every sample. The record of the start reads `starts 1 refusals 0 failures 0`, and the KMD log holds no refusal line. Not shown: whether anything was audible (nobody listened in this trial; the owner's report on `tester.20` of 2026-10-07 is what makes BD-092 verified), 32 kHz, more than two channels, HBR, and any stop, resume or path-power transition (`stops 0 resumes 0`) The ID of this fact moved at the b26 round-2 re-cut: it was M845 on `train/b26` until main was merged, where M845 already named a fact of the M16 compute work (icd.yaml), committed first. The b26 DP audio facts M845, M846 and M847 are M850, M851 and M852 from this merge on."
+    evidence: "[DP audio step 3](../evidence/windows/2026-10-09-dp-audio-step3/README.md)"
+    edges:
+      - {"type": "uses", "to": "M788"}
+      - {"type": "uses", "to": "M824"}
+      - {"type": "uses", "to": "M830"}
+  - id: M851
+    status: MEASURED
+    date: "2026-10-09"
+    claim: "`DP0_DP_SEC_AUD_M_READBACK` follows the sample rate of the playing application on unit A under Windows, independently of the Windows audio stack. It reads 2740 (`0x0AB4`) while 44 100 Hz plays and 2980 and 2984 (`0x0BA4`, `0x0BA8`) while 48 000 Hz plays. With `DP_SEC_AUD_N` = 32768 and the 512fbr DTO on, Maud / Naud = 512 x fs / f_LS_Clk, which for a 270 MHz link symbol clock predicts 2740.28 and 2982.62: an error of -0.010 % at 44.1 kHz and of -0.09 % and +0.05 % at 48 kHz. The ratio of the two readings is 1.0890 against 48000 / 44100 = 1.08844, which is 0.06 %"
+    status_text: "MEASURED (unit A, 4 reads around two playbacks)"
+    detail: "The reads are the `dpaudio` observation slots of the KMD, by register name, before the tone, twice during it and after it. The register reads 0 under Linux on the same unit, also during playback (M820), so it is a witness on Windows only; the Linux reading of M820 stands. This is the one rate witness of the DP audio path with no part of the Windows audio stack in it, and it confirms the driver's DTO1 module decision: the module comes from `CLK4_0_CLK4_CLK2_CURRENT_CNT` (6000 = 600.000 MHz, M788) and is 6 000 000, where Linux's clock manager lowers the reference for the VBIOS spread-spectrum figure and writes 5 988 740 (M820), which would make the wall clock 24.0451 MHz, 0.188 % fast. Not shown: the link symbol clock was not read in this trial, so the 270 MHz of the prediction is an inference from the two readings and M810's link rate, not a measurement of this run The ID of this fact moved at the b26 round-2 re-cut: it was M846 on `train/b26` until main was merged, where M846 already named a fact of the M16 compute work (icd.yaml), committed first. The b26 DP audio facts M845, M846 and M847 are M850, M851 and M852 from this merge on."
+    evidence: "[DP audio step 3](../evidence/windows/2026-10-09-dp-audio-step3/README.md)"
+    edges:
+      - {"type": "uses", "to": "M788"}
+      - {"type": "uses", "to": "M820"}
+      - {"type": "uses", "to": "M850"}
+  - id: M852
+    status: MEASURED
+    date: "2026-10-09"
+    claim: "The inbox HD Audio class driver of Windows accepts the endpoint this driver builds on unit A, with the format set of the monitor's EDID (step 4 of DP audio). There is one ACTIVE render endpoint, `PKEY_Device_FriendlyName` \"Digital Audio (HDMI)\", form factor 9, behind `ehdmioutwave` of the AA01 codec on `hdaudio.inf` 10.0.22621.2506. Its engine device format is 44 100 Hz 2 ch 16 bit, its shared mix format 44 100 Hz 2 ch 32 bit float, and the rates it publishes are 32 000, 44 100 and 48 000 Hz, which is the rate mask `0x70` that `dce_aud_hw_init` writes. The codec's second pin is a second endpoint in state 8, UNPLUGGED, with `AUDIO_ENABLED` 0. The KMD log reads `configure done on endpoint 0 (EDID), 27 writes, speakers 0x01` and `LPCM 2 ch rates 0x7F sizes 0x7`"
+    status_text: "MEASURED (unit A, one trial, read only)"
+    detail: "The first lab run of steps 2 and 4 together, on the installed `0.7.216.100-tester.23` package. It shows that `AUDIO_ENABLED` as the last write of a start, which is this driver's deviation from Linux's order, still lets the class driver find and open the endpoint: the exclusive arms of M850 ran on it. The notes of the start are `audio-enabled-inherited unsolicited-enabled`, so the class driver had enabled the pin's unsolicited responses. Not shown: the device container of the endpoint (the ELD carried Linux DC's constant port ID at this trial, before the container ID of KMD 0.7.216.25), 32 kHz, more than two channels, and what the endpoint does at a hot plug The ID of this fact moved at the b26 round-2 re-cut: it was M847 on `train/b26` until main was merged, where M847 already named a fact of the M16 compute work (icd.yaml), committed first. The b26 DP audio facts M845, M846 and M847 are M850, M851 and M852 from this merge on."
+    evidence: "[DP audio step 3](../evidence/windows/2026-10-09-dp-audio-step3/README.md)"
+    edges:
+      - {"type": "uses", "to": "M810"}
+      - {"type": "uses", "to": "M819"}
+      - {"type": "uses", "to": "M850"}

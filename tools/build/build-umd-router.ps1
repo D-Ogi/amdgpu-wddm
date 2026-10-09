@@ -16,8 +16,10 @@
 # The recipe is the one that built the registered router 674AD261 (2026-10-01, driver/umd/router/README.md):
 # VS 2022 vcvars64 (MSVC 14.44.35207, cl 19.44.35221) with the WDK 10.0.26100.0 um and shared headers in front of
 # INCLUDE; /O2 /MD /W4 /WX /Zi, linked /DEBUG /OPT:REF /OPT:ICF with /PDBALTPATH:%_PDB%, so the DLL names its PDB
-# by file name only and carries no build path. No /Brepro: the PE and debug-directory timestamps and the PDB
-# signature differ on every build (see the README for what a rebuild compares).
+# by file name only and carries no build path. Since build/release-from-branches the recipe also gives cl and link
+# /Brepro and gives cl /FC with /d1trimfile:<repo>, so two builds of one commit in two directories give the same
+# bytes (docs/design/reproducible-builds.md). The registered 674AD261 and the routers of b21 came before that: a
+# rebuild differs from them in the PE and debug-directory timestamps and the PDB signature (pe_compare.py).
 param([string]$OutputDir, [string]$VsInstall, [ValidateSet('x64', 'x86')][string]$Arch = 'x64')
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
@@ -46,10 +48,13 @@ try {
     $env:INCLUDE = "$wdk\um;$wdk\shared;$env:INCLUDE"
     Write-Host "Visual Studio: $install, cl $(Get-ClVersion), target $env:VSCMD_ARG_TGT_ARCH"
     $crt = if ($Arch -eq 'x86') { '/MT' } else { '/MD' }
+    # /Brepro: a content hash where cl and link write a time. /FC with /d1trimfile: __FILE__ and the name that MSVC
+    # gives an anonymous namespace (a hash of the source path) see only the path below the repository.
+    $repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
     Push-Location $OutputDir
     try {
         $front = @("$src\front-adapter.cpp", "$src\front-device.cpp", "$src\front-dxgi.cpp")
-        & cl.exe /nologo /O2 $crt /W4 /WX /Zi /LD "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front "/Fe:$OutputDir\bc250d3d_router.dll" /link /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
+        & cl.exe /nologo /O2 $crt /W4 /WX /Zi /LD @repro "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front "/Fe:$OutputDir\bc250d3d_router.dll" /link /Brepro /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
         if ($LASTEXITCODE -ne 0) { throw 'router build failed' }
         # The doubles: one source, a tag per role (cpu, hosted, app), one without OpenAdapter10_2, one that fails.
         $doubles = @(
@@ -60,10 +65,10 @@ try {
             @('fake-fail', @('/DFAKE_TAG=0xFA', '/DFAKE_FAIL')))
         foreach ($d in $doubles) {
             $name = $d[0]; $defines = $d[1]
-            & cl.exe /nologo /O2 $crt /W4 /WX /LD @defines "/Fo$obj\$name.obj" "$src\tests\fake-umd.cpp" "/Fe:$OutputDir\$name.dll"
+            & cl.exe /nologo /O2 $crt /W4 /WX /LD @repro @defines "/Fo$obj\$name.obj" "$src\tests\fake-umd.cpp" "/Fe:$OutputDir\$name.dll" /link /Brepro
             if ($LASTEXITCODE -ne 0) { throw "$name build failed" }
         }
-        & cl.exe /nologo /O2 $crt /W4 /WX /EHsc /std:c++17 "/I$contract" "/Fo$obj\host\" "$src\tests\test-router.cpp" @front "/Fe:$OutputDir\test-router.exe"
+        & cl.exe /nologo /O2 $crt /W4 /WX /EHsc /std:c++17 @repro "/I$contract" "/Fo$obj\host\" "$src\tests\test-router.cpp" @front "/Fe:$OutputDir\test-router.exe" /link /Brepro
         if ($LASTEXITCODE -ne 0) { throw 'test-router build failed' }
         $machine = (& dumpbin.exe /nologo /headers bc250d3d_router.dll | Select-String 'machine \(') -join ' '
         $want = if ($Arch -eq 'x86') { '14C machine (x86)' } else { '8664 machine (x64)' }

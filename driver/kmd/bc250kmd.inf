@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/09/2026,0.7.216.24
+DriverVer   = 10/09/2026,0.7.216.25
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -226,9 +226,13 @@ HKR, Parameters, EnableVmidPool,     0x00010003, 1
 ; so the endpoint stays hidden. The interrupt the inbox driver uses for that endpoint is the HD Audio function's own
 ; (PCI\VEN_1002&DEV_13FF), not this device's: the installer sets MSISupported there, because on a line interrupt the
 ; stream interrupts never arrive and the audio plays at 0.33x (BD-092).
+; EnableDpAudioContainerId 1 puts the port ID Windows made for the monitor (DxgkDdiGetChildContainerId) into the
+; ELD of the endpoint, so that the audio endpoint and the monitor belong to one device container. The driver keeps
+; the container ID Windows chose; only the ELD changes. 0 leaves Linux's two constant port-ID halves there.
 HKR, Parameters, EnableDpAudio,      0x00010003, 1
 HKR, Parameters, EnableDpAudioEndpoint, 0x00010003, 1
 HKR, Parameters, EnableDpAudioStream, 0x00010003, 1
+HKR, Parameters, EnableDpAudioContainerId, 0x00010003, 1
 ; Display modes, stage A (modeset.c, docs/design/display-modes.md). At start the driver reads the monitor's EDID over
 ; DP AUX, gives it to Windows as the monitor descriptor (the real monitor name), and offers the native mode and the
 ; smaller sizes of the EDID and of a list of common desktop sizes. The timing on the cable never changes: a smaller

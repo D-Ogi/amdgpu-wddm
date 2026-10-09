@@ -32,6 +32,9 @@ static NTSTATUS InitializeDisplayOnly(_In_ PDRIVER_OBJECT DriverObject, _In_ PUN
     data.DxgkDdiQueryChildRelations = Bc250QueryChildRelations;
     data.DxgkDdiQueryChildStatus = Bc250QueryChildStatus;
     data.DxgkDdiQueryDeviceDescriptor = Bc250QueryDeviceDescriptor;
+    // WDDM 1.2, so inside the WIN8 baseline this table declares. It keeps the default container ID and takes the
+    // port ID of the child for the ELD of the DP audio endpoint (pnp.c, docs/design/dp-audio.md step 4).
+    data.DxgkDdiGetChildContainerId = Bc250GetChildContainerId;
     data.DxgkDdiSetPowerState = Bc250SetPowerState;
     data.DxgkDdiUnload = Bc250Unload;
     data.DxgkDdiStopDeviceAndReleasePostDisplayOwnership = Bc250StopDeviceAndReleasePostDisplayOwnership;

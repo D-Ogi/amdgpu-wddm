@@ -1819,8 +1819,133 @@ int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u
  * FRAME_CONTROL end, SWITCH_BUFFER. The fence size is added by the caller. */
 #define BC250_JOB_FRAME_DWORDS (2u + 3u + 2u + 4u + 2u + 2u)
 
-int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
-			 u64 fence_addr, u64 seq, unsigned int flags)
+/* ---------------------------------------------------------------------------------------------
+ * The VM flush on the ring: option (b) of docs/design/gfx-submit-root-serialization.md
+ *
+ * PROVENANCE: Linux amdgpu (MIT), gmc_v10_0_emit_flush_gpu_tlb() and gfx_v10_0_ring_emit_vm_flush()
+ * (driver/amdgpu-import/reference/gmc_v10_0.c:374, reference/gfx_v10_0.c:8767) at v6.18, commit
+ * 7d0a66e4bb9081d75c82ec4957c50034cb0ea449, with gfx_v10_0_ring_emit_wreg() (reference/gfx_v10_0.c
+ * :9003) and gfx_v10_0_wait_reg_mem() (:4011) as the two packet writers.
+ *
+ * Three deviations from that path, each with its reason:
+ *
+ *  1. No semaphore. gmc_v10_0_use_invalidate_semaphore() is true for the MMHUB only, and this is
+ *     the GFXHUB, so upstream emits none here either. bc250_gmc_flush_gpu_tlb() takes none for
+ *     this hub for the same reason, which also keeps the semaphore hazard of facts M25 out of the
+ *     path.
+ *  2. The invalidate request and the acknowledge wait are two packets, not one.
+ *     gfx_v10_0_ring_emit_reg_write_reg_wait() fuses them into one WAIT_REG_MEM with OPERATION(1)
+ *     when adev->gfx.cp_fw_write_wait says the CP firmware does that operation, and falls back to
+ *     amdgpu_ring_emit_reg_write_reg_wait_helper() (one WRITE_DATA and one WAIT_REG_MEM) when it
+ *     does not. The shim tracks no CP firmware version, so it writes the fallback, which every
+ *     firmware version runs.
+ *  3. The fallback gets the acknowledge-reset cycle between the two: a WAIT_REG_MEM on the request
+ *     register with reference 0 and mask 0, which passes at once and whose only effect is a read
+ *     cycle. Without it the acknowledge wait can read a bit that the previous invalidation of this
+ *     engine left set, and the job would then run on a TLB that was never invalidated. Upstream
+ *     does the same on SDMA (sdma_v5_0_ring_emit_reg_write_reg_wait(), reference/sdma_v5_0.c,
+ *     "wait for a cycle to reset vm_inv_eng*_ack", which bc250_sdma_vm_reg_write_reg_wait()
+ *     follows) and in the CPU path for a GFXHUB below GC 10.3 (the dummy read of the request
+ *     register in gmc_v10_0_flush_gpu_tlb(), which bc250_gmc_flush_gpu_tlb_observed() follows).
+ * ------------------------------------------------------------------------------------------- */
+
+/* PACKET3_WRITE_DATA__DST_MMREG_ADDR and PACKET3_WAIT_REG_MEM__REG_POLL_ADDR are 18 bits (nvd.h),
+ * so a register offset above this does not fit the packet and is refused. */
+#define BC250_GFX_MMREG_FIELD_MAX	0x3FFFFu
+
+/* gfx_v10_0_ring_emit_wreg(), the AMDGPU_RING_TYPE_GFX arm of its switch. */
+static void bc250_gfx_vm_wreg(struct amdgpu_ring *ring, u32 reg, u32 value)
+{
+	amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
+	amdgpu_ring_write(ring, WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM);
+	amdgpu_ring_write(ring, reg);
+	amdgpu_ring_write(ring, 0);
+	amdgpu_ring_write(ring, value);
+}
+
+/* gfx_v10_0_ring_emit_reg_wait(), which is gfx_v10_0_wait_reg_mem(ring, 0, 0, 0, reg, 0, value,
+ * mask, 0x20): engine ME, register space, operation wait_reg_mem, function equal, poll interval
+ * 0x20. */
+static void bc250_gfx_vm_reg_wait(struct amdgpu_ring *ring, u32 reg, u32 value, u32 mask)
+{
+	amdgpu_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	amdgpu_ring_write(ring, WAIT_REG_MEM_MEM_SPACE(0) | WAIT_REG_MEM_OPERATION(0) |
+				WAIT_REG_MEM_FUNCTION(3) | WAIT_REG_MEM_ENGINE(0));
+	amdgpu_ring_write(ring, reg);
+	amdgpu_ring_write(ring, 0);
+	amdgpu_ring_write(ring, value);
+	amdgpu_ring_write(ring, mask);
+	amdgpu_ring_write(ring, 0x20);
+}
+
+int bc250_gfx_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng)
+{
+	const struct amdgpu_vmhub *hub;
+	u64 lo, hi, req, ack;
+	u32 request;
+
+	/* Every refusal below happens before a single dword is written, so that it leaves the ring
+	 * exactly as it was, as bc250_gfx_emit_ib() and bc250_gfx_emit_fence() do. */
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_GFX)
+		return BC250_EINVAL;
+	/* VMID 0 is the GART aperture, whose root is not ours to move: the same refusal
+	 * bc250_gmc_set_vmid_pd() makes. */
+	if (vmid == 0 || vmid >= AMDGPU_NUM_VMID)
+		return BC250_EINVAL;
+	/* The engine table is in bc250_gmc.h. The caller passes BC250_INV_ENG_GFX_RING; an engine
+	 * number the hub does not have would address another register. */
+	if (eng >= BC250_INV_ENG_COUNT)
+		return BC250_EINVAL;
+	/* A page directory is a page (bc250_gmc_set_vmid_pd(): the low bits of the register are not
+	 * address bits). */
+	if ((root_phys & (AMDGPU_GPU_PAGE_SIZE - 1)) != 0)
+		return BC250_EINVAL;
+
+	hub = &ring->adev->vmhub[AMDGPU_GFXHUB(0)];
+	if (hub->vmhub_funcs == NULL || hub->vmhub_funcs->get_invalidate_req == NULL ||
+	    hub->ctx_addr_distance == 0 || hub->eng_distance == 0 || hub->ctx0_ptb_addr_lo32 == 0)
+		return BC250_EINVAL;    /* the hub's init() has not run, so its offsets are 0 */
+
+	/* The four register offsets are the hub fields gfxhub_v2_0_init() computed with
+	 * SOC15_REG_OFFSET over AMD's headers, the same ones bc250_gmc_set_vmid_pd(),
+	 * bc250_gmc_get_vmid_pd() and bc250_sdma_emit_vm_flush() use. Nothing here knows an address.
+	 * The arithmetic is in u64 so that an overflow becomes a refusal and not a wrapped offset. */
+	lo = (u64)hub->ctx0_ptb_addr_lo32 + (u64)hub->ctx_addr_distance * vmid;
+	hi = (u64)hub->ctx0_ptb_addr_hi32 + (u64)hub->ctx_addr_distance * vmid;
+	req = (u64)hub->vm_inv_eng0_req + (u64)hub->eng_distance * eng;
+	ack = (u64)hub->vm_inv_eng0_ack + (u64)hub->eng_distance * eng;
+	if (lo > BC250_GFX_MMREG_FIELD_MAX || hi > BC250_GFX_MMREG_FIELD_MAX ||
+	    req > BC250_GFX_MMREG_FIELD_MAX || ack > BC250_GFX_MMREG_FIELD_MAX)
+		return BC250_EINVAL;
+
+	/* amdgpu_gmc_pd_addr(): the root plus AMDGPU_PTE_VALID and nothing else on this part
+	 * (shim.c), which is the value bc250_gmc_set_vmid_pd() writes through setup_vm_pt_regs. */
+	root_phys |= AMDGPU_PTE_VALID;
+	request = hub->vmhub_funcs->get_invalidate_req(vmid, 0);
+
+	bc250_gfx_vm_wreg(ring, (u32)lo, lower_32_bits(root_phys));
+	bc250_gfx_vm_wreg(ring, (u32)hi, upper_32_bits(root_phys));
+	bc250_gfx_vm_wreg(ring, (u32)req, request);
+	bc250_gfx_vm_reg_wait(ring, (u32)req, 0, 0);
+	bc250_gfx_vm_reg_wait(ring, (u32)ack, 1u << vmid, 1u << vmid);
+	return 0;
+}
+
+/* The job frame. `vm` NULL is the frame of 0.7.216.24 and earlier, dword for dword: the caller has
+ * already pointed the VMID at its root and invalidated it by MMIO. `vm` non-NULL puts
+ * bc250_gfx_emit_vm_flush() in front of the same frame, which is where upstream has it:
+ * amdgpu_vm_flush() runs before amdgpu_ib_schedule(), and PFP_SYNC_ME below is the second half of
+ * gfx_v10_0_ring_emit_vm_flush(). */
+struct bc250_gfx_job_vm {
+	u64 root_phys;
+	u32 eng;
+};
+
+static int bc250_gfx_submit_job_frame(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw,
+				      u32 vmid, u64 fence_addr, u64 seq, unsigned int flags,
+				      const struct bc250_gfx_job_vm *vm)
 {
 	unsigned int ndw;
 	int r;
@@ -1834,13 +1959,23 @@ int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, 
 	if (ndw == 0)
 		return BC250_EINVAL;
 	ndw = BC250_JOB_FRAME_DWORDS + bc250_gfx_fence_size(ring, flags);
+	if (vm != NULL)
+		ndw += BC250_GFX_VM_FLUSH_DWORDS;
 
 	r = amdgpu_ring_alloc(ring, ndw);
 	if (r)
 		return r;
 
-	/* gfx_v10_0_ring_emit_vm_flush's PFP half. The TLB flush itself is MMIO,
-	 * done by the caller before this, on every job. */
+	if (vm != NULL) {
+		r = bc250_gfx_emit_vm_flush(ring, vmid, vm->root_phys, vm->eng);
+		if (r) {
+			amdgpu_ring_undo(ring);
+			return r;
+		}
+	}
+
+	/* gfx_v10_0_ring_emit_vm_flush's PFP half. The TLB flush itself is the flush above with
+	 * `vm`, and MMIO done by the caller before this call without it. */
 	amdgpu_ring_write(ring, PACKET3(PACKET3_PFP_SYNC_ME, 0));
 	amdgpu_ring_write(ring, 0);
 
@@ -1876,6 +2011,24 @@ int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, 
 
 	amdgpu_ring_commit(ring);
 	return 0;
+}
+
+int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			 u64 fence_addr, u64 seq, unsigned int flags)
+{
+	return bc250_gfx_submit_job_frame(ring, gpu_addr, length_dw, vmid, fence_addr, seq, flags,
+					  NULL);
+}
+
+int bc250_gfx_submit_job_vm(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			    u64 fence_addr, u64 seq, unsigned int flags, u64 root_phys, u32 eng)
+{
+	struct bc250_gfx_job_vm vm;
+
+	vm.root_phys = root_phys;
+	vm.eng = eng;
+	return bc250_gfx_submit_job_frame(ring, gpu_addr, length_dw, vmid, fence_addr, seq, flags,
+					  &vm);
 }
 
 /* COMPUTE_PGM_LO is addr >> 8 and COMPUTE_PGM_HI is bits 47:40. A SET_SH_REG count is the

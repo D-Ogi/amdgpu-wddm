@@ -57,6 +57,9 @@ try {
  Check 'kmd-compile' { & pwsh -NoProfile -File "$repo\driver\kmd\build.ps1" -Kits "$Workspace\toolchain\nuget" -Out "$Out\kmd" -CompileOnly }
  Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
+ # The provenance gate of the release payload (tools/release/provenance.py, run by build-release.ps1): its self-test on
+ # throwaway repositories. The gate itself needs the payload files of a workspace, so the release build runs it.
+ Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
@@ -168,6 +171,9 @@ try {
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
   @{n='log-rate-no-gap';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-NoGapReset');Fails=$true}
+  @{n='dpm-log-cadence';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace)}
+  @{n='dpm-log-cadence-no-idle';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-NoIdleCadence');Fails=$true}
+  @{n='dpm-log-cadence-60s';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-IdleSixtySeconds');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}
@@ -191,6 +197,9 @@ try {
   @{n='umd-caps';s='driver\kmd\test\run_umd_caps.ps1';a=@('-Kits',$kits)}
   @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$kits)}
   @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$kits)}
+  # The frozen gfx job frame and the VM flush on the ring (docs/design/gfx-submit-root-serialization.md).
+  @{n='gfx-vm-flush';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$kits)}
+  @{n='gfx-vm-flush-wrong-ack';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-WrongAckMask');Fails=$true}
   @{n='shim-ih';s='driver\shim\test\run_ih.ps1';a=@('-Kits',$kits)}
   @{n='shim-psp';s='driver\shim\test\run_psp.ps1';a=@('-Kits',$kits,'-Firmware',$firmware)}
   @{n='shim-pte';s='driver\shim\test\run_pte.ps1';a=@('-Kits',$kits)}

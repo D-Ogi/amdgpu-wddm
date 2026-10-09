@@ -33,6 +33,7 @@
       "EnableDpAudio": 1,
       "EnableDpAudioEndpoint": 1,
       "EnableDpAudioStream": 1,
+      "EnableDpAudioContainerId": 1,
       "EnableDisplayModes": 2,
       "HangRecoveryMode": 1,
       "DpmMode": 1,
