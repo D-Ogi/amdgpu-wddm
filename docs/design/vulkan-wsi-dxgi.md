@@ -1,16 +1,19 @@
 # Design: the Vulkan WSI presents through DXGI on a D3D12 device
 
 Date: 2026-10-07. Ported to the b23 release line on 2026-10-08 and to the shipped b25 system ICD line on
-2026-10-09. Status: implemented offline, not measured on unit A. The DXGI route is the default (owner
-decision, 2026-10-07: a route that must be switched on gets forgotten). GDI is the explicit rollback and the
-automatic fallback when the DXGI route fails.
+2026-10-09. **Status: measured on unit A on 2026-10-09 and failed. The route presents no frame (BD-105), so it
+is in no release.** The DXGI route was the default on the b26 candidate (owner decision, 2026-10-07: a route
+that must be switched on gets forgotten), with GDI as the explicit rollback and the automatic fallback when
+the DXGI route fails. Neither fallback caught this failure. The work goes on, opt-in and with bounded waits,
+on `wsi/b27-vk-dxgi` and `amdgpu-wddm/b27-vk-wsi-dxgi`. See "The lab result" below.
 
-This route is how the M15.14 criterion is met for Vulkan. The owner put Vulkan into M15.14 on 2026-10-08
+This route is how the M15.14 criterion is to be met for Vulkan. The owner put Vulkan into M15.14 on 2026-10-08
 (independent flip: the display pipeline scans out a fullscreen or borderless game from the game's own
 swap-chain buffer, and DWM does not compose its frames). The registered system Vulkan ICD presents with `D3DKMTPresent` and a blit, so DWM
 composes every Vulkan frame today. A DXGI flip-model chain on a D3D12 device of our adapter has the shape the
 D3D12 shell's scan-out rule admits, so the Vulkan chain can reach the same flip as a native D3D12 game.
-Step 5 and step 7 of the lab plan are that measurement. See the M15.14 row of
+Step 5 and step 7 of the lab plan were that measurement, and they read no present at all, so the Vulkan half
+of M15.14 is still unmeasured. See the M15.14 row of
 [the M15 reconciliation](../m15-reconciliation.md).
 
 **Two ICD lines, and this work sits on one of them.** The release carries two 64-bit RADV builds. The D3D ICD
@@ -250,8 +253,9 @@ keeps the DXGI hooks.
   the first thing to change if step 5 reads `COMPOSED` with nothing over the output.
 - The route runs its copy on the D3D12 shell's queue, so the shell's hosted device and the application's RADV
   device share the GPU through two contexts. Their order is the shared fences only.
-- The route is the default before any lab run. A defect that the fallbacks do not catch (a wrong picture, a
-  hang in the D3D12 queue) reaches every pure Vulkan application until `gdi` is set.
+- The route was the default before any lab run. A defect that the fallbacks do not catch (a wrong picture, a
+  hang in the D3D12 queue) reaches every pure Vulkan application until `gdi` is set. **This risk is the one
+  that happened** (BD-105, "The lab result"), and it is why the route is opt-in on the b27 line.
 - System32 `d3d12core.dll` delay-imports `dxgi.dll!CreateDXGIFactory2` (10.0.26100.9278). When an
   application-local DXVK `dxgi.dll` is already in the process, that import binds to DXVK, as the `d3d11` import
   does in [M792](../facts/d3d.md#m792). In M792 only the NULL-adapter path reached that import, and this route
@@ -265,8 +269,9 @@ keeps the DXGI hooks.
 
 The kit that runs it is `scratch/b24/vk-wsi-dxgi-kit/lab/` (local, outside this repository): one PowerShell 5.1
 script per step, `install-candidate.ps1` and `rollback-candidate.ps1` for the file swap, `EXPECTED.md` with the
-expected line of every step, and `selftest.ps1` for the reading logic. Nothing of it has run. The kit takes the
-candidate file and its hash as parameters, so the b26 candidate needs no new kit.
+expected line of every step, and `selftest.ps1` for the reading logic. Steps 0, 1, 2, 5, 6 and 7 ran on
+2026-10-09. See "The lab result". The kit takes the candidate file and its hash as parameters, so the b26
+candidate needs no new kit.
 
 **The base of the plan is 0.7.216.100-tester.23 and the b26 candidate ICD.** The lab holds that release. Each
 step uses it with one file replaced: `vulkan\vulkan_radeon.dll` under the install root, the system Vulkan ICD.
@@ -345,9 +350,40 @@ read it with `tools/win/etw/etw-present-mode.py`.
    number. Q2RTX may also fail for a ray-tracing reason that has nothing to do with this WSI: the route lines
    appear before the game picks a device, so an early failure still names which route was chosen.
 
-If a step fails on the DXGI route, the release notes keep `gdi` as the named workaround
-(`docs/testing/release-notes/pending/vk-wsi-dxgi.md`), and the failure gets a GitHub issue. A failure of
-step 7 blocks the wagon in any case: Quake II RTX is a release gate (owner, 2026-10-08).
+If a step fails on the DXGI route, the failure gets a GitHub issue, and a failure of step 7 blocks the wagon in
+any case: Quake II RTX is a release gate (owner, 2026-10-08). Step 7 did fail, so the wagon left the train and
+the release notes of 0.7.216.100-tester.24 name neither the route nor its `gdi` workaround: the ICD that ships
+there does not read the switch.
+
+### The lab result (2026-10-09, b26 validation)
+
+**The route presents no frame.** BD-105. Six steps ran on the b26 candidate ICD `89436E4F`, which the
+0.7.216.100-tester.24 package carried in its system Vulkan slot:
+
+| Step | Reading |
+|---|---|
+| 0 | the control arm, taken from the b25 records: the tester.23 ICD has no route code and its present rows read `gdi` |
+| 1 | the route chose itself. The presenter device and the window swap chain were created, and the 8-bit pair was offered. **No present row was written in 60 s.** The KMD CPU blit counter did not move either, so there was no silent fallback |
+| 2 | the `gdi` rollback works from the variable, from the registry and from an invalid value: 1858, 1282 and 1218 present rows |
+| 5 | **FAIL**: 0 present rows, `scanout_flips` delta 0, `scanout_requests` delta 0, no admission refusal. An independent flip needs a present |
+| 6 | `dxgi-composition` behaves the same: the chain is created and **0 present rows** |
+| 7 | Quake II RTX, 1920x1200 borderless: the timedemo never loaded, **0 present rows in 133 s**, no frame rate, the GPU at its idle clock. The paired `gdi` arm of the same session gave 631 frames at 27.81 frames per second and 640 rows with path `gdi` |
+
+The first `Present1`, or the acquire before it, does not return. `wsi_win32_present_log` writes one row per
+completed present and flushes every 64 rows, so an arm with no row at all completed fewer than 64 presents in
+its whole life, and the `gdi` arms of the same lengths wrote 640 to 1858 rows. The route lines report
+`reason=ok`, there is no `CPU images (GDI)` fallback line and no fallback reason, so the presenter believed it
+was working: neither the explicit nor the automatic rollback covers this failure. The hardware is clean through
+all of it: 0 GPU faults, 0 fence timeouts, 0 `ResetEngine`, 0 Display-provider events, 0 bugchecks, and no TDR
+ended any arm. The failure is inside the process.
+
+**What this costs and what it does not.** The wagon was dropped from 0.7.216.100-tester.24 and the system
+Vulkan slot went back to the tester.23 file `4E3F393F`, which has no route code: the Windows shader disk cache
+and the BD-102 fixes are in that file already, so nothing else of the release moved. On the lab both owner
+gates then pass, Quake II RTX among them. Nothing of the route is in any release, and the two risks of the
+list above that this result bears on are the two CPU waits of the route and the image creation of a chain.
+The route continues as train b27 (`amdgpu-wddm/b27-vk-wsi-dxgi`, `wsi/b27-vk-dxgi`), where it is opt-in, GDI
+is the default again, and the waits the route owns carry a deadline.
 
 ### What runs offline before the lab
 
