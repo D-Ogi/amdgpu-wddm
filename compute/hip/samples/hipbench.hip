@@ -400,7 +400,7 @@ int main(int argc, char** argv) {
     }
 
     printf("hipbench: batch %s, barrier %s, budget %.0f ms, results %s\n",
-           batch != NULL ? batch : "0 (default)", barrier != NULL ? barrier : "full (default)",
+           batch != NULL ? batch : "1 (default)", barrier != NULL ? barrier : "light (default)",
            g_budget_ms, g_expect_compute ? "checked" : "not checked");
 
     check(hipInit(0), "hipInit");

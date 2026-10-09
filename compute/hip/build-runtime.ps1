@@ -451,32 +451,34 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     $env:PATH = $savedPath
     $benchOut | ForEach-Object { Write-Host "  $_" }
     if ($benchExit -ne 0) { throw "hipbench failed against the mock DLL ($benchExit)" }
-    # The one number this run is allowed to assert: with batching off, one launch is one
-    # submission. If that stops being true the benchmark is measuring something else.
+    # The one number this run is allowed to assert: the default of the runtime batches, so one
+    # launch must be well under one submission. The default changed on 2026-10-09 with the lab
+    # measurement behind it (evidence/m16/perf-2026-10-09), and this is the gate that says the
+    # default really reaches a HIP program through the counters of the DLL.
     $perLaunch = $benchOut | Select-String -Pattern 'submissions per launch' | ForEach-Object {
         if ($_.Line -match '([0-9.]+) submissions per launch') { [double]$Matches[1] } }
     if (-not $perLaunch) { throw 'hipbench printed no submissions per launch: the counters are not reaching it' }
     Write-Host "  hipbench read $($perLaunch.Count) counter ratios from the DLL, the first $($perLaunch[0])"
-    if ([math]::Abs($perLaunch[0] - 1.0) -gt 0.01) {
-        throw "with batching off one launch must be one submission, and hipbench measured $($perLaunch[0])"
+    if ($perLaunch[0] -gt 0.1) {
+        throw "the default of the runtime batches, so one launch must be under 0.1 submissions, and hipbench measured $($perLaunch[0])"
     }
 
-    # The same arm with batching on. One launch must now be well under one submission, which is
-    # the whole point of design section 9, and it must come out through the counters of the DLL: this
-    # is the only place in the build where the batched path runs behind a real HIP program.
-    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-bench-batch.txt'
-    $benchBatchOut = & $benchExe '--wait-total' '20000' '--launches' '200' '--chain' '50' `
-        '--sync' '50' '--event' '20' '--copy-iterations' '1' '--batch' '1' '--batch-max' '32' `
-        '--barrier' 'light' '--budget-ms' '60000' 2>&1
-    $benchBatchExit = $LASTEXITCODE
-    $benchBatchOut | ForEach-Object { Write-Host "  $_" }
-    if ($benchBatchExit -ne 0) { throw "hipbench with batching on failed ($benchBatchExit)" }
-    $batchedPerLaunch = $benchBatchOut | Select-String -Pattern 'submissions per launch' |
+    # The same arm with the two switches turned off, which is exactly build 1: one launch, one
+    # submission. The switches are what a lab arm compares against, so a build in which they
+    # stopped working would be a build whose defaults cannot be measured.
+    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-bench-nobatch.txt'
+    $benchPlainOut = & $benchExe '--wait-total' '20000' '--launches' '200' '--chain' '50' `
+        '--sync' '50' '--event' '20' '--copy-iterations' '1' '--batch' '0' `
+        '--barrier' 'full' '--budget-ms' '60000' 2>&1
+    $benchPlainExit = $LASTEXITCODE
+    $benchPlainOut | ForEach-Object { Write-Host "  $_" }
+    if ($benchPlainExit -ne 0) { throw "hipbench with batching off failed ($benchPlainExit)" }
+    $plainPerLaunch = $benchPlainOut | Select-String -Pattern 'submissions per launch' |
         ForEach-Object { if ($_.Line -match '([0-9.]+) submissions per launch') { [double]$Matches[1] } }
-    if (-not $batchedPerLaunch) { throw 'hipbench with batching on printed no submissions per launch' }
-    Write-Host "  hipbench with batching on measured $($batchedPerLaunch[0]) submissions per launch"
-    if ($batchedPerLaunch[0] -gt 0.1) {
-        throw "a cap of 32 launches per buffer must bring one launch under 0.1 submissions, and hipbench measured $($batchedPerLaunch[0])"
+    if (-not $plainPerLaunch) { throw 'hipbench with batching off printed no submissions per launch' }
+    Write-Host "  hipbench with batching off measured $($plainPerLaunch[0]) submissions per launch"
+    if ([math]::Abs($plainPerLaunch[0] - 1.0) -gt 0.01) {
+        throw "with batching off one launch must be one submission, and hipbench measured $($plainPerLaunch[0])"
     }
 }
 

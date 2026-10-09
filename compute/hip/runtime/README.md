@@ -69,18 +69,18 @@ product DLL needs that library.
    because clang writes a unique `__hip_cuid_*` symbol into every compilation
    (`tests/data/PROVENANCE-runtime.txt`).
 7. `test_hip_batch.exe` passes, and `test_hip_mock.exe` and `test_hip_threads.exe` pass a
-   second time with `BC250_HIP_BATCH=1` and `BC250_HIP_BARRIER=light`. The default of this
-   build is batching off, so without that second pass nothing would ever run a batched
-   submission.
-8. `hipbench.exe`, against the mock DLL, measures 1.000 submissions per launch with batching
-   off and under 0.1 with a cap of 32. The number comes from the counters of the DLL itself, so
-   this also gates the two counter calls.
+   second time with `BC250_HIP_BATCH=1` and `BC250_HIP_BARRIER=light`. Those are the defaults
+   of this build, and the second pass stays because it names them.
+8. `hipbench.exe`, against the mock DLL, measures under 0.1 submissions per launch with no
+   environment at all (the default batches) and exactly 1.000 with `--batch 0 --barrier full`,
+   which is build 1. The number comes from the counters of the DLL itself, so this also gates
+   the two counter calls, and the second arm gates the switches.
 
 ## Batching, and the switches
 
 Section 8 of the design is the off-GPU cost of a launch, and the mechanism is in layer 1
 (`compute/hip/README.md` has the shape of it). This runtime needed two insertions for it:
-`hip_device.cpp` reads four environment variables once, at its first call, and gives layer 1 a
+`hip_device.cpp` reads five environment variables once, at its first call, and gives layer 1 a
 policy. `hipEventRecord` submits an open buffer before it stamps the event, so an event covers
 the work the stream had asked for. Every other path is right without a change, because
 `bc250hsa_wait` submits an open buffer itself when a caller asks for a value the device has not
@@ -88,14 +88,26 @@ been given.
 
 | Variable | Values | Default |
 |---|---|---|
-| `BC250_HIP_BATCH` | `0`, `1` | `0`, one submission per launch |
+| `BC250_HIP_BATCH` | `0`, `1` | `1`, several launches in one indirect buffer |
 | `BC250_HIP_BATCH_MAX` | 1 to 256 dispatches per buffer | 32 |
 | `BC250_HIP_BATCH_HOLD_US` | microseconds a buffer may hold a dispatch | 1000 |
-| `BC250_HIP_BARRIER` | `full`, `light` | `full` |
+| `BC250_HIP_BARRIER` | `full`, `light` | `light` |
+| `BC250_HIP_PM4_STATE_CACHE` | `0`, `1` | `1`, write only the state that changed |
 
-Both defaults are the conservative value until the lab says otherwise. A value the backend
-refuses gets one line on the standard error stream and the build-1 behaviour, never a failed
-`hipInit`.
+The first two defaults were the conservative value until the lab said otherwise. It did, on
+2026-10-09: `evidence/m16/perf-2026-10-09` and facts M850 to M854. Batching with the light
+barrier is exact over two chains of 1000 dependent kernels, 2.2 times faster on the launch line
+and 3.8 times faster on the chain line, and 0.032 submissions per dispatch against 1.000. One
+line is slower, a 4 KB device-to-host copy by about 9.5 us, which the second launch after it
+repays. Section 8.6a of the design has the whole of that and the arm that will settle its cause.
+
+`BC250_HIP_BATCH=0` with `BC250_HIP_BARRIER=full` is exactly build 1. A value the backend
+refuses gets one line on the standard error stream and the device's own default, which is one
+submission per launch, never a failed `hipInit`.
+
+`BC250_HIP_PM4_STATE_CACHE=0` is the other control arm. By default a launch that follows another
+one in the same indirect buffer writes only the compute state that changed, 23 dwords instead of
+72 (design section 8.8). This variable makes every launch write the whole state, as build 1 did.
 
 ## Measurement
 

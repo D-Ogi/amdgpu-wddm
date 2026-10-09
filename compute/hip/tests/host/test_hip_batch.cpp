@@ -121,6 +121,19 @@ struct Seen {
     uint64_t      value;
 };
 
+// How many records of one kind the mock holds now.
+uint32_t records_of(unsigned kind) {
+    uint32_t seen = 0;
+    const uint32_t count = bc250hsa_mock_record_count();
+    for (uint32_t i = 0; i < count; ++i) {
+        const bc250hsa_mock_record* record = bc250hsa_mock_record_at(i);
+        if (record != nullptr && static_cast<unsigned>(record->kind) == kind) {
+            seen++;
+        }
+    }
+    return seen;
+}
+
 std::vector<Seen> collect_dispatches() {
     std::vector<Seen> out;
     const uint32_t count = bc250hsa_mock_record_count();
@@ -454,6 +467,111 @@ int main(int argc, char** argv) {
         check(hipStreamSynchronize(stream) == hipSuccess, "and its synchronisation");
         check(read_counters().submissions > before_submissions,
               "the work after the refusals reached the device");
+    }
+
+    // -------------------------------------------------------------------------------------
+    // 5. What one copy costs, in flushes and waits, with batching off and on.
+    //
+    // The lab session of 2026-10-09 measured a 4 KB device-to-host hipMemcpy at 19.2 us with
+    // batching off and 28.9 us with it on, and host-to-device at 0.265 us in both
+    // (evidence/m16/perf-2026-10-09). The host path of the two directions is the same code
+    // apart from the direction of one memcpy, so the question this test answers is the one
+    // that can be answered off the hardware: does a copy of either direction perform the same
+    // number of flushes, submissions and waits under both policies, and exactly one copy?
+    //
+    // It is a regression test and not an explanation. If someone later adds a second flush, a
+    // wait that is not needed or a copy that runs twice on one of the two paths, this fails
+    // here with the number, instead of showing up on the lab as microseconds nobody can place.
+    std::printf("test_hip_batch: 5. the cost of one copy in flushes and waits\n");
+    {
+        float probe[16];
+        std::memset(probe, 0, sizeof(probe));
+        // The device is idle and nothing is open: every launch so far has been synchronised.
+        check(hipDeviceSynchronize() == hipSuccess, "the device is idle before the copies");
+
+        struct CopyCost {
+            uint64_t submissions;
+            uint64_t waits;
+            uint64_t waits_fast;
+            uint32_t to_device;
+            uint32_t from_device;
+        };
+        CopyCost cost[4];
+        std::memset(cost, 0, sizeof(cost));
+        const bc250hsa_batch_policy policies[2] = { off, on };
+        const char* const names[2] = { "batching off", "batching on" };
+
+        for (int p = 0; p < 2; ++p) {
+            bc250hsa_batch_policy set = policies[p];
+            set.struct_bytes = static_cast<uint32_t>(sizeof(set));
+            check(bc250hsa_batch_policy_set(dev, &set) == BC250HSA_OK, "the policy of the arm");
+            for (int dir = 0; dir < 2; ++dir) {
+                CopyCost& c = cost[p * 2 + dir];
+                bc250hsa_mock_reset();
+                const bc250hsa_counters before = read_counters();
+                const hipError_t err =
+                    dir == 0
+                        ? hipMemcpy(device_c, probe, sizeof(probe), hipMemcpyHostToDevice)
+                        : hipMemcpy(probe, device_c, sizeof(probe), hipMemcpyDeviceToHost);
+                check(err == hipSuccess, "the copy of the arm");
+                const bc250hsa_counters after = read_counters();
+                c.submissions = after.submissions - before.submissions;
+                c.waits = after.waits - before.waits;
+                c.waits_fast = after.waits_fast - before.waits_fast;
+                c.to_device = records_of(BC250HSA_MOCK_COPY_TO_DEVICE);
+                c.from_device = records_of(BC250HSA_MOCK_COPY_FROM_DEVICE);
+            }
+            std::printf("test_hip_batch:    %-13s h2d %llu submissions %llu waits,"
+                        " d2h %llu submissions %llu waits\n",
+                        names[p], (unsigned long long)cost[p * 2].submissions,
+                        (unsigned long long)cost[p * 2].waits,
+                        (unsigned long long)cost[p * 2 + 1].submissions,
+                        (unsigned long long)cost[p * 2 + 1].waits);
+        }
+
+        for (int i = 0; i < 4; ++i) {
+            // An idle device needs no submission for a copy: there is nothing open to flush.
+            check_u64(cost[i].submissions, 0u, "a copy of an idle device submits nothing");
+            // One wait, answered by the fence mapping. Two would be the double wait the lab
+            // measurement asked about.
+            check_u64(cost[i].waits, 1u, "a copy waits exactly once");
+            check_u64(cost[i].waits_fast, 1u, "and that wait is answered by the fence mapping");
+        }
+        for (int i = 0; i < 2; ++i) {
+            check_u64(cost[i * 2].to_device, 1u, "host to device copies once");
+            check_u64(cost[i * 2].from_device, 0u, "and not in the other direction");
+            check_u64(cost[i * 2 + 1].from_device, 1u, "device to host copies once");
+            check_u64(cost[i * 2 + 1].to_device, 0u, "and not in the other direction");
+        }
+        // And the two policies agree, field for field, in both directions. This is the claim
+        // the lab number has to be read against: the host path of a copy does not change with
+        // the batching policy.
+        check(std::memcmp(&cost[0], &cost[2], sizeof(CopyCost)) == 0,
+              "host to device costs the same under both policies");
+        check(std::memcmp(&cost[1], &cost[3], sizeof(CopyCost)) == 0,
+              "device to host costs the same under both policies");
+
+        // The other half of the claim: with work open, a copy of either direction submits it
+        // exactly once and no more.
+        for (int dir = 0; dir < 2; ++dir) {
+            bc250hsa_batch_policy set = on;
+            set.struct_bytes = static_cast<uint32_t>(sizeof(set));
+            check(bc250hsa_batch_policy_set(dev, &set) == BC250HSA_OK, "batching on");
+            bc250hsa_mock_reset();
+            const bc250hsa_counters before = read_counters();
+            for (int i = 0; i < 3; ++i) {
+                check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args,
+                                      0, stream) == hipSuccess,
+                      "a launch before the copy");
+            }
+            const hipError_t err =
+                dir == 0 ? hipMemcpy(device_c, probe, sizeof(probe), hipMemcpyHostToDevice)
+                         : hipMemcpy(probe, device_c, sizeof(probe), hipMemcpyDeviceToHost);
+            check(err == hipSuccess, "the copy behind the open work");
+            const bc250hsa_counters after = read_counters();
+            check_u64(after.submissions - before.submissions, 1u,
+                      "the copy submitted the open buffer exactly once");
+        }
     }
 
     // Back to the default, so that the teardown below is the ordinary path.

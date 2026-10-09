@@ -75,34 +75,44 @@ bool read_text(const char* name, char* text, size_t bytes) {
 // The batching policy of the process (section 8.1 of bc250hsa.h, which keeps policy out of
 // layer 1). A HIP program has no API for it, so it arrives in the environment:
 //
-//   BC250_HIP_BATCH=1               append consecutive launches into one indirect buffer
+//   BC250_HIP_BATCH=0|1             append consecutive launches into one indirect buffer
 //   BC250_HIP_BATCH_MAX=<n>         dispatches per buffer, 0 or absent takes the default
 //   BC250_HIP_BATCH_HOLD_US=<us>    the time cap, 0 or absent takes the default
 //   BC250_HIP_BARRIER=full|light    the barrier between two dispatches of one buffer
+//   BC250_HIP_PM4_STATE_CACHE=0|1   write only the compute state that changed
 //
-// Both defaults are the conservative ones: batching off, and the full acquire. Build 1 of
-// this route has one submission per launch, and no lab trial has measured either switch on
-// the hardware yet (the plan is scratch\m16-hip\lab\perf-README.md). The switches exist so
-// that the trial can measure them, and the defaults change when it has.
+// MEASURED, unit A, 2026-10-09 17:33-17:40Z (evidence/m16/perf-2026-10-09): batching on with
+// the light barrier is exact over two chains of 1000 dependent kernels, 2.2 times faster on
+// the launch line and 3.8 times faster on the chain line than one submission per dispatch,
+// and it cuts submissions per dispatch from 1.000 to 0.032. The defaults are therefore
+// batching on, 32 dispatches a buffer and the light barrier, which is what that session
+// measured as arm P3. Each of the three is still a switch, and BC250_HIP_BATCH=0 with
+// BC250_HIP_BARRIER=full is exactly build 1.
 void apply_batch_policy(bc250hsa_device* dev) {
     char text[32];
     bc250hsa_batch_policy policy;
     std::memset(&policy, 0, sizeof(policy));
     policy.struct_bytes = static_cast<uint32_t>(sizeof(policy));
-    policy.enabled = read_ms("BC250_HIP_BATCH") != 0 ? 1u : 0u;
+    // An absent variable takes the default, and the default is on, so only an explicit 0
+    // turns batching off. read_ms answers 0 for both, which is why the text is read here.
+    policy.enabled = 1u;
+    if (read_text("BC250_HIP_BATCH", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
+        policy.enabled = 0u;
+    }
     policy.max_dispatches = read_ms("BC250_HIP_BATCH_MAX");
     policy.max_hold_us = read_ms("BC250_HIP_BATCH_HOLD_US");
-    policy.light_barrier = 0u;
-    if (read_text("BC250_HIP_BARRIER", text, sizeof(text)) && std::strcmp(text, "light") == 0) {
-        policy.light_barrier = 1u;
+    policy.light_barrier = 1u;
+    if (read_text("BC250_HIP_BARRIER", text, sizeof(text)) && std::strcmp(text, "full") == 0) {
+        policy.light_barrier = 0u;
     }
-    if (policy.enabled == 0 && policy.light_barrier == 0) {
-        return;   // the defaults of the library; no call, no refusal to report
+    if (read_text("BC250_HIP_PM4_STATE_CACHE", text, sizeof(text)) &&
+        std::strcmp(text, "0") == 0) {
+        state().dispatch_flags |= BC250HSA_DISPATCH_FULL_STATE;
     }
     const bc250hsa_status status = bc250hsa_batch_policy_set(dev, &policy);
     if (status != BC250HSA_OK) {
-        std::fprintf(stderr, "amdhip64: the backend refused the batching policy (%s); it stays"
-                             " at one submission per launch\n",
+        std::fprintf(stderr, "amdhip64: the backend refused the batching policy (%s); the"
+                             " device keeps its own default, one submission per launch\n",
                      bc250hsa_status_string(status));
     }
 }

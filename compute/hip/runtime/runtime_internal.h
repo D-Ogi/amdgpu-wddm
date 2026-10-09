@@ -146,6 +146,13 @@ struct State {
     // two minutes per wait (design decision 10).
     uint32_t                                wait_slice_ms = 0;
     uint32_t                                wait_total_ms = 0;
+    // The BC250HSA_DISPATCH_* bits every launch of this process carries. It is 0 for a product
+    // build; BC250_HIP_PM4_STATE_CACHE=0 adds BC250HSA_DISPATCH_FULL_STATE, which writes the
+    // whole compute state for every dispatch of a batch (section 8.8 of the design). The
+    // switch exists so that a lab arm can measure the state cache against the build without
+    // it, and so that a wrong assumption about persistent register state can be turned off in
+    // one environment variable instead of a new build.
+    uint32_t                                dispatch_flags = 0;
     // Streams and events that exist now, the null stream apart. A host test reads them to see
     // that an object destroyed while another thread waited on it is freed one time and not
     // twice, which a reference count that counted wrong would show here as a number that never

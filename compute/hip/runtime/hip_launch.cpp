@@ -326,7 +326,7 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     bc250hsa_dispatch dispatch;
     std::memset(&dispatch, 0, sizeof(dispatch));
     dispatch.struct_bytes = static_cast<uint32_t>(sizeof(dispatch));
-    dispatch.flags = 0;
+    dispatch.flags = bc250hip::state().dispatch_flags;
     dispatch.kernel = kernel;
     dispatch.kernarg_va = buffer->mem.va;
     dispatch.launch = launch;
