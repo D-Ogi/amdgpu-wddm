@@ -25,10 +25,11 @@ promise the direct screen path for Vulkan games: that promise waits for a lab ru
   - To turn it on for every program, set the text value `WsiRoute` to `dxgi` under the registry key
     `HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\Vulkan`. Delete the value, or set it to `gdi`, to go back.
 - **What to expect if you turn it on**: in our own test run, the programs that used this path showed no
-  picture at all and had to be closed. The driver now gives up after two seconds and goes back to the old path
-  for the next window, so the program keeps a window, and the driver log names the step where the new path
-  stopped. Please send that log with a GitHub issue if you try it. We would like to know what your machine
-  does here.
+  picture at all and had to be closed. The driver now watches the two waits it owns on this path: if the
+  program stops in one of them, the driver gives up after two seconds and the next window takes the old path,
+  so the program keeps a usable window. If it stops anywhere else on the new path, it still has to be closed.
+  Either way the driver log names the step the new path stopped at. Please send that log with a GitHub issue if
+  you try it. We would like to know what your machine does here.
 - If you do not set either value, nothing of this reaches your programs.
 
 ## If something goes wrong
