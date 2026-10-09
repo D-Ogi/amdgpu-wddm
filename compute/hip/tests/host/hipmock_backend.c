@@ -11,15 +11,29 @@
  * they have their own tests against the same code objects. Nothing here is evidence about the
  * hardware, and the properties it reports name themselves a mock.
  *
+ * Threads: every entry point that touches the state of this file takes one recursive lock, so
+ * that the multithreaded host test measures the lock of layer 2 and not a race in its own mock.
+ * bc250hsa_wait is the exception that matters: it holds the lock only to read, and never while
+ * it sleeps.
+ *
  * Environment:
  *   BC250_HIP_MOCK_RECORD=<path>  append every record to this file, one line each
  *   BC250_HIP_MOCK_NO_MAP=1       bc250hsa_map refuses, which exercises the host-memory
  *                                 fallback of hipMalloc
+ *   BC250_HIP_MOCK_HOLD_MS=<ms>   a dispatch retires this many milliseconds after its
+ *                                 submission instead of at once, so that a wait really waits.
+ *                                 It is how a program measures what its other threads can do
+ *                                 while one of them waits for the device.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 #include "bc250hsa.h"
 #include "hipmock_backend.h"
@@ -50,11 +64,24 @@ typedef struct mock_allocation {
     bc250hsa_mem mem;
 } mock_allocation;
 
+/* A dispatch that has not retired yet, when a hold time is in effect. The values retire in the
+ * order they were submitted, so the list is a queue. */
+#define MOCK_MAX_PENDING_FENCES 64u
+
+typedef struct mock_pending_fence {
+    uint64_t value;
+    uint64_t due_ms;
+} mock_pending_fence;
+
 struct bc250hsa_device {
     uint32_t        magic;
     uint32_t        opens;
     uint64_t        next_va;
-    uint64_t        fence;
+    uint64_t        fence;      /* the last submitted value */
+    uint64_t        retired;    /* the value the device has reached */
+    uint32_t        hold_ms;    /* 0: a dispatch retires at once, as it always did */
+    mock_pending_fence pending[MOCK_MAX_PENDING_FENCES];
+    uint32_t        pending_count;
     mock_allocation allocations[MOCK_MAX_ALLOCATIONS];
     uint32_t        live_allocations;
     uint64_t        live_bytes;
@@ -92,6 +119,50 @@ static uint32_t               g_log_level;
 static int32_t                g_os_status;
 static FILE*                  g_record_file;
 static int                    g_record_file_tried;
+
+/* ------------------------------------------------------------------------------------------
+ * The lock of the mock, and the clock
+ *
+ * One recursive lock. It is recursive because bc250hsa_module_load allocates through the
+ * device allocator, which is bc250hsa_alloc, and both take it. The depth and the owner are
+ * written only by the thread that holds the lock, and the only comparison a thread makes is
+ * against its own thread id, which no other thread ever writes there.
+ * ---------------------------------------------------------------------------------------- */
+
+#if defined(_WIN32)
+static SRWLOCK       g_lock = SRWLOCK_INIT;
+static volatile LONG g_lock_owner;
+static uint32_t      g_lock_depth;
+
+static void mock_lock(void) {
+    const LONG self = (LONG)GetCurrentThreadId();
+    if (g_lock_owner == self) {
+        g_lock_depth++;
+        return;
+    }
+    AcquireSRWLockExclusive(&g_lock);
+    InterlockedExchange(&g_lock_owner, self);
+    g_lock_depth = 1u;
+}
+
+static void mock_unlock(void) {
+    if (--g_lock_depth != 0u) {
+        return;
+    }
+    InterlockedExchange(&g_lock_owner, 0);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+static uint64_t mock_now_ms(void) { return (uint64_t)GetTickCount64(); }
+static void     mock_sleep_ms(uint32_t ms) { Sleep(ms); }
+#else
+/* The host tests of this component build on Windows only. A build elsewhere gets a single
+ * threaded mock, which is what it had before. */
+static void     mock_lock(void) {}
+static void     mock_unlock(void) {}
+static uint64_t mock_now_ms(void) { return 0u; }
+static void     mock_sleep_ms(uint32_t ms) { (void)ms; }
+#endif
 
 /* ------------------------------------------------------------------------------------------
  * Small helpers
@@ -195,6 +266,41 @@ static bc250hsa_mock_record* record_new(uint32_t kind) {
     return record;
 }
 
+/* A number of milliseconds from the operating system's environment. It reads the environment
+ * block and not getenv for the same measured reason as layer 2 does: a program that links the
+ * static C runtime and a DLL that links the dynamic one have one environment copy each, and a
+ * _putenv_s of the program never reaches a getenv of the DLL. */
+static uint32_t mock_env_ms(const char* name) {
+#if defined(_WIN32)
+    char        text[32];
+    const DWORD bytes = GetEnvironmentVariableA(name, text, (DWORD)sizeof(text));
+    if (bytes == 0u || bytes >= (DWORD)sizeof(text)) {
+        return 0u;
+    }
+    return (uint32_t)strtoul(text, NULL, 10);
+#else
+    (void)name;
+    return 0u;
+#endif
+}
+
+/* Retires every pending fence value whose hold time has passed. The caller holds the lock. */
+static void mock_retire_due(bc250hsa_device* dev) {
+    const uint64_t now = mock_now_ms();
+    uint32_t       done = 0;
+    while (done < dev->pending_count && dev->pending[done].due_ms <= now) {
+        dev->retired = dev->pending[done].value;
+        done++;
+    }
+    if (done != 0u) {
+        uint32_t i;
+        for (i = 0; i + done < dev->pending_count; ++i) {
+            dev->pending[i] = dev->pending[i + done];
+        }
+        dev->pending_count -= done;
+    }
+}
+
 static void log_line(uint32_t level, const char* message) {
     if (g_log_fn != NULL && level <= g_log_level) {
         g_log_fn(g_log_ctx, level, message);
@@ -265,14 +371,17 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_devic
     if (params != NULL && params->struct_bytes != (uint32_t)sizeof(*params)) {
         return BC250HSA_EINVAL;
     }
+    mock_lock();
     if (g_device.magic != MOCK_DEVICE_MAGIC) {
         memset(&g_device, 0, sizeof(g_device));
         g_device.magic = MOCK_DEVICE_MAGIC;
         /* A synthetic GPU address window, far from any host pointer. */
         g_device.next_va = 0x0000400000000000ull;
+        g_device.hold_ms = mock_env_ms("BC250_HIP_MOCK_HOLD_MS");
     }
     g_device.opens++;
     *out = &g_device;
+    mock_unlock();
     log_line(BC250HSA_LOG_INFO, "mock device open");
     return BC250HSA_OK;
 }
@@ -282,8 +391,10 @@ void bc250hsa_close(bc250hsa_device* dev) {
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
         return;
     }
+    mock_lock();
     if (dev->opens > 1u) {
         dev->opens--;
+        mock_unlock();
         return;
     }
     for (i = 0; i < MOCK_MAX_ALLOCATIONS; ++i) {
@@ -295,6 +406,7 @@ void bc250hsa_close(bc250hsa_device* dev) {
     dev->live_allocations = 0;
     dev->live_bytes = 0;
     dev->opens = 0;
+    mock_unlock();
 }
 
 bc250hsa_status bc250hsa_props_read(bc250hsa_device* dev, bc250hsa_props* out) {
@@ -364,8 +476,8 @@ static mock_allocation* allocation_of(bc250hsa_device* dev, const bc250hsa_mem* 
     return NULL;
 }
 
-bc250hsa_status bc250hsa_alloc(bc250hsa_device* dev, uint64_t bytes, uint64_t alignment,
-                               uint32_t flags, bc250hsa_mem* out) {
+static bc250hsa_status alloc_locked(bc250hsa_device* dev, uint64_t bytes, uint64_t alignment,
+                                    uint32_t flags, bc250hsa_mem* out) {
     uint32_t slot;
     uint64_t aligned_bytes;
     void* raw;
@@ -424,7 +536,16 @@ bc250hsa_status bc250hsa_alloc(bc250hsa_device* dev, uint64_t bytes, uint64_t al
     return BC250HSA_OK;
 }
 
-bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem) {
+bc250hsa_status bc250hsa_alloc(bc250hsa_device* dev, uint64_t bytes, uint64_t alignment,
+                               uint32_t flags, bc250hsa_mem* out) {
+    bc250hsa_status result;
+    mock_lock();
+    result = alloc_locked(dev, bytes, alignment, flags, out);
+    mock_unlock();
+    return result;
+}
+
+static bc250hsa_status free_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
     mock_allocation* allocation;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL) {
         return BC250HSA_EINVAL;
@@ -450,7 +571,15 @@ bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem) {
     return BC250HSA_OK;
 }
 
-bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out) {
+bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem) {
+    bc250hsa_status result;
+    mock_lock();
+    result = free_locked(dev, mem);
+    mock_unlock();
+    return result;
+}
+
+static bc250hsa_status map_locked(bc250hsa_device* dev, bc250hsa_mem* mem, void** out) {
     mock_allocation* allocation;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL || out == NULL) {
         return BC250HSA_EINVAL;
@@ -474,7 +603,15 @@ bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out
     return BC250HSA_OK;
 }
 
-bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem) {
+bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out) {
+    bc250hsa_status result;
+    mock_lock();
+    result = map_locked(dev, mem, out);
+    mock_unlock();
+    return result;
+}
+
+static bc250hsa_status unmap_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
     mock_allocation* allocation;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL) {
         return BC250HSA_EINVAL;
@@ -488,10 +625,18 @@ bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem) {
     return BC250HSA_OK;
 }
 
+bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem) {
+    bc250hsa_status result;
+    mock_lock();
+    result = unmap_locked(dev, mem);
+    mock_unlock();
+    return result;
+}
+
 void bc250hsa_write_barrier(void) { /* nothing to drain in host memory */ }
 
-static bc250hsa_status mock_copy(bc250hsa_device* dev, const bc250hsa_mem* mem, uint64_t offset,
-                                 void* host_side, uint64_t bytes, int to_device) {
+static bc250hsa_status copy_locked(bc250hsa_device* dev, const bc250hsa_mem* mem, uint64_t offset,
+                                   void* host_side, uint64_t bytes, int to_device) {
     mock_allocation* allocation;
     unsigned char* base;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL || host_side == NULL) {
@@ -523,6 +668,15 @@ static bc250hsa_status mock_copy(bc250hsa_device* dev, const bc250hsa_mem* mem, 
         }
     }
     return BC250HSA_OK;
+}
+
+static bc250hsa_status mock_copy(bc250hsa_device* dev, const bc250hsa_mem* mem, uint64_t offset,
+                                 void* host_side, uint64_t bytes, int to_device) {
+    bc250hsa_status result;
+    mock_lock();
+    result = copy_locked(dev, mem, offset, host_side, bytes, to_device);
+    mock_unlock();
+    return result;
 }
 
 bc250hsa_status bc250hsa_copy_to_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
@@ -1641,10 +1795,19 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
         return BC250HSA_EINVAL;
     }
 
+    mock_lock();
     g_counters.dispatches_built++;
     g_counters.submissions++;
     dev->fence++;
     *fence_value_out = dev->fence;
+    mock_retire_due(dev);
+    if (dev->hold_ms == 0u || dev->pending_count >= MOCK_MAX_PENDING_FENCES) {
+        dev->retired = dev->fence;
+    } else {
+        dev->pending[dev->pending_count].value = dev->fence;
+        dev->pending[dev->pending_count].due_ms = mock_now_ms() + dev->hold_ms;
+        dev->pending_count++;
+    }
 
     {
         bc250hsa_mock_record* record = record_new(BC250HSA_MOCK_DISPATCH);
@@ -1692,34 +1855,55 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
             record_line(record);
         }
     }
+    mock_unlock();
     return BC250HSA_OK;
 }
 
 uint64_t bc250hsa_fence_read(bc250hsa_device* dev) {
+    uint64_t retired;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
         return UINT64_MAX;
     }
-    /* A recorded dispatch retires at once, so the fence always holds the last value. */
-    return dev->fence;
+    mock_lock();
+    mock_retire_due(dev);
+    retired = dev->retired;
+    mock_unlock();
+    /* Without a hold time a recorded dispatch retires at once, so this is the last value. */
+    return retired;
 }
 
 uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev) {
+    uint64_t submitted;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
         return 0u;
     }
-    return dev->fence;
+    mock_lock();
+    submitted = dev->fence;
+    mock_unlock();
+    return submitted;
 }
 
 bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t slice_ms,
                               uint32_t total_ms) {
+    uint64_t deadline_ms;
+    uint32_t hold_ms;
+    uint64_t submitted;
+    uint64_t retired;
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
         return BC250HSA_EINVAL;
     }
+    mock_lock();
     g_counters.waits++;
-    g_counters.waits_fast++;
+    mock_retire_due(dev);
+    retired = dev->retired;
+    submitted = dev->fence;
+    hold_ms = dev->hold_ms;
+    if (value <= retired) {
+        g_counters.waits_fast++;
+    }
     {
-        /* The bound is recorded, not obeyed: nothing here can block. A test reads it to see
-         * that layer 2 passes its own wait policy into every wait. */
+        /* The bound is recorded as well as obeyed. A test reads it to see that layer 2 passes
+         * its own wait policy into every wait. */
         bc250hsa_mock_record* record = record_new(BC250HSA_MOCK_WAIT);
         if (record != NULL) {
             record->value = value;
@@ -1728,12 +1912,39 @@ bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t sli
             record_line(record);
         }
     }
-    if (value > dev->fence) {
+    mock_unlock();
+
+    if (value <= retired) {
+        return BC250HSA_OK;
+    }
+    if (hold_ms == 0u || value > submitted) {
         /* Nothing can raise the fence here, so a value above it is a test mistake. */
+        mock_lock();
         g_counters.waits_timed_out++;
+        mock_unlock();
         return BC250HSA_ETIMEOUT;
     }
-    return BC250HSA_OK;
+
+    /* A hold time is in effect, so the value is in flight and this wait really waits. The lock
+     * is not held while it sleeps: a mock that blocked every other thread here would hide
+     * exactly what the multithreaded test measures. */
+    deadline_ms = mock_now_ms() + (total_ms != 0u ? total_ms : 120000u);
+    for (;;) {
+        mock_sleep_ms(1u);
+        mock_lock();
+        mock_retire_due(dev);
+        retired = dev->retired;
+        mock_unlock();
+        if (value <= retired) {
+            return BC250HSA_OK;
+        }
+        if (mock_now_ms() >= deadline_ms) {
+            mock_lock();
+            g_counters.waits_timed_out++;
+            mock_unlock();
+            return BC250HSA_ETIMEOUT;
+        }
+    }
 }
 
 bc250hsa_status bc250hsa_query_fault(bc250hsa_device* dev, bc250hsa_fault* out) {
@@ -1767,9 +1978,32 @@ bc250hsa_status bc250hsa_last_ib(bc250hsa_device* dev, const uint32_t** dwords, 
  * ---------------------------------------------------------------------------------------- */
 
 void bc250hsa_mock_reset(void) {
+    mock_lock();
     g_record_count = 0u;
     memset(&g_counters, 0, sizeof(g_counters));
     g_counters.struct_bytes = (uint32_t)sizeof(g_counters);
+    mock_unlock();
+}
+
+void bc250hsa_mock_set_hold_ms(uint32_t hold_ms) {
+    mock_lock();
+    /* The device may not be open yet. The field is part of the device, and bc250hsa_open keeps
+     * it when the device already exists, so an order of calls either way works. */
+    if (g_device.magic != MOCK_DEVICE_MAGIC) {
+        memset(&g_device, 0, sizeof(g_device));
+        g_device.magic = MOCK_DEVICE_MAGIC;
+        g_device.next_va = 0x0000400000000000ull;
+    }
+    g_device.hold_ms = hold_ms;
+    mock_unlock();
+}
+
+uint32_t bc250hsa_mock_hold_ms(void) {
+    uint32_t hold_ms;
+    mock_lock();
+    hold_ms = g_device.hold_ms;
+    mock_unlock();
+    return hold_ms;
 }
 
 uint32_t bc250hsa_mock_record_count(void) { return g_record_count; }

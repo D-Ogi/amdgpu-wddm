@@ -164,6 +164,35 @@ if (-not $SkipTests) {
         $includes + $objects + @('/link') + $libpaths) 'test_hip_mock'
     & $testExe $fixture
     if ($LASTEXITCODE -ne 0) { throw "test_hip_mock failed ($LASTEXITCODE)" }
+
+    # ------------------------------------------------------------------------------------------
+    # The multithreaded client, and its negative control.
+    #
+    # The owner asks for multithreading to be measured with our own clients (2026-09-29). The
+    # control build compiles the same runtime with BC250_HIP_WAIT_UNDER_LOCK=1, which restores
+    # the process lock over the waits, and the test refuses to run as a control unless the
+    # runtime it links really behaves that way. Without the control, a green run of the test
+    # would say nothing: a test that measures concurrency has to fail when there is none.
+    # ------------------------------------------------------------------------------------------
+    $threadsTestSource = Join-Path $hip 'tests\host\test_hip_threads.cpp'
+    $threadsExe = Join-Path $Out 'test_hip_threads.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', "/Fo$testObjDir\", "/Fe$threadsExe",
+        $threadsTestSource) + $includes + $objects + @('/link') + $libpaths) 'test_hip_threads'
+    & $threadsExe $fixture
+    if ($LASTEXITCODE -ne 0) { throw "test_hip_threads failed ($LASTEXITCODE)" }
+
+    $ctlObjDir = Join-Path $Out 'obj-ctl'
+    New-Item -ItemType Directory -Force $ctlObjDir | Out-Null
+    Invoke-Cl ($warn + @('/c', '/MT', '/std:c++17', '/EHsc', '/DBC250_HIP_WAIT_UNDER_LOCK=1',
+        "/Fo$ctlObjDir\") + $includes + $runtimeSources) 'runtime objects (wait under the lock)'
+    Invoke-Cl ($warn + @('/c', '/MT', '/std:c11', "/Fo$ctlObjDir\") + $includes + @($mockSource)) 'mock backend (control)'
+    $ctlObjects = Get-ChildItem $ctlObjDir -Filter '*.obj' | ForEach-Object { $_.FullName }
+    $ctlExe = Join-Path $Out 'test_hip_threads_control.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', '/DBC250_HIP_WAIT_UNDER_LOCK=1',
+        "/Fo$ctlObjDir\", "/Fe$ctlExe", $threadsTestSource) + $includes + $ctlObjects +
+        @('/link') + $libpaths) 'test_hip_threads_control'
+    & $ctlExe $fixture '--negative-control'
+    if ($LASTEXITCODE -ne 0) { throw "the negative control of test_hip_threads failed ($LASTEXITCODE)" }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -314,7 +343,8 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     $env:BC250_HIP_MOCK_RECORD = $record
     $sampleOut = & $sampleExe '--wait-total' '10000' 2>&1
     $sampleExit = $LASTEXITCODE
-    $env:PATH = $savedPath
+    # The build path stays: the threads sample below is compiled by the same clang, and its link
+    # needs the toolset the vcvars environment names.
     $sampleOut | ForEach-Object { Write-Host "  $_" }
     if ($sampleExit -ne 0) { throw "the HIP sample failed ($sampleExit)" }
     if (-not (Test-Path $record)) { throw 'the mock backend wrote no record of the sample run' }
@@ -342,6 +372,31 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     if ($waits -eq 0 -or $bounded -ne $waits) {
         throw "--wait-total did not reach every wait: $bounded of $waits carry the 10000 ms bound"
     }
+
+    # ------------------------------------------------------------------------------------------
+    # The multithreaded client as a real HIP program. It shares its measurement with the host
+    # test (tests\host\hip_threads_client.h) and it is the program of the step-3 lab session:
+    # there the delay of a wait is the kernel itself (--spin), and here it is the hold time of
+    # the mock backend (--mock-hold).
+    # ------------------------------------------------------------------------------------------
+    $threadsSampleExe = Join-Path $Out 'mock\hipthreads.exe'
+    $threadsFlags = $flags + @("-I$(Join-Path $hip 'tests\host')")
+    & $clang @threadsFlags -o $threadsSampleExe (Join-Path $hip 'samples\threads.hip') "-L$Out"
+    if ($LASTEXITCODE -ne 0) { $env:PATH = $savedPath; throw "clang failed for the threads sample ($LASTEXITCODE)" }
+    Copy-Item $threadsSampleExe (Join-Path $Out 'hipthreads.exe') -Force
+
+    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-threads.txt'
+    $threadsOut = & $threadsSampleExe '--wait-total' '20000' '--mock-hold' '150' 2>&1
+    $threadsExit = $LASTEXITCODE
+    $env:PATH = $savedPath
+    $threadsOut | ForEach-Object { Write-Host "  $_" }
+    if ($threadsExit -ne 0) { throw "the threads sample failed ($threadsExit)" }
+    $inWindow = $threadsOut | Select-String -Pattern 'operations in all' | ForEach-Object {
+        if ($_.Line -match '(\d+) operations in all') { [int]$Matches[1] } }
+    if (-not $inWindow -or $inWindow -lt 3) {
+        throw "the threads sample measured $inWindow operations inside the long wait of another thread"
+    }
+    Write-Host "  the threads sample measured $inWindow operations inside one thread's wait for the device"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -350,7 +405,9 @@ if ($SkipClang -or -not (Test-Path $clang)) {
 Write-Host ''
 foreach ($file in @((Join-Path $Out 'mock\amdhip64.dll'), (Join-Path $Out 'amdhip64.dll'),
         (Join-Path $Out 'amdhip64.lib'), (Join-Path $Out 'test_hip_mock.exe'),
-        (Join-Path $Out 'vadd.exe'), (Join-Path $Out 'mock\vadd.exe'))) {
+        (Join-Path $Out 'test_hip_threads.exe'), (Join-Path $Out 'test_hip_threads_control.exe'),
+        (Join-Path $Out 'vadd.exe'), (Join-Path $Out 'mock\vadd.exe'),
+        (Join-Path $Out 'hipthreads.exe'), (Join-Path $Out 'mock\hipthreads.exe'))) {
     if (-not (Test-Path $file)) { continue }
     $item = Get-Item $file
     $label = $item.FullName.Substring($Out.Length).TrimStart('\')

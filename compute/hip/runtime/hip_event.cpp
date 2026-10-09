@@ -40,6 +40,24 @@ void events_stamp_retired(bc250hsa_device* dev) {
     }
 }
 
+void event_retain(ihipEvent_t* event) {
+    if (event == nullptr) {
+        return;
+    }
+    event->refs++;
+}
+
+void event_release(ihipEvent_t* event) {
+    if (event == nullptr) {
+        return;
+    }
+    if (--event->refs > 0) {
+        return;
+    }
+    state().live_events--;
+    delete event;
+}
+
 void events_forget(ihipEvent_t* event) {
     State& s = state();
     s.pending_events.erase(
@@ -55,8 +73,9 @@ bool valid(const ihipEvent_t* event) {
     return event != nullptr && event->magic == BC250_HIP_EVENT_MAGIC;
 }
 
-// Waits for the event's value, so that its timestamp exists. The caller holds the lock.
-hipError_t retire(ihipEvent_t* event) {
+// Waits for the event's value, so that its timestamp exists. The caller holds the lock and a
+// reference to the event, because the wait opens the lock.
+hipError_t retire(bc250hip::Guard& guard, ihipEvent_t* event) {
     if (event->recorded == 0) {
         return hipErrorInvalidHandle;
     }
@@ -68,7 +87,7 @@ hipError_t retire(ihipEvent_t* event) {
     if (err != hipSuccess) {
         return err;
     }
-    const hipError_t waited = bc250hip::wait_fence(dev, event->fence_value);
+    const hipError_t waited = guard.wait(dev, event->fence_value);
     if (waited != hipSuccess) {
         return waited;
     }
@@ -104,6 +123,11 @@ hipError_t hipEventCreateWithFlags(hipEvent_t* event, unsigned int flags) {
     created->pending = 0;
     created->fence_value = 0;
     created->host_ms = 0.0;
+    created->refs = 1;   // the handle this call returns
+    {
+        bc250hip::Guard guard;
+        state().live_events++;
+    }
     *event = created;
     return hipSuccess;
 }
@@ -113,21 +137,23 @@ hipError_t hipEventCreate(hipEvent_t* event) {
 }
 
 hipError_t hipEventDestroy(hipEvent_t event) {
+    bc250hip::Guard guard;
     if (!valid(event)) {
         return fail(hipErrorInvalidHandle);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
     bc250hip::events_forget(event);
+    // The handle dies here. The object itself lives as long as a thread that waits on it still
+    // holds a reference.
     event->magic = 0;
-    delete event;
+    bc250hip::event_release(event);
     return hipSuccess;
 }
 
 hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream) {
+    bc250hip::Guard guard;
     if (!valid(event)) {
         return fail(hipErrorInvalidHandle);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
@@ -155,27 +181,38 @@ hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream) {
 }
 
 hipError_t hipEventSynchronize(hipEvent_t event) {
+    bc250hip::Guard guard;
     if (!valid(event)) {
         return fail(hipErrorInvalidHandle);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
-    return fail(retire(event));
+    // The reference keeps the event alive across the wait, which opens the lock: another thread
+    // may call hipEventDestroy on it in the meantime.
+    bc250hip::EventRef held;
+    held.attach(event);
+    return fail(retire(guard, event));
 }
 
 hipError_t hipEventElapsedTime(float* ms, hipEvent_t start, hipEvent_t stop) {
-    if (ms == nullptr || !valid(start) || !valid(stop)) {
+    if (ms == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    bc250hip::Guard guard;
+    if (!valid(start) || !valid(stop)) {
         return fail(hipErrorInvalidHandle);
     }
     if ((start->flags & static_cast<unsigned>(hipEventDisableTiming)) != 0 ||
         (stop->flags & static_cast<unsigned>(hipEventDisableTiming)) != 0) {
         return fail(hipErrorInvalidHandle);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
-    hipError_t err = retire(start);
+    bc250hip::EventRef held_start;
+    bc250hip::EventRef held_stop;
+    held_start.attach(start);
+    held_stop.attach(stop);
+    hipError_t err = retire(guard, start);
     if (err != hipSuccess) {
         return fail(err);
     }
-    err = retire(stop);
+    err = retire(guard, stop);
     if (err != hipSuccess) {
         return fail(err);
     }

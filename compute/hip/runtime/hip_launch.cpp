@@ -36,7 +36,8 @@ constexpr uint32_t kKernargPoolMax = 64;
 
 namespace bc250hip {
 
-hipError_t kernarg_acquire(uint32_t bytes, uint32_t alignment, KernargBuffer** out) {
+hipError_t kernarg_acquire(Guard& guard, uint32_t bytes, uint32_t alignment,
+                           KernargBuffer** out) {
     State& s = state();
     bc250hsa_device* dev = nullptr;
     const hipError_t err = device(&dev);
@@ -55,6 +56,9 @@ hipError_t kernarg_acquire(uint32_t bytes, uint32_t alignment, KernargBuffer** o
     for (KernargBuffer& buffer : s.kernargs) {
         if (buffer.mem.bytes < bytes || (buffer.mem.va % alignment) != 0) {
             continue;
+        }
+        if (buffer.claimed) {
+            continue;   // another thread already waits for this one
         }
         if (!buffer.busy || buffer.fence <= retired) {
             buffer.busy = true;
@@ -90,8 +94,12 @@ hipError_t kernarg_acquire(uint32_t bytes, uint32_t alignment, KernargBuffer** o
         return translate(BC250HSA_ENOMEM);
     }
     // The pool is full and every buffer is still in flight. Wait for the oldest one under the
-    // wait policy of the process instead of growing without a limit.
-    const hipError_t waited = wait_fence(dev, oldest->fence);
+    // wait policy of the process instead of growing without a limit. The claim makes the wait
+    // safe with the lock open: no other thread takes this buffer, and the pool vector holds its
+    // whole capacity from the first use, so the pointer survives.
+    oldest->claimed = true;
+    const hipError_t waited = guard.wait(dev, oldest->fence);
+    oldest->claimed = false;
     if (waited != hipSuccess) {
         return waited;
     }
@@ -106,6 +114,46 @@ void kernarg_release(KernargBuffer* buffer, uint64_t fence) {
     }
     buffer->fence = fence;
     buffer->busy = fence != 0;
+}
+
+// The kernel behind a host stub, with the code object loaded on the first launch. A launch looks
+// it up again after every wait that opened the lock, because another thread may unregister the
+// fat binary in the meantime and the kernel records die with it.
+static hipError_t resolve_kernel(const void* function, const bc250hsa_kernel** out) {
+    State& s = state();
+    const auto found = s.functions.find(function);
+    if (found == s.functions.end()) {
+        return hipErrorInvalidDeviceFunction;
+    }
+    Function& entry = found->second;
+    if (entry.module == nullptr) {
+        return hipErrorInvalidDeviceFunction;
+    }
+    if (entry.kernel == nullptr) {
+        const bc250hsa_status load = module_ensure_loaded(entry.module);
+        if (load != BC250HSA_OK) {
+            return translate(load);
+        }
+        entry.kernel =
+            bc250hsa_module_kernel_by_name(entry.module->loaded, entry.device_name.c_str());
+        if (entry.kernel == nullptr) {
+            return hipErrorInvalidDeviceFunction;
+        }
+    }
+    *out = entry.kernel;
+    return hipSuccess;
+}
+
+// The same kernel after a wait, or a refusal. A fat binary that another thread unregistered
+// while this launch waited makes the launch invalid, and that is better than a dispatch of a
+// kernel whose code object is gone.
+static hipError_t same_kernel_after_wait(const void* function, const bc250hsa_kernel* kernel) {
+    const bc250hsa_kernel* again = nullptr;
+    const hipError_t err = resolve_kernel(function, &again);
+    if (err != hipSuccess) {
+        return err;
+    }
+    return again == kernel ? hipSuccess : hipErrorInvalidDeviceFunction;
 }
 
 }  // namespace bc250hip
@@ -162,40 +210,27 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
         return fail(hipErrorInvalidValue);
     }
 
-    std::lock_guard<std::mutex> guard(state().lock);
-    bc250hip::State& s = state();
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
         return fail(err);
     }
 
-    const auto found = s.functions.find(function);
-    if (found == s.functions.end()) {
-        return fail(hipErrorInvalidDeviceFunction);
-    }
-    bc250hip::Function& entry = found->second;
-    if (entry.module == nullptr) {
-        return fail(hipErrorInvalidDeviceFunction);
+    const bc250hsa_kernel* kernel = nullptr;
+    err = bc250hip::resolve_kernel(function, &kernel);
+    if (err != hipSuccess) {
+        return fail(err);
     }
 
-    if (entry.kernel == nullptr) {
-        const bc250hsa_status load = bc250hip::module_ensure_loaded(entry.module);
-        if (load != BC250HSA_OK) {
-            return fail(bc250hip::translate(load));
-        }
-        entry.kernel =
-            bc250hsa_module_kernel_by_name(entry.module->loaded, entry.device_name.c_str());
-        if (entry.kernel == nullptr) {
-            return fail(hipErrorInvalidDeviceFunction);
-        }
-    }
-    const bc250hsa_kernel* kernel = entry.kernel;
-
+    // The stream is held for the whole launch: the two waits below open the lock, and another
+    // thread may call hipStreamDestroy on it meanwhile.
+    bc250hip::StreamRef held;
     ihipStream_t* target = bc250hip::resolve_stream(stream);
     if (target == nullptr) {
         return fail(hipErrorInvalidHandle);
     }
+    held.attach(target);
 
     bc250hsa_launch launch;
     std::memset(&launch, 0, sizeof(launch));
@@ -217,8 +252,14 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     }
 
     bc250hip::KernargBuffer* buffer = nullptr;
-    err = bc250hip::kernarg_acquire(kernarg_bytes, kernarg_align, &buffer);
+    err = bc250hip::kernarg_acquire(guard, kernarg_bytes, kernarg_align, &buffer);
     if (err != hipSuccess) {
+        return fail(err);
+    }
+    // A full pool waited, and a wait opens the lock.
+    err = bc250hip::same_kernel_after_wait(function, kernel);
+    if (err != hipSuccess) {
+        bc250hip::kernarg_release(buffer, 0);
         return fail(err);
     }
     if (buffer->mem.host == nullptr) {
@@ -241,13 +282,20 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
         // itself is refused, because a kernel that reads a null host call buffer faults.
         std::fprintf(stderr, "amdhip64: kernel '%s' asks for a host call buffer (device printf), "
                              "which this build does not support\n",
-                     kernel->name != nullptr ? kernel->name : entry.device_name.c_str());
+                     kernel->name != nullptr ? kernel->name : "<unnamed>");
         bc250hip::kernarg_release(buffer, 0);
         return fail(hipErrorNotSupported);
     }
     bc250hsa_write_barrier();
 
-    err = bc250hip::stream_drain_pending(target);
+    err = bc250hip::stream_drain_pending(guard, target);
+    if (err != hipSuccess) {
+        bc250hip::kernarg_release(buffer, 0);
+        return fail(err);
+    }
+    // The event wait of this stream waited as well, and the packed buffer must still belong to
+    // the kernel this launch resolved.
+    err = bc250hip::same_kernel_after_wait(function, kernel);
     if (err != hipSuccess) {
         bc250hip::kernarg_release(buffer, 0);
         return fail(err);

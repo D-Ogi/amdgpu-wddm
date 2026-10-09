@@ -151,7 +151,7 @@ void** __hipRegisterFatBinary(const void* data) {
         return nullptr;
     }
 
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hip::State& s = state();
     const auto known = s.module_by_wrapper.find(data);
     if (known != s.module_by_wrapper.end()) {
@@ -190,7 +190,7 @@ void __hipUnregisterFatBinary(void** modules) {
     if (modules == nullptr) {
         return;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hip::State& s = state();
     Module* module = reinterpret_cast<Module*>(modules);
     size_t at = s.modules.size();
@@ -237,7 +237,7 @@ int __hipRegisterFunction(void** modules, const void* hostFunction, char* device
     if (modules == nullptr || hostFunction == nullptr || deviceName == nullptr) {
         return 1;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     Function entry;
     entry.module = reinterpret_cast<Module*>(modules);
     entry.device_name = deviceName;
@@ -255,7 +255,7 @@ void __hipRegisterVar(void** modules, void* hostVar, char* deviceVar, const char
     if (modules == nullptr || deviceName == nullptr) {
         return;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     Module* module = reinterpret_cast<Module*>(modules);
     Var var;
     var.host_var = hostVar;

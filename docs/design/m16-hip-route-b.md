@@ -1239,6 +1239,51 @@ performs, is therefore a hard requirement of a Windows HIP build. That is a norm
 and not a gap of our runtime. `-fhip-new-launch-api` is the clang 22 default, so layer 2 implements
 `hipLaunchKernel` only. The legacy `hipSetupArgument` and `hipLaunchByPtr` path stays unwritten.
 
+### 4.7 The process lock, and the waits
+
+Layer 2 keeps one lock over the process state: the device, the modules, the host stubs, the
+allocation table, the kernel argument pool and the streams. One lock is the right size here,
+because layer 1 has one hardware queue and serialises its submissions anyway (`bc250hsa.h`,
+rule 5). A finer lock would buy no parallel submission.
+
+Above that lock there is one rule. **No thread holds the lock while it waits for the device.** The
+first build of layer 2 did. The result is what a lock over a wait always is: a program whose
+second thread cannot call the runtime at all while the first one waits. A wait here is a whole
+dispatch long. Design section 3.8 states the rule for layer 1 already ("never spins on a fence
+while it holds a lock that the completion path needs"). This section states it for layer 2.
+
+A wait therefore has three parts:
+
+1. read the fence value to wait for, with the lock held,
+2. wait in `bc250hsa_wait`, with the lock open,
+3. take the lock again and update the state.
+
+`bc250hip::Guard` is the lock and the only way to wait, so no entry point can wait by itself and
+forget the rule. Layer 1's wait may be entered from several threads at once: it creates its own
+operating system event per call and its counters are interlocked.
+
+Step 3 is the reason the three parts matter. The lock must not be held across a wait, but the
+state must still be consistent when the wait ends, because another thread owned it in the
+meantime. Two answers, and no third:
+
+| What a call still needs after its wait | The answer |
+|---|---|
+| a stream, an event | a reference count on the object. The handle holds one. A call that waits holds one more (`StreamRef`, `EventRef`). `hipStreamDestroy` and `hipEventDestroy` take the handle's reference away and clear its magic word. The handle dies at once, and the object dies when the last waiter lets go of it |
+| the kernel of a host stub, an allocation of the table, a buffer of the kernel argument pool | a second lookup. The kernel is resolved again, because another thread may have unregistered the fat binary. The allocation table is read again, because another thread may have freed the same pointer. A pool buffer that a thread waits for carries a claim, so no other thread takes it |
+
+Two more consequences, both of them HIP's own semantics and not a compromise:
+
+- `hipDeviceSynchronize`, `hipMemcpy` and `hipFree` wait for the device's last submitted value as
+  it stood when the call started. Work that another thread submits during the wait belongs to the
+  next call.
+- A synchronize clears the event wait that it waited for and not a later one that another thread
+  asked for in the meantime.
+
+The owner's instruction of 2026-09-29 is that multithreading is measured with our own clients
+before an application is asked to exercise it. `compute/hip/tests/host/hip_threads_client.h` is
+that client, with a negative control that restores the lock over the wait. Section 5.4 lists what
+each of the two builds must measure.
+
 ---
 
 ## 5. Repository placement, build and tests
@@ -1275,6 +1320,8 @@ compute/
         test_descriptor.c         the kernel descriptor fields against the measured values
         bc250hsa_mock.c           a mock device for layer 2, over host memory
         test_hip_mock.cpp         layer 2 against the mock: register, launch, stream, event
+        hip_threads_client.h      the multithreaded client, shared with samples/threads.hip
+        test_hip_threads.cpp      layer 2 under four threads, and its negative control
       data/
         PROVENANCE.txt            the clang revision and the exact build command of each file
         m16_kernels.gfx1013.co    one code object with vadd, reduce256 and writeGridSize
@@ -1331,7 +1378,9 @@ DECIDED, and this is the same answer for both layers.
 `compute/hip/build-runtime.ps1` does the same for layer 2: it builds `amdhip64.dll` and
 `amdhip64.lib`, checks that the exported names equal `amdhip64.def` and that the def file holds exactly
 the 38 names of section 4.1, builds `test_hip_mock.exe` against `bc250hsa_mock.c`, runs it, and, when
-the AMDGPU clang is present, compiles and links the HIP sample and checks its import table.
+the AMDGPU clang is present, compiles and links the HIP sample and checks its import table. It also
+builds and runs the two multithreaded tests of section 5.4, the negative control among them, and the
+clang-built `hipthreads.exe` against the mock build of the DLL.
 
 ### 5.4 The host tests, and what each one would catch
 
@@ -1343,6 +1392,8 @@ the AMDGPU clang is present, compiles and links the HIP sample and checks its im
 | `test_descriptor` | the three committed descriptors | `RSRC1` or `RSRC3` is modified, or `LDS_SIZE` is not written for `reduce256`. It also fails when the user SGPR count is not read from `RSRC2`, or a reserved field is not checked |
 | `test_pm4` | a dispatch of known numbers | the packet order changes, a register offset changes, or the shader-type bit is lost. It also fails when the entry address shift is wrong, the fence dwords change, or the padding is wrong |
 | `test_hip_mock` | layer 2 over the mock device | registration does not find a kernel from its host stub, or the packer writes the wrong arguments. It also fails when stream order is lost across an event wait. It fails as well when the per-thread error state leaks between threads, or when a second module in one process registers twice |
+| `test_hip_threads` | layer 2 under four threads, over the mock device | a thread that waits for the device stops the other threads. It counts the operations the others finish inside one long wait. It also compares the wall time of four threads with the time a serialised runtime takes. It fails as well when a stream or an event that another thread destroyed inside a wait leaks, or is freed twice |
+| `test_hip_threads_control` | the same test over a runtime compiled with `BC250_HIP_WAIT_UNDER_LOCK=1` | the negative control. It fails when the other threads finish work although the lock is held over the wait. Such a run would measure something else than it says. It also refuses to call itself a control unless the runtime it links really waits with the lock held |
 
 The mock device implements `bc250hsa.h` over host memory with a synthetic GPU address base, and it
 links the real loader, the real packer and the real PM4 builder. Only the device, the submission and

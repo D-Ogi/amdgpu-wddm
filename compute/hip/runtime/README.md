@@ -65,6 +65,37 @@ product DLL needs that library.
    because clang writes a unique `__hip_cuid_*` symbol into every compilation
    (`tests/data/PROVENANCE-runtime.txt`).
 
+## Threads
+
+One lock holds the process state, and no thread holds it while it waits for the device. A wait
+has three parts: read the fence value to wait for with the lock held, wait with the lock open,
+take the lock again and update the state. `bc250hip::Guard` is that lock and the only way to
+wait. Everything a call still needs after its wait is either held with a reference count (a
+stream through `StreamRef`, an event through `EventRef`) or looked up again (the kernel of a host
+stub, an allocation of the table), because another thread owns the state while the wait runs.
+`hipStreamDestroy` and `hipEventDestroy` therefore take the handle's reference away and never
+free an object that a waiting thread still holds.
+
+Submissions stay serialised, because layer 1 has one hardware queue and its own device lock
+(`bc250hsa.h`, rule 5). The rule above is about the waits, which are the long part.
+
+The owner asks for multithreading to be measured with our own clients (2026-09-29).
+[`tests/host/hip_threads_client.h`](../tests/host/hip_threads_client.h) is that client: one
+thread waits for the device while the others launch and allocate, and it counts the work they
+finish inside that wait. Two programs run it, and both are built and measured by
+`build-runtime.ps1`:
+
+| Program | Where |
+|---|---|
+| `test_hip_threads.exe` | the host test, against the mock backend. It also reads the live stream and event counts of the runtime, so a reference count that leaked or freed twice is visible |
+| `test_hip_threads_control.exe` | the same test over a runtime compiled with `BC250_HIP_WAIT_UNDER_LOCK=1`. It is the negative control. With the lock held over the wait, no other thread may finish anything. The test also refuses to call itself a control unless the runtime it links really waits that way |
+| `hipthreads.exe` | a real HIP program that clang compiles (`samples/threads.hip`), for the mock DLL here and the product DLL on the lab |
+
+MEASURED on the development PC, 2026-10-09, with the mock backend holding each dispatch 200 ms:
+the three worker threads finished 63 operations inside a 204 ms wait of thread 0, and four
+threads of four waits each took 840 ms where a serialised runtime takes 3240 ms. The control
+build measured 0 operations inside the wait and 3044 ms for the same work.
+
 ## The mock build
 
 `compute/hip/tests/host/hipmock_backend.c` implements `bc250hsa.h` over host memory. A dispatch
@@ -92,9 +123,8 @@ have their own tests against the same code objects.
   process wins over a numerically equal device address, and an explicit `hipMemcpyKind` is the
   caller's word, which the runtime does not argue with. When the GPU address window of layer 1
   overlaps the address space of the process, the runtime says so one time on the error stream.
-- One lock holds the whole process state, the waits among them, so a second thread cannot call
-  the runtime while the first one waits. The owner asks for multithreading to be measured with
-  our own clients first, so a multi-threaded client comes before step 3.
+- An asynchronous copy is still a synchronous one, so a copy on one stream waits for that
+  stream's own work even when another stream could carry it.
 - `__hipRegisterManagedVar` reports a missing capability. Managed memory needs page migration.
 - A kernel that asks for a host call buffer (device-side `printf`) is refused by name. The
   counter of layer 1 answers kill criterion K4 of the route document.

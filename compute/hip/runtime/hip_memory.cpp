@@ -94,7 +94,7 @@ const Allocation* find_host_allocation(const void* ptr, uint64_t bytes, uint64_t
 // Waits for everything that this stream owes. Build 1 makes every copy synchronous, so this is
 // what keeps a copy behind the kernel that writes its source. It covers the event wait that the
 // stream still carries, and for the legacy null stream it covers the whole device.
-hipError_t wait_for_stream(ihipStream_t* stream) {
+hipError_t wait_for_stream(bc250hip::Guard& guard, ihipStream_t* stream) {
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
@@ -104,15 +104,20 @@ hipError_t wait_for_stream(ihipStream_t* stream) {
     if (value == 0) {
         return hipSuccess;
     }
-    const hipError_t waited = bc250hip::wait_fence(dev, value);
+    const hipError_t waited = guard.wait(dev, value);
     if (waited != hipSuccess) {
         return waited;
     }
-    stream->pending_wait = 0;
+    // Only the event wait that this call waited for is cleared; a later one stays.
+    if (stream->pending_wait <= value) {
+        stream->pending_wait = 0;
+    }
     return hipSuccess;
 }
 
-hipError_t wait_for_device() {
+// The work of the whole device, as it stood when this call started. Work that another thread
+// submits while this one waits belongs to the next call.
+hipError_t wait_for_device(bc250hip::Guard& guard) {
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
@@ -122,7 +127,7 @@ hipError_t wait_for_device() {
     if (value == 0) {
         return hipSuccess;
     }
-    return bc250hip::wait_fence(dev, value);
+    return guard.wait(dev, value);
 }
 
 // Is this pointer one that hipHostMalloc returned? A host mapping and a GPU virtual address
@@ -318,7 +323,7 @@ hipError_t hipMalloc(void** ptr, size_t size) {
         *ptr = nullptr;
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     Allocation allocation;
     const hipError_t err = allocate_device(size, &allocation);
     if (err != hipSuccess) {
@@ -338,7 +343,7 @@ hipError_t hipHostMalloc(void** ptr, size_t size, unsigned int flags) {
         *ptr = nullptr;
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
@@ -361,10 +366,9 @@ hipError_t hipHostMalloc(void** ptr, size_t size, unsigned int flags) {
     return hipSuccess;
 }
 
-static hipError_t free_allocation(uint64_t va) {
+static hipError_t free_allocation(bc250hip::Guard& guard, uint64_t va) {
     bc250hip::State& s = state();
-    const auto found = s.by_va.find(va);
-    if (found == s.by_va.end()) {
+    if (s.by_va.find(va) == s.by_va.end()) {
         return hipErrorInvalidDevicePointer;
     }
     bc250hsa_device* dev = nullptr;
@@ -374,9 +378,15 @@ static hipError_t free_allocation(uint64_t va) {
     }
     // bc250hsa_free states that the caller must know that no submission still reads the memory,
     // so hipFree waits for everything in flight. HIP says the same: a free is synchronous.
-    const hipError_t waited = wait_for_device();
+    const hipError_t waited = wait_for_device(guard);
     if (waited != hipSuccess) {
         return waited;
+    }
+    // The wait opened the lock, so the table is read again: another thread may have freed the
+    // same pointer, which is the program's mistake and not ours to crash on.
+    const auto found = s.by_va.find(va);
+    if (found == s.by_va.end()) {
+        return hipErrorInvalidDevicePointer;
     }
     bc250hsa_mem mem = found->second.mem;
     if (mem.host != nullptr) {
@@ -390,20 +400,20 @@ hipError_t hipFree(void* ptr) {
     if (ptr == nullptr) {
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
-    return fail(free_allocation(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr))));
+    bc250hip::Guard guard;
+    return fail(free_allocation(guard, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr))));
 }
 
 hipError_t hipHostFree(void* ptr) {
     if (ptr == nullptr) {
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     const auto found = state().va_by_host.find(ptr);
     if (found == state().va_by_host.end()) {
         return fail(hipErrorInvalidValue);
     }
-    return fail(free_allocation(found->second));
+    return fail(free_allocation(guard, found->second));
 }
 
 hipError_t hipMemcpy(void* dst, const void* src, size_t sizeBytes, hipMemcpyKind kind) {
@@ -413,11 +423,13 @@ hipError_t hipMemcpy(void* dst, const void* src, size_t sizeBytes, hipMemcpyKind
     if (sizeBytes == 0) {
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
-    hipError_t err = wait_for_device();
+    bc250hip::Guard guard;
+    hipError_t err = wait_for_device(guard);
     if (err != hipSuccess) {
         return fail(err);
     }
+    // The lookup and the copy both happen after the wait, with the lock held, so a pointer that
+    // another thread freed during the wait is answered and never copied through.
     err = copy_now(dst, src, sizeBytes, kind);
     return err == hipSuccess ? hipSuccess : fail(err);
 }
@@ -430,13 +442,15 @@ hipError_t hipMemcpyAsync(void* dst, const void* src, size_t sizeBytes, hipMemcp
     if (sizeBytes == 0) {
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
+    bc250hip::StreamRef held;
     ihipStream_t* target = bc250hip::resolve_stream(stream);
     if (target == nullptr) {
         return fail(hipErrorInvalidHandle);
     }
+    held.attach(target);
     // Build 1 performs an asynchronous copy at once, after the work of this stream retires.
-    hipError_t err = wait_for_stream(target);
+    hipError_t err = wait_for_stream(guard, target);
     if (err != hipSuccess) {
         return fail(err);
     }
@@ -451,8 +465,8 @@ hipError_t hipMemset(void* dst, int value, size_t sizeBytes) {
     if (sizeBytes == 0) {
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
-    const hipError_t err = wait_for_device();
+    bc250hip::Guard guard;
+    const hipError_t err = wait_for_device(guard);
     if (err != hipSuccess) {
         return fail(err);
     }
@@ -467,12 +481,14 @@ hipError_t hipMemsetAsync(void* dst, int value, size_t sizeBytes, hipStream_t st
     if (sizeBytes == 0) {
         return hipSuccess;
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
+    bc250hip::StreamRef held;
     ihipStream_t* target = bc250hip::resolve_stream(stream);
     if (target == nullptr) {
         return fail(hipErrorInvalidHandle);
     }
-    const hipError_t err = wait_for_stream(target);
+    held.attach(target);
+    const hipError_t err = wait_for_stream(guard, target);
     if (err != hipSuccess) {
         return fail(err);
     }
@@ -484,7 +500,7 @@ hipError_t hipMemGetInfo(size_t* freeBytes, size_t* totalBytes) {
     if (freeBytes == nullptr || totalBytes == nullptr) {
         return fail(hipErrorInvalidValue);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {

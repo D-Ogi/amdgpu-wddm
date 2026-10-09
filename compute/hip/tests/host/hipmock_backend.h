@@ -59,6 +59,17 @@ typedef struct bc250hsa_mock_record {
  * test may reset between two runs of the same process and still count live allocations. */
 void bc250hsa_mock_reset(void);
 
+/* How long a dispatch takes to retire, in milliseconds. 0, the default, retires it at once and
+ * is what every test before the multithreaded one expects. A hold time makes bc250hsa_wait
+ * really wait, which is what lets a test measure what the other threads of a process can do
+ * while one of them waits for the device. BC250_HIP_MOCK_HOLD_MS sets the same value in a
+ * separate process, such as a clang-built HIP program against the mock build of the DLL.
+ *
+ * The hold time is the only control that a test sets while threads run. The readers below are
+ * for a quiescent state: they take no lock and a test calls them with its threads joined. */
+void     bc250hsa_mock_set_hold_ms(uint32_t hold_ms);
+uint32_t bc250hsa_mock_hold_ms(void);
+
 uint32_t                           bc250hsa_mock_record_count(void);
 const bc250hsa_mock_record*        bc250hsa_mock_record_at(uint32_t index);
 const char*                        bc250hsa_mock_kind_name(uint32_t kind);

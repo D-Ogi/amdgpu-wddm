@@ -83,6 +83,9 @@ hipError_t device(bc250hsa_device** out) {
             s.null_stream.flags = hipStreamDefault;
             s.null_stream.last_fence = 0;
             s.null_stream.pending_wait = 0;
+            // The null stream lives in State and is never freed, so its count is a marker and
+            // not a lifetime: stream_release leaves it alone.
+            s.null_stream.refs = 1;
             s.props.struct_bytes = static_cast<uint32_t>(sizeof(s.props));
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
         }
@@ -96,9 +99,23 @@ hipError_t device(bc250hsa_device** out) {
     return hipSuccess;
 }
 
-hipError_t wait_fence(bc250hsa_device* dev, uint64_t value) {
+bool waits_under_lock() { return BC250_HIP_WAIT_UNDER_LOCK_BUILD != 0; }
+
+hipError_t Guard::wait(bc250hsa_device* dev, uint64_t value) {
     State& s = state();
-    const bc250hsa_status status = bc250hsa_wait(dev, value, s.wait_slice_ms, s.wait_total_ms);
+    // The policy belongs to the process, so it is read here and not by the caller. Both numbers
+    // are written once, at the first device open, and read under the lock.
+    const uint32_t slice_ms = s.wait_slice_ms;
+    const uint32_t total_ms = s.wait_total_ms;
+#if BC250_HIP_WAIT_UNDER_LOCK_BUILD
+    // The negative control: the first build of layer 2 waited like this, and a second thread
+    // could not call the runtime at all while the first one waited.
+    const bc250hsa_status status = bc250hsa_wait(dev, value, slice_ms, total_ms);
+#else
+    held_.unlock();
+    const bc250hsa_status status = bc250hsa_wait(dev, value, slice_ms, total_ms);
+    held_.lock();
+#endif
     if (status == BC250HSA_OK) {
         events_stamp_retired(dev);
     }
@@ -139,7 +156,7 @@ hipError_t hipInit(unsigned int flags) {
     if (flags != 0) {
         return fail(hipErrorInvalidValue);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     return err == hipSuccess ? hipSuccess : fail(err);
@@ -149,7 +166,7 @@ hipError_t hipGetDeviceCount(int* count) {
     if (count == nullptr) {
         return fail(hipErrorInvalidValue);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     *count = err == hipSuccess ? 1 : 0;
@@ -160,7 +177,7 @@ hipError_t hipSetDevice(int deviceId) {
     if (deviceId != 0) {
         return fail(hipErrorInvalidDevice);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     state().current_device = 0;
     return hipSuccess;
 }
@@ -169,7 +186,7 @@ hipError_t hipGetDevice(int* deviceId) {
     if (deviceId == nullptr) {
         return fail(hipErrorInvalidValue);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     *deviceId = state().current_device;
     return hipSuccess;
 }
@@ -181,7 +198,7 @@ hipError_t hipGetDeviceProperties(hipDeviceProp_t* prop, int deviceId) {
     if (deviceId != 0) {
         return fail(hipErrorInvalidDevice);
     }
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
@@ -242,17 +259,19 @@ hipError_t hipGetDeviceProperties(hipDeviceProp_t* prop, int deviceId) {
 }
 
 hipError_t hipDeviceSynchronize(void) {
-    std::lock_guard<std::mutex> guard(state().lock);
+    bc250hip::Guard guard;
     bc250hsa_device* dev = nullptr;
     const hipError_t err = bc250hip::device(&dev);
     if (err != hipSuccess) {
         return fail(err);
     }
+    // The snapshot is the promise of this call: everything submitted before it. Work that
+    // another thread submits while this one waits belongs to the next synchronize.
     const uint64_t value = bc250hsa_fence_last_submitted(dev);
     if (value == 0) {
         return hipSuccess;
     }
-    return fail(bc250hip::wait_fence(dev, value));
+    return fail(guard.wait(dev, value));
 }
 
 }  // extern "C"
