@@ -842,9 +842,17 @@ that the machine does not survive costs the curve and not the machine, and the d
   `dpm` line when the table is fresh. The driver log gets two `smu metrics:` lines next to each telemetry line and in
   the summary.
 - The driver log (`bc250kmd_cli log`) gets every transition, a telemetry block every 5 s and a line in the summary.
-  At the idle point the block comes every 60 s (BD-097). At 5 s the blocks filled the 768 wrapping lines of the ring
-  in about five minutes, and an idle desktop lost its events. `Parameters\TelemetryIdleLogMs` (REG_DWORD, read at the
-  device start, at most 3600000) sets that period. The value 0, or a value up to 5000, gives a block every 5 s again.
+  At the idle point the block comes every 120 s (BD-097, after the lab read of 2026-10-09). The versions
+  0.7.216.22 to .24 wrote it every 60 s. At 5 s the blocks filled the 768 wrapping lines of the ring in about five minutes, and an idle desktop lost its
+  events. At 60 s the lab measured 0.256 lines/s of which 78 % were this block, and the ring held about 3000 s of
+  the 3600 s the plan of BD-097 asks for. Half the blocks leave about 4900 s. The rule is `driver/kmd/dpm_log_cadence.h`, a
+  pure decision over the governor's own idle state, and `tools/quality/quick.ps1` runs its host test as the
+  `dpm-log-cadence` gate with two negative controls. `Parameters\TelemetryIdleLogMs` (REG_DWORD, read at the
+  device start, at most 3600000) sets that period. The value 0, or a value up to 5000, gives a block every 5 s
+  again. Under load the period stays 5 s, which is the cadence a game trial's kernel-log stream reads, and the
+  check itself still runs every 5 s, so the first block after the governor leaves the idle point comes within 5 s.
+  Every state change (a clock level, a thermal step, a fan mode, a fault, a refusal) writes its own line where it
+  happens and never waits for this cadence.
   From 0.7.200 these lines show `warm N` after `thermal N`: N is the number of governor ticks in which the warm zone
   stopped a raise. The `RUN_DPM` escape does not carry this counter. A CLI built before 0.7.200 shows throttle 8 as
   `?`.
