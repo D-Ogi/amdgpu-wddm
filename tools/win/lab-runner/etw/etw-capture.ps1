@@ -278,17 +278,25 @@ function DwmPct([ref]$prev) {
     return $r
 }
 function Finish { Note "etw-capture end cleanup_failed=$script:cleanupFailed"; exit ([int]$script:cleanupFailed) }
-# The world rule (BD-107). It is loaded once, from next to this script, because etw-start.ps1 copies both files
-# into the trial's capture directory. A missing rule file is noted once and then behaves like no telemetry.
-$script:worldRule = $null
+# The world rule (BD-107), from next to this script, because etw-start.ps1 copies both files into the trial's
+# capture directory. The dot-source is HERE, at script scope, and not inside World-Now: a dot-source inside a
+# function defines that script's functions in the function's own scope, and they are gone when it returns. Loaded
+# lazily from inside World-Now, the first poll worked and every later one lost Test-WorldTelemetry, reported
+# telemetry=$false and opened the window unverified - the defect of BD-107, two seconds late. A missing rule file
+# is noted once by World-Now and then behaves like no telemetry.
+$script:worldRulePath = Join-Path (Split-Path -Parent $PSCommandPath) 'world-rule.ps1'
+$script:worldRule = [bool](Test-Path -LiteralPath $script:worldRulePath)
+if ($script:worldRule) { . $script:worldRulePath }
+$script:worldRuleNoted = $false
 function World-Now {
     if (!$WorldTelemetry) { return @{ world = $false; telemetry = $false; why = 'no -WorldTelemetry' } }
-    if ($null -eq $script:worldRule) {
-        $path = Join-Path (Split-Path -Parent $PSCommandPath) 'world-rule.ps1'
-        if (Test-Path -LiteralPath $path) { . $path; $script:worldRule = $true }
-        else { $script:worldRule = $false; Note 'world rule not staged next to the capture; the time bound opens unverified' }
+    if (!$script:worldRule) {
+        if (!$script:worldRuleNoted) {
+            $script:worldRuleNoted = $true
+            Note 'world rule not staged next to the capture; the time bound opens unverified'
+        }
+        return @{ world = $false; telemetry = $false; why = 'world-rule.ps1 not staged' }
     }
-    if (!$script:worldRule) { return @{ world = $false; telemetry = $false; why = 'world-rule.ps1 not staged' } }
     try { return Test-WorldTelemetry -Path $WorldTelemetry -SettleSeconds $WorldSettleSeconds }
     catch { return @{ world = $false; telemetry = $false; why = "world rule error: $($_.Exception.Message)" } }
 }

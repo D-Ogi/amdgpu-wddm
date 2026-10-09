@@ -231,6 +231,43 @@ Check 'the time bound no longer opens window B by itself' {
     $block = $block.Substring(0, $block.IndexOf('Start-Sleep -Seconds 2'))
     if ($block -match "Start-B\s+'time'") { throw 'the time bound still opens window B unconditionally' }
 }
+Check 'the capture loads the world rule at script scope, so every poll can ask it' {
+    # The trap this check exists for. A dot-source inside a function runs in that FUNCTION's scope, so the
+    # functions it defines are gone when the function returns. The world rule was first loaded that way, lazily,
+    # from inside World-Now: the first poll answered, every later one threw CommandNotFoundException, the catch
+    # turned that into telemetry=$false, and the time bound opened window B unverified two seconds after it had
+    # correctly held it - BD-107 again. The trap is demonstrated here, so that nobody has to take it on trust.
+    $probe = Join-Path ([IO.Path]::GetTempPath()) ('bc250-scope-' + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $probe
+    try {
+        Set-Content -LiteralPath (Join-Path $probe 'r.ps1') -Value 'function Probe-Thing { return 1 }'
+        $lazy = {
+            param($dir)
+            function Load { . (Join-Path $dir 'r.ps1'); return (Probe-Thing) }
+            $first = Load
+            $second = try { Probe-Thing } catch { 'gone' }
+            return @($first, $second)
+        }
+        $r = & $lazy $probe
+        if ($r[1] -ne 'gone') { throw 'a dot-source inside a function now survives it; this check needs rewriting' }
+    } finally { Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue }
+
+    # And the capture must not be written that way: no dot-source of the rule inside any of its functions, and
+    # exactly one at the script's own level.
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $here 'etw-capture.ps1'), [ref]$null, [ref]$null)
+    # Every dot-source in the capture, whatever it names its path variable: the capture has exactly one, the rule.
+    $dots = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and
+        $n.InvocationOperator -eq 'Dot' }, $true))
+    if ($dots.Count -ne 1) { throw "the capture has $($dots.Count) dot-sources, not the one that loads the rule" }
+    foreach ($fn in @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true))) {
+        if ($fn.Extent.StartOffset -le $dots[0].Extent.StartOffset -and $fn.Extent.EndOffset -ge $dots[0].Extent.EndOffset) {
+            throw "the world rule is dot-sourced inside $($fn.Name): its functions would be gone after the first poll"
+        }
+    }
+    # The rule is reached through the script-scope flag, and the "not staged" note is still written only once.
+    Needs 'etw-capture.ps1' @('$script:worldRule = [bool](Test-Path -LiteralPath $script:worldRulePath)',
+        'if (!$script:worldRule) {', '$script:worldRuleNoted')
+}
 Check 'the start script stages the world rule with the trial sampler' {
     Needs 'etw-start.ps1' @('world-rule.ps1 not staged', '-NoWorldRule',
         "Copy-Item -LiteralPath `$rule -Destination (Join-Path `$root 'world-rule.ps1')",
