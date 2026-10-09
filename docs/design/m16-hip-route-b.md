@@ -2122,7 +2122,9 @@ Two numbers of that session are worth carrying in the design, because both are e
   host side.
 - **One line got slower, and it is not in this code path.** A 4 KB device-to-host `hipMemcpy` is
   19.2-19.4 us with batching off and 28.8-28.9 us with it on, while the same arms' 1 MiB and
-  64 MiB device-to-host copies are the same to three digits in all six arms. The host path of a
+  64 MiB device-to-host copies do not split with the policy at all: all six arms are within
+  0.8 % of each other on the 1 MiB line and within 0.1 % on the 64 MiB line, and the batched and
+  the unbatched arms are mixed through both of those spreads. The host path of a
   copy is one function per direction and it does not look at the policy: one `bc250hsa_flush`
   (which returns at once with no buffer open), one lookup and one `memcpy`. The host-to-device
   line of the same arms is 0.264-0.333 us in every arm, which bounds that whole shared path well
