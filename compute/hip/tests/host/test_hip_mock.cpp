@@ -454,6 +454,23 @@ int main(int argc, char** argv) {
     check(hipEventElapsedTime(&elapsed, t0, t1) == hipSuccess, "hipEventElapsedTime");
     check(elapsed >= 4.0f, "the elapsed time holds the gap between the two records");
     check(elapsed < 1000.0f, "the elapsed time is not the age of the question");
+    // An event that nothing recorded is complete: it waits for nothing and holds nothing back.
+    // MEASURED 2026-10-09: a refusal here stopped llama-bench at its first HIP call, because
+    // ggml_backend_cuda_device_event_synchronize synchronizes an event before any record.
+    hipEvent_t fresh = nullptr;
+    float never = -1.0f;
+    check(hipEventCreateWithFlags(&fresh, hipEventDisableTiming) == hipSuccess,
+          "hipEventCreateWithFlags with timing off");
+    check(hipEventSynchronize(fresh) == hipSuccess, "an unrecorded event synchronizes at once");
+    check(hipStreamWaitEvent(first, fresh, 0) == hipSuccess, "a stream waits for it and goes on");
+    check(hipEventSynchronize(fresh) == hipSuccess, "and it is still complete afterwards");
+    check(hipEventDestroy(fresh) == hipSuccess, "hipEventDestroy fresh");
+    hipEvent_t untimed = nullptr;
+    check(hipEventCreate(&untimed) == hipSuccess, "hipEventCreate untimed");
+    check(hipEventElapsedTime(&never, t0, untimed) == hipErrorInvalidHandle,
+          "the elapsed time of an unrecorded event is refused, not zero");
+    check(hipEventDestroy(untimed) == hipSuccess, "hipEventDestroy untimed");
+
     check(hipEventDestroy(t1) == hipSuccess, "hipEventDestroy t1");
     check(hipEventDestroy(t0) == hipSuccess, "hipEventDestroy t0");
     check(hipEventDestroy(done) == hipSuccess, "hipEventDestroy");

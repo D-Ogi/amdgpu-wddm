@@ -75,11 +75,16 @@ bool valid(const ihipEvent_t* event) {
 
 // Waits for the event's value, so that its timestamp exists. The caller holds the lock and a
 // reference to the event, because the wait opens the lock.
+//
+// An event that nothing recorded is complete and waits for nothing, which is the HIP contract
+// and what hipStreamWaitEvent already answers. Only the timing path refuses such an event, and
+// it refuses it itself: there is no timestamp to subtract. MEASURED 2026-10-09: this rule in
+// the wrong place stopped llama-bench against the mock. ggml creates its events with
+// hipEventCreateWithFlags(hipEventDisableTiming) and calls hipEventSynchronize on one of them
+// before anything records it (ggml-cuda.cu, ggml_backend_cuda_device_event_synchronize), and
+// hipErrorInvalidHandle there is a stated abort through its own CUDA_CHECK.
 hipError_t retire(bc250hip::Guard& guard, ihipEvent_t* event) {
-    if (event->recorded == 0) {
-        return hipErrorInvalidHandle;
-    }
-    if (event->pending == 0) {
+    if (event->recorded == 0 || event->pending == 0) {
         return hipSuccess;
     }
     bc250hsa_device* dev = nullptr;
@@ -202,6 +207,11 @@ hipError_t hipEventElapsedTime(float* ms, hipEvent_t start, hipEvent_t stop) {
     }
     if ((start->flags & static_cast<unsigned>(hipEventDisableTiming)) != 0 ||
         (stop->flags & static_cast<unsigned>(hipEventDisableTiming)) != 0) {
+        return fail(hipErrorInvalidHandle);
+    }
+    if (start->recorded == 0 || stop->recorded == 0) {
+        // No timestamp exists for an event that nothing recorded, so there is nothing to
+        // subtract. HIP answers the invalid handle here, not a zero time.
         return fail(hipErrorInvalidHandle);
     }
     bc250hip::EventRef held_start;
