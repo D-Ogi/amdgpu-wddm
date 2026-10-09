@@ -208,8 +208,9 @@ int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct
  *              answers the clock of the moment, so an idle core answers far under the floor and counts as no
  *              answer. Any answer inside the band was given to a core that was boosting, so it is a lower bound
  *              of the firmware's own ceiling.
- *   mhz        the clock limit a restore asks for: the higher of the two, clamped to BC250_CPU_MAX_MHZ (the
- *              release bound, so a restore never asks for more than stock). 0 when neither answered.
+ *   mhz        the clock limit a restore asks for (0.7.216.15, K137): the higher of the two, clamped to
+ *              BC250_CPU_MAX_MHZ (the release bound, so a restore never asks for more than stock), which is
+ *              the highest clock the firmware itself answered. 0 when neither answered.
  *   boost_given  1 when boost_mhz carries an answer. Without it mhz is the P-state table alone, and sending it
  *              as a restore CUTS the boost the firmware had given: that is BD-094 (0x8F 3200 held one busy
  *              thread near 3180 MHz until a restart, K220). The driver therefore takes no clock limit it could
