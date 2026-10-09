@@ -2097,7 +2097,7 @@ arm of section 8.7 is what may change the default, and nothing else.
 | `BC250_HIP_PM4_STATE_CACHE` | `0`, `1` | `1`, write only the state that changed |
 
 The first two defaults were the conservative value until the hardware had spoken. It has
-(`evidence/m16/perf-2026-10-09`, facts M850 to M854): batching with the light barrier is exact over
+(`evidence/m16/perf-2026-10-09`, facts M853 to M857): batching with the light barrier is exact over
 two chains of 1000 dependent kernels, 2.2 times faster than build 1 on the `launch` line and 3.8
 times faster on the `chain` line, and it cuts submissions per dispatch from 1.000 to 0.032. The
 defaults are therefore the measured arm P3 of that session. `BC250_HIP_BATCH=0` with
@@ -2142,7 +2142,7 @@ answers that question, which is why those two calls exist.
 
 The host tests prove the harness and the mechanism, and they cannot prove the gain: the mock backend
 runs no instruction. The lab answered it on 2026-10-09 in six arms of 3.4 to 3.8 s each
-(`evidence/m16/perf-2026-10-09`, facts M850 to M854), and section 8.6 states the defaults that
+(`evidence/m16/perf-2026-10-09`, facts M853 to M857), and section 8.6 states the defaults that
 follow. What is left for the next slot is in `scratch/m16-hip/lab/perf-README.md`: the state cache
 of section 8.8 against the switch that turns it off, a cap of 64 under it, and the copy line of
 section 8.6a with no kernel phase in front of it.

@@ -2,7 +2,7 @@
 
 MEASURED on unit A (ASRock BC-250, Windows 11 Pro), 2026-10-09 17:29 to 17:40Z. Six arms of the
 microbenchmark `hipbench`, each a bounded non-game trial, the longest 3.8 s of wall time. No GPU
-fault, no timeout, no wrong result, no stop rule reached. Facts M850 to M854.
+fault, no timeout, no wrong result, no stop rule reached. Facts M853 to M857.
 
 The question: build 1 of this route submits one kernel dispatch as one indirect buffer and one
 `D3DKMTSubmitCommand`. A decode step of a language model is hundreds of kernels, so the fixed cost

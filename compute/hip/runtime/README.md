@@ -95,7 +95,7 @@ been given.
 | `BC250_HIP_PM4_STATE_CACHE` | `0`, `1` | `1`, write only the state that changed |
 
 The first two defaults were the conservative value until the lab said otherwise. It did, on
-2026-10-09: `evidence/m16/perf-2026-10-09` and facts M850 to M854. Batching with the light
+2026-10-09: `evidence/m16/perf-2026-10-09` and facts M853 to M857. Batching with the light
 barrier is exact over two chains of 1000 dependent kernels, 2.2 times faster on the launch line
 and 3.8 times faster on the chain line, and 0.032 submissions per dispatch against 1.000. One
 line is slower, a 4 KB device-to-host copy by about 9.5 us, which the second launch after it
