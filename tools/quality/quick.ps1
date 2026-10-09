@@ -197,6 +197,9 @@ try {
   @{n='umd-caps';s='driver\kmd\test\run_umd_caps.ps1';a=@('-Kits',$kits)}
   @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$kits)}
   @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$kits)}
+  # The frozen gfx job frame and the VM flush on the ring (docs/design/gfx-submit-root-serialization.md).
+  @{n='gfx-vm-flush';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$kits)}
+  @{n='gfx-vm-flush-wrong-ack';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-WrongAckMask');Fails=$true}
   @{n='shim-ih';s='driver\shim\test\run_ih.ps1';a=@('-Kits',$kits)}
   @{n='shim-psp';s='driver\shim\test\run_psp.ps1';a=@('-Kits',$kits,'-Firmware',$firmware)}
   @{n='shim-pte';s='driver\shim\test\run_pte.ps1';a=@('-Kits',$kits)}
