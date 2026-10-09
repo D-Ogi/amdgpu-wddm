@@ -1,12 +1,14 @@
 # The root serialization of the gfx submit path, and the VMID pool
 
 Status: option (a) is **implemented in KMD 0.7.214.1 behind `EnableVmidPool` (default on)**. Option (b) is
-**implemented behind `EnableRingVmFlush` (default off)** and has not run on the lab yet. `EnableVmidPool` 0 gives
-the behaviour of 0.7.213.1. `EnableRingVmFlush` absent or 0 gives the packet sequence of 0.7.216.24, dword for
-dword.
+**implemented behind `EnableRingVmFlush` (default off)** and **ran on the lab on 2026-10-09**: 81 minutes of
+uptime, 680 786 frames flushed on the ring, 0 rule refusals, 0 faults, 0 timeouts, no measurable cost (section 3,
+"What the lab measured"). The default stays off until the open measurement of a game's frame time is made.
+`EnableVmidPool` 0 gives the behaviour of 0.7.213.1. `EnableRingVmFlush` absent or 0 gives the packet sequence of
+0.7.216.24, dword for dword.
 
 This document was first written as "F2" against KMD 0.7.196.1. Section 1 keeps that analysis. Sections 2, 4 and 5
-describe what 0.7.214.1 does. Section 3 describes option (b) and its lab plan. Code names refer to the tree of
+describe what 0.7.214.1 does. Section 3 describes option (b), its lab plan and what the lab measured. Code names refer to the tree of
 0.7.214.1, and section 3 to the tree that added `EnableRingVmFlush`.
 
 ## 1. What serialized up to 0.7.213.1
@@ -286,6 +288,43 @@ the recovery path and stops at the first timeout.
    unretired with the ring's read pointer inside the 29 dwords, which the timeout report's ring window shows.
 6. **Rollback.** `EnableRingVmFlush` 0 and a restart give the packet sequence of 0.7.216.24, byte for byte, which
    the `gfx-vm-flush` gate holds. Nothing else has to be undone.
+
+### What the lab measured
+
+The plan above ran on unit A on 2026-10-09, on `0.7.216.100-tester.24`
+(`scratch\train\b26\validation\RESULTS.md` section 5, files `ringflush-gate1-dwm.txt`,
+`ringflush-gate1-after520.txt`, `ringflush-gate1-final.txt`, `ringflush-gate0-after.txt`). The driver read the
+switch in `GfxStart` 1.158 s into the boot and said `gfx: VM flush on the ring (EnableRingVmFlush), engine 1`.
+
+| Read at | Frames on the ring | On a root the VMID held | Rule refusals | Node 0 timeouts | MMIO flush lines | TDR |
+|---|---|---|---|---|---|---|
+| 37 s after the boot | 621 | 614 | 0 | 0 | 0 | none |
+| after the 3 min desktop arm (249 s) | 1185 | 1173 | 0 | 0 | 0 | none |
+| after the first game session (1361 s) | 183 832 | 183 816 | 0 | 0 | 0 | none |
+| end of the gate (4854 s) | 680 786 | 680 758 | 0 | 0 | 0 | none |
+
+The workload was the three-minute desktop arm, three The Witcher 3 Remaster D3D12 HIGH sessions with ray tracing
+and four DXRPathTracer runs: about 81 minutes of uptime. Every read also gave 0 GPU faults, 0 hardware fence
+timeouts, 0 `ResetEngine`, 0 `wddm: timeout` and 0 events of the `Display` provider since the boot. The paging node stayed
+clean (47 234 submitted, 47 234 completed, 0 timeouts, 0 refused). The stop rule of step 5 never fired. The
+rollback went back to `gfx: VM flush by MMIO before the frame (EnableRingVmFlush 0), engine 17`, and that is the
+state the lab is left in.
+
+**The cost.** DXRPathTracer (Sponza, 1536x864, 1024 spp, path length 3, VSync off, 30.0 s), two runs at each gate
+on one boot each: gate 1 read 18.81 and 18.74 fps (124.8 and 124.4 Mrays/s), gate 0 read 18.85 and 18.73 fps
+(125.1 and 124.3 Mrays/s). The two gates are inside each other's run-to-run spread, 0.6 % end to end, so this
+workload sees neither a cost nor a saving.
+
+**Open: the game frame time.** The plan's step 3 asks for a game session against an existing baseline. The gate-0
+arm was measured (trial 519: 12.5 presents/s at a mean 1337 MHz, 9.3 presents per GHz, which matches trial 516 on
+the b25 package within the usual spread). The gate-1 half was not: the harness opened its measurement window on
+the game's main menu in all three attempts, which is `DEFECTS.md` BD-107, not driver behaviour. Until a game arm
+is measured at gate 1, the default stays off.
+
+**One check in the arm script is not discriminating.** `ringflush.ps1 -Step read` asserts that the per-frame line
+`gfx: VMID <n> root 0x... flush -> ...` is absent. It counted 0 at gate 1 and 0 at gate 0, where the MMIO flush is
+what runs, so the line is not written at the release log level. The `ring VM flush on/off: N frames` summary line
+is the one that carries the answer.
 
 ## 4. VM fault attribution
 
