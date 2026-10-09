@@ -49,7 +49,7 @@ function Needs([string]$name, [string[]]$needles) {
     }
 }
 
-$scripts = @('etw-capture.ps1', 'etw-start.ps1', 'etw-closure.ps1')
+$scripts = @('etw-capture.ps1', 'etw-start.ps1', 'etw-closure.ps1', 'world-rule.ps1')
 
 Check 'the three scripts parse' {
     foreach ($name in $scripts) {
@@ -77,14 +77,14 @@ Check 'the start script only passes switches the capture knows' {
     $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $here 'etw-capture.ps1'), [ref]$null, [ref]$null)
     $declared = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
     foreach ($switch in @('-GpuOnly', '-SkipA', '-SecondsB', '-WorldLog', '-ReserveSeconds', '-Process',
-                          '-PresentMode', '-SchedulerStacks')) {
+                          '-PresentMode', '-SchedulerStacks', '-WorldTelemetry', '-WorldSettleSeconds')) {
         if ($declared -notcontains $switch.Substring(1)) { throw "etw-capture.ps1 has no $switch" }
     }
     # The task's argument line is built on the lines that assign $fps and on the action line, after its -File.
     # Every -Switch spelled in that text must be a parameter of the capture.
     $argText = ''
     foreach ($line in (Text 'etw-start.ps1') -split "`n") {
-        if ($line -match '\$fps\s*\+?=') { $argText += "`n" + $line.Substring($line.IndexOf('=') + 1) }
+        if ($line -match '\$(fps|worldArgs)\s*\+?=') { $argText += "`n" + $line.Substring($line.IndexOf('=') + 1) }
         elseif ($line -match 'New-ScheduledTaskAction') {
             $at = $line.IndexOf('-File')
             if ($at -lt 0) { throw 'the action line no longer starts the capture with -File' }
@@ -156,6 +156,125 @@ Check 'the start script passes -ReserveSeconds once and refuses a window the mod
     $argLines = @($text -split "`n" | Where-Object { $_ -match '\$fps\s*\+?=' -or $_ -match 'New-ScheduledTaskAction' })
     $inArgs = ([regex]::Matches(($argLines -join "`n"), '-ReserveSeconds')).Count
     if ($inArgs -ne 1) { throw "the task line carries -ReserveSeconds $inArgs times, not once" }
+}
+# The world rule of BD-107. Its numbers are the lab's: the Witcher 3 Remaster main menu sits on the 1000 MHz DPM
+# floor at 0-40 % busy (it presents at the 240 fps cap), and the world holds 1100-1500 MHz at 93-100 %. The three
+# sampler lines below are recorded ones, from trials 520 (menu) and 519 (world) of the b26 validation, plus the
+# legacy fixed-clock form of the same sampler. The whole four-arm replay is scratch\bd107\replay-b26.ps1.
+. (Join-Path $here 'world-rule.ps1')
+function Band([datetime]$start, [int]$count, [int]$mhz, [double]$busy) {
+    # $count one-second sampler lines, oldest first, ending at $start.
+    # Invariant formatting: this PC may run a culture whose decimal separator is a comma, and the sampler the
+    # lab writes is invariant ("busy 13.3%").
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $lines = @()
+    for ($i = $count - 1; $i -ge 0; $i--) {
+        $lines += , ($start.AddSeconds(-$i).ToString('HH:mm:ss.fff', $inv) + ' dpm ' + $mhz + ' MHz  919 mV (SMU ' +
+            $mhz + ' MHz VID 100)  78.1 C busy ' + $busy.ToString('0.0', $inv) + '% avg  99.2% want 1900 cap 1500 max 1500')
+    }
+    return ($lines -join "`n")
+}
+Check 'the world rule reads the lab sampler lines' {
+    $now = [datetime]'2026-10-09T16:31:09'
+    $text = @(
+        '16:57:58.123 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  68.8 C busy  26.7% avg  16.1% want 1000 cap 1500 max 1500',
+        '16:31:09.049 dpm 1500 MHz  919 mV (SMU 1500 MHz VID 100)  79.9 C busy 100.0% avg  99.9% want 1900 cap 1500 max 1500',
+        '16:31:10.055 fixed 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.1 C busy  13.3% avg  17.2% want 1000 cap 1500 max 1500',
+        'smu metrics: ok, 4498 tables, 1 failures, last 560 ms ago: gfx 818 mV 1000 MHz 62.25 C') -join "`n"
+    $s = Get-WorldSamples -Text $text -Reference $now
+    if ($s.Count -ne 3) { throw "read $($s.Count) samples of 3" }
+    # Ascending by time: the world line, the legacy fixed line, then the menu line of 16:57:58.
+    if ($s[0].mhz -ne 1500 -or $s[0].busy -ne 100.0) { throw "the world line read $($s[0].mhz) MHz busy $($s[0].busy)" }
+    if ($s[1].mhz -ne 1000 -or $s[1].busy -ne 13.3) { throw 'the legacy fixed line is no longer read' }
+    if ($s[2].busy -ne 26.7) { throw "the menu line read busy $($s[2].busy)" }
+    # The lines carry no date. A session that runs across midnight reads a late time of day against an early
+    # reference as the day before, so the samples stay in order.
+    $after = [datetime]'2026-10-10T02:00:00'
+    $late = Get-WorldSamples -Text '23:50:00.000 dpm 1500 MHz  919 mV (SMU 1500 MHz VID 100)  78.1 C busy 100.0% avg' -Reference $after
+    if ($late[0].time -ne [datetime]'2026-10-09T23:50:00') { throw "a late time of day read as $($late[0].time) against a 02:00 reference" }
+}
+Check 'the world rule admits the world band and refuses the W3 main menu' {
+    $now = [datetime]'2026-10-09T16:31:09'
+    $world = Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now 40 1500 100.0) -Reference $now) -Now $now
+    if (!$world.world) { throw "the world band was refused: $($world.why)" }
+    $menu = Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now 40 1000 26.7) -Reference $now) -Now $now
+    if ($menu.world) { throw 'the main menu band passed as the world' }
+    if ($menu.why -notlike 'menu band*') { throw "the menu band gave the wrong reason: $($menu.why)" }
+    # A menu that reaches 40 % busy on the floor is still the menu, and the world at 93 % is still the world.
+    if ((Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now 40 1000 40.0) -Reference $now) -Now $now).world) { throw '1000 MHz at 40 % busy passed as the world' }
+    if (!(Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now 40 1100 93.1) -Reference $now) -Now $now).world) { throw '1100 MHz at 93 % busy was refused' }
+}
+Check 'the world rule waits out the settle time and refuses stale or absent telemetry' {
+    $now = [datetime]'2026-10-09T16:31:09'
+    $short = Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now 10 1500 100.0) -Reference $now) -Now $now
+    if ($short.world) { throw 'a band of 10 s passed the 25 s settle' }
+    if ($short.why -notlike 'band held*') { throw "the settle refusal gave the wrong reason: $($short.why)" }
+    $few = Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now 4 1500 100.0) -Reference $now) -Now $now -SettleSeconds 0
+    if ($few.world) { throw '4 samples passed the 8-sample run' }
+    $stale = Test-WorldSignal -Samples (Get-WorldSamples -Text (Band $now.AddSeconds(-60) 40 1500 100.0) -Reference $now) -Now $now
+    if ($stale.world -or $stale.why -notlike 'telemetry stale*') { throw "a sampler that stopped a minute ago gave: $($stale.why)" }
+    $none = Test-WorldSignal -Samples @() -Now $now
+    if ($none.world -or $none.telemetry -or $none.why -ne 'no telemetry') { throw "no samples gave: $($none.why)" }
+    $missing = Test-WorldTelemetry -Path (Join-Path $env:TEMP ('bc250-no-such-sampler-' + [guid]::NewGuid().ToString('N') + '.txt')) -Now $now
+    if ($missing.world -or $missing.telemetry -or $missing.why -ne 'no telemetry file') { throw "a missing sampler file gave: $($missing.why)" }
+}
+Check 'the time bound no longer opens window B by itself' {
+    Needs 'etw-capture.ps1' @('[string]$WorldTelemetry', '[int]$WorldSettleSeconds = 25',
+        'if ($w.world) { Start-B (''time, world: '' + $w.why); break }',
+        'if (!$w.telemetry) { Start-B (''time, world unverified: '' + $w.why); break }',
+        'window B held at the time bound')
+    # The only Start-B on the time path is inside the world decision: a bare one would be the old defect back.
+    $text = Text 'etw-capture.ps1'
+    $at = $text.IndexOf('if ($el -ge $LatestB)')
+    if ($at -lt 0) { throw 'the time bound is no longer read the way this check reads it' }
+    $block = $text.Substring($at)
+    $block = $block.Substring(0, $block.IndexOf('Start-Sleep -Seconds 2'))
+    if ($block -match "Start-B\s+'time'") { throw 'the time bound still opens window B unconditionally' }
+}
+Check 'the capture loads the world rule at script scope, so every poll can ask it' {
+    # The trap this check exists for. A dot-source inside a function runs in that FUNCTION's scope, so the
+    # functions it defines are gone when the function returns. The world rule was first loaded that way, lazily,
+    # from inside World-Now: the first poll answered, every later one threw CommandNotFoundException, the catch
+    # turned that into telemetry=$false, and the time bound opened window B unverified two seconds after it had
+    # correctly held it - BD-107 again. The trap is demonstrated here, so that nobody has to take it on trust.
+    $probe = Join-Path ([IO.Path]::GetTempPath()) ('bc250-scope-' + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $probe
+    try {
+        Set-Content -LiteralPath (Join-Path $probe 'r.ps1') -Value 'function Probe-Thing { return 1 }'
+        $lazy = {
+            param($dir)
+            function Load { . (Join-Path $dir 'r.ps1'); return (Probe-Thing) }
+            $first = Load
+            $second = try { Probe-Thing } catch { 'gone' }
+            return @($first, $second)
+        }
+        $r = & $lazy $probe
+        if ($r[1] -ne 'gone') { throw 'a dot-source inside a function now survives it; this check needs rewriting' }
+    } finally { Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue }
+
+    # And the capture must not be written that way: no dot-source of the rule inside any of its functions, and
+    # exactly one at the script's own level.
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $here 'etw-capture.ps1'), [ref]$null, [ref]$null)
+    # Every dot-source in the capture, whatever it names its path variable: the capture has exactly one, the rule.
+    $dots = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and
+        $n.InvocationOperator -eq 'Dot' }, $true))
+    if ($dots.Count -ne 1) { throw "the capture has $($dots.Count) dot-sources, not the one that loads the rule" }
+    foreach ($fn in @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true))) {
+        if ($fn.Extent.StartOffset -le $dots[0].Extent.StartOffset -and $fn.Extent.EndOffset -ge $dots[0].Extent.EndOffset) {
+            throw "the world rule is dot-sourced inside $($fn.Name): its functions would be gone after the first poll"
+        }
+    }
+    # The rule is reached through the script-scope flag, and the "not staged" note is still written only once.
+    Needs 'etw-capture.ps1' @('$script:worldRule = [bool](Test-Path -LiteralPath $script:worldRulePath)',
+        'if (!$script:worldRule) {', '$script:worldRuleNoted')
+}
+Check 'the start script stages the world rule with the trial sampler' {
+    Needs 'etw-start.ps1' @('world-rule.ps1 not staged', '-NoWorldRule',
+        "Copy-Item -LiteralPath `$rule -Destination (Join-Path `$root 'world-rule.ps1')",
+        'the staged etw-capture.ps1 has no -WorldTelemetry')
+    if ((Text 'etw-start.ps1') -notmatch '-WorldTelemetry\s+`"C:\\BC250\\tmp\\dpm-\$Trial\.txt`"') {
+        throw 'the task line no longer names the trial DPM sampler'
+    }
 }
 Check 'the capture writes its own notes file next to the trial' {
     Needs 'etw-capture.ps1' @("Join-Path `$Root 'etw-notes.txt'")

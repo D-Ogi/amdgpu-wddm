@@ -7,7 +7,7 @@
 # limit as an outer bound only.
 param([Parameter(Mandatory)][ValidatePattern('^[0-9]{3}$')][string]$Trial, [int]$Seconds = 30, [int]$StartA = 5,
     [int]$DwmPct = 15, [int]$LatestB = 110, [int]$FpsSeconds = 0, [int]$WorldSeconds = 0, [switch]$PresentMode,
-    [switch]$SchedulerStacks)
+    [switch]$SchedulerStacks, [int]$WorldSettleSeconds = 25, [switch]$NoWorldRule)
 $ErrorActionPreference = 'Stop'
 $perf = 'C:\BC250\tools\perfview\PerfView.exe'
 $expect = 'E6B89A6DA0FE7DA5F64302306153C6AAC7A4BE67C800426A91AE014093E4DF2D'
@@ -40,6 +40,19 @@ if ($process -and !(Select-String -LiteralPath $script -SimpleMatch -Quiet -Patt
     throw 'the staged etw-capture.ps1 has no -Process: push tools\win\lab-runner\etw\etw-capture.ps1 to C:\BC250\tmp first'
 }
 Copy-Item -LiteralPath $script -Destination (Join-Path $root 'etw-capture.ps1')
+# The world rule (BD-107) goes next to the capture, and the capture gets the trial's own DPM sampler file
+# (scratch\dpm\trial-samplers.ps1 writes it; SESSION_SAMPLER=1 on the host turns the sampler on). The rule must be
+# staged, or window B would silently go back to opening on a time bound, which is the defect this fixes;
+# -NoWorldRule is the deliberate way to run without it.
+$worldArgs = ''
+if (!$NoWorldRule) {
+    $rule = 'C:\BC250\tmp\world-rule.ps1'
+    if (!(Test-Path -LiteralPath $rule)) { throw 'world-rule.ps1 not staged: push tools\win\lab-runner\etw\world-rule.ps1 to C:\BC250\tmp first (or pass -NoWorldRule)' }
+    if (!(Select-String -LiteralPath $script -SimpleMatch -Quiet -Pattern '[string]$WorldTelemetry')) {
+        throw 'the staged etw-capture.ps1 has no -WorldTelemetry: push tools\win\lab-runner\etw\etw-capture.ps1 to C:\BC250\tmp first' }
+    Copy-Item -LiteralPath $rule -Destination (Join-Path $root 'world-rule.ps1')
+    $worldArgs = " -WorldTelemetry `"C:\BC250\tmp\dpm-$Trial.txt`" -WorldSettleSeconds $WorldSettleSeconds"
+}
 $name = "BC250-Etw$Trial"
 if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { throw "task $name already registered; run etw-closure.ps1 first" }
 # -FpsSeconds N (Full HD FPS tests): DxgKrnl only, no window A, window B from the world (walk start in the
@@ -73,7 +86,7 @@ if ($SchedulerStacks) {
     if ($WorldSeconds -le 0) { throw '-SchedulerStacks needs -WorldSeconds N' }
     $fps += ' -SchedulerStacks'
 }
-$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"$root\etw-capture.ps1`" -Root `"$root`" -Tag N$Trial -NotAfterQpc $notAfter -Seconds $Seconds -StartA $StartA -DwmPct $DwmPct -LatestB $LatestB$fps")
+$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"$root\etw-capture.ps1`" -Root `"$root`" -Tag N$Trial -NotAfterQpc $notAfter -Seconds $Seconds -StartA $StartA -DwmPct $DwmPct -LatestB $LatestB$fps$worldArgs")
 $s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds (300 + $extra)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 $null = Register-ScheduledTask -TaskName $name -Action $a -Settings $s -Principal $p
