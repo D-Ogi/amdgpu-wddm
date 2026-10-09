@@ -1,0 +1,100 @@
+== before 03:24:14Z
+dwm 1912
+health abi=1 version=0x000700D8 flags=15 generation=27357403 epoch=17 completed=12766 age_ms=410 ready_ms=1341566
+kmd log: GPU FAULT 0, fence timeout/reset 0
+=== x64 default (3.6 s, exe C0CED039)
+d3d9probe mode default pid 3456
+Direct3DCreate9Ex -> 0x00000000
+adapters 1
+adapter 0: "BC-250 GPU (amdgpu-wddm)" driver "bc250d3d_router.dll" version 0.0.0.0 vendor 0x1002 device 0x13FE
+caps: vs 3.0 ps 3.0, max texture 16384x16384, simultaneous RTs 4
+CreateDeviceEx(hardware vp) -> 0x00000000
+device on the 9On12 layer: yes (QueryInterface 0x00000000)
+GetRenderTargetData -> 0x00000000
+pixels: triangle 32896 (exact rule 32896), clear 32640, other 0, wrong samples 0
+timing: 200 frames x 100 draws in 0.110 s = 1824.5 frames/s, 182450 draws/s
+module C:\BC250\tmp\d3d9probe\b1008-x64\d3d9probe.exe
+module C:\Windows\SYSTEM32\d3d9.dll
+module C:\Windows\SYSTEM32\d3d9on12.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\d3d12.dll
+module C:\Windows\SYSTEM32\D3D12Core.dll
+module C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+module C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_vkd3d.dll
+module C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_radv.dll
+verdict PASS
+verdict PASS
+exit 0
+=== x64 on12 (2.3 s, exe C0CED039)
+d3d9probe mode on12 pid 11260
+Direct3DCreate9On12Ex -> 0x00000000
+adapters 1
+adapter 0: "BC-250 GPU (amdgpu-wddm)" driver "bc250d3d_router.dll" version 0.0.0.0 vendor 0x1002 device 0x13FE
+caps: vs 3.0 ps 3.0, max texture 16384x16384, simultaneous RTs 4
+CreateDeviceEx(hardware vp) -> 0x00000000
+device on the 9On12 layer: yes (QueryInterface 0x00000000)
+GetRenderTargetData -> 0x00000000
+pixels: triangle 32896 (exact rule 32896), clear 32640, other 0, wrong samples 0
+timing: 200 frames x 100 draws in 0.106 s = 1893.8 frames/s, 189379 draws/s
+module C:\BC250\tmp\d3d9probe\b1008-x64\d3d9probe.exe
+module C:\Windows\SYSTEM32\d3d9.dll
+module C:\Windows\SYSTEM32\d3d9on12.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\d3d12.dll
+module C:\Windows\SYSTEM32\D3D12Core.dll
+module C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+module C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_vkd3d.dll
+module C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_radv.dll
+verdict PASS
+verdict PASS
+exit 0
+=== x86 default (3.5 s, exe DA42A183)
+d3d9probe mode default pid 9544
+Direct3DCreate9Ex -> 0x00000000
+adapters 1
+adapter 0: "BC-250 GPU (amdgpu-wddm)" driver "bc250d3d_router.dll" version 0.0.0.0 vendor 0x1002 device 0x13FE
+caps: vs 3.0 ps 3.0, max texture 16384x16384, simultaneous RTs 4
+CreateDeviceEx(hardware vp) -> 0x00000000
+device on the 9On12 layer: yes (QueryInterface 0x00000000)
+GetRenderTargetData -> 0x00000000
+pixels: triangle 32896 (exact rule 32896), clear 32640, other 0, wrong samples 0
+timing: 200 frames x 100 draws in 0.110 s = 1817.4 frames/s, 181738 draws/s
+module C:\BC250\tmp\d3d9probe\b1008-x86\d3d9probe.exe
+module C:\Windows\SYSTEM32\d3d9.dll
+module C:\Windows\SYSTEM32\d3d9on12.dll
+module C:\Windows\SYSTEM32\d3d12.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\D3D12Core.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_d3d12.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_vkd3d.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_radv.dll
+verdict PASS
+verdict PASS
+exit 0
+=== x86 on12 (2.3 s, exe DA42A183)
+d3d9probe mode on12 pid 2216
+Direct3DCreate9On12Ex -> 0x00000000
+adapters 1
+adapter 0: "BC-250 GPU (amdgpu-wddm)" driver "bc250d3d_router.dll" version 0.0.0.0 vendor 0x1002 device 0x13FE
+caps: vs 3.0 ps 3.0, max texture 16384x16384, simultaneous RTs 4
+CreateDeviceEx(hardware vp) -> 0x00000000
+device on the 9On12 layer: yes (QueryInterface 0x00000000)
+GetRenderTargetData -> 0x00000000
+pixels: triangle 32896 (exact rule 32896), clear 32640, other 0, wrong samples 0
+timing: 200 frames x 100 draws in 0.105 s = 1896.9 frames/s, 189690 draws/s
+module C:\BC250\tmp\d3d9probe\b1008-x86\d3d9probe.exe
+module C:\Windows\SYSTEM32\d3d9.dll
+module C:\Windows\SYSTEM32\d3d9on12.dll
+module C:\Windows\SYSTEM32\d3d12.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\D3D12Core.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_d3d12.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_vkd3d.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_radv.dll
+verdict PASS
+verdict PASS
+exit 0
+== after 03:24:29Z
+dwm 1912
+health abi=1 version=0x000700D8 flags=15 generation=27357403 epoch=17 completed=13108 age_ms=23 ready_ms=1356891
+kmd log: GPU FAULT 0, fence timeout/reset 0

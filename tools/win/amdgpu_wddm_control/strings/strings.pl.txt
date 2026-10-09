@@ -879,7 +879,7 @@ search.games.sm.terms|mt|ab586346|model shaderów|shader model|SM 6.8|SM 6.7|SM 
 search.games.cpu-render|mt-safe|bf157885|Uruchamiaj DirectX 11 na procesorze
 search.games.cpu-render.terms|mt|927301e2|renderowanie na CPU|renderowanie programowe|WARP|procesor|DirectX 11|ostateczność
 search.display.scaling|mt-safe|22b1cb79|Skalowanie GPU
-help.setting.latency|mt|6f3206a0|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę.
+help.setting.latency|mt|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|mt|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
 help.setting.amd-version|mt|7604c528|Niektóre gry ostrzegają, że sterownik graficzny jest stary, bo nie znają tego sterownika. Po włączeniu sterownik podaje numer wersji, który te gry akceptują. Sam sterownik się nie zmienia.
 help.setting.vk-present|mt|e892e511|Sposób, w jaki gry Vulkan wyświetlają klatki. Tryb nowoczesny jest domyślny i szybszy. Tryb zgodności używa starszej, wolniejszej metody; wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
@@ -952,3 +952,25 @@ display.result.reverted|mt|ad2c3799|Przywrócono poprzednie ustawienia ekranu.
 display.result.failed|mt|ab18a02b|Windows nie przyjął tego ustawienia ekranu. Nic się nie zmieniło.
 display.result.keep-failed|mt|45a5a6dd|Nowe ustawienia ekranu działają, ale Windows ich nie zapisał. Po ponownym uruchomieniu mogą wrócić poprzednie.
 display.result.revert-failed|mt|3d5b3356|Nie udało się przywrócić poprzednich ustawień ekranu. Wybierz je ponownie tutaj lub w ustawieniach ekranu Windows.
+
+# ---- how long Windows waits for the graphics before it resets them (src/TdrSetting.cs, the Help page) ----
+tdr.title|mt-safe|ff352a9c|Czas oczekiwania na grafikę
+tdr.intro|mt|866aa1cd|Gdy gra poprosi o jeden bardzo ciężki obraz, układ graficzny może potrzebować dużo czasu, aby go skończyć. Windows czeka ustaloną liczbę sekund, a potem uznaje, że grafika przestała działać, i ją resetuje. Na tym komputerze reset kończy grę i może zatrzymać Windows niebieskim ekranem. Dłuższe oczekiwanie pozwala ciężkiemu obrazowi dojść do końca.
+tdr.label|mt-safe|a2aa568e|Czas oczekiwania
+tdr.choice.not-set|mt-safe|64c56966|Nieustawione: Windows czeka {0} sekundy
+tdr.choice.windows|mt-safe|6af5dc29|{0} sekundy (tyle Windows czeka sam)
+tdr.choice.recommended|mt-safe|4466478a|{0} sekund (zalecane dla tego sterownika)
+tdr.choice.seconds|mt-safe|e549e94b|{0} sekund
+tdr.now|mt-safe|614c5ef2|Zapisane teraz: {0} s.
+tdr.now.absent|mt|448aaa5f|Nic nie jest zapisane, więc Windows czeka {0} sekundy.
+tdr.now.not-valid|mt|1b27a5bd|Zapisane teraz: {0} s, czyli poza tym, co proponuje ta aplikacja. Wybierz czas oczekiwania z listy, aby go zastąpić.
+tdr.after-restart|mt|d4991d13|Nowy czas oczekiwania zaczyna działać po ponownym uruchomieniu systemu Windows.
+tdr.apply|mt-safe|66b53fd5|Zapisz czas oczekiwania
+tdr.unreadable|mt|7d529569|Nie można odczytać czasu oczekiwania na tym komputerze.
+tdr.in-main-window|mt|f60b3f14|Czas oczekiwania zmienia się w głównym oknie, na stronie Pomoc.
+search.help.tdr|mt-safe|ff352a9c|Czas oczekiwania na grafikę
+search.help.tdr.terms|mt|c2a4853d|zawiesza|zawieszenie|czarny ekran|niebieski ekran|nie odpowiada|czekanie|ciężki obraz|limit czasu
+help.setting.tdr|mt|c224cc97|Ile sekund Windows czeka na ciężki obraz, zanim uzna, że grafika przestała działać. 10 sekund pasuje do tego sterownika; 2 sekundy to tyle, ile Windows czeka sam. Nowy czas oczekiwania działa po ponownym uruchomieniu systemu Windows.
+plan.title.tdr-delay|mt-safe|ff352a9c|Czas oczekiwania na grafikę
+plan.line.tdr|mt|c88deff7|Windows czeka na grafikę {0} s.
+plan.line.tdr-default|mt|e906ce42|Czas oczekiwania wraca do tego, który Windows ustawia sam.

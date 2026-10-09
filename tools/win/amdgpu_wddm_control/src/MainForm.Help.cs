@@ -16,6 +16,9 @@ namespace AmdgpuWddmControl
         bool _reportDxdiag = true, _reportCaps = true;
         string _reportStatus;
         bool _reportOk;
+        // The waiting time for the graphics the person picked but has not saved yet (TdrSetting.cs); null: the stored
+        // one is shown.
+        uint? _tdrEdit;
 
         Control BuildHelp(int width)
         {
@@ -63,6 +66,8 @@ namespace AmdgpuWddmControl
             else repair.Add(Ui.Label(Strings.T("help.repair.unavailable"), null, Theme.Warn, repair.Inner));
             p.Controls.Add(repair);
 
+            p.Controls.Add(BuildTdrCard(width));
+
             var restart = new CardPanel(Strings.T("search.help.restart"), width);
             Mark("help.restart", restart);
             restart.Add(Ui.Dim(Strings.T("help.restart.text"), restart.Inner));
@@ -97,6 +102,47 @@ namespace AmdgpuWddmControl
 
             if (_prefs.ShowSupportOptions) p.Controls.Add(BuildSupport(width));
             return p;
+        }
+
+        // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). A Windows setting, so
+        // it is here with the other things a person reaches for when the picture broke, and not among the settings for
+        // games. The choice stays in the window until "Save"; the write is the planned action tdr-delay, which the
+        // elevated helper performs like every other change. Windows reads the value when it starts, which is why the
+        // card says plainly that it applies after a restart of Windows.
+        CardPanel BuildTdrCard(int width)
+        {
+            var c = new CardPanel(Strings.T("tdr.title"), width);
+            Mark("help.tdr", c);
+            c.Add(Ui.Dim(Strings.T("tdr.intro"), c.Inner));
+            if (_snap.TdrError != null)
+            {
+                c.Add(Ui.Label(Strings.T("tdr.unreadable"), null, Theme.Warn, c.Inner));
+                return c;
+            }
+            var stored = _snap.Tdr();
+            var items = TdrSetting.Items(stored);
+            var combo = Choices(items.Select(x => x.Text).ToList(), Strings.T("tdr.label"), ChoiceMax(c.Inner));
+            combo.SelectedIndex = TdrSetting.Selected(items, stored, _tdrEdit);
+            combo.SelectionChangeCommitted += (o, e) =>
+            {
+                if (combo.SelectedIndex < 0) return;
+                var pick = items[combo.SelectedIndex].Seconds;
+                _tdrEdit = pick != null && pick != stored ? pick : null;
+                BeginInvoke((Action)(() => ShowPage(_page, null, false)));
+            };
+            Mark("help.tdr.choice", combo);
+            c.Add(Ui.WrapRow(c.Inner, RowLabel(Strings.T("tdr.label"), c.Inner), combo, Explain("tdr", Strings.T("tdr.label"))));
+            c.Add(RowDetail(TdrSetting.StateText(stored), c.Inner, stored != null && !TdrSetting.IsValid(stored.Value) ? Theme.Warn : (Color?)null));
+            c.Add(RowDetail(Strings.T("tdr.after-restart"), c.Inner));
+            var save = Ui.Button(Strings.T("tdr.apply"), (s, e) =>
+            {
+                if (_tdrEdit == null) return;
+                uint wanted = _tdrEdit.Value;
+                RunAction("tdr-delay", new Recovery.PlanArgs { Tdr = wanted }, null, null, false, ok => { if (ok) _tdrEdit = null; });
+            }, true);
+            save.Enabled = _tdrEdit != null && _work == null;
+            c.Add(save);
+            return c;
         }
 
         void CreateReport()

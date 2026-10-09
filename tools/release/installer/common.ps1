@@ -17,6 +17,9 @@ $script:DisplayClassGuid = '{4d36e968-e325-11ce-bfc1-08002be10318}'
 $script:SoftwareKey      = 'HKLM:\SOFTWARE\amdgpu-wddm'
 $script:ParametersKey    = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 $script:KhronosKey       = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+# Windows' own graphics key. One value of it belongs to this release: TdrDelay, how long Windows waits for the
+# graphics before it resets them (BD-079). Nothing else here is ours.
+$script:GraphicsDriversKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
 # The 32-bit Vulkan loader reads its drivers from the WOW64 view (BD-064); the installer runs as a 64-bit process.
 $script:KhronosKeyWow    = 'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers'
 $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce'

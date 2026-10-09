@@ -125,13 +125,15 @@ driver. It is the gate for the verdict logic, which is where the review found th
 read as a zero, `admit_ok` used as if it were the client's own number, and a scan-out flip counted with the
 flip gate closed.
 
-The trial has two arms. Without `-Experiment` the shell keeps its registered composed-primary path: the
-control arm, in which every frame must present exactly, the scan-out counters must not move at all, and the
-overall flip counters must still move - a quiet arm on a desktop that was not composing proves nothing. With
-`-Experiment scanout-flip-1920x1200` the shell asks for a scan-out primary. The mode names its geometry
-because the kernel driver admits a flip at the POST geometry alone, so a chain of any other size could only
-end in a refusal, after being moved into VRAM with no CPU mapping for nothing; a bare `scanout-flip` is
-refused by the script before anything runs.
+The trial has two arms, and `-Experiment` names the arm. M15.14 increment 3 made the scan-out primary the
+default of the D3D12 shell, so an empty list is the control arm on an increment-2 shell and the scan-out
+arm on an increment-3 shell. The script therefore refuses a list that names no arm, before anything runs.
+With `-Experiment scanout-flip-off` the shell keeps the composed primary. This is the control arm. Every
+frame must present exactly, the scan-out counters must not move at all, and the overall flip counters must
+still move. A quiet arm on a desktop that was not composing proves nothing. With `-Experiment scanout-flip`
+the shell asks for a scan-out primary. An increment-2 shell needs the spelling with the geometry
+(`scanout-flip-1920x1200`), because it compared the chain with that geometry. An increment-3 shell reads
+both spellings and compares the chain with the source mode in the kernel driver's caps trailer.
 
 The delta then says which of three things happened: flips admitted, candidates refused (with the clause that
 refused them), or no candidate reaching `SetVidPnSourceAddress` at all. The last one does not place the stop

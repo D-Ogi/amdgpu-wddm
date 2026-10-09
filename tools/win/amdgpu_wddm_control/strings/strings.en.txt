@@ -897,7 +897,7 @@ search.games.sm.terms|src|-|shader model|SM 6.8|SM 6.7|SM 6.6|shader|DirectX 12
 search.games.cpu-render|src|-|Run DirectX 11 on the processor
 search.games.cpu-render.terms|src|-|CPU rendering|software rendering|WARP|processor|DirectX 11|fallback|last resort
 search.display.scaling|src|-|GPU scaling
-help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate.
+help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate. Works in DirectX 11 and DirectX 12 games. A game that already keeps fewer frames ahead is left as it is.
 help.setting.overlay|src|-|Shows the frame rate and frame times in a corner of the game. Works in DirectX 11 games for now.
 help.setting.amd-version|src|-|Some games warn that the graphics driver is old, because they do not know this driver. With this on, the driver reports a version number that these games accept. The driver itself does not change.
 help.setting.vk-present|src|-|How Vulkan games show their frames. Modern is the default and is faster. Compatibility uses an older, slower way; try it when a Vulkan game shows a black or frozen picture.
@@ -970,3 +970,25 @@ display.result.reverted|src|-|The previous display settings are back.
 display.result.failed|src|-|Windows did not accept this display setting. Nothing changed.
 display.result.keep-failed|src|-|The new display settings apply now, but Windows did not save them. They can go back after a restart.
 display.result.revert-failed|src|-|The previous display settings did not come back. Choose them again here or in the Windows display settings.
+
+# ---- how long Windows waits for the graphics before it resets them (src/TdrSetting.cs, the Help page) ----
+tdr.title|src|-|Waiting time for the graphics
+tdr.intro|src|-|When a game asks for one very heavy picture, the graphics chip can need a long time to finish it. Windows waits a set number of seconds, then decides that the graphics stopped working and resets them. On this computer a reset ends the game, and it can stop Windows with a blue screen. A longer wait lets a heavy picture finish.
+tdr.label|src|-|Waiting time
+tdr.choice.not-set|src|-|Not set: Windows waits {0} seconds
+tdr.choice.windows|src|-|{0} seconds (what Windows uses by itself)
+tdr.choice.recommended|src|-|{0} seconds (recommended for this driver)
+tdr.choice.seconds|src|-|{0} seconds
+tdr.now|src|-|Saved now: {0} seconds.
+tdr.now.absent|src|-|Nothing is saved, so Windows waits {0} seconds.
+tdr.now.not-valid|src|-|Saved now: {0} seconds, which is outside what this app offers. Pick a waiting time from the list to replace it.
+tdr.after-restart|src|-|A new waiting time starts to work after you restart Windows.
+tdr.apply|src|-|Save the waiting time
+tdr.unreadable|src|-|The waiting time cannot be read on this computer.
+tdr.in-main-window|src|-|You change the waiting time in the main window, on the Help page.
+search.help.tdr|src|-|Waiting time for the graphics
+search.help.tdr.terms|src|-|freeze|frozen|hang|black screen|blue screen|stops responding|wait|heavy picture|timeout
+help.setting.tdr|src|-|How many seconds Windows waits for a heavy picture before it decides that the graphics stopped working. 10 seconds suits this driver; 2 seconds is what Windows uses by itself. A new waiting time works after you restart Windows.
+plan.title.tdr-delay|src|-|Waiting time for the graphics
+plan.line.tdr|src|-|Windows waits {0} seconds for the graphics.
+plan.line.tdr-default|src|-|The waiting time goes back to the one Windows uses by itself.

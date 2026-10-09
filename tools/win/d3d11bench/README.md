@@ -13,8 +13,11 @@ pwsh tools\win\d3d11bench\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget
 ```
 
 The build runs the tests of `compare.py` and `imgdiff.py` first and fails on a failing case, keeps the previous executable under
-`retained\` by its hash, compiles with `/W4 /WX`, checks `--help` and prints the SHA-256 that a lab runner pins.
+`retained\` by its hash, compiles with `/W4 /WX`, checks `--help` and the image architecture, and prints the SHA-256 that a lab runner pins.
 Output: `<BC250_ROOT>\scratch\build\d3d11bench\d3d11bench.exe`.
+
+`-Arch x86` builds the 32-bit client from the same source, into `scratch\build\d3d11bench\x86`. The D3D11 shell
+has an x64 and an x86 image, so a lab matrix that must cover both takes both clients from this one source.
 
 ## Scenes
 
@@ -27,6 +30,14 @@ Output: `<BC250_ROOT>\scratch\build\d3d11bench\d3d11bench.exe`.
 Frame scenes render 30 warm-up frames (`--warmup`), then 300 measured ones (`--frames`), and read back the last
 frame for an FNV-1a checksum. Every scene's output is deterministic, so a checksum mismatch between the two paths on
 one GPU is a correctness failure, not noise.
+
+In window mode `--sync-interval N` is the sync interval the program gives `IDXGISwapChain::Present`, 0 to 4.
+The default is 0, which is what the program always asked for. The per-application `VSync` setting of the driver
+overrides this interval, so the acceptance matrix of BD-099 needs all three of 0, 1 and 2
+(`docs/design/per-app-graphics-settings.md`). Offscreen mode has no swap chain and ignores the option.
+The result records the interval the run really presented at as `sync_interval`, and `compare.py` reads it as a
+setting of the workload: a capped run and an uncapped one are not the same work, so it refuses such a pair.
+A result from before the option carries no such key, and it reads as interval 0.
 
 Across implementations (a CPU rasterizer against a GPU, one vendor against another) the scenes are built to be
 comparable too; this is scene revision 2, `scene_revision` in the result:
@@ -83,7 +94,8 @@ standard output or in `--out FILE` (written atomically):
 
 - `result` (`measured` or `failed`) and `exit`;
 - `scene_revision`: the scenes' shaders and constants (2; absent in revision 1 results);
-- the settings: `mode`, `width`, `height`, `feature_level`, `frame_latency` and every scene's parameters;
+- the settings: `mode`, `width`, `height`, `feature_level`, `frame_latency`, `sync_interval` and every scene's
+  parameters;
 - `adapter`: vendor, device and description as DXGI reports them;
 - `d3d11`: `app-local` or `system`, from the path of the `d3d11.dll` the process actually loaded;
 - `modules`: path and size of every loaded graphics module (D3D runtime, DXGI, Vulkan loader, the project's

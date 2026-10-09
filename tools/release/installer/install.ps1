@@ -681,6 +681,7 @@ function Get-InstallSettingsImpact {
         @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters -Reopen:$script:ReopenClosures) }
         @{ group = 'desktop_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.desktop_router -Previous $prev.applied.desktop_router -Current (Read-RegistryValues "$($script:SoftwareKey)\DesktopRouter")) }
         @{ group = 'app_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.app_router -Previous $prev.applied.app_router -Current (Read-RegistryValues "$($script:SoftwareKey)\AppRouter")) }
+        @{ group = 'graphics_drivers'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.graphics_drivers -Previous $prev.applied.graphics_drivers -Current (Read-RegistryValues $script:GraphicsDriversKey)) }
     )
     foreach ($app in ConvertTo-PairList $tbl.defaults.d3d12_applications) {
         $prevApp = $null
@@ -1244,6 +1245,21 @@ if ($mftAction -eq 'register') {
 # The *Wow paths are what the x86 router (32-bit processes) loads; the policy values are shared (BD-064).
 Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') })
 Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') })
+# How long Windows waits for the graphics before it resets them: TdrDelay under Windows' own GraphicsDrivers key
+# (BD-079; tools\win\amdgpu_wddm_control\src\TdrSetting.cs holds the rules and the range). Windows waits 2 s while
+# the value is absent, and this part has no working GPU reset, so a picture that needs longer than the wait does not
+# end as a reset engine but as a stopped machine. The release writes 10 s, the waiting time the lab has run since
+# 2026-09-28, and the control application's Help page shows and changes it. The upgrade rule is the one every other
+# default follows: a value the previous installer wrote is replaced, a value the tester or the control application set
+# is kept. The value from before the first write of this install goes into the state, so the uninstaller can put it
+# back; a re-run must not record the value this installer itself wrote, hence Set-StateValueOnce.
+$tdrBefore = Read-RegistryValues $script:GraphicsDriversKey
+[void](Set-StateValueOnce $state 'tdr_delay' ([pscustomobject]@{
+    present = [bool]$tdrBefore.ContainsKey('TdrDelay')
+    previous = $(if ($tdrBefore.ContainsKey('TdrDelay')) { $tdrBefore['TdrDelay'] } else { $null })
+    wrote = $regDefaults.defaults.graphics_drivers.TdrDelay }))
+Save-InstallState $state
+Invoke-RegistryDefaults $script:GraphicsDriversKey $regDefaults.defaults.graphics_drivers $applied.graphics_drivers
 # Application profiles: the shipped ones by the same rule; a tester's own profiles are other keys and stay as they are.
 foreach ($app in ConvertTo-PairList $regDefaults.defaults.d3d12_applications) {
     $prevApp = $null

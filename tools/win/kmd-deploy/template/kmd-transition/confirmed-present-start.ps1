@@ -10,7 +10,7 @@ enum Bc250StartHealthFlags {
 # native-trial package can carry it alone; test-identity.ps1 proves the default ABI is identity.ps1's candidate.
 function Get-ConfirmedPresentStart {
  param([Parameter(Mandatory)][string]$Health,[Parameter(Mandatory)][double]$ElapsedSeconds,
- [UInt64]$ExpectedGeneration=0,[UInt64]$ExpectedEpoch=0,[string]$Abi=$KmdCandidateAbi)
+ [UInt64]$ExpectedGeneration=0,[UInt64]$ExpectedEpoch=0,[UInt64]$ConfirmedEpoch=0,[string]$Abi=$KmdCandidateAbi)
  if($Abi -notmatch '^0x[0-9A-F]{8}$'){throw 'ABI required: pass -Abi or dot-source identity.ps1 first'}
  $pattern='health abi=1 version='+[regex]::Escape($Abi)+' flags=(\d+) generation=(\d+) epoch=(\d+) completed=(\d+) age_ms=(\d+) ready_ms=(\d+)'
  if($Health -notmatch $pattern){throw 'Invalid KMD health witness for the expected ABI'}
@@ -22,6 +22,15 @@ function Get-ConfirmedPresentStart {
  $confirmed=($flags -band [Bc250StartHealthFlags]::Confirmed) -ne 0
  if(($flags -band $required) -ne $required -or ([int]$flags -band (-bnot [int]$known)) -ne 0 -or !$generation -or !$epoch -or !$completed -or $age -gt 15000){throw 'Unhealthy or stale presentation witness'}
  if(($ExpectedGeneration -and $generation -ne $ExpectedGeneration) -or ($ExpectedEpoch -and $epoch -ne $ExpectedEpoch)){throw 'Health generation/epoch changed'}
- if($confirmed -and $ready -lt 60000){throw 'Confirmed health has insufficient ready age'}
- return @{launch=$confirmed;flags=[int]$flags;flag_names=$flags.ToString();generation=$generation;epoch=$epoch;completed=$completed;ready_ms=$ready;age_ms=$age}
+ # The 60 s ready age belongs to the interval the KMD durably confirmed under its own lock. CONFIRMED follows
+ # the confirmed start, that is its generation, while every mode set and every visibility change advances the
+ # epoch and restarts the ready clock (driver/kmd/start_health.c HealthInvalidate), so a game's exit mode commit
+ # leaves a CONFIRMED witness with a short ready age. -ConfirmedEpoch names the interval of this same start that
+ # a caller already admitted with the full ready age, and it must be given with the generation it belongs to.
+ # A later interval of that start may then show a short ready age; the admitted interval itself may not, and an
+ # earlier one is impossible within a generation.
+ if($ConfirmedEpoch -and (!$ExpectedGeneration -or $ExpectedEpoch)){throw 'An admitted interval needs its generation and no pinned epoch'}
+ if($ConfirmedEpoch -and $epoch -lt $ConfirmedEpoch){throw 'Confirmed interval precedes the admitted start'}
+ if($confirmed -and $ready -lt 60000 -and !($ConfirmedEpoch -and $epoch -gt $ConfirmedEpoch)){throw 'Confirmed health has insufficient ready age'}
+ return @{launch=$confirmed;flags=[int]$flags;flag_names=$flags.ToString();generation=$generation;epoch=$epoch;completed=$completed;ready_ms=$ready;age_ms=$age;confirmed_since_epoch=$ConfirmedEpoch}
 }

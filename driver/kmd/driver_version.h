@@ -1,13 +1,24 @@
 // The driver version that the adapter's software key reports, for the per-application graphics setting
 // ReportAmdDriverVersion (docs/design/per-app-graphics-settings.md).
 //
-// Some games compare the DriverVersion string of the display adapter's software key (the DeviceKey that
-// EnumDisplayDevices returns, HKLM\SYSTEM\CurrentControlSet\Control\Video\{...}\0000) with a minimum version per GPU
-// vendor. For vendor 0x1002 they expect AMD's numbering, whose first field is far above this driver's 0: the
+// Some games compare the DriverVersion string of the display adapter's video key (the DeviceKey that
+// EnumDisplayDevices returns, HKLM\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000) with a minimum version per
+// GPU vendor. For vendor 0x1002 they expect AMD's numbering, whose first field is far above this driver's 0: the
 // version 0.7.216.18 reads as a very old AMD driver, and the game shows a warning about a known driver problem. With
 // ReportAmdDriverVersion = 1 the kernel-mode driver writes the AMD-scheme number a.b.c.d -> (a + 40).b.c.d in that
 // value at each adapter start: 0.7.216.18 -> 40.7.216.18. The installed number stays in Bc250DriverVersion and comes
-// back when the setting is cleared. The PnP driver key (Control\Class) and the driver store keep the INF's number.
+// back when the setting is cleared. The driver store keeps the INF's number; the device property that the SetupAPI
+// reports comes from the same key as DriverVersion and changes with it.
+//
+// The video key is not the key that DXGK_DEVICE_INFO.DeviceRegistryPath gives (b23 lab 489: that one is the class
+// key), so driver_version.c reads the GUID of the video key from the VideoID value of the adapter's hardware key and
+// builds the path from it. The helpers below check the two parts of that path and join them.
+//
+// Each numbered video key is a registry symbolic link (a REG_LINK value SymbolicLinkValue) to the display class key
+// of the adapter, and an open that does not ask for OBJ_OPENLINK follows it. The key that this driver writes is
+// therefore the class key, which is also the key that backs the SetupAPI property DEVPKEY_Device_DriverVersion and
+// the version that Device Manager shows. A path below Control\Video is only the way in, so driver_version.c reads
+// the name of the key it opened and admits one of the two names that DriverVersionIsAdapterKey accepts.
 //
 // Pure: no WDK header, so driver/kmd/test/driver_version_test.c checks it on the host. driver_version.c does the
 // registry work in the driver.
@@ -15,6 +26,9 @@
 
 #define DRIVER_VERSION_AMD_OFFSET 40u       // added to the first field
 #define DRIVER_VERSION_CHARS 24u            // "65535.65535.65535.65535" and its terminator
+#define DRIVER_VERSION_GUID_CHARS 38u       // "{00000000-0000-0000-0000-000000000000}", no terminator
+#define DRIVER_VERSION_INSTANCE_CHARS 4u    // "0000", no terminator
+#define DRIVER_VERSION_PATH_CHARS 128u      // the video key path and its terminator fit with room to spare
 
 // What a start does with the three values of the software key.
 typedef enum _DRIVER_VERSION_ACTION {
@@ -134,21 +148,108 @@ static __inline void DriverVersionDecide(int Enabled, const wchar_t* Current, co
     Plan->Action = DriverVersionForget;
 }
 
+// The registry path of the video keys of one adapter, without the GUID. The GUID of the adapter comes from the
+// VideoID value of its hardware key, and each numbered subkey below it is one video key of the adapter.
+#define DRIVER_VERSION_VIDEO_ROOT L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Video\\"
+
+// 1 when Text (Chars wide characters, no terminator needed) is a GUID in the registry form
+// "{8-4-4-4-12 hexadecimal digits}", as the VideoID value holds it. Hexadecimal digits of both cases are accepted.
+static __inline int DriverVersionIsGuidText(const wchar_t* Text, unsigned long Chars)
+{
+    unsigned long i;
+    if (!Text || Chars != DRIVER_VERSION_GUID_CHARS) return 0;
+    if (Text[0] != L'{' || Text[37] != L'}') return 0;
+    for (i = 1; i < 37; i++) {
+        const wchar_t c = Text[i];
+        if (i == 9 || i == 14 || i == 19 || i == 24) {
+            if (c != L'-') return 0;
+        } else if (!((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f') || (c >= L'A' && c <= L'F'))) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// 1 when Name (Chars wide characters, no terminator needed) is the name of a video key of an adapter: four decimal
+// digits, as in "0000". A subkey with another name (for example "Video") is not one.
+static __inline int DriverVersionIsInstanceName(const wchar_t* Name, unsigned long Chars)
+{
+    unsigned long i;
+    if (!Name || Chars != DRIVER_VERSION_INSTANCE_CHARS) return 0;
+    for (i = 0; i < Chars; i++) {
+        if (Name[i] < L'0' || Name[i] > L'9') return 0;
+    }
+    return 1;
+}
+
+// The full registry path of one video key, or of the key that holds them when Instance is null:
+//
+//   \Registry\Machine\SYSTEM\CurrentControlSet\Control\Video\{VideoID}
+//   \Registry\Machine\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000
+//
+// Guid and Instance are given with their character counts and no terminator. The return value is the number of
+// characters in Out without its terminator, or 0 when a part does not pass its check or the path does not fit.
+static __inline unsigned long DriverVersionVideoPath(const wchar_t* Guid, unsigned long GuidChars,
+                                                     const wchar_t* Instance, unsigned long InstanceChars,
+                                                     wchar_t* Out, unsigned long OutChars)
+{
+    static const wchar_t root[] = DRIVER_VERSION_VIDEO_ROOT;
+    const unsigned long rootChars = (unsigned long)(sizeof(root) / sizeof(root[0])) - 1u;
+    unsigned long n = 0, i;
+
+    if (!Out || !OutChars) return 0;
+    Out[0] = 0;
+    if (!DriverVersionIsGuidText(Guid, GuidChars)) return 0;
+    if (Instance && !DriverVersionIsInstanceName(Instance, InstanceChars)) return 0;
+    if (!Instance) InstanceChars = 0;
+    // the terminator and, with an instance, the separator
+    if (rootChars + GuidChars + (Instance ? 1u + InstanceChars : 0u) + 1u > OutChars) return 0;
+    for (i = 0; i < rootChars; i++) Out[n++] = root[i];
+    for (i = 0; i < GuidChars; i++) Out[n++] = Guid[i];
+    if (Instance) {
+        Out[n++] = L'\\';
+        for (i = 0; i < InstanceChars; i++) Out[n++] = Instance[i];
+    }
+    Out[n] = 0;
+    return n;
+}
+
+// 1 when Path (Chars wide characters, no terminator needed) holds Needle (a string of upper-case characters and its
+// terminator), compared without case.
+static __inline int DriverVersionHas(const wchar_t* Path, unsigned long Chars, const wchar_t* Needle,
+                                     unsigned long Length)
+{
+    unsigned long i, j;
+    if (!Path || Chars < Length) return 0;
+    for (i = 0; i + Length <= Chars; i++) {
+        for (j = 0; j < Length; j++) {
+            wchar_t c = Path[i + j];
+            if (c >= L'a' && c <= L'z') c = (wchar_t)(c - L'a' + L'A');
+            if (c != Needle[j]) break;
+        }
+        if (j == Length) return 1;
+    }
+    return 0;
+}
+
 // 1 when Path (Chars wide characters, no terminator needed) names a key below Control\Video, compared without case:
-// the only key this driver writes the number in.
+// the only path this driver opens to write the number.
 static __inline int DriverVersionIsVideoKey(const wchar_t* Path, unsigned long Chars)
 {
     static const wchar_t needle[] = L"\\CONTROL\\VIDEO\\";
-    const unsigned long length = (unsigned long)(sizeof(needle) / sizeof(needle[0])) - 1u;
-    unsigned long i, j;
-    if (!Path || Chars < length) return 0;
-    for (i = 0; i + length <= Chars; i++) {
-        for (j = 0; j < length; j++) {
-            wchar_t c = Path[i + j];
-            if (c >= L'a' && c <= L'z') c = (wchar_t)(c - L'a' + L'A');
-            if (c != needle[j]) break;
-        }
-        if (j == length) return 1;
-    }
-    return 0;
+    return DriverVersionHas(Path, Chars, needle, (unsigned long)(sizeof(needle) / sizeof(needle[0])) - 1u);
+}
+
+// The display class, whose key holds DriverVersion for one adapter (devguid.h GUID_DEVCLASS_DISPLAY).
+#define DRIVER_VERSION_DISPLAY_CLASS L"\\CONTROL\\CLASS\\{4D36E968-E325-11CE-BFC1-08002BE10318}\\"
+
+// 1 when Path (Chars wide characters, no terminator needed) names a key that this driver may write the number in:
+// a key below Control\Video, or the key of one display adapter below Control\Class. A numbered video key is a
+// symbolic link to the second of those, so the name of the key that the open gives back is the class key, while the
+// path asked for is the video key. Both names are admitted and nothing else is.
+static __inline int DriverVersionIsAdapterKey(const wchar_t* Path, unsigned long Chars)
+{
+    static const wchar_t needle[] = DRIVER_VERSION_DISPLAY_CLASS;
+    if (DriverVersionIsVideoKey(Path, Chars)) return 1;
+    return DriverVersionHas(Path, Chars, needle, (unsigned long)(sizeof(needle) / sizeof(needle[0])) - 1u);
 }

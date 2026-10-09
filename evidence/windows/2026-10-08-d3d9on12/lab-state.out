@@ -1,0 +1,25 @@
+class key 0000
+UserModeDriverName    = ['', 'C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll', 'C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll', 'C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll']
+UserModeDriverNameWow = ['', 'C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll', 'C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll', 'C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_d3d12.dll']
+file C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll 93F707BB
+file C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll 93F707BB
+file C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll BBB5803E
+file C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll 9A91CA91
+file C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll 9A91CA91
+file C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_d3d12.dll 077104FE
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_d3d11.dll D100E93A
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_dxvk.dll A42ADB6E
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_radv.dll F6392B51
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_d3d12.dll 077104FE
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_radv.dll F6392B51
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\d3d12\amdgpu_wddm_vkd3d.dll C00AC538
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d.dll FF33F4B1
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll 9A91CA91
+x86 dir file C:\Program Files\amdgpu-wddm\wow64\vulkan\vulkan_radeon.dll F6392B51
+staged C:\BC250\tmp\d3d9probe\d3d9probe.exe C46C0614
+staged C:\BC250\tmp\d3d9probe\x86\d3d9probe.exe 31BC3202
+staged C:\BC250\m14\app-route-001\ops\app-run.ps1 ABSENT
+dwm 1912
+boot 2026-10-08T02:46:03.5000000Z
+health abi=1 version=0x000700D8 flags=15 generation=27357403 epoch=17 completed=13693 age_ms=958 ready_ms=1702412
+d3d9on12.dll x64 True x86 True

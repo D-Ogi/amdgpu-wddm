@@ -71,4 +71,31 @@ foreach($bad in @([pscustomobject]@{switches=2;modules=@('CPU-HASH')},[pscustomo
  try{Assert-KmdCpuBaseline (@{umd_registration=@('router.dll','router.dll');icd_registration=@('baseline.json');umd_sha256='CPU-HASH';desktop=$bad}) (New-RouterObservation)}catch{$badRejected=$true}
  if(!$badRejected){throw 'False acceptance: malformed desktop record'}
 }
-Write-Output "PASS: CPU witness and $($cases.Count) false-closure controls; router desktop witness and $($routerCases.Count + 3) controls"
+# The confirmed start a finished Verify admitted, read back from the acceptance receipts (BD-098 follow-up): a
+# mode set after Verify advances the epoch and restarts the ready clock, so a later reader needs that epoch.
+$records=@(
+ [pscustomobject]@{scope='candidate-ready-only';health=[pscustomobject]@{flags=7;generation=43455941387;epoch=3;ready_ms=61000;completed=9;age_ms=100}},
+ [pscustomobject]@{scope='candidate-confirmed';health=[pscustomobject]@{flags=15;generation=43455941387;epoch=4;ready_ms=60001;completed=31;age_ms=900}},
+ [pscustomobject]@{scope='candidate-confirmed';health=[pscustomobject]@{flags=15;generation=43455941387;epoch=5;ready_ms=60442;completed=76;age_ms=1241}},
+ [pscustomobject]@{scope='restored-confirmed';health=[pscustomobject]@{flags=15;generation=99999999999;epoch=2;ready_ms=60001;completed=12;age_ms=300}}
+)
+# Two admitted intervals of one start: the newest supersedes, so an interval between them is not admitted either.
+if((Get-KmdAcceptedConfirmedEpoch -Records $records -Generation 43455941387) -ne 5){throw 'Accepted epoch of the live generation not found'}
+if((Get-KmdAcceptedConfirmedEpoch -Records $records -Generation 99999999999) -ne 2){throw 'Accepted epoch of the other generation not found'}
+# A generation no record names leaves the caller without a supersession, it does not invent one.
+if((Get-KmdAcceptedConfirmedEpoch -Records $records -Generation 7) -ne 0){throw 'Accepted epoch invented for an unknown generation'}
+if((Get-KmdAcceptedConfirmedEpoch -Records @() -Generation 7) -ne 0){throw 'Accepted epoch invented without records'}
+$epochCases=@(
+ @{name='no live generation';run={Get-KmdAcceptedConfirmedEpoch -Records $records -Generation 0}},
+ @{name='record without a witness';run={Get-KmdAcceptedConfirmedEpoch -Records @([pscustomobject]@{scope='candidate-confirmed';health=$null}) -Generation 5}},
+ @{name='confirmed record below the ready age';run={Get-KmdAcceptedConfirmedEpoch -Records @([pscustomobject]@{scope='candidate-confirmed';health=[pscustomobject]@{flags=15;generation=5;epoch=4;ready_ms=59999;completed=9;age_ms=100}}) -Generation 5}},
+ @{name='confirmed record with unconfirmed flags';run={Get-KmdAcceptedConfirmedEpoch -Records @([pscustomobject]@{scope='candidate-confirmed';health=[pscustomobject]@{flags=7;generation=5;epoch=4;ready_ms=61000;completed=9;age_ms=100}}) -Generation 5}},
+ @{name='confirmed record without completed work';run={Get-KmdAcceptedConfirmedEpoch -Records @([pscustomobject]@{scope='candidate-confirmed';health=[pscustomobject]@{flags=15;generation=5;epoch=4;ready_ms=61000;completed=0;age_ms=100}}) -Generation 5}},
+ @{name='confirmed record with stale completed work';run={Get-KmdAcceptedConfirmedEpoch -Records @([pscustomobject]@{scope='candidate-confirmed';health=[pscustomobject]@{flags=15;generation=5;epoch=4;ready_ms=61000;completed=9;age_ms=15001}}) -Generation 5}}
+)
+foreach($case in $epochCases){
+ $rejected=$false
+ try{& $case.run|Out-Null}catch{$rejected=$true}
+ if(!$rejected){throw "False acceptance (accepted epoch): $($case.name)"}
+}
+Write-Output "PASS: CPU witness and $($cases.Count) false-closure controls; router desktop witness and $($routerCases.Count + 3) controls; accepted confirmed epoch and $($epochCases.Count) controls"

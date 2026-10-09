@@ -17,11 +17,12 @@
 namespace {
 using native12::Adapter;
 using native12::Device;
-// The per-application settings this shell applies (docs/design/per-app-graphics-settings.md). MaxFrameLatency
-// and PerformanceOverlay are D3D11 only, RenderOnCpu is the router's: a set value of those shows as not applied.
+// The per-application settings this shell applies (docs/design/per-app-graphics-settings.md). PerformanceOverlay
+// is D3D11 only, RenderOnCpu is the router's: a set value of those shows as not applied.
 constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::FrameRateLimit) |
     amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::VSync) |
-    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::Anisotropy);
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::Anisotropy) |
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::MaxFrameLatency);
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
     return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 &&
         (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0092;

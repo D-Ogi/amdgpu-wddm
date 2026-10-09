@@ -199,21 +199,35 @@ void output_tests() {
     const std::string all=effective(s);
     CHECK(has(all,"amdgpu-wddm settings: api=d3d11 app=Game.EXE FrameRateLimit=60/global VSync=1/global "
                   "Anisotropy=16/application MaxFrameLatency=2/global PerformanceOverlay=1/environment RenderOnCpu=unset"));
-    // A shell marks what it does not apply (the D3D12 shell: no overlay, no latency).
-    const unsigned d3d12=as::kAll & ~as::bit(Setting::PerformanceOverlay) & ~as::bit(Setting::MaxFrameLatency) &
-        ~as::bit(Setting::RenderOnCpu);
+    // A shell marks what it does not apply (the D3D12 shell: no overlay, and RenderOnCpu is the router's).
+    const unsigned d3d12=as::kAll & ~as::bit(Setting::PerformanceOverlay) & ~as::bit(Setting::RenderOnCpu);
     const std::string part=effective(s,d3d12);
-    CHECK(has(part,"MaxFrameLatency=2/global/not-applied") && has(part,"PerformanceOverlay=1/environment/not-applied"));
+    CHECK(has(part,"MaxFrameLatency=2/global ") && has(part,"PerformanceOverlay=1/environment/not-applied"));
     CHECK(has(part,"Anisotropy=16/application ") && has(part,"RenderOnCpu=unset"));
+    // A shell that applies neither still marks both, so the line never claims a setting took effect.
+    const std::string none=effective(s,d3d12 & ~as::bit(Setting::MaxFrameLatency));
+    CHECK(has(none,"MaxFrameLatency=2/global/not-applied"));
     CHECK(as::sync_override(s).valid && as::sync_override(s).interval==1);
-    // BD-099: the D3D11 shell waits only for the part of VSync that the application's interval does not give.
-    CHECK(as::extra_vblanks(as::sync_override(s),0)==1 && as::extra_vblanks(as::sync_override(s),1)==0);
-    CHECK(as::extra_vblanks(as::sync_override(s),2)==0 && as::extra_vblanks(as::SyncOverride{false,0u},0)==0);
-    CHECK(as::extra_vblanks(as::SyncOverride{true,0u},0)==0 && as::extra_vblanks(as::SyncOverride{true,0u},1)==0);
-    // BD-099: the D3D11 shell passes VSync 0 to the runtime, and VSync 1 or no VSync not at all.
-    CHECK(!as::d3d11_runtime_override(as::sync_override(s)).valid);
-    CHECK(!as::d3d11_runtime_override(as::SyncOverride{false,0u}).valid);
-    CHECK(as::d3d11_runtime_override(as::SyncOverride{true,0u}).valid && as::d3d11_runtime_override(as::SyncOverride{true,0u}).interval==0);
+    // BD-099: on the old present callback the D3D11 shell waits only for the part of VSync that the
+    // application's interval does not give.
+    CHECK(as::extra_vblanks(as::sync_override(s),0,false)==1 && as::extra_vblanks(as::sync_override(s),1,false)==0);
+    CHECK(as::extra_vblanks(as::sync_override(s),2,false)==0 && as::extra_vblanks(as::SyncOverride{false,0u},0,false)==0);
+    CHECK(as::extra_vblanks(as::SyncOverride{true,0u},0,false)==0 && as::extra_vblanks(as::SyncOverride{true,0u},1,false)==0);
+    // BD-099: on the old present callback the shell passes VSync 0 to the runtime, and VSync 1 or no VSync not
+    // at all.
+    CHECK(!as::d3d11_runtime_override(as::sync_override(s),false).valid);
+    CHECK(!as::d3d11_runtime_override(as::SyncOverride{false,0u},false).valid);
+    CHECK(as::d3d11_runtime_override(as::SyncOverride{true,0u},false).valid &&
+          as::d3d11_runtime_override(as::SyncOverride{true,0u},false).interval==0);
+    // BD-099: on the whole present callback (the WDDM 2.2 interface) every override goes to the runtime, and the
+    // shell waits for no vertical blank of its own.
+    CHECK(as::d3d11_runtime_override(as::sync_override(s),true).valid &&
+          as::d3d11_runtime_override(as::sync_override(s),true).interval==1);
+    CHECK(as::d3d11_runtime_override(as::SyncOverride{true,0u},true).valid &&
+          !as::d3d11_runtime_override(as::SyncOverride{true,0u},true).interval);
+    CHECK(!as::d3d11_runtime_override(as::SyncOverride{false,0u},true).valid);
+    CHECK(!as::extra_vblanks(as::sync_override(s),0,true) && !as::extra_vblanks(as::sync_override(s),1,true));
+    CHECK(!as::extra_vblanks(as::SyncOverride{true,2u},0,true));
     CHECK(as::frame_rate_limit(s)==60 && as::max_frame_latency(s)==2);
     CHECK(as::dxvk_config(s)=="d3d11.samplerAnisotropy = 16;dxvk.hud = fps,frametimes,gpuload,api");
     CHECK(as::vkd3d_anisotropy(s)=="16");

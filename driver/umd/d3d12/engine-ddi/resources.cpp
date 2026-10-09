@@ -645,7 +645,24 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             hr = import_memory(c, build_request(true), &memory);
         }
         if (FAILED(hr)) {
-            log_line("heap: the shell's memory request failed: %08lx", static_cast<unsigned long>(hr));
+            // BD-101. The code this slot reports to the runtime is clamped to E_OUTOFMEMORY, because a create
+            // function of a user-mode display driver is in the AllowOutOfMemory category and the runtime treats
+            // every other code as a critical driver failure: it removes the application's device and sets the
+            // removed reason to DXGI_ERROR_DRIVER_INTERNAL_ERROR (windows-driver-docs display
+            // handling-errors.md; measured on this slot in BD-075, where E_NOTIMPL cost the device in all 13
+            // shared-resource cells). Passing an argument refusal through as E_INVALIDARG would therefore turn
+            // a failed create into a lost device, which is worse than the wrong code. So the line is the place
+            // that must not mislead, and it says which of the two this was: two lab sessions read
+            // "0x8007000e, out of memory" for a 4 MiB alignment refusal with 8 GB free. The shell's own
+            // "heap import refused" line of the same call names the stage that declined.
+            const bool argument = hr == E_INVALIDARG || hr == E_NOTIMPL;
+            log_refusal("heap: the shell refused the memory request: %08lx%s; it is reported as %08lx, the only "
+                        "code this slot may report (%llu bytes, alignment %llu, heap flags 0x%x)",
+                        static_cast<unsigned long>(hr),
+                        argument ? " - an argument refusal, not a memory shortage" : "",
+                        static_cast<unsigned long>(admitted_create_failure(hr)),
+                        static_cast<unsigned long long>(hd.SizeInBytes),
+                        static_cast<unsigned long long>(hd.Alignment), static_cast<unsigned>(hd.Flags));
             return hr;
         }
         hr = engine_heap_from_memory(c, hd, memory, &heap);

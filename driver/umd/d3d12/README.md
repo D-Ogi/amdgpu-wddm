@@ -229,6 +229,37 @@ and [native Evict](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3d1
 The engine-side ownership contract is in
 [engine-ddi/INTEGRATION.md](engine-ddi/INTEGRATION.md).
 
+## Scan-out primaries (M15.14)
+
+A swap-chain primary can be a scan-out primary: the 64-byte E26R v3 record with
+the PRIMARY and SCANOUT bits, which the kernel driver places in the local segment
+where the scan-out hardware reads it. The compositor can then flip the game's own buffers
+(independent flip) and does not compose them. Trial 478 measured this for The
+Witcher 3 at the native mode in exclusive fullscreen and in borderless (M844).
+
+The scan-out primary is on by default. The experiment `scanout-flip-off` turns it
+off (`ddi-trace.h`). `scanout-mode.h` holds the decision. For each primary,
+`RuntimeHeapImports::scanout_caps_now` reads the kernel driver's scan-out caps
+trailer again, and the rule that both application shells share
+(`driver/contract/bc250_scanout_primary.h`) compares the chain with the source
+mode in that trailer. The rule also reads the compositor's desktop-route record
+(`driver/contract/bc250_desktop_route.h`) again for each primary, and stands the
+chain down (`desktop-route`) unless the router in `dwm.exe` wrote `gpu` there: the
+CPU compositor cannot read a scan-out primary. A game can create its chain before
+the mode commit, so the trailer can be one mode behind the chain (session 480).
+When the geometry is the only clause that fails, `RuntimeHeapImports::mode_list_now`
+reads the kernel driver's mode list for source 0 (`D3DKMTGetDisplayModeList`). If
+the list offers the chain's geometry, the chain gets the scan-out primary. The
+flip itself waits for the commit: the router's front and the kernel driver compare
+each flip with the committed mode. A chain that the rule cannot admit gets the
+composed primary, in the shared aperture with its CPU mapping, and never a
+failure. Each change of the answer writes one `M15.14 scanout` line to the
+debugger channel, with the reason, the chain, the trailer's geometry, the kill
+switch, the record (`desktop=gpu`, `desktop=cpu-fallback`, `desktop=absent` and
+the other words of `bc250_desktop_route_text`) and the mode list (`modes=not-read`,
+`offered`, `not-offered` or `failed`). The process writes at most 64 such lines,
+and the last one ends in `budget-spent`.
+
 ## Registration between sessions
 
 The UMD is the fourth `UserModeDriverName` entry, and it loads the engine and

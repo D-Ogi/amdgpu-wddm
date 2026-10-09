@@ -73,6 +73,17 @@ class CompareTest(unittest.TestCase):
         other_scenes[0]["scene_revision"] = 2   # revision 1 results carry none
         with self.assertRaises(compare.InputError):
             compare.compare(side([10.0], "app-local"), other_scenes)
+        other_interval = side([10.0], "system")
+        other_interval[0]["sync_interval"] = 1  # BD-099: a capped run is not the same work as an uncapped one
+        with self.assertRaises(compare.InputError):
+            compare.compare(side([10.0], "app-local"), other_interval)
+
+    def test_a_missing_sync_interval_reads_as_zero(self):
+        """Results from before the option carry no sync_interval, and all of them presented at interval 0."""
+        explicit = side([10.0], "system")
+        explicit[0]["sync_interval"] = 0
+        _, code = compare.compare(side([10.0], "app-local"), explicit)
+        self.assertEqual(code, 0)
 
     def test_paths_are_checked_unless_waived(self):
         with self.assertRaises(compare.InputError):

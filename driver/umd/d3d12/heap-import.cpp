@@ -17,20 +17,35 @@ HRESULT from_vk(VkResult r) noexcept {
     if(r==VK_ERROR_DEVICE_LOST)return DXGI_ERROR_DEVICE_REMOVED;
     return E_FAIL;
 }
-// One line per distinct scan-out answer, at most once each, and nothing at all unless the operator named
-// the mode: a trial that selected scan-out and did not get it must be able to read which clause stood the
-// request down, without a log that grows with the swap chains a game creates (M15.14 increment 2).
+// One line for every change of the scan-out answer: a trial must be able to read which clause decided each
+// chain a game made, now that the request is the default and every primary asks the question (M15.14
+// increment 3). A game that recreates the same chain at the same mode adds nothing; a resize, a mode change,
+// a format change or a different answer adds one line. The budget bounds a game that alternates forever,
+// and the last line of the budget says that it ran out, so a quiet log is never mistaken for a quiet game.
+// desktop is the word of bc250_desktop_route_text for the compositor's record ("not-read" when the off
+// switch stopped the decision before it), and desktop_pid the compositor that wrote it. modes is what the
+// kernel driver's mode list said about a chain that is not the committed mode (scanout_mode_list_text).
 void scanout_note(const ScanoutDecision& decision,const bc250_scanout_caps& caps,unsigned long force_cpu,
+                  const char* desktop,unsigned desktop_pid,ScanoutModeList modes,
                   unsigned dxgi,unsigned width,unsigned height,unsigned pitch) noexcept {
-    if(decision.reason==ScanoutStandDown::ModeOff)return;
-    static std::atomic_uint logged{0};
-    const unsigned mask=1u<<unsigned(decision.reason);
-    if(logged.fetch_or(mask,std::memory_order_relaxed)&mask)return;
-    char text[256];
+    unsigned long long key=1469598103934665603ull;                    // FNV-1a over the fields the line prints
+    const unsigned long long words[]={unsigned(decision.reason),unsigned(decision.switch_state),width,height,
+        pitch,dxgi,caps.flags,caps.post_width,caps.post_height,force_cpu,desktop_pid,unsigned(modes)};
+    for(const unsigned long long word:words)
+        for(unsigned i=0;i<8;++i)key=(key^((word>>(i*8))&0xFFu))*1099511628211ull;
+    for(const char* c=desktop;*c;++c)key=(key^static_cast<unsigned char>(*c))*1099511628211ull;
+    static std::atomic<unsigned long long> last{0};
+    static std::atomic_int budget{64};
+    if(last.exchange(key,std::memory_order_relaxed)==key)return;
+    const int left=budget.fetch_sub(1,std::memory_order_relaxed);
+    if(left<=0)return;
+    char text[320];
     std::snprintf(text,sizeof(text),
-        "M15.14 scanout %s mode=%ux%u chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu\n",
-        scanout_stand_down_text(decision.reason),decision.mode_width,decision.mode_height,width,height,
-        pitch,dxgi,static_cast<unsigned long>(caps.flags),caps.post_width,caps.post_height,force_cpu);
+        "M15.14 scanout %s switch=%s chain=%ux%u pitch=%u format=%u caps=%08lX source=%ux%u forcecpu=%lu "
+        "desktop=%s desktop_pid=%u modes=%s%s\n",
+        scanout_stand_down_text(decision.reason),scanout_switch_text(decision.switch_state),width,height,
+        pitch,dxgi,static_cast<unsigned long>(caps.flags),caps.post_width,caps.post_height,force_cpu,
+        desktop,desktop_pid,scanout_mode_list_text(modes),left==1?" budget-spent":"");
     OutputDebugStringA(text);
 }
 }
@@ -92,10 +107,19 @@ RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& doma
     :runtime_(d.runtime),callbacks_(d.callbacks),kernel_(d.kernel_callbacks),domain_(domain),
      paging_(d.runtime,d.kernel_callbacks),physical_(physical),device_(device),instance_(instance),gipa_(gipa),identity_(identity),
      policy_(policy) {
-    // The adapter's published scan-out trailer and the desktop route's kill switch, once per device
-    // (M15.14 increment 2). A device without an adapter - the host tests - keeps the closed answer.
-    if(d.adapter)scanout_caps_=d.adapter->contract.scanout;
+    // The desktop route's kill switch, once per device (M15.14 increment 2). The scan-out trailer is read
+    // for every primary (scanout_caps_now); a device without an adapter - the host tests - has none.
+    adapter_=d.adapter;
     force_cpu_=scanout_force_cpu();
+    desktop_route_reader_=&scanout_desktop_route_read;
+    mode_list_reader_=&scanout_mode_list_read;
+}
+ScanoutModeList RuntimeHeapImports::mode_list_now(unsigned width,unsigned height) const noexcept {
+    return mode_list_reader_(adapter_?adapter_->contract.luid:0,width,height);
+}
+bc250_scanout_caps RuntimeHeapImports::scanout_caps_now() const noexcept {
+    if(!adapter_)return {};
+    return query_scanout_caps(adapter_->runtime,adapter_->callbacks.pfnQueryAdapterInfoCb);
 }
 RuntimeHeapImports::~RuntimeHeapImports(){discard_metadata();}
 uint32_t RuntimeHeapImports::held_count() const noexcept {
@@ -366,6 +390,20 @@ HRESULT RuntimeHeapImports::refuse(const char* why,HRESULT hr,const engine_ddi::
                 r?r->SampleDesc.Count:0u,r?unsigned(r->Layout):0u,r?unsigned(r->Flags):0u);
     return hr;
 }
+// BD-101: a refusal decided after the allocation and the mapping exist, where the request's own shape is no
+// longer the answer - the address is. The caller releases the record as it did before; this records the reason
+// and writes the one line, so that a refusal at this stage is as readable as one taken before the callback. It
+// is deliberately a second function and not a widening of refuse(): refuse() names a check of the request and
+// may run only before anything was allocated, and the two must not be confused in a log.
+HRESULT RuntimeHeapImports::refuse_address(const char* why,HRESULT hr,uint64_t bytes,uint64_t alignment,
+                                           uint64_t address) noexcept {
+    report_.refusal=why;
+    ddi_refusal("heap import refused (%s): %08lx; %llu bytes, alignment %llu, address %llx (off by %llu)",
+                why,static_cast<unsigned long>(hr),static_cast<unsigned long long>(bytes),
+                static_cast<unsigned long long>(alignment),static_cast<unsigned long long>(address),
+                static_cast<unsigned long long>(alignment?address&(alignment-1):0ull));
+    return hr;
+}
 
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
@@ -451,13 +489,33 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         const auto* row=composed;
         // Every reason not to ask for scan-out stands the request down to this composed primary instead
         // of failing the allocation; the clauses and why each one exists are in scanout-mode.h. They
-        // include the operator's switches on both sides (the mode itself, the kernel driver's published
-        // trailer, the desktop route's DwmForceCpu), the source mode's geometry and the pitch, because a
-        // request the kernel driver would refuse at flip time is worse than no request: the buffer would
-        // be in VRAM with no CPU mapping, and the refusal would come after SharedPrimaryTransition.
+        // include the operator's switches on both sides (scanout-flip-off, the kernel driver's published
+        // trailer, the desktop route's DwmForceCpu), the compositor's own route, the source mode's
+        // geometry and the pitch, because a request the kernel driver would refuse at flip time, or one
+        // the compositor could not read, is worse than no request: the buffer would be in VRAM with no
+        // CPU mapping, and the refusal would come after SharedPrimaryTransition.
         if(primary){
-            const ScanoutDecision decision=scanout_decide(ddi_experiment_name(),scanout_caps_,force_cpu_,
+            // The trailer and the compositor's record of this moment: the geometry clause compares the
+            // chain with the source mode the kernel driver has committed now, which a game may have changed
+            // since the device was made, and dwm.exe may have restarted on another route since then. The
+            // off switch is asked first, so a start that turned scan-out off reads neither.
+            const bool off=scanout_switch(ddi_experiment_name())==ScanoutSwitch::Off;
+            const bc250_scanout_caps caps=off?bc250_scanout_caps{}:scanout_caps_now();
+            bc250_desktop_route desktop{};
+            const unsigned desktop_status=off?BC250_DESKTOP_ROUTE_READ_ABSENT:desktop_route_now(&desktop);
+            const bool desktop_gpu=bc250_desktop_route_gpu(desktop_status,&desktop)!=0;
+            ScanoutDecision decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,desktop_gpu,
                 unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
+            // C71: a chain made before the mode commit is not the trailer's geometry yet. The kernel driver's
+            // mode list is asked only then, and only a geometry it offers turns the answer; every later
+            // clause still applies, and the flip itself still waits for the commit (bc250_scanout_primary.h).
+            ScanoutModeList modes=ScanoutModeList::NotRead;
+            if(decision.reason==ScanoutStandDown::SourceGeometry){
+                modes=mode_list_now(unsigned(r->Width),r->Height);
+                if(modes==ScanoutModeList::Offered)
+                    decision=scanout_decide(ddi_experiment_name(),caps,force_cpu_,desktop_gpu,unsigned(r->Format),
+                                            unsigned(r->Width),r->Height,request->surface_row_pitch,true);
+            }
             if(decision.admitted){
                 const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                                              AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
@@ -465,8 +523,9 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                 // the two lookups, and the composed primary is the safe answer to that as well.
                 if(direct){row=direct;surface_scanout=true;}
             }
-            scanout_note(decision,scanout_caps_,force_cpu_,unsigned(r->Format),unsigned(r->Width),r->Height,
-                         request->surface_row_pitch);
+            scanout_note(decision,caps,force_cpu_,
+                         off?"not-read":bc250_desktop_route_text(desktop_status,desktop.route),desktop.pid,modes,
+                         unsigned(r->Format),unsigned(r->Width),r->Height,request->surface_row_pitch);
         }
         if(!row)return refuse(primary?"primary format":"shared surface format",E_NOTIMPL,*request);
         surface_format=static_cast<D3DDDIFORMAT>(row->d3dddi);
@@ -576,7 +635,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // device, which is the fail-fast part and has no switch.
     const bool share_required=hr==E_INVALIDARG && shareable && !surface && !ddi_experiment("shared-create-retry-off");
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
-    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
+    // BD-101: the mapping carries the request's alignment, so a heap that asks for more than the address the
+    // runtime picks by itself (the 4 MiB MSAA placement alignment) is mapped inside a reservation at an
+    // aligned offset instead of being refused below.
+    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping,alignment);}
     // The runtime makes a new heap resident only after this DDI returns, on its own paging queue,
     // and makes only its queues' contexts wait for that. The engine also submits on contexts the
     // runtime never sees, so its VA must not leave here before the allocation is resident and its
@@ -588,7 +650,14 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // The mapping itself was accepted: let it complete so that the release below can free it.
         UINT64 ignored=0;(void)paging_.wait_ready(record->mapping,&ignored);
     }
-    if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
+    if(hr==S_OK){
+        report_.stage=ImportStage::AddressAlignment;report_.address=address;
+        // The backstop of the reservation route above: the address must satisfy the request whichever way it
+        // was obtained. BD-101: this check held and returned hr directly, so report_.refusal stayed empty and
+        // no line said which stage declined; it now answers through the module's refusal, like every other one.
+        if(address&(alignment-1))
+            hr=refuse_address("address alignment",E_INVALIDARG,allocation.held,alignment,address);
+    }
     if(hr==S_OK){
         report_.stage=ImportStage::Import;
         bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
@@ -677,14 +746,18 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     }
     HRESULT hr=record->allocation.adopt(request->allocation);
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
-    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping);}
+    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping,alignment);}
     if(hr==S_OK){report_.stage=ImportStage::Resident;hr=paging_.make_resident(record->mapping);}
     UINT64 address=0;
     if(hr==S_OK){report_.stage=ImportStage::MapReady;hr=paging_.wait_ready(record->mapping,&address);}
     else if(report_.stage==ImportStage::Resident){
         UINT64 ignored=0;(void)paging_.wait_ready(record->mapping,&ignored);
     }
-    if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
+    if(hr==S_OK){
+        report_.stage=ImportStage::AddressAlignment;report_.address=address;
+        if(address&(alignment-1))
+            hr=refuse_address("address alignment",E_INVALIDARG,request->byte_size,alignment,address);
+    }
     if(hr==S_OK){
         report_.stage=ImportStage::Import;
         bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;

@@ -56,6 +56,8 @@
 #define BC250_FRONT_DIRECT_FLIP_H
 
 #include "front-resource.h"
+#include "front-flip-log.h"
+#include <cstdio>
 #include "../../contract/bc250_scanout_caps.h"
 #include "../../contract/amdgpu_wddm_surface_format.h"
 
@@ -157,6 +159,29 @@ inline bool FlipSupported(const bc250_scanout_caps &caps, const Resource *client
                           const Resource *compositor)
 {
     return FlipReason(caps, client, compositor) == FlipRefusal::none;
+}
+
+// The log counts every answer per rule (front-flip-log.h), one counter per value of the enum above.
+static_assert(static_cast<unsigned>(FlipRefusal::pitch) + 1 == kFlipRules,
+              "FlipRefusal changed: kFlipRules in front-flip-log.h must count every rule");
+static_assert(static_cast<unsigned>(FlipRefusal::none) == 0, "rules[0] of the flip log is the TRUE count");
+
+// The rules part of a summary line: "supported:12,gated:3", in the enum's order, rules with a zero count left
+// out, "none" when there was no call. Always terminated; a short buffer cuts the list, never the line.
+inline void FlipLogRules(const FlipLog *log, char *out, size_t size)
+{
+    if (!out || !size) return;
+    out[0] = 0;
+    size_t used = 0;
+    for (unsigned i = 0; i < kFlipRules; ++i) {
+        const long count = log->rules[i];
+        if (!count) continue;
+        const int n = _snprintf_s(out + used, size - used, _TRUNCATE, "%s%s:%ld", used ? "," : "",
+                                  FlipRefusalText(static_cast<FlipRefusal>(i)), count);
+        if (n < 0) return;
+        used += (size_t)n;
+    }
+    if (!used) _snprintf_s(out, size, _TRUNCATE, "none");
 }
 
 }  // namespace bc250front

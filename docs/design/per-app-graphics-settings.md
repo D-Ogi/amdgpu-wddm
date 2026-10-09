@@ -2,7 +2,8 @@
 
 Status: implemented on bc250-win branch `umd/per-app-graphics-settings` and on branch
 `amdgpu-wddm/per-app-graphics-settings` of the DXVK and vkd3d-proton forks. The host gates pass on the
-development PC (2026-10-08). No lab trial on unit A has run yet.
+development PC (2026-10-08). No lab trial on unit A has run yet. The D3D12 half of `MaxFrameLatency` came later,
+on branch `d3d12/frame-latency` for train b24, and waits for its own lab check.
 
 The control application writes these settings into the registry. The driver reads them and applies them to one
 application or to all applications. This document is the contract between the two sides. The Vulkan ICD settings
@@ -44,7 +45,7 @@ key. The KMD reads `ReportAmdDriverVersion` at each adapter start.
 | `FrameRateLimit` | `AMDGPU_WDDM_FRAME_RATE_LIMIT` | 0, 20-300 | works | works |
 | `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | works | works |
 | `Anisotropy` | `AMDGPU_WDDM_ANISOTROPY` | 1, 2, 4, 8, 16 | works | works |
-| `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | not applied |
+| `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | works |
 | `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied |
 | `RenderOnCpu` | `AMDGPU_WDDM_RENDER_ON_CPU` | 0, 1 | works, also for D3D10 | no CPU route |
 | `ReportAmdDriverVersion` | none | 0, 1 | global key only | global key only |
@@ -66,30 +67,39 @@ of the device, so no other queue operation of the device waits with the Present.
 ### VSync
 
 The value 0 forces the sync interval 0 (`DXGI_DDI_FLIP_INTERVAL_IMMEDIATE`). The value 1 forces the sync
-interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). The D3D12 shell sets `SyncIntervalOverrideValid` and
-`SyncIntervalOverride` in `D3D12DDI_PRESENT_0051` for both values. The D3D11 shell sets them in `DXGIDDICB_PRESENT`
-for `VSync` 0 only, and does `VSync` 1 with its own waits.
+interval 1 (`DXGI_DDI_FLIP_INTERVAL_ONE`). Both shells set `SyncIntervalOverrideValid` and `SyncIntervalOverride`
+for both values: the D3D12 shell in `D3D12DDI_PRESENT_0051`, and the D3D11 shell in `DXGIDDICB_PRESENT`.
 
-The WDK declares the two `DXGIDDICB_PRESENT` fields only for the WDDM 2.2.2 interface and later, and the D3D11 shell
-reports the WDDM 2.0 interface. The D3D11 runtime gives the full Present callback only from interface 0xB0023
-(WDDM 2.2) build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS` in `d3d10umddi.h`). Below that, `d3d11.dll` 10.0.22621 gives
-`PresentCB_PreWDDM2_2`, which copies only the older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On
-x64 the copy holds `SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not
-`SyncIntervalOverride`. Thus each override arrives as interval 0. An override for `VSync` 1 gave 873-928 frames/s
-for the intervals 1 and 2. On x86 (WOW64) the copy holds neither field, and the override has no effect.
+The D3D11 shell gets those two fields only at the interface it negotiates. The WDK declares them only for the
+WDDM 2.2.2 interface and later. The D3D11 runtime copies the whole structure only from interface 0xB0023
+(WDDM 2.2) build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS` in `d3d10umddi.h`). The shell therefore offers the WDDM 2.2
+interface to an FL12 adapter, with the WDDM 2.2 device table and the DXGI 1.6.1 table that go with it
+(`driver/umd/dxvk/ddi-wddm22.h`). `DeviceOwner::full_present_callback` holds the answer for the device, and the
+Present path passes the whole override while it is true.
+
+Below that interface the shell passes `VSync` 0 only, and does `VSync` 1 with its own waits. Two cases keep it
+there: an FL11 adapter, which offers the D3D11.1 interface alone, and the process switch
+`wddm22-ddi-off` of `AMDGPU_WDDM_D3D11_EXPERIMENT` (`driver/umd/dxvk/ddi-experiment.h`), which withholds the
+WDDM 2.2 offer for a comparison. Then `d3d11.dll` 10.0.22621 gives `PresentCB_PreWDDM2_2`, which copies only the
+older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On x64 the copy holds
+`SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not `SyncIntervalOverride`.
+Thus each override arrives as interval 0. An override for `VSync` 1 gave 873-928 frames/s for the intervals 1
+and 2. On x86 (WOW64) the copy holds neither field, and the override has no effect.
 
 The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
-`FlipInterval` is 0 for the intervals 0, 1 and 2. Thus with `VSync` 1 the D3D11 shell waits for one vertical blank
-after each Present (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`), and the runtime keeps the interval of the
-application. It waits on the desktop output of the adapter, the primary output first. The DDI does not name the
-window, so with several outputs of different refresh rates the wait follows that one output. A shell that reports the
-WDDM 2.2.2 interface gets the full structure and can pass both values to the runtime.
+`FlipInterval` is 0 for the intervals 0, 1 and 2. Thus on the old callback the shell waits for one vertical blank
+after each Present with `VSync` 1 (`VBlankPacer` in `driver/umd/dxvk/vblank-pacer.h`), and the runtime keeps the
+interval of the application. It waits on the desktop output of the adapter, the primary output first. The DDI does
+not name the window, so with several outputs of different refresh rates the wait follows that one output. On the
+whole callback the runtime paces the frame and the shell waits for nothing.
 
-On unit A at 59 Hz, the x64 d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and
-30 frames/s for interval 2. With `VSync` 0 it gave 857-873 frames/s for the intervals 1 and 2. The x86 d3d11bench
-gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774
-frames/s for interval 0, 60 frames/s for interval 1 and 30 frames/s for interval 2. Thus `VSync` 1 does not shorten
-interval 2, and for an x86 application `VSync` 0 does not shorten interval 1 or 2.
+The measurements below come from the shell on the old callback (the vertical-blank waits). On unit A at 59 Hz, the
+x64 d3d11bench in a window gave 60 frames/s with `VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval
+2. With `VSync` 0 it gave 857-873 frames/s for the intervals 1 and 2. The x86 d3d11bench gave 60 frames/s with
+`VSync` 1 for the intervals 0 and 1, and 30 frames/s for interval 2. With `VSync` 0 it gave 774 frames/s for
+interval 0, 60 frames/s for interval 1 and 30 frames/s for interval 2. Thus on that callback `VSync` 1 does not
+shorten interval 2, and for an x86 application `VSync` 0 does not shorten interval 1 or 2. The shell on the whole
+callback is measured in the b24 lab validation.
 
 ### Anisotropy
 
@@ -105,12 +115,62 @@ made it.
 
 ### MaxFrameLatency
 
-The value is the number of Presents that the D3D11 shell lets wait for the GPU. After each Present the shell waits
-until the Present that is N places back has completed. The wait uses the present fence of the shell, as the swap
-chain of DXVK does for its own frame latency. Only a lost device makes the Present fail.
+The value is the number of Presents that a shell lets wait for the GPU. After each Present the shell waits until
+the frame that is N places back has finished on the GPU. Both shells apply it.
 
-The D3D12 shell does not apply this value. A D3D12 application controls its frame latency with its own fences and
-with `SetMaximumFrameLatency` of its swap chain.
+The limit is a ceiling and never a floor. The first check of the wait costs no wait at all. An application that
+keeps fewer frames in flight than the value, with its own fences or with the frame-latency waitable object of its
+swap chain, finds the frame already finished. The shell then adds no wait of its own. The setting can lower the
+frames in flight of such an application, never raise them.
+
+- D3D11: the wait uses the present fence of the shell, as the swap chain of DXVK does for its own frame latency.
+  It waits for the Present that is N places back. Only a lost device makes the Present fail. The code is in
+  `driver/umd/dxvk/ddi-present.cpp`.
+- D3D12: the runtime makes the kernel present call, so the shell holds no present fence. Its proof that a frame
+  finished is a device progress snapshot (`driver/umd/d3d12/device-progress.h`), which it takes at each Present.
+  The snapshot names each monitored fence of the device that the GPU has not reached yet, so everything that
+  every context of the device submitted before that Present has retired once the snapshot is retired. The shell
+  keeps a ring of N snapshots, one per device, and before Present N returns it waits for the snapshot of Present
+  N-k. The code is `FrameLatency` in `driver/umd/d3d12/frame-latency.h`. The snapshot covers the work that
+  produced that frame. It does not cover the kernel present, which the runtime makes after the shell returns, so
+  the number of flips that the compositor still holds stays a matter for DXGI.
+
+The D3D12 wait runs after the shell releases the device's queue domain, as the frame rate limit runs before it
+(`device-state.h`, `QueueDomainScope`), so no other queue operation of the device waits with the present. A
+refused present gets no wait. The wait polls the snapshot: a short spin first, then sleeps of 250 microseconds on
+a high-resolution timer. It gives up after one second, counts the event and lets the frame through, so a fence
+that never retires cannot stop the application inside the driver. After 8 frames that spend the whole budget the
+gate stops for the life of the device. A fence that never retires would otherwise cost a budget in every Present,
+which is one frame per second for as long as the application runs.
+
+A lost device reports the value `0xFFFFFFFFFFFFFFFF` on the fences that the kernel wrote, and that value counts as
+retired. A loss that leaves a fence below its published value instead ends the wait on the budget, and the stop
+above ends the gate. The shell's own flag for a lost device is not read here, because the gate has no business
+failing a present.
+
+One device that presents on several queues shares one ring, as it shares one frame rate clock. The setting
+belongs to the application, not to one swap chain.
+
+The snapshot holds only what the Vulkan ICD publishes. The ICD publishes the value of its monitored fence after
+every native submit (`radv_wddm2_cs.c`, `BC250_HOST_PUBLISH_PROGRESS`). An ICD that publishes nothing gives an
+empty snapshot, which is retired at once, so the setting does nothing. The lab check reads the witness line to
+prove that the gate waited, and not only that the value reached the shell.
+
+The D3D12 shell writes four lines at most per process, one of each kind, as the witness that the gate is in force.
+Each line goes to the log of `AMDGPU_WDDM_LOG` and to the debugger, as the settings line does, so a lab trial
+reads them from the log file:
+
+```
+BC250 MaxFrameLatency=1: the present waited after 9 checks (frame 42)
+BC250 MaxFrameLatency=1: the present gave up after 4005 checks (frame 1180)
+BC250 MaxFrameLatency=1: the present proved nothing: more unretired fences than the snapshot holds (frame 7)
+BC250 MaxFrameLatency=1: the gate stopped: too many frames did not finish inside the budget (frame 1310)
+```
+
+The first line is the proof that the gate is in force. The second line is a defect report: a frame did not finish
+within one second. The third line says that the device had more unretired fences than the snapshot holds (8), so
+the gate could prove nothing and let that frame through. It separates a gate that found the frame finished from a
+gate that could not look. The fourth line says that the gate stopped itself.
 
 ### PerformanceOverlay
 
@@ -147,7 +207,7 @@ apply:
 
 ```
 amdgpu-wddm settings: api=d3d12 app=game.exe FrameRateLimit=60/application VSync=unset Anisotropy=16/global
-MaxFrameLatency=2/global/not-applied PerformanceOverlay=unset RenderOnCpu=unset
+MaxFrameLatency=2/global PerformanceOverlay=unset RenderOnCpu=unset
 ```
 
 The line above is one line in the log. An ignored value gives a line before it:
@@ -194,11 +254,49 @@ other three fields stay, so a support report still identifies the build of this 
 
 ### The mechanism
 
-`EnumDisplayDevices` gives the adapter's `Control\Video` key as the `DeviceKey` of each adapter. Unreal Engine
-4 reads the `DriverVersion` value of that key. This key is also the software key that dxgkrnl gives the KMD in
-`DXGK_DEVICE_INFO.DeviceRegistryPath`.
+`EnumDisplayDevices` gives the adapter's video key as the `DeviceKey` of each adapter:
 
-At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of the software key:
+```
+HKLM\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000
+```
+
+Unreal Engine 4 reads the `DriverVersion` value of that key. This key is not the one that dxgkrnl gives the KMD in
+`DXGK_DEVICE_INFO.DeviceRegistryPath`: on unit A that one is the class key
+`Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000`. The first version of this code wrote only to
+`DeviceRegistryPath` and refused that key, so the number never reached Unreal Engine (b23 lab 489).
+
+The KMD finds the video keys of its adapter in two steps:
+
+1. It opens the adapter's hardware key (`IoOpenDeviceRegistryKey` with `PLUGPLAY_REGKEY_DEVICE`) and reads the
+   `VideoID` value, which holds the GUID of the video keys of this adapter.
+2. It opens `Control\Video\{VideoID}` and visits each subkey whose name is four decimal digits. One adapter can have
+   more than one such key, and `HKLM\HARDWARE\DEVICEMAP\VIDEO` names the same keys as `\Device\Video<n>`. The
+   development PC showed four of them for one adapter. The KMD visits at most 16 and says so in the log if there
+   are more.
+
+Each numbered video key is a registry symbolic link: it holds a `REG_LINK` value `SymbolicLinkValue` whose target is
+the class key of the adapter, `Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<nnnn>`. An open that
+does not ask for `OBJ_OPENLINK` follows the link, so the KMD writes the class key through the video path. Three
+results follow:
+
+- The second and later video keys of the adapter find the number in place and write nothing.
+- The write also changes the version that Device Manager gives for the adapter.
+- The write changes the SetupAPI property `DEVPKEY_Device_DriverVersion`, because that property reads the
+  `DriverVersion` value of the same class key. The Microsoft page of that property names its registry value
+  `REGSTR_VAL_DRIVERVERSION`, `DriverVersion`
+  (`windows-driver-docs-pr/install/devpkey-device-driverversion.md`, staging `110f60ea`).
+
+The driver store keeps the INF number, and so does `Bc250DriverVersion`. Because the key that the write reaches is
+not the key that the path names, the KMD guards both: it opens only a path below `Control\Video`, and it reads the
+name of the key that the open gives back and writes only when that name is a video key or one adapter key of
+the adapter class `{4d36e968-e325-11ce-bfc1-08002be10318}`.
+
+The two facts above were measured on the development PC on 2026-10-08, read-only, with
+`RegOpenKeyEx(REG_OPTION_OPEN_LINK)` and `RegQueryValueEx("SymbolicLinkValue")` on the video keys of its graphics
+adapter, and by comparing `DEVPKEY_Device_DriverVersion` of the devnode with the `DriverVersion` value of the class
+key that the link named. All four numbered video keys of that adapter named the same class key.
+
+At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of each video key:
 
 | Value | Content |
 |---|---|
@@ -209,11 +307,12 @@ At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three v
 When the setting goes back to 0, the next start writes the installed number back and deletes the two backup values.
 A new driver installation writes its own number into `DriverVersion`. With the setting on, the next start reports
 the new number in the AMD scheme. With the setting off, the KMD keeps the new number and deletes only the backups.
-The KMD writes only to a key whose path contains `\Control\Video\`.
+The KMD opens only a path that contains `\Control\Video\`, and it writes only when the key behind that path names a
+video key or one adapter key of the adapter class.
 
-The PnP driver key under `Control\Class` and the driver store keep the INF number. The installer and the control
-application read the version from there, so they show the installed number. The code is `driver/kmd/driver_version.c`,
-and `driver/kmd/driver_version.h` holds the decisions that the host test checks.
+The driver store keeps the INF number, and `Bc250DriverVersion` holds it next to the reported number, so a support
+report can give both. The code is `driver/kmd/driver_version.c`, and `driver/kmd/driver_version.h` holds the
+decisions and the path of the key, which the host test checks.
 
 ### What Unreal Engine checks
 
@@ -225,13 +324,21 @@ branches 4.26 and 5.4, read on 2026-10-08.
 | 4.26 | 4 | `DriverVersion` of the `DeviceKey` | `<=22.19.662.4` for all RHIs, `<=26.20.13031.15006` for D3D12 |
 | 5.4 | 5 | `DEVPKEY_Device_DriverVersion` through the SetupAPI | `<27.20.20913.2000` for D3D11, `DriverDate` `<2-19-2024` for D3D12 and Vulkan |
 
-Unreal Engine 4.26 shows its warning only when an entry matches. The number `40.7.216.18` matches neither 4.26
-entry, so a 4.26 game does not show it with the setting on. The Ascent showed this warning on unit A on 2026-10-07.
+Unreal Engine 4.26 shows its warning only when an entry matches. It compares the two numbers as six unsigned
+integers, right-aligned: `0.7.216.18` becomes `0.0.0.7.216.18` and `22.19.662.4` becomes `0.0.22.19.662.4`, so the
+first field decides. The installed `0.7.216.18` is below both entries and the warning appears. The number
+`40.7.216.18` is above both entries, and no entry matches. The Ascent showed this warning on unit A on 2026-10-07 (session 465), with the
+recommended version `19.20.1`, which is the `SuggestedDriverVersion` of `[GPU_AMD]` for D3D12 in the 4.26 file.
 
-Unreal Engine 5.4 reads the PnP driver key, which this setting does not change. Its D3D12 and Vulkan entries
-compare the driver date, and the INF date `10/07/2026` passes them. A 5.4 game on D3D11 still sees `0.7.216.18`
-and shows its warning. The method falls back to the `DeviceKey` only when the SetupAPI finds no adapter with the
-name of the D3D adapter.
+Unreal Engine 4.26 also reads `Catalyst_Version`, `RadeonSoftwareEdition` and `RadeonSoftwareVersion` of the same
+key for the text of its message. The decision uses the number of `DriverVersion`, so this driver does not write
+those three values.
+
+Unreal Engine 5.4 reads the device property through the SetupAPI. That property reads the `DriverVersion` value of
+the class key, which is the key that the symbolic link of the video key leads to, so the setting changes the number
+that method 5 sees as well. Its D3D12 and Vulkan entries compare the driver date, and the INF date of this driver
+passes them. The lab check records the property next to the registry values, to check this on unit A. Method 5
+reads the `DeviceKey` only when the SetupAPI finds no adapter with the name of the D3D adapter.
 
 A future entry that matches all versions from a value upward, with `>=`, would also match the AMD-scheme number.
 

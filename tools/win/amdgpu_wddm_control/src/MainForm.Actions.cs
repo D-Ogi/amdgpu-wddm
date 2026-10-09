@@ -36,6 +36,9 @@ namespace AmdgpuWddmControl
                 if (more.Image != null) { verb.Add("--image"); verb.Add(more.Image); }
                 if (more.Value != null) { verb.Add("--value"); verb.Add(more.Value); }
                 if (more.Gfx != null) { verb.Add("--gfx"); verb.Add(more.Gfx); }
+                // The waiting time for the graphics (TdrSetting.cs): the helper plans again from its own reading, so
+                // the chosen number has to reach its command line, or it refuses the action as a usage error.
+                if (more.Tdr != null) { verb.Add("--tdr"); verb.Add(more.Tdr.Value.ToString(CultureInfo.InvariantCulture)); }
                 verb.AddRange(TunerPlan.Arguments(more));
                 verb.AddRange(FanPlan.Arguments(more));
             }

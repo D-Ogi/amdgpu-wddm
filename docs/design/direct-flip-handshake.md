@@ -158,9 +158,10 @@ applies these clauses in order, and each clause has a name that a trace prints:
 | `pitch` | the two differ in pitch |
 
 The rule assumes no display mode. The geometry of the `source-geometry` clause comes from the scan-out
-caps trailer, which the front reads again at every question. Today `display.c` offers the POST mode
+caps trailer, which the front reads again at every question. In `main`, `display.c` offers the POST mode
 alone, so the trailer says 1920x1200 on this lab. A kernel driver that offers more modes writes the
-committed mode into the same two fields, and the rule follows without a change.
+committed mode into the same two fields, and the rule follows without a change. The kernel driver of
+the display-modes branch does this (`DisplaySourceWidth` and `DisplaySourceHeight` in `wddm.c`).
 
 ### The two sides are not symmetric
 
@@ -269,16 +270,57 @@ the 4 KiB base at the create.
 
 The client side asks for scan-out only when its own record carries the SCANOUT bit in an E26R v3 record
 of 64 bytes. The D3D12 shell writes that record in its scan-out mode (increment 2 of the shell). The
-D3D11 shell writes a v3 record without the SCANOUT bit, so a D3D11 client stays composed, with
-`rule=client-scannable`.
+D3D11 shell of increment 2 writes a v3 record without the SCANOUT bit, so a D3D11 client stays composed,
+with `rule=client-scannable`.
+
+## What increment 3 changes
+
+Trial 478 (M844) ran The Witcher 3 (D3D12) in three modes. The game flipped independently in exclusive
+fullscreen and in borderless at the native 1920x1200. Exclusive fullscreen at 1920x1080 stayed composed,
+because the shell's experiment named 1920x1200 as a fixed geometry. The front logged its first 256
+answers in the first seconds of the session, so the log had no answer for the later modes. Increment 3
+changes these items:
+
+- **The D3D12 shell follows the committed mode.** The scan-out primary is on by default, and the
+  experiment `scanout-flip-off` turns it off. The shell reads the trailer again for every primary that it
+  creates. The rule that both application shells share (`driver/contract/bc250_scanout_primary.h`)
+  compares the chain with the trailer's source geometry, not with a geometry that the operator names.
+  The spellings `scanout-flip` and `scanout-flip-1920x1200` still read as on. Session 480 proved that a
+  game can create its chain before the mode commit. Thus, when only the geometry fails, the shell also
+  accepts a geometry that the kernel driver's mode list offers (`modes=offered`). The front still
+  answers by the committed mode in the trailer, so the compositor composes that chain until the commit.
+- **The front logs by change and by count** (`driver/umd/router/front-flip-log.h`). An answer writes a
+  line only when its key differs from the last line of the device. The key is every field of the line
+  except the call number and the two handles. The change lines have a budget of 256, and the changes
+  past it are counted. A counter per rule, per answer and per `IMMEDIATE` flag counts every call. Every
+  30 s while the compositor asks, and once more at the destroy of the device, a
+  `check_direct_flip summary` line gives all the counters.
+- **The D3D11 shell can ask for scan-out.** `driver/umd/dxvk/scanout-primary.h` sets the SCANOUT bit
+  under the same shared rule. It is off by default until a lab arm measures it:
+  `AMDGPU_WDDM_D3D11_SCANOUT=1` in the process environment, or `ScanoutPrimary` (REG_DWORD 1) under
+  `HKLM\SOFTWARE\amdgpu-wddm\D3D11`, turns it on. The runtime creates some D3D11 window buffers as
+  DISPLAYABLE without a primary description (M746). These buffers cannot ask, and the shell logs them
+  as `not-primary`.
+- **The analyser has a kernel witness.** Win32k marks most game frames of trial 478 with
+  `SkipIndependentFlip`, but the kernel events of the same frames record the flip.
+  `tools/win/etw/etw-present-mode.py` now reads such a frame as a hardware flip when four clauses hold
+  (`tools/win/etw/README.md`).
+- **The router writes the compositor's route for the shells.** The CPU compositor cannot read a
+  scan-out primary. A hosted open that fails in `dwm.exe` sends the desktop to the CPU UMD
+  (`fallback=1`), and no registry value records it. The router in `dwm.exe` writes each desktop decision
+  into the session's desktop-route record (`driver/contract/bc250_desktop_route.h`). Both shells stand
+  a chain down (`desktop-route`) unless that record says `gpu` and the compositor's account owns it.
+
+The rollback ladder for the shell's half: `scanout-flip-off` as the machine value `Experiment` under
+`HKLM\SOFTWARE\amdgpu-wddm\D3D12`, then `DirectFlipFront = 0`, then `EnableDirectFlipHandshake = 0`.
 
 ## The offline gate
 
 `tools/build/build-umd-router.ps1` compiles the front into the router and into `test-router.exe`, so the
 host gate drives the production table fills and the production rule. `tools/build/test-umd-router.ps1`
-runs 82 scenarios, each in its own process on a private application hive.
+runs 84 scenarios, each in its own process on a private application hive.
 
-Twelve of them are M15.14's:
+Thirteen of them are the front's:
 
 | Scenario | What it settles |
 | --- | --- |
@@ -288,10 +330,16 @@ Twelve of them are M15.14's:
 | `front-absent`, `front-zero`, `front-wrong-type` | the three states that mean off, and the column each one writes |
 | `front-on` | the whole path: versions, caps, device create, the forwards, and the FALSE answer of a start without the trailer |
 | `front-answer` | the TRUE answer for the pair the lab passes. Seven negative controls each turn it FALSE under their own clause. |
+| `front-log` | 300 more questions over one pair write one line per change of the answer, and the destroy summary counts every answer under its rule |
 | `front-d3d10-entry` | the D3D10.0 adapter entry leaves the route unchanged |
 | `front-d3d10-interface` | the front forwards a device created at the D3D10.0 interface whole, and writes nothing past either table or past the hosted private block |
 | `front-cpu-route` | the kill switch keeps the front out of the path |
 | `front-stack` | the front over the real hosted UMD, with its own version list and caps |
+
+Four more check the desktop-route record, with the harness started as `dwm.exe`: `route-dwm-name`,
+`route-dwm-name-kill`, `route-dwm-name-fallback` (new in this revision) and `desktop-dwm-unchanged`. The
+fallback scenario fails the hosted open, so the router falls back to the CPU UMD. It then asks the shells'
+shared rule over the record, and the rule stands the chain down although `DwmForceCpu` is 0.
 
 `tools/quality/quick.ps1` runs the suites that need nothing from the lab, as the `router-front` gate. The
 rest of the router's host gate needs three binaries that are not in this repository, so it runs as

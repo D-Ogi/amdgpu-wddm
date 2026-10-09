@@ -25,6 +25,15 @@
 # values (out of range, a wrong type) and the Deny list over an application 0. 88 scenarios, 0 failed on 2026-10-08
 # with the same tester.20 binaries.
 #
+# M15.14 increment 3 adds front-log: after front-answer's suite, 300 more questions over one pair write one line
+# per change of the answer (three), and the destroy summary counts every answer under its rule. front-rule also
+# drives the change log, its budget and the periodic summary on its own clock (front-flip-log.h).
+#
+# The desktop-route record (driver/contract/bc250_desktop_route.h) adds route-dwm-name-fallback: the harness runs as
+# dwm.exe, the hosted open fails and the router falls back to the CPU UMD, the record says so, and the shells' shared
+# rule stands down over it. route-dwm-name, route-dwm-name-kill and desktop-dwm-unchanged read the record too.
+# With both wagons of train b24 the gate runs 90 scenarios; the count of the last run is in TRAIN-b24.md.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(

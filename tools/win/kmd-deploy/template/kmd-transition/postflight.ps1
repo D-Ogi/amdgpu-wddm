@@ -75,7 +75,16 @@ foreach ($name in $key.GetValueNames()) { $parameters[$name] = @{ value = $key.G
 $result.parameters = $parameters
 $result.driver_log = (& $cli log summary | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Log query failed' }
-$result.confirmed = Get-ConfirmedPresentStart -Health $result.health -ElapsedSeconds 0 -Abi $KmdCandidateAbi
+# The acceptance receipts of this attempt's Verify name the start it admitted with the full 60 s ready age. A
+# mode set or a visibility change between Verify and here (a game's exit mode commit, an operator resolution
+# change) advances the epoch and restarts that clock while the start stays confirmed (BD-098), so the gate takes
+# the admitted interval as superseded. A start of another generation has no such record and is refused.
+$acceptance = @(Get-ChildItem -LiteralPath $Directory -Filter '*-health-acceptance.json' -File |
+ ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json })
+$live = Get-KmdReadyHealth $result.health $KmdCandidateAbi
+$result.accepted_epoch = Get-KmdAcceptedConfirmedEpoch -Records $acceptance -Generation $live.generation
+if (!$result.accepted_epoch) { throw 'No accepted confirmed start for the live generation' }
+$result.confirmed = Get-ConfirmedPresentStart -Health $result.health -ElapsedSeconds 0 -Abi $KmdCandidateAbi -ExpectedGeneration $live.generation -ConfirmedEpoch $result.accepted_epoch
 if (!$result.confirmed.launch) { throw 'Confirmed CPU baseline required' }
 if ($result.clock -notmatch 'MHz=1000 VID=116 temperature_mc=(\d+) ready=1' -or [int]$Matches[1] -ge 85000) { throw 'Clock operating point mismatch' }
 if ($result.dwm.Count -ne 1 -or @($result.dwm[0].modules | Where-Object { $_.sha256 -eq $result.umd_sha256 }).Count -ne 1) { throw 'One CPU DWM with the baseline UMD required' }

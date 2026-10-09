@@ -31,8 +31,12 @@ INFO = {
 }
 # scene_revision: the scenes' shaders and constants (absent in revision 1 results). Checksums of different
 # revisions never match, and their costs are not the same workload.
-RUN_SETTINGS = ("mode", "width", "height", "feature_level", "scene_revision")
+RUN_SETTINGS = ("mode", "width", "height", "feature_level", "scene_revision", "sync_interval")
 SCENE_SETTINGS = ("frames", "warmup", "draws", "layers", "shaders")
+# sync_interval: the present interval the program asked for (BD-099). It is a setting of the workload, because a
+# capped run and an uncapped one are not the same work. Results from before the option carry no such key, and
+# every one of them presented at interval 0, so a missing key reads as 0 and stays comparable.
+RUN_DEFAULTS = {"sync_interval": 0}
 
 
 class InputError(Exception):
@@ -52,7 +56,7 @@ def metric(scene, name):
 def settings(run):
     adapter = run.get("adapter", {})
     return {
-        "run": {key: run.get(key) for key in RUN_SETTINGS},
+        "run": {key: run.get(key, RUN_DEFAULTS.get(key)) for key in RUN_SETTINGS},
         "adapter": (adapter.get("vendor"), adapter.get("device")),
         "scenes": {
             scene["name"]: {key: scene[key] for key in SCENE_SETTINGS if key in scene}
