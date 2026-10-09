@@ -521,6 +521,14 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.
 struct _BC250_LOG_LINE;
 ULONG GuardLogSequence(void);                                   // the sequence number the next line will get
+ULONGLONG GuardLogMilliseconds(void);                           // the stamp a line written now would get; any IRQL
+// BD-097: the log summary's own lines, beside the ring. Between Begin (TRUE) and End every GuardLog of THIS
+// thread, outside a DPC, goes into that storage instead of the ring, and End says which sequence number
+// GuardLogRead reads the block from. FALSE from Begin means another thread holds it and the lines go into the
+// ring, as they always did. GuardLogSummaryBase is the block held now, for a page read of that space.
+BOOLEAN GuardLogSummaryBegin(void);
+void GuardLogSummaryEnd(_Out_ ULONG* First, _Out_ ULONG* Lines, _Out_ ULONG* Dropped, _Out_ ULONG* RingSeq);
+ULONG GuardLogSummaryBase(void);
 void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
@@ -809,6 +817,10 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);
+// BD-097: the paging submit line's tally - submits, the ones that wrote no line, and the summary lines that
+// stand for them (log_rate.h). One moment of the three, under the rate limit's own lock.
+void GfxPagingLogCounts(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Submits, _Out_ ULONG* Skipped,
+                        _Out_ ULONG* Summaries);
 // KMD214, the VMID pool (docs/design/gfx-submit-root-serialization.md). GfxVmidReport logs who ran at Vmid now and
 // before it, with Who as the line's prefix: for a fault latch (ih.c) or a timeout (wddm.c). GfxVmidCounters is
 // the pool's state for the wddm summary. Both <= DISPATCH_LEVEL.
@@ -1076,7 +1088,8 @@ BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Ph
 BOOLEAN VidMmProbeIb(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Leaf, _Out_ ULONGLONG* Physical,
                      _Out_ BOOLEAN* System, _Out_writes_(BC250_IB_PROBE_DWORDS) ULONG* Dwords);
 void VidMmSummary(void);
-void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
+void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring, or beside
+                                                    // it under GuardLogSummaryBegin (BD-097). It does nothing
                                                     // when the gate is closed, so the escape can call it either way
 void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG* Flips);    // 0/0 when closed
 

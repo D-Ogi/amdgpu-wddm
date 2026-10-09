@@ -3,6 +3,7 @@
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "paging_journal.h"
+#include "log_rate.h"
 #include "display_timing.h"
 #include "display_modes.h"
 #include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
@@ -237,11 +238,33 @@ static NTSTATUS PagingJournalEscape(_In_ const BC250_DEVICE* device, _In_ const 
     return STATUS_SUCCESS;
 }
 
+// BD-097: one ring line for a summary that went beside the ring, rate limited (log_rate.h). A caller that polls
+// summaries would otherwise still rotate the ring, one line a poll: 720 lines an hour at the old 5 s cadence,
+// against 768 rotating lines. The first lines are written in full and then one a BC250_LOG_RATE_INTERVAL_MS, so
+// a reader always sees that summaries were taken and how often, without the ring paying for each one. The state
+// needs no lock of its own: BC250_ESCAPE_LOG_SUMMARY is a Level Two escape, so dxgkrnl serializes two of them on
+// this adapter, which is the same guarantee WddmSummary is called under.
+static BC250_LOG_RATE g_SummaryNoteRate;
+
+static void LogSummaryNote(ULONG First, ULONG Lines, ULONG Dropped, ULONG RingSeq)
+{
+    BC250_LOG_RATE_NOTE note;
+    ULONG outcome = Bc250LogRateDecide(&g_SummaryNoteRate, GuardLogMilliseconds(), &note);
+
+    if (outcome == BC250_LOG_RATE_LINE)
+        GuardLog("log: summary of %lu lines beside the ring at seq %lu (%lu did not fit), read from %lu",
+                 Lines, RingSeq, Dropped, First);
+    else if (outcome == BC250_LOG_RATE_SUMMARY)
+        GuardLog("log: summary of %lu lines beside the ring at seq %lu: %lu taken in %llu ms, %lu of %lu silent",
+                 Lines, RingSeq, note.Pending, note.ElapsedMs, note.Skipped, note.Calls);
+}
+
 // BC250_ESCAPE_GET_LOG and BC250_ESCAPE_LOG_SUMMARY. The driver's own log, a page of lines at a time. This is how an
 // experiment reads the trail on a headless machine with no kernel debugger and no DebugView, so it needs no gate: it
 // touches no register, no memory of the device and nothing the caller did not already own. Administrators only all
-// the same, because the lines name physical addresses. LOG_SUMMARY first writes the WDDM counter tables into the
-// ring, so that one call gets both; with the gate closed that is a single line saying so. The caller decided
+// the same, because the lines name physical addresses. LOG_SUMMARY first writes the WDDM counter tables, so that
+// one call gets both: into the ring for the evidence form, and beside the ring for the polling form (BD-097, the
+// block below); with the gate closed that is a single line saying so. The caller decided
 // `summary` from one read of the command: a command that changes between two looks at the buffer must not be able
 // to get a summary past the check that guards it.
 static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* Escape, BOOLEAN summary)
@@ -278,16 +301,49 @@ static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* 
     from = log->From;
     if (summary)
     {
-        // Where the summary starts, taken before it is written, so that `log summary` can print only the
-        // lines it caused instead of the whole ring again. Another processor logging in between lands in the
-        // same window; that is one or two extra lines, not a wrong answer.
-        summaryFrom = GuardLogSequence();
-        WddmSummary(device);
-        if (from == BC250_LOG_FROM_SUMMARY) from = summaryFrom;
+        // BD-097: the polling form writes the block beside the ring. One summary is about 320 lines, 42 % of
+        // the ring's rotating tail, and the b23 lab read (2026-10-08) measured what a 5 s poll of it does: the
+        // whole ring rotated in about 12 s and the mode sets an hour of evidence was about were gone. The block
+        // goes to its own storage, addressed from BC250_LOG_SUMMARY_SEQ, and the ring gets one rate-limited
+        // line that says where it was taken. The CLI needs nothing new for it: the sequence it asks for next is
+        // the one answered here, and the summary space pages like the ring.
+        //
+        // `log summary` with a position of its own (the evidence form, which prints the whole ring) still
+        // writes into the ring, where the block belongs between the lines it is read with.
+        BOOLEAN beside = (from == BC250_LOG_FROM_SUMMARY) && GuardLogSummaryBegin();
+
+        if (beside)
+        {
+            ULONG first = BC250_LOG_SUMMARY_SEQ, lines = 0, dropped = 0, ringSeq = 0;
+
+            WddmSummary(device);
+            // The block's own first sequence, not the constant: each summary answers from the next block of the
+            // space, so that a reader of the block before it is refused instead of given a page of each.
+            GuardLogSummaryEnd(&first, &lines, &dropped, &ringSeq);
+            summaryFrom = first;
+            from = summaryFrom;
+            LogSummaryNote(first, lines, dropped, ringSeq);
+        }
+        else
+        {
+            // Where the summary starts, taken before it is written, so that `log summary` can print only the
+            // lines it caused instead of the whole ring again. Another processor logging in between lands in the
+            // same window; that is one or two extra lines, not a wrong answer.
+            summaryFrom = GuardLogSequence();
+            WddmSummary(device);
+            if (from == BC250_LOG_FROM_SUMMARY) from = summaryFrom;
+        }
     }
     else if (from == BC250_LOG_FROM_SUMMARY)
     {
         from = 0;                       // the sentinel means nothing without a summary; do not read past the end
+    }
+    else if (from >= BC250_LOG_SUMMARY_SEQ)
+    {
+        // A page read inside the summary space. It answers the block the driver holds now, so that a caller
+        // whose own block was replaced by a newer summary reads that from the same escape instead of seeing an
+        // empty page it cannot tell from the end of its block (BD-097).
+        summaryFrom = GuardLogSummaryBase();
     }
     log->SummaryFrom = summaryFrom;
     log->NtStatus = 0;

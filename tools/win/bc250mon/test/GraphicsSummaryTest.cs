@@ -98,12 +98,20 @@ static class GraphicsSummaryTest
             KmdInfoProvider.Output=Ring(KmdInfoProvider.PageCounts);
             panel=Poll(provider);Check(KmdInfoProvider.Calls==5 && KmdInfoProvider.LastArgs=="log 0","the request is consumed by that one poll");
 
-            // A ring with no summary in it makes no counter claim at all.
+            // A ring with no summary in it, read by a provider that never saw one, makes no counter claim at all.
             KmdInfoProvider.Output=KmdInfoProvider.Header+KmdInfoProvider.Tail+KmdInfoProvider.PageCounts;
-            panel=Poll(provider);
-            Check(Value(panel,"KMD counters")=="no summary in the ring; the graphics.summary action writes one" &&
-                  Find(panel,"KMD counters").Level==Level.Warn,"no summary in the ring is said so");
+            var bare=new GraphicsPipelineProvider(dir);
+            panel=Poll(bare);
+            Check(Value(panel,"KMD counters")=="no summary yet; the graphics.summary action writes one" &&
+                  Find(panel,"KMD counters").Level==Level.Warn,"no block anywhere is said so");
             Check(Value(panel,"HW flips")==null && Value(panel,"Scanout")=="not reported","and no counter is invented");
+            // BD-097: from KMD 0.7.216.23 a requested summary writes its block beside the log ring, so the page
+            // reads after it find none in the ring. The rows then come from the block this session kept, and the
+            // counter row says that it is kept and when it was taken.
+            panel=Poll(provider);
+            Check(Value(panel,"KMD counters").StartsWith("kept from the summary of ") &&
+                  Find(panel,"KMD counters").Level==Level.Info,"a kept block is named as kept");
+            Check(Value(panel,"HW flips")=="12" && Value(panel,"Paging")=="SDMA 17/17","the kept block still parses");
             // A block older than ten minutes of driver time is amber, not quietly current.
             KmdInfoProvider.Output=Ring(KmdInfoProvider.PageCounts,"\n   908   1240.500 dcn: vsync 99999");
             panel=Poll(provider);

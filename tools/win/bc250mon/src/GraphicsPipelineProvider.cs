@@ -26,6 +26,10 @@ namespace Bc250Mon
         readonly string _manifest, _summaryPausePath;
         string _lastSummaryOutput;
         DateTime _lastSummaryUtc;
+        // The last counter block this session saw, and when. BD-097: from KMD 0.7.216.23 a requested summary
+        // writes its block beside the log ring, so a page read cannot find it again.
+        string _keptCounters;
+        DateTime _keptCountersUtc;
         int _summaryRequested;
         string _cachedPath, _cachedHash;
         DateTime _cachedWrite;
@@ -168,8 +172,18 @@ namespace Bc250Mon
                 {
                     _lastSummaryOutput = output;
                     _lastSummaryUtc = DateTime.UtcNow;
+                    // From KMD 0.7.216.23 a requested summary writes its block beside the log ring, not into it
+                    // (BD-097, docs/design/kmd-log-ring.md): one poll's 320 lines used to rotate the ring in
+                    // about 12 s. So a later page read finds no block to parse, and the counters of the last
+                    // summary are kept here instead. An older driver puts the block in the ring, and then this
+                    // keeps what the page read itself brought back, which is the same thing.
+                    if (summary || SummaryStamp.IsMatch(output ?? ""))
+                    {
+                        _keptCounters = output;
+                        _keptCountersUtc = DateTime.UtcNow;
+                    }
                     AddEscapeCheck(panel, output, summary ? "1" : "0");
-                    AddCounterAge(panel, output, summary);
+                    AddCounterAge(panel, output, summary, _keptCounters == null ? (DateTime?)null : _keptCountersUtc);
                 }
                 // A read that failed wrote no summary, so an operator's request is not spent. LOG_SUMMARY under a
                 // running game is the slow case and the subprocess has 5 s, so a timeout here is the likely one:
@@ -179,6 +193,10 @@ namespace Bc250Mon
             }
             else panel.Rows.Add(new Row("KMD counters", output == null ? "paused; no cached snapshot" :
                 "paused; snapshot " + _lastSummaryUtc.ToLocalTime().ToString("HH:mm:ss"), Level.Warn));
+            // Which text the counter rows below are read from: this read's own block when it holds one, and the
+            // kept block of the last summary when it does not (BD-097: the block lives beside the ring now).
+            if (exit == 0 && !summary && !SummaryStamp.IsMatch(output ?? "") && _keptCounters != null)
+                output = _keptCounters;
             if (exit == 0)
             {
                 string flip = Last(output, @"vidpn flip (open|closed): (\d+) hardware flips");
@@ -219,13 +237,18 @@ namespace Bc250Mon
         }
         // Where the counters come from. A page read never writes a summary, so its block is as old as the last
         // summary anybody asked for; an unmarked stale block would read as a sample of this poll.
-        static void AddCounterAge(Panel panel, string output, bool summary)
+        static void AddCounterAge(Panel panel, string output, bool summary, DateTime? kept)
         {
             if (summary) { panel.Rows.Add(new Row("KMD counters", "summary written by this poll, on request", Level.Good)); return; }
             var last = LastMatch(SummaryStamp, output);
             if (last == null)
             {
-                panel.Rows.Add(new Row("KMD counters", "no summary in the ring; the graphics.summary action writes one", Level.Warn));
+                // No block in the ring. From KMD 0.7.216.23 that is the normal state, because a requested
+                // summary writes beside the ring, so the rows come from the block this session kept.
+                panel.Rows.Add(kept == null ?
+                    new Row("KMD counters", "no summary yet; the graphics.summary action writes one", Level.Warn) :
+                    new Row("KMD counters", "kept from the summary of " + kept.Value.ToLocalTime().ToString("HH:mm:ss"),
+                            Level.Info));
                 return;
             }
             var newest = LastMatch(AnyStamp, output);
