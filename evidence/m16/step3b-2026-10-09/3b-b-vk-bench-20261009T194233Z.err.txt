@@ -1,0 +1,124 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f93
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = AMD BC-250 (RADV GFX1013) (radv) | uma: 1 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 65536 | int dot: 0 | matrix cores: none
+radv_wddm2_winsys_create
+allocation handle=0x40001400
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x400016c0
+allocation handle=0x40001840
+allocation handle=0x400019c0
+allocation handle=0x40001a80
+allocation handle=0x40001b40
+allocation handle=0x40001c00
+allocation handle=0x40001d40
+allocation handle=0x40001dc0
+allocation handle=0x40001e40
+allocation handle=0x40001ec0
+allocation handle=0x40001f40
+allocation handle=0x40001fc0
+allocation handle=0x40002040
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x400020c0
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x40002140
+allocation handle=0x400021c0
+allocation handle=0x80000180
+allocation handle=0x40002240
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000280
+allocation handle=0x400022c0
+allocation handle=0x40002340
+allocation handle=0x400023c0
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000480
+allocation handle=0x40002440
+allocation handle=0x400024c0
+allocation handle=0x40002540
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x400025c0
+allocation handle=0x80000700
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000780
+allocation handle=0x40002640
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x400026c0
+allocation handle=0x40002740
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x400027c0
+allocation handle=0x80000a80
+allocation handle=0x80000b00
+allocation handle=0x80000b80
+allocation handle=0x80000c00
+allocation handle=0x80000c80
+allocation handle=0x80000d00
+allocation handle=0x80000d80
+allocation handle=0x80000e00
+allocation handle=0x80000e80
+allocation handle=0x80000f00
+allocation handle=0x80000f80
+allocation handle=0x80001000
+bc250: gather capacity=20480 bytes required=17248 ibs=2
+allocation handle=0x80001080
+allocation handle=0x80001100
+allocation handle=0x80001180
+bc250: gather capacity=28672 bytes required=26048 ibs=2
+allocation handle=0x80001200
+allocation handle=0x80001280
+allocation handle=0x80000880
+allocation handle=0x80000a00
+bc250: gather capacity=28672 bytes required=26240 ibs=2
+allocation handle=0x40002840
+allocation handle=0x80001480
+allocation handle=0x80001500
+allocation handle=0x80001580
+allocation handle=0x80001600
+bc250: gather capacity=20480 bytes required=18944 ibs=2
+allocation handle=0x400028c0
+allocation handle=0x80001700
+allocation handle=0x80001780
+bc250: gather capacity=12288 bytes required=8864 ibs=2
+allocation handle=0x40002940
+bc250: gather capacity=20480 bytes required=17632 ibs=2
+allocation handle=0x80001880
+bc250: gather capacity=20480 bytes required=19296 ibs=2
+allocation handle=0x80001900
+allocation handle=0x400029c0
+allocation handle=0x40002a40
+allocation handle=0x40002ac0
+allocation handle=0x40002bc0
+allocation handle=0x40002c40
+allocation handle=0x40002cc0
+allocation handle=0x40002d40
+allocation handle=0x40002dc0
+allocation handle=0x40002e40
+allocation handle=0x40002ec0
+allocation handle=0x40002f40
+allocation handle=0x40002fc0
+allocation handle=0x40003040
+allocation handle=0x400030c0
+allocation handle=0x40003140
+bc250: gather capacity=28672 bytes required=24768 ibs=2
+allocation handle=0x400031c0
+allocation handle=0x40003240
+allocation handle=0x400032c0
+allocation handle=0x40003340
+bc250: gather capacity=28672 bytes required=26272 ibs=2
+allocation handle=0x400033c0
+allocation handle=0x40003440
+allocation handle=0x400034c0
+allocation handle=0x40003540
+allocation handle=0x400035c0
+allocation handle=0x40003640
+allocation handle=0x400036c0
+allocation handle=0x40003740
+allocation handle=0x400037c0
+allocation handle=0x40003840
+allocation handle=0x400038c0
+allocation handle=0x40003940
+allocation handle=0x400039c0
+bc250: gather capacity=20480 bytes required=16512 ibs=2

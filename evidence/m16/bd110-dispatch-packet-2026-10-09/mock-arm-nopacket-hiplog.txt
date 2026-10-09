@@ -1,0 +1,2 @@
+amdhip64 [78528:109128] info log on, level 2 (info), interface 1.2
+amdhip64 [78528:109128] error hipLaunchKernel/dispatch_submit refuses kernel _ZL12rms_norm_f32ILi1024ELb1ELb0ELb0EEvPKfPfixxxfS1_xxx5uint3S3_S3_S3_S1_xxxS3_S3_S3_S3_f: not supported by this build (hipErrorNotSupported)

@@ -1,0 +1,109 @@
+utc 2026-10-09T19:55:23Z
+=== C:\BC250\tmp\m16-perf ===
+  ok      amdhip64.dll 256000 E754A950
+  ok      hipbench.exe 189952 E2627FA7
+  other  kmd-3a-after.txt 181940
+  other  kmd-3b-before.txt 177573
+  other  kmd-3b-b-fail.txt 183115
+  other  kmd-3b-final.txt 166455
+  other  kmd-after.txt 163115
+  other  kmd-before.txt 160572
+  other  kmd-final.txt 175219
+  other  p1-20261009T173324Z.txt 2608
+  other  p1b-20261009T173616Z.txt 2608
+  other  p2-20261009T173337Z.txt 2582
+  other  p3-20261009T173405Z.txt 2583
+  other  p4-20261009T173418Z.txt 2583
+  other  p4b-20261009T173534Z.txt 2583
+  other  R0-vadd-before-20261009T194611Z.err.txt 0
+  other  R0-vadd-before-20261009T194611Z.out.txt 523
+  other  R1-20261009T194622Z.err.txt 0
+  other  R1-20261009T194622Z.out.txt 2585
+  other  R1b-20261009T194906Z.err.txt 0
+  other  R1b-20261009T194906Z.out.txt 2586
+  other  R3-20261009T194646Z.err.txt 0
+  other  R3-20261009T194646Z.out.txt 2600
+  other  R5-20261009T194704Z.err.txt 0
+  other  R5-20261009T194704Z.out.txt 2600
+  other  R5n-20261009T194721Z.err.txt 0
+  other  R5n-20261009T194721Z.out.txt 2600
+  other  R9-vadd-after-20261009T194921Z.err.txt 0
+  other  R9-vadd-after-20261009T194921Z.out.txt 523
+  other  Rc-build1-20261009T194744Z.err.txt 0
+  other  Rc-build1-20261009T194744Z.out.txt 2534
+  other  Rc-default-20261009T194821Z.err.txt 0
+  other  Rc-default-20261009T194821Z.out.txt 2555
+  ok      vadd.exe 163840 389B9380
+  other  vadd-after-20261009T173631Z.txt 526
+  other  vadd-before-20261009T173312Z.txt 526
+=== C:\BC250\tmp\m16-hip3 ===
+  ok      amdhip64.dll 256000 E754A950
+  ok      hipthreads.exe 198656 3527D90D
+  other  pre-3a-threads-20261009T193735Z.err.txt 0
+  other  pre-3a-threads-20261009T193735Z.out.txt 766
+  other  pre-3a-threads-build1-20261009T193837Z.err.txt 0
+  other  pre-3a-threads-build1-20261009T193837Z.out.txt 768
+  other  pre-3a-threads-build1b-20261009T193858Z.err.txt 0
+  other  pre-3a-threads-build1b-20261009T193858Z.out.txt 762
+  other  pre-vadd-20261009T193650Z.err.txt 0
+  other  pre-vadd-20261009T193650Z.out.txt 523
+  other  pre-vadd2-20261009T193722Z.err.txt 0
+  other  pre-vadd2-20261009T193722Z.out.txt 523
+  ok      vadd.exe 163840 389B9380
+=== C:\BC250\tmp\m16-hip3b ===
+  other  3b-a-gemm-20261009T193922Z.err.txt 0
+  other  3b-a-gemm-20261009T193922Z.out.txt 2714
+  other  3b-b-hip-bench-20261009T193951Z.err.txt 441
+  other  3b-b-hip-bench-20261009T193951Z.out.txt 264
+  other  3b-b-hip-bench-build1-20261009T194308Z.err.txt 441
+  other  3b-b-hip-bench-build1-20261009T194308Z.out.txt 264
+  other  3b-c-hip-64-20261009T194323Z.err.txt 779
+  other  3b-c-hip-64-20261009T194323Z.out.txt 0
+  ok      amdhip64.dll 256000 E754A950
+  ok      bc250hipblas.dll 156672 A1B9E3A5
+  ok      gemm_check.exe 202752 345FB740
+  ok      ggml.dll 91136 C4283F43
+  ok      ggml-base.dll 823808 59A6169D
+  ok      ggml-cpu.dll 1455616 0FC2FC13
+  ok      ggml-hip.dll 54291968 1102A1DD
+  other  hip-64.txt 3
+  ok      llama.dll 3555328 CE3BD45B
+  ok      llama-bench.exe 9728 A89C9F1D
+  ok      llama-bench-impl.dll 427520 FAA129B2
+  ok      llama-common.dll 6324224 E0A0D7FB
+  ok      llama-completion.exe 9728 C027ADFB
+  ok      llama-completion-impl.dll 155648 15F0371F
+=== C:\BC250\tmp\m16-hip3b-noasm ===
+  other  3b-d-noasm-bench-20261009T194437Z.err.txt 441
+  other  3b-d-noasm-bench-20261009T194437Z.out.txt 264
+  ok      amdhip64.dll 256000 E754A950
+  ok      bc250hipblas.dll 156672 A1B9E3A5
+  ok      ggml.dll 91136 949B02D6
+  ok      ggml-base.dll 823808 8CE39EDC
+  ok      ggml-cpu.dll 1550336 F700CA9D
+  ok      ggml-hip.dll 54435328 B45DCA6D
+  ok      llama.dll 3555328 9241057E
+  ok      llama-bench.exe 9728 250F1D74
+  ok      llama-bench-impl.dll 427520 991AE923
+  ok      llama-common.dll 6324224 CCF577E9
+  ok      llama-completion.exe 9728 5E0F0BAB
+  ok      llama-completion-impl.dll 155648 E0511A34
+=== C:\BC250\tmp\m16-vk ===
+  other  3b-b-vk-bench-20261009T194233Z.err.txt 4425
+  other  3b-b-vk-bench-20261009T194233Z.out.txt 558
+  other  3b-c-vk-64-20261009T194416Z.err.txt 6187
+  other  3b-c-vk-64-20261009T194416Z.out.txt 248
+  ok      ggml.dll 61952 D1B9005F
+  ok      ggml-base.dll 675840 DC0DABD1
+  ok      ggml-cpu.dll 1099776 AB85B9D3
+  ok      ggml-vulkan.dll 45315584 2E45226E
+  ok      llama.dll 2790400 71C85E3C
+  ok      llama-bench.exe 10752 EBEBD210
+  ok      llama-bench-impl.dll 908288 CAD4A9E2
+  ok      llama-common.dll 8359424 66A981F6
+  ok      llama-completion.exe 10752 B2096895
+  ok      llama-completion-impl.dll 250880 75820384
+  other  vk-64.txt 251
+=== C:\BC250\tmp\models ===
+  ok      tinyllama-1.1b-chat-v1.0.Q4_0.gguf 637699456 DA3087FB
+verify: 42 ok, 0 not ok

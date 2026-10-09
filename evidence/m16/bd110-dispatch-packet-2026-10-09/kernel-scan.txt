@@ -1,0 +1,139 @@
+== ggml-hip.dll (the build that ran arms (b) and (c))
+   image: 54291968 bytes, 139 gfx1013 code objects, 7105 kernels
+   kernel_code_properties 0x0409 (PRIVATE_SEGMENT_BUFFER,KERNARG_SEGMENT_PTR,WAVEFRONT_SIZE32): 5353
+   kernel_code_properties 0x040b (PRIVATE_SEGMENT_BUFFER,DISPATCH_PTR,KERNARG_SEGMENT_PTR,WAVEFRONT_SIZE32): 1752
+   user SGPR count: 6: 5353, 8: 1752
+   refused by our stack before the fix: 1756 of 7105
+     dispatch/EUNSUPPORTED: 4
+     sgpr/EUNSUPPORTED: 1752
+   the refused kernels by family (the 12 largest):
+     mul_mat_q_stream_k_fixup: 768
+     flash_attn_stream_k_fixup_general: 338
+     flash_attn_combine_results: 144
+     k_bin_bcast: 114
+     flash_attn_mask_to_KV_max: 101
+     k_get_rows_kq: 60
+     mul_mat_vec_q: 55
+     k_get_rows: 28
+     mul_mat_vec_q_moe: 23
+     dequantize_block: 21
+     soft_max_f32: 20
+     k_get_rows_float: 16
+   kernels that ask for scratch (private_segment_fixed_size not 0):
+      484 bytes  _ZL12rwkv_wkv_f32ILi128EEviiiiPKfS1_S1_S1_S1_S1_Pf
+       48 bytes  _ZL12rwkv_wkv_f32ILi64EEviiiiPKfS1_S1_S1_S1_S1_Pf
+      132 bytes  _ZL13rwkv_wkv7_f32ILi128EEviiiiPKfS1_S1_S1_S1_S1_S1_Pf
+      476 bytes  _ZL21gated_linear_attn_f32ILi128EEviiiifPKfS1_S1_S1_S1_Pf
+
+== ggml-hip.dll (the no-assembly variant, arm (d))
+   image: 54435328 bytes, 139 gfx1013 code objects, 7105 kernels
+   kernel_code_properties 0x0409 (PRIVATE_SEGMENT_BUFFER,KERNARG_SEGMENT_PTR,WAVEFRONT_SIZE32): 5353
+   kernel_code_properties 0x040b (PRIVATE_SEGMENT_BUFFER,DISPATCH_PTR,KERNARG_SEGMENT_PTR,WAVEFRONT_SIZE32): 1752
+   user SGPR count: 6: 5353, 8: 1752
+   refused by our stack before the fix: 1836 of 7105
+     dispatch/EUNSUPPORTED: 84
+     sgpr/EUNSUPPORTED: 1752
+   the refused kernels by family (the 12 largest):
+     mul_mat_q_stream_k_fixup: 768
+     flash_attn_stream_k_fixup_general: 338
+     flash_attn_combine_results: 144
+     k_bin_bcast: 114
+     flash_attn_mask_to_KV_max: 101
+     mul_mat_q: 79
+     k_get_rows_kq: 60
+     mul_mat_vec_q: 56
+     k_get_rows: 28
+     mul_mat_vec_q_moe: 23
+     dequantize_block: 21
+     soft_max_f32: 20
+   kernels that ask for scratch (private_segment_fixed_size not 0):
+      484 bytes  _ZL12rwkv_wkv_f32ILi128EEviiiiPKfS1_S1_S1_S1_S1_Pf
+       48 bytes  _ZL12rwkv_wkv_f32ILi64EEviiiiPKfS1_S1_S1_S1_S1_Pf
+       56 bytes  _ZL13mul_mat_vec_qIL9ggml_type40ELi8ELb0ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj
+      132 bytes  _ZL13rwkv_wkv7_f32ILi128EEviiiiPKfS1_S1_S1_S1_S1_S1_Pf
+      476 bytes  _ZL21gated_linear_attn_f32ILi128EEviiiifPKfS1_S1_S1_S1_Pf
+      324 bytes  _ZL9mul_mat_qIL9ggml_type10ELi24ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      172 bytes  _ZL9mul_mat_qIL9ggml_type10ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      224 bytes  _ZL9mul_mat_qIL9ggml_type10ELi32ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      256 bytes  _ZL9mul_mat_qIL9ggml_type10ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     2448 bytes  _ZL9mul_mat_qIL9ggml_type10ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     3516 bytes  _ZL9mul_mat_qIL9ggml_type10ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     3432 bytes  _ZL9mul_mat_qIL9ggml_type10ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       52 bytes  _ZL9mul_mat_qIL9ggml_type11ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      140 bytes  _ZL9mul_mat_qIL9ggml_type12ELi24ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      344 bytes  _ZL9mul_mat_qIL9ggml_type12ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      432 bytes  _ZL9mul_mat_qIL9ggml_type12ELi32ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     1084 bytes  _ZL9mul_mat_qIL9ggml_type12ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     1288 bytes  _ZL9mul_mat_qIL9ggml_type12ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     1436 bytes  _ZL9mul_mat_qIL9ggml_type12ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+     1512 bytes  _ZL9mul_mat_qIL9ggml_type12ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       52 bytes  _ZL9mul_mat_qIL9ggml_type12ELi8ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      164 bytes  _ZL9mul_mat_qIL9ggml_type13ELi24ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      228 bytes  _ZL9mul_mat_qIL9ggml_type13ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      284 bytes  _ZL9mul_mat_qIL9ggml_type13ELi32ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      244 bytes  _ZL9mul_mat_qIL9ggml_type13ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      292 bytes  _ZL9mul_mat_qIL9ggml_type13ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      316 bytes  _ZL9mul_mat_qIL9ggml_type13ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      408 bytes  _ZL9mul_mat_qIL9ggml_type13ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       48 bytes  _ZL9mul_mat_qIL9ggml_type13ELi8ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      176 bytes  _ZL9mul_mat_qIL9ggml_type14ELi16ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      168 bytes  _ZL9mul_mat_qIL9ggml_type14ELi24ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      292 bytes  _ZL9mul_mat_qIL9ggml_type14ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      260 bytes  _ZL9mul_mat_qIL9ggml_type14ELi32ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      220 bytes  _ZL9mul_mat_qIL9ggml_type14ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      240 bytes  _ZL9mul_mat_qIL9ggml_type14ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      324 bytes  _ZL9mul_mat_qIL9ggml_type14ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      380 bytes  _ZL9mul_mat_qIL9ggml_type14ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       88 bytes  _ZL9mul_mat_qIL9ggml_type14ELi8ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      172 bytes  _ZL9mul_mat_qIL9ggml_type16ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      196 bytes  _ZL9mul_mat_qIL9ggml_type16ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      176 bytes  _ZL9mul_mat_qIL9ggml_type18ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      248 bytes  _ZL9mul_mat_qIL9ggml_type18ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      172 bytes  _ZL9mul_mat_qIL9ggml_type19ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      200 bytes  _ZL9mul_mat_qIL9ggml_type19ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       20 bytes  _ZL9mul_mat_qIL9ggml_type20ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       60 bytes  _ZL9mul_mat_qIL9ggml_type20ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type21ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      188 bytes  _ZL9mul_mat_qIL9ggml_type21ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      264 bytes  _ZL9mul_mat_qIL9ggml_type21ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       24 bytes  _ZL9mul_mat_qIL9ggml_type23ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       64 bytes  _ZL9mul_mat_qIL9ggml_type23ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      184 bytes  _ZL9mul_mat_qIL9ggml_type2ELi16ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       12 bytes  _ZL9mul_mat_qIL9ggml_type2ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       76 bytes  _ZL9mul_mat_qIL9ggml_type2ELi32ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       60 bytes  _ZL9mul_mat_qIL9ggml_type2ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       76 bytes  _ZL9mul_mat_qIL9ggml_type2ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      104 bytes  _ZL9mul_mat_qIL9ggml_type2ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      168 bytes  _ZL9mul_mat_qIL9ggml_type2ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type39ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type39ELi32ELb0EL9ggml_prec40EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       32 bytes  _ZL9mul_mat_qIL9ggml_type39ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       32 bytes  _ZL9mul_mat_qIL9ggml_type39ELi40ELb0EL9ggml_prec40EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       68 bytes  _ZL9mul_mat_qIL9ggml_type39ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       68 bytes  _ZL9mul_mat_qIL9ggml_type39ELi48ELb0EL9ggml_prec40EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      184 bytes  _ZL9mul_mat_qIL9ggml_type3ELi16ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type3ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       72 bytes  _ZL9mul_mat_qIL9ggml_type3ELi32ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       56 bytes  _ZL9mul_mat_qIL9ggml_type3ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       72 bytes  _ZL9mul_mat_qIL9ggml_type3ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      100 bytes  _ZL9mul_mat_qIL9ggml_type3ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+      164 bytes  _ZL9mul_mat_qIL9ggml_type3ELi64ELb1EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       68 bytes  _ZL9mul_mat_qIL9ggml_type41ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       56 bytes  _ZL9mul_mat_qIL9ggml_type41ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       88 bytes  _ZL9mul_mat_qIL9ggml_type42ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       76 bytes  _ZL9mul_mat_qIL9ggml_type42ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type6ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       32 bytes  _ZL9mul_mat_qIL9ggml_type6ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       72 bytes  _ZL9mul_mat_qIL9ggml_type6ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type7ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       32 bytes  _ZL9mul_mat_qIL9ggml_type7ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       72 bytes  _ZL9mul_mat_qIL9ggml_type7ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+        8 bytes  _ZL9mul_mat_qIL9ggml_type8ELi32ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       32 bytes  _ZL9mul_mat_qIL9ggml_type8ELi40ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+       64 bytes  _ZL9mul_mat_qIL9ggml_type8ELi48ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_
+
+== bc250hipblas.dll (arm (a), which passed)
+   image: 156672 bytes, 1 gfx1013 code objects, 8 kernels
+   kernel_code_properties 0x0409 (PRIVATE_SEGMENT_BUFFER,KERNARG_SEGMENT_PTR,WAVEFRONT_SIZE32): 8
+   user SGPR count: 6: 8
+   refused by our stack before the fix: 0 of 8
