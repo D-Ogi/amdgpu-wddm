@@ -3,7 +3,8 @@
 #   A: $StartA s after the game appears, $Seconds long (owner: DWM misbehaves from the game start). The game is
 #      -Process (comma-separated Get-Process names, wildcards allowed; default witcher3, game runner profiles).
 #   B: when dwm.exe CPU exceeds $DwmPct % of the machine in two consecutive 2 s samples, or at $LatestB s after
-#      the game appeared, whichever first.
+#      the game appeared, whichever first. From $LatestB on the window waits for the world band of
+#      world-rule.ps1 when -WorldTelemetry names a sampler file (BD-107).
 # One deadline bounds everything: $NotAfterQpc is the trial's own runtime cutoff (watch.ps1 origin + 255 s, less a
 # margin, computed by etw-start.ps1 from the trial's start.json) on the shared QPC clock (review 854). A window is
 # only started when its collection plus the cleanup reserve fits before it, and every wait, logman call and
@@ -19,6 +20,13 @@
 # Present-mode mode (M15.14): -PresentMode adds Microsoft-Windows-Win32k and Microsoft-Windows-Dwm-Core to the
 # DxgKrnl session, with narrow keyword masks, so that etw-present-mode.py can say per frame whether a present was
 # scanned out or composed. It is off by default and changes nothing else about a window.
+# World rule (BD-107): -WorldTelemetry <path> names the trial's DPM sampler file (C:\BC250\tmp\dpm-<trial>.txt)
+# and world-rule.ps1 next to this script decides from it whether the GPU is in the game's world or in its menu.
+# It gates the time-bounded fallback below, which in the b26 validation opened window B on the Witcher 3 main
+# menu: from -LatestB on, the window waits for the world band instead of opening at once, and -WorldSettleSeconds
+# says how long that band must hold. Without the switch, without the rule file, or with a sampler that stopped,
+# the fallback opens as it always did and the note says the world was not verified, because a window opened on an
+# unverified picture is still better than no window at all.
 # Scheduler-stack mode (C49): -SchedulerStacks adds a second, stack-enabled DxgKrnl stream to PerfView's own user
 # session, filtered to the scheduler's decision events, next to the cheaper kernel set that prices a DPC. It
 # answers one question the packet-level session cannot: which dxgkrnl call site puts a context back into the node's
@@ -27,7 +35,8 @@
 # c45b-window.py and c48gaps.py parse.
 param([string]$Root, [string]$Tag, [int]$Seconds = 30, [int]$StartA = 5, [int]$DwmPct = 15, [int]$LatestB = 110,
     [long]$NotAfterQpc = 0, [switch]$Smoke, [switch]$GpuOnly, [switch]$SkipA, [string]$WorldLog = '', [int]$SecondsB = 0,
-    [int]$ReserveSeconds = 0, [string]$Process = 'witcher3', [switch]$PresentMode, [switch]$SchedulerStacks)
+    [int]$ReserveSeconds = 0, [string]$Process = 'witcher3', [switch]$PresentMode, [switch]$SchedulerStacks,
+    [string]$WorldTelemetry = '', [int]$WorldSettleSeconds = 25)
 $ErrorActionPreference = 'Stop'
 $gameNames = @($Process -split ',' | Where-Object { $_ })
 $perf = 'C:\BC250\tools\perfview\PerfView.exe'
@@ -269,6 +278,20 @@ function DwmPct([ref]$prev) {
     return $r
 }
 function Finish { Note "etw-capture end cleanup_failed=$script:cleanupFailed"; exit ([int]$script:cleanupFailed) }
+# The world rule (BD-107). It is loaded once, from next to this script, because etw-start.ps1 copies both files
+# into the trial's capture directory. A missing rule file is noted once and then behaves like no telemetry.
+$script:worldRule = $null
+function World-Now {
+    if (!$WorldTelemetry) { return @{ world = $false; telemetry = $false; why = 'no -WorldTelemetry' } }
+    if ($null -eq $script:worldRule) {
+        $path = Join-Path (Split-Path -Parent $PSCommandPath) 'world-rule.ps1'
+        if (Test-Path -LiteralPath $path) { . $path; $script:worldRule = $true }
+        else { $script:worldRule = $false; Note 'world rule not staged next to the capture; the time bound opens unverified' }
+    }
+    if (!$script:worldRule) { return @{ world = $false; telemetry = $false; why = 'world-rule.ps1 not staged' } }
+    try { return Test-WorldTelemetry -Path $WorldTelemetry -SettleSeconds $WorldSettleSeconds }
+    catch { return @{ world = $false; telemetry = $false; why = "world rule error: $($_.Exception.Message)" } }
+}
 
 Note ("etw-capture begin tag=$Tag perfview=$((Get-FileHash -LiteralPath $perf).Hash.Substring(0,8)) not_after_qpc=$NotAfterQpc")
 if ($Smoke) { $t0 = [DateTime]::UtcNow; Note 'smoke: one window, no game'; Capture 'S'; Finish }
@@ -293,7 +316,7 @@ function Start-B([string]$why) {
     Note "window B trigger $why, $s s"
     Capture 'B' $s
 }
-$prev = $null; $hits = 0
+$prev = $null; $hits = 0; $script:timeHeld = $false
 while ($true) {
     $el = ([DateTime]::UtcNow - $t0).TotalSeconds
     if ((Left) -lt $minB + $reserve + 1) { Note ("window B skipped: {0:0} s left at t={1:0}" -f (Left), $el); break }
@@ -313,7 +336,14 @@ while ($true) {
         if ($pct -ge $DwmPct) { $hits++ } else { $hits = 0 }
         if ($hits -ge 2) { Start-B ('dwm {0:0.0}%' -f $pct); break }
     }
-    if ($el -ge $LatestB) { Start-B 'time'; break }
+    # The time bound is no longer a trigger by itself (BD-107): from here on the window opens as soon as the
+    # world band holds, and only a sampler that says nothing lets it open unverified.
+    if ($el -ge $LatestB) {
+        $w = World-Now
+        if ($w.world) { Start-B ('time, world: ' + $w.why); break }
+        if (!$w.telemetry) { Start-B ('time, world unverified: ' + $w.why); break }
+        if (!$script:timeHeld) { $script:timeHeld = $true; Note ("window B held at the time bound t={0:0}: {1}" -f $el, $w.why) }
+    }
     Start-Sleep -Seconds 2
 }
 Finish
