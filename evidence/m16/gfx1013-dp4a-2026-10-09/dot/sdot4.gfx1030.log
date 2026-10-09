@@ -1,0 +1,7 @@
+# builtin __builtin_amdgcn_sdot4, target gfx1030
+clang++ -x hip --offload-arch=gfx1030 --offload-device-only --no-gpu-bundle-output -nogpuinc -nogpulib -O2 -std=c++17 -DBC250_PROBE=1 -c -o sdot4.gfx1030.o probe-dot.hip
+
+
+exit 0
+# the instruction the builtin became:
+	v_dot4c_i32_i8 v1, s0, v0                                  // 000000001740: 1A020000

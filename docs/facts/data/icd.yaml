@@ -414,3 +414,19 @@ facts:
     evidence: "[Step 2 record](../evidence/m16/step2-2026-10-08/README.md), [program output](../evidence/m16/step2-2026-10-08/vadd.out.txt)"
     edges:
       - {"type": "uses", "to": "M845"}
+  - id: M847
+    status: MEASURED
+    date: "2026-10-09"
+    claim: "gfx1013 has neither 8-bit dot product instruction, and on clang 22.1.8 it does not need the inline assembly that llama.cpp's HIP backend keeps for RDNA1. `__builtin_amdgcn_sdot4` is refused for gfx1013 with \"needs target feature dot1-insts\" and `__builtin_amdgcn_sudot4` with \"needs target feature dot8-insts\"; the positive control gfx1030 accepts `sdot4` and produces `v_dot4c_i32_i8`, and refuses `sudot4`, because dot8-insts is a GFX11 feature. Of the four branches of `ggml_cuda_dp4a` only two remain for this part, and compiled in isolation for gfx1013 they are the same code: with eight independent dot products in one kernel the generic C byte loop and the RDNA1 inline assembly both give 32 `v_mul_i32_i24_sdwa` and 16 `v_add3_u32`, 49 vector instructions each. With one dot product alone the generic form costs 12 vector instructions against the assembly's 7, because its byte extraction has nothing to amortise over"
+    status_text: "MEASURED (compile level, development machine, no lab unit)"
+    detail: "llama.cpp b86d2f075, clang 22.1.8 of toolchain/llvm-amdgpu-22.1.8, every device compilation for gfx1013 and the control for gfx1030. This is instruction selection, not speed: neither form has run on the hardware. The same MMQ translation unit built without and with the one-line patch gives two kernels that differ by more than the dot product (1025 against 2292 instructions in `mul_mat_q<Q8_0, 8>`, and 40 against 180 `ds_read2_b32`), and this measurement did not isolate why; both are wave32, neither spills"
+    evidence: "[gfx1013 dp4a](../evidence/m16/gfx1013-dp4a-2026-10-09/README.md)"
+  - id: M848
+    status: MEASURED
+    date: "2026-10-09"
+    claim: "llama.cpp's HIP backend disagrees with itself about gfx1013, and the one-line patch that adds `__gfx1013__` to its RDNA1 list is a correctness fix and not a tuning choice. The host maps the `gcnArchName` string \"gfx1013\" to an RDNA1 compute capability with no patch at all (`ggml-cuda.cu:172-218` with `common.cuh:80-88`), while the device-side `RDNA1` macro names only gfx1010 and gfx1012 (`vendors/hip.h:236`), so the device constexpr `get_mmvq_mmid_max_batch_for_device` falls through to the pre-Pascal table. That constexpr is the `__launch_bounds__` of `mul_mat_vec_q_moe` (`mmvq.cu:858`): for Q8_0 the host may launch a block of 8 by 32 = 256 threads into a kernel compiled for 128, for Q4_0 256 into 192, for Q2_K 224 into 128 and for Q6_K 160 into 128. gfx1011 is in the same position in that list, and it does have dot1-insts"
+    status_text: "MEASURED (source of llama.cpp b86d2f075, read, not executed)"
+    detail: "It reaches the mul_mat_id path only, so a mixture-of-experts model is needed to meet it; a dense model never launches that kernel. The warp size does not depend on the macro: `ggml_cuda_get_physical_warp_size` answers 32 for everything that is not GFX9 or GFX8, so both builds of every kernel are wave32. The MMQ tile configuration also does not change, because RDNA1 is not named in that table either and both builds take the rdna2 entry (`mmq.cuh:265-281`). No gfx1011 part was tested here"
+    evidence: "[gfx1013 dp4a](../evidence/m16/gfx1013-dp4a-2026-10-09/README.md)"
+    edges:
+      - {"type": "uses", "to": "M847"}
