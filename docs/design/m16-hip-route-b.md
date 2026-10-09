@@ -1711,6 +1711,14 @@ A buffer is submitted at the first of these:
 | the dword cap (one ring slot, less the completion write) | the buffer must fit the slot |
 | the hold time cap (default 1000 us) | see the honest note below |
 
+A batch trades the cost of a submission against the time to the first instruction: while the host
+fills a buffer, the device has nothing of that buffer to run. For a program that runs ahead of the
+device, which is what a decode loop does, that is free. For a program that sends one kernel and waits
+for it, it is not, and that program keeps the behaviour of build 1 anyway, because its wait flushes.
+The dispatch cap and the hold time cap bound the trade in between, and the `chain` measurement of
+hipbench is end to end on purpose, so an arm that holds work back too long is visible there and
+not only in the submission count.
+
 The library runs no thread of its own, so the hold time cap is checked when the next call arrives and
 not by a timer. This is stated plainly because it would be easy to present it as a guarantee: the
 guarantee is the one above it. Nothing a program can observe stays behind an open buffer, because every
