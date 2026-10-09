@@ -1061,6 +1061,10 @@ prompt matrix multiply then falls back to hipBLAS. 32 is MEASURED: every kernel 
 wave size 32. The error state is per thread. `hipGetLastError` clears it and `hipPeekAtLastError` does
 not.
 
+Section 4.9 holds the measured step-3 set, which is 13 names and not the 14 of the estimate below.
+The paragraph that follows is the estimate of the spike, and it is kept because the difference is
+the useful part.
+
 Step 3 adds 14 names, which the spike measured from the application: `hipDeviceGetAttribute`,
 `hipDeviceGetPCIBusId`, `hipFuncSetAttribute`, `hipOccupancyMaxActiveBlocksPerMultiprocessor` (on the
 FlashAttention dispatch path, so not optional), `hipOccupancyMaxPotentialBlockSize`,
@@ -1292,6 +1296,138 @@ The owner's instruction of 2026-09-29 is that multithreading is measured with ou
 before an application is asked to exercise it. `compute/hip/tests/host/hip_threads_client.h` is
 that client, with a negative control that restores the lock over the wait. Section 5.4 lists what
 each of the two builds must measure.
+
+### 4.8 What llama.cpp's ggml-hip backend asks of the host
+
+MEASURED 2026-10-09, offline, with two tools in `scratch\m16-hip\step3\tools`. `inventory.py`
+reads every `.cu` and `.cuh` file of `ggml/src/ggml-cuda`, keeps each call of a name of the CUDA
+or HIP host interface, resolves the CUDA name to the HIP name through the backend's own
+`ggml-cuda/vendors/hip.h`, and compares the result with `amdhip64.def`. `device_scan.py` does the
+same for the device side. The checkout is llama.cpp `b86d2f07`, which is the revision that the
+Vulkan measurements of fact M816 and the Strata work already use.
+
+The host interface of the backend is 95 distinct calls. They divide like this.
+
+| Group | Count | What we do |
+|---|---|---|
+| Already exported by `amdhip64.dll` after step 2 | 25 | nothing |
+| Removed by a build option | 19 | `GGML_HIP_GRAPHS=OFF` removes 8 graph and capture names, `GGML_HIP_NO_VMM=ON` removes 10 virtual memory names, `GGML_CUDA_FA=OFF` removes `hipOccupancyMaxActiveBlocksPerMultiprocessor` |
+| Compiled out by the backend itself | 1 | `hipLaunchHostFunc`, which sits inside `#if 0` |
+| Added in step 3 (section 4.9) | 13 | implemented |
+| hipBLAS and rocBLAS | 11 | open work, section 4.10 |
+| The CUDA-only paths and the macro names of the backend | 26 | nothing: they never reach a HIP build |
+
+Two names of the spike's estimate are therefore not needed, and two more are needed only with
+FlashAttention on. `hipDeviceDisablePeerAccess` is named in `vendors/hip.h` and called nowhere,
+and `hipOccupancyMaxPotentialBlockSize` is the same.
+
+### 4.9 The entry points of step 3
+
+DECIDED. 13 names, which takes `amdhip64.def` from 38 to 51. Each one is in the link line of
+ggml-hip, so each one must exist, and five of them say no.
+
+| Name | What it does here |
+|---|---|
+| `hipDeviceGetAttribute` | 13 attributes, each one the same value as the field of `hipGetDeviceProperties` that carries it. An attribute this build does not know is `hipErrorInvalidValue` and never a guessed zero |
+| `hipDeviceGetPCIBusId` | the bus identifier of the adapter, from the three numbers layer 1 reads. A short buffer truncates and reports success, as CUDA and HIP both do |
+| `hipDeviceCanAccessPeer` | one device, so the answer is 0 and a second device number is `hipErrorInvalidDevice` |
+| `hipDeviceEnablePeerAccess` | `hipErrorInvalidDevice`: a device cannot peer with itself, and there is no other |
+| `hipFuncSetAttribute` | records a dynamic group memory ceiling for one kernel, and refuses a value above the hardware limit at the call that asks for it. The ceiling is advice on this part: there is no 48 KiB default to lift, and layer 1 checks each dispatch |
+| `hipLaunchCooperativeKernel` | `hipErrorNotSupported`. One hardware queue, so nothing can start every workgroup of a grid at the same time |
+| `hipHostGetDevicePointer` | the GPU address of memory `hipHostMalloc` returned, interior pointers included |
+| `hipHostRegister` | `hipErrorNotSupported`. Layer 1 has no entry point that takes a range of a program's own memory |
+| `hipHostUnregister` | `hipErrorHostMemoryNotRegistered` |
+| `hipMallocManaged` | `hipErrorNotSupported`, which is the code the backend falls back on |
+| `hipMemAdvise` | `hipErrorNotSupported`, and the backend ignores the result |
+| `hipMemcpy2DAsync` | a real row-by-row copy under one wait. The bytes between the rows stay as they were |
+| `hipMemcpyPeerAsync` | within device 0 it is a device-to-device copy. Any other device number is `hipErrorInvalidDevice` |
+
+Each refusal was chosen against the code that receives it, not against the specification alone:
+
+- `hipMallocManaged` must answer exactly `hipErrorNotSupported`. With that code
+  `ggml_cuda_device_malloc` falls back to `hipMalloc` and writes one warning line. Any other
+  error code becomes an abort of the program.
+- `hipHostRegister` is called only with `GGML_CUDA_REGISTER_HOST` in the environment.
+  `ggml_backend_cuda_register_host_buffer` clears the error and runs without registered host
+  memory, which costs one copy through a staging buffer per upload.
+- `hipLaunchCooperativeKernel` is guarded at run time by the attribute
+  `hipDeviceAttributeCooperativeLaunch`, which this runtime answers 0. The entry point exists
+  because the backend links against it.
+
+Two more things belong to the same step. `hipStreamPerThread` and `hipStreamLegacy` are handle
+values that no stream object can have, and the backend passes `hipStreamPerThread` to
+`hipMemcpyPeerAsync`. Both now resolve to the one default stream of the process, which is
+stricter than HIP asks and is legal. And `hipDeviceProp_t` already carries every field the
+backend reads, `gcnArchName` first of all: the backend parses `gfx1013` out of it to pick its
+kernels.
+
+### 4.10 What stops the backend from building today
+
+Two walls, both MEASURED 2026-10-09 with `scratch\m16-hip\step3\probe\try-ggml-hip.py`.
+
+**Wall 1, the package files.** The CMake configure stops at `ggml/src/ggml-hip/CMakeLists.txt`
+line 46, `find_package(hip REQUIRED)`: "Could not find a package configuration file provided by
+hip". Lines 47 and 48 ask for `hipblas` and `rocblas` in the same way. So our tree needs
+`hip-config.cmake`, `hipblas-config.cmake` and `rocblas-config.cmake` of its own, with the
+targets `hip::host`, `hip::device`, `roc::hipblas` and `roc::rocblas`, and a `hip_VERSION` of at
+least 6.1, which line 55 enforces.
+
+**Wall 2, the device headers.** One translation unit compiled by hand, with no CMake, stops at
+`ggml/src/ggml-common.h` line 51: `'hip/hip_fp16.h' file not found`. Our `include/hip` holds one
+header, `hip_runtime.h`. The backend needs `hip/hip_fp16.h`, `hip/hip_bf16.h` and
+`hipblas/hipblas.h` as well.
+
+The size of wall 2 is measured and not estimated. `device_scan.py` finds 134 device-side names in
+the backend's kernels, and 30 of them are the C library of mathematics. Those 30 are no longer
+work: see section 4.6 and the probe below. The rest divides like this.
+
+| Group | Names | Note |
+|---|---|---|
+| half and bfloat16 types, operators and conversions | 26 | `_Float16` and `__bf16` are native types of this compiler, so these are our own small header and not new hardware |
+| vector types and their makers (`float2`, `int4`, `make_float4`) | 16 | our own header. `dim3` is the one of them we already have |
+| cross-lane functions (`__shfl`, `__shfl_xor`, `__all`, `__any`, `__ballot`, `__popc`, `__byte_perm`) | 9 | MEASURED below: every one of them compiles for gfx1013 |
+| atomics (`atomicAdd` and its system form) | 2 | MEASURED below |
+| cached and non-temporal loads, fast-math names, the CUDA 4-bit float types | 13 | the three `__nv_fp4` names belong to a CUDA-only path |
+| matrix core and wave matrix instructions | 22 | not for this part, and the backend already guards them by architecture |
+| dot product (`__dp4a`) | 3 | MEASURED below: gfx1013 has no dot instruction, so the backend's integer fallback is the only path |
+| scheduling and barrier builtins | 13 | clang supplies them, as the probe proves. `__syncthreads` is already in our header |
+
+So the remaining work of step 3 is a HIP device header set of about 100 names and a hipBLAS shim
+of 11 entry points. It is not a hardware question and it is not a compiler question.
+
+### 4.11 What the device probes measured
+
+Four probes, `scratch\m16-hip\step3\probe\run-probe.py`, all offline, all for gfx1013, all
+against the device library of section 4.6 and clang's own HIP math headers. Nothing of AMD's
+product stack is installed on the machine that ran them.
+
+| Probe | Result |
+|---|---|
+| 48 names of the mathematics library, and the half-precision set | a 14256-byte code object, 0 undefined symbols |
+| the same source with `-nogpulib` | the link fails on `__ocml_expm1_f32`, `__ocml_log1p_f32` and `__ocml_rsqrt_f32`. This is the negative control: it proves the device library carries the work and that clang does not expand it in place |
+| cross-lane, atomic, permute and scheduling builtins | a 6208-byte code object, 0 undefined symbols |
+| `__builtin_amdgcn_sdot4` | "needs target feature dot1-insts". gfx1013 has no dot-product instruction |
+
+One result of the third probe is a number for the roadmap. The generated instructions of that
+code object are `ds_bpermute_b32` for a cross-lane move, `v_perm_b32` for a byte permute, one
+native `global_atomic_add` for the integer addition, and `global_atomic_cmpswap` for the float
+addition. So every floating-point `atomicAdd` on this part is a compare-and-swap loop. The
+backend uses that operation in its split-k matrix multiply paths, so the loop is on the hot path
+of a prompt and not in a corner.
+
+Two names of the CUDA interface are missing from clang's HIP math headers and belong to ours:
+`__float_as_int` and `__float_as_uint`, with their two inverses. One builtin each.
+
+How the probes reach those math headers is worth one paragraph, because it decides the shape of
+our include tree. clang holds the HIP mathematics itself, in
+`lib/clang/22/include/__clang_hip_math.h`, and `__clang_hip_runtime_wrapper.h` pulls it in. clang
+force-includes that wrapper only when it recognises a ROCm installation, so the probes name the
+wrapper on the command line with `-include`. The wrapper then includes `"hip/hip_version.h"`,
+which a ROCm installation supplies. Ours supplies it as well: the probe tree holds a
+`hip/hip_version.h` of 24 lines that states the interface version our runtime implements. With
+that one file, our include directory and the bitcode directory, `--rocm-path` makes clang behave
+as it does against a product installation, and the device library links by itself. The file
+belongs in `compute/hip/include/hip` as soon as the device headers of section 4.10 are written.
 
 ---
 

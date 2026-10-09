@@ -14,8 +14,9 @@ calls `__hipRegisterFatBinary` and `__hipRegisterFunction` before `main()`, and 
 call of `hipLaunchKernel`. This DLL answers those calls. No AMD user-mode component is
 involved, and no part of this work uses PAL (owner decision D015).
 
-38 exported names, which [`amdhip64.def`](amdhip64.def) lists. A plain HIP vector addition
-links against exactly that set.
+51 exported names, which [`amdhip64.def`](amdhip64.def) lists: the 38 of step 2, against which a
+plain HIP vector addition links, and the 13 that llama.cpp's ggml-hip backend adds in step 3
+(design section 4.9).
 
 | File | What it holds |
 |---|---|
@@ -47,7 +48,7 @@ product DLL needs that library.
 
 ## What the build gates
 
-1. `amdhip64.def` holds exactly 38 names, and every one of them is declared in
+1. `amdhip64.def` holds exactly 51 names, and every one of them is declared in
    `hip_runtime.h`.
 2. Every undefined symbol of the runtime objects that belongs to our own stack is declared in
    `bc250hsa.h`. A new call into layer 1 that the contract does not carry is a build failure.
@@ -55,7 +56,8 @@ product DLL needs that library.
 4. `test_hip_mock.exe` passes: registration, argument packing, stream order across an event
    wait, event timing, no allocation leak on a second run, the fixed properties of the design,
    the memory entry points with an explicit kind and with `hipMemcpyDefault`, the null stream,
-   the per-thread error state, and a second fat binary in one process.
+   the per-thread error state, a second fat binary in one process, and the 13 step-3 entry
+   points: 224 checks in all.
 5. A real HIP program, compiled by clang against `hip_runtime.h` and linked against
    `amdhip64.lib`, imports `amdhip64.dll`, runs against the mock build, and records the
    dispatches that its two `<<<>>>` calls asked for, with the measured grid, block and kernel
@@ -132,5 +134,11 @@ have their own tests against the same code objects.
 - `__hipRegisterManagedVar` reports a missing capability. Managed memory needs page migration.
 - A kernel that asks for a host call buffer (device-side `printf`) is refused by name. The
   counter of layer 1 answers kill criterion K4 of the route document.
-- Step 3 adds 14 more names for llama.cpp, five of them honest stubs, and the device-side math,
-  atomic and shuffle sets in the header.
+- The device-side header set that llama.cpp's kernels need is not written. Design section 4.10
+  measures it: about 100 names, which are the half and bfloat16 types, the vector types, the
+  cross-lane functions, the atomics and the cached loads. The mathematics of those kernels is no
+  longer work, because clang's own HIP math headers and the device library of section 4.6 carry
+  all 48 names a probe asked for.
+- There is no hipBLAS. The backend needs 11 entry points of `hipblas` and `rocblas`, and its
+  CMake file requires all three packages. A shim over our own matrix multiply kernels is the
+  open work, and `GGML_CUDA_FORCE_MMQ=ON` keeps the quantised multiplies out of it.
