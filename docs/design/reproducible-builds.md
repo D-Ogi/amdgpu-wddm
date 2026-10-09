@@ -311,18 +311,23 @@ file reproduces when it is built with the recipes of this branch and its commit 
 
 `tools/release/release-sources.json` in this tree describes the payload of `0.7.216.100-tester.23`, which main
 `5fc83d67` released. Of its 34 files, 30 are built by a recipe, 3 are data files of a commit, and one is the
-LunarG `vulkaninfo.exe`. Thirteen of the 30 claim a bit-identical rebuild, and the other 21 say why they
+LunarG `vulkaninfo.exe`. Nine of the 30 claim a bit-identical rebuild, and the other 21 say why they
 cannot, with the recipe hashes or the switch that was missing.
 
 Two of the built files are the ones this release itself built, and both reproduce. Each was built two times
 from one commit of this branch, into two directories whose paths have different lengths.
 
-| payload file | commit | recipe | shipped | both builds |
+| payload file | commit | recipe | registered | both builds |
 |---|---|---|---|---|
 | `kmd/bc250kmd.sys`, unsigned | `00f09bfa` | `driver/kmd/build.ps1` | `C8D69F59`, 668160 bytes | `C8D69F59` |
 | `kmd/bc250kmd.sys`, signed | `00f09bfa` | the same | `2D0F5CB6`, 669584 bytes | `2D0F5CB6` |
 | `kmd/bc250kmd.inf` | `00f09bfa` | the same | `444A5156`, 20866 bytes | `444A5156` |
 | `vulkan/vulkan_radeon.dll` | mesa `d3da6d0a` | `build-mesa.ps1 -Config radv-system` | `4E3F393F`, 21914112 bytes | `4E3F393F` |
+
+The column `registered` holds the hash of the source that the manifest registers for the release. The
+release signs the kernel driver again and edits its INF, so the package holds other bytes for those two
+files. The manifest keeps the Authenticode digest of the signed copy and names the edit of the INF, and
+`provenance.py check --package` compares the package against both.
 
 The kernel driver gives one more result than the table says. The shipped file came from a third output
 directory and from `00f09bfa`, while the first build of the train came from `c0c7a0a1`, the commit before it,
