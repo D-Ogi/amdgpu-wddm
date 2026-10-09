@@ -125,6 +125,9 @@ have their own tests against the same code objects.
   overlaps the address space of the process, the runtime says so one time on the error stream.
 - An asynchronous copy is still a synchronous one, so a copy on one stream waits for that
   stream's own work even when another stream could carry it.
+- One wait can still happen with the process lock held, and it is not ours to move: a submission
+  whose command ring is full waits for the oldest slot inside layer 1. It needs eight dispatches
+  of one process in flight, and the fix belongs to layer 1 (design section 4.7).
 - `__hipRegisterManagedVar` reports a missing capability. Managed memory needs page migration.
 - A kernel that asks for a host call buffer (device-side `printf`) is refused by name. The
   counter of layer 1 answers kill criterion K4 of the route document.

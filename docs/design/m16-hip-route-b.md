@@ -1279,6 +1279,15 @@ Two more consequences, both of them HIP's own semantics and not a compromise:
 - A synchronize clears the event wait that it waited for and not a later one that another thread
   asked for in the meantime.
 
+One wait is left inside the lock, and layer 2 cannot reach it. A submission whose command ring
+is full waits for the oldest slot inside `bc250hsa_dispatch_submit`, under the same bound and
+under layer 1's own device lock (`bc250hsa.h`, rule 5). Layer 2 holds the process lock across a
+submission, because a submission is a system call and not a wait, and the contract gives it no
+ring slot to read. It happens only with eight dispatches of one process in flight, and it
+blocks the other threads' submissions in layer 1 anyway. The fix belongs to layer 1: wait for a
+free slot without holding the device lock. It is open work of step 3 and is not needed before a
+multithreaded application queues eight dispatches.
+
 The owner's instruction of 2026-09-29 is that multithreading is measured with our own clients
 before an application is asked to exercise it. `compute/hip/tests/host/hip_threads_client.h` is
 that client, with a negative control that restores the lock over the wait. Section 5.4 lists what
