@@ -46,9 +46,11 @@ if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 
 # 2. The application, with the string tables embedded.
-$resources = @(Get-ChildItem "$here\strings\strings.*.txt" | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+# Both lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
+# the file system, which the recipe does not own.
+$resources = @(Get-ChildItem "$here\strings\strings.*.txt" | Sort-Object Name | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$exe" @resources (Get-ChildItem "$here\src\*.cs").FullName
+    "/win32manifest:$here\app.manifest" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_setup.exe does not declare TargetFramework .NETFramework,Version=v4.8' }

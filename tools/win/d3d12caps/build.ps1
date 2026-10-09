@@ -42,6 +42,10 @@ if (Test-Path -LiteralPath $previous) {
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
+# /Brepro on cl and link: a content hash where they write a time. /FC with /d1trimfile: __FILE__ and the name that
+# MSVC gives an anonymous namespace (a hash of the source path) see only the path below the repository. Two builds
+# of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
+$repro = @('/Brepro', '/FC', "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
 $variant = @(); if ($AgilitySdkVersion) { $variant = @("/DCAPS_AGILITY_SDK_VERSION=$AgilitySdkVersion") }
 if ($Tool -eq 'd3d12sm68') {
     # The test shaders, compiled by the SDK's dxc (x64 host) into headers the client embeds; dxil.dll next to dxc.exe
@@ -58,10 +62,10 @@ if ($Tool -eq 'd3d12sm68') {
 }
 # d3d12.dll and dxgi.dll are loaded at run time by name, so that an application-local runtime (the per-application
 # route) is used exactly as the game would use it; neither import library is linked.
-& $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
+& $cl @repro @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
-    "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link',
+    "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link', '/Brepro',
     "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
     'version.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$|^\s*Creating library|\.exp$') { Write-Host "  $_" } }
