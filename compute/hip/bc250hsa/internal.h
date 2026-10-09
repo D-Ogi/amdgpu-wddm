@@ -78,6 +78,8 @@ typedef enum bc250hsa_counter {
     BC250HSA_C_UNKNOWN_ARG_KINDS,
     BC250HSA_C_HOSTCALL_BUFFER_REQUESTS,
     BC250HSA_C_DYNAMIC_STACK_REFUSALS,
+    BC250HSA_C_BATCHES_SUBMITTED,
+    BC250HSA_C_DISPATCHES_BATCHED,
     BC250HSA_C_COUNT
 } bc250hsa_counter;
 
@@ -176,5 +178,28 @@ bc250hsa_status bc250hsa_descriptor_read(const uint8_t* bytes, size_t byte_count
 /* pm4_dispatch.c, shared with submit.c. */
 bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
                                             uint32_t lds_bytes_per_workgroup);
+
+/* The dword writer of pm4_dispatch.c, and the three steps of one indirect buffer.
+ * bc250hsa_pm4_build_batch is these three in a row, and submit.c calls them one at a
+ * time: the head when it opens a batch, one append per dispatch, the tail when it
+ * submits. A buffer is therefore written once and not rebuilt per dispatch.
+ *
+ * It holds no state of its own: submit.c makes the writer again from the slot and the
+ * dword count it already keeps. overflow says that the buffer was full; the count then
+ * stops growing and every later put is dropped, so a caller checks the flag. */
+typedef struct bc250hsa_pm4_writer {
+    uint32_t* dwords;
+    uint32_t  capacity;
+    uint32_t  count;
+    int       overflow;
+} bc250hsa_pm4_writer;
+
+void bc250hsa_pm4_writer_init(bc250hsa_pm4_writer* w, uint32_t* dwords, uint32_t capacity,
+                              uint32_t count);
+void bc250hsa_pm4_ib_head(bc250hsa_pm4_writer* w, const bc250hsa_pm4_env* env);
+/* first 1: no barrier in front, because the head's acquire already covers it. */
+bc250hsa_status bc250hsa_pm4_ib_append(bc250hsa_pm4_writer* w, const bc250hsa_dispatch* dispatch,
+                                       const bc250hsa_pm4_env* env, int first);
+bc250hsa_status bc250hsa_pm4_ib_tail(bc250hsa_pm4_writer* w, const bc250hsa_pm4_env* env);
 
 #endif /* BC250HSA_INTERNAL_H */

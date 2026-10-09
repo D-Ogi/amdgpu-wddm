@@ -102,6 +102,38 @@
     (BC250HSA_AM_GCR_GL2_INV | BC250HSA_AM_GCR_GL2_WB | BC250HSA_AM_GCR_GLM_INV | \
      BC250HSA_AM_GCR_GLM_WB | BC250HSA_AM_GCR_GL1_INV | BC250HSA_AM_GCR_GLV_INV | \
      BC250HSA_AM_GCR_GLK_INV | BC250HSA_AM_GCR_GLI_INV)
+/* The acquire between two dispatches of one batched indirect buffer, when the caller
+ * asks for the light barrier (BC250HSA_DISPATCH_LIGHT_BARRIER). It invalidates the
+ * level-0 caches of the reader and the level-1 read cache, and it touches neither the
+ * level-2 cache, nor the metadata cache, nor the instruction cache.
+ *
+ * Why those three bits and no others, from the Mesa radv path for a compute-to-compute
+ * buffer dependency on GFX10 (ref/mesa at 05e6c9622e1):
+ *   - the destination of a shader storage read asks for AC_BARRIER_INV_VMEM, and for
+ *     AC_BARRIER_INV_SMEM as well because ACO reads a storage buffer through the
+ *     scalar unit (src/amd/vulkan/radv_cmd_buffer.c:8133-8147);
+ *   - ac_gfx10_emit_barrier turns INV_VMEM into GLV_INV, INV_SMEM into GLK_INV, and
+ *     adds GL1_INV when either of them is set (src/amd/common/ac_barrier.c:89-103);
+ *   - the level-2 invalidate of that path is behind `if (!image_is_coherent)`, and
+ *     can_skip_buffer_l2_flushes() clears it for a buffer on GFX10 whose
+ *     tcc_rb_non_coherent is false (radv_cmd_buffer.c:7910-7914, 8094);
+ *   - the source of a shader storage write adds nothing else for a buffer
+ *     (radv_cmd_buffer.c:7969-7982);
+ *   - the wait for the waves is EVENT_WRITE(CS_PARTIAL_FLUSH), which the dispatch
+ *     body already emits (ac_barrier.c:289-291).
+ * The instruction cache invalidate stays at the head of the indirect buffer: no code
+ * object is loaded while one buffer is being built, which is why bc250hsa_module_load
+ * submits an open batch first.
+ *
+ * Deviation from Linux, stated as repo rule 7 asks: amdgpu emits the full acquire of
+ * BC250HSA_ACQUIRE_GCR_CNTL in front of every indirect buffer, because it cannot know
+ * what the previous buffer of another client did. This acquire sits inside one
+ * indirect buffer of one device, between two dispatches this library built, so it
+ * carries only the invalidations that dependency needs. Whether gfx1013 reports a
+ * level-2 cache that a buffer dependency may skip is not measured yet, so the light
+ * barrier is a switch and the full acquire stays the default. */
+#define BC250HSA_ACQUIRE_GCR_CNTL_LIGHT                                          \
+    (BC250HSA_AM_GCR_GL1_INV | BC250HSA_AM_GCR_GLV_INV | BC250HSA_AM_GCR_GLK_INV)
 #define BC250HSA_ACQUIRE_POLL_INTERVAL 0x0000000Au
 /* driver/shim/bc250_dispatch.c, BC250_DISPATCH_COHER_START_DELAY. */
 #define BC250HSA_COHER_START_DELAY 0x20u

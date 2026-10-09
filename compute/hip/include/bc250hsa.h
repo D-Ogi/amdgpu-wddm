@@ -6,8 +6,8 @@
  * submission path. The hipBLAS shim and the step-1 host tool use it as well.
  *
  * What this layer owns: one WDDM device on the BC-250 adapter, its memory, the code
- * object loader, the kernel argument packer, the PM4 dispatch stream, one monitored
- * fence and one bounded wait.
+ * object loader, the kernel argument packer, the PM4 dispatch stream, the batching of
+ * dispatches into one indirect buffer, one monitored fence and one bounded wait.
  *
  * What this layer does not own: HIP semantics, streams, events, modules per process,
  * and the offload bundle policy of a compiler. Those belong to layer 2.
@@ -45,7 +45,7 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 0u
+#define BC250HSA_ABI_VERSION_MINOR 1u   /* 1.1 added section 8.1, batching */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -122,6 +122,12 @@ typedef struct bc250hsa_counters {
     uint64_t unknown_arg_kinds;
     uint64_t hostcall_buffer_requests;
     uint64_t dynamic_stack_refusals;
+    /* Section 8.1. submissions / dispatches_built is the number this interface is
+     * measured by: one submission per dispatch is one user-to-kernel transition per
+     * kernel. batches_submitted counts the submissions that carried more than one
+     * dispatch, and dispatches_batched the dispatches that rode in them. */
+    uint64_t batches_submitted;
+    uint64_t dispatches_batched;
 } bc250hsa_counters;
 
 bc250hsa_status bc250hsa_counters_read(bc250hsa_counters* out);
@@ -427,6 +433,9 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
 #define BC250HSA_DISPATCH_START_AT_000 0x4u /* add FORCE_START_AT_000 to the initiator */
 #define BC250HSA_DISPATCH_NO_ACQUIRE 0x8u /* leave out ACQUIRE_MEM; diagnosis only */
 #define BC250HSA_DISPATCH_NO_FENCE   0x10u/* leave out RELEASE_MEM; the caller fences */
+#define BC250HSA_DISPATCH_LIGHT_BARRIER 0x20u /* between two dispatches of one batch, emit
+                                               * the level-0 and level-1 invalidate only.
+                                               * Section 8.1 */
 
 typedef struct bc250hsa_dispatch {
     uint32_t struct_bytes;
@@ -441,6 +450,12 @@ typedef struct bc250hsa_dispatch {
  * not wait for the dispatch. It may wait for a free ring slot, under the bound of
  * bc250hsa_wait's defaults, and returns BC250HSA_EBUSY if none frees.
  *
+ * With batching on (section 8.1) the dispatch is appended to the indirect buffer this
+ * device is building and the submission happens at a flush point. The returned fence
+ * value is then the value of the whole batch: it is a value this device has promised
+ * and not yet submitted, every wait for it submits the batch first, and a caller
+ * cannot tell the difference apart from the timing.
+ *
  * It refuses, and submits nothing: a zero grid or block, a block product above
  * max_flat_workgroup_size, local memory above the device limit, uses_dynamic_stack,
  * a kernarg_va that is not aligned to kernarg_align, and a kernel whose enabled user
@@ -448,6 +463,65 @@ typedef struct bc250hsa_dispatch {
 bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev,
                                          const bc250hsa_dispatch* dispatch,
                                          uint64_t* fence_value_out);
+
+/* ---------------------------------------------------------------------------------
+ * 8.1 Batching
+ *
+ * One dispatch per indirect buffer is one D3DKMTSubmitCommand, and therefore one
+ * user-to-kernel transition and one kernel driver submission, per kernel. A decode step
+ * of a language model issues hundreds of small kernels, so that cost is paid hundreds of
+ * times per token. The kernel driver runs one indirect buffer at a time
+ * (driver/kmd/wddm.c refuses a blob whose num_ibs is not 1), so the answer is not more
+ * indirect buffers per submission: it is more dispatches per indirect buffer.
+ *
+ * With batching on, consecutive dispatches of this device append into one indirect
+ * buffer, separated by the barrier of BC250HSA_DISPATCH_LIGHT_BARRIER or by the full
+ * acquire, and one RELEASE_MEM at the end writes one fence value for the whole buffer.
+ * Every dispatch of the batch therefore reports that one value, which keeps the rule a
+ * caller needs: when the fence reaches the value a dispatch reported, that dispatch has
+ * finished.
+ *
+ * The batch is submitted at the first of these:
+ *   - bc250hsa_flush, bc250hsa_close, or a bc250hsa_wait for a value the device has not
+ *     submitted yet;
+ *   - bc250hsa_free, bc250hsa_map, bc250hsa_unmap, a copy through the host mapping, or a
+ *     module load or unload, because each of them changes memory a dispatch of the open
+ *     batch may name;
+ *   - max_dispatches dispatches, or max_ib_dwords dwords, in the buffer;
+ *   - a dispatch that arrives max_hold_us or more after the batch was opened.
+ * The library runs no thread of its own, so the time cap is read when a call arrives.
+ * Nothing a program can observe stays behind an open batch: every read of the device
+ * goes through one of the flush points above.
+ *
+ * A submission that fails with an open batch loses work this library already promised.
+ * It therefore marks the device lost, where the next call reports it, instead of
+ * returning an error to a caller that did not make that dispatch.
+ * ------------------------------------------------------------------------------- */
+
+#define BC250HSA_BATCH_DISPATCHES_MAX     256u
+#define BC250HSA_BATCH_DISPATCHES_DEFAULT  32u
+#define BC250HSA_BATCH_HOLD_US_DEFAULT   1000u
+
+typedef struct bc250hsa_batch_policy {
+    uint32_t struct_bytes;
+    uint32_t enabled;         /* 0: one submission per dispatch, as build 1 did */
+    uint32_t max_dispatches;  /* 0 takes BC250HSA_BATCH_DISPATCHES_DEFAULT */
+    uint32_t max_ib_dwords;   /* 0 takes what one command ring slot holds */
+    uint32_t max_hold_us;     /* 0 takes BC250HSA_BATCH_HOLD_US_DEFAULT */
+    uint32_t light_barrier;   /* 1: BC250HSA_DISPATCH_LIGHT_BARRIER between dispatches */
+} bc250hsa_batch_policy;
+
+/* Rule 6 of this header keeps policy out of the library: the caller decides. A change
+ * submits an open batch first, so the policy of a dispatch is the policy its buffer was
+ * opened with. */
+bc250hsa_status bc250hsa_batch_policy_set(bc250hsa_device* dev,
+                                          const bc250hsa_batch_policy* policy);
+bc250hsa_status bc250hsa_batch_policy_get(bc250hsa_device* dev, bc250hsa_batch_policy* out);
+
+/* Submits the open batch, if there is one. fence_value_out, when it is not NULL,
+ * receives the value of that submission, or the last submitted value when nothing was
+ * open. It is BC250HSA_OK with batching off and with an empty batch. */
+bc250hsa_status bc250hsa_flush(bc250hsa_device* dev, uint64_t* fence_value_out);
 
 /* --- the pure builder, for the golden test and for a failure report --------------- */
 
@@ -469,6 +543,16 @@ bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
                                             const bc250hsa_pm4_env* env,
                                             uint32_t* dwords, uint32_t dword_capacity,
                                             uint32_t* dwords_written);
+
+/* The same stream for count dispatches in one indirect buffer: one head (the graphics
+ * ring CONTEXT_CONTROL and the full acquire), count dispatch bodies with the barrier of
+ * env->flags between them, and one completion write at the end. count 1 writes exactly
+ * what bc250hsa_pm4_build_dispatch writes, dword for dword. A batch of n dispatches
+ * needs at most n * BC250HSA_PM4_MAX_DWORDS dwords. */
+bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, uint32_t count,
+                                         const bc250hsa_pm4_env* env,
+                                         uint32_t* dwords, uint32_t dword_capacity,
+                                         uint32_t* dwords_written);
 
 /* COMPUTE_PGM_RSRC2.LDS_SIZE for this part: align(bytes, 512) / 512. The command
  * processor writes this field from the AQL packet, and a PM4 path must write it by
@@ -502,11 +586,15 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
  * never enters the kernel and it never fails. UINT64_MAX means a lost device. */
 uint64_t bc250hsa_fence_read(bc250hsa_device* dev);
 
-/* The value of the last submission of this device. 0 before the first one. */
+/* The value the last dispatch of this device writes. 0 before the first one. With
+ * batching on it covers a dispatch that is still in the open batch, because that is what
+ * a caller means by "everything this device owes"; bc250hsa_wait for it submits the
+ * batch. */
 uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev);
 
-/* Waits until the fence reaches value. It reads the host mapping first, and most waits
- * end there. It then waits in slices of slice_ms, up to total_ms in all, and between
+/* Waits until the fence reaches value. A value this device has promised and not yet
+ * submitted submits the open batch first (section 8.1). It reads the host mapping
+ * first, and most waits end there. It then waits in slices of slice_ms, up to total_ms in all, and between
  * two slices it re-reads the fence and asks the operating system whether the device
  * still runs. slice_ms 0 takes 1000 and total_ms 0 takes 120000, which are the
  * measured defaults of our Vulkan driver: one long wait turns a healthy wait behind

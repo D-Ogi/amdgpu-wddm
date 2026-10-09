@@ -164,6 +164,12 @@ hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream) {
         return fail(hipErrorInvalidHandle);
     }
     bc250hip::events_forget(event);
+    // A flush point of section 8.1 of bc250hsa.h. An event is a question about time, and a
+    // launch that is still in an open indirect buffer would answer it with the time of the
+    // whole buffer. The submission here keeps the recorded value the value of the work that
+    // this stream had asked for by now, as it is with batching off. It costs one submission
+    // per record, which a program that records an event per kernel pays on purpose.
+    (void)bc250hsa_flush(dev, nullptr);
     // The event covers everything the stream owes, the event wait it carries among it. The
     // legacy null stream owes the work of the whole device.
     event->fence_value = bc250hip::stream_target_value(dev, target);

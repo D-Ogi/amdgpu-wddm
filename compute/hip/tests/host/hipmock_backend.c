@@ -77,8 +77,19 @@ struct bc250hsa_device {
     uint32_t        magic;
     uint32_t        opens;
     uint64_t        next_va;
-    uint64_t        fence;      /* the last submitted value */
+    uint64_t        fence;      /* the last value handed out, the open batch included */
+    uint64_t        submitted;  /* the last value a submission carried */
     uint64_t        retired;    /* the value the device has reached */
+    /* Section 8.1 of the interface, emulated: a batch holds its dispatches back until a
+     * flush point, so a layer-2 path that forgets to flush before it waits does not
+     * retire here and the test that waits on it fails. That is the whole point of
+     * emulating it: the risk of batching sits in layer 2's flush points, not in the
+     * dwords, which the layer-1 test covers. */
+    bc250hsa_batch_policy batch;
+    int             batch_open;
+    uint32_t        batch_count;
+    uint64_t        batch_fence;
+    uint64_t        batch_opened_ms;
     uint32_t        hold_ms;    /* 0: a dispatch retires at once, as it always did */
     mock_pending_fence pending[MOCK_MAX_PENDING_FENCES];
     uint32_t        pending_count;
@@ -301,6 +312,30 @@ static void mock_retire_due(bc250hsa_device* dev) {
     }
 }
 
+/* Submits the open batch of the mock device. The caller holds the lock. It is the whole
+ * of section 8.1 that this file emulates: the value the dispatches of the batch were
+ * given becomes a submitted value here, and only here does it retire. */
+static void mock_batch_submit_locked(bc250hsa_device* dev) {
+    if (dev == NULL || !dev->batch_open) {
+        return;
+    }
+    dev->batch_open = 0;
+    dev->submitted = dev->batch_fence;
+    g_counters.submissions++;
+    if (dev->batch_count > 1u) {
+        g_counters.batches_submitted++;
+        g_counters.dispatches_batched += dev->batch_count;
+    }
+    if (dev->hold_ms == 0u || dev->pending_count >= MOCK_MAX_PENDING_FENCES) {
+        dev->retired = dev->batch_fence;
+    } else {
+        dev->pending[dev->pending_count].value = dev->batch_fence;
+        dev->pending[dev->pending_count].due_ms = mock_now_ms() + dev->hold_ms;
+        dev->pending_count++;
+    }
+    dev->batch_count = 0;
+}
+
 static void log_line(uint32_t level, const char* message) {
     if (g_log_fn != NULL && level <= g_log_level) {
         g_log_fn(g_log_ctx, level, message);
@@ -392,6 +427,7 @@ void bc250hsa_close(bc250hsa_device* dev) {
         return;
     }
     mock_lock();
+    mock_batch_submit_locked(dev);   /* a flush point of section 8.1, as bc250hsa_close has */
     if (dev->opens > 1u) {
         dev->opens--;
         mock_unlock();
@@ -574,6 +610,9 @@ static bc250hsa_status free_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
 bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem) {
     bc250hsa_status result;
     mock_lock();
+    /* A flush point of section 8.1, as kmt_memory.c has one: a dispatch of the open
+     * batch may name this range. */
+    mock_batch_submit_locked(dev);
     result = free_locked(dev, mem);
     mock_unlock();
     return result;
@@ -606,6 +645,7 @@ static bc250hsa_status map_locked(bc250hsa_device* dev, bc250hsa_mem* mem, void*
 bc250hsa_status bc250hsa_map(bc250hsa_device* dev, bc250hsa_mem* mem, void** out) {
     bc250hsa_status result;
     mock_lock();
+    mock_batch_submit_locked(dev);   /* a flush point of section 8.1 */
     result = map_locked(dev, mem, out);
     mock_unlock();
     return result;
@@ -628,6 +668,7 @@ static bc250hsa_status unmap_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
 bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem) {
     bc250hsa_status result;
     mock_lock();
+    mock_batch_submit_locked(dev);   /* a flush point of section 8.1 */
     result = unmap_locked(dev, mem);
     mock_unlock();
     return result;
@@ -674,6 +715,9 @@ static bc250hsa_status mock_copy(bc250hsa_device* dev, const bc250hsa_mem* mem, 
                                  void* host_side, uint64_t bytes, int to_device) {
     bc250hsa_status result;
     mock_lock();
+    /* A flush point of section 8.1: a copy through the host mapping reads or writes what
+     * the work the caller already asked for reads or wrote. */
+    mock_batch_submit_locked(dev);
     result = copy_locked(dev, mem, offset, host_side, bytes, to_device);
     mock_unlock();
     return result;
@@ -1527,6 +1571,9 @@ bc250hsa_status bc250hsa_module_load(bc250hsa_device* dev, const void* image, si
     if (status != BC250HSA_OK) {
         return status;
     }
+    /* A flush point of section 8.1, as kmt_memory.c has one: it is why the light barrier
+     * may leave the instruction cache to the head of each indirect buffer. */
+    (void)bc250hsa_flush(dev, NULL);
     return load_image(&allocator, image, image_bytes, out);
 }
 
@@ -1797,16 +1844,30 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
 
     mock_lock();
     g_counters.dispatches_built++;
-    g_counters.submissions++;
-    dev->fence++;
-    *fence_value_out = dev->fence;
-    mock_retire_due(dev);
-    if (dev->hold_ms == 0u || dev->pending_count >= MOCK_MAX_PENDING_FENCES) {
-        dev->retired = dev->fence;
+    if (dev->batch.enabled != 0u) {
+        if (!dev->batch_open) {
+            dev->fence++;
+            dev->batch_fence = dev->fence;
+            dev->batch_open = 1;
+            dev->batch_count = 0;
+            dev->batch_opened_ms = mock_now_ms();
+        }
+        dev->batch_count++;
+        *fence_value_out = dev->batch_fence;
+        mock_retire_due(dev);
     } else {
-        dev->pending[dev->pending_count].value = dev->fence;
-        dev->pending[dev->pending_count].due_ms = mock_now_ms() + dev->hold_ms;
-        dev->pending_count++;
+        g_counters.submissions++;
+        dev->fence++;
+        dev->submitted = dev->fence;
+        *fence_value_out = dev->fence;
+        mock_retire_due(dev);
+        if (dev->hold_ms == 0u || dev->pending_count >= MOCK_MAX_PENDING_FENCES) {
+            dev->retired = dev->fence;
+        } else {
+            dev->pending[dev->pending_count].value = dev->fence;
+            dev->pending[dev->pending_count].due_ms = mock_now_ms() + dev->hold_ms;
+            dev->pending_count++;
+        }
     }
 
     {
@@ -1855,6 +1916,63 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
             record_line(record);
         }
     }
+    /* The caps of section 8.1: the dispatch count, and the time since the batch was
+     * opened. The mock's clock has millisecond resolution, so a hold below one
+     * millisecond is read as "submit every dispatch at once", which is what a caller
+     * that passes max_hold_us 1 asks for. */
+    if (dev->batch_open &&
+        (dev->batch_count >= dev->batch.max_dispatches ||
+         mock_now_ms() - dev->batch_opened_ms >= (uint64_t)dev->batch.max_hold_us / 1000u)) {
+        mock_batch_submit_locked(dev);
+    }
+    mock_unlock();
+    return BC250HSA_OK;
+}
+
+/* Section 8.1. The policy is the caller's, and a change submits what is open. */
+bc250hsa_status bc250hsa_batch_policy_set(bc250hsa_device* dev,
+                                          const bc250hsa_batch_policy* policy) {
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || policy == NULL ||
+        policy->struct_bytes != (uint32_t)sizeof(*policy)) {
+        return BC250HSA_EINVAL;
+    }
+    if (policy->max_dispatches > BC250HSA_BATCH_DISPATCHES_MAX) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    mock_batch_submit_locked(dev);
+    dev->batch = *policy;
+    if (dev->batch.max_dispatches == 0u) {
+        dev->batch.max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
+    }
+    if (dev->batch.max_hold_us == 0u) {
+        dev->batch.max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
+    }
+    mock_unlock();
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_batch_policy_get(bc250hsa_device* dev, bc250hsa_batch_policy* out) {
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || out == NULL ||
+        out->struct_bytes != (uint32_t)sizeof(*out)) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    *out = dev->batch;
+    out->struct_bytes = (uint32_t)sizeof(*out);
+    mock_unlock();
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_flush(bc250hsa_device* dev, uint64_t* fence_value_out) {
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    mock_batch_submit_locked(dev);
+    if (fence_value_out != NULL) {
+        *fence_value_out = dev->submitted;
+    }
     mock_unlock();
     return BC250HSA_OK;
 }
@@ -1894,9 +2012,14 @@ bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t sli
     }
     mock_lock();
     g_counters.waits++;
+    /* The flush point of every wait (section 8.1): a value this device promised and has
+     * not submitted yet can never retire, so the batch goes out first. */
+    if (value > dev->submitted) {
+        mock_batch_submit_locked(dev);
+    }
     mock_retire_due(dev);
     retired = dev->retired;
-    submitted = dev->fence;
+    submitted = dev->submitted;
     hold_ms = dev->hold_ms;
     if (value <= retired) {
         g_counters.waits_fast++;
@@ -1979,6 +2102,9 @@ bc250hsa_status bc250hsa_last_ib(bc250hsa_device* dev, const uint32_t** dwords, 
 
 void bc250hsa_mock_reset(void) {
     mock_lock();
+    /* An open batch is submitted and not dropped: its value is already in the hands of
+     * whatever ran before this reset, and a dropped value would hang the next wait. */
+    mock_batch_submit_locked(&g_device);
     g_record_count = 0u;
     memset(&g_counters, 0, sizeof(g_counters));
     g_counters.struct_bytes = (uint32_t)sizeof(g_counters);

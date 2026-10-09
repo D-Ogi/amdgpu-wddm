@@ -135,6 +135,8 @@ bc250hsa_status bc250hsa_counters_read(bc250hsa_counters* out)
     out->unknown_arg_kinds         = counter_read(BC250HSA_C_UNKNOWN_ARG_KINDS);
     out->hostcall_buffer_requests  = counter_read(BC250HSA_C_HOSTCALL_BUFFER_REQUESTS);
     out->dynamic_stack_refusals    = counter_read(BC250HSA_C_DYNAMIC_STACK_REFUSALS);
+    out->batches_submitted         = counter_read(BC250HSA_C_BATCHES_SUBMITTED);
+    out->dispatches_batched        = counter_read(BC250HSA_C_DISPATCHES_BATCHED);
     return BC250HSA_OK;
 }
 
