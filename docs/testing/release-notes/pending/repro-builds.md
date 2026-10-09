@@ -20,4 +20,6 @@ step copies the lines into `docs/testing/release-notes/<version>-tester.N.md` an
 ## Known behaviour
 
 - The catalog file of the kernel driver (`bc250kmd.cat`) is still different in every build, because every
-  build signs a new one. The driver itself (`bc250kmd.sys`) and its `.inf` are the same bytes.
+  build signs a new one. The driver image is the same in every build. The signature of `bc250kmd.sys` and
+  the version line of `bc250kmd.inf` belong to the release, and the manifest records the hash of the driver
+  image below its signature.
