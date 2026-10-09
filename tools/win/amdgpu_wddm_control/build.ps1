@@ -48,7 +48,8 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs' |
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
+    'LayoutRules.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
@@ -243,6 +244,65 @@ if (-not $NoSmoke) {
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }
     Write-Host "  tuning dry runs: $($tune.Count) plans, 4 refusals, 10 usage errors"
+    # The graphics settings for games (src/GraphicsSettings.cs): a setting for all games, a value stored already, a
+    # value removed, one game's value removed together with its key left empty, a game value next to its switches,
+    # and a reading without the keys (the BD-059 snapshot has none); then the usage errors. The Vulkan names
+    # (GraphicsSettings.AwaitingIcd) are not offered in this release, so --gfx refuses them as usage errors.
+    $graphicsKey = 'HKLM\SOFTWARE\amdgpu-wddm\Graphics'
+    $w3Graphics = 'HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe'
+    $gfx = [ordered]@{
+        'all-vsync'  = @(@('graphics-defaults', '--gfx', 'VSync=1,Anisotropy=16'), $tuned, 0, "set $graphicsKey VSync = 1 (DWord)", "set $graphicsKey Anisotropy = 16 (DWord)",
+                         'takes effect: the next time a game starts', 'undo: yes')
+        'all-stored' = @(@('graphics-defaults', '--gfx', 'FrameRateLimit=60'), $tuned, 3, 'refused: These settings for all games are stored already.')
+        'all-unset'  = @(@('graphics-defaults', '--gfx', 'FrameRateLimit=unset'), $tuned, 0, "delete $graphicsKey FrameRateLimit")
+        'game-unset' = @(@('game-profile', '--image', 'witcher3.exe', '--gfx', 'VSync=unset'), $tuned, 0, "delete $w3Graphics VSync", "delete key $w3Graphics (empty)",
+                         'takes effect: the next time witcher3.exe starts')
+        'game-both'  = @(@('game-profile', '--image', 'witcher3.exe', '--value', 'shader-model-68-off', '--gfx', 'FrameRateLimit=144'), $tuned, 0,
+                         "set $w3Graphics FrameRateLimit = 144 (DWord)", 'shader-model-68-off')
+        'unreadable' = @(@('graphics-defaults', '--gfx', 'VSync=1'), $snapshot, 3, 'refused: The graphics settings cannot be read')
+    }
+    foreach ($e in $gfx.GetEnumerator()) {
+        $r = Invoke-DryRun (@('--action') + $e.Value[0] + @('--dry-run', '--snapshot', $e.Value[1])) "gfx-$($e.Key)"
+        if ($r.Code -ne $e.Value[2]) { throw "dry run gfx $($e.Key): exit $($r.Code), $($e.Value[2]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 3) {
+            if (-not $r.Text.Contains($want)) { throw "dry run gfx $($e.Key): '$want' missing: $($r.Text)" }
+        }
+    }
+    foreach ($bad in @(@('graphics-defaults'), @('graphics-defaults', '--gfx', 'VSync=2'), @('graphics-defaults', '--gfx', 'Bogus=1'), @('graphics-defaults', '--gfx', 'VSync=1,VSync=0'),
+            @('graphics-defaults', '--gfx', 'WsiRoute=gdi'), @('game-profile', '--image', 'witcher3.exe', '--gfx', 'MemoryOverflow=strict'),
+            @('graphics-defaults', '--image', 'witcher3.exe', '--gfx', 'VSync=1'), @('reset-defaults', '--gfx', 'VSync=1'),
+            @('game-profile', '--image', 'witcher3.exe'), @('game-undo', '--image', 'witcher3.exe', '--gfx', 'VSync=1'))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $tuned)) ('usage-gfx-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
+    Write-Host "  graphics dry runs: $($gfx.Count) plans and refusals, 10 usage errors"
+    # How long Windows waits for the graphics (src/TdrSetting.cs, BD-079): the one write, the range, and the
+    # waiting time that is in force already. The recorded snapshots have no TdrDelay, which is the state of a
+    # machine the installer never touched.
+    $tdrKey = 'HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+    $tdr = [ordered]@{
+        'set10'  = @(@('--tdr', '10'), 0, "set $tdrKey TdrDelay = 10 (DWord)", 'takes effect: at the next restart of Windows', 'undo: yes')
+        'set2'   = @(@('--tdr', '2'), 0, "set $tdrKey TdrDelay = 2 (DWord)")
+        'set60'  = @(@('--tdr', '60'), 0, "set $tdrKey TdrDelay = 60 (DWord)")
+        'short'  = @(@('--tdr', '1'), 3, 'refused: The waiting time must be between 2 and 60 seconds.')
+        'long'   = @(@('--tdr', '600'), 3, 'refused: The waiting time must be between 2 and 60 seconds.')
+    }
+    foreach ($e in $tdr.GetEnumerator()) {
+        $r = Invoke-DryRun (@('--action', 'tdr-delay') + $e.Value[0] + @('--dry-run', '--snapshot', $snapshot)) "tdr-$($e.Key)"
+        if ($r.Code -ne $e.Value[1]) { throw "dry run tdr $($e.Key): exit $($r.Code), $($e.Value[1]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 2) {
+            if (-not $r.Text.Contains($want)) { throw "dry run tdr $($e.Key): '$want' missing: $($r.Text)" }
+        }
+    }
+    # The dry run never writes, so the waiting time of this PC decides whether the same number is a change or a
+    # refusal: both are a pass, a usage error is not.
+    $r = Invoke-DryRun @('--action', 'tdr-delay', '--tdr', '10', '--dry-run') 'tdr-this-pc'
+    if ($r.Code -ne 0 -and $r.Code -ne 3) { throw "dry run of the waiting time on this PC (exit $($r.Code)): $($r.Text)" }
+    foreach ($bad in @(@('tdr-delay'), @('tdr-delay', '--tdr', 'ten'), @('tdr-delay', '--tdr', '-5'), @('reopen-gpu-path', '--tdr', '10'), @('reset-defaults', '--tdr', '10'))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-tdr-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
+    Write-Host "  graphics waiting time: $($tdr.Count) plans and refusals, 5 usage errors"
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'

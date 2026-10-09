@@ -14,8 +14,9 @@ struct RuntimeSurfaceRequest {
     HANDLE runtime_resource=nullptr;
     UINT vidpn_source=0;
     // Displayable uses the same linear LB7A layout; only pPrimaryDesc sets
-    // allocation Flags.Primary and a VidPnSourceId.
-    bool primary=false,shared=false,cpu_read=false,displayable=false;
+    // allocation Flags.Primary and a VidPnSourceId. scanout (M15.14): the v3
+    // record carries SCANOUT, which only a primary without cpu_read may ask.
+    bool primary=false,shared=false,cpu_read=false,displayable=false,scanout=false;
 };
 HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,RuntimeSurfaceAllocation &);
 // Caller must retire engine/Present use and destroy image wrappers first.

@@ -30,4 +30,27 @@ inline HRESULT query_adapter_identity(HANDLE adapter,PFND3DDDI_QUERYADAPTERINFOC
     luid=(UINT64(identity.luid_high)<<32)|identity.luid_low;
     return S_OK;
 }
+// M15.14 increment 3: the scan-out caps trailer of a zero-initialized query buffer, or a zeroed structure.
+// The caller tests flags, which is zero unless every header field was right; post_width and post_height are
+// the geometry of the source mode the kernel driver admits a flip at now. The same decode as the D3D12
+// shell's (driver/umd/d3d12/adapter-contract.h) and the router front's.
+inline bc250_scanout_caps decode_scanout_caps(const unsigned char *data,size_t bytes) noexcept {
+    bc250_scanout_caps caps{};
+    if (!data || bytes<BC250_SCANOUT_CAPS_TOTAL) return {};
+    std::memcpy(&caps,data+BC250_SCANOUT_CAPS_OFFSET,sizeof(caps));
+    if (caps.magic!=BC250_SCANOUT_CAPS_MAGIC || caps.version!=BC250_SCANOUT_CAPS_VERSION ||
+        caps.size!=sizeof(caps) || !caps.post_width || !caps.post_height) return {};
+    return caps;
+}
+// The trailer of this moment. A kernel driver that commits display modes answers each query with the
+// source mode of that moment, so the shell asks again for every primary it creates instead of keeping the
+// copy of the adapter's open. A failed query is no trailer, which keeps the composed primary.
+inline bc250_scanout_caps query_scanout_caps(HANDLE adapter,PFND3DDDI_QUERYADAPTERINFOCB query) noexcept {
+    if (!adapter || !query) return {};
+    unsigned char data[BC250_SCANOUT_CAPS_TOTAL]{};
+    D3DDDICB_QUERYADAPTERINFO request{};
+    request.pPrivateDriverData=data; request.PrivateDriverDataSize=sizeof(data);
+    if (FAILED(query(adapter,&request))) return {};
+    return decode_scanout_caps(data,sizeof(data));
+}
 }

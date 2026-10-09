@@ -175,6 +175,17 @@ inline HRESULT get_adapter_caps(const AdapterCaps &caps,const D3D10_2DDIARG_GETC
             caps.options3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer});
     case D3DWDDM2_0DDICAPS_GPUVA_CAPS:
         return write_adapter_cap(args,D3DWDDM2_0DDI_GPUVA_CAPS_DATA{adapter_gpuva_bits_per_resource});
+    // BD-099: the two queries of the WDDM 2.2 interface. Both say "nothing of this is offered", which is what
+    // the engine and this shell do. The runtime asks them before it picks an interface, so the answer does not
+    // depend on the interface it picks.
+    case D3DWDDM2_2DDICAPS_SHADERCACHE:
+        // The engine keeps its own pipeline cache (DXVK). No session of the runtime's cache is asked for, so the
+        // four shader-cache entries of the WDDM 2.2 table are never called (ddi-wddm22.cpp).
+        return write_adapter_cap(args,D3DWDDM2_2DDICAPS_SHADERCACHE_DATA{FALSE});
+    case D3DWDDM2_2DDICAPS_TEXTURE_LAYOUT:
+        // As the deprecated WDDM 2.0 answer above: no device-dependent layout or swizzle, no 64 KB standard
+        // swizzle, and no indexable swizzle patterns. The counts are zero, so no pattern is ever asked for.
+        return write_adapter_cap(args,D3DWDDM2_2DDI_TEXTURE_LAYOUT_CAPS{0,0,FALSE,FALSE});
     default:break;
     }
     // No invented layout or capability for an unknown query. Say once which one it was.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
-// M15.14 increment 2: whether this shell asks for a scan-out primary, in one function the host test can
-// drive through every answer.
+// M15.14: whether this shell asks for a scan-out primary, in one function the host test can drive through
+// every answer.
 //
 // The decision is a stand-down, never a failure. Everything it can refuse is a property of the start, of
 // the operator's switches or of the chain's geometry, and in every one of those cases the right outcome is
@@ -11,43 +11,64 @@
 // local segment with no CPU access for a flip the kernel driver would refuse (and refuse after the OS has
 // taken SharedPrimaryTransition, which does not fall back to composition seamlessly - a black output).
 //
-// The clauses, in the order they are asked:
-//   ModeOff        AMDGPU_WDDM_D3D12_EXPERIMENT does not name the scan-out mode. The driver's default.
-//   OtherIntent    the same list also names present-cached or present-noprimary, which describe the
-//                  opposite intent for the same buffer (a cached CPU reader, or no primary at all).
-//   ModeGeometry   the chain is not the geometry the mode names ("scanout-flip-1920x1200").
-//   ForceCpu       the desktop route's kill switch DwmForceCpu is on, so the compositor is the CPU UMD,
-//                  which reads every primary on the CPU to compose it. There is no CheckDirectFlipSupport
-//                  on that route and no flip to be had, while the request alone would cost that reader its
-//                  write-combined aperture mapping (experiments 104 and 107).
-//   CapsClosed     the kernel driver published no scan-out trailer, or published one without
-//                  BC250_SCANOUT_CAPS_DIRECT_FLIP: an older driver, or an operator switch that is off.
-//   SourceGeometry the chain is not the geometry of the source mode the trailer carries, which is the one
-//                  geometry Bc250ScanoutAdmit admits a flip at. The clause compares against the trailer
-//                  and never against a size of its own, so it follows whatever source mode the kernel
-//                  driver offers (the same rule the router's front applies on the compositor's side).
-//   Format         the chain's format is not a SCANOUT_PRIMARY row of the shared table, or is a row with
-//                  no DXGI name (so the compositor's opener could not take its record).
-//   Pitch          the engine's row pitch is not the one pitch every component derives
-//                  (scanout_row_pitch). Nothing downstream could check a pitch only this shell knows.
+// Increment 3 (2026-10-08). The scan-out primary is the driver's default, and the geometry it is asked for
+// is the source mode the kernel driver has committed, not a size the operator names. Trial 478 is why:
+// The Witcher 3 scanned out its own buffers at the native mode in exclusive fullscreen and in borderless,
+// and stayed composed in exclusive fullscreen at 1920x1080 only because increment 2's experiment named
+// 1920x1200 while the kernel driver had committed a real 1080 mode. The caller reads the trailer again for
+// every primary it creates (RuntimeHeapImports::scanout_caps_now), so the geometry clause follows a mode
+// change of a running game.
 //
-// ModeGeometry sits before the switches on purpose: a start with the mode named for another monitor must
-// read as "this chain is not the one" and not as "the kernel driver said no", or a trial would chase a
-// switch that was never the reason.
+// The clauses, in the order they are asked:
+//   ModeOff        the operator's off switch: the experiment list (AMDGPU_WDDM_D3D12_EXPERIMENT, the
+//                  application's profile or the machine value under HKLM\SOFTWARE\amdgpu-wddm\D3D12) names
+//                  "scanout-flip-off", as every default of this shell is turned off (ddi_experiment_off).
+//   OtherIntent    the same list names present-cached or present-noprimary, which describe the opposite
+//                  intent for the same buffer (a cached CPU reader, or no primary at all).
+//   then the rule both application shells share (driver/contract/bc250_scanout_primary.h):
+//   ForceCpu       the desktop route's kill switch DwmForceCpu is on, so the compositor is the CPU UMD.
+//   DesktopRoute   the compositor's record (driver/contract/bc250_desktop_route.h, read for every primary)
+//                  does not say GPU: the router in dwm.exe took the CPU UMD, including the fallback after a
+//                  failed hosted open, or there is no record from the compositor's account.
+//   CapsClosed     the kernel driver published no scan-out trailer, or one without DIRECT_FLIP.
+//   SourceGeometry the chain is not the geometry of the source mode the trailer carries now, and not a
+//                  source mode the kernel driver offers either (the mode list, asked only for such a chain;
+//                  why in bc250_scanout_primary.h).
+//   Format         the chain's format is not a SCANOUT_PRIMARY row with a DXGI name, or is a row other
+//                  than the firmware's own format while the trailer lacks BC250_SCANOUT_CAPS_PLANE_FORMATS
+//                  (a kernel driver before 0.7.216.20 does not program the plane's pixel format, so RGBA8
+//                  and RGB10A2 stay composed there).
+//   Pitch          the engine's row pitch is not the one pitch every component derives (scanout_row_pitch).
+//
+// The increment-2 spelling "scanout-flip-1920x1200" still reads as an explicit on, and so does a bare
+// "scanout-flip": a lab script written for increment 2 keeps working. The named geometry is not compared
+// any more. A geometry named by the operator is a guess about the mode, and the kernel driver's trailer is
+// the mode itself; the guess is what kept 478's 1080 chain composed.
 #include "allocation-request.h"
 #include "ddi-trace.h"
 #include "../../contract/bc250_scanout_caps.h"
+#include "../../contract/bc250_scanout_primary.h"
+#include "../../contract/bc250_desktop_route.h"
+#include <d3dkmthk.h>
+#include <cstring>
+#include <memory>
+#include <new>
 namespace native12 {
+// The train rule (owner, 2026-10-05): a finished, measured feature is on by default, with a switch to turn
+// it off. Measured: the plan A client 600 of 600 frames at FlipOnNextVSync (K227), The Witcher 3 2028 of
+// 2028 flips in exclusive fullscreen and 1696 of 1696 in borderless at the native mode with FlipImmediate,
+// 0 refusals, and a mode change away from a flipping chain without a black output (trial 478).
+inline constexpr bool kScanoutDefaultOn=true;
 enum class ScanoutStandDown : unsigned {
-    Admitted,ModeOff,OtherIntent,ModeGeometry,ForceCpu,CapsClosed,SourceGeometry,Format,Pitch,Count
+    Admitted,ModeOff,OtherIntent,ForceCpu,DesktopRoute,CapsClosed,SourceGeometry,Format,Pitch,Count
 };
 inline const char* scanout_stand_down_text(ScanoutStandDown reason) noexcept {
     switch(reason){
     case ScanoutStandDown::Admitted:return "admitted";
     case ScanoutStandDown::ModeOff:return "mode-off";
     case ScanoutStandDown::OtherIntent:return "other-intent";
-    case ScanoutStandDown::ModeGeometry:return "mode-geometry";
     case ScanoutStandDown::ForceCpu:return "force-cpu";
+    case ScanoutStandDown::DesktopRoute:return "desktop-route";
     case ScanoutStandDown::CapsClosed:return "caps-closed";
     case ScanoutStandDown::SourceGeometry:return "source-geometry";
     case ScanoutStandDown::Format:return "format";
@@ -55,54 +76,165 @@ inline const char* scanout_stand_down_text(ScanoutStandDown reason) noexcept {
     default:return "unknown";
     }
 }
+// Where the on or off came from, for the trace: the default, a list that names the mode, or the off switch.
+enum class ScanoutSwitch : unsigned {Default,Named,Off};
+inline const char* scanout_switch_text(ScanoutSwitch value) noexcept {
+    switch(value){
+    case ScanoutSwitch::Default:return "default";
+    case ScanoutSwitch::Named:return "named";
+    case ScanoutSwitch::Off:return "off";
+    default:return "unknown";
+    }
+}
+// The off switch wins over everything, because a switch may only subtract from the validated default.
+// With kScanoutDefaultOn false, Default reads as Off and only a named mode turns the request on.
+inline ScanoutSwitch scanout_switch(const char* experiments) noexcept {
+    if(ddi_experiment_listed(experiments,"scanout-flip-off"))return ScanoutSwitch::Off;
+    unsigned width=0,height=0;
+    if(ddi_experiment_listed(experiments,"scanout-flip") || ddi_experiment_scanout(experiments,&width,&height))
+        return ScanoutSwitch::Named;
+    return kScanoutDefaultOn?ScanoutSwitch::Default:ScanoutSwitch::Off;
+}
 struct ScanoutDecision {
     ScanoutStandDown reason{ScanoutStandDown::ModeOff};
     bool admitted{};                            // reason==Admitted
-    // What the mode named, for the trace: 0 when the list named no mode.
-    unsigned mode_width{},mode_height{};
+    ScanoutSwitch switch_state{ScanoutSwitch::Off};
 };
 // width, height and pitch are the chain's as engine-ddi described it; dxgi is D3D12DDIARG_CREATERESOURCE's
-// Format. caps is the adapter's published trailer (all zero when there is none) and force_cpu the desktop
-// router's kill switch as that router reads it (any non-zero value, and any value of the wrong type, is on).
+// Format. caps is the trailer as read for this primary (all zero when there is none), force_cpu the
+// desktop router's kill switch as that router reads it (any non-zero value, and any value of the wrong
+// type, is on), desktop_gpu whether the compositor's record, read for this primary, says GPU, and
+// offered_mode whether the kernel driver's mode list holds width x height (scanout_mode_offered). The
+// caller asks the list only after a first answer of SourceGeometry with offered_mode false.
 inline ScanoutDecision scanout_decide(const char* experiments,const bc250_scanout_caps& caps,
-                                      unsigned long force_cpu,unsigned dxgi,
-                                      unsigned width,unsigned height,unsigned pitch) noexcept {
+                                      unsigned long force_cpu,bool desktop_gpu,unsigned dxgi,
+                                      unsigned width,unsigned height,unsigned pitch,
+                                      bool offered_mode=false) noexcept {
     ScanoutDecision out{};
-    if(!ddi_experiment_scanout(experiments,&out.mode_width,&out.mode_height)){
-        out.reason=ScanoutStandDown::ModeOff;return out;
-    }
+    out.switch_state=scanout_switch(experiments);
+    if(out.switch_state==ScanoutSwitch::Off){out.reason=ScanoutStandDown::ModeOff;return out;}
     if(ddi_experiment_listed(experiments,"present-cached") ||
        ddi_experiment_listed(experiments,"present-noprimary")){
         out.reason=ScanoutStandDown::OtherIntent;return out;
     }
-    if(width!=out.mode_width || height!=out.mode_height){
-        out.reason=ScanoutStandDown::ModeGeometry;return out;
+    switch(bc250_scanout_primary_rule(&caps,force_cpu,desktop_gpu?1:0,dxgi,width,height,pitch,offered_mode?1:0)){
+    case BC250_SCANOUT_PRIMARY_ADMITTED:out.reason=ScanoutStandDown::Admitted;out.admitted=true;break;
+    case BC250_SCANOUT_PRIMARY_FORCE_CPU:out.reason=ScanoutStandDown::ForceCpu;break;
+    case BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE:out.reason=ScanoutStandDown::DesktopRoute;break;
+    case BC250_SCANOUT_PRIMARY_CAPS_CLOSED:out.reason=ScanoutStandDown::CapsClosed;break;
+    case BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY:out.reason=ScanoutStandDown::SourceGeometry;break;
+    case BC250_SCANOUT_PRIMARY_FORMAT:out.reason=ScanoutStandDown::Format;break;
+    default:out.reason=ScanoutStandDown::Pitch;break;
     }
-    if(force_cpu){out.reason=ScanoutStandDown::ForceCpu;return out;}
-    if(!(caps.flags&BC250_SCANOUT_CAPS_DIRECT_FLIP)){out.reason=ScanoutStandDown::CapsClosed;return out;}
-    if(width!=caps.post_width || height!=caps.post_height){
-        out.reason=ScanoutStandDown::SourceGeometry;return out;
-    }
-    const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(dxgi),
-                                              AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
-    if(!row || !row->dxgi){out.reason=ScanoutStandDown::Format;return out;}
-    if(!pitch || pitch!=scanout_row_pitch(width)){out.reason=ScanoutStandDown::Pitch;return out;}
-    out.reason=ScanoutStandDown::Admitted;out.admitted=true;return out;
+    // The clauses this function asked inline up to increment 2 are now the shared rule above, which both
+    // application shells call; the PLANE_FORMATS half of the format clause moved with them
+    // (driver/contract/bc250_scanout_primary.h).
+    return out;
 }
 // The desktop router's kill switch, read the way the router itself reads it (driver/umd/router/router.cpp
-// ReadConfig): absent is 0, a DWORD is its value, any other type counts as set. Read once per process,
+// ReadDword): absent is 0, a DWORD is its value, anything else - another type, a longer value
+// (ERROR_MORE_DATA), a value the process may not read - counts as set. Read once per process,
 // like every other switch of this shell: the router reads it at the compositor's adapter open and a change
 // takes a new dwm.exe anyway, so a later value could not describe the compositor this process is talking to.
+// The 64-bit view on both images (ddi_detail::registry_view): the router lives in the 64-bit compositor, so
+// the value that steers it is the 64-bit one, and the x86 shell of a 32-bit game must read that one too.
 inline unsigned long scanout_force_cpu_read() noexcept {
     DWORD value=0,bytes=sizeof(value),type=0;
     const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\amdgpu-wddm\\DesktopRouter",
-                                      L"DwmForceCpu",RRF_RT_ANY,&type,&value,&bytes);
-    if(status!=ERROR_SUCCESS)return 0;                       // absent, or unreadable: the router's 0
-    if(type!=REG_DWORD || bytes!=sizeof(value))return 1;     // fail safe, exactly as the router does
+                                      L"DwmForceCpu",RRF_RT_ANY|ddi_detail::registry_view,&type,&value,&bytes);
+    if(status==ERROR_FILE_NOT_FOUND)return 0;                // absent: the router's 0
+    if(status!=ERROR_SUCCESS || type!=REG_DWORD || bytes!=sizeof(value))return 1;  // fail safe, as the router
     return value;
 }
 inline unsigned long scanout_force_cpu() noexcept {
     static const unsigned long value=scanout_force_cpu_read();
     return value;
+}
+// The compositor's desktop-route record, read for every primary like the trailer and never cached: dwm.exe
+// can restart while a game runs, and its route with it (the kernel driver swap does exactly that). The
+// caller holds the reader as a function pointer so that the host tests can put a double in place of the
+// compositor; the shell itself only ever reads the session's record from the compositor's account.
+inline unsigned scanout_desktop_route_read(bc250_desktop_route* record) noexcept {
+    return bc250_desktop_route_read_session(record);
+}
+// The kernel driver's mode list, for a chain that is not the committed mode (C71, session 480: a game
+// makes its exclusive-fullscreen chain before the mode commit). The answer, for the clause and the trace:
+//   NotRead     the list was not asked: the chain is the committed mode, or another clause decided first
+//   Offered     the video present source offers a source mode of the chain's width and height
+//   NotOffered  the list was read and holds no such mode
+//   Failed      the adapter could not be opened or closed, or the list could not be read
+// Failed and NotOffered both keep the composed primary.
+enum class ScanoutModeList : unsigned {NotRead,Offered,NotOffered,Failed};
+inline const char* scanout_mode_list_text(ScanoutModeList value) noexcept {
+    switch(value){
+    case ScanoutModeList::NotRead:return "not-read";
+    case ScanoutModeList::Offered:return "offered";
+    case ScanoutModeList::NotOffered:return "not-offered";
+    case ScanoutModeList::Failed:return "failed";
+    default:return "unknown";
+    }
+}
+struct ScanoutModeKmt {
+    PFND3DKMT_OPENADAPTERFROMLUID open{};
+    PFND3DKMT_GETDISPLAYMODELIST list{};
+    PFND3DKMT_CLOSEADAPTER close{};
+};
+// A list longer than this is not read (tools/win/dxgimodes has the same cap). The kernel driver offers a few
+// geometries in a few formats, so a real list is short.
+inline constexpr UINT kScanoutModeListMax=4096;
+// One question: does BC250_SCANOUT_VIDPN_SOURCE of the adapter with this LUID offer a width x height source
+// mode now. The list is counted first and then read; a list that grew between the two calls
+// (STATUS_BUFFER_TOO_SMALL) is counted once more. Only the geometry is compared: the format clause and the
+// kernel driver decide the format, and the list has one entry per format and refresh rate. The adapter handle
+// is this function's own and is closed before it returns; a close that fails makes the answer Failed.
+inline ScanoutModeList scanout_mode_offered(const LUID& luid,const ScanoutModeKmt& kmt,
+                                            unsigned width,unsigned height) noexcept {
+    if(!kmt.open || !kmt.list || !kmt.close || !width || !height)return ScanoutModeList::Failed;
+    constexpr NTSTATUS buffer_too_small=static_cast<NTSTATUS>(0xC0000023L);   // STATUS_BUFFER_TOO_SMALL
+    D3DKMT_OPENADAPTERFROMLUID opened{};opened.AdapterLuid=luid;
+    const NTSTATUS open_status=kmt.open(&opened);
+    if(open_status<0)return ScanoutModeList::Failed;
+    ScanoutModeList answer=ScanoutModeList::Failed;
+    for(int attempt=0;open_status==0 && opened.hAdapter && attempt<2;++attempt){
+        D3DKMT_GETDISPLAYMODELIST query{};
+        query.hAdapter=opened.hAdapter;query.VidPnSourceId=BC250_SCANOUT_VIDPN_SOURCE;
+        if(kmt.list(&query)!=0 || query.ModeCount>kScanoutModeListMax)break;
+        if(!query.ModeCount){answer=ScanoutModeList::NotOffered;break;}
+        const UINT count=query.ModeCount;
+        std::unique_ptr<D3DKMT_DISPLAYMODE[]> modes(new(std::nothrow) D3DKMT_DISPLAYMODE[count]{});
+        if(!modes)break;
+        query.pModeList=modes.get();
+        const NTSTATUS status=kmt.list(&query);
+        if(status==buffer_too_small)continue;
+        if(status!=0 || query.ModeCount>count)break;
+        answer=ScanoutModeList::NotOffered;
+        for(UINT i=0;i<query.ModeCount;++i)
+            if(modes[i].Width==width && modes[i].Height==height){answer=ScanoutModeList::Offered;break;}
+        break;
+    }
+    if(opened.hAdapter){
+        D3DKMT_CLOSEADAPTER closed{};closed.hAdapter=opened.hAdapter;
+        if(kmt.close(&closed)!=0)return ScanoutModeList::Failed;
+    }
+    return answer;
+}
+// The shell's reader: gdi32's entries, the adapter's LUID. Like the desktop-route record, the caller holds
+// it as a function pointer so that the host tests can answer for the kernel driver.
+inline ScanoutModeList scanout_mode_list_read(UINT64 luid,unsigned width,unsigned height) noexcept {
+    if(!luid)return ScanoutModeList::Failed;
+    HMODULE gdi=LoadLibraryExW(L"gdi32.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!gdi)return ScanoutModeList::Failed;
+    ScanoutModeKmt kmt{};
+    const auto entry=[gdi](auto& function,const char* name) noexcept {
+        const FARPROC address=GetProcAddress(gdi,name);
+        static_assert(sizeof(function)==sizeof(address));std::memcpy(&function,&address,sizeof(function));
+    };
+    entry(kmt.open,"D3DKMTOpenAdapterFromLuid");
+    entry(kmt.list,"D3DKMTGetDisplayModeList");
+    entry(kmt.close,"D3DKMTCloseAdapter");
+    LUID adapter{};std::memcpy(&adapter,&luid,sizeof(adapter));
+    const ScanoutModeList answer=scanout_mode_offered(adapter,kmt,width,height);
+    FreeLibrary(gdi);
+    return answer;
 }
 }

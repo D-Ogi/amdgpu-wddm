@@ -35,6 +35,10 @@ namespace AmdgpuWddmControl
                 if (more.Games != null) { verb.Add("--games"); verb.Add(more.Games); }
                 if (more.Image != null) { verb.Add("--image"); verb.Add(more.Image); }
                 if (more.Value != null) { verb.Add("--value"); verb.Add(more.Value); }
+                if (more.Gfx != null) { verb.Add("--gfx"); verb.Add(more.Gfx); }
+                // The waiting time for the graphics (TdrSetting.cs): the helper plans again from its own reading, so
+                // the chosen number has to reach its command line, or it refuses the action as a usage error.
+                if (more.Tdr != null) { verb.Add("--tdr"); verb.Add(more.Tdr.Value.ToString(CultureInfo.InvariantCulture)); }
                 verb.AddRange(TunerPlan.Arguments(more));
                 verb.AddRange(FanPlan.Arguments(more));
             }
@@ -96,8 +100,9 @@ namespace AmdgpuWddmControl
 
         bool Dirty(string page)
         {
-            if (page == "games") return GameWrites().Count > 0;
-            if (page == "graphics") return ClockWrites().Count > 0 || CuChoiceChanged;
+            if (page == "games") return GamePendings().Count > 0;
+            if (page == "graphics") return ClockWrites().Count > 0 || CuChoiceChanged || GfxGlobalWrites().Count > 0;
+            if (page == "display") return DisplayDirty();
             return false;
         }
 
@@ -106,13 +111,15 @@ namespace AmdgpuWddmControl
             bool ok = false;
             if (page == "games") ok = ApplyGames();
             else if (page == "graphics") ok = ApplyGraphics();
+            else if (page == "display") ok = ApplyDisplay();
             return ok && !Dirty(page);
         }
 
         void DiscardPage(string page)
         {
-            if (page == "games") _gameEdits.Clear();
-            if (page == "graphics") { _autoEdit = null; _ceilEdit = null; _ceilEdited = false; _cuEdit = null; }
+            if (page == "games") { _gameEdits.Clear(); _smEdits.Clear(); _gfxGameEdits.Clear(); }
+            if (page == "graphics") { _autoEdit = null; _ceilEdit = null; _ceilEdited = false; _cuEdit = null; _gfxGlobalEdits.Clear(); }
+            if (page == "display") _displayEdits.Clear();
         }
 
         // The modal helper run is synchronous for Save in the three-way dialog: it waits for the action to finish.

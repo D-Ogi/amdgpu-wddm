@@ -14,7 +14,9 @@ def main():
     ap.add_argument('--out', required=True, type=Path)
     ap.add_argument('--match', default=r'/src/amd/vulkan/')
     args = ap.parse_args()
-    entries = json.loads(args.compile_commands.read_text(encoding='utf-8'))
+    # utf-8-sig, not utf-8: Windows PowerShell 5.1 writes a byte-order mark for `Set-Content -Encoding utf8` and
+    # PowerShell 7 does not, so the build host decided whether this gate could read its own compile_commands.json.
+    entries = json.loads(args.compile_commands.read_text(encoding='utf-8-sig'))
     selected = [e for e in entries if re.search(args.match, e['file'].replace('\\', '/')) and e['file'].endswith('.c')]
     if not selected:
         raise SystemExit('FAIL: no selected C compilation commands')

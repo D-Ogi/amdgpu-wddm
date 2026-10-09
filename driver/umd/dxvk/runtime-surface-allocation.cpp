@@ -9,7 +9,7 @@ static_assert(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceRequest &request,RuntimeSurfaceAllocation &out) {
     if (out.allocation || out.kernel_resource || out.runtime_resource) return E_UNEXPECTED;
     if (!device.domain.entered() || !device.hDevice || !device.KTCallbacks.pfnAllocateCb || !device.KTCallbacks.pfnDeallocate2Cb ||
-        (request.primary && request.cpu_read)) return E_INVALIDARG;
+        (request.primary && request.cpu_read) || (request.scanout && !request.primary)) return E_INVALIDARG;
     // The kernel driver's type-0 admission, by the same table: the composed rows and the scan-out
     // rows a primary may have (X8R8G8B8). The row sizes the pixel: 1 byte for A8, 8 for RGBA16F.
     const auto *row=amdgpu_wddm_surface_format_by_d3dddi(request.surface.Format);
@@ -18,10 +18,14 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     if (!runtime_surface_geometry(request.surface,row->bytes_per_pixel)) return E_INVALIDARG;
     auto texture=request.texture;
     const bool extended=texture.Magic!=0;
+    // Only the v3 record has the SCANOUT bit (the v2 group below carries PRIMARY and CPU_READ alone).
+    if (request.scanout && !extended) return E_INVALIDARG;
     // The E26R v3 texture format is what an opener reads back; it must be the LB7A row's.
     if (extended && (texture.Magic!=BC250_SURFACE_RESOURCE_MAGIC ||
         texture.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION || texture.Shared!=UINT(request.shared) ||
-        texture.Access!=((request.primary ? 1u : 0u)|(request.cpu_read ? 2u : 0u)) ||
+        texture.Access!=((request.primary ? BC250_SURFACE_RESOURCE_PRIMARY : 0u)|
+                         (request.cpu_read ? BC250_SURFACE_RESOURCE_CPU_READ : 0u)|
+                         (request.scanout ? BC250_SURFACE_RESOURCE_SCANOUT : 0u)) ||
         texture.Width!=request.surface.Width || texture.Height!=request.surface.Height ||
         !runtime_surface_format(request.surface.Format,DXGI_FORMAT(texture.Format)))) return E_INVALIDARG;
     static_assert(sizeof(texture)==64);

@@ -1,6 +1,7 @@
 // The window's dialogs, all in the window's language and theme: Save / Discard / Keep editing (WU-011, Escape keeps
 // editing), the confirmation of a planned change (WU-053), the restart question (WU-060: hints, "Later"), the
-// Identify label on the monitor (WU-030, borderless, closes after 3 s) and the report preview (WU-067).
+// Identify label on the monitor (WU-030, borderless, closes after 3 s), the report preview (WU-067) and the
+// "keep these display settings?" question after a display change (15 s, then the old settings come back).
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -119,6 +120,39 @@ namespace AmdgpuWddmControl
         public static bool Ask(IWin32Window owner, HintDecision hints)
         {
             using (var d = new RestartDialog(hints ?? new HintDecision())) return d.ShowDialog(owner) == DialogResult.OK;
+        }
+    }
+
+    // After a display change, as in Windows: Keep or Revert, and Revert by itself after 15 s, so that a monitor that
+    // shows nothing comes back without a click. Revert has the focus; Enter and Escape revert.
+    sealed class KeepDisplayDialog : ThemedDialog
+    {
+        readonly Timer _tick = new Timer { Interval = 1000 };
+        readonly Label _count;
+        int _left = DisplayInfo.KeepSeconds;
+
+        KeepDisplayDialog() : base(Strings.T("display.keep.title"), 440)
+        {
+            TopMost = true;
+            _count = Line(Strings.T("display.keep.text", _left), Theme.Dim);
+            var revert = Add(Strings.T("display.keep.revert"), DialogResult.Cancel);
+            Add(Strings.T("display.keep.keep"), DialogResult.OK, true);
+            CancelButton = revert; AcceptButton = revert;
+            ActiveControl = revert;
+            _tick.Tick += (s, e) =>
+            {
+                _left--;
+                _count.Text = Strings.T("display.keep.text", Math.Max(0, _left));
+                if (_left <= 0) { _tick.Stop(); DialogResult = DialogResult.Cancel; Close(); }
+            };
+        }
+
+        protected override void OnShown(EventArgs e) { base.OnShown(e); _tick.Start(); }
+        protected override void OnFormClosed(FormClosedEventArgs e) { _tick.Dispose(); base.OnFormClosed(e); }
+
+        public static bool Ask(IWin32Window owner)
+        {
+            using (var d = new KeepDisplayDialog()) return d.ShowDialog(owner) == DialogResult.OK;
         }
     }
 

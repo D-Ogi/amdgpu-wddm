@@ -270,7 +270,28 @@ allocation with D3DDDI_ID_UNINITIALIZED, lab session 343). Admission as a primar
 permission to scan out: the kernel driver's SetVidPnSourceAddress takes only the 8-bit
 scan-out rows, and direct scan-out of RGB10A2/RGBA16F remains unsupported; this revision
 does not establish when the OS promotes such a buffer. The Ascent's UE 4.26 borderless
-swap chain is an RGB10A2 primary. Other layouts remain implementation work. Checks avoid row-footprint
+swap chain is an RGB10A2 primary.
+
+M15.14 increment 3 (`scanout-primary.h`) lets an 8-bit primary ask for scan-out. The
+E26R v3 record then carries `SCANOUT` next to `PRIMARY`, and the kernel driver places
+the buffer in the local segment, which the display core can read. The request is off by
+default until a D3D11 game is measured with it. `AMDGPU_WDDM_D3D11_SCANOUT=1` in the
+environment, or the REG_DWORD `ScanoutPrimary=1` under `HKLM\SOFTWARE\amdgpu-wddm\D3D11`,
+turns it on. The environment wins over the machine value, and any other value is off.
+The clauses are those of the D3D12 shell (`driver/contract/bc250_scanout_primary.h`):
+source mode geometry from the scan-out caps trailer of each create, the format row,
+the pitch and the router's DwmForceCpu. The runtime creates the primary of a mode
+change before it sets that mode, so the trailer still names the previous mode at the
+create (session 480). Thus a chain also passes the geometry clause when the primary
+descriptor's `ModeDesc` has the chain's width and height (`mode=WxH` in the line).
+The flips still wait for the commit, because the router's front and the kernel
+driver compare each flip with the committed mode. This shell adds two: the buffer must have a
+primary descriptor, and the descriptor must name video present source 0. A swap-chain
+buffer without a primary descriptor (a DISPLAYABLE window buffer, M746) cannot ask,
+because the record's PRIMARY bit comes from that descriptor. Each change of the answer
+writes one `M15.14 d3d11 scanout` line through OutputDebugString.
+
+Other layouts remain implementation work. Checks avoid row-footprint
 integer overflow. Failure destroys the image and releases any failed-bind memory
 wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
 Mock tests cover pitch mismatch, bind failure, success, teardown and oversized
@@ -330,8 +351,44 @@ FL11_1) or version 2 (132 bytes, `AdapterConfigRecord2`, maximum FL12_0 or FL12_
 An FL12 record is advertised only when the adapter's sparse policy (`AmdgpuWddmSparseBinding`,
 read as in the D3D12 shell, default on) is enabled; otherwise the caps are clamped to FL11_1 and
 only the D3D11.1 DDI is offered. With the policy on, the shell offers the WDDM 2.0 DDI
-(`ddi-wddm2.cpp`, tiled entries through the engine's ID3D11DeviceContext2) and chains
-`bc250_host_policy` with `BC250_HOST_POLICY_SPARSE` to the hosted ICD.
+(`ddi-wddm2.cpp`, tiled entries through the engine's ID3D11DeviceContext2) and the WDDM 2.2 DDI
+(`ddi-wddm22.cpp`), and chains `bc250_host_policy` with `BC250_HOST_POLICY_SPARSE` to the hosted ICD.
+
+## The WDDM 2.2 interface (BD-099)
+
+The WDDM 2.2 device table is the WDDM 2.0 table with `RelocateDeviceFuncs` retyped and six entries
+appended: the two sync tokens of WDDM 2.1 and the four shader-cache sessions of WDDM 2.2. Its DXGI
+table is DXGI 1.6.1: the DXGI 1.4 entries, `OfferResources1` in place of `OfferResources`, `Present1`
+and `PresentMultiplaneOverlay1` on the 1_6_1 arguments, and `ReclaimResources1` appended. Each table is
+built by copying the table below it and replacing what changed. The gate
+`tools/quality/ddi_table_versions.py` reads the WDK headers and states that every other entry is
+inherited unchanged, entry by entry.
+
+The reason to offer it is the Present callback. The D3D11 runtime copies the whole
+`DXGIDDICB_PRESENT`, with `SyncIntervalOverrideValid` and `SyncIntervalOverride` in it, only from
+interface 0xB0023 build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS`). Below that build `d3d11.dll` installs
+`PresentCB_PreWDDM2_2`, which copies a shorter structure, and the per-application VSync needs the
+vertical-blank waits of the shell instead (`docs/design/per-app-graphics-settings.md`).
+
+What the new entries do:
+
+- `AcquireResource` and `ReleaseResource` pass the sync token to `pfnAcquireResourceCb` and
+  `pfnReleaseResourceCb`. `ReleaseResource` submits the engine's commands first, because the other
+  process may start as soon as the token is free.
+- `OfferResources1` performs the offer and drops the offer flags, so no allocation of this shell is
+  decommitted. `ReclaimResources1` answers OK or DISCARDED per resource from the WDDM 2.0 reclaim
+  callback. NOT_COMMITTED cannot arise, because no offer allows a decommit.
+- `Present1` and `PresentMultiplaneOverlay1` behave as their DXGI 1.4 forms: one surface goes to the
+  DXGI 1.2 Present, the rotation hint is a hint and is not taken, and an overlay present is refused.
+- The four shader-cache entries are unreachable. The adapter answers `D3DWDDM2_2DDICAPS_SHADERCACHE`
+  with `RequestRuntimeShaderCache` FALSE, because the engine keeps its own pipeline cache, so the
+  runtime creates no session. A call is a broken contract: the entry says so once and loses the device.
+
+The process switch `AMDGPU_WDDM_D3D11_EXPERIMENT=wddm22-ddi-off` withholds the WDDM 2.2 offer and
+leaves the WDDM 2.0 table as the newest one (`ddi-experiment.h`, the shape of the D3D12 shell's
+switch, with the same registry fall-backs). The name ends in `-off` because the shells share one
+rule: a validated behaviour is the default, and a switch only ever turns one off again. The
+recommended default is the WDDM 2.2 offer, which is what the shell does with no switch named.
 
 The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability

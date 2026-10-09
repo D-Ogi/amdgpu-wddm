@@ -14,4 +14,8 @@ template<typename Submit> HRESULT offer_after_submit(RuntimeDevice &runtime,
     return runtime.KTCallbacks.pfnOfferAllocationsCb(runtime.hDevice,&request);
 }
 void install_dxgi_resource_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &);
+// The two resource entries that the DXGI 1.6.1 table replaces: OfferResources1, which adds the offer
+// flags, and ReclaimResources1, which reports a result per resource in place of a discarded flag. Every
+// other resource entry of that table is the one above, at the same offset (ddi-wddm22.cpp).
+void install_dxgi1_6_1_resource_ddi(DXGI1_6_1_DDI_BASE_FUNCTIONS &);
 }

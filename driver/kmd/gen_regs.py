@@ -176,7 +176,13 @@ DCN_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG0_OTG_MASTER_UPD
                        "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG",
                        "mmOTG0_OTG_GLOBAL_SYNC_STATUS",
                        # BD-013: AMD optc1_set_blank, used by dcn201_tg_funcs.
-                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
+                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL",
+                       # M15.14 (0.7.216.20): the plane's pixel format per flip (plane_format.h). AMD writes the same
+                       # three for a format change: hubp1_program_pixel_format (SURFACE_PIXEL_FORMAT, crossbar),
+                       # dpp201_cnv_setup (CNVC_SURFACE_PIXEL_FORMAT). The firmware's values with those fields
+                       # replaced, inside the flip's OTG0 update lock, and only when the format changes.
+                       "mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
+                       "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT"]
 
 # ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
 # write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of
@@ -203,6 +209,13 @@ DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
 DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", "mmDP_DTO0_MODULO",
     "mmOTG0_PIXEL_RATE_CNTL", "mmOTG0_OTG_INTERLACE_CONTROL", "mmOTG0_OTG_V_TOTAL_CONTROL"]
 DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
+# M15.14 (0.7.216.20): the plane's pixel format registers (plane_format.h), read at start to decode the firmware's
+# format and on restore to verify it; MPCC0_MPCC_CONTROL, CNVC_CFG0_FORMAT_CONTROL and CNVC_CFG0_ALPHA_2BIT_LUT
+# for the start log only (the blend mode, ALPHA_EN and the 2-bit alpha table decide whether a surface's alpha
+# reaches the output; CNVC_UPDATE_PENDING is the double-buffer witness of the CNVC fields). HUBP0_DCSURF_SURFACE_CONFIG is on DCN_REGISTERS already; named here for a define.
+DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
+    "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT", "mmCNVC_CFG0_FORMAT_CONTROL", "mmMPCC0_MPCC_CONTROL",
+    "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
 NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
 
@@ -305,6 +318,42 @@ AUDIO_IX_WRITE = ([_AZ + "CHANNEL_SPEAKER"] + [f"{_AZ}AUDIO_DESCRIPTOR{i}" for i
 AUDIO_IX_READ = AUDIO_IX_WRITE + [_AZ + r for r in ("UNSOLICITED_RESPONSE", "RESPONSE_PIN_SENSE", "WIDGET_CONTROL",
                                                     "RESPONSE_CONFIGURATION_DEFAULT")]
 
+# ---- Display modes (docs/design/display-modes.md, stage A): the EDID over DP AUX and pipe 0's scaler -------------
+# dpaux.c reads the monitor's EDID through the DP AUX engine of the connector the firmware lit. On unit A that is
+# AUX0 on the DDC1 pads: amdgpu's whole EDID read in the E03 trace goes through DP_AUX0_* and DC_GPIO_DDC1_MASK /
+# DC_GPIO_AUX_CTRL_5 (evidence/linux/2026-09-21-E03-init-trace/amdgpu-events.txt), in the sequence of Linux
+# dce/dce_aux.c (MIT, v6.18). dcn_scale.c programs pipe 0's HUBP viewport, DSCL scaler and line buffer, and MPCC 0's
+# background, in the sequence of dcn10_dpp_dscl.c dpp1_dscl_set_scaler_manual_scale and dcn10_hubp.c
+# min_set_viewport; the same trace has amdgpu write every one of these registers on pipes 0 and 3. Only the OTG lock
+# and its manual trigger come from the flip's own list. SW_DATA and SCL_COEF_RAM_TAP_DATA are data ports (each
+# access moves an index), so the code writes them and reads SW_DATA only in the reply phase, and neither is on
+# READ_REG. modeset.c, dpaux.c and dcn_scale.c alone compile these tables (BC250_REGS_WITH_DISPLAY_TABLES).
+DISPLAY_AUX_WRITES = ["mmDP_AUX0_AUX_CONTROL", "mmDP_AUX0_AUX_SW_CONTROL", "mmDP_AUX0_AUX_ARB_CONTROL",
+                      "mmDP_AUX0_AUX_INTERRUPT_CONTROL", "mmDP_AUX0_AUX_SW_DATA", "mmDC_GPIO_DDC1_MASK",
+                      "mmDC_GPIO_AUX_CTRL_5"]
+DISPLAY_AUX_READS = ["mmDP_AUX0_AUX_SW_STATUS"]
+_DSCL_WRITES = ["SCL_COEF_RAM_TAP_SELECT", "SCL_COEF_RAM_TAP_DATA", "SCL_MODE", "SCL_TAP_CONTROL", "DSCL_CONTROL",
+                "DSCL_2TAP_CONTROL", "SCL_HORZ_FILTER_SCALE_RATIO", "SCL_HORZ_FILTER_INIT",
+                "SCL_HORZ_FILTER_SCALE_RATIO_C", "SCL_HORZ_FILTER_INIT_C", "SCL_VERT_FILTER_SCALE_RATIO",
+                "SCL_VERT_FILTER_INIT", "SCL_VERT_FILTER_INIT_BOT", "SCL_VERT_FILTER_SCALE_RATIO_C",
+                "SCL_VERT_FILTER_INIT_C", "SCL_VERT_FILTER_INIT_BOT_C", "DSCL_AUTOCAL", "RECOUT_START", "RECOUT_SIZE",
+                "MPC_SIZE", "LB_DATA_FORMAT", "LB_MEMORY_CTRL", "SCL_BLACK_OFFSET"]
+_VIEWPORT = ["DCSURF_PRI_VIEWPORT_START", "DCSURF_PRI_VIEWPORT_DIMENSION", "DCSURF_SEC_VIEWPORT_START",
+             "DCSURF_SEC_VIEWPORT_DIMENSION", "DCSURF_PRI_VIEWPORT_START_C", "DCSURF_PRI_VIEWPORT_DIMENSION_C",
+             "DCSURF_SEC_VIEWPORT_START_C", "DCSURF_SEC_VIEWPORT_DIMENSION_C"]
+DISPLAY_PIPE_WRITES = ([f"mmDSCL0_{r}" for r in _DSCL_WRITES] + [f"mmHUBP0_{r}" for r in _VIEWPORT] +
+                       [f"mmMPCC0_MPCC_BG_{c}" for c in ("R_CR", "G_Y", "B_CB")] +
+                       ["mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG"])
+# Read only: the update and memory power state of the scaler, the underflow status, and which DPP and OPP feed
+# MPCC 0 and OTG 0 (the precondition that pipe 0 alone drives the output).
+DISPLAY_PIPE_READS = ["mmDSCL0_DSCL_UPDATE", "mmDSCL0_DSCL_MEM_PWR_CTRL", "mmDSCL0_DSCL_MEM_PWR_STATUS",
+                      "mmHUBP0_DCHUBP_CNTL", "mmMPCC0_MPCC_TOP_SEL", "mmODM0_OPTC_DATA_SOURCE_SELECT"]
+DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT"]
+DISPLAY_NAMED = DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS
+EXTRA_READS += [("DMU", n) for n in DISPLAY_NAMED
+                if n not in DISPLAY_DATA_PORTS and ("DMU", n) not in EXTRA_READS and
+                n not in ("mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
+
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
 
 
@@ -347,7 +396,7 @@ def main():
     out = ["// Generated by gen_regs.py from the vendored amdgpu headers through tools/regcalc. Do not edit.",
            "#pragma once", ""]
     audio_pairs = [("DMU", reg) for pair in AUDIO_ENDPOINT_PAIRS for reg in pair]
-    for ip, name in dict.fromkeys(NAMED + EXTRA_READS + audio_pairs):
+    for ip, name in dict.fromkeys(NAMED + EXTRA_READS + audio_pairs + [("DMU", n) for n in DISPLAY_NAMED]):
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
     # DP audio: the Azalia endpoint's indirect indices (dpaudio.c), by name, from dcn_2_0_1_offset.h's ix defines.
     out += ["", "// Azalia endpoint indirect indices (ixAZF0ENDPOINTn_AZALIA_F0_CODEC_PIN_CONTROL_*, the same for n = 0, 1):",
@@ -491,6 +540,30 @@ def main():
     out += ["};", "#endif", ""]
     summary.append(f"{len(audio_read)} audio reads, {len(audio_write)} audio writes, "
                    f"{len(ix_read)}/{len(ix_write)} Azalia indices read/write")
+
+    # Display modes (dpaux.c, dcn_scale.c, modeset.c): their own read and write tables, in a block of their own like
+    # the audio tables, so that nothing outside those files can reach these registers through them.
+    disp_write = sorted({offset(maps, "DMU", n) for n in DISPLAY_AUX_WRITES + DISPLAY_PIPE_WRITES})
+    disp_read = sorted({offset(maps, "DMU", n) for n in DISPLAY_NAMED})
+    if len(disp_write) != len(DISPLAY_AUX_WRITES) + len(DISPLAY_PIPE_WRITES):
+        sys.exit("the display write lists have two names for one offset")
+    if len(disp_read) != len(DISPLAY_NAMED):
+        sys.exit("the display lists have two names for one offset")
+    if not set(disp_write) <= set(disp_read):
+        sys.exit("a display write register is not on the display read table - a write must be verifiable")
+    if disp_read[-1] >= BAR5_LENGTH:
+        sys.exit(f"display: 0x{disp_read[-1]:X} is beyond BAR5")
+    out += ["// Display modes (dpaux.c, dcn_scale.c, modeset.c): DP AUX0 with its DDC1 pads, pipe 0's viewport, scaler,",
+            "// line buffer and MPCC 0 background, and the OTG 0 lock. Sorted, unique. For those three files alone.",
+            "#ifdef BC250_REGS_WITH_DISPLAY_TABLES",
+            f"#define BC250_MMIO_DISPLAY_ALLOW_COUNT {len(disp_read)}",
+            "static const unsigned long g_MmioDisplayAllow[BC250_MMIO_DISPLAY_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in disp_read[i:i + 10]) + "," for i in range(0, len(disp_read), 10)]
+    out += ["};", f"#define BC250_MMIO_DISPLAY_WRITE_ALLOW_COUNT {len(disp_write)}",
+            "static const unsigned long g_MmioDisplayWriteAllow[BC250_MMIO_DISPLAY_WRITE_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in disp_write[i:i + 10]) + "," for i in range(0, len(disp_write), 10)]
+    out += ["};", "#endif", ""]
+    summary.append(f"{len(disp_read)} display reads, {len(disp_write)} display writes")
     (HERE / "regs.generated.h").write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes)
           + "; " + ", ".join(summary))

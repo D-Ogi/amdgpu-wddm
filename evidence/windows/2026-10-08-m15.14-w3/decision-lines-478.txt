@@ -1,0 +1,10 @@
+Trial 478. The D3D12 shell's M15.14 lines from the game's debugger log (cdb.log), in order:
+  M15.14 scanout admitted mode=1920x1200 chain=1920x1200 pitch=7680 format=28 caps=00000003 source=1920x1200 forcecpu=0
+  M15.14 scanout mode-geometry mode=1920x1200 chain=1920x1080 pitch=7680 format=28 caps=00000003 source=1920x1200 forcecpu=0
+
+The router front's log of the compositor (dwm.exe pid 1912): the first two lines, the first answer, and the
+count of check_direct_flip lines per answer and rule (the increment-2 budget is 256 lines per device):
+  bc250d3d_front installed adapter=000001BC39631A70 interface=000b0011 version=00060000 caps_query=00000000 caps_flags=00000003 source=1920x1200
+  bc250d3d_front supported_versions hosted=3 total=4 added=000b000f00000000
+  bc250d3d_front check_direct_flip call=1 flags=00000000 answer=1 rule=supported caps_query=00000000 caps_flags=00000003 source=1920x1200 client=000001BC4B8DA170 recorded=1 opened=1 primary=1 shared=1 1920x1200 pitch=7680 fmt=28 record_v=3 record_access=5 compositor=000001BC3F1289F0 recorded=1 opened=0 primary=1 shared=0 1920x1200 pitch=7680 fmt=87 record_v=3 record_access=1
+  answer=1 rule=supported: 256 lines

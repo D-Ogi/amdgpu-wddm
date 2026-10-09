@@ -103,6 +103,15 @@ namespace AmdgpuWddmControl
 
         int _builtWidth;
 
+        // The column width the page now in the content panel was built at. ColumnWidth above is the width of this
+        // moment, and the two differ whenever ClientSize changed after the page was built: the window manager clamps a
+        // client size larger than the desktop to the maximum tracking size, so a 1240 px client becomes 1028 px on a
+        // 1024x768 session-0 desktop, and the page built before the handle existed keeps the wider column it was given.
+        // The --smoke-render width check uses this width, never the live one (b24 lab round 3).
+        int _pageColumn;
+
+        public int PageColumnWidth { get { return _pageColumn; } }
+
         void RebuildIfWidthChanged()
         {
             if (Math.Abs(ColumnWidth - _builtWidth) > Theme.S(8)) { BuildShell(); }
@@ -280,7 +289,9 @@ namespace AmdgpuWddmControl
             var old = _content.Controls.Cast<Control>().ToList();
             _content.Controls.Clear();
             foreach (var c in old) c.Dispose();
-            var built = BuildPage(page, ColumnWidth);
+            int column = ColumnWidth;
+            var built = BuildPage(page, column);
+            _pageColumn = column;
             _content.Controls.Add(built);
             _content.ResumeLayout(true);
             foreach (var kv in _navButtons)

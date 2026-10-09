@@ -77,7 +77,13 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
-// All eight off is the release and reporting behaviour of adapter106 with no ray tracing.
+//   shader-model-68-off: the adapter reports shader model 6.7 at most, and no 1091 answer (adapter-caps.cpp,
+//     engine-ddi set_shader_model_ceiling, M840).
+//   shader-model-67-off: the adapter reports shader model 6.6 at most, the answer of earlier builds; it wins over
+//     shader-model-68-off.
+//   scanout-flip-off: a swap-chain primary is always the composed one, never a scan-out primary
+//     (scanout-mode.h, M15.14 increment 3; trial 478).
+// All eleven off is the release and reporting behaviour of adapter106 with no ray tracing.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
@@ -196,13 +202,11 @@ inline bool ddi_experiment_listed(const char* list,const char* name) noexcept {
     return false;
 }
 inline bool ddi_experiment(const char* name) noexcept {return ddi_experiment_listed(ddi_experiment_name(),name);}
-// M15.14: the scan-out mode names the geometry it is for, as one token - "scanout-flip-1920x1200". The
-// experiment syntax is lower-case letters, digits, hyphens and commas, so a mode and its geometry fit in
-// one token and no second variable is needed. Naming it is not decoration. The kernel driver admits a
-// flip only at the POST geometry, so a windowed chain of any other size can never be scanned out, while
-// asking for scan-out anyway would still move that chain into VRAM with no CPU mapping - a placement
-// regression for a buffer that was never eligible, and refusals in the counters that look like a mode
-// mismatch rather than a client that never qualified. Width and height are written on true only.
+// M15.14 increment 2 spelled the scan-out mode with the geometry it was for, as one token -
+// "scanout-flip-1920x1200" - because the kernel driver then admitted a flip at the POST geometry only.
+// Increment 3 compares the chain with the source mode the kernel driver publishes (scanout-mode.h), so the
+// geometry in the token is no longer compared: the token still parses, and reads as an explicit on, so that a
+// lab script written for increment 2 keeps working. Width and height are written on true only.
 inline bool ddi_experiment_scanout(const char* list,unsigned* width,unsigned* height) noexcept {
     static const char prefix[]="scanout-flip-";
     const size_t length=sizeof(prefix)-1;

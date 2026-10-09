@@ -1,0 +1,307 @@
+== D3D12Core.dll FileVersion 10.0.22621.5415 (WinBuild.160101.0800) SizeOfImage 0x203000
+-- ?ConvertShaderModelFromDDI@@YA?AW4D3D_SHADER_MODEL@@AEBW4D3D12DDI_SHADER_MODEL@@@Z at 0x49738
+   49738: mov edx, dword ptr [rcx]
+   4973a: mov eax, 0x60035
+   4973f: mov r8d, 0x51
+   49745: cmp edx, eax
+   49747: jg 0x49791
+   49749: je 0x49771
+   4974b: sub edx, 0x60000
+   49751: je 0x49789
+   49753: sub edx, 5
+   49756: je 0x49789
+   49758: sub edx, 0xb
+   4975b: je 0x49781
+   4975d: sub edx, 5
+   49760: je 0x49781
+   49762: sub edx, 0xb
+   49765: je 0x49779
+   49767: sub edx, 5
+   4976a: je 0x49779
+   4976c: cmp edx, 0xb
+   4976f: jne 0x497d3
+   49771: mov r8d, 0x63
+   49777: jmp 0x497d3
+   49779: mov r8d, 0x62
+   4977f: jmp 0x497d3
+   49781: mov r8d, 0x61
+   49787: jmp 0x497d3
+   49789: mov r8d, 0x60
+   4978f: jmp 0x497d3
+   49791: sub edx, 0x60040
+   49797: je 0x497cd
+   49799: sub edx, 5
+   4979c: je 0x497cd
+   4979e: sub edx, 0xb
+   497a1: je 0x497c5
+   497a3: sub edx, 5
+   497a6: je 0x497c5
+   497a8: sub edx, 0xb
+   497ab: je 0x497bd
+   497ad: sub edx, 5
+   497b0: je 0x497bd
+   497b2: cmp edx, 0xb
+   497b5: jne 0x497d3
+   497b7: lea r8d, [rdx + 0x5c]
+   497bb: jmp 0x497d3
+   497bd: mov r8d, 0x66
+   497c3: jmp 0x497d3
+   497c5: mov r8d, 0x65
+   497cb: jmp 0x497d3
+   497cd: mov r8d, 0x64
+   497d3: mov eax, r8d
+   497d6: ret 
+   497d7: int3 
+   497d8: int3 
+   497d9: int3 
+   497da: int3 
+   497db: int3 
+   497dc: int3 
+   497dd: int3 
+   497de: int3 
+   497df: int3 
+   497e0: sub rsp, 0x38
+   497e4: movups xmm0, xmmword ptr [rdx]
+   497e7: mov r9, rcx
+   497ea: mov r8, rdx
+   497ed: mov edx, dword ptr [rdx + 0x10]
+   497f0: movdqu xmmword ptr [rcx], xmm0
+   497f4: lea rcx, [rsp + 0x20]
+   497f9: call 0x49998
+   497fe: movups xmm0, xmmword ptr [rax]
+   49801: xor eax, eax
+   49803: movdqu xmmword ptr [r9 + 0x10], xmm0
+   49809: cmp dword ptr [r8 + 0x14], eax
+   4980d: je 0x49814
+   4980f: mov eax, 1
+   49814: mov dword ptr [r9 + 0x20], eax
+   49818: mov rax, r9
+   4981b: add rsp, 0x38
+   4981f: ret 
+   49820: int3 
+   49821: int3 
+   49822: int3 
+   49823: int3 
+   49824: int3 
+   49825: int3 
+   49826: int3 
+   49827: int3 
+   49828: sub rsp, 0x38
+   4982c: mov eax, dword ptr [rdx]
+   4982e: mov r8, rcx
+   49831: mov dword ptr [rcx], eax
+   49833: mov eax, dword ptr [rdx + 4]
+-- 0x60065 (6_6 release): 0 site(s) in .text
+-- 0x60070 (6_7 experimental): 0 site(s) in .text
+-- 0x60075 (6_7 release): 0 site(s) in .text
+-- 0x60080 (6_8 experimental): 0 site(s) in .text
+-- 0x60085 (6_8 release): 0 site(s) in .text
+-- 0x60090 (6_9 experimental): 0 site(s) in .text
+== D3D12Core.dll FileVersion 10.0.26100.9278 (WinBuild.160101.0800) SizeOfImage 0x35b000
+-- ?ConvertShaderModelFromDDI@@YA?AW4D3D_SHADER_MODEL@@AEBW4D3D12DDI_SHADER_MODEL@@@Z at 0x94ad8
+   94ad8: mov edx, dword ptr [rcx]
+   94ada: mov eax, 0x60045
+   94adf: mov r8d, 0x51
+   94ae5: cmp edx, eax
+   94ae7: jg 0x94b43
+   94ae9: je 0x94b1b
+   94aeb: sub edx, 0x60000
+   94af1: je 0x94b3b
+   94af3: sub edx, 5
+   94af6: je 0x94b3b
+   94af8: sub edx, 0xb
+   94afb: je 0x94b33
+   94afd: sub edx, 5
+   94b00: je 0x94b33
+   94b02: sub edx, 0xb
+   94b05: je 0x94b2b
+   94b07: sub edx, 5
+   94b0a: je 0x94b2b
+   94b0c: sub edx, 0xb
+   94b0f: je 0x94b23
+   94b11: sub edx, 5
+   94b14: je 0x94b23
+   94b16: cmp edx, 0xb
+   94b19: jne 0x94b97
+   94b1b: mov r8d, 0x64
+   94b21: jmp 0x94b97
+   94b23: mov r8d, 0x63
+   94b29: jmp 0x94b97
+   94b2b: mov r8d, 0x62
+   94b31: jmp 0x94b97
+   94b33: mov r8d, 0x61
+   94b39: jmp 0x94b97
+   94b3b: mov r8d, 0x60
+   94b41: jmp 0x94b97
+   94b43: sub edx, 0x60050
+   94b49: je 0x94b91
+   94b4b: sub edx, 5
+   94b4e: je 0x94b91
+   94b50: sub edx, 0xb
+   94b53: je 0x94b89
+   94b55: sub edx, 5
+   94b58: je 0x94b89
+   94b5a: sub edx, 0xb
+   94b5d: je 0x94b81
+   94b5f: sub edx, 5
+   94b62: je 0x94b81
+   94b64: sub edx, 0xb
+   94b67: je 0x94b79
+   94b69: sub edx, 5
+   94b6c: je 0x94b79
+   94b6e: cmp edx, 0xb
+   94b71: jne 0x94b97
+   94b73: lea r8d, [rdx + 0x5e]
+   94b77: jmp 0x94b97
+   94b79: mov r8d, 0x68
+   94b7f: jmp 0x94b97
+   94b81: mov r8d, 0x67
+   94b87: jmp 0x94b97
+   94b89: mov r8d, 0x66
+   94b8f: jmp 0x94b97
+   94b91: mov r8d, 0x65
+   94b97: mov eax, r8d
+   94b9a: ret 
+   94b9b: int3 
+   94b9c: int3 
+   94b9d: int3 
+   94b9e: int3 
+   94b9f: int3 
+   94ba0: int3 
+   94ba1: int3 
+   94ba2: int3 
+   94ba3: int3 
+   94ba4: int3 
+   94ba5: int3 
+   94ba6: int3 
+   94ba7: int3 
+   94ba8: int3 
+   94ba9: int3 
+   94baa: int3 
+   94bab: int3 
+   94bac: int3 
+   94bad: int3 
+   94bae: int3 
+   94baf: int3 
+   94bb0: lea rcx, [rip + 0x282de1]
+   94bb7: jmp 0x6a8cc
+   94bbc: int3 
+   94bbd: int3 
+   94bbe: int3 
+   94bbf: int3 
+   94bc0: int3 
+   94bc1: int3 
+   94bc2: int3 
+   94bc3: int3 
+   94bc4: mov r11, rsp
+   94bc7: mov qword ptr [r11 + 0x18], rbx
+   94bcb: push rsi
+   94bcc: push rdi
+   94bcd: push r14
+   94bcf: sub rsp, 0x40
+-- 0x60065 (6_6 release): 0 site(s) in .text
+-- 0x60070 (6_7 experimental): 0 site(s) in .text
+-- 0x60075 (6_7 release): 0 site(s) in .text
+-- 0x60080 (6_8 experimental): 0 site(s) in .text
+-- 0x60085 (6_8 release): 1 site(s) in .text: 1f692d ?GetD3D12ShaderModel@VersionedDeviceData@@QEAAXAEAI@Z+315
+-- 0x60090 (6_9 experimental): 0 site(s) in .text
+== D3D12Core.dll FileVersion 1.615.1.0.20250213.1 SizeOfImage 0x33f000
+-- ?ConvertShaderModelFromDDI@@YA?AW4D3D_SHADER_MODEL@@AEBW4D3D12DDI_SHADER_MODEL@@@Z at 0x7f8b4
+   7f8b4: mov edx, dword ptr [rcx]
+   7f8b6: mov eax, 0x60045
+   7f8bb: mov r8d, 0x51
+   7f8c1: cmp edx, eax
+   7f8c3: jg 0x7f91f
+   7f8c5: je 0x7f8f7
+   7f8c7: sub edx, 0x60000
+   7f8cd: je 0x7f917
+   7f8cf: sub edx, 5
+   7f8d2: je 0x7f917
+   7f8d4: sub edx, 0xb
+   7f8d7: je 0x7f90f
+   7f8d9: sub edx, 5
+   7f8dc: je 0x7f90f
+   7f8de: sub edx, 0xb
+   7f8e1: je 0x7f907
+   7f8e3: sub edx, 5
+   7f8e6: je 0x7f907
+   7f8e8: sub edx, 0xb
+   7f8eb: je 0x7f8ff
+   7f8ed: sub edx, 5
+   7f8f0: je 0x7f8ff
+   7f8f2: cmp edx, 0xb
+   7f8f5: jne 0x7f973
+   7f8f7: mov r8d, 0x64
+   7f8fd: jmp 0x7f973
+   7f8ff: mov r8d, 0x63
+   7f905: jmp 0x7f973
+   7f907: mov r8d, 0x62
+   7f90d: jmp 0x7f973
+   7f90f: mov r8d, 0x61
+   7f915: jmp 0x7f973
+   7f917: mov r8d, 0x60
+   7f91d: jmp 0x7f973
+   7f91f: sub edx, 0x60050
+   7f925: je 0x7f96d
+   7f927: sub edx, 5
+   7f92a: je 0x7f96d
+   7f92c: sub edx, 0xb
+   7f92f: je 0x7f965
+   7f931: sub edx, 5
+   7f934: je 0x7f965
+   7f936: sub edx, 0xb
+   7f939: je 0x7f95d
+   7f93b: sub edx, 5
+   7f93e: je 0x7f95d
+   7f940: sub edx, 0xb
+   7f943: je 0x7f955
+   7f945: sub edx, 5
+   7f948: je 0x7f955
+   7f94a: cmp edx, 0xb
+   7f94d: jne 0x7f973
+   7f94f: lea r8d, [rdx + 0x5e]
+   7f953: jmp 0x7f973
+   7f955: mov r8d, 0x68
+   7f95b: jmp 0x7f973
+   7f95d: mov r8d, 0x67
+   7f963: jmp 0x7f973
+   7f965: mov r8d, 0x66
+   7f96b: jmp 0x7f973
+   7f96d: mov r8d, 0x65
+   7f973: mov eax, r8d
+   7f976: ret 
+   7f977: int3 
+   7f978: int3 
+   7f979: int3 
+   7f97a: int3 
+   7f97b: int3 
+   7f97c: int3 
+   7f97d: int3 
+   7f97e: int3 
+   7f97f: int3 
+   7f980: mov qword ptr [rsp + 0x20], rbx
+   7f985: push rbp
+   7f986: push rsi
+   7f987: push rdi
+   7f988: push r14
+   7f98a: push r15
+   7f98c: sub rsp, 0xd0
+   7f993: mov rax, qword ptr [rip + 0x254966]
+   7f99a: xor rax, rsp
+   7f99d: mov qword ptr [rsp + 0xc0], rax
+   7f9a5: mov rsi, qword ptr [rsp + 0x128]
+   7f9ad: mov rbp, rcx
+-- 0x60065 (6_6 release): 0 site(s) in .text
+-- 0x60070 (6_7 experimental): 0 site(s) in .text
+-- 0x60075 (6_7 release): 0 site(s) in .text
+-- 0x60080 (6_8 experimental): 0 site(s) in .text
+-- 0x60085 (6_8 release): 0 site(s) in .text
+-- 0x60090 (6_9 experimental): 0 site(s) in .text
+== D3D12Core.dll FileVersion 1.619.4.0.20260702.1 SizeOfImage 0x4da000
+-- ConvertShaderModelFromDDI: no public symbols for this build
+-- 0x60065 (6_6 release): 0 site(s) in .text
+-- 0x60070 (6_7 experimental): 0 site(s) in .text
+-- 0x60075 (6_7 release): 0 site(s) in .text
+-- 0x60080 (6_8 experimental): 1 site(s) in .text: 85e4b
+-- 0x60085 (6_8 release): 2 site(s) in .text: 85e8b, 28e7d8
+-- 0x60090 (6_9 experimental): 0 site(s) in .text

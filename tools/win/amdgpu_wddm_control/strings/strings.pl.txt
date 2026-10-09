@@ -94,7 +94,7 @@ guide.update-available|mt|9ba22dcf|Jest dostępna nowsza wersja sterownika. Szcz
 guide.all-good|mt|f523ac28|Wszystko wygląda dobrze. Można grać.
 guide.tip.settings|mt|d4c81f93|Twoje wybory na tej stronie pozostają po aktualizacji sterownika.
 guide.tip.display|mt|fff5e425|Jeśli po zmianie monitora okno się zgubi, samo wróci na widoczny ekran.
-guide.tip.graphics|mt|69913a1e|Zmiany na tej stronie zaczną działać po następnym ponownym uruchomieniu systemu Windows.
+guide.tip.graphics|mt|bce30225|Zmiany taktowania i rdzeni zaczną działać po następnym ponownym uruchomieniu systemu Windows. Ustawienia dla wszystkich gier działają od następnego uruchomienia gry.
 # ---- status card on Home (WU-007, WU-052, WU-061) ----
 status.title.problem|mt-safe|4241fd03|Coś wymaga Twojej uwagi
 status.title.attention|mt-safe|2908a908|Sprawdź to
@@ -264,7 +264,7 @@ search.games.undo.terms|mt|f63a6cb8|cofnij|ponów|przywróć|cofnięcie
 search.games.add|mt-safe|37b1384f|Dodaj grę
 search.games.add.terms|mt|94d2c8d7|dodaj|gra|gry|program|exe
 search.display.resolution|mt-safe|c12b3df8|Rozdzielczość i częstotliwość odświeżania
-search.display.resolution.terms|mt|0e2e3e69|rozdzielczość|odświeżanie|częstotliwość|Hz|1080p|monitor|ekran
+search.display.resolution.terms|mt|d9eeed60|rozdzielczość|odświeżanie|częstotliwość|Hz|1080p|monitor|ekran|zmień rozdzielczość|ustaw odświeżanie|tryb|144 Hz
 search.display.identify|mt-safe|3def2f6d|Identyfikuj monitor
 search.display.identify.terms|mt|6a71b05e|identyfikuj|który ekran|który monitor|numer monitora
 search.display.scale|mt-safe|1cf201de|Skala, układ i orientacja
@@ -301,20 +301,10 @@ search.help.restart|mt-safe|1ef47f1f|Uruchom ponownie system Windows
 search.help.restart.terms|mt|7ad6427b|uruchom ponownie|ponowne uruchomienie|restart|reset|restart sterownika
 search.help.guides|mt-safe|6ef2d14b|Pomoc w typowych problemach
 search.help.guides.terms|mt|031dd644|czarny ekran|awaria|crash|wolno|przycinanie|mysz|problem|pomoc
-search.later.vsync|mt-safe|86146f8a|Synchronizacja pionowa (VSync)
-search.later.vsync.terms|mt|352b1574|VSync|V-Sync|synchronizacja pionowa|rozrywanie obrazu|tearing
-search.later.fps|mt-safe|3217f73e|Limit klatek na sekundę
-search.later.fps.terms|mt|226d00fd|FPS|limit FPS|FPS limit|ogranicznik klatek|frame limiter|klatki na sekundę|liczba klatek
 search.later.sharpen|mt-safe|65319812|Wyostrzanie obrazu
 search.later.sharpen.terms|mt|9e551a61|wyostrzanie|ostrość|RIS|CAS
 search.later.aa|mt-safe|c77c3af2|Wygładzanie krawędzi
 search.later.aa.terms|mt|99479753|AA|MSAA|antyaliasing|anti-aliasing|wygładzanie|ząbki|poszarpane krawędzie
-search.later.af|mt-safe|527a4439|Filtrowanie tekstur
-search.later.af.terms|mt|ef806f34|AF|anizotropowe|filtrowanie anizotropowe|filtrowanie|tekstury
-search.later.scaling|mt-safe|7f3a6f5d|Skalowanie obrazu
-search.later.scaling.terms|mt|485400f8|skalowanie|upscaling|skalowanie całkowite|integer scaling|proporcje|rozciąganie
-search.later.mode|mt-safe|90ed46c7|Wybierz rozdzielczość i częstotliwość odświeżania
-search.later.mode.terms|mt|6088b5a8|zmień rozdzielczość|ustaw odświeżanie|rozdzielczość|tryb|144 Hz
 search.later.hdr|mt-safe|60790181|HDR
 search.later.hdr.terms|mt|e0f32e0b|HDR|10-bit|10 bitów|głębia kolorów|kolor|kolory
 search.later.vrr|mt-safe|2939546a|Zmienna częstotliwość odświeżania
@@ -323,8 +313,6 @@ search.later.power|mt-safe|fba85679|Limit mocy
 search.later.power.terms|mt|db72d2b0|limit mocy|pobór mocy|moc|waty|TDP
 search.perf.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
 search.perf.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
-search.later.fps-counter|mt-safe|8e4f7029|Wyświetlanie liczby klatek
-search.later.fps-counter.terms|mt|40353cf6|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę
 search.later.cache-clear|mt-safe|6b923412|Wyczyść pamięć podręczną shaderów
 search.later.cache-clear.terms|mt|bd9dc929|wyczyść cache|usuń cache|wyczyść pamięć podręczną|usuń pamięć podręczną
 # ---- window frame (WU-008, WU-011) ----
@@ -356,10 +344,10 @@ ui.restart.title|mt-safe|6fa4b426|Uruchomić ponownie system Windows?
 ui.restart.text|mt|57b7190e|Zmiana zacznie działać po ponownym uruchomieniu. Windows poprosi inne programy o zamknięcie, więc najpierw zapisz w nich swoją pracę.
 ui.restart.later|mt-safe|73b6e48a|Później
 ui.restart.now|mt-safe|09af1002|Uruchom ponownie teraz
-ui.later|mt|3ff09ef1|Dostępne później.
-ui.later.short|mt|91981460|dostępne później
+ui.later|mt|3ff09ef1|Wkrótce.
+ui.later.short|mt|91981460|wkrótce
 ui.later.reason|mt|d5a9cf1d|Sterownik jeszcze tego nie potrafi. Ta funkcja pojawi się w jednej z kolejnych wersji sterownika.
-ui.later.title|mt-safe|e3b48f0b|Dostępne później
+ui.later.title|mt-safe|e3b48f0b|Wkrótce
 nav.home|mt-safe|3a786953|Strona główna
 nav.games|mt-safe|d9dae781|Gry
 nav.graphics|mt-safe|a874fca8|Grafika
@@ -373,9 +361,9 @@ page.home.intro|mt|05aa30e0|Co teraz robi Twój komputer i co wymaga Twojej uwag
 page.games.title|mt-safe|d9dae781|Gry
 page.games.intro|mt|7bac98dd|Ustawienia pojedynczej gry. Zaczynają działać przy następnym uruchomieniu gry.
 page.graphics.title|mt-safe|a874fca8|Grafika
-page.graphics.intro|mt|e2b681e7|Taktowanie i rdzenie graficzne dla wszystkich gier. Zmiany zaczną działać po następnym ponownym uruchomieniu systemu Windows.
+page.graphics.intro|mt|83130cfc|Taktowanie, rdzenie graficzne i ustawienia dla wszystkich gier. Zmiany taktowania i rdzeni zaczną działać po następnym ponownym uruchomieniu systemu Windows; ustawienia dla wszystkich gier od następnego uruchomienia gry.
 page.display.title|mt-safe|34e108c0|Ekran
-page.display.intro|mt|799bfbb0|Twoje monitory i to, co teraz wyświetlają.
+page.display.intro|mt|00622054|Twoje monitory, to, co teraz wyświetlają, i tryby, które możesz wybrać.
 page.performance.title|mt-safe|442aded8|Wydajność
 page.performance.intro|mt|b072238e|Bieżące odczyty układu graficznego i pamięci podręczne shaderów.
 page.driver.title|mt-safe|9fe4c68e|Sterownik
@@ -457,7 +445,7 @@ graphics.cores.40|mt-safe|908ab6d1|Wszystkie (40)
 graphics.not-installed|mt|17713c9c|Sterownik nie jest zainstalowany, więc nie ma tu nic do ustawienia.
 graphics.unsaved|mt|fdb121dc|Masz zmiany, które nie są jeszcze zastosowane.
 graphics.saved|mt|75d79f0a|Brak niezapisanych zmian.
-graphics.reset.text|mt|e6fe86ec|Przywraca taktowanie i rdzenie graficzne do ustawień tej wersji sterownika.
+graphics.reset.text|mt|2ddb47cc|Przywraca taktowanie i rdzenie graficzne do ustawień tej wersji sterownika, a ustawienia dla wszystkich gier do „Decyduje aplikacja”.
 graphics.reset.keep-games|mt|4ef40ca5|Zachowaj ustawienia poszczególnych gier
 graphics.reset.button|mt-safe|cf98ec90|Przywróć domyślne...
 graphics.undo|mt-safe|766450ec|Cofnij ostatnią zmianę...
@@ -471,7 +459,7 @@ display.refresh|mt-safe|1c04ebff|Częstotliwość odświeżania
 display.size|mt|cae2c3d9|{0} x {1}
 display.mode|mt|f4307cf3|{0} x {1}, {2} Hz
 display.mode.no-rate|mt|cae2c3d9|{0} x {1}
-display.mode-note|mt|2b5a8898|Te wartości możesz tu zobaczyć. Zmienianie ich w tej aplikacji pojawi się później.
+display.mode-note|mt|f9c30388|Windows podaje tryby, które ten monitor może pokazać. Nowe ustawienie działa od razu i zostaje tylko wtedy, gdy je zachowasz w ciągu 15 sekund.
 display.identify|mt-safe|4786cd51|Identyfikuj
 display.windows.title|mt-safe|a597577a|Ustawienia ekranu systemu Windows
 display.windows.text|mt|49237ecd|Skalę, układ, orientację i monitor główny ustawia się w systemie Windows.
@@ -580,8 +568,8 @@ recovery.actions|mt-safe|f42148c5|Co możesz zrobić
 # ---- explanations next to each page and setting (WU-064) ----
 help.page.home|mt|37fa8758|Strona główna pokazuje jedną kartę stanu: czy wszystko jest gotowe, a jeśli nie, co zrobić dalej. Poniżej są ostatnie gry i krótkie podsumowanie.
 help.page.games|mt|ea40fa7a|Każda gra może mieć własne ustawienia. Są one przechowywane według nazwy pliku programu i odczytywane przy uruchomieniu gry.
-help.page.graphics|mt|42618ee2|Te ustawienia dotyczą wszystkich gier. Sterownik odczytuje je podczas uruchamiania systemu Windows, więc zaczynają działać po następnym ponownym uruchomieniu.
-help.page.display|mt|0d0b6ad7|Ta strona pokazuje, co teraz wyświetla każdy monitor. Rozdzielczość, skalę i układ ustawia system Windows.
+help.page.graphics|mt|c6ff7fd8|Te ustawienia dotyczą wszystkich gier. Taktowanie i rdzenie graficzne zaczną działać po następnym ponownym uruchomieniu systemu Windows. Ustawienia dla wszystkich gier działają od następnego uruchomienia gry; ustawienie danej gry na stronie Gry ma pierwszeństwo.
+help.page.display|mt|f914a5ac|Wybierz rozdzielczość, częstotliwość odświeżania i skalowanie każdego monitora. Nowe ustawienie zostaje tylko wtedy, gdy je zachowasz w ciągu 15 sekund. Skalę i układ ustawia system Windows.
 help.page.performance|mt|ef1ac3a4|Bieżące odczyty układu graficznego. „Brak odczytu” oznacza, że sterownik nie potrafi jeszcze zmierzyć tej wartości.
 help.page.driver|mt|a2700547|Zainstalowana wersja, informacja, czy została sprawdzona, i czy jest dostępna nowsza wersja.
 help.page.settings|mt|b5b868fe|Jak ta aplikacja działa dla Ciebie. Nic tutaj nie zmienia sterownika.
@@ -596,7 +584,7 @@ help.setting.cpu|mt|b2c75482|Rozkłada pracę sterownika na więcej rdzeni proce
 help.setting.diag|mt|f2712639|Przełączniki do testów prowadzonych przez twórców. Używaj ich tylko na ich prośbę.
 help.setting.undo|mt|a64f5f62|Przywraca ustawienia tej gry sprzed ostatniej zmiany. Ponów przywraca Twoją zmianę.
 help.setting.add|mt|c3f487f7|Wybierz plik programu gry (.exe), aby nadać jej własne ustawienia, zanim ją uruchomisz.
-help.setting.resolution|mt|aa573835|Liczba pikseli i częstotliwość odświeżania każdego monitora. Ustawia je system Windows.
+help.setting.resolution|mt|8b860a88|Liczba pikseli i częstotliwość odświeżania każdego monitora. Dostępne są tylko tryby, które podaje Windows. Nowy tryb działa od razu i zostaje tylko wtedy, gdy go zachowasz w ciągu 15 sekund.
 help.setting.identify|mt|83ce03d0|Wyświetla numer monitora na tym monitorze przez 3 sekundy.
 help.setting.scale|mt|dac4615e|Windows ustawia rozmiar tekstu i aplikacji, układ monitorów i orientację.
 help.setting.sensors|mt|462f8d49|Obciążenie, temperatura, taktowanie i pamięć wideo układu graficznego, co 2 sekundy.
@@ -615,19 +603,17 @@ help.setting.repair|mt|7bd6d691|Instaluje ponownie tę samą wersję z kopii na 
 help.setting.report|mt|77f4acdf|Tworzy plik zip z informacjami dla twórców. Ty decydujesz, czy go wysłać.
 help.setting.restart|mt|f4c0e8b6|Uruchamia ponownie system Windows. Ponowne uruchomienie samego sterownika grafiki nie jest dostępne.
 help.setting.guides|mt|e75ebef4|Pomoc krok po kroku w typowych problemach.
-help.setting.vsync|mt|368cb9db|Sprawia, że gra czeka na monitor, zanim pokaże nową klatkę. Dostępne później.
-help.setting.fps|mt|0b744582|Ogranicza liczbę klatek rysowanych przez grę w każdej sekundzie. Dostępne później.
-help.setting.sharpen|mt|f351a4a8|Sprawia, że obraz wygląda ostrzej. Dostępne później.
-help.setting.aa|mt|2f6e7807|Wygładza poszarpane krawędzie. Dostępne później.
-help.setting.af|mt|b1771bc6|Sprawia, że tekstury widziane pod kątem wyglądają ostrzej. Dostępne później.
-help.setting.scaling|mt|fab3d8f8|Jak niższa rozdzielczość wypełnia ekran. Dostępne później.
-help.setting.mode|mt|16a81243|Wybór rozdzielczości i częstotliwości odświeżania w tej aplikacji. Dostępne później.
-help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Dostępne później.
-help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Dostępne później.
-help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Dostępne później.
+help.setting.vsync|mt|321b1cca|Sprawia, że gra czeka na monitor, zanim pokaże nową klatkę. Usuwa to rozrywanie obrazu, ale może dodać małe opóźnienie. „Decyduje aplikacja” zostawia to ustawieniu samej gry.
+help.setting.fps|mt|9453113b|Ogranicza liczbę klatek rysowanych przez grę w każdej sekundzie. Limit sprawia, że układ graficzny jest chłodniejszy i cichszy. „Bez limitu” dla jednej gry znosi limit ustawiony dla wszystkich gier.
+help.setting.sharpen|mt|f351a4a8|Sprawia, że obraz wygląda ostrzej. Wkrótce.
+help.setting.aa|mt|2f6e7807|Wygładza poszarpane krawędzie. Wkrótce.
+help.setting.af|mt|4c6456a0|Sprawia, że tekstury widziane pod kątem wyglądają ostrzej. Wyższe wartości nieco spowalniają grę.
+help.setting.scaling|mt|9b2c7d59|Jak obraz o niższej rozdzielczości niż monitor wypełnia ekran: rozciągnięty na cały ekran, powiększony z zachowaniem proporcji albo wyśrodkowany bez skalowania. Zmiana zostaje tylko wtedy, gdy ją zachowasz w ciągu 15 sekund.
+help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Wkrótce.
+help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Wkrótce.
+help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Wkrótce.
 help.setting.fan|mt|e5088079|Wybiera, kto steruje wentylatorem obudowy. Automatycznie zostawia to ustawieniu płyty w BIOS. Krzywa sterownika kręci wentylatorem nieco szybciej niż standardowe ustawienie płyty, gdy układ jest gorący. Cicho jest wolniej poniżej 80 °C, Wydajność szybciej w całym zakresie. Od 87 °C wentylator zawsze pracuje na pełnych obrotach.
-help.setting.fps-counter|mt|929ada50|Pokazuje liczbę klatek na sekundę. Dostępne później.
-help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Dostępne później.
+help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Wkrótce.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|mt|e6d2df01|Zaawansowane dostrajanie
 graphics.tuning.show|mt|ad38683b|Pokaż zaawansowane dostrajanie
@@ -869,3 +855,122 @@ perf.fan.refuse.bad-test|mt|31d68f2f|Taka prędkość testu nie jest dostępna.
 perf.fan.refuse.busy|mt|d56c3708|Test nie jest teraz możliwy, bo sterownik w tej chwili nie prowadzi wentylatora w zwykły sposób.
 plan.line.fan-test|mt|e34087ea|Wentylator pracuje na {0} % przez {1} sekund, potem wraca do używanego ustawienia. Nic nie jest zapisywane.
 plan.title.fan-test|mt|86153b93|Test wentylatora
+
+# ---- graphics settings for games, shader model, display modes (2026-10-08) ----
+search.graphics.vsync|mt-safe|86146f8a|Synchronizacja pionowa (VSync)
+search.graphics.vsync.terms|mt|352b1574|VSync|V-Sync|synchronizacja pionowa|rozrywanie obrazu|tearing
+search.graphics.fps|mt-safe|3217f73e|Limit klatek na sekundę
+search.graphics.fps.terms|mt|226d00fd|FPS|limit FPS|FPS limit|ogranicznik klatek|frame limiter|klatki na sekundę|liczba klatek
+search.graphics.af|mt-safe|527a4439|Filtrowanie tekstur
+search.graphics.af.terms|mt|ef806f34|AF|anizotropowe|filtrowanie anizotropowe|filtrowanie|tekstury
+search.display.scaling.terms|mt|4245cba4|skalowanie|upscaling|skalowanie całkowite|integer scaling|proporcje|rozciąganie|skalowanie GPU|skalowanie ekranu|wyśrodkowanie
+search.graphics.overlay.terms|mt|72342a7f|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę|nakładka wydajności|HUD|OSD
+search.graphics.latency|mt-safe|f3bcef3c|Niskie opóźnienie
+search.graphics.latency.terms|mt|5b07cf0e|opóźnienie|input lag|opóźnienie sterowania|kolejka klatek|Anti-Lag|Reflex
+search.graphics.overlay|mt-safe|37d49e6c|Nakładka wydajności
+search.graphics.amd-version|mt-safe|e9b65d7d|Zgłaszaj wersję sterownika AMD
+search.graphics.amd-version.terms|mt|a3215411|wersja sterownika|stary sterownik|przestarzały sterownik|ostrzeżenie o sterowniku|AMD
+search.graphics.vk-present|mt-safe|cdee9cc4|Wyświetlanie w grach Vulkan
+search.graphics.vk-present.terms|mt|93c9bf20|Vulkan|wyświetlanie|czarny ekran|zamrożony obraz|zgodność
+search.graphics.vk-memory|mt-safe|542ed595|Gdy pamięć wideo jest pełna
+search.graphics.vk-memory.terms|mt|ac5d910a|VRAM|pamięć wideo|brak pamięci|pełna pamięć|pamięć systemowa|Vulkan
+search.games.sm|mt-safe|0dbc5bc7|Najwyższy model shaderów
+search.games.sm.terms|mt|ab586346|model shaderów|shader model|SM 6.8|SM 6.7|SM 6.6|shader
+search.games.cpu-render|mt-safe|bf157885|Uruchamiaj DirectX 11 na procesorze
+search.games.cpu-render.terms|mt|927301e2|renderowanie na CPU|renderowanie programowe|WARP|procesor|DirectX 11|ostateczność
+search.display.scaling|mt-safe|22b1cb79|Skalowanie GPU
+help.setting.latency|mt|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
+help.setting.overlay|mt|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
+help.setting.amd-version|mt|7604c528|Niektóre gry ostrzegają, że sterownik graficzny jest stary, bo nie znają tego sterownika. Po włączeniu sterownik podaje numer wersji, który te gry akceptują. Sam sterownik się nie zmienia.
+help.setting.vk-present|mt|e892e511|Sposób, w jaki gry Vulkan wyświetlają klatki. Tryb nowoczesny jest domyślny i szybszy. Tryb zgodności używa starszej, wolniejszej metody; wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
+help.setting.vk-memory|mt|ec2dc30f|Co dostaje gra Vulkan, gdy pamięć wideo jest pełna. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
+help.setting.sm|mt|f3b2ff18|Najwyższy model shaderów, który sterownik zgłasza grze DirectX 12. Domyślny to 6.8. Niektóre gry nie działają z nowszym modelem shaderów; dla takiej gry wybierz 6.7 lub 6.6.
+help.setting.cpu-render|mt|527d8d82|Uruchamia DirectX 11 tej gry na procesorze zamiast na układzie graficznym. To jest znacznie wolniejsze. Używaj tego tylko w ostateczności, dla gry, która nie działa na układzie graficznym.
+gfx.choice.app|mt-safe|e7f551b6|Decyduje aplikacja
+gfx.choice.inherit|mt-safe|efd0e1d0|Jak dla wszystkich gier: {0}
+gfx.choice.inherit-short|mt-safe|1123f3b7|Jak dla wszystkich gier
+gfx.choice.invalid|mt-safe|5a02ac31|Zapisana wartość nieprawidłowa ({0})
+gfx.choice.invalid-type|mt-safe|28ddf6e4|Zapisana wartość nieprawidłowa
+gfx.choice.other|mt-safe|fe8e078f|Ustawione poza tą aplikacją
+gfx.choice.no-limit|mt-safe|f7fcff0d|Bez limitu
+gfx.choice.fps|mt-safe|88471b01|{0} kl./s
+gfx.choice.always-off|mt-safe|4afd2db4|Zawsze wyłączone
+gfx.choice.always-on|mt-safe|044ba8a9|Zawsze włączone
+gfx.choice.af-off|mt-safe|9d03458d|1x (wyłączone)
+gfx.choice.af|mt-safe|17c1da00|{0}x
+gfx.choice.latency-1|mt-safe|4928c007|1 klatka naprzód (najmniejsze opóźnienie)
+gfx.choice.latency|mt-safe|ae07b17c|{0} klatki naprzód
+gfx.choice.on|mt-safe|13001175|Włączone
+gfx.choice.off|mt-safe|ca7981b4|Wyłączone
+gfx.choice.modern|mt-safe|eef6c7f6|Nowoczesny
+gfx.choice.modern-default|mt-safe|8716b3e7|Nowoczesny (domyślny)
+gfx.choice.compat|mt-safe|b37ddf1f|Zgodność
+gfx.choice.sysmem|mt|c50a771a|Użyj pamięci systemowej (wolniej, gra działa dalej)
+gfx.choice.sysmem-default|mt|5c867377|Użyj pamięci systemowej (domyślnie, wolniej, gra działa dalej)
+gfx.choice.oom|mt|2cd3164e|Zgłoś brak pamięci (gra może obniżyć ustawienia)
+gfx.origin.means|mt|74467f34|Sterownik używa: {0}.
+gfx.origin.invalid-global|mt|b6a732e5|Wartość zapisana dla wszystkich gier jest nieprawidłowa i pozostaje bez zmian.
+gfx.origin.invalid-game|mt|4cc07720|Wartość zapisana dla tej gry jest nieprawidłowa i pozostaje bez zmian.
+gfx.origin.default|mt-safe|04e6cbc0|Nie ustawiono: {0}.
+gfx.origin.stored|mt-safe|2b5c4aeb|Zapisane dla wszystkich gier.
+gfx.origin.global|mt|6617fcee|Z ustawień dla wszystkich gier: {0}.
+gfx.note.overlay|mt|a4263f23|Na razie działa w grach DirectX 11.
+gfx.note.cpu-render|mt|0b9bf5df|Znacznie wolniej. Ostateczność dla gry DirectX 11, która nie działa na układzie graficznym.
+gfx.note.amd-version|mt|7f26a73f|Dla gier, które ostrzegają przed starym sterownikiem graficznym.
+gfx.note.vk-present|mt|3d7eec4c|Tryb zgodności jest wolniejszy. Wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
+gfx.note.sm|mt|3efcfd20|Niektóre gry nie działają z nowszym modelem shaderów. Niższy wybierz tylko dla takiej gry.
+gfx.global.title|mt-safe|c750f458|Ustawienia dla wszystkich gier
+gfx.global.intro|mt|20a33c5c|Dotyczą każdej gry. Ustawienie danej gry na stronie Gry ma pierwszeństwo. Zmiany działają od następnego uruchomienia gry.
+gfx.unreadable|mt|ff488b79|Tych ustawień nie można teraz odczytać.
+gfx.section.vulkan|mt-safe|81ede1da|Gry Vulkan
+games.section.d3d12|mt-safe|3cf6f600|Zgodność DirectX 12
+games.section.graphics|mt-safe|a874fca8|Grafika
+games.sm.68|mt-safe|6f32da37|6.8 (domyślny)
+games.sm.67|mt-safe|01a6025a|6.7
+games.sm.66|mt-safe|66bc4f39|6.6
+plan.title.graphics-defaults|mt-safe|c750f458|Ustawienia dla wszystkich gier
+plan.line.gfx-set|mt-safe|71aab4a2|Wszystkie gry, {0}: {1}.
+plan.line.gfx-game-set|mt-safe|c54706e6|{0}, {1}: {2}.
+plan.line.gfx-key|mt|220286cf|{0} nie ma już własnych ustawień grafiki.
+plan.game.sm|mt-safe|c1663251|najwyższy model shaderów {0}
+plan.when.games|mt|b0bc763f|Obowiązuje od następnego uruchomienia gry. Uruchomiona gra zachowuje stare ustawienia do ponownego uruchomienia.
+display.rate|mt-safe|5fb6a929|{0} Hz
+display.modes.none|mt|7ed3bcf3|Windows nie podaje żadnych trybów dla tego monitora.
+display.scaling.unknown|mt|c574918b|Nie można odczytać skalowania tego monitora.
+display.scaling.full|mt-safe|d133925f|Pełny ekran (rozciągnięty)
+display.scaling.aspect|mt-safe|2c3e2511|Zachowaj proporcje
+display.scaling.center|mt-safe|eb28a6b5|Wyśrodkowany (bez skalowania)
+display.scaling.windows|mt-safe|71ae8940|Tak, jak ustawił Windows
+display.scaling.note|mt|c33519ca|Jak obraz o niższej rozdzielczości niż monitor wypełnia ekran.
+display.changed|mt|4889b3fe|Zmienione, jeszcze niezastosowane. Teraz: {0}.
+display.keep.title|mt-safe|b3e16247|Zachować te ustawienia ekranu?
+display.keep.text|mt|29e4a10e|Powrót do poprzednich ustawień ekranu za {0} s.
+display.keep.keep|mt-safe|6ab75428|Zachowaj zmiany
+display.keep.revert|mt-safe|0026c505|Przywróć
+display.result.kept|mt|66c7a50f|Nowe ustawienia ekranu zostały zachowane.
+display.result.reverted|mt|ad2c3799|Przywrócono poprzednie ustawienia ekranu.
+display.result.failed|mt|ab18a02b|Windows nie przyjął tego ustawienia ekranu. Nic się nie zmieniło.
+display.result.keep-failed|mt|45a5a6dd|Nowe ustawienia ekranu działają, ale Windows ich nie zapisał. Po ponownym uruchomieniu mogą wrócić poprzednie.
+display.result.revert-failed|mt|3d5b3356|Nie udało się przywrócić poprzednich ustawień ekranu. Wybierz je ponownie tutaj lub w ustawieniach ekranu Windows.
+
+# ---- how long Windows waits for the graphics before it resets them (src/TdrSetting.cs, the Help page) ----
+tdr.title|mt-safe|ff352a9c|Czas oczekiwania na grafikę
+tdr.intro|mt|866aa1cd|Gdy gra poprosi o jeden bardzo ciężki obraz, układ graficzny może potrzebować dużo czasu, aby go skończyć. Windows czeka ustaloną liczbę sekund, a potem uznaje, że grafika przestała działać, i ją resetuje. Na tym komputerze reset kończy grę i może zatrzymać Windows niebieskim ekranem. Dłuższe oczekiwanie pozwala ciężkiemu obrazowi dojść do końca.
+tdr.label|mt-safe|a2aa568e|Czas oczekiwania
+tdr.choice.not-set|mt-safe|64c56966|Nieustawione: Windows czeka {0} sekundy
+tdr.choice.windows|mt-safe|6af5dc29|{0} sekundy (tyle Windows czeka sam)
+tdr.choice.recommended|mt-safe|4466478a|{0} sekund (zalecane dla tego sterownika)
+tdr.choice.seconds|mt-safe|e549e94b|{0} sekund
+tdr.now|mt-safe|614c5ef2|Zapisane teraz: {0} s.
+tdr.now.absent|mt|448aaa5f|Nic nie jest zapisane, więc Windows czeka {0} sekundy.
+tdr.now.not-valid|mt|1b27a5bd|Zapisane teraz: {0} s, czyli poza tym, co proponuje ta aplikacja. Wybierz czas oczekiwania z listy, aby go zastąpić.
+tdr.after-restart|mt|d4991d13|Nowy czas oczekiwania zaczyna działać po ponownym uruchomieniu systemu Windows.
+tdr.apply|mt-safe|66b53fd5|Zapisz czas oczekiwania
+tdr.unreadable|mt|7d529569|Nie można odczytać czasu oczekiwania na tym komputerze.
+tdr.in-main-window|mt|f60b3f14|Czas oczekiwania zmienia się w głównym oknie, na stronie Pomoc.
+search.help.tdr|mt-safe|ff352a9c|Czas oczekiwania na grafikę
+search.help.tdr.terms|mt|c2a4853d|zawiesza|zawieszenie|czarny ekran|niebieski ekran|nie odpowiada|czekanie|ciężki obraz|limit czasu
+help.setting.tdr|mt|c224cc97|Ile sekund Windows czeka na ciężki obraz, zanim uzna, że grafika przestała działać. 10 sekund pasuje do tego sterownika; 2 sekundy to tyle, ile Windows czeka sam. Nowy czas oczekiwania działa po ponownym uruchomieniu systemu Windows.
+plan.title.tdr-delay|mt-safe|ff352a9c|Czas oczekiwania na grafikę
+plan.line.tdr|mt|c88deff7|Windows czeka na grafikę {0} s.
+plan.line.tdr-default|mt|e906ce42|Czas oczekiwania wraca do tego, który Windows ustawia sam.

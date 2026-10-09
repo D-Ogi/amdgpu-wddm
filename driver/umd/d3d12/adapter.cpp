@@ -17,6 +17,12 @@
 namespace {
 using native12::Adapter;
 using native12::Device;
+// The per-application settings this shell applies (docs/design/per-app-graphics-settings.md). PerformanceOverlay
+// is D3D11 only, RenderOnCpu is the router's: a set value of those shows as not applied.
+constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::FrameRateLimit) |
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::VSync) |
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::Anisotropy) |
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::MaxFrameLatency);
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
     return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 &&
         (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0092;
@@ -41,7 +47,24 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
        !cb.pfnAllocateCb || !cb.pfnDeallocateCb || !cb.pfnSetCommandListDDITableCb || !cb.pfnSetCommandListErrorCb) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
     auto device=new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
-    HRESULT hr=native12::create_device_engine(*device);
+    // The per-application settings: once per process, the effective values in the log; Anisotropy as the
+    // vkd3d-proton fork's VKD3D_SAMPLER_ANISOTROPY, which the engine reads when it creates this device.
+    namespace as=amdgpu_wddm::app_settings;
+    const as::Settings& settings=as::process_settings();
+    as::log_once(settings,"d3d12",kAppliedSettings,[](const char* line) {
+        char text[1100];
+        std::snprintf(text,sizeof(text),"%s\n",line);
+        OutputDebugStringA(text);
+        amdgpu_wddm_log::print("%s",text);
+    });
+    HRESULT hr=E_OUTOFMEMORY;
+    try {
+        const as::ScopedEnv anisotropy("VKD3D_SAMPLER_ANISOTROPY",as::vkd3d_anisotropy(settings),
+            as::ScopedEnv::Mode::Replace);
+        hr=native12::create_device_engine(*device);
+    } catch(...) {
+        hr=E_OUTOFMEMORY;
+    }
     if(FAILED(hr)){device->~Device();trace("CreateDevice-engine-failed",static_cast<unsigned>(hr));return hr;}
     ++adapter->devices;
     // The outer device exists: note the launch once per process, off this thread (recent-launch.h).

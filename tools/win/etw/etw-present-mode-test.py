@@ -12,10 +12,17 @@ No ETW session, no lab, no capture of its own. It runs over two fixtures:
                     bDirectFlip 1 with bIndependentFlip 0, and Windowed_Dx_Flip_Consumed for nearly every
                     present. Increment 1's control must read INERT on it and increment 2's conjunction must
                     read REFUTED, because the compositor consumed the frames.
+  The Witcher 3     testdata/w3-exclusive-flip-excerpt.txt and w3-exclusive-1080-composed-excerpt.txt, one
+                    second each of trial 478 (2026-10-08). The first is the game in exclusive fullscreen at the
+                    native mode: every present independent-flipped and programmed, the VSync DPC scanning the
+                    same three addresses, nothing consumed, and Win32k marking every InFrame token
+                    SkipIndependentFlip true. The kernel witness must HOLD there and relabel those presents. The
+                    second is the same game at 1920x1080, composed: the witness must not hold and nothing moves.
   synthetic         dumper texts written here, in the real header shapes, for the branches no capture of this
                     driver has ever taken: a hardware independent flip, a withdrawn independent candidate, an
-                    MMIOFlip whose Flags carries the unconfirmed 0x40 bit, and a full increment-2 conjunction
-                    with the kernel driver's numbers supplied.
+                    MMIOFlip whose Flags carries the unconfirmed 0x40 bit, a full increment-2 conjunction
+                    with the kernel driver's numbers supplied, and the negative controls of the kernel witness
+                    (one present consumed, the DPC scanning another address, no independent flip at all).
 
 Why the synthetic half exists: the independent-flip branch could not fire at all. The two flags are BOOL fields
 that the dumper writes as "true"/"false", the parser read them with int(), int("true") raises, and the result was
@@ -36,6 +43,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PARSER = HERE / 'etw-present-mode.py'
 KEPT = HERE / 'testdata' / 'base-composed-excerpt.txt'
+W3_FLIP = HERE / 'testdata' / 'w3-exclusive-flip-excerpt.txt'
+W3_COMPOSED = HERE / 'testdata' / 'w3-exclusive-1080-composed-excerpt.txt'
 
 # The header lines of the synthetic fixtures are the real ones, copied from the kept trace's header block, so a
 # synthetic row cannot pass through a column layout that no capture produces.
@@ -254,6 +263,30 @@ def true_dump(dpc_address=ADMITTED):
     return '\n'.join(HEADER + rows) + '\n'
 
 
+def skip_dump(consume=None, dpc_address=ADMITTED, independent=True):
+    """Trial 478's shape: Win32k marks every InFrame token IndependentFlip true with SkipIndependentFlip true,
+    while the kernel independent-flips and programs the client's own packets.
+
+    consume names a present count DWM consumed; dpc_address moves what the VSync DPC scanned; independent
+    False leaves out the IndependentFlip events. Each is one negative control of the kernel witness.
+    """
+    rows = []
+    for index in range(3):
+        base = 1000 + index * 10000
+        count = index + 1
+        rows += [detailed(base, GAME, 0xD0 + index), present_call(base + 10, GAME),
+                 surface_object(base + 100, GAME, 0xD0 + index, count),
+                 state(base + 200, count, True, True, 2), state(base + 210, count, True, True, 3),
+                 packet(base - 50, GAME, 6001 + index)]
+        if independent:
+            rows.append(independent_flip(base + 280, 6001 + index, 0))
+        rows += [mmio_flip(base + 290, 6001 + index, 0x2, address=ADMITTED + index * 0x1000),
+                 vsync_dpc(base + 300, dpc_address + index * 0x1000, 0, 0)]
+        if consume == count:
+            rows.append(consumed(base + 400, count))
+    return '\n'.join(HEADER + rows) + '\n'
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location('etw_present_mode', PARSER)
     module = importlib.util.module_from_spec(spec)
@@ -358,6 +391,9 @@ def kept_trace_cases(check):
                   r'no_plane_for_this_process=PASS result=INERT', text)
     check.present('increment 2 is refuted by the consumption',
                   r'M15\.14 INCREMENT2 "Unknown" \(4476\): not_consumed_by_dwm=FAIL .*result=REFUTED', text)
+    check.present('the kernel witness does not hold on the composed baseline',
+                  r'M15\.14 KERNEL-WITNESS "Unknown" \(4476\): independent_flips=FAIL .*not_consumed_by_dwm=FAIL '
+                  r'result=NOT-HELD relabelled=0', text)
     check.present('and names the count that refutes it',
                   r'not_consumed_by_dwm\s+FAIL\s+58 Windowed_Dx_Flip_Consumed and 0 Dx_Flip_Consumed', text)
     check.present('a clause with no input says so instead of passing',
@@ -405,6 +441,48 @@ def kept_trace_cases(check):
                   r'M15\.14 INCREMENT1 notaprocess: .*result=NO-DATA', done.stdout)
 
 
+def witcher_cases(check):
+    """Trial 478, one second of each shape: the kernel witness HOLDS for the flipping game and relabels the
+    presents Win32k marked skipped; it does not hold for the composed one, and nothing moves there."""
+    for fixture in (W3_FLIP, W3_COMPOSED):
+        if not fixture.is_file():
+            check.check('the fixture %s is present' % fixture.name, False, '%s is missing' % fixture)
+            return
+    done = run(W3_FLIP, '6812')
+    check.check('the parser runs over the W3 flip excerpt', done.returncode == 0, done.stderr[-400:])
+    text = done.stdout
+    check.present('Win32k marked every InFrame token skipped',
+                  r'InFrame rows 102, with IndependentFlip 102, with SkipIndependentFlip 102', text)
+    check.present('the kernel witness holds, with all four clauses',
+                  r'M15\.14 KERNEL-WITNESS "Unknown" \(6812\): independent_flips=PASS mmio_programmed=PASS '
+                  r'vsync_scanned_same_addresses=PASS not_consumed_by_dwm=PASS result=HOLDS relabelled=102', text)
+    check.present('the DPC scanned the three addresses the game programmed',
+                  r'vsync_scanned_same_addresses\s+PASS\s+all 3 scanned: 0xF434664000, 0xF43B930000, '
+                  r'0xF43C1FA000', text)
+    check.present('those presents are hardware flips by the witness',
+                  r'hardware flip \(kernel witness; Win32k skip\)\s+102\s+98\.1%', text)
+    check.absent('and no longer composed by the Win32k label', r'composed flip \(independent skipped\)', text)
+    check.present('the timeline follows the relabel', r'0  hardware flip \(kernel witness; Win32k skip\) 102', text)
+    check.present('the two presents at the edges stay unclassified', r'unclassified\s+2\s', text)
+    check.present('the kernel count is printed beside it, not joined',
+                  r'\(6812\): 104 present packets \(104 rows\), 102 independent flips, 102 reached MMIOFlip', text)
+    check.present('the verdict line is unchanged by the witness',
+                  r'M15\.14 VERDICT "Unknown" \(6812\): packets=104 independent=102 mmio=102 vsync=0 '
+                  r'directflip=0/0 result=INDEPENDENT-FLIP', text)
+
+    done = run(W3_COMPOSED, '6812')
+    check.check('the parser runs over the W3 composed excerpt', done.returncode == 0, done.stderr[-400:])
+    text = done.stdout
+    check.present('the composed game: DWM consumed its frames', r'composed flip \(DWM consumed\)\s+58\s', text)
+    check.present('the witness does not hold there',
+                  r'M15\.14 KERNEL-WITNESS "Unknown" \(6812\): independent_flips=FAIL mmio_programmed=NO-DATA '
+                  r'vsync_scanned_same_addresses=NO-DATA not_consumed_by_dwm=FAIL result=NOT-HELD relabelled=0', text)
+    check.absent('and nothing is relabelled', r'kernel witness; Win32k skip', text)
+    check.present('the composed verdict stands',
+                  r'M15\.14 VERDICT "Unknown" \(6812\): packets=95 independent=0 mmio=0 vsync=0 '
+                  r'directflip=0/58 result=COMPOSED', text)
+
+
 def synthetic_cases(check):
     """The branches no capture of this driver has taken yet."""
     with tempfile.TemporaryDirectory() as directory:
@@ -435,6 +513,46 @@ def synthetic_cases(check):
                       r'no_plane_for_this_process=FAIL result=MOVED', text)
         check.present('the independent-flip events are summarised',
                       r'independent-flip events: 2, present packets with one: 2', text)
+        check.present('one consumed present keeps the kernel witness from holding',
+                      r'M15\.14 KERNEL-WITNESS "flipclient\.exe" \(4242\): .*not_consumed_by_dwm=FAIL '
+                      r'result=NOT-HELD relabelled=0', text)
+
+        # The kernel witness (increment 3) and its negative controls, on trial 478's shape.
+        skip = Path(directory) / 'skip.txt'
+        skip.write_text(skip_dump(), encoding='utf-8')
+        done = run(skip, 'flipclient')
+        check.check('the parser runs over the skip dump', done.returncode == 0, done.stderr[-400:])
+        check.present('the witness holds on the skip shape',
+                      r'M15\.14 KERNEL-WITNESS "flipclient\.exe" \(4242\): independent_flips=PASS '
+                      r'mmio_programmed=PASS vsync_scanned_same_addresses=PASS not_consumed_by_dwm=PASS '
+                      r'result=HOLDS relabelled=3', done.stdout)
+        check.present('and all three presents are hardware flips by it',
+                      r'hardware flip \(kernel witness; Win32k skip\)\s+3\s+100\.0%', done.stdout)
+        check.present('the Win32k label it overrides is printed beside it',
+                      r'InFrame rows 3, with IndependentFlip 3, with SkipIndependentFlip 3', done.stdout)
+        consumed_one = Path(directory) / 'skip-consumed.txt'
+        consumed_one.write_text(skip_dump(consume=2), encoding='utf-8')
+        done = run(consumed_one, 'flipclient')
+        check.present('one consumed present: NOT-HELD',
+                      r'not_consumed_by_dwm=FAIL result=NOT-HELD relabelled=0', done.stdout)
+        check.present('the consumed present is composed',
+                      r'composed flip \(DWM consumed\)\s+1\b', done.stdout)
+        check.present('and the other two keep the Win32k label, because the witness is per process',
+                      r'composed flip \(independent skipped\)\s+2\b', done.stdout)
+        elsewhere = Path(directory) / 'skip-dpc-elsewhere.txt'
+        elsewhere.write_text(skip_dump(dpc_address=0x3FF000000), encoding='utf-8')
+        done = run(elsewhere, 'flipclient')
+        check.present('a DPC that scanned other addresses: NOT-HELD, and it names them',
+                      r'vsync_scanned_same_addresses\s+FAIL\s+3 of 3 addresses never scanned: 0x271001000, '
+                      r'0x271002000, 0x271003000', done.stdout)
+        check.present('so nothing is relabelled', r'composed flip \(independent skipped\)\s+3\b', done.stdout)
+        no_flip = Path(directory) / 'skip-no-independent.txt'
+        no_flip.write_text(skip_dump(independent=False), encoding='utf-8')
+        done = run(no_flip, 'flipclient')
+        check.present('no IndependentFlip event: NOT-HELD',
+                      r'independent_flips=FAIL mmio_programmed=NO-DATA vsync_scanned_same_addresses=NO-DATA '
+                      r'not_consumed_by_dwm=PASS result=NOT-HELD relabelled=0', done.stdout)
+        check.absent('and no relabel', r'kernel witness; Win32k skip\)\s+\d', done.stdout)
 
         true = Path(directory) / 'true.txt'
         true.write_text(true_dump(), encoding='utf-8')
@@ -571,6 +689,7 @@ def main():
     check = Checker()
     unit_cases(check, load_module())
     kept_trace_cases(check)
+    witcher_cases(check)
     synthetic_cases(check)
     etl_case(check)
     print('etw-present-mode self-test: %d ok, %d failure(s)' % (check.ok, check.failed))

@@ -44,7 +44,14 @@ namespace AmdgpuWddmControl
         public string ConfirmLogLast { get; set; }
         public Dictionary<string, long> DefaultParameters { get; set; }     // manifest.json "defaults"; null: none
         public Dictionary<string, long> DefaultRouter { get; set; }
+        public Dictionary<string, long> DefaultGraphicsDrivers { get; set; }
         public string DefaultsError { get; set; }
+        // How long Windows waits for the graphics before it resets them (TdrSetting.cs): the stored number of seconds,
+        // null when nothing is stored (Windows waits TdrSetting.WindowsDefault then). TdrError names why the value
+        // could not be read; null means it was read. An old recorded snapshot has neither member, which reads as
+        // "nothing stored, read without trouble" and plans the release default, as a fresh machine does.
+        public long? TdrDelay { get; set; }
+        public string TdrError { get; set; }
         // The desktop compositor of the active interactive session (BD-060): what is running now, and every DWM the
         // observers saw in this session of this boot, this reading included.
         public DwmReading DwmNow { get; set; }
@@ -69,6 +76,9 @@ namespace AmdgpuWddmControl
         // recommended ones (manifest.json defaults.d3d12_applications; null: none).
         public Dictionary<string, string> GameProfiles { get; set; }
         public Dictionary<string, string> DefaultApplications { get; set; }
+        // The Graphics and Vulkan settings keys (GraphicsSettings.cs): every existing key of the two roots and of their
+        // games, with all their values. Null: the read failed.
+        public List<GfxKey> GfxKeys { get; set; }
 
         public RecoverySnapshot() { Parameters = new Dictionary<string, long>(); DwmRoute = "unknown"; }
 
@@ -84,6 +94,13 @@ namespace AmdgpuWddmControl
             return Parameters != null && Parameters.TryGetValue(name, out v) ? (uint?)(uint)v : null;
         }
 
+        // The stored waiting time for the graphics as a DWORD, or null when nothing is stored or the number is outside
+        // the DWORD range (a value of another type is reported through TdrError instead).
+        public uint? Tdr()
+        {
+            return TdrDelay != null && TdrDelay.Value >= 0 && TdrDelay.Value <= uint.MaxValue ? (uint?)(uint)TdrDelay.Value : null;
+        }
+
         public bool DriverRunning { get { return DriverError == null && (Interop != null || Health != null || Dpm != null); } }
     }
 
@@ -92,15 +109,21 @@ namespace AmdgpuWddmControl
         public string Path { get; set; }
         public string Name { get; set; }
         public bool Delete { get; set; }
-        public string Kind { get; set; }        // DWord (all the app's own writes), QWord or String (only an undo)
+        public string Kind { get; set; }        // DWord, String (the Vulkan settings and an undo) or QWord (only an undo)
         public long Number { get; set; }
         public string Text { get; set; }
+        // Removes the key Path itself (Name null). Only a game's empty Graphics or Vulkan key; the helper checks that it
+        // has no value and no subkey before it removes it.
+        public bool DeleteKey { get; set; }
 
         public static RegWrite Dword(string path, string name, uint value) { return new RegWrite { Path = path, Name = name, Kind = "DWord", Number = value }; }
+        public static RegWrite Str(string path, string name, string value) { return new RegWrite { Path = path, Name = name, Kind = "String", Text = value }; }
         public static RegWrite Remove(string path, string name) { return new RegWrite { Path = path, Name = name, Delete = true }; }
+        public static RegWrite RemoveKey(string path) { return new RegWrite { Path = path, DeleteKey = true }; }
 
         public override string ToString()
         {
+            if (DeleteKey) return @"delete key HKLM\" + Path + " (empty)";
             string where = @"HKLM\" + Path + " " + Name;
             if (Delete) return "delete " + where;
             return "set " + where + " = " + (Kind == "String" ? "\"" + Text + "\"" : Number.ToString(CultureInfo.InvariantCulture)) + " (" + Kind + ")";
@@ -132,6 +155,8 @@ namespace AmdgpuWddmControl
         public readonly List<string> PlainNotes = new List<string>();
         // Per-game switches: image -> new Experiment value, "" = remove the game's key. Backed up and undoable per game.
         public readonly SortedDictionary<string, string> GameWrites = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // The game a game-profile, game-undo or game-redo plan is about (its Graphics and Vulkan writes are in Writes).
+        public string GameImage;
         // What the dialog shows (in the window's language): one line per change, then the notes.
         public readonly List<string> Preview = new List<string>();
 
@@ -337,13 +362,18 @@ namespace AmdgpuWddmControl
             "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
             "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask",
             // The case fan card of the Performance page: one escape each, and the driver stores the choice.
-            "fan-auto", "fan-curve", "fan-test" };
+            "fan-auto", "fan-curve", "fan-test",
+            // The graphics settings for all games (the Graphics page); a game's own ones go with game-profile.
+            "graphics-defaults",
+            // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079).
+            "tdr-delay" };
 
         public static bool Allowed(string path, string name)
         {
             if (string.Equals(path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return ParameterNames.Contains(name);
             if (string.Equals(path, RouterPath, StringComparison.OrdinalIgnoreCase)) return RouterNames.Contains(name);
-            return false;
+            if (TdrSetting.Allowed(path, name)) return true;
+            return GraphicsSettings.Allowed(path, name);
         }
 
         // The CU setter's set only (G-PLAN): CuMode written as 40 or removed, CuDisableWgp and CuModeConfirmed removed.
@@ -946,6 +976,20 @@ namespace AmdgpuWddmControl
                 cuWarn ? "warn" : cuView.Class == CuClass.Standard || cuView.Class == CuClass.Confirmed ? "ok" : "info",
                 cuView.OfferConfirm ? "cu-confirm" : null, cuView.OfferConfirm ? "Confirm now" : null);
 
+            // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). No action is
+            // offered here, because the action carries the chosen number; the Help page's card does that.
+            long tdrWanted = 0;
+            bool tdrKnown = s.DefaultGraphicsDrivers != null && s.DefaultGraphicsDrivers.TryGetValue(TdrSetting.ValueName, out tdrWanted);
+            string tdrRelease = tdrKnown ? " The release writes " + tdrWanted + "." : "";
+            if (s.TdrError != null)
+                add("Graphics waiting time", "The waiting time cannot be read: " + s.TdrError + "." + tdrRelease, "warn", null, null);
+            else if (s.Tdr() == null)
+                add("Graphics waiting time", TdrSetting.ValueName + " is absent, so Windows waits " + TdrSetting.WindowsDefault + " s." + tdrRelease,
+                    tdrKnown && tdrWanted > TdrSetting.WindowsDefault ? "warn" : "info", null, null);
+            else
+                add("Graphics waiting time", TdrSetting.ValueName + " " + s.Tdr().Value + " s." + tdrRelease,
+                    tdrKnown && s.Tdr().Value < tdrWanted ? "warn" : "ok", null, null);
+
             // The installer's start-confirm task.
             if (!s.TaskFound)
                 add("Start confirmation task", "The release's logon task is not installed. Run the release installer again.", "warn", null, null);
@@ -968,7 +1012,7 @@ namespace AmdgpuWddmControl
         }
 
         // The plan of one action. ceiling: enable-dpm and set-clocks; mode: set-clocks; backups: undo, game-undo,
-        // game-redo; more: cu-mode (Cu), reset-defaults (Games), game-* (Image, Value).
+        // game-redo; more: cu-mode (Cu), reset-defaults (Games), game-* (Image, Value, Gfx), graphics-defaults (Gfx).
         public static ActionPlan Plan(string action, RecoverySnapshot s, uint? mode = null, uint? ceiling = null, IEnumerable<BackupRecord> backups = null, bool operatorAccepted = false,
             PlanArgs more = null)
         {
@@ -1084,6 +1128,13 @@ namespace AmdgpuWddmControl
                     p.Writes.Add(RegWrite.Dword(RouterPath, "DwmForceCpu", (uint)cpu));
                     if (s.DefaultParameters["EnableGpuPresentBlit"] == 1 && s.DefaultParameters["EnableCddDwmInterop"] == 1 && s.P("InteropClosedReason") != null)
                         p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
+                    // The waiting time for the graphics, when the installed release names one (manifest.json
+                    // defaults.graphics_drivers). A release that names none, or a number outside the range this app
+                    // accepts, leaves the value as it is: the reset never writes a waiting time nobody chose.
+                    long tdrDefault;
+                    if (s.DefaultGraphicsDrivers != null && s.DefaultGraphicsDrivers.TryGetValue(TdrSetting.ValueName, out tdrDefault) &&
+                        tdrDefault >= 0 && tdrDefault <= uint.MaxValue && TdrSetting.IsValid((uint)tdrDefault) && s.TdrError == null)
+                        p.Writes.AddRange(TdrSetting.PlanWrites(s.Tdr(), (uint)tdrDefault));
                     int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k));
                     if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
                     // The tuning page's settings are not in manifest.json, because the driver stores them itself
@@ -1097,6 +1148,12 @@ namespace AmdgpuWddmControl
                     var cu = CuMode.Plan(s.StoredCu(), CuMode.Stock);
                     if (!cu.Refused) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
                     else if (s.StoredCu().Unreadable) p.Notes.Add("The graphics-core setting cannot be read and is left as it is.");
+                    // The graphics settings for all games go back to "Application decides"; a game's own ones go with
+                    // the per-game switches.
+                    int gfxFrom = p.Writes.Count;
+                    if (s.GfxKeys != null) p.Writes.AddRange(GraphicsSettings.ResetWrites(s.GfxKeys, more.Games == "reset"));
+                    else p.Notes.Add("The graphics settings for games cannot be read and are left as they are.");
+                    int gfxCount = p.Writes.Count - gfxFrom;
                     // Per-game switches: kept unless the user asked to reset them too (WU-055).
                     if (more.Games == "reset")
                     {
@@ -1114,7 +1171,8 @@ namespace AmdgpuWddmControl
                     else p.Notes.Add("Per-game settings are kept.");
                     if (p.Writes.All(w => Same(s, w)) && p.Cu == null && p.GameWrites.Count == 0 && p.TuneSteps.Count == 0)
                         return Refuse(p, "All these settings have their release defaults already.");
-                    p.Change = "Sets " + string.Join(", ", p.Writes.Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
+                    p.Change = "Sets " + string.Join(", ", p.Writes.Take(gfxFrom).Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
+                        (gfxCount > 0 ? "; graphics settings for games: " + gfxCount + " changes back to \"Application decides\"" : "") +
                         (p.Cu != null ? "; graphics cores: Standard (24)" : "") + (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") +
                         (p.TuneSteps.Count > 0 ? "; tuning: " + string.Join(", ", p.TuneSteps.Select(t => t.Kind)) : "") + ".";
                     if (p.Cu != null) p.Notes.Add("The graphics-core part cannot be undone: its old values are kept for diagnosis only.");
@@ -1133,6 +1191,14 @@ namespace AmdgpuWddmControl
                         if (image != null && v.Name == Profiles.ValueName) { p.GameWrites[image] = v.Existed ? v.Text ?? "" : ""; continue; }
                         if (!Allowed(v.Path, v.Name)) return Refuse(p, "The backup names " + v.Name + ", which this app does not change.");
                         p.Writes.Add(v.Existed ? new RegWrite { Path = v.Path, Name = v.Name, Kind = v.Kind, Number = v.Number, Text = v.Text } : RegWrite.Remove(v.Path, v.Name));
+                    }
+                    if (s.GfxKeys != null) GraphicsSettings.AddKeyRemovals(p.Writes, s.GfxKeys);
+                    if (p.Writes.Count > 0 && p.Writes.All(GraphicsSettings.Owns) && p.GameWrites.Count == 0 && (target.Diagnosis == null || target.Diagnosis.Count == 0))
+                    {
+                        // Only graphics settings for games: they apply when a game starts, no restart needed.
+                        p.Change = "Restores the values found before \"" + target.Action + "\" of " + target.Utc + ".";
+                        p.Effect = "the next time a game starts";
+                        break;
                     }
                     p.Change = "Restores the values found before \"" + target.Action + "\" of " + target.Utc + ".";
                     var router = p.Writes.FirstOrDefault(w => w.Name == "DwmForceCpu");
@@ -1175,17 +1241,74 @@ namespace AmdgpuWddmControl
                     p.Title = "Game settings";
                     p.Undoable = true;
                     if (more.Image == null || !GameAllowed(more.Image, more.Value ?? "")) return Refuse(p, "Not a game file name or not a valid list of switches.");
+                    p.GameImage = more.Image;
+                    p.Effect = "the next time " + more.Image + " starts";
+                    // A game's graphics and Vulkan settings (--gfx), with or without its switches (--value).
+                    string gfxChange = null;
+                    if (more.Gfx != null)
+                    {
+                        var edits = GraphicsSettings.ParseEdits(more.Gfx);
+                        if (edits == null) return Refuse(p, "Not a valid list of graphics settings.");
+                        if (s.GfxKeys == null) return Refuse(p, "The graphics settings cannot be read, so they are not changed.");
+                        try { p.Writes.AddRange(GraphicsSettings.PlanWrites(s.GfxKeys, more.Image, edits)); }
+                        catch (ArgumentException e) { return Refuse(p, e.Message); }
+                        if (p.Writes.Count > 0) gfxChange = GraphicsSettings.Describe(p.Writes);
+                    }
+                    if (more.Value == null)
+                    {
+                        if (more.Gfx == null) return Refuse(p, "No game settings given (--value or --gfx).");
+                        if (p.Writes.Count == 0) return Refuse(p, "These settings of " + more.Image + " are stored already.");
+                        p.Change = gfxChange;
+                        p.Notes.Add("These settings are shared by every game named " + more.Image + " on this PC.");
+                        break;
+                    }
                     string current = null;
                     if (s.GameProfiles != null) s.GameProfiles.TryGetValue(more.Image, out current);
                     var names = (more.Value ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
                     ProfileWrite pw;
                     try { pw = Profiles.PlanWrite(more.Image, string.IsNullOrEmpty(current) ? null : current, names); }
                     catch (ArgumentException e) { return Refuse(p, e.Message); }
-                    if (pw.Kind == ProfileWriteKind.None) return Refuse(p, "These settings of " + more.Image + " are stored already.");
-                    p.GameWrites[more.Image] = pw.Kind == ProfileWriteKind.Set ? pw.Value : "";
-                    p.Effect = "the next time " + more.Image + " starts";
-                    p.Change = pw.Kind == ProfileWriteKind.Set ? "Sets the switches of " + more.Image + " to " + pw.Value + "." : "Removes the settings of " + more.Image + ".";
+                    if (pw.Kind == ProfileWriteKind.None && p.Writes.Count == 0) return Refuse(p, "These settings of " + more.Image + " are stored already.");
+                    if (pw.Kind != ProfileWriteKind.None) p.GameWrites[more.Image] = pw.Kind == ProfileWriteKind.Set ? pw.Value : "";
+                    p.Change = (pw.Kind == ProfileWriteKind.None ? "" : pw.Kind == ProfileWriteKind.Set ? "Sets the switches of " + more.Image + " to " + pw.Value + "." : "Removes the settings of " + more.Image + ".") +
+                        (gfxChange != null ? (pw.Kind == ProfileWriteKind.None ? "" : " ") + gfxChange : "");
                     p.Notes.Add("These settings are shared by every game named " + more.Image + " on this PC.");
+                    break;
+                }
+
+                case "graphics-defaults":
+                {
+                    p.Title = "Settings for all games";
+                    p.Undoable = true;
+                    p.Effect = "the next time a game starts";
+                    var edits = GraphicsSettings.ParseEdits(more.Gfx);
+                    if (edits == null) return Refuse(p, "Not a valid list of graphics settings.");
+                    if (s.GfxKeys == null) return Refuse(p, "The graphics settings cannot be read, so they are not changed.");
+                    try { p.Writes.AddRange(GraphicsSettings.PlanWrites(s.GfxKeys, null, edits)); }
+                    catch (ArgumentException e) { return Refuse(p, e.Message); }
+                    if (p.Writes.Count == 0) return Refuse(p, "These settings for all games are stored already.");
+                    p.Change = GraphicsSettings.Describe(p.Writes);
+                    p.Notes.Add("A game's own setting wins over the setting for all games.");
+                    break;
+                }
+
+                case "tdr-delay":
+                {
+                    // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). Windows
+                    // reads the value when it starts, so the change applies at the next restart of Windows. The
+                    // driver does not have to be running for this: it is a Windows setting, and a tester whose
+                    // picture already broke must be able to lengthen the wait.
+                    p.Title = "Waiting time for the graphics";
+                    p.Effect = "at the next restart of Windows";
+                    p.Undoable = true;
+                    if (more.Tdr == null) return Refuse(p, "No waiting time given.");
+                    if (!TdrSetting.IsValid(more.Tdr.Value))
+                        return Refuse(p, "The waiting time must be between " + TdrSetting.Min + " and " + TdrSetting.Max + " seconds.");
+                    if (s.TdrError != null) return Refuse(p, "The waiting time for the graphics cannot be read, so it is not changed: " + s.TdrError);
+                    p.Writes.AddRange(TdrSetting.PlanWrites(s.Tdr(), more.Tdr.Value));
+                    if (p.Writes.Count == 0) return Refuse(p, "Windows waits " + more.Tdr.Value + " seconds for the graphics already.");
+                    p.Change = TdrSetting.Describe(s.Tdr(), more.Tdr.Value);
+                    p.OfferRestart = true;
                     break;
                 }
 
@@ -1226,16 +1349,25 @@ namespace AmdgpuWddmControl
                     var t = redo ? GameRedoTarget(backups ?? new BackupRecord[0], more.Image) : GameUndoTarget(backups ?? new BackupRecord[0], more.Image);
                     if (t == null) return Refuse(p, redo ? "There is no undone change of " + more.Image + " to redo." : "There is no change of " + more.Image + " to undo.");
                     p.UndoOf = t.File;
+                    p.GameImage = more.Image;
                     var v = t.Values.FirstOrDefault(x => GameImage(x.Path) != null && string.Equals(GameImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase) && x.Name == Profiles.ValueName);
-                    if (v == null) return Refuse(p, "The saved change does not name " + more.Image + ".");
-                    p.GameWrites[more.Image] = v.Existed ? v.Text ?? "" : "";
+                    if (v != null) p.GameWrites[more.Image] = v.Existed ? v.Text ?? "" : "";
+                    // The game's graphics and Vulkan values of that change, and its keys left empty by the restore.
+                    foreach (var g in t.Values.Where(x => string.Equals(GraphicsSettings.AppImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        if (!Allowed(g.Path, g.Name)) return Refuse(p, "The saved change names " + g.Name + ", which this app does not change.");
+                        p.Writes.Add(g.Existed ? new RegWrite { Path = g.Path, Name = g.Name, Kind = g.Kind, Number = g.Number, Text = g.Text } : RegWrite.Remove(g.Path, g.Name));
+                    }
+                    if (v == null && p.Writes.Count == 0) return Refuse(p, "The saved change does not name " + more.Image + ".");
+                    if (s.GfxKeys != null) GraphicsSettings.AddKeyRemovals(p.Writes, s.GfxKeys);
                     p.Effect = "the next time " + more.Image + " starts";
                     p.Change = (redo ? "Restores the settings of " + more.Image + " from before the undo of " : "Restores the settings of " + more.Image + " from before the change of ") + t.Utc + ".";
                     break;
                 }
             }
             foreach (var w in p.Writes)
-                if (!Allowed(w.Path, w.Name)) return Refuse(p, "internal: " + w.Name + " is not on the list of values this app may write");
+                if (w.DeleteKey ? !GraphicsSettings.KeyRemovalAllowed(w.Path) : !Allowed(w.Path, w.Name))
+                    return Refuse(p, "internal: " + (w.DeleteKey ? "the key " + w.Path : w.Name) + " is not on the list of values this app may write");
             foreach (var g in p.GameWrites)
                 if (!GameAllowed(g.Key, g.Value)) return Refuse(p, "internal: " + g.Key + " is not a game this app may change");
             if (p.Cu != null && !p.Cu.Steps.All(CuMode.Allowed)) return Refuse(p, "internal: a graphics-core step is not allowed");
@@ -1246,10 +1378,15 @@ namespace AmdgpuWddmControl
         {
             public uint? Cu;
             public string Games, Image, Value;
+            // The graphics settings (GraphicsSettings.ParseEdits): graphics-defaults for all games, game-profile for
+            // its game. "FrameRateLimit=60,VSync=unset".
+            public string Gfx;
             // The tuning page: the curve as 11 values ("820,840,..."), the trial window in ms, and the processor's
             // clock, undervolt steps, temperature cap and core count.
             public string Curve;
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
+            // tdr-delay: the waiting time in seconds that the person chose (TdrSetting.Choices).
+            public uint? Tdr;
             // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".
             public string FanProfile, FanCurve;
             public uint? FanTestPct;            // fan-test: the duty of the short test

@@ -2380,7 +2380,7 @@ static int Confirm(void)
 static int Log(const WCHAR *fromText, int summary)
 {
     static BC250_ESCAPE_LOG log;        // 10 KB: a static, not a frame this tool has no reason to grow
-    unsigned long from = 0, printed = 0;
+    unsigned long from = 0, printed = 0, block = 0;     // block: the summary block being paged, 0 = the ring
     int first = 1;
     NTSTATUS status;
     WCHAR *end;
@@ -2429,6 +2429,16 @@ static int Log(const WCHAR *fromText, int summary)
         }
         // The sentinel is no position to compare with: the driver answers the sequence it actually read from.
         if (from == BC250_LOG_FROM_SUMMARY) from = log.From;
+        // BD-097: a read inside the summary space pages one block, and the driver holds one block at a time. An
+        // empty page whose SummaryFrom names another block is a block that a newer summary replaced, not the end
+        // of this one, so a short block is never printed as if it were whole. A driver before 0.7.216.24 answers
+        // SummaryFrom 0 for a page read and says nothing of the kind.
+        if (from >= BC250_LOG_SUMMARY_SEQ)
+            block = BC250_LOG_SUMMARY_SEQ +
+                    (from - BC250_LOG_SUMMARY_SEQ) / BC250_LOG_SUMMARY_LINES * BC250_LOG_SUMMARY_LINES;
+        if (log.Returned == 0 && block != 0 && log.SummaryFrom >= BC250_LOG_SUMMARY_SEQ && log.SummaryFrom != block)
+            printf("             the block beside the ring was replaced by a newer summary after %lu lines; the "
+                   "one held now reads from %lu\n", printed, log.SummaryFrom);
         if (log.Returned == 0 || log.Next <= from) break;   // the end, or a driver that is not moving on
         from = log.Next;
         // A driver that keeps logging while we read would keep us here: the ring is 1024 lines, so anything past
@@ -3267,10 +3277,12 @@ static int DpmCurve(int argc, WCHAR **argv)
 // step at a time; the load between the steps is the caller's business, so the wrapper script runs it.
 //
 // The whole surface is off until CpuTune is 1 in the driver's Parameters key. Every write needs an administrator.
-#define CPU_ERRORS 6
+#define CPU_ERRORS 7
+C_ASSERT(CPU_ERRORS == BC250_CPU_REQUEST_ERROR_COUNT);   // a new reason must not reach an operator as "?"
 static const char *const g_CpuError[CPU_ERRORS] = {
     "none", "the clock is outside the admitted range", "the undervolt is deeper than the maximum",
-    "the temperature cap is outside its band", "nothing to change", "the plan needs too many steps"
+    "the temperature cap is outside its band", "nothing to change", "the plan needs too many steps",
+    "this start does not know the firmware's own boost ceiling, so a clock limit could not be given back"
 };
 #define CPU_FAILS 6
 static const char *const g_CpuFail[CPU_FAILS] = {
@@ -3366,6 +3378,10 @@ static void CpuPrint(const BC250_ESCAPE_CPU *c)
                "driver repeats it every second; a cold start is the last backstop\n");
     if (!(c->Flags & BC250_CPU_FLAG_TEMP_VALID))
         printf("cpu: the temperature above was NOT read on the last message, so it is older than the rest\n");
+    if ((c->Flags & BC250_CPU_FLAG_QUEUE3_PROVEN) && !(c->Flags & BC250_CPU_FLAG_BOOST_KNOWN))
+        printf("cpu: the firmware's own boost ceiling has NOT answered in this start, so the clock limit is "
+               "refused: a limit could only be given back as the P-state top, which is under the boost "
+               "(BD-094). The undervolt and the temperature cap are unaffected\n");
 }
 
 // What the caller knows about the load it ran over this sample (0.7.211). The driver judges clock stretching
@@ -3400,7 +3416,12 @@ static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *na
     if (c.Status != BC250_ESCAPE_STATUS_DONE) {
         printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s\n", name, c.Status, c.NtStatus,
                c.Error < CPU_ERRORS ? g_CpuError[c.Error] : "?");
-        if (c.NtStatus == 0xC0000184ul)
+        if (c.Error == BC250_CPU_REQUEST_ERROR_NO_CEILING)
+            printf("# The clock control is refused for this start (BD-094): message 0x43 answered no clock inside "
+                   "the band, and the boost probe did not make it answer either, so the way back out of the chip "
+                   "could only be the P-state top, under the boost. A Windows restart is the way out; the "
+                   "undervolt and the temperature cap still work\n");
+        else if (c.NtStatus == 0xC0000184ul)
             printf("# STATUS_INVALID_DEVICE_STATE: CpuTune must be 1 in the driver's Parameters key, and a keep or "
                    "a cancel needs a trial in flight\n");
         if (c.NtStatus == 0xC00000A3ul)

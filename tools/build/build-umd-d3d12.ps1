@@ -3,6 +3,11 @@
 param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64')
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
+# Windows installer detection asks for elevation (a UAC prompt on the desktop of the build PC) before it starts a
+# 32-bit exe without a manifest whose name holds "patch", "setup", "install" or "update". hosted-dispatch-test.exe
+# below is one ("dis-patch"): the -Arch x86 build waited on two prompts on 2026-10-08. No host gate here needs
+# elevation, so every child of this recipe starts as the invoker.
+$env:__COMPAT_LAYER='RunAsInvoker'
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root=Get-Bc250Root $repo
 if(!$EngineInclude){
@@ -25,6 +30,8 @@ $engineLib=Join-Path $engineBuild 'engine-ddi.lib'
 if(!(Test-Path -LiteralPath $engineLib)){throw 'Native engine-ddi library missing'}
 # The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
 & "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
+# The per-application graphics settings that CreateDevice and Present read.
+& "$PSScriptRoot\test-umd-app-settings.ps1" -OutputDir (Join-Path $OutputDir 'quality\app-settings') -VsInstall $VsInstall -Arch $Arch
 $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
@@ -183,6 +190,11 @@ try {
   if($LASTEXITCODE){throw 'Present outputs test build failed'}
   & .\present-outputs-test.exe
   if($LASTEXITCODE){throw 'Present outputs tests failed'}
+  # The per-application MaxFrameLatency gate of Present: the ring, the poll loop and the counters.
+  & cl.exe @flags /analyze /analyze:external- /Fe:frame-latency-test.exe "$repo\driver\umd\d3d12\frame-latency-test.cpp"
+  if($LASTEXITCODE){throw 'Frame latency test build failed'}
+  & .\frame-latency-test.exe
+  if($LASTEXITCODE){throw 'Frame latency tests failed'}
   & cl.exe @flags /analyze /analyze:external- /Fe:shell-core-ddi-test.exe "$repo\driver\umd\d3d12\shell-core-ddi-test.cpp"
   if($LASTEXITCODE){throw 'Shell core DDI test build failed'}
   & .\shell-core-ddi-test.exe

@@ -31,6 +31,13 @@ namespace AmdgpuWddmControl
             var installed = new CardPanel(Strings.T("home.driver.title"), width);
             string version = ReleaseVersion();
             installed.Add(Ui.Label(version != null ? Strings.T("drv.installed", version) : Strings.T("drv.installed.none"), null, null, installed.Inner));
+            // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). This view only
+            // reads, so it shows the waiting time and says where it is changed; the main window's Help page does that.
+            var tdr = new RecoverySnapshot();
+            RecoveryProbe.ReadTdr(tdr);
+            installed.Add(Ui.Label(tdr.TdrError != null ? Strings.T("tdr.unreadable") : TdrSetting.StateText(tdr.Tdr()), null,
+                tdr.TdrError != null ? Theme.Warn : (Color?)null, installed.Inner));
+            installed.Add(Ui.Dim(Strings.T("tdr.in-main-window"), installed.Inner));
             _page.Controls.Add(installed);
 
             foreach (var g in HelpGuides.RecoveryIds)

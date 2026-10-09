@@ -20,6 +20,7 @@ static partial class UnitTests
         RecentLaunchRecords();
         Search();
         WindowFit();
+        PageWidthRule(root);
         Caches();
         SensorRows();
         GroupsAndOrigins();
@@ -231,10 +232,18 @@ static partial class UnitTests
     static void Search()
     {
         Func<string, string, string> first = (q, lang) => { var h = SettingsSearch.Find(q, lang); return h.Count == 0 ? null : h[0].Entry.Id; };
-        Equal("later.vsync", first("vsync", "en"), "VSync leads to its Coming-later row");
-        Check(SettingsSearch.Find("vsync", "en")[0].Entry.ComingLater, "the VSync row is marked coming later");
-        Equal("later.fps", first("FPS limit", "en"), "FPS limit leads to its Coming-later row");
-        Equal("later.vsync", first("ＶＳＹＮＣ", "ja"), "full-width Latin folds to half width");
+        Equal("graphics.vsync", first("vsync", "en"), "VSync leads to its setting for all games");
+        Check(!SettingsSearch.Find("vsync", "en")[0].Entry.ComingLater, "the VSync row is a setting now, not coming later");
+        Equal("graphics.fps", first("FPS limit", "en"), "FPS limit leads to its setting");
+        Equal("graphics.vsync", first("ＶＳＹＮＣ", "ja"), "full-width Latin folds to half width");
+        Equal("later.hdr", first("HDR", "en"), "HDR leads to its Coming-later row");
+        Check(SettingsSearch.Find("HDR", "en")[0].Entry.ComingLater, "the HDR row is marked coming later");
+        Equal("games.sm", first("shader model", "en"), "the shader model is a game setting");
+        Equal("display.scaling", first("GPU scaling", "en"), "GPU scaling is on the Display page");
+        Equal("display.resolution", first("refresh rate", "en"), "the refresh rate is the resolution setting");
+        Check(!SettingsSearch.Index.Any(x => x.Id.StartsWith("graphics.vk-", StringComparison.Ordinal)), "no search entry for a Vulkan setting that waits for its ICD");
+        foreach (var e in SettingsSearch.Index.Where(x => x.Id.StartsWith("later.", StringComparison.Ordinal)))
+            Check(!new[] { "vsync", "fps", "af", "scaling", "mode", "fps-counter" }.Contains(e.Id.Substring(6)), "no Coming-later row for a setting that exists: " + e.Id);
         Equal(SettingsSearch.Normalize("カタカナ"), SettingsSearch.Normalize("かたかな"), "hiragana folds to katakana");
         Equal(SettingsSearch.Normalize("ｶﾀｶﾅ"), SettingsSearch.Normalize("カタカナ"), "half-width katakana folds");
         Equal(SettingsSearch.Normalize("clock-auto"), SettingsSearch.Normalize("Clock Auto"), "spaces, hyphens and case are ignored");
@@ -272,6 +281,37 @@ static partial class UnitTests
         Check(title.Top >= 0, "WU-036: the title bar comes back on a screen");
         var none = DisplayInfo.Fit(w, new List<Rectangle>(), min, 30);
         Equal(w, none, "WU-036: no screen information: nothing moves");
+    }
+
+    // G-RENDER: the page width rule of --smoke-render. A page is measured against the column it was built at, so that
+    // a real overflow is still a finding and a client size clamped after the build is not (b24 lab round 3: on a
+    // 1024x768 session-0 desktop the 1240 px client became 1028 px, the live column 449 px, and the correctly built
+    // 661 px home page was reported as too wide).
+    static void PageWidthRule(string root)
+    {
+        // The real overflow: a page wider than its own build column, slack included, always fails.
+        var overflow = LayoutRules.PageWidthFinding("home", 700, 661, 2);
+        Check(overflow != null, "G-RENDER: a page wider than its own build column fails");
+        Check(overflow != null && overflow.Contains("home") && overflow.Contains("700") && overflow.Contains("661"),
+            "G-RENDER: the finding names the page, its width and its build column: " + overflow);
+        Check(LayoutRules.PageWidthFinding("graphics", 2000, 1339, 10) != null, "G-RENDER: a page far wider than its build column fails");
+        Check(LayoutRules.PageWidthFinding("home", 664, 661, 2) != null, "G-RENDER: one px past the slack fails");
+        // A page that fits passes, at the slack and below it.
+        Equal(null, LayoutRules.PageWidthFinding("home", 661, 661, 2), "G-RENDER: a page as wide as its build column passes");
+        Equal(null, LayoutRules.PageWidthFinding("home", 663, 661, 2), "G-RENDER: the slack of a fractional DPI scale passes");
+        Equal(null, LayoutRules.PageWidthFinding("home", 400, 661, 2), "G-RENDER: a narrower page passes");
+        // The regression itself: the page was built at 661 and the live column shrank to 449. The live column is not
+        // an input of the rule any more, so a correctly built page gives no finding.
+        Equal(null, LayoutRules.PageWidthFinding("home", 661, 661, 2), "G-RENDER: a client size clamped after the build is no finding");
+        Check(LayoutRules.PageWidthFinding("home", 661, 449, 2) != null, "G-RENDER: the rule reads the build column, so 661 over 449 is still a finding");
+        Throws<ArgumentOutOfRangeException>(() => LayoutRules.PageWidthFinding("home", 700, 661, -1), "G-RENDER: negative slack is refused");
+        Throws<ArgumentNullException>(() => LayoutRules.PageWidthFinding(null, 700, 661, 2), "G-RENDER: a finding without a place is refused");
+        // The window code asks the form for the build column, not for the width of this moment.
+        var smoke = Regex.Replace(File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\MainForm.Smoke.cs")), @"//[^\n]*", "");
+        var widthCall = smoke.Split('\n').FirstOrDefault(l => l.Contains("LayoutRules.PageWidthFinding"));
+        Check(widthCall != null && widthCall.Contains("PageColumnWidth"),
+            "G-RENDER: the render gate measures the page against PageColumnWidth: " + widthCall);
+        Check(!Regex.IsMatch(smoke, @"built\.Width\s*>\s*ColumnWidth"), "G-RENDER: the render gate no longer measures the page against the live column width");
     }
 
     // F-CACHE: the D3D12 engine cache counted from a directory; the other caches honestly unknown.
@@ -387,7 +427,8 @@ static partial class UnitTests
         Equal(ValueOrigin.DriverDefault, GameGroups.Origin(cpu, "raytracing-tier-off", "raytracing-tier-off"), "origin: the group's default state is the driver default");
         Check(GameGroups.Hidden(stored).SequenceEqual(new[] { "release-two-phase-off", "x-future" }), "G-PROF: the support-only names: " + string.Join(",", GameGroups.Hidden(stored)));
         foreach (var g in GameGroups.All) foreach (var t in g.Tokens) Check(Profiles.Find(t) != null, "group token " + t + " is a catalog switch");
-        Check(Profiles.Catalog.All(c => GameGroups.All.Count(g => g.Tokens.Contains(c.Token)) == 1), "every catalog switch is in exactly one group");
+        Check(Profiles.Catalog.All(c => GameGroups.All.Count(g => g.Tokens.Contains(c.Token)) + (c.Token == ShaderModelCeiling.Off68 || c.Token == ShaderModelCeiling.Off67 ? 1 : 0) == 1),
+            "every catalog switch is in exactly one group or the shader model choice");
         foreach (var g in GameGroups.All) Check(Strings.Has("game.group." + g.Id) && Strings.Has("game.group." + g.Id + ".cost") && Strings.Has("help.setting." + g.Id), "group " + g.Id + " has its texts");
     }
 
@@ -442,10 +483,19 @@ static partial class UnitTests
         int plans = 0;
         var fixtures = new List<RecoverySnapshot> { WithDefaults() };
         var f = WithDefaults(); f.Parameters["InteropClosedReason"] = 2; f.Parameters["DpmMode"] = 0; f.Parameters["CuMode"] = 40; fixtures.Add(f);
+        // The graphics settings: stored for all games and for witcher3, so reset-defaults and the game change carry them.
+        foreach (var x in fixtures)
+            x.GfxKeys = new List<GfxKey>
+            {
+                GKey(GraphicsSettings.GraphicsPath, 1, "FrameRateLimit", 60), GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "gdi"),
+                GKey(GraphicsSettings.AppPath(GraphicsSettings.GraphicsPath, "witcher3.exe"), 0, "VSync", 1),
+            };
         var more = new Dictionary<string, Recovery.PlanArgs>
         {
             { "cu-mode", new Recovery.PlanArgs { Cu = 40 } }, { "reset-defaults", new Recovery.PlanArgs { Games = "reset" } },
-            { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off" } },
+            { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off,shader-model-67-off", Gfx = "VSync=unset,Anisotropy=8,FrameRateLimit=144" } },
+            { "tdr-delay", new Recovery.PlanArgs { Tdr = TdrSetting.ReleaseDefault } },
+            { "graphics-defaults", new Recovery.PlanArgs { Gfx = "FrameRateLimit=unset,MaxFrameLatency=1,PerformanceOverlay=1,ReportAmdDriverVersion=1,VSync=0" } },
         };
         foreach (var s in fixtures)
             foreach (var a in Recovery.Actions)
@@ -520,7 +570,8 @@ static partial class UnitTests
         Check(window.Length >= 8, "G-SRC: window files found: " + window.Length);
         Func<string, string[], IEnumerable<string>> where = (pattern, except) => files.Where(kv => (except == null || !except.Contains(kv.Key)) && Regex.IsMatch(Regex.Replace(kv.Value, @"//[^\n]*", ""), pattern)).Select(kv => kv.Key);
         Equal("", string.Join(",", where(@"\b(WebRequest|HttpWebRequest|HttpClient|WebClient|TcpClient|UdpClient|Socket|ServicePointManager)\b", new[] { "UpdateCheck.cs" })), "G-SRC: network code only in UpdateCheck.cs");
-        Equal("", string.Join(",", where(@"\b(ChangeDisplaySettings\w*|SetDisplayConfig)\b", null)), "G-SRC: no display-mode writes before phase 4");
+        Equal("", string.Join(",", where(@"\b(ChangeDisplaySettings\w*|SetDisplayConfig)\b", new[] { "DisplayModes.cs" })), "G-SRC: display-mode writes only in DisplayModes.cs");
+        Check(Regex.IsMatch(files["DisplayModes.cs"], @"CdsTest") && Regex.IsMatch(files["MainForm.Display.cs"], @"KeepDisplayDialog\.Ask"), "G-SRC: a mode is tested first and kept only on the person's word");
         Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape and the report's own timed-out child");
         Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", null)), "G-SRC: no PnP disable or enable");
         Equal("", string.Join(",", where(@"\b(EWX_FORCE\w*|Restart-Computer|shutdown(\.exe)?\s+/r)\b", null)), "G-SRC: no forced restart");

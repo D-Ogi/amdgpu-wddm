@@ -37,11 +37,15 @@ int main() {
     assert(!native12::ddi_experiment_listed("", "a"));
     assert(!native12::ddi_experiment_listed(nullptr, "a"));
 
-    // M15.14: the scan-out mode carries the geometry it is for in its own token, and nothing else is
-    // the scan-out mode. A bare "scanout-flip" asks for nothing, so an operator who forgets the mode
-    // gets the registered composed path rather than a chain moved into VRAM for a flip that the kernel
-    // driver would refuse at every present.
+    // M15.14: the increment-2 token carries a geometry, and the parser still reads it exactly, because
+    // increment 3 counts it as an explicit on (scanout-mode.h). The parser itself stays strict: a token
+    // that is not a geometry is no geometry. The off switch is no geometry either.
     unsigned width = 0, height = 0;
+    width = height = 7;
+    assert(!native12::ddi_experiment_scanout("scanout-flip-off", &width, &height));
+    assert(width == 7 && height == 7);
+    assert(detail::experiment_syntax("scanout-flip-off"));
+    width = height = 0;
     assert(native12::ddi_experiment_scanout("scanout-flip-1920x1200", &width, &height));
     assert(width == 1920 && height == 1200);
     width = height = 0;
@@ -97,6 +101,11 @@ int main() {
     assert(!native12::ddi_experiment_off(nullptr));
     // The positive name of a default is accepted and turns nothing off.
     assert(!native12::ddi_experiment_listed("raytracing-tier,recording-bind", "raytracing-tier-off"));
+    // The shader model switches (adapter-caps.cpp): valid syntax, matched whole, neither one implies the other.
+    assert(detail::experiment_syntax("shader-model-67-off,shader-model-68-off"));
+    assert(native12::ddi_experiment_listed("present-cached,shader-model-68-off", "shader-model-68-off"));
+    assert(!native12::ddi_experiment_listed("shader-model-68-off", "shader-model-67-off"));
+    assert(!native12::ddi_experiment_listed("shader-model-67", "shader-model-67-off"));
     // A name too long for the "-off" buffer is no switch, never an accidental off.
     assert(!native12::ddi_experiment_off(std::string(60, 'a').c_str()));
 

@@ -82,7 +82,23 @@ The rules, each named with the event that carries it:
                  shape of an application buffer reaching the plane: on a composing desktop the address alternates
                  between the compositor's own buffers at the refresh rate, and on this driver the DPC's field can
                  carry a value that is not an address at all. The only sound use of these numbers is to match a
-                 distinct value against an address the kernel driver logged as admitted.
+                 distinct value against an address the kernel driver logged as admitted, or against the
+                 addresses MMIOFlip programmed for the same process (the kernel witness below).
+  kernel witness M15.14 increment 3. Four facts about one process, all from the kernel and the compositor's
+                 consumption events, none from Win32k's token flags: (1) dxgkrnl made its present packets
+                 independent flips, (2) those packets reached MMIOFlip, (3) every distinct address MMIOFlip
+                 programmed for them is an address a VSync DPC scanned, and (4) DWM consumed none of the
+                 process's presents (no Dx_Flip_Consumed, no Windowed_Dx_Flip_Consumed, no undecoded row). When
+                 all four hold, the witness HOLDS, and a present that Win32k's last TokenStateChanged marks
+                 IndependentFlip true with SkipIndependentFlip true, and that DWM did not consume, is a hardware
+                 flip: "hardware flip (kernel witness; Win32k skip)". Trial 478 is the case: The Witcher 3 in
+                 exclusive fullscreen and in borderless carried SkipIndependentFlip true on every InFrame token,
+                 while every one of its packets was an independent flip, MMIOFlip programmed three buffers of
+                 its own, the VSync DPC scanned exactly those three, and DWM consumed nothing. The Win32k flag
+                 describes the compositor's token bookkeeping, not where the buffer went; the kernel events do.
+                 The override is per process and stays narrow: no other label moves, a consumed present stays
+                 composed, and the label says which rule placed it. It still joins no token to a submit
+                 sequence; the per-present count and the kernel's count are printed side by side.
 
 The verdict lines, which a trial greps instead of reading the tables:
 
@@ -95,6 +111,9 @@ The verdict lines, which a trial greps instead of reading the tables:
                                 bug, not progress. result=INERT, MOVED or NO-DATA. Read it for the client under
                                 test only: on a composing desktop the compositor's own packets are the ones that
                                 reach the plane, so the compositor reads MOVED by construction.
+  M15.14 KERNEL-WITNESS <process>  the four clauses of the kernel witness above, each PASS, FAIL or NO-DATA,
+                                with result=HOLDS, NOT-HELD or NO-DATA and the number of presents the witness
+                                relabelled. The VERDICT line's result does not change with it.
   M15.14 INCREMENT2 <process>   the conjunction of increment 2, because DirectFlip without independent flip has
                                 no unique ETW event. Four clauses: (1) neither Dx_Flip_Consumed nor
                                 Windowed_Dx_Flip_Consumed for the client's present counts, (2) an MMIOFlip of
@@ -103,7 +122,7 @@ The verdict lines, which a trial greps instead of reading the tables:
                                 `--kmd-counters`: scanout_flips > 0, scanout_requests > 0 and every admission
                                 refusal column at zero. result=CONFIRMED, REFUTED or UNKNOWN.
 
-A process named on the command line always gets all three lines, with zeros, because "the events were not in the
+A process named on the command line always gets all four lines, with zeros, because "the events were not in the
 capture" and "the flip did not happen" must not look alike.
 
 What this cannot do: say which plane a multi-plane overlay flip belongs to beyond LayerIndex, or tell exclusive
@@ -503,20 +522,31 @@ def selected(t, wanted):
     return sorted(n for n in names if any(w.lower() in n.lower() for w in wanted))
 
 
-def present_mode(t, key):
-    """The compositor-side mode of one present, as (mode, reason). The reason is None unless unclassified."""
+WITNESS_LABEL = 'hardware flip (kernel witness; Win32k skip)'
+
+
+def present_mode(t, key, witness=False):
+    """The compositor-side mode of one present, as (mode, reason). The reason is None unless unclassified.
+
+    witness is the kernel witness of the present's process (kernel_witness, result HOLDS). It moves one label
+    only: a present Win32k marks independent-and-skipped, and DWM did not consume, is a hardware flip.
+    """
     independent, skip, _state = t['states'].get(key, (None, None, None))
     if independent and not skip:
         return 'hardware flip (independent)', None
     if key in t['consumed']:
         return 'composed flip (DWM consumed)', None
     if independent and skip:
-        return 'composed flip (independent skipped)', None
+        return (WITNESS_LABEL if witness else 'composed flip (independent skipped)'), None
     return 'unclassified', 'no TokenStateChanged' if key not in t['states'] else 'state without consumption'
 
 
-def classify(t, process):
-    """The compositor-side mode of each present of one process, plus DWM's own answer for the same keys."""
+def classify(t, process, witness=None):
+    """The compositor-side mode of each present of one process, plus DWM's own answer for the same keys.
+
+    witness None computes the process's kernel witness here; a caller that has it passes the bool."""
+    if witness is None:
+        witness = kernel_witness(t, process)['result'] == 'HOLDS'
     modes = collections.Counter()
     dwm_view = collections.Counter()
     reasons = collections.Counter()
@@ -524,7 +554,7 @@ def classify(t, process):
     for time, owner, key in t['presents']:
         if owner != process:
             continue
-        mode, reason = present_mode(t, key)
+        mode, reason = present_mode(t, key, witness)
         if reason:
             reasons[reason] += 1
         modes[mode] += 1
@@ -553,6 +583,89 @@ def kernel_side(t, process):
                 physical[phys] += 1
     return {'packets': own, 'flips': flips, 'programmed': programmed, 'scanned': scanned,
             'physical': physical, 'flags': flags}
+
+
+def consumption(t, process):
+    """DWM's consumption of one process's presents: (windowed, plain, undecoded, present counts)."""
+    keys = t['keys'].get(process, set())
+    windowed = plain = 0
+    for key in keys:
+        windowed += t['consumed'].get(key, {}).get('Windowed_Dx_Flip_Consumed', 0)
+        plain += t['consumed'].get(key, {}).get('Dx_Flip_Consumed', 0)
+    return windowed, plain, sum(t['consumed_undecoded'].values()), len(keys)
+
+
+def kernel_witness(t, process):
+    """M15.14 increment 3: the kernel's own account of one process's frames, which overrides Win32k's
+    SkipIndependentFlip label when it holds (see "kernel witness" in the module docstring).
+
+    Four clauses, each PASS, FAIL or NO-DATA. HOLDS needs all four PASS; any FAIL is NOT-HELD; otherwise
+    NO-DATA. A capture without the DxgKrnl per-frame events is NO-DATA, never HOLDS.
+    """
+    clauses = []
+    kernel = kernel_side(t, process)
+    own, flips, programmed = kernel['packets'], kernel['flips'], set(kernel['programmed'])
+    if not own:
+        status = 'NO-DATA'
+    else:
+        status = 'PASS' if flips else 'FAIL'
+    clauses.append(('independent_flips', status, '%d of %d present packets' % (len(flips), len(own))))
+
+    both = [sequence for sequence in flips if sequence in programmed]
+    if not flips:
+        status = 'NO-DATA'
+    else:
+        status = 'PASS' if both else 'FAIL'
+    clauses.append(('mmio_programmed', status, '%d of %d independent flips reached MMIOFlip'
+                    % (len(both), len(flips))))
+
+    # The addresses of this process's own independent flips, against every address a VSync DPC scanned. The
+    # DPC is the display side; an address of this process that no DPC scanned means the plane never read it.
+    addresses = set()
+    for sequence in both:
+        for _time, _event, _value, physical, _alloc in t['mmio'][sequence]:
+            if physical is not None:
+                addresses.add(physical)
+    dpc = set(value for _time, value in t['scanned'].get('VSyncDPC', []))
+    missing = sorted(addresses - dpc)
+    if not addresses:
+        status, detail = 'NO-DATA', 'no programmed address of this process'
+    elif not dpc:
+        status, detail = 'NO-DATA', 'no VSyncDPC event with a ScannedPhysicalAddress in this capture'
+    elif missing:
+        status = 'FAIL'
+        detail = '%d of %d addresses never scanned: %s' % (len(missing), len(addresses),
+                                                            ', '.join('0x%X' % a for a in missing))
+    else:
+        status, detail = 'PASS', 'all %d scanned: %s' % (len(addresses),
+                                                         ', '.join('0x%X' % a for a in sorted(addresses)))
+    clauses.append(('vsync_scanned_same_addresses', status, detail))
+
+    windowed, plain, undecoded, keys = consumption(t, process)
+    if not keys:
+        status = 'NO-DATA'
+    elif undecoded:
+        status = 'FAIL'
+    else:
+        status = 'PASS' if windowed + plain == 0 else 'FAIL'
+    clauses.append(('not_consumed_by_dwm', status,
+                    '%d Windowed_Dx_Flip_Consumed and %d Dx_Flip_Consumed over %d present counts'
+                    % (windowed, plain, keys)
+                    + ('' if not undecoded else '; %d consumption rows did not decode' % undecoded)))
+
+    statuses = [status for _name, status, _detail in clauses]
+    if 'FAIL' in statuses:
+        result = 'NOT-HELD'
+    elif 'NO-DATA' in statuses:
+        result = 'NO-DATA'
+    else:
+        result = 'HOLDS'
+    relabelled = 0
+    if result == 'HOLDS':
+        for _time, owner, key in t['presents']:
+            if owner == process and present_mode(t, key, True)[0] == WITNESS_LABEL:
+                relabelled += 1
+    return {'result': result, 'clauses': clauses, 'relabelled': relabelled, 'flips': len(both)}
 
 
 def parse_counters(values):
@@ -644,16 +757,11 @@ def increment2(t, process, admitted, counters):
     a clause that contradicts the conjunction is FAIL and the verdict is REFUTED.
     """
     clauses = []
-    keys = t['keys'].get(process, set())
-    windowed = plain = 0
-    for key in keys:
-        windowed += t['consumed'].get(key, {}).get('Windowed_Dx_Flip_Consumed', 0)
-        plain += t['consumed'].get(key, {}).get('Dx_Flip_Consumed', 0)
+    windowed, plain, undecoded, count = consumption(t, process)
     # A consumption row whose surface key did not read is not an absence of consumption. The clause is the
     # only one of the four that is an absence, so it is the only one a decoding fault can turn into a
     # false CONFIRMED: it fails on such a row and says how many there were.
-    undecoded = sum(t['consumed_undecoded'].values())
-    if not keys:
+    if not count:
         status = 'NO-DATA'
     elif undecoded:
         status = 'FAIL'
@@ -661,7 +769,7 @@ def increment2(t, process, admitted, counters):
         status = 'PASS' if windowed + plain == 0 else 'FAIL'
     clauses.append(('not_consumed_by_dwm', status,
                     '%d Windowed_Dx_Flip_Consumed and %d Dx_Flip_Consumed over %d present counts'
-                    % (windowed, plain, len(keys))
+                    % (windowed, plain, count)
                     + ('' if not undecoded
                        else '; %d consumption rows did not decode their surface key (%s), so this absence '
                             'is not evidence' % (undecoded, dict(t['consumed_undecoded'])))))
@@ -749,7 +857,8 @@ def report(t, wanted, admitted, counters, out=sys.stdout):
     timeline = collections.defaultdict(collections.Counter)
     for process in sorted(names, key=lambda p: -(sum(t['present_calls'].get(p, {}).values())
                                                  + len(t['packets'].get(p, {})))):
-        modes, dwm_view, reasons, (first, last) = classify(t, process)
+        witness = kernel_witness(t, process)['result'] == 'HOLDS'
+        modes, dwm_view, reasons, (first, last) = classify(t, process, witness)
         calls = t['present_calls'].get(process, collections.Counter())
         extra = sum(calls.values()) - sum(modes.values())
         if extra > 0:
@@ -778,11 +887,15 @@ def report(t, wanted, admitted, counters, out=sys.stdout):
             say('    DWM says: %-28s %6d' % (view, n))
         if reasons:
             say('    unclassified reasons: %s' % dict(reasons))
+        if modes.get(WITNESS_LABEL):
+            say('    (%d presents Win32k marked SkipIndependentFlip are hardware flips by the kernel witness;'
+                % modes[WITNESS_LABEL])
+            say('     see M15.14 KERNEL-WITNESS below)')
         lo = t['span_us'][0]
         if lo is not None:
             for time, owner, key in t['presents']:
                 if owner == process:
-                    timeline[int((time - lo) / 1e6)][present_mode(t, key)[0]] += 1
+                    timeline[int((time - lo) / 1e6)][present_mode(t, key, witness)[0]] += 1
 
     say()
     say('-- per second (mode: presents) --')
@@ -830,6 +943,11 @@ def report(t, wanted, admitted, counters, out=sys.stdout):
                direct_yes, direct_total, result))
         one = increment1(t, process)
         two = increment2(t, process, admitted, counters)
+        three = kernel_witness(t, process)
+        say('M15.14 KERNEL-WITNESS %s: %s result=%s relabelled=%d'
+            % (process, clause_text(three), three['result'], three['relabelled']))
+        for name, status, detail in three['clauses']:
+            say('    %-36s %-8s %s' % (name, status, detail))
         say('M15.14 INCREMENT1 %s: %s result=%s%s'
             % (process, clause_text(one), one['result'],
                '' if not one.get('note') else '  CAVEAT: %s' % one['note']))
@@ -841,7 +959,7 @@ def report(t, wanted, admitted, counters, out=sys.stdout):
         verdicts[process] = {'mode': result, 'packets': len(own), 'independent': len(flips),
                              'mmio': len(kernel['programmed']), 'vsync': len(kernel['scanned']),
                              'directflip': [direct_yes, direct_total], 'modes': dict(modes),
-                             'increment1': one, 'increment2': two}
+                             'increment1': one, 'increment2': two, 'kernel_witness': three}
 
     say()
     say('-- display side --')

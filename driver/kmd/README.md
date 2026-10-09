@@ -43,7 +43,8 @@ no code from Microsoft's MS-PL sample.
 | `bc250kmd.h` | the device structure, the stage table and the interface-version notes |
 | `pnp.c` | add/start/stop/remove, the single child (always-connected video output, no EDID), power |
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
-| `guard.c` | boot-loop guard, stage breadcrumbs in the registry, and the log: `DbgPrintEx` plus a ring inside the driver image that `bc250kmd_cli log` reads back |
+| `guard.c` | boot-loop guard, stage breadcrumbs in the registry, and the log: `DbgPrintEx` plus a ring inside the driver image that `bc250kmd_cli log` reads back. The summary writes beside that ring (`docs/design/kmd-log-ring.md`) |
+| `log_rate.h` | how often one line of a hot path reaches the ring: the first lines of a burst, then one summary line an interval. Host test `test/log_rate_test.c` (BD-097) |
 | `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`; every access checked against tables generated through regcalc (E07) |
 | `sequence.c` | the kernel backend of `driver/shim`, shared by every bring-up sequence: registers only through the sequence's own generated table, first refused access stops all further writes, a plan executes no write and records what would be written |
 | `gart.c` | M4: the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`; registers through a table generated from amdgpu's own trace of the step (E09) |
@@ -91,6 +92,9 @@ no code from Microsoft's MS-PL sample.
   wrap cost are counted rather than quietly dropped. Appending takes a spin lock, so a caller above
   `DISPATCH_LEVEL` is counted instead of logged, and the count is printed with the rest. The ring survives a
   device stop and start but not a driver unload, which makes it a reload detector as well: see "Running stage A".
+  How long the ring holds, the three rules a line on a hot path must use (a gate, a count cap, or the rate limit
+  of `log_rate.h`) and the summary that goes beside the ring are in
+  [docs/design/kmd-log-ring.md](../../docs/design/kmd-log-ring.md) (BD-097).
 - The service is `ErrorControl = 0`: a failed start never stops the boot.
 
 ## The DDI table gate (M7 stage A, ADR 0008)
@@ -350,6 +354,27 @@ remove every hardware flip and are not a rollback of this feature.
 The kernel driver's own admission never reads this switch: `SetVidPnSourceAddress` decides with
 `scanout_admit.h` and `AddressAllowed` alone, so a stale or wrong "yes" in user mode cannot widen what
 may be programmed into HUBP0.
+
+## Plane pixel formats (M15.14, 0.7.216.20)
+
+`EnableScanoutPlaneFormats` decides whether the driver changes the plane's pixel format at a flip. It is a
+REG_DWORD under the service's `Parameters` key. The INF and the release installer write 1, and absent also
+means 1. At 1 and with the VidPN flip path open, the start reads the firmware's three format registers
+(`HUBP0_DCSURF_SURFACE_CONFIG`, `HUBPRET0_HUBPRET_CONTROL`, `CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT`). If
+they hold ARGB8888, the driver can flip RGBA8 and RGB10A2 surfaces as well as BGRA8. It then sets
+`BC250_SCANOUT_CAPS_PLANE_FORMATS` in the scan-out caps trailer. The encodings are in `plane_format.h`, and
+the design is in [scan-out admission](../../docs/design/scanout-admission.md#plane-pixel-formats-0721620).
+
+At 0 the driver does not read the registers, the flag stays clear, and every flip uses ARGB8888, as in
+0.7.216.18. This is the bisect switch of the feature. The start log says which way it went:
+
+```
+dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+wddm: plane formats on
+```
+
+The summary line `wddm summary: plane formats ...` counts the flips of each format, the format changes
+and the refusals.
 
 ## VMID pool (0.7.214.1)
 

@@ -470,8 +470,13 @@ template<class Policy> class DdiEntryTables final {
         // that docs/d3d12-shared-resources.md records as open, because a slot whose failures the runtime already
         // sees as E_OUTOFMEMORY gains nothing, while one that reports E_INVALIDARG for a bad argument would stop
         // saying so to the debug layer. Adding a name here is cheap; removing a diagnosis is not.
+        // The two state object slots are in the list since The Ascent (lab trial 465): a refused CreateStateObject
+        // cost Unreal Engine 4.26 its device, and the engine module clamps its own refusals there too
+        // (engine-ddi state-objects.cpp, create_record).
         static constexpr bool allow_out_of_memory=ddi_same_name(Name::name(),"pfnCreateHeapAndResource") ||
-            ddi_same_name(Name::name(),"pfnOpenHeapAndResource");
+            ddi_same_name(Name::name(),"pfnOpenHeapAndResource") ||
+            ddi_same_name(Name::name(),"pfnCreateStateObject") ||
+            ddi_same_name(Name::name(),"pfnAddToStateObject");
         static auto original() noexcept {
             using Fn=std::remove_reference_t<decltype(core_.*Member)>;
             return core_ready_.load(std::memory_order_acquire)?core_.*Member:Fn{};

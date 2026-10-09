@@ -124,6 +124,33 @@ Check (($d.decision -eq 'driver-closed') -and ($d.closure_record -eq 'DpmLastRea
 $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = 0; DpmLastReason = 1 }) 'DpmMode'
 Check ($d.decision -eq 'kept') "an empty durable record, DpmLastReason 1: $($d.decision)"
 # The record is deleted with the write, and the restore set does not write it back.
+'the graphics waiting time (TdrDelay, BD-079): written when absent, kept when the tester changed it'
+# The group is new in this release, so no previous installer wrote it: every value the tester has is the tester's.
+$tdrDefaults = $table.defaults.graphics_drivers
+Check ($null -ne $tdrDefaults.TdrDelay) 'registry-defaults.json has defaults.graphics_drivers.TdrDelay'
+Check (($tdrDefaults.TdrDelay -ge 2) -and ($tdrDefaults.TdrDelay -le 60)) "TdrDelay $($tdrDefaults.TdrDelay) is inside the range the control application offers"
+Check ($null -eq $table.legacy_applied.graphics_drivers) 'no release before this one wrote the group'
+$plan = Get-RegistryDefaultPlan -Defaults $tdrDefaults -Previous $table.legacy_applied.graphics_drivers -Current @{}
+$d = Get-Decision $plan 'TdrDelay'
+Check (($d.decision -eq 'set') -and ($d.value -eq $tdrDefaults.TdrDelay) -and $d.write) "absent: written as $($tdrDefaults.TdrDelay) ($($d.decision))"
+foreach ($theirs in 2, 5, 20, 7) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $tdrDefaults -Previous $table.legacy_applied.graphics_drivers -Current @{ TdrDelay = $theirs }) 'TdrDelay'
+    $want = $(if ($theirs -eq $tdrDefaults.TdrDelay) { 'same' } else { 'kept' })
+    Check (($d.decision -eq $want) -and -not $d.write) "TdrDelay $theirs set outside this installer: $($d.decision), nothing written"
+}
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $tdrDefaults -Previous $table.legacy_applied.graphics_drivers -Current @{ TdrDelay = $tdrDefaults.TdrDelay }) 'TdrDelay'
+Check (($d.decision -eq 'same') -and -not $d.write) "TdrDelay $($tdrDefaults.TdrDelay) already: nothing written ($($d.decision))"
+# A later release that wants another waiting time replaces only the value this release wrote.
+$laterTdr = $tdrDefaults | ConvertTo-Json | ConvertFrom-Json
+$laterTdr.TdrDelay = 20
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $laterTdr -Previous $tdrDefaults -Current @{ TdrDelay = $tdrDefaults.TdrDelay }) 'TdrDelay'
+Check (($d.decision -eq 'update') -and ($d.value -eq 20) -and $d.write) "a later release raises the waiting time this release wrote: $($d.decision)"
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $laterTdr -Previous $tdrDefaults -Current @{ TdrDelay = 30 }) 'TdrDelay'
+Check (($d.decision -eq 'kept') -and ($d.value -eq 30) -and -not $d.write) "a later release keeps the tester's 30 seconds: $($d.decision)"
+# Only one value of Windows' own key is this release's. The plan judges nothing else there.
+Check (@($plan).Count -eq 1) "the plan for Windows' graphics key names one value only: $(@($plan | ForEach-Object { $_.name }) -join ', ')"
+Check ($script:GraphicsDriversKey -eq 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers') "the key is Windows' GraphicsDrivers key: $($script:GraphicsDriversKey)"
+
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test'
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 try {

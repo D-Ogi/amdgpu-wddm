@@ -30,8 +30,9 @@ int DcnAddressFits(unsigned long long Physical, unsigned long long VramBase, uns
 int DcnSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pitch,
                     unsigned long long* Bytes);
 // The same for a linear surface of 1-, 4- or 8-byte pixels (a composed surface: an A8 atlas at 1 byte, a swap-chain
-// buffer at 4, FP16 at 8): the pitch is a whole number of pixels and holds the row. Scan-out keeps DcnSurfaceBytes,
-// whose 4 bytes are the plane's.
+// buffer at 4, FP16 at 8): the pitch is a whole number of pixels and holds the row. Since 0.7.216.20 (M15.14) the
+// scan-out admission and the flip use it as well, with the bytes a pixel of the plane's format (plane_format.h);
+// DcnSurfaceBytes stays for the firmware's own 4-byte surface.
 int DcnLinearSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pitch,
                           unsigned long BytesPerPixel, unsigned long long* Bytes);
 unsigned long DcnPrimaryPitch(unsigned long Width);

@@ -78,6 +78,7 @@
 #include "cpu.h"
 #include "interop.h"
 #include "dpaudio.h"
+#include "modeset.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -168,6 +169,7 @@ typedef struct _BC250_DEVICE {
     BC250_FAN_OWNER Fan;               // fan.c: the case fan control, the one writer of the board's monitor chip
     BC250_SMU_METRICS SmuMetrics;      // smu_metrics.c: the SMU metrics table, its page and its reader
     BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
+    BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -229,6 +231,14 @@ typedef struct _BC250_DEVICE {
     ULONGLONG DcnCurrentAddress;
     BOOLEAN DcnDiverged;
     BOOLEAN DcnBlanked;                // this driver requested blank; restore must unblank
+    // M15.14 plane format (0.7.216.20, plane_format.h). The firmware's three format registers, read once per start
+    // by DcnCaptureFirmwareFormat (WddmStart). DcnPlaneFormats is TRUE only when they decode to ARGB8888, and
+    // only then may a flip program another format or restore check one. DcnPlaneFormat is the plane format the
+    // plane was last programmed with, published with the address and pitch under DcnSurfaceSequence.
+    ULONG DcnFirmwareSurfaceConfig, DcnFirmwareHubpretControl, DcnFirmwareCnvcFormat;
+    BOOLEAN DcnPlaneFormats;
+    ULONG DcnPlaneFormat;
+    volatile LONG DcnFormatChanges, DcnFormatRefused;
 
     // dcn.c's VidPn flip (0.7.24, ADR 0011 point 3 step 3): Device->DcnWriteEnabled && EnableVidPnFlip together
     // (mmio.c's MmioStart), i.e. EnableMmio && EnableDcnWrite && EnableVidPnFlip. Meaningful only under the full
@@ -304,6 +314,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN ComposedSourceModes;        // display_modes.h: offer the composed formats' source modes too (full table,
                                         // OfferComposedSourceModes not 0; read at WddmStart)
     ULONG CommittedSourceFormat;        // D3DDDIFORMAT of the last committed source mode, for the commit log
+    ULONG CommittedSourceWidth, CommittedSourceHeight;  // its size, for the same log (modeset.c owns the scan-out size)
     PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
     ULONGLONG WddmApertureRequest;       // the aperture size GartCaptureAperture asks for (wddm.c WddmStart,
                                          // ApertureSegmentMegabytes); 0 until WddmStart sets it
@@ -336,6 +347,19 @@ typedef struct _BC250_DEVICE {
     KEVENT GfxRetireEvent;              // NotificationEvent, set by GfxRetireSignal, cleared by the waiter
     volatile LONG GfxRetireGeneration;  // bumped by every signal; snapshot closes the test/wait window
 } BC250_DEVICE;
+
+// The committed source size (modeset.c): the size of the surface the plane reads. Post's until a commit changes it;
+// the OTG timing is always Post's. Read at any IRQL: the pair changes only inside wddm.c's primary transaction.
+static __inline ULONG DisplaySourceWidth(_In_ const BC250_DEVICE* Device)
+{
+    LONG width = Device->Modeset.SourceWidth;
+    return width > 0 ? (ULONG)width : Device->Post.Width;
+}
+static __inline ULONG DisplaySourceHeight(_In_ const BC250_DEVICE* Device)
+{
+    LONG height = Device->Modeset.SourceHeight;
+    return height > 0 ? (ULONG)height : Device->Post.Height;
+}
 
 // Something a held submission is waiting for has happened: the gfx fence arrived, a completion-queue slot was
 // freed, or the path was closed by a failure, a TDR DDI or the stop. <= DISPATCH_LEVEL, callable with a spin
@@ -396,6 +420,9 @@ void CpuResume(BC250_DEVICE* Device);
 NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
+
+// driver_version.c: the per-application graphics setting ReportAmdDriverVersion, at each adapter start
+void DriverVersionStart(BC250_DEVICE* Device);
 
 // hwmon.c
 struct _BC250_ESCAPE_HWMON;
@@ -494,6 +521,14 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.
 struct _BC250_LOG_LINE;
 ULONG GuardLogSequence(void);                                   // the sequence number the next line will get
+ULONGLONG GuardLogMilliseconds(void);                           // the stamp a line written now would get; any IRQL
+// BD-097: the log summary's own lines, beside the ring. Between Begin (TRUE) and End every GuardLog of THIS
+// thread, outside a DPC, goes into that storage instead of the ring, and End says which sequence number
+// GuardLogRead reads the block from. FALSE from Begin means another thread holds it and the lines go into the
+// ring, as they always did. GuardLogSummaryBase is the block held now, for a page read of that space.
+BOOLEAN GuardLogSummaryBegin(void);
+void GuardLogSummaryEnd(_Out_ ULONG* First, _Out_ ULONG* Lines, _Out_ ULONG* Dropped, _Out_ ULONG* RingSeq);
+ULONG GuardLogSummaryBase(void);
 void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
@@ -540,7 +575,8 @@ typedef struct _BC250_DCN_REG_INFO {
 } BC250_DCN_REG_INFO;
 NTSTATUS MmioDcnRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table);
-// 0.7.20 (ADR 0011 point 3 step 2): the write side, g_MmioDcnWriteAllow's six HUBP0/OTG0 registers only, gated
+// 0.7.20 (ADR 0011 point 3 step 2): the write side, g_MmioDcnWriteAllow's HUBP0/OTG0 registers only (from 0.7.216.20
+// also the three plane format registers, gen_regs.py's DCN_WRITE_REGISTERS), gated
 // by Device->DcnWriteEnabled. Every call logged - the escape's own occasional writes (dcn.c's DcnFlipCore).
 NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 // 0.7.24 (ADR 0011 point 3 step 3, review 16 section 24): the same validated write, Quiet skips the per-write
@@ -592,6 +628,7 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
+NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same without the unblank (modeset.c)
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
 // DcnFlipEscape uses (step 2), never PollFlipPending's blocking poll (this may run above DISPATCH_LEVEL, per
@@ -600,8 +637,14 @@ NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no al
 // Device->VramMcBase + an offset), not the physical address DCN wants; PhysicalOut, if not NULL, gets the
 // translated address for the caller's own log line. STATUS_DEVICE_NOT_READY with the gate closed,
 // STATUS_ACCESS_DENIED when the address does not translate inside the carve-out or fails the escape's own 4
-// KiB/range rule.
-NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+// KiB/range rule. PlaneFormat (plane_format.h, 0.7.216.20) is the surface's plane format: its bytes a pixel are the
+// pitch's unit, and a format other than the plane's current one is programmed in the same locked update as the
+// address. STATUS_NOT_SUPPORTED for a format other than ARGB8888 when the firmware's format did not decode.
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
+    ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+// M15.14 (0.7.216.20): read the firmware's plane format registers once per start, before any flip can change them
+// (WddmStart). Read-only. Afterwards Device->DcnPlaneFormats says whether a flip may program another format.
+void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device);
 // Non-blocking hardware observations: pending includes EARLIEST_INUSE mismatch.
 // Scanout returns the actual card address, independently of request publication.
 BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress);
@@ -774,6 +817,10 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);
+// BD-097: the paging submit line's tally - submits, the ones that wrote no line, and the summary lines that
+// stand for them (log_rate.h). One moment of the three, under the rate limit's own lock.
+void GfxPagingLogCounts(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Submits, _Out_ ULONG* Skipped,
+                        _Out_ ULONG* Summaries);
 // KMD214, the VMID pool (docs/design/gfx-submit-root-serialization.md). GfxVmidReport logs who ran at Vmid now and
 // before it, with Who as the line's prefix: for a fault latch (ih.c) or a timeout (wddm.c). GfxVmidCounters is
 // the pool's state for the wddm summary. Both <= DISPATCH_LEVEL.
@@ -992,6 +1039,13 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
+// modeset.c: the primary transaction (the flip DDI's PrimarySequence) for a change of the source size at
+// PASSIVE_LEVEL. While it is held, SetVidPnSourceAddress answers STATUS_DEVICE_BUSY, as for a flip in progress.
+// Begin is bounded and returns FALSE when it could not take it; TRUE with nothing held when there is no full table.
+// End with Invalidate says that the plane went back to the firmware surface: the next flip is a change whatever
+// address it carries, and no application surface is scanned out any more.
+BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Generation);
+void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate);
 // PASSIVE/Level Three, software-owner retention only. Not wired to power DDIs
 // until the separate hardware suspend/restore coordinator is implemented.
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device);
@@ -1034,7 +1088,8 @@ BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Ph
 BOOLEAN VidMmProbeIb(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Leaf, _Out_ ULONGLONG* Physical,
                      _Out_ BOOLEAN* System, _Out_writes_(BC250_IB_PROBE_DWORDS) ULONG* Dwords);
 void VidMmSummary(void);
-void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
+void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring, or beside
+                                                    // it under GuardLogSummaryBegin (BD-097). It does nothing
                                                     // when the gate is closed, so the escape can call it either way
 void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG* Flips);    // 0/0 when closed
 

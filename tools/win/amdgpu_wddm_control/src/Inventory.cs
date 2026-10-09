@@ -233,9 +233,15 @@ namespace AmdgpuWddmControl
     // this program (Program.RunElevated), which calls the same methods.
     public static class SettingsStore
     {
+        // The machine's keys in the 64-bit view, the view CuRegistry.cs opens with KEY_WOW64_64KEY and the one the
+        // router and the driver write. This application is built for x64, where Registry.LocalMachine is already that
+        // view, so naming the view changes nothing today and keeps the two paths the same if that ever changes. The
+        // base key lives as long as the process, like Registry.LocalMachine itself, so nothing disposes it.
+        public static readonly RegistryKey Machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+
         public static uint? ReadDword(string path, string name)
         {
-            using (var key = Registry.LocalMachine.OpenSubKey(path))
+            using (var key = Machine.OpenSubKey(path))
             {
                 var v = key == null ? null : key.GetValue(name);
                 return v is int ? (uint?)(uint)(int)v : null;
@@ -274,6 +280,39 @@ namespace AmdgpuWddmControl
                 key.SetValue(Profiles.ValueName, value, RegistryValueKind.String);
             using (var key = Registry.LocalMachine.OpenSubKey(Profiles.RegistryPath + "\\" + image))
                 if (key == null || (key.GetValue(Profiles.ValueName) as string) != value) throw new InvalidOperationException("The profile did not read back as written.");
+        }
+
+        // The Graphics and Vulkan settings keys (GraphicsSettings.cs): each root and each game's key below its
+        // Applications key, with every value as it is stored.
+        public static List<GfxKey> ReadGfxKeys()
+        {
+            var list = new List<GfxKey>();
+            foreach (var root in GraphicsSettings.Roots)
+                using (var k = Registry.LocalMachine.OpenSubKey(root))
+                {
+                    if (k == null) continue;
+                    list.Add(ReadGfxKey(k, root));
+                    using (var apps = k.OpenSubKey(GraphicsSettings.AppsKey))
+                        if (apps != null)
+                            foreach (var image in apps.GetSubKeyNames())
+                                using (var a = apps.OpenSubKey(image))
+                                    if (a != null) list.Add(ReadGfxKey(a, GraphicsSettings.AppPath(root, image)));
+                }
+            return list;
+        }
+
+        static GfxKey ReadGfxKey(RegistryKey k, string path)
+        {
+            var g = new GfxKey { Path = path, SubKeys = k.SubKeyCount };
+            foreach (var n in k.GetValueNames())
+            {
+                var kind = k.GetValueKind(n);
+                var data = k.GetValue(n, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                if (kind == RegistryValueKind.DWord && data is int) g.Values[n] = GfxValue.Dword((uint)(int)data);
+                else if (kind == RegistryValueKind.String && data is string) g.Values[n] = GfxValue.Str((string)data);
+                else g.Values[n] = new GfxValue { Type = "Other", Text = kind.ToString() };
+            }
+            return g;
         }
 
         public static void RemoveProfile(string image)

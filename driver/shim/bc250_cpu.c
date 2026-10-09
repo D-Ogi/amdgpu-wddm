@@ -258,6 +258,41 @@ int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct
 	return complete;
 }
 
+/* One firmware answer into the running maximum, when it is a clock of this part (bc250_cpu.h). */
+static unsigned int cpu_baseline_take(unsigned int top, unsigned int mhz)
+{
+	if (mhz < BC250_CPU_MIN_MHZ || mhz > BC250_CPU_MAX_MHZ_LAB) return top;
+	return mhz > top ? mhz : top;
+}
+
+void bc250_cpu_baseline_read(const unsigned int *pstate_mhz, unsigned int pstates,
+			     const unsigned int *core_mhz, unsigned int cores,
+			     const struct bc250_cpu_baseline *previous, struct bc250_cpu_baseline *out)
+{
+	unsigned int i, table = 0u, boost = 0u;
+	if (out == NULL) return;
+	for (i = 0u; pstate_mhz != NULL && i < pstates; i++) table = cpu_baseline_take(table, pstate_mhz[i]);
+	for (i = 0u; core_mhz != NULL && i < cores; i++) boost = cpu_baseline_take(boost, core_mhz[i]);
+	/* Every top of the same start is a floor: a stage that read nothing new cannot lower what another one saw.
+	 * The tops of *previous came out of this function, so they are inside the band already. */
+	if (previous != NULL) {
+		if (previous->table_mhz > table) table = previous->table_mhz;
+		if (previous->boost_mhz > boost) boost = previous->boost_mhz;
+	}
+	if (table > BC250_CPU_MAX_MHZ) table = BC250_CPU_MAX_MHZ;
+	if (boost > BC250_CPU_MAX_MHZ) boost = BC250_CPU_MAX_MHZ;
+	out->table_mhz = table;
+	out->boost_mhz = boost;
+	out->boost_given = boost != 0u ? 1 : 0;
+	out->mhz = boost > table ? boost : table;
+}
+
+int bc250_cpu_boost_probe_needed(const struct bc250_cpu_baseline *baseline)
+{
+	if (baseline == NULL) return 1;
+	return baseline->boost_given ? 0 : 1;
+}
+
 /* ---- the failure signs -------------------------------------------------------------------------- */
 
 enum bc250_cpu_fail bc250_cpu_check_sample(const struct bc250_cpu_sample *s)

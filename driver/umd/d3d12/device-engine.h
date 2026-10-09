@@ -16,6 +16,11 @@ void destroy_device_engine(Device&) noexcept;
 engine_ddi::DeviceContext* engine_context(Device&) noexcept;
 QueueEngineRegistry* engine_queues(Device&) noexcept;
 RuntimeHeapImports* engine_imports(Device&) noexcept;
+// The per-application MaxFrameLatency gate of one Present (frame-latency.h). The gate and its proof of GPU
+// progress both live with the engine: the hosted dispatch sees every progress publication the ICD makes
+// (device-progress.h), and the ring of snapshots stays off the structure the runtime allocates per device.
+// latency 0, or a device without an engine: nothing is taken and nothing waits.
+void engine_frame_gate(Device&,uint32_t latency) noexcept;
 bool device_engine_entered(Device&) noexcept;
 void report_device_error(Device&,HRESULT) noexcept;
 

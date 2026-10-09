@@ -48,12 +48,13 @@ def extract(source_path, array):
     with open(source_path, "r", encoding="utf-8", newline="") as f:
         lines = f.read().split("\n")
 
-    # The declaration line: "<type> <array>[] = {" possibly split over two lines upstream. Every
+    # The declaration line: "<type> <array>[] = {" or "<type> <array>[N] = {" (the DCN scaler filter
+    # tables of dce_scl_filters.c carry their size), possibly split over two lines upstream. Every
     # table we take is on one line today; if that ever changes, this fails loudly rather than
     # guessing.
     start = None
     for i, line in enumerate(lines):
-        if re.search(r"\b" + re.escape(array) + r"\s*\[\s*\]\s*=\s*\{\s*$", line):
+        if re.search(r"\b" + re.escape(array) + r"\s*\[\s*\d*\s*\]\s*=\s*\{\s*$", line):
             start = i
             break
     if start is None:

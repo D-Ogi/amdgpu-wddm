@@ -65,20 +65,24 @@ inline constexpr uint32_t kE26rWritten=3; // raise this and E26rResource togethe
 static_assert(kE26rWritten==BC250_SURFACE_RESOURCE_TEXTURE_VERSION &&
               e26r_bytes(kE26rWritten)==sizeof(E26rResource),
               "E26rResource cannot describe the record version this shell writes");
-// The byte pitch a scan-out surface of this width must have, and the only one every component along the
-// path derives on its own: the kernel driver's primary layout takes DcnPrimaryPitch
-// (driver/kmd/dcn_translate.c), which rounds the width up to 64 pixels of 4 bytes, and the compositor's
-// hosted driver rounds the row up to 256 bytes (the router's HostedSurfacePitch), which is the same number
-// for a 4-byte row. The flip clause itself is weaker - any whole number of pixels that holds the row - but
-// a pitch nothing else derives is a pitch no other component can check, and the cost of being wrong is not
-// a refusal before the flip: the OS has already taken SharedPrimaryTransition and does not fall back to
-// composition seamlessly, so the output goes black. 0 for a width this pitch cannot express.
-inline constexpr uint32_t scanout_row_pitch(uint32_t width) noexcept {
-    const uint64_t pixels=(uint64_t(width)+63ull)&~63ull;
-    return !width || pixels*4ull>0xfffffffful?0u:uint32_t(pixels*4ull);
+// The byte pitch a scan-out surface of this width and row size must have, and the only one every
+// component along the path derives on its own: the compositor's hosted driver rounds the row
+// (width * bytes_per_pixel) up to 256 bytes (the router's HostedSurfacePitch), and for a 4-byte row that
+// is also the kernel driver's primary layout, DcnPrimaryPitch (driver/kmd/dcn_translate.c), which rounds
+// the width up to 64 pixels of 4 bytes. bytes_per_pixel comes from the format's row of the shared table,
+// never from a constant: an 8-byte row (RGBA16F) gets width * 8 rounded to 256 bytes. The flip clause
+// itself is weaker - any whole number of pixels that holds the row - but a pitch nothing else derives is a
+// pitch no other component can check, and the cost of being wrong is not a refusal before the flip: the
+// OS has already taken SharedPrimaryTransition and does not fall back to composition seamlessly, so the
+// output goes black. 0 for a width or a row size this pitch cannot express.
+inline constexpr uint32_t scanout_row_pitch(uint32_t width,uint32_t bytes_per_pixel=4u) noexcept {
+    const uint64_t row=uint64_t(width)*bytes_per_pixel;
+    return !width || !bytes_per_pixel || row>0xffffff00ull?0u:uint32_t((row+255ull)&~255ull);
 }
 static_assert(scanout_row_pitch(1920)==7680 && scanout_row_pitch(1280)==5120 && scanout_row_pitch(1366)==5632 &&
-              scanout_row_pitch(1)==256 && scanout_row_pitch(65)==512 && !scanout_row_pitch(0));
+              scanout_row_pitch(1)==256 && scanout_row_pitch(65)==512 && !scanout_row_pitch(0) &&
+              scanout_row_pitch(1920,8)==15360 && scanout_row_pitch(1366,8)==11008 &&
+              scanout_row_pitch(33,8)==512 && !scanout_row_pitch(1920,0));
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
               AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
@@ -129,7 +133,11 @@ struct AllocationRequest final {
         blob.version=BC250_UMD_ALLOC_VERSION_CACHE_POLICY;blob.size=sizeof(blob);
         blob.alloc_size=rounded;blob.phys_alignment=alignment;
         blob.preferred_heap=heap;blob.gem_flags=flags;blob.va_size=rounded;
-        // VA is mapped separately through the runtime; no exact-VA promise here.
+        // phys_alignment is the physical alignment of the allocation the kernel driver makes. The GPU virtual
+        // address is a separate request, made by the mapping (paging.h, PagingDomain::map): the DDI's map
+        // structure has no alignment field, so an alignment above the runtime's own granularity is obtained
+        // from a reservation and the mapping is placed at the aligned offset inside it (BD-101). Nothing here
+        // promises an address.
         info.pPrivateDriverData=&blob;info.PrivateDriverDataSize=sizeof(blob);
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=rounded;
@@ -139,7 +147,8 @@ struct AllocationRequest final {
     // opener read, under the 12-byte E26R v1 resource record. pitch and size are the bound image's,
     // never chosen here. By default the allocation is a primary of no video present source: it is
     // composed, not scanned out, so its format is one the surface format table enables for composition.
-    // scanout (M15.14): the selected mode for an eligible 8-bit chain. The record becomes the 64-byte
+    // scanout (M15.14): the selected mode for an eligible chain (scanout-mode.h decides which formats the
+    // kernel driver's caps admit; this function checks only the table). The record becomes the 64-byte
     // v3 one with PRIMARY and SCANOUT (bc250_scanout_record.h), which asks the kernel driver for the
     // local segment and is the only shape the compositor's opener takes, and the allocation names video
     // present source 0, so SetVidPnSourceAddress can be given this surface. The
@@ -162,9 +171,10 @@ struct AllocationRequest final {
                             bool primary=true,bool scanout=false) noexcept {
         blob={};surface={};resource={};texture={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
-        // Scan-out needs the SCANOUT_PRIMARY policy bit, which only the 8-bit rows carry, and it needs
-        // the surface to be a primary of video present source 0: a scanned-out buffer with no source is
-        // a contradiction. Composition keeps the COMPOSED bit and every row that has it.
+        // Scan-out needs the SCANOUT_PRIMARY policy bit (BGRA8, RGBA8 and RGB10A2 today; the caller has
+        // already checked the caps with bc250_scanout_format_admitted), and it needs the surface to be a
+        // primary of video present source 0: a scanned-out buffer with no source is a contradiction.
+        // Composition keeps the COMPOSED bit and every row that has it.
         if(scanout && (!primary || cpuRead))return E_INVALIDARG;
         const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
                                                   scanout?AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY
@@ -179,7 +189,7 @@ struct AllocationRequest final {
         if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
         // The pitch pin (scanout_row_pitch): for scan-out the description carries the one pitch every
         // component derives, not whatever the engine's image layout happened to produce.
-        if(scanout && pitch!=scanout_row_pitch(width))return E_INVALIDARG;
+        if(scanout && pitch!=scanout_row_pitch(width,row->bytes_per_pixel))return E_INVALIDARG;
         const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
         if(pitch<width4*row->bytes_per_pixel || !size || (size&4095) || size>0xfffff000ull || size<uint64_t(pitch)*height4)
             return E_INVALIDARG;

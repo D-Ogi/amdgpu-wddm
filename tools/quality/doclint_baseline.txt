@@ -108,7 +108,7 @@
 364	docs/research/m9-dma-contract-audit.md
 13	docs/research/m9-system-paging.md
 22	docs/testing/INSTALL.md
-14	docs/testing/THIRD-PARTY.md
+13	docs/testing/THIRD-PARTY.md
 73	docs/testing/defaults-audit-2026-10-04.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md
@@ -133,7 +133,7 @@
 6	driver/shim/test/README.md
 26	driver/shim/test/sdma_faults_report.md
 24	driver/umd/d3d12/README.md
-215	driver/umd/d3d12/engine-ddi/INTEGRATION.md
+211	driver/umd/d3d12/engine-ddi/INTEGRATION.md
 29	driver/umd/d3d12/engine-ddi/README.md
 31	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
@@ -149,7 +149,7 @@
 48	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
-74	tools/win/amdgpu_wddm_control/README.md
+64	tools/win/amdgpu_wddm_control/README.md
 7	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md
 39	tools/win/bc250mon/README.md

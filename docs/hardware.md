@@ -105,6 +105,28 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   revert the firmware refuses is owed, not forgotten: the driver repeats it every second
   (`BC250_CPU_REVERT_RETRY_MS`) and reports it as `BC250_CPU_FLAG_REVERT_OWED`. A core-mask change needs a Windows
   restart and carries the two-mark boot guard, so a mask the machine does not survive costs the mask.
+- CPU baseline (KMD 0.7.216.24): a revert, a reset and the release of the joint arm's cap send the clock limit
+  that the read stage of the start recorded. That limit is the highest clock the firmware answered itself, over the
+  P-state table (`0x3B`) and the per-core clocks (`0x43`), each in the band 2800 to 4000 MHz, clamped to the release
+  bound of 3500 MHz. On unit A the table gives 3200 MHz and the cores give 3500 MHz under load. Up to
+  0.7.216.14 the table alone set the limit, and every restore capped the boost at 3200 MHz until a restart. The driver
+  records the baseline only while it has sent nothing in the start. A later read stage of the same start can raise it
+  and cannot lower it.
+- The boost probe (KMD 0.7.216.24, BD-094): `0x43` answers the clock of the moment, so an idle start reads 900 to
+  1400 MHz, the band refuses those answers, and the baseline falls back to the table's 3200 MHz, which is under the
+  boost. The allowlist above holds no message that answers the boost ceiling itself, so the full read stage makes
+  the firmware answer it: it keeps one core busy for `BC250_CPU_BOOST_PROBE_MS` (25 ms) and reads the per-core
+  clocks again, at most `BC250_CPU_BOOST_PROBE_ROUNDS` (2) times, and it stops at the first answer inside the band.
+  The probe sends the getter `0x43` and no other message, it runs only while the driver has applied nothing, and it
+  costs one core of six about a fifth of a second at worst, once per start. It does not run at or above 87 C
+  (`BC250_CLOCK_HOT_MC`): the probe makes heat, and the only thing it buys is the clock control, which the start
+  can refuse. The read stage of a later `readback` probes again when the part is cool.
+- The clock limit is refused while the boost ceiling of the start is unknown (`BC250_CPU_ERROR_NO_CEILING`,
+  `BC250_CPU_FLAG_BOOST_KNOWN`): the driver takes no control it could give back only as the P-state table's top.
+  The undervolt and the temperature cap are not affected, the joint power arm takes no cap in that state, and a
+  restart is the way out. A restore always goes out, because nothing else takes a change out of the chip. The
+  stored settings of such a start go in without their clock limit, and keep their undervolt and their cap: one
+  refused control must not cost the other two.
 - Clock stretching: an unstable CPU undervolt shows first as the effective core clock (`0x43`) falling about
   200 MHz or more under the clock asked for (`BC250_CPU_STRETCH_MHZ`), before it shows as a hang. It counts only
   over a sample the caller marks as loaded, because an idle core sits under its limit for no bad reason. That is a

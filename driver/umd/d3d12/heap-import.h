@@ -5,9 +5,12 @@
 #include "device-progress.h"
 #include "paging.h"
 #include "../../contract/bc250_scanout_caps.h"
+#include "../../contract/bc250_desktop_route.h"
 #include <atomic>
 namespace native12 {
 struct Device;
+struct Adapter;
+enum class ScanoutModeList : unsigned;          // scanout-mode.h
 // Calls run inside the owner's DeviceScope, including hosted GIPA and RuntimeDomain scopes, on any
 // number of the device's DDI threads at once. lock_ guards the record list and every record's flags
 // and is a leaf: no runtime callback, Vulkan call or paging operation runs under it. A record in a
@@ -109,13 +112,18 @@ class RuntimeHeapImports final {
     uint64_t held_bytes_{},deposits_{};
     bool draining_{};
     ImportReleasePolicy policy_{};
-    // M15.14 increment 2: the two start-time facts the scan-out decision needs, taken once in the
-    // constructor so no allocation path reads the registry or the adapter again. The caps are the kernel
-    // driver's published trailer (all zero when there is none, which is the answer of every driver before
-    // this increment and of a start whose operator switch is off); force_cpu_ is the desktop route's kill
-    // switch, which decides whether the compositor is the CPU UMD and therefore whether any flip exists.
-    bc250_scanout_caps scanout_caps_{};
+    // M15.14: what the scan-out decision needs. force_cpu_ is the desktop route's kill switch, which decides
+    // whether the compositor is the CPU UMD and therefore whether any flip exists; it is taken once, in the
+    // constructor, because the compositor reads it once. The kernel driver's trailer is not taken once
+    // (increment 3): its geometry is the source mode committed now, and a game changes the mode between the
+    // device and its chain, so the adapter is kept and the trailer is read for every primary. The
+    // compositor's desktop-route record is read for every primary as well, through desktop_route_reader_
+    // (scanout_desktop_route_read, or a host test's double). The kernel driver's mode list is asked through
+    // mode_list_reader_ (scanout_mode_list_read, or a double) for a chain that is not the committed mode.
+    Adapter* adapter_{};
     unsigned long force_cpu_{};
+    unsigned (*desktop_route_reader_)(bc250_desktop_route*) noexcept{};
+    ScanoutModeList (*mode_list_reader_)(UINT64 luid,unsigned width,unsigned height) noexcept{};
     ProgressSource progress_{};
     std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
     std::atomic<bool> active_{true},paging_open_{};
@@ -128,6 +136,11 @@ class RuntimeHeapImports final {
     // hr unchanged. Only for a refusal taken before any callback, probe or allocation.
     static HRESULT refuse(const char* why,HRESULT hr,const engine_ddi::MemoryRequest& request,
                           uint32_t unimplemented_heap_flags=0) noexcept;
+    // The same for a refusal decided after the allocation and the mapping exist, where the address and not the
+    // request's shape is the answer (BD-101, ImportStage::AddressAlignment). The caller still releases the
+    // record; this writes the reason and the line.
+    static HRESULT refuse_address(const char* why,HRESULT hr,uint64_t bytes,uint64_t alignment,
+                                  uint64_t address) noexcept;
     HRESULT release(Record&) noexcept;
     HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
     HRESULT unlock_for_release(Record&) noexcept;               // a CPU lock the ICD left on it
@@ -148,9 +161,29 @@ public:
     // owner that has it (device-engine.cpp); without it progress_gate holds nothing.
     void bind_progress(const ProgressSource& source) noexcept {progress_=source;}
     const ImportReleasePolicy& policy() const noexcept {return policy_;}
-    // What the constructor took from the adapter and the registry, for the tests and the trace.
-    const bc250_scanout_caps& scanout_caps() const noexcept {return scanout_caps_;}
+    // The scan-out trailer as the kernel driver publishes it at this moment: all zero for a device with no
+    // adapter (the host tests), for a kernel driver without the trailer and for a query that fails, which
+    // all read as "no scan-out". One kernel query per call; allocate() calls it once per primary.
+    bc250_scanout_caps scanout_caps_now() const noexcept;
+    // What the constructor took from the registry, for the tests and the trace.
     unsigned long force_cpu() const noexcept {return force_cpu_;}
+    // The compositor's desktop-route record as it is now: the read status (BC250_DESKTOP_ROUTE_READ_*) and
+    // the record. allocate() calls it once per primary, after the off switch.
+    unsigned desktop_route_now(bc250_desktop_route* record) const noexcept {
+        return desktop_route_reader_(record);
+    }
+    // The host tests' seam: a reader in place of the session's record, which only dwm.exe can write.
+    void read_desktop_route_with(unsigned (*reader)(bc250_desktop_route*) noexcept) noexcept {
+        desktop_route_reader_=reader;
+    }
+    // Whether the adapter's video present source offers a width x height source mode now. allocate() calls
+    // it only for a primary whose first answer was SourceGeometry (C71); a device without an adapter asks
+    // with LUID 0, which the shell's reader answers Failed.
+    ScanoutModeList mode_list_now(unsigned width,unsigned height) const noexcept;
+    // The host tests' seam: a reader in place of the kernel driver's mode list.
+    void read_mode_list_with(ScanoutModeList (*reader)(UINT64,unsigned,unsigned) noexcept) noexcept {
+        mode_list_reader_=reader;
+    }
     // What the quarantine holds now, for tests and the trace.
     uint32_t held_count() const noexcept;
     uint64_t held_bytes() const noexcept;

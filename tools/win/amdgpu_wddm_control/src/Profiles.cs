@@ -72,7 +72,17 @@ namespace AmdgpuWddmControl
                 "The driver stops answering when the system asks a command queue to wait, which ends the game. Use only when the developers ask for it."),
             new ProfileSwitch("replay-log", "Write a replay log (diagnostic)",
                 "The replay lines also go to a file of their own. This changes no behaviour; it costs the writes."),
+            // The shader model ceiling (GameGroups.cs ShaderModelCeiling): one choice of three, not a check box.
+            new ProfileSwitch("shader-model-68-off", "Highest shader model 6.7",
+                "The adapter reports shader model 6.7 at most. The default is 6.8."),
+            new ProfileSwitch("shader-model-67-off", "Highest shader model 6.6",
+                "The adapter reports shader model 6.6 at most, as every driver before 2026-10-07 did. Wins over shader-model-68-off."),
         };
+
+        // Catalog switches whose shell is not on main yet. ShellTokens lets such a switch be missing from the shell and
+        // fails once the shell reads it, so the entry goes away with the merge. Empty since the b23 train merged
+        // m15/shader-model-68, whose shell reads shader-model-68-off and shader-model-67-off.
+        public static readonly string[] AwaitingShell = { };
 
         static readonly Regex Syntax = new Regex("^[a-z0-9,-]*$", RegexOptions.CultureInvariant);
         static readonly Regex ImageSyntax = new Regex(@"^[A-Za-z0-9 _.()+-]{1,96}\.exe$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);

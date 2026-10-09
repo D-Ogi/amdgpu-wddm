@@ -28,6 +28,7 @@ static_assert(sizeof(D3D12DDICAPS_UMD_BASED_COMMAND_QUEUE_PRIORITY_DATA_0023) ==
 static_assert(sizeof(D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050) == 4, "1067: H:7004-7008");
 static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0090) == 4, "1077: H:11127-11131");
 static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0091) == 16, "1078: H:11143-11150");
+static_assert(sizeof(D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110) == 8, "1091: H:13671-13679");
 
 // ---- Enums passed through by value ------------------------------------------------------------------------------------
 static_assert(D3D12DDI_RESOURCE_BINDING_TIER_1 == static_cast<int>(D3D12_RESOURCE_BINDING_TIER_1) &&
@@ -63,9 +64,12 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS11 options11;
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS14 options14;   // logged only: no DDI type reaches the runtime at 0092
+    D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;   // 1091
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
     bool report_raytracing_tier{true};          // the driver's default; set_raytracing_tier_reporting takes it back
+    D3D_SHADER_MODEL shader_model_ceiling{D3D_SHADER_MODEL_6_8};   // set_shader_model_ceiling lowers it
 };
 
 namespace {
@@ -75,15 +79,34 @@ constexpr uint32_t kDdiVersion = 92;                     // D3D12DDI_BUILD_VERSI
 constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0,
                                          D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_2};
 
-// Shader models whose RELEASE value has a suffix at or below 0092 (H:3478-3500): 6_7_RELEASE is 0093, so a 0092
-// driver lists at most 6_6. The engine is asked with 6_6 as the highest model of interest.
+// The release value of every shader model from 5_1 to 6_8 (H:3478-3500). The suffix of a value names the DDI build
+// that defined it, not a version the driver must negotiate: the runtimes read in INTEGRATION.md "Shader model"
+// (M840) take the highest release value of the 1012 list that they know, whatever build the driver negotiated.
+// The 22621 system runtime knows release values up to 6_6 and ignores 6_7 and 6_8; runtime 26100 and the Agility
+// SDK cores 1.615 and 1.619 map both. The engine is asked with 6_8 as the highest model of interest; its answer is
+// what dxil-spirv implements on this adapter (vkd3d-proton device.c, d3d12_device_caps_init_shader_model).
 struct ShaderModel { D3D_SHADER_MODEL api; D3D12DDI_SHADER_MODEL ddi; };
 constexpr ShaderModel kShaderModels[] = {
     {D3D_SHADER_MODEL_5_1, D3D12DDI_SHADER_MODEL_5_1_RELEASE_0011}, {D3D_SHADER_MODEL_6_0, D3D12DDI_SHADER_MODEL_6_0_RELEASE_0011},
     {D3D_SHADER_MODEL_6_1, D3D12DDI_SHADER_MODEL_6_1_RELEASE_0033}, {D3D_SHADER_MODEL_6_2, D3D12DDI_SHADER_MODEL_6_2_RELEASE_0042},
     {D3D_SHADER_MODEL_6_3, D3D12DDI_SHADER_MODEL_6_3_RELEASE_0054}, {D3D_SHADER_MODEL_6_4, D3D12DDI_SHADER_MODEL_6_4_RELEASE_0062},
     {D3D_SHADER_MODEL_6_5, D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071}, {D3D_SHADER_MODEL_6_6, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082},
+    {D3D_SHADER_MODEL_6_7, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093}, {D3D_SHADER_MODEL_6_8, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108},
 };
+constexpr D3D_SHADER_MODEL kHighestShaderModel = D3D_SHADER_MODEL_6_8;
+static_assert(kShaderModels[std::size(kShaderModels) - 1].api == kHighestShaderModel, "the table ends at the ceiling");
+
+bool known_shader_model(D3D_SHADER_MODEL m) noexcept {
+    for (const ShaderModel& s : kShaderModels)
+        if (s.api == m) return true;
+    return false;
+}
+
+// What 1012 and 1091 report: the engine's model, at most the shell's ceiling (6_8 unless lowered).
+D3D_SHADER_MODEL reported_shader_model(const AdapterCaps& c) noexcept {
+    return c.shader_model.HighestShaderModel < c.shader_model_ceiling ? c.shader_model.HighestShaderModel
+                                                                      : c.shader_model_ceiling;
+}
 
 // Feature level 12_2 needs raytracing tier 1.1, mesh shaders, VRS tier 2 and sampler feedback (DirectX-Specs
 // D3D12_FeatureLevel12_2.md). build_caps reports none of them while their DDI slots are fail-safes (SLOTS.md), so
@@ -142,6 +165,8 @@ const char* feature_name(D3D12_FEATURE f) noexcept {
     case D3D12_FEATURE_D3D12_OPTIONS11: return "D3D12_OPTIONS11";
     case D3D12_FEATURE_D3D12_OPTIONS12: return "D3D12_OPTIONS12";
     case D3D12_FEATURE_D3D12_OPTIONS13: return "D3D12_OPTIONS13";
+    case D3D12_FEATURE_D3D12_OPTIONS14: return "D3D12_OPTIONS14";
+    case D3D12_FEATURE_D3D12_OPTIONS21: return "D3D12_OPTIONS21";
     case D3D12_FEATURE_SERIALIZATION: return "SERIALIZATION";
     default: return "?";
     }
@@ -263,7 +288,7 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
     if (!c) return E_OUTOFMEMORY;
     c->levels.NumFeatureLevels = static_cast<UINT>(std::size(kLevels));
     c->levels.pFeatureLevelsRequested = kLevels;
-    c->shader_model.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+    c->shader_model.HighestShaderModel = kHighestShaderModel;
     struct Entry { D3D12_FEATURE feature; void* data; UINT size; bool required; };
     const Entry entries[] = {
         {D3D12_FEATURE_FEATURE_LEVELS, &c->levels, sizeof(c->levels), true},
@@ -279,6 +304,8 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         {D3D12_FEATURE_D3D12_OPTIONS11, &c->options11, sizeof(c->options11), false},
         {D3D12_FEATURE_D3D12_OPTIONS12, &c->options12, sizeof(c->options12), false},
         {D3D12_FEATURE_D3D12_OPTIONS13, &c->options13, sizeof(c->options13), false},
+        {D3D12_FEATURE_D3D12_OPTIONS14, &c->options14, sizeof(c->options14), false},
+        {D3D12_FEATURE_D3D12_OPTIONS21, &c->options21, sizeof(c->options21), false},
         {D3D12_FEATURE_SERIALIZATION, &c->serialization, sizeof(c->serialization), false},
     };
     constexpr size_t kCount = std::size(entries);
@@ -303,9 +330,10 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         }
         std::memset(entries[i].data, 0, entries[i].size);   // the engine leaves *pData alone on failure (V11)
     }
-    // The level list and model ceiling were engine-ddi's input; anything else is not an answer to them.
-    if (!pipeline_level(c->levels.MaxSupportedFeatureLevel) || c->shader_model.HighestShaderModel < D3D_SHADER_MODEL_5_1 ||
-        c->shader_model.HighestShaderModel > D3D_SHADER_MODEL_6_6) {
+    // The level list and model ceiling were engine-ddi's input; anything else is not an answer to them. A model
+    // between two table rows (no such D3D_SHADER_MODEL exists today) is not an answer either.
+    if (!pipeline_level(c->levels.MaxSupportedFeatureLevel) || c->shader_model.HighestShaderModel > kHighestShaderModel ||
+        !known_shader_model(c->shader_model.HighestShaderModel)) {
         log_line("QueryAdapterCaps: feature level %x or shader model %x outside what was asked",
                  static_cast<unsigned>(c->levels.MaxSupportedFeatureLevel),
                  static_cast<unsigned>(c->shader_model.HighestShaderModel));
@@ -313,6 +341,13 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         return E_UNEXPECTED;
     }
     c->levels.pFeatureLevelsRequested = nullptr;          // not kept past the call
+    // One line per adapter: the model and the optional features of 6_7 and 6_8 as the engine computed them. The
+    // OPTIONS14 pair reaches no runtime at DDI 0092 (D3D12DDICAPS_TYPE_OPTIONS_0093 is queried only from 0093 on).
+    log_line("QueryAdapterCaps: shader model %x; AdvancedTextureOps %d, WriteableMSAATextures %d, "
+             "SampleCmpGradientAndBias %d, ExtendedCommandInfo %d",
+             static_cast<unsigned>(c->shader_model.HighestShaderModel), c->options14.AdvancedTextureOpsSupported,
+             c->options14.WriteableMSAATexturesSupported, c->options21.SampleCmpGradientAndBiasSupported,
+             c->options21.ExtendedCommandInfoSupported);
     *out = c;
     return S_OK;
 }
@@ -324,6 +359,18 @@ HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept {
     caps->report_raytracing_tier = report;
     log_line("raytracing tier reporting %s (engine tier %d)", report ? "on" : "off",
              static_cast<int>(caps->options5.RaytracingTier));
+    return S_OK;
+}
+
+HRESULT set_shader_model_ceiling(AdapterCaps* caps, D3D_SHADER_MODEL ceiling) noexcept {
+    if (!caps || !known_shader_model(ceiling)) {
+        log_line("shader model ceiling %x refused%s", static_cast<unsigned>(ceiling), caps ? "" : ": null caps");
+        return E_INVALIDARG;
+    }
+    caps->shader_model_ceiling = ceiling;
+    log_line("shader model ceiling %x (engine %x): reported %x", static_cast<unsigned>(ceiling),
+             static_cast<unsigned>(caps->shader_model.HighestShaderModel),
+             static_cast<unsigned>(reported_shader_model(*caps)));
     return S_OK;
 }
 
@@ -383,7 +430,8 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         auto* d = payload<D3D12DDI_D3D12_SHADER_MODELS_DATA_0011>(r);
         if (!d || !d->pNumShaderModelsSupported) return E_INVALIDARG;
         UINT n = 0;
-        while (n < std::size(kShaderModels) && kShaderModels[n].api <= c.shader_model.HighestShaderModel) ++n;
+        const D3D_SHADER_MODEL highest = reported_shader_model(c);
+        while (n < std::size(kShaderModels) && kShaderModels[n].api <= highest) ++n;
         if (d->pShaderModelsSupported) {
             // _Field_size_opt_(*pNumShaderModelsSupported) (H:3506): the array holds that many entries.
             if (*d->pNumShaderModelsSupported < n) {
@@ -536,6 +584,18 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         d->UnrestrictedVertexElementAlignmentSupported = c.options13.UnrestrictedVertexElementAlignmentSupported;
         d->InvertedViewportHeightFlipsYSupported = c.options13.InvertedViewportHeightFlipsYSupported;
         d->InvertedViewportDepthFlipsZSupported = c.options13.InvertedViewportDepthFlipsZSupported;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_SHADER_MODEL_6_8_OPTIONS_0110: {
+        // A 0110 type, asked by runtimes that map 6_8 whenever 1012 lists 6_8, with no DDI version check (runtime
+        // 26100: QueryShaderModel66AndLater; M840). It is answered here although the shell negotiates 0092: an
+        // unanswered type leaves both fields FALSE. Both are the engine's OPTIONS21 answers while 6_8 is reported,
+        // FALSE otherwise ("only queried if the device supports >= shader model 6.8", H:13672).
+        auto* d = payload<D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110>(r);
+        if (!d) return E_INVALIDARG;
+        const bool sm68 = reported_shader_model(c) >= D3D_SHADER_MODEL_6_8;
+        d->SampleCmpGradientAndBiasSupported = sm68 && c.options21.SampleCmpGradientAndBiasSupported;
+        d->ExtendedCommandInfoSupported = sm68 && c.options21.ExtendedCommandInfoSupported;
         return S_OK;
     }
     default:

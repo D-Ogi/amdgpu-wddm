@@ -135,8 +135,10 @@ A summary now goes out once per `graphics.summary` action -
 `python mon.py action graphics.summary`, or the same name through the HTTP API - and
 the `KMD counters` row says where the block in the panel came from: `summary written by this poll, on request`, or
 `from the ring's last summary, N s before the newest log line` (amber past ten
-minutes of driver time), or `no summary in the ring` when no counter row is shown
-at all. The `KMD poll` row checks the CLI's escape count line and warns when a
+minutes of driver time), or `kept from the summary of HH:mm:ss`, or `no summary
+yet` when no counter row is shown at all. The kept block is what KMD 0.7.216.24
+and later need: a requested summary writes beside the log ring there, so a page
+read cannot find it again (BD-097, `docs/design/kmd-log-ring.md`). The `KMD poll` row checks the CLI's escape count line and warns when a
 page read took any Level Two escape, when a requested summary took more than one,
 or when the CLI printed no count (BD-054: a CLI at `C:\BC250\kmd\` from before
 KMD 0.7.184.1 sent all 16 pages of the ring as Level Two calls, a 280-420 ms game

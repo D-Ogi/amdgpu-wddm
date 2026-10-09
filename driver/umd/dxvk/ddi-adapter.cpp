@@ -2,9 +2,12 @@
 #include "ddi-adapter.h"
 #include "adapter-identity.h"
 #include "ddi-negotiation.h"
+#include "ddi-experiment.h"
 #include "diagnostics.h"
 #include "../d3d12/instance-policy.h"
 #include "../recent-launch/recent-launch.h"
+#include "../app-settings/app-settings.h"
+#include "../d3d12/stdio-log.h"
 #include <mutex>
 #include <string>
 #include <memory>
@@ -21,13 +24,32 @@ struct Adapter {
     EngineModules modules;
     std::mutex mutex;
     std::vector<DdiDeviceHandle> failed;
+    // M15.14: the runtime's adapter query and the scan-out switches, read once at the open. The runtime's
+    // adapter handle stays valid until CloseAdapter, and every device is destroyed before that.
+    ScanoutSource scanout;
 };
 Adapter *adapter(D3D10DDI_HADAPTER handle) {return static_cast<Adapter *>(handle.pDrvPrivate);}
+// The settings this shell applies; RenderOnCpu is the router's (driver/umd/router), so a set value shows here as
+// not applied: the router kept the application on the GPU (a protected application, for example).
+constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::kAll &
+    ~amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::RenderOnCpu);
+void log_app_settings(const amdgpu_wddm::app_settings::Settings &settings) noexcept {
+    amdgpu_wddm::app_settings::log_once(settings,"d3d11",kAppliedSettings,[](const char *line) {
+        char text[1100];
+        std::snprintf(text,sizeof(text),"%s\n",line);
+        OutputDebugStringA(text);
+        amdgpu_wddm_log::print("%s",text);
+    });
+}
 bool compatible_device(const Adapter &a,UINT interfaceVersion,UINT version,UINT flags,D3D_FEATURE_LEVEL &level) {
     const bool d3d11_1=interfaceVersion==D3D11_1_DDI_INTERFACE_VERSION && (version>>16)==D3D11_1_DDI_BUILD_VERSION;
-    // The WDDM 2.0 table is offered only by an FL12 adapter (supported_ddi_versions).
-    const bool wddm2_0=wddm2_0_ddi(interfaceVersion,version) && a.caps.maximum>=D3D_FEATURE_LEVEL_12_0;
-    return (d3d11_1 || wddm2_0) &&
+    const bool fl12=a.caps.maximum>=D3D_FEATURE_LEVEL_12_0;
+    // The WDDM 2.0 and WDDM 2.2 tables are offered only by an FL12 adapter (supported_ddi_versions). A
+    // runtime that asks for the WDDM 2.2 interface which the process switch withholds gets no device from
+    // this table: it asks again for the newest interface the adapter did offer.
+    const bool wddm2_0=wddm2_0_ddi(interfaceVersion,version) && fl12;
+    const bool wddm2_2=wddm2_2_ddi(interfaceVersion,version) && fl12 && wddm2_2_offered();
+    return (d3d11_1 || wddm2_0 || wddm2_2) &&
         SUCCEEDED(requested_feature_level(flags,level,interfaceVersion)) && level<=a.caps.maximum;
 }
 template<typename T> T system_entry(HMODULE module,const char *name) noexcept {
@@ -64,7 +86,25 @@ SIZE_T APIENTRY device_size(D3D10DDI_HADAPTER handle,const D3D10DDIARG_CALCPRIVA
 HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *values) {
     auto *a=adapter(handle);
     if (!a) return E_INVALIDARG;
-    return supported_ddi_versions(a->caps.maximum,entries,values);
+    const bool wddm2_2=wddm2_2_offered();
+    const HRESULT hr=supported_ddi_versions(a->caps.maximum,wddm2_2,entries,values);
+    // The offered set, once per adapter, read out of the array the shell just filled: the runtime asks twice
+    // (count, then array), and an FL11 adapter offers the D3D11.1 table alone.
+    if (SUCCEEDED(hr) && values && !(a->observations.fetch_or(4,std::memory_order_relaxed)&4)) {
+        char list[64]{}; size_t used=0;
+        for (UINT32 i=0;i<*entries;++i) {
+            const char *parts[2]={i ? " + " : "",ddi_version_name(values[i])};
+            for (const char *part:parts)
+                for (const char *p=part;*p && used+1<sizeof(list);++p) list[used++]=*p;
+        }
+        list[used]=0;
+        char text[192];
+        std::snprintf(text,sizeof(text),"M14 DDI versions: %s (BD-099 experiment wddm22-ddi-off=%u)\n",
+            list,unsigned(!wddm2_2));
+        OutputDebugStringA(text);
+        amdgpu_wddm_log::print("%s",text);
+    }
+    return hr;
 }
 HRESULT APIENTRY caps(D3D10DDI_HADAPTER handle,const D3D10_2DDIARG_GETCAPS *args) {
     auto *a=adapter(handle);
@@ -75,7 +115,8 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
     if (!a || !args) return E_INVALIDARG;
     if(!(a->observations.fetch_or(2,std::memory_order_relaxed)&2))
         adapter_diagnostic("CreateDevice",args->Interface,args->Version,args->Flags);
-    // p11_1DeviceFuncs, pWDDM2_0DeviceFuncs and pDXGIDDIBaseFunctions3/5 share their unions.
+    // p11_1DeviceFuncs, pWDDM2_0DeviceFuncs, pWDDM2_2DeviceFuncs and pDXGIDDIBaseFunctions3/5/6_1 share
+    // their unions, so one null check covers whichever member the negotiated interface names.
     if (!compatible_device(*a,args->Interface,args->Version,args->Flags,level) ||
         !args->hDrvDevice.pDrvPrivate || !args->p11_1DeviceFuncs || !args->DXGIBaseDDI.pDXGIDDIBaseFunctions3) return E_INVALIDARG;
     static_cast<DdiDeviceHandle *>(args->hDrvDevice.pDrvPrivate)->owner=nullptr;
@@ -88,7 +129,17 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
         // Allocate retention storage before any callback can create live state.
         a->failed.emplace_back();
         BC250_DXVK_SHELL_SERVICES services{};services.Size=sizeof(services);services.Log=engine_diagnostic;
-        HRESULT hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags);
+        // The per-application settings: once per process, the effective values in the log; Anisotropy and
+        // PerformanceOverlay as DXVK user options, which the engine's DXVK instance reads in this call only.
+        namespace as=amdgpu_wddm::app_settings;
+        const as::Settings &settings=as::process_settings();
+        log_app_settings(settings);
+        HRESULT hr=S_OK;
+        {
+            const as::ScopedEnv options("DXVK_CONFIG",as::dxvk_config(settings),as::ScopedEnv::Mode::Append);
+            hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags,
+                &a->scanout);
+        }
         if (!a->failed.back().owner) a->failed.pop_back();
         if(FAILED(hr))failure_diagnostic("CreateDevice",hr);
         // The outer device exists: note the launch once per process, off this thread (recent-launch.h).
@@ -126,6 +177,7 @@ HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &args,const AdapterConfigura
             a->luid,sparse,a->unresolved_policy_adapter);
         a->policy_flags=policy==S_OK && sparse ? BC250_HOST_POLICY_SPARSE : 0;
         a->caps=adapter_caps_for_policy(config.caps,a->policy_flags);
+        a->scanout=read_scanout_source(args.hRTAdapter.handle,args.pAdapterCallbacks->pfnQueryAdapterInfoCb);
         D3D10_2DDI_ADAPTERFUNCS table{};
         table.pfnCalcPrivateDeviceSize=device_size;table.pfnCreateDevice=create;
         table.pfnCloseAdapter=close;table.pfnGetSupportedVersions=versions;table.pfnGetCaps=caps;

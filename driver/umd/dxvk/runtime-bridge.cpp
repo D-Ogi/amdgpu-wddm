@@ -375,7 +375,8 @@ HRESULT wait_present_value(HostBridge &bridge, UINT64 value)
 }
 
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
-    D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine)
+    D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
+    PresentSyncOverride sync)
 {
    auto *device=bridge.device;
    if (!device || !device->domain.entered() || !device->present_context || !source || !flush)
@@ -394,6 +395,10 @@ HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
    present.hDstAllocation=destination;
    present.hContext=device->present_context;
    present.pDXGIContext=dxgi_context;
+   if (sync.valid) {
+      present.SyncIntervalOverrideValid=TRUE;
+      present.SyncIntervalOverride=sync.interval;
+   }
    const HRESULT result=device->DXGICallbacks->pfnPresentCb(device->hDevice,&present);
    if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge);
    if (FAILED(result)) return result;

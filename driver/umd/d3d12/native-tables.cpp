@@ -278,6 +278,10 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12D
         if(hr!=S_OK)return hr;
     }
     stage=5;
+    // The per-application VSync setting as the sync interval override of this present.
+    const auto vsync=amdgpu_wddm::app_settings::sync_override(amdgpu_wddm::app_settings::process_settings());
+    from.sync_override_valid=vsync.valid;
+    from.sync_override=vsync.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
     hr=fill_present(from,result,contexts,queues);
     if(hr==S_OK)stage=0;
     return hr;
@@ -288,13 +292,25 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     // The entry path experiment's frame clock and arms (engine-ddi.h, "Entry path"); nothing without its knobs.
     engine_ddi::entry_frame();
     const auto device=EntryPolicy::resolve(list);
-    // A queue operation: its context must not be executing on another thread (QueueDomainScope).
-    QueueDomainScope serial(device);
+    const auto& settings=amdgpu_wddm::app_settings::process_settings();
+    // The per-application FrameRateLimit (docs/design/per-app-graphics-settings.md): the wait comes before the
+    // queue domain, so that no other queue operation of the device waits with this present.
+    if(device)device->frame_limiter.frame(amdgpu_wddm::app_settings::frame_rate_limit(settings));
     unsigned stage=1;
-    // Every output given is zero before anything is validated, and again after a refusal.
-    if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};
-    const HRESULT hr=device?present_outputs(*device,queue,args,result,contexts,queues,stage):E_INVALIDARG;
-    if(hr!=S_OK){if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};}
+    HRESULT hr;
+    {
+        // A queue operation: its context must not be executing on another thread (QueueDomainScope).
+        QueueDomainScope serial(device);
+        // Every output given is zero before anything is validated, and again after a refusal.
+        if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};
+        hr=device?present_outputs(*device,queue,args,result,contexts,queues,stage):E_INVALIDARG;
+        if(hr!=S_OK){if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};}
+    }
+    // The per-application MaxFrameLatency (frame-latency.h): the application may have at most N presents ahead
+    // of the GPU, so this present returns only once the frame N places back has finished. Outside the queue
+    // domain, as the frame rate limit is, and never on a refused present. Without the setting nothing happens.
+    if(device && hr==S_OK)
+        engine_frame_gate(*device,amdgpu_wddm::app_settings::max_frame_latency(settings));
     if(ddi_trace_enabled()){
         amdgpu_wddm_log::print("{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
             "\"source\":%u,\"destination\":%u,\"context\":%u,\"thread\":%lu}\n",stage,

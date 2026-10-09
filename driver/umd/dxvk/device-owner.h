@@ -6,6 +6,9 @@
 #include "engine-error.h"
 #include "runtime-surface.h"
 #include "present-shadow.h"
+#include "vblank-pacer.h"
+#include "../app-settings/app-settings.h"
+#include "scanout-primary.h"
 #include <memory>
 #include <vector>
 namespace bc250::umd {
@@ -43,6 +46,18 @@ public:
     size_t surface_count() const { return surfaces_.size(); }
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.
     PresentShadows &present_shadows() { return present_shadows_; }
+    // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).
+    amdgpu_wddm::app_settings::FrameLimiter &frame_limiter() { return frame_limiter_; }
+    // BD-099: the per-application VSync of this device's presents as vertical-blank waits.
+    VBlankPacer &vblank_pacer() { return vblank_pacer_; }
+    // BD-099: true where the runtime copies the whole DXGIDDICB_PRESENT, with SyncIntervalOverrideValid and
+    // SyncIntervalOverride in it. That is the WDDM 2.2 interface at build 5 and later
+    // (IS_DXGI1_6_1_BASE_FUNCTIONS). Below it the runtime copies a shorter structure, the override field is
+    // not in it, and VSync needs the vertical-blank waits of the shell instead.
+    bool full_present_callback() const { return full_present_callback_; }
+    // M15.14: the adapter's scan-out source, copied at CreateDevice (scanout-primary.h).
+    const ScanoutSource &scanout() const { return scanout_; }
+    void set_scanout(const ScanoutSource &source) { scanout_=source; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -61,6 +76,9 @@ private:
     VkPhysicalDeviceMemoryProperties surface_memory_{};
     std::vector<std::unique_ptr<RuntimeSurface>> surfaces_;
     PresentShadows present_shadows_{};
+    amdgpu_wddm::app_settings::FrameLimiter frame_limiter_;
+    VBlankPacer vblank_pacer_;
+    ScanoutSource scanout_{};
     RuntimeDevice runtime_;
     HostBridge bridge_{};
     HostedInstance instance_;
@@ -70,6 +88,6 @@ private:
     ID3D11DeviceContext4 *context_=nullptr;
     HMODULE modules_[3]{};
     EngineErrorState errors_;
-    bool initialized_=false,closing_=false;
+    bool initialized_=false,closing_=false,full_present_callback_=false;
 };
 }

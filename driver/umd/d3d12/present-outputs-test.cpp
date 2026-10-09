@@ -44,6 +44,17 @@ int main() {
     assert(fill_present({0x40000100,0,0x40000200,0,context},&result,&contexts,nullptr)==S_OK);
     assert(result.BroadcastDstAllocation[0]==0x40000200);
 
+    // The per-application VSync setting: the override reaches the runtime as given, and only when asked for.
+    const DXGI_DDI_FLIP_INTERVAL_TYPE intervals[]={DXGI_DDI_FLIP_INTERVAL_IMMEDIATE,DXGI_DDI_FLIP_INTERVAL_ONE};
+    for(const auto interval:intervals){
+        std::memset(&result,0xa5,sizeof(result));
+        assert(fill_present({0x40000100,0,0,0,context,true,interval},&result,&contexts,nullptr)==S_OK);
+        assert(result.SyncIntervalOverrideValid==TRUE && result.SyncIntervalOverride==interval);
+    }
+    std::memset(&result,0xa5,sizeof(result));
+    assert(fill_present({0x40000100,0,0,0,context,false,DXGI_DDI_FLIP_INTERVAL_ONE},&result,&contexts,nullptr)==S_OK);
+    assert(result.SyncIntervalOverrideValid==FALSE && result.SyncIntervalOverride==DXGI_DDI_FLIP_INTERVAL_IMMEDIATE);
+
     // A refusal leaves every output zero.
     std::memset(&result,0xa5,sizeof(result));std::memset(&contexts,0xa5,sizeof(contexts));
     std::memset(&queues,0xa5,sizeof(queues));

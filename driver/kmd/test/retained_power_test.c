@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
+#include "plane_format.h"   /* M15.14: BC250_PLANE_FORMAT_* */
 #ifndef _Inout_
 #define _Inout_
 #endif
@@ -36,6 +37,8 @@ typedef struct {
 typedef struct {
  BC250_WDDM *Wddm;
  int DcnVsyncArmed,SourceVisible,DcnBlanked,VidPnFlipEnabled;
+ /* M15.14 (0.7.216.20): the plane format state; the retained pause makes the current format unknown. */
+ int DcnPlaneFormats;unsigned long DcnPlaneFormat;
 } BC250_DEVICE;
 static unsigned checks,failures,flushes,cancels,removes,arms,mmio;
 static int currentIrql,lockHeld,gfxReady=1,pagingReady=1,enableStatus;
@@ -70,7 +73,10 @@ int main(void){
  const size_t scalar[]={offsetof(BC250_WDDM,HwPending),offsetof(BC250_WDDM,DeferredValid),offsetof(BC250_WDDM,PagingHwPending),offsetof(BC250_WDDM,PagingDeferredValid),offsetof(BC250_WDDM,ReportActive),offsetof(BC250_WDDM,ReportAgain)};
  const size_t arrays[]={offsetof(BC250_WDDM,ActiveSubmissions),offsetof(BC250_WDDM,CompletionPending),offsetof(BC250_WDDM,PreemptionPending),offsetof(BC250_WDDM,RefusalPending),offsetof(BC250_WDDM,RejectedPending),offsetof(BC250_WDDM,WatchdogFaulted)};
  setup(&d,&w);before=w;
+ d.DcnPlaneFormats=1;d.DcnPlaneFormat=BC250_PLANE_FORMAT_ABGR8888;
  CHECK(WddmSuspendRetained(&d)==0 && w.Stopping && w.RetainedPowerPause && w.PrimaryNeedsRestore);
+ /* M15.14: the format registers may change with the address over power loss, so the next flip writes them. */
+ CHECK(d.DcnPlaneFormat==BC250_PLANE_FORMAT_NONE);
  CHECK(d.Wddm==&w && !d.DcnVsyncArmed && flushes==2 && cancels==4 && removes==5); // KMD172: + paging drain timer
  retained(&w,&before);
  CHECK(WddmSuspendRetained(&d)==0 && cancels==4 && removes==5);

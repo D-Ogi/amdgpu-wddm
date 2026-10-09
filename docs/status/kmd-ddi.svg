@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="860" height="424" viewBox="0 0 860 424" role="img" aria-label="Kernel-mode DDI: 49 of 147 slots done (33.33%)" font-family="-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Noto Sans&#x27;,Helvetica,Arial,sans-serif">
-<title>Kernel-mode DDI: 49 of 147 slots done (33.33%)</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="424" viewBox="0 0 860 424" role="img" aria-label="Kernel-mode DDI: 51 of 147 slots done (34.69%)" font-family="-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Noto Sans&#x27;,Helvetica,Arial,sans-serif">
+<title>Kernel-mode DDI: 51 of 147 slots done (34.69%)</title>
 <defs><pattern id="newer" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#0d1117"/><rect width="2" height="5" fill="#3d444d"/></pattern></defs>
 <rect x="0.5" y="0.5" width="859" height="423" rx="6" fill="#161b22" stroke="#30363d"/>
-<text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">Kernel-mode DDI: 49 of 147 slots done (33.33%)</text>
+<text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">Kernel-mode DDI: 51 of 147 slots done (34.69%)</text>
 <text x="10" y="39" font-size="12" fill="#9198a1">DRIVER_INITIALIZATION_DATA, WDK 10.0.26100, counted up to WDDM 2.9. Done: WddmBuildTable sets the slot to a function that does work.</text>
 <rect x="11.5" y="47.5" width="219.76" height="327" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Scheduling and submission: 11/32, and 16 newer than WDDM 2.9 (not targeted yet)</title>
@@ -57,18 +57,18 @@
 </g>
 <text x="17.5" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Scheduling and submission 11/32</text>
 <rect x="234.26" y="47.5" width="247.61" height="174.22" rx="3" fill="#161b22" stroke="#30363d"/>
-<g><title>Display and VidPN: 10/29</title>
+<g><title>Display and VidPN: 11/29</title>
 <rect x="236.26" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryChildRelations: done - forwards to Bc250QueryChildRelations: does work</title></rect>
 <rect x="271.06" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryChildStatus: done - forwards to Bc250QueryChildStatus: does work</title></rect>
-<rect x="305.86" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiIsSupportedVidPn: done - forwards to Bc250IsSupportedVidPn: does work</title></rect>
-<rect x="340.67" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEnumVidPnCofuncModality: done - forwards to Bc250EnumVidPnCofuncModality: does work</title></rect>
-<rect x="375.47" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceVisibility: done - forwards to Bc250SetVidPnSourceVisibility: does work</title></rect>
-<rect x="410.27" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCommitVidPn: done - forwards to Bc250CommitVidPn: does work</title></rect>
-<rect x="445.07" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRecommendMonitorModes: done - forwards to Bc250RecommendMonitorModes: does work</title></rect>
-<rect x="236.26" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetScanLine: done - does work</title></rect>
-<rect x="271.06" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSystemDisplayEnable: done - does work</title></rect>
-<rect x="305.86" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSystemDisplayWrite: done - does work</title></rect>
-<rect x="340.67" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryDeviceDescriptor: missing - forwards to Bc250QueryDeviceDescriptor: every return is a failure constant</title></rect>
+<rect x="305.86" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryDeviceDescriptor: done - forwards to Bc250QueryDeviceDescriptor: forwards to ModesetQueryDescriptor: does work</title></rect>
+<rect x="340.67" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiIsSupportedVidPn: done - forwards to Bc250IsSupportedVidPn: does work</title></rect>
+<rect x="375.47" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEnumVidPnCofuncModality: done - forwards to Bc250EnumVidPnCofuncModality: does work</title></rect>
+<rect x="410.27" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceVisibility: done - forwards to Bc250SetVidPnSourceVisibility: does work</title></rect>
+<rect x="445.07" y="49.5" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCommitVidPn: done - forwards to Bc250CommitVidPn: does work</title></rect>
+<rect x="236.26" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRecommendMonitorModes: done - forwards to Bc250RecommendMonitorModes: does work</title></rect>
+<rect x="271.06" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiGetScanLine: done - does work</title></rect>
+<rect x="305.86" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSystemDisplayEnable: done - does work</title></rect>
+<rect x="340.67" y="83.54" width="34.8" height="34.04" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSystemDisplayWrite: done - does work</title></rect>
 <rect x="375.47" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPalette: missing - NULL in WddmBuildTable</title></rect>
 <rect x="410.27" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPointerPosition: missing - only logs, counts, reads or writes zeros</title></rect>
 <rect x="445.07" y="83.54" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPointerShape: missing - every return is a failure constant</title></rect>
@@ -88,12 +88,12 @@
 <rect x="445.07" y="151.63" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiExchangePreStartInfo: missing - NULL in WddmBuildTable</title></rect>
 <rect x="236.26" y="185.68" width="34.8" height="34.04" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetTargetAdjustedColorimetry2: missing - NULL in WddmBuildTable</title></rect>
 </g>
-<text x="240.26" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Display and VidPN 10/29</text>
+<text x="240.26" y="63.5" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Display and VidPN 11/29</text>
 <rect x="234.26" y="224.72" width="247.61" height="149.78" rx="3" fill="#161b22" stroke="#30363d"/>
-<g><title>Present and flip: 2/24, and 1 newer than WDDM 2.9 (not targeted yet)</title>
+<g><title>Present and flip: 3/24, and 1 newer than WDDM 2.9 (not targeted yet)</title>
 <rect x="236.26" y="226.72" width="34.8" height="36.44" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetVidPnSourceAddress: done - does work</title></rect>
-<rect x="271.06" y="226.72" width="34.8" height="36.44" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPresent: done - does work</title></rect>
-<rect x="305.86" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateActiveVidPnPresentPath: missing - forwards to Bc250UpdateActiveVidPnPresentPath: only logs, counts, reads or writes zeros</title></rect>
+<rect x="271.06" y="226.72" width="34.8" height="36.44" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateActiveVidPnPresentPath: done - forwards to Bc250UpdateActiveVidPnPresentPath: does work</title></rect>
+<rect x="305.86" y="226.72" width="34.8" height="36.44" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiPresent: done - does work</title></rect>
 <rect x="340.67" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCreateOverlay: missing - NULL in WddmBuildTable</title></rect>
 <rect x="375.47" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUpdateOverlay: missing - NULL in WddmBuildTable</title></rect>
 <rect x="410.27" y="226.72" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiFlipOverlay: missing - NULL in WddmBuildTable</title></rect>
@@ -117,7 +117,7 @@
 <rect x="305.86" y="336.06" width="34.8" height="36.44" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCancelQueuedFlips: missing - NULL in WddmBuildTable</title></rect>
 <rect x="340.67" y="336.06" width="34.8" height="36.44" fill="url(#newer)" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiCancelFlips: newer than WDDM 2.9 (not targeted yet) - NULL in WddmBuildTable</title></rect>
 </g>
-<text x="240.26" y="240.72" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Present and flip 2/24</text>
+<text x="240.26" y="240.72" font-size="12" font-weight="600" fill="#e6edf3" stroke="#0d1117" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Present and flip 3/24</text>
 <rect x="484.87" y="47.5" width="168.71" height="166.46" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Device and power: 11/19</title>
 <rect x="486.87" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiAddDevice: done - does work</title></rect>
@@ -125,7 +125,7 @@
 <rect x="552.76" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiStopDevice: done - does work</title></rect>
 <rect x="585.7" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiRemoveDevice: done - does work</title></rect>
 <rect x="618.64" y="49.5" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiSetPowerState: done - does work</title></rect>
-<rect x="486.87" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetDevice: done - forwards to FanResetDevice: forwards to FanBlind: does work</title></rect>
+<rect x="486.87" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiResetDevice: done - does work</title></rect>
 <rect x="519.81" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiUnload: done - does work</title></rect>
 <rect x="552.76" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiQueryAdapterInfo: done - does work</title></rect>
 <rect x="585.7" y="90.11" width="32.94" height="40.61" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>DxgkDdiEscape: done - does work</title></rect>

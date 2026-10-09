@@ -32,6 +32,8 @@
 #include "../front-direct-flip.h"   // the front: front-adapter.h, front-resource.h and the pure flip rule
 #include "bc250_adapter_identity.h" // driver/contract (build.ps1 /I)
 #include "bc250_scanout_caps.h"
+#include "bc250_scanout_primary.h"
+#include "bc250_desktop_route.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -145,6 +147,30 @@ static void PolicyTests()
         CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%d got %s",
               c.exe, (int)c.mode, (int)c.component, AppReasonName(d.reason));
     }
+
+    // RenderOnCpu (the per-application graphics setting): the CPU UMD after the protected list and before Deny. It
+    // never widens the GPU route: the mode, the protected list and the GPU UMD path keep their answers.
+    struct CpuCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool e102, gpu, cpu; AppRoute route; AppReason reason; };
+    const CpuCase cpu[] = {
+        {L"notepad.exe", Gd, nullptr, nullptr, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"notepad.exe", Gd, nullptr, nullptr, true, true, false, AppRoute::Gpu, AppReason::Default},
+        {L"d3d11mt.exe", Al, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"d3d11bench.exe", Gd, nullptr, deny, true, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"d3d11bench.exe", Gd, nullptr, deny, true, true, false, AppRoute::Cpu, AppReason::Denied},
+        {L"d3d11mt.exe", AppMode::Cpu, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::ModeCpu},
+        {L"d3d11mt.exe", AppMode::Invalid, allow, nullptr, true, true, true, AppRoute::Cpu, AppReason::ModeInvalid},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, true, true, true, AppRoute::Cpu, AppReason::Protected},
+        {L"", Gd, nullptr, nullptr, true, true, true, AppRoute::Cpu, AppReason::NoExe},
+        {L"notepad.exe", Gd, nullptr, nullptr, false, true, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"notepad.exe", Gd, nullptr, nullptr, true, false, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+    };
+    for (const CpuCase &c : cpu) {
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, Component::No, c.cpu});
+        CHECK(d.route == c.route && d.reason == c.reason, "render-on-cpu exe=%ls mode=%d cpu=%d got %s",
+              c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
+    }
+    CHECK(!strcmp(AppReasonName(AppReason::RenderOnCpu), "app-render-on-cpu"), "reason name %s",
+          AppReasonName(AppReason::RenderOnCpu));
     struct PathCase { const wchar_t *image, *windows; bool component; };
     const PathCase paths[] = {
         {L"C:\\Windows\\System32\\notepad.exe", L"C:\\Windows", true},
@@ -197,6 +223,7 @@ static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t HostedKey[] = L"SOFTWARE\\amdgpu-wddm\\HostedUmd";
 static const wchar_t KmdKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
 static const wchar_t AppKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
+static const wchar_t GraphicsKey[] = L"SOFTWARE\\amdgpu-wddm\\Graphics"; // app-settings-core.h
 // The UMD path values of the router under test and of the other bitness (router.cpp, BD-064): a 32-bit router reads
 // CpuUmdPathWow, HostedUmdPathWow and GpuUmdPathWow and must ignore the 64-bit names, and the other way round.
 #ifdef _WIN64
@@ -389,6 +416,58 @@ static std::string Ptr(UINT_PTR value)
     char text[32];
     sprintf_s(text, "%p", (void *)value);
     return text;
+}
+
+// The desktop-route record (driver/contract/bc250_desktop_route.h). The router writes it only in dwm.exe, so the
+// scenarios that check it run as <layout>\dwm\dwm.exe. The owner of the section is the default owner of this
+// process's token (TokenOwner: the user, or the Administrators group for an elevated token); on the lab it is
+// the compositor's account, Window Manager\DWM-<session>. ReadRecord reads with this process's owner, which is
+// what the shells' reader does with the compositor's.
+static std::vector<BYTE> TokenOwnerSid()
+{
+    std::vector<BYTE> sid;
+    HANDLE token = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return sid;
+    DWORD bytes = 0;
+    GetTokenInformation(token, TokenOwner, nullptr, 0, &bytes);
+    std::vector<BYTE> info(bytes ? bytes : 1);
+    if (bytes && GetTokenInformation(token, TokenOwner, info.data(), bytes, &bytes)) {
+        const PSID owner = ((TOKEN_OWNER *)info.data())->Owner;
+        sid.assign((const BYTE *)owner, (const BYTE *)owner + GetLengthSid(owner));
+    }
+    CloseHandle(token);
+    return sid;
+}
+static unsigned ReadRecord(bc250_desktop_route *record)
+{
+    std::vector<BYTE> owner = TokenOwnerSid();
+    return bc250_desktop_route_read(BC250_DESKTOP_ROUTE_NAME, owner.empty() ? nullptr : (PSID)owner.data(), record);
+}
+// What the shells' shared rule answers for a chain that the trailer admits (1920x1200 B8G8R8A8, the contract's
+// pitch, DwmForceCpu 0), with the record as it is: the end-to-end question of the desktop-route record.
+static unsigned RuleOverRecord()
+{
+    bc250_desktop_route record;
+    const unsigned status = ReadRecord(&record);
+    const bc250_scanout_caps caps = {BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION, sizeof(caps),
+                                     BC250_SCANOUT_CAPS_DIRECT_FLIP, 1920, 1200};
+    return bc250_scanout_primary_rule(&caps, 0, bc250_desktop_route_gpu(status, &record), 87, 1920, 1200,
+                                      bc250_scanout_primary_pitch(1920, 4), 0);
+}
+// The record this process wrote: status OK, the given route, this pid, the hosted HRESULT and the decision count.
+static void CheckRecord(unsigned route, HRESULT hostedHr, unsigned decisions)
+{
+    bc250_desktop_route r;
+    const unsigned status = ReadRecord(&r);
+    CHECK(status == BC250_DESKTOP_ROUTE_READ_OK && r.route == route && r.pid == GetCurrentProcessId() &&
+          r.hosted_hr == (unsigned)hostedHr && r.decisions == decisions,
+          "record: status %u (%s) route %u pid %u hosted_hr %08x decisions %u, expected route %u hr %08lx decisions %u",
+          status, bc250_desktop_route_text(status, r.route), r.route, r.pid, r.hosted_hr, r.decisions, route,
+          (unsigned long)hostedHr, decisions);
+    // The shells' own reader asks for the compositor's account, which this process is not: the record is refused.
+    bc250_desktop_route s;
+    CHECK(bc250_desktop_route_read_session(&s) == BC250_DESKTOP_ROUTE_READ_OWNER && !s.route && !s.magic,
+          "the session reader took a record from an account other than the compositor's");
 }
 
 // Common router key: fake CPU UMD, hosted UMD from the router's own directory (no HostedUmdPath).
@@ -870,6 +949,44 @@ static void FrontRuleTests()
         a = client;
         a.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
         run(caps, &a, &compositor, FlipRefusal::format, "a storage row that is not a scan-out row");
+        // M15.14 (0.7.216.20): RGBA8 and RGB10A2 are scan-out rows, but a row that is not the firmware's
+        // own format needs the trailer's PLANE_FORMATS flag, because only that kernel driver programs the
+        // plane's pixel format. With the flag, the client's row may differ from the compositor's BGRA8
+        // row (the swizzle and the address latch in one VUPDATE); FP16 stays refused.
+        bc250_scanout_caps planes = caps;
+        planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        const DXGI_FORMAT newRows[] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM};
+        for (DXGI_FORMAT format : newRows) {
+            a = client;
+            a.format = format;
+            run(caps, &a, &compositor, FlipRefusal::format, "a new scan-out row without PLANE_FORMATS");
+            run(planes, &a, &compositor, FlipRefusal::none, "a new scan-out row with PLANE_FORMATS");
+            Resource b = compositor;
+            b.format = format;
+            run(caps, &a, &b, FlipRefusal::format, "two new rows without PLANE_FORMATS");
+            run(planes, &a, &b, FlipRefusal::none, "two new rows with PLANE_FORMATS");
+            run(planes, &client, &b, FlipRefusal::none, "a BGRA8 client over a new compositor row");
+        }
+        a = client;
+        run(planes, &a, &compositor, FlipRefusal::none, "BGRA8 with PLANE_FORMATS");
+        a.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        a.pitch = HostedSurfacePitch(1920, 8);
+        run(planes, &a, &compositor, FlipRefusal::format, "FP16 with PLANE_FORMATS");
+        a = client;
+        a.format = DXGI_FORMAT_A8_UNORM;
+        run(planes, &a, &compositor, FlipRefusal::format, "A8 with PLANE_FORMATS");
+        a = client;
+        a.format = 0;
+        run(planes, &a, &compositor, FlipRefusal::format, "a format the record and the blob disagree on");
+        {
+            Resource b = compositor;
+            b.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            run(planes, &client, &b, FlipRefusal::format, "an FP16 compositor buffer (an HDR desktop)");
+        }
+        a = client;
+        a.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        a.pitch = 1920 * 4 + 256;
+        run(planes, &a, &compositor, FlipRefusal::pitch, "an RGBA8 client of another pitch");
         a = client;
         a.width = 1280;
         run(caps, &a, &compositor, FlipRefusal::geometry, "a client of another width");
@@ -959,6 +1076,65 @@ static void FrontRuleTests()
     CHECK(zero(read), "a null buffer decoded");
     // And the read through the adapter: no adapter, or one without a callback, is E_POINTER and zero.
     CHECK(ReadScanoutCaps(nullptr, &read) == E_POINTER && zero(read), "a read with no adapter");
+
+    // M15.14 increment 3: the flip log (front-flip-log.h). A key that repeats writes no line, a changed key
+    // writes one, the budget bounds the lines and counts the changes past it, every answer is counted under
+    // its rule, and the periodic summary is due once per interval of the caller's clock.
+    FlipLog log;
+    memset(&log, 0, sizeof(log));
+    const unsigned long long k1 = FlipKeyAdd(FlipKeyStart(), 1), k2 = FlipKeyAdd(FlipKeyStart(), 2);
+    CHECK(k1 && k2 && k1 != k2, "two words gave one key");
+    CHECK(FlipLogAnswer(&log, 0, false, k1) == FlipLine::change, "the first answer wrote no line");
+    for (int i = 0; i < 99; ++i)
+        CHECK(FlipLogAnswer(&log, 0, i % 2 == 0, k1) == FlipLine::none, "a repeated key wrote a line");
+    CHECK(FlipLogAnswer(&log, (unsigned)FlipRefusal::source_geometry, false, k2) == FlipLine::change,
+          "a changed key wrote no line");
+    CHECK(FlipLogAnswer(&log, 0, false, k1) == FlipLine::change, "a key that came back wrote no line");
+    CHECK(FlipLogAnswer(&log, 0, false, 0) == FlipLine::change && FlipLogAnswer(&log, 0, false, 0) == FlipLine::none,
+          "the zero key is not a key of its own");
+    FlipTotals totals = FlipLogTotals(&log);
+    CHECK(totals.calls == 104 && totals.supported == 103 && totals.refused == 1 && totals.lines == 4 &&
+              !totals.suppressed && log.unchanged == 100 && log.immediate == 50,
+          "totals calls=%ld true=%ld false=%ld lines=%ld suppressed=%ld unchanged=%ld immediate=%ld", totals.calls,
+          totals.supported, totals.refused, totals.lines, totals.suppressed, (long)log.unchanged, (long)log.immediate);
+    char rules[256];
+    FlipLogRules(&log, rules, sizeof(rules));
+    CHECK(!strcmp(rules, "supported:103,source-geometry:1"), "rules text: %s", rules);
+    FlipLog empty;
+    memset(&empty, 0, sizeof(empty));
+    FlipLogRules(&empty, rules, sizeof(rules));
+    CHECK(!strcmp(rules, "none"), "rules text of no call: %s", rules);
+    char tiny[8];
+    FlipLogRules(&log, tiny, sizeof(tiny));
+    CHECK(strlen(tiny) < sizeof(tiny), "a short buffer was overrun");
+    // An answer that alternates forever: the lines stop at the budget, the changes do not.
+    FlipLog flood;
+    memset(&flood, 0, sizeof(flood));
+    unsigned written = 0, held = 0;
+    for (LONG i = 0; i < kFlipChangeLines + 44; ++i) {
+        const FlipLine line = FlipLogAnswer(&flood, (unsigned)(i % 2 ? FlipRefusal::pitch : FlipRefusal::none), false,
+                                            i % 2 ? k1 : k2);
+        if (line == FlipLine::change) ++written;
+        if (line == FlipLine::suppressed) ++held;
+    }
+    totals = FlipLogTotals(&flood);
+    CHECK(written == (unsigned)kFlipChangeLines && held == 44 && totals.lines == kFlipChangeLines &&
+              totals.suppressed == 44 && flood.rules[(unsigned)FlipRefusal::pitch] == (kFlipChangeLines + 44) / 2,
+          "budget: written=%u held=%u lines=%ld suppressed=%ld", written, held, totals.lines, totals.suppressed);
+    // The rule index past the enum is counted nowhere and faults nowhere.
+    FlipLogAnswer(&flood, kFlipRules + 3, false, k1);
+    CHECK(FlipLogTotals(&flood).calls == totals.calls, "an unknown rule index was counted");
+    // The periodic summary: the first call starts the period, then one summary per interval, and only one
+    // caller wins a period.
+    FlipLog timed;
+    memset(&timed, 0, sizeof(timed));
+    CHECK(!FlipLogSummaryDue(&timed, 1000, 30000), "a summary was due at the first call");
+    CHECK(!FlipLogSummaryDue(&timed, 30999, 30000), "a summary was due before the interval");
+    CHECK(FlipLogSummaryDue(&timed, 31000, 30000), "no summary after the interval");
+    CHECK(!FlipLogSummaryDue(&timed, 31000, 30000), "two summaries in one period");
+    CHECK(!FlipLogSummaryDue(&timed, 60999, 30000) && FlipLogSummaryDue(&timed, 61000, 30000) &&
+              timed.summaries == 2,
+          "the second period: summaries=%ld", (long)timed.summaries);
 }
 
 // ---------------------------------------------------------------- the records and the resource map (pure)
@@ -1247,11 +1423,107 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     device.pfnOpenResource(hDevice, &open, other, rt);
     CHECK(ask(other, compositor, 0) == FALSE, "TRUE for two different pitches");
     CHECK(Has(lastLine(), "answer=0 rule=pitch"), "pitch: %s", lastLine().c_str());
+    // M15.14 (0.7.216.20): an RGBA8 client, the W3 shape of lab session 458. The blob and the v3 record
+    // both say RGBA8. Without PLANE_FORMATS the rule says format; with it the pair flips.
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    lb7a.Format = D3DDDIFMT_A8B8G8R8;
+    e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for RGBA8 without PLANE_FORMATS");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=28"), "RGBA8 no flag: %s",
+          lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
+    CHECK(ask(other, compositor, 0) == TRUE, "RGBA8 with PLANE_FORMATS refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "answer=1 rule=supported") && Has(lastLine(), "caps_flags=00000003") &&
+          Has(lastLine(), "pitch=7680 fmt=28"), "RGBA8 with flag: %s", lastLine().c_str());
+    CHECK(ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "RGBA8 IMMEDIATE refused");
+    // The sRGB view of the same storage in the record is the same row.
+    e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == TRUE, "an RGBA8 sRGB record refused: %s", lastLine().c_str());
+    // A record that names another storage row than the kernel driver's blob is refused, not renamed.
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for a BGRA8 record over an RGBA8 blob");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=0 "), "mismatch: %s",
+          lastLine().c_str());
+    // RGB10A2, the 10-bit swap chain.
+    lb7a.Format = D3DDDIFMT_A2B10G10R10;
+    e26r.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == TRUE, "RGB10A2 with PLANE_FORMATS refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "fmt=24"), "RGB10A2: %s", lastLine().c_str());
+    // FP16 at its own 8-byte pitch: not a scan-out row, with or without the flag.
+    lb7a.Format = D3DDDIFMT_A16B16G16R16F;
+    lb7a.Pitch = width * 8;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    e26r.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE, "TRUE for an FP16 client");
+    CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=10"), "FP16: %s", lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    lb7a.Format = D3DDDIFMT_A8R8G8B8;
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    e26r.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    // The front-log scenario asks about `other` after this suite and expects the BGRA8 client of negative
+    // control 6, whose pitch differs from the compositor's: open it in that shape again.
+    lb7a.Pitch = width * 4 + 256;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
+    device.pfnOpenResource(hDevice, &open, other, rt);
+    CHECK(ask(other, compositor, 0) == FALSE && Has(lastLine(), "answer=0 rule=pitch"),
+          "the pitch-mismatch client again: %s", lastLine().c_str());
+    lb7a.Pitch = width * 4;
+    lb7a.Size = (unsigned long long)lb7a.Pitch * height;
     // Negative control 7: a destroyed client is forgotten, so a reused handle is never answered from the
     // record of a buffer that is gone.
     device.pfnDestroyResource(hDevice, client);
     CHECK(ask(client, compositor, 0) == FALSE, "TRUE for a destroyed client");
     CHECK(Has(lastLine(), "answer=0 rule=record"), "destroyed client: %s", lastLine().c_str());
+    ScanoutTrailer = false;
+}
+
+// M15.14 increment 3, the front-log scenario: the change lines and the summary of CheckDirectFlipSupport over
+// the double. FrontAnswerChecks has run first, so the device holds the compositor's buffer (0x41000000) and
+// an opened client (0x41000200) whose pitch differs from it, and the log already holds one line per change of
+// that suite. The compositor asks the same question many times per second, and only a change writes a line.
+static void FrontLogChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDEVICE hDevice)
+{
+    const std::wstring logPath = Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                 std::to_wstring(GetCurrentProcessId()) + L".log";
+    auto lines = [&]() {
+        const std::string log = ReadAll(logPath);
+        size_t n = 0;
+        for (size_t at = log.find("check_direct_flip call="); at != std::string::npos;
+             at = log.find("check_direct_flip call=", at + 1))
+            ++n;
+        return n;
+    };
+    D3D10DDI_HRESOURCE compositor, client;
+    compositor.pDrvPrivate = (void *)(UINT_PTR)0x41000000;
+    client.pDrvPrivate = (void *)(UINT_PTR)0x41000200;
+    auto ask = [&](unsigned times) {
+        for (unsigned i = 0; i < times; ++i) {
+            BOOL supported = 2;
+            device.pfnCheckDirectFlipSupport(hDevice, client, compositor, 0, &supported);
+            CHECK(supported == FALSE, "the pitch-mismatch pair answered %d", supported);
+        }
+    };
+    ScanoutTrailer = true;
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    ScanoutWidth = 1920;
+    ScanoutHeight = 1200;
+    const size_t before = lines();
+    ask(200);
+    CHECK(lines() == before + 1, "200 equal answers wrote %Iu lines, expected 1", lines() - before);
+    // The source mode moves, and back: one line each, however many questions follow.
+    ScanoutHeight = 1080;
+    ask(50);
+    CHECK(lines() == before + 2, "a mode change wrote %Iu lines in all, expected 2", lines() - before);
+    ScanoutHeight = 1200;
+    ask(50);
+    CHECK(lines() == before + 3, "the mode's return wrote %Iu lines in all, expected 3", lines() - before);
     ScanoutTrailer = false;
 }
 
@@ -1287,6 +1559,12 @@ static void Child(const std::string &s)
         CHECK(log.find("entry=OpenAdapter10_2 route=hosted reason=hosted fallback=0 hosted_hr=00000000 hr=00000000") != std::string::npos &&
               log.find("hosted_source=router-directory") != std::string::npos &&
               log.find("entry=OpenAdapter10 route=hosted") != std::string::npos, "route log: %s", log.c_str());
+        // A HostedClients entry is a test client, not the compositor: no desktop-route record of this process.
+        bc250_desktop_route record;
+        const unsigned status = ReadRecord(&record);
+        CHECK(Has(log, "record=none") && !Has(log, "record=published") &&
+              (status != BC250_DESKTOP_ROUTE_READ_OK || record.pid != GetCurrentProcessId()),
+              "a HostedClients entry wrote the record: status %u pid %u; route log: %s", status, record.pid, log.c_str());
     } else if (s == "route-kill-switch") {
         RouterBase(true); Switches(true, true); SetDw(RouterKey, L"DwmForceCpu", 1); OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
@@ -1412,14 +1690,45 @@ static void Child(const std::string &s)
               "hr=%08lx (expected module or path not found for C:\\BC250\\m15\\desktop-umd173-007\\bc250d3d.dll)", o.hr);
     } else if (s == "route-dwm-name") {
         // Run from <layout>\dwm\dwm.exe: the real process-name rule, no HostedClients.
-        RouterBase(false); Switches(true, true); OverrideHklm();
+        RouterBase(false); Switches(true, true);
+        SetSz(RouterKey, L"RouteLogDirectory", Layout + L"\\routelogs");
+        OverrideHklm();
         CHECK(!_wcsicmp(ExeBase().c_str(), L"dwm.exe"), "not running as dwm.exe");
+        bc250_desktop_route before;
+        CHECK(ReadRecord(&before) == BC250_DESKTOP_ROUTE_READ_ABSENT, "a desktop-route record exists before the router ran");
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == S_OK && o.tag == HostedTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        // M15.14: the compositor's GPU route is in the record, and the shells' rule admits over it.
+        CheckRecord(BC250_DESKTOP_ROUTE_GPU, S_OK, 1);
+        CHECK(RuleOverRecord() == BC250_SCANOUT_PRIMARY_ADMITTED, "rule over the GPU record: %s",
+              bc250_scanout_primary_text(RuleOverRecord()));
+        std::string log = ReadAll(RouteLog(Layout + L"\\routelogs"));
+        CHECK(Has(log, "route=hosted reason=hosted fallback=0") && Has(log, "record=published"), "route log: %s", log.c_str());
     } else if (s == "route-dwm-name-kill") {
         RouterBase(false); Switches(true, true); SetDw(RouterKey, L"DwmForceCpu", 1); OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        // The kill switch is in the record too, so a shell that reads only the record stands down as well.
+        CheckRecord(BC250_DESKTOP_ROUTE_KILL_SWITCH, S_FALSE, 1);
+        CHECK(RuleOverRecord() == BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE, "rule over the kill-switch record: %s",
+              bc250_scanout_primary_text(RuleOverRecord()));
+    } else if (s == "route-dwm-name-fallback") {
+        // The case no registry value shows (M15.14 risk 2): the hosted open fails in dwm.exe, the router falls back
+        // to the CPU UMD (fallback=1), and the record says so. The shared rule stands a scan-out primary down
+        // although DwmForceCpu is 0 and the trailer admits the chain.
+        RouterBase(false); Switches(true, true);
+        SetSz(RouterKey, HostedUmdPathName, Layout + L"\\fail\\fake-fail.dll");
+        SetSz(RouterKey, L"RouteLogDirectory", Layout + L"\\routelogs");
+        OverrideHklm();
+        CHECK(!_wcsicmp(ExeBase().c_str(), L"dwm.exe"), "not running as dwm.exe");
+        Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        std::string log = ReadAll(RouteLog(Layout + L"\\routelogs"));
+        CHECK(Has(log, "route=cpu reason=hosted fallback=1 hosted_hr=80004005") && Has(log, "force_cpu=0") &&
+              Has(log, "record=published"), "route log: %s", log.c_str());
+        CheckRecord(BC250_DESKTOP_ROUTE_FALLBACK, E_FAIL, 1);
+        CHECK(RuleOverRecord() == BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE, "rule over the fallback record: %s",
+              bc250_scanout_primary_text(RuleOverRecord()));
     }
 
     // The real hosted UMD in <layout>\umd with a placeholder amdgpu_wddm_radv.dll next to it (OpenAdapter only
@@ -1513,7 +1822,7 @@ static void Child(const std::string &s)
         if (s == "front-cpu-route") SetDw(RouterKey, L"DwmForceCpu", 1);
         // front-answer is front-on with the scan-out caps trailer of a start that admits a client flip; the
         // adapter open sees it too, and its install line says so.
-        if (s == "front-answer") {
+        if (s == "front-answer" || s == "front-log") {
             ScanoutTrailer = true;
             ScanoutWidth = 1920;
             ScanoutHeight = 1200;
@@ -1857,9 +2166,26 @@ static void Child(const std::string &s)
         CHECK((void *)device.pfnCheckDirectFlipSupport != nullptr, "pfnCheckDirectFlipSupport is null");
 
         // M15.14 increment 2: the TRUE answer and its controls, over surfaces the front recorded itself.
-        if (s == "front-answer") {
+        if (s == "front-answer" || s == "front-log") {
             FrontAnswerChecks(device, create.hDrvDevice, record, recordReset);
+            if (s == "front-log") FrontLogChecks(device, create.hDrvDevice);
             device.pfnDestroyDevice(create.hDrvDevice);
+            if (s == "front-log") {
+                // The destroy summary counts every answer of both suites under its rule: the 300 questions above
+                // are pitch (250) and source-geometry (50), and the lines the change log held back are 0. The
+                // TRUE answers are front-answer's three and the four of its PLANE_FORMATS block (RGBA8, RGBA8
+                // IMMEDIATE, the RGBA8 sRGB record and RGB10A2).
+                const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                                std::to_wstring(GetCurrentProcessId()) + L".log");
+                const size_t at = frontLog.find("check_direct_flip summary");
+                const std::string line = at == std::string::npos ? std::string()
+                                                                 : frontLog.substr(at, frontLog.find('\n', at) - at);
+                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=7 ") &&
+                          Has(line, "source-geometry:51") && Has(line, "pitch:252"),
+                      "the destroy summary: %s", line.c_str());
+                CHECK(frontLog.find("check_direct_flip summary", at + 1) == std::string::npos,
+                      "more than one summary line: %s", frontLog.c_str());
+            }
             CHECK(o.funcs.pfnCloseAdapter && o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
             return;
         }
@@ -2045,7 +2371,40 @@ static void Child(const std::string &s)
             lines = {"route=gpu reason=app-default fallback=0 gpu_hr=00000000", "app_mode=gpu-default mode_source=registry"};
         } else if (s == "app-gpu-default-denied") {
             AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {L"other.exe", Upper(self)});
-            lines = {"route=cpu reason=app-denied fallback=0"};
+            lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=unset"};
+        } else if (s == "app-render-on-cpu-app") {
+            // The per-application graphics setting, in the application key named by the image (any case).
+            AppBase(L"gpu-default");
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + Upper(self)).c_str(), L"RenderOnCpu", 1);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0 gpu_hr=00000001", "render_on_cpu=1/application"};
+        } else if (s == "app-render-on-cpu-global") {
+            AppBase(L"allowlist"); SetMulti(AppKey, L"Allow", {self});
+            SetDw(GraphicsKey, L"RenderOnCpu", 1);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0", "render_on_cpu=1/global"};
+        } else if (s == "app-render-on-cpu-app-off") {
+            // An application 0 wins over a global 1.
+            AppBase(L"gpu-default");
+            SetDw(GraphicsKey, L"RenderOnCpu", 1);
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0", "render_on_cpu=0/application"};
+        } else if (s == "app-render-on-cpu-env") {
+            // AMDGPU_WDDM_RENDER_ON_CPU=1 (scenario environment) wins over an application 0.
+            AppBase(L"gpu-default");
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            lines = {"route=cpu reason=app-render-on-cpu fallback=0", "render_on_cpu=1/environment"};
+        } else if (s == "app-render-on-cpu-invalid") {
+            // Out of range and of another type: ignored, the application decision stands.
+            AppBase(L"gpu-default");
+            SetDw(GraphicsKey, L"RenderOnCpu", 2);
+            SetSz((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", L"1");
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0", "render_on_cpu=unset"};
+        } else if (s == "app-render-on-cpu-deny") {
+            // The old Deny list still keeps an application on the CPU UMD with RenderOnCpu 0.
+            AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {self});
+            SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
+            lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=0/application"};
         } else if (s == "app-deny-wrong-type") {
             // A Deny list that cannot be read must not widen the GPU route.
             AppBase(L"gpu-default"); SetSz(AppKey, L"Deny", L"other.exe");
@@ -2141,6 +2500,15 @@ static void Child(const std::string &s)
               Has(log, "route=cpu reason=kmd-switches-off fallback=0") && !Has(log, "app_mode=") && !Has(log, "gpu_hr="),
               "route log: %s", log.c_str());
         CHECK(!Exists(RouteLog(Layout + L"\\applogs")), "desktop line in AppRouter's log directory");
+        // The record holds the last of the three desktop decisions; a test client writes none.
+        if (dwm) {
+            CheckRecord(BC250_DESKTOP_ROUTE_SWITCHES_OFF, S_FALSE, 3);
+        } else {
+            bc250_desktop_route record;
+            const unsigned status = ReadRecord(&record);
+            CHECK(Has(log, "record=none") && (status != BC250_DESKTOP_ROUTE_READ_OK || record.pid != GetCurrentProcessId()),
+                  "a HostedClients entry wrote the record: status %u", status);
+        }
     } else if (s == "protected-logonui") {
         // Run from <layout>\logonui\logonui.exe: listed in Allow, gpu-default, still the CPU UMD.
         RouterBase(false); Switches(true, true);
@@ -2213,6 +2581,7 @@ static int RunAll(const std::wstring &out)
         {"route-wow-default-cpu-beside-router", nullptr, {}},
 #endif
         {"route-dwm-name", "dwm\\dwm.exe", {}}, {"route-dwm-name-kill", "dwm\\dwm.exe", {}},
+        {"route-dwm-name-fallback", "dwm\\dwm.exe", {}},
         {"umd-identity", nullptr, {}}, {"umd-openadapter10", nullptr, {}},
         {"umd-no-trailer", nullptr, {}}, {"umd-callback-fails", nullptr, {}}, {"umd-bad-version", nullptr, {}},
         {"umd-zero-luid", nullptr, {}}, {"umd-bad-reserved", nullptr, {}},
@@ -2229,6 +2598,7 @@ static int RunAll(const std::wstring &out)
         {"front-absent", nullptr, {}}, {"front-zero", nullptr, {}}, {"front-wrong-type", nullptr, {}},
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
         {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}}, {"front-answer", nullptr, {}},
+        {"front-log", nullptr, {}},
         // Application policy (AppRouter).
         {"app-absent-key", nullptr, {}}, {"app-mode-absent", nullptr, {}}, {"app-mode-cpu", nullptr, {}},
         {"app-mode-invalid", nullptr, {}}, {"app-mode-wrong-type", nullptr, {}},
@@ -2238,6 +2608,11 @@ static int RunAll(const std::wstring &out)
         {"app-gpu-umd-unset", nullptr, {}}, {"app-gpu-umd-relative", nullptr, {}}, {"app-gpu-umd-wrong-type", nullptr, {}},
         {"app-gpu-fails", nullptr, {}}, {"app-gpu-missing", nullptr, {}}, {"app-gpu-no-export", nullptr, {}},
         {"app-d3d10-entry", nullptr, {}}, {"app-log-dir-fallback", nullptr, {}}, {"app-mode-toggle", nullptr, {}},
+        // RenderOnCpu, the per-application graphics setting (app-settings-core.h).
+        {"app-render-on-cpu-app", nullptr, {}}, {"app-render-on-cpu-global", nullptr, {}},
+        {"app-render-on-cpu-app-off", nullptr, {}},
+        {"app-render-on-cpu-env", nullptr, {{L"AMDGPU_WDDM_RENDER_ON_CPU", L"1"}}},
+        {"app-render-on-cpu-invalid", nullptr, {}}, {"app-render-on-cpu-deny", nullptr, {}},
         {"protected-logonui", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},
@@ -2251,10 +2626,10 @@ static int RunAll(const std::wstring &out)
         std::wstring name(sc.name, sc.name + strlen(sc.name));
         std::wstring exe = sc.exe ? Layout + L"\\" + std::wstring(sc.exe, sc.exe + strlen(sc.exe)) : self;
         std::wstring cmd = L"\"" + exe + L"\" child " + name + L" \"" + Layout + L"\"";
-        // Environment: the parent's without any BC250_ variable, plus the scenario's.
+        // Environment: the parent's without any BC250_ or AMDGPU_WDDM_ variable, plus the scenario's.
         std::vector<std::wstring> vars;
         for (wchar_t *e = GetEnvironmentStringsW(), *p = e; *p; p += wcslen(p) + 1)
-            if (_wcsnicmp(p, L"BC250_", 6)) vars.push_back(p);
+            if (_wcsnicmp(p, L"BC250_", 6) && _wcsnicmp(p, L"AMDGPU_WDDM_", 12)) vars.push_back(p);
         for (auto &kv : sc.env) {
             std::wstring v = kv.second;
             size_t at = v.find(L"<layout>");

@@ -32,6 +32,7 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/amdgpu/<file> > driver/am
 | `reference/sdma_v5_0.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
 | `reference/navi10_ih.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2018 Advanced Micro Devices, Inc. |
 | `reference/amdgpu_ih.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2014 Advanced Micro Devices, Inc. |
+| `reference/dce_scl_filters.c` | `drivers/gpu/drm/amd/display/dc/dce/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2012-16 Advanced Micro Devices, Inc. |
 
 Every one of the files carries the full MIT permission notice; only `cyan_skillfish_reg_init.c` also
 carries the SPDX tag. Checked file by file, not assumed from the directory.
@@ -425,3 +426,12 @@ or hardware ownership is established by this source-only preparation.
 - SMU mailbox: AMD MIT `reference/smu_cmn.c`, Linux v6.18 @ `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, unchanged. `smu_mailbox.inc` mechanically extracts complete send/response/argument/status bodies; `extract_smu.py --check` verifies them. Port polling uses monotonic time and an iteration bound, with explicit owner and callback-IO errors; debug/no-hardware bypasses are disabled. Generated MP1 byte offsets use regcalc and the existing AMD headers.
 
 - gfx10_prt_flags.inc: Linux amdgpu (MIT), v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449, unchanged PRT flag body from gmc_v10_0_get_vm_pte.
+
+## DCN scaler filter (resolution modes, stage A)
+
+`reference/dce_scl_filters.c` is the unchanged AMD MIT file from Linux v6.18, commit
+`7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, `drivers/gpu/drm/amd/display/dc/dce/`. It is reference only:
+it includes `transform.h` and the DC fixed-point type, so it does not compile here. The one table the
+KMD uses, `filter_4tap_64p_upscale`, is cut out of it by `tools/import/extract_table.py` into
+`driver/kmd/scl_filter_4tap_64p_upscale.inc`, and `driver/kmd/test/run_modeset.ps1` runs the extraction
+again with `--check`. `driver/kmd/dcn_scale.c` names the upstream functions it follows.
