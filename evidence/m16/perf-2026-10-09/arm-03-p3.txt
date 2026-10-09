@@ -1,0 +1,25 @@
+arm p3 clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60000 ready=1
+arm p3 start utc 2026-10-09T17:34:05Z
+arm p3 command hipbench.exe --batch 1 --batch-max 32 --barrier light --expect-compute --wait-total 20000 --budget-ms 150000 --json
+| hipbench: batch 1, barrier light, budget 150000 ms, results checked
+| hipbench: 1 device(s), 'AMD BC-250' arch 'gfx1013', 40 multiprocessors at 2000000 kHz
+| hipbench: the first launch and its synchronisation took 0.593 ms (the code object load is inside it)
+| hipbench: launch   2000 empty kernels: 7.601 us each on the host, wall 15.3 ms, 0.033 submissions per launch
+| {"tool":"hipbench","measurement":"launch","count":2000,"us_each":7.601,"wall_ms":15.301,"rate":0.033,"rate_unit":"submissions/launch","dispatches":2000,"submissions":65,"batches":65,"dispatches_batched":2000,"waits":27,"waits_fast":0}
+| hipbench: chain    1000 dependent kernels: 3.832 us each on the host, 0.0040 ms each end to end, wall 4.0 ms, 32 submissions, exact yes
+| {"tool":"hipbench","measurement":"chain","count":1000,"us_each":3.832,"wall_ms":3.992,"rate":0.032,"rate_unit":"submissions/launch","dispatches":1000,"submissions":32,"batches":32,"dispatches_batched":1000,"waits":31,"waits_fast":0}
+| hipbench: copy         4096 bytes x 256: to device 14749.3 MiB/s (0.265 us each), from device 135.1 MiB/s (28.906 us each)
+| {"tool":"hipbench","measurement":"copy","bytes":4096,"iterations":256,"h2d_mib_s":14749.263,"d2h_mib_s":135.135,"h2d_us":0.265,"d2h_us":28.906,"waits":512,"waits_fast":512}
+| hipbench: copy      1048576 bytes x 8: to device 35057.0 MiB/s (28.525 us each), from device 205.0 MiB/s (4879.112 us each)
+| {"tool":"hipbench","measurement":"copy","bytes":1048576,"iterations":8,"h2d_mib_s":35056.968,"d2h_mib_s":204.955,"h2d_us":28.525,"d2h_us":4879.112,"waits":16,"waits_fast":16}
+| hipbench: copy     67108864 bytes x 8: to device 14790.6 MiB/s (4327.075 us each), from device 177.7 MiB/s (360088.500 us each)
+| {"tool":"hipbench","measurement":"copy","bytes":67108864,"iterations":8,"h2d_mib_s":14790.592,"d2h_mib_s":177.734,"h2d_us":4327.075,"d2h_us":360088.500,"waits":16,"waits_fast":16}
+| hipbench: sync     2000 synchronisations of a retired stream: 0.057 us each, 2000 of 2000 waits answered by the fence mapping
+| {"tool":"hipbench","measurement":"sync","count":2000,"us_each":0.057,"wall_ms":0.113,"rate":2000.000,"rate_unit":"fast waits","dispatches":0,"submissions":0,"batches":0,"dispatches_batched":0,"waits":2000,"waits_fast":2000}
+| hipbench: event    500 record and wait rounds on retired work: 0.093 us each
+| {"tool":"hipbench","measurement":"event","count":500,"us_each":0.093,"wall_ms":0.047,"rate":0.000,"rate_unit":"none","dispatches":0,"submissions":0,"batches":0,"dispatches_batched":0,"waits":0,"waits_fast":0}
+| hipbench: 3387 ms in all, api failures 0
+| hipbench: ok
+arm p3 exit 0 after 3.4 s, log C:\BC250\tmp\m16-perf\p3-20261009T173405Z.txt
+arm p3 clock after : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60000 ready=1
+arm p3 end
