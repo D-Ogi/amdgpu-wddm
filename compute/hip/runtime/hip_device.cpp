@@ -129,6 +129,13 @@ hipError_t device(bc250hsa_device** out) {
     State& s = state();
     if (!s.open_tried) {
         s.open_tried = true;
+        // The log sink goes in before the first call into layer 1. log_start() installs it, and
+        // until it runs every bc250hsa_log line has nowhere to go. bc250hsa_open below is the
+        // first call that can write one, and a refusal inside pm4_dispatch.c states its reason
+        // through that sink only, so a sink installed later by the first refuse() of this
+        // runtime would lose the very line the lab needs (defect BD-110). With
+        // BC250_HIP_LOG unset this reads one local static and returns.
+        log_start();
         s.wait_slice_ms = read_ms("BC250_HIP_WAIT_SLICE_MS");
         s.wait_total_ms = read_ms("BC250_HIP_WAIT_TOTAL_MS");
         // The interface version of the library we were built against. A different major value

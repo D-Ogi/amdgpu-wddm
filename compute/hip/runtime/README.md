@@ -117,10 +117,14 @@ one in the same indirect buffer writes only the compute state that changed, 23 d
 | `BC250_HIP_LOG_LEVEL` | `0` error, `1` warning, `2` information, `3` trace | `2` |
 
 With it on, every refusal of this runtime names the call, the kernel and the reason, and every
-`bc250hsa_log` line of layer 1 arrives on the same stream. A file path is appended to, so several
-runs of one trial keep their order, and a path that cannot be opened gets one line on the error
-stream instead of silence. Each line carries the process and the thread identifier. The log holds
-call names, kernel names and status names, and no application data.
+`bc250hsa_log` line of layer 1 arrives on the same stream. The sink goes in where the device
+opens, before the first call into layer 1, and not at the first refusal of this runtime: a sink
+installed at the first refusal would miss the `bc250hsa_log` line that the same refusal had
+already written, which is the one line that states which of the rules of `pm4_dispatch.c` spoke.
+A file path is appended to, so several runs of one trial keep their order, and a path that cannot
+be opened gets one line on the error stream instead of silence. Each line carries the process and
+the thread identifier. The log holds call names, kernel names and status names, and no
+application data.
 
 The reason it exists is a lab session. On 2026-10-09 all three llama.cpp arms of M16 step 3B died
 at `CUDA_CHECK(cudaGetLastError())` right after a `<<<>>>` call, with our own text for
