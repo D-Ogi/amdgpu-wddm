@@ -209,7 +209,18 @@ typedef struct bc250hsa_pm4_writer {
  *
  * A NULL cache, and BC250HSA_DISPATCH_FULL_STATE, both mean "write everything": the
  * golden single-dispatch stream of test_pm4.c goes through the NULL path, and the flag
- * is the switch a lab arm turns the whole mechanism off with. */
+ * is the switch a lab arm turns the whole mechanism off with.
+ *
+ * One invariant the cache does not police, because it holds register values and not
+ * policy: which packets count as constant depends on BC250HSA_DISPATCH_NO_CU_MASK of
+ * the dispatch that wrote them, and that flag arrives per dispatch through
+ * bc250hsa_pm4_env. The pure builder cannot break it (bc250hsa_pm4_build_batch takes
+ * one env for the whole buffer) and layer 2 cannot either (the flag is process-wide,
+ * runtime/hip_device.cpp). A caller that varies that one flag between two dispatches of
+ * one buffer must set BC250HSA_DISPATCH_FULL_STATE on the dispatch that changes it, or
+ * the two compute-unit masks of the first dispatch stay as the buffer before ours left
+ * them. That is a scheduling cost and never a wrong result, which is why it is an
+ * invariant here and not a comparison in the loop. */
 typedef struct bc250hsa_pm4_state {
     uint32_t valid;                            /* 0: nothing is known, write it all */
     uint32_t pgm_lo;

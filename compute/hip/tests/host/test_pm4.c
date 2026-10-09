@@ -816,8 +816,8 @@ static void check_state_cache(void)
         CHECK_U64(uncached, SEG_FULL_DWORDS);
         CHECK_U64(s.dwords[2], SEG_FULL_DWORDS);
 
-        /* 72 dwords a dispatch becomes 23, so the slot holds 227 dispatches instead of
-         * 711. Printed and not only asserted, because the number belongs in the
+        /* 72 dwords a dispatch becomes 23, so the slot holds 711 dispatches instead of
+         * 227. Printed and not only asserted, because the number belongs in the
          * evidence of the change and a reader of the test log should not have to
          * divide. */
         printf("test_pm4: dwords a repeated dispatch: %u without the state cache"
