@@ -41,6 +41,11 @@
     { "name": "kmd/bd097-paging-log (b25 wagon, BD-097)", "commit": "887148461ab054798b275a98c98c3c316a79cf9b" },
     { "name": "fix/bd094-boost-baseline (b25 wagon, BD-094)", "commit": "f82a00ccf3f26d9b15cdf4e4baa4221f82157186" },
     { "name": "fix/control-smoke-width (b25 wagon)", "commit": "c312a33d6fb6b2ccadee879ab6feaeb38541d855" },
-    { "name": "build/b25-radv-system-ndebug (b25 wagon, the radv-system option set)", "commit": "a2ffa26c4b0e15bf73e572d3d640002f42159375" }
+    { "name": "build/b25-radv-system-ndebug (b25 wagon, the radv-system option set)", "commit": "a2ffa26c4b0e15bf73e572d3d640002f42159375" },
+    { "name": "build/b26-repro (b26 wagon, the reproducible recipes and the provenance gate)", "commit": "502659c161b925e80e3904d9d258aa6d7267f8af" },
+    { "name": "kmd/b26-idle-telemetry-cadence (b26 wagon, BD-097 long idle)", "commit": "07af3aec5d6e477bb121f254b8528f8df4ee7db9" },
+    { "name": "kmd/b26-ring-vm-flush (b26 wagon, option (b) of the gfx submit root serialization)", "commit": "66b9fbf7a1f8e7b146dd639fb3e48c79498110f8" },
+    { "name": "kmd/b26-dp-audio (b26 wagon, DP audio step 4)", "commit": "bfe639b33d4c3cebc55c4a0a508dd83754ffa33a" },
+    { "name": "wsi/b26-vk-dxgi (b26 wagon, the Vulkan flip over DXGI)", "commit": "5e79ac749527cc21b6bc36f6c17dd51903add410" }
   ]
 }

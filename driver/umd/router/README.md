@@ -85,3 +85,7 @@ Measured on the development PC on 2026-10-03: same size (21504 bytes), five diff
 fields, and the rebuilt image with the reference's timestamps and GUID copied in hashes to `674AD261...` again.
 The doubles and `test-router.exe` (`CCB5EBE8`) compare the same way. A build with `/Brepro` would make the hash
 itself reproducible, but it would not be `674AD261`.
+
+The recipe now uses `/Brepro` on the compiler and the linker and `/FC /d1trimfile:<repo>` on the compiler
+(`docs/design/reproducible-builds.md`). Two builds of one commit in two directories give the same bytes. The
+comparison above stays the method for `674AD261` and for the other routers that came before this change.

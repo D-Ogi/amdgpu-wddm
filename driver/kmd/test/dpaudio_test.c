@@ -20,6 +20,9 @@
 //   8. Step 4: the sink from an EDID (edid.c parses the lab monitor's redacted EDID) is Linux's audio_info:
 //      identity in Linux's byte order, the monitor name, the LPCM descriptor with the most channels capped at 8,
 //      the speaker byte or DEFAULT_SPEAKER_LOCATION; an EDID without LPCM, a bad one or none gives the fixed set.
+//   9. Step 4's container ID: the ELD carries the port ID the operating system made for the child, the refresh
+//      after a start writes nothing when the ELD already holds it, cycles the presence bit when it does not, and
+//      a refused, failed or mismatched refresh leaves the endpoint enabled and not clock-gated.
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -51,6 +54,7 @@ typedef struct {
     unsigned long FailWriteAt;              // the n-th Write call (1-based) fails; 0 = none
     unsigned long FailReadOffset;           // a read of this offset fails; 0 = none
     unsigned long StuckOffset, StuckMask;   // a direct write here keeps these bits as they were (a read-back differs)
+    unsigned long StuckIndex, StuckIndexSet; // the same for one indirect index: its DATA write keeps the old value
     unsigned long AudioEnabledWrites;       // HOT_PLUG_CONTROL writes with AUDIO_ENABLED set, either endpoint
     TRACE Trace[256];
     unsigned long Traced;
@@ -106,6 +110,10 @@ static long FakeWrite(void* context, unsigned long offset, unsigned long value)
         if (offset == g_Data[e]) {
             if (!f->Armed[e]) f->Protocol++;
             f->Armed[e] = 0;
+            if (f->StuckIndexSet && f->Index[e] == f->StuckIndex) {
+                f->Trace[f->Traced++] = (TRACE){ OP_DATA, e, f->Index[e], value };
+                return 0;                   // the write is accepted and the value does not change: a read-back differs
+            }
             f->Ix[e][f->Index[e]] = value;
             if (f->Index[e] == BC250_AZ_IX_HOT_PLUG_CONTROL && (value & HPC_AE)) f->AudioEnabledWrites++;
             f->Trace[f->Traced++] = (TRACE){ OP_DATA, e, f->Index[e], value };
@@ -632,7 +640,7 @@ static void WriteFailures(void)
     unsigned long observe = Calls(0), init = Calls(1), configure = Calls(2), stream = Calls(3), enable = Calls(4), k, bad = 0;
     const unsigned long base = observe + init + configure;
 
-    CHECK(observe == 16 && init > 0 && configure > 0 && stream == 18 && enable > 0);
+    CHECK(observe == 20 && init > 0 && configure > 0 && stream == 18 && enable > 0);
     for (k = observe + 1; k <= base + stream + enable; k++) {
         BC250_AZ_IO io;
         unsigned long groups = k <= observe + init ? 0 : k <= base ? 1 : k <= base + stream ? 2 : 3, reason;
@@ -833,7 +841,7 @@ typedef char ReasonOkIsZero[BC250_DPAUDIO_REASON_OK == 0 ? 1 : -1];     // a zer
 typedef char StepNoneIsZero[BC250_DPAUDIO_STEP_NONE == 0 ? 1 : -1];
 // The ABI 1 prefix is the 0.7.215 layout: the stream record starts right after LastStatus.
 typedef char Abi1Prefix[(offsetof(BC250_ESCAPE_DPAUDIO, SwitchStream) == BC250_DPAUDIO_ABI1_SIZE &&
-                         sizeof(BC250_ESCAPE_DPAUDIO) == 480) ? 1 : -1];
+                         BC250_DPAUDIO_ABI1_SIZE == 408) ? 1 : -1];
 
 
 // ---- step 4: the sink from the EDID -----------------------------------------------------------------------------
@@ -927,6 +935,169 @@ static void StepFour(void)
     CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 0 && sink.FromEdid == 0);
 }
 
+// ---- step 4: the container ID in the ELD --------------------------------------------------------------------------
+
+#define ELD_PORT_LOW 0x5558859eul           // Linux DC's two constants, the value of a sink with no container ID
+#define ELD_PORT_HIGH 0x0d989449ul
+#define OS_PORT_ID 0x0123456789ABCDEFull    // a port ID of the shape dxgkrnl gives: 64 bits, both halves non-zero
+
+static unsigned long long EldPortId(unsigned long e)
+{
+    return ((unsigned long long)g_Fake.Ix[e][BC250_AZ_IX_SINK_INFO3] << 32) |
+           (unsigned long long)g_Fake.Ix[e][BC250_AZ_IX_SINK_INFO2];
+}
+
+static void ContainerId(void)
+{
+    static BC250_EDID_INFO info;
+    BC250_DPAUDIO_SINK sink;
+    BC250_DPAUDIO_PORTID port;
+    BC250_DPAUDIO_RESULT r;
+    BC250_AZ_IO io;
+    unsigned long writes, cycles;
+
+    // The sink without a container ID: Linux's two constants, as before this step.
+    Bc250DpAudioSinkDefault(&sink);
+    CHECK(sink.HasPortId == 0 && sink.PortId == 0);
+    ConfigureWith(&sink, 0);
+    CHECK(EldPortId(0) == (((unsigned long long)ELD_PORT_HIGH << 32) | ELD_PORT_LOW));
+
+    // Bc250DpAudioSinkContainer: the port ID is taken as it is, the identity only where the EDID gave none.
+    CHECK(Bc250EdidParse(g_LabEdid, sizeof(g_LabEdid), &info) == BC250_EDID_OK);
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1);
+    CHECK(Bc250DpAudioSinkContainer(&sink, OS_PORT_ID, 0xAE30ul, 0x1144ul) == 0);    // the OS agrees with the EDID
+    CHECK(sink.HasPortId == 1 && sink.PortId == OS_PORT_ID);
+    CHECK(sink.Manufacturer == 0xAE30ul && sink.Product == 0x1144ul);
+    CHECK(Bc250DpAudioSinkContainer(&sink, OS_PORT_ID, 0x1234ul, 0x1144ul) == 1);    // it does not: reported, kept
+    CHECK(sink.Manufacturer == 0xAE30ul);
+    Bc250DpAudioSinkDefault(&sink);                                                  // no EDID: the OS identity is used
+    CHECK(Bc250DpAudioSinkContainer(&sink, OS_PORT_ID, 0xAE30ul, 0x1144ul) == 0);
+    CHECK(sink.Manufacturer == 0xAE30ul && sink.Product == 0x1144ul && sink.FromEdid == 0);
+    CHECK(Bc250DpAudioSinkContainer(&sink, 0, 0, 0) == 0 && sink.HasPortId == 0);     // no container ID yet
+
+    // The configure group writes the container ID into the two ELD words, low half first.
+    CHECK(Bc250DpAudioSinkFromEdid(&info, &sink) == 1);
+    (void)Bc250DpAudioSinkContainer(&sink, OS_PORT_ID, 0xAE30ul, 0x1144ul);
+    ConfigureWith(&sink, 0);
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO2] == 0x89ABCDEFul);
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO3] == 0x01234567ul);
+    CHECK(EldPortId(0) == OS_PORT_ID);
+    CHECK(g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO2] == 0);                                // the other endpoint untouched
+
+    // A whole start writes it too, and AUDIO_ENABLED is still the last write.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    g_Run.Sink = &sink;
+    CHECK(Bc250DpAudioRun(&io, &g_Run) == BC250_DPAUDIO_REASON_OK);
+    g_Run.Sink = 0;
+    CHECK(g_Run.Config.PortId == OS_PORT_ID && EldPortId(0) == OS_PORT_ID);
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE) != 0 && g_Fake.Protocol == 0);
+
+    // The refresh over an ELD that already holds that port ID: not one write, no presence cycle.
+    writes = g_Fake.Writes;
+    cycles = g_Fake.AudioEnabledWrites;
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, OS_PORT_ID, 1, &port) == 0);
+    CHECK(port.Changed == 0 && port.Cycled == 0 && port.Writes == 0);
+    CHECK(port.Before == OS_PORT_ID && port.After == OS_PORT_ID);
+    CHECK(g_Fake.Writes == writes + 2 && g_Fake.AudioEnabledWrites == cycles);        // only the two INDEX selects
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE) != 0);
+
+    // The real case: the start of a boot wrote Linux's constants, the operating system then gives the port ID.
+    // The sink goes away and comes back around the two words, and the read-back matches.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    g_Run.Sink = 0;
+    CHECK(Bc250DpAudioRun(&io, &g_Run) == BC250_DPAUDIO_REASON_OK);
+    CHECK(EldPortId(0) == (((unsigned long long)ELD_PORT_HIGH << 32) | ELD_PORT_LOW));
+    cycles = g_Fake.AudioEnabledWrites;
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, OS_PORT_ID, 1, &port) == 0);
+    CHECK(port.Changed == 1 && port.Cycled == 1 && port.Writes > 0);
+    CHECK(port.Before == (((unsigned long long)ELD_PORT_HIGH << 32) | ELD_PORT_LOW) && port.After == OS_PORT_ID);
+    CHECK(EldPortId(0) == OS_PORT_ID);
+    // Three HOT_PLUG_CONTROL writes carry AUDIO_ENABLED 1 through the cycle: the one that opens the clock gate
+    // before the bit is cleared, and the two of dce_aud_az_enable that bring the sink back.
+    CHECK(g_Fake.AudioEnabledWrites == cycles + 3);
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE) != 0);                // AUDIO_ENABLED 1 again
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_CGD) == 0);               // and not clock-gated
+    CHECK(g_Fake.Protocol == 0);
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_AUDIO_DESCRIPTOR0] != 0);                          // the format survived
+
+    // Nothing else of the endpoint or the stream changed: the refresh touches two words and the presence bit.
+    CHECK(g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO0] == 0 && g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO1] == 10);
+    CHECK(Get(&g_Fake, g_S[0].Sec) == 0x1111ul && Get(&g_Fake, g_S[0].Pkt) == 0x04000801ul);
+
+    // An endpoint this driver has not enabled: the words are written, no presence cycle.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    CHECK(Bc250DpAudioConfigureSink(&io, 0, 0, &r) == 0);
+    cycles = g_Fake.AudioEnabledWrites;
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, OS_PORT_ID, 0, &port) == 0);
+    CHECK(port.Changed == 1 && port.Cycled == 0 && EldPortId(0) == OS_PORT_ID);
+    CHECK(g_Fake.AudioEnabledWrites == cycles);                                       // never enabled by the refresh
+
+    // Negative control 1: no port ID at all. Refused, and not one register written.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    CHECK(Bc250DpAudioConfigureSink(&io, 0, 0, &r) == 0);
+    writes = g_Fake.Writes;
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, 0, 1, &port) == BC250_AZ_STATUS_INVALID_PARAMETER);
+    CHECK(g_Fake.Writes == writes && port.Writes == 0 && port.Changed == 0);
+    CHECK(EldPortId(0) == (((unsigned long long)ELD_PORT_HIGH << 32) | ELD_PORT_LOW));
+
+    // Negative control 2: an endpoint out of range. Refused before any access.
+    writes = g_Fake.Writes;
+    CHECK(Bc250DpAudioPortIdRefresh(&io, BC250_DPAUDIO_ENDPOINTS, OS_PORT_ID, 1, &port) ==
+          BC250_AZ_STATUS_INVALID_PARAMETER);
+    CHECK(g_Fake.Writes == writes && port.Writes == 0);
+
+    // Negative control 3: the high word accepts the write and keeps its value. The refresh reports the mismatch,
+    // and it still closes the clock-gating bracket and brings the sink back.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    CHECK(Bc250DpAudioRun(&io, &g_Run) == BC250_DPAUDIO_REASON_OK);
+    g_Fake.StuckIndex = BC250_AZ_IX_SINK_INFO3;
+    g_Fake.StuckIndexSet = 1;
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, OS_PORT_ID, 1, &port) == BC250_AZ_STATUS_MISMATCH);
+    CHECK(port.After != OS_PORT_ID && port.Changed == 1 && port.Cycled == 1);
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE) != 0);
+    CHECK((g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_CGD) == 0);
+    g_Fake.StuckIndexSet = 0;
+
+    // Negative control 4: a failed write of the low word. The failure is reported, the bracket closes and the sink
+    // comes back; the words it could write are not read back as the port ID.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    CHECK(Bc250DpAudioRun(&io, &g_Run) == BC250_DPAUDIO_REASON_OK);
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, OS_PORT_ID, 0, &port) == 0);              // first with no failure
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    CHECK(Bc250DpAudioRun(&io, &g_Run) == BC250_DPAUDIO_REASON_OK);
+    g_Fake.FailWriteAt = g_Fake.Writes + 6;     // inside the refresh, after the presence cycle and the bracket
+    CHECK(Bc250DpAudioPortIdRefresh(&io, 0, OS_PORT_ID, 1, &port) < 0);
+    g_Fake.FailWriteAt = 0;
+    CHECK(port.After != OS_PORT_ID);
+
+    // The two ELD words have their own observation slots, so the lab reads the port ID without a write.
+    UnitA(&g_Fake);
+    Io(&io, &g_Fake);
+    g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO2] = 0x89ABCDEFul;
+    g_Fake.Ix[0][BC250_AZ_IX_SINK_INFO3] = 0x01234567ul;
+    g_Fake.Ix[1][BC250_AZ_IX_SINK_INFO3] = 0xDEADBEEFul;
+    Bc250DpAudioObserve(&io, &g_Run.Obs);
+    CHECK(g_Run.Obs.Regs[BC250_DPAUDIO_OBS_EP0_SINK_INFO2] == 0x89ABCDEFul);
+    CHECK(g_Run.Obs.Regs[BC250_DPAUDIO_OBS_EP0_SINK_INFO3] == 0x01234567ul);
+    CHECK(g_Run.Obs.Regs[BC250_DPAUDIO_OBS_EP1_SINK_INFO3] == 0xDEADBEEFul);
+    CHECK(g_Run.Obs.Regs[BC250_DPAUDIO_OBS_EP1_SINK_INFO2] == 0);
+}
+
+// The ABI 2 prefix is the 0.7.216.1 layout: the container-ID record starts right after the stream counters.
+typedef char Abi2Prefix[(offsetof(BC250_ESCAPE_DPAUDIO, PortId) == BC250_DPAUDIO_ABI2_SIZE &&
+                         sizeof(BC250_ESCAPE_DPAUDIO) == 536) ? 1 : -1];
+// The slots of 0.7.216.1 keep their numbers; the four new ones are appended.
+typedef char ContainerSlotsAppended[(BC250_DPAUDIO_OBS_DIG1_AFMT_60958_0 == 57 &&
+                                     BC250_DPAUDIO_OBS_EP0_SINK_INFO2 == 58 &&
+                                     BC250_DPAUDIO_OBS_EP1_SINK_INFO3 == 61) ? 1 : -1];
+
 int main(void)
 {
     Gate();
@@ -942,6 +1113,7 @@ int main(void)
     Tables();
     Texts();
     StepFour();
+    ContainerId();
     printf("dpaudio: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

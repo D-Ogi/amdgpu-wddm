@@ -13,7 +13,9 @@ Configures and builds DXVK with a recorded meson option set (dxvk-configs.json).
 
 The build is a native MSVC build, as the M12 E33 per-application packages were: vcvars64.bat, meson from
 PYTHONPATH, ninja and glslangValidator on PATH. DXVK needs no WDK headers. After configure the script compares
-the new log's "Build Options:" line with the option set and stops on any difference.
+the new log's "Build Options:" line with the option set and stops on any difference. The set the script
+passes is the configured set plus the reproducible-build switches of Add-ReproducibleMesonOptions
+(common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
 
 The source tree must be a DXVK checkout with its submodules initialized (git submodule update --init
 --recursive); this script patches nothing and fetches nothing.
@@ -61,6 +63,7 @@ if (-not $Glslang) { $Glslang = Join-Path $root 'scratch\glslang\bin' }
 if (-not $Temp) { $Temp = Join-Path $root 'scratch\tmp' }
 $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
+$options = Add-ReproducibleMesonOptions $options $Source $Build
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'src\dxvk\dxvk_device.h'))) { throw "$Source is not a DXVK source tree" }
 # An uninitialized submodule is an empty directory; meson would fail much later with a less useful message.

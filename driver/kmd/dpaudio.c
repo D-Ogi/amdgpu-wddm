@@ -12,6 +12,10 @@
 //                                       as EnableDpAudio 0.
 //     EnableDpAudioStream    REG_DWORD  1 (default) = step 2, the wall DTO, the AFMT audio path and the DP_SEC
 //                                       audio packets on the inherited stream. 0 = the same as EnableDpAudio 0.
+//     EnableDpAudioContainerId  REG_DWORD  1 (default) = step 4's container ID: the ELD carries the port ID the
+//                                       operating system made for the child (DxgkDdiGetChildContainerId), so that
+//                                       the audio endpoint and the monitor land in one device container. 0 = the
+//                                       ELD keeps Linux DC's two constant port-ID halves, as before 0.7.216.25.
 //
 // All three are read at every start and resume. The endpoint is never shown without its stream: with step 1
 // alone, Windows showed an active "Digital Audio (HDMI)" endpoint whose audio clock was not programmed, and it
@@ -40,9 +44,12 @@
 #define DPAUDIO_SETTING_ENABLE L"EnableDpAudio"
 #define DPAUDIO_SETTING_ENDPOINT L"EnableDpAudioEndpoint"
 #define DPAUDIO_SETTING_STREAM L"EnableDpAudioStream"
+#define DPAUDIO_SETTING_CONTAINER L"EnableDpAudioContainerId"
 
-// The ABI 1 reply is exactly the fields before the stream record.
+// The ABI 1 reply is exactly the fields before the stream record, and the ABI 2 reply the fields before the
+// container-ID record. Both prefixes are frozen: an older tool keeps its layout.
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPAUDIO, SwitchStream) == BC250_DPAUDIO_ABI1_SIZE);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPAUDIO, PortId) == BC250_DPAUDIO_ABI2_SIZE);
 
 // The callbacks dpaudio_seq.c performs its checked accesses through. The tables are checked there; checked again
 // here so that nothing in this file can reach BAR5 past them either.
@@ -92,6 +99,9 @@ void DpAudioInitialize(_Inout_ BC250_DEVICE* Device)
     audio->State = BC250_DPAUDIO_STATE_IDLE;
     audio->Reason = BC250_DPAUDIO_REASON_NOT_STARTED;
     audio->SwitchEnable = audio->SwitchEndpoint = audio->SwitchStream = BC250_DPAUDIO_NO_SWITCH;
+    // The container-ID switch is read at the start too, so before the first start it is "not read yet" and not 0,
+    // which the CLI would print as "the switch is off" (b26 review finding F1).
+    audio->SwitchContainerId = BC250_DPAUDIO_NO_SWITCH;
     audio->StreamState = BC250_DPAUDIO_STREAM_OFF;
     audio->StreamStep = BC250_DPAUDIO_STEP_NONE;
 }
@@ -181,6 +191,8 @@ static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
         GuardLog("dpaudio: LPCM %lu ch rates 0x%02lX sizes 0x%lX, sink 0x%04lX/0x%04lX '%s'", Start->Sink.LpcmChannels,
                  Start->Sink.LpcmRates, Start->Sink.LpcmSizes, Start->Sink.Manufacturer, Start->Sink.Product,
                  Start->Sink.Name);
+        GuardLog("dpaudio: ELD port id 0x%016llX (%s)", run->Config.PortId,
+                 Start->Sink.HasPortId ? "the container ID of the child" : "Linux's constant: no container ID yet");
     }
     if (run->Groups >= 3) {
         GuardLog("dpaudio: stream on DP%lu: DTO_SOURCE 0x%08lX DTO1 %lu/%lu, AUD_N 0x%08lX timestamp 0x%lX, %lu writes",
@@ -209,6 +221,9 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     ULONG enable = GuardReadSetting(DPAUDIO_SETTING_ENABLE, 1);
     ULONG endpointSwitch = GuardReadSetting(DPAUDIO_SETTING_ENDPOINT, 1);
     ULONG streamSwitch = GuardReadSetting(DPAUDIO_SETTING_STREAM, 1);
+    ULONG containerSwitch = GuardReadSetting(DPAUDIO_SETTING_CONTAINER, 1);
+    ULONGLONG portId = 0;
+    ULONG osManufacturer = 0, osProduct = 0, identityDiffers = 0;
     KIRQL irql;
 
     // From pool: the observation alone is 270 bytes, and a start already runs deep in dxgkrnl's stack (M104).
@@ -220,6 +235,14 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     IoOpen(Device, &io);
     // Step 4: the EDID that modeset.c read at this start, or the fixed set of step 1 without one (dpaudio_seq.h).
     (void)Bc250DpAudioSinkFromEdid(ModesetEdidForAudio(Device), &start->Sink);
+    // The container ID of a boot's first start is not known yet: the operating system calls
+    // DxgkDdiGetChildContainerId only after DxgkDdiStartDevice returns, and DpAudioContainerId then refreshes the
+    // ELD. Every later start (a resume, the monitor's path power coming back) has it and writes it at once.
+    KeAcquireSpinLock(&audio->Lock, &irql);
+    audio->SwitchContainerId = containerSwitch;
+    if (containerSwitch == 1) { portId = audio->PortId; osManufacturer = audio->OsManufacturer; osProduct = audio->OsProduct; }
+    KeReleaseSpinLock(&audio->Lock, irql);
+    identityDiffers = (ULONG)Bc250DpAudioSinkContainer(&start->Sink, portId, osManufacturer, osProduct);
     start->Seq.Sink = &start->Sink;
     start->Gate = Bc250DpAudioGate(Device->Mmio != NULL, enable, endpointSwitch, streamSwitch);
     KeAcquireSpinLock(&audio->Lock, &irql);
@@ -244,6 +267,11 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
         start->Reason = Bc250DpAudioRun(&io, &start->Seq);
         audio->Reason = start->Reason;
         audio->Notes = run->Plan.Notes;
+        audio->SinkFromEdid = start->Sink.FromEdid;
+        if (identityDiffers) audio->Notes |= BC250_DPAUDIO_NOTE_OS_IDENTITY;
+        // What the configure group left in the ELD's two port-ID words: the operating system's ID, or, before it
+        // has given one, Linux DC's constants. 0 when the group did not run.
+        if (run->Groups >= 2) audio->PortIdInEld = run->Config.PortId;
         audio->Endpoint = run->Plan.Endpoint;
         audio->Stream = run->Plan.Stream;
         audio->RefClockCount = run->Plan.RefClock;
@@ -386,27 +414,89 @@ void DpAudioPathPower(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     }
 }
 
-// BC250_ESCAPE_RUN_DPAUDIO (bc250kmd_escape.h). HardwareAccess only, administrators only, one of two exact sizes
-// (display.c): ABI 1 with BC250_DPAUDIO_ABI1_SIZE bytes, ABI 2 with the whole structure. Nothing past Size is read
-// or written.
+// Step 4's container ID (docs/design/dp-audio.md). dxgkrnl calls DxgkDdiGetChildContainerId for the one child
+// after DxgkDdiStartDevice has returned, so the port ID always arrives after the start that configured the
+// endpoint. The port ID is kept for every later start, and the ELD of a running endpoint is refreshed at once:
+// read first, written only when it differs, and bracketed by a presence cycle so that the HD Audio class driver
+// reads the ELD again (dpaudio_seq.c Bc250DpAudioPortIdRefresh says why). A refusal or a failure never touches
+// the endpoint's audio: the stream and AUDIO_ENABLED stay as the start left them.
+void DpAudioContainerId(_Inout_ BC250_DEVICE* Device, ULONGLONG PortId, USHORT Manufacturer, USHORT Product)
+{
+    BC250_DPAUDIO* audio = &Device->DpAudio;
+    BC250_DPAUDIO_PORTID refresh;
+    BC250_AZ_IO io;
+    ULONG containerSwitch = GuardReadSetting(DPAUDIO_SETTING_CONTAINER, 1);
+    ULONG endpoint, calls;
+    BOOLEAN ran = FALSE, enabled;
+    long status = 0;
+    KIRQL irql;
+
+    RtlZeroMemory(&refresh, sizeof(refresh));
+    IoOpen(Device, &io);
+    KeAcquireSpinLock(&audio->Lock, &irql);
+    audio->ContainerCalls++;
+    calls = audio->ContainerCalls;
+    audio->SwitchContainerId = containerSwitch;
+    audio->PortId = PortId;
+    audio->OsManufacturer = Manufacturer;
+    audio->OsProduct = Product;
+    endpoint = audio->Endpoint;
+    enabled = (BOOLEAN)(audio->State == BC250_DPAUDIO_STATE_ENABLED);
+    // Only an endpoint this driver configured gets its ELD corrected. Without one the port ID waits for the next
+    // start, which writes it in the configure group and needs no presence cycle.
+    if (containerSwitch == 1 && PortId != 0 && Device->Mmio != NULL && audio->Written) {
+        status = Bc250DpAudioPortIdRefresh(&io, endpoint, PortId, enabled, &refresh);
+        audio->PortIdStatus = status;
+        if (status < 0) audio->Failures++;
+        else audio->PortIdInEld = refresh.After;
+        if (refresh.Changed) audio->PortIdWrites++; else audio->PortIdSkips++;
+        if (refresh.Cycled) audio->PortIdCycles++;
+        ran = TRUE;
+    } else if (containerSwitch == 1 && PortId != 0) {
+        audio->PortIdSkips++;
+    }
+    IoClose(audio, &io);
+    KeReleaseSpinLock(&audio->Lock, irql);
+    // One line per call, so that a boot's log says what the operating system gave and what the ELD holds.
+    GuardLog("dpaudio: container id call %lu: port 0x%016llX mfg 0x%04X product 0x%04X, switch %lu",
+             calls, PortId, (ULONG)Manufacturer, (ULONG)Product, containerSwitch);
+    if (ran) {
+        GuardLog("dpaudio: ELD port id on endpoint %lu: 0x%016llX -> 0x%016llX (0x%08lX)", endpoint, refresh.Before,
+                 refresh.After, (ULONG)status);
+        GuardLog("dpaudio: ELD port id: %s, %s, %lu writes", refresh.Changed ? "written" : "already held",
+                 refresh.Cycled ? "presence cycled" : "no presence cycle", refresh.Writes);
+    }
+    else if (containerSwitch != 1)
+        GuardLog("dpaudio: container id ignored: EnableDpAudioContainerId is not 1; the ELD keeps Linux's constant");
+    else if (PortId == 0)
+        GuardLog("dpaudio: container id carries no port ID; the ELD keeps Linux's constant");
+    else
+        GuardLog("dpaudio: container id kept for the next start: no endpoint of this driver is configured");
+}
+
+// BC250_ESCAPE_RUN_DPAUDIO (bc250kmd_escape.h). HardwareAccess only, administrators only, one of three exact sizes
+// (display.c): ABI 1 with BC250_DPAUDIO_ABI1_SIZE bytes, ABI 2 with BC250_DPAUDIO_ABI2_SIZE, ABI 3 with the whole
+// structure. Nothing past Size is read or written.
 void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags)
 {
     BC250_DPAUDIO* audio = &Device->DpAudio;
     BC250_DPAUDIO_OBSERVATION* obs = NULL;
     ULONG op = Data->Op, abi = Data->AbiVersion, i;
-    const BOOLEAN abi2 = abi == BC250_DPAUDIO_ABI && Size == sizeof(BC250_ESCAPE_DPAUDIO);
+    const BOOLEAN abi3 = abi == BC250_DPAUDIO_ABI && Size == sizeof(BC250_ESCAPE_DPAUDIO);
+    const BOOLEAN abi2 = abi == BC250_DPAUDIO_ABI_2 && Size == BC250_DPAUDIO_ABI2_SIZE;
     const BOOLEAN abi1 = abi == BC250_DPAUDIO_ABI_1 && Size == BC250_DPAUDIO_ABI1_SIZE;
     BC250_AZ_IO io;
     long status = STATUS_SUCCESS;
     KIRQL irql;
 
-    if (Size != BC250_DPAUDIO_ABI1_SIZE && Size != sizeof(BC250_ESCAPE_DPAUDIO)) return;    // display.c refused it
+    if (Size != BC250_DPAUDIO_ABI1_SIZE && Size != BC250_DPAUDIO_ABI2_SIZE &&
+        Size != sizeof(BC250_ESCAPE_DPAUDIO)) return;                                       // display.c refused it
     RtlZeroMemory(Data, Size);
     Data->Magic = BC250_ESCAPE_MAGIC;
     Data->Command = BC250_ESCAPE_RUN_DPAUDIO;
     Data->Version = BC250_KMD_VERSION;
-    Data->AbiVersion = abi1 ? BC250_DPAUDIO_ABI_1 : BC250_DPAUDIO_ABI;
+    Data->AbiVersion = abi1 ? BC250_DPAUDIO_ABI_1 : (abi2 ? BC250_DPAUDIO_ABI_2 : BC250_DPAUDIO_ABI);
     Data->Op = op;
     Data->Status = BC250_ESCAPE_STATUS_REFUSED;
     if (!Admin) {
@@ -415,7 +505,8 @@ void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* 
         return;
     }
     // HardwareAccess requests dxgkrnl's Level Two exclusion of stop and MMIO unmap, as OBSERVE_DCN.
-    if (EscapeFlags != 1u || !(abi1 || abi2) || (op != BC250_DPAUDIO_OP_OBSERVE && op != BC250_DPAUDIO_OP_STATE)) {
+    if (EscapeFlags != 1u || !(abi1 || abi2 || abi3) ||
+        (op != BC250_DPAUDIO_OP_OBSERVE && op != BC250_DPAUDIO_OP_STATE)) {
         Data->NtStatus = (ULONG)STATUS_INVALID_PARAMETER;
         return;
     }
@@ -442,7 +533,7 @@ void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* 
     Data->CodecId = audio->CodecId; Data->ConfigDefault = audio->ConfigDefault;
     Data->HotPlugBefore = audio->HotPlugBefore; Data->HotPlugAfter = audio->HotPlugAfter;
     Data->LastStatus = (ULONG)audio->LastStatus;
-    if (abi2) {
+    if (abi2 || abi3) {
         Data->SwitchStream = audio->SwitchStream;
         Data->StreamState = audio->StreamState; Data->StreamStep = audio->StreamStep;
         Data->StreamStatus = (ULONG)audio->StreamStatus; Data->RefClockCount = audio->RefClockCount;
@@ -452,6 +543,14 @@ void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* 
         Data->DtoSource = audio->DtoSource; Data->SecCntl = audio->SecCntl; Data->AfmtCntl = audio->AfmtCntl;
         Data->PacketControl = audio->PacketControl; Data->PacketControl2 = audio->PacketControl2;
         Data->StreamOn = audio->StreamOn; Data->StreamOff = audio->StreamOff; Data->StreamUndos = audio->StreamUndos;
+    }
+    if (abi3) {
+        Data->PortId = audio->PortId; Data->PortIdInEld = audio->PortIdInEld;
+        Data->OsManufacturer = audio->OsManufacturer; Data->OsProduct = audio->OsProduct;
+        Data->SwitchContainerId = audio->SwitchContainerId;
+        Data->ContainerCalls = audio->ContainerCalls; Data->PortIdWrites = audio->PortIdWrites;
+        Data->PortIdSkips = audio->PortIdSkips; Data->PortIdCycles = audio->PortIdCycles;
+        Data->PortIdStatus = (ULONG)audio->PortIdStatus; Data->SinkFromEdid = audio->SinkFromEdid;
     }
     KeReleaseSpinLock(&audio->Lock, irql);
     if (obs != NULL) {

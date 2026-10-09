@@ -90,6 +90,7 @@ typedef struct _BC250_DPAUDIO_RESULT {
     unsigned long HotPlugBefore, HotPlugAfter;      // HOT_PLUG_CONTROL of the endpoint the group worked on
     unsigned long SizeRates, PowerStates;           // Bc250DpAudioHwInit: read back after the writes
     unsigned long Writes;                           // register writes this group performed
+    unsigned long long PortId;                      // Bc250DpAudioConfigureSink: the port ID it wrote into the ELD
 } BC250_DPAUDIO_RESULT;
 long Bc250DpAudioHwInit(BC250_AZ_IO* Io, BC250_DPAUDIO_RESULT* Result);                       // endpoint 0
 
@@ -107,6 +108,11 @@ typedef struct _BC250_DPAUDIO_SINK {
     unsigned long LpcmSizes;                // CTA-861 SAD byte 2 of LPCM: bit 0 = 16, 1 = 20, 2 = 24 bit
     unsigned long Speakers;                 // the first byte of the speaker allocation data block
     unsigned long FromEdid;                 // 0: the fixed set of step 1 (Bc250DpAudioSinkDefault)
+    // The container ID half of step 4. The port ID of the ELD is the one the operating system made for this child
+    // (DXGK_CHILD_CONTAINER_ID.EldInfo.PortId), so that the audio endpoint and the monitor land in one device
+    // container. HasPortId 0 writes Linux DC's two constants instead.
+    unsigned long long PortId;
+    unsigned long HasPortId;
 } BC250_DPAUDIO_SINK;
 // The fixed "basic audio" set of step 1: 2-channel LPCM at 32, 44.1 and 48 kHz, 16 bit, FL/FR, "BC-250 DP".
 void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink);
@@ -115,11 +121,39 @@ void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink);
 // and has an LPCM descriptor; else 0 and the fixed set (a deviation: Linux gives such a sink no audio at all, this
 // driver keeps the endpoint it had before step 4, docs/design/dp-audio.md step 4).
 int Bc250DpAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Sink);
+// The container ID half of step 4, after the two calls above (both reset the whole sink). PortId 0 leaves Linux's
+// constants in place. Manufacturer and Product are the operating system's EldInfo values, taken only where the
+// EDID gave none, so an endpoint without an EDID still carries the monitor's identity; returns 1 when they differ
+// from the EDID's (the caller logs BC250_DPAUDIO_NOTE_OS_IDENTITY, nothing more).
+int Bc250DpAudioSinkContainer(BC250_DPAUDIO_SINK* Sink, unsigned long long PortId, unsigned long Manufacturer,
+                              unsigned long Product);
 // Step 1's configure for a sink; Sink NULL is the fixed set.
 long Bc250DpAudioConfigureSink(BC250_AZ_IO* Io, unsigned long Endpoint, const BC250_DPAUDIO_SINK* Sink,
                                BC250_DPAUDIO_RESULT* Result);
 long Bc250DpAudioConfigure(BC250_AZ_IO* Io, unsigned long Endpoint, BC250_DPAUDIO_RESULT* Result);  // the fixed set
 long Bc250DpAudioSetEnabled(BC250_AZ_IO* Io, unsigned long Endpoint, int Enable, BC250_DPAUDIO_RESULT* Result);
+
+// The container ID of step 4, on its own. The operating system gives the port ID of a child only after
+// DxgkDdiStartDevice returns (ref/windows-driver-docs "Enumerating Child Devices of a Display Adapter"), so the
+// first start of a boot cannot know it and the ELD has to be corrected afterwards. Read-first and idempotent:
+// the two ELD words are read, and nothing is written when they already hold PortId.
+//
+// When they do not, and Enabled says this driver has AUDIO_ENABLED 1 on the endpoint, the sink goes away and
+// comes back around the write: AUDIO_ENABLED 0, the two words, AUDIO_ENABLED 1. That is Linux's order for a sink
+// whose audio_info changes (dce_aud_az_disable, dce_aud_az_configure, dce_aud_az_enable in dce_audio.c, as
+// dc_link_dp calls them at a mode set), and the HD Audio side needs it: the class driver reads the ELD when the
+// pin reports presence, so an ELD that changes under a pin that stays present is never read again. The lab saw
+// the class driver enable the pin's unsolicited responses (note BC250_DPAUDIO_NOTE_UNSOLICITED), which is how it
+// learns of the cycle.
+typedef struct _BC250_DPAUDIO_PORTID {
+    unsigned long long Before, After;       // SINK_INFO2 | SINK_INFO3 << 32, read before and after the write
+    unsigned long Changed;                  // 1 when the two words were written (Before differed from PortId)
+    unsigned long Cycled;                   // 1 when AUDIO_ENABLED went 0 and then 1 around the write
+    unsigned long Writes;                   // register writes performed
+    BC250_DPAUDIO_RESULT Off, On;           // the two halves of the presence cycle, when it ran
+} BC250_DPAUDIO_PORTID;
+long Bc250DpAudioPortIdRefresh(BC250_AZ_IO* Io, unsigned long Endpoint, unsigned long long PortId, int Enabled,
+                               BC250_DPAUDIO_PORTID* Result);
 
 // Step 2's two sequences on stream encoder Stream (DIGn, DPn). Every write is a read-modify-write of named fields
 // only, read back at once; a read-back whose named bits differ ends the enable with BC250_AZ_STATUS_MISMATCH. The

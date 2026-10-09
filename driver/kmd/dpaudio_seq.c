@@ -157,6 +157,9 @@ static const OBS_SLOT g_ObsSlots[BC250_DPAUDIO_OBS_COUNT] = {
     [BC250_DPAUDIO_OBS_REFCLK_COUNT] = { SLOT_DIRECT, 0, BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT },
     D(DIG0_AFMT_INFOFRAME_CONTROL0, DIG0_AFMT_INFOFRAME_CONTROL0), D(DIG0_AFMT_60958_0, DIG0_AFMT_60958_0),
     D(DIG1_AFMT_INFOFRAME_CONTROL0, DIG1_AFMT_INFOFRAME_CONTROL0), D(DIG1_AFMT_60958_0, DIG1_AFMT_60958_0),
+    // Step 4's container ID: the two ELD words that hold the port ID, on both endpoints. Reads, like every slot.
+    I(EP0_SINK_INFO2, 0, SINK_INFO2), I(EP0_SINK_INFO3, 0, SINK_INFO3),
+    I(EP1_SINK_INFO2, 1, SINK_INFO2), I(EP1_SINK_INFO3, 1, SINK_INFO3),
 };
 #undef D
 #undef I
@@ -298,6 +301,7 @@ long Bc250DpAudioHwInit(BC250_AZ_IO* Io, BC250_DPAUDIO_RESULT* Result)
     long status;
 
     Result->HotPlugBefore = Result->HotPlugAfter = Result->SizeRates = Result->PowerStates = Result->Writes = 0;
+    Result->PortId = 0;
     IR(HOT_PLUG_CONTROL, &hpc);
     Result->HotPlugBefore = hpc;
     hpc |= HPC_CLOCK_GATING_DISABLE;
@@ -332,7 +336,8 @@ long Bc250DpAudioHwInit(BC250_AZ_IO* Io, BC250_DPAUDIO_RESULT* Result)
 #define LPCM_SIZES 0x01u                    // the CTA-861 SAD byte 3 of LPCM: bit 0 = 16 bit (amdgpu_dm copies it as is)
 #define SPEAKERS_FL_FR 0x01u                // struct audio_speaker_flags (dc_types.h:451-): FL_FR is bit 0
 // The two halves of the port ID. Linux DC writes these constants when no Windows DM supplies a container ID
-// (dc_stream.c:98-109); step 4 replaces them with DXGK_CHILD_CONTAINER_ID.EldInfo.PortId.
+// (dc_stream.c:98-109); step 4 replaces them with DXGK_CHILD_CONTAINER_ID.EldInfo.PortId where the operating
+// system has given one (Bc250DpAudioSinkContainer, Bc250DpAudioPortIdRefresh).
 #define SINK_PORT_ID0 0x5558859eul
 #define SINK_PORT_ID1 0x0d989449ul
 static const char g_SinkName[] = "BC-250 DP";
@@ -361,6 +366,8 @@ void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink)
     Sink->LpcmSizes = LPCM_SIZES;
     Sink->Speakers = SPEAKERS_FL_FR;
     Sink->FromEdid = 0;
+    Sink->PortId = 0;
+    Sink->HasPortId = 0;
 }
 
 // dm_helpers_parse_edid_caps (amdgpu_dm_helpers.c:104-173) and is_audio_format_supported (dce_audio.c): the identity
@@ -389,6 +396,23 @@ int Bc250DpAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Si
     Sink->Speakers = Info->HasSpeaker ? Info->Speaker : BC250_DPAUDIO_DEFAULT_SPEAKERS;
     Sink->FromEdid = 1;
     return 1;
+}
+
+// The container ID half of step 4 (docs/design/dp-audio.md). Not in Linux: no Windows DM supplies DC with a port
+// ID, so DC writes its two constants. The identity is taken from the operating system only where the EDID gave
+// none, because the EDID is the primary source for both and the two must not disagree without a word in the log.
+int Bc250DpAudioSinkContainer(BC250_DPAUDIO_SINK* Sink, unsigned long long PortId, unsigned long Manufacturer,
+                              unsigned long Product)
+{
+    int differs;
+
+    Sink->PortId = PortId;
+    Sink->HasPortId = PortId != 0;
+    differs = (Manufacturer != 0 && Sink->Manufacturer != 0 && Manufacturer != Sink->Manufacturer) ||
+              (Product != 0 && Sink->Product != 0 && Product != Sink->Product);
+    if (Sink->Manufacturer == 0) Sink->Manufacturer = Manufacturer & 0xFFFFul;
+    if (Sink->Product == 0) Sink->Product = Product & 0xFFFFul;
+    return differs;
 }
 
 static unsigned long NameChar(const BC250_DPAUDIO_SINK* Sink, unsigned long i)
@@ -424,6 +448,7 @@ long Bc250DpAudioConfigureSink(BC250_AZ_IO* Io, unsigned long Endpoint, const BC
     }
 
     Result->HotPlugBefore = Result->HotPlugAfter = Result->SizeRates = Result->PowerStates = Result->Writes = 0;
+    Result->PortId = 0;
     IR(HOT_PLUG_CONTROL, &hpc);
     Result->HotPlugBefore = hpc;
     IW(HOT_PLUG_CONTROL, hpc | HPC_CLOCK_GATING_DISABLE);
@@ -467,8 +492,10 @@ long Bc250DpAudioConfigureSink(BC250_AZ_IO* Io, unsigned long Endpoint, const BC
     length++;                                           // the characters plus the terminator
     if (length > SINK_NAME_MAX) length = SINK_NAME_MAX;
     IW(SINK_INFO1, SET(0, SINK_INFO1, SINK_DESCRIPTION_LEN, length));
-    IW(SINK_INFO2, SET(0, SINK_INFO2, PORT_ID0, SINK_PORT_ID0));
-    IW(SINK_INFO3, SET(0, SINK_INFO3, PORT_ID1, SINK_PORT_ID1));
+    Result->PortId = Sink->HasPortId ? Sink->PortId
+                                     : ((unsigned long long)SINK_PORT_ID1 << 32) | (unsigned long long)SINK_PORT_ID0;
+    IW(SINK_INFO2, SET(0, SINK_INFO2, PORT_ID0, (unsigned long)(Result->PortId & 0xFFFFFFFFul)));
+    IW(SINK_INFO3, SET(0, SINK_INFO3, PORT_ID1, (unsigned long)((Result->PortId >> 32) & 0xFFFFFFFFul)));
     IW(SINK_INFO4, SET(SET(SET(SET(0, SINK_INFO4, DESCRIPTION0, NameChar(Sink, 0)), SINK_INFO4, DESCRIPTION1, NameChar(Sink, 1)),
                            SINK_INFO4, DESCRIPTION2, NameChar(Sink, 2)), SINK_INFO4, DESCRIPTION3, NameChar(Sink, 3)));
     IW(SINK_INFO5, SET(SET(SET(SET(0, SINK_INFO5, DESCRIPTION4, NameChar(Sink, 4)), SINK_INFO5, DESCRIPTION5, NameChar(Sink, 5)),
@@ -493,6 +520,7 @@ long Bc250DpAudioSetEnabled(BC250_AZ_IO* Io, unsigned long Endpoint, int Enable,
     long status;
 
     Result->HotPlugBefore = Result->HotPlugAfter = Result->SizeRates = Result->PowerStates = Result->Writes = 0;
+    Result->PortId = 0;
     IR(HOT_PLUG_CONTROL, &hpc);
     Result->HotPlugBefore = hpc;
     if (Enable) {
@@ -510,6 +538,89 @@ long Bc250DpAudioSetEnabled(BC250_AZ_IO* Io, unsigned long Endpoint, int Enable,
     }
     IR(HOT_PLUG_CONTROL, &Result->HotPlugAfter);
     return BC250_AZ_STATUS_SUCCESS;
+}
+
+// ---- step 4: the container ID in the ELD ---------------------------------------------------------------------------
+
+// No Windows and no C library in this file: the group results are cleared field by field.
+static void ZeroResult(BC250_DPAUDIO_RESULT* Result)
+{
+    Result->HotPlugBefore = Result->HotPlugAfter = Result->SizeRates = Result->PowerStates = Result->Writes = 0;
+    Result->PortId = 0;
+}
+
+// Read the two ELD words that hold the port ID. Reads only.
+static long PortIdRead(BC250_AZ_IO* Io, unsigned long Endpoint, unsigned long long* PortId)
+{
+    unsigned long low = 0, high = 0;
+    long status;
+
+    *PortId = 0;
+    TRY(Bc250AzIndirectRead(Io, Endpoint, BC250_AZ_IX_SINK_INFO2, &low));
+    TRY(Bc250AzIndirectRead(Io, Endpoint, BC250_AZ_IX_SINK_INFO3, &high));
+    *PortId = ((unsigned long long)high << 32) | (unsigned long long)low;
+    return BC250_AZ_STATUS_SUCCESS;
+}
+
+// dpaudio_seq.h says why the presence cycle is there and where Linux does the same. The write is bracketed by
+// CLOCK_GATING_DISABLE, like every other endpoint write of dce_aud_az_configure, and read back: a word that reads
+// back differently ends the refresh with BC250_AZ_STATUS_MISMATCH and leaves AUDIO_ENABLED 1 again, because an
+// endpoint with a stale port ID is still an endpoint that plays.
+long Bc250DpAudioPortIdRefresh(BC250_AZ_IO* Io, unsigned long Endpoint, unsigned long long PortId, int Enabled,
+                               BC250_DPAUDIO_PORTID* Result)
+{
+    unsigned long hpc = 0, bracket = 0;
+    long status, first;
+
+    Result->Before = Result->After = 0;
+    Result->Changed = Result->Cycled = Result->Writes = 0;
+    ZeroResult(&Result->Off);
+    ZeroResult(&Result->On);
+    if (Endpoint >= BC250_DPAUDIO_ENDPOINTS) return BC250_AZ_STATUS_INVALID_PARAMETER;
+    if (PortId == 0) return BC250_AZ_STATUS_INVALID_PARAMETER;      // no container ID: Linux's constants stay
+    TRY(PortIdRead(Io, Endpoint, &Result->Before));
+    Result->After = Result->Before;
+    if (Result->Before == PortId) return BC250_AZ_STATUS_SUCCESS;   // the ELD already carries it: no write at all
+    if (Enabled) {
+        status = Bc250DpAudioSetEnabled(Io, Endpoint, 0, &Result->Off);
+        Result->Writes += Result->Off.Writes;
+        if (status < 0) return status;                               // the sink did not go away: change nothing
+        Result->Cycled = 1;
+    }
+    // From here every step runs and the first failure is kept, so that one bad write cannot leave the endpoint
+    // clock-gated or unplugged. The bracket is dce_aud_az_configure's: CLOCK_GATING_DISABLE around the words.
+    first = Bc250AzIndirectRead(Io, Endpoint, BC250_AZ_IX_HOT_PLUG_CONTROL, &hpc);
+    if (first >= 0) {
+        bracket = 1;
+        status = Bc250AzIndirectWrite(Io, Endpoint, BC250_AZ_IX_HOT_PLUG_CONTROL, hpc | HPC_CLOCK_GATING_DISABLE);
+        if (status >= 0) Result->Writes++;
+        first = status;
+    }
+    status = Bc250AzIndirectWrite(Io, Endpoint, BC250_AZ_IX_SINK_INFO2,
+                                  SET(0, SINK_INFO2, PORT_ID0, (unsigned long)(PortId & 0xFFFFFFFFul)));
+    if (status >= 0) { Result->Writes++; Result->Changed = 1; }
+    if (first >= 0) first = status;
+    status = Bc250AzIndirectWrite(Io, Endpoint, BC250_AZ_IX_SINK_INFO3,
+                                  SET(0, SINK_INFO3, PORT_ID1, (unsigned long)((PortId >> 32) & 0xFFFFFFFFul)));
+    if (status >= 0) { Result->Writes++; Result->Changed = 1; }
+    if (first >= 0) first = status;
+    // Only a HOT_PLUG_CONTROL that was read is written back: hpc 0 here would clear AUDIO_ENABLED as well.
+    if (bracket) {
+        status = Bc250AzIndirectWrite(Io, Endpoint, BC250_AZ_IX_HOT_PLUG_CONTROL, hpc & ~HPC_CLOCK_GATING_DISABLE);
+        if (status >= 0) Result->Writes++;
+        if (first >= 0) first = status;
+    }
+    status = PortIdRead(Io, Endpoint, &Result->After);
+    if (first >= 0) first = status;
+    // The read-back is the whole point of the refresh: a port ID that did not land is worse than Linux's constant,
+    // because it says the ELD holds something nobody chose.
+    if (first >= 0 && Result->After != PortId) first = BC250_AZ_STATUS_MISMATCH;
+    if (Result->Cycled) {
+        status = Bc250DpAudioSetEnabled(Io, Endpoint, 1, &Result->On);
+        Result->Writes += Result->On.Writes;
+        if (first >= 0) first = status;
+    }
+    return first;
 }
 
 // ---- step 2: the stream half ---------------------------------------------------------------------------------------

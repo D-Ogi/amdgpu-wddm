@@ -1,0 +1,17 @@
+staging directory before: False
+staging directory after:  False
+one-shot task present:    False
+switch EnableDpAudio = 1
+switch EnableDpAudioEndpoint = 1
+switch EnableDpAudioStream = 1
+switch EnableDpAudioEdid = absent
+TdrDelay = 10
+boot 2026-10-09T08:04:16.5000000Z
+faults since boot (Display 4101/4102, WHEA, BugCheck): 0
+--- dpaudio state
+  state enabled, reason: stream on and endpoint enabled
+  starts 1 resumes 0 stops 0 refusals 0 failures 0 path-on 0 path-off 0
+  stream on, step NONE, NTSTATUS 0x00000000; on 1 off 0 undone 0
+  reference clock 6000 (100 kHz units), DTO1 module 6000000 phase 240000, DTO_SOURCE 0x00100010
+--- temperature and clock
+

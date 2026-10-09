@@ -3,8 +3,9 @@
     python tools/build/pe_compare.py <reference.dll> <rebuilt.dll>
 
 Those fields are the COFF header TimeDateStamp, the TimeDateStamp of every debug directory entry, and the GUID and
-age of the CodeView (RSDS) record. Everything else, the PE CheckSum included, must be equal. Prints each differing
-byte range with the field it belongs to; exit 0 when the only differences are in those fields (or none), 1
+age of the CodeView (RSDS) record. The PE CheckSum may also differ, but only when the reference CheckSum is the
+CheckSum of the rebuilt image with those fields copied in (a /RELEASE link). Everything else must be equal. Prints
+each differing byte range with the field it belongs to; exit 0 when the only differences are in those fields (or none), 1
 otherwise. Used to show that the committed router source (driver/umd/router) rebuilds the registered binary.
 """
 import hashlib
@@ -49,6 +50,23 @@ def volatile_fields(data):
     return fields
 
 
+def checksum_offset(data):
+    return struct.unpack_from('<I', data, 0x3C)[0] + 24 + 64
+
+
+def pe_checksum(data):
+    """The optional header CheckSum of an image (the algorithm of imagehlp CheckSumMappedFile)."""
+    skip = checksum_offset(data)
+    padded = data + (b'\0' if len(data) % 2 else b'')
+    total = 0
+    for i in range(0, len(padded), 2):
+        if skip <= i < skip + 4:
+            continue
+        total += padded[i] | padded[i + 1] << 8
+        total = (total & 0xFFFF) + (total >> 16)
+    return ((total & 0xFFFF) + (total >> 16) + len(data)) & 0xFFFFFFFF
+
+
 def main(reference_path, rebuilt_path):
     reference = open(reference_path, 'rb').read()
     rebuilt = open(rebuilt_path, 'rb').read()
@@ -59,6 +77,18 @@ def main(reference_path, rebuilt_path):
     if fields != volatile_fields(rebuilt):
         print('the per-build fields sit at different offsets')
         return 1
+    # The rebuilt image with the reference's per-build fields copied in: equal to the reference exactly when every
+    # difference sits in those fields. Printed as evidence, never written back.
+    patched = bytearray(rebuilt)
+    for off, ln, _ in fields:
+        patched[off:off + ln] = reference[off:off + ln]
+    # A link with /RELEASE also writes a CheckSum, and the CheckSum covers the per-build fields. It counts as one of
+    # them only when the reference CheckSum is the CheckSum of the patched image.
+    cks = checksum_offset(reference)
+    reference_checksum = struct.unpack_from('<I', reference, cks)[0]
+    if reference[cks:cks + 4] != rebuilt[cks:cks + 4] and reference_checksum and reference_checksum == pe_checksum(bytes(patched)):
+        fields = fields + [(cks, 4, 'CheckSum, recomputed')]
+        patched[cks:cks + 4] = reference[cks:cks + 4]
     ranges, start = [], None
     for i in range(len(reference) + 1):
         differs = i < len(reference) and reference[i] != rebuilt[i]
@@ -81,11 +111,6 @@ def main(reference_path, rebuilt_path):
         print('0x%05X-0x%05X  %s  %s -> %s' % (a, b - 1, ' + '.join(names) if explained else 'UNEXPLAINED',
                                                reference[a:b].hex(), rebuilt[a:b].hex()))
     print('%d bytes, %d differing range(s), %d outside the per-build fields' % (len(reference), len(ranges), unexplained))
-    # The rebuilt image with the reference's per-build fields copied in: equal to the reference exactly when every
-    # difference sits in those fields. Printed as evidence, never written back.
-    patched = bytearray(rebuilt)
-    for off, ln, _ in fields:
-        patched[off:off + ln] = reference[off:off + ln]
     print('SHA-256 reference                        %s' % hashlib.sha256(reference).hexdigest().upper())
     print('SHA-256 rebuilt                          %s' % hashlib.sha256(rebuilt).hexdigest().upper())
     print('SHA-256 rebuilt, reference fields copied %s' % hashlib.sha256(bytes(patched)).hexdigest().upper())

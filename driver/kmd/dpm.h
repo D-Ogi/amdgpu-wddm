@@ -3,12 +3,12 @@
 // guard's persistence and the telemetry snapshot.
 #pragma once
 #include "bc250_dpm.h"
+// The periodic telemetry block's cadence and its decision (BD-097): BC250_DPM_LOG_MS, BC250_DPM_IDLE_LOG_MS,
+// BC250_DPM_IDLE_LOG_MAX_MS and Bc250DpmTelemetryDue live there, so the host test can drive the whole rule.
+#include "dpm_log_cadence.h"
 
 #define BC250_DPM_TICK_MS 25u               // the governor's period; the timer resolution may stretch it
 #define BC250_DPM_VERIFY_MS 1000u           // SMU readback of clock and VID
-#define BC250_DPM_LOG_MS 5000u              // one telemetry block in the driver log
-#define BC250_DPM_IDLE_LOG_MS 60000u        // the block's period at the idle point (BD-097), TelemetryIdleLogMs
-#define BC250_DPM_IDLE_LOG_MAX_MS 3600000u
 #define BC250_DPM_ERROR_LIMIT 3u            // failed transitions in a row before the governor gives up
 
 typedef struct _BC250_DPM_SNAP {

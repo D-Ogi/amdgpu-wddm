@@ -19,7 +19,9 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
 The build is a native MSVC build, like the M12 per-application packages: vcvars64.bat, meson from PYTHONPATH,
 ninja and glslang on PATH, CC and CXX set to cl. vkd3d-proton also needs the IDL compiler widl (MSYS2
 mingw64 ships one); its directory goes at the end of PATH, so that nothing else in it shadows the MSVC tools. After configure the script compares the new log's "Build Options:" line with the option set and
-stops on any difference.
+stops on any difference. The set the script passes is the configured set plus the reproducible-build switches
+of Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%. The switches
+go at the end of the c_args, cpp_args and cpp_link_args that ddi-engine-lto already has.
 
 The source tree must be a vkd3d-proton checkout with its submodules initialized (git submodule update --init
 --recursive); this script patches nothing and fetches nothing.
@@ -69,6 +71,7 @@ if (-not $Glslang) { $Glslang = Join-Path $root 'scratch\glslang\bin' }
 if (-not $Temp) { $Temp = Join-Path $root 'scratch\tmp' }
 $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
+$options = Add-ReproducibleMesonOptions $options $Source $Build
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'libs\vkd3d\vkd3d_private.h'))) { throw "$Source is not a vkd3d-proton source tree" }
 # An uninitialized submodule is an empty directory; meson would fail much later with a less useful message.

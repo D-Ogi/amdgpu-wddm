@@ -8,7 +8,10 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | File | Purpose |
 |---|---|
 | `new-release-cert.ps1` | Creates the release test-signing certificate once, in a private directory outside the repository (never in the repo or the package). Separate from the lab certificate. |
-| `release-sources.json` | The registered lab artifacts that make up the release, with SHA256. The build refuses any other byte. |
+| `release-sources.json` | The registered lab artifacts that make up the release, with SHA256 and the origin of each file (see "Provenance" below). The build refuses any other byte. |
+| `provenance.py` | Gate (build): every payload file names its commit, its recipe and its hash, and every commit that it names is on a published branch. See "Provenance" below. |
+| `rebuild-check.ps1` | Builds payload files again from their commits in temporary work trees and compares the hashes. `build-release.ps1 -RebuildCheck` runs it. |
+| `test_provenance.py` | Host test of `provenance.py` in temporary repositories. It is the `release-provenance` check of `tools\quality\quick.ps1`. |
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts; with `-SetupApp`, also the setup window `setup\amdgpu_wddm_setup.exe` (`tools/win/amdgpu_wddm_setup`). |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
@@ -27,7 +30,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once
-pwsh -File tools\release\build-release.ps1 [-SetupApp <setup build folder>]   # the control app comes from its release-sources.json rows
+pwsh -File tools\release\build-release.ps1 [-SetupApp <setup build folder>] [-RebuildCheck]   # the control app comes from its release-sources.json rows
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
@@ -147,6 +150,47 @@ would take the gate with it, and the commit is what was merged. A wagon gets its
 the train. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
 (`<id> <path> <reason>`); without that file the gate runs with no exceptions. The fork repositories take the same run
 with `--paths src`. One run over `driver` and `tools` takes about 15 s.
+
+## Provenance
+
+Each `files` entry of `release-sources.json` records where its bytes come from. `provenance.py` reads that record,
+and the release build fails when the record does not agree with the files. The reasons and the measurements are in
+`docs/design/reproducible-builds.md`.
+
+| Field | Content |
+|---|---|
+| `built_from` with `recipe` | `repo`, `commit`, `recipe`, `args` and `output`: a build of that commit by that recipe of this repository at `recipe_commit` (default: `commit`). `inputs` names the other trees that the recipe reads. `unsigned_output` names the image before the signature. |
+| `built_from` with `path` | `repo`, `commit` and `path`: a data file, the blob at that path as a checkout writes it. |
+| `third_party` | `url`, `version` and `sha256`. A file from an archive also has `archive_sha256` and `archive_path`. |
+| `sha256` | The hash of the source file. A signed file also has `unsigned_sha256` (the image before the signature) and `authenticode_sha256` (the Authenticode digest). |
+| `unverified` | Why no rebuild gave these bytes. The gate accepts this text in place of a matching rebuild and prints the count of such entries. |
+| `release_edits` | What `build-release.ps1` changes in the packaged copy. Only the INF has it. |
+
+`repositories` gives each repository name its URL, its local checkouts under `BC250_ROOT` and the repositories of
+its submodules. `recipe_repository` is the name of this repository in that table. An argument of a recipe can hold
+a placeholder: `{src}`, `{out}`, `{root}`, `{input:<name>}`, `{payload:<package path>}` or `{tool:<name>}`.
+
+`build-release.ps1` runs `provenance.py check` two times. The check uses no network and builds nothing.
+
+1. After the copy step, the check reads the sources. Every payload entry must have `built_from` or `third_party`.
+   Every commit that an entry names must be in a local checkout. A remote-tracking branch of a remote with the URL of
+   that repository must contain the commit (`git branch -r --contains`). The recipe must exist at its commit. Each
+   source file must have its recorded hash. A data file must be its blob, byte for byte.
+2. In the gates step, the check also reads the package (`--package`). Each packaged copy must be its source. A
+   re-signed file must have the recorded Authenticode digest. Only an entry with `release_edits` can differ.
+
+`-RebuildCheck` also runs `rebuild-check.ps1`, which is slow and therefore off by default. That script builds each
+`built_from` entry again from its commit, in temporary work trees under `scratch\repro-builds\rb`. It compares the
+hashes and writes `rebuild-check.json` into the output folder. Run it alone like this:
+
+```
+pwsh -File tools\release\rebuild-check.ps1 -Plan                        # the builds and their arguments, no build
+pwsh -File tools\release\rebuild-check.ps1 -Path payload/kmd/bc250kmd.sys
+pwsh -File tools\release\rebuild-check.ps1 -Twice -IncludeUnverified    # two builds each: the determinism measurement
+```
+
+When a rebuild gives the bytes of an `unverified` entry, the script reports it. Remove the `unverified` field in
+the same commit that records the result.
 
 PROVENANCE: vulkaninfo.exe 1.4.335 from Khronos Vulkan-Tools (LunarG build), Apache-2.0.
 PROVENANCE: linux-firmware `amdgpu/cyan_skillfish2_*.bin` at 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, redistributable per `LICENSE.amdgpu`. Not in the package and never committed: the installer downloads the files (kernel.org, GitLab mirror) or takes them from `-FirmwareDir`, checked against `tools/firmware/cyan_skillfish2.json`.

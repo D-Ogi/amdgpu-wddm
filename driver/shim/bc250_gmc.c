@@ -18,7 +18,9 @@
 #include "soc15_common.h"
 
 #define BC250_FOUR_GB		0x100000000ULL
-#define BC250_GART_ENGINE	17u	/* gmc_v10_0_flush_gpu_tlb: "Use register 17 for GART" */
+/* gmc_v10_0_flush_gpu_tlb: "Use register 17 for GART". Every CPU MMIO flush of this driver uses
+ * it, not only the GART one; the engine table is in bc250_gmc.h. */
+#define BC250_GART_ENGINE	BC250_INV_ENG_CPU
 
 static u64 bc250_align_up(u64 value, u64 alignment)
 {

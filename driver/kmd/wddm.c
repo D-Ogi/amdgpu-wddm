@@ -2422,6 +2422,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                  vmid.Reuses, vmid.Busy, vmid.RuleRefusals);
         GuardLog("wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations", vmid.Flushes,
                  vmid.FlushVmids);
+        // Option (b): the root write and the invalidation as packets in front of the frame. With the gate off
+        // both numbers are 0 and the flush was MMIO ahead of every job, as before.
+        GuardLog("wddm summary: ring VM flush %s: %lu frames, %lu of them on a root the VMID held",
+                 vmid.RingFlushGate ? "on" : "off", vmid.RingFlushes, vmid.RingFlushSame);
     }
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
@@ -7327,6 +7331,9 @@ C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) ==
          FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetInterruptTargetPresentId) + sizeof(PVOID));
 #define BC250_WDDM_TABLE_TAIL_START \
     (FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID))
+// GetChildContainerId is a WDDM 1.2 member and this table fills it (step 4 of DP audio), so it has to sit before
+// that tail, or WddmCheckReserved would report it as a member of a version this driver does not declare.
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetChildContainerId) < BC250_WDDM_TABLE_TAIL_START);
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -7379,7 +7386,8 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
 // counters are file-scope because the child DDIs may run before BC250_WDDM exists. All of these DDIs are
 // PASSIVE_LEVEL ones; the IRQL test only guards the log's spin lock against an annotation being wrong.
 typedef enum _BC250_WDDM_TRACED {
-    TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedIsSupportedVidPn,
+    TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedGetChildContainerId,
+    TracedIsSupportedVidPn,
     TracedRecommendFunctionalVidPn, TracedEnumVidPnCofuncModality, TracedSetVidPnSourceVisibility, TracedCommitVidPn,
     TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability, TracedCount
 } BC250_WDDM_TRACED;
@@ -7389,8 +7397,12 @@ static volatile LONG g_TracedCalls[TracedCount];
 static NTSTATUS WddmTraced(BC250_WDDM_TRACED Slot, _In_z_ const char* Name, NTSTATUS Status, ULONG Detail)
 {
     LONG calls = InterlockedIncrement(&g_TracedCalls[Slot]);
+    // STATUS_MONITOR_NO_DESCRIPTOR is the designed answer of GetChildContainerId (step 4 of DP audio): it keeps the
+    // container ID the operating system offers. NT_SUCCESS is false for it, so without this line the designed answer
+    // of every call would be logged as a failure for the first 64 calls (b26 review finding F2).
+    BOOLEAN failed = !NT_SUCCESS(Status) && Status != STATUS_MONITOR_NO_DESCRIPTOR;
 
-    if (KeGetCurrentIrql() <= DISPATCH_LEVEL && (calls <= 6 || (!NT_SUCCESS(Status) && calls <= 64)))
+    if (KeGetCurrentIrql() <= DISPATCH_LEVEL && (calls <= 6 || (failed && calls <= 64)))
         GuardLog("wddm: display %s call %ld detail 0x%X -> 0x%08X", Name, calls, Detail, Status);
     return Status;
 }
@@ -7414,6 +7426,14 @@ static DXGKDDI_QUERY_DEVICE_DESCRIPTOR Bc250WddmQueryDeviceDescriptor;
 static NTSTATUS Bc250WddmQueryDeviceDescriptor(_In_ const PVOID Context, _In_ ULONG ChildUid, _Inout_ PDXGK_DEVICE_DESCRIPTOR Descriptor)
 {
     return WddmTraced(TracedQueryDeviceDescriptor, "QueryDeviceDescriptor", Bc250QueryDeviceDescriptor(Context, ChildUid, Descriptor), ChildUid);
+}
+
+static DXGKDDI_GET_CHILD_CONTAINER_ID Bc250WddmGetChildContainerId;
+static NTSTATUS Bc250WddmGetChildContainerId(_In_ const PVOID Context, _In_ ULONG ChildUid,
+                                             _Inout_ PDXGK_CHILD_CONTAINER_ID ContainerId)
+{
+    return WddmTraced(TracedGetChildContainerId, "GetChildContainerId",
+                      Bc250GetChildContainerId(Context, ChildUid, ContainerId), ChildUid);
 }
 
 #define BC250_WDDM_TRACED_DDI(DdiType, Name, ArgType)                                                          \
@@ -7453,6 +7473,10 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiQueryChildRelations = Bc250WddmQueryChildRelations;
     Data->DxgkDdiQueryChildStatus = Bc250WddmQueryChildStatus;
     Data->DxgkDdiQueryDeviceDescriptor = Bc250WddmQueryDeviceDescriptor;
+    // WDDM 1.2, inside the WDDM 2.0 block this table fills (the assert near WddmCheckReserved says so). It keeps
+    // dxgkrnl's default container ID and takes the child's port ID for the ELD of the DP audio endpoint
+    // (pnp.c Bc250GetChildContainerId, docs/design/dp-audio.md step 4).
+    Data->DxgkDdiGetChildContainerId = Bc250WddmGetChildContainerId;
     Data->DxgkDdiSetPowerState = Bc250SetPowerState;
     Data->DxgkDdiUnload = Bc250Unload;
     Data->DxgkDdiStopDeviceAndReleasePostDisplayOwnership = Bc250StopDeviceAndReleasePostDisplayOwnership;
@@ -7522,9 +7546,9 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
     // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
     // version alone obliges none of them; WDDMVersion stays 2.0 (ADR 0019 B1). QueryInterface, ControlEtwLogging,
-    // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, GetChildContainerId, SetPowerComponentFState,
+    // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
-    // display-only table today. ControlInterrupt and GetScanLine are **not** in this list any more: the flip
-    // path above sets both. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
+    // display-only table today. ControlInterrupt, GetScanLine and GetChildContainerId are **not** in this list
+    // any more: the flip path above sets the first two, and step 4 of DP audio sets the third. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
     WddmCheckReserved(Data);
 }

@@ -71,5 +71,11 @@ still there.
   [M793](../facts/d3d.md#m793) and [M794](../facts/d3d.md#m794), measured on the development PC
   (`evidence/windows/2026-09-28-E56-dxgi-shadowing-dev-pc/`). Nothing there measures our own driver.
 - `evidence/windows/2026-09-27-E43-witcher3-dx12-present-log/RESULT.md`.
+- [Vulkan WSI through DXGI](../design/vulkan-wsi-dxgi.md) (2026-10-07): the route on a D3D12 device of our
+  adapter that replaces the kernel-thunk plan of point 1. It was the default on the b26 candidate until its
+  first lab trial, which froze every client that used it before the first present (BD-105, 2026-10-09). No
+  frame has been presented through it. The wagon left train b26, so the route is in no release: the system
+  Vulkan ICD of 0.7.216.100-tester.24 is the tester.23 file, which has no route code. The route continues on
+  `wsi/b27-vk-dxgi` and `amdgpu-wddm/b27-vk-wsi-dxgi`, opt-in, with `gdi` the default again.
 - Mesa fork `amdgpu-wddm/radv-wddm2-kmt-enum` c34ab7cd: `src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c`,
   `src/vulkan/wsi/wsi_common_win32.cpp`; `driver/kmd/wddm.c` `Bc250WddmPresent`.

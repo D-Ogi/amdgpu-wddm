@@ -17,6 +17,12 @@ minutes. The lab measured the first number on 2026-10-08 (defect BD-097): 708 of
 were one line of the SDMA paging submit path, the tail held 354 s, and the two mode-set lines of an
 hour before were gone.
 
+The lab measured it again on 2026-10-09, after the rate limit and the summary block of the same
+defect: an idle desktop wrote 0.256 lines a second, 78 % of them the governor's periodic telemetry
+block every 60 s, and the tail then held about 3000 s. The plan of BD-097 asks for an hour, so that
+block goes to 120 s at the idle point (`driver/kmd/dpm_log_cadence.h`), which leaves about 4900 s of
+an idle desktop in the tail.
+
 ## The rules for a line on a hot path
 
 A hot path is a path that runs for each frame, each submission or each paging operation. One
@@ -30,9 +36,10 @@ line, and a new hot line must use one of them.
 | A rate limit | `log_rate.h` | The first eight calls of the device start write their line. After them one line a minute carries the count |
 
 The rate limit is for a line that must keep a cadence, because the reader of the trail must see that
-the path still works. One minute is the cadence that the telemetry block of the same defect got. A
-call that follows 2 s of quiet also writes its line, so the first work after an idle desktop is in
-the log, but only while the minute still has room for a second line. That cap is what bounds the
+the path still works. One minute is the cadence that the telemetry block of the same defect got
+first. That block went to two minutes at the idle point after the next lab read, and this rate limit
+keeps its minute. A call that follows 2 s of quiet also writes its line, so the first work after an
+idle desktop is in the log, but only while the minute still has room for a second line. That cap is what bounds the
 rule: two lines a minute is 120 lines an hour, whatever shape the traffic has. The measured idle
 traffic gives 67 lines an hour, against 7200 before. The host test is
 `driver/kmd/test/log_rate_test.c`, and `tools/quality/quick.ps1` runs it as the `log-rate` gate with

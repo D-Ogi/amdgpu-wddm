@@ -12,18 +12,19 @@ codec answers on the GPU's audio function, but the display driver must do three 
 The KMD does this in `driver/kmd/dpaudio.c` (switches, lock, record, log, entry points and the escape) and
 `driver/kmd/dpaudio_seq.c` (the register work, with no Windows code in it). The sequences are Linux amdgpu's:
 `dce_audio.c` for the endpoint and the DTO, `dcn10_stream_encoder.c` for the stream encoder (Linux v6.18).
-`driver/kmd/test/dpaudio_test.c` checks every write against a fake register file.
+`driver/kmd/test/dpaudio_test.c` checks every write against a fake register file. The Windows entry points, the
+switches and the container ID are the only Windows parts.
 
-The work has six steps. Steps 0 to 2 are in the driver from KMD 0.7.216.1. Step 4 is in the driver from KMD
-0.7.216.19, without the container ID. Steps 3 and 5 are not done yet.
+The work has six steps. Steps 0 to 2 are in the driver from KMD 0.7.216.1, step 4 from 0.7.216.19 and its
+container ID from 0.7.216.25. Step 3 ran on the lab on 2026-10-09. Step 5 is not written yet.
 
 | Step | What it does | State |
 | --- | --- | --- |
 | 0 | Reads the codec, the straps, the encoders, the endpoints and the reference clock. Writes nothing | 0.7.215.1 |
 | 1 | Configures the endpoint and sets `AUDIO_ENABLED` | 0.7.215.1, changed in 0.7.216.1 |
-| 2 | Starts the audio stream: wall DTO, AFMT, DP_SEC packets | 0.7.216.1 |
-| 3 | A tone through the new endpoint, heard at the monitor | lab trial to do |
-| 4 | The real ELD from the monitor's EDID | 0.7.216.19. The container ID is not written |
+| 2 | Starts the audio stream: wall DTO, AFMT, DP_SEC packets | 0.7.216.1. Measured on the lab ([M850](../facts/display.md#m850)) |
+| 3 | A tone through the new endpoint, at the right rate | done on the lab, 2026-10-09 ([M850](../facts/display.md#m850), [M851](../facts/display.md#m851)) |
+| 4 | The real ELD from the monitor's EDID, with the container ID | 0.7.216.19, the container ID 0.7.216.25 |
 | 5 | Hot plug of the monitor | not written |
 
 ## Why the endpoint waits for the stream
@@ -48,8 +49,9 @@ and every resume. Only the value 1 opens a switch.
 | `EnableDpAudio` | 1 | No audio register is read or written. The driver behaves as before this feature |
 | `EnableDpAudioEndpoint` | 1 | The start is refused. No endpoint, no stream |
 | `EnableDpAudioStream` | 1 | The start is refused. No endpoint, no stream |
+| `EnableDpAudioContainerId` | 1 | The ELD keeps Linux's constant port ID. No container-ID register is written |
 
-The INF and `tools/release/installer/registry-defaults.json` both write the three defaults.
+The INF and `tools/release/installer/registry-defaults.json` both write the four defaults.
 
 ## Preconditions
 
@@ -138,6 +140,26 @@ This driver therefore uses the counter: module = count x 1000. On unit A that is
 24.000 MHz. The driver reads the counter at every start. A count outside 5000 to 7000 refuses the start with
 `REFCLK`, so a counter that reads 0 or nonsense never gives a module.
 
+### What the lab measured (step 3, 2026-10-09)
+
+The first Windows trial of the stream half ran on the installed 0.7.216.100-tester.23 package
+([M850](../facts/display.md#m850), [M851](../facts/display.md#m851), evidence
+`evidence/windows/2026-10-09-dp-audio-step3/`). It measured the rate twice, from two sides:
+
+- A 1 kHz tone from the interactive session. `IAudioClock::GetPosition` against `QueryPerformanceCounter` gives
+  1.0000 for exclusive 48 kHz, polled and event-driven, and 0.9991 over the whole run of shared 44.1 kHz
+  (1.0000 after the first two seconds). The bound was 0.5 %. The same call took 30.6 s for 10 s of audio before
+  the MSI fix of BD-092.
+- `DP0_DP_SEC_AUD_M_READBACK`, which holds the Maud of the DP audio time stamp against `AUD_N` 32768. It reads
+  2740 while 44.1 kHz plays and 2980 to 2984 while 48 kHz plays. The ratio is 1.0890 against 48000 / 44100 =
+  1.08844, which is 0.06 %. That is a witness on the hardware side, with no part of the Windows audio stack in it.
+
+So the DTO1 module decision below is measured, not argued: Linux's 5 988 740 would be 0.19 % fast, which the
+exclusive arms would have shown as about 1.0019, five times the spread they do show. The whole stream state was
+read before, twice during and after the tone and did not change, `AFMT_AUDIO_FIFO_OVERFLOW` included. Step 4 ran
+on the lab in the same trial: the endpoint is built from the monitor's EDID, and the class driver publishes
+32 000, 44 100 and 48 000 Hz, which is the rate mask `dce_aud_hw_init` writes.
+
 ### Failure and mismatch
 
 A failed write, or a read-back whose named bits differ, ends the start at once. The driver then runs the stop
@@ -173,8 +195,9 @@ When the monitor path powers on again, or the driver comes back to D0, the start
 
 ## The record and the CLI
 
-`BC250_ESCAPE_RUN_DPAUDIO` has two exact sizes:
+`BC250_ESCAPE_RUN_DPAUDIO` has three exact sizes:
 
+- ABI 3 (536 bytes, KMD 0.7.216.25 and later): the ABI 2 record followed by the container-ID record.
 - ABI 2 (480 bytes, KMD 0.7.216.1 and later): the ABI 1 record followed by the stream record.
 - ABI 1 (408 bytes): the 0.7.215.1 layout. A 0.7.216.1 driver still answers it.
 
@@ -183,9 +206,14 @@ of the last stream sequence, the reference count, the DTO1 module and phase, the
 `DP_SEC_CNTL`, `AFMT_CNTL` and both packet-control registers, the mismatch triple, and the counters of stream
 starts, stops and undos.
 
-`bc250kmd_cli dpaudio` prints the check table (with the reference-clock row), the decision a start would take now,
-the raw slots and the record. `bc250kmd_cli dpaudio state` prints the record alone. The CLI asks with ABI 2 and asks
-again with ABI 1 when an older driver refuses the size.
+The container-ID record holds the switch `EnableDpAudioContainerId`, the port ID the operating system gave for the
+child and the one the ELD carries, the identity (`ManufacturerName` and `ProductCode`) next to it, whether the last
+configure used the EDID sink, the status of the last refresh, and the counters of DDI calls, ELD writes, calls that
+found the right ELD already there, and presence cycles.
+
+`bc250kmd_cli dpaudio` prints the check table (with the reference-clock row), the port ID each endpoint's ELD holds
+now, the decision a start would take now, the raw slots and the record. `bc250kmd_cli dpaudio state` prints the
+record alone. The CLI asks with ABI 3 and asks again one ABI lower each time an older driver refuses the size.
 
 ## Step 4: the sink from the EDID
 
@@ -200,8 +228,9 @@ and `dce_aud_az_configure`.
 | LPCM channels | The LPCM short audio descriptor with the most channels, at most 8 | 2 |
 | LPCM rates | Its rate bits (32 to 192 kHz) | 32, 44.1 and 48 kHz |
 | LPCM sizes | Its sample-size bits (16, 20, 24 bit) | 16 bit |
-| `MANUFACTURER_ID`, `PRODUCT_ID` | EDID bytes 8 and 9, and the product code | 0 |
+| `MANUFACTURER_ID`, `PRODUCT_ID` | EDID bytes 8 and 9, and the product code | The operating system's `EldInfo`, else 0 |
 | Sink name | The monitor name descriptor, at most 18 characters | "BC-250 DP" |
+| Port ID (`SINK_INFO2`, `SINK_INFO3`) | Not in the EDID: `EldInfo.PortId` of the child (below) | Linux DC's two constants |
 
 Without an EDID, or with an EDID that has no LPCM descriptor, the endpoint gets the fixed set. This is a deviation
 from Linux, which then writes no LPCM descriptor. An endpoint without a format would be an endpoint without sound.
@@ -209,17 +238,60 @@ from Linux, which then writes no LPCM descriptor. An endpoint without a format w
 `HBR_CAPABLE` stays 0. Linux writes 1 on this link, because `check_audio_bandwidth_dp` returns early for SST
 8b/10b (`dce_audio.c`). HBR audio is not in the scope of this driver yet.
 
-The port ID (`SINK_INFO2` and `SINK_INFO3`) keeps Linux's constant until the driver gives Windows a container ID
-(`DXGK_CHILD_CONTAINER_ID`).
+The log line `dpaudio: configure done` says `EDID` or `fixed set`. The next two lines have the LPCM values, the
+sink IDs and the port ID. `driver/kmd/test/dpaudio_test.c` runs step 4 with the lab monitor's EDID and with the
+negative cases.
 
-The log line `dpaudio: configure done` says `EDID` or `fixed set`. The next line has the LPCM values and the sink
-IDs. `driver/kmd/test/dpaudio_test.c` runs step 4 with the lab monitor's EDID and with the negative cases.
+## The container ID
+
+The ELD of a sink carries a port ID: 64 bits in `SINK_INFO2` and `SINK_INFO3`. Windows makes one for each child of
+the display adapter, out of the child's name, and offers it to the driver together with the default container ID it
+derived from the EDID (`DXGK_CHILD_CONTAINER_ID`, `DxgkDdiGetChildContainerId`). An audio endpoint whose ELD carries
+that port ID belongs to the same device container as the monitor. Before 0.7.216.25 the driver left Linux DC's two
+constants there, because no Windows display manager gives DC a port ID.
+
+`Bc250GetChildContainerId` (`driver/kmd/pnp.c`) keeps the container ID Windows chose and returns
+`STATUS_MONITOR_NO_DESCRIPTOR` without touching the structure, which is what that answer means in the DDI
+reference: the display hardware has no container ID of its own. What it does take is the `EldInfo` next to it: the
+port ID, and the manufacturer and product, which step 4 uses only where the EDID gave none.
+
+The order of the calls decides the rest. Windows enumerates the children after `DxgkDdiStartDevice` has returned
+(`ref/windows-driver-docs`, "Enumerating Child Devices of a Display Adapter"), and `DpAudioStart` runs inside it. So
+the first start of a boot cannot know the port ID:
+
+1. The first start writes Linux's constants into the ELD, as before.
+2. Windows calls `DxgkDdiGetChildContainerId`. `DpAudioContainerId` keeps the port ID for every later start and
+   refreshes the ELD of the running endpoint at once.
+3. The refresh reads the two words first and writes nothing when they already hold that port ID. A later call with
+   the same ID therefore costs two reads.
+4. When they differ and this driver has `AUDIO_ENABLED` 1 on the endpoint, the sink goes away and comes back around
+   the write: `AUDIO_ENABLED` 0, the two words inside the clock-gating bracket, `AUDIO_ENABLED` 1. The HD Audio
+   class driver reads the ELD when the pin reports presence, so an ELD that changes under a pin that stays present
+   is never read again. Linux does the same at a mode set that changes the sink (`dce_aud_az_disable`,
+   `dce_aud_az_configure`, `dce_aud_az_enable`). The lab saw the class driver enable the pin's unsolicited
+   responses (note `unsolicited-enabled`), which is how it learns of the cycle.
+5. Every step after the first write runs whatever the one before it did, and the first failure is the result. A
+   refused, failed or mismatched refresh leaves the endpoint enabled and not clock-gated: an endpoint with a stale
+   port ID still plays.
+6. The two words are read back and compared. A port ID that did not land is `STATUS_DEVICE_DATA_ERROR` in the
+   record.
+
+Both DDI tables carry the entry point. `EnableDpAudioContainerId` 0 leaves the ELD with Linux's constants.
+
+What this does not prove: unit A's codec has no HDA-specification ELD buffer ([M819](../facts/linux.md#m819)), so
+whether the inbox class driver reads the sink information out of the vendor-verb registers at all is still open.
+The port ID is written where the AMD driver and Linux DC write it. Whether the endpoint and the monitor then share
+one device container on this unit is to be measured.
 
 ## Not proven yet
 
-- No lab trial has run step 2. The host test proves the order and the values against a fake register file only.
-- Nobody has heard the tone. During the Linux visit L1007 no headphones were on the monitor.
-- `AUDIO_ENABLED` last is a deviation from Linux. It needs the step 3 trial to show that the class driver still
-  finds the endpoint.
+- Nobody has heard the tone in a measured trial. The owner heard DP audio on tester.20 on 2026-10-07 (BD-092),
+  which is a report, not a measurement. The lab trial of 2026-10-09 measured the rate, not the sound.
 - The read-back of the update strobes is not known. The driver does not compare them.
-- No lab trial has run step 4. The class driver's name for the endpoint is to be checked on the lab.
+- The container ID is not measured on the lab: whether the audio endpoint and the monitor end in one device
+  container, and whether the class driver reads the ELD again after the presence cycle.
+- 32 kHz, more than two channels and HBR are untested. The endpoint publishes 32 kHz, but only 44.1 and 48 kHz
+  ran in the trial.
+- `DpAudioStop`, `DpAudioResume` and the path-power transitions are unexercised on the lab (the trial of
+  2026-10-09 recorded `stops 0 resumes 0`).
+- Step 5, hot plug, is not written. The monitor has never been unplugged in a trial.

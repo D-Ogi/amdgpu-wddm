@@ -421,6 +421,23 @@ NTSTATUS Bc250QueryDeviceDescriptor(_In_ const PVOID MiniportDeviceContext, _In_
     return ModesetQueryDescriptor((BC250_DEVICE*)MiniportDeviceContext, DeviceDescriptor);
 }
 
+// The container ID of the one child. dxgkrnl makes a default one out of the EDID that Bc250QueryDeviceDescriptor
+// answered and offers it here; the driver keeps it (STATUS_MONITOR_NO_DESCRIPTOR, and the structure is not
+// touched, as the DDI reference requires of that answer). The hardware carries no container ID of its own, so
+// there is nothing better to put there.
+//
+// What the driver does take is the EldInfo next to it: the port ID the operating system made for this child and
+// the monitor's manufacturer and product. DP audio writes the port ID into the ELD of the Azalia endpoint, so
+// that the audio endpoint and the monitor land in one device container (docs/design/dp-audio.md step 4).
+NTSTATUS Bc250GetChildContainerId(_In_ const PVOID MiniportDeviceContext, _In_ ULONG ChildUid,
+                                  _Inout_ PDXGK_CHILD_CONTAINER_ID ContainerId)
+{
+    if (ChildUid != BC250_CHILD_UID || ContainerId == NULL) return STATUS_INVALID_PARAMETER;
+    DpAudioContainerId((BC250_DEVICE*)MiniportDeviceContext, ContainerId->EldInfo.PortId,
+                       ContainerId->EldInfo.ManufacturerName, ContainerId->EldInfo.ProductCode);
+    return STATUS_MONITOR_NO_DESCRIPTOR;
+}
+
 NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG DeviceUid,
                             _In_ DEVICE_POWER_STATE DevicePowerState, _In_ POWER_ACTION ActionType)
 {
