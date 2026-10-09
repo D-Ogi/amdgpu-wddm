@@ -1512,8 +1512,11 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
     {
-        // Nothing was committed: both emitters refuse before writing and bc250_gfx_submit_ib undoes the allocation.
-        // A claim above stands: the register holds the new root, the table says so, and the VMID has no live job.
+        // Nothing was committed: every emitter refuses before writing, and bc250_gfx_submit_ib and
+        // bc250_gfx_submit_job_vm undo the allocation. A claim above stands, and the VMID has no live job. With
+        // the gate off the register holds the new root, because the MMIO flush ran before the claim. With the
+        // gate on the register still holds the old one, because the packet that writes it was never committed;
+        // the next job of this VMID writes the root again whatever the table says, so the two come back in step.
         (void)InterlockedCompareExchange(&Gfx->SubmitInFlight, previousPending, (LONG)seq);
         Gfx->SubmitSeq = previousSeq;
         GuardLog("gfx: IB 0x%llX x%lu dwords at VMID %lu refused, result %d", GpuAddress, SizeBytes / 4, Vmid, result);
