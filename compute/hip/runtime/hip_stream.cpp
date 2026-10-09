@@ -16,8 +16,15 @@ bool stream_valid(const ihipStream_t* stream) {
 }
 
 ihipStream_t* resolve_stream(hipStream_t stream) {
-    if (stream == nullptr) {
+    if (stream == nullptr || stream == hipStreamLegacy || stream == hipStreamPerThread) {
         // The default stream of the process. The device open fills its fields.
+        //
+        // HIP reserves two handle values for a stream that no program created: the legacy
+        // default stream and the per-thread default stream. No stream object can live at
+        // address 1 or 2, so the values are safe to test for. This runtime has one process
+        // default stream and no per-thread one, which is legal and stricter than HIP asks:
+        // work of the per-thread stream then also orders against the legacy one. llama.cpp
+        // passes hipStreamPerThread to hipMemcpyPeerAsync.
         return &state().null_stream;
     }
     return stream_valid(stream) ? stream : nullptr;

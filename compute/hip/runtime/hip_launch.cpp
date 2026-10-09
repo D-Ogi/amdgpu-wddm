@@ -332,4 +332,72 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     return hipSuccess;
 }
 
+// The dynamic group memory ceiling of one kernel. On a CUDA part a kernel may not ask for more
+// than 48 KiB of dynamic shared memory until a program lifts the ceiling with this call, and
+// llama.cpp lifts it for every kernel that needs more (CUDA_SET_SHARED_MEMORY_LIMIT in
+// common.cuh). This part has no such ceiling: the hardware gives 64 KiB of group memory per
+// workgroup and layer 1 checks each dispatch against it.
+//
+// So the call records the value and refuses one that the hardware could never give. That is
+// worth more than a plain success: a program learns about an impossible request at the call
+// that makes it.
+// The process lock is not recursive, so the group memory limit is read before the lock is
+// taken: hipGetDeviceProperties takes the lock itself.
+hipError_t hipFuncSetAttribute(const void* func, hipFuncAttribute attr, int value) {
+    if (func == nullptr) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+    size_t group_limit = 0;
+    if (attr == hipFuncAttributeMaxDynamicSharedMemorySize) {
+        hipDeviceProp_t prop;
+        const hipError_t err = hipGetDeviceProperties(&prop, 0);
+        if (err != hipSuccess) {
+            return err;  // hipGetDeviceProperties already recorded it
+        }
+        group_limit = prop.sharedMemPerBlock;
+    }
+
+    bc250hip::Guard guard;
+    bc250hip::State& s = state();
+    const auto found = s.functions.find(func);
+    if (found == s.functions.end()) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+    switch (attr) {
+        case hipFuncAttributeMaxDynamicSharedMemorySize:
+            if (value < 0 || static_cast<size_t>(value) > group_limit) {
+                return fail(hipErrorInvalidValue);
+            }
+            found->second.dynamic_group_max = value;
+            return hipSuccess;
+        case hipFuncAttributePreferredSharedMemoryCarveout:
+            // This part has no cache that group memory is carved out of, so there is nothing to
+            // prefer. The request is legal and has no effect.
+            return hipSuccess;
+        default:
+            return fail(hipErrorInvalidValue);
+    }
+}
+
+// A cooperative start, which guarantees that every workgroup of the grid runs at the same time
+// so that the grid can synchronise inside itself. This build cannot promise it: one hardware
+// queue, no cooperative dispatch packet and no reserved occupancy.
+//
+// hipDeviceGetAttribute answers 0 for hipDeviceAttributeCooperativeLaunch, and llama.cpp reads
+// that attribute at start-up and keeps the plain path (softmax.cu). The entry point exists
+// because the backend links against it, and it says no instead of starting a grid that would
+// deadlock inside its own barrier.
+hipError_t hipLaunchCooperativeKernel(const void* function, dim3 gridDim, dim3 blockDim,
+                                      void** args, size_t sharedMemBytes, hipStream_t stream) {
+    (void)gridDim;
+    (void)blockDim;
+    (void)args;
+    (void)sharedMemBytes;
+    (void)stream;
+    if (function == nullptr) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+    return fail(hipErrorNotSupported);
+}
+
 }  // extern "C"

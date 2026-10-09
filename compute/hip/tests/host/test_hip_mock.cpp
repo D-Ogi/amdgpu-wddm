@@ -13,7 +13,11 @@
 //   8. an event timestamp is the time its value retired, so two events report the gap between
 //      them and not zero;
 //   9. the error state belongs to the thread that made the error;
-//  10. a second fat binary in the same process registers and launches on its own.
+//  10. a second fat binary in the same process registers and launches on its own;
+//  11. the 13 entry points of step 3 answer as design section 4.9 states: the attributes agree
+//      with the device properties, the two-dimensional copy keeps the bytes between its rows,
+//      the per-thread default stream resolves, and the five refusals return the exact error
+//      code that llama.cpp acts on.
 //
 // It needs no GPU and no AMDGPU compiler: the code object comes from the committed fixture
 // compute/hip/tests/data/hip_test_kernels.gfx1013.fatbin.
@@ -641,7 +645,223 @@ int main(int argc, char** argv) {
     }
 
     // ---------------------------------------------------------------------------------------
-    std::printf("test_hip_mock: 10. the module unregisters\n");
+    std::printf("test_hip_mock: 10. the step 3 entry points\n");
+    {
+        (void)hipGetLastError();
+
+        // The attributes. Each one must agree with the field of hipGetDeviceProperties that
+        // carries the same thing, because a program may read either.
+        hipDeviceProp_t props10;
+        check(hipGetDeviceProperties(&props10, 0) == hipSuccess, "hipGetDeviceProperties for 10");
+        int value = -1;
+        check(hipDeviceGetAttribute(&value, hipDeviceAttributeWarpSize, 0) == hipSuccess,
+              "hipDeviceGetAttribute warp size");
+        check_u64((uint64_t)value, (uint64_t)props10.warpSize, "the attribute warp size");
+        check(hipDeviceGetAttribute(&value, hipDeviceAttributeMultiprocessorCount, 0) ==
+                  hipSuccess,
+              "hipDeviceGetAttribute compute unit count");
+        check_u64((uint64_t)value, (uint64_t)props10.multiProcessorCount,
+                  "the attribute compute unit count");
+        check(hipDeviceGetAttribute(&value, hipDeviceAttributeMaxSharedMemoryPerBlock, 0) ==
+                  hipSuccess,
+              "hipDeviceGetAttribute group memory");
+        check_u64((uint64_t)value, (uint64_t)props10.sharedMemPerBlock,
+                  "the attribute group memory per workgroup");
+        // The two answers llama.cpp acts on. Both must be 0, or it would take a path this
+        // build cannot run.
+        check(hipDeviceGetAttribute(&value, hipDeviceAttributeCooperativeLaunch, 0) == hipSuccess,
+              "hipDeviceGetAttribute cooperative launch");
+        check_u64((uint64_t)value, 0u, "cooperative launch is not supported");
+        check(hipDeviceGetAttribute(&value, hipDeviceAttributeVirtualMemoryManagementSupported,
+                                    0) == hipSuccess,
+              "hipDeviceGetAttribute virtual memory management");
+        check_u64((uint64_t)value, 0u, "virtual memory management is not supported");
+        check(hipDeviceGetAttribute(&value, (hipDeviceAttribute_t)9999, 0) ==
+                  hipErrorInvalidValue,
+              "an unknown attribute is refused and not guessed");
+        check(hipDeviceGetAttribute(&value, hipDeviceAttributeWarpSize, 1) ==
+                  hipErrorInvalidDevice,
+              "an attribute of a second device is refused");
+        check(hipDeviceGetAttribute(nullptr, hipDeviceAttributeWarpSize, 0) ==
+                  hipErrorInvalidValue,
+              "hipDeviceGetAttribute checks its pointer");
+        (void)hipGetLastError();
+
+        // The bus identifier. The mock backend reports bus 3, device 0, function 0.
+        char bus[32];
+        std::memset(bus, 0x7F, sizeof(bus));
+        check(hipDeviceGetPCIBusId(bus, (int)sizeof(bus), 0) == hipSuccess,
+              "hipDeviceGetPCIBusId");
+        check(std::strcmp(bus, "0000:03:00.0") == 0, "the bus identifier of the mock backend");
+        char shortbus[6];
+        check(hipDeviceGetPCIBusId(shortbus, (int)sizeof(shortbus), 0) == hipSuccess,
+              "hipDeviceGetPCIBusId into a short buffer");
+        check(std::strcmp(shortbus, "0000:") == 0,
+              "a short buffer truncates and stays terminated");
+        check(hipDeviceGetPCIBusId(bus, 0, 0) == hipErrorInvalidValue,
+              "hipDeviceGetPCIBusId refuses a zero length");
+        check(hipDeviceGetPCIBusId(bus, (int)sizeof(bus), 1) == hipErrorInvalidDevice,
+              "hipDeviceGetPCIBusId refuses a second device");
+        (void)hipGetLastError();
+
+        // No peer, and both entry points say so.
+        int can = -1;
+        check(hipDeviceCanAccessPeer(&can, 0, 0) == hipSuccess, "hipDeviceCanAccessPeer");
+        check_u64((uint64_t)can, 0u, "a device is not its own peer");
+        check(hipDeviceCanAccessPeer(&can, 0, 1) == hipErrorInvalidDevice,
+              "there is no second device to peer with");
+        check(hipDeviceEnablePeerAccess(0, 0) == hipErrorInvalidDevice,
+              "hipDeviceEnablePeerAccess has nothing to enable");
+        (void)hipGetLastError();
+
+        // The kernel attribute. A value the hardware can give is kept; one it cannot is
+        // refused at the call that asks for it.
+        check(hipFuncSetAttribute(&g_stub_vadd, hipFuncAttributeMaxDynamicSharedMemorySize,
+                                  32768) == hipSuccess,
+              "hipFuncSetAttribute 32768 bytes of group memory");
+        check(hipFuncSetAttribute(&g_stub_vadd, hipFuncAttributeMaxDynamicSharedMemorySize,
+                                  1 << 20) == hipErrorInvalidValue,
+              "a group memory ceiling above the hardware is refused");
+        check(hipFuncSetAttribute(&g_stub_vadd, hipFuncAttributeMaxDynamicSharedMemorySize, -1) ==
+                  hipErrorInvalidValue,
+              "a negative group memory ceiling is refused");
+        check(hipFuncSetAttribute(&g_stub_vadd, hipFuncAttributePreferredSharedMemoryCarveout,
+                                  50) == hipSuccess,
+              "the carveout preference is accepted and has no effect");
+        check(hipFuncSetAttribute(&g_stub_vadd, (hipFuncAttribute)4242, 1) ==
+                  hipErrorInvalidValue,
+              "an unknown kernel attribute is refused");
+        check(hipFuncSetAttribute(&g_stub_unknown, hipFuncAttributeMaxDynamicSharedMemorySize,
+                                  1024) == hipErrorInvalidDeviceFunction,
+              "hipFuncSetAttribute of an unregistered stub is refused");
+        check(hipFuncSetAttribute(nullptr, hipFuncAttributeMaxDynamicSharedMemorySize, 1024) ==
+                  hipErrorInvalidDeviceFunction,
+              "hipFuncSetAttribute checks its function");
+        // The attribute must not change what a launch does: the ceiling is advice here.
+        check(hipLaunchKernel(&g_stub_vadd, dim3(4u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                              nullptr) == hipSuccess,
+              "a launch after hipFuncSetAttribute still runs");
+        (void)hipGetLastError();
+
+        // A cooperative start is refused, and the attribute above already told the program so.
+        check(hipLaunchCooperativeKernel(&g_stub_vadd, dim3(4u, 1u, 1u), dim3(256u, 1u, 1u),
+                                         args, 0, nullptr) == hipErrorNotSupported,
+              "hipLaunchCooperativeKernel is not supported");
+        check(hipLaunchCooperativeKernel(nullptr, dim3(1u, 1u, 1u), dim3(1u, 1u, 1u), nullptr, 0,
+                                         nullptr) == hipErrorInvalidDeviceFunction,
+              "hipLaunchCooperativeKernel checks its function");
+        (void)hipGetLastError();
+
+        // The device address of host-visible memory, and of a pointer inside it.
+        void* host = nullptr;
+        check(hipHostMalloc(&host, 4096, hipHostMallocMapped) == hipSuccess,
+              "hipHostMalloc for the device pointer test");
+        void* dev_of_host = nullptr;
+        check(hipHostGetDevicePointer(&dev_of_host, host, 0) == hipSuccess,
+              "hipHostGetDevicePointer");
+        check(dev_of_host != nullptr, "the device pointer is not null");
+        void* dev_inside = nullptr;
+        check(hipHostGetDevicePointer(&dev_inside, static_cast<char*>(host) + 64, 0) ==
+                  hipSuccess,
+              "hipHostGetDevicePointer of an interior pointer");
+        check_u64((uint64_t)(uintptr_t)dev_inside, (uint64_t)(uintptr_t)dev_of_host + 64u,
+                  "an interior pointer moves the device address by the same offset");
+        check(hipHostGetDevicePointer(&dev_of_host, host, 1) == hipErrorInvalidValue,
+              "hipHostGetDevicePointer takes no flags in this build");
+        int on_the_stack = 0;
+        check(hipHostGetDevicePointer(&dev_of_host, &on_the_stack, 0) == hipErrorInvalidValue,
+              "memory this runtime did not allocate has no device address");
+        (void)hipGetLastError();
+
+        // The five honest refusals. Each code is the one llama.cpp acts on.
+        check(hipHostRegister(&on_the_stack, sizeof(on_the_stack), hipHostRegisterReadOnly) ==
+                  hipErrorNotSupported,
+              "hipHostRegister refuses, because layer 1 cannot map a program's own memory");
+        check(hipHostUnregister(&on_the_stack) == hipErrorHostMemoryNotRegistered,
+              "hipHostUnregister has nothing registered to release");
+        void* managed = reinterpret_cast<void*>(static_cast<uintptr_t>(1));
+        check(hipMallocManaged(&managed, 4096, 0) == hipErrorNotSupported,
+              "hipMallocManaged refuses with the code llama.cpp falls back on");
+        check(managed == nullptr, "a refused hipMallocManaged leaves no pointer behind");
+        check(hipMemAdvise(host, 4096, hipMemAdviseSetCoarseGrain, 0) == hipErrorNotSupported,
+              "hipMemAdvise has no managed memory to advise about");
+        (void)hipGetLastError();
+
+        // The two-dimensional copy, between two device allocations, which is where ggml-hip
+        // uses it. The rows are 48 bytes inside a stride of 64, so a copy that ignored the
+        // stride would be visible at once.
+        const size_t width = 48;
+        const size_t pitch = 64;
+        const size_t rows = 8;
+        const size_t span2d = pitch * rows;
+        unsigned char expect[512];
+        unsigned char readback[512];
+        check(span2d == sizeof(expect), "the two-dimensional test buffers match its sizes");
+        void* src2d = nullptr;
+        void* dst2d = nullptr;
+        check(hipMalloc(&src2d, span2d) == hipSuccess, "hipMalloc src2d");
+        check(hipMalloc(&dst2d, span2d) == hipSuccess, "hipMalloc dst2d");
+        for (size_t i = 0; i < span2d; ++i) {
+            expect[i] = static_cast<unsigned char>(i & 0xFF);
+            readback[i] = 0xEE;
+        }
+        check(hipMemcpy(src2d, expect, span2d, hipMemcpyHostToDevice) == hipSuccess,
+              "the source of the two-dimensional copy is filled");
+        check(hipMemcpy(dst2d, readback, span2d, hipMemcpyHostToDevice) == hipSuccess,
+              "the destination of the two-dimensional copy is marked");
+
+        check(hipMemcpy2DAsync(dst2d, pitch, src2d, pitch, width, rows,
+                               hipMemcpyDeviceToDevice, nullptr) == hipSuccess,
+              "hipMemcpy2DAsync");
+        std::memset(readback, 0, sizeof(readback));
+        check(hipMemcpy(readback, dst2d, span2d, hipMemcpyDeviceToHost) == hipSuccess,
+              "the destination of the two-dimensional copy is read back");
+        bool rows_match = true;
+        bool gaps_kept = true;
+        for (size_t r = 0; r < rows; ++r) {
+            for (size_t c = 0; c < pitch; ++c) {
+                const unsigned char got = readback[r * pitch + c];
+                if (c < width) {
+                    if (got != expect[r * pitch + c]) {
+                        rows_match = false;
+                    }
+                } else if (got != 0xEE) {
+                    gaps_kept = false;
+                }
+            }
+        }
+        check(rows_match, "every row of the two-dimensional copy holds the source bytes");
+        check(gaps_kept, "the bytes between the rows are untouched");
+        check(hipMemcpy2DAsync(dst2d, 16, src2d, pitch, width, rows, hipMemcpyDeviceToDevice,
+                               nullptr) == hipErrorInvalidValue,
+              "a row wider than its pitch is refused");
+        check(hipMemcpy2DAsync(dst2d, pitch, src2d, pitch, width, 0, hipMemcpyDeviceToDevice,
+                               nullptr) == hipSuccess,
+              "a copy of no rows is legal and does nothing");
+        (void)hipGetLastError();
+
+        // The copy between devices, which this process can only make within device 0, and the
+        // per-thread default stream that llama.cpp passes to it.
+        check(hipMemset(dst2d, 0, span2d) == hipSuccess, "the destination is cleared");
+        check(hipMemcpyPeerAsync(dst2d, 0, src2d, 0, span2d, hipStreamPerThread) == hipSuccess,
+              "hipMemcpyPeerAsync within device 0 on the per-thread stream");
+        std::memset(readback, 0, sizeof(readback));
+        check(hipMemcpy(readback, dst2d, span2d, hipMemcpyDeviceToHost) == hipSuccess,
+              "the result of hipMemcpyPeerAsync is read back");
+        check(std::memcmp(readback, expect, span2d) == 0, "hipMemcpyPeerAsync moved every byte");
+        check(hipMemcpyPeerAsync(dst2d, 1, src2d, 0, 16, nullptr) == hipErrorInvalidDevice,
+              "a copy to a second device is refused");
+        check(hipStreamSynchronize(hipStreamPerThread) == hipSuccess,
+              "the per-thread default stream synchronises");
+        (void)hipGetLastError();
+
+        check(hipFree(src2d) == hipSuccess, "hipFree src2d");
+        check(hipFree(dst2d) == hipSuccess, "hipFree dst2d");
+        check(hipHostFree(host) == hipSuccess, "hipHostFree of the device pointer test");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 11. the module unregisters\n");
     const uint32_t live_before_unregister = bc250hsa_mock_live_allocations();
     __hipUnregisterFatBinary(handle);
     check(bc250hsa_mock_live_allocations() < live_before_unregister,

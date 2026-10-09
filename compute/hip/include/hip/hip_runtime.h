@@ -97,6 +97,10 @@ typedef enum hipError_t {
   hipErrorNotReady = 600,
   hipErrorInvalidHandle = 400,
   hipErrorNotSupported = 801,
+  hipErrorPeerAccessAlreadyEnabled = 704,
+  hipErrorPeerAccessNotEnabled = 705,
+  hipErrorHostMemoryAlreadyRegistered = 712,
+  hipErrorHostMemoryNotRegistered = 713,
   hipErrorUnknown = 999
 } hipError_t;
 
@@ -118,6 +122,61 @@ typedef struct ihipModuleSymbol_t *hipFunction_t;
 #define hipEventDefault 0x00
 #define hipEventDisableTiming 0x02
 #define hipHostMallocDefault 0x00
+#define hipHostMallocPortable 0x01
+#define hipHostMallocMapped 0x02
+#define hipHostMallocWriteCombined 0x04
+#define hipHostRegisterDefault 0x00
+#define hipHostRegisterPortable 0x01
+#define hipHostRegisterMapped 0x02
+#define hipHostRegisterIoMemory 0x04
+#define hipHostRegisterReadOnly 0x08
+
+// The per-thread default stream. HIP gives it a handle value that no stream object can have,
+// and a program may pass it where a stream is expected. This runtime has one process-wide
+// default stream and no per-thread one, so both handles mean the same object (step 3 of design
+// docs/design/m16-hip-route-b.md, section 4.9).
+#define hipStreamLegacy ((hipStream_t)1)
+#define hipStreamPerThread ((hipStream_t)2)
+
+// The device attributes this runtime answers. The numbers are ours: a program of this route
+// compiles against this header, and the header travels with the DLL, so the only requirement is
+// that the two agree. hipGetDeviceProperties carries the same numbers as whole fields, and a
+// program may use either.
+typedef enum hipDeviceAttribute_t {
+  hipDeviceAttributeWarpSize = 1,
+  hipDeviceAttributeMaxThreadsPerBlock = 2,
+  hipDeviceAttributeMaxSharedMemoryPerBlock = 3,
+  hipDeviceAttributeMultiprocessorCount = 4,
+  hipDeviceAttributeClockRate = 5,
+  hipDeviceAttributeConcurrentKernels = 6,
+  hipDeviceAttributeIntegrated = 7,
+  hipDeviceAttributeCanMapHostMemory = 8,
+  hipDeviceAttributeComputeCapabilityMajor = 9,
+  hipDeviceAttributeComputeCapabilityMinor = 10,
+  hipDeviceAttributeCooperativeLaunch = 11,
+  hipDeviceAttributeVirtualMemoryManagementSupported = 12,
+  hipDeviceAttributeManagedMemory = 13
+} hipDeviceAttribute_t;
+
+// The kernel attributes a program may set. The two numbers are the ones CUDA uses for the same
+// two attributes, because a program written for CUDA reaches them through a rename.
+typedef enum hipFuncAttribute {
+  hipFuncAttributeMaxDynamicSharedMemorySize = 8,
+  hipFuncAttributePreferredSharedMemoryCarveout = 9
+} hipFuncAttribute;
+
+// The advice a program may give about managed memory. This runtime has no managed memory, so
+// every value is accepted by the parser and refused by hipMemAdvise.
+typedef enum hipMemoryAdvise {
+  hipMemAdviseSetReadMostly = 1,
+  hipMemAdviseUnsetReadMostly = 2,
+  hipMemAdviseSetPreferredLocation = 3,
+  hipMemAdviseUnsetPreferredLocation = 4,
+  hipMemAdviseSetAccessedBy = 5,
+  hipMemAdviseUnsetAccessedBy = 6,
+  hipMemAdviseSetCoarseGrain = 100,
+  hipMemAdviseUnsetCoarseGrain = 101
+} hipMemoryAdvise;
 
 // The fields that llama.cpp and a normal HIP program read. The runtime fills only the fields it
 // knows, and a program that reads one of the others gets 0. Every program of this route is
@@ -220,6 +279,41 @@ HIP_PUBLIC_API hipError_t hipEventDestroy(hipEvent_t event);
 HIP_PUBLIC_API hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream);
 HIP_PUBLIC_API hipError_t hipEventSynchronize(hipEvent_t event);
 HIP_PUBLIC_API hipError_t hipEventElapsedTime(float *ms, hipEvent_t start, hipEvent_t stop);
+
+// ---------------------------------------------------------------------------
+// The step 3 host entry points
+//
+// llama.cpp's ggml-hip backend links against every name below. Five of them say no and mean it:
+// this part has no managed memory, no page-locked registration of a program's own memory, no
+// second device and no cooperative dispatch. ggml-hip handles each of those answers, and
+// docs/design/m16-hip-route-b.md section 4.9 states where it does.
+// ---------------------------------------------------------------------------
+
+HIP_PUBLIC_API hipError_t hipDeviceGetAttribute(int *value, hipDeviceAttribute_t attr,
+                                                int deviceId);
+HIP_PUBLIC_API hipError_t hipDeviceGetPCIBusId(char *pciBusId, int len, int deviceId);
+HIP_PUBLIC_API hipError_t hipDeviceCanAccessPeer(int *canAccessPeer, int deviceId,
+                                                 int peerDeviceId);
+HIP_PUBLIC_API hipError_t hipDeviceEnablePeerAccess(int peerDeviceId, unsigned int flags);
+
+HIP_PUBLIC_API hipError_t hipFuncSetAttribute(const void *func, hipFuncAttribute attr, int value);
+HIP_PUBLIC_API hipError_t hipLaunchCooperativeKernel(const void *function, dim3 gridDim,
+                                                     dim3 blockDim, void **args,
+                                                     size_t sharedMemBytes, hipStream_t stream);
+
+HIP_PUBLIC_API hipError_t hipHostGetDevicePointer(void **devPtr, void *hstPtr,
+                                                  unsigned int flags);
+HIP_PUBLIC_API hipError_t hipHostRegister(void *hostPtr, size_t sizeBytes, unsigned int flags);
+HIP_PUBLIC_API hipError_t hipHostUnregister(void *hostPtr);
+HIP_PUBLIC_API hipError_t hipMallocManaged(void **ptr, size_t size, unsigned int flags);
+HIP_PUBLIC_API hipError_t hipMemAdvise(const void *devPtr, size_t count, hipMemoryAdvise advice,
+                                       int deviceId);
+HIP_PUBLIC_API hipError_t hipMemcpy2DAsync(void *dst, size_t dpitch, const void *src,
+                                           size_t spitch, size_t width, size_t height,
+                                           hipMemcpyKind kind, hipStream_t stream);
+HIP_PUBLIC_API hipError_t hipMemcpyPeerAsync(void *dst, int dstDeviceId, const void *src,
+                                             int srcDeviceId, size_t sizeBytes,
+                                             hipStream_t stream);
 
 HIP_PUBLIC_API hipError_t hipGetLastError(void);
 HIP_PUBLIC_API hipError_t hipPeekAtLastError(void);

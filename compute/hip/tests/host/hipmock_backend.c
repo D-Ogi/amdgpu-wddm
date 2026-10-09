@@ -425,7 +425,9 @@ bc250hsa_status bc250hsa_props_read(bc250hsa_device* dev, bc250hsa_props* out) {
     out->gfx_ip_major = 10u;
     out->gfx_ip_minor = 1u;
     out->gfx_ip_rev = 3u;
-    out->pci_bus = 0u;
+    /* A bus number that is not zero, so that hipDeviceGetPCIBusId is measured against a value
+     * and not against the zero an unfilled structure would also give. */
+    out->pci_bus = 3u;
     out->pci_device = 0u;
     out->pci_function = 0u;
     out->wave_size = 32u;

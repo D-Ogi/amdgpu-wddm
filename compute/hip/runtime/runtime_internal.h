@@ -93,6 +93,12 @@ struct Function {
     Module*                 module = nullptr;
     std::string             device_name;
     const bc250hsa_kernel*  kernel = nullptr;
+    // The largest dynamic group memory this kernel may ask for, as hipFuncSetAttribute set it.
+    // -1 means that no program set it. The value is advice on this part: there is no 48 KiB
+    // default ceiling to lift, and layer 1 checks the real dispatch against the hardware. It is
+    // kept and reported, so that a program which sets a value above the hardware limit learns
+    // it at the call that sets it and not at the launch.
+    int                     dynamic_group_max = -1;
 };
 
 struct Allocation {

@@ -5,6 +5,7 @@
 // answers at once, because the first open records its status.
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -256,6 +257,126 @@ hipError_t hipGetDeviceProperties(hipDeviceProp_t* prop, int deviceId) {
     // Fields this build does not know stay 0: regsPerBlock, l2CacheSize, totalConstMem,
     // clockInstructionRate, managedMemory, unifiedAddressing, cooperativeLaunch.
     return hipSuccess;
+}
+
+// The attributes of design section 4.9. One switch and no judgement: every value this runtime
+// answers is a field hipGetDeviceProperties already fills, and the two must never disagree.
+// An attribute this build does not answer is hipErrorInvalidValue and not a guessed zero,
+// because a program that reads an unknown attribute has to learn that it is unknown.
+hipError_t hipDeviceGetAttribute(int* value, hipDeviceAttribute_t attr, int deviceId) {
+    if (value == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (deviceId != 0) {
+        return fail(hipErrorInvalidDevice);
+    }
+    hipDeviceProp_t prop;
+    const hipError_t err = hipGetDeviceProperties(&prop, deviceId);
+    if (err != hipSuccess) {
+        return err;  // hipGetDeviceProperties already recorded it
+    }
+    switch (attr) {
+        case hipDeviceAttributeWarpSize:
+            *value = prop.warpSize;
+            return hipSuccess;
+        case hipDeviceAttributeMaxThreadsPerBlock:
+            *value = prop.maxThreadsPerBlock;
+            return hipSuccess;
+        case hipDeviceAttributeMaxSharedMemoryPerBlock:
+            *value = static_cast<int>(prop.sharedMemPerBlock);
+            return hipSuccess;
+        case hipDeviceAttributeMultiprocessorCount:
+            *value = prop.multiProcessorCount;
+            return hipSuccess;
+        case hipDeviceAttributeClockRate:
+            *value = prop.clockRate;
+            return hipSuccess;
+        case hipDeviceAttributeConcurrentKernels:
+            *value = prop.concurrentKernels;
+            return hipSuccess;
+        case hipDeviceAttributeIntegrated:
+            *value = prop.integrated;
+            return hipSuccess;
+        case hipDeviceAttributeCanMapHostMemory:
+            *value = prop.canMapHostMemory;
+            return hipSuccess;
+        case hipDeviceAttributeComputeCapabilityMajor:
+            *value = prop.major;
+            return hipSuccess;
+        case hipDeviceAttributeComputeCapabilityMinor:
+            *value = prop.minor;
+            return hipSuccess;
+        // No cooperative dispatch: one hardware queue, and nothing starts every workgroup of a
+        // grid at the same time. hipLaunchCooperativeKernel says the same, and llama.cpp reads
+        // this attribute before it calls that entry point.
+        case hipDeviceAttributeCooperativeLaunch:
+            *value = 0;
+            return hipSuccess;
+        // No virtual memory management entry points in this build (the cuMem family).
+        case hipDeviceAttributeVirtualMemoryManagementSupported:
+            *value = 0;
+            return hipSuccess;
+        case hipDeviceAttributeManagedMemory:
+            *value = 0;
+            return hipSuccess;
+        default:
+            return fail(hipErrorInvalidValue);
+    }
+}
+
+// The bus identifier of the adapter, in the form a program expects: domain, bus, device and
+// function. This part is one function of one device, and layer 1 reads the three numbers from
+// the adapter, so no number here is invented. The domain is 0: a Windows adapter has no
+// segment number in the properties layer 1 reads.
+hipError_t hipDeviceGetPCIBusId(char* pciBusId, int len, int deviceId) {
+    if (pciBusId == nullptr || len <= 0) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (deviceId != 0) {
+        return fail(hipErrorInvalidDevice);
+    }
+    bc250hip::Guard guard;
+    bc250hsa_device* dev = nullptr;
+    const hipError_t err = bc250hip::device(&dev);
+    if (err != hipSuccess) {
+        return fail(err);
+    }
+    const bc250hip::State& s = state();
+    char text[32];
+    std::snprintf(text, sizeof(text), "0000:%02x:%02x.%01x",
+                  static_cast<unsigned>(s.props.pci_bus & 0xFFu),
+                  static_cast<unsigned>(s.props.pci_device & 0xFFu),
+                  static_cast<unsigned>(s.props.pci_function & 0xFu));
+    // CUDA and HIP both truncate into the caller's buffer and report success, so a short buffer
+    // is not an error. The result stays terminated.
+    const size_t room = static_cast<size_t>(len) - 1;
+    std::strncpy(pciBusId, text, room);
+    pciBusId[room] = '\0';
+    return hipSuccess;
+}
+
+// One device, so there is no peer. The pair of entry points below exists because llama.cpp
+// links against both of them; it calls them only when GGML_CUDA_P2P is in the environment, and
+// a second device would have to exist first.
+hipError_t hipDeviceCanAccessPeer(int* canAccessPeer, int deviceId, int peerDeviceId) {
+    if (canAccessPeer == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (deviceId != 0 || peerDeviceId != 0) {
+        return fail(hipErrorInvalidDevice);
+    }
+    *canAccessPeer = 0;  // a device is not its own peer
+    return hipSuccess;
+}
+
+hipError_t hipDeviceEnablePeerAccess(int peerDeviceId, unsigned int flags) {
+    (void)flags;
+    if (peerDeviceId != 0) {
+        return fail(hipErrorInvalidDevice);
+    }
+    // The only device of this process is the calling device, and a device cannot peer with
+    // itself. HIP reports exactly this for that case.
+    return fail(hipErrorInvalidDevice);
 }
 
 hipError_t hipDeviceSynchronize(void) {

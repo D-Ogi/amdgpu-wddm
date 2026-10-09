@@ -121,6 +121,9 @@ bc250hsa_status bc250hsa_props_read(bc250hsa_device* dev, bc250hsa_props* out)
     out->max_workgroups_per_dim = 0xFFFFFFFFu;
     out->lds_bytes_per_workgroup = 65536u;
     out->waves_per_cu = 16u;
+    out->pci_bus = 3u;      /* not zero, so a reader of this field is measured against a value */
+    out->pci_device = 0u;
+    out->pci_function = 0u;
     out->vram_bytes = 1024ull * 1024ull * 1024ull;
     out->visible_vram_bytes = out->vram_bytes;
     out->gtt_bytes = out->vram_bytes;
