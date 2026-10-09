@@ -1,0 +1,1075 @@
+﻿log          1478807 lines since this driver load, 1477783 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     1      0.000 stage 10
+     2      0.000 gate: EnableFullWddm 2
+     3      0.000 stage 20
+     4      1.127 stage 30
+     5      1.127 guard: count 0 -> 1 flushed, durable required 1
+     6      1.127 stage 31
+     7      1.127 stage 32
+     8      1.127 post display 1920x1200 pitch 7680 format 22 target 4294967295
+     9      1.127 stage 33
+    10      1.127 stage 34
+    11      1.127 interrupt resource 1: message, vector 0x51, flags 0x3
+    12      1.127 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    13      1.142 hwmon: base 0x0A20 ec 1.0 build 07/28/21 customer 0x162B -> ok
+    14      1.142 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+    15      1.142 hwmon: customer ID 0x162B is not pinned (HwmonExpectId absent): pin it after this trial
+    16      1.142 smu: native owner start status 0x00000000
+    17      1.142 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    18      1.142 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    19      1.142 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    20      1.142 gart: ready, dummy page at 0x26153B000
+    21      1.142 psp: ready
+    22      1.142 gpumem: ready, doorbells at 0xD0000000
+    23      1.142 gfx: ready, GPU submission allowed, paging node allowed, hot submit log off
+    24      1.142 gfx: VMID pool on (EnableVmidPool)
+    25      1.142 ih: ready
+    26      1.142 wddm: composed source modes offered
+    27      1.142 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 3
+    28      1.142 wddm: scan-out admission on
+    29      1.142 wddm: DirectFlip handshake on
+    30      1.142 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 1 vram 1 mmio 1 aligned 1 post 1
+    31      1.142 dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+    32      1.142 dcnflip: plane format: cnvc control 0x00000000 alpha lut 0xFFAA5500 mpcc control 0xFFFF0461 (blend mode 2)
+    33      1.142 wddm: plane formats on
+    34      1.142 wddm: shared residency on (UMD VRAM allocations may be demoted to the aperture)
+    35      1.142 wddm: completion report pairs its own notify dpc: yes
+    36      1.142 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+    37      1.142 wddm: POST display target 4294967295 is not ours, vsync reports name child 0x250001
+    38      1.142 wddm: OS aperture asked 384 MiB, using 384 MiB (only MAP_APERTURE_SEGMENT uses it)
+    39      1.142 wddm: OS aperture 384 MiB at gpu 0x4002000, PTE slice 0xF5FFE20010
+    40      1.142 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    41      1.142 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    42      1.142 startup: entering interrupt connection
+    43      1.142 startup: entering firmware preparation
+    44      1.142 startup: entering native clock preparation
+    45      1.142 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1500MHz/VID101 observed 1000MHz/VID116 temp 65250mc staged 0
+    46      1.142 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    47      1.142 gfx: unpublished translation bootstrap entered with engines halted
+    48      1.142 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    49      1.142 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    50      1.142 startup: entering GART initialization
+    51      1.159 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    52      1.159 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    53      1.159 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    54      1.159 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    55      1.159 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    56      1.159 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    57      1.159 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    58      1.159 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    59      1.159 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    60      1.159 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    61      1.159 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    62      1.159 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    63      1.159 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    64      1.159 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    65      1.159 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    66      1.159 startup: entering PSP initialization
+    67      1.205 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    68      1.205 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    69      1.237 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    70      1.237 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    71      1.237 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    72      1.237 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 251 us, in TMR at 0x0
+    73      1.237 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    74      1.237 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    75      1.237 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1952 us, in TMR at 0x0
+    76      1.237 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    77      1.237 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    78      1.241 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1937 us, in TMR at 0x0
+    79      1.241 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    80      1.241 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    81      1.241 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5853 us, in TMR at 0xF5FF842000
+    82      1.241 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    83      1.241 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    84      1.251 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF883000
+    85      1.251 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    86      1.251 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    87      1.253 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF8C4000
+    88      1.253 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    89      1.253 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    90      1.253 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    91      1.253 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    92      1.253 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    93      1.253 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    94      1.253 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    95      1.253 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    96      1.268 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    97      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    98      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    99      1.268 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   100      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   101      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   102      1.268 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1736 us, in TMR at 0x0
+   103      1.268 gfx: RLC after-psp-command CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   104      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   105      1.268 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   106      1.268 gfx: RLC after-psp CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   107      1.268 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+   108      1.268 startup: entering IH initialization
+   109      1.268 ih: init: rc 0, 18 writes
+   110      1.268 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   111      1.268 startup: entering GFX initialization
+   112      1.268 cumode: CuMode 40 disable 0x00000 -> mode 40 reason 0, confirmed earlier
+   113      1.268 gfx: RLC startup policy pp_gfxoff 0
+   114      1.268 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 1 us
+   115      1.268 gfx: stage 2 (golden registers): rc 0, 83 writes so far, 24 us
+   116      1.268 gfx: stage 3 (GRBM CAM probe): rc 0, 86 writes so far, 2 us
+   117      1.268 cumode: stage run: mode 40 applied 40 reason 0 wrote 1
+   118      1.268 gfx: stage 4 (constants): rc 0, 264 writes so far, 78 us
+   119      1.268 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   120      1.268 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   121      1.268 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   122      1.268 gpumem: startup GFX translations committed after RLC, before CP
+   123      1.268 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   124      1.268 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   125      1.268 gfx: stage 5 (RLC): rc 0, 276 writes so far, 147 us
+   126      1.268 amdgpu[0]: CP resume kiq-init begin
+
+   127      1.268 amdgpu[0]: CP resume kiq-init end result=0
+
+   128      1.268 amdgpu[0]: CP resume compute-unhalt begin
+
+   129      1.268 amdgpu[0]: CP resume compute-unhalt end
+
+   130      1.268 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   131      1.268 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   132      1.268 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   133      1.268 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   134      1.268 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   135      1.268 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   136      1.268 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   137      1.268 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   138      1.268 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   139      1.268 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   140      1.268 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   141      1.268 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   142      1.268 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   143      1.268 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   144      1.268 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   145      1.268 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   146      1.268 amdgpu[0]: CP resume kcq-enable begin
+
+   147      1.268 amdgpu[0]: CP resume kcq-enable end result=0
+
+   148      1.268 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   149      1.268 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   150      1.268 amdgpu[0]: CP resume kgq-enable begin
+
+   151      1.268 amdgpu[0]: CP resume kgq-enable end result=0
+
+   152      1.268 amdgpu[0]: CP resume gfx-start begin
+
+   153      1.268 amdgpu[0]: CP resume gfx-start end result=0
+
+   154      1.268 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   155      1.268 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   156      1.268 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   157      1.268 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   158      1.268 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   159      1.268 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   160      1.268 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   161      1.268 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   162      1.268 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   163      1.268 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   164      1.268 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   165      1.268 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   166      1.268 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   167      1.268 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   168      1.268 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   169      1.268 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   170      1.268 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   171      1.268 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   172      1.268 gfx: stage 6 (CP): rc 0, 338 writes so far, 400 us
+   173      1.268 gfx: stage 7 (SDMA): rc 0, 431 writes so far, 198 us
+   174      1.268 gfx: stage 8 (interrupt sources): rc 0, 466 writes so far, 21 us
+   175      1.268 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   176      1.268 gfx: op 1 to stage 8 -> 0x00000000, result 0, 466 writes, 16 doorbells
+   177      1.268 cumode: applied 40 CUs (40 counted), reason 0, consistent 1, wrote 1, RLC_PG_CNTL 0x00000008 (PG enables 0x8), after the RLC stage 0x00800000 (PG enables 0x0)
+   178      1.268 cumode: SA0-3 CC 0xFFE00000 0xFFE00000 0xFFE00000 0xFFE00000 SPI 0x1F 0x1F 0x1F 0x1F
+   179      1.348 startup: both engines ready
+   180      1.348 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   181      1.348 wddm: GPU initialized before adapter admission
+   182      1.348 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 576 of 568 bytes
+   183      1.348 wddm: handle callbacks size 576 get@104=FFFFF8067B4EE910 acquire@288=FFFFF8067B3D4100 release@296=FFFFF8067B3D4760
+   184      1.380 display modes: AUX 25 transactions 25 attempts, 0 defers 0 timeouts 0 invalid 0 nacks 0 busy
+   185      1.380 display modes: AUX 20470 us stalled, EDID 256 bytes, status 0x00000000 close 0x00000000
+   186      1.380 display modes: DPCD rev 0x11 max link rate 0x0A max lanes 4 (0x84) downspread 0x01
+   187      1.380 display modes: EDID ok, 256 bytes, 2 blocks, version 1.4
+   188      1.380 display modes: monitor LEN product 0x1144 name 'LEN LT2452pwC'
+   189      1.380 display modes: preferred 1920x1200 59.950 Hz, pixel clock 154000 kHz; native (firmware) 1920x1200
+   190      1.380 display modes: pipe 0 ok (0x00000000): viewport 0x00000000/0x04B00780 recout 0x00000000/0x04B00780 mpc 0x04B00780
+   191      1.380 display modes: pipe 0 scl 0x00000001 mem 0x00000000 top 0 odm 0 hubp 0x000E1000
+   192      1.380 display modes: requested 2 level 2, 16 source modes, descriptor served
+   193      1.380 display modes: list 0..5: 1920x1200/0x03 1920x1080/0x36 1680x1050/0x24 1600x1200/0x04 1600x900/0x20 1440x900/0x24
+   194      1.380 display modes: list 6..11: 1400x1050/0x20 1280x1024/0x2C 1280x960/0x20 1280x800/0x20 1280x720/0x32 1152x864/0x20
+   195      1.380 display modes: list 12..15: 1024x768/0x28 800x600/0x28 720x480/0x02 640x480/0x3C
+   196      1.380 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00010201/0x00100200 be 0x00000100/0x00010000 hpd 0x12/0x0
+   197      1.380 dpaudio: ep0 cfg 0x185600F0 hpc 0x00000000 unsol 0x80 sense 0x7FFFFFFF; ep1 cfg 0x185600F0 hpc 0x00000000; first fail 0x00000000
+   198      1.380 dpaudio: sec 0x00000000/0x00000000 dto src 0x00000030 dto1 0/1 afmt 0x00000100/0x00000000 pkt 0x04000800/0x04000800
+   199      1.380 dpaudio: DP reference clock count 6000 (100 kHz units): DTO1 module 6000000, phase 240000, for a 24 MHz wall clock
+   200      1.380 dpaudio: preconditions hold: stream DP0, endpoint 0, notes 0x8
+   201      1.380 dpaudio: hw_init done on endpoint 0: rates 0x00020070 power 0xC0000009 hpc 0x00000000, 4 writes
+   202      1.380 dpaudio: configure done on endpoint 0 (EDID), 27 writes, speakers 0x01
+   203      1.380 dpaudio: LPCM 2 ch rates 0x7F sizes 0x7, sink 0xAE30/0x1144 'LEN LT2452pwC'
+   204      1.380 dpaudio: stream on DP0: DTO_SOURCE 0x00100010 DTO1 240000/6000000, AUD_N 0x00008000 timestamp 0x1, 18 writes
+   205      1.380 dpaudio: stream on DP0: AFMT_CNTL 0x00000101 SRC 0x0 PACKET 0x04000801 PACKET2 0x00000300 SEC_CNTL 0x00001111
+   206      1.380 dpaudio: AUDIO_ENABLED set on endpoint 0: hpc 0x00000000 -> 0x80000000
+   207      1.380 stage 35
+   208      1.380 fan: control on: mode curve profile standard
+   209      1.380 fan: restore record taken at the first change, bugcheck callback on
+   210      1.380 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+   211      1.380 dpm: thermal zone DpmThermalZone 0 (absent) -> on, error 0
+   212      1.380 dpm: thermal zone: steps from 86000 mC, no raise from 83000 mC
+   213      1.380 dpm: idle DpmIdleMHz 500 hold 3000 ms (absent) under 2 permille (absent) -> on (error 0)
+   214      1.380 dpm: idle DpmIdleLeavePermille 150 (absent): leaves at 150 permille over the window, or 500 in one tick
+   215      1.380 dpm: joint power arm DpmJointGovernor 0 (absent) -> off
+   216      1.380 dpm: DpmMode 1 DpmMaxMHz 1500 -> DPM, ceiling 1500 MHz, reason 0, confirmed earlier
+   217      1.382 dpm: hardware busy sampler running, every 1000 us
+   218      1.382 dpm: telemetry in the log every 5000 ms, every 60000 ms at the idle point
+   219      1.382 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   220      1.382 cpu: the surface sees 12 processors, core mask 0x77
+   221      1.382 stage 39
+   222      1.382 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   223      1.382 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+   224      1.382 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   225      1.382 wddm: QueryAdapterInfo type 1 in 0 out 592 -> 0x00000000
+   226      1.382 wddm: QueryAdapterInfo type 15 in 4 out 32 -> 0xC00000BB
+   227      1.392 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   228      1.392 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   229      1.392 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   230      1.392 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   231      1.392 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   232      1.392 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   233      1.392 wddm: GetNodeMetadata node 0 adapter 0
+   234      1.392 wddm: GetNodeMetadata node 1 adapter 0
+   235      1.392 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   236      1.392 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   237      1.392 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   238      1.392 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   239      1.393 wddm: CreateProcess flags 0x00000001 pasids 1
+   240      1.393 wddm: CreateDevice flags 0x00000001 pasid 0 pid 792
+   241      1.393 wddm: CreateDevice flags 0x00000001 pasid 0 pid 792
+   242      1.394 wddm: capture reservation ready 22020400 bytes
+   243      1.394 wddm: context FFFFB50EFFAF95F0 pid 792 node 1 umd 0 system 1 ip 0
+   244      1.394 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   245      1.394 wddm: CreateContext answered dma 65536 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   246      1.395 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   247      1.395 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   248      1.395 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   249      1.395 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   250      1.395 vidmm: table physical cache query pa 0x45E154000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   251      1.395 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   252      1.395 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   253      1.395 vidmm: table physical cache query pa 0x45E155000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   254      1.395 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   255      1.395 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+1478039   7254.976 wddm summary: DestroyDevice                     186  first at 2835
+1478040   7254.976 wddm summary: CreateContext                     305  first at 244
+1478041   7254.976 wddm summary: DestroyContext                    286  first at 2823
+1478042   7254.976 wddm summary: CreateProcess                      90  first at 239
+1478043   7254.976 wddm summary: DestroyProcess                     79  first at 2863
+1478044   7254.976 wddm summary: SetRootPageTable                   64  first at 269
+1478045   7254.976 wddm summary: CreateAllocation                81187  first at 322
+1478046   7254.976 wddm summary: DestroyAllocation              143200  first at 1067
+1478047   7254.976 wddm summary: DescribeAllocation              97621  first at 354
+1478048   7254.976 wddm summary: GetStandardAllocationDriverData      4  first at 319
+1478049   7254.976 wddm summary: OpenAllocation                  81343  first at 325
+1478050   7254.976 wddm summary: CloseAllocation                 81017  first at 1066
+1478051   7254.976 wddm summary: BuildPagingBuffer              1616071  first at 246
+1478052   7254.976 wddm summary: SubmitCommandVirtual           2731197  first at 296
+1478053   7254.976 wddm summary: PreemptCommand                  78497  first at 418
+1478054   7254.976 wddm summary: QueryDependentEngineGroup           5  first at 1218063
+1478055   7254.976 wddm summary: ResetEngine                         5  first at 1218064
+1478056   7254.976 wddm summary: CalibrateGpuClock               14521  first at 128303
+1478057   7254.976 wddm summary: Present                         97737  first at 396
+1478058   7254.976 wddm summary: SetVidPnSourceAddress           97622  first at 388
+1478059   7254.976 wddm summary: ControlInterrupt                    3  first at 394
+1478060   7254.976 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+1478061   7254.976 wddm summary: adapter info type   1       1  first at 225
+1478062   7254.976 wddm summary: adapter info type  15       1  first at 226
+1478063   7254.976 wddm summary: adapter info type  47       1  first at 227
+1478064   7254.976 wddm summary: adapter info type  13       1  first at 228
+1478065   7254.976 wddm summary: adapter info type  14       4  first at 229
+1478066   7254.976 wddm summary: adapter info type  11       2  first at 236
+1478067   7254.976 wddm summary: adapter info type  10       1  first at 238
+1478068   7254.976 wddm summary: adapter info type  16       1  first at 238
+1478069   7254.976 wddm summary: adapter info type  20       1  first at 276
+1478070   7254.976 wddm summary: adapter info type   0   85862  first at 637
+1478071   7254.976 wddm summary: capture plans reserved 0 heap 0
+1478072   7254.976 wddm summary: capture context peaks plans 0 reserved-bytes 0
+1478073   7254.976 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+1478074   7254.976 wddm summary: paging operation  11  1134211  first at 246
+1478075   7254.976 wddm summary: paging operation  12  408153  first at 310
+1478076   7254.976 wddm summary: paging operation   9   37942  first at 334
+1478077   7254.976 wddm summary: paging operation   2   33810  first at 1061
+1478078   7254.976 wddm summary: paging operation   8    1955  first at 1082
+1478079   7254.976 wddm summary: objects created/destroyed: alloc 81187/143200
+1478080   7254.976 wddm summary: objects created/destroyed: dev 199/186 ctx 305/286 proc 90/79, 702 alive
+1478081   7254.976 wddm summary: allocations opened/closed: 81343/81017 calls
+1478082   7254.976 wddm summary: ---- standard allocations; refused flags/type/geom/buf/input ----
+1478083   7254.976 wddm summary: stdalloc primary size/fill 1/1 ok 2 refused 0/0/0/0/0
+1478084   7254.976 wddm summary: stdalloc shadow size/fill 1/1 ok 2 refused 0/0/0/0/0
+1478085   7254.976 wddm summary: lb7a type 0 create ok/refused/rolled-back 307/0/0 open ok/refused 463/0
+1478086   7254.976 wddm summary: CreateAllocation calls ok 81187 resource-data 0 invalid 0 no-memory 0
+1478087   7254.976 wddm summary: gdi type masks requested 0x000 refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+1478088   7254.976 wddm summary: submissions 0 physical + 2731197 virtual, 78497 preemptions, last completed fence 1850304
+1478089   7254.976 wddm summary: node 0 hardware: 1850304 submitted, 1793531 completed, 5 timeouts, 0 refused, 5 soft-recovered
+1478090   7254.976 wddm summary: umd: 80880 allocs (0 refused), 172 contexts, 1850179 submits on the ring, 0 not run
+1478091   7254.976 wddm summary: umd placement (shared residency on): local 0, local+aperture 35896, aperture 44984
+1478092   7254.976 wddm profile: umd calls 1850179, elapsed ticks 165845224, QPC frequency 10000000
+1478093   7254.976 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+1478094   7254.976 wddm profile: holds 0 (spin-only 0), held 0 us worst 0, 0 spins
+1478095   7254.976 wddm profile: hold wakes 0 event, 0 timeout
+1478096   7254.976 wddm profile: held us <100:0 100:0 200:0 500:0 1k:0 2k:0 5k:0 10k:0 20k+:0
+1478097   7254.976 wddm profile: node 0 ring idle 5855513385 us in 1223389 gaps, worst 148827875 us, lost 0, 434281 vsyncs
+1478098   7254.976 wddm profile: node 0 ring >=4ms 21683/5780650769 us, vsync-ended 303/66261870 us, 152578 ns/frame
+1478099   7254.976 wddm profile: node 0 ring gap us <16:120033 16:485156 32:454473 64:118255 128:5847
+1478100   7254.976 wddm profile: node 0 ring gap us 512:12464 2k:5478 4k:7202 8k+:14481
+1478101   7254.976 wddm profile: node 1 ring idle 7217831609 us in 880892 gaps, worst 259354594 us, lost 0, 434281 vsyncs
+1478102   7254.976 wddm profile: node 1 ring >=4ms 20061/7097823748 us, vsync-ended 395/165442496 us, 380957 ns/frame
+1478103   7254.976 wddm profile: node 1 ring gap us <16:260350 16:189807 32:192127 64:81888 128:77061
+1478104   7254.976 wddm profile: node 1 ring gap us 512:48779 2k:10819 4k:6123 8k+:13938
+1478105   7254.976 wddm profile: ring gap vblank stamps: 434840 hardware, 0 software timer
+1478106   7254.976 wddm profile: notify pairing gate 1, 2750256 reports: 2733665 same pass, 16591 deferred
+1478107   7254.976 wddm profile: notify pairing 0 waiting now (worst 3), 3103146 notifications carried no report
+1478108   7254.976 wddm profile: notify pairing 434281 vsync reports (0 waiting, worst 1), 55425 contended
+1478109   7254.976 wddm profile: reports not delivered: node 0 retried 0 dropped 0
+1478110   7254.976 wddm profile: reports not delivered: node 1 retried 0 dropped 0, 0 preemption acks lost
+1478111   7254.976 wddm profile: hot submit log lines left out: 5550912 (HotSubmitLog off)
+1478112   7254.976 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+1478113   7254.976 wddm summary: VMID pool: 36 claims, 1850268 reuses, 0 busy, 0 rule refusals
+1478114   7254.976 wddm summary: VMID pool FLUSH_TLB: 332781 built, 4658830 VMID invalidations
+1478115   7254.976 wddm summary: node 1 (paging, open): 880893 hardware submitted, 880893 completed, 0 timeouts, 0 refused
+1478116   7254.976 wddm: paging OS-private queue admissions=880893 (no submit allocation)
+1478117   7254.976 wddm summary: SubmitCommandVirtual by node: 0: 1850304, 1: 880893, 0 private-buffer refusals
+1478118   7254.976 wddm summary: paging DMA VA nonzero 1615042 zero 1029, mapping observations 8
+1478119   7254.976 wddm summary: native DMA transfers 1886 fills 35671 bytes 176627204096
+1478120   7254.976 wddm: native PTE copies gate1 ranges0
+1478121   7254.976 wddm summary: native DMA exact disjoint checks 850
+1478122   7254.976 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x261206000 CPU_PA0x261206000
+1478123   7254.976 wddm summary: BuildPagingBuffer: 1886 transfers, 35671 fills, 176627204096 bytes, 494489 insufficient-buffer
+1478124   7254.976 wddm summary: virtual transfers (count/bytes) to system 1736/52892459008, from system 150/15840980992, other 0/0
+1478125   7254.976 wddm summary: physical transfers (count/bytes) to system 0/0, from system 0/0, other 0/0
+1478126   7254.976 wddm summary: aperture map batches 0, unmap batches 0
+1478127   7254.976 wddm summary: paging fills 35671/107893764096 bytes, aperture pages mapped 0 unmapped 0
+1478128   7254.976 wddm summary: paging TLB invalidations 332781, PTE update batches 1122453
+1478129   7254.976 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+1478130   7254.976 wddm summary: presents 97737, flips 97615 of 97622 address calls (97612 arrived above DISPATCH_LEVEL)
+1478131   7254.976 wddm summary: scan-out flips 0 of 0 requested candidates; admission ok/no-alloc/not-requested 97622/0/0
+1478132   7254.976 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+1478133   7254.976 wddm summary: type0 creates asked/not by record none 0/2 v1 0/16 v2 0/32 v3 0/257
+1478134   7254.976 wddm summary: type0 creates other 0/0, PRIMARY records 9, in a resource group 307
+1478135   7254.976 wddm summary: flip flags mode/immediate/shared-transition/independent 10/0/0/0, redirected presents 0
+1478136   7254.976 wddm summary: plane formats 1, flips argb8888/abgr8888/abgr2101010 97615/0/0, changes 0 refused 0
+1478137   7254.976 wddm summary: DirectFlip handshake on
+1478138   7254.976 wddm: CDD interop1 GPU Present gate1 identity probe1
+1478139   7254.976 wddm: DRIVERCAPS returned interop0 0 interop1 1
+1478140   7254.976 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+1478141   7254.976 wddm: DRIVERCAPS interop1 first100ns28420937 last100ns28420937
+1478142   7254.976 wddm: Blt observation calls125 capacity16
+1478143   7254.976 wddm: Blt obs0 interrupt100ns29234841 qpc30722143
+1478144   7254.976 wddm: Blt obs0 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478145   7254.976 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478146   7254.976 wddm: Blt obs0 src 936,916,984,966 dst 936,916,984,966
+1478147   7254.976 wddm: Blt obs0 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478148   7254.976 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478149   7254.976 wddm: Blt obs0 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478150   7254.976 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478151   7254.976 wddm: Blt obs1 interrupt100ns29621000 qpc31108503
+1478152   7254.976 wddm: Blt obs1 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478153   7254.976 wddm: Blt obs1 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478154   7254.976 wddm: Blt obs1 src 936,916,984,966 dst 936,916,984,966
+1478155   7254.976 wddm: Blt obs1 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478156   7254.976 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478157   7254.976 wddm: Blt obs1 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478158   7254.976 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478159   7254.976 wddm: Blt obs2 interrupt100ns30079919 qpc31567400
+1478160   7254.976 wddm: Blt obs2 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478161   7254.976 wddm: Blt obs2 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478162   7254.976 wddm: Blt obs2 src 936,916,984,966 dst 936,916,984,966
+1478163   7254.976 wddm: Blt obs2 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478164   7254.976 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478165   7254.976 wddm: Blt obs2 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478166   7254.976 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478167   7254.976 wddm: Blt obs3 interrupt100ns30540165 qpc32028165
+1478168   7254.976 wddm: Blt obs3 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478169   7254.976 wddm: Blt obs3 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478170   7254.976 wddm: Blt obs3 src 936,916,984,966 dst 936,916,984,966
+1478171   7254.976 wddm: Blt obs3 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478172   7254.976 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478173   7254.976 wddm: Blt obs3 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478174   7254.976 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478175   7254.976 wddm: Blt obs4 interrupt100ns31010441 qpc32497938
+1478176   7254.976 wddm: Blt obs4 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478177   7254.976 wddm: Blt obs4 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478178   7254.976 wddm: Blt obs4 src 936,916,984,966 dst 936,916,984,966
+1478179   7254.976 wddm: Blt obs4 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478180   7254.976 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478181   7254.976 wddm: Blt obs4 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478182   7254.976 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478183   7254.976 wddm: Blt obs5 interrupt100ns31480150 qpc32967909
+1478184   7254.976 wddm: Blt obs5 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478185   7254.976 wddm: Blt obs5 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478186   7254.976 wddm: Blt obs5 src 936,916,984,966 dst 936,916,984,966
+1478187   7254.976 wddm: Blt obs5 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478188   7254.976 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478189   7254.976 wddm: Blt obs5 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478190   7254.976 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478191   7254.976 wddm: Blt obs6 interrupt100ns31952078 qpc33439746
+1478192   7254.976 wddm: Blt obs6 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478193   7254.976 wddm: Blt obs6 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478194   7254.976 wddm: Blt obs6 src 936,916,984,966 dst 936,916,984,966
+1478195   7254.976 wddm: Blt obs6 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478196   7254.976 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478197   7254.976 wddm: Blt obs6 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478198   7254.976 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478199   7254.976 wddm: Blt obs7 interrupt100ns32423741 qpc33911545
+1478200   7254.976 wddm: Blt obs7 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478201   7254.976 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478202   7254.976 wddm: Blt obs7 src 936,916,984,966 dst 936,916,984,966
+1478203   7254.976 wddm: Blt obs7 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478204   7254.976 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478205   7254.976 wddm: Blt obs7 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478206   7254.976 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478207   7254.976 wddm: Blt obs8 interrupt100ns32892022 qpc34379827
+1478208   7254.976 wddm: Blt obs8 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478209   7254.976 wddm: Blt obs8 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478210   7254.976 wddm: Blt obs8 src 936,916,984,966 dst 936,916,984,966
+1478211   7254.976 wddm: Blt obs8 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478212   7254.976 wddm: Blt obs8 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478213   7254.976 wddm: Blt obs8 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478214   7254.976 wddm: Blt obs8 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478215   7254.976 wddm: Blt obs9 interrupt100ns33361928 qpc34849655
+1478216   7254.976 wddm: Blt obs9 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478217   7254.976 wddm: Blt obs9 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478218   7254.976 wddm: Blt obs9 src 936,916,984,966 dst 936,916,984,966
+1478219   7254.976 wddm: Blt obs9 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478220   7254.976 wddm: Blt obs9 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478221   7254.976 wddm: Blt obs9 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478222   7254.976 wddm: Blt obs9 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478223   7254.976 wddm: Blt obs10 interrupt100ns35576135 qpc37066372
+1478224   7254.976 wddm: Blt obs10 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478225   7254.976 wddm: Blt obs10 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478226   7254.976 wddm: Blt obs10 src 0,0,1920,1200 dst 0,0,1920,1200
+1478227   7254.976 wddm: Blt obs10 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478228   7254.976 wddm: Blt obs10 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478229   7254.976 wddm: Blt obs10 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478230   7254.976 wddm: Blt obs10 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478231   7254.976 wddm: Blt obs11 interrupt100ns35576135 qpc37067125
+1478232   7254.976 wddm: Blt obs11 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478233   7254.976 wddm: Blt obs11 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+1478234   7254.976 wddm: Blt obs11 src 0,0,1920,1200 dst 0,0,1920,1200
+1478235   7254.976 wddm: Blt obs11 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478236   7254.976 wddm: Blt obs11 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478237   7254.976 wddm: Blt obs11 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478238   7254.976 wddm: Blt obs11 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478239   7254.976 wddm: Blt obs12 interrupt100ns35576135 qpc37071605
+1478240   7254.976 wddm: Blt obs12 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478241   7254.976 wddm: Blt obs12 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+1478242   7254.976 wddm: Blt obs12 src 0,0,1920,1200 dst 0,0,1920,1200
+1478243   7254.976 wddm: Blt obs12 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478244   7254.976 wddm: Blt obs12 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478245   7254.976 wddm: Blt obs12 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478246   7254.976 wddm: Blt obs12 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478247   7254.976 wddm: Blt obs13 interrupt100ns35576135 qpc37072070
+1478248   7254.976 wddm: Blt obs13 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478249   7254.976 wddm: Blt obs13 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+1478250   7254.976 wddm: Blt obs13 src 0,0,1920,1200 dst 0,0,1920,1200
+1478251   7254.976 wddm: Blt obs13 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478252   7254.976 wddm: Blt obs13 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478253   7254.976 wddm: Blt obs13 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478254   7254.976 wddm: Blt obs13 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478255   7254.976 wddm: Blt obs14 interrupt100ns35576135 qpc37072471
+1478256   7254.976 wddm: Blt obs14 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478257   7254.976 wddm: Blt obs14 dma4096 private2184 offset580 rects1 list256 valid1 snapshot1
+1478258   7254.976 wddm: Blt obs14 src 0,0,1920,1200 dst 0,0,1920,1200
+1478259   7254.976 wddm: Blt obs14 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478260   7254.976 wddm: Blt obs14 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478261   7254.976 wddm: Blt obs14 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478262   7254.976 wddm: Blt obs14 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478263   7254.976 wddm: Blt obs15 interrupt100ns35586272 qpc37075091
+1478264   7254.976 wddm: Blt obs15 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478265   7254.976 wddm: Blt obs15 dma4096 private2184 offset725 rects1 list256 valid1 snapshot1
+1478266   7254.976 wddm: Blt obs15 src 0,0,1920,1200 dst 0,0,1920,1200
+1478267   7254.976 wddm: Blt obs15 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478268   7254.976 wddm: Blt obs15 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478269   7254.976 wddm: Blt obs15 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478270   7254.976 wddm: Blt obs15 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478271   7254.976 wddm: GPU Present calls125 records125 rotate96 refused0
+1478272   7254.976 wddm: GPU Present submits125 rejected0 failed0
+1478273   7254.976 wddm: GPU Present errors parameter0 handle0 color0 other0
+1478274   7254.976 wddm: GPU Present snapshot refused stopping0 unopened0 owner0 umdopen0 unbound0 gone0 umdbacking0 descriptor0 same0 format0
+1478275   7254.976 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+1478276   7254.976 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback)
+1478277   7254.976 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+1478278   7254.976 wddm summary: widest blit 0 rows
+1478279   7254.976 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+1478280   7254.976 wddm summary: vsync enabled, 0 ticks, 434281 reported to dxgkrnl
+1478281   7254.976 wddm summary: visibility calls 14 source 0x00000000 requested 1 status 0x00000000 current 1
+1478282   7254.976 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+1478283   7254.976 wddm visibility: true 10 false 4 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+1478284   7254.976 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 30682674..30682706
+1478285   7254.976 wddm visibility event: 2 src 0 req 1 status 00000000 visible 1 blank 0 qpc 31033187..31033227
+1478286   7254.976 wddm visibility event: 3 src 0 req 1 status 00000000 visible 1 blank 0 qpc 31608910..31608967
+1478287   7254.976 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 122371384..122371455
+1478288   7254.976 wddm visibility event: 5 src 0 req 0 status 00000000 visible 0 blank 1 qpc 136926554..136926653
+1478289   7254.976 wddm visibility event: 6 src 0 req 0 status 00000000 visible 0 blank 1 qpc 136964619..136964732
+1478290   7254.976 wddm visibility event: 7 src 0 req 1 status 00000000 visible 1 blank 0 qpc 137065479..137065519
+1478291   7254.976 wddm visibility event: 8 src 0 req 1 status 00000000 visible 1 blank 0 qpc 137377465..137377512
+1478292   7254.976 wddm visibility event: 9 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2454556360..2454556520
+1478293   7254.976 wddm visibility event: 10 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2460242099..2460242144
+1478294   7254.976 wddm visibility event: 11 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2460485597..2460485691
+1478295   7254.976 wddm visibility event: 12 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2463563657..2463563844
+1478296   7254.976 wddm visibility event: 13 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2467677224..2467677266
+1478297   7254.976 wddm visibility event: 14 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2467916458..2467916541
+1478298   7254.976 wddm summary: dcn lock acknowledgement timeouts 0
+1478299   7254.976 wddm summary: vidpn flip open: 97615 hardware flips, 0 refused
+1478300   7254.976 wddm summary: vidpn flip vsyncs 1 armed, 434850 acked, 0 refused, 9 completion-deferred, 9 old-buffer-reports
+1478301   7254.976 vsync skip: odd 0 read 0 same 0 changed 0
+1478302   7254.976 vsync skip100ns: odd 0 read 0 same 0 changed 0
+1478303   7254.976 vsync vector: DPC polls 434840 ACKs 443 sync-failures 0
+1478304   7254.976 vsync diagnostic: irq 3111519 no-mmio 0 flip-off 0 unarmed 47
+1478305   7254.976 vsync diagnostic: no-event 3111462 read-fail 0 ack-fail 0
+1478306   7254.976 vsync diagnostic: 100ns irq 72564273973 entry 72564273973 ack 72564273973 notify 72564273973 status 00101104
+1478307   7254.976 wddm summary: *** TDR: ResetEngine 5, ResetFromTimeout 0, RestartFromTimeout 0 - the scheduler timed this adapter out ***
+1478308   7254.976 wddm summary: CollectDbgInfo called 5 time(s) since the driver was loaded
+1478309   7254.976 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+1478310   7254.976 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+1478311   7254.976 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+1478312   7254.976 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+1478313   7254.976 vidmm summary: segment 0 named by 74199026 valid entries, 0 refused
+1478314   7254.976 vidmm summary: segment 1 named by 146661108 valid entries, 0 refused
+1478315   7254.976 vidmm summary: segment 3 named by 181843 valid entries, 0 refused
+1478316   7254.976 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+1478317   7254.976 vidmm summary: PTE encoding level 0 segment 0 coherent 481652 noncoherent 73717374
+1478318   7254.976 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+1478319   7254.976 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 146661108
+1478320   7254.976 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+1478321   7254.976 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+1478322   7254.976 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+1478323   7254.976 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 180368
+1478324   7254.976 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+1478325   7254.976 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 768
+1478326   7254.976 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+1478327   7254.976 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 195
+1478328   7254.976 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+1478329   7254.976 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 64 roots
+1478330   7255.166 gfx: paging submit, 798 ring dwords reserved for buffer at 0x400348, seq 2731198
+1478331   7255.166 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731199
+1478332   7255.166 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 2731200
+1478333   7255.166 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 2731201
+1478334   7255.166 gfx: paging submit, 622 ring dwords reserved for buffer at 0x400000, seq 2731202
+1478335   7255.166 gfx: paging submit, 210 ring dwords reserved for buffer at 0x4009B8, seq 2731203
+1478336   7255.166 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400D00, seq 2731204
+1478337   7255.166 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731205
+1478338   7255.166 gfx: paging submit, 940 ring dwords reserved for buffer at 0x400000, seq 2731206
+1478339   7255.166 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731207
+1478340   7255.166 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410348, seq 2731208
+1478341   7255.166 gfx: paging submit, 226 ring dwords reserved for buffer at 0x4106D0, seq 2731209
+1478342   7255.167 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410A58, seq 2731210
+1478343   7255.167 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410DE0, seq 2731211
+1478344   7255.167 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E20, seq 2731212
+1478345   7255.167 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731213
+1478346   7255.167 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400348, seq 2731214
+1478347   7255.167 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400388, seq 2731215
+1478348   7255.167 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4003C8, seq 2731216
+1478349   7255.201 gfx: paging submit, 750 ring dwords reserved for buffer at 0x400408, seq 2731217
+1478350   7255.201 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731218
+1478351   7255.201 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 2731219
+1478352   7255.201 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 2731220
+1478353   7255.201 gfx: paging submit, 670 ring dwords reserved for buffer at 0x400000, seq 2731221
+1478354   7255.201 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400A78, seq 2731222
+1478355   7255.201 gfx: paging submit, 128 ring dwords reserved for buffer at 0x400DC0, seq 2731223
+1478356   7255.201 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731224
+1478357   7255.201 gfx: paging submit, 988 ring dwords reserved for buffer at 0x400000, seq 2731225
+1478358   7255.201 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731226
+1478359   7255.201 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410348, seq 2731227
+1478360   7255.201 gfx: paging submit, 226 ring dwords reserved for buffer at 0x4106D0, seq 2731228
+1478361   7255.202 gfx: paging submit, 234 ring dwords reserved for buffer at 0x410A58, seq 2731229
+1478362   7255.202 gfx: paging submit, 24 ring dwords reserved for buffer at 0x410E00, seq 2731230
+1478363   7255.202 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731231
+1478364   7255.202 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400348, seq 2731232
+1478365   7255.202 gfx: paging submit, 226 ring dwords reserved for buffer at 0x4006D0, seq 2731233
+1478366   7255.203 gfx: paging submit, 352 ring dwords reserved for buffer at 0x400A58, seq 2731234
+1478367   7255.203 gfx: paging submit, 640 ring dwords reserved for buffer at 0x410000, seq 2731235
+1478368   7255.203 gfx: paging submit, 368 ring dwords reserved for buffer at 0x410A00, seq 2731236
+1478369   7255.203 gfx: paging submit, 414 ring dwords reserved for buffer at 0x400000, seq 2731237
+1478370   7255.203 gfx: paging submit, 592 ring dwords reserved for buffer at 0x400678, seq 2731238
+1478371   7255.203 gfx: paging submit, 460 ring dwords reserved for buffer at 0x410000, seq 2731239
+1478372   7255.203 gfx: paging submit, 544 ring dwords reserved for buffer at 0x410730, seq 2731240
+1478373   7255.203 gfx: paging submit, 750 ring dwords reserved for buffer at 0x400000, seq 2731241
+1478374   7255.203 gfx: paging submit, 256 ring dwords reserved for buffer at 0x400BB8, seq 2731242
+1478375   7255.203 gfx: paging submit, 736 ring dwords reserved for buffer at 0x410000, seq 2731243
+1478376   7255.203 gfx: paging submit, 272 ring dwords reserved for buffer at 0x410B80, seq 2731244
+1478377   7255.203 gfx: paging submit, 510 ring dwords reserved for buffer at 0x400000, seq 2731245
+1478378   7255.203 gfx: paging submit, 496 ring dwords reserved for buffer at 0x4007F8, seq 2731246
+1478379   7255.204 gfx: paging submit, 556 ring dwords reserved for buffer at 0x410000, seq 2731247
+1478380   7255.204 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4108B0, seq 2731248
+1478381   7255.204 gfx: paging submit, 846 ring dwords reserved for buffer at 0x400000, seq 2731249
+1478382   7255.204 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D38, seq 2731250
+1478383   7255.204 gfx: paging submit, 832 ring dwords reserved for buffer at 0x410000, seq 2731251
+1478384   7255.204 gfx: paging submit, 176 ring dwords reserved for buffer at 0x410D00, seq 2731252
+1478385   7255.204 gfx: paging submit, 606 ring dwords reserved for buffer at 0x400000, seq 2731253
+1478386   7255.204 gfx: paging submit, 400 ring dwords reserved for buffer at 0x400978, seq 2731254
+1478387   7255.204 gfx: paging submit, 652 ring dwords reserved for buffer at 0x410000, seq 2731255
+1478388   7255.204 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A30, seq 2731256
+1478389   7255.204 gfx: paging submit, 942 ring dwords reserved for buffer at 0x400000, seq 2731257
+1478390   7255.210 gfx: paging submit, 64 ring dwords reserved for buffer at 0x400EB8, seq 2731259
+1478391   7255.210 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731260
+1478392   7255.211 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731261
+1478393   7255.211 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400348, seq 2731262
+1478394   7255.211 gfx: paging submit, 512 ring dwords reserved for buffer at 0x400690, seq 2731263
+1478395   7255.211 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731264
+1478396   7255.211 gfx: paging submit, 230 ring dwords reserved for buffer at 0x410348, seq 2731265
+1478397   7255.211 gfx: paging submit, 210 ring dwords reserved for buffer at 0x4106E0, seq 2731266
+1478398   7255.211 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410A28, seq 2731267
+1478399   7255.212 gfx: paging submit, 24 ring dwords reserved for buffer at 0x410DB0, seq 2731268
+1478400   7255.212 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731269
+1478401   7255.212 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400348, seq 2731270
+1478402   7255.212 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4006D0, seq 2731271
+1478403   7255.212 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400710, seq 2731272
+1478404   7255.212 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400750, seq 2731273
+1478405   7255.212 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400A98, seq 2731274
+1478406   7255.212 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400AD8, seq 2731275
+1478407   7255.212 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400B18, seq 2731276
+1478408   7255.245 gfx: paging submit, 286 ring dwords reserved for buffer at 0x400B58, seq 2731277
+1478409   7255.245 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731278
+1478410   7255.245 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 2731279
+1478411   7255.245 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 2731280
+1478412   7255.245 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 2731281
+1478413   7255.245 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731282
+1478414   7255.245 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410348, seq 2731283
+1478415   7255.245 gfx: paging submit, 592 ring dwords reserved for buffer at 0x410690, seq 2731284
+1478416   7255.245 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 2731285
+1478417   7255.246 gfx: paging submit, 734 ring dwords reserved for buffer at 0x410000, seq 2731286
+1478418   7255.246 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410B78, seq 2731287
+1478419   7255.246 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410F00, seq 2731288
+1478420   7255.246 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731289
+1478421   7255.247 gfx: paging submit, 234 ring dwords reserved for buffer at 0x400348, seq 2731290
+1478422   7255.247 gfx: paging submit, 234 ring dwords reserved for buffer at 0x4006F0, seq 2731291
+1478423   7255.247 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400A98, seq 2731292
+1478424   7255.247 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400E20, seq 2731293
+1478425   7255.247 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731294
+1478426   7255.247 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410348, seq 2731295
+1478427   7255.247 gfx: paging submit, 352 ring dwords reserved for buffer at 0x4108C8, seq 2731296
+1478428   7255.247 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E48, seq 2731297
+1478429   7255.247 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731298
+1478430   7255.247 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400348, seq 2731299
+1478431   7255.248 gfx: paging submit, 352 ring dwords reserved for buffer at 0x4006D0, seq 2731301
+1478432   7255.248 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400C50, seq 2731302
+1478433   7255.248 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410000, seq 2731303
+1478434   7255.248 gfx: paging submit, 234 ring dwords reserved for buffer at 0x410388, seq 2731304
+1478435   7255.248 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410730, seq 2731305
+1478436   7255.249 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410AB8, seq 2731306
+1478437   7255.249 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410AF8, seq 2731307
+1478438   7255.249 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410B38, seq 2731308
+1478439   7255.249 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E80, seq 2731309
+1478440   7255.249 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410EC0, seq 2731310
+1478441   7255.249 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410F00, seq 2731311
+1478442   7255.282 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F40, seq 2731312
+1478443   7255.282 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 2731313
+1478444   7255.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 2731314
+1478445   7255.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 2731315
+1478446   7255.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 2731316
+1478447   7255.282 gfx: paging submit, 414 ring dwords reserved for buffer at 0x400000, seq 2731317
+1478448   7255.282 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400678, seq 2731318
+1478449   7255.282 gfx: paging submit, 384 ring dwords reserved for buffer at 0x4009C0, seq 2731319
+1478450   7255.283 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731320
+1478451   7255.283 gfx: paging submit, 942 ring dwords reserved for buffer at 0x400000, seq 2731321
+1478452   7255.283 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400EB8, seq 2731322
+1478453   7255.283 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731323
+1478454   7255.283 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410348, seq 2731324
+1478455   7255.284 gfx: paging submit, 234 ring dwords reserved for buffer at 0x4106D0, seq 2731325
+1478456   7255.284 gfx: paging submit, 234 ring dwords reserved for buffer at 0x410A78, seq 2731326
+1478457   7255.284 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E20, seq 2731327
+1478458   7255.284 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731328
+1478459   7255.284 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400348, seq 2731329
+1478460   7255.284 gfx: paging submit, 226 ring dwords reserved for buffer at 0x4006D0, seq 2731330
+1478461   7255.284 gfx: paging submit, 226 ring dwords reserved for buffer at 0x400A58, seq 2731331
+1478462   7255.285 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400DE0, seq 2731333
+1478463   7255.285 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731334
+1478464   7255.285 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410348, seq 2731335
+1478465   7255.285 gfx: paging submit, 234 ring dwords reserved for buffer at 0x4106D0, seq 2731336
+1478466   7255.285 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410A78, seq 2731337
+1478467   7255.285 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E00, seq 2731338
+1478468   7255.285 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E40, seq 2731339
+1478469   7255.285 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731340
+1478470   7255.286 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400348, seq 2731341
+1478471   7255.286 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400388, seq 2731342
+1478472   7255.286 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4003C8, seq 2731343
+1478473   7255.315 gfx: paging submit, 750 ring dwords reserved for buffer at 0x400408, seq 2731344
+1478474   7255.315 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731345
+1478475   7255.315 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 2731346
+1478476   7255.315 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 2731347
+1478477   7255.315 gfx: paging submit, 670 ring dwords reserved for buffer at 0x400000, seq 2731348
+1478478   7255.315 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400A78, seq 2731349
+1478479   7255.315 gfx: paging submit, 128 ring dwords reserved for buffer at 0x400DC0, seq 2731350
+1478480   7255.315 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 2731351
+1478481   7255.316 gfx: paging submit, 988 ring dwords reserved for buffer at 0x400000, seq 2731352
+1478482   7255.316 gfx: paging submit, 210 ring dwords reserved for buffer at 0x410000, seq 2731353
+1478483   7255.316 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410348, seq 2731354
+1478484   7255.316 gfx: paging submit, 226 ring dwords reserved for buffer at 0x4106D0, seq 2731355
+1478485   7255.316 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410A58, seq 2731356
+1478486   7255.317 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410DE0, seq 2731357
+1478487   7255.317 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410E20, seq 2731358
+1478488   7255.317 gfx: paging submit, 210 ring dwords reserved for buffer at 0x400000, seq 2731359
+1478489   7255.317 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400348, seq 2731360
+1478490   7255.317 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400388, seq 2731361
+1478491   7255.317 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4003C8, seq 2731362
+1478492   7255.479 vsync snapshot: 100ns begin 72569390256 end 72569390256 valid 1F
+1478493   7255.479 vsync snapshot: frame 0006A537 sync 00101104 control 80011311 lock 00000000 position 042F0382
+1478494   7255.479 dpm: summary dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 154 lowers 185 thermal 2 warm
+1478495   7255.479 dpm: summary idle 500 MHz (now), hold 3000 ms under 2 permille, entries 30 exits 29 refusals 0, 5292802 ms at the point
+1478496   7255.479 dpm: summary idle leave at 150 permille, exits 29 by a busy tick, 0 by the window
+1478497   7255.479 hwmon: summary fan2 1295 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+1478498   7255.479 hwmon: summary apu 60.0 C, duty read-back unproven
+1478499   7255.479 hwmon: summary 7152 samples 0 errors 0 retries 0 refusals
+1478500   7255.479 smu metrics: summary 36.5 W avg 37.6 W, gfx 10.1 W soc 0.7 W
+1478501   7255.479 smu metrics: summary gfx 824 mV 500 MHz 56.2 C soc 837 mV 57.7 C thr 0
+1478502   7255.479 fan: summary curve curve/standard
+1478503   7255.479 fan: summary target 75% applied 75% raw 191 rb 191, 1295 rpm
+1478504   7255.479 fan: summary 1 takeovers 0 handbacks 191 writes
+1478505   7255.479 fan: summary 0 failures 2 emergencies 0 doubts
+1478506   7255.479 dpm: summary tune up 900 target 800 down 650 permille, hold 200 ms, floor 0 MHz, serial 0 applied 0, floor ticks 0
+1478507   7255.479 dpm: summary tune thermal: hot step 500 ms, soft release delta 4000 mC step 4000 ms, soft raises 46
+1478508   7255.479 dpm: summary tune zone: at 86000 mC (delta 1000) step 1500 ms, no raise from 83000 mC
+1478509   7255.479 dpm: summary tune zone lead: 15000 ms over 5000 ms, now +0 mC, 172 ticks with none
+1478510   7255.479 dpm: summary tune zone: 89 steps, 6338 ticks, 0 idle holds, slope measured
+1478511   7255.479 interop summary: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x803 users 1 marks 1 unmarks 0 mark-failures 0 last-end 0
+1478512   7255.479 wddm summary: ---- DDI calls: name, count, first log line ----
+1478513   7255.479 wddm summary: QueryAdapterInfo                85880  first at 225
+1478514   7255.479 wddm summary: GetNodeMetadata                     2  first at 233
+1478515   7255.479 wddm summary: CreateDevice                      204  first at 240
+1478516   7255.479 wddm summary: DestroyDevice                     191  first at 2835
+1478517   7255.479 wddm summary: CreateContext                     310  first at 244
+1478518   7255.479 wddm summary: DestroyContext                    291  first at 2823
+1478519   7255.479 wddm summary: CreateProcess                      95  first at 239
+1478520   7255.479 wddm summary: DestroyProcess                     84  first at 2863
+1478521   7255.479 wddm summary: SetRootPageTable                   67  first at 269
+1478522   7255.479 wddm summary: CreateAllocation                81209  first at 322
+1478523   7255.479 wddm summary: DestroyAllocation              143244  first at 1067
+1478524   7255.479 wddm summary: DescribeAllocation              97622  first at 354
+1478525   7255.479 wddm summary: GetStandardAllocationDriverData      4  first at 319
+1478526   7255.479 wddm summary: OpenAllocation                  81365  first at 325
+1478527   7255.479 wddm summary: CloseAllocation                 81039  first at 1066
+1478528   7255.479 wddm summary: BuildPagingBuffer              1616348  first at 246
+1478529   7255.479 wddm summary: SubmitCommandVirtual           2731363  first at 296
+1478530   7255.479 wddm summary: PreemptCommand                  78497  first at 418
+1478531   7255.479 wddm summary: QueryDependentEngineGroup           5  first at 1218063
+1478532   7255.479 wddm summary: ResetEngine                         5  first at 1218064
+1478533   7255.479 wddm summary: CalibrateGpuClock               14521  first at 128303
+1478534   7255.479 wddm summary: Present                         97738  first at 396
+1478535   7255.479 wddm summary: SetVidPnSourceAddress           97623  first at 388
+1478536   7255.479 wddm summary: ControlInterrupt                    3  first at 394
+1478537   7255.479 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+1478538   7255.479 wddm summary: adapter info type   1       1  first at 225
+1478539   7255.479 wddm summary: adapter info type  15       1  first at 226
+1478540   7255.479 wddm summary: adapter info type  47       1  first at 227
+1478541   7255.479 wddm summary: adapter info type  13       1  first at 228
+1478542   7255.479 wddm summary: adapter info type  14       4  first at 229
+1478543   7255.479 wddm summary: adapter info type  11       2  first at 236
+1478544   7255.479 wddm summary: adapter info type  10       1  first at 238
+1478545   7255.479 wddm summary: adapter info type  16       1  first at 238
+1478546   7255.479 wddm summary: adapter info type  20       1  first at 276
+1478547   7255.479 wddm summary: adapter info type   0   85867  first at 637
+1478548   7255.479 wddm summary: capture plans reserved 0 heap 0
+1478549   7255.479 wddm summary: capture context peaks plans 0 reserved-bytes 0
+1478550   7255.479 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+1478551   7255.479 wddm summary: paging operation  11  1134397  first at 246
+1478552   7255.479 wddm summary: paging operation  12  408244  first at 310
+1478553   7255.479 wddm summary: paging operation   9   37942  first at 334
+1478554   7255.479 wddm summary: paging operation   2   33810  first at 1061
+1478555   7255.479 wddm summary: paging operation   8    1955  first at 1082
+1478556   7255.479 wddm summary: objects created/destroyed: alloc 81209/143244
+1478557   7255.479 wddm summary: objects created/destroyed: dev 204/191 ctx 310/291 proc 95/84, 702 alive
+1478558   7255.479 wddm summary: allocations opened/closed: 81365/81039 calls
+1478559   7255.479 wddm summary: ---- standard allocations; refused flags/type/geom/buf/input ----
+1478560   7255.479 wddm summary: stdalloc primary size/fill 1/1 ok 2 refused 0/0/0/0/0
+1478561   7255.479 wddm summary: stdalloc shadow size/fill 1/1 ok 2 refused 0/0/0/0/0
+1478562   7255.479 wddm summary: lb7a type 0 create ok/refused/rolled-back 307/0/0 open ok/refused 463/0
+1478563   7255.479 wddm summary: CreateAllocation calls ok 81209 resource-data 0 invalid 0 no-memory 0
+1478564   7255.479 wddm summary: gdi type masks requested 0x000 refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+1478565   7255.479 wddm summary: submissions 0 physical + 2731363 virtual, 78497 preemptions, last completed fence 1850308
+1478566   7255.479 wddm summary: node 0 hardware: 1850308 submitted, 1793535 completed, 5 timeouts, 0 refused, 5 soft-recovered
+1478567   7255.479 wddm summary: umd: 80902 allocs (0 refused), 177 contexts, 1850183 submits on the ring, 0 not run
+1478568   7255.479 wddm summary: umd placement (shared residency on): local 0, local+aperture 35896, aperture 45006
+1478569   7255.479 wddm profile: umd calls 1850183, elapsed ticks 165845727, QPC frequency 10000000
+1478570   7255.479 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+1478571   7255.479 wddm profile: holds 0 (spin-only 0), held 0 us worst 0, 0 spins
+1478572   7255.479 wddm profile: hold wakes 0 event, 0 timeout
+1478573   7255.479 wddm profile: held us <100:0 100:0 200:0 500:0 1k:0 2k:0 5k:0 10k:0 20k+:0
+1478574   7255.479 wddm profile: node 0 ring idle 5856018984 us in 1223393 gaps, worst 148827875 us, lost 0, 434311 vsyncs
+1478575   7255.479 wddm profile: node 0 ring >=4ms 21687/5781156368 us, vsync-ended 303/66261870 us, 152567 ns/frame
+1478576   7255.479 wddm profile: node 0 ring gap us <16:120033 16:485156 32:454473 64:118255 128:5847
+1478577   7255.479 wddm profile: node 0 ring gap us 512:12464 2k:5478 4k:7202 8k+:14485
+1478578   7255.479 wddm profile: node 1 ring idle 7218255857 us in 881054 gaps, worst 259354594 us, lost 0, 434311 vsyncs
+1478579   7255.479 wddm profile: node 1 ring >=4ms 20067/7098238914 us, vsync-ended 396/165475624 us, 381007 ns/frame
+1478580   7255.479 wddm profile: node 1 ring gap us <16:260432 16:189825 32:192155 64:81901 128:77071
+1478581   7255.479 wddm profile: node 1 ring gap us 512:48784 2k:10819 4k:6124 8k+:13943
+1478582   7255.479 wddm profile: ring gap vblank stamps: 434870 hardware, 0 software timer
+1478583   7255.479 wddm profile: notify pairing gate 1, 2750422 reports: 2733826 same pass, 16596 deferred
+1478584   7255.479 wddm profile: notify pairing 0 waiting now (worst 3), 3103342 notifications carried no report
+1478585   7255.479 wddm profile: notify pairing 434311 vsync reports (0 waiting, worst 1), 55439 contended
+1478586   7255.479 wddm profile: reports not delivered: node 0 retried 0 dropped 0
+1478587   7255.479 wddm profile: reports not delivered: node 1 retried 0 dropped 0, 0 preemption acks lost
+1478588   7255.479 wddm profile: hot submit log lines left out: 5550924 (HotSubmitLog off)
+1478589   7255.479 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+1478590   7255.479 wddm summary: VMID pool: 37 claims, 1850271 reuses, 0 busy, 0 rule refusals
+1478591   7255.479 wddm summary: VMID pool FLUSH_TLB: 332855 built, 4659866 VMID invalidations
+1478592   7255.479 wddm summary: node 1 (paging, open): 881055 hardware submitted, 881055 completed, 0 timeouts, 0 refused
+1478593   7255.479 wddm: paging OS-private queue admissions=881055 (no submit allocation)
+1478594   7255.479 wddm summary: SubmitCommandVirtual by node: 0: 1850308, 1: 881055, 0 private-buffer refusals
+1478595   7255.479 wddm summary: paging DMA VA nonzero 1615319 zero 1029, mapping observations 8
+1478596   7255.479 wddm summary: native DMA transfers 1886 fills 35671 bytes 176627204096
+1478597   7255.479 wddm: native PTE copies gate1 ranges0
+1478598   7255.479 wddm summary: native DMA exact disjoint checks 850
+1478599   7255.479 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x261206000 CPU_PA0x261206000
+1478600   7255.479 wddm summary: BuildPagingBuffer: 1886 transfers, 35671 fills, 176627204096 bytes, 494551 insufficient-buffer
+1478601   7255.479 wddm summary: virtual transfers (count/bytes) to system 1736/52892459008, from system 150/15840980992, other 0/0
+1478602   7255.479 wddm summary: physical transfers (count/bytes) to system 0/0, from system 0/0, other 0/0
+1478603   7255.480 wddm summary: aperture map batches 0, unmap batches 0
+1478604   7255.480 wddm summary: paging fills 35671/107893764096 bytes, aperture pages mapped 0 unmapped 0
+1478605   7255.480 wddm summary: paging TLB invalidations 332855, PTE update batches 1122638
+1478606   7255.480 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+1478607   7255.480 wddm summary: presents 97738, flips 97616 of 97623 address calls (97613 arrived above DISPATCH_LEVEL)
+1478608   7255.480 wddm summary: scan-out flips 0 of 0 requested candidates; admission ok/no-alloc/not-requested 97623/0/0
+1478609   7255.480 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+1478610   7255.480 wddm summary: type0 creates asked/not by record none 0/2 v1 0/16 v2 0/32 v3 0/257
+1478611   7255.480 wddm summary: type0 creates other 0/0, PRIMARY records 9, in a resource group 307
+1478612   7255.480 wddm summary: flip flags mode/immediate/shared-transition/independent 10/0/0/0, redirected presents 0
+1478613   7255.480 wddm summary: plane formats 1, flips argb8888/abgr8888/abgr2101010 97616/0/0, changes 0 refused 0
+1478614   7255.480 wddm summary: DirectFlip handshake on
+1478615   7255.480 wddm: CDD interop1 GPU Present gate1 identity probe1
+1478616   7255.480 wddm: DRIVERCAPS returned interop0 0 interop1 1
+1478617   7255.480 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+1478618   7255.480 wddm: DRIVERCAPS interop1 first100ns28420937 last100ns28420937
+1478619   7255.480 wddm: Blt observation calls125 capacity16
+1478620   7255.480 wddm: Blt obs0 interrupt100ns29234841 qpc30722143
+1478621   7255.480 wddm: Blt obs0 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478622   7255.480 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478623   7255.480 wddm: Blt obs0 src 936,916,984,966 dst 936,916,984,966
+1478624   7255.480 wddm: Blt obs0 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478625   7255.480 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478626   7255.480 wddm: Blt obs0 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478627   7255.480 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478628   7255.480 wddm: Blt obs1 interrupt100ns29621000 qpc31108503
+1478629   7255.480 wddm: Blt obs1 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478630   7255.480 wddm: Blt obs1 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478631   7255.480 wddm: Blt obs1 src 936,916,984,966 dst 936,916,984,966
+1478632   7255.480 wddm: Blt obs1 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478633   7255.480 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478634   7255.480 wddm: Blt obs1 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478635   7255.480 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478636   7255.480 wddm: Blt obs2 interrupt100ns30079919 qpc31567400
+1478637   7255.480 wddm: Blt obs2 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478638   7255.480 wddm: Blt obs2 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478639   7255.480 wddm: Blt obs2 src 936,916,984,966 dst 936,916,984,966
+1478640   7255.480 wddm: Blt obs2 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478641   7255.480 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478642   7255.480 wddm: Blt obs2 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478643   7255.480 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478644   7255.480 wddm: Blt obs3 interrupt100ns30540165 qpc32028165
+1478645   7255.480 wddm: Blt obs3 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478646   7255.480 wddm: Blt obs3 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478647   7255.480 wddm: Blt obs3 src 936,916,984,966 dst 936,916,984,966
+1478648   7255.480 wddm: Blt obs3 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478649   7255.480 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478650   7255.480 wddm: Blt obs3 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478651   7255.480 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478652   7255.480 wddm: Blt obs4 interrupt100ns31010441 qpc32497938
+1478653   7255.480 wddm: Blt obs4 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478654   7255.480 wddm: Blt obs4 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478655   7255.480 wddm: Blt obs4 src 936,916,984,966 dst 936,916,984,966
+1478656   7255.480 wddm: Blt obs4 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478657   7255.480 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478658   7255.480 wddm: Blt obs4 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478659   7255.480 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478660   7255.480 wddm: Blt obs5 interrupt100ns31480150 qpc32967909
+1478661   7255.480 wddm: Blt obs5 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478662   7255.480 wddm: Blt obs5 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478663   7255.480 wddm: Blt obs5 src 936,916,984,966 dst 936,916,984,966
+1478664   7255.480 wddm: Blt obs5 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478665   7255.480 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478666   7255.480 wddm: Blt obs5 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478667   7255.480 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478668   7255.480 wddm: Blt obs6 interrupt100ns31952078 qpc33439746
+1478669   7255.480 wddm: Blt obs6 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478670   7255.480 wddm: Blt obs6 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478671   7255.480 wddm: Blt obs6 src 936,916,984,966 dst 936,916,984,966
+1478672   7255.480 wddm: Blt obs6 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478673   7255.480 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478674   7255.480 wddm: Blt obs6 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478675   7255.480 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478676   7255.480 wddm: Blt obs7 interrupt100ns32423741 qpc33911545
+1478677   7255.480 wddm: Blt obs7 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478678   7255.480 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478679   7255.480 wddm: Blt obs7 src 936,916,984,966 dst 936,916,984,966
+1478680   7255.480 wddm: Blt obs7 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478681   7255.480 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478682   7255.480 wddm: Blt obs7 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478683   7255.480 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478684   7255.480 wddm: Blt obs8 interrupt100ns32892022 qpc34379827
+1478685   7255.480 wddm: Blt obs8 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478686   7255.480 wddm: Blt obs8 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478687   7255.480 wddm: Blt obs8 src 936,916,984,966 dst 936,916,984,966
+1478688   7255.480 wddm: Blt obs8 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478689   7255.480 wddm: Blt obs8 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478690   7255.480 wddm: Blt obs8 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478691   7255.480 wddm: Blt obs8 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478692   7255.480 wddm: Blt obs9 interrupt100ns33361928 qpc34849655
+1478693   7255.480 wddm: Blt obs9 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478694   7255.480 wddm: Blt obs9 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478695   7255.480 wddm: Blt obs9 src 936,916,984,966 dst 936,916,984,966
+1478696   7255.480 wddm: Blt obs9 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478697   7255.480 wddm: Blt obs9 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478698   7255.480 wddm: Blt obs9 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478699   7255.480 wddm: Blt obs9 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478700   7255.480 wddm: Blt obs10 interrupt100ns35576135 qpc37066372
+1478701   7255.480 wddm: Blt obs10 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478702   7255.480 wddm: Blt obs10 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+1478703   7255.480 wddm: Blt obs10 src 0,0,1920,1200 dst 0,0,1920,1200
+1478704   7255.480 wddm: Blt obs10 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478705   7255.480 wddm: Blt obs10 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478706   7255.480 wddm: Blt obs10 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478707   7255.480 wddm: Blt obs10 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478708   7255.480 wddm: Blt obs11 interrupt100ns35576135 qpc37067125
+1478709   7255.480 wddm: Blt obs11 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478710   7255.480 wddm: Blt obs11 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+1478711   7255.480 wddm: Blt obs11 src 0,0,1920,1200 dst 0,0,1920,1200
+1478712   7255.480 wddm: Blt obs11 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478713   7255.480 wddm: Blt obs11 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478714   7255.480 wddm: Blt obs11 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478715   7255.480 wddm: Blt obs11 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478716   7255.480 wddm: Blt obs12 interrupt100ns35576135 qpc37071605
+1478717   7255.480 wddm: Blt obs12 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478718   7255.480 wddm: Blt obs12 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+1478719   7255.480 wddm: Blt obs12 src 0,0,1920,1200 dst 0,0,1920,1200
+1478720   7255.480 wddm: Blt obs12 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478721   7255.480 wddm: Blt obs12 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478722   7255.480 wddm: Blt obs12 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478723   7255.480 wddm: Blt obs12 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478724   7255.480 wddm: Blt obs13 interrupt100ns35576135 qpc37072070
+1478725   7255.480 wddm: Blt obs13 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478726   7255.480 wddm: Blt obs13 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+1478727   7255.480 wddm: Blt obs13 src 0,0,1920,1200 dst 0,0,1920,1200
+1478728   7255.480 wddm: Blt obs13 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478729   7255.480 wddm: Blt obs13 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478730   7255.480 wddm: Blt obs13 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478731   7255.480 wddm: Blt obs13 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478732   7255.480 wddm: Blt obs14 interrupt100ns35576135 qpc37072471
+1478733   7255.480 wddm: Blt obs14 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478734   7255.480 wddm: Blt obs14 dma4096 private2184 offset580 rects1 list256 valid1 snapshot1
+1478735   7255.480 wddm: Blt obs14 src 0,0,1920,1200 dst 0,0,1920,1200
+1478736   7255.480 wddm: Blt obs14 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478737   7255.480 wddm: Blt obs14 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478738   7255.480 wddm: Blt obs14 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478739   7255.480 wddm: Blt obs14 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478740   7255.480 wddm: Blt obs15 interrupt100ns35586272 qpc37075091
+1478741   7255.480 wddm: Blt obs15 ctxFFFFB50EFE334170 devFFFFB50EFE334EF0 flags1 node0 umd0 system0
+1478742   7255.480 wddm: Blt obs15 dma4096 private2184 offset725 rects1 list256 valid1 snapshot1
+1478743   7255.480 wddm: Blt obs15 src 0,0,1920,1200 dst 0,0,1920,1200
+1478744   7255.480 wddm: Blt obs15 side0 handleFFFFB50EFE334710 adapter0 va8DC000
+1478745   7255.480 wddm: Blt obs15 side0 1920x1200 pitch7680 fmt21 bytes9216000
+1478746   7255.480 wddm: Blt obs15 side1 handleFFFFB50EFE334A70 adapter0 va12000
+1478747   7255.480 wddm: Blt obs15 side1 1920x1200 pitch7680 fmt21 bytes9216000
+1478748   7255.480 wddm: GPU Present calls125 records125 rotate96 refused0
+1478749   7255.480 wddm: GPU Present submits125 rejected0 failed0
+1478750   7255.480 wddm: GPU Present errors parameter0 handle0 color0 other0
+1478751   7255.480 wddm: GPU Present snapshot refused stopping0 unopened0 owner0 umdopen0 unbound0 gone0 umdbacking0 descriptor0 same0 format0
+1478752   7255.480 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+1478753   7255.480 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback)
+1478754   7255.480 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+1478755   7255.480 wddm summary: widest blit 0 rows
+1478756   7255.480 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+1478757   7255.480 wddm summary: vsync enabled, 0 ticks, 434311 reported to dxgkrnl
+1478758   7255.480 wddm summary: visibility calls 14 source 0x00000000 requested 1 status 0x00000000 current 1
+1478759   7255.480 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+1478760   7255.480 wddm visibility: true 10 false 4 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+1478761   7255.480 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 30682674..30682706
+1478762   7255.480 wddm visibility event: 2 src 0 req 1 status 00000000 visible 1 blank 0 qpc 31033187..31033227
+1478763   7255.480 wddm visibility event: 3 src 0 req 1 status 00000000 visible 1 blank 0 qpc 31608910..31608967
+1478764   7255.480 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 122371384..122371455
+1478765   7255.480 wddm visibility event: 5 src 0 req 0 status 00000000 visible 0 blank 1 qpc 136926554..136926653
+1478766   7255.480 wddm visibility event: 6 src 0 req 0 status 00000000 visible 0 blank 1 qpc 136964619..136964732
+1478767   7255.480 wddm visibility event: 7 src 0 req 1 status 00000000 visible 1 blank 0 qpc 137065479..137065519
+1478768   7255.480 wddm visibility event: 8 src 0 req 1 status 00000000 visible 1 blank 0 qpc 137377465..137377512
+1478769   7255.480 wddm visibility event: 9 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2454556360..2454556520
+1478770   7255.480 wddm visibility event: 10 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2460242099..2460242144
+1478771   7255.480 wddm visibility event: 11 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2460485597..2460485691
+1478772   7255.480 wddm visibility event: 12 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2463563657..2463563844
+1478773   7255.480 wddm visibility event: 13 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2467677224..2467677266
+1478774   7255.480 wddm visibility event: 14 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2467916458..2467916541
+1478775   7255.480 wddm summary: dcn lock acknowledgement timeouts 0
+1478776   7255.480 wddm summary: vidpn flip open: 97616 hardware flips, 0 refused
+1478777   7255.480 wddm summary: vidpn flip vsyncs 1 armed, 434880 acked, 0 refused, 9 completion-deferred, 9 old-buffer-reports
+1478778   7255.480 vsync skip: odd 0 read 0 same 0 changed 0
+1478779   7255.480 vsync skip100ns: odd 0 read 0 same 0 changed 0
+1478780   7255.480 vsync vector: DPC polls 434870 ACKs 443 sync-failures 0
+1478781   7255.480 vsync diagnostic: irq 3111715 no-mmio 0 flip-off 0 unarmed 47
+1478782   7255.480 vsync diagnostic: no-event 3111658 read-fail 0 ack-fail 0
+1478783   7255.480 vsync diagnostic: 100ns irq 72569278436 entry 72569278436 ack 72569278436 notify 72569278436 status 00101104
+1478784   7255.480 wddm summary: *** TDR: ResetEngine 5, ResetFromTimeout 0, RestartFromTimeout 0 - the scheduler timed this adapter out ***
+1478785   7255.480 wddm summary: CollectDbgInfo called 5 time(s) since the driver was loaded
+1478786   7255.480 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+1478787   7255.480 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+1478788   7255.480 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+1478789   7255.480 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+1478790   7255.480 vidmm summary: segment 0 named by 74206638 valid entries, 0 refused
+1478791   7255.480 vidmm summary: segment 1 named by 146661108 valid entries, 0 refused
+1478792   7255.480 vidmm summary: segment 3 named by 181905 valid entries, 0 refused
+1478793   7255.480 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+1478794   7255.480 vidmm summary: PTE encoding level 0 segment 0 coherent 489264 noncoherent 73717374
+1478795   7255.480 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+1478796   7255.480 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 146661108
+1478797   7255.480 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+1478798   7255.480 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+1478799   7255.480 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+1478800   7255.480 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 180400
+1478801   7255.480 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+1478802   7255.480 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 788
+1478803   7255.480 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+1478804   7255.480 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 205
+1478805   7255.480 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+1478806   7255.480 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 67 roots
+             1024 lines printed
+             escapes: 16 without adapter synchronization, 1 with HardwareAccess
+

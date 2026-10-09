@@ -1,0 +1,584 @@
+﻿{
+    "schema":  1,
+    "tool":  "m16-step1",
+    "utc_start":  "2026-10-08T12:33:51Z",
+    "host_name":  "BC250-A",
+    "work_dir":  "C:\\BC250\\m16\\step1",
+    "probe":  "C:\\BC250\\m16\\step1\\hipprobe.exe",
+    "probe_sha256":  "6D997D83AE28F3F4627872E615F061A0AEFAAEE345F7CDBF3265C1D2CA08A0EB",
+    "code_object":  "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+    "code_object_sha256":  "A275344D28EA93B867E7541DD2DE64A882A14403A113EEA8198F1839C1047183",
+    "release_client":  "C:\\Program Files\\amdgpu-wddm\\tools\\bc250kmd_cli.exe",
+    "release_client_sha256":  "86D66D74F077B8EFC19833DCF57066084EDF0C16E96857DD9893D49C09732D46",
+    "bound_seconds":  150,
+    "tail_reserve_seconds":  45,
+    "kmd_info":  "# adapter    BC-250 GPU (amdgpu-wddm)\r\n# hardware   PCI\\VEN_1002\u0026DEV_13FE\u0026SUBSYS_00001022\u0026REV_00\r\n# interface  \\\\?\\pci#ven_1002\u0026dev_13fe\u0026subsys_00001022\u0026rev_00#4\u002619caf403\u00260\u00260041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}\r\nD3DKMTOpenAdapterFromDeviceName -\u003e 0x00000000 STATUS_SUCCESS\r\n# adapter    handle 0x40000000 luid 00000000-00007FA1\r\nD3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -\u003e 0x00000000 STATUS_SUCCESS\r\nversion      0x000700D8 (milestone 7 revision 216)\r\nlast stage   50 first CommitVidPn\r\nmode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)\r\npresents     0\r\ncounters     blits 0, flips 97612 (the full table\u0027s own present counters; both stay 0 in display-only mode)\r\ngates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open\r\n",
+    "clock_before":  "clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60375 ready=1\r\n",
+    "clock_after":  "clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60375 ready=1\r\n",
+    "temp_start_c":  60.375,
+    "temp_end_c":  60.375,
+    "runs":  [
+                 {
+                     "label":  "selftest",
+                     "arguments":  [
+                                       "--selftest",
+                                       "--co",
+                                       "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+                                       "--wait-slice",
+                                       "1000",
+                                       "--wait-total",
+                                       "10000"
+                                   ],
+                     "bound":  15,
+                     "seconds":  1.249,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "stdout":  [
+                                    "{\"tool\":\"hipprobe\",\"kernel\":\"vadd\",\"mode\":\"selftest\",\"status\":\"ok\",\"items\":1048576,\"grid\":[4096,1,1],\"block\":[256,1,1],\"kernarg_bytes\":28,\"group_segment_bytes\":0,\"dispatch_dwords\":88,\"fence_value\":0,\"fence_read\":0,\"wait_ms\":0.000,\"checked\":4,\"mismatches\":0,\"first_mismatch\":-1,\"dangling_submission\":false,\"detail\":\"\"}",
+                                    "{\"tool\":\"hipprobe\",\"kernel\":\"reduce256\",\"mode\":\"selftest\",\"status\":\"ok\",\"items\":1048576,\"grid\":[4096,1,1],\"block\":[256,1,1],\"kernarg_bytes\":16,\"group_segment_bytes\":1024,\"dispatch_dwords\":88,\"fence_value\":0,\"fence_read\":0,\"wait_ms\":0.000,\"checked\":2,\"mismatches\":0,\"first_mismatch\":-1,\"dangling_submission\":false,\"detail\":\"\"}",
+                                    "{\"tool\":\"hipprobe\",\"kernel\":\"writeGridSize\",\"mode\":\"selftest\",\"status\":\"ok\",\"items\":3,\"grid\":[7,3,2],\"block\":[64,2,1],\"kernarg_bytes\":264,\"group_segment_bytes\":0,\"dispatch_dwords\":88,\"fence_value\":0,\"fence_read\":0,\"wait_ms\":0.000,\"checked\":14,\"mismatches\":0,\"first_mismatch\":-1,\"dangling_submission\":false,\"detail\":\"\"}"
+                                ],
+                     "stderr":  {
+
+                                },
+                     "json":  [
+                                  {
+                                      "tool":  "hipprobe",
+                                      "kernel":  "vadd",
+                                      "mode":  "selftest",
+                                      "status":  "ok",
+                                      "items":  1048576,
+                                      "grid":  [
+                                                   4096,
+                                                   1,
+                                                   1
+                                               ],
+                                      "block":  [
+                                                    256,
+                                                    1,
+                                                    1
+                                                ],
+                                      "kernarg_bytes":  28,
+                                      "group_segment_bytes":  0,
+                                      "dispatch_dwords":  88,
+                                      "fence_value":  0,
+                                      "fence_read":  0,
+                                      "wait_ms":  0.000,
+                                      "checked":  4,
+                                      "mismatches":  0,
+                                      "first_mismatch":  -1,
+                                      "dangling_submission":  false,
+                                      "detail":  ""
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "kernel":  "reduce256",
+                                      "mode":  "selftest",
+                                      "status":  "ok",
+                                      "items":  1048576,
+                                      "grid":  [
+                                                   4096,
+                                                   1,
+                                                   1
+                                               ],
+                                      "block":  [
+                                                    256,
+                                                    1,
+                                                    1
+                                                ],
+                                      "kernarg_bytes":  16,
+                                      "group_segment_bytes":  1024,
+                                      "dispatch_dwords":  88,
+                                      "fence_value":  0,
+                                      "fence_read":  0,
+                                      "wait_ms":  0.000,
+                                      "checked":  2,
+                                      "mismatches":  0,
+                                      "first_mismatch":  -1,
+                                      "dangling_submission":  false,
+                                      "detail":  ""
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "kernel":  "writeGridSize",
+                                      "mode":  "selftest",
+                                      "status":  "ok",
+                                      "items":  3,
+                                      "grid":  [
+                                                   7,
+                                                   3,
+                                                   2
+                                               ],
+                                      "block":  [
+                                                    64,
+                                                    2,
+                                                    1
+                                                ],
+                                      "kernarg_bytes":  264,
+                                      "group_segment_bytes":  0,
+                                      "dispatch_dwords":  88,
+                                      "fence_value":  0,
+                                      "fence_read":  0,
+                                      "wait_ms":  0.000,
+                                      "checked":  14,
+                                      "mismatches":  0,
+                                      "first_mismatch":  -1,
+                                      "dangling_submission":  false,
+                                      "detail":  ""
+                                  }
+                              ]
+                 },
+                 {
+                     "label":  "info",
+                     "arguments":  [
+                                       "--info",
+                                       "--co",
+                                       "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+                                       "--wait-slice",
+                                       "1000",
+                                       "--wait-total",
+                                       "10000"
+                                   ],
+                     "bound":  20,
+                     "seconds":  0.027,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "stdout":  "{\"tool\":\"hipprobe\",\"info\":\"device\",\"name\":\"AMD BC-250\",\"gfx_ip\":[10,1,3],\"cu_count\":40,\"se_count\":2,\"wave_size\":32,\"lds_bytes_per_workgroup\":65536,\"max_workgroup_size\":1024,\"gfx_clock_khz\":2000000,\"mem_clock_khz\":0,\"vram_bytes\":8589934592,\"visible_vram_bytes\":8589934592,\"gtt_bytes\":4020457472,\"kmd_version\":[3,64,0,3],\"abi\":[1,0]}",
+                     "stderr":  {
+
+                                },
+                     "json":  [
+                                  {
+                                      "tool":  "hipprobe",
+                                      "info":  "device",
+                                      "name":  "AMD BC-250",
+                                      "gfx_ip":  [
+                                                     10,
+                                                     1,
+                                                     3
+                                                 ],
+                                      "cu_count":  40,
+                                      "se_count":  2,
+                                      "wave_size":  32,
+                                      "lds_bytes_per_workgroup":  65536,
+                                      "max_workgroup_size":  1024,
+                                      "gfx_clock_khz":  2000000,
+                                      "mem_clock_khz":  0,
+                                      "vram_bytes":  8589934592,
+                                      "visible_vram_bytes":  8589934592,
+                                      "gtt_bytes":  4020457472,
+                                      "kmd_version":  [
+                                                          3,
+                                                          64,
+                                                          0,
+                                                          3
+                                                      ],
+                                      "abi":  [
+                                                  1,
+                                                  0
+                                              ]
+                                  }
+                              ]
+                 },
+                 {
+                     "label":  "vadd",
+                     "arguments":  [
+                                       "--kernel",
+                                       "vadd",
+                                       "--n",
+                                       "1048576",
+                                       "--co",
+                                       "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+                                       "--wait-slice",
+                                       "1000",
+                                       "--wait-total",
+                                       "10000"
+                                   ],
+                     "bound":  40,
+                     "seconds":  0.038,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "stdout":  [
+                                    "{\"tool\":\"hipprobe\",\"info\":\"device\",\"name\":\"AMD BC-250\",\"gfx_ip\":[10,1,3],\"cu_count\":40,\"se_count\":2,\"wave_size\":32,\"lds_bytes_per_workgroup\":65536,\"max_workgroup_size\":1024,\"gfx_clock_khz\":2000000,\"mem_clock_khz\":0,\"vram_bytes\":8589934592,\"visible_vram_bytes\":8589934592,\"gtt_bytes\":4020457472,\"kmd_version\":[3,64,0,3],\"abi\":[1,0]}",
+                                    "{\"tool\":\"hipprobe\",\"kernel\":\"vadd\",\"mode\":\"gpu\",\"status\":\"ok\",\"items\":1048576,\"grid\":[4096,1,1],\"block\":[256,1,1],\"kernarg_bytes\":28,\"group_segment_bytes\":0,\"dispatch_dwords\":88,\"fence_value\":1,\"fence_read\":1,\"wait_ms\":0.415,\"checked\":1048576,\"mismatches\":0,\"first_mismatch\":-1,\"dangling_submission\":false,\"detail\":\"\"}",
+                                    "{\"tool\":\"hipprobe\",\"counters\":{\"modules_loaded\":1,\"dispatches_built\":1,\"submissions\":1,\"submissions_refused\":0,\"waits\":1,\"waits_fast\":0,\"waits_timed_out\":0,\"device_losses\":0,\"hidden_args_zeroed\":0,\"unknown_arg_kinds\":0,\"hostcall_buffer_requests\":0,\"dynamic_stack_refusals\":0}}"
+                                ],
+                     "stderr":  {
+
+                                },
+                     "json":  [
+                                  {
+                                      "tool":  "hipprobe",
+                                      "info":  "device",
+                                      "name":  "AMD BC-250",
+                                      "gfx_ip":  [
+                                                     10,
+                                                     1,
+                                                     3
+                                                 ],
+                                      "cu_count":  40,
+                                      "se_count":  2,
+                                      "wave_size":  32,
+                                      "lds_bytes_per_workgroup":  65536,
+                                      "max_workgroup_size":  1024,
+                                      "gfx_clock_khz":  2000000,
+                                      "mem_clock_khz":  0,
+                                      "vram_bytes":  8589934592,
+                                      "visible_vram_bytes":  8589934592,
+                                      "gtt_bytes":  4020457472,
+                                      "kmd_version":  [
+                                                          3,
+                                                          64,
+                                                          0,
+                                                          3
+                                                      ],
+                                      "abi":  [
+                                                  1,
+                                                  0
+                                              ]
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "kernel":  "vadd",
+                                      "mode":  "gpu",
+                                      "status":  "ok",
+                                      "items":  1048576,
+                                      "grid":  [
+                                                   4096,
+                                                   1,
+                                                   1
+                                               ],
+                                      "block":  [
+                                                    256,
+                                                    1,
+                                                    1
+                                                ],
+                                      "kernarg_bytes":  28,
+                                      "group_segment_bytes":  0,
+                                      "dispatch_dwords":  88,
+                                      "fence_value":  1,
+                                      "fence_read":  1,
+                                      "wait_ms":  0.415,
+                                      "checked":  1048576,
+                                      "mismatches":  0,
+                                      "first_mismatch":  -1,
+                                      "dangling_submission":  false,
+                                      "detail":  ""
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "counters":  {
+                                                       "modules_loaded":  1,
+                                                       "dispatches_built":  1,
+                                                       "submissions":  1,
+                                                       "submissions_refused":  0,
+                                                       "waits":  1,
+                                                       "waits_fast":  0,
+                                                       "waits_timed_out":  0,
+                                                       "device_losses":  0,
+                                                       "hidden_args_zeroed":  0,
+                                                       "unknown_arg_kinds":  0,
+                                                       "hostcall_buffer_requests":  0,
+                                                       "dynamic_stack_refusals":  0
+                                                   }
+                                  }
+                              ]
+                 },
+                 {
+                     "label":  "reduce256",
+                     "arguments":  [
+                                       "--kernel",
+                                       "reduce256",
+                                       "--n",
+                                       "65536",
+                                       "--co",
+                                       "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+                                       "--wait-slice",
+                                       "1000",
+                                       "--wait-total",
+                                       "10000"
+                                   ],
+                     "bound":  40,
+                     "seconds":  0.029,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "stdout":  [
+                                    "{\"tool\":\"hipprobe\",\"info\":\"device\",\"name\":\"AMD BC-250\",\"gfx_ip\":[10,1,3],\"cu_count\":40,\"se_count\":2,\"wave_size\":32,\"lds_bytes_per_workgroup\":65536,\"max_workgroup_size\":1024,\"gfx_clock_khz\":2000000,\"mem_clock_khz\":0,\"vram_bytes\":8589934592,\"visible_vram_bytes\":8589934592,\"gtt_bytes\":4020457472,\"kmd_version\":[3,64,0,3],\"abi\":[1,0]}",
+                                    "{\"tool\":\"hipprobe\",\"kernel\":\"reduce256\",\"mode\":\"gpu\",\"status\":\"ok\",\"items\":65536,\"grid\":[256,1,1],\"block\":[256,1,1],\"kernarg_bytes\":16,\"group_segment_bytes\":1024,\"dispatch_dwords\":88,\"fence_value\":1,\"fence_read\":1,\"wait_ms\":0.074,\"checked\":256,\"mismatches\":0,\"first_mismatch\":-1,\"dangling_submission\":false,\"detail\":\"\"}",
+                                    "{\"tool\":\"hipprobe\",\"counters\":{\"modules_loaded\":1,\"dispatches_built\":1,\"submissions\":1,\"submissions_refused\":0,\"waits\":1,\"waits_fast\":0,\"waits_timed_out\":0,\"device_losses\":0,\"hidden_args_zeroed\":0,\"unknown_arg_kinds\":0,\"hostcall_buffer_requests\":0,\"dynamic_stack_refusals\":0}}"
+                                ],
+                     "stderr":  {
+
+                                },
+                     "json":  [
+                                  {
+                                      "tool":  "hipprobe",
+                                      "info":  "device",
+                                      "name":  "AMD BC-250",
+                                      "gfx_ip":  [
+                                                     10,
+                                                     1,
+                                                     3
+                                                 ],
+                                      "cu_count":  40,
+                                      "se_count":  2,
+                                      "wave_size":  32,
+                                      "lds_bytes_per_workgroup":  65536,
+                                      "max_workgroup_size":  1024,
+                                      "gfx_clock_khz":  2000000,
+                                      "mem_clock_khz":  0,
+                                      "vram_bytes":  8589934592,
+                                      "visible_vram_bytes":  8589934592,
+                                      "gtt_bytes":  4020457472,
+                                      "kmd_version":  [
+                                                          3,
+                                                          64,
+                                                          0,
+                                                          3
+                                                      ],
+                                      "abi":  [
+                                                  1,
+                                                  0
+                                              ]
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "kernel":  "reduce256",
+                                      "mode":  "gpu",
+                                      "status":  "ok",
+                                      "items":  65536,
+                                      "grid":  [
+                                                   256,
+                                                   1,
+                                                   1
+                                               ],
+                                      "block":  [
+                                                    256,
+                                                    1,
+                                                    1
+                                                ],
+                                      "kernarg_bytes":  16,
+                                      "group_segment_bytes":  1024,
+                                      "dispatch_dwords":  88,
+                                      "fence_value":  1,
+                                      "fence_read":  1,
+                                      "wait_ms":  0.074,
+                                      "checked":  256,
+                                      "mismatches":  0,
+                                      "first_mismatch":  -1,
+                                      "dangling_submission":  false,
+                                      "detail":  ""
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "counters":  {
+                                                       "modules_loaded":  1,
+                                                       "dispatches_built":  1,
+                                                       "submissions":  1,
+                                                       "submissions_refused":  0,
+                                                       "waits":  1,
+                                                       "waits_fast":  0,
+                                                       "waits_timed_out":  0,
+                                                       "device_losses":  0,
+                                                       "hidden_args_zeroed":  0,
+                                                       "unknown_arg_kinds":  0,
+                                                       "hostcall_buffer_requests":  0,
+                                                       "dynamic_stack_refusals":  0
+                                                   }
+                                  }
+                              ]
+                 },
+                 {
+                     "label":  "writeGridSize",
+                     "arguments":  [
+                                       "--kernel",
+                                       "writeGridSize",
+                                       "--grid",
+                                       "7,3,2",
+                                       "--block",
+                                       "64,2,1",
+                                       "--co",
+                                       "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+                                       "--wait-slice",
+                                       "1000",
+                                       "--wait-total",
+                                       "10000"
+                                   ],
+                     "bound":  40,
+                     "seconds":  0.029,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "stdout":  [
+                                    "{\"tool\":\"hipprobe\",\"info\":\"device\",\"name\":\"AMD BC-250\",\"gfx_ip\":[10,1,3],\"cu_count\":40,\"se_count\":2,\"wave_size\":32,\"lds_bytes_per_workgroup\":65536,\"max_workgroup_size\":1024,\"gfx_clock_khz\":2000000,\"mem_clock_khz\":0,\"vram_bytes\":8589934592,\"visible_vram_bytes\":8589934592,\"gtt_bytes\":4020457472,\"kmd_version\":[3,64,0,3],\"abi\":[1,0]}",
+                                    "{\"tool\":\"hipprobe\",\"kernel\":\"writeGridSize\",\"mode\":\"gpu\",\"status\":\"ok\",\"items\":3,\"grid\":[7,3,2],\"block\":[64,2,1],\"kernarg_bytes\":264,\"group_segment_bytes\":0,\"dispatch_dwords\":88,\"fence_value\":1,\"fence_read\":1,\"wait_ms\":0.061,\"checked\":3,\"mismatches\":0,\"first_mismatch\":-1,\"dangling_submission\":false,\"detail\":\"\"}",
+                                    "{\"tool\":\"hipprobe\",\"counters\":{\"modules_loaded\":1,\"dispatches_built\":1,\"submissions\":1,\"submissions_refused\":0,\"waits\":1,\"waits_fast\":0,\"waits_timed_out\":0,\"device_losses\":0,\"hidden_args_zeroed\":0,\"unknown_arg_kinds\":0,\"hostcall_buffer_requests\":0,\"dynamic_stack_refusals\":0}}"
+                                ],
+                     "stderr":  {
+
+                                },
+                     "json":  [
+                                  {
+                                      "tool":  "hipprobe",
+                                      "info":  "device",
+                                      "name":  "AMD BC-250",
+                                      "gfx_ip":  [
+                                                     10,
+                                                     1,
+                                                     3
+                                                 ],
+                                      "cu_count":  40,
+                                      "se_count":  2,
+                                      "wave_size":  32,
+                                      "lds_bytes_per_workgroup":  65536,
+                                      "max_workgroup_size":  1024,
+                                      "gfx_clock_khz":  2000000,
+                                      "mem_clock_khz":  0,
+                                      "vram_bytes":  8589934592,
+                                      "visible_vram_bytes":  8589934592,
+                                      "gtt_bytes":  4020457472,
+                                      "kmd_version":  [
+                                                          3,
+                                                          64,
+                                                          0,
+                                                          3
+                                                      ],
+                                      "abi":  [
+                                                  1,
+                                                  0
+                                              ]
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "kernel":  "writeGridSize",
+                                      "mode":  "gpu",
+                                      "status":  "ok",
+                                      "items":  3,
+                                      "grid":  [
+                                                   7,
+                                                   3,
+                                                   2
+                                               ],
+                                      "block":  [
+                                                    64,
+                                                    2,
+                                                    1
+                                                ],
+                                      "kernarg_bytes":  264,
+                                      "group_segment_bytes":  0,
+                                      "dispatch_dwords":  88,
+                                      "fence_value":  1,
+                                      "fence_read":  1,
+                                      "wait_ms":  0.061,
+                                      "checked":  3,
+                                      "mismatches":  0,
+                                      "first_mismatch":  -1,
+                                      "dangling_submission":  false,
+                                      "detail":  ""
+                                  },
+                                  {
+                                      "tool":  "hipprobe",
+                                      "counters":  {
+                                                       "modules_loaded":  1,
+                                                       "dispatches_built":  1,
+                                                       "submissions":  1,
+                                                       "submissions_refused":  0,
+                                                       "waits":  1,
+                                                       "waits_fast":  0,
+                                                       "waits_timed_out":  0,
+                                                       "device_losses":  0,
+                                                       "hidden_args_zeroed":  0,
+                                                       "unknown_arg_kinds":  0,
+                                                       "hostcall_buffer_requests":  0,
+                                                       "dynamic_stack_refusals":  0
+                                                   }
+                                  }
+                              ]
+                 },
+                 {
+                     "label":  "info-after",
+                     "arguments":  [
+                                       "--info",
+                                       "--co",
+                                       "C:\\BC250\\m16\\step1\\m16_kernels.gfx1013.co",
+                                       "--wait-slice",
+                                       "1000",
+                                       "--wait-total",
+                                       "10000"
+                                   ],
+                     "bound":  20,
+                     "seconds":  0.018,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "stdout":  "{\"tool\":\"hipprobe\",\"info\":\"device\",\"name\":\"AMD BC-250\",\"gfx_ip\":[10,1,3],\"cu_count\":40,\"se_count\":2,\"wave_size\":32,\"lds_bytes_per_workgroup\":65536,\"max_workgroup_size\":1024,\"gfx_clock_khz\":2000000,\"mem_clock_khz\":0,\"vram_bytes\":8589934592,\"visible_vram_bytes\":8589934592,\"gtt_bytes\":4020457472,\"kmd_version\":[3,64,0,3],\"abi\":[1,0]}",
+                     "stderr":  {
+
+                                },
+                     "json":  [
+                                  {
+                                      "tool":  "hipprobe",
+                                      "info":  "device",
+                                      "name":  "AMD BC-250",
+                                      "gfx_ip":  [
+                                                     10,
+                                                     1,
+                                                     3
+                                                 ],
+                                      "cu_count":  40,
+                                      "se_count":  2,
+                                      "wave_size":  32,
+                                      "lds_bytes_per_workgroup":  65536,
+                                      "max_workgroup_size":  1024,
+                                      "gfx_clock_khz":  2000000,
+                                      "mem_clock_khz":  0,
+                                      "vram_bytes":  8589934592,
+                                      "visible_vram_bytes":  8589934592,
+                                      "gtt_bytes":  4020457472,
+                                      "kmd_version":  [
+                                                          3,
+                                                          64,
+                                                          0,
+                                                          3
+                                                      ],
+                                      "abi":  [
+                                                  1,
+                                                  0
+                                              ]
+                                  }
+                              ]
+                 }
+             ],
+    "counters":  {
+                     "modules_loaded":  1,
+                     "dispatches_built":  1,
+                     "submissions":  1,
+                     "submissions_refused":  0,
+                     "waits":  1,
+                     "waits_fast":  0,
+                     "waits_timed_out":  0,
+                     "device_losses":  0,
+                     "hidden_args_zeroed":  0,
+                     "unknown_arg_kinds":  0,
+                     "hostcall_buffer_requests":  0,
+                     "dynamic_stack_refusals":  0
+                 },
+    "kmd_log_pulled":  true,
+    "kmd_log_lines":  403,
+    "kmd_log_suspect":  [
+                            "1478095   7254.976 wddm profile: hold wakes 0 event, 0 timeout",
+                            "1478115   7254.976 wddm summary: node 1 (paging, open): 880893 hardware submitted, 880893 completed, 0 timeouts, 0 refused",
+                            "1478298   7254.976 wddm summary: dcn lock acknowledgement timeouts 0",
+                            "1478307   7254.976 wddm summary: *** TDR: ResetEngine 5, ResetFromTimeout 0, RestartFromTimeout 0 - the scheduler timed this adapter out ***"
+                        ],
+    "criteria":  {
+                     "1 vadd matches":  "pass",
+                     "2 fence retires once per dispatch":  "pass",
+                     "3 reduce256 matches (LDS_SIZE)":  "pass",
+                     "4 writeGridSize matches (hidden block)":  "pass",
+                     "5 driver log clean":  "FAIL",
+                     "6 no device loss, device reopens":  "pass",
+                     "7 hostcall_buffer_requests is 0":  "pass"
+                 },
+    "session_seconds":  1.937,
+    "verdict":  "FAIL: 1 of the seven pass criteria failed",
+    "exit_code":  5
+}

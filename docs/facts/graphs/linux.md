@@ -93,8 +93,8 @@ flowchart LR
   M823["M823<br/>hardware"]
   M824["M824<br/>display"]
   M825["M825<br/>display"]
-  M846["M846<br/>display"]
-  M847["M847<br/>display"]
+  M851["M851<br/>display"]
+  M852["M852<br/>display"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -114,9 +114,9 @@ flowchart LR
   M824 --> M821
   M825 --> M820
   M825 --> M822
-  M846 --> M820
-  M847 --> M810
-  M847 --> M819
+  M851 --> M820
+  M852 --> M810
+  M852 --> M819
   M139 --> M50
   M801 --> M46
   M24 --> M25
@@ -145,6 +145,6 @@ flowchart LR
   M821 --> M820
   M822 --> M821
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M788,M801,M804,M807,M812,M813,M823,M824,M825,M846,M847 other
+  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M788,M801,M804,M807,M812,M813,M823,M824,M825,M851,M852 other
 ```
 

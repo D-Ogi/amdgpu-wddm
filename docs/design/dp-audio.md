@@ -22,8 +22,8 @@ container ID from 0.7.216.25. Step 3 ran on the lab on 2026-10-09. Step 5 is not
 | --- | --- | --- |
 | 0 | Reads the codec, the straps, the encoders, the endpoints and the reference clock. Writes nothing | 0.7.215.1 |
 | 1 | Configures the endpoint and sets `AUDIO_ENABLED` | 0.7.215.1, changed in 0.7.216.1 |
-| 2 | Starts the audio stream: wall DTO, AFMT, DP_SEC packets | 0.7.216.1. Measured on the lab ([M845](../facts/display.md#m845)) |
-| 3 | A tone through the new endpoint, at the right rate | done on the lab, 2026-10-09 ([M845](../facts/display.md#m845), [M846](../facts/display.md#m846)) |
+| 2 | Starts the audio stream: wall DTO, AFMT, DP_SEC packets | 0.7.216.1. Measured on the lab ([M850](../facts/display.md#m850)) |
+| 3 | A tone through the new endpoint, at the right rate | done on the lab, 2026-10-09 ([M850](../facts/display.md#m850), [M851](../facts/display.md#m851)) |
 | 4 | The real ELD from the monitor's EDID, with the container ID | 0.7.216.19, the container ID 0.7.216.25 |
 | 5 | Hot plug of the monitor | not written |
 
@@ -143,7 +143,7 @@ This driver therefore uses the counter: module = count x 1000. On unit A that is
 ### What the lab measured (step 3, 2026-10-09)
 
 The first Windows trial of the stream half ran on the installed 0.7.216.100-tester.23 package
-([M845](../facts/display.md#m845), [M846](../facts/display.md#m846), evidence
+([M850](../facts/display.md#m850), [M851](../facts/display.md#m851), evidence
 `evidence/windows/2026-10-09-dp-audio-step3/`). It measured the rate twice, from two sides:
 
 - A 1 kHz tone from the interactive session. `IAudioClock::GetPosition` against `QueryPerformanceCounter` gives
