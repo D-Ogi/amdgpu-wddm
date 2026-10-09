@@ -201,12 +201,15 @@ a tested capability, and the release notes must say so until a client asks for a
 | | `amdgpu_wddm_stdio.h` and `u_amdgpu_wddm_stdio.c`: the named log stream the route lines use. On the D3D ICD line that pair also redirects the whole process's stdio. On the system line it declares the log and nothing else. The ICD's stdio therefore stays as the registered build has it |
 | bc250-win, `wsi/b26-vk-dxgi` (`wsi/vk-dxgi-b23` and `wsi/vk-dxgi` are the same note on the earlier bases) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 
-The route reaches 64-bit processes only. The release carries two Vulkan ICDs: `payload/vulkan/vulkan_radeon.dll`
-from the system line, which this branch changes, and `payload/wow64/vulkan/vulkan_radeon.dll`, which is the x86
-build of the D3D ICD line. One build serves the 32-bit D3D11 shell and 32-bit Vulkan, which
-[the third-party list](../testing/THIRD-PARTY.md) records. A release that rebuilds the system line only leaves
-a 32-bit Vulkan application on the CPU path. Nothing in the code is 64-bit specific. The x86 build of the route
-needs the route commits on the D3D ICD line and its own trial. Until then the release notes must say so.
+**32-bit processes.** The release carries two Vulkan ICDs: `payload/vulkan/vulkan_radeon.dll` from the system
+line, which this branch changes, and `payload/wow64/vulkan/vulkan_radeon.dll`, which is the x86 build of the
+D3D ICD line. One build serves the 32-bit D3D11 shell and 32-bit Vulkan, which
+[the third-party list](../testing/THIRD-PARTY.md) records. A release that rebuilds the system line only
+therefore leaves a 32-bit Vulkan application on the CPU path. Nothing in the code is 64-bit specific. Earlier
+the system line could not build x86 at all. The b25 dispatch-table generator merge removed that, so this branch
+builds an x86 candidate with the same five gates. Whether the wow64 Vulkan slot takes it is a decision of the
+train cut, not of this note. The slot change needs its own 32-bit arm, and until that arm runs the release
+notes must say that a 32-bit Vulkan application keeps the old path.
 
 Three upstream defects are fixed on the way. The device-wide `wsi_device::blit` hook took the DXGI blit for a CPU
 swapchain on a DXGI-capable device, and that blit reads a fence array which only a DXGI swapchain has. The present
@@ -344,7 +347,7 @@ step 7 blocks the wagon in any case: Quake II RTX is a release gate (owner, 2026
 
 | Gate | What it proves |
 |---|---|
-| The five build gates of the system ICD recipe | The candidate has the shader disk cache, no live assert, the x64 machine, no static `dxgi`/`d3d11`/`d3d12`/`d3d12core`/`dcomp` import, and the git sha of the branch head. The import gate is the one that keeps the route on System32 modules |
+| The five build gates of the system ICD recipe, on x64 and on x86 | The candidate has the shader disk cache, no live assert, the asked machine, no static `dxgi`/`d3d11`/`d3d12`/`d3d12core`/`dcomp` import, and the git sha of the branch head. The import gate is the one that keeps the route on System32 modules |
 | `tools/build/build-radv-wsi-route-test.ps1` | The route rules: the switch and its three sources, the report of application-local modules, the D3D12 implementation check, and the LB7A import rules. Its negative control must fail every case |
 | The pipeline stage-cover host test of this line | The ported tree still builds and passes the host test the shipped line carries |
 | The fence-wait shape check and the BVH node address check | The port did not undo the two BD-102 fixes of tester.23. Each check reads its rule out of the tree first, and each one has a negative control |
