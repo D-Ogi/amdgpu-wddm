@@ -473,9 +473,22 @@ static void check_batch(void)
                  BC250HSA_EINVAL);
     /* A capacity that holds two dispatches and not three is BC250HSA_ENOMEM and no
      * half-written buffer: submit.c reads the overflow and opens another buffer. */
-    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, 2u * single_count,
-                                          &batch_count),
-                 BC250HSA_ENOMEM);
+    {
+        bc250hsa_counters before;
+        bc250hsa_counters after;
+
+        before.struct_bytes = (uint32_t)sizeof(before);
+        CHECK_STATUS(bc250hsa_counters_read(&before), BC250HSA_OK);
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, 2u * single_count,
+                                              &batch_count),
+                     BC250HSA_ENOMEM);
+        /* And the dispatch the buffer had no room for is not counted as built. submit.c
+         * appends it again into the next buffer, so a count here would count it twice,
+         * and dispatches_built is the denominator of submissions per dispatch. */
+        after.struct_bytes = (uint32_t)sizeof(after);
+        CHECK_STATUS(bc250hsa_counters_read(&after), BC250HSA_OK);
+        CHECK_U64(after.dispatches_built - before.dispatches_built, 2u);
+    }
 }
 
 /* --------------------------------------------------------------------------------

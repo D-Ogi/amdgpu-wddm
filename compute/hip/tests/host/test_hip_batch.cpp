@@ -412,6 +412,15 @@ int main(int argc, char** argv) {
     // -------------------------------------------------------------------------------------
     std::printf("test_hip_batch: 4. the policy is refused when it cannot be met\n");
     {
+        // The policy in force before the refusals, so that the invariant below can be checked:
+        // a refusal must leave it exactly as it was. A backend that applied half of a policy and
+        // then returned the refusal would enable batching with a buffer it cannot fill, and
+        // every later dispatch would fail while the caller believed its policy was rejected.
+        bc250hsa_batch_policy in_force;
+        std::memset(&in_force, 0, sizeof(in_force));
+        in_force.struct_bytes = static_cast<uint32_t>(sizeof(in_force));
+        check(bc250hsa_batch_policy_get(dev, &in_force) == BC250HSA_OK, "the policy in force");
+
         bc250hsa_batch_policy bad;
         std::memset(&bad, 0, sizeof(bad));
         bad.struct_bytes = static_cast<uint32_t>(sizeof(bad));
@@ -425,6 +434,26 @@ int main(int argc, char** argv) {
               "a structure size this build does not know is refused");
         check(bc250hsa_batch_policy_set(dev, nullptr) == BC250HSA_EINVAL, "no policy is refused");
         check(bc250hsa_flush(nullptr, nullptr) == BC250HSA_EINVAL, "a flush of no device");
+
+        bc250hsa_batch_policy after_refusals;
+        std::memset(&after_refusals, 0, sizeof(after_refusals));
+        after_refusals.struct_bytes = static_cast<uint32_t>(sizeof(after_refusals));
+        check(bc250hsa_batch_policy_get(dev, &after_refusals) == BC250HSA_OK,
+              "the policy after the refusals");
+        check(std::memcmp(&in_force, &after_refusals, sizeof(in_force)) == 0,
+              "a refused policy changed nothing of the one in force");
+        // And the device still batches as the policy in force says: a refusal that wedged it
+        // would show up as a launch that fails.
+        bc250hsa_mock_reset();
+        const uint64_t before_submissions = read_counters().submissions;
+        for (int i = 0; i < 4; ++i) {
+            check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                                  stream) == hipSuccess,
+                  "a launch after the refusals");
+        }
+        check(hipStreamSynchronize(stream) == hipSuccess, "and its synchronisation");
+        check(read_counters().submissions > before_submissions,
+              "the work after the refusals reached the device");
     }
 
     // Back to the default, so that the teardown below is the ordinary path.

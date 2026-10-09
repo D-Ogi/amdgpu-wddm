@@ -284,18 +284,25 @@ static bc250hsa_status submit_ib(struct bc250hsa_device* dev, uint32_t slot, uin
     return BC250HSA_OK;
 }
 
-/* The dword capacity a batch of this device may fill, the completion write and the
- * padding left aside. */
-static uint32_t batch_dword_cap(const struct bc250hsa_device* dev)
+/* The dword capacity a batch of this device may fill under one policy's max_ib_dwords,
+ * the completion write and the padding left aside. It takes the number and not the
+ * device's policy, so that bc250hsa_batch_policy_set can test a policy before it is the
+ * device's. */
+static uint32_t dword_cap_for(const struct bc250hsa_device* dev, uint32_t max_ib_dwords)
 {
     const uint32_t slot_dwords = dev->ring_slot_bytes / 4u;
     const uint32_t reserve = BC250HSA_RELEASE_MEM_DWORDS + BC250HSA_IB_PAD_DWORDS;
     uint32_t       cap = slot_dwords;
 
-    if (dev->batch.max_ib_dwords != 0u && dev->batch.max_ib_dwords < cap) {
-        cap = dev->batch.max_ib_dwords;
+    if (max_ib_dwords != 0u && max_ib_dwords < cap) {
+        cap = max_ib_dwords;
     }
     return (cap > reserve) ? (cap - reserve) : 0u;
+}
+
+static uint32_t batch_dword_cap(const struct bc250hsa_device* dev)
+{
+    return dword_cap_for(dev, dev->batch.max_ib_dwords);
 }
 
 bc250hsa_status bc250hsa_batch_submit_locked(struct bc250hsa_device* dev)
@@ -378,15 +385,23 @@ bc250hsa_status bc250hsa_batch_policy_set(struct bc250hsa_device* dev,
     /* The policy of a dispatch is the policy its indirect buffer was opened with. */
     result = bc250hsa_batch_submit_locked(dev);
     if (result == BC250HSA_OK) {
-        dev->batch = *policy;
-        if (dev->batch.max_dispatches == 0u) {
-            dev->batch.max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
+        /* The whole policy is tested before any of it is the device's. A refusal that
+         * left half of it applied would enable batching with a buffer too small for one
+         * dispatch, and every later dispatch would answer BC250HSA_ENOMEM while the
+         * caller had been told the policy was refused. */
+        bc250hsa_batch_policy wanted = *policy;
+
+        wanted.struct_bytes = (uint32_t)sizeof(wanted);
+        if (wanted.max_dispatches == 0u) {
+            wanted.max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
         }
-        if (dev->batch.max_hold_us == 0u) {
-            dev->batch.max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
+        if (wanted.max_hold_us == 0u) {
+            wanted.max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
         }
-        if (batch_dword_cap(dev) < BC250HSA_PM4_MAX_DWORDS) {
+        if (dword_cap_for(dev, wanted.max_ib_dwords) < BC250HSA_PM4_MAX_DWORDS) {
             result = BC250HSA_EINVAL;
+        } else {
+            dev->batch = wanted;
         }
     }
     LeaveCriticalSection(&dev->lock);

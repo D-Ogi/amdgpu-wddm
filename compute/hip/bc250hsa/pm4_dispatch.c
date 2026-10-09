@@ -395,6 +395,13 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
     put(w, BC250HSA_PACKET3(BC250HSA_PKT3_EVENT_WRITE, 0u));
     put(w, BC250HSA_EVENT_TYPE(BC250HSA_EVENT_CS_PARTIAL_FLUSH) |
                BC250HSA_EVENT_INDEX(BC250HSA_EVENT_INDEX_CS_PARTIAL_FLUSH));
+    /* A dispatch the buffer had no room for was not built: put() dropped its dwords and
+     * submit.c is about to open another buffer and append it again. Counting it here
+     * would count it twice, and dispatches_built is the denominator of the ratio this
+     * route is judged by (submissions per dispatch), so the count follows the dwords. */
+    if (w->overflow) {
+        return BC250HSA_OK;
+    }
     bc250hsa_count_add(BC250HSA_C_DISPATCHES_BUILT, 1u);
     return BC250HSA_OK;
 }
