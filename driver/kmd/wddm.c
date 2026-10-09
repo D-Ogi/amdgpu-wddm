@@ -7397,8 +7397,12 @@ static volatile LONG g_TracedCalls[TracedCount];
 static NTSTATUS WddmTraced(BC250_WDDM_TRACED Slot, _In_z_ const char* Name, NTSTATUS Status, ULONG Detail)
 {
     LONG calls = InterlockedIncrement(&g_TracedCalls[Slot]);
+    // STATUS_MONITOR_NO_DESCRIPTOR is the designed answer of GetChildContainerId (step 4 of DP audio): it keeps the
+    // container ID the operating system offers. NT_SUCCESS is false for it, so without this line the designed answer
+    // of every call would be logged as a failure for the first 64 calls (b26 review finding F2).
+    BOOLEAN failed = !NT_SUCCESS(Status) && Status != STATUS_MONITOR_NO_DESCRIPTOR;
 
-    if (KeGetCurrentIrql() <= DISPATCH_LEVEL && (calls <= 6 || (!NT_SUCCESS(Status) && calls <= 64)))
+    if (KeGetCurrentIrql() <= DISPATCH_LEVEL && (calls <= 6 || (failed && calls <= 64)))
         GuardLog("wddm: display %s call %ld detail 0x%X -> 0x%08X", Name, calls, Detail, Status);
     return Status;
 }

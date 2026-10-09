@@ -1896,7 +1896,8 @@ typedef struct _BC250_ESCAPE_DPAUDIO {
     unsigned long SwitchContainerId;        // EnableDpAudioContainerId as the last start or DDI call read it
     unsigned long ContainerCalls;           // calls of DxgkDdiGetChildContainerId
     unsigned long PortIdWrites;             // ELD port-ID refreshes that wrote (the ID had changed)
-    unsigned long PortIdSkips;              // calls that wrote nothing: the ELD already held that port ID
+    unsigned long PortIdSkips;              // calls that wrote nothing: the ELD already held that port ID, or no
+                                            // endpoint of this driver is configured yet (the log lines differ)
     unsigned long PortIdCycles;             // refreshes that cycled AUDIO_ENABLED 0 -> 1 so the ELD is read again
     unsigned long PortIdStatus;             // NTSTATUS of the last refresh (0 for none or success)
     unsigned long SinkFromEdid;             // 1 when the last configure used the EDID sink, 0 the fixed set

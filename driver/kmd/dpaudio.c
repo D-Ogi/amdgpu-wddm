@@ -99,6 +99,9 @@ void DpAudioInitialize(_Inout_ BC250_DEVICE* Device)
     audio->State = BC250_DPAUDIO_STATE_IDLE;
     audio->Reason = BC250_DPAUDIO_REASON_NOT_STARTED;
     audio->SwitchEnable = audio->SwitchEndpoint = audio->SwitchStream = BC250_DPAUDIO_NO_SWITCH;
+    // The container-ID switch is read at the start too, so before the first start it is "not read yet" and not 0,
+    // which the CLI would print as "the switch is off" (b26 review finding F1).
+    audio->SwitchContainerId = BC250_DPAUDIO_NO_SWITCH;
     audio->StreamState = BC250_DPAUDIO_STREAM_OFF;
     audio->StreamStep = BC250_DPAUDIO_STEP_NONE;
 }
