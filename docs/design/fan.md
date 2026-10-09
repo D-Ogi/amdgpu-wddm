@@ -350,7 +350,7 @@ exit path, the fault retry and the bugcheck callback still try.
 | out of D0 | `FanPause` from `Bc250SetPowerState` after `DpmPause`. `FanResume` takes the fan again in D0 | `power` |
 | out of D0, display-only branch | `FanStop` on the branch that stops the governor | `power` |
 | driver unload | `FanDriverUnload` from `Bc250Unload`, for a device that the stop paths missed | `unload` |
-| the step stops | the watchdog DPC: no step for 3 s. A step that holds the controller for 6 s gets a blind give-back | `watchdog` |
+| the step stops | the watchdog DPC: no step for 3 s, given back in a work item at PASSIVE_LEVEL. A step that holds the controller for 6 s gets a blind give-back | `watchdog` |
 | the user asks | `RUN_FAN` BOARD, applied at the next step | `user` |
 | a lease runs out | inside the policy, at the step that sees it | `lease` |
 | the control is off while the driver holds the fan | the next step, inside the policy | `disabled` |
@@ -485,6 +485,15 @@ During the whole trial Tctl stays below 87 C, and the trial stops at once if it 
   writes with ours. The readback checks turn such a collision into a fault and a give-back, not into a
   wrong duty that stays.
 - The bugcheck give-back is best effort. It cannot wait for a slow chip and does not check its result.
-- The watchdog DPC runs the handshake at DISPATCH_LEVEL. The polls are bounded (200 polls of 250 us), but
-  a chip that never answers costs that time at raised IRQL.
+- The watchdog's normal give-back runs in a work item at PASSIVE_LEVEL, not in the DPC (0.7.216.26, audit
+  finding F1). The DPC may not stall as the handshake does: a DPC "must not specify delays of more than 100
+  microseconds" and should return inside 100 microseconds
+  (`ref/windows-driver-docs/windows-driver-docs-pr/kernel/guidelines-for-writing-dpc-routines.md:31,35`), and
+  the handshake polls 250 us up to 200 times per phase. The DPC now takes the hold, queues the item and
+  returns. The item gives the fan back and releases the hold, and `FanStop` waits for the hold before it frees
+  the item. A start that gets no work item falls back to the blind give-back, whose stalls are 100 us with a
+  2 ms ceiling, and the log says which path ran.
+- The blind give-back still runs in the DPC when a step holds the controller for 6 s. That is inside the
+  single-stall rule (100 us) but not inside the 100 us a whole DPC should take: a chip that never answers
+  costs up to 2 ms at raised IRQL there, once per start.
 - No lab run on Windows wrote the chip yet. M803 measured the sequence under Linux only.

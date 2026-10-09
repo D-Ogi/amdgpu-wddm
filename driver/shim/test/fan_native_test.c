@@ -14,6 +14,7 @@
 #include "fan-native.inc"
 
 static BC250_DEVICE device;
+static DEVICE_OBJECT native_pdo = {1};
 
 #define SECOND (1000ull * 10000ull)
 #define TARGET1 BC250_HWMON_REG_DUTY_WRITE(BC250_FAN_CHANNEL)
@@ -83,8 +84,16 @@ static void Fresh(int enable)
     native_delays = 0;
     native_base = BC250_HWMON_BASE_DEFAULT;
     native_time = 10ull * SECOND;
+    native_irql = NATIVE_IRQL_PASSIVE;
+    native_stall_max_us = 0;
+    native_stall_dispatch_us = 0;
+    native_stall_dispatch_max_us = 0;
+    native_work_allocations = native_work_queued = native_work_runs = 0;
+    native_work_refused = 0;
+    memset(&native_work_item, 0, sizeof(native_work_item));
     memset(&device, 0, sizeof(device));
     device.StartHealth.Generation = 7;
+    device.PhysicalDeviceObject = &native_pdo;      /* what FanStart allocates the work item against */
     HwmonInitialize(&device.Hwmon);
     native_port_lock = &device.Hwmon.PortLock;
     FanInitialize(&device);
@@ -218,6 +227,15 @@ static void TakeAt70(void)
           device.Fan.Ctl.restore.target == BC250_HWMON_TARGET_REST);
 }
 
+/* The watchdog's timer DPC, in the context the kernel runs it in: DISPATCH_LEVEL. Everything the DPC stalls is
+ * recorded against that context (fan_native_mock.h), which is what the 100-microsecond rule is about. */
+static void FireWatchdog(void)
+{
+    native_irql = NATIVE_IRQL_DISPATCH;
+    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
+    native_irql = NATIVE_IRQL_PASSIVE;
+}
+
 /* The engine closes a phase the blind restore left open at its next status polls. */
 static void SettleEngine(void)
 {
@@ -292,37 +310,80 @@ static void exit_paths(void)
     CHECK(AtRest() && device.Fan.Ctl.reason == BC250_FAN_REASON_UNLOAD && !device.Fan.Configured);
     CHECK(!device.Fan.BugCheck.Registered && CleanWrites(0));
 
-    /* The watchdog: quiet for 2 s, nothing; for 3 s, the fan goes back. The next live step takes it again. */
+    /* The watchdog: quiet for 2 s, nothing; for 3 s, the fan goes back. The handback itself is not the DPC's own
+     * work any more (audit finding F1): the DPC keeps the hold, queues the work item and returns, and the item
+     * gives the fan back at PASSIVE_LEVEL. The next live step takes it again. */
     TakeAt70();
+    CHECK(native_work_allocations == 1u && device.Fan.Worker != NULL);
     native_time += 2ull * SECOND;
-    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
-    CHECK(Held() && device.Fan.WatchdogFires == 0u);
+    FireWatchdog();
+    CHECK(Held() && device.Fan.WatchdogFires == 0u && native_work_queued == 0u);
     native_time += 1ull * SECOND;
-    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
+    FireWatchdog();
+    /* Inside the DPC: the fan is still the driver's, the controller is still held, nothing was stalled at
+     * DISPATCH_LEVEL, and the work item is waiting. */
+    CHECK(Held() && device.Fan.WatchdogFires == 1u && native_work_queued == 1u);
+    CHECK(device.Fan.Busy == 1 && device.Fan.WorkerQueued == 1);
+    CHECK(native_stall_dispatch_us == 0u && native_stall_dispatch_max_us == 0u);
+    CHECK(NativeRunWorkItems() == 1 && native_work_runs == 1u);
     CHECK(AtRest() && device.Fan.Ctl.reason == BC250_FAN_REASON_WATCHDOG && device.Fan.WatchdogFires == 1u);
+    CHECK(device.Fan.Busy == 0 && device.Fan.WorkerQueued == 0);
+    /* The handshake did stall, and every one of those microseconds was spent at PASSIVE_LEVEL. */
+    CHECK(native_stall_max_us >= BC250_FAN_POLL_US && native_stall_dispatch_us == 0u);
     Read(&f);
     CHECK(f.WatchdogFires == 1u && f.Reason == BC250_FAN_REASON_WATCHDOG);
     native_time += 5ull * SECOND;
-    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
-    CHECK(device.Fan.WatchdogFires == 1u);      /* nothing held, nothing to do */
+    FireWatchdog();
+    CHECK(device.Fan.WatchdogFires == 1u && native_work_queued == 1u);  /* nothing held, nothing to queue */
     Second(70000);
     CHECK(Held());
     CHECK(CleanWrites(0));
     FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(native_work_item.Freed && device.Fan.Worker == NULL);
+
+    /* The same watchdog with no work item for this device object: the bounded blind restore runs instead, in the
+     * DPC, and its stalls stay inside the 100 microseconds the contract allows there. */
+    Fresh(1);
+    native_work_refused = 1;
+    Start();
+    CHECK(device.Fan.Worker == NULL && native_log_has("blind: NO WORK ITEM"));
+    Second(70000);
+    CHECK(Held() && device.Fan.Ctl.controlling);
+    native_time += 3ull * SECOND;
+    FireWatchdog();
+    SettleEngine();
+    CHECK(AtRest() && device.Fan.WatchdogFires == 1u && native_work_queued == 0u);
+    CHECK(native_log_has("no work item"));
+    CHECK(native_stall_dispatch_max_us <= 100u);        /* the contract's ceiling for one stall in a DPC */
+    CHECK(native_stall_dispatch_us <= BC250_FAN_BLIND_POLL_US * BC250_FAN_BLIND_POLL_MAX);
+    FanStop(&device, BC250_FAN_REASON_STOP);
+
+    /* A stop while the item is still queued: the stop waits for it, the fan is the board's, and the item is
+     * freed after it has run and not while the system still owns it. */
+    TakeAt70();
+    native_time += 3ull * SECOND;
+    FireWatchdog();
+    CHECK(native_work_queued == 1u && native_work_runs == 0u && device.Fan.Busy == 1);
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(native_work_runs == 1u && AtRest() && native_work_item.Freed && !native_work_item.Queued);
+    CHECK(native_stall_dispatch_us == 0u);
 
     /* The watchdog against a step that never lets go of the controller: nothing for 6 s, then the blind restore,
      * once, without the lock and without the hold. */
     TakeAt70();
     device.Fan.Busy = 1;
     native_time += 4ull * SECOND;
-    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
+    FireWatchdog();
     CHECK(Held() && device.Fan.WatchdogFires == 0u);
     native_time += 2ull * SECOND;
-    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
+    FireWatchdog();
     SettleEngine();
     CHECK(AtRest() && device.Fan.BlindDone && device.Fan.WatchdogFires == 1u);
+    /* The blind restore is the one chip access this DPC may make: 100-microsecond stalls, 2 ms at the most. */
+    CHECK(native_stall_dispatch_max_us <= 100u);
+    CHECK(native_stall_dispatch_us <= BC250_FAN_BLIND_POLL_US * BC250_FAN_BLIND_POLL_MAX);
     native_ec.logged = 0;
-    device.Fan.Dpc.Routine(&device.Fan.Dpc, device.Fan.Dpc.Context, NULL, NULL);
+    FireWatchdog();
     CHECK(native_ec.logged == 0u && device.Fan.WatchdogFires == 1u);
     device.Fan.Busy = 0;
     CHECK(CleanWrites(1));

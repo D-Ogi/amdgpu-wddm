@@ -50,6 +50,16 @@ typedef struct _BC250_FAN_OWNER {
     ULONGLONG WatchdogFires;
     KTIMER Timer;
     KDPC Dpc;
+    // The watchdog's normal handback runs here and not in the DPC (audit finding F1). The handshake polls the
+    // chip with 250-microsecond stalls, up to 200 of them per phase (BC250_FAN_POLL_US, BC250_FAN_POLL_MAX),
+    // and a DPC "must not specify delays of more than 100 microseconds"
+    // (ref/windows-driver-docs/windows-driver-docs-pr/kernel/guidelines-for-writing-dpc-routines.md:35). The
+    // DPC therefore takes the hold, queues this item and returns; the item gives the fan back at
+    // PASSIVE_LEVEL and releases the hold. WorkerQueued is the one-at-a-time guard and WorkerQueuedAt says
+    // since when, so a worker that never runs cannot keep the blind restore away for ever.
+    PIO_WORKITEM Worker;
+    volatile LONG WorkerQueued;
+    ULONGLONG WorkerQueuedAt;
     KBUGCHECK_CALLBACK_RECORD BugCheck;
     // The log's memory, so that a state is logged once when it changes and not once a second.
     ULONG LoggedState, LoggedReason, LoggedDoubt;

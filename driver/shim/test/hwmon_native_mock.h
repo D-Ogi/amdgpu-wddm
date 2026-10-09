@@ -107,6 +107,10 @@ static void KeStallExecutionProcessor(unsigned usec)
 #else
     UNREFERENCED_PARAMETER(usec);
 #endif
+    /* The fan control's test defines this hook to record the stall against the context it ran in. */
+#ifdef NATIVE_STALL_HOOK
+    NATIVE_STALL_HOOK(usec);
+#endif
     native_stalls++;
 }
 
