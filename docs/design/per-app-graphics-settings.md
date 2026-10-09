@@ -177,18 +177,47 @@ other three fields stay, so a support report still identifies the build of this 
 
 ### The mechanism
 
-`EnumDisplayDevices` gives the adapter's video key as the `DeviceKey` of each adapter:
+The value that the setting changes is `DriverVersion` in the software key of the graphics adapter. That is the key
+that dxgkrnl names in `DXGK_DEVICE_INFO.DeviceRegistryPath`, the registry path of the software key of the adapter,
+about which the DDI reference says "Registry data should be written only to this path"
+(`ref/ddi-display/dispmprt.md`, `DXGK_DEVICE_INFO`). `IoOpenDeviceRegistryKey` with `PLUGPLAY_REGKEY_DRIVER` opens
+the same key, and that is how a graphics miniport writes its own registry information
+(`windows-driver-docs-pr/display/registering-hardware-information.md`,
+`windows-driver-docs-pr/install/opening-a-device-s-software-key.md`, staging `110f60ea`). On unit A it is
+
+```
+HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000
+```
+
+`EnumDisplayDevices` gives a second path to the same values and reports it as the `DeviceKey` of the adapter:
 
 ```
 HKLM\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000
 ```
 
-Unreal Engine 4 reads the `DriverVersion` value of that key. This key is not the one that dxgkrnl gives the KMD in
-`DXGK_DEVICE_INFO.DeviceRegistryPath`: on unit A that one is the class key
-`Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000`. The first version of this code wrote only to
-`DeviceRegistryPath` and refused that key, so the number never reached Unreal Engine (b23 lab 489).
+Unreal Engine 4 reads the `DriverVersion` value of that path. Each numbered video key is a registry symbolic link: it
+holds a `REG_LINK` value `SymbolicLinkValue` whose target is the software key above, and an open that does not ask
+for `OBJ_OPENLINK` follows it. A write through either path therefore reaches the same value. Three results follow:
 
-The KMD finds the video keys of its adapter in two steps:
+- A second video key of the adapter finds the number in place and writes nothing.
+- The write also changes the version that Device Manager gives for the adapter.
+- The write changes the SetupAPI property `DEVPKEY_Device_DriverVersion`, because that property reads the
+  `DriverVersion` value of the same key. The Microsoft page of that property names its registry value
+  `REGSTR_VAL_DRIVERVERSION`, `DriverVersion`
+  (`windows-driver-docs-pr/install/devpkey-device-driverversion.md`, staging `110f60ea`).
+
+The KMD writes the software key, and it opens it by handle with `IoOpenDeviceRegistryKey`, not by a path of its own.
+The PnP manager creates that key when the device is installed, so an adapter start always reaches it. The first
+version of this code wrote only to `DeviceRegistryPath` as a path and refused it, because the guard admitted no path
+outside `Control\Video`, so the number never reached Unreal Engine (b23 lab 489). The second version wrote only
+through the video path, and that path is not there yet while the adapter starts. On the lab the
+`Control\Video\{VideoID}` key opened and held no numbered subkey, so nothing was written and the log said "this
+adapter has no video key" about a key that the same script read minutes later (BD-104, b24 round 2). The DDI makes
+that order plausible: the count of video present sources is an output parameter of `DxgkDdiStartDevice`, so dxgkrnl
+learns how many of those keys the adapter needs only when the start returns, and this code runs inside the start.
+
+After the software key the KMD still visits the video keys, for an installation where a numbered video key holds its
+own `DriverVersion` instead of a link. It finds them in two steps:
 
 1. It opens the adapter's hardware key (`IoOpenDeviceRegistryKey` with `PLUGPLAY_REGKEY_DEVICE`) and reads the
    `VideoID` value, which holds the GUID of the video keys of this adapter.
@@ -197,29 +226,29 @@ The KMD finds the video keys of its adapter in two steps:
    development PC showed four of them for one adapter. The KMD visits at most 16 and says so in the log if there
    are more.
 
-Each numbered video key is a registry symbolic link: it holds a `REG_LINK` value `SymbolicLinkValue` whose target is
-the class key of the adapter, `Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<nnnn>`. An open that
-does not ask for `OBJ_OPENLINK` follows the link, so the KMD writes the class key through the video path. Three
-results follow:
+That pass normally finds nothing during a start, which is silent while the software key was reached. Its own
+`DeviceRegistryPath` fallback stays for a machine that has no `VideoID` and no software key of its own.
 
-- The second and later video keys of the adapter find the number in place and write nothing.
-- The write also changes the version that Device Manager gives for the adapter.
-- The write changes the SetupAPI property `DEVPKEY_Device_DriverVersion`, because that property reads the
-  `DriverVersion` value of the same class key. The Microsoft page of that property names its registry value
-  `REGSTR_VAL_DRIVERVERSION`, `DriverVersion`
-  (`windows-driver-docs-pr/install/devpkey-device-driverversion.md`, staging `110f60ea`).
+The driver store keeps the INF number, and so does `Bc250DriverVersion`. Because an open can follow a symbolic link
+to a key other than the one the path names, the KMD guards every write the same way: it reads the name of the key
+that the open gives back, through `ZwQueryKey` with `KeyNameInformation`, and writes only when that name is a video
+key or one adapter key of the adapter class `{4d36e968-e325-11ce-bfc1-08002be10318}`. A path that the KMD builds
+itself is in addition admitted only below `Control\Video`.
 
-The driver store keeps the INF number, and so does `Bc250DriverVersion`. Because the key that the write reaches is
-not the key that the path names, the KMD guards both: it opens only a path below `Control\Video`, and it reads the
-name of the key that the open gives back and writes only when that name is a video key or one adapter key of
-the adapter class `{4d36e968-e325-11ce-bfc1-08002be10318}`.
+The guideline for device installation asks a driver not to change `DriverVersion` in a software key
+(`windows-driver-docs-pr/install/opening-a-device-s-software-key.md`), because the value carries the installation
+state of the device. The same page records that Windows imposes those restrictions at installation time, and that
+"Values can be replicated for compatibility". This driver changes the value after installation, on purpose and only
+while an explicit setting asks for it: `Bc250DriverVersion` keeps the installed number, the next start with the
+setting cleared writes it back, and the driver store copy is never touched. That is the price of the games that
+refuse to run well against the number this driver installs.
 
 The two facts above were measured on the development PC on 2026-10-08, read-only, with
 `RegOpenKeyEx(REG_OPTION_OPEN_LINK)` and `RegQueryValueEx("SymbolicLinkValue")` on the video keys of its graphics
 adapter, and by comparing `DEVPKEY_Device_DriverVersion` of the devnode with the `DriverVersion` value of the class
 key that the link named. All four numbered video keys of that adapter named the same class key.
 
-At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of each video key:
+At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of each key it reaches:
 
 | Value | Content |
 |---|---|
@@ -230,8 +259,8 @@ At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three v
 When the setting goes back to 0, the next start writes the installed number back and deletes the two backup values.
 A new driver installation writes its own number into `DriverVersion`. With the setting on, the next start reports
 the new number in the AMD scheme. With the setting off, the KMD keeps the new number and deletes only the backups.
-The KMD opens only a path that contains `\Control\Video\`, and it writes only when the key behind that path names a
-video key or one adapter key of the adapter class.
+The KMD writes only when the name of the key it opened is a video key or one adapter key of the adapter class. A
+path that the KMD builds itself must in addition be below `\Control\Video\`.
 
 The driver store keeps the INF number, and `Bc250DriverVersion` holds it next to the reported number, so a support
 report can give both. The code is `driver/kmd/driver_version.c`, and `driver/kmd/driver_version.h` holds the

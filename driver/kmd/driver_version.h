@@ -1,7 +1,7 @@
 // The driver version that the adapter's software key reports, for the per-application graphics setting
 // ReportAmdDriverVersion (docs/design/per-app-graphics-settings.md).
 //
-// Some games compare the DriverVersion string of the display adapter's video key (the DeviceKey that
+// Some games compare the DriverVersion string of the graphics adapter's video key (the DeviceKey that
 // EnumDisplayDevices returns, HKLM\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000) with a minimum version per
 // GPU vendor. For vendor 0x1002 they expect AMD's numbering, whose first field is far above this driver's 0: the
 // version 0.7.216.18 reads as a very old AMD driver, and the game shows a warning about a known driver problem. With
@@ -10,15 +10,18 @@
 // back when the setting is cleared. The driver store keeps the INF's number; the device property that the SetupAPI
 // reports comes from the same key as DriverVersion and changes with it.
 //
-// The video key is not the key that DXGK_DEVICE_INFO.DeviceRegistryPath gives (b23 lab 489: that one is the class
-// key), so driver_version.c reads the GUID of the video key from the VideoID value of the adapter's hardware key and
-// builds the path from it. The helpers below check the two parts of that path and join them.
+// Each numbered video key is a registry symbolic link (a REG_LINK value SymbolicLinkValue) to the software key of
+// the adapter, the key that DXGK_DEVICE_INFO.DeviceRegistryPath names and that IoOpenDeviceRegistryKey opens for
+// PLUGPLAY_REGKEY_DRIVER (on unit A the class key, b23 lab 489). An open of a video key that does not ask for
+// OBJ_OPENLINK follows the link, so both paths reach the same value, which also backs the SetupAPI property
+// DEVPKEY_Device_DriverVersion and the version that Device Manager shows.
 //
-// Each numbered video key is a registry symbolic link (a REG_LINK value SymbolicLinkValue) to the display class key
-// of the adapter, and an open that does not ask for OBJ_OPENLINK follows it. The key that this driver writes is
-// therefore the class key, which is also the key that backs the SetupAPI property DEVPKEY_Device_DriverVersion and
-// the version that Device Manager shows. A path below Control\Video is only the way in, so driver_version.c reads
-// the name of the key it opened and admits one of the two names that DriverVersionIsAdapterKey accepts.
+// driver_version.c writes the software key, by the handle that IoOpenDeviceRegistryKey gives, because the numbered
+// video keys are not there yet at that point of the adapter start (BD-104). It visits the video keys after it, for an
+// installation where such a key holds its own DriverVersion: it reads the GUID of those keys from the VideoID value
+// of the adapter's hardware key and builds the path from it, and the helpers below check the two parts of that path
+// and join them. Before any write, the name of the key that the open gave back must be one of the two names that
+// DriverVersionIsAdapterKey accepts; a path that the driver builds itself must in addition be below Control\Video.
 //
 // Pure: no WDK header, so driver/kmd/test/driver_version_test.c checks it on the host. driver_version.c does the
 // registry work in the driver.
