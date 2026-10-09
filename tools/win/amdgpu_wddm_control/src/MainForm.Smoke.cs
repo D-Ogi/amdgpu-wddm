@@ -193,7 +193,10 @@ namespace AmdgpuWddmControl
                     int bottom = _content.PointToClient(last.Parent.PointToScreen(last.Location)).Y + last.Height;
                     int extent = _content.DisplayRectangle.Bottom + _content.Padding.Bottom;
                     if (bottom > extent) w.AppendLine(where + ": the last control " + Label(last) + " ends at " + bottom + ", outside the scroll range " + extent);
-                    if (built.Width > ColumnWidth + Theme.S(2)) w.AppendLine(where + ": the page is " + built.Width + " px wide, the column has " + ColumnWidth);
+                    // PageColumnWidth, not ColumnWidth: the window manager may have clamped ClientSize since the page
+                    // was built (LayoutRules.PageWidthFinding says why).
+                    var tooWide = LayoutRules.PageWidthFinding(where, built.Width, PageColumnWidth, Theme.S(2));
+                    if (tooWide != null) w.AppendLine(tooWide);
                     foreach (var p in Overlaps(this)) w.AppendLine(where + ": " + p);
                     foreach (var p in Overflows(this)) w.AppendLine(where + ": " + p);
                     foreach (var p in NoInternals(Texts(this, true))) w.AppendLine(where + ": G-NOINT " + p);
