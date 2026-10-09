@@ -1,37 +1,39 @@
-# Pending release-notes lines: Vulkan applications present on the GPU (Vulkan ICD)
+# Pending release-notes lines: the GPU path for Vulkan windows, as a switch (Vulkan ICD)
 
 This file is not a release. It holds the tester-facing lines for the next tester release notes that ship the
-Vulkan driver of branch `amdgpu-wddm/b26-vk-wsi-dxgi`, which is the shipped system Vulkan ICD line plus the
+Vulkan driver of branch `amdgpu-wddm/b27-vk-wsi-dxgi`, which is the shipped system Vulkan ICD line plus the
 route.
 The release step copies the lines into
 `docs/testing/release-notes/<version>-tester.N.md` and deletes this file. The design is
 `docs/design/vulkan-wsi-dxgi.md`.
 
+**State of the work, for the writer of the release notes, not for the tester:** the new path has never shown
+a picture on the lab machine. In the first trial every Vulkan program that used it stopped before its first
+picture (BD-105). The path is therefore off unless somebody turns it on, and these lines say so. They must not
+promise the direct screen path for Vulkan games: that promise waits for a lab run that shows a picture.
+
 ## Changed
 
-- A Vulkan application or game now shows its pictures through the GPU. Before this version, the driver copied
-  each picture on the processor into the window. Now the GPU copies it, and the desktop shows it the same way
-  as the picture of a DirectX 12 game. A fullscreen Vulkan game can therefore use the same direct path to the
-  screen as a DirectX 12 game.
+- Nothing changes for a Vulkan application or game in this release. Vulkan windows keep the path they had.
 
-## Known behaviour
+## New, and off by default
 
-- If the new path cannot start for an application, the driver uses the old path for it, and the driver log
-  says why. The application keeps its picture.
-- The first window of a Vulkan application can open a little later, because the driver starts a second,
-  DirectX 12 part for the pictures.
-- The driver now offers Vulkan applications 10-bit colour, and HDR when the screen is in HDR mode. **We have not
-  tested these yet.** No test picture of this release used them. An application that asks for 10-bit colour or HDR
-  can therefore fail to open its window. If that happens, use the old path below and send us the support report.
-  An application that asks for the usual 8-bit colour is not affected.
-- A Vulkan application that needs three pictures in its window queue cannot use the new path. The driver offers
-  two. Use the old path for such an application.
-- A 32-bit Vulkan application keeps the old path in this release.
+- The driver now has a second way to show the pictures of a Vulkan program: the GPU copies each picture into
+  the window, as it does for a DirectX 12 game, instead of the processor. It is a test path. It is **off**, and
+  a program uses it only if you turn it on for that program:
+  - Set the environment variable `AMDGPU_WDDM_VK_WSI` to `dxgi` before you start the program.
+  - To turn it on for every program, set the text value `WsiRoute` to `dxgi` under the registry key
+    `HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\Vulkan`. Delete the value, or set it to `gdi`, to go back.
+- **What to expect if you turn it on**: in our own test run, the programs that used this path showed no
+  picture at all and had to be closed. The driver now gives up after two seconds and goes back to the old path
+  for the next window, so the program keeps a window, and the driver log names the step where the new path
+  stopped. Please send that log with a GitHub issue if you try it. We would like to know what your machine
+  does here.
+- If you do not set either value, nothing of this reaches your programs.
 
 ## If something goes wrong
 
-- If a Vulkan application shows a wrong picture, a black window or stops, use the old path:
-  - For one application, set the environment variable `AMDGPU_WDDM_VK_WSI` to `gdi` before you start it.
-  - For all applications, set the text value `WsiRoute` to `gdi` under the registry key
-    `HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\Vulkan`.
-  Then open a GitHub issue with the support report. The driver log in the report names the path each window used.
+- A Vulkan program that shows a wrong picture, a black window or stops: delete `AMDGPU_WDDM_VK_WSI` and the
+  `WsiRoute` value, or set them to `gdi`, and start the program again. That is the path of every earlier
+  release. Then open a GitHub issue with the support report. The driver log in the report names the path each
+  window used.

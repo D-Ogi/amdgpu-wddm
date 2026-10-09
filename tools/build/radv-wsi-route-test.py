@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT
-"""Test the Vulkan present route rules of the Mesa fork (radv_wddm2_wsi_route.h). Run via
-build-radv-wsi-route-test.ps1.
+"""Test the Vulkan present route rules of the Mesa fork (radv_wddm2_wsi_route.h, wsi_win32_deadline.h). Run
+via build-radv-wsi-route-test.ps1.
 
-The rules are plain C in one header: the route switch (AMDGPU_WDDM_VK_WSI, the WsiRoute registry value, the
+The rules are plain C in two headers: the route switch (AMDGPU_WDDM_VK_WSI, the WsiRoute registry value, the
 default), the module gate that keeps the DXGI route away from processes with an application-local dxgi.dll,
-d3d12.dll or d3d12core.dll, and the LB7A checks of the D3D12 shared-resource import. The test source
+d3d12.dll or d3d12core.dll, the LB7A checks of the D3D12 shared-resource import, and the deadlines of the
+DXGI route with the rule that retires it when its first present never completes (BD-105). The test source
 (src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_wsi_route_test.c) is compiled with cl /W4 /WX on its own; no Mesa build
 and no GPU are involved. It runs twice: as is (every case must pass) and with --negative-control, which inverts every
 expectation and must fail every case. design: docs/design/vulkan-wsi-dxgi.md.
@@ -20,7 +21,8 @@ import subprocess
 import sys
 
 TEST_REL = 'src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_wsi_route_test.c'
-HEADER_REL = 'src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi_route.h'
+HEADER_RELS = ('src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi_route.h',
+               'src/vulkan/wsi/wsi_win32_deadline.h')
 TIMEOUT = 60
 
 
@@ -36,15 +38,16 @@ def main():
     src = Path(args.source).resolve()
     out = Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=False)
-    test, header = src / TEST_REL, src / HEADER_REL
+    test = src / TEST_REL
+    inputs = {rel: sha(src / rel) for rel in (TEST_REL, *HEADER_RELS)}
     tests = re.findall(r'^\s*\{"(\w+)", test_\w+\},', test.read_text(encoding='utf-8'), re.M)
     if not tests:
         raise SystemExit('no tests[] table in ' + str(test))
     exe = out / 'radv_wddm2_wsi_route_test.exe'
     record = {'source_head': subprocess.check_output(['git', '-C', str(src), 'rev-parse', 'HEAD'], text=True).strip(),
               'source_status': subprocess.check_output(['git', '-C', str(src), 'status', '--porcelain', '--',
-                                                        TEST_REL, HEADER_REL], text=True),
-              'inputs': {TEST_REL: sha(test), HEADER_REL: sha(header)}, 'tests': tests}
+                                                        TEST_REL, *HEADER_RELS], text=True),
+              'inputs': inputs, 'tests': tests}
     argv = ['cl', '/nologo', '/W4', '/WX', '/std:c11', '/TC', '/Fe' + str(exe), '/Fo' + str(out) + '\\', str(test)]
     p = subprocess.run(argv, cwd=out, capture_output=True, text=True, errors='replace')
     (out / 'build.log').write_text('> ' + subprocess.list2cmdline(argv) + '\n' + p.stdout + p.stderr)
