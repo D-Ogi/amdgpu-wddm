@@ -1485,6 +1485,118 @@ easy to make a mistake with: with `GGML_CUDA_NO_FA=1` the attention matrix multi
 `hipblasGemmStridedBatchedEx`, so the GEMM must really compute. FlashAttention on moves attention
 onto ggml's own kernels instead.
 
+### 4.13 The hipBLAS wall is down: bc250hipblas
+
+MEASURED 2026-10-09, offline, no lab unit. `compute/hipblas` holds the library, and
+`compute/hipblas/README.md` holds the whole of it: the type table, the kernel shape, the tests
+and the open performance work. This section records the decisions that belong in the design and
+the two new walls the build found.
+
+**What was built.** `bc250hipblas.dll`, one translation unit of HIP C++ for gfx1013 over our own
+HIP runtime, 11 exported names (the ten the link asks for, plus `hipblasStatusToString`, which
+the header declares). Two kernels: a strided batched GEMM and one that takes arrays of pointers
+in device memory, because that is how ggml passes a batch (`ggml-cuda.cu:1588`,
+`out-prod.cu:100`). One workgroup of 16 x 16 work items per 16 x 16 tile of C, the reduction in
+steps of 16 through local memory, 2 KB of local memory, eight wave32 waves.
+
+**Three decisions worth keeping.**
+
+1. **One translation unit, because of `-fno-gpu-rdc`.** `hip::device` of our CMake package
+   compiles with `-fno-gpu-rdc`, so each translation unit's device code is self-contained and a
+   kernel in one file cannot be started from another. Everything three readers share is in a
+   header instead (`src/gemm_core.h`): the kernel, the host test and the device test all use the
+   same index arithmetic, the same tile phases and the same type table.
+2. **A refusal, never a guess.** Five type combinations are implemented and every other one
+   answers `HIPBLAS_STATUS_NOT_SUPPORTED`, as does `HIPBLAS_OP_C` and an unknown algorithm
+   selector. The reason is `GGML_CUDA_FORCE_MMQ=ON`: a quantized type that MMQ does not cover
+   still reaches `hipblasGemmEx` through `ggml_cuda_mul_mat_cublas`, so an unknown
+   `hipblasDatatype_t` read as f32 would be a wrong number in a model's output with no message,
+   while a refusal is a stated abort through ggml's own `CUBLAS_CHECK`.
+3. **The accumulator is f32 even when the compute type is `HIPBLAS_R_16F`.** More accurate than
+   the letter of the type, never less, and it is what this part wants: gfx1013 has no f16 dot
+   instruction. The result is rounded to f16 one time, on the store. `alpha` and `beta` are read
+   in the compute type, as hipBLAS states, so a `R_16F` call passes two `__half`
+   (`ggml-cuda.cu:1399-1402`).
+
+**What the tests can and cannot prove.** The mock backend of layer 2 records a dispatch and
+executes no instruction, so no kernel runs on the development PC. The host test therefore runs
+the kernel's own three phases serially over every work item of every workgroup, which is what
+the two `__syncthreads` of the kernel promise, and compares the result with an independent
+reference: 550 checks, 0 failures, over 8 shapes with odd sizes, 4 transpositions, both betas,
+three element combinations, batch counts 1, 3 and 5 in both batch modes, `k == 0`, and a
+negative control per case. The device test program runs through the interface instead: against
+the mock it checks every refusal and proves that a refused call builds no dispatch (446 checks,
+0 failures, 43 dispatches expected and 43 recorded, every one a 16 x 16 workgroup), and on unit
+A it checks the numbers. Until that lab arm runs, this library is proven on the processor and
+unproven on the GPU.
+
+**Two new walls, both in llama.cpp's own build and both down.**
+
+1. **`llama-cli` is not a target at b86d2f07, and neither is one single front end.** The command
+   line program of that revision is the target `llama-app` (`bin\llama.exe`), which carries the
+   old `llama-cli`, `llama-completion` and `llama-bench` front ends as subcommands. A separate
+   `llama-cli` target exists under `tools/cli`, and it is configured only with
+   `LLAMA_BUILD_SERVER=ON`, which also pulls in `tools/ui`, whose CMake file downloads prebuilt
+   assets from Hugging Face - which an offline build cannot do. `llama-app` does not link without
+   the server either: its CMake file links `llama-server-impl` and `llama-cli-impl`
+   unconditionally. The two programs that do build offline are `llama-completion` and
+   `llama-bench`, they are exactly the two the Vulkan comparison build already holds, and between
+   them they are the greedy generation and the benchmark the lab plan needs. The lab plan names
+   those two.
+2. **`LLAMA_OPENSSL=ON` breaks the host compilation on this machine.** cpp-httplib's
+   `find_package(OpenSSL)` finds the MSYS2 installation of the development PC, and CMake then
+   puts `-isystem C:/msys64/mingw64/include` on every `llama-common` translation unit. That
+   directory holds MinGW's `<stdint.h>`, which shadows the Windows SDK one, and MSVC's
+   `vcruntime.h` fails on "unknown type name 'uintptr_t'". `-DLLAMA_OPENSSL=OFF` is the answer
+   and costs nothing: a lab trial reads a local model file.
+
+### 4.14 What the whole stack does against the mock, and the one ceiling that stops it
+
+MEASURED 2026-10-09, offline. With `bc250hipblas.dll` and the mock build of `amdhip64.dll` beside
+them, `llama-completion.exe` and `llama-bench.exe` start, load `ggml-hip.dll`, open our runtime
+and enumerate the device:
+
+```
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+  Device 0: AMD BC-250 (mock device), gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+```
+
+Two walls stood between the link and that line, and both are instructive.
+
+**The event contract, and it was ours.** `ggml_backend_cuda_device_event_synchronize` creates an
+event with `hipEventCreateWithFlags(hipEventDisableTiming)` and synchronizes it before anything
+records it. Our runtime answered `hipErrorInvalidHandle`, which is a stated abort through ggml's
+own `CUDA_CHECK`, and `llama-bench` stopped at its first HIP call. HIP returns success there: an
+event that nothing recorded is complete, waits for nothing and holds nothing back, which is what
+our own `hipStreamWaitEvent` already answered. The rule was in the wrong place, in the shared
+helper that waits for an event's value. It now lives in `hipEventElapsedTime` alone, which is the
+one path that really needs a record, because without one there is no timestamp to subtract. The
+host test covers all three calls on an unrecorded event (`test_hip_mock`, 232 checks).
+
+**The mock backend's ceiling, and it is only the mock's.** A bounded `llama-bench` run then
+reaches the start of a kernel and stops with `hipErrorInvalidImage`. The cause is not the code object
+and not the product loader: the mock backend is a fixed-size test double, with
+`MOCK_MAX_KERNELS 16`, `MOCK_MAX_SYMBOLS 128` and `MOCK_NAME_MAX 96`, and ggml's code objects are
+far above all three. MEASURED with `scratch\m16-hip\step3\probe\mock-ceiling.py` over the 144
+translation units of `ggml-hip`:
+
+| | ggml-hip, gfx1013 | the mock's ceiling |
+|---|---|---|
+| translation units with a gfx1013 image | 139 of 144 | - |
+| kernel descriptors in all | 7105 | - |
+| kernel descriptors in one translation unit, most | 352 (`mmvf.cu`) | 16 |
+| defined symbols in one image, most | 2476 (`mmvf.cu`) | 128 |
+| longest symbol name | 176 characters (`binbcast.cu`) | 96 |
+
+84 of those translation units carry more than 16 kernels, 84 more than 128 symbols and 89 a name
+longer than 96 characters. The product loader of layer 1 (`bc250hsa/co_loader.c`,
+`co_metadata.c`) allocates its kernel and symbol tables from the metadata's own counts and has no
+such ceiling, so this wall is between the development PC and a model, not between the driver and
+one. **Therefore: a model does not run against the mock, and the first inference of this route is
+a lab arm.** Raising the mock's tables to the metadata's counts is named work of its own. It buys
+an offline proof of the whole argument path of the backend, and it is not needed for the lab arms
+of part 3B.
+
 ---
 
 ## 5. Repository placement, build and tests

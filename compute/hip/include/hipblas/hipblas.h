@@ -21,6 +21,11 @@
 
 #include <hip/hip_runtime.h>
 
+// hip_fp16.h, because hipblasHalf below is __half. A header has to be includable on its own:
+// ggml reaches this file through ggml-common.h, which includes hip_fp16.h first, so the gap was
+// invisible until a program of ours included hipblas/hipblas.h by itself.
+#include <hip/hip_fp16.h>
+
 #if defined(BC250_HIPBLAS_BUILD_DLL)
 #define HIPBLAS_PUBLIC_API
 #elif defined(_WIN32) && !defined(__HIP_DEVICE_COMPILE__)

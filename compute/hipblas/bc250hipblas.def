@@ -1,0 +1,26 @@
+; The export list of bc250hipblas.dll (M16, route B, step 3). One name per line, no decoration:
+; every entry point is extern "C", so the exported name equals the C name on x64 Windows.
+;
+; Ten of the eleven names are what the link of llama.cpp's ggml-hip.dll asks for, measured by
+; that link failing on exactly these ten (scratch\m16-hip\step3\out3\build-ggml-hip.log) and by
+; the inventory of compute\hipblas\README.md. hipblasStatusToString is the eleventh: the
+; interface header declares it, our own test programs print with it, and ggml does not reach it
+; (its CUBLAS_CHECK compiles the switch-based string instead, because vendors/hip.h does not
+; define CUDART_VERSION).
+;
+; build-hipblas.ps1 counts these names, compares them with the exports of the built DLL, and
+; builds the import library bc250hipblas.lib out of this file with llvm-dlltool. The library
+; name matters: hipblas-config.cmake looks for bc250hipblas in <root>/lib.
+LIBRARY bc250hipblas.dll
+EXPORTS
+hipblasCreate
+hipblasDestroy
+hipblasSetStream
+hipblasStatusToString
+hipblasSgemm
+hipblasSgemmBatched
+hipblasSgemmStridedBatched
+hipblasGemmEx
+hipblasGemmBatchedEx
+hipblasGemmStridedBatchedEx
+hipblasStrsmBatched
