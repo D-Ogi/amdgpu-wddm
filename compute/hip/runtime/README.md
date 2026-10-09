@@ -14,9 +14,10 @@ calls `__hipRegisterFatBinary` and `__hipRegisterFunction` before `main()`, and 
 call of `hipLaunchKernel`. This DLL answers those calls. No AMD user-mode component is
 involved, and no part of this work uses PAL (owner decision D015).
 
-51 exported names, which [`amdhip64.def`](amdhip64.def) lists: the 38 of step 2, against which a
-plain HIP vector addition links, and the 13 that llama.cpp's ggml-hip backend adds in step 3
-(design section 4.9).
+55 exported names, which [`amdhip64.def`](amdhip64.def) lists: the 38 of step 2, against which a
+plain HIP vector addition links, the 15 that llama.cpp's ggml-hip backend adds in step 3 (design
+section 4.9), and two of ours that are not HIP (`bc250hipGetCounters` and
+`bc250hipResetCounters`, see Measurement below).
 
 | File | What it holds |
 |---|---|
@@ -27,6 +28,7 @@ plain HIP vector addition links, and the 13 that llama.cpp's ggml-hip backend ad
 | `hip_event.cpp` | events over the stream fence values |
 | `hip_device.cpp` | the process state, the lazy device, the device properties |
 | `hip_error.cpp` | the per-thread error state and the status translation |
+| `hip_perf.cpp` | the two counter calls, which are ours and not HIP |
 | `dllmain.cpp` | the entry point, which does nothing on purpose |
 
 ## How to build it
@@ -48,7 +50,7 @@ product DLL needs that library.
 
 ## What the build gates
 
-1. `amdhip64.def` holds exactly 51 names, and every one of them is declared in
+1. `amdhip64.def` holds exactly 55 names, and every one of them is declared in
    `hip_runtime.h`.
 2. Every undefined symbol of the runtime objects that belongs to our own stack is declared in
    `bc250hsa.h`. A new call into layer 1 that the contract does not carry is a build failure.
@@ -56,8 +58,8 @@ product DLL needs that library.
 4. `test_hip_mock.exe` passes: registration, argument packing, stream order across an event
    wait, event timing, no allocation leak on a second run, the fixed properties of the design,
    the memory entry points with an explicit kind and with `hipMemcpyDefault`, the null stream,
-   the per-thread error state, a second fat binary in one process, and the 13 step-3 entry
-   points: 224 checks in all.
+   the per-thread error state, a second fat binary in one process, and the 15 step-3 entry
+   points: 232 checks in all, measured by this build.
 5. A real HIP program, compiled by clang against `hip_runtime.h` and linked against
    `amdhip64.lib`, imports `amdhip64.dll`, runs against the mock build, and records the
    dispatches that its two `<<<>>>` calls asked for, with the measured grid, block and kernel
@@ -66,6 +68,44 @@ product DLL needs that library.
    and the host test run against the result. The fixture is not reproducible byte for byte,
    because clang writes a unique `__hip_cuid_*` symbol into every compilation
    (`tests/data/PROVENANCE-runtime.txt`).
+7. `test_hip_batch.exe` passes, and `test_hip_mock.exe` and `test_hip_threads.exe` pass a
+   second time with `BC250_HIP_BATCH=1` and `BC250_HIP_BARRIER=light`. The default of this
+   build is batching off, so without that second pass nothing would ever run a batched
+   submission.
+8. `hipbench.exe`, against the mock DLL, measures 1.000 submissions per launch with batching
+   off and under 0.1 with a cap of 32. The number comes from the counters of the DLL itself, so
+   this also gates the two counter calls.
+
+## Batching, and the switches
+
+Section 8 of the design is the off-GPU cost of a launch, and the mechanism is in layer 1
+(`compute/hip/README.md` has the shape of it). This runtime needed two insertions for it:
+`hip_device.cpp` reads four environment variables once, at its first call, and gives layer 1 a
+policy. `hipEventRecord` submits an open buffer before it stamps the event, so an event covers
+the work the stream had asked for. Every other path is right without a change, because
+`bc250hsa_wait` submits an open buffer itself when a caller asks for a value the device has not
+been given.
+
+| Variable | Values | Default |
+|---|---|---|
+| `BC250_HIP_BATCH` | `0`, `1` | `0`, one submission per launch |
+| `BC250_HIP_BATCH_MAX` | 1 to 256 dispatches per buffer | 32 |
+| `BC250_HIP_BATCH_HOLD_US` | microseconds a buffer may hold a dispatch | 1000 |
+| `BC250_HIP_BARRIER` | `full`, `light` | `full` |
+
+Both defaults are the conservative value until the lab says otherwise. A value the backend
+refuses gets one line on the standard error stream and the build-1 behaviour, never a failed
+`hipInit`.
+
+## Measurement
+
+`bc250hipGetCounters` and `bc250hipResetCounters` are not HIP. They report what the submission
+layer did, and above all how many times one kernel launch entered the kernel driver, which no
+HIP entry point answers. `samples/hipbench.hip` is their named user: launch rate, a dependent
+chain in the shape of a decode step, host copies at 4 KB, 1 MiB and 64 MiB, the cost of
+synchronising a retired stream, an event round, and submissions per launch beside each one. The
+The mock DLL proves the harness. The numbers that mean anything come from the lab arms in
+`scratch/m16-hip/lab/perf-README.md`, which is local.
 
 ## Threads
 

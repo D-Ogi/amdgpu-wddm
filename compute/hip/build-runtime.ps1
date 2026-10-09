@@ -1,6 +1,7 @@
 # Builds layer 2 of the M16 HIP runtime: amdhip64.dll, its import library amdhip64.lib, the
-# mock build of the same DLL, the host test, and a real clang-built HIP program that links
-# against them. Design: docs/design/m16-hip-route-b.md, sections 4 and 5.
+# mock build of the same DLL, the host tests, and the real clang-built HIP programs that link
+# against them (vadd, hipthreads and the microbenchmark hipbench).
+# Design: docs/design/m16-hip-route-b.md, sections 4, 5 and 9.
 #
 # Nothing is installed and nothing is written to drive C:. The compiler comes from the
 # installed Visual Studio toolset, the headers and import libraries from the SDK NuGet packages
@@ -71,11 +72,13 @@ $fixture = Join-Path $hip 'tests\data\hip_test_kernels.gfx1013.fatbin'
 # ---------------------------------------------------------------------------------------------
 # 1. The export list: the module definition file, the header and the built DLL must agree.
 # ---------------------------------------------------------------------------------------------
-$expectedExports = 53
+# 53 HIP entry points (sections 4.1 and 4.9) and the two counter calls of runtime\hip_perf.cpp
+# (section 8.7), which are ours and not HIP.
+$expectedExports = 55
 $defNames = Get-Content $def | Where-Object { $_ -match '^[A-Za-z_]' -and $_ -notmatch '^(LIBRARY|EXPORTS)' } | ForEach-Object { $_.Trim() }
 Write-Host "  amdhip64.def holds $($defNames.Count) names"
 if ($defNames.Count -ne $expectedExports) {
-    throw "amdhip64.def holds $($defNames.Count) names, and section 4.1 of the design states $expectedExports"
+    throw "amdhip64.def holds $($defNames.Count) names, and sections 4.1, 4.9 and 8.7 of the design state $expectedExports"
 }
 $headerText = Get-Content $header -Raw
 foreach ($name in $defNames) {
@@ -121,7 +124,7 @@ function Invoke-Cl([string[]]$Arguments, [string]$What) {
 }
 
 $runtimeSources = @('hip_device.cpp', 'hip_error.cpp', 'hip_event.cpp', 'hip_launch.cpp',
-    'hip_memory.cpp', 'hip_module.cpp', 'hip_stream.cpp') |
+    'hip_memory.cpp', 'hip_module.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
     ForEach-Object { Join-Path $hip "runtime\$_" }
 $dllSource = Join-Path $hip 'runtime\dllmain.cpp'
 $mockSource = Join-Path $hip 'tests\host\hipmock_backend.c'
@@ -193,6 +196,39 @@ if (-not $SkipTests) {
         @('/link') + $libpaths) 'test_hip_threads_control'
     & $ctlExe $fixture '--negative-control'
     if ($LASTEXITCODE -ne 0) { throw "the negative control of test_hip_threads failed ($LASTEXITCODE)" }
+
+    # ------------------------------------------------------------------------------------------
+    # Batching, from the side layer 2 sees it (design section 9). The dwords of a batched indirect
+    # buffer are the business of layer 1's test_pm4; this one drives the flush points, where a
+    # mistake is a wait that never ends rather than a slow program.
+    # ------------------------------------------------------------------------------------------
+    $batchTestSource = Join-Path $hip 'tests\host\test_hip_batch.cpp'
+    $batchExe = Join-Path $Out 'test_hip_batch.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', "/Fo$testObjDir\", "/Fe$batchExe",
+        $batchTestSource) + $includes + $objects + @('/link') + $libpaths) 'test_hip_batch'
+    & $batchExe $fixture
+    if ($LASTEXITCODE -ne 0) { throw "test_hip_batch failed ($LASTEXITCODE)" }
+
+    # ------------------------------------------------------------------------------------------
+    # And every other host test again with batching on, through the environment the runtime
+    # reads (runtime\hip_device.cpp). The default of this build is off, so without this pass
+    # nothing but the test above would ever run a batched submission.
+    # ------------------------------------------------------------------------------------------
+    $env:BC250_HIP_BATCH = '1'
+    $env:BC250_HIP_BARRIER = 'light'
+    try {
+        foreach ($pair in @(@{ exe = $testExe; name = 'test_hip_mock' },
+                            @{ exe = $threadsExe; name = 'test_hip_threads' })) {
+            & $pair.exe $fixture
+            if ($LASTEXITCODE -ne 0) {
+                throw "$($pair.name) failed with BC250_HIP_BATCH=1 ($LASTEXITCODE)"
+            }
+            Write-Host "  $($pair.name) passes with batching on and the light barrier"
+        }
+    } finally {
+        Remove-Item env:BC250_HIP_BATCH -ErrorAction SilentlyContinue
+        Remove-Item env:BC250_HIP_BARRIER -ErrorAction SilentlyContinue
+    }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -388,15 +424,60 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-threads.txt'
     $threadsOut = & $threadsSampleExe '--wait-total' '20000' '--mock-hold' '150' 2>&1
     $threadsExit = $LASTEXITCODE
-    $env:PATH = $savedPath
     $threadsOut | ForEach-Object { Write-Host "  $_" }
-    if ($threadsExit -ne 0) { throw "the threads sample failed ($threadsExit)" }
+    if ($threadsExit -ne 0) { $env:PATH = $savedPath; throw "the threads sample failed ($threadsExit)" }
     $inWindow = $threadsOut | Select-String -Pattern 'operations in all' | ForEach-Object {
         if ($_.Line -match '(\d+) operations in all') { [int]$Matches[1] } }
     if (-not $inWindow -or $inWindow -lt 3) {
         throw "the threads sample measured $inWindow operations inside the long wait of another thread"
     }
     Write-Host "  the threads sample measured $inWindow operations inside one thread's wait for the device"
+
+    # ------------------------------------------------------------------------------------------
+    # The microbenchmark. On the lab it answers what one kernel launch costs off the GPU; here
+    # it proves the harness and the counters, against the mock DLL, which runs no instruction.
+    # The run is short on purpose: the numbers of a mock say nothing about the hardware, only
+    # that every measurement and every counter delta comes out.
+    # ------------------------------------------------------------------------------------------
+    $benchExe = Join-Path $Out 'mock\hipbench.exe'
+    & $clang @flags -o $benchExe (Join-Path $hip 'samples\hipbench.hip') "-L$Out"
+    if ($LASTEXITCODE -ne 0) { $env:PATH = $savedPath; throw "clang failed for hipbench ($LASTEXITCODE)" }
+    Copy-Item $benchExe (Join-Path $Out 'hipbench.exe') -Force
+
+    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-bench.txt'
+    $benchOut = & $benchExe '--wait-total' '20000' '--launches' '200' '--chain' '50' `
+        '--sync' '50' '--event' '20' '--copy-iterations' '2' '--budget-ms' '60000' 2>&1
+    $benchExit = $LASTEXITCODE
+    $env:PATH = $savedPath
+    $benchOut | ForEach-Object { Write-Host "  $_" }
+    if ($benchExit -ne 0) { throw "hipbench failed against the mock DLL ($benchExit)" }
+    # The one number this run is allowed to assert: with batching off, one launch is one
+    # submission. If that stops being true the benchmark is measuring something else.
+    $perLaunch = $benchOut | Select-String -Pattern 'submissions per launch' | ForEach-Object {
+        if ($_.Line -match '([0-9.]+) submissions per launch') { [double]$Matches[1] } }
+    if (-not $perLaunch) { throw 'hipbench printed no submissions per launch: the counters are not reaching it' }
+    Write-Host "  hipbench read $($perLaunch.Count) counter ratios from the DLL, the first $($perLaunch[0])"
+    if ([math]::Abs($perLaunch[0] - 1.0) -gt 0.01) {
+        throw "with batching off one launch must be one submission, and hipbench measured $($perLaunch[0])"
+    }
+
+    # The same arm with batching on. One launch must now be well under one submission, which is
+    # the whole point of design section 9, and it must come out through the counters of the DLL: this
+    # is the only place in the build where the batched path runs behind a real HIP program.
+    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-bench-batch.txt'
+    $benchBatchOut = & $benchExe '--wait-total' '20000' '--launches' '200' '--chain' '50' `
+        '--sync' '50' '--event' '20' '--copy-iterations' '1' '--batch' '1' '--batch-max' '32' `
+        '--barrier' 'light' '--budget-ms' '60000' 2>&1
+    $benchBatchExit = $LASTEXITCODE
+    $benchBatchOut | ForEach-Object { Write-Host "  $_" }
+    if ($benchBatchExit -ne 0) { throw "hipbench with batching on failed ($benchBatchExit)" }
+    $batchedPerLaunch = $benchBatchOut | Select-String -Pattern 'submissions per launch' |
+        ForEach-Object { if ($_.Line -match '([0-9.]+) submissions per launch') { [double]$Matches[1] } }
+    if (-not $batchedPerLaunch) { throw 'hipbench with batching on printed no submissions per launch' }
+    Write-Host "  hipbench with batching on measured $($batchedPerLaunch[0]) submissions per launch"
+    if ($batchedPerLaunch[0] -gt 0.1) {
+        throw "a cap of 32 launches per buffer must bring one launch under 0.1 submissions, and hipbench measured $($batchedPerLaunch[0])"
+    }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -406,8 +487,10 @@ Write-Host ''
 foreach ($file in @((Join-Path $Out 'mock\amdhip64.dll'), (Join-Path $Out 'amdhip64.dll'),
         (Join-Path $Out 'amdhip64.lib'), (Join-Path $Out 'test_hip_mock.exe'),
         (Join-Path $Out 'test_hip_threads.exe'), (Join-Path $Out 'test_hip_threads_control.exe'),
+        (Join-Path $Out 'test_hip_batch.exe'),
         (Join-Path $Out 'vadd.exe'), (Join-Path $Out 'mock\vadd.exe'),
-        (Join-Path $Out 'hipthreads.exe'), (Join-Path $Out 'mock\hipthreads.exe'))) {
+        (Join-Path $Out 'hipthreads.exe'), (Join-Path $Out 'mock\hipthreads.exe'),
+        (Join-Path $Out 'hipbench.exe'), (Join-Path $Out 'mock\hipbench.exe'))) {
     if (-not (Test-Path $file)) { continue }
     $item = Get-Item $file
     $label = $item.FullName.Substring($Out.Length).TrimStart('\')

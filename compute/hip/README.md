@@ -28,15 +28,15 @@ path, and comes on its own branch.
 
 ```
 bc250hsa.h                 the only header a caller needs
-  status.c                 status names, the log hook, twelve process counters
+  status.c                 status names, the log hook, fourteen process counters
   co_msgpack.c             a MessagePack reader that refuses what it does not know
   co_metadata.c            NT_AMDGPU_METADATA to bc250hsa_kernel; the 64-byte descriptor
   co_loader.c              the clang offload bundle, then the ELF code object
   kernarg.c                the kernel argument buffer, from the metadata list only
-  pm4_dispatch.c           the 19 packets of one gfx1013 compute dispatch
+  pm4_dispatch.c           the 19 packets of one gfx1013 compute dispatch, and the batch of several
   kmt_device.c             the adapter, the device, the node-0 context, the fence
   kmt_memory.c             allocate, map a GPU address, make resident, wait for the paging fence
-  submit.c                 the command ring, D3DKMTSubmitCommand, the sliced bounded wait
+  submit.c                 the command ring, D3DKMTSubmitCommand, the batch, the sliced bounded wait
 ```
 
 The first six files touch no operating system call, so every host test links them and runs anywhere.
@@ -53,6 +53,42 @@ Three rules the library keeps, because each one is a measured trap:
 3. **No wait is unbounded, and no wait is one long sleep.** A wait runs in slices and asks the
    operating system between two of them whether the device still runs. One long wait turned a healthy
    14.6-second wait behind another process's engine reset into a lost device (defect K225).
+
+## Batching, and the barrier between dispatches
+
+Build 1 sent one kernel dispatch as one indirect buffer and one `D3DKMTSubmitCommand`. Right, and
+expensive: a kernel that runs for two microseconds paid for a call into the kernel driver, a ring
+slot, a fence and a completion write. Section 8 of the design is the answer, and section 8.1 of
+`bc250hsa.h` is its interface: consecutive dispatches go into one larger indirect buffer, and one
+submission carries them all.
+
+The whole mechanism is here in layer 1, because layer 1 owns the wait. `bc250hsa_wait` submits an
+open buffer as soon as a caller asks for a fence value that was promised but not yet sent to the
+device, so a program cannot look at work that is still waiting to be submitted. The other flush
+points are the map, the unmap, the copy, the free, the code object load and the device closing: in
+each one the caller is about to read bytes or addresses that open work owns.
+
+| Knob | What it does | Default |
+|---|---|---|
+| `bc250hsa_batch_policy.enabled` | one buffer per batch instead of one per dispatch | 0, which is build 1 |
+| `max_dispatches` | the dispatch cap of one buffer, at most 256 | 32 |
+| `max_ib_dwords` | the dword cap | one ring slot, less the completion write |
+| `max_hold_us` | how long an open buffer may hold a dispatch | 1000 |
+| `light_barrier` | the level-0 and level-1 invalidate between two dispatches of one buffer, in place of the full acquire | 0 |
+
+Both defaults are the conservative value: neither has run on the hardware. The library reads no
+environment variable, so these come from the caller. `runtime/` reads `BC250_HIP_BATCH`,
+`BC250_HIP_BATCH_MAX`, `BC250_HIP_BATCH_HOLD_US` and `BC250_HIP_BARRIER` and sets them.
+
+`BC250HSA_ACQUIRE_GCR_CNTL_LIGHT` in `bc250hsa/pm4_regs.h` names the bits of the light barrier and
+the Mesa file and line each one comes from, with the bits it drops stated: `GL2_INV`, `GL2_WB`,
+`GLM_INV`, `GLM_WB`, `GLI_INV`. The instruction invalidate stays at the head of the buffer, because
+a code object load is a flush point. `test_pm4` checks the dwords of both values, and the dropped
+bits are its negative control.
+
+The off-GPU cost itself is measured by `samples/hipbench.hip`, which reads the submission counters
+through the two vendor calls of layer 2 and prints submissions per dispatch beside its timings. The
+lab arms are in `scratch/m16-hip/lab/perf-README.md`, which is local.
 
 ## Build
 

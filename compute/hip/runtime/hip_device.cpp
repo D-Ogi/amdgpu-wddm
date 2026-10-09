@@ -55,6 +55,58 @@ uint32_t read_ms(const char* name) {
     return value > 0xFFFFFFFFul ? 0xFFFFFFFFu : static_cast<uint32_t>(value);
 }
 
+// The name as it stands, for a switch that is a word and not a number. The same
+// MEASURED note applies: the operating system's environment and not getenv.
+bool read_text(const char* name, char* text, size_t bytes) {
+#if defined(_WIN32)
+    const DWORD got = GetEnvironmentVariableA(name, text, static_cast<DWORD>(bytes));
+    return got != 0 && got < bytes;
+#else
+    const char* found = std::getenv(name);
+    if (found == nullptr || std::strlen(found) + 1 > bytes) {
+        return false;
+    }
+    std::strncpy(text, found, bytes - 1);
+    text[bytes - 1] = '\0';
+    return true;
+#endif
+}
+
+// The batching policy of the process (section 8.1 of bc250hsa.h, which keeps policy out of
+// layer 1). A HIP program has no API for it, so it arrives in the environment:
+//
+//   BC250_HIP_BATCH=1               append consecutive launches into one indirect buffer
+//   BC250_HIP_BATCH_MAX=<n>         dispatches per buffer, 0 or absent takes the default
+//   BC250_HIP_BATCH_HOLD_US=<us>    the time cap, 0 or absent takes the default
+//   BC250_HIP_BARRIER=full|light    the barrier between two dispatches of one buffer
+//
+// Both defaults are the conservative ones: batching off, and the full acquire. Build 1 of
+// this route has one submission per launch, and no lab trial has measured either switch on
+// the hardware yet (the plan is scratch\m16-hip\lab\perf-README.md). The switches exist so
+// that the trial can measure them, and the defaults change when it has.
+void apply_batch_policy(bc250hsa_device* dev) {
+    char text[32];
+    bc250hsa_batch_policy policy;
+    std::memset(&policy, 0, sizeof(policy));
+    policy.struct_bytes = static_cast<uint32_t>(sizeof(policy));
+    policy.enabled = read_ms("BC250_HIP_BATCH") != 0 ? 1u : 0u;
+    policy.max_dispatches = read_ms("BC250_HIP_BATCH_MAX");
+    policy.max_hold_us = read_ms("BC250_HIP_BATCH_HOLD_US");
+    policy.light_barrier = 0u;
+    if (read_text("BC250_HIP_BARRIER", text, sizeof(text)) && std::strcmp(text, "light") == 0) {
+        policy.light_barrier = 1u;
+    }
+    if (policy.enabled == 0 && policy.light_barrier == 0) {
+        return;   // the defaults of the library; no call, no refusal to report
+    }
+    const bc250hsa_status status = bc250hsa_batch_policy_set(dev, &policy);
+    if (status != BC250HSA_OK) {
+        std::fprintf(stderr, "amdhip64: the backend refused the batching policy (%s); it stays"
+                             " at one submission per launch\n",
+                     bc250hsa_status_string(status));
+    }
+}
+
 }  // namespace
 
 double host_now_ms() {
@@ -89,6 +141,7 @@ hipError_t device(bc250hsa_device** out) {
             s.null_stream.refs = 1;
             s.props.struct_bytes = static_cast<uint32_t>(sizeof(s.props));
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
+            apply_batch_policy(s.dev);
         }
     }
     if (s.dev == nullptr) {

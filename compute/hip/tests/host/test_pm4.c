@@ -278,6 +278,220 @@ static void check_golden(void)
 }
 
 /* --------------------------------------------------------------------------------
+ * 2b. The batched indirect buffer (section 8.1 of the interface)
+ * ------------------------------------------------------------------------------ */
+
+#define BATCH_MAX 2048u
+
+/* What one walk of a stream found: how many packets of each kind it holds, and the
+ * GCR_CNTL dword of every ACQUIRE_MEM in order. The walker reads the count field of
+ * every type-3 header, so a malformed stream ends the walk short and the dword count
+ * it reports does not match the stream length. */
+typedef struct stream_shape {
+    uint32_t walked;          /* dwords the walk consumed */
+    uint32_t context_control;
+    uint32_t acquire;
+    uint32_t dispatch_direct;
+    uint32_t cs_partial_flush;
+    uint32_t release_mem;
+    uint32_t nop;
+    uint32_t gcr[8];          /* the GCR_CNTL of the first eight acquires */
+} stream_shape;
+
+static void walk_stream(const uint32_t* dwords, uint32_t count, stream_shape* shape)
+{
+    uint32_t at = 0;
+
+    memset(shape, 0, sizeof(*shape));
+    while (at < count) {
+        const uint32_t header = dwords[at];
+        const uint32_t opcode = (header >> 8) & 0xFFu;
+        const uint32_t body = ((header >> 16) & 0x3FFFu) + 1u;
+        if (CP_PACKET_GET_TYPE(header) != PACKET_TYPE3) {
+            break;
+        }
+        if (opcode == BC250HSA_PKT3_NOP) {
+            /* The ring pad: the count field is the maximum and the command processor
+             * reads one dword. */
+            shape->nop++;
+            at++;
+            shape->walked = at;
+            continue;
+        }
+        if (at + 1u + body > count) {
+            break;
+        }
+        if (opcode == BC250HSA_PKT3_CONTEXT_CONTROL) {
+            shape->context_control++;
+        } else if (opcode == BC250HSA_PKT3_ACQUIRE_MEM) {
+            if (shape->acquire < 8u) {
+                shape->gcr[shape->acquire] = dwords[at + body];
+            }
+            shape->acquire++;
+        } else if (opcode == BC250HSA_PKT3_DISPATCH_DIRECT) {
+            shape->dispatch_direct++;
+        } else if (opcode == BC250HSA_PKT3_EVENT_WRITE) {
+            if ((dwords[at + 1u] & 0x3Fu) == BC250HSA_EVENT_CS_PARTIAL_FLUSH) {
+                shape->cs_partial_flush++;
+            }
+        } else if (opcode == BC250HSA_PKT3_RELEASE_MEM) {
+            shape->release_mem++;
+        }
+        at += 1u + body;
+        shape->walked = at;
+    }
+}
+
+static void check_batch(void)
+{
+    bc250hsa_kernel   k;
+    bc250hsa_dispatch d[3];
+    bc250hsa_dispatch one;
+    bc250hsa_pm4_env  env;
+    uint32_t          single[GOLDEN_MAX];
+    uint32_t          batch[BATCH_MAX];
+    uint32_t          single_count = 0;
+    uint32_t          batch_count = 0;
+    stream_shape      shape;
+    uint32_t          i;
+
+    golden_kernel(&k);
+    golden_inputs(&one, &env, &k);
+
+    /* 1. A batch of one is the single dispatch, dword for dword. The golden stream is
+     *    already compared with the single build, so this is the control that the
+     *    batched path writes the same head, body and completion write. */
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&one, &env, single, GOLDEN_MAX, &single_count),
+                 BC250HSA_OK);
+    CHECK_STATUS(bc250hsa_pm4_build_batch(&one, 1u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    CHECK_U64(batch_count, single_count);
+    if (batch_count == single_count) {
+        int same = 1;
+        for (i = 0; i < batch_count; i++) {
+            if (batch[i] != single[i]) {
+                same = 0;
+            }
+        }
+        CHECK(same);
+    }
+
+    /* 2. Three dispatches, the full barrier. One head, one completion write, three
+     *    dispatches, three waits for the waves, and three acquires: the head's and one
+     *    in front of each dispatch but the first. */
+    for (i = 0; i < 3u; i++) {
+        golden_inputs(&d[i], &env, &k);
+        d[i].launch.grid[0] = 16u + i;   /* so the bodies are not identical */
+    }
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    CHECK_U64(batch_count % 8u, 0u);
+    walk_stream(batch, batch_count, &shape);
+    CHECK_U64(shape.walked, batch_count);
+    CHECK_U64(shape.context_control, 1u);
+    CHECK_U64(shape.dispatch_direct, 3u);
+    CHECK_U64(shape.cs_partial_flush, 3u);
+    CHECK_U64(shape.release_mem, 1u);
+    CHECK_U64(shape.acquire, 3u);
+    CHECK_U64(shape.gcr[0], BC250HSA_ACQUIRE_GCR_CNTL);
+    CHECK_U64(shape.gcr[1], BC250HSA_ACQUIRE_GCR_CNTL);
+    CHECK_U64(shape.gcr[2], BC250HSA_ACQUIRE_GCR_CNTL);
+    /* One buffer of three is shorter than three buffers of one: it drops two heads and
+     * two completion writes and keeps the acquires. */
+    CHECK(batch_count < 3u * single_count);
+    /* The grid of each dispatch, in the order they were appended. */
+    {
+        uint32_t at = 0;
+        uint32_t seen = 0;
+        while (at < batch_count) {
+            const uint32_t header = batch[at];
+            const uint32_t opcode = (header >> 8) & 0xFFu;
+            const uint32_t body = ((header >> 16) & 0x3FFFu) + 1u;
+            if (opcode == BC250HSA_PKT3_NOP) {
+                at++;
+                continue;
+            }
+            if (opcode == BC250HSA_PKT3_DISPATCH_DIRECT) {
+                CHECK_U64(batch[at + 1u], 16u + seen);
+                seen++;
+            }
+            at += 1u + body;
+        }
+        CHECK_U64(seen, 3u);
+    }
+
+    /* 3. The light barrier. The head keeps the full acquire, because the instruction
+     *    cache invalidate belongs there, and the two barriers between the dispatches
+     *    carry the level-0 and level-1 invalidate only. */
+    golden_inputs(&d[0], &env, &k);
+    env.flags |= BC250HSA_DISPATCH_LIGHT_BARRIER;
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    walk_stream(batch, batch_count, &shape);
+    CHECK_U64(shape.walked, batch_count);
+    CHECK_U64(shape.acquire, 3u);
+    CHECK_U64(shape.gcr[0], BC250HSA_ACQUIRE_GCR_CNTL);
+    CHECK_U64(shape.gcr[1], BC250HSA_ACQUIRE_GCR_CNTL_LIGHT);
+    CHECK_U64(shape.gcr[2], BC250HSA_ACQUIRE_GCR_CNTL_LIGHT);
+    /* The light barrier is a subset of the full one, and a strict subset: a test that
+     * passed with the two values equal would prove nothing. */
+    CHECK_U64(BC250HSA_ACQUIRE_GCR_CNTL_LIGHT & ~(uint32_t)BC250HSA_ACQUIRE_GCR_CNTL, 0u);
+    /* And the bits it drops, exactly. An empty difference would make every check above
+     * pass with the two barriers equal, which would prove nothing. */
+    CHECK_U64(BC250HSA_ACQUIRE_GCR_CNTL & ~(uint32_t)BC250HSA_ACQUIRE_GCR_CNTL_LIGHT,
+              (uint32_t)(BC250HSA_AM_GCR_GL2_INV | BC250HSA_AM_GCR_GL2_WB |
+                         BC250HSA_AM_GCR_GLM_INV | BC250HSA_AM_GCR_GLM_WB |
+                         BC250HSA_AM_GCR_GLI_INV));
+    /* What it leaves out, by name: the level-2 cache, the metadata cache and the
+     * instruction cache. What it keeps: the two level-0 caches and level 1. */
+    CHECK_U64(BC250HSA_ACQUIRE_GCR_CNTL_LIGHT &
+                  (uint32_t)(BC250HSA_AM_GCR_GL2_INV | BC250HSA_AM_GCR_GL2_WB |
+                             BC250HSA_AM_GCR_GLM_INV | BC250HSA_AM_GCR_GLM_WB |
+                             BC250HSA_AM_GCR_GLI_INV),
+              0u);
+    CHECK_U64(BC250HSA_ACQUIRE_GCR_CNTL_LIGHT,
+              (uint32_t)(BC250HSA_AM_GCR_GL1_INV | BC250HSA_AM_GCR_GLV_INV |
+                         BC250HSA_AM_GCR_GLK_INV));
+    /* The negative control of the barrier: with the acquire left out there is none at
+     * all, and the light bit changes nothing. */
+    golden_inputs(&d[0], &env, &k);
+    env.flags |= BC250HSA_DISPATCH_LIGHT_BARRIER | BC250HSA_DISPATCH_NO_ACQUIRE;
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    walk_stream(batch, batch_count, &shape);
+    CHECK_U64(shape.acquire, 0u);
+    CHECK_U64(shape.dispatch_direct, 3u);
+
+    /* 4. The refusals of the batch builder. */
+    golden_inputs(&d[0], &env, &k);
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 0u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, BC250HSA_BATCH_DISPATCHES_MAX + 1u, &env, batch,
+                                          BATCH_MAX, &batch_count),
+                 BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_build_batch(NULL, 1u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_EINVAL);
+    /* A capacity that holds two dispatches and not three is BC250HSA_ENOMEM and no
+     * half-written buffer: submit.c reads the overflow and opens another buffer. */
+    {
+        bc250hsa_counters before;
+        bc250hsa_counters after;
+
+        before.struct_bytes = (uint32_t)sizeof(before);
+        CHECK_STATUS(bc250hsa_counters_read(&before), BC250HSA_OK);
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, 2u * single_count,
+                                              &batch_count),
+                     BC250HSA_ENOMEM);
+        /* And the dispatch the buffer had no room for is not counted as built. submit.c
+         * appends it again into the next buffer, so a count here would count it twice,
+         * and dispatches_built is the denominator of submissions per dispatch. */
+        after.struct_bytes = (uint32_t)sizeof(after);
+        CHECK_STATUS(bc250hsa_counters_read(&after), BC250HSA_OK);
+        CHECK_U64(after.dispatches_built - before.dispatches_built, 2u);
+    }
+}
+
+/* --------------------------------------------------------------------------------
  * 3. The variants and the refusals
  * ------------------------------------------------------------------------------ */
 
@@ -580,6 +794,7 @@ int main(int argc, char** argv)
     if (read_golden(dir)) {
         check_golden();
     }
+    check_batch();
     check_variants();
     check_refusals();
     check_helpers();

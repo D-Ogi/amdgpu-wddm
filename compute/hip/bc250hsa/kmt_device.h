@@ -39,6 +39,10 @@ typedef struct bc250hsa_alloc_record {
 /* One zeroed page per device backs the private segment buffer, which clang always
  * requests even when PRIVATE_SEGMENT_FIXED_SIZE is 0. */
 #define BC250HSA_ZERO_PAGE_BYTES         4096u
+/* The local memory a workgroup may ask for on gfx10.1. It is a property of the part and
+ * not of the capability blob, which carries no local memory size. bc250hsa_props_read
+ * reports it and the device keeps it, so the dispatch path needs no property read. */
+#define BC250HSA_LDS_BYTES_PER_WORKGROUP 65536u
 
 struct bc250hsa_device {
     CRITICAL_SECTION lock;
@@ -53,7 +57,12 @@ struct bc250hsa_device {
 
     volatile uint64_t* fence_cpu;     /* FenceValueCPUVirtualAddress */
     uint64_t           fence_gpu_va;  /* FenceValueGPUVirtualAddress */
-    uint64_t           fence_last_submitted;
+    uint64_t           fence_last_submitted;   /* the last value handed to SubmitCommand */
+    /* The last value this device promised a caller. It is fence_last_submitted, except
+     * while a batch is open: then it is that batch's value, which no submission carries
+     * yet (section 8.1 of the interface). bc250hsa_fence_last_submitted() reports this
+     * one, because a caller means "everything this device owes" by it. */
+    uint64_t           fence_last_assigned;
 
     uint64_t va_window_start;
     uint64_t va_window_end;
@@ -74,6 +83,22 @@ struct bc250hsa_device {
 
     uint32_t* last_ib;                /* a host copy of the last submitted buffer */
     uint32_t  last_ib_dwords;
+    uint32_t  last_ib_capacity;       /* dwords; one command ring slot */
+
+    /* The local memory a workgroup may ask for, read from the capability blob at open.
+     * bc250hsa_pm4_check_dispatch needs it on every dispatch, and build 1 read the whole
+     * property structure for that one number. */
+    uint32_t lds_bytes_per_workgroup;
+
+    /* Batching, section 8.1 of the interface. The policy is the caller's; the state
+     * below is the indirect buffer this device is building now. */
+    bc250hsa_batch_policy batch;
+    int      batch_open;
+    uint32_t batch_slot;
+    uint32_t batch_dwords;            /* dwords in the open buffer, the tail apart */
+    uint32_t batch_count;             /* dispatches in the open buffer */
+    uint64_t batch_fence_value;       /* the value its one completion write will hold */
+    uint64_t batch_opened_us;         /* bc250hsa_now_us() when it was opened */
 
     uint8_t caps[BC250HSA_CAPS_BYTES];
     int     caps_valid;
@@ -90,5 +115,12 @@ int             bc250hsa_device_executing(struct bc250hsa_device* dev);
 /* kmt_memory.c */
 bc250hsa_status bc250hsa_wait_paging_fence(struct bc250hsa_device* dev, uint64_t value);
 void            bc250hsa_free_all_allocations(struct bc250hsa_device* dev);
+
+/* submit.c. A monotonic host clock in microseconds, for the time cap of a batch. */
+uint64_t bc250hsa_now_us(void);
+/* Submits the open batch of this device. The caller holds dev->lock. It is BC250HSA_OK
+ * when nothing is open. Every call that changes memory a dispatch of the open buffer may
+ * name calls it first (section 8.1 of the interface). */
+bc250hsa_status bc250hsa_batch_submit_locked(struct bc250hsa_device* dev);
 
 #endif /* BC250HSA_KMT_DEVICE_H */
