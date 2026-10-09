@@ -87,6 +87,8 @@ else {
                 $restart = Restart-GpuAudioDevice -InstanceId $audio.instance
                 Write-Info "pnputil /restart-device: exit $($restart.code), device status '$($restart.status)' after $($restart.seconds) s"
                 Write-Log $restart.text
+                # A pnputil that did not return inside the budget is its own answer, not a failed device status.
+                if ($restart.timed_out) { throw "pnputil /restart-device did not return within $($script:AudioRestartWaitSeconds) s (process $($restart.id) is still running; it was not stopped, because a kernel PnP restart cannot be taken back)" }
                 if (-not $restart.ok) { throw "the HD Audio function did not come back within $($script:AudioRestartWaitSeconds) s (pnputil exit $($restart.code), status '$($restart.status)')" }
             } | Out-Null
         } catch {

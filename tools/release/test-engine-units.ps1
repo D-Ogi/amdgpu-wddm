@@ -526,6 +526,49 @@ foreach ($ph in 'testsigning-pending', 'driver-pending-restart', 'installed') {
 }
 Check ($null -eq (Get-PendingRestart ([pscustomobject]@{ phase = 'verified'; restart_boot_id = 41 }) ([ordered]@{ boot_id = 41 }))) 'a phase that waits for nothing is never pending'
 
+'[K3] a native program under a deadline: the budget covers the program, not only the waiting after it'
+# Audit finding K3. Restart-GpuAudioDevice promised one budget for pnputil and the status polling, but the
+# pnputil call itself was an ordinary blocking pipeline with no timeout, so a stuck PnP restart could hold the
+# install for ever. The fake child below never answers inside its budget. It is a child of this test and the
+# test stops it afterwards; the installer deliberately does not stop pnputil, because a kernel PnP transition
+# cannot be taken back by killing the program that asked for it.
+$fakeDir = Join-Path $work 'k3'
+[void][IO.Directory]::CreateDirectory($fakeDir)
+$fakeSlow = Join-Path $fakeDir 'fake-pnputil.cmd'
+Write-Text $fakeSlow "@echo off`r`necho fake pnputil %*`r`nping -n 21 127.0.0.1 >nul`r`n"
+$fakeFast = Join-Path $fakeDir 'fake-fast.cmd'
+Write-Text $fakeFast "@echo off`r`necho fake fast %*`r`nexit /b 0`r`n"
+$fast = Invoke-NativeBounded -File $fakeFast -Arguments @('/restart-device', 'PCI\x') -TimeoutSeconds 30
+Check (($fast.code -eq 0) -and (-not $fast.timed_out) -and ($fast.text -match 'fake fast /restart-device')) "a program that answers: exit $($fast.code), timed_out $($fast.timed_out), text '$($fast.text)'"
+$clockNew = [Diagnostics.Stopwatch]::StartNew()
+$slow = Invoke-NativeBounded -File $fakeSlow -Arguments @('/restart-device', 'PCI\x') -TimeoutSeconds 2
+$newSeconds = $clockNew.Elapsed.TotalSeconds
+Check ($slow.timed_out -and ($null -eq $slow.code) -and ($slow.id -gt 0)) "a program that does not answer: timed_out $($slow.timed_out), code '$($slow.code)', process $($slow.id)"
+Check ($newSeconds -lt 10) "the deadline of 2 s returned after $([Math]::Round($newSeconds, 1)) s"
+Check ($slow.text -match 'fake pnputil /restart-device') "the output up to the deadline comes back ('$($slow.text)')"
+Stop-Process -Id $slow.id -Force -ErrorAction SilentlyContinue
+# The whole function, with the fake in place of pnputil and no real device to ask about: the timeout is its own
+# answer, ok is false, and the saved MSI value is nobody's business here (the caller writes it before this call).
+$savedPnpUtil = $script:PnpUtilPath
+function Get-PnpDevice { param([string]$InstanceId, [switch]$ErrorAction) return $null }
+try {
+    $script:PnpUtilPath = $fakeSlow
+    $clockFn = [Diagnostics.Stopwatch]::StartNew()
+    $r3 = Restart-GpuAudioDevice -InstanceId 'PCI\VEN_1002&DEV_13FF&SUBSYS_00000000&REV_00\4&0&1' -TimeoutSeconds 2
+    $fnSeconds = $clockFn.Elapsed.TotalSeconds
+} finally { $script:PnpUtilPath = $savedPnpUtil }
+Check ($r3.timed_out -and (-not $r3.ok) -and ($null -eq $r3.status)) "Restart-GpuAudioDevice on a stuck restart: timed_out $($r3.timed_out), ok $($r3.ok), status '$($r3.status)'"
+Check ($fnSeconds -lt 10) "and it returned after $([Math]::Round($fnSeconds, 1)) s, inside its 2 s budget plus the start-up of the fake"
+Stop-Process -Id $r3.id -Force -ErrorAction SilentlyContinue
+# The negative control of the same section: the unbounded helper the function used before this change takes as
+# long as the program does, whatever the caller's budget says.
+$fakeSix = Join-Path $fakeDir 'fake-six.cmd'
+Write-Text $fakeSix "@echo off`r`nping -n 7 127.0.0.1 >nul`r`n"
+$clockOld = [Diagnostics.Stopwatch]::StartNew()
+$null = Invoke-Native $fakeSix @('/restart-device', 'PCI\x')
+$oldSeconds = $clockOld.Elapsed.TotalSeconds
+Check ($oldSeconds -ge 5) "negative control: Invoke-Native (no deadline) took $([Math]::Round($oldSeconds, 1)) s for a 6 s program and observes no budget"
+
 '[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
 Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'
 $script:EngineJob = 'kill-on-close'
