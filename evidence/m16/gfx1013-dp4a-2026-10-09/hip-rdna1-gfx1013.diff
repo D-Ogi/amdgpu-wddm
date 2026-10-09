@@ -1,0 +1,22 @@
+The one-line change this measurement is about, against llama.cpp b86d2f075.
+
+gfx1013 is a GFX10.1 part. Its host-side compute capability maps into ggml-cuda's RDNA1 range
+(ggml/src/ggml-cuda/common.cuh:80-88), but the device-side RDNA1 macro does not name it, so the
+host and the device of the same build disagree about what the part is.
+
+--- a/ggml/src/ggml-cuda/vendors/hip.h
++++ b/ggml/src/ggml-cuda/vendors/hip.h
+@@ -233,9 +233,9 @@
+     defined(__gfx1034__) || defined(__gfx1035__) || defined(__gfx1036__) || defined(__gfx1037__)
+ #define RDNA2
+ #endif
+
+-#if defined(__gfx1010__) || defined(__gfx1012__)
++#if defined(__gfx1010__) || defined(__gfx1012__) || defined(__gfx1013__)
+ #define RDNA1
+-#endif // defined(__gfx1010__) || defined(__gfx1012__)
++#endif // defined(__gfx1010__) || defined(__gfx1012__) || defined(__gfx1013__)
+
+ #if defined(RDNA4) || defined(RDNA3) || defined(RDNA2) || defined(RDNA1)
+ #define RDNA // For the entire family
+ #endif // defined(RDNA4) || defined(RDNA3) || defined(RDNA2) || defined(RDNA1)

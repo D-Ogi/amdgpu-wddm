@@ -1,0 +1,9 @@
+# builtin __builtin_amdgcn_sudot4, target gfx1013
+clang++ -x hip --offload-arch=gfx1013 --offload-device-only --no-gpu-bundle-output -nogpuinc -nogpulib -O2 -std=c++17 -DBC250_PROBE=2 -c -o sudot4.gfx1013.o probe-dot.hip
+
+./probe-dot.hip:21:8: error: '__builtin_amdgcn_sudot4' needs target feature dot8-insts
+   21 |   *c = __builtin_amdgcn_sudot4(true, *a, true, *b, *c, false);
+      |        ^
+1 error generated when compiling for gfx1013.
+
+exit 1

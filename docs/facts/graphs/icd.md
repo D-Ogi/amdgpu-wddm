@@ -14,7 +14,10 @@ flowchart LR
   M509["M509"]
   M510["M510<br/>linux"]
   M816["M816<br/>games"]
+  M847["M847"]
+  M849["M849"]
   M253 ==>|supersedes| M251
+  M849 ==>|supersedes| M847
   M816 ==>|supersedes| M166
   M510 ==>|supports| M509
   classDef other stroke-dasharray:4 3
@@ -49,6 +52,9 @@ flowchart LR
   M842["M842<br/>games"]
   M845["M845"]
   M846["M846"]
+  M847["M847"]
+  M848["M848"]
+  M849["M849"]
   M139 --> M50
   M252 --> M253
   M253 --> M166
@@ -61,6 +67,8 @@ flowchart LR
   M665 --> M569
   M795 --> M773
   M846 --> M845
+  M848 --> M847
+  M849 --> M848
   M842 --> M795
   M510 --> M508
   M516 --> M515
