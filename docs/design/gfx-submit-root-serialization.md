@@ -1,10 +1,13 @@
 # The root serialization of the gfx submit path, and the VMID pool
 
-Status: option (a) is **implemented in KMD 0.7.214.1 behind `EnableVmidPool` (default on)**. Option (b) is not
-implemented. `EnableVmidPool` 0 gives the behaviour of 0.7.213.1.
+Status: option (a) is **implemented in KMD 0.7.214.1 behind `EnableVmidPool` (default on)**. Option (b) is
+**implemented behind `EnableRingVmFlush` (default off)** and has not run on the lab yet. `EnableVmidPool` 0 gives
+the behaviour of 0.7.213.1. `EnableRingVmFlush` absent or 0 gives the packet sequence of 0.7.216.24, dword for
+dword.
 
-This document was first written as "F2" against KMD 0.7.196.1. Sections 1 and 3 keep that analysis. Sections 2, 4
-and 5 describe what 0.7.214.1 does. Code names refer to the tree of 0.7.214.1.
+This document was first written as "F2" against KMD 0.7.196.1. Section 1 keeps that analysis. Sections 2, 4 and 5
+describe what 0.7.214.1 does. Section 3 describes option (b) and its lab plan. Code names refer to the tree of
+0.7.214.1, and section 3 to the tree that added `EnableRingVmFlush`.
 
 ## 1. What serialized up to 0.7.213.1
 
@@ -165,7 +168,7 @@ with nothing published, and the next buffer starts the whole set again.
 | `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types; the pipeline test checks the VMID in the queue and in the timeout report |
 | `experiments/E27-m9-inference/paging-route-test-suffix.c` (`shim-paging`) | the real `GfxPagingBuildFlush`, gate 0 and the fan-out |
 
-## 3. Option (b): the flush on the ring (not implemented)
+## 3. Option (b): the flush on the ring, implemented behind `EnableRingVmFlush`, default off
 
 Upstream does the root change and the invalidation in the command stream: `gmc_v10_0_emit_flush_gpu_tlb`
 (`driver/amdgpu-import/reference/gmc_v10_0.c`) emits two `WREG` packets for the page-table-base pair of the context
@@ -173,18 +176,116 @@ and one `reg_write_reg_wait` for the invalidate request and acknowledge, and `gf
 follows it with `PACKET3_PFP_SYNC_ME`. The packets execute in ring order, so the CP serializes the root change
 against the previous job, and one VMID is enough.
 
-Against it, now:
+The three objections of the F2 text, and what answers each of them:
 
-- It changes the frame of `bc250_gfx_submit_job`, a fixed, logged, known-good packet sequence that a dump of a
-  0x116 is read against.
-- It needs `vm_inv_eng`, `eng_distance`, the hub register bases and the acknowledge semantics to be correct in
-  emitted packets, not in MMIO writes that can be read back. A wrong acknowledge mask is a CP that waits forever:
-  a TDR, and no engine reset on this part (facts M53).
-- The invalidation engine is shared with the CPU path (`bc250_gmc_flush_gpu_tlb`), and the shim has no equivalent
-  of the upstream `adev->gmc.invalidate_lock`.
+| Objection | Answer |
+|---|---|
+| It changes the frame of `bc250_gfx_submit_job`, which a dump of a 0x116 is read against | It does not. The flush is 29 dwords **in front of** the frame, and the frame behind it is the same 23 dwords. The host test `gfx-vm-flush` holds both: the frame against a frozen array, and the flush against the reference |
+| `vm_inv_eng`, `eng_distance`, the hub bases and the acknowledge semantics must be right in packets, not in MMIO writes that can be read back | The same test reads every field of the 29 dwords back, for all 15 VMIDs and all 18 engines. It compares them against offsets it derives a second time with `SOC15_REG_OFFSET` over AMD's headers. `gfx-vm-flush-wrong-ack` is the negative control: a wait that masks every bit instead of the VMID's own must fail the test |
+| The invalidation engine is shared with the CPU path, and the shim has no `adev->gmc.invalidate_lock` | Each owner now has its own engine. The table is in `driver/shim/include/bc250_gmc.h` |
 
-(b) remains the way to one VMID and no CPU poll on the submit path, after the ownership of the invalidation
-engine is settled.
+### The invalidation engines
+
+A hub has 18 invalidation engines, each with its own request, acknowledge and semaphore register,
+`eng_distance` apart (`gfxhub_v2_0_init`, `driver/amdgpu-import/gfxhub_v2_0.c`). The offsets are
+`mmGCVM_INVALIDATE_ENG0_REQ`, `_ACK` and `_SEM`, and the distance comes from `mmGCVM_INVALIDATE_ENG1_REQ`. A request
+starts an invalidation and the engine sets one bit per VMID in its acknowledge register. Two writers of one
+engine therefore read each other's acknowledge, which is why upstream gives every ring an engine of its own in
+`amdgpu_gmc_allocate_vm_inv_eng` (out of the mask `0x1FFF3`) and keeps `invalidate_lock` for the CPU path alone.
+
+| Engine | Owner | Where |
+|---|---|---|
+| 0 | the SDMA0 paging stream, in SDMA packets | `bc250_sdma_paging.c`, `bc250_sdma_emit_vm_flush` |
+| 1 | the gfx ring, in PM4 packets | `bc250_gfx_emit_vm_flush`, this gate |
+| 2, 3 | firmware, as upstream (they are the holes in `0x1FFF3`) | - |
+| 17 | every CPU MMIO flush | `bc250_gmc_flush_gpu_tlb`, serialized by the miniport's `GartLock` |
+
+So the ownership question is settled by disjoint engines, not by a lock: the gfx ring never waits on an
+acknowledge that the CPU path or the paging stream produced. A new owner takes a free engine of the upstream mask
+and is named in that table. `BC250_INV_ENG_GFX_RING`, `BC250_INV_ENG_CPU` and `BC250_INV_ENG_SDMA_PAGING` are
+the three constants, and the host test checks that they differ and that the registers they address differ.
+
+### What is emitted
+
+`bc250_gfx_submit_job_vm` is `bc250_gfx_submit_job` with `bc250_gfx_emit_vm_flush` in front of the frame, which is
+where upstream has it: `amdgpu_vm_flush` runs before `amdgpu_ib_schedule`, and the `PACKET3_PFP_SYNC_ME` that
+already opens our frame is the second half of `gfx_v10_0_ring_emit_vm_flush`. The 29 dwords are:
+
+| Dwords | Packet | Content |
+|---|---|---|
+| 5 | `WRITE_DATA` | `GCVM_CONTEXT<vmid>_PAGE_TABLE_BASE_ADDR_LO32` = low half of root plus `AMDGPU_PTE_VALID` |
+| 5 | `WRITE_DATA` | the `HI32` half of the same pair |
+| 5 | `WRITE_DATA` | `GCVM_INVALIDATE_ENG1_REQ` = the hub's `get_invalidate_req(vmid, 0)` |
+| 7 | `WAIT_REG_MEM` | the same request register, reference 0, mask 0: the acknowledge-reset cycle |
+| 7 | `WAIT_REG_MEM` | `GCVM_INVALIDATE_ENG1_ACK`, reference and mask `1 << vmid` |
+
+Three deviations from `gmc_v10_0_emit_flush_gpu_tlb`, each with its reason, all three also written at the
+implementation in `driver/shim/bc250_gfx.c`:
+
+1. **No semaphore.** `gmc_v10_0_use_invalidate_semaphore` is true for the MMHUB only, and this is the GFXHUB, so
+   upstream emits none here either. It also keeps the semaphore hazard of facts M25 out of the path.
+2. **The request and the acknowledge wait are two packets, not one.**
+   `gfx_v10_0_ring_emit_reg_write_reg_wait` fuses them into one `WAIT_REG_MEM` with `OPERATION(1)` when
+   `adev->gfx.cp_fw_write_wait` says the CP firmware does that operation, and falls back to
+   `amdgpu_ring_emit_reg_write_reg_wait_helper` when it does not. The shim tracks no CP firmware version, so it
+   writes the fallback, which every firmware version runs.
+3. **The fallback gets the acknowledge-reset cycle between the two.** Without it the wait can read an acknowledge
+   bit that the previous invalidation of this engine left set, and the job would then run on a TLB that was never
+   invalidated. Upstream does the same on SDMA (`sdma_v5_0_ring_emit_reg_write_reg_wait`, "wait for a cycle to
+   reset vm_inv_eng*_ack", which `bc250_sdma_vm_reg_write_reg_wait` follows) and in the CPU path for a GFXHUB
+   below GC 10.3 (the dummy read of the request register in `gmc_v10_0_flush_gpu_tlb`, which
+   `bc250_gmc_flush_gpu_tlb_observed` follows).
+
+The flush is emitted for every pool job, not only for a job whose root differs from the VMID's current root. The
+invalidation is needed on every job anyway (section 2, "the per-submit invalidation stays"), and a root write that
+is unconditional keeps the register and the table in step after an emitter that refused.
+
+**The ring costs nothing.** `amdgpu_ring_alloc` rounds every request up to `align_mask + 1`, which is 256 dwords
+on the gfx ring. The frame is 23 dwords and the flush 29, so both fit the same reservation and the number of jobs
+the ring holds does not change. The host test asserts it.
+
+### What does not change
+
+Admission does not. `Bc250VmidAdmit` makes the same decision with the gate on as with it off, and the rule that
+the root of a VMID whose last job has not retired is never rewritten stays in force. Only the way the root
+reaches the register changes: packets in ring order instead of MMIO and a CPU poll of up to 100 ms ahead of the
+doorbell.
+
+One diagnostic does change. `ProgressSiteVmFlush`, which names the VMID of a CPU flush in a dump, is not entered
+with the gate on, because no CPU flush runs. A stall in the invalidation is then a job whose fence never retires
+with the ring's read pointer inside the 29 dwords, which the timeout report's ring window shows.
+
+**The recommended combination is `EnableVmidPool` 1 with `EnableRingVmFlush` 1.** With the pool on, the gate is a
+pure mechanism swap: the same VMIDs, the same decisions, no CPU poll in the submit path. With the pool off, the
+refusal predicate of 0.7.213.1 still holds a job of a foreign root off until the ring drains, so the ring flush
+removes the poll and nothing else. Relaxing that predicate is what makes one VMID enough, which is the rest of
+option (b). It needs the pool's model check extended to a root change behind a live job, and it is not in this
+gate.
+
+### The lab plan
+
+The risk this plan is built around: a CP that waits forever on an acknowledge that never comes. That is a TDR,
+and this part has no engine reset (facts M53), so the only way out is a restart. The plan therefore starts with
+the recovery path and stops at the first timeout.
+
+1. **Before the first arm.** Check in the registry that `TdrDelay` is 10 s (the GUI default) and that
+   `HangRecoveryMode` is its released value. Check that the hang detector and the path of
+   `docs/design/hang-recovery.md` are armed. Keep the rollback ready: `EnableRingVmFlush` 0 and a restart.
+2. **Arm 1, bounded to three minutes, desktop only.** `EnableRingVmFlush` 1, `EnableVmidPool` 1, restart, and
+   DWM composing the desktop with no game. Read the start log for `gfx: VM flush on the ring
+   (EnableRingVmFlush), engine 1`, then let the desktop run and read the summary.
+3. **Arm 2, one interactive game session.** The Witcher 3 Remaster at a preset that already has a baseline, so
+   the frame rate is comparable. The session ends as soon as its goals are met.
+4. **What to read.** `wddm summary: ring VM flush on: <frames> frames, <same> of them on a root the VMID held`
+   next to `wddm summary: VMID pool: ... claims, ... reuses, ... busy, ... rule refusals`. `frames` must equal the
+   node-0 hardware submissions, `rule refusals` must stay 0, and `busy` must not grow against the gate-0 run.
+   `gfx: VMID %lu root 0x%llX flush -> %d` must be absent (no MMIO flush ran), and no GPU fault line and no
+   timeout report may appear.
+5. **Stop at the first timeout.** A `wddm: timeout` line, a 0x116 or a black screen ends the arm: cut the gate,
+   restart, and keep the log ring and the journal. A CP stuck in the acknowledge wait leaves the job's fence
+   unretired with the ring's read pointer inside the 29 dwords, which the timeout report's ring window shows.
+6. **Rollback.** `EnableRingVmFlush` 0 and a restart give the packet sequence of 0.7.216.24, byte for byte, which
+   the `gfx-vm-flush` gate holds. Nothing else has to be undone.
 
 ## 4. VM fault attribution
 
@@ -218,6 +319,10 @@ calls it for the VMID of the timed-out job and, in the register snapshot, for th
 | A fault latched on a recycled VMID | a fault nobody can attribute | the history of section 4 | `vmid-pool`: the history cases |
 | `EnableVmidPool` 0 is not 0.7.213.1 | a bisect switch that lies | the gate-0 path keeps the old predicate at the old point | `vmid-pool`: gate-0 identity against the old predicate (120 cases); `gfx-pipeline`, `gfx-retained` |
 | Fourteen VMIDs used up by many processes | `STATUS_DEVICE_BUSY`, the behaviour of 0.7.213.1 | nothing; F1 makes the wait cheap | the summary counts `busy` |
+| An acknowledge mask that is not the VMID's bit (gate 1) | a CP that waits forever: a TDR, and no engine reset (facts M53) | the emitted dwords are read back against the reference, per VMID | `gfx-vm-flush`, with `gfx-vm-flush-wrong-ack` as its negative control |
+| A stale acknowledge bit from this engine's previous invalidation (gate 1) | a job on a TLB that was never invalidated | the acknowledge-reset cycle between the request and the wait | `gfx-vm-flush`: the cycle's register, reference and mask |
+| The gfx ring and the CPU path on one invalidation engine (gate 1) | one path reads the other's acknowledge | one owner per engine (section 3) | `gfx-vm-flush`: the three engine numbers and the registers they address |
+| `EnableRingVmFlush` 0 is not 0.7.216.24 | a bisect switch that lies | the flush is a prefix and the frame is untouched code | `gfx-vm-flush`: the frame against a frozen 23-dword array |
 
 ## 6. Gate, counters, rollback
 
@@ -235,3 +340,21 @@ wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations
 ```
 
 `rule refusals` must be 0. Any other value is a defect. To roll back, set `EnableVmidPool` to 0 and restart.
+
+`EnableRingVmFlush` is a second REG_DWORD under the same key, read once in `GfxStart`. Absent or 0 is the MMIO
+flush ahead of the frame, dword for dword as 0.7.216.24. 1 puts the root write and the invalidation in the
+command stream (section 3). Neither the INF nor the release installer writes it, so a computer that has never
+been told otherwise has it off. The start log says:
+
+```
+gfx: VM flush on the ring (EnableRingVmFlush), engine 1
+gfx: VM flush by MMIO before the frame (EnableRingVmFlush 0), engine 17
+```
+
+and the summary adds one line:
+
+```
+wddm summary: ring VM flush on: %lu frames, %lu of them on a root the VMID held
+```
+
+With the gate off both numbers are 0. To roll back, set `EnableRingVmFlush` to 0 and restart.

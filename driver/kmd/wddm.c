@@ -2422,6 +2422,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                  vmid.Reuses, vmid.Busy, vmid.RuleRefusals);
         GuardLog("wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations", vmid.Flushes,
                  vmid.FlushVmids);
+        // Option (b): the root write and the invalidation as packets in front of the frame. With the gate off
+        // both numbers are 0 and the flush was MMIO ahead of every job, as before.
+        GuardLog("wddm summary: ring VM flush %s: %lu frames, %lu of them on a root the VMID held",
+                 vmid.RingFlushGate ? "on" : "off", vmid.RingFlushes, vmid.RingFlushSame);
     }
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,

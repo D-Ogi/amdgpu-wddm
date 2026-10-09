@@ -24,6 +24,39 @@
 #define BC250_ETIME	(-62)
 
 /*
+ * The GFXHUB invalidation engines, one owner each.
+ *
+ * A hub has 18 invalidation engines. Each engine has its own request, acknowledge and semaphore
+ * register, eng_distance apart (gfxhub_v2_0_init(), driver/amdgpu-import/gfxhub_v2_0.c:445-463;
+ * mmGCVM_INVALIDATE_ENG0_REQ/_ACK/_SEM and mmGCVM_INVALIDATE_ENG1_REQ give the distance). A
+ * request starts an invalidation and the engine sets one bit per VMID in its acknowledge register.
+ *
+ * Upstream gives each ring its own engine in amdgpu_gmc_allocate_vm_inv_eng() out of the 0x1FFF3
+ * mask (engines 2 and 3 belong to firmware), uses engine 17 for the CPU path of
+ * gmc_v10_0_flush_gpu_tlb(), and keeps adev->gmc.invalidate_lock for that CPU path alone. The
+ * reason for both is the same: a request and its acknowledge are the state of one engine, so two
+ * writers of one engine read each other's acknowledge.
+ *
+ * This driver has no engine allocator and no equivalent of invalidate_lock. The engines are
+ * therefore named here, once, and each owner has an engine of its own:
+ *
+ *   0     the SDMA0 paging stream, in SDMA packets (bc250_sdma_paging.c,
+ *         bc250_sdma_emit_vm_flush())
+ *   1     the gfx ring, in PM4 packets (bc250_gfx_emit_vm_flush(), the EnableRingVmFlush gate of
+ *         the miniport)
+ *   2, 3  firmware, as upstream
+ *   17    every CPU MMIO flush (bc250_gmc_flush_gpu_tlb()), which the miniport serializes under
+ *         one lock at PASSIVE_LEVEL
+ *
+ * A new owner takes a free engine of the upstream mask and gets a line here. Two owners on one
+ * engine need a lock that both obey, and no such lock exists.
+ */
+#define BC250_INV_ENG_SDMA_PAGING	0u
+#define BC250_INV_ENG_GFX_RING		1u
+#define BC250_INV_ENG_CPU		17u
+#define BC250_INV_ENG_COUNT		18u
+
+/*
  * The inputs that no register and no formula gives: addresses of buffers somebody else allocated,
  * and one policy bit.
  *

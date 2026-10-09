@@ -239,6 +239,36 @@ int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u
 int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
 			 u64 fence_addr, u64 seq, unsigned int flags);
 
+/* ---------------------------------------------------------------------------------------------
+ * The VM flush on the ring (option (b) of docs/design/gfx-submit-root-serialization.md)
+ *
+ * bc250_gfx_submit_job() above expects the caller to have pointed the VMID at the page-directory
+ * root and invalidated it by MMIO before the call (bc250_gmc_set_vmid_pd()). The two calls here do
+ * the same two steps in the command stream, where the CP runs them in ring order behind the
+ * previous job, which is what gmc_v10_0_emit_flush_gpu_tlb() and gfx_v10_0_ring_emit_vm_flush() do
+ * upstream.
+ *
+ * `eng` is the invalidation engine. It must be the gfx ring's own (BC250_INV_ENG_GFX_RING,
+ * bc250_gmc.h): the engine owns the request and the acknowledge, so an engine shared with the CPU
+ * path would wait on an acknowledge the CPU path produced.
+ * ------------------------------------------------------------------------------------------- */
+
+/* How many dwords bc250_gfx_emit_vm_flush() writes: two WRITE_DATA for the root pair, and the
+ * three packets of the invalidate request and its acknowledge wait. */
+#define BC250_GFX_VM_FLUSH_DWORDS	(5u + 5u + 5u + 7u + 7u)
+
+/* Emit into a gfx ring amdgpu_ring_alloc() has already reserved space in. root_phys is the page
+ * directory's physical address without AMDGPU_PTE_VALID, exactly as bc250_gmc_set_vmid_pd() takes
+ * it. Returns 0, or BC250_EINVAL with nothing written: a ring that is not a gfx ring, vmid 0 or 16
+ * and over, a root_phys that is not page aligned, an engine of 18 or over, a hub whose init() has
+ * not run, or a register offset outside the packet's 18-bit field. */
+int bc250_gfx_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng);
+
+/* bc250_gfx_submit_job() with the flush above in front of the frame. The frame itself, from
+ * PFP_SYNC_ME to SWITCH_BUFFER, is the same dwords as bc250_gfx_submit_job() writes. */
+int bc250_gfx_submit_job_vm(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			    u64 fence_addr, u64 seq, unsigned int flags, u64 root_phys, u32 eng);
+
 /* The first SET_SH_REG of COMPUTE_PGM_LO in a PM4 dword stream. *hi_written is 0 when the
  * packet stored only LO, which leaves COMPUTE_PGM_HI at whatever the preamble wrote.
  * *byte_addr is (hi << 40) | (lo << 8) when HI was in the packet, otherwise just lo << 8.

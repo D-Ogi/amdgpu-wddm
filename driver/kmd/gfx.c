@@ -10,6 +10,10 @@
 //     EnableVmidPool   REG_DWORD  0 = every WDDM job at VMID 1, a job of another root waits for the ring to drain
 //                                 (0.7.213.1). Absent or 1 = a VMID per page-table root from a pool (vmid_pool.h,
 //                                 docs/design/gfx-submit-root-serialization.md). Default 1 from 0.7.214.1.
+//     EnableRingVmFlush  REG_DWORD  1 = a job's root write and invalidation are packets in front of its frame
+//                                 (option (b) of docs/design/gfx-submit-root-serialization.md), on the gfx ring's
+//                                 own invalidation engine. Absent or 0 = the MMIO flush ahead of the frame, byte
+//                                 for byte as 0.7.216.24. Default 0.
 //
 // One escape (BC250_ESCAPE_RUN_GFX), four operations:
 //   PLAN    set up (allocates memory and zeroes it, the GART table untouched; reads registers), run stages 1..LastStage against the real registers
@@ -163,6 +167,13 @@ typedef struct _BC250_GFX {
     // and the FLUSH_TLB builder (GfxPagingLock, never GartLock) take to read them. Both resets of the table run
     // with GfxAccessClose done and GfxPagingLock held exclusively, so they need no VmidLock.
     BOOLEAN VmidPoolGate;           // EnableVmidPool, read once at GfxStart; absent = on
+    // Option (b) of docs/design/gfx-submit-root-serialization.md: the root change and the invalidation of a job
+    // whose root differs from the VMID's current root go into the command stream instead of MMIO ahead of it.
+    // Read once at GfxStart; absent or 0 = the MMIO flush of 0.7.216.24, byte for byte. The admission decision
+    // (Bc250VmidAdmit) does not change with the gate: only how the root reaches the register.
+    BOOLEAN RingVmFlushGate;        // EnableRingVmFlush, read once at GfxStart; absent = off
+    volatile LONG RingVmFlushes;    // jobs whose flush was emitted on the ring
+    volatile LONG RingVmFlushSame;  // of those, the ones whose VMID already held the root
     BOOLEAN VmidProbed;             // the bring-up read ran; once per device start, a teardown does not clear it
     USHORT VmidMembers;             // the pool: VMIDs 1 and 3..15 less what the bring-up read found programmed
     USHORT VmidExcluded;            // the VMIDs that read found programmed by something else
@@ -1409,7 +1420,7 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     // refuses to touch; a caller submitting at VMID 0 is submitting out of the driver's own GTT pages. A job
     // flushes its VMID on every submit, same root or not. Remembering the root misses a leaf change under the
     // same root, and the invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
-    if (Vmid != 0)
+    if (Vmid != 0 && !Gfx->RingVmFlushGate)
     {
         ProgressEnterInput(ProgressSiteVmFlush, (LONG)Vmid);
         result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
@@ -1421,7 +1432,19 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
         if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
             return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
-        // The table follows the register. A claim moves the previous tenant into the history first.
+    }
+    // EnableRingVmFlush: no MMIO root write and no CPU poll here. The same two steps are packets in front of the
+    // job frame (bc250_gfx_emit_vm_flush), so the CP runs them in ring order behind the previous job. The packets
+    // are written below, after the sequence number is published, because they are part of the frame.
+    else if (Vmid != 0)
+    {
+        if (Gfx->HotSubmitLog) GuardLog("gfx: VMID %lu root 0x%llX flush on the ring", Vmid, RootPhysical);
+        else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
+    }
+    if (Vmid != 0)
+    {
+        // The table follows the register, or with the ring gate the packet that writes it. A claim moves the
+        // previous tenant into the history first.
         if (decision.Claim)
         {
             KeAcquireSpinLock(&Gfx->VmidLock, &irql);
@@ -1469,7 +1492,23 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         else InterlockedExchangeAdd(&Gfx->HotSubmitLinesSkipped, (Identity != NULL) ? 2 : 1);
         // The VMID goes into the IB packet's control word (PACKET3_INDIRECT_BUFFER__VMID, bc250_gfx_emit_ib): the
         // CP fetches the IB, and the job makes every access, through this VMID's page tables.
-        result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
+        if (Gfx->RingVmFlushGate)
+        {
+            // The root pair and the invalidation go in front of the frame, on the gfx ring's own invalidation
+            // engine (BC250_INV_ENG_GFX_RING: the CPU path owns engine 17 and the paging stream engine 0, so no
+            // two writers share a request and an acknowledge). The root write is emitted whether or not the VMID
+            // already holds this root: the invalidation is needed on every job anyway, and an unconditional write
+            // keeps the register and the table in step after an emitter that refused.
+            result = bc250_gfx_submit_job_vm(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq,
+                                             AMDGPU_FENCE_FLAG_INT, RootPhysical, BC250_INV_ENG_GFX_RING);
+            if (result == 0)
+            {
+                InterlockedIncrement(&Gfx->RingVmFlushes);
+                if (!decision.Claim) InterlockedIncrement(&Gfx->RingVmFlushSame);
+            }
+        }
+        else
+            result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
     {
@@ -1586,6 +1625,9 @@ void GfxVmidCounters(_In_ const BC250_DEVICE* Device, _Out_ BC250_GFX_VMID_COUNT
     Counters->RuleRefusals = (ULONG)InterlockedCompareExchange(&gfx->VmidRuleRefusals, 0, 0);
     Counters->Flushes = (ULONG)InterlockedCompareExchange(&gfx->VmidFlushes, 0, 0);
     Counters->FlushVmids = (ULONG)InterlockedCompareExchange(&gfx->VmidFlushVmids, 0, 0);
+    Counters->RingFlushGate = gfx->RingVmFlushGate;
+    Counters->RingFlushes = (ULONG)InterlockedCompareExchange(&gfx->RingVmFlushes, 0, 0);
+    Counters->RingFlushSame = (ULONG)InterlockedCompareExchange(&gfx->RingVmFlushSame, 0, 0);
     GfxAccessRelease(Device);
 }
 
@@ -4003,6 +4045,11 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                              page-table root from a pool (vmid_pool.h). Until the bring-up read at the first
     //                              pool submit, the pool is VMID 1 alone.
     gfx->VmidPoolGate = (GuardReadSetting(L"EnableVmidPool", 1) != 0);
+    //   EnableRingVmFlush  REG_DWORD  1 = the root write and the invalidation of a job are packets in front of
+    //                                 its frame (option (b) of docs/design/gfx-submit-root-serialization.md).
+    //                                 Absent or 0 = the MMIO flush of 0.7.216.24 ahead of the frame, byte for
+    //                                 byte. Independent of EnableVmidPool; both on is the recommended pair.
+    gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 0) != 0);
     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
     KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
@@ -4015,6 +4062,8 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     GuardLog("gfx: ready, GPU submission %s, paging node %s, hot submit log %s", gfx->SubmitGate ? "allowed" : "off",
              gfx->PagingGate ? "allowed" : "off", gfx->HotSubmitLog ? "on" : "off");
     GuardLog("gfx: VMID pool %s", gfx->VmidPoolGate ? "on (EnableVmidPool)" : "off (EnableVmidPool 0): every job at VMID 1");
+    GuardLog("gfx: VM flush %s", gfx->RingVmFlushGate ? "on the ring (EnableRingVmFlush), engine 1" :
+             "by MMIO before the frame (EnableRingVmFlush 0), engine 17");
     return STATUS_SUCCESS;
 }
 
