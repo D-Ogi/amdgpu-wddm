@@ -107,6 +107,13 @@ struct Allocation {
 
 // A kernel argument buffer of the pool. The buffer stays in the pool after the launch and is
 // used again when its fence retires, so a second run of the same work allocates nothing new.
+//
+// The invariant of the two flags: `busy` with `fence` 0 means a thread holds this buffer and
+// has not submitted it yet, and no other thread may take it. kernarg_acquire therefore clears
+// `fence` on every way out, and kernarg_release writes the fence value of the submission (or 0,
+// which frees the buffer again when the launch failed). A buffer whose retired fence value
+// stayed while a thread held it would read as free for a second thread, and the two would pack
+// their arguments into one buffer.
 struct KernargBuffer {
     bc250hsa_mem mem{};
     uint64_t     fence = 0;

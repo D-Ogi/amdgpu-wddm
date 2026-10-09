@@ -61,7 +61,11 @@ hipError_t kernarg_acquire(Guard& guard, uint32_t bytes, uint32_t alignment,
             continue;   // another thread already waits for this one
         }
         if (!buffer.busy) {
+            // Taking a buffer clears its fence value, so that the rule below sees it as taken
+            // and not submitted. A buffer that is not busy carries no fence value anyway; the
+            // assignment is here so that one line, and not two places, states the rule.
             buffer.busy = true;
+            buffer.fence = 0;
             *out = &buffer;
             return hipSuccess;
         }
@@ -73,7 +77,12 @@ hipError_t kernarg_acquire(Guard& guard, uint32_t bytes, uint32_t alignment,
             continue;
         }
         if (buffer.fence <= retired) {
+            // The work of this buffer has retired, so the buffer is free. Clear the fence value
+            // with the same assignment as above: a buffer whose old value stayed would read as
+            // free for a second thread as well, and both of them would pack their arguments
+            // into it.
             buffer.busy = true;
+            buffer.fence = 0;
             *out = &buffer;
             return hipSuccess;
         }
@@ -116,6 +125,7 @@ hipError_t kernarg_acquire(Guard& guard, uint32_t bytes, uint32_t alignment,
         return waited;
     }
     oldest->busy = true;
+    oldest->fence = 0;   // taken and not submitted, as every other way out of this function
     *out = oldest;
     return hipSuccess;
 }
