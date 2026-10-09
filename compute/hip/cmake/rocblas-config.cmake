@@ -2,9 +2,11 @@
 #
 # Why it exists: llama.cpp's ggml-hip backend requires the package
 # (ggml/src/ggml-hip/CMakeLists.txt:48) and then never includes a rocBLAS header and never calls
-# a rocBLAS function. MEASURED on llama.cpp b86d2f07: the only occurrence of the name "rocblas"
-# in ggml/src is a comment in ggml-cuda/mmq.cu:390. The requirement is the historical shape of
-# the ROCm build, where hipBLAS sits on rocBLAS.
+# a rocBLAS function. MEASURED on llama.cpp b86d2f07: in the C and C++ sources of ggml/src the
+# name "rocblas" occurs once, in a comment at ggml-cuda/mmq.cu:390; the other two occurrences are
+# in the CMake file itself, the find_package above and the link line at
+# ggml/src/ggml-hip/CMakeLists.txt:144. The requirement is the historical shape of the ROCm build,
+# where hipBLAS sits on rocBLAS.
 #
 # This package therefore states the truth: rocBLAS is found, it carries no library and no header,
 # and nothing links it. A target that ever does call a rocBLAS function will fail to link, which
