@@ -76,9 +76,19 @@ each one the caller is about to read bytes or addresses that open work owns.
 | `max_hold_us` | how long an open buffer may hold a dispatch | 1000 |
 | `light_barrier` | the level-0 and level-1 invalidate between two dispatches of one buffer, in place of the full acquire | 0 |
 
-Both defaults are the conservative value: neither has run on the hardware. The library reads no
-environment variable, so these come from the caller. `runtime/` reads `BC250_HIP_BATCH`,
-`BC250_HIP_BATCH_MAX`, `BC250_HIP_BATCH_HOLD_US` and `BC250_HIP_BARRIER` and sets them.
+The library's own defaults stay the conservative ones, because the library has no policy of its
+own (rule 6 of the header): a caller that says nothing gets the behaviour of build 1. The policy
+of the product comes from `runtime/`, which reads `BC250_HIP_BATCH`, `BC250_HIP_BATCH_MAX`,
+`BC250_HIP_BATCH_HOLD_US`, `BC250_HIP_BARRIER` and `BC250_HIP_PM4_STATE_CACHE` and sets it. Since
+the lab session of 2026-10-09 (`evidence/m16/perf-2026-10-09`) those defaults are batching on, a
+cap of 32 and the light barrier.
+
+Inside one buffer, a dispatch writes only the compute state that differs from the one before it:
+72 dwords a dispatch become 23 for the shape a real launch has. The first dispatch of every buffer
+is complete, because another context's buffer runs between two of ours, and
+`BC250HSA_DISPATCH_FULL_STATE` turns the whole mechanism off for a comparison. Design section 8.8
+holds the rules. `test_pm4` section 2c states the dwords of each case and carries the negative
+control that a field which did change is written.
 
 `BC250HSA_ACQUIRE_GCR_CNTL_LIGHT` in `bc250hsa/pm4_regs.h` names the bits of the light barrier and
 the Mesa file and line each one comes from, with the bits it drops stated: `GL2_INV`, `GL2_WB`,
@@ -157,7 +167,7 @@ under a 150-second bound, and writes `result.json`, the driver log tail and the 
 it. The bound covers the whole session, from the first call of the release client to the last line of
 the driver log tail: every single call is bounded by the time that is left, so the printed bound is
 the real one. The record ends with the seven pass criteria of section 6.3, each one `pass`, `FAIL` or
-`unknown`, so a reader does not have to judge. It refuses to start at or above 87 C and when it
+`unknown`, so a reader does not have to judge. It refuses to run at or above 87 C and when it
 cannot read Tctl at all, and after a timeout or a lost device it stops the session and submits
 nothing again. The kit that drives it, the
 push list and the evidence to pull are in `scratch/m16-hip/lab/` of the workspace, which stays

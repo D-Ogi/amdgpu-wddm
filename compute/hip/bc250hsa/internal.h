@@ -194,12 +194,43 @@ typedef struct bc250hsa_pm4_writer {
     int       overflow;
 } bc250hsa_pm4_writer;
 
+/* The compute state that the previous dispatch of the same indirect buffer left in the
+ * hardware. A SET_SH_REG write is persistent register state: DISPATCH_DIRECT does not
+ * clear it, so a second dispatch in the same buffer has to write only the registers
+ * whose value differs. Everything that never differs (the three start registers, the
+ * shader checksum, the six request-control registers, the coherency start delay, the
+ * two compute-unit masks, the scratch ring size and the resource limits) is written by
+ * the first dispatch of the buffer and by nothing after it.
+ *
+ * The cache belongs to one indirect buffer and to nothing wider. Another context's
+ * buffer runs between two of ours, and this build programs no state at the ring frame,
+ * so the first dispatch of every buffer writes the whole sequence. `valid` is what
+ * says whether anything may be left out, and submit.c resets it when it opens a buffer.
+ *
+ * A NULL cache, and BC250HSA_DISPATCH_FULL_STATE, both mean "write everything": the
+ * golden single-dispatch stream of test_pm4.c goes through the NULL path, and the flag
+ * is the switch a lab arm turns the whole mechanism off with. */
+typedef struct bc250hsa_pm4_state {
+    uint32_t valid;                            /* 0: nothing is known, write it all */
+    uint32_t pgm_lo;
+    uint32_t pgm_hi;
+    uint32_t rsrc1;
+    uint32_t rsrc2;
+    uint32_t rsrc3;
+    uint32_t block[3];
+    uint32_t user_sgpr_count;
+    uint32_t user_sgpr[BC250HSA_MAX_USER_SGPR];
+} bc250hsa_pm4_state;
+
 void bc250hsa_pm4_writer_init(bc250hsa_pm4_writer* w, uint32_t* dwords, uint32_t capacity,
                               uint32_t count);
 void bc250hsa_pm4_ib_head(bc250hsa_pm4_writer* w, const bc250hsa_pm4_env* env);
-/* first 1: no barrier in front, because the head's acquire already covers it. */
+/* first 1: no barrier in front, because the head's acquire already covers it, and the
+ * whole compute state is written whatever `state` holds.
+ * state NULL: write the whole compute state for every dispatch, as build 1 did. */
 bc250hsa_status bc250hsa_pm4_ib_append(bc250hsa_pm4_writer* w, const bc250hsa_dispatch* dispatch,
-                                       const bc250hsa_pm4_env* env, int first);
+                                       const bc250hsa_pm4_env* env, int first,
+                                       bc250hsa_pm4_state* state);
 bc250hsa_status bc250hsa_pm4_ib_tail(bc250hsa_pm4_writer* w, const bc250hsa_pm4_env* env);
 
 #endif /* BC250HSA_INTERNAL_H */

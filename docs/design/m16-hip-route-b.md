@@ -905,6 +905,11 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
 #define BC250HSA_DISPATCH_LIGHT_BARRIER 0x20u /* between two dispatches of one batch, emit
                                                * the level-0 and level-1 invalidate only.
                                                * Section 8.1 */
+#define BC250HSA_DISPATCH_FULL_STATE 0x40u /* write the whole compute state for every
+                                            * dispatch of a batch, not only the registers
+                                            * that changed since the one before it.
+                                            * Section 8.8; the switch a lab arm compares
+                                            * against */
 
 typedef struct bc250hsa_dispatch {
     uint32_t struct_bytes;
@@ -2017,6 +2022,20 @@ A buffer is submitted at the first of these:
 | the dword cap (one ring slot, less the completion write) | the buffer must fit the slot |
 | the hold time cap (default 1000 us) | see the honest note below |
 
+There is a sixth one, and it is not in layer 1 at all: the kernel argument pool of layer 2
+(`kKernargPoolMax` in `runtime/hip_launch.cpp`, 64 buffers). A kernel argument buffer may not be
+written again until the dispatch that reads it has retired, so dispatch 65 of a run waits for the
+oldest buffer, and a wait for a value an open buffer has promised is the first flush point of the
+table. MEASURED on unit A (`evidence/m16/perf-2026-10-09`): at a dispatch cap of 256 with the
+time cap effectively off, 2000 dispatches became exactly 32 submissions and 1000 chained dispatches
+exactly 16, which is 2000/64 and 1000/64 rounded up, and the wait count of each arm equals its
+submission count. **That pool, and not the dword cap, is what makes a dispatch cap above 64
+unreachable today.** The dword cap is nowhere near it: one dispatch and its barrier is 72 dwords
+without the state cache of section 8.8 and 23 with it, so a 65536-byte ring slot holds 227 or 711
+of them. The default cap of 32 is below the pool and the pool therefore never binds. A cap above 64
+would need the pool raised with it, which is 4096 bytes of host-visible memory per entry and a
+decision nothing yet needs.
+
 A batch trades the cost of a submission against the time to the first instruction: while the host
 fills a buffer, the device has nothing of that buffer to run. For a program that runs ahead of the
 device, which is what a decode loop does, that is free. For a program that sends one kernel and waits
@@ -2071,15 +2090,47 @@ arm of section 8.7 is what may change the default, and nothing else.
 
 | Switch | Values | Default |
 |---|---|---|
-| `BC250_HIP_BATCH` | `0`, `1` | `0`, one submission per dispatch, exactly build 1 |
+| `BC250_HIP_BATCH` | `0`, `1` | `1`, several dispatches in one indirect buffer |
 | `BC250_HIP_BATCH_MAX` | 1 to 256 dispatches | 32 when batching is on |
 | `BC250_HIP_BATCH_HOLD_US` | microseconds | 1000 |
-| `BC250_HIP_BARRIER` | `full`, `light` | `full` |
+| `BC250_HIP_BARRIER` | `full`, `light` | `light` |
+| `BC250_HIP_PM4_STATE_CACHE` | `0`, `1` | `1`, write only the state that changed |
 
-Both defaults are the conservative value, because neither has run on the hardware. Layer 1 reads no
-environment variable: `hip_device.cpp` reads these four and calls `bc250hsa_batch_policy_set`, so the
-policy stays the caller's (header rule 6), and a program that embeds layer 1 directly sets the same
-structure itself.
+The first two defaults were the conservative value until the hardware had spoken. It has
+(`evidence/m16/perf-2026-10-09`, facts M850 to M854): batching with the light barrier is exact over
+two chains of 1000 dependent kernels, 2.2 times faster than build 1 on the `launch` line and 3.8
+times faster on the `chain` line, and it cuts submissions per dispatch from 1.000 to 0.032. The
+defaults are therefore the measured arm P3 of that session. `BC250_HIP_BATCH=0` with
+`BC250_HIP_BARRIER=full` is exactly build 1, and `hipbench --batch 0 --barrier full` is the control
+arm the build gate runs on every build.
+
+Layer 1 reads no environment variable: `hip_device.cpp` reads these five and calls
+`bc250hsa_batch_policy_set`, so the policy stays the caller's (header rule 6), and a program that
+embeds layer 1 directly sets the same structure itself. The state cache is not part of the policy
+structure, because it is a property of one indirect buffer and not of the device: it is the
+`BC250HSA_DISPATCH_FULL_STATE` flag of a dispatch, and `BC250_HIP_PM4_STATE_CACHE=0` is what sets
+it on every dispatch of a process.
+
+### 8.6a What the measurement cost, and the one line it did not explain
+
+Two numbers of that session are worth carrying in the design, because both are easy to read wrongly.
+
+- **The gain is host time, not GPU time.** The off-GPU cost of a dispatch fell from 14.6-16.5 us
+  to 3.8 us on the chain line. For a 7-billion-parameter model that is not the first bottleneck:
+  it is about 6.2 ms of one processor core a token, which batching cuts to 1.5 ms. It decides the
+  result for a small model, a long kernel chain, or a build that wants the processor for its own
+  host side.
+- **One line got slower, and it is not in this code path.** A 4 KB device-to-host `hipMemcpy` is
+  19.2-19.4 us with batching off and 28.8-28.9 us with it on, while the same arms' 1 MiB and
+  64 MiB device-to-host copies are the same to three digits in all six arms. The host path of a
+  copy is one function per direction and it does not look at the policy: one `bc250hsa_flush`
+  (which returns at once with no buffer open), one lookup and one `memcpy`. The host-to-device
+  line of the same arms is 0.264-0.333 us in every arm, which bounds that whole shared path well
+  under one microsecond, and that path does not move with the policy. `test_hip_batch` section 5
+  asserts the flush, submission and wait counts of a copy are equal under both policies. So the
+  difference is a read rate of the write-combining mapping (203 MiB/s against 135 MiB/s at 4 KB),
+  not a fixed host cost, and what sets that rate is not established. The arm that decides it is in
+  `scratch/m16-hip/lab/perf-README.md`: the same copy line with no kernel phase in front of it.
 
 ### 8.7 What is measured, and what the lab must answer
 
@@ -2090,9 +2141,50 @@ an already retired stream, and an event round. It reads the submission counters 
 answers that question, which is why those two calls exist.
 
 The host tests prove the harness and the mechanism, and they cannot prove the gain: the mock backend
-runs no instruction. What the lab must answer is in `scratch/m16-hip/lab/perf-README.md`: four arms,
-each under three minutes, batching off and on and the barrier full and light, with exact results as the
-pass criterion in every arm and the submission count as the measurement.
+runs no instruction. The lab answered it on 2026-10-09 in six arms of 3.4 to 3.8 s each
+(`evidence/m16/perf-2026-10-09`, facts M850 to M854), and section 8.6 states the defaults that
+follow. What is left for the next slot is in `scratch/m16-hip/lab/perf-README.md`: the state cache
+of section 8.8 against the switch that turns it off, a cap of 64 under it, and the copy line of
+section 8.6a with no kernel phase in front of it.
+
+### 8.8 The compute state a dispatch repeats
+
+A `SET_SH_REG` write is persistent register state. `DISPATCH_DIRECT` does not clear it, and this
+build programs nothing at the ring frame, so inside one indirect buffer the second dispatch of the
+same kernel does not have to say the same thing again. Build 1 said it anyway, 64 dwords per
+dispatch, because build 1 had one dispatch per buffer and there was nothing to repeat.
+
+`bc250hsa_pm4_ib_append` now takes a `bc250hsa_pm4_state` cache (`bc250hsa/internal.h`, not public)
+and writes only what differs from the dispatch before it in the same buffer. What is in the cache:
+the program address, the two resource registers, RSRC3, the workgroup size and the user data run.
+What is left out of every dispatch but the first: the three start registers, the shader checksum,
+the six request-control registers, the coherency start delay, the two compute-unit masks, the
+scratch ring size and the resource limits, none of which this build ever varies.
+
+Three rules, and each one is a test in `tests/host/test_pm4.c` section 2c:
+
+1. **The first dispatch of every buffer is complete.** Another context's buffer runs between two of
+   ours, so nothing may be assumed across a submission. `submit.c` clears the cache when it opens
+   a buffer, and `bc250hsa_pm4_build_batch` starts a fresh one per call.
+2. **A dispatch that overflowed the buffer did not write its dwords, so it does not touch the
+   cache.** `submit.c` appends it again into the next buffer with `first` set.
+3. **A field that changed is written.** This is the negative control, one changed field at a time:
+   the block, the kernel argument pointer, the local memory a dispatch asks for, and a second
+   kernel. A cache that skipped any of them would dispatch a kernel with the previous dispatch's
+   value, which is the whole risk of the mechanism.
+
+MEASURED on the development machine, by the pure builder with no device in it: one dispatch and its
+barrier is **72 dwords** without the cache and **23** with it, for the shape a real dispatch has (the
+same kernel, the same block, a new kernel argument buffer each time, which is what layer 2 hands
+out). A 65536-byte command ring slot holds 16368 usable dwords, so it holds 227 such dispatches
+without the cache and 711 with it. Neither number is the ceiling that binds: the kernel argument
+pool of section 8.4 closes a buffer at 64. What the cache buys is therefore not a deeper cap. It is
+3.1 times fewer dwords for the host to write and for the command processor to read on every
+dispatch after the first, inside the cap we already use.
+
+`BC250HSA_DISPATCH_FULL_STATE` turns it off, dispatch by dispatch, and the stream is then dword for
+dword the one the builder wrote before this section existed. That flag is the control arm, on the
+development machine and on the lab.
 
 ---
 

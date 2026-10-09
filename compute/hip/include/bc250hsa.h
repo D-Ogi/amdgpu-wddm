@@ -436,6 +436,11 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
 #define BC250HSA_DISPATCH_LIGHT_BARRIER 0x20u /* between two dispatches of one batch, emit
                                                * the level-0 and level-1 invalidate only.
                                                * Section 8.1 */
+#define BC250HSA_DISPATCH_FULL_STATE 0x40u /* write the whole compute state for every
+                                            * dispatch of a batch, not only the registers
+                                            * that changed since the one before it.
+                                            * Section 8.8; the switch a lab arm compares
+                                            * against */
 
 typedef struct bc250hsa_dispatch {
     uint32_t struct_bytes;

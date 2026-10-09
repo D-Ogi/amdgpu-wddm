@@ -274,11 +274,36 @@ bc250hsa_status bc250hsa_pm4_ib_tail(writer* w, const bc250hsa_pm4_env* env)
     return BC250HSA_OK;
 }
 
+/* Does this dispatch need the run of user data registers written again? A different
+ * count, or any different value, and the whole run goes out: one SET_SH_REG names
+ * consecutive registers, so there is nothing to gain from writing part of it. */
+static int user_sgprs_differ(const bc250hsa_pm4_state* state,
+                             const bc250hsa_user_sgpr_plan* plan)
+{
+    uint32_t i;
+
+    if (state->user_sgpr_count != plan->count) {
+        return 1;
+    }
+    for (i = 0; i < plan->count; i++) {
+        if (state->user_sgpr[i] != plan->value[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Packets 3 to 17 of the stream: everything that belongs to one dispatch, the head of
  * the indirect buffer and the completion write apart, with the barrier of section 8.1 in
- * front of every dispatch but the first. */
+ * front of every dispatch but the first.
+ *
+ * With a `state` cache (section 8.8 of the design) a dispatch that follows another one
+ * in the same buffer writes only the registers whose value changed. The first dispatch
+ * of a buffer, a NULL cache and BC250HSA_DISPATCH_FULL_STATE all write the whole
+ * sequence, so the stream of one dispatch by itself is unchanged, dword for dword. */
 bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispatch,
-                                       const bc250hsa_pm4_env* env, int first)
+                                       const bc250hsa_pm4_env* env, int first,
+                                       bc250hsa_pm4_state* state)
 {
     const bc250hsa_kernel*  k;
     bc250hsa_user_sgpr_plan plan;
@@ -287,6 +312,10 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
     uint32_t                values[4];
     uint32_t                rsrc2;
     uint32_t                initiator;
+    uint32_t                pgm_lo;
+    uint32_t                pgm_hi;
+    int                     full;
+    uint32_t                i;
 
     if (w == NULL || dispatch == NULL || env == NULL) {
         return BC250HSA_EINVAL;
@@ -303,42 +332,58 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
         return status;
     }
 
+    /* The whole sequence goes out when the hardware state behind this dispatch is not
+     * known: the first dispatch of the buffer, a caller that keeps no cache, and the
+     * switch that turns the mechanism off. */
+    full = first || state == NULL || state->valid == 0u ||
+           (env->flags & BC250HSA_DISPATCH_FULL_STATE) != 0u;
+
     if (!first) {
         build_inter_dispatch_barrier(w, env);
     }
 
-    /* 3 to 5. COMPUTE_START_X/Y/Z, the shader checksum and COMPUTE_REQ_CTRL with the
-     *    five registers behind it, all zero, as the reference writes them. */
-    set_sh(w, BC250HSA_REG_COMPUTE_START_X, zero, 3u);
-    set_sh1(w, BC250HSA_REG_COMPUTE_SHADER_CHKSUM, 0u);
-    set_sh(w, BC250HSA_REG_COMPUTE_REQ_CTRL, zero, 6u);
+    if (full) {
+        /* 3 to 5. COMPUTE_START_X/Y/Z, the shader checksum and COMPUTE_REQ_CTRL with
+         *    the five registers behind it, all zero, as the reference writes them.
+         *    Constant for the life of the buffer, so only the first dispatch of it
+         *    writes them. */
+        set_sh(w, BC250HSA_REG_COMPUTE_START_X, zero, 3u);
+        set_sh1(w, BC250HSA_REG_COMPUTE_SHADER_CHKSUM, 0u);
+        set_sh(w, BC250HSA_REG_COMPUTE_REQ_CTRL, zero, 6u);
 
-    /* 6. The one uconfig write of the sequence, and the one packet with no
-     *    shader-type bit. A performance knob of ACQUIRE_MEM. */
-    put(w, BC250HSA_PACKET3(BC250HSA_PKT3_SET_UCONFIG_REG, 1u));
-    put(w, BC250HSA_REG_CP_COHER_START_DELAY);
-    put(w, BC250HSA_COHER_START_DELAY);
+        /* 6. The one uconfig write of the sequence, and the one packet with no
+         *    shader-type bit. A performance knob of ACQUIRE_MEM. */
+        put(w, BC250HSA_PACKET3(BC250HSA_PKT3_SET_UCONFIG_REG, 1u));
+        put(w, BC250HSA_REG_CP_COHER_START_DELAY);
+        put(w, BC250HSA_COHER_START_DELAY);
 
-    /* 7 and 8. Every compute unit of all four shader engines, through the command
-     *    processor's own mask path. The first two packets to drop when the command
-     *    processor refuses the opcode (open question 2 of the design). */
-    if ((env->flags & BC250HSA_DISPATCH_NO_CU_MASK) == 0u) {
-        put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
-        put(w, (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE0);
-        put(w, 0xFFFFFFFFu);
-        put(w, 0xFFFFFFFFu);
-        put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
-        put(w, (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE2);
-        put(w, 0xFFFFFFFFu);
-        put(w, 0xFFFFFFFFu);
+        /* 7 and 8. Every compute unit of all four shader engines, through the command
+         *    processor's own mask path. The first two packets to drop when the command
+         *    processor refuses the opcode (open question 2 of the design). */
+        if ((env->flags & BC250HSA_DISPATCH_NO_CU_MASK) == 0u) {
+            put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
+            put(w,
+                (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE0);
+            put(w, 0xFFFFFFFFu);
+            put(w, 0xFFFFFFFFu);
+            put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
+            put(w,
+                (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE2);
+            put(w, 0xFFFFFFFFu);
+            put(w, 0xFFFFFFFFu);
+        }
     }
 
     /* 9. COMPUTE_PGM_LO and _HI: the entry address shifted right by 8, and bits
      *    47:40 of the byte address. The high half is not address32_hi; a build that
      *    kept a preamble value of 0x80 fetched a shader at the wrong address. */
-    values[0] = (uint32_t)(k->entry_va >> 8);
-    values[1] = (uint32_t)(k->entry_va >> 40) & 0xFFu;
-    set_sh(w, BC250HSA_REG_COMPUTE_PGM_LO, values, 2u);
+    pgm_lo = (uint32_t)(k->entry_va >> 8);
+    pgm_hi = (uint32_t)(k->entry_va >> 40) & 0xFFu;
+    if (full || state->pgm_lo != pgm_lo || state->pgm_hi != pgm_hi) {
+        values[0] = pgm_lo;
+        values[1] = pgm_hi;
+        set_sh(w, BC250HSA_REG_COMPUTE_PGM_LO, values, 2u);
+    }
 
     /* 10. RSRC1 unchanged, RSRC2 with the computed LDS_SIZE written into bits 23:15.
      *     Decision 3 of section 2: the command processor normally writes that field
@@ -350,27 +395,42 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
                                       dispatch->launch.dynamic_group_bytes) &
               BC250HSA_RSRC2_LDS_SIZE_MASK)
              << BC250HSA_RSRC2_LDS_SIZE_SHIFT;
-    values[0] = k->compute_pgm_rsrc1;
-    values[1] = rsrc2;
-    set_sh(w, BC250HSA_REG_COMPUTE_PGM_RSRC1, values, 2u);
+    if (full || state->rsrc1 != k->compute_pgm_rsrc1 || state->rsrc2 != rsrc2) {
+        values[0] = k->compute_pgm_rsrc1;
+        values[1] = rsrc2;
+        set_sh(w, BC250HSA_REG_COMPUTE_PGM_RSRC1, values, 2u);
+    }
 
     /* 11. RSRC3, gfx10 and later, copied unchanged. */
-    set_sh1(w, BC250HSA_REG_COMPUTE_PGM_RSRC3, k->compute_pgm_rsrc3);
+    if (full || state->rsrc3 != k->compute_pgm_rsrc3) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_PGM_RSRC3, k->compute_pgm_rsrc3);
+    }
 
     /* 12. No scratch in this build, so COMPUTE_TMPRING_SIZE is 0. A spilling kernel
-     *     was already refused by bc250hsa_pm4_check_dispatch. */
-    set_sh1(w, BC250HSA_REG_COMPUTE_TMPRING_SIZE, 0u);
+     *     was already refused by bc250hsa_pm4_check_dispatch. Constant, as 3 to 8 are. */
+    if (full) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_TMPRING_SIZE, 0u);
+    }
 
     /* 13. The workgroup size in work items. */
-    set_sh(w, BC250HSA_REG_COMPUTE_NUM_THREAD_X, dispatch->launch.block, 3u);
+    if (full || state->block[0] != dispatch->launch.block[0] ||
+        state->block[1] != dispatch->launch.block[1] ||
+        state->block[2] != dispatch->launch.block[2]) {
+        set_sh(w, BC250HSA_REG_COMPUTE_NUM_THREAD_X, dispatch->launch.block, 3u);
+    }
 
-    /* 14. The user data plan, one packet for the whole run of registers. */
-    if (plan.count != 0u) {
+    /* 14. The user data plan, one packet for the whole run of registers. The kernel
+     *     argument pointer is in it, and layer 2 hands out another kernel argument
+     *     buffer per launch, so in practice this is the one packet that does go out
+     *     for every dispatch. */
+    if (plan.count != 0u && (full || user_sgprs_differ(state, &plan))) {
         set_sh(w, BC250HSA_REG_COMPUTE_USER_DATA_0, plan.value, plan.count);
     }
 
-    /* 15. COMPUTE_RESOURCE_LIMITS, 0 as the reference writes it. */
-    set_sh1(w, BC250HSA_REG_COMPUTE_RESOURCE_LIMITS, 0u);
+    /* 15. COMPUTE_RESOURCE_LIMITS, 0 as the reference writes it. Constant. */
+    if (full) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_RESOURCE_LIMITS, 0u);
+    }
 
     /* 16. The dispatch itself, in workgroups. CS_W32_EN comes from the kernel and not
      *     from the measured control dispatch, whose shader is wave64: this is the one
@@ -402,6 +462,24 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
     if (w->overflow) {
         return BC250HSA_OK;
     }
+    /* The dwords are in the buffer, so the hardware state they leave behind is now
+     * known. A dispatch that overflowed wrote nothing, and submit.c appends it again
+     * into the next buffer with `first` set, so the cache must not be touched above. */
+    if (state != NULL) {
+        state->pgm_lo = pgm_lo;
+        state->pgm_hi = pgm_hi;
+        state->rsrc1 = k->compute_pgm_rsrc1;
+        state->rsrc2 = rsrc2;
+        state->rsrc3 = k->compute_pgm_rsrc3;
+        state->block[0] = dispatch->launch.block[0];
+        state->block[1] = dispatch->launch.block[1];
+        state->block[2] = dispatch->launch.block[2];
+        state->user_sgpr_count = plan.count;
+        for (i = 0; i < plan.count; i++) {
+            state->user_sgpr[i] = plan.value[i];
+        }
+        state->valid = 1u;
+    }
     bc250hsa_count_add(BC250HSA_C_DISPATCHES_BUILT, 1u);
     return BC250HSA_OK;
 }
@@ -410,9 +488,10 @@ bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, ui
                                          const bc250hsa_pm4_env* env, uint32_t* dwords,
                                          uint32_t dword_capacity, uint32_t* dwords_written)
 {
-    writer          w;
-    bc250hsa_status status;
-    uint32_t        i;
+    writer             w;
+    bc250hsa_pm4_state state;
+    bc250hsa_status    status;
+    uint32_t           i;
 
     if (dispatches == NULL || env == NULL || dwords == NULL || dwords_written == NULL ||
         count == 0u) {
@@ -430,10 +509,11 @@ bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, ui
     }
 
     bc250hsa_pm4_writer_init(&w, dwords, dword_capacity, 0u);
+    memset(&state, 0, sizeof(state));
 
     bc250hsa_pm4_ib_head(&w, env);
     for (i = 0; i < count; i++) {
-        status = bc250hsa_pm4_ib_append(&w, &dispatches[i], env, i == 0u);
+        status = bc250hsa_pm4_ib_append(&w, &dispatches[i], env, i == 0u, &state);
         if (status != BC250HSA_OK) {
             return status;
         }

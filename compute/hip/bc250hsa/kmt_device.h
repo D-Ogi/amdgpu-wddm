@@ -99,6 +99,10 @@ struct bc250hsa_device {
     uint32_t batch_count;             /* dispatches in the open buffer */
     uint64_t batch_fence_value;       /* the value its one completion write will hold */
     uint64_t batch_opened_us;         /* bc250hsa_now_us() when it was opened */
+    /* The compute state the last dispatch of the open buffer left in the hardware, so
+     * that the next one writes only what changed (section 8.8). It is cleared when a
+     * buffer opens, because another context's buffer runs between two of ours. */
+    bc250hsa_pm4_state batch_state;
 
     uint8_t caps[BC250HSA_CAPS_BYTES];
     int     caps_valid;

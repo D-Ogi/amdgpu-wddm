@@ -487,6 +487,9 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
             dev->batch_fence_value = dev->fence_last_submitted + 1u;
             dev->batch_count = 0;
             dev->batch_opened_us = bc250hsa_now_us();
+            /* A new buffer knows nothing about the hardware's register state: another
+             * context's work runs between two of our submissions. */
+            memset(&dev->batch_state, 0, sizeof(dev->batch_state));
             slot_host =
                 (uint32_t*)((uint8_t*)dev->ring.host + (size_t)slot * dev->ring_slot_bytes);
             fill_env(dev, &env, dispatch->flags, dev->batch_fence_value);
@@ -504,7 +507,8 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
                                 (size_t)dev->batch_slot * dev->ring_slot_bytes);
         fill_env(dev, &env, dispatch->flags, dev->batch_fence_value);
         bc250hsa_pm4_writer_init(&w, slot_host, batch_dword_cap(dev), dev->batch_dwords);
-        result = bc250hsa_pm4_ib_append(&w, dispatch, &env, dev->batch_count == 0u);
+        result = bc250hsa_pm4_ib_append(&w, dispatch, &env, dev->batch_count == 0u,
+                                        &dev->batch_state);
         if (result != BC250HSA_OK) {
             bc250hsa_count_add(BC250HSA_C_SUBMISSIONS_REFUSED, 1u);
             return result;

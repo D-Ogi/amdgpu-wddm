@@ -472,15 +472,22 @@ static void check_batch(void)
     CHECK_STATUS(bc250hsa_pm4_build_batch(NULL, 1u, &env, batch, BATCH_MAX, &batch_count),
                  BC250HSA_EINVAL);
     /* A capacity that holds two dispatches and not three is BC250HSA_ENOMEM and no
-     * half-written buffer: submit.c reads the overflow and opens another buffer. */
+     * half-written buffer: submit.c reads the overflow and opens another buffer. The
+     * capacity is measured and not computed from the single-dispatch length, because a
+     * dispatch that repeats the one before it is shorter than the first one of the
+     * buffer (section 8.8): exactly the length of the two-dispatch stream leaves no room
+     * for a third. */
     {
         bc250hsa_counters before;
         bc250hsa_counters after;
+        uint32_t          two_count = 0;
 
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &two_count),
+                     BC250HSA_OK);
+        CHECK(two_count > 0u && two_count < 3u * single_count);
         before.struct_bytes = (uint32_t)sizeof(before);
         CHECK_STATUS(bc250hsa_counters_read(&before), BC250HSA_OK);
-        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, 2u * single_count,
-                                              &batch_count),
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, two_count, &batch_count),
                      BC250HSA_ENOMEM);
         /* And the dispatch the buffer had no room for is not counted as built. submit.c
          * appends it again into the next buffer, so a count here would count it twice,
@@ -488,6 +495,337 @@ static void check_batch(void)
         after.struct_bytes = (uint32_t)sizeof(after);
         CHECK_STATUS(bc250hsa_counters_read(&after), BC250HSA_OK);
         CHECK_U64(after.dispatches_built - before.dispatches_built, 2u);
+    }
+}
+
+/* --------------------------------------------------------------------------------
+ * 2c. The per-dispatch state cache (section 8.8 of the design)
+ *
+ * A SET_SH_REG write is persistent register state, and DISPATCH_DIRECT does not clear
+ * it, so a dispatch that follows another one in the same indirect buffer has to write
+ * only the registers whose value differs. These tests say exactly which packets a
+ * second dispatch holds, in dwords, for four cases, and the negative control is the
+ * one that matters: a field that DID change must be written again.
+ * ------------------------------------------------------------------------------ */
+
+/* The segments of a batched stream: segment i is everything the walk met after
+ * DISPATCH_DIRECT i-1 and up to and including DISPATCH_DIRECT i. For each segment it
+ * records the first register offset of every SET_SH_REG, how many SET_SH_REG_INDEX and
+ * SET_UCONFIG_REG packets it holds, how many acquires, and how many dwords it is. */
+#define SEG_MAX  8u
+#define SEG_REGS 24u
+
+typedef struct seg_shape {
+    uint32_t count;
+    uint32_t dwords[SEG_MAX];
+    uint32_t regs[SEG_MAX][SEG_REGS];
+    uint32_t reg_count[SEG_MAX];
+    uint32_t sh_reg_index[SEG_MAX];
+    uint32_t uconfig[SEG_MAX];
+    uint32_t acquire[SEG_MAX];
+    uint32_t partial_flush[SEG_MAX];
+} seg_shape;
+
+static void walk_segments(const uint32_t* dwords, uint32_t count, seg_shape* out)
+{
+    uint32_t at = 0;
+    uint32_t seg = 0;
+    uint32_t start = 0;
+    int      dispatched = 0;
+
+    memset(out, 0, sizeof(*out));
+    while (at < count && seg < SEG_MAX) {
+        const uint32_t header = dwords[at];
+        const uint32_t opcode = (header >> 8) & 0xFFu;
+        const uint32_t body = ((header >> 16) & 0x3FFFu) + 1u;
+
+        if (CP_PACKET_GET_TYPE(header) != PACKET_TYPE3) {
+            break;
+        }
+        if (opcode == BC250HSA_PKT3_NOP) {
+            at++;
+            continue;
+        }
+        if (at + 1u + body > count) {
+            break;
+        }
+        if (opcode == BC250HSA_PKT3_SET_SH_REG) {
+            if (out->reg_count[seg] < SEG_REGS) {
+                out->regs[seg][out->reg_count[seg]] = dwords[at + 1u];
+            }
+            out->reg_count[seg]++;
+        } else if (opcode == BC250HSA_PKT3_SET_SH_REG_INDEX) {
+            out->sh_reg_index[seg]++;
+        } else if (opcode == BC250HSA_PKT3_SET_UCONFIG_REG) {
+            out->uconfig[seg]++;
+        } else if (opcode == BC250HSA_PKT3_ACQUIRE_MEM) {
+            out->acquire[seg]++;
+        } else if (opcode == BC250HSA_PKT3_DISPATCH_DIRECT) {
+            dispatched = 1;
+        } else if (opcode == BC250HSA_PKT3_EVENT_WRITE) {
+            if ((dwords[at + 1u] & 0x3Fu) == BC250HSA_EVENT_CS_PARTIAL_FLUSH) {
+                out->partial_flush[seg]++;
+            }
+        }
+        at += 1u + body;
+        /* The wait for the waves belongs to the dispatch in front of it, so the segment
+         * ends after that packet and not at DISPATCH_DIRECT itself. */
+        if (dispatched && opcode == BC250HSA_PKT3_EVENT_WRITE) {
+            out->dwords[seg] = at - start;
+            start = at;
+            seg++;
+            out->count = seg;
+            dispatched = 0;
+        }
+    }
+}
+
+static int seg_writes(const seg_shape* s, uint32_t seg, uint32_t reg)
+{
+    uint32_t i;
+    const uint32_t held = (s->reg_count[seg] < SEG_REGS) ? s->reg_count[seg] : SEG_REGS;
+
+    for (i = 0; i < held; i++) {
+        if (s->regs[seg][i] == reg) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* The dwords of a dispatch that repeats everything of the one before it: the barrier,
+ * DISPATCH_DIRECT with its four values, and the wait for the waves. */
+#define SEG_REPEAT_DWORDS    (8u + 5u + 2u)
+/* The same, plus the one run of user data registers, which is what a real launch is:
+ * layer 2 hands out another kernel argument buffer per launch. */
+#define SEG_NEW_KERNARG_DWORDS (SEG_REPEAT_DWORDS + 8u)
+/* And with no cache at all: the whole compute state of section 3.7 again. */
+#define SEG_FULL_DWORDS      (8u + 64u)
+
+static void check_state_cache(void)
+{
+    bc250hsa_kernel   k;
+    bc250hsa_kernel   k2;
+    bc250hsa_dispatch d[3];
+    bc250hsa_pm4_env  env;
+    uint32_t          batch[BATCH_MAX];
+    uint32_t          full[BATCH_MAX];
+    uint32_t          batch_count = 0;
+    uint32_t          full_count = 0;
+    seg_shape         s;
+    uint32_t          i;
+
+    golden_kernel(&k);
+
+    /* 1. The same kernel twice, the same arguments, the same block. The second
+     *    dispatch writes no register at all: only the barrier, the dispatch and the
+     *    wait for the waves. */
+    for (i = 0; i < 3u; i++) {
+        golden_inputs(&d[i], &env, &k);
+    }
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    walk_segments(batch, batch_count, &s);
+    CHECK_U64(s.count, 2u);
+    CHECK_U64(s.reg_count[1], 0u);
+    CHECK_U64(s.sh_reg_index[1], 0u);
+    CHECK_U64(s.uconfig[1], 0u);
+    CHECK_U64(s.acquire[1], 1u);
+    CHECK_U64(s.partial_flush[1], 1u);
+    CHECK_U64(s.dwords[1], SEG_REPEAT_DWORDS);
+    /* The first dispatch of the buffer is complete: the eight register runs of section
+     * 3.7, the two compute-unit masks and the one uconfig write. */
+    CHECK_U64(s.reg_count[0], 10u);
+    CHECK_U64(s.sh_reg_index[0], 2u);
+    CHECK_U64(s.uconfig[0], 1u);
+
+    /* 1b. The control: with BC250HSA_DISPATCH_FULL_STATE the second dispatch is the
+     *     whole sequence again, and the stream is the one the builder wrote before this
+     *     section existed. A cache that wrote nothing in case 1 and nothing here too
+     *     would pass case 1 and fail this. */
+    golden_inputs(&d[0], &env, &k);
+    env.flags |= BC250HSA_DISPATCH_FULL_STATE;
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, full, BATCH_MAX, &full_count),
+                 BC250HSA_OK);
+    walk_segments(full, full_count, &s);
+    CHECK_U64(s.count, 2u);
+    CHECK_U64(s.reg_count[1], 10u);
+    CHECK_U64(s.sh_reg_index[1], 2u);
+    CHECK_U64(s.uconfig[1], 1u);
+    CHECK_U64(s.dwords[1], SEG_FULL_DWORDS);
+    CHECK(full_count > batch_count);
+
+    /* 2. Two kernels. Everything that belongs to the kernel goes out again: the
+     *    program address, the two resource registers, RSRC3 and the user data run,
+     *    because the private segment resource and the kernel argument pointer share
+     *    that run. What stays out is the constant state: the start registers, the
+     *    checksum, the request control, the coherency delay, the compute-unit masks,
+     *    the scratch ring size and the resource limits. */
+    golden_kernel(&k2);
+    k2.name = "other";
+    k2.entry_va = 0x00000140ABCE5100ull;
+    k2.compute_pgm_rsrc1 = 0xE0AF0001u;
+    k2.compute_pgm_rsrc3 = 0x00000002u;
+    golden_inputs(&d[0], &env, &k);
+    golden_inputs(&d[1], &env, &k2);
+    d[1].kernel = &k2;
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    walk_segments(batch, batch_count, &s);
+    CHECK_U64(s.count, 2u);
+    CHECK(seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_LO));
+    CHECK(seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_RSRC1));
+    CHECK(seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_RSRC3));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_START_X));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_SHADER_CHKSUM));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_REQ_CTRL));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_TMPRING_SIZE));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_RESOURCE_LIMITS));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_NUM_THREAD_X));
+    CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_USER_DATA_0));
+    CHECK_U64(s.sh_reg_index[1], 0u);
+    CHECK_U64(s.uconfig[1], 0u);
+
+    /* 3. Kernel A, kernel B, kernel A. The third dispatch is not the second, so the
+     *    program address and the resource registers go out a third time: the cache
+     *    holds what the hardware was last told and not a set of everything seen. */
+    golden_inputs(&d[0], &env, &k);
+    golden_inputs(&d[1], &env, &k2);
+    d[1].kernel = &k2;
+    golden_inputs(&d[2], &env, &k);
+    CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, BATCH_MAX, &batch_count),
+                 BC250HSA_OK);
+    walk_segments(batch, batch_count, &s);
+    CHECK_U64(s.count, 3u);
+    CHECK(seg_writes(&s, 2u, BC250HSA_REG_COMPUTE_PGM_LO));
+    CHECK(seg_writes(&s, 2u, BC250HSA_REG_COMPUTE_PGM_RSRC1));
+    CHECK(seg_writes(&s, 2u, BC250HSA_REG_COMPUTE_PGM_RSRC3));
+    CHECK(!seg_writes(&s, 2u, BC250HSA_REG_COMPUTE_START_X));
+    CHECK_U64(s.dwords[1], s.dwords[2]);
+
+    /* 4. The negative control, one changed field at a time. Each of these dispatches
+     *    repeats the one before it except in the one field named, and the register run
+     *    that carries that field must be in the second segment. A cache that skipped it
+     *    would launch the second dispatch with the first one's value, which is the
+     *    whole risk of this mechanism, and each line below is the test that catches it. */
+    {
+        /* the block, which is COMPUTE_NUM_THREAD_X */
+        golden_inputs(&d[0], &env, &k);
+        golden_inputs(&d[1], &env, &k);
+        d[1].launch.block[1] = 2u;
+        d[1].launch.grid[0] = 2048u;   /* the work items per dispatch stay inside 1024 */
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                     BC250HSA_OK);
+        walk_segments(batch, batch_count, &s);
+        CHECK(seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_NUM_THREAD_X));
+        CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_LO));
+
+        /* the kernel argument pointer, which is the user data run */
+        golden_inputs(&d[0], &env, &k);
+        golden_inputs(&d[1], &env, &k);
+        d[1].kernarg_va = 0x00000140ABCD4000ull;
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                     BC250HSA_OK);
+        walk_segments(batch, batch_count, &s);
+        CHECK(seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_USER_DATA_0));
+        CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_LO));
+        CHECK_U64(s.dwords[1], SEG_NEW_KERNARG_DWORDS);
+
+        /* the local memory a dispatch asks for, which is RSRC2 and shares its run
+         * with RSRC1 */
+        golden_inputs(&d[0], &env, &k);
+        golden_inputs(&d[1], &env, &k);
+        d[1].launch.dynamic_group_bytes = 1024u;
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                     BC250HSA_OK);
+        walk_segments(batch, batch_count, &s);
+        CHECK(seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_RSRC1));
+        CHECK(!seg_writes(&s, 1u, BC250HSA_REG_COMPUTE_PGM_LO));
+
+        /* the grid, which is DISPATCH_DIRECT and is never cached */
+        golden_inputs(&d[0], &env, &k);
+        golden_inputs(&d[1], &env, &k);
+        d[1].launch.grid[2] = 3u;
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                     BC250HSA_OK);
+        walk_segments(batch, batch_count, &s);
+        CHECK_U64(s.count, 2u);
+        CHECK_U64(s.dwords[1], SEG_REPEAT_DWORDS);
+    }
+
+    /* 5. The buffer boundary resets the cache. bc250hsa_pm4_build_batch starts a new
+     *    cache for every call, which is what submit.c does when it opens a buffer, and
+     *    the first dispatch of the second buffer must be complete: another context's
+     *    work runs between two of our submissions, and this build programs no state at
+     *    the ring frame. Two buffers of two dispatches each are therefore twice the
+     *    stream of case 1, dword for dword. */
+    {
+        uint32_t second[BATCH_MAX];
+        uint32_t second_count = 0;
+
+        golden_inputs(&d[0], &env, &k);
+        golden_inputs(&d[1], &env, &k);
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, batch, BATCH_MAX, &batch_count),
+                     BC250HSA_OK);
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 2u, &env, second, BATCH_MAX, &second_count),
+                     BC250HSA_OK);
+        CHECK_U64(second_count, batch_count);
+        if (second_count == batch_count) {
+            int same = 1;
+            for (i = 0; i < batch_count; i++) {
+                if (second[i] != batch[i]) {
+                    same = 0;
+                }
+            }
+            CHECK(same);
+        }
+        walk_segments(second, second_count, &s);
+        CHECK_U64(s.reg_count[0], 10u);
+        CHECK_U64(s.sh_reg_index[0], 2u);
+        CHECK_U64(s.uconfig[0], 1u);
+    }
+
+    /* 6. The measurement this change is worth, in dwords, for the two shapes a decode
+     *    loop has. The slot ceiling follows from it: one 65536-byte command ring slot
+     *    holds 16368 usable dwords (the completion write and the padding aside). */
+    {
+        const uint32_t usable = 16368u;
+        uint32_t       cached = 0;
+        uint32_t       uncached = 0;
+
+        for (i = 0; i < 3u; i++) {
+            golden_inputs(&d[i], &env, &k);
+        }
+        d[1].kernarg_va = 0x00000140ABCD4000ull;
+        d[2].kernarg_va = 0x00000140ABCD6000ull;
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, batch, BATCH_MAX, &batch_count),
+                     BC250HSA_OK);
+        walk_segments(batch, batch_count, &s);
+        cached = s.dwords[1];
+        CHECK_U64(cached, SEG_NEW_KERNARG_DWORDS);
+        CHECK_U64(s.dwords[2], SEG_NEW_KERNARG_DWORDS);
+
+        golden_inputs(&d[0], &env, &k);
+        env.flags |= BC250HSA_DISPATCH_FULL_STATE;
+        d[1].kernarg_va = 0x00000140ABCD4000ull;
+        d[2].kernarg_va = 0x00000140ABCD6000ull;
+        CHECK_STATUS(bc250hsa_pm4_build_batch(d, 3u, &env, full, BATCH_MAX, &full_count),
+                     BC250HSA_OK);
+        walk_segments(full, full_count, &s);
+        uncached = s.dwords[1];
+        CHECK_U64(uncached, SEG_FULL_DWORDS);
+        CHECK_U64(s.dwords[2], SEG_FULL_DWORDS);
+
+        /* 72 dwords a dispatch becomes 23, so the slot holds 227 dispatches instead of
+         * 711. Printed and not only asserted, because the number belongs in the
+         * evidence of the change and a reader of the test log should not have to
+         * divide. */
+        printf("test_pm4: dwords a repeated dispatch: %u without the state cache"
+               " (%u a slot), %u with it (%u a slot)\n",
+               (unsigned)uncached, (unsigned)(usable / uncached), (unsigned)cached,
+               (unsigned)(usable / cached));
+        CHECK_U64(usable / uncached, 227u);
+        CHECK_U64(usable / cached, 711u);
     }
 }
 
@@ -795,6 +1133,7 @@ int main(int argc, char** argv)
         check_golden();
     }
     check_batch();
+    check_state_cache();
     check_variants();
     check_refusals();
     check_helpers();
