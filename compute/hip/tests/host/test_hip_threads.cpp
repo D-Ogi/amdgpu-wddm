@@ -231,6 +231,27 @@ int main(int argc, char** argv) {
         check(wrong == 0u, "every wait carries the wait bound of the process");
     }
 
+    // The same rule, now for a buffer of the pool that a launch has already used once. The
+    // client's launches left every buffer busy with a fence value the device has retired, which
+    // is what makes such a buffer free again. Taking it must still mark it as taken, or two
+    // threads pack their arguments into one buffer, as they would for a buffer that was never
+    // used. This control runs after the client, because only then does the pool hold buffers
+    // with a retired fence value.
+    {
+        bc250hip::Guard          guard;
+        bc250hip::KernargBuffer* first = nullptr;
+        bc250hip::KernargBuffer* second = nullptr;
+        check(bc250hip::kernarg_acquire(guard, 64u, 16u, &first) == hipSuccess,
+              "kernarg_acquire gives a buffer of the used pool");
+        check(bc250hip::kernarg_acquire(guard, 64u, 16u, &second) == hipSuccess,
+              "kernarg_acquire gives a second buffer of the used pool");
+        check(first != nullptr && second != nullptr && first != second,
+              "a reused kernel argument buffer that is taken and not submitted is not handed "
+              "out twice");
+        bc250hip::kernarg_release(first, 0);
+        bc250hip::kernarg_release(second, 0);
+    }
+
     // A counter of layer 1 for the same waits, which is the second witness of the measurement.
     {
         bc250hsa_counters counters;
