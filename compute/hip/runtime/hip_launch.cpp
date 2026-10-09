@@ -60,7 +60,19 @@ hipError_t kernarg_acquire(Guard& guard, uint32_t bytes, uint32_t alignment,
         if (buffer.claimed) {
             continue;   // another thread already waits for this one
         }
-        if (!buffer.busy || buffer.fence <= retired) {
+        if (!buffer.busy) {
+            buffer.busy = true;
+            *out = &buffer;
+            return hipSuccess;
+        }
+        if (buffer.fence == 0) {
+            // Busy with no fence value is a buffer another thread took and has not submitted
+            // yet. Its arguments are being written right now, and a launch of this thread may
+            // open the lock between the packing and the submission (the event wait of its
+            // stream), so this must never be handed out as free.
+            continue;
+        }
+        if (buffer.fence <= retired) {
             buffer.busy = true;
             *out = &buffer;
             return hipSuccess;

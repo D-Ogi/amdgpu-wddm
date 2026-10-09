@@ -80,7 +80,10 @@ inline Options default_options(LaunchFn launch, void* ctx) {
     options.threads = 4;
     options.iterations = 4;
     options.destroy_rounds = 6;
-    options.window_ops_max = 2000;
+    // The kernel argument pool of layer 2 holds 64 buffers. A cap keeps one worker from taking
+    // all of them and leaving the others to wait for a buffer, which is a wait for the device
+    // and would read as if the lock had blocked them.
+    options.window_ops_max = 16;
     options.settle_ms = 20;
     options.buffer_bytes = 65536;
     options.worker_alloc_bytes = 4096;

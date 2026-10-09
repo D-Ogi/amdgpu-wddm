@@ -92,9 +92,10 @@ finish inside that wait. Two programs run it, and both are built and measured by
 | `hipthreads.exe` | a real HIP program that clang compiles (`samples/threads.hip`), for the mock DLL here and the product DLL on the lab |
 
 MEASURED on the development PC, 2026-10-09, with the mock backend holding each dispatch 200 ms:
-the three worker threads finished 63 operations inside a 204 ms wait of thread 0, and four
-threads of four waits each took 840 ms where a serialised runtime takes 3240 ms. The control
-build measured 0 operations inside the wait and 3044 ms for the same work.
+the three worker threads finished 48 operations inside a 199 ms wait of thread 0, which is their
+whole cap of 16 each, and four threads of four waits each took 812 ms where a serialised runtime
+takes 3239 ms. The control build measured 0 operations inside the wait, and 2838 ms for the same
+work.
 
 ## The mock build
 

@@ -171,6 +171,25 @@ int main(int argc, char** argv) {
           "__hipRegisterFunction vadd");
     check(hipInit(0) == hipSuccess, "hipInit");
 
+    // The kernel argument pool, before any thread runs. A buffer that one thread has taken and
+    // not submitted yet must never be handed to a second thread: a launch may open the lock
+    // between the packing and the submission (the event wait of its stream), and the second
+    // thread would pack its own arguments over the first one's. The rule is "busy with no fence
+    // value is not free", and this is its control.
+    {
+        bc250hip::Guard         guard;
+        bc250hip::KernargBuffer* first = nullptr;
+        bc250hip::KernargBuffer* second = nullptr;
+        check(bc250hip::kernarg_acquire(guard, 64u, 16u, &first) == hipSuccess,
+              "kernarg_acquire gives a buffer");
+        check(bc250hip::kernarg_acquire(guard, 64u, 16u, &second) == hipSuccess,
+              "kernarg_acquire gives a second buffer");
+        check(first != nullptr && second != nullptr && first != second,
+              "a kernel argument buffer that is taken and not submitted is not handed out twice");
+        bc250hip::kernarg_release(first, 0);
+        bc250hip::kernarg_release(second, 0);
+    }
+
     const int streams_before = bc250hip::state().live_streams;
     const int events_before = bc250hip::state().live_events;
 
