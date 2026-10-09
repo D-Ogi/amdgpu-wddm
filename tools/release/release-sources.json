@@ -178,7 +178,7 @@
       "sha256": "DEF9A60B23202E4551E489E9DBD557068B6CA209A09B3863378014F6107BF8C6",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "4e9a98e9f882dbab1d474b5debb84f67c46dfa33",
+        "commit": "41bd52c810dedf32515cd7751dfee8ae8a6065a2",
         "recipe_commit": "3eca5f986c5d0b52b16bbd2f2f10b6e7ee1e2e05",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
@@ -195,7 +195,7 @@
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "unverified": "Built with a recipe tree that has no Add-ReproducibleMesonOptions, so the Meson command line has no /Brepro, /FC or /d1trimfile: the image carries a build time stamp, an RSDS GUID of its own and the paths of its build and source trees (docs/design/reproducible-builds.md). The recipe.json beside the file also records three modified tracked entries in the source tree scratch/app-settings/vkd3d-proton at 4e9a98e9 (worktree diff D208B484), so the commit alone does not name the sources. Not rebuilt in the b26 repro lane, which rebuilt the kernel driver and the system Vulkan ICD. tools/release/rebuild-check.ps1 -Entry <path> builds this entry again from the commit above.",
+      "unverified": "Built with a recipe tree that has no Add-ReproducibleMesonOptions, so the Meson command line has no /Brepro, /FC or /d1trimfile: the image carries a build time stamp, an RSDS GUID of its own and the paths of its build and source trees (docs/design/reproducible-builds.md). The recipe.json beside the file records head 4e9a98e9 with three modified tracked entries (worktree diff D208B484). That diff is byte-equal to the diff from 4e9a98e9 to 41bd52c8, so the build read the tree of 41bd52c8, the commit of this record. Not rebuilt in the b26 repro lane, which rebuilt the kernel driver and the system Vulkan ICD. tools/release/rebuild-check.ps1 -Entry <path> builds this entry again from the commit above.",
       "size": 3702784,
       "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/per-app-graphics-settings 41bd52c8 = 4e9a98e9 plus one commit: VKD3D_SAMPLER_ANISOTROPY sets the maximum anisotropy of static samplers and sampler descriptors with a linear minification filter, limited to maxSamplerAnisotropy; dxil-spirv d2d82332). Built by tools/build build-vkd3d.ps1 from the 4e9a98e9 tree with the worktree diff of 41bd52c8 (D208B484, the same bytes as git diff 4e9a98e9 41bd52c8)"
     },

@@ -346,8 +346,10 @@ each, and `tools/build/write-umd-config.py` writes them from the capability file
 of the engine and the ICD of their architecture. Run again on the b24 round-3 capability files, the recipe
 gives `1E975948` (x64) and `A279A6CA` (x86), the bytes in the package.
 
-The nineteen other built files were made before this branch. Their reasons are of the same three kinds as in
-the section above, with one addition: a build whose source tree was not clean. The `recipe.json` of the two
-x64 engine builds of b23 counts five modified entries in the DXVK tree and three in the vkd3d-proton tree, so
-for those two files the commit alone does not name the sources. Each becomes verifiable the first time a
-train builds it with the recipes of this branch, from a clean tree of a published commit.
+The twenty-one other built files were made before this branch. Their reasons are of the same three kinds as
+in the section above, with one addition: a build whose source tree was not clean. The `recipe.json` of the two
+x64 engine builds of b23 counts five modified entries in the DXVK tree and three in the vkd3d-proton tree.
+Each of those two worktree diffs is byte-equal to the diff from the recorded head to the next commit of the
+same fork branch, so each build read the tree of a published commit, and the record names that commit. Each
+file becomes verifiable the first time a train builds it with the recipes of this branch, from a clean tree of
+that commit.
