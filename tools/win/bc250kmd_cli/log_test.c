@@ -6,7 +6,7 @@
 // GET_LOG and LOG_SUMMARY as display.c's LogEscape does from 0.7.184.1 on (GET_LOG with NoAdapterSynchronization
 // alone, LOG_SUMMARY only with HardwareAccess, the BC250_LOG_FROM_SUMMARY sentinel, GuardLogRead's paging), or as
 // a driver up to 0.7.183.1 does (every NoAdapterSynchronization escape refused with Status REFUSED and nothing else
-// written), and from 0.7.216.23 as one that keeps the polling form's block beside the ring (BD-097: SummaryFrom
+// written), and from 0.7.216.24 as one that keeps the polling form's block beside the ring (BD-097: SummaryFrom
 // BC250_LOG_SUMMARY_SEQ, the block paged out of that space, one note line in the ring). Built and run by
 // build.ps1 before the tool itself; nothing here touches a driver.
 //
@@ -102,7 +102,7 @@ BOOL WINAPI FakeSetupDiDestroyDeviceInfoList(HDEVINFO DeviceInfoSet)
 
 typedef struct {
     int Before184;                  // refuse every NoAdapterSynchronization escape, as up to 0.7.183.1
-    int Beside;                     // 0.7.216.23 and later: the polling form's block goes beside the ring (BD-097)
+    int Beside;                     // 0.7.216.24 and later: the polling form's block goes beside the ring (BD-097)
     unsigned long Total;            // lines in the ring (no wrap: the cases stay under BC250_LOG_RING_LINES)
     unsigned long SummaryLines;     // lines one LOG_SUMMARY writes
     unsigned long Opens, Closes;
@@ -166,7 +166,7 @@ NTSTATUS APIENTRY FakeD3DKMTEscape(const D3DKMT_ESCAPE *escape)
     if (summary) {
         if (g_driver.Summaries < 8) g_driver.SummaryFrom[g_driver.Summaries] = from;
         g_driver.Summaries++;
-        // 0.7.216.23 (BD-097): the polling form's block goes beside the ring, addressed from
+        // 0.7.216.24 (BD-097): the polling form's block goes beside the ring, addressed from
         // BC250_LOG_SUMMARY_SEQ, and the ring gets one line saying where it was taken. The evidence form (a
         // position of its own) still writes the block into the ring.
         if (g_driver.Beside && from == BC250_LOG_FROM_SUMMARY) {
@@ -263,7 +263,7 @@ static int HasLineMs(unsigned long s, unsigned long ms, const char *text)
 // The line the tool prints for sequence s of the fake ring (Milliseconds = 1000 + s), with its text.
 static int HasLine(unsigned long s, const char *text) { return HasLineMs(s, 1000 + s, text); }
 
-// The line the tool prints for line i of a block beside the ring (0.7.216.23, BD-097).
+// The line the tool prints for line i of a block beside the ring (0.7.216.24, BD-097).
 static int HasBesideLine(unsigned long i, const char *text)
 {
     return HasLineMs(BC250_LOG_SUMMARY_SEQ + i, 1000 + i, text);
@@ -316,7 +316,7 @@ int main(void)
     Check(g_driver.Hard == 1 && g_driver.Soft == 7, "summary: one HardwareAccess escape, the pages without");
     Check(Contains("escapes: 7 without adapter synchronization, 1 with HardwareAccess\n"), "summary: counts");
 
-    // 0.7.216.23 (BD-097): the same poll against a driver that keeps the block beside the ring. The tool is
+    // 0.7.216.24 (BD-097): the same poll against a driver that keeps the block beside the ring. The tool is
     // unchanged - it asks for the sequence the driver answered with - so the whole block still comes back, in
     // the same number of escapes, and the ring grew by one line instead of a hundred.
     Reset(0, 300, 100);

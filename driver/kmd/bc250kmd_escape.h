@@ -914,7 +914,7 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 #define BC250_CPU_REQUEST_MASK_STOCK 0x77u     // 6 of the 8 cores: the mask this part ships with
 #define BC250_CPU_REQUEST_MASK_FULL 0xFFu      // all eight
 #define BC250_CPU_REQUEST_SEARCH_STEPS 8u      // the deepest undervolt step the search tries
-#define BC250_CPU_REQUEST_ERROR_COUNT 7u       // enum bc250_cpu_error, 0 to 6 (0.7.216.23 added NO_CEILING)
+#define BC250_CPU_REQUEST_ERROR_COUNT 7u       // enum bc250_cpu_error, 0 to 6 (0.7.216.24 added NO_CEILING)
 #define BC250_CPU_REQUEST_ERROR_NO_CEILING 6u  // the one reason a caller acts on: the clock control is refused
                                                // for this start, the undervolt and the cap still work (BD-094)
 #define BC250_CPU_OP_READ 0u                 // software state only: what is applied, stored, recorded
@@ -950,7 +950,7 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 #define BC250_CPU_FLAG_BOOST_KNOWN 8192u     // the firmware's own boost ceiling answered in this start, so
                                              // BaselineMaxMHz can be given back and a clock limit is admitted.
                                              // Without it the clock control is refused (BC250_CPU_ERROR_NO_CEILING,
-                                             // 0.7.216.23): a limit could only be given back as the P-state top,
+                                             // 0.7.216.24): a limit could only be given back as the P-state top,
                                              // under the boost (BD-094). No field moves, so the ABI stays
 typedef struct _BC250_ESCAPE_CPU {
     unsigned long Magic, Command, Status, Version;
@@ -1572,7 +1572,7 @@ typedef struct _BC250_ESCAPE_FENCE {
 #define BC250_LOG_RING_LINES 1024           // the whole ring: the head above plus a wrapping tail
 #define BC250_LOG_MAX_LINES 64              // lines one escape returns
 
-// The summary's own lines, beside the ring (0.7.216.23, BD-097). One summary is about 320 lines, 42 % of the
+// The summary's own lines, beside the ring (0.7.216.24, BD-097). One summary is about 320 lines, 42 % of the
 // ring's rotating tail, so a caller that asks for one every few seconds used to rotate the whole ring in about
 // 12 s and push out the events every other line of the trail is kept for. BC250_ESCAPE_LOG_SUMMARY with `From`
 // BC250_LOG_FROM_SUMMARY therefore writes its block into storage of its own and leaves the ring alone (it adds

@@ -105,14 +105,14 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   revert the firmware refuses is owed, not forgotten: the driver repeats it every second
   (`BC250_CPU_REVERT_RETRY_MS`) and reports it as `BC250_CPU_FLAG_REVERT_OWED`. A core-mask change needs a Windows
   restart and carries the two-mark boot guard, so a mask the machine does not survive costs the mask.
-- CPU baseline (KMD 0.7.216.23): a revert, a reset and the release of the joint arm's cap send the clock limit
+- CPU baseline (KMD 0.7.216.24): a revert, a reset and the release of the joint arm's cap send the clock limit
   that the read stage of the start recorded. That limit is the highest clock the firmware answered itself, over the
   P-state table (`0x3B`) and the per-core clocks (`0x43`), each in the band 2800 to 4000 MHz, clamped to the release
   bound of 3500 MHz. On unit A the table gives 3200 MHz and the cores give 3500 MHz under load. Up to
   0.7.216.14 the table alone set the limit, and every restore capped the boost at 3200 MHz until a restart. The driver
   records the baseline only while it has sent nothing in the start. A later read stage of the same start can raise it
   and cannot lower it.
-- The boost probe (KMD 0.7.216.23, BD-094): `0x43` answers the clock of the moment, so an idle start reads 900 to
+- The boost probe (KMD 0.7.216.24, BD-094): `0x43` answers the clock of the moment, so an idle start reads 900 to
   1400 MHz, the band refuses those answers, and the baseline falls back to the table's 3200 MHz, which is under the
   boost. The allowlist above holds no message that answers the boost ceiling itself, so the full read stage makes
   the firmware answer it: it keeps one core busy for `BC250_CPU_BOOST_PROBE_MS` (25 ms) and reads the per-core

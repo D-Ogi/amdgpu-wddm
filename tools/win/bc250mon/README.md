@@ -136,7 +136,7 @@ A summary now goes out once per `graphics.summary` action -
 the `KMD counters` row says where the block in the panel came from: `summary written by this poll, on request`, or
 `from the ring's last summary, N s before the newest log line` (amber past ten
 minutes of driver time), or `kept from the summary of HH:mm:ss`, or `no summary
-yet` when no counter row is shown at all. The kept block is what KMD 0.7.216.23
+yet` when no counter row is shown at all. The kept block is what KMD 0.7.216.24
 and later need: a requested summary writes beside the log ring there, so a page
 read cannot find it again (BD-097, `docs/design/kmd-log-ring.md`). The `KMD poll` row checks the CLI's escape count line and warns when a
 page read took any Level Two escape, when a requested summary took more than one,

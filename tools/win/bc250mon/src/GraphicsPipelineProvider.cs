@@ -26,7 +26,7 @@ namespace Bc250Mon
         readonly string _manifest, _summaryPausePath;
         string _lastSummaryOutput;
         DateTime _lastSummaryUtc;
-        // The last counter block this session saw, and when. BD-097: from KMD 0.7.216.23 a requested summary
+        // The last counter block this session saw, and when. BD-097: from KMD 0.7.216.24 a requested summary
         // writes its block beside the log ring, so a page read cannot find it again.
         string _keptCounters;
         DateTime _keptCountersUtc;
@@ -172,7 +172,7 @@ namespace Bc250Mon
                 {
                     _lastSummaryOutput = output;
                     _lastSummaryUtc = DateTime.UtcNow;
-                    // From KMD 0.7.216.23 a requested summary writes its block beside the log ring, not into it
+                    // From KMD 0.7.216.24 a requested summary writes its block beside the log ring, not into it
                     // (BD-097, docs/design/kmd-log-ring.md): one poll's 320 lines used to rotate the ring in
                     // about 12 s. So a later page read finds no block to parse, and the counters of the last
                     // summary are kept here instead. An older driver puts the block in the ring, and then this
@@ -243,7 +243,7 @@ namespace Bc250Mon
             var last = LastMatch(SummaryStamp, output);
             if (last == null)
             {
-                // No block in the ring. From KMD 0.7.216.23 that is the normal state, because a requested
+                // No block in the ring. From KMD 0.7.216.24 that is the normal state, because a requested
                 // summary writes beside the ring, so the rows come from the block this session kept.
                 panel.Rows.Add(kept == null ?
                     new Row("KMD counters", "no summary yet; the graphics.summary action writes one", Level.Warn) :

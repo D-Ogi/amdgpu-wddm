@@ -199,7 +199,7 @@ unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
 int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *before,
 			     const struct bc250_cpu_settings *baseline, struct bc250_cpu_settings *out);
 
-/* What the read stage learned about the clock the chip runs at by itself (0.7.216.23, BD-094). Two answers of the
+/* What the read stage learned about the clock the chip runs at by itself (0.7.216.24, BD-094). Two answers of the
  * firmware carry it, and they are not the same number:
  *   table_mhz  the highest P-state clock (BC250_CPU_MSG_READ_PSTATE_MHZ). It is the top of the named P-states,
  *              3200 MHz on unit A, and it is NOT the boost: the firmware grants one busy core 3481 to 3500 MHz

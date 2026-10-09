@@ -105,7 +105,7 @@ static class GraphicsSummaryTest
             Check(Value(panel,"KMD counters")=="no summary yet; the graphics.summary action writes one" &&
                   Find(panel,"KMD counters").Level==Level.Warn,"no block anywhere is said so");
             Check(Value(panel,"HW flips")==null && Value(panel,"Scanout")=="not reported","and no counter is invented");
-            // BD-097: from KMD 0.7.216.23 a requested summary writes its block beside the log ring, so the page
+            // BD-097: from KMD 0.7.216.24 a requested summary writes its block beside the log ring, so the page
             // reads after it find none in the ring. The rows then come from the block this session kept, and the
             // counter row says that it is kept and when it was taken.
             panel=Poll(provider);

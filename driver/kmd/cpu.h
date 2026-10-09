@@ -48,7 +48,7 @@ typedef struct _BC250_CPU_STATE {
     struct bc250_cpu_settings Stored;       // the registry's values
     struct bc250_cpu_settings Baseline;     // what the firmware answered before the first write of this start
     BOOLEAN BaselineValid;
-    struct bc250_cpu_baseline BaselineRead; // the two tops the read stages of this start answered (0.7.216.23):
+    struct bc250_cpu_baseline BaselineRead; // the two tops the read stages of this start answered (0.7.216.24):
                                             // table_mhz is what a loaded core is judged against with no limit
                                             // applied, boost_mhz is the firmware's own ceiling, and boost_given
                                             // says whether a clock limit can be given back at all (BD-094)

@@ -1,7 +1,7 @@
 # Prints one complete "wddm summary" block of the kernel driver, to read the driver's cumulative counters
 # (faults, timeouts, resets).
 #
-# From KMD 0.7.216.23 a requested summary writes its block beside the log ring (BD-097,
+# From KMD 0.7.216.24 a requested summary writes its block beside the log ring (BD-097,
 # docs/design/kmd-log-ring.md), so the ring of a running machine holds no block to cut out of it. This script
 # therefore asks for the block itself with "log summary only", which costs one Level Two escape and answers the
 # whole block. Against an older driver, or a CLI that does not know that form, it falls back to the block

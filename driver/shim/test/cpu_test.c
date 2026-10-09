@@ -467,7 +467,7 @@ static void test_restore(void)
 	CHECK(p.step[2].kind == BC250_CPU_STEP_TEMP && p.step[2].cools == 0u);
 }
 
-/* The read stage's record of the clock the chip runs at by itself (0.7.216.23, BD-094; 0.7.216.15, K137).
+/* The read stage's record of the clock the chip runs at by itself (0.7.216.24, BD-094; 0.7.216.15, K137).
  * Up to 0.7.216.14 the baseline was the P-state table's highest entry alone: unit A answers 3200 MHz there while
  * the firmware boosts one core to 3481-3500 MHz, so every revert, reset and release of the joint arm sent 3200 MHz
  * and held one busy thread at about 3180 MHz until a restart (K220). 0.7.216.15 added the per-core clocks, which
@@ -607,7 +607,7 @@ static void test_baseline_starts(void)
 	CHECK(st.valid && st.probes == 1);
 	CHECK(st.baseline.max_given && st.baseline.max_mhz == 3200u && !st.read.boost_given);
 	/* 0.7.216.22 stopped here: the clock control was admitted and a revert sent 0x8F 3200, which held one busy
-	 * thread near 3180 MHz until a restart. 0.7.216.23 admits no clock limit in this state. */
+	 * thread near 3180 MHz until a restart. 0.7.216.24 admits no clock limit in this state. */
 	CHECK(start_admits_clock(&st) == 0);
 	/* The probe keeps one core busy and reads the per-core clocks again inside the same stage. The firmware
 	 * answers 3500 MHz on the core it ran on, and the baseline of the start is the boost. */

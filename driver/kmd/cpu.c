@@ -98,7 +98,7 @@ static void CpuWait(ULONG Ms)
     (void)KeDelayExecutionThread(KernelMode, FALSE, &delay);
 }
 
-// The same wait, spent busy on this processor instead of asleep: the boost probe alone uses it (0.7.216.23,
+// The same wait, spent busy on this processor instead of asleep: the boost probe alone uses it (0.7.216.24,
 // BD-094). The firmware answers the clock of the moment on message 0x43, so a sleeping thread reads an idle core
 // and the probe would measure nothing. KeStallExecutionProcessor takes 50 us at a time, which is the documented
 // bound for one call; the thread stays at PASSIVE_LEVEL and preemptible, so this costs one core's time and
@@ -239,7 +239,7 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
 // alone made every revert, reset and joint-arm release a 0x8F 3200 that held the processor near 3180 MHz until a
 // restart. That is a cut sold as a restore, the mirror image of the 0.7.210 defect. The number is still an answer
 // and not a constant this driver chose: the release bound only clamps it.
-// Why the table alone is not enough either (0.7.216.23, BD-094): message 0x43 answers the clock of the moment, so
+// Why the table alone is not enough either (0.7.216.24, BD-094): message 0x43 answers the clock of the moment, so
 // an idle start reads 900 to 1400 MHz, the band refuses those, and the baseline falls back to the table's 3200 MHz
 // - the very cut K137 removed. The lab met exactly that in the b23 validation (arm A of the BD-094 test: a revert
 // on an idle machine capped the processor at 3200 MHz until a restart; arm B, with one busy thread during the read
@@ -286,7 +286,7 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
              read.table_mhz, read.boost_given ? "" : "(not answered) ", read.boost_mhz);
 }
 
-// The boost probe (0.7.216.23, BD-094). The read allowlist of docs/hardware.md carries no message that answers the
+// The boost probe (0.7.216.24, BD-094). The read allowlist of docs/hardware.md carries no message that answers the
 // firmware's boost ceiling: 0x3B answers the named P-states (3200 MHz on unit A, under the boost) and 0x43 answers
 // the clock of the moment, which on an idle machine is 900 to 1400 MHz. So the stage makes the firmware answer the
 // ceiling: it keeps one core busy for BC250_CPU_BOOST_PROBE_MS and reads the per-core clocks again. One busy thread
@@ -472,7 +472,7 @@ static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings
         return STATUS_SUCCESS;
     }
     if (error != BC250_CPU_OK) return STATUS_INVALID_PARAMETER;
-    // Never take a control this start could not give back (0.7.216.23, BD-094). A clock limit is given back from
+    // Never take a control this start could not give back (0.7.216.24, BD-094). A clock limit is given back from
     // the baseline, and a baseline without a per-core answer names the P-state table's top alone, which is UNDER
     // the firmware's own boost: sending it back is the cut that held unit A at 3200 MHz until a restart. The read
     // stage makes the firmware answer the ceiling (CpuBoostProbe); when even that failed, the limit is refused
@@ -649,7 +649,7 @@ static void CpuJointPublish(BC250_DEVICE* Device)
     KeAcquireSpinLock(&s->SnapLock, &irql);
     ready = s->Enabled && s->Created && s->Proven && !s->OnTrial && !s->RevertOwed && !s->Search.running;
     KeReleaseSpinLock(&s->SnapLock, irql);
-    // The arm takes no cap it could only release as the P-state table's top (0.7.216.23, BD-094): with no limit
+    // The arm takes no cap it could only release as the P-state table's top (0.7.216.24, BD-094): with no limit
     // applied the release goes back to the baseline, and a baseline without a per-core answer is under the
     // firmware's own boost. CpuApplyEx refuses such a cap as well; this keeps the governor from asking.
     if (!from->max_given && !(s->BaselineValid && s->BaselineRead.boost_given)) ready = FALSE;
@@ -801,7 +801,7 @@ static void CpuThread(_In_ PVOID Context)
                     enum bc250_cpu_error error = BC250_CPU_OK;
                     struct bc250_cpu_settings stored = s->Stored;
                     // A clock limit this start could not give back is left OUT of the plan, and the rest of the
-                    // stored settings still go in (0.7.216.23, BD-094). CpuApplyEx refuses a whole plan that
+                    // stored settings still go in (0.7.216.24, BD-094). CpuApplyEx refuses a whole plan that
                     // carries such a step, which is right for a request an operator sent and wrong here: the
                     // undervolt and the temperature cap of the registry have nothing to do with the ceiling, and
                     // losing them would turn one refused control into three. s->Stored itself does not move, so

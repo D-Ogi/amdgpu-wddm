@@ -130,7 +130,7 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
   (`0x43`), clamped to `BC250_CPU_MAX_MHZ`. The core clock counts because it is the firmware's own answer of the boost
   it gives. On unit A the P-state table stops at 3200 MHz while the cores boost to 3500 MHz, so a baseline of the
   table alone made each restore a cut. The number is still an answer of the chip, not a constant of the driver.
-- The record keeps the two answers apart (0.7.216.23, BD-094), because they are not the same number: `table_mhz`
+- The record keeps the two answers apart (0.7.216.24, BD-094), because they are not the same number: `table_mhz`
   is what a loaded core is judged against in the undervolt search, and `boost_mhz` is the ceiling a restore asks
   for. A core answers the clock of the moment, so an idle start gets no boost answer at all: the read stage then
   keeps one core busy for a short window and reads the core clocks again (the boost probe), because no message of

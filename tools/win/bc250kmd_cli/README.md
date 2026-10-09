@@ -33,7 +33,7 @@ bc250kmd_cli clock read | clock set <MHz> <mV>    one KMD clock sample, or the c
 bc250kmd_cli log [from]                           the driver's log ring, 64 lines per escape, without the adapter lock (0.7.184)
 bc250kmd_cli log summary [from | only]            the WDDM counters written into the ring first (one HardwareAccess escape),
                                                   then the ring; only: just the counter block, beside the ring, the form
-                                                  for a poller (0.7.216.23, docs/design/kmd-log-ring.md)
+                                                  for a poller (0.7.216.24, docs/design/kmd-log-ring.md)
 bc250kmd_cli telemetry [count [interval ms]]      DPM snapshot and segment statistics: what the monitor's GPU line shows
 bc250kmd_cli vram [hardware-id]                   dxgkrnl's segment statistics of any adapter, one line per segment,
                                                   then the dedicated and shared system memory sizes (0.7.216.8)
@@ -63,7 +63,7 @@ idles the GPU for it and a running game waits: BD-054 was the overlay polling a 
 `log summary` took 16 of them every 5 s (280-420 ms per poll). The overlay reads that line and warns when
 M is above 1, or when the line is missing.
 
-From KMD 0.7.216.23 `log summary only` costs the ring one line instead of about 320: the driver keeps the block
+From KMD 0.7.216.24 `log summary only` costs the ring one line instead of about 320: the driver keeps the block
 beside the ring and answers `SummaryFrom` as the sequence of the block's first line, which pages exactly like a
 ring sequence (BD-097, `docs/design/kmd-log-ring.md`). `log summary` without a position still writes the block
 into the ring, where a reader of the whole trail wants it. The tool asks for the sequence the driver answered

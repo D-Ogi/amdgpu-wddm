@@ -51,7 +51,7 @@ One log summary is about 320 lines. In the ring that is 42 % of the tail for eac
 that asks for a summary every few seconds rotates the whole ring in about 12 s. The overlay polled
 the summary that way until KMD 0.7.213, and the b23 lab read found the cost in the ring.
 
-From KMD 0.7.216.23 the polling form of the escape writes the block beside the ring:
+From KMD 0.7.216.24 the polling form of the escape writes the block beside the ring:
 
 - `bc250kmd_cli log summary only` sends `From` as `BC250_LOG_FROM_SUMMARY`. The driver writes the
   block into storage of its own, answers `SummaryFrom` as the sequence of the block's first line,

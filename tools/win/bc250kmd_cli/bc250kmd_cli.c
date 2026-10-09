@@ -2431,7 +2431,7 @@ static int Log(const WCHAR *fromText, int summary)
         if (from == BC250_LOG_FROM_SUMMARY) from = log.From;
         // BD-097: a read inside the summary space pages one block, and the driver holds one block at a time. An
         // empty page whose SummaryFrom names another block is a block that a newer summary replaced, not the end
-        // of this one, so a short block is never printed as if it were whole. A driver before 0.7.216.23 answers
+        // of this one, so a short block is never printed as if it were whole. A driver before 0.7.216.24 answers
         // SummaryFrom 0 for a page read and says nothing of the kind.
         if (from >= BC250_LOG_SUMMARY_SEQ)
             block = BC250_LOG_SUMMARY_SEQ +
