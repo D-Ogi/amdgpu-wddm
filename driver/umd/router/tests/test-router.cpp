@@ -885,14 +885,15 @@ static void FrontRuleTests()
     compositor.opened = false;
     compositor.shared = false;
     compositor.record = FlipRecord(false, BC250_SURFACE_RESOURCE_PRIMARY);
-    CHECK(FlipReason(caps, &client, &compositor) == FlipRefusal::none, "the admissible pair is refused: %s",
-          FlipRefusalText(FlipReason(caps, &client, &compositor)));
-    CHECK(FlipSupported(caps, &client, &compositor), "FlipSupported disagrees with FlipReason");
+    CHECK(FlipReason(caps, &client, &compositor, 0u) == FlipRefusal::none, "the admissible pair is refused: %s",
+          FlipRefusalText(FlipReason(caps, &client, &compositor, 0u)));
+    CHECK(FlipSupported(caps, &client, &compositor, 0u), "FlipSupported disagrees with FlipReason");
 
     // One refusal per clause, in the order the rule applies them. Each case changes exactly one thing.
+    // `flags` is the CheckDirectFlipFlags of the question; 0 is the ordinary VSync one.
     auto run = [&](const bc250_scanout_caps &c, const Resource *a, const Resource *b, FlipRefusal want,
-                   const char *what) {
-        const FlipRefusal got = FlipReason(c, a, b);
+                   const char *what, unsigned flags = 0u) {
+        const FlipRefusal got = FlipReason(c, a, b, flags);
         CHECK(got == want, "%s: rule says %s, expected %s", what, FlipRefusalText(got), FlipRefusalText(want));
     };
     run(caps, nullptr, &compositor, FlipRefusal::handle, "a null client handle");
@@ -999,6 +1000,50 @@ static void FrontRuleTests()
         a = client;
         a.pitch = 1920 * 4 + 256;
         run(caps, &a, &compositor, FlipRefusal::pitch, "two different pitches");
+    }
+    // The flag-by-format matrix of the IMMEDIATE clause (audit finding K4). The contract: "If the swizzle
+    // can only be changed at every VSync interval, ensure that the CheckDirectFlipFlags parameter does not
+    // have a value of D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE" (ref/ddi-display/d3d10umddi.md:8833-8838).
+    // This plane changes the swizzle at VUPDATE alone, so every pair of two different rows is refused for
+    // an IMMEDIATE question and admitted for an ordinary one. A pair of one row changes no swizzle and is
+    // admitted either way.
+    {
+        bc250_scanout_caps planes = caps;
+        planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        const DXGI_FORMAT rows[] = {DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM,
+                                    DXGI_FORMAT_R10G10B10A2_UNORM};
+        for (DXGI_FORMAT one : rows) {
+            for (DXGI_FORMAT other : rows) {
+                Resource a = client, b = compositor;
+                a.format = one;
+                b.format = other;
+                const bool same = one == other;
+                run(planes, &a, &b, FlipRefusal::none, "a pair of scan-out rows at VSync", 0u);
+                run(planes, &a, &b, same ? FlipRefusal::none : FlipRefusal::immediate_swizzle,
+                    same ? "one row under IMMEDIATE" : "two rows under IMMEDIATE", kFlipCheckImmediate);
+            }
+        }
+        // An unknown flag is not the IMMEDIATE bit and changes nothing; the bit itself is the WDK value
+        // (front-device.cpp asserts the mirror against d3d10umddi.h, which this host test does not include).
+        static_assert(kFlipCheckImmediate == 0x00000001u,
+                      "kFlipCheckImmediate is not D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE");
+        {
+            Resource a = client, b = compositor;
+            a.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            run(planes, &a, &b, FlipRefusal::none, "two rows under an unknown flag", 0x80000000u);
+            run(planes, &a, &b, FlipRefusal::immediate_swizzle, "two rows under IMMEDIATE and an unknown flag",
+                kFlipCheckImmediate | 0x80000000u);
+            // An earlier clause still names itself: the IMMEDIATE clause sits with the format clauses, so
+            // it is not a new first answer for every refusal. The clauses after it (geometry, pitch) are
+            // reached only by a pair whose two rows are the same one.
+            a.record = FlipRecord(true, BC250_SURFACE_RESOURCE_PRIMARY);
+            run(planes, &a, &b, FlipRefusal::client_scannable,
+                "an IMMEDIATE question whose client record has no SCANOUT bit", kFlipCheckImmediate);
+            a = client;
+            a.width = 1280;
+            run(planes, &a, &b, FlipRefusal::geometry, "an IMMEDIATE question whose pair differs in width",
+                kFlipCheckImmediate);
+        }
     }
     {
         Resource b = compositor;

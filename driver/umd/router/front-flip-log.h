@@ -28,7 +28,7 @@
 namespace bc250front {
 
 // One counter per FlipRefusal value (front-direct-flip.h asserts that the count matches the enum).
-static const unsigned kFlipRules = 14;
+static const unsigned kFlipRules = 15;
 static const LONG kFlipChangeLines = 256;
 static const ULONGLONG kFlipSummaryMs = 30000;
 

@@ -833,7 +833,11 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
     const Resource *compositor = bad_handles ? nullptr : &compositor_record;
     bc250_scanout_caps caps;
     const HRESULT query = ReadScanoutCaps(dev->adapter, &caps);
-    const FlipRefusal reason = FlipReason(caps, client, compositor);
+    // The flags are part of the question (audit finding K4): an IMMEDIATE flip over two different
+    // swizzles is refused by the rule itself, not answered TRUE and then quietly flipped at VUPDATE.
+    static_assert(kFlipCheckImmediate == D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE,
+                  "front-direct-flip.h mirrors D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE: the WDK value changed");
+    const FlipRefusal reason = FlipReason(caps, client, compositor, checkFlags);
     const bool answer = reason == FlipRefusal::none;
     if (answer) InterlockedIncrement(&dev->direct_flip_true);
     if (supported) *supported = answer ? TRUE : FALSE;
