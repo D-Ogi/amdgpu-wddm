@@ -291,10 +291,12 @@ refused; one dry run of this PC; where the build is not elevated, one real run t
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
 5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--nagi]
-[--switch-to xx] [--fixture <snapshot.json>]` in 23 runs: four languages at 1, 1.25, 1.5 and 2, with
-`test/snapshot-bd059.json` as the fixture, text at 150 %, Nagi shown, and two language switches. Every page is drawn
-to a PNG without a window at the default size and at the minimum size, and the whole page as `<page>-full.png`. The
-build fails when two sibling controls overlap, a text is cut, a page is wider than the window or its last control
+[--switch-to xx] [--fixture <snapshot.json>]` in 29 runs: four languages at 1, 1.25, 1.5 and 2, with
+`test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, Nagi shown, and two language
+switches. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
+page as `<page>-full.png`. The build fails when two sibling controls overlap, a text is cut, a page is wider than
+the page column it was built at (`LayoutRules.PageWidthFinding`: the column width of this moment is not the measure,
+because the window manager clamps a client size larger than the desktop), its last control
 lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
 stop, the art shows while "Show Nagi" is off, or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).

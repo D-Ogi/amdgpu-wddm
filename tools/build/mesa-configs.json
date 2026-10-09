@@ -47,6 +47,28 @@
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "recorded_script": "none yet: the radv set plus -Db_vscrt=mt, first built 2026-10-01"
     },
+    "radv-system": {
+      "description": "RADV Vulkan ICD for the system Vulkan loader (payload/vulkan/vulkan_radeon.dll): the radv set, with -Db_ndebug=true, so NDEBUG is defined and no assert is live in the shipped ICD. A failed RADV assert calls abort() in the game process, which ends the game with no message; releases up to b23 shipped this ICD with the asserts on, because the Mesa lines 2732f9c8 and 308a5e33 did not build with NDEBUG (vtn_cmat.c has a variable that only assert reads, and /we4189 made C4189 an error). Mesa a7f44c96 relaxes C4189 in MSVC NDEBUG builds, so the set now takes -Db_ndebug=true; the Mesa line must carry that commit. The option set is equal to the radv set, and this name stays because the release scripts and the rebuild records name the system ICD by it",
+      "needs_llvm": false,
+      "glslang": "required",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=amd",
+        "-Dgallium-drivers=[]",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "recorded_script": "the radv set of d6176765 (experiments/E27-m9-inference/radv-main/build.cmd), which built CF3948D6 and the b23 system ICD A6562DAF"
+    },
     "llvmpipe-umd": {
       "description": "Desktop D3D10 UMD: Gallium d3d10umd frontend on llvmpipe/softpipe, statically linked LLVM, static CRT",
       "needs_llvm": true,

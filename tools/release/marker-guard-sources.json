@@ -36,6 +36,11 @@
     { "name": "gui/per-app-graphics-settings", "commit": "28bd93c955b89b9225e8286ac218cc5c7558e120" },
     { "name": "main (b23 base, with kmd/hang-recovery-b22 5e10c2bf, b23 wagon 1)", "commit": "9c03c35cfbb79046fd4cce629082f51f5a43ed2b" },
     { "name": "kmd/k137-cpu-baseline (424b2945 only, b23 wagon 13)", "commit": "424b294558052ef0322c2146232c02ae501d7eaf" },
-    { "name": "fix/bd099-d3d11-vsync (b23 wagon 14)", "commit": "6c2ebcfa996b8ee669ffc0c4117681b54402c508" }
+    { "name": "fix/bd099-d3d11-vsync (b23 wagon 14)", "commit": "6c2ebcfa996b8ee669ffc0c4117681b54402c508" },
+    { "name": "fix/bd104-video-key (b25 wagon, BD-104)", "commit": "f38d8c400a46e79f7c3f9ebf79e3e67719236c32" },
+    { "name": "kmd/bd097-paging-log (b25 wagon, BD-097)", "commit": "887148461ab054798b275a98c98c3c316a79cf9b" },
+    { "name": "fix/bd094-boost-baseline (b25 wagon, BD-094)", "commit": "f82a00ccf3f26d9b15cdf4e4baa4221f82157186" },
+    { "name": "fix/control-smoke-width (b25 wagon)", "commit": "c312a33d6fb6b2ccadee879ab6feaeb38541d855" },
+    { "name": "build/b25-radv-system-ndebug (b25 wagon, the radv-system option set)", "commit": "a2ffa26c4b0e15bf73e572d3d640002f42159375" }
   ]
 }

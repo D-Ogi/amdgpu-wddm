@@ -20,6 +20,7 @@ static partial class UnitTests
         RecentLaunchRecords();
         Search();
         WindowFit();
+        PageWidthRule(root);
         Caches();
         SensorRows();
         GroupsAndOrigins();
@@ -280,6 +281,37 @@ static partial class UnitTests
         Check(title.Top >= 0, "WU-036: the title bar comes back on a screen");
         var none = DisplayInfo.Fit(w, new List<Rectangle>(), min, 30);
         Equal(w, none, "WU-036: no screen information: nothing moves");
+    }
+
+    // G-RENDER: the page width rule of --smoke-render. A page is measured against the column it was built at, so that
+    // a real overflow is still a finding and a client size clamped after the build is not (b24 lab round 3: on a
+    // 1024x768 session-0 desktop the 1240 px client became 1028 px, the live column 449 px, and the correctly built
+    // 661 px home page was reported as too wide).
+    static void PageWidthRule(string root)
+    {
+        // The real overflow: a page wider than its own build column, slack included, always fails.
+        var overflow = LayoutRules.PageWidthFinding("home", 700, 661, 2);
+        Check(overflow != null, "G-RENDER: a page wider than its own build column fails");
+        Check(overflow != null && overflow.Contains("home") && overflow.Contains("700") && overflow.Contains("661"),
+            "G-RENDER: the finding names the page, its width and its build column: " + overflow);
+        Check(LayoutRules.PageWidthFinding("graphics", 2000, 1339, 10) != null, "G-RENDER: a page far wider than its build column fails");
+        Check(LayoutRules.PageWidthFinding("home", 664, 661, 2) != null, "G-RENDER: one px past the slack fails");
+        // A page that fits passes, at the slack and below it.
+        Equal(null, LayoutRules.PageWidthFinding("home", 661, 661, 2), "G-RENDER: a page as wide as its build column passes");
+        Equal(null, LayoutRules.PageWidthFinding("home", 663, 661, 2), "G-RENDER: the slack of a fractional DPI scale passes");
+        Equal(null, LayoutRules.PageWidthFinding("home", 400, 661, 2), "G-RENDER: a narrower page passes");
+        // The regression itself: the page was built at 661 and the live column shrank to 449. The live column is not
+        // an input of the rule any more, so a correctly built page gives no finding.
+        Equal(null, LayoutRules.PageWidthFinding("home", 661, 661, 2), "G-RENDER: a client size clamped after the build is no finding");
+        Check(LayoutRules.PageWidthFinding("home", 661, 449, 2) != null, "G-RENDER: the rule reads the build column, so 661 over 449 is still a finding");
+        Throws<ArgumentOutOfRangeException>(() => LayoutRules.PageWidthFinding("home", 700, 661, -1), "G-RENDER: negative slack is refused");
+        Throws<ArgumentNullException>(() => LayoutRules.PageWidthFinding(null, 700, 661, 2), "G-RENDER: a finding without a place is refused");
+        // The window code asks the form for the build column, not for the width of this moment.
+        var smoke = Regex.Replace(File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\MainForm.Smoke.cs")), @"//[^\n]*", "");
+        var widthCall = smoke.Split('\n').FirstOrDefault(l => l.Contains("LayoutRules.PageWidthFinding"));
+        Check(widthCall != null && widthCall.Contains("PageColumnWidth"),
+            "G-RENDER: the render gate measures the page against PageColumnWidth: " + widthCall);
+        Check(!Regex.IsMatch(smoke, @"built\.Width\s*>\s*ColumnWidth"), "G-RENDER: the render gate no longer measures the page against the live column width");
     }
 
     // F-CACHE: the D3D12 engine cache counted from a directory; the other caches honestly unknown.

@@ -35,6 +35,7 @@
 #include "bc250_sdma_virtual_ptes.h"
 #include "paging_intervals.h"
 #include "paging_permutation.h"
+#include "log_rate.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
 #include "bc250_gmc.h"
@@ -206,6 +207,13 @@ typedef struct _BC250_GFX {
     volatile LONG PagingSubmitFailed;     // sticky, like SubmitFailed, but independent: node 1 fails on its own hardware
     volatile LONG PagingSubmitInFlight;   // SDMA paging retains its independent one-in-flight rule
     ULONG PagingSubmitSeq;
+    // BD-097: the one line a successful paging submit writes, rate limited (log_rate.h). An idle desktop submits
+    // paging work about twice a second, and the uncapped line was 708 of the ring's 768 rotating lines in the
+    // b23 lab read: the mode sets of an hour before were gone. Its own spin lock, because the decision runs at
+    // DISPATCH_LEVEL on any processor, outside GartLock and outside Sdma0RingLock (the log call itself happens
+    // after the lock is released, as it did before). A few instructions under the lock, no GuardLog inside it.
+    KSPIN_LOCK PagingLogLock;
+    BC250_LOG_RATE PagingLogRate;
 } BC250_GFX;
 
 // DPC-safe CPU lifetime references. Admission and pointer lookup share a device
@@ -1018,6 +1026,24 @@ ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device)
     skipped = (ULONG)InterlockedCompareExchange(&gfx->HotSubmitLinesSkipped, 0, 0);
     GfxAccessRelease(Device);
     return skipped;
+}
+
+// BD-097: the paging submit line's own tally - submits, lines left out and summary lines - for the log summary,
+// through the same access gate. Read under PagingLogLock, so the three numbers are one moment.
+void GfxPagingLogCounts(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Submits, _Out_ ULONG* Skipped,
+                        _Out_ ULONG* Summaries)
+{
+    BC250_GFX* gfx = GfxAccessAcquire(Device);
+    KIRQL irql;
+
+    *Submits = *Skipped = *Summaries = 0;
+    if (gfx == NULL) return;
+    KeAcquireSpinLock(&gfx->PagingLogLock, &irql);
+    *Submits = gfx->PagingLogRate.Calls;
+    *Skipped = gfx->PagingLogRate.Skipped;
+    *Summaries = gfx->PagingLogRate.Summaries;
+    KeReleaseSpinLock(&gfx->PagingLogLock, irql);
+    GfxAccessRelease(Device);
 }
 
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
@@ -3662,6 +3688,28 @@ static int PagingWriteRing(void* Context, const PAGING_PRIVATE_SPAN* Span)
                              BC250_SDMA_PAGING_VMID,Span->CsaAddress)==0;
 }
 
+// BD-097: one successful paging submit's line, rate limited (log_rate.h). The decision is made under
+// PagingLogLock, which this is the only taker of, and the log call happens outside it. A summary line stands for
+// the submits that wrote nothing, with the time they took and the totals of this device start, so a quiet log is
+// never read as a quiet node - the same rule D5 gave the node-0 submit lines, with a cadence instead of a gate.
+// Nothing here touches the ring or the fence: a failure to log is not a failure to submit.
+static void GfxLogPagingSubmit(_Inout_ BC250_GFX* Gfx, ULONG Dwords, ULONGLONG Start, ULONG Seq)
+{
+    BC250_LOG_RATE_NOTE note;
+    KIRQL irql;
+    ULONG outcome;
+
+    KeAcquireSpinLock(&Gfx->PagingLogLock, &irql);
+    outcome = Bc250LogRateDecide(&Gfx->PagingLogRate, GuardLogMilliseconds(), &note);
+    KeReleaseSpinLock(&Gfx->PagingLogLock, irql);
+
+    if (outcome == BC250_LOG_RATE_LINE)
+        GuardLog("gfx: paging submit, %lu ring dwords reserved for buffer at 0x%llX, seq %lu", Dwords, Start, Seq);
+    else if (outcome == BC250_LOG_RATE_SUMMARY)
+        GuardLog("gfx: paging submit, seq %lu at 0x%llX: %lu submits in %llu ms, %lu of %lu with no line",
+                 Seq, Start, note.Pending, note.ElapsedMs, note.Skipped, note.Calls);
+}
+
 static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
                           ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
 {
@@ -3731,7 +3779,7 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
 
     gfx->PagingSubmitSeq = seq;
     *Seq = seq;
-    GuardLog("gfx: paging submit, %lu ring dwords reserved for buffer at 0x%llX, seq %lu", dwords, Start, seq);
+    GfxLogPagingSubmit(gfx, dwords, Start, seq);
     return STATUS_SUCCESS;
 }
 
@@ -3958,6 +4006,10 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
     KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
+    // BD-097: the paging submit line's rate limit starts over at every device start, so the first submits of a
+    // start are always in the log in full.
+    KeInitializeSpinLock(&gfx->PagingLogLock);
+    Bc250LogRateReset(&gfx->PagingLogRate);
     Device->Gfx = gfx;
     GfxAccessOpen(Device);
     GuardLog("gfx: ready, GPU submission %s, paging node %s, hot submit log %s", gfx->SubmitGate ? "allowed" : "off",

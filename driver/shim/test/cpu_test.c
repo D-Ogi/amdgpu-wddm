@@ -467,10 +467,14 @@ static void test_restore(void)
 	CHECK(p.step[2].kind == BC250_CPU_STEP_TEMP && p.step[2].cools == 0u);
 }
 
-/* The baseline clock (0.7.216.15, K137). Up to 0.7.216.14 it was the P-state table's highest entry alone: unit A
- * answers 3200 MHz there while the firmware boosts to 3481-3500 MHz, so every revert, reset and release of the
- * joint arm sent 3200 MHz and held one busy thread at about 3180 MHz until a restart. The per-core clocks are the
- * firmware's own answer of the boost it gives, so they count; the release bound clamps the result. */
+/* The read stage's record of the clock the chip runs at by itself (0.7.216.24, BD-094; 0.7.216.15, K137).
+ * Up to 0.7.216.14 the baseline was the P-state table's highest entry alone: unit A answers 3200 MHz there while
+ * the firmware boosts one core to 3481-3500 MHz, so every revert, reset and release of the joint arm sent 3200 MHz
+ * and held one busy thread at about 3180 MHz until a restart (K220). 0.7.216.15 added the per-core clocks, which
+ * are the firmware's own answer of the boost it gives. The lab then showed the other half of the defect (arm A of
+ * the b23 BD-094 test): message 0x43 answers the clock of the MOMENT, so an idle start reads 900 to 1400 MHz, the
+ * band refuses those, and the baseline falls back to the table's 3200 MHz. The record therefore keeps the two tops
+ * apart, and the driver takes no clock limit while the boost top is missing. */
 static void test_baseline(void)
 {
 	unsigned int pstate[BC250_CPU_PSTATES] = { 3200u, 2800u, 1400u, 0u, 0u, 0u, 0u, 0u };
@@ -480,36 +484,194 @@ static void test_baseline(void)
 	unsigned int idle[BC250_CPU_CORES] = { 1400u, 550u, 0u, 0u, 0u, 0u, 0u, 0u };
 	unsigned int junk[BC250_CPU_CORES] = { 0xFFFFu, 0xFFFFFFFFu, 0u, 0u, 0u, 0u, 0u, 0u };
 	unsigned int low[BC250_CPU_CORES] = { 2780u, 2790u, 0u, 0u, 0u, 0u, 0u, 0u };
+	struct bc250_cpu_baseline b, previous;
 
-	/* The measured cold boot of unit A: P-states 3200 and the cores at 3500 give 3500. */
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, core, BC250_CPU_CORES, 0u) == 3500u);
-	/* No core answered: the P-state table alone, as up to 0.7.216.14. */
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, none, BC250_CPU_CORES, 0u) == 3200u);
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, NULL, 0u, 0u) == 3200u);
+	/* The measured cold boot of unit A: P-states 3200 and the cores at 3500 give 3500, and the two tops stay
+	 * apart - the undervolt search is judged against the table and a restore asks for the boost. */
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, core, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 3500u && b.table_mhz == 3200u && b.boost_mhz == 3500u && b.boost_given == 1);
+	CHECK(bc250_cpu_boost_probe_needed(&b) == 0);
+	/* No core answered: the P-state table alone, and the boost is still unknown. A restore may not send this
+	 * as the ceiling, so the stage owes a boost probe. */
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, none, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 3200u && b.table_mhz == 3200u && b.boost_mhz == 0u && b.boost_given == 0);
+	CHECK(bc250_cpu_boost_probe_needed(&b) == 1);
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, NULL, 0u, NULL, &b);
+	CHECK(b.mhz == 3200u && b.boost_given == 0);
 	/* Cores above the release bound: the release bound. A restore never asks for more than stock. */
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, high, BC250_CPU_CORES, 0u) == BC250_CPU_MAX_MHZ);
-	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, high, BC250_CPU_CORES, 0u) == BC250_CPU_MAX_MHZ);
-	/* Idle cores sit under the floor and are no answer; the P-state table still names the clock. */
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, idle, BC250_CPU_CORES, 0u) == 3200u);
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, high, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == BC250_CPU_MAX_MHZ && b.boost_mhz == BC250_CPU_MAX_MHZ);
+	bc250_cpu_baseline_read(NULL, 0u, high, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == BC250_CPU_MAX_MHZ && b.table_mhz == 0u);
+	/* Idle cores sit under the floor and are no answer; the P-state table still names the clock, and this is
+	 * exactly the start that arm A met: the boost is unknown and the table's top is NOT it. */
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, idle, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 3200u && b.boost_given == 0 && bc250_cpu_boost_probe_needed(&b) == 1);
 	/* Values that are not clocks of this part are no answer, and they never clamp to the release bound. */
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, junk, BC250_CPU_CORES, 0u) == 3200u);
-	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, junk, BC250_CPU_CORES, 0u) == 0u);
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, junk, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 3200u && b.boost_mhz == 0u);
+	bc250_cpu_baseline_read(NULL, 0u, junk, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 0u && b.boost_given == 0);
 	/* Nothing plausible at all: no clock limit is named, and the restore says the limit stays. */
-	CHECK(bc250_cpu_baseline_mhz(none, BC250_CPU_PSTATES, none, BC250_CPU_CORES, 0u) == 0u);
+	bc250_cpu_baseline_read(none, BC250_CPU_PSTATES, none, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 0u && b.table_mhz == 0u && b.boost_given == 0);
 	/* The cores alone (a P-state table that did not answer) still name the boost. */
-	CHECK(bc250_cpu_baseline_mhz(none, BC250_CPU_PSTATES, core, BC250_CPU_CORES, 0u) == 3500u);
-	/* A later read stage of the same start raises the baseline and never lowers it. */
-	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, low, BC250_CPU_CORES, 3200u) == 3200u);
-	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, core, BC250_CPU_CORES, 3200u) == 3500u);
-	CHECK(bc250_cpu_baseline_mhz(NULL, 0u, none, BC250_CPU_CORES, 3500u) == 3500u);
-	/* The held state of K137 (one busy thread at 2.78 GHz) still gives the P-state table's 3200. */
-	CHECK(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, low, BC250_CPU_CORES, 0u) == 3200u);
+	bc250_cpu_baseline_read(none, BC250_CPU_PSTATES, core, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 3500u && b.boost_given == 1);
+	/* A later read stage of the same start raises the baseline and never lowers it: each top of the record is a
+	 * floor of the next stage. */
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, core, BC250_CPU_CORES, NULL, &previous);
+	bc250_cpu_baseline_read(NULL, 0u, idle, BC250_CPU_CORES, &previous, &b);
+	CHECK(b.mhz == 3500u && b.table_mhz == 3200u && b.boost_mhz == 3500u);
+	bc250_cpu_baseline_read(NULL, 0u, none, BC250_CPU_CORES, &previous, &b);
+	CHECK(b.mhz == 3500u);
+	/* The held state of K137 (one busy thread at 2.78 GHz) reads under the band's floor of 2800 MHz, so it is no
+	 * answer: the clock limit falls back to the table's 3200 MHz and the boost stays unknown. That is the right
+	 * reading of that state, because the clocks of it were held by a cap of our own. */
+	bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, low, BC250_CPU_CORES, NULL, &b);
+	CHECK(b.mhz == 3200u && b.boost_mhz == 0u && b.boost_given == 0);
+	CHECK(bc250_cpu_boost_probe_needed(&b) == 1);
 	/* A baseline of 3500 is a restore that the release admits without the lab bound. */
 	{
-		struct bc250_cpu_settings b = set(bc250_cpu_baseline_mhz(pstate, BC250_CPU_PSTATES, core,
-									  BC250_CPU_CORES, 0u), 0, 100u);
-		b.uv_given = 1;
-		CHECK(bc250_cpu_settings_check(&b, 0) == BC250_CPU_OK);
+		struct bc250_cpu_settings s;
+		bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, core, BC250_CPU_CORES, NULL, &b);
+		s = set(b.mhz, 0, 100u);
+		s.uv_given = 1;
+		CHECK(bc250_cpu_settings_check(&s, 0) == BC250_CPU_OK);
+	}
+	/* A missing record owes a probe: nothing is known yet. */
+	CHECK(bc250_cpu_boost_probe_needed(NULL) == 1);
+	/* The probe's own bounds stay small enough for a start path: one core busy for at most about a fifth of a
+	 * second (the windows plus the getter gap of every core of every window). */
+	{
+		unsigned int rounds = BC250_CPU_BOOST_PROBE_ROUNDS, window = BC250_CPU_BOOST_PROBE_MS;
+		unsigned int busiest = rounds * (window + BC250_CPU_CORES * BC250_CPU_GETTER_GAP_MS);
+		CHECK(rounds >= 1u && window >= 1u && busiest <= 250u);
+	}
+}
+
+/* One start of driver/kmd/cpu.c, so that the three starts below are the sequences the KMD runs and not three
+ * single calls. The rule is CpuRecordBaseline's: the full read stage records the baseline, a later stage of the
+ * same start may raise its clock and never lower it, and nothing is recorded once this driver has applied
+ * something, because then the per-core clocks answer OUR limit and not the firmware's own ceiling. */
+struct cpu_start {
+	struct bc250_cpu_baseline read;		/* what the stages of this start have answered */
+	struct bc250_cpu_settings baseline;	/* what a revert, a reset or a joint release asks for */
+	int valid;				/* the baseline is recorded */
+	int applied;				/* this driver has sent something: the record is closed */
+	int probes;				/* stages that owed a boost probe */
+};
+
+static void start_stage(struct cpu_start *st, const unsigned int *pstate, const unsigned int *core, int full)
+{
+	struct bc250_cpu_baseline read;
+	unsigned int previous = (st->valid && st->baseline.max_given) ? st->baseline.max_mhz : 0u;
+	if (st->applied) return;
+	if (!st->valid && !full) return;		/* the full stage records first: it has the table */
+	bc250_cpu_baseline_read(full ? pstate : NULL, full ? BC250_CPU_PSTATES : 0u, core, BC250_CPU_CORES,
+				&st->read, &read);
+	st->read = read;
+	if (bc250_cpu_boost_probe_needed(&read)) st->probes++;
+	if (!st->valid) {
+		st->valid = 1;
+		st->baseline = set(read.mhz, 0, 100u);
+		st->baseline.uv_given = 1;		/* no curve scale survives a boot */
+		return;
+	}
+	if (read.mhz > previous) { st->baseline.max_given = 1; st->baseline.max_mhz = read.mhz; }
+}
+
+/* 1 when the start admits a clock limit at all: driver/kmd/cpu.c refuses one while the firmware's own ceiling is
+ * unknown (BC250_CPU_ERROR_NO_CEILING), because the way back out of the chip could only be the P-state table's
+ * top, which is under the boost. */
+static int start_admits_clock(const struct cpu_start *st)
+{
+	return st->valid && st->read.boost_given ? 1 : 0;
+}
+
+/* The three starts of the BD-094 rule, with the clocks the lab measured on unit A. */
+static void test_baseline_starts(void)
+{
+	unsigned int pstate[BC250_CPU_PSTATES] = { 3200u, 2800u, 1400u, 0u, 0u, 0u, 0u, 0u };
+	unsigned int sleepy[BC250_CPU_CORES] = { 1400u, 900u, 1400u, 0u, 900u, 1400u, 0u, 0u };
+	unsigned int probed[BC250_CPU_CORES] = { 1400u, 3500u, 1400u, 0u, 900u, 1400u, 0u, 0u };
+	unsigned int busy[BC250_CPU_CORES] = { 3500u, 3500u, 3490u, 0u, 3481u, 3500u, 0u, 0u };
+	unsigned int stretched[BC250_CPU_CORES] = { 3300u, 3280u, 0u, 0u, 0u, 0u, 0u, 0u };
+	struct cpu_start st;
+	struct bc250_cpu_settings trial, before, back;
+
+	/* Arm A: a warm restart with no load, which is how a user meets the driver. The stage reads the clocks of
+	 * the moment (1400/900 MHz), so the boost is unknown and the stage owes the probe. */
+	memset(&st, 0, sizeof(st));
+	start_stage(&st, pstate, sleepy, 1);
+	CHECK(st.valid && st.probes == 1);
+	CHECK(st.baseline.max_given && st.baseline.max_mhz == 3200u && !st.read.boost_given);
+	/* 0.7.216.22 stopped here: the clock control was admitted and a revert sent 0x8F 3200, which held one busy
+	 * thread near 3180 MHz until a restart. 0.7.216.24 admits no clock limit in this state. */
+	CHECK(start_admits_clock(&st) == 0);
+	/* The probe keeps one core busy and reads the per-core clocks again inside the same stage. The firmware
+	 * answers 3500 MHz on the core it ran on, and the baseline of the start is the boost. */
+	start_stage(&st, pstate, probed, 1);
+	CHECK(st.baseline.max_given && st.baseline.max_mhz == 3500u);
+	CHECK(st.read.boost_given && st.read.table_mhz == 3200u && st.read.boost_mhz == 3500u);
+	CHECK(start_admits_clock(&st) == 1);
+	/* The revert of a 3300 MHz trial now names the boost, not the table: that is the whole defect. */
+	trial = set(3300u, 0, 0);
+	memset(&before, 0, sizeof(before));
+	memset(&back, 0, sizeof(back));
+	CHECK(bc250_cpu_restore_target(&trial, &before, &st.baseline, &back) == 1);
+	CHECK(back.max_given && back.max_mhz == 3500u);
+	/* The undervolt search still measures stretching against the table's top and not against the boost: one
+	 * busy core reaches higher than every core under the search's load. */
+	CHECK(st.read.table_mhz == 3200u);
+
+	/* Arm B: one busy thread during the first stage, which is how the b23 lab run passed. The cores answer the
+	 * boost by themselves, so no probe is owed at all. */
+	memset(&st, 0, sizeof(st));
+	start_stage(&st, pstate, busy, 1);
+	CHECK(st.valid && st.probes == 0 && start_admits_clock(&st) == 1);
+	CHECK(st.baseline.max_given && st.baseline.max_mhz == 3500u && st.read.table_mhz == 3200u);
+
+	/* A start that applies a kept undervolt. The stage records the baseline BEFORE the first write, so the
+	 * undervolt of the registry cannot move it; and once something is applied no stage records anything, because
+	 * the per-core clocks then answer our own limit. A later stage with stretched cores leaves the boost alone. */
+	memset(&st, 0, sizeof(st));
+	start_stage(&st, pstate, busy, 1);
+	CHECK(st.baseline.max_given && st.baseline.max_mhz == 3500u);
+	CHECK(st.baseline.uv_given && st.baseline.uv_steps == 0u);	/* the way back out of any undervolt */
+	st.applied = 1;							/* the stored undervolt is in the chip */
+	start_stage(&st, pstate, stretched, 1);
+	CHECK(st.baseline.max_mhz == 3500u && st.read.boost_mhz == 3500u);
+	/* The revert of that undervolt asks for 0 steps and the recorded boost, so it cannot cut the clock. */
+	trial = set(0, 4u, 0);
+	memset(&before, 0, sizeof(before));
+	memset(&back, 0, sizeof(back));
+	CHECK(bc250_cpu_restore_target(&trial, &before, &st.baseline, &back) == 1);
+	CHECK(back.uv_given && back.uv_steps == 0u);
+	CHECK(!back.max_given || back.max_mhz == 3500u);
+
+	/* The start where even the probe answers nothing (a part that never leaves its named P-states, or a probe
+	 * that the firmware refused): the clock control stays refused for the whole start, and the undervolt and the
+	 * temperature cap are unaffected. A restart is the way out, and it costs nothing in the chip. */
+	memset(&st, 0, sizeof(st));
+	start_stage(&st, pstate, sleepy, 1);
+	start_stage(&st, pstate, sleepy, 1);
+	CHECK(st.probes == 2 && start_admits_clock(&st) == 0);
+	CHECK(st.baseline.uv_given && st.baseline.temp_given);
+	/* The stored settings of that start still go in, without their clock limit alone: one refused control must
+	 * not cost the other two (driver/kmd/cpu.c, the stored settings of CpuStart). The plan then carries the
+	 * undervolt and the cap, and no clock step, so nothing of it can be refused for the missing ceiling. */
+	{
+		struct bc250_cpu_settings none, stored = set(3300u, 6u, 85u);
+		struct bc250_cpu_plan p;
+		unsigned int i, clocks = 0;
+		if (!start_admits_clock(&st)) { stored.max_given = 0; stored.max_mhz = 0; }
+		CHECK(!stored.max_given && stored.uv_given && stored.uv_steps == 6u && stored.temp_c == 85u);
+		memset(&none, 0, sizeof(none));
+		memset(&p, 0, sizeof(p));
+		CHECK(bc250_cpu_plan(&none, &stored, 0, &p) == BC250_CPU_OK && p.count == 2);
+		for (i = 0; i < p.count; i++) if (p.step[i].kind == BC250_CPU_STEP_CLOCK) clocks++;
+		CHECK(clocks == 0);
 	}
 }
 
@@ -682,6 +844,7 @@ int main(void)
 	test_plan();
 	test_restore();
 	test_baseline();
+	test_baseline_starts();
 	test_sample();
 	test_search();
 	test_mask();

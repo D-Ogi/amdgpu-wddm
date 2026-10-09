@@ -265,16 +265,32 @@ static unsigned int cpu_baseline_take(unsigned int top, unsigned int mhz)
 	return mhz > top ? mhz : top;
 }
 
-unsigned int bc250_cpu_baseline_mhz(const unsigned int *pstate_mhz, unsigned int pstates,
-				    const unsigned int *core_mhz, unsigned int cores, unsigned int previous_mhz)
+void bc250_cpu_baseline_read(const unsigned int *pstate_mhz, unsigned int pstates,
+			     const unsigned int *core_mhz, unsigned int cores,
+			     const struct bc250_cpu_baseline *previous, struct bc250_cpu_baseline *out)
 {
-	unsigned int i, top = 0u;
-	for (i = 0u; pstate_mhz != NULL && i < pstates; i++) top = cpu_baseline_take(top, pstate_mhz[i]);
-	for (i = 0u; core_mhz != NULL && i < cores; i++) top = cpu_baseline_take(top, core_mhz[i]);
-	if (top > BC250_CPU_MAX_MHZ) top = BC250_CPU_MAX_MHZ;
-	/* previous_mhz came out of this function earlier in the same start, so it is inside the band already. */
-	if (previous_mhz > top) top = previous_mhz;
-	return top;
+	unsigned int i, table = 0u, boost = 0u;
+	if (out == NULL) return;
+	for (i = 0u; pstate_mhz != NULL && i < pstates; i++) table = cpu_baseline_take(table, pstate_mhz[i]);
+	for (i = 0u; core_mhz != NULL && i < cores; i++) boost = cpu_baseline_take(boost, core_mhz[i]);
+	/* Every top of the same start is a floor: a stage that read nothing new cannot lower what another one saw.
+	 * The tops of *previous came out of this function, so they are inside the band already. */
+	if (previous != NULL) {
+		if (previous->table_mhz > table) table = previous->table_mhz;
+		if (previous->boost_mhz > boost) boost = previous->boost_mhz;
+	}
+	if (table > BC250_CPU_MAX_MHZ) table = BC250_CPU_MAX_MHZ;
+	if (boost > BC250_CPU_MAX_MHZ) boost = BC250_CPU_MAX_MHZ;
+	out->table_mhz = table;
+	out->boost_mhz = boost;
+	out->boost_given = boost != 0u ? 1 : 0;
+	out->mhz = boost > table ? boost : table;
+}
+
+int bc250_cpu_boost_probe_needed(const struct bc250_cpu_baseline *baseline)
+{
+	if (baseline == NULL) return 1;
+	return baseline->boost_given ? 0 : 1;
 }
 
 /* ---- the failure signs -------------------------------------------------------------------------- */

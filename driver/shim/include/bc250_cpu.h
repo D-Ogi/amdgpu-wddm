@@ -149,6 +149,8 @@ enum bc250_cpu_error {
 	BC250_CPU_ERROR_TEMP = 3,	/* temp_c outside MIN..MAX_TEMP_C */
 	BC250_CPU_ERROR_NOTHING = 4,	/* no value given, or none of them differs from what is applied */
 	BC250_CPU_ERROR_PLAN = 5,	/* the plan would need more steps than BC250_CPU_PLAN_MAX */
+	BC250_CPU_ERROR_NO_CEILING = 6,	/* a clock limit, and this start does not know the firmware's own ceiling:
+					 * the limit could not be given back (struct bc250_cpu_baseline) */
 	BC250_CPU_ERROR_COUNT
 };
 /* Ranges alone, against the release bound or the lab bound (lab=1 admits up to BC250_CPU_MAX_MHZ_LAB and needs
@@ -197,20 +199,52 @@ unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
 int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *before,
 			     const struct bc250_cpu_settings *baseline, struct bc250_cpu_settings *out);
 
-/* The clock limit of the recorded baseline (0.7.216.15, K137): the highest clock the firmware itself answered in
- * the read stage, over the P-state table (BC250_CPU_MSG_READ_PSTATE_MHZ) and the per-core clocks
- * (BC250_CPU_MSG_READ_CORE_MHZ). Both are the firmware's own answers, so neither is an invented constant: the
- * P-state table gives the highest named P-state (3200 MHz on unit A), and the per-core clock gives the boost the
- * firmware actually grants above it (3481 to 3500 MHz on unit A after a cold boot). Up to 0.7.216.14 the baseline
- * was the P-state table alone, so every restore sent 3200 MHz and capped the boost the firmware had given.
- *   - An answer outside BC250_CPU_MIN_MHZ..BC250_CPU_MAX_MHZ_LAB is not a clock of this part and counts as no
- *     answer (a core that did not answer reads 0, an idle core reads far under the floor).
- *   - The result is clamped to BC250_CPU_MAX_MHZ, the release bound: a restore never asks for more than stock.
- *   - previous_mhz is the baseline this start recorded already (0 for none). The result is never below it, so a
- *     later read stage of the same start can raise the baseline and never lower it.
- * Returns 0 when no answer is plausible and previous_mhz is 0: the baseline then names no clock limit. */
-unsigned int bc250_cpu_baseline_mhz(const unsigned int *pstate_mhz, unsigned int pstates,
-				    const unsigned int *core_mhz, unsigned int cores, unsigned int previous_mhz);
+/* What the read stage learned about the clock the chip runs at by itself (0.7.216.24, BD-094). Two answers of the
+ * firmware carry it, and they are not the same number:
+ *   table_mhz  the highest P-state clock (BC250_CPU_MSG_READ_PSTATE_MHZ). It is the top of the named P-states,
+ *              3200 MHz on unit A, and it is NOT the boost: the firmware grants one busy core 3481 to 3500 MHz
+ *              above it. This is the clock a loaded core is judged against in the undervolt search.
+ *   boost_mhz  the highest per-core clock (BC250_CPU_MSG_READ_CORE_MHZ) that is a clock of this part. A core
+ *              answers the clock of the moment, so an idle core answers far under the floor and counts as no
+ *              answer. Any answer inside the band was given to a core that was boosting, so it is a lower bound
+ *              of the firmware's own ceiling.
+ *   mhz        the clock limit a restore asks for (0.7.216.15, K137): the higher of the two, clamped to
+ *              BC250_CPU_MAX_MHZ (the release bound, so a restore never asks for more than stock), which is
+ *              the highest clock the firmware itself answered. 0 when neither answered.
+ *   boost_given  1 when boost_mhz carries an answer. Without it mhz is the P-state table alone, and sending it
+ *              as a restore CUTS the boost the firmware had given: that is BD-094 (0x8F 3200 held one busy
+ *              thread near 3180 MHz until a restart, K220). The driver therefore takes no clock limit it could
+ *              only give back from the table (bc250_cpu_boost_probe_needed, driver/kmd/cpu.c).
+ * No number here is invented by the driver; the release bound only clamps. */
+struct bc250_cpu_baseline {
+	unsigned int	mhz;		/* the clock limit of a restore, 0 for none */
+	unsigned int	table_mhz;	/* the P-state table's top, in band, 0 for none */
+	unsigned int	boost_mhz;	/* the highest per-core answer in band, 0 for none */
+	int		boost_given;	/* 1 when boost_mhz answered: a restore cannot cut the boost */
+};
+
+/* One read stage into *out. *previous is what this start recorded already (NULL or a zeroed record for none):
+ * every top in it is a floor, so a later read stage of the same start raises the baseline and never lowers it.
+ * An answer outside BC250_CPU_MIN_MHZ..BC250_CPU_MAX_MHZ_LAB is not a clock of this part and counts as no answer
+ * (a core that did not answer reads 0, an idle core reads far under the floor, and junk never clamps to the
+ * release bound). pstate_mhz or core_mhz may be NULL with a count of 0 for a stage that did not read it. */
+void bc250_cpu_baseline_read(const unsigned int *pstate_mhz, unsigned int pstates,
+			     const unsigned int *core_mhz, unsigned int cores,
+			     const struct bc250_cpu_baseline *previous, struct bc250_cpu_baseline *out);
+
+/* 1 when the boost ceiling of this start is still unknown, so the read stage owes a boost probe: a short busy
+ * window on one core, after which the per-core clocks answer the ceiling (BC250_CPU_BOOST_PROBE_MS,
+ * BC250_CPU_BOOST_PROBE_ROUNDS; driver/kmd/cpu.c CpuBoostProbe). The firmware has no message for the ceiling
+ * itself - the read allowlist of docs/hardware.md holds no GetMaxBoostMHz - so a busy window is the only way to
+ * make it answer. A record that already carries a per-core answer owes nothing. */
+int bc250_cpu_boost_probe_needed(const struct bc250_cpu_baseline *baseline);
+
+/* The boost probe's bounds: one busy window before the per-core clocks are read again, and at most this many
+ * windows. The probe stops at the first answer inside the band, so the usual cost is one window plus the
+ * getters of one core. Worst case it keeps one core of six busy for about a fifth of a second, once per start,
+ * and only on a start whose cores were all idle when the stage read them. */
+#define BC250_CPU_BOOST_PROBE_MS	25u
+#define BC250_CPU_BOOST_PROBE_ROUNDS	2u
 
 /* ---- what the hardware said, and the three failure signs --------------------------------------- */
 
