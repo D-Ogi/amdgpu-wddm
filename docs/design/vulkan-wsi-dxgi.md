@@ -156,6 +156,12 @@ a tested capability, and the release notes must say so until a client asks for a
 - `AMDGPU_WDDM_VK_WSI` in the environment, else the REG_SZ value `WsiRoute` under
   `HKLM\SOFTWARE\amdgpu-wddm\Vulkan`: `gdi`, `dxgi` (window swap chain) or `dxgi-composition`. An empty
   environment value counts as absent. Any other value selects GDI and the log names it invalid.
+- The registry read asks for the 64-bit view (`RRF_SUBKEY_WOW6464KEY`) on a 32-bit image. The installer and
+  the control application write that view only, so a 32-bit ICD without the flag would read the empty
+  `WOW6432Node` copy and the machine-wide rollback would not reach a 32-bit Vulkan application. The D3D12
+  shell and the DXVK front ask the same way (`driver/umd/d3d12/ddi-trace.h`,
+  `driver/umd/dxvk/scanout-primary.h`). No arm measures this yet: step 2 runs the 64-bit client, and the
+  x86 candidate has no arm.
 - The default is `dxgi` (`RADV_WDDM2_WSI_ROUTE_DEFAULT`). `gdi` from either source is the rollback, as
   ADR 0018 point 2 asks. An invalid value also selects GDI, so a mistyped rollback still rolls back.
 - **Application-local runtime modules do not change the route.** The presenter binds System32 `dxgi.dll` and
