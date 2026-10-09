@@ -159,7 +159,8 @@ than one directory. `/pathmap` changes only the paths in the debug information, 
 ### The MSVC recipes of this repository
 
 Each recipe built two times, from two work trees of one commit, into two output directories with paths of
-different lengths. "Before" is main `9c03c35c`. "After" is the branch `build/release-from-branches` at `10a4d091`.
+different lengths. "Before" is main `9c03c35c`. "After" is the branch at `51b1e876` (`10a4d091` before the
+rebase of this branch onto main `5fc83d67`).
 A hash is the first 8 hex digits of the SHA-256.
 
 | recipe | payload file | added switches | before: build 1, build 2 | after: both builds |
@@ -189,8 +190,8 @@ copies neither of them into the image.
 
 ### The Meson recipes of the forks
 
-The recipes `tools/build/build-mesa.ps1`, `build-dxvk.ps1` and `build-vkd3d.ps1` configure Meson. From `841e4018` on,
-each recipe calls `Add-ReproducibleMesonOptions` in `tools/build/common.ps1`. This function adds
+The recipes `tools/build/build-mesa.ps1`, `build-dxvk.ps1` and `build-vkd3d.ps1` configure Meson. From `308a689d` on
+(`841e4018` before the rebase), each recipe calls `Add-ReproducibleMesonOptions` in `tools/build/common.ps1`. This function adds
 `/Brepro /FC /d1trimfile:<source> /d1trimfile:<build>` to `c_args` and `cpp_args`. It adds
 `/Brepro /PDBALTPATH:%_PDB%` to `c_link_args` and `cpp_link_args`. Meson keeps only the last `-D` value of an
 option, so the function adds the switches to the value that the recipe gives and does not give a second value.
@@ -200,7 +201,7 @@ and build directories must not contain white space, because Meson divides `c_arg
 `rebuild-check.ps1 -Twice` built one payload entry of each fork two times with 8 parallel jobs. The two builds used
 two copies of one commit and two output directories with paths of different lengths. "Before" is the recipe of
 the commit that the manifest of main names (`3c31bd97`, `d5593267`, `693c02b3`). "After" is the recipe of
-`841e4018`.
+`308a689d`.
 
 | fork commit | recipe | payload file | before: build 1, build 2 | what differs before | after: both builds |
 |---|---|---|---|---|---|
@@ -211,7 +212,7 @@ the commit that the manifest of main names (`3c31bd97`, `d5593267`, `693c02b3`).
 The DXVK image holds the name of one anonymous namespace, and its path hash (cause 8) is different in the two
 builds before the change. After the change the two builds are equal.
 
-The other fork entries of the manifest, built two times in the same way with the recipe of `841e4018`:
+The other fork entries of the manifest, built two times in the same way with the recipe of `308a689d`:
 
 | fork commit | recipe | payload file | after: both builds |
 |---|---|---|---|
@@ -230,8 +231,10 @@ another directory gives the same bytes.
 The `radv` option set has `-Db_ndebug=true` from `b4c74c86` on. With `NDEBUG`, line 714 of
 `src/compiler/spirv/vtn_cmat.c` at `2732f9c8` declares a variable that only `assert` reads. Mesa makes warning
 C4189 an error (`/we4189`), so the build stops. The shipped file was built with the option set of `d6176765`,
-which does not set `b_ndebug`. The system ICD stays on its Mesa line, so `build-mesa.ps1 -Config radv-system`
-(`1eb9ddc3`) names that option set: the `radv` set without `-Db_ndebug=true`.
+which does not set `b_ndebug`. The system ICD stayed on its Mesa line, so `build-mesa.ps1 -Config radv-system`
+(`1eb9ddc3`, on main as `a2ffa26c`) named that option set: the `radv` set without `-Db_ndebug=true`. From Mesa
+`a7f44c96`, which relaxes C4189 in MSVC `NDEBUG` builds, the `radv-system` set has `-Db_ndebug=true` as well,
+and the two measurements below describe the b23 file, not a file built with the current set.
 
 The b23 system ICD `A6562DAF` is Mesa `308a5e33` (`2732f9c8` and one BD-096 fix), built with the recipe of
 `d6176765`. Two measurements:
@@ -258,16 +261,21 @@ shipped files were built without `/Brepro`:
 
 What remains for the forks:
 
-1. The next release train builds each fork file with the recipe of `841e4018` or later, from its published commit.
+1. The next release train builds each fork file with the recipe of `308a689d` or later, from its published commit.
    Then `rebuild-check.ps1` can tie the file, and the manifest entry can drop its `unverified` field.
 2. Each fork file must have a `recipe.json` that names a committed recipe. Some shipped files came from an
    uncommitted copy of the recipe or from a build script outside the repository.
 3. The `llvmpipe-umd` builds link a local LLVM build (`scratch/llvm2312-build` and its x86 copy). A rebuild needs an
    LLVM build that a commit or a download record identifies.
-4. `vulkan/vulkan_radeon.dll` builds with `-Config radv-system`, because its Mesa line does not build with
-   `-Db_ndebug=true`.
+4. `vulkan/vulkan_radeon.dll` builds with `-Config radv-system`. Up to b23 that set had no `-Db_ndebug=true`,
+   because its Mesa line did not build with `NDEBUG`. From Mesa `a7f44c96` the set has it, and the system ICD
+   of `0.7.216.100-tester.23` is the first one built with it. That file reproduces, and the section below
+   measures it.
 
-### The shipped files
+### The shipped files of main 9c03c35c
+
+This section is the first measurement of the whole payload, made on the release that main `9c03c35c` named.
+The payload of `0.7.216.100-tester.23`, which the manifest in this tree describes, is the section after it.
 
 `tools/release/rebuild-check.ps1` built each payload entry of main `9c03c35c` again from the commit that its
 `built_from` record names, in new work trees under `scratch\repro-builds`. Ten files gave the shipped bytes:
@@ -298,3 +306,43 @@ kinds:
 
 A file of kinds 1 and 2 reproduces when the next release builds it again with the recipes of this branch. A fork
 file reproduces when it is built with the recipes of this branch and its commit is on a published branch.
+
+### The shipped files of 0.7.216.100-tester.23
+
+`tools/release/release-sources.json` in this tree describes the payload of `0.7.216.100-tester.23`, which main
+`5fc83d67` released. Of its 34 files, 30 are built by a recipe, 3 are data files of a commit, and one is the
+LunarG `vulkaninfo.exe`. Thirteen of the 30 claim a bit-identical rebuild, and the other 21 say why they
+cannot, with the recipe hashes or the switch that was missing.
+
+Two of the built files are the ones this release itself built, and both reproduce. Each was built two times
+from one commit of this branch, into two directories whose paths have different lengths.
+
+| payload file | commit | recipe | shipped | both builds |
+|---|---|---|---|---|
+| `kmd/bc250kmd.sys`, unsigned | `00f09bfa` | `driver/kmd/build.ps1` | `C8D69F59`, 668160 bytes | `C8D69F59` |
+| `kmd/bc250kmd.sys`, signed | `00f09bfa` | the same | `2D0F5CB6`, 669584 bytes | `2D0F5CB6` |
+| `kmd/bc250kmd.inf` | `00f09bfa` | the same | `444A5156`, 20866 bytes | `444A5156` |
+| `vulkan/vulkan_radeon.dll` | mesa `d3da6d0a` | `build-mesa.ps1 -Config radv-system` | `4E3F393F`, 21914112 bytes | `4E3F393F` |
+
+The kernel driver gives one more result than the table says. The shipped file came from a third output
+directory and from `00f09bfa`, while the first build of the train came from `c0c7a0a1`, the commit before it,
+which changes an identifier inside a comment of a compiled header. Three directories and two commits of the
+same sources therefore give one image. The catalog `bc250kmd.cat` is different in every build, because every
+build signs a new one, and `/Brepro` cannot reach a detached signature.
+
+The system Vulkan ICD is the first fork file of a release that reproduces. It needed two things that arrived
+together: the `radv-system` option set with `-Db_ndebug=true`, and a Mesa line that builds with `NDEBUG`. The
+shipped file was built with the recipe tree `998f4130`, whose `radv-system` set is equal to the set of this
+branch, field for field and in order, and the reproducible switches reach it through
+`Add-ReproducibleMesonOptions`.
+
+Two more files of the payload reproduce without a build: the two D3D11 capability records. They are 132 bytes
+each, and `tools/build/write-umd-config.py` writes them from the capability file of the probe and the hashes
+of the engine and the ICD of their architecture. Run again on the b24 round-3 capability files, the recipe
+gives `1E975948` (x64) and `A279A6CA` (x86), the bytes in the package.
+
+The nineteen other built files were made before this branch. Their reasons are of the same three kinds as in
+the section above, with one addition: a build whose source tree was not clean. The `recipe.json` of the two
+x64 engine builds of b23 counts five modified entries in the DXVK tree and three in the vkd3d-proton tree, so
+for those two files the commit alone does not name the sources. Each becomes verifiable the first time a
+train builds it with the recipes of this branch, from a clean tree of a published commit.
