@@ -258,6 +258,7 @@ ProgressSource HostedDispatch::progress_source() noexcept {
 // to report_deferred_removal.
 HRESULT HostedDispatch::remove_device(int site) noexcept {
     char name[48];std::snprintf(name,sizeof(name),"hosted-remove-device:%d",site);
+    ddi_first_removal("hosted-remove-device",__FILE__,site);
     ddi_failure_note(name,D3DDDIERR_DEVICEREMOVED);
     if(worker_==this){
         if(!lost_.exchange(true))removal_deferred_.store(true,std::memory_order_release);

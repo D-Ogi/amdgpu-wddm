@@ -51,8 +51,12 @@ struct Device {
     // Every failing DDI reports, also after the loss: pfnSetErrorCb fails the runtime's current API call
     // on the calling thread, so a call left unreported would return S_OK to the application. DDI threads
     // run at once; the callback is the runtime's per-call error state.
-    void remove() noexcept {
+    // The call site comes from the caller's own __builtin_LINE()/__builtin_FILE(), as
+    // HostedDispatch::remove_device takes its site, so the first removal of a process names the
+    // decision that made it without a switch and without a debugger (ddi_first_removal).
+    void remove(int line=__builtin_LINE(),const char* file=__builtin_FILE()) noexcept {
         lost.store(true);
+        ddi_first_removal("device-remove",file,line);
         ddi_failure_note("device-remove",D3DDDIERR_DEVICEREMOVED);
         if(callbacks.pfnSetErrorCb) callbacks.pfnSetErrorCb(runtime,D3DDDIERR_DEVICEREMOVED);
     }

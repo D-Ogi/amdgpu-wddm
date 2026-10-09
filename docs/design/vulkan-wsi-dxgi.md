@@ -310,6 +310,72 @@ What this does not do: it does not make the route present. If the freeze is in a
 route now ends as a bad frame rate and a named stage instead of a dead game, which is the difference between a
 lane experiment and a release defect. If it is not, the change has still named the window it is in.
 
+### A dead route retires the work it queued
+
+The third lab trial of 2026-10-09 ran the deadlines above and found the half of the answer they do not give.
+The route retired itself after 2000 ms, as designed, and the client froze anyway. The expired acquire read
+`image 0 blit fence have 18446744073709551615 want 2`, and `18446744073709551615` is `UINT64_MAX`, which is
+what `ID3D12Fence::GetCompletedValue` answers for a device that has been **removed**. The user-mode stack of
+the frozen client then named a call of its own: `vk_common_DeviceWaitIdle` under the recreate path the
+`VK_ERROR_OUT_OF_DATE_KHR` had sent it into.
+
+That freeze is a property of the present shape and not of the deadline. `wsi_common_queue_present` leaves
+**two** submissions on the application's queue per presented image. The first signals the image's shared blit
+timeline semaphore to `V`. The presenter's D3D12 queue then waits `V`, copies into the back buffer and signals
+`V + 1`. The second submission waits `V + 1` and signals the image's own Vulkan fence and semaphores. Only the
+presenter's `Signal` can reach `V + 1`, so a presenter that is gone leaves a queue submission waiting on a
+value nothing in the process can produce. `vkDeviceWaitIdle` waits for that submission, and it takes no
+timeout. The route's own deadlines cannot cover it: by then the route has already answered, correctly, that it
+is out of date.
+
+So a route that retires **signals the Vulkan side of every outstanding shared blit timeline from the CPU**, to
+the value the presenter's `Signal` should have reached:
+
+- `wsi_win32_route_retire_value` in `wsi_win32_deadline.h` is the rule, in plain C, so the host test drives
+  it: an image with a recorded present value above the semaphore's current value wants that value, and
+  anything else wants nothing. An image that never presented, and a timeline the presenter did reach, are both
+  left alone, and a second pass over the same chain finds nothing to do.
+- `wsi_win32_retire_blit_waits` applies it with `vkGetSemaphoreCounterValue` and `vkSignalSemaphore`, both
+  core in Vulkan 1.2 and both new entries of the WSI dispatch table. It runs on the two expiry paths (the
+  acquire and the queue flush) and on swapchain destroy of a route that is already retired, never on a live
+  one. Each image it releases logs the two values and the result.
+- A CPU signal exists for a timeline semaphore and for nothing else. There is no `vkSignalFence`, and none is
+  needed: the released second submission signals the image's fence and binary semaphores itself, which is
+  exactly the state the application is waiting for.
+- Signalling a timeline from the CPU to a value the GPU was going to signal is safe here because the GPU will
+  not signal it: the presenter is dead, which is the condition of this path. Over-signalling a live timeline
+  is a specification violation, so the live route is never touched.
+
+Two smaller changes come with it. A retired route stops offering the three surface formats that have no CPU
+path, so the swapchain the client creates after the error falls back to CPU images instead of answering
+`VK_ERROR_INITIALIZATION_FAILED`. And every expired wait logs `presenter device removed reason 0x<hr>` from
+`ID3D12Device::GetDeviceRemovedReason` on the presenter device, which turns the `UINT64_MAX` reading from an
+inference into an HRESULT.
+
+### The presenter's own removal site
+
+The removal is in our own D3D12 user-mode driver: the presenter line of round 3 reads
+`impl=system:D3D12Core.dll` on our adapter, so the device the route holds is a device of
+`amdgpu_wddm_d3d12.dll`. Round 3 could not name the site, because the shell's removal path wrote nothing a
+release build keeps: `Device::remove` called `ddi_failure_note`, which needs `AMDGPU_WDDM_DDI_TRACE=2` and
+writes to the debugger channel only.
+
+The shell therefore logs the **first** removal of a process on the always-on channel, once, behind no switch:
+`ddi_first_removal` in `ddi-trace.h` is a one-shot `std::atomic<bool>` exchange that writes
+`device removed: <what> at <file>:<line>, the first removal in this process` through `ddi_refusal`, the
+budgeted dual-channel path every refusal already uses. `Device::remove` takes `__builtin_LINE()` and
+`__builtin_FILE()` defaults, so every one of its call sites names itself with no change at the call site, and
+`HostedDispatch::remove_device` passes the site it was already given. One line per process bounds the cost: a
+removal storm cannot flood the channel, and the first removal is the one that matters, because the later ones
+are its consequences.
+
+The candidate sites, read out of the tree, are the queue submission path (`native-queue-ddi.cpp`,
+`native_execute`, where an engine `execute` other than `S_OK` removes the device), the deferred replay worker
+whose removal is reported later through `report_deferred_removal`, and the admitted-create clamp. The replay
+worker is the one that would explain round 3 exactly: a `Present1` that returned, and a removal reported after
+it from another thread. The lab arm reads the ICD's HRESULT line first and the shell's site line in the round
+that installs a shell, because the d3d12 slot is a hash-pinned registered triplet and not a file copy.
+
 ## Code
 
 | Repository, branch | Change |
@@ -328,8 +394,10 @@ lane experiment and a release defect. If it is not, the change has still named t
 | | `9974c121` after the offline review. The two-second bound says what it rests on. The GDI path's 3.18 ms is the only measured present. A retired route promises a window only for the waits it covers. The fence of an expired queue wait stays with the queue, which still has its `Signal` outstanding. `wsi_win32_route_wait_expired` is read into a local, not into a log argument |
 | | `8f0bfdfb` after round 2 of the review. The route test's own deadline comment had kept the present cost that was never measured |
 | | `b433f564`, `281fbbcb` and `0c0ffa4c` after the second lab trial. `route.presented` follows a completed present and an acquire that returned. The seventh stage name is `acquire-wait`, and the stage log is gated per chain. The present log flushes a row of an unproved route at once. An expired acquire writes the blit-fence reading. The fence that proves the route is the acquired image's own. The chain's last present belongs to another image and lags by one frame for ever |
+| | `cfa220dd` after the third lab trial. A retired route releases the submissions it left waiting on the shared blit timeline: `wsi_win32_route_retire_value` is the rule and `wsi_win32_retire_blit_waits` applies it. Both expiry paths log the presenter's `GetDeviceRemovedReason`. A retired route stops offering the formats with no CPU path. `wsi_common.c` takes `vkSignalSemaphore` and `vkGetSemaphoreCounterValue` into the WSI dispatch table. The route test takes the round-4 case |
 | bc250-win, `wsi/b26-vk-dxgi` (`wsi/vk-dxgi-b23` and `wsi/vk-dxgi` are the same note on the earlier bases) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 | bc250-win, `wsi/b27-vk-dxgi` | This note's BD-105 sections, and `radv-wsi-route-test.py` hashing the second header into its record |
+| | `driver/umd/d3d12`: the first device removal of a process names its own site on the always-on channel (`ddi_first_removal`, one shot). `Device::remove` takes `__builtin_FILE()` and `__builtin_LINE()` defaults, so each call site names itself |
 
 **32-bit processes.** The release carries two Vulkan ICDs: `payload/vulkan/vulkan_radeon.dll` from the system
 line, which this branch changes, and `payload/wow64/vulkan/vulkan_radeon.dll`, which is the x86 build of the
@@ -387,6 +455,14 @@ keeps the DXGI hooks.
   and the layout check (`check_blit_image`) is then the guard.
 
 ## Lab plan
+
+**Round 4 of BD-105 adds one measurement and no arm.** The decisive arm is still vkcube with `dxgi` asked, and
+its three outcomes are unchanged. What round 4 reads on top is the presenter's removal HRESULT in the route
+log, the release lines of the retired blit timelines, and the client's **window** from a one-shot task of the
+interactive session, because a client whose window answers is the whole of outcome 2 and round 3 measured only
+half of it. An SSH session on this lab is session 0, where `EnumWindows` sees no window of the logged-in
+desktop at all, so the probe has to run where the window lives. The verdict of the dxgi arms now gates on the
+route's proof line, which is how a round that did not present can no longer print PASS.
 
 **After BD-105 the plan has one decisive arm, and it is not a game.** vkcube with `dxgi` asked reproduces the
 freeze, as it did in the b26 trial. It needs no game and it fits in 170 s, so it is the arm that says whether
@@ -499,6 +575,9 @@ step 7 blocks the wagon in any case: Quake II RTX is a release gate (owner, 2026
 | `tools/build/build-radv-wsi-route-test.ps1` | The route rules: the switch and its three sources, the report of application-local modules, the D3D12 implementation check, and the LB7A import rules. Its negative control must fail every case |
 | The pipeline stage-cover host test of this line | The ported tree still builds and passes the host test the shipped line carries |
 | The fence-wait shape check and the BVH node address check | The port did not undo the two BD-102 fixes of tester.23. Each check reads its rule out of the tree first, and each one has a negative control |
+| The source gates of the round, each one with a control revision | Every rule this note describes is in the tree, and none of them passes on the revision before it. Twenty-four of them after round 4 |
+| The pre-fix controls | The round's own host-test cases refuse to compile or fail against the headers of the rounds before them. Four after round 4, the last one the retire rule against `0c0ffa4c` |
+| The D3D12 shell's experiment test | The one-shot first-removal line exists, spends exactly one refusal of the budget, and spends none on the removals after it |
 
 The queue, sync and memory host tests belong to the D3D ICD line (`src/amd/vulkan/winsys/wddm2/tests/` on that
 line). The system line has no source for them, so they cannot run on this candidate. The lab arms and the route

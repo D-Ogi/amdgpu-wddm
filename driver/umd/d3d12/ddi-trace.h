@@ -47,6 +47,32 @@ inline void ddi_refusal(_Printf_format_string_ const char* format,...) noexcept 
     std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 %s\n",text);
     OutputDebugStringA(line);
 }
+// The file name of a __builtin_FILE() path, without its directories.
+inline const char* ddi_source_name(const char* path) noexcept {
+    if(!path)return "?";
+    const char* base=path;
+    for(const char* c=path;*c;c++){if(*c=='\\' || *c=='/')base=c+1;}
+    return base;
+}
+// The FIRST device removal of this process, named where it was decided, on the always-on channel.
+//
+// Why this is not behind a switch. Every other record of a removal is: ddi_failure_note needs
+// AMDGPU_WDDM_DDI_TRACE=2 and writes to the debugger channel only, so a removal left no trace in the
+// process log that lab evidence collects. On 2026-10-09 the Vulkan WSI DXGI route read
+// ID3D12Fence::GetCompletedValue() == UINT64_MAX on a shared blit fence of this device, which is the
+// documented answer for a REMOVED device, and no line of any log said that a device had been removed,
+// let alone which decision removed it (BD-105). A removal happens at most once per device and ends
+// every later call anyway, so one line costs nothing measurable and answers the question that an
+// argument from absence cannot.
+//
+// One line per process: the first removal is the one that matters, and a cascade of dependent
+// removals after it would bury it.
+inline void ddi_first_removal(const char* what,const char* file,int line) noexcept {
+    static std::atomic<bool> seen{};
+    if(seen.exchange(true,std::memory_order_relaxed))return;
+    ddi_refusal("device removed: %s at %s:%d, the first removal in this process",
+        what?what:"?",ddi_source_name(file),line);
+}
 inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
     if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);

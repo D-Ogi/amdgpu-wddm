@@ -7,6 +7,7 @@
 #include "ddi-trace.h"
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 using native12::DdiExperimentSource;
@@ -117,7 +118,26 @@ int main() {
     assert(detail::application_profile(text, sizeof(text)) == 0 && !text[0]);
     assert(detail::machine_experiment(text, sizeof(text)) == 0 && !text[0]);
 
+    // The first device removal of a process names its own site, once, with no switch set
+    // (ddi_first_removal). What is observable here is the always-on refusal budget: one line for the
+    // first removal and nothing for any later one, so a cascade cannot bury the decision that
+    // removed the device. BD-105 round 3 is why this line exists at all: the Vulkan WSI read the
+    // removed-device sentinel from a shared fence of this driver's D3D12 device and no log of the
+    // process said that a removal had happened.
+    assert(!std::strcmp(native12::ddi_source_name("a\\b\\queue-engine.cpp"), "queue-engine.cpp"));
+    assert(!std::strcmp(native12::ddi_source_name("a/b/native-queue-ddi.cpp"), "native-queue-ddi.cpp"));
+    assert(!std::strcmp(native12::ddi_source_name("device-state.h"), "device-state.h"));
+    assert(!std::strcmp(native12::ddi_source_name(""), ""));
+    assert(!std::strcmp(native12::ddi_source_name(nullptr), "?"));
+    const int32_t budget_before = native12::ddi_refusal_budget.load();
+    native12::ddi_first_removal("device-remove", __FILE__, 1);
+    const int32_t budget_after_first = native12::ddi_refusal_budget.load();
+    assert(budget_before - budget_after_first == 1);
+    native12::ddi_first_removal("hosted-remove-device", __FILE__, 2);
+    native12::ddi_first_removal("device-remove", __FILE__, 3);
+    assert(native12::ddi_refusal_budget.load() == budget_after_first);
+
     std::puts("PASS ddi experiment sources: syntax, matching, profile key, machine-wide value, variable "
-              "precedence, none, refusals, the -off form of every default");
+              "precedence, none, refusals, the -off form of every default, and the one-shot first-removal line");
     return 0;
 }
