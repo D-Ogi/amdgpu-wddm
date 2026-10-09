@@ -203,6 +203,9 @@ hipError_t copy_now(void* dst, const void* src, size_t bytes, hipMemcpyKind kind
         }
         if (dst_device->mem.host == nullptr || src_device->mem.host == nullptr) {
             // A copy kernel and the copy engine are later work, named in the design.
+            bc250hip::log_line(BC250HSA_LOG_ERROR,
+                               "hipMemcpy device to device refuses: one of the two allocations"
+                               " has no host mapping, and a copy kernel is later work");
             return hipErrorNotSupported;
         }
         std::memcpy(static_cast<unsigned char*>(dst_device->mem.host) + dst_offset,
@@ -230,6 +233,9 @@ hipError_t fill_now(void* dst, int value, size_t bytes) {
         }
         if (allocation->mem.host == nullptr) {
             // A fill kernel is later work, named in the design.
+            bc250hip::log_line(BC250HSA_LOG_ERROR,
+                               "hipMemset refuses: the allocation has no host mapping, and a"
+                               " fill kernel is later work");
             return hipErrorNotSupported;
         }
     }
@@ -594,7 +600,9 @@ hipError_t hipHostRegister(void* hostPtr, size_t sizeBytes, unsigned int flags) 
     if (hostPtr == nullptr) {
         return fail(hipErrorInvalidValue);
     }
-    return fail(hipErrorNotSupported);
+    return bc250hip::refuse("hipHostRegister", nullptr,
+                            "layer 1 has no entry point that maps an existing host range",
+                            hipErrorNotSupported);
 }
 
 hipError_t hipHostUnregister(void* hostPtr) {
@@ -619,7 +627,9 @@ hipError_t hipMallocManaged(void** ptr, size_t size, unsigned int flags) {
         return fail(hipErrorInvalidValue);
     }
     *ptr = nullptr;
-    return fail(hipErrorNotSupported);
+    return bc250hip::refuse("hipMallocManaged", nullptr,
+                            "no page fault handler for a compute queue, so no managed memory",
+                            hipErrorNotSupported);
 }
 
 // Advice about managed memory, which this build does not have. llama.cpp ignores the result of
@@ -633,7 +643,9 @@ hipError_t hipMemAdvise(const void* devPtr, size_t count, hipMemoryAdvise advice
     if (deviceId != 0) {
         return fail(hipErrorInvalidDevice);
     }
-    return fail(hipErrorNotSupported);
+    return bc250hip::refuse("hipMemAdvise", nullptr,
+                            "advice about managed memory, which this build does not have",
+                            hipErrorNotSupported);
 }
 
 hipError_t hipMemGetInfo(size_t* freeBytes, size_t* totalBytes) {

@@ -124,7 +124,7 @@ function Invoke-Cl([string[]]$Arguments, [string]$What) {
 }
 
 $runtimeSources = @('hip_device.cpp', 'hip_error.cpp', 'hip_event.cpp', 'hip_launch.cpp',
-    'hip_memory.cpp', 'hip_module.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
+    'hip_log.cpp', 'hip_memory.cpp', 'hip_module.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
     ForEach-Object { Join-Path $hip "runtime\$_" }
 $dllSource = Join-Path $hip 'runtime\dllmain.cpp'
 $mockSource = Join-Path $hip 'tests\host\hipmock_backend.c'
@@ -242,6 +242,21 @@ Invoke-Cl ($warn + @('/c', '/MD', '/std:c11', "/Fo$mockObjDir\") + $includes + @
 Invoke-Cl ($warn + @('/LD', '/MD', '/std:c++17', '/EHsc', "/Fo$mockObjDir\", "/Fe$mockDll") +
     $includes + $runtimeSources + @($dllSource, (Join-Path $mockObjDir 'hipmock_backend.obj')) +
     @('/link', "/DEF:$def") + $libpaths) 'amdhip64.dll (mock backend)'
+
+# 3a. The negative control of the AQL dispatch packet (section 7.1 of bc250hsa.h, defect
+#     BD-110). The same DLL over the same mock, built with BC250_HIP_NO_DISPATCH_PACKET=1, so
+#     that it passes no packet address and every kernel which reads its own blockDim is refused
+#     exactly as the build of 2026-10-09 refused it. A real HIP client of that shape can then be
+#     run against both DLLs offline, and the difference is the fix and nothing else.
+$noPktObjDir = Join-Path $Out 'obj-mock-nopacket'
+New-Item -ItemType Directory -Force $noPktObjDir | Out-Null
+$noPktDll = Join-Path $Out 'mock-no-dispatch-packet\amdhip64.dll'
+New-Item -ItemType Directory -Force (Split-Path -Parent $noPktDll) | Out-Null
+Invoke-Cl ($warn + @('/c', '/MD', '/std:c11', "/Fo$noPktObjDir\") + $includes + @($mockSource)) 'mock backend (no-packet control)'
+Invoke-Cl ($warn + @('/LD', '/MD', '/std:c++17', '/EHsc', '/DBC250_HIP_NO_DISPATCH_PACKET=1',
+    "/Fo$noPktObjDir\", "/Fe$noPktDll") +
+    $includes + $runtimeSources + @($dllSource, (Join-Path $noPktObjDir 'hipmock_backend.obj')) +
+    @('/link', "/DEF:$def") + $libpaths) 'amdhip64.dll (mock backend, no dispatch packet)'
 
 # ---------------------------------------------------------------------------------------------
 # 4. The product DLL, when the static library of layer 1 is available.
@@ -422,7 +437,10 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     Copy-Item $threadsSampleExe (Join-Path $Out 'hipthreads.exe') -Force
 
     $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-threads.txt'
-    $threadsOut = & $threadsSampleExe '--wait-total' '20000' '--mock-hold' '150' 2>&1
+    # --device-overlaps, because this run is against the mock backend, which holds each dispatch
+    # on a timer of its own and therefore has as many in flight as the threads give it. On the
+    # lab the same program runs without the flag: one indirect buffer at a time (defect BD-111).
+    $threadsOut = & $threadsSampleExe '--wait-total' '20000' '--mock-hold' '150' '--device-overlaps' 2>&1
     $threadsExit = $LASTEXITCODE
     $threadsOut | ForEach-Object { Write-Host "  $_" }
     if ($threadsExit -ne 0) { $env:PATH = $savedPath; throw "the threads sample failed ($threadsExit)" }

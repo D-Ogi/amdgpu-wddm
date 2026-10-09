@@ -1052,10 +1052,40 @@ static void check_refusals(void)
     /* A user SGPR item this build does not program. */
     golden_kernel(&k);
     golden_inputs(&d, &env, &k);
+    /* The dispatch pointer with no AQL packet behind it. The kernel reads its own
+     * blockDim through that register, so a dispatch with no packet is refused by name
+     * and not started with a register that points nowhere (section 7.1 of the header,
+     * defect BD-110). */
     k.kernel_code_properties = 0x0409u | BC250HSA_KCP_DISPATCH_PTR;
     k.user_sgpr_count = 8u;
+    CHECK_U64(d.dispatch_packet_va, 0u);
     CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
                  BC250HSA_EUNSUPPORTED);
+    /* The same kernel with a packet: the plan grows by two registers, and they hold the
+     * packet's address in the documented order (private segment buffer, dispatch
+     * pointer, kernel argument pointer). */
+    {
+        bc250hsa_user_sgpr_plan plan;
+        plan.struct_bytes = (uint32_t)sizeof(plan);
+        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x00000140ABCD2000ull,
+                                              0x00000140ABCD3040ull,
+                                              env.private_segment_rsrc, &plan),
+                     BC250HSA_OK);
+        CHECK_U64(plan.count, 8u);
+        CHECK_U64(plan.value[3], BC250HSA_BUFFER_RSRC_W3);
+        CHECK_U64(plan.value[4], 0xABCD3040u);
+        CHECK_U64(plan.value[5], 0x00000140u);
+        CHECK_U64(plan.value[6], 0xABCD2000u);
+        CHECK_U64(plan.value[7], 0x00000140u);
+    }
+    d.dispatch_packet_va = 0x0000014000003040ull;
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
+                 BC250HSA_OK);
+    /* An address that is not 64-byte aligned is not an AQL packet. */
+    d.dispatch_packet_va = 0x0000014000003048ull;
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
+                 BC250HSA_EINVAL);
+    d.dispatch_packet_va = 0u;
 
     /* A plan that does not fill exactly the registers the prologue reads. */
     golden_kernel(&k);
@@ -1063,17 +1093,17 @@ static void check_refusals(void)
     {
         bc250hsa_user_sgpr_plan plan;
         plan.struct_bytes = (uint32_t)sizeof(plan);
-        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x1000u, env.private_segment_rsrc, &plan),
+        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x1000u, 0u, env.private_segment_rsrc, &plan),
                      BC250HSA_EUNSUPPORTED);
     }
     golden_kernel(&k);
     {
         bc250hsa_user_sgpr_plan plan;
         plan.struct_bytes = (uint32_t)sizeof(plan) + 4u;
-        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x1000u, env.private_segment_rsrc, &plan),
+        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x1000u, 0u, env.private_segment_rsrc, &plan),
                      BC250HSA_EINVAL);
         plan.struct_bytes = (uint32_t)sizeof(plan);
-        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x00000140ABCD2000ull,
+        CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, 0x00000140ABCD2000ull, 0u,
                                               env.private_segment_rsrc, &plan),
                      BC250HSA_OK);
         CHECK_U64(plan.count, 6u);

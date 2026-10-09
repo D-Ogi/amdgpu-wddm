@@ -53,10 +53,19 @@
  * ---------------------------------------------------------------------------------------- */
 
 #define MOCK_MAX_ALLOCATIONS 1024u
-#define MOCK_MAX_KERNELS 16u
+/* The module record is one calloc of this shape, so these are the per-module heap cost and
+ * not static memory. MEASURED on the ggml-hip backend of llama.cpp, which is the largest
+ * client this mock has to carry: its 139 code objects hold 7105 kernels, the largest object
+ * 352 of them, and its widest kernel takes 53 arguments. The limits are the next round
+ * numbers above those, so that a client of that size loads against the mock offline and the
+ * refusal it meets is a real one and not the mock's ceiling (defect BD-110). */
+#define MOCK_MAX_KERNELS 512u
 #define MOCK_MAX_ARGS 64u
-#define MOCK_MAX_SYMBOLS 128u
-#define MOCK_NAME_MAX 96u
+#define MOCK_MAX_SYMBOLS 1024u
+/* MEASURED: the longest mangled kernel name of the ggml-hip backend is 156 characters (its
+ * .symbol is three longer), and a name the mock truncates is a name
+ * bc250hsa_module_kernel_by_name cannot find again. */
+#define MOCK_NAME_MAX 256u
 
 typedef struct mock_allocation {
     int          live;
@@ -1320,6 +1329,10 @@ static bc250hsa_status parse_metadata(const unsigned char* note, size_t note_byt
 #define KD_RSRC1_OFFSET 48u
 #define KD_RSRC2_OFFSET 52u
 #define KD_PROPERTIES_OFFSET 56u
+/* ENABLE_SGPR_DISPATCH_PTR of the kernel descriptor. The library keeps this name in its own
+ * private header; the mock states its own copy with the bit written down, because the host
+ * tests must see the same shape the library sees. */
+#define BC250HSA_MOCK_KCP_DISPATCH_PTR 0x0002u
 
 static const mock_symbol* symbol_by_name(const struct bc250hsa_module* mod, const char* name) {
     uint32_t i;
@@ -1670,6 +1683,16 @@ bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel, uin
     }
     *bytes = kernel->kernarg_bytes;
     *alignment = kernel->kernarg_align != 0u ? kernel->kernarg_align : 16u;
+    if ((kernel->kernel_code_properties & BC250HSA_MOCK_KCP_DISPATCH_PTR) != 0u) {
+        /* Section 7.1 of the header: the AQL dispatch packet goes behind the kernel
+         * arguments in the same buffer. The mock keeps the same shape, so that a client
+         * which runs against it allocates what the real library would. */
+        *bytes = (uint32_t)align_up(kernel->kernarg_bytes, BC250HSA_AQL_PACKET_ALIGN) +
+                 BC250HSA_AQL_PACKET_BYTES;
+        if (*alignment < BC250HSA_AQL_PACKET_ALIGN) {
+            *alignment = BC250HSA_AQL_PACKET_ALIGN;
+        }
+    }
     return BC250HSA_OK;
 }
 
@@ -1683,9 +1706,11 @@ static void write_u32(unsigned char* at, uint32_t value) { memcpy(at, &value, si
 bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
                                       const bc250hsa_launch* launch, void* const* args,
                                       uint32_t arg_count, void* kernarg, uint32_t kernarg_bytes,
-                                      bc250hsa_pack_result* result) {
+                                      uint64_t kernarg_va, bc250hsa_pack_result* result) {
     uint32_t i;
     uint32_t explicit_index = 0;
+    uint32_t needed = 0;
+    uint32_t needed_align = 0;
     unsigned char* base = (unsigned char*)kernarg;
     if (kernel == NULL || launch == NULL || kernarg == NULL || result == NULL) {
         return BC250HSA_EINVAL;
@@ -1694,15 +1719,18 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
         result->struct_bytes != (uint32_t)sizeof(*result)) {
         return BC250HSA_EINVAL;
     }
-    if (kernarg_bytes < kernel->kernarg_bytes) {
+    if (bc250hsa_kernarg_requirements(kernel, &needed, &needed_align) != BC250HSA_OK ||
+        kernarg_bytes < needed) {
         return BC250HSA_EINVAL;
     }
-    memset(base, 0, kernel->kernarg_bytes);
+    memset(base, 0, needed);
     result->bytes_written = kernel->kernarg_bytes;
     result->explicit_args_written = 0;
     result->hidden_args_zeroed = 0;
     result->unknown_arg_kinds = 0;
     result->hostcall_buffer_requested = 0;
+    result->dispatch_packet_requested = 0;
+    result->dispatch_packet_offset = 0;
     result->first_unknown_kind[0] = '\0';
 
     for (i = 0; i < kernel->arg_count; ++i) {
@@ -1759,6 +1787,24 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
     if (explicit_index != arg_count) {
         return BC250HSA_EINVAL;
     }
+    if ((kernel->kernel_code_properties & BC250HSA_MOCK_KCP_DISPATCH_PTR) != 0u) {
+        /* The mock writes the two fields a host test reads back, and nothing else: the
+         * workgroup size and the grid in work items. The whole packet is the library's
+         * business and test_kernarg checks it there. */
+        const uint32_t offset = (uint32_t)align_up(kernel->kernarg_bytes,
+                                                   BC250HSA_AQL_PACKET_ALIGN);
+        unsigned char* packet = base + offset;
+        uint32_t d;
+        memset(packet, 0, BC250HSA_AQL_PACKET_BYTES);
+        for (d = 0; d < 3u; ++d) {
+            write_u16(packet + 4u + d * 2u, launch->block[d]);
+            write_u32(packet + 12u + d * 4u, launch->grid[d] * launch->block[d]);
+        }
+        memcpy(packet + 40u, &kernarg_va, sizeof(kernarg_va));
+        result->dispatch_packet_requested = 1u;
+        result->dispatch_packet_offset = offset;
+        result->bytes_written = offset + BC250HSA_AQL_PACKET_BYTES;
+    }
     return BC250HSA_OK;
 }
 
@@ -1780,10 +1826,12 @@ bc250hsa_status bc250hsa_buffer_resource(uint64_t va, uint64_t bytes, uint32_t o
 }
 
 bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t kernarg_va,
+                                         uint64_t dispatch_packet_va,
                                          const uint32_t private_segment_rsrc[4],
                                          bc250hsa_user_sgpr_plan* out) {
     (void)kernel;
     (void)kernarg_va;
+    (void)dispatch_packet_va;
     (void)private_segment_rsrc;
     (void)out;
     return BC250HSA_EUNSUPPORTED;
@@ -1831,10 +1879,19 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
     if ((uint64_t)kernel->group_segment_bytes + dispatch->launch.dynamic_group_bytes > 65536u) {
         return BC250HSA_EINVAL;
     }
-    if (kernel->uses_dynamic_stack != 0u) {
+    if (kernel->uses_dynamic_stack != 0u || kernel->private_segment_bytes != 0u) {
         /* Open question 4 of the design: a spilling kernel needs a scratch ring that no trial
-         * has measured yet. */
+         * has measured yet. The real check (pm4_dispatch.c) refuses a fixed private segment as
+         * well, and the mock has to refuse the same set or a client that runs against it would
+         * learn the wrong answer. */
         g_counters.dynamic_stack_refusals++;
+        g_counters.submissions_refused++;
+        return BC250HSA_EUNSUPPORTED;
+    }
+    if ((kernel->kernel_code_properties & BC250HSA_MOCK_KCP_DISPATCH_PTR) != 0u &&
+        dispatch->dispatch_packet_va == 0u) {
+        /* Section 7.1: the kernel reads its own blockDim out of the AQL dispatch packet, and
+         * this dispatch carries none. */
         g_counters.submissions_refused++;
         return BC250HSA_EUNSUPPORTED;
     }

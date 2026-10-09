@@ -175,6 +175,17 @@ State& state();
 #endif
 bool waits_under_lock();
 
+// The negative control of the dispatch packet (section 7.1 of bc250hsa.h, defect BD-110). A
+// build with BC250_HIP_NO_DISPATCH_PACKET=1 passes no packet address, so every kernel that
+// reads its own blockDim is refused exactly as the build of 2026-10-09 refused it. It exists
+// so that the fix can be shown to be the fix, offline, against the mock backend, and nothing
+// but that control build defines the macro.
+#if defined(BC250_HIP_NO_DISPATCH_PACKET) && BC250_HIP_NO_DISPATCH_PACKET
+#define BC250_HIP_NO_DISPATCH_PACKET_BUILD 1
+#else
+#define BC250_HIP_NO_DISPATCH_PACKET_BUILD 0
+#endif
+
 // The process lock, and the only way to wait for the device.
 //
 // An entry point writes `Guard guard;` and holds the state. When it has to wait, it reads the
@@ -208,6 +219,13 @@ hipError_t last_error_peek();
 hipError_t last_error_take();
 void       last_error_set(hipError_t err);
 
+// The diagnostic log of this runtime (hip_log.cpp). BC250_HIP_LOG turns it on, and with it on
+// every refusal of this runtime and every bc250hsa_log line of layer 1 names itself. It is off
+// by default and then costs one read of a local static per call.
+void log_start();
+bool log_on();
+void log_line(uint32_t level, const char* format, ...);
+
 // Records an error and returns it, so that an entry point can write `return fail(...)`.
 inline hipError_t fail(hipError_t err) {
     if (err != hipSuccess) {
@@ -216,6 +234,13 @@ inline hipError_t fail(hipError_t err) {
     return err;
 }
 inline hipError_t fail_status(bc250hsa_status status) { return fail(translate(status)); }
+
+// A refusal that says which call refused what and why. It records the error exactly as fail()
+// does, and with the log off it costs the same. Every path of this runtime that answers "this
+// build cannot do that" goes through one of the two, so that a lab session never again has to
+// guess which of them spoke (defect BD-110).
+hipError_t refuse(const char* call, const char* kernel, const char* why, hipError_t err);
+hipError_t refuse_status(const char* call, const char* kernel, bc250hsa_status status);
 
 // The allocation table. find_allocation accepts an interior pointer, because a HIP program
 // passes `buffer + offset` to hipMemcpy.

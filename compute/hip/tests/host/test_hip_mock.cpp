@@ -878,7 +878,45 @@ int main(int argc, char** argv) {
     }
 
     // ---------------------------------------------------------------------------------------
-    std::printf("test_hip_mock: 11. the module unregisters\n");
+    // The error state across a refused optional call and a launch, which is the shape the lab
+    // session of 2026-10-09 could not tell apart from a failed launch (defect BD-110): three
+    // llama.cpp programs died at `CUDA_CHECK(cudaGetLastError())` right after a `<<<>>>` call,
+    // and from the message alone a sticky error of an earlier call looks the same.
+    //
+    // HIP says hipGetLastError returns the last error of any call of the thread, so a refused
+    // optional call does leave its code there until something reads it. That is the behaviour
+    // of ROCm as well, and llama.cpp is written for it: every optional call it makes is
+    // followed by its own `(void)cudaGetLastError()`. These checks state both halves, so that
+    // the next reader of a "ROCm error at hipGetLastError()" line knows which half to test.
+    std::printf("test_hip_mock: 11. the error state across a refusal and a launch\n");
+    {
+        void* managed = nullptr;
+        check(hipGetLastError() == hipSuccess, "the error state starts clear");
+        check(hipMallocManaged(&managed, 4096, 0) == hipErrorNotSupported,
+              "the optional call is refused");
+        // The launch itself succeeds, and the refusal of the call before it is still there.
+        check(hipLaunchKernel(&g_stub_vadd, dim3(1u, 1u, 1u), dim3(1u, 1u, 1u), args, 0,
+                              nullptr) == hipSuccess,
+              "the launch after the refused call succeeds");
+        check(hipPeekAtLastError() == hipErrorNotSupported,
+              "the refusal of the earlier call is what a launch-site hipGetLastError reports");
+        check(hipGetLastError() == hipErrorNotSupported, "and reading it reports the same");
+        check(hipGetLastError() == hipSuccess, "one read clears it");
+        // The same sequence with the clear llama.cpp writes: the launch site sees nothing.
+        check(hipMallocManaged(&managed, 4096, 0) == hipErrorNotSupported,
+              "the optional call is refused again");
+        (void)hipGetLastError();
+        check(hipLaunchKernel(&g_stub_vadd, dim3(1u, 1u, 1u), dim3(1u, 1u, 1u), args, 0,
+                              nullptr) == hipSuccess,
+              "the launch after the cleared refusal succeeds");
+        check(hipGetLastError() == hipSuccess,
+              "a program that clears the error after the optional call sees a clean launch");
+        check(hipDeviceSynchronize() == hipSuccess, "the two launches retire");
+        (void)hipGetLastError();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 12. the module unregisters\n");
     const uint32_t live_before_unregister = bc250hsa_mock_live_allocations();
     __hipUnregisterFatBinary(handle);
     check(bc250hsa_mock_live_allocations() < live_before_unregister,

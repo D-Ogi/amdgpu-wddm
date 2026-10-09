@@ -109,6 +109,53 @@ submission per launch, never a failed `hipInit`.
 one in the same indirect buffer writes only the compute state that changed, 23 dwords instead of
 72 (design section 8.8). This variable makes every launch write the whole state, as build 1 did.
 
+## The log, and why it exists
+
+| Variable | Values | Default |
+|---|---|---|
+| `BC250_HIP_LOG` | `0` or absent, `1`, `stderr`, or a file path | off |
+| `BC250_HIP_LOG_LEVEL` | `0` error, `1` warning, `2` information, `3` trace | `2` |
+
+With it on, every refusal of this runtime names the call, the kernel and the reason, and every
+`bc250hsa_log` line of layer 1 arrives on the same stream. A file path is appended to, so several
+runs of one trial keep their order, and a path that cannot be opened gets one line on the error
+stream instead of silence. Each line carries the process and the thread identifier. The log holds
+call names, kernel names and status names, and no application data.
+
+The reason it exists is a lab session. On 2026-10-09 all three llama.cpp arms of M16 step 3B died
+at `CUDA_CHECK(cudaGetLastError())` right after a `<<<>>>` call, with our own text for
+`hipErrorNotSupported` and nothing else: layer 1 wrote its reason through `bc250hsa_log`, this
+runtime installed no sink, and the refusal counters of layer 1 are not among the two counter
+exports. The session had to end with "the next step is a build whose refusals say which call and
+which kernel they refuse" (defect BD-110). With the switch the same run says, in one line:
+
+```
+amdhip64 [78528:109128] error hipLaunchKernel/dispatch_submit refuses kernel
+  _ZL12rms_norm_f32ILi1024ELb1ELb0ELb0E...: not supported by this build (hipErrorNotSupported)
+```
+
+`hipLaunchKernel` reports through it at six points (the host stub, the code object load, the
+kernel lookup, the kernel argument requirements, the packing and the submission), and so do
+`hipHostRegister`, `hipMallocManaged`, `hipMemAdvise`, `hipStreamBeginCapture`,
+`hipLaunchCooperativeKernel`, `hipFuncSetAttribute`, `__hipRegisterManagedVar`, the
+device-to-device copy and the fill of an allocation with no host mapping.
+
+## The AQL dispatch packet
+
+A kernel that reads its own `blockDim` enables `ENABLE_SGPR_DISPATCH_PTR`:
+`__builtin_amdgcn_workgroup_size_x`, which is what `blockDim.x` becomes, is a 16-bit load from
+the AQL kernel dispatch packet and not an implicit kernel argument. A PM4 dispatch has no packet,
+so layer 1 writes one at the end of the same kernel argument buffer this runtime takes from its
+pool, and `hipLaunchKernel` passes its address in `bc250hsa_dispatch` (section 7.1 of
+`bc250hsa.h`). One allocation, one lifetime: the packet retires with the dispatch that reads it.
+
+MEASURED on the built `ggml-hip.dll` of llama.cpp: 1752 of its 7105 gfx1013 kernels enable the
+bit, among them every `k_get_rows`, every `soft_max_f32` and half of the `k_bin_bcast` and
+`mul_mat_q` sets. Without the packet layer 1 refused all 1752 by name, which is defect BD-110 and
+the reason no model ran on 2026-10-09. The negative control is a build of this DLL with
+`BC250_HIP_NO_DISPATCH_PACKET=1`, which `build-runtime.ps1` writes to
+`mock-no-dispatch-packet\amdhip64.dll` and nothing else defines.
+
 ## Measurement
 
 `bc250hipGetCounters` and `bc250hipResetCounters` are not HIP. They report what the submission

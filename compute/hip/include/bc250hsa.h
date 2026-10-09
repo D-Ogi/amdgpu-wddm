@@ -45,7 +45,9 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 1u   /* 1.1 added section 8.1, batching */
+#define BC250HSA_ABI_VERSION_MINOR 2u   /* 1.1 added section 8.1, batching;
+                                         * 1.2 added section 7.1, the AQL dispatch packet
+                                         * that ENABLE_SGPR_DISPATCH_PTR needs */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -402,10 +404,41 @@ typedef struct bc250hsa_pack_result {
     uint32_t hidden_args_zeroed;
     uint32_t unknown_arg_kinds;
     uint32_t hostcall_buffer_requested; /* 1: the kernel asks for a host call service */
+    uint32_t dispatch_packet_requested; /* 1: the kernel enables ENABLE_SGPR_DISPATCH_PTR,
+                                         * and the packet was written at the offset below */
+    uint32_t dispatch_packet_offset;    /* where in the buffer the 64-byte packet is */
     char     first_unknown_kind[32];    /* the metadata key, for the log */
 } bc250hsa_pack_result;
 
-/* The size and the alignment that the caller must allocate for one launch. */
+/* ---------------------------------------------------------------------------------
+ * 7.1 The AQL dispatch packet
+ *
+ * A kernel may enable ENABLE_SGPR_DISPATCH_PTR, and the compiler does so for every
+ * kernel that reads its own workgroup size: `__builtin_amdgcn_workgroup_size_x`, which
+ * is what HIP's blockDim becomes, is a 16-bit load from the AQL kernel dispatch packet
+ * and not an implicit kernel argument. MEASURED on the ggml-hip backend of llama.cpp:
+ * 1752 of its 7105 gfx1013 kernels enable the bit, among them every k_get_rows kernel,
+ * which is the first launch of a decode (evidence/m16/step3b-2026-10-09, defect BD-110).
+ *
+ * A PM4 dispatch has no packet of its own, so this layer writes one. It belongs to the
+ * launch, so it goes at the end of the kernel argument buffer the caller already
+ * allocates per launch: bc250hsa_kernarg_requirements adds the 64 bytes and the
+ * alignment, bc250hsa_kernarg_pack fills it from the same bc250hsa_launch the kernel
+ * arguments come from, and the caller passes its address in bc250hsa_dispatch. One
+ * allocation, one lifetime, and the packet retires with the dispatch that reads it.
+ *
+ * Every field the packet holds is one this layer knows: the workgroup size, the grid in
+ * work items, the two segment sizes, the kernel object and the kernel argument address.
+ * completion_signal is 0, because this layer completes through its own fence and not
+ * through an HSA signal, and the two reserved fields are 0.
+ * ------------------------------------------------------------------------------- */
+
+#define BC250HSA_AQL_PACKET_BYTES 64u
+#define BC250HSA_AQL_PACKET_ALIGN 64u
+
+/* The size and the alignment that the caller must allocate for one launch. It covers
+ * the kernel arguments and, for a kernel that enables ENABLE_SGPR_DISPATCH_PTR, the
+ * AQL dispatch packet behind them. */
 bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel,
                                               uint32_t* bytes, uint32_t* alignment);
 
@@ -414,11 +447,17 @@ bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel,
  * in declaration order. The packer walks the list and the array in step, writes every
  * hidden field it knows from launch, and zeroes every hidden field it does not know.
  * It never computes an offset of its own. kernarg may be a plain host buffer, which is
- * what the host test uses. */
+ * what the host test uses.
+ *
+ * kernarg_va is the GPU address that this buffer will have in bc250hsa_dispatch. It is
+ * written into the AQL dispatch packet of section 7.1 and used for nothing else, so a
+ * caller that packs into a plain host buffer passes 0 and the packet's kernarg_address
+ * field reads 0. */
 bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
                                       const bc250hsa_launch* launch,
                                       void* const* args, uint32_t arg_count,
                                       void* kernarg, uint32_t kernarg_bytes,
+                                      uint64_t kernarg_va,
                                       bc250hsa_pack_result* result);
 
 /* ---------------------------------------------------------------------------------
@@ -447,6 +486,11 @@ typedef struct bc250hsa_dispatch {
     uint32_t flags;
     const bc250hsa_kernel* kernel;
     uint64_t kernarg_va;            /* a resident buffer of kernarg_bytes, already filled */
+    /* The AQL dispatch packet of section 7.1, where bc250hsa_kernarg_pack wrote it:
+     * kernarg_va + bc250hsa_pack_result.dispatch_packet_offset. It is needed only by a
+     * kernel that enables ENABLE_SGPR_DISPATCH_PTR, and such a kernel with 0 here is
+     * refused rather than started with a register that points nowhere. */
+    uint64_t dispatch_packet_va;
     bc250hsa_launch launch;
 } bc250hsa_dispatch;
 
@@ -463,8 +507,9 @@ typedef struct bc250hsa_dispatch {
  *
  * It refuses, and submits nothing: a zero grid or block, a block product above
  * max_flat_workgroup_size, local memory above the device limit, uses_dynamic_stack,
- * a kernarg_va that is not aligned to kernarg_align, and a kernel whose enabled user
- * SGPRs this build does not program (BC250HSA_EUNSUPPORTED in the last two cases). */
+ * a kernarg_va that is not aligned to kernarg_align, a kernel that enables
+ * ENABLE_SGPR_DISPATCH_PTR with no dispatch_packet_va, and a kernel whose enabled user
+ * SGPRs this build does not program (BC250HSA_EUNSUPPORTED in the last three cases). */
 bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev,
                                          const bc250hsa_dispatch* dispatch,
                                          uint64_t* fence_value_out);
@@ -578,8 +623,11 @@ typedef struct bc250hsa_user_sgpr_plan {
 
 /* Walks the ENABLE_SGPR_* bits of the kernel in the order of the AMDGPU documentation
  * and places each item at the next free COMPUTE_USER_DATA register. It refuses an
- * enabled item that this build does not program, with BC250HSA_EUNSUPPORTED. */
+ * enabled item that this build does not program, with BC250HSA_EUNSUPPORTED, and it
+ * refuses ENABLE_SGPR_DISPATCH_PTR with dispatch_packet_va 0 for the same reason: a
+ * register that points nowhere is worse than a stated refusal. */
 bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t kernarg_va,
+                                         uint64_t dispatch_packet_va,
                                          const uint32_t private_segment_rsrc[4],
                                          bc250hsa_user_sgpr_plan* out);
 

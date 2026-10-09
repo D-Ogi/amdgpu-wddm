@@ -299,7 +299,8 @@ static int selftest_kernel(const struct bc250hsa_module* mod, const char* name,
 
     memset(&pack, 0, sizeof(pack));
     pack.struct_bytes = (uint32_t)sizeof(pack);
-    status = bc250hsa_kernarg_pack(k, launch, args, arg_count, kernarg, KERNARG_BYTES, &pack);
+    status = bc250hsa_kernarg_pack(k, launch, args, arg_count, kernarg, KERNARG_BYTES,
+                                   0x0000004000002000ull, &pack);
     if (status != BC250HSA_OK) {
         report.status = "error";
         report.detail = bc250hsa_status_string(status);
@@ -311,6 +312,9 @@ static int selftest_kernel(const struct bc250hsa_module* mod, const char* name,
     dispatch.struct_bytes = (uint32_t)sizeof(dispatch);
     dispatch.kernel = k;
     dispatch.kernarg_va = 0x0000004000002000ull;
+    if (pack.dispatch_packet_requested != 0u) {
+        dispatch.dispatch_packet_va = dispatch.kernarg_va + pack.dispatch_packet_offset;
+    }
     dispatch.launch = *launch;
     memset(&env, 0, sizeof(env));
     env.struct_bytes = (uint32_t)sizeof(env);
@@ -469,15 +473,22 @@ static int dispatch_and_wait(run_state* st, const bc250hsa_kernel* k,
     report->block[0] = launch->block[0]; report->block[1] = launch->block[1];
     report->block[2] = launch->block[2];
 
-    if (k->kernarg_bytes > st->kernarg.bytes) {
-        report->status = "error";
-        report->detail = "the kernel argument buffer is too small";
-        return 0;
+    {
+        /* The buffer holds the kernel arguments and, for a kernel that reads the AQL
+         * dispatch packet, the packet behind them (section 7.1 of the header). */
+        uint32_t needed = 0;
+        uint32_t needed_align = 0;
+        if (bc250hsa_kernarg_requirements(k, &needed, &needed_align) != BC250HSA_OK ||
+            needed > st->kernarg.bytes) {
+            report->status = "error";
+            report->detail = "the kernel argument buffer is too small";
+            return 0;
+        }
     }
     memset(&pack, 0, sizeof(pack));
     pack.struct_bytes = (uint32_t)sizeof(pack);
     status = bc250hsa_kernarg_pack(k, launch, args, arg_count, st->kernarg.host,
-                                   (uint32_t)st->kernarg.bytes, &pack);
+                                   (uint32_t)st->kernarg.bytes, st->kernarg.va, &pack);
     if (status != BC250HSA_OK) {
         report->status = "error";
         report->detail = bc250hsa_status_string(status);
@@ -489,6 +500,9 @@ static int dispatch_and_wait(run_state* st, const bc250hsa_kernel* k,
     dispatch.struct_bytes = (uint32_t)sizeof(dispatch);
     dispatch.kernel = k;
     dispatch.kernarg_va = st->kernarg.va;
+    if (pack.dispatch_packet_requested != 0u) {
+        dispatch.dispatch_packet_va = st->kernarg.va + pack.dispatch_packet_offset;
+    }
     dispatch.launch = *launch;
 
     started = now_ms();

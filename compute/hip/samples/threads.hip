@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
     int i;
     int threads = 4;
     int iterations = 4;
+    int overlaps = 0;
 
     for (i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--wait-total") == 0 && i + 1 < argc) {
@@ -105,10 +106,17 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--iterations") == 0 && i + 1 < argc) {
             ++i;
             iterations = (int)strtol(argv[i], NULL, 10);
+        } else if (strcmp(argv[i], "--device-overlaps") == 0) {
+            /* The backend behind this runtime can have several dispatches in flight at once,
+             * so phase B may beat the serialised time. The mock backend can; the BC-250
+             * cannot, because the ring runs one indirect buffer at a time (bc250hsa.h rule 5),
+             * and the default is therefore off (defect BD-111). */
+            overlaps = 1;
         } else {
             printf("hipthreads: unknown argument '%s'\n", argv[i]);
             printf("hipthreads: usage: hipthreads.exe [--wait-total <ms>] [--mock-hold <ms>] "
-                   "[--spin <n>] [--grid <n>] [--threads <n>] [--iterations <n>]\n");
+                   "[--spin <n>] [--grid <n>] [--threads <n>] [--iterations <n>] "
+                   "[--device-overlaps]\n");
             return 2;
         }
     }
@@ -145,6 +153,7 @@ int main(int argc, char** argv) {
         int                    failures;
         options.threads = threads;
         options.iterations = iterations;
+        options.device_overlaps_dispatches = overlaps;
         options.buffer_bytes = (size_t)g_grid * BLOCK * sizeof(float);
         failures = bc250hipthreads::run(options, &result);
         printf("hipthreads: %s\n", failures == 0 ? "ok" : "failed");

@@ -68,6 +68,7 @@ bc250hsa_status bc250hsa_buffer_resource(uint64_t va, uint64_t bytes, uint32_t o
 }
 
 bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t kernarg_va,
+                                         uint64_t dispatch_packet_va,
                                          const uint32_t private_segment_rsrc[4],
                                          bc250hsa_user_sgpr_plan* out)
 {
@@ -80,16 +81,25 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
         return BC250HSA_EINVAL;
     }
     properties = kernel->kernel_code_properties;
-    /* Only the two items this build programs may be enabled. Everything else the
-     * compiler can ask for (dispatch pointer, queue pointer, dispatch id, flat
-     * scratch init, private segment size) needs a value this build does not have,
-     * so it is refused by name instead of programmed with a wrong one. */
-    if ((properties & (uint16_t)(BC250HSA_KCP_DISPATCH_PTR | BC250HSA_KCP_QUEUE_PTR |
-                                 BC250HSA_KCP_DISPATCH_ID | BC250HSA_KCP_FLAT_SCRATCH_INIT |
+    /* Only the three items this build programs may be enabled. Everything else the
+     * compiler can ask for (queue pointer, dispatch id, flat scratch init, private
+     * segment size) needs a value this build does not have, so it is refused by name
+     * instead of programmed with a wrong one. */
+    if ((properties & (uint16_t)(BC250HSA_KCP_QUEUE_PTR | BC250HSA_KCP_DISPATCH_ID |
+                                 BC250HSA_KCP_FLAT_SCRATCH_INIT |
                                  BC250HSA_KCP_PRIVATE_SEGMENT_SIZE)) != 0u) {
         bc250hsa_log(BC250HSA_LOG_ERROR,
                      "kernel %s enables a user SGPR item this build does not program (0x%04x)",
                      kernel->name, (unsigned)properties);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    /* The dispatch pointer is programmed from the AQL packet of section 7.1 of the
+     * header. Without a packet the register would point nowhere, and a kernel that
+     * reads its own blockDim through it would read rubbish, so that is refused. */
+    if ((properties & BC250HSA_KCP_DISPATCH_PTR) != 0u && dispatch_packet_va == 0u) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "kernel %s reads the AQL dispatch packet and this dispatch carries none",
+                     kernel->name);
         return BC250HSA_EUNSUPPORTED;
     }
 
@@ -106,6 +116,13 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
         for (i = 0; i < 4u; i++) {
             out->value[out->count++] = private_segment_rsrc[i];
         }
+    }
+    if ((properties & BC250HSA_KCP_DISPATCH_PTR) != 0u) {
+        if (out->count + 2u > BC250HSA_MAX_USER_SGPR) {
+            return BC250HSA_EUNSUPPORTED;
+        }
+        out->value[out->count++] = (uint32_t)dispatch_packet_va;
+        out->value[out->count++] = (uint32_t)(dispatch_packet_va >> 32);
     }
     if ((properties & BC250HSA_KCP_KERNARG_SEGMENT_PTR) != 0u) {
         if (out->count + 2u > BC250HSA_MAX_USER_SGPR) {
@@ -192,6 +209,20 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
         return BC250HSA_EINVAL;
     }
     if (k->kernarg_bytes != 0u && dispatch->kernarg_va == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    /* Section 7.1 of the header: a kernel that reads the AQL dispatch packet needs the
+     * packet, and the refusal names the kernel here as well, so that the reason is in
+     * the log before the plan runs. */
+    if ((k->kernel_code_properties & BC250HSA_KCP_DISPATCH_PTR) != 0u &&
+        dispatch->dispatch_packet_va == 0u) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "kernel %s reads the AQL dispatch packet and this dispatch carries none",
+                     k->name);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    if (dispatch->dispatch_packet_va != 0u &&
+        (dispatch->dispatch_packet_va % (uint64_t)BC250HSA_AQL_PACKET_ALIGN) != 0u) {
         return BC250HSA_EINVAL;
     }
     return BC250HSA_OK;
@@ -327,7 +358,8 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
     k = dispatch->kernel;
 
     plan.struct_bytes = (uint32_t)sizeof(plan);
-    status = bc250hsa_plan_user_sgprs(k, dispatch->kernarg_va, env->private_segment_rsrc, &plan);
+    status = bc250hsa_plan_user_sgprs(k, dispatch->kernarg_va, dispatch->dispatch_packet_va,
+                                      env->private_segment_rsrc, &plan);
     if (status != BC250HSA_OK) {
         return status;
     }

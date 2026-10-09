@@ -42,7 +42,7 @@ bc250hsa.h                 the only header a caller needs
 The first six files touch no operating system call, so every host test links them and runs anywhere.
 The last three are the Windows half. The split is why `tests/host/` needs no adapter.
 
-Three rules the library keeps, because each one is a measured trap:
+Four rules the library keeps, because each one is a measured trap:
 
 1. **The packer never computes an offset.** It walks the `.args` list of the metadata. In a measured
    kernel two hidden fields meet at one byte boundary, and a kernel gets an implicit argument block
@@ -50,7 +50,16 @@ Three rules the library keeps, because each one is a measured trap:
 2. **The host writes `COMPUTE_PGM_RSRC2.LDS_SIZE`.** The command processor normally takes that field
    from the AQL packet. A PM4 dispatch has no AQL packet, and the kernel descriptor holds 0 even for
    a kernel with 1024 bytes of local memory (measured on `reduce256`).
-3. **No wait is unbounded, and no wait is one long sleep.** A wait runs in slices and asks the
+3. **A kernel that reads its own `blockDim` needs an AQL dispatch packet.**
+   `__builtin_amdgcn_workgroup_size_x` is a 16-bit load from the AQL kernel dispatch packet, so the
+   compiler enables `ENABLE_SGPR_DISPATCH_PTR` for such a kernel, and a PM4 dispatch has no packet
+   of its own. `bc250hsa_kernarg_requirements` therefore adds 64 bytes behind the kernel arguments,
+   `bc250hsa_kernarg_pack` writes a packet that states this launch and nothing else, and
+   `bc250hsa_plan_user_sgprs` programs the two registers from its address (header section 7.1).
+   MEASURED on llama.cpp's built `ggml-hip.dll`: 1752 of its 7105 gfx1013 kernels enable the bit,
+   among them every `k_get_rows`. Without the packet all 1752 were refused by name, which is the
+   whole of defect BD-110.
+4. **No wait is unbounded, and no wait is one long sleep.** A wait runs in slices and asks the
    operating system between two of them whether the device still runs. One long wait turned a healthy
    14.6-second wait behind another process's engine reset into a lost device (defect K225).
 

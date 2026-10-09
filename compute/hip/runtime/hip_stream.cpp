@@ -211,7 +211,9 @@ hipError_t hipStreamWaitEvent(hipStream_t stream, hipEvent_t event, unsigned int
 hipError_t hipStreamBeginCapture(hipStream_t stream, hipStreamCaptureMode mode) {
     (void)stream;
     (void)mode;
-    return fail(hipErrorNotSupported);
+    return bc250hip::refuse("hipStreamBeginCapture", nullptr,
+                            "no graph object, no replay and nothing to record into",
+                            hipErrorNotSupported);
 }
 
 }  // extern "C"
