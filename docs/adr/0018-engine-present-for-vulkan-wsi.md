@@ -71,5 +71,8 @@ still there.
   [M793](../facts/d3d.md#m793) and [M794](../facts/d3d.md#m794), measured on the development PC
   (`evidence/windows/2026-09-28-E56-dxgi-shadowing-dev-pc/`). Nothing there measures our own driver.
 - `evidence/windows/2026-09-27-E43-witcher3-dx12-present-log/RESULT.md`.
+- [Vulkan WSI through DXGI](../design/vulkan-wsi-dxgi.md) (2026-10-07): the route on a D3D12 device of our
+  adapter that replaces the kernel-thunk plan of point 1. It is the default, `gdi` is the switch back, and it
+  is not measured yet.
 - Mesa fork `amdgpu-wddm/radv-wddm2-kmt-enum` c34ab7cd: `src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c`,
   `src/vulkan/wsi/wsi_common_win32.cpp`; `driver/kmd/wddm.c` `Bc250WddmPresent`.
