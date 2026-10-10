@@ -62,6 +62,7 @@ try {
  Check 'lab-emerg' { & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-emerg\parse-check.ps1" }
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
+ Check 'target-boot' { & python -m unittest discover -s "$repo\tools\win" -p "test_target*.py" }
  Check 'train-validate' { & python -m unittest discover -s "$repo\tools\win\train-validate" }
  Check 'gpu-timeline' { & python -m unittest discover -s "$repo\tools\win\gpu-timeline" -p 'test_*.py' }
  Check 'isa-xml' { & python -m unittest discover -s "$repo\tools\isa" }
