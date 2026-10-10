@@ -7,8 +7,10 @@
 # with it), a DPM that is switched off (a 0x116 leaves DpmMode 0 behind), a TdrDelay other than 10 (the GUI
 # default since 2026-10-08), a temperature at or above -MaxTctl, and another trial already running on the
 # machine. The last one is why this exists: two agents on one lab produce two sets of numbers and no evidence.
-# The emergency channel task is not a competing trial and is never counted as one.
-param([int]$Cu = 40, [int]$TdrDelay = 10, [double]$MaxTctl = 80)
+# The resident tasks of the lab are not competing trials and are never counted as one: the overlay, the net
+# watchdog and the emergency channel run at every boot and must keep running. -ResidentTasks names them.
+param([int]$Cu = 40, [int]$TdrDelay = 10, [double]$MaxTctl = 80,
+    [string[]]$ResidentTasks = @('BC250 monitor overlay', 'BC250 net watchdog', 'Lab emergency channel'))
 $ErrorActionPreference = 'Continue'
 $bad = @()
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
@@ -37,8 +39,10 @@ $gd = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 
 "tdr: TdrDelay=$($gd.TdrDelay) TdrDdiDelay=$($gd.TdrDdiDelay) TdrLevel=$($gd.TdrLevel)"
 if ([int]$gd.TdrDelay -ne $TdrDelay) { $bad += "TdrDelay is $($gd.TdrDelay), wanted $TdrDelay" }
 # A competing trial: a running task of another kit, or a game or path tracing client already up.
-$tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
+$running = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
     Where-Object { $_.State -eq 'Running' -and $_.TaskName -match 'BC250|DWM|G0|WSI|pathtrace|trial' -and $_.TaskName -notmatch 'emergency' })
+$tasks = @($running | Where-Object { $ResidentTasks -notcontains $_.TaskName })
+"tasks_resident: $(($running | Where-Object { $ResidentTasks -contains $_.TaskName } | ForEach-Object { $_.TaskName }) -join ', ')"
 "tasks_running: $($tasks.Count) $(($tasks | ForEach-Object { $_.TaskName }) -join ', ')"
 if ($tasks.Count) { $bad += "another trial task runs: $(($tasks | ForEach-Object { $_.TaskName }) -join ', ')" }
 $procs = @(Get-Process -ErrorAction SilentlyContinue |
