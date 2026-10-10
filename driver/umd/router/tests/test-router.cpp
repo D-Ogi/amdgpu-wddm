@@ -1426,7 +1426,8 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
                                        "record_v=3 record_access=1";
     CHECK(Has(yes, clientPart.c_str()), "the client's half of the line: %s", yes.c_str());
     CHECK(Has(yes, compositorPart.c_str()), "the compositor's half of the line: %s", yes.c_str());
-    // IMMEDIATE changes nothing in the rule.
+    // IMMEDIATE changes nothing for a pair of one and the same row: both buffers here are BGRA8, so no
+    // swizzle has to change and the IMMEDIATE clause of audit finding K4 does not apply to them.
     CHECK(ask(client, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "TRUE refused for IMMEDIATE");
     // The pair the other way round is never a flip of the wrong buffer.
     CHECK(ask(compositor, client, 0) == FALSE, "TRUE for the pair given the other way round");
@@ -1482,7 +1483,24 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     CHECK(ask(other, compositor, 0) == TRUE, "RGBA8 with PLANE_FORMATS refused: %s", lastLine().c_str());
     CHECK(Has(lastLine(), "answer=1 rule=supported") && Has(lastLine(), "caps_flags=00000003") &&
           Has(lastLine(), "pitch=7680 fmt=28"), "RGBA8 with flag: %s", lastLine().c_str());
-    CHECK(ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "RGBA8 IMMEDIATE refused");
+    // The same pair under IMMEDIATE is refused (audit finding K4, 0.7.216.26): the client's row is RGBA8 and
+    // the compositor's is BGRA8, so the plane's pixel format and its red/blue crossbar have to change, and
+    // this hardware changes them at VUPDATE alone. The contract: "If the swizzle can only be changed at every
+    // VSync interval, ensure that the CheckDirectFlipFlags parameter does not have a value of
+    // D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE" (ref/ddi-display/d3d10umddi.md:8833-8838).
+    const BOOL immediateAnswer = ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE);
+    CHECK(immediateAnswer == FALSE, "RGBA8 IMMEDIATE answered %d", immediateAnswer);
+    const std::string immediateLine = lastLine();
+    CHECK(Has(immediateLine, "answer=0 rule=immediate-swizzle") && Has(immediateLine, "flags=00000001") &&
+              Has(immediateLine, "fmt=28"),
+          "RGBA8 IMMEDIATE: %s", immediateLine.c_str());
+    // The negative check of the expectation this gate carried until 0.7.216.26 (BD-115): it asked for TRUE
+    // here, which the rule now refuses. Both halves of that stale answer must fail, so a revert of the clause
+    // cannot pass this suite in silence.
+    CHECK(immediateAnswer != TRUE, "the stale expectation holds again: RGBA8 IMMEDIATE answered TRUE");
+    CHECK(!Has(immediateLine, "answer=1 rule=supported"),
+          "the stale expectation holds again: the RGBA8 IMMEDIATE line says supported: %s",
+          immediateLine.c_str());
     // The sRGB view of the same storage in the record is the same row.
     e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     device.pfnOpenResource(hDevice, &open, other, rt);
@@ -2218,16 +2236,24 @@ static void Child(const std::string &s)
             if (s == "front-log") {
                 // The destroy summary counts every answer of both suites under its rule: the 300 questions above
                 // are pitch (250) and source-geometry (50), and the lines the change log held back are 0. The
-                // TRUE answers are front-answer's three and the four of its PLANE_FORMATS block (RGBA8, RGBA8
-                // IMMEDIATE, the RGBA8 sRGB record and RGB10A2).
+                // TRUE answers are front-answer's three and the three of its PLANE_FORMATS block (RGBA8, the
+                // RGBA8 sRGB record and RGB10A2). The fourth question of that block carried IMMEDIATE and is
+                // the one immediate-swizzle answer (audit finding K4): it counted as a seventh TRUE until
+                // 0.7.216.26, which is what BD-115 was.
                 const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                                 std::to_wstring(GetCurrentProcessId()) + L".log");
                 const size_t at = frontLog.find("check_direct_flip summary");
                 const std::string line = at == std::string::npos ? std::string()
                                                                  : frontLog.substr(at, frontLog.find('\n', at) - at);
-                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=7 ") &&
-                          Has(line, "source-geometry:51") && Has(line, "pitch:252"),
+                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=6 ") &&
+                          Has(line, "immediate-swizzle:1") && Has(line, "source-geometry:51") &&
+                          Has(line, "pitch:252"),
                       "the destroy summary: %s", line.c_str());
+                // The negative check of the stale expectation (BD-115): the seventh TRUE is gone for good, and
+                // a summary that counts one again is a revert of the IMMEDIATE clause, not a passing gate.
+                CHECK(!Has(line, "true=7 "),
+                      "the stale expectation holds again: the summary counts the IMMEDIATE answer as a TRUE: %s",
+                      line.c_str());
                 CHECK(frontLog.find("check_direct_flip summary", at + 1) == std::string::npos,
                       "more than one summary line: %s", frontLog.c_str());
             }
