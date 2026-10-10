@@ -131,12 +131,22 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
   it gives. On unit A the P-state table stops at 3200 MHz while the cores boost to 3500 MHz, so a baseline of the
   table alone made each restore a cut. The number is still an answer of the chip, not a constant of the driver.
 - The record keeps the two answers apart (0.7.216.24, BD-094), because they are not the same number: `table_mhz`
-  is what a loaded core is judged against in the undervolt search, and `boost_mhz` is the ceiling a restore asks
+  is what a loaded core is judged against in the undervolt search, and `boost_mhz` is the clock a restore asks
   for. A core answers the clock of the moment, so an idle start gets no boost answer at all: the read stage then
   keeps one core busy for a short window and reads the core clocks again (the boost probe), because no message of
   the allowlist answers the ceiling itself. The lab met the cut in the b23 validation of 0.7.216.22: on an idle
   start the baseline was the table's 3200 MHz and a revert from the user interface held the processor there until
   a restart. With one busy thread during the read stage the same build recorded and restored 3500 MHz.
+- **`boost_mhz` is an observed maximum and not a proved ceiling** (0.7.216.26, audit finding F3). Message `0x43`
+  answers "core frequency in MHz for core_id 0-7"
+  (`ref/bc250_smu_oc__WARN-MIT-facts-only/bc250_smu/api_q3.py:135-137`, revision `327014d6`), which is the clock of
+  the moment and promises no limit, and the read allowlist of `docs/hardware.md` holds no message that answers a
+  maximum. So the probe reads its whole bounded sweep and keeps the highest reply per core instead of stopping at
+  the first reply inside the band. A firmware that answers 2900 MHz in the first window and 3500 MHz in the second
+  would otherwise record 2900 MHz, and that is the number a restore gives back, which is the BD-094 cut again. The
+  quantity is the right restore target and is not evidence about what the part can reach.
+  `driver/shim/test/cpu_native_test.c` drives the stage against a firmware model whose replies change between the
+  sweep's windows, because the rule lives in a loop and no pure function of the shim can hold it.
 - While the boost ceiling of a start is unknown, the clock limit is refused and not taken
   (`BC250_CPU_ERROR_NO_CEILING`, which the user interface reads as `BC250_CPU_FLAG_BOOST_KNOWN`). This is the rule of the
   whole surface in one line: the driver takes no control that it cannot give back. The undervolt and the

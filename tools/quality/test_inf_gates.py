@@ -36,14 +36,16 @@ class InfGates(unittest.TestCase):
         parameters["EnableMmio"] = 1
         return lines, parameters
 
-    def failures(self, lines, parameters):
+    def failures(self, lines, parameters, groups=None):
         directory = tempfile.TemporaryDirectory(dir=OUT)
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
         inf = root / "bc250kmd.inf"
         inf.write_text(HEADER + "".join(text + "\r\n" for text in lines), encoding="ascii", newline="")
         defaults = root / "registry-defaults.json"
-        defaults.write_text(json.dumps({"defaults": {"parameters": parameters}}), encoding="utf-8")
+        document = {"defaults": {"parameters": parameters}}
+        document["defaults"].update(groups or {})
+        defaults.write_text(json.dumps(document), encoding="utf-8")
         return g.check(inf, defaults)
 
     # ---- the agreed case ------------------------------------------------------------------------
@@ -148,6 +150,53 @@ class InfGates(unittest.TestCase):
         failures = self.failures(lines, parameters)
         self.assertEqual(1, len(failures))
         self.assertIn("not a release default any more", failures[0])
+
+    # ---- the installation state of the device (finding K1) --------------------------------------
+    def test_an_addreg_line_that_writes_a_software_key_property_fails(self):
+        lines, parameters = self.base()
+        lines.append("HKR,, DriverVersion, 0x00000000, \"40.7.216.100\"")
+        failures = self.failures(lines, parameters)
+        self.assertEqual(1, len(failures))
+        self.assertIn("installation state", failures[0])
+        self.assertIn(g.SOFTWARE_KEY_PAGE, failures[0])
+
+    def test_every_software_key_property_is_refused(self):
+        for name in g.INSTALLATION_OWNED:
+            lines, parameters = self.base()
+            lines.append("HKLM, SOFTWARE\\somewhere, %s, 0x00000000, \"x\"" % name)
+            failures = self.failures(lines, parameters)
+            self.assertEqual(1, len(failures), name)
+            self.assertIn(name, failures[0])
+
+    def test_the_inf_may_not_turn_the_runtime_version_write_on(self):
+        lines, parameters = self.base()
+        lines.append(line(g.RUNTIME_VERSION_SETTING, g.NOCLOBBER, 1))
+        failures = self.failures(lines, parameters)
+        self.assertTrue(any("turns the runtime DriverVersion write on" in text for text in failures),
+                        failures)
+
+    def test_the_release_table_may_not_name_the_runtime_version_setting(self):
+        lines, parameters = self.base()
+        failures = self.failures(lines, parameters,
+                                 groups={"graphics": {g.RUNTIME_VERSION_SETTING: 1}})
+        self.assertEqual(1, len(failures))
+        self.assertIn("belongs to the control application alone", failures[0])
+
+    def test_the_release_table_may_not_name_a_software_key_property(self):
+        lines, parameters = self.base()
+        failures = self.failures(lines, parameters, groups={"graphics": {"DriverDesc": 1}})
+        self.assertEqual(1, len(failures))
+        self.assertIn("DriverDesc", failures[0])
+
+    def test_a_commented_out_property_line_is_not_a_write(self):
+        lines, parameters = self.base()
+        lines.append("; HKR,, DriverVersion, 0x00000000, \"40.7.216.100\"")
+        self.assertEqual([], self.failures(lines, parameters))
+
+    def test_the_repository_names_neither_the_properties_nor_the_setting(self):
+        inf = REPO / "driver" / "kmd" / "bc250kmd.inf"
+        defaults = REPO / "tools" / "release" / "installer" / "registry-defaults.json"
+        self.assertEqual([], g.check_installation_state(inf, defaults))
 
     # ---- the repository itself -----------------------------------------------------------------
     def test_the_repository_agrees(self):

@@ -152,10 +152,26 @@ applies these clauses in order, and each clause has a name that a trace prints:
 | `client-scannable` | the application's record never asked for scan-out, or its placement cannot be read |
 | `compositor-scannable` | the display core cannot read the compositor's buffer where it sits |
 | `format` | the storage row is not a `SCANOUT_PRIMARY` row of the shared format table |
+| `immediate-swizzle` | the question is `IMMEDIATE` and the two rows need a VSync-only swizzle change |
 | `geometry` | the two differ in width or height |
 | `source-geometry` | they differ from the source mode at which the kernel driver admits a flip now |
 | `pitch-unknown` | one side's pitch is not known in user mode |
 | `pitch` | the two differ in pitch |
+
+Fourteen refusals and the `TRUE` answer make the fifteen counters of the log, which is `kFlipRules` in
+`front-flip-log.h`. A `static_assert` there holds that count against the last enumerator. The order
+above is the order in which `FlipReason` applies the clauses, and it is not the order of the
+`FlipRefusal` enumeration: `immediate_swizzle` was appended after `pitch`, because a value a trace has
+already printed may not move, while the clause itself runs between `format` and `geometry`. A trace
+reads the clause by its name, never by its number.
+
+The `immediate-swizzle` clause (0.7.216.26, audit finding K4) is the one the DDI states directly: "If
+the swizzle can only be changed at every VSync interval, ensure that the *CheckDirectFlipFlags*
+parameter does not have a value of **D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE**"
+(`ref/ddi-display/d3d10umddi.md:8833-8838`). This hardware latches the plane's pixel format, its
+red/blue crossbar and the flip address together at VUPDATE and at no other moment, so two rows of
+different `d3dddi` swizzle cannot answer an immediate question. `docs/design/scanout-admission.md`
+holds the format side of the same rule.
 
 The rule assumes no display mode. The geometry of the `source-geometry` clause comes from the scan-out
 caps trailer, which the front reads again at every question. In `main`, `display.c` offers the POST mode

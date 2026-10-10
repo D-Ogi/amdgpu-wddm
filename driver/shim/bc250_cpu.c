@@ -293,6 +293,12 @@ int bc250_cpu_boost_probe_needed(const struct bc250_cpu_baseline *baseline)
 	return baseline->boost_given ? 0 : 1;
 }
 
+int bc250_cpu_boost_probe_more(unsigned int rounds_done, unsigned int observed_mhz)
+{
+	(void)observed_mhz;	/* an answer never ends the sweep: see the header (audit finding F3) */
+	return rounds_done + 1u < BC250_CPU_BOOST_PROBE_ROUNDS ? 1 : 0;
+}
+
 /* ---- the failure signs -------------------------------------------------------------------------- */
 
 enum bc250_cpu_fail bc250_cpu_check_sample(const struct bc250_cpu_sample *s)

@@ -541,6 +541,41 @@ static void test_baseline(void)
 	}
 	/* A missing record owes a probe: nothing is known yet. */
 	CHECK(bc250_cpu_boost_probe_needed(NULL) == 1);
+	/* What the probe records is an OBSERVED maximum (audit finding F3). Message 0x43 answers the clock of the
+	 * moment and promises no limit, so the sweep reads every window of every round and keeps the highest reply;
+	 * driver/kmd/cpu.c stopped at the first reply inside the band up to 0.7.216.24. Three firmware answers that
+	 * the rule has to survive, each one a sweep whose rounds chain through *previous as the stage's do. */
+	/* The sweep's stop rule: the bound ends it, an answer does not (driver/kmd/cpu.c CpuBoostProbe asks this
+	 * function). A rule that stopped at the first in-band reply fails every line here. */
+	CHECK(bc250_cpu_boost_probe_more(0u, 3500u) == 1 && bc250_cpu_boost_probe_more(0u, 0u) == 1);
+	CHECK(bc250_cpu_boost_probe_more(0u, 2800u) == 1 && bc250_cpu_boost_probe_more(0u, 4000u) == 1);
+	CHECK(bc250_cpu_boost_probe_more(BC250_CPU_BOOST_PROBE_ROUNDS - 1u, 0u) == 0);
+	CHECK(bc250_cpu_boost_probe_more(BC250_CPU_BOOST_PROBE_ROUNDS, 3500u) == 0);
+	{
+		/* A ramp: the first window answers 2900 MHz, the second 3500. The first reply is not the maximum, and
+		 * the record must end at 3500 or a restore would give back the ramp's first step (the BD-094 cut). */
+		const unsigned int ramp1[BC250_CPU_CORES] = {2900u, 0u, 0u, 0u, 0u, 0u};
+		const unsigned int ramp2[BC250_CPU_CORES] = {3500u, 3500u, 3500u, 3500u, 3500u, 3500u};
+		struct bc250_cpu_baseline sweep;
+		bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, ramp1, BC250_CPU_CORES, NULL, &sweep);
+		CHECK(sweep.boost_given == 1 && sweep.boost_mhz == 2900u && sweep.mhz == 3200u);
+		bc250_cpu_baseline_read(NULL, 0u, ramp2, BC250_CPU_CORES, &sweep, &b);
+		CHECK(b.boost_mhz == 3500u && b.mhz == 3500u && bc250_cpu_boost_probe_needed(&b) == 0);
+		/* A thermally limited part: every window answers 3200 MHz. That is the observed maximum and the usable
+		 * restore target; it says nothing about what the firmware would allow on a cold part. */
+		{
+			const unsigned int warm[BC250_CPU_CORES] = {3200u, 3200u, 3200u, 3200u, 3200u, 3200u};
+			bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, warm, BC250_CPU_CORES, NULL, &sweep);
+			bc250_cpu_baseline_read(NULL, 0u, warm, BC250_CPU_CORES, &sweep, &b);
+			CHECK(b.boost_given == 1 && b.boost_mhz == 3200u && b.mhz == 3200u);
+		}
+		/* A delayed answer: the first window answers nothing inside the band, the second answers 3500. The
+		 * sweep must still be running then, which is why it does not stop at its first in-band reply. */
+		bc250_cpu_baseline_read(pstate, BC250_CPU_PSTATES, idle, BC250_CPU_CORES, NULL, &sweep);
+		CHECK(sweep.boost_given == 0 && bc250_cpu_boost_probe_needed(&sweep) == 1);
+		bc250_cpu_baseline_read(NULL, 0u, ramp2, BC250_CPU_CORES, &sweep, &b);
+		CHECK(b.boost_given == 1 && b.boost_mhz == 3500u);
+	}
 	/* The probe's own bounds stay small enough for a start path: one core busy for at most about a fifth of a
 	 * second (the windows plus the getter gap of every core of every window). */
 	{

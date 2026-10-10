@@ -264,7 +264,7 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
         if (read.mhz <= previous) return;
         s->Baseline.max_given = 1;
         s->Baseline.max_mhz = read.mhz;
-        GuardLog("cpu: the baseline clock of this start rises to %lu MHz (was %lu): the firmware's own boost",
+        GuardLog("cpu: the baseline clock of this start rises to %lu MHz (was %lu): observed under load",
                  read.mhz, previous);
         return;
     }
@@ -288,10 +288,18 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
 
 // The boost probe (0.7.216.24, BD-094). The read allowlist of docs/hardware.md carries no message that answers the
 // firmware's boost ceiling: 0x3B answers the named P-states (3200 MHz on unit A, under the boost) and 0x43 answers
-// the clock of the moment, which on an idle machine is 900 to 1400 MHz. So the stage makes the firmware answer the
-// ceiling: it keeps one core busy for BC250_CPU_BOOST_PROBE_MS and reads the per-core clocks again. One busy thread
-// is enough - the lab measured 3500 MHz on every core of arm B of the b23 BD-094 test with a single busy thread -
-// and the probe stops at the first answer inside the band.
+// the clock of the moment, which on an idle machine is 900 to 1400 MHz. So the stage makes the firmware answer under
+// load: it keeps one core busy for BC250_CPU_BOOST_PROBE_MS and reads the per-core clocks again. One busy thread is
+// enough - the lab measured 3500 MHz on every core of arm B of the b23 BD-094 test with a single busy thread.
+//
+// WHAT THIS QUANTITY IS (0.7.216.26, audit finding F3): the highest per-core clock this probe observed, and not the
+// firmware's maximum. Message 0x43 answers "core frequency in MHz for core_id 0-7"
+// (ref/bc250_smu_oc__WARN-MIT-facts-only/bc250_smu/api_q3.py:135-137, revision 327014d6) and promises no limit, so
+// no reading of it can establish a ceiling. The probe therefore reads the whole bounded sweep and keeps the highest
+// reply instead of stopping at the first one inside the band: a ramp that answers 2800 MHz in the first window and
+// 3500 MHz in the second would otherwise record 2800 MHz as "the boost" and give that back at a restore, which is
+// the BD-094 lesson (do not confuse a reported operating point with the restoration ceiling). The worst-case cost
+// is what it always was, because the sweep's bound is what it always was: rounds * (window + cores * getter gap).
 // Cost and bounds: one core of six busy for about a fifth of a second at worst, once per start, and only on a start
 // whose cores all read under the band. The thread holds this processor (KeSetSystemAffinityThreadEx, which the user
 // thread of a READBACK escape also admits) so the load cannot wander between cores. It stays at PASSIVE_LEVEL and
@@ -307,15 +315,17 @@ static void CpuBoostProbe(BC250_DEVICE* Device, ULONG* CoreMHz)
     KAFFINITY affinity = (KAFFINITY)1 << KeGetCurrentProcessorNumber(), previous;
 
     previous = KeSetSystemAffinityThreadEx(affinity);
-    for (round = 0; round < BC250_CPU_BOOST_PROBE_ROUNDS && !answered; round++) {
+    for (round = 0; round < BC250_CPU_BOOST_PROBE_ROUNDS; round++) {
+        if (round != 0 && !bc250_cpu_boost_probe_more(round - 1, answered)) break;
         CpuBusyWait(BC250_CPU_BOOST_PROBE_MS);
-        for (i = 0; i < BC250_CPU_CORES && !answered; i++) {
+        for (i = 0; i < BC250_CPU_CORES; i++) {
             value = 0;
             if (NT_SUCCESS(CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CORE_MHZ, i, FALSE, TRUE,
                                       &value))) {
                 probed++;
                 if (value > CoreMHz[i]) CoreMHz[i] = value;
-                if (value >= BC250_CPU_MIN_MHZ && value <= BC250_CPU_MAX_MHZ_LAB) answered = value;
+                if (value >= BC250_CPU_MIN_MHZ && value <= BC250_CPU_MAX_MHZ_LAB && value > answered)
+                    answered = value;
             }
             CpuBusyWait(BC250_CPU_GETTER_GAP_MS);
         }
@@ -323,7 +333,7 @@ static void CpuBoostProbe(BC250_DEVICE* Device, ULONG* CoreMHz)
     KeRevertToUserAffinityThreadEx(previous);
     for (i = 0; i < BC250_CPU_CORES; i++) if (CoreMHz[i] > top) top = CoreMHz[i];
     GuardLog("cpu: the boost probe kept one core busy and read %lu core clocks: %s%lu MHz", probed,
-             answered ? "the firmware's own boost is " : "still no clock inside the band, highest ", top);
+             answered ? "the highest observed core clock is " : "still no clock inside the band, highest ", top);
 }
 
 // Whether the stage owes a probe: the firmware's ceiling is still unknown and this driver has sent nothing, so a

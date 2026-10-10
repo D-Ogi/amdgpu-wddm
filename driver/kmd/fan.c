@@ -324,8 +324,34 @@ void FanResetDevice(BC250_DEVICE* Device)
     FanBlind(owner, &owner->Ctl);
 }
 
+// The watchdog's normal handback, at PASSIVE_LEVEL (audit finding F1). The DPC below took the hold and queued this
+// item; the hold is still ours, so nothing else can be in the controller. The normal handshake polls the chip with
+// 250-microsecond stalls (BC250_FAN_POLL_US), which a DPC may not do: "DPC routines that call the
+// KeStallExecutionProcessor routine to delay execution must not specify delays of more than 100 microseconds"
+// (ref/windows-driver-docs/windows-driver-docs-pr/kernel/guidelines-for-writing-dpc-routines.md:35). So the work
+// happens here, where a stall of a few milliseconds costs this thread alone.
+static IO_WORKITEM_ROUTINE FanHandBackWorker;
+static VOID FanHandBackWorker(_In_opt_ PDEVICE_OBJECT DeviceObject, _In_opt_ PVOID Context)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+    BC250_FAN_OWNER* owner;
+
+    UNREFERENCED_PARAMETER(DeviceObject);
+    if (device == NULL) return;
+    owner = &device->Fan;
+    if (owner->Ctl.controlling) {
+        if (FanHandBack(device, BC250_FAN_REASON_WATCHDOG, "watchdog") != 0)
+            owner->WatchdogRetryAt = KeQueryInterruptTime() + 10000ull * BC250_FAN_FAULT_RETRY_MS;
+        FanPublish(device, NULL);
+    }
+    // The order matters for FanStop: it waits for the hold, so the hold must be the last thing this item lets go.
+    InterlockedExchange(&owner->WorkerQueued, 0);
+    FanRelease(owner);
+}
+
 // The watchdog: the step stopped running for BC250_FAN_WATCHDOG_MS while the driver holds the fan. A DISPATCH_LEVEL
-// DPC, so it never waits for the controller: it tries the hold once and comes back a second later.
+// DPC, so it never waits for the controller: it tries the hold once and comes back a second later. It never talks to
+// the chip over the normal handshake either; that is the work item above.
 static KDEFERRED_ROUTINE FanWatchdog;
 static VOID FanWatchdog(_In_ PKDPC Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Argument1, _In_opt_ PVOID Argument2)
 {
@@ -345,7 +371,11 @@ static VOID FanWatchdog(_In_ PKDPC Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID A
     if (!FanTryHold(owner)) {
         // A step holds the controller and has not let go for this long. Inside the policy every poll is bounded,
         // so the thread is stuck outside it. The blind restore works on a copy: the holder still owns the real one.
-        if (silent >= BC250_FAN_WATCHDOG_FORCE_MS && !owner->BlindDone) {
+        // A hold taken by this watchdog's own work item is not such a stuck step until the item itself is as late
+        // as a stuck step would be: the item polls the chip, which takes milliseconds, not seconds.
+        const BOOLEAN worker = owner->WorkerQueued != 0 &&
+                               FanMsSince(now, owner->WorkerQueuedAt) < BC250_FAN_WATCHDOG_FORCE_MS;
+        if (silent >= BC250_FAN_WATCHDOG_FORCE_MS && !owner->BlindDone && !worker) {
             struct bc250_fan_ctl copy = owner->Ctl;
             owner->BlindDone = TRUE;
             owner->WatchdogFires++;
@@ -357,8 +387,17 @@ static VOID FanWatchdog(_In_ PKDPC Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID A
     if (owner->Ctl.controlling && now >= owner->WatchdogRetryAt) {
         owner->WatchdogFires++;
         GuardLog("fan: watchdog: no control step for %lu ms", silent);
-        if (FanHandBack(device, BC250_FAN_REASON_WATCHDOG, "watchdog") != 0)
-            owner->WatchdogRetryAt = now + 10000ull * BC250_FAN_FAULT_RETRY_MS;
+        if (owner->Worker != NULL && InterlockedCompareExchange(&owner->WorkerQueued, 1, 0) == 0) {
+            // The hold stays taken: the work item owns the controller from here and releases it at the end.
+            owner->WorkerQueuedAt = now;
+            IoQueueWorkItem(owner->Worker, FanHandBackWorker, DelayedWorkQueue, device);
+            return;
+        }
+        // No work item for this device object (the start could not allocate one): the bounded blind restore is
+        // the fallback, 100-microsecond stalls and a 2 ms ceiling (BC250_FAN_BLIND_POLL_US/_MAX), which a DPC may
+        // do. It gives the fan back without the handshake's verification, and the log says which path ran.
+        FanBlind(owner, &owner->Ctl);
+        GuardLog("fan: watchdog: no work item: blind restore, the fan is the board's without a read-back");
         FanPublish(device, NULL);
     }
     FanRelease(owner);
@@ -447,6 +486,12 @@ void FanStart(BC250_DEVICE* Device)
         LARGE_INTEGER due;
         owner->BugCheckRegistered = KeRegisterBugCheckCallback(&owner->BugCheck, FanBugCheck, owner,
                                                                sizeof(*owner), (PUCHAR)"bc250kmd fan");
+        // The watchdog's handback runs in this item, at PASSIVE_LEVEL (audit finding F1). A device object with no
+        // item left is not a failed start: the watchdog then falls back to the bounded blind restore and says so.
+        owner->WorkerQueued = 0;
+        owner->WorkerQueuedAt = 0;
+        owner->Worker = Device->PhysicalDeviceObject != NULL ? IoAllocateWorkItem(Device->PhysicalDeviceObject)
+                                                             : NULL;
         due.QuadPart = -10000ll * BC250_FAN_WATCHDOG_PERIOD_MS;
         (void)KeSetTimerEx(&owner->Timer, due, BC250_FAN_WATCHDOG_PERIOD_MS, &owner->Dpc);
         owner->TimerArmed = TRUE;
@@ -455,6 +500,8 @@ void FanStart(BC250_DEVICE* Device)
         GuardLog("fan: restore record %s, bugcheck callback %s",
                  owner->Ctl.restore.valid ? "kept" : "taken at the first change",
                  owner->BugCheckRegistered ? "on" : "REFUSED");
+        GuardLog("fan: the watchdog's handback runs %s",
+                 owner->Worker != NULL ? "in a work item at PASSIVE_LEVEL" : "blind: NO WORK ITEM");
     } else {
         GuardLog("fan: control off (%s): the board's curve runs the fan, no write to the chip",
                  g_FanGate[gate]);
@@ -474,6 +521,8 @@ void FanStop(BC250_DEVICE* Device, ULONG Reason)
         owner->TimerArmed = FALSE;
     }
     KeFlushQueuedDpcs();                // the watchdog DPC runs this image's code and holds the controller
+    // The hold also waits for the watchdog's work item, which releases it last: after this call no handback of
+    // that item is in flight and the item itself is no longer queued (audit finding F1).
     FanHold(owner);
     (void)FanHandBack(Device, Reason, bc250_fan_reason_name(Reason));
     FanPublish(Device, NULL);
@@ -489,6 +538,10 @@ void FanStop(BC250_DEVICE* Device, ULONG Reason)
              owner->Ctl.failures);
     owner->Configured = FALSE;
     owner->Enabled = FALSE;
+    if (owner->Worker != NULL) {
+        IoFreeWorkItem(owner->Worker);
+        owner->Worker = NULL;
+    }
     if (g_FanDevice == Device) g_FanDevice = NULL;
     FanRelease(owner);
 }

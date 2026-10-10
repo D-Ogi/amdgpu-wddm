@@ -121,10 +121,23 @@ older kernel driver therefore keeps RGBA8 and RGB10A2 composed. This is necessar
 comes after `SharedPrimaryTransition`, and then the output stays black.
 
 The router's front admits a pair whose two rows differ, for example an RGBA8 client over DWM's BGRA8
-buffer. Both rows must pass `bc250_scanout_format_admitted` and must have the same bytes per pixel. The
-DDI asks for compatible swizzle formats, and it refuses an `IMMEDIATE` flip only for a swizzle that can
-change at VSync alone (`ref/ddi-display/d3d10umddi.md:8833-8838`). Here the address also changes at
-VSync alone, so the two always change in the same frame, and the front keeps `IMMEDIATE` admitted.
+buffer. Both rows must pass `bc250_scanout_format_admitted` and must have the same bytes per pixel.
+
+A pair of two different rows is admitted only while the question is not an `IMMEDIATE` one
+(0.7.216.26, audit finding K4). The DDI asks for compatible swizzle formats and then says: "If the
+swizzle can only be changed at every VSync interval, ensure that the *CheckDirectFlipFlags* parameter
+does not have a value of **D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE**"
+(`ref/ddi-display/d3d10umddi.md:8833-8838`). This hardware can change the swizzle at VSync and at no
+other moment: the kernel driver writes the plane's pixel format, its red/blue crossbar and the address
+of every flip in one OTG master-update-lock window and clears `SURFACE_FLIP_TYPE`, so both latch at the
+next VUPDATE (`DcnFlipWriteSequence` in `driver/kmd/dcn.c`). That the two latch together keeps the
+colours right. It does not make the swizzle changeable off the vertical blank, which is the only thing
+the clause asks about. The front therefore refuses an `IMMEDIATE` question whose two rows need a
+different `d3dddi` swizzle, under the rule name `immediate-swizzle`
+(`FlipRefusal::immediate_swizzle`, `driver/umd/router/front-direct-flip.h`). Two rows of one and the
+same swizzle change nothing and keep the answer they had. An earlier reading of this paragraph took
+the atomic latch for an exemption from the clause. It is not one, because the answer given here comes
+before the runtime commits to DirectFlip. An immediate request the driver ignores later is too late.
 
 The operator switch is `EnableScanoutPlaneFormats` (`REG_DWORD`, `Parameters` key, absent means 1). The
 value 0 makes the driver skip the start's register read, so the flag stays clear and every flip uses

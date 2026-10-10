@@ -13,6 +13,9 @@ $script:AudioIdPrefix    = 'PCI\VEN_1002&DEV_13FF'
 $script:AudioMsiValue    = 'MSISupported'
 $script:AudioEnumRoot    = 'HKLM:\SYSTEM\CurrentControlSet\Enum'
 $script:AudioRestartWaitSeconds = 60                           # pnputil /restart-device, and the device back in D0
+# The program that restarts that function. A host test points this at a child of its own to drive the deadline of
+# Restart-GpuAudioDevice without a real device (audit finding K3).
+$script:PnpUtilPath      = 'pnputil.exe'
 $script:DisplayClassGuid = '{4d36e968-e325-11ce-bfc1-08002be10318}'
 $script:SoftwareKey      = 'HKLM:\SOFTWARE\amdgpu-wddm'
 $script:ParametersKey    = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
@@ -83,6 +86,59 @@ function Invoke-Native {
     $ErrorActionPreference = 'Continue'
     try { $text = (& $File @Arguments 2>&1 | ForEach-Object { [string]$_ }) -join "`n" } finally { $ErrorActionPreference = $old }
     return @{ text = $text; code = $LASTEXITCODE }
+}
+# The same, under a deadline, for a step whose budget must cover the program as well as the waiting after it
+# (audit finding K3). Invoke-Native above is an ordinary blocking pipeline: it has no timeout, so a program that
+# never returns holds the install or the uninstall for ever, whatever the caller's budget says.
+#
+# Both output streams are read as they arrive, so a program that writes more than a pipe holds cannot stop on a
+# reader that is in fact waiting for its exit, and only $MaxOutputChars of the text come back.
+#
+# A program that passes the deadline is NOT killed. Terminating pnputil in the middle of a kernel PnP transition
+# does not roll that transition back: the device is left wherever the kernel got to, and a kill would only hide
+# that. The caller gets timed_out = $true, the process id that is still running and the output up to that
+# moment, and decides what to tell the user. What the program writes after the deadline is not collected.
+function Invoke-NativeBounded {
+    param([Parameter(Mandatory)][string]$File, [string[]]$Arguments = @(),
+          [Parameter(Mandatory)][double]$TimeoutSeconds, [int]$MaxOutputChars = 8192)
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $quoted = @(foreach ($a in @($Arguments)) {
+            if ($a -eq '' -or $a -match '[^A-Za-z0-9_.:\\/=,+-]') { '"' + ($a -replace '(\\+)$', '$1$1') + '"' } else { $a }
+        })
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $File
+    $psi.Arguments = ($quoted -join ' ')
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $text = New-Object Text.StringBuilder
+    $p = New-Object Diagnostics.Process
+    $p.StartInfo = $psi
+    # Both streams are read as they arrive, so a program that writes more than a pipe holds cannot stop on a
+    # reader that is in fact waiting for its exit. The handler takes the lines of both streams in one buffer.
+    $sink = { if ($null -ne $EventArgs.Data) { [void]$Event.MessageData.AppendLine($EventArgs.Data) } }
+    $subscriptions = @(
+        (Register-ObjectEvent -InputObject $p -EventName OutputDataReceived -Action $sink -MessageData $text),
+        (Register-ObjectEvent -InputObject $p -EventName ErrorDataReceived -Action $sink -MessageData $text))
+    $code = $null
+    $id = $null
+    $timedOut = $false
+    try {
+        [void]$p.Start()
+        $id = $p.Id
+        $p.BeginOutputReadLine()
+        $p.BeginErrorReadLine()
+        $ms = [int][Math]::Max(0.0, [Math]::Min(2147483.0, [double]$TimeoutSeconds) * 1000.0)
+        if ($p.WaitForExit($ms)) { $code = $p.ExitCode } else { $timedOut = $true }
+    } finally {
+        foreach ($s in $subscriptions) { Unregister-Event -SubscriptionId $s.Id -ErrorAction SilentlyContinue }
+        $p.Dispose()
+    }
+    $out = ([string]$text.ToString() -replace "`r`n", "`n").Trim()
+    if ($out.Length -gt $MaxOutputChars) { $out = $out.Substring(0, $MaxOutputChars) + "`n[output cut]" }
+    return @{ text = $out; code = $code; timed_out = $timedOut; id = $id
+        seconds = [Math]::Round($clock.Elapsed.TotalSeconds, 1) }
 }
 
 # Restarts the calling script elevated (UAC prompt) and ends this process with exit code 10. Started from a .cmd
@@ -808,19 +864,29 @@ function Remove-GpuAudioMsiValue([string]$Key) {
 # pnputil /restart-device for one device, then the device back in its normal state, both inside one budget. The
 # endpoints of that function disappear for a few seconds and the audio service rebuilds them; no other device and no
 # part of the desktop is restarted (BD-060 is about the display device, which this is not).
+#
+# The budget covers pnputil itself (audit finding K3): it used to cover only the status polling after pnputil had
+# returned, so a PnP restart that never came back held the install or the uninstall with no bound at all. A
+# timeout is reported as itself - timed_out, with the process id still running - and not as a failed or unknown
+# device status, because a stuck kernel PnP transition is a different thing from a device that answered something
+# else. The run is not killed; see Invoke-NativeBounded.
 function Restart-GpuAudioDevice {
     param([Parameter(Mandatory)][string]$InstanceId, [int]$TimeoutSeconds = $script:AudioRestartWaitSeconds)
     $clock = [Diagnostics.Stopwatch]::StartNew()
-    $n = Invoke-Native pnputil.exe @('/restart-device', $InstanceId)
+    $n = Invoke-NativeBounded -File $script:PnpUtilPath -Arguments @('/restart-device', $InstanceId) `
+        -TimeoutSeconds $TimeoutSeconds
     $status = $null
-    while ($clock.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
-        $d = Get-PnpDevice -InstanceId $InstanceId -ErrorAction SilentlyContinue
-        if ($d) { $status = [string]$d.Status; if ($status -eq 'OK') { break } }
-        Start-Sleep -Seconds 1
+    if (-not $n.timed_out) {
+        while ($clock.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+            $d = Get-PnpDevice -InstanceId $InstanceId -ErrorAction SilentlyContinue
+            if ($d) { $status = [string]$d.Status; if ($status -eq 'OK') { break } }
+            Start-Sleep -Seconds 1
+        }
     }
-    return [pscustomobject]@{ code = $n.code; text = $n.text; status = $status
+    return [pscustomobject]@{ code = $n.code; text = $n.text; status = $status; timed_out = $n.timed_out
+        id = $n.id; restart_seconds = $n.seconds
         seconds = [Math]::Round($clock.Elapsed.TotalSeconds, 1)
-        ok = (($n.code -eq 0) -and ($status -eq 'OK')) }
+        ok = ((-not $n.timed_out) -and ($n.code -eq 0) -and ($status -eq 'OK')) }
 }
 # Did the write reach the computer? Reads the value again, for the one instance.
 function Test-GpuAudioMsi {

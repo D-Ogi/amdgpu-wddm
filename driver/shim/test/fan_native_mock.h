@@ -7,7 +7,30 @@
 #pragma once
 #define NATIVE_FAN_DEVICE 1
 #define NATIVE_STALL_ANY 1
+/* The context a call runs in, and what it stalls there. A DPC runs at DISPATCH_LEVEL, where the kernel contract
+ * says: "DPC routines that call the KeStallExecutionProcessor routine to delay execution must not specify delays
+ * of more than 100 microseconds", and a DPC "should run for no more than 100 microseconds each time it is
+ * called" (ref/windows-driver-docs/windows-driver-docs-pr/kernel/guidelines-for-writing-dpc-routines.md:31,35,
+ * revision 110f60eaf2ac5836e644d320c1e92c1011f2af5e). The test sets native_irql around the calls it makes, and
+ * the hook below records the context class, the largest single stall and the stall the driver asked for in all,
+ * so the rule is asserted instead of inferred from a comment (audit finding F1). */
+#define NATIVE_IRQL_PASSIVE 0
+#define NATIVE_IRQL_DISPATCH 2
+static unsigned char native_irql = NATIVE_IRQL_PASSIVE;
+static unsigned int native_stall_max_us;            /* the largest single stall, any context */
+static unsigned int native_stall_dispatch_us;       /* the sum of the stalls asked for at DISPATCH_LEVEL */
+static unsigned int native_stall_dispatch_max_us;   /* and the largest single one of them */
+static void NativeStall(unsigned int usec);
+#define NATIVE_STALL_HOOK(usec) NativeStall(usec)
 #include "hwmon_native_mock.h"
+
+static void NativeStall(unsigned int usec)
+{
+    if (usec > native_stall_max_us) native_stall_max_us = usec;
+    if (native_irql < NATIVE_IRQL_DISPATCH) return;
+    native_stall_dispatch_us += usec;
+    if (usec > native_stall_dispatch_max_us) native_stall_dispatch_max_us = usec;
+}
 
 /* ---- the watchdog's timer and DPC ------------------------------------------------------------------------- */
 
@@ -59,6 +82,67 @@ static BOOLEAN KeCancelTimer(KTIMER *Timer)
 
 static unsigned int native_dpc_flushes;
 static void KeFlushQueuedDpcs(void) { native_dpc_flushes++; }
+
+/* ---- the work item the watchdog hands the normal handback to (audit finding F1) ---------------------------- */
+
+typedef struct _DEVICE_OBJECT { int Present; } DEVICE_OBJECT, *PDEVICE_OBJECT;
+typedef VOID IO_WORKITEM_ROUTINE(PDEVICE_OBJECT DeviceObject, PVOID Context);
+typedef IO_WORKITEM_ROUTINE *PIO_WORKITEM_ROUTINE;
+typedef enum _WORK_QUEUE_TYPE { CriticalWorkQueue = 0, DelayedWorkQueue = 1 } WORK_QUEUE_TYPE;
+typedef struct _IO_WORKITEM {
+    PDEVICE_OBJECT Device;
+    PIO_WORKITEM_ROUTINE Routine;
+    PVOID Context;
+    int Queued;
+    int Freed;
+} IO_WORKITEM, *PIO_WORKITEM;
+
+/* One device object, one item: the fan control allocates at the start and frees at the stop. */
+static IO_WORKITEM native_work_item;
+static unsigned int native_work_allocations, native_work_queued, native_work_runs;
+static int native_work_refused;             /* 1: IoAllocateWorkItem answers NULL, for the fallback section */
+
+static PIO_WORKITEM IoAllocateWorkItem(PDEVICE_OBJECT Device)
+{
+    CHECK(Device != NULL && native_irql == NATIVE_IRQL_PASSIVE);
+    if (native_work_refused) return NULL;
+    memset(&native_work_item, 0, sizeof(native_work_item));
+    native_work_item.Device = Device;
+    native_work_allocations++;
+    return &native_work_item;
+}
+
+static void IoFreeWorkItem(PIO_WORKITEM Item)
+{
+    CHECK(Item != NULL && !Item->Queued);   /* never freed while the system still owns it */
+    Item->Freed = 1;
+}
+
+static void IoQueueWorkItem(PIO_WORKITEM Item, PIO_WORKITEM_ROUTINE Routine, WORK_QUEUE_TYPE Queue, PVOID Context)
+{
+    CHECK(Item != NULL && !Item->Freed && !Item->Queued && Routine != NULL && Queue == DelayedWorkQueue);
+    Item->Routine = Routine;
+    Item->Context = Context;
+    Item->Queued = 1;
+    native_work_queued++;
+}
+
+/* The system worker thread, where the test (or a wait inside the driver) chooses to let it run. Always at
+ * PASSIVE_LEVEL, which is the whole point of the item. */
+static int NativeRunWorkItems(void)
+{
+    PIO_WORKITEM_ROUTINE routine;
+    unsigned char saved = native_irql;
+
+    if (!native_work_item.Queued) return 0;
+    routine = native_work_item.Routine;
+    native_work_item.Queued = 0;
+    native_work_runs++;
+    native_irql = NATIVE_IRQL_PASSIVE;
+    routine(native_work_item.Device, native_work_item.Context);
+    native_irql = saved;
+    return 1;
+}
 
 /* ---- the bugcheck callback -------------------------------------------------------------------------------- */
 
@@ -132,6 +216,9 @@ static NTSTATUS KeDelayExecutionThread(int Mode, BOOLEAN Alertable, PLARGE_INTEG
     UNREFERENCED_PARAMETER(Alertable);
     UNREFERENCED_PARAMETER(Interval);
     native_delays++;
+    /* The one thing a real wait at PASSIVE_LEVEL also allows: the system worker thread runs the queued item.
+     * Without this, FanStop's hold would wait here for a handback that nothing dispatches. */
+    if (NativeRunWorkItems()) return STATUS_SUCCESS;
     /* A hold nobody releases: fail, and release it so that the test goes on to its other sections. */
     CHECK(native_delays <= 1000u);
     if (native_delays > 1000u && native_busy != NULL) *native_busy = 0;
@@ -160,6 +247,7 @@ typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_NATIVE StartHealth;
     BC250_HWMON_OWNER Hwmon;
     BC250_FAN_OWNER Fan;
+    PDEVICE_OBJECT PhysicalDeviceObject;    /* what FanStart allocates the work item against */
 } BC250_DEVICE;
 
 void HwmonInitialize(BC250_HWMON_OWNER *Owner);

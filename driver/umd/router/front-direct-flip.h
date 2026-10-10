@@ -39,19 +39,29 @@
 // an answer given here and the placement given at `DxgkDdiCreateAllocation` cannot disagree.
 //
 // IMMEDIATE (`D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE`) says the runtime would present without waiting
-// for the vertical blank. Nothing in the rule changes with it: the front neither queues the flip nor
-// owns the retire, and refusing the flag would only send an immediate present back to a copy.
+// for the vertical blank. For a pair of one and the same swizzle nothing in the rule changes with it:
+// the front neither queues the flip nor owns the retire, and refusing the flag would only send an
+// immediate present back to a copy.
 //
-// THE TWO FORMATS MAY DIFFER (0.7.216.20). The contract asks for compatible "swizzle formats", and says
-// that a swizzle the hardware can change only at VSync must not be admitted for an IMMEDIATE flip
-// (ref/ddi-display/d3d10umddi.md:8833-8838). The kernel driver writes the plane's pixel format, its
-// red/blue crossbar and the address of every flip in one OTG master-update-lock window, and it clears
-// SURFACE_FLIP_TYPE, so the address too latches only at the next VUPDATE (driver/kmd/dcn.c,
-// DcnFlipWriteSequence). The swizzle and the address therefore always change in the same frame, and an
-// IMMEDIATE flip shows no frame with one buffer's bytes read in the other buffer's order. So an RGBA8
-// back buffer may take the place of the compositor's BGRA8 front buffer when both rows pass
-// bc250_scanout_format_admitted with the trailer's flags and have the same bytes per pixel. The kernel
-// driver programs the client's format at the flip and the firmware's BGRA8 at the flip back.
+// THE TWO FORMATS MAY DIFFER (0.7.216.20), BUT NOT UNDER IMMEDIATE (0.7.216.26, audit finding K4). The
+// contract asks for compatible "swizzle formats" and then says: "If the swizzle can only be changed at
+// every VSync interval, ensure that the CheckDirectFlipFlags parameter does not have a value of
+// D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE" (ref/ddi-display/d3d10umddi.md:8833-8838). This hardware can
+// change the swizzle at VSync and at no other moment: the kernel driver writes the plane's pixel format,
+// its red/blue crossbar and the address of every flip in one OTG master-update-lock window, and it
+// clears SURFACE_FLIP_TYPE, so both latch at the next VUPDATE (driver/kmd/dcn.c, DcnFlipWriteSequence).
+// Latching them together keeps the colours right - no frame shows one buffer's bytes read in the other
+// buffer's order - but it does not make the swizzle changeable off the vertical blank, which is the only
+// thing the clause asks about. The earlier comment read that atomicity as an exemption; it is not one,
+// and an answer of TRUE here is given before the runtime commits to DirectFlip, so later ignoring the
+// immediate request cannot repair it.
+//
+// So: an RGBA8 back buffer may take the place of the compositor's BGRA8 front buffer when both rows pass
+// bc250_scanout_format_admitted with the trailer's flags and have the same bytes per pixel, and the
+// question is not an IMMEDIATE one (`FlipRefusal::immediate_swizzle` when it is). The kernel driver
+// programs the client's format at the flip and the firmware's BGRA8 at the flip back. A pair of the same
+// row changes no swizzle at all and keeps the IMMEDIATE answer it had. The day a plane can take a new
+// format off the vertical blank, that mechanism - and not this comment - lifts the clause.
 #ifndef BC250_FRONT_DIRECT_FLIP_H
 #define BC250_FRONT_DIRECT_FLIP_H
 
@@ -79,7 +89,12 @@ enum class FlipRefusal {
     source_geometry, // or they differ from the source mode the kernel driver admits a flip at now
     pitch_unknown,   // one side's pitch is not known here; see the clause below
     pitch,           // the two differ in pitch
+    immediate_swizzle,  // the question is IMMEDIATE and the two rows need a VSync-only swizzle change
 };
+
+// D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE (d3d10umddi.h). Mirrored so that this rule stays a pure
+// function of its arguments; front-device.cpp static_asserts the mirror against the WDK enumeration.
+static const unsigned kFlipCheckImmediate = 0x00000001u;
 
 inline const char *FlipRefusalText(FlipRefusal reason)
 {
@@ -98,6 +113,7 @@ inline const char *FlipRefusalText(FlipRefusal reason)
     case FlipRefusal::source_geometry: return "source-geometry";
     case FlipRefusal::pitch_unknown: return "pitch-unknown";
     case FlipRefusal::pitch: return "pitch";
+    case FlipRefusal::immediate_swizzle: return "immediate-swizzle";
     }
     return "unknown";
 }
@@ -107,7 +123,7 @@ inline const char *FlipRefusalText(FlipRefusal reason)
 // pair given the other way round is refused with "sides", which is a fail-safe FALSE and never a flip of
 // the wrong buffer.
 inline FlipRefusal FlipReason(const bc250_scanout_caps &caps, const Resource *client,
-                              const Resource *compositor)
+                              const Resource *compositor, unsigned checkFlags)
 {
     if (!client || !compositor || client == compositor) return FlipRefusal::handle;
     // Clause 1. An older kernel driver, a closed EnableDirectFlipHandshake, a closed EnableScanoutAdmit,
@@ -135,6 +151,12 @@ inline FlipRefusal FlipReason(const bc250_scanout_caps &caps, const Resource *cl
     if (!bc250_scanout_format_admitted(row, caps.flags) || !bc250_scanout_format_admitted(own, caps.flags) ||
         row->bytes_per_pixel != own->bytes_per_pixel)
         return FlipRefusal::format;
+    // The IMMEDIATE clause. Two different rows mean the plane's pixel format and its red/blue crossbar
+    // must change, and this hardware changes them at VUPDATE alone, so the contract forbids the TRUE for
+    // an IMMEDIATE question (see THE TWO FORMATS MAY DIFFER above). One and the same row changes no
+    // swizzle, so it keeps the answer it had before this clause existed.
+    if ((checkFlags & kFlipCheckImmediate) != 0u && row->d3dddi != own->d3dddi)
+        return FlipRefusal::immediate_swizzle;
     if (client->width != compositor->width || client->height != compositor->height)
         return FlipRefusal::geometry;
     // The geometry clause Bc250ScanoutAdmit will apply, said here rather than inferred from the
@@ -156,13 +178,13 @@ inline FlipRefusal FlipReason(const bc250_scanout_caps &caps, const Resource *cl
 }
 
 inline bool FlipSupported(const bc250_scanout_caps &caps, const Resource *client,
-                          const Resource *compositor)
+                          const Resource *compositor, unsigned checkFlags)
 {
-    return FlipReason(caps, client, compositor) == FlipRefusal::none;
+    return FlipReason(caps, client, compositor, checkFlags) == FlipRefusal::none;
 }
 
 // The log counts every answer per rule (front-flip-log.h), one counter per value of the enum above.
-static_assert(static_cast<unsigned>(FlipRefusal::pitch) + 1 == kFlipRules,
+static_assert(static_cast<unsigned>(FlipRefusal::immediate_swizzle) + 1 == kFlipRules,
               "FlipRefusal changed: kFlipRules in front-flip-log.h must count every rule");
 static_assert(static_cast<unsigned>(FlipRefusal::none) == 0, "rules[0] of the flip log is the TRUE count");
 
