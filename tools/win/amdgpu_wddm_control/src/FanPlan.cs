@@ -184,6 +184,15 @@ namespace AmdgpuWddmControl
         }
 
         // The curve in force, as the driver reports it.
+        // What the fan card is drawn from: the window rebuilds the card when this changes (MainForm.Fan.cs). The
+        // three flags that say which signal called the load heavy are left out, because they cross every few
+        // seconds while a temperature ramps and the card draws nothing from them.
+        public static string Signature(FanState f)
+        {
+            return f == null ? "-" : (f.Flags & ~FanState.FlagsBoostWhy) + ":" + f.State + ":" + f.Mode + ":" + f.Profile +
+                ":" + f.StoredMode + ":" + f.StoredProfile + ":" + CurveText(ShownC(f), ShownPct(f));
+        }
+
         public static uint[] ShownC(FanState f) { return f == null ? null : f.CurveC.Take((int)Math.Min(f.Points, MaxPoints)).ToArray(); }
         public static uint[] ShownPct(FanState f) { return f == null ? null : f.CurvePct.Take((int)Math.Min(f.Points, MaxPoints)).ToArray(); }
 

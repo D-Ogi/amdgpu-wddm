@@ -152,8 +152,12 @@ namespace AmdgpuWddmControl
             FlagFault = 32, FlagGated = 64, FlagPaused = 128, FlagRestoreSaved = 256, FlagSubstituted = 512, FlagHeldBack = 1024;
         // The load feed-forward (fan.md rule 10): FlagBoost is full speed under a heavy load now, FlagBoostOff is
         // a start that read FanLoadBoost as off. The three flags that say which signal called the load heavy
-        // (2048 << 1 and up) are for the driver log and the command line, not for the window.
-        public const uint FlagBoost = 2048, FlagBoostOff = 32768;
+        // (FlagsBoostWhy) are for the driver log and the command line, not for the window: they cross while a
+        // temperature ramps, so MainForm.Fan.cs leaves them out of the card's signature.
+        // FlagBoostArmed is the rule holding a heavy load with no duty of ours to raise (a lease's fixed duty, the
+        // wait for a retake): the driver log and the command line say "armed" there, and the window says nothing.
+        public const uint FlagBoost = 2048, FlagBoostOff = 32768, FlagBoostArmed = 65536;
+        public const uint FlagsBoostWhy = 4096 | 8192 | 16384;
         public const uint ModeBoard = 0, ModeCurve = 1, ModeFixed = 2;
         public const uint StateOff = 0, StateBoard = 1, StateCurve = 2, StateFixed = 3, StateEmergency = 4, StateDoubt = 5, StateFault = 6;
         public const uint ProfileCustom = 0, ProfileStandard = 1, ProfileQuiet = 2, ProfilePerformance = 3;

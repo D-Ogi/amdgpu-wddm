@@ -319,6 +319,8 @@ search.later.power|src|-|Power limit
 search.later.power.terms|src|-|power limit|watts|TDP
 search.perf.fan|src|-|Fan control
 search.perf.fan.terms|src|-|fan|fan curve|noise|cooling
+search.perf.fan-boost|src|-|Full fan speed under heavy load
+search.perf.fan-boost.terms|src|-|loud|noise|full speed|fan speed|heavy load|hot
 search.later.cache-clear|src|-|Clear the shader cache
 search.later.cache-clear.terms|src|-|clear cache|delete cache
 
@@ -631,6 +633,7 @@ help.setting.hdr|src|-|High dynamic range: brighter highlights and more colours.
 help.setting.vrr|src|-|The monitor follows the game's frame rate for smoother motion. Coming later.
 help.setting.power|src|-|The most power the chip may use. Coming later.
 help.setting.fan|src|-|Chooses who runs the case fan. Automatic leaves it to the board's BIOS setting. The driver curve turns the fan a little faster than the board's standard setting when the chip is hot. Quiet is slower below 80 °C, Performance is faster everywhere. From 87 °C the fan always runs at full speed.
+help.setting.fan-boost|src|-|Lets the driver take the fan to full speed as soon as the graphics work hard, instead of waiting for the chip to get hot. It is on from the start. Switch it off if you want the fan curve alone to decide; a new setting works after you restart Windows.
 help.setting.cache-clear|src|-|Deletes the shader cache. Coming later.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|src|-|Advanced tuning

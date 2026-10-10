@@ -395,6 +395,7 @@ static partial class UnitTests
     {
         Check(Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST " + FanState.FlagBoost + @"u\b"), "FlagBoost = BC250_FAN_FLAG_BOOST");
         Check(Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST_OFF " + FanState.FlagBoostOff + @"u\b"), "FlagBoostOff = BC250_FAN_FLAG_BOOST_OFF");
+        Check(Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST_ARMED " + FanState.FlagBoostArmed + @"u\b"), "FlagBoostArmed = BC250_FAN_FLAG_BOOST_ARMED");
         Check(FanCurves.BoostOn(null) && FanCurves.BoostOn(1) && !FanCurves.BoostOn(0) && !FanCurves.BoostOn(7),
             "nothing stored and 1 are on, 0 and any other value off, as the driver reads the value");
 
@@ -431,6 +432,29 @@ static partial class UnitTests
             Strings.T("perf.fan.boost.now"), Strings.T("perf.fan.boost.after-restart") };
         foreach (var t in words) Check(t.Length > 0 && !t.StartsWith("[", StringComparison.Ordinal), "fan boost sentence: " + t);
         Check(!PlainWords.Findings(words).Any(), "G-NOINT: the switch's own words");
+
+        // The three flags that say which signal called the load heavy cross every few seconds while a temperature
+        // ramps. The card draws nothing from them, so they must not rebuild the Performance page (round 2 review).
+        Check(Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST_BUSY 4096u\b") &&
+              Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST_POWER 8192u\b") &&
+              Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST_RISE 16384u\b"),
+            "FlagsBoostWhy = the three BC250_FAN_FLAG_BOOST_* signal flags");
+        Equal(FanState.FlagsBoostWhy, 4096u | 8192u | 16384u, "the three signal flags are one mask");
+        var ramp = FanFixture(FanState.FlagEnabled | FanState.FlagControlling);
+        var crossed = FanFixture(FanState.FlagEnabled | FanState.FlagControlling);
+        crossed.Flags |= FanState.FlagsBoostWhy;
+        Equal(FanCurves.Signature(ramp), FanCurves.Signature(crossed),
+            "a signal that crosses does not rebuild the card");
+        var boosting = FanFixture(FanState.FlagEnabled | FanState.FlagControlling);
+        boosting.Flags |= FanState.FlagBoost;
+        Check(FanCurves.Signature(ramp) != FanCurves.Signature(boosting),
+            "a boost that takes the fan to full speed does rebuild it");
+        // And the search finds the switch by the words a person types about a loud fan, in every language.
+        Check(SettingsSearch.Index.Any(e => e.Id == "perf.fan-boost" && e.Page == "performance"),
+            "the switch is searchable on the Performance page");
+        foreach (var query in new[] { "loud", "noise", "full fan speed" })
+            Check(SettingsSearch.Find(query, "en").Any(h => h.Entry.Id == "perf.fan-boost"), "a search for \"" + query + "\" finds it");
+        Check(SettingsSearch.Find("hałas", "pl").Any(h => h.Entry.Id == "perf.fan-boost"), "and in Polish");
     }
 
     // Every state and gate has a plain sentence.

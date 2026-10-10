@@ -313,6 +313,8 @@ search.later.power|mt-safe|fba85679|Limit mocy
 search.later.power.terms|mt|db72d2b0|limit mocy|pobór mocy|moc|waty|TDP
 search.perf.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
 search.perf.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
+search.perf.fan-boost|mt-safe|b044d1f7|Pełne obroty wentylatora przy dużym obciążeniu
+search.perf.fan-boost.terms|mt|458693d7|głośno|hałas|pełne obroty|obroty wentylatora|duże obciążenie|gorąco
 search.later.cache-clear|mt-safe|6b923412|Wyczyść pamięć podręczną shaderów
 search.later.cache-clear.terms|mt|bd9dc929|wyczyść cache|usuń cache|wyczyść pamięć podręczną|usuń pamięć podręczną
 # ---- window frame (WU-008, WU-011) ----
@@ -613,6 +615,7 @@ help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i wi
 help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Wkrótce.
 help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Wkrótce.
 help.setting.fan|mt|e5088079|Wybiera, kto steruje wentylatorem obudowy. Automatycznie zostawia to ustawieniu płyty w BIOS. Krzywa sterownika kręci wentylatorem nieco szybciej niż standardowe ustawienie płyty, gdy układ jest gorący. Cicho jest wolniej poniżej 80 °C, Wydajność szybciej w całym zakresie. Od 87 °C wentylator zawsze pracuje na pełnych obrotach.
+help.setting.fan-boost|mt|6e077955|Pozwala sterownikowi przejść na pełne obroty wentylatora, gdy grafika zaczyna pracować intensywnie, zamiast czekać, aż układ się nagrzeje. Jest włączone od początku. Wyłącz je, jeśli o obrotach ma decydować sama krzywa; nowe ustawienie działa po ponownym uruchomieniu systemu Windows.
 help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Wkrótce.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|mt|e6d2df01|Zaawansowane dostrajanie
