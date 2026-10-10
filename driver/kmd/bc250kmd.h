@@ -509,6 +509,11 @@ void GuardReleaseStart(void);       // orderly stop of a started device: give th
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+// BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
+// one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
+// must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
+// does (tools/release/installer/install.ps1, BD-079).
+ULONG GuardReadGraphicsSetting(_In_z_ PCWSTR Name, ULONG Default);
 NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value); // absent is STATUS_OBJECT_NAME_NOT_FOUND
 NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written and flushed
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
@@ -784,9 +789,10 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_S
 //   GfxSubmitReady   whether a submission would be taken: stage 8 done, nothing failed, nothing in flight and the
 //                    EnableGpuSubmit gate open. Advisory - GfxSubmitIb checks the same things under the lock.
 //   GfxSubmitBusy    the same gates, but the one in-flight IB has not arrived. Advisory, same as Ready.
-//   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
-//                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
-//                    only safe answer to a submission that never completed.
+//   GfxSubmitClose   closes ring admission at DISPATCH_LEVEL until a validated engine recovery commits.
+//                    Does not fault StartHealth. Used when preparing an OS-requested reset.
+//   GfxSubmitFail    closes admission and faults StartHealth for the rest of this device start.
+//                    A later successful engine recovery never clears that health fault.
 // KMD193 (bsod-245 item 4): who the submission belongs to, as values. gfx.c does not know what a WDDM context
 // is and must not learn; it copies these three words into the journal's BC250_PJ_GFX_SUBMIT record and into its
 // own job-frame log line, and dereferences nothing. NULL from a caller with no context (the IB_AT escape).
@@ -803,6 +809,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
+void GfxSubmitClose(_Inout_ BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //   GfxSoftRecover   M15.12 stage 1 (docs/design/hang-recovery.md). PASSIVE_LEVEL, from DxgkDdiResetEngine only,
 //                    under the HangRecoveryMode switch: kill the waves on Vmid (amdgpu's
@@ -810,11 +817,21 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //                    Vmid is the hung job's own VMID, which the caller reads out of the completion-queue entry
 //                    (since the VMID pool of 0.7.214 there is no single application VMID to assume).
 //                    Returns a BC250_HANG_VERDICT_* (hang_recovery.h): ALREADY_RETIRED or DRAINED = the ring is idle
-//                    and reopened (SubmitInFlight and the sticky SubmitFailed cleared); NOT_DRAINED = nothing changed,
+//                    but gates remain closed until the WDDM reset commit; NOT_DRAINED = nothing changed,
 //                    the caller keeps today's refusal. *Seq is the sequence waited for, *Kills the SQ_CMD writes
 //                    issued, *Micros the time spent.
 ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
                      _Out_ ULONG* Micros);
+//   GfxFenceObserved BD-114: the raw submission fence slot for the submit watchdog's progress token
+//                    (submit_watchdog.h). DISPATCH_LEVEL, read-only, no side effect at all - unlike
+//                    GfxFenceArrived it retires nothing and wakes nobody. FALSE: there was nothing to read.
+//   GfxReopenAfterAbort
+//                    BD-114: final reset commit, at DISPATCH_LEVEL under WDDM Lock.
+//                    Proves the ring idle and clears SubmitInFlight/SubmitFailed; no wake.
+//                    FALSE if work remains in flight. The caller opens its WDDM gate
+//                    in the same critical section, then signals after releasing the lock.
+BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
+BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);

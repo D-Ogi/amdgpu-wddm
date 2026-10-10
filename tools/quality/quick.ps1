@@ -76,9 +76,15 @@ try {
  Check 'smu-native' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_smu_native.ps1" -Root $Workspace -Out "$Out\smu-native" }
  Check 'cu-mode' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_cu_mode.ps1" -Out "$Out\cu-mode" -Kits "$Workspace\toolchain\nuget" }
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
+ # BD-114: the private submit watchdog's budget, its progress window, its head stamp and the aborted-fence
+ # answer, with the source checks that hold wddm.c to the same decisions (the host test cannot compile it).
+ Check 'recovery-protocol' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_recovery_protocol.ps1" -Root $Workspace -Out "$Out\recovery-protocol" }
+ Check 'submit-watchdog' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_submit_watchdog.ps1" -Root $Workspace -Out "$Out\submit-watchdog" }
  Check 'ring-gap' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ring_gap.ps1" -Root $Workspace -Out "$Out\ring-gap" }
  Check 'paging-queue' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue" }
  Check 'paging-queue-no-quota' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-no-quota" -Mutation '--drop-quota' -ExpectFailure }
+ # BD-114 7.1: node 1's deadline and timer priced from the old flat 500 ms again must fail by a CHECK.
+ Check 'paging-queue-flat-budget' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-flat-budget" -Mutation '--flat-paging-budget' -ExpectFailure }
  Check 'surface-layout' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_translate.ps1" -Root $Workspace -Out "$Out\surface-layout" -Kits "$Workspace\toolchain\nuget" }
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Workspace\toolchain\nuget" }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Workspace\toolchain\nuget" }
@@ -190,6 +196,35 @@ try {
   @{n='hang-recovery-gart-backend';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-GartBackend');Fails=$true}
   @{n='hang-recovery-count-refused';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-CountRefusedKills');Fails=$true}
   @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true}
+  @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
+  @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
+  @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
+  @{n='submit-watchdog-IgnoreAlternatingActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-IgnoreAlternatingActivity');Fails=$true}
+  @{n='submit-watchdog-AssumeOsClockAtHead';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AssumeOsClockAtHead');Fails=$true}
+  @{n='submit-watchdog-HeadAgeAtRetirement';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-HeadAgeAtRetirement');Fails=$true}
+  @{n='recovery-protocol-DropAdmissionReason';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-DropAdmissionReason');Fails=$true}
+  @{n='recovery-protocol-RejectActiveImmediately';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-RejectActiveImmediately');Fails=$true}
+  @{n='recovery-protocol-IgnoreDrainDeadline';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-IgnoreDrainDeadline');Fails=$true}
+  @{n='recovery-protocol-FaultHealthOnAdmission';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-FaultHealthOnAdmission');Fails=$true}
+  @{n='recovery-protocol-AdmitDuringReset';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-AdmitDuringReset');Fails=$true}
+  @{n='recovery-protocol-ReadAfterRelease';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReadAfterRelease');Fails=$true}
+  @{n='recovery-protocol-KeepCoveredBoundary';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-KeepCoveredBoundary');Fails=$true}
+  @{n='recovery-protocol-IgnoreReportInFlight';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreReportInFlight');Fails=$true}
+  @{n='recovery-protocol-IgnoreLostReport';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreLostReport');Fails=$true}
+  @{n='recovery-protocol-UseNotifiedAsCompleted';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-UseNotifiedAsCompleted');Fails=$true}
+  @{n='recovery-protocol-ShareNodeWatermark';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ShareNodeWatermark');Fails=$true}
+  @{n='recovery-protocol-ResetWritesCompleted';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ResetWritesCompleted');Fails=$true}
+  @{n='recovery-protocol-IgnoreEpoch';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreEpoch');Fails=$true}
+  @{n='recovery-protocol-TimeoutAfterUnlock';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-TimeoutAfterUnlock');Fails=$true}
+  @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
+  @{n='submit-watchdog-no-tdr-floor';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoTdrFloor');Fails=$true}
+  @{n='submit-watchdog-clamp-tdr';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ClampTdrToBudgetMax');Fails=$true}
+  @{n='submit-watchdog-ignore-progress';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-IgnoreProgress');Fails=$true}
+  @{n='submit-watchdog-stamp-at-ring-write';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-StampAtRingWrite');Fails=$true}
+  @{n='submit-watchdog-report-with-pending';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ReportWithPendingCompletion');Fails=$true}
+  @{n='submit-watchdog-no-fence-range';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoFenceRange');Fails=$true}
+  @{n='submit-watchdog-log-the-constant';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-LogTheConstant');Fails=$true}
+  @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
   @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent');Fails=$true}
   @{n='gfx-pipeline-no-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutCapacity');Fails=$true}
@@ -262,4 +297,3 @@ try {
  Write-Error $_
  exit 1
 }
-
