@@ -80,7 +80,9 @@ class PackageContextTests(unittest.TestCase):
         if nonlocal_fixture:
             # Git 2.27 lacks GIT_CONFIG_GLOBAL/SYSTEM overrides. Include the isolated
             # fixtures at command scope; --local must ignore this non-local scope too.
-            command = "$script:FixtureGit=(Get-Command git -CommandType Application).Source; function git { & $script:FixtureGit "
+            # Select-Object -First 1: a PATH with two git.exe entries (Git for Windows ships cmd\git.exe and
+            # mingw64\bin\git.exe) makes Get-Command return both, and .Source on the array joins the paths.
+            command = "$script:FixtureGit=(Get-Command git -CommandType Application | Select-Object -First 1).Source; function git { & $script:FixtureGit "
             for level in ("SYSTEM", "GLOBAL"):
                 command += "-c " + ps_quote("include.path=" + self.env["GIT_CONFIG_" + level]) + " "
             script = command + "@args }; " + script

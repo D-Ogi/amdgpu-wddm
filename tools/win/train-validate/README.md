@@ -26,6 +26,10 @@ python tools/win/train-validate/validate.py run --train b28 --package <package d
 
 The suite does not take the work the owner reserved for a person.
 
+- **The board memory acceptance** (`board-memory`) stays with the operator as well. It needs the control
+  application's Board memory card, an elevated confirmation and two restarts of Windows, and the owner's
+  physical CMOS clear is its only recovery if the board does not start again. The arm's lab script is the
+  read-only reading the operator takes at each of the four steps.
 - **The interactive Witcher 3 Remaster session** (`w3-high-rt`) stays with the operator: the owner's rule is
   that the agent drives the game itself, with a half-scale shot every 10 to 15 seconds, and ends the session
   when its goals are done. The runner prints where that session fits and never starts it.
@@ -92,6 +96,7 @@ The difference matters when a number is read out of this table.
 | `slots`, `kmdver`, `preflight` | read | every installed file against the package manifest, the identity of what runs, and 40 CU, DPM, health and TdrDelay |
 | `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`. That script refuses a second apply of the same release. The wrapper then reads `lab-baseline.json`. It passes when that file already names this release and this manifest hash. A resumed run thus gets the same answer as the first run |
 | `vk-smoke`, `x86-smoke` | lab | the system Vulkan ICD and the 32-bit D3D11 stack answer |
+| `vkheaps` | read | the Vulkan memory heaps of the installed system ICD follow the board's carve-out, not a frozen capture |
 | `q2rtx-pipeline`, `q2rtx-query`, `q2rtx-loop` | lab, **owner gate** | Quake II RTX runs with `VK_KHR_ray_tracing_pipeline` and with `VK_KHR_ray_query` |
 | `cache-0`, `cache-1`, `q2rtx-warm`, `cache-2` | read, lab | the shader disk cache of a new Vulkan driver build is written and then read. A new build has a cache namespace of its own (BD-100), so this is the b25 B1 proof again |
 | `dxrpt` | lab | path tracing through D3D12 holds its frame rate |
@@ -100,6 +105,7 @@ The difference matters when a number is read out of this table.
 | `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness |
 | `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene |
 | `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator |
+| `board-memory` | operator | the board memory acceptance: 12288 MiB in the control application, a restart, then Restore |
 
 Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms cache`, `--arms llm`, or a
 list such as `--arms q2rtx-pipeline,q2rtx-query`.

@@ -975,6 +975,8 @@ class ShippedSetEndToEnd(unittest.TestCase):
             ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("vk-smoke.ps1", Completed(0, "driverInfo = Mesa 26.3.0-devel (git-18e0f56be7)")),
             ("x86-d3d11-smoke.ps1", Completed(0, "exit 0 after 12.0 s")),
+            ("vkheaps.ps1", Completed(0, "vk heaps: device-local 7897 MiB, host 2672 MiB, total 10569 MiB")),
+            ("board-memory.ps1", Completed(0, "probe status 0\nwindows ram 7629 MiB")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi pipeline",
              Completed(0, "Using VK_KHR_ray_tracing_pipeline\n631 frames, 10.45 seconds: 60.40 fps")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi query",
@@ -1017,7 +1019,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 25)
+        self.assertEqual(len(records), 27)
         self.assertEqual([row["value"] for row in records if row["id"] == "uninstall"], [0.0],
                          "the number comes from the inventory after the uninstaller, not before it")
         plans = Path(self.tmp) / "scratch" / "m15" / "native-caps001" / "plans"
