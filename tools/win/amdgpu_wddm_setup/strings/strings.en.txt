@@ -286,5 +286,5 @@ guide.upgrade-done|src|-|Done! The driver is installed and checked. Have fun!
 # Optional Windows tuning
 tuning.title|src|-|Windows tuning
 tuning.opt-in|src|-|Apply optional Windows tuning
-tuning.details|src|-|Disable diagnostic telemetry, downloaded maps, and the program, experience and USB telemetry tasks. Offline maps will stop updating automatically.
-tuning.restore|src|-|Updates, driver updates, SysMain, Search and drive optimization stay unchanged. Restore saved settings in the control app or during removal.
+tuning.details|src|-|Apply recommended settings to reduce Windows background activity.
+tuning.restore|src|-|Review individual settings and restore saved values in the control app. Removal also offers restoration of machine-wide settings.

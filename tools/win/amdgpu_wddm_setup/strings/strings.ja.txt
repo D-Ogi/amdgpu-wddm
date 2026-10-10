@@ -284,5 +284,5 @@ guide.upgrade-done|mt|7ed192a1|完了です! ドライバーはインストー�
 # Optional Windows tuning
 tuning.title|mt|a1f6198e|Windows の設定調整
 tuning.opt-in|mt|d229d14d|任意の Windows 設定調整を適用する
-tuning.details|mt|1bf4ab21|診断テレメトリとダウンロードした地図のサービス、およびプログラム、ユーザー体験、USB のテレメトリタスクを無効にします。オフライン地図は自動更新されなくなります。
-tuning.restore|mt|9c2f960d|更新、ドライバー更新、SysMain、検索、ドライブの最適化は変更しません。保存した設定は制御アプリまたはアンインストール時に復元できます。
+tuning.details|mt|36ae26fb|Windows のバックグラウンド動作を減らす推奨設定を適用します。
+tuning.restore|mt|387d1d61|制御アプリで個別の設定を確認し、保存した値を復元できます。アンインストール時にもコンピューター全体の設定を復元できます。

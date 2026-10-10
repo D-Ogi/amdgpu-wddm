@@ -245,9 +245,8 @@ correct the application.
 ## Optional Windows tuning
 
 The setup window offers Windows tuning. This option starts unchecked.
-Select it to disable diagnostic telemetry, downloaded maps, and the program, experience and USB telemetry tasks.
-Offline maps will stop updating automatically.
-Windows Update, driver updates, SysMain, Search and drive optimization stay unchanged.
+Select it to apply the control application's recommended background settings through its shared backend.
+The package manifest and command-line plan list the choices from that application's catalog.
 Use the control application's Windows settings page for individual changes and recovery.
 
 For a command-line installation, add `-ApplySystemTuning` to `install.cmd`.

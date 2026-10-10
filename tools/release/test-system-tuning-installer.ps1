@@ -5,6 +5,7 @@ $outRoot = [IO.Path]::GetFullPath($Out)
 [void][IO.Directory]::CreateDirectory($outRoot)
 . (Join-Path $PSScriptRoot 'installer\common.ps1')
 . (Join-Path $PSScriptRoot 'installer\system-tuning.ps1')
+. (Join-Path $PSScriptRoot 'system-tuning-manifest.ps1')
 $realTuningProcess = (Get-Item Function:\Invoke-TuningProcess).ScriptBlock
 Import-Module (Join-Path $PSScriptRoot '..\win\system-tuning\SystemTuning.Core.psm1') -Force
 $script:checks = 0
@@ -14,14 +15,26 @@ function Refuses([scriptblock]$Action, [string]$Message) {
     try { & $Action } catch { $failed = $true }
     Assert $failed $Message
 }
-function Write-Info([string]$Message) { }
+$script:planMessages = New-Object Collections.Generic.List[string]
+function Write-Info([string]$Message) { $script:planMessages.Add($Message) }
 function Invoke-Change([string]$Description, [scriptblock]$Action) { if (-not $script:DryRunMode) { & $Action } }
 $script:calls = 0
 $script:fake = @{ code = 0; text = '{"schema":1,"ok":true,"action":"ApplyRecommended","scope":"Machine","dryRun":false}'; error = '' }
 function Invoke-TuningProcess([string]$ScriptPath, [string]$Action) { $script:calls++; return $script:fake }
 
 $expected = @(Get-TuningCatalog | Where-Object recommended | ForEach-Object id)
-Assert (($expected -join ',') -ceq ($script:SystemTuningRecommended -join ',')) 'Plan and backend recommended choices disagree'
+$metadata = New-SystemTuningManifest -CoreModule (Join-Path $PSScriptRoot '..\win\system-tuning\SystemTuning.Core.psm1')
+Assert (($expected -join ',') -ceq ($metadata.recommended -join ',')) 'Manifest and backend recommended choices disagree'
+Assert (-not $metadata.selected_by_default -and $metadata.preserve_recovery_state) 'Manifest changed opt-in or recovery semantics'
+Write-SystemTuningPlan -Selected $true -Manifest ([pscustomobject]@{system_tuning=$metadata})
+foreach ($item in $metadata.recommended_items) { Assert (@($script:planMessages | Where-Object { $_.Contains($item.label) -and $_.Contains($item.id) -and $_.Contains($item.note) }).Count -eq 1) 'Plan omitted catalog item detail' }
+# A different package catalog drives the installer plan without changing installer code.
+$script:planMessages.Clear()
+Write-SystemTuningPlan -Selected $true -Manifest ([pscustomobject]@{system_tuning=@{recommended_items=@(@{id='fixture.future';label='Future catalog item';note='Only the fixture changed.'})}})
+Assert (@($script:planMessages | Where-Object { $_ -like '*fixture.future*' }).Count -eq 1) 'Installer retained its own recommendation list'
+Refuses { Write-SystemTuningPlan -Selected $true -Manifest $null } 'Selected plan silently ignored missing catalog metadata'
+Write-SystemTuningPlan -Selected $false -Manifest $null
+Assert ($script:calls -eq 0) 'Plan invoked the tuning engine'
 $none = Get-InstallInputs @{} $null '1'
 Assert (-not ($none.switches -contains 'ApplySystemTuning')) 'Default must not select tuning'
 $chosen = Get-InstallInputs @{ApplySystemTuning=$true} $null '1'

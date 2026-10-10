@@ -158,6 +158,8 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 foreach ($f in $taskScripts) { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 # Source-owned scripts accompany every package, including installations without the control app.
 . (Join-Path $PSScriptRoot 'installer\system-tuning.ps1')
+. (Join-Path $PSScriptRoot 'system-tuning-manifest.ps1')
+$tuningManifest = New-SystemTuningManifest -CoreModule (Join-Path $repo 'tools\win\system-tuning\SystemTuning.Core.psm1')
 $tuningRows = @()
 $tuningDestinations = @('payload/system-tuning')
 if (Test-Path -LiteralPath (Join-Path $pkg 'payload\control')) { $tuningDestinations += 'payload/control/system-tuning' }
@@ -418,7 +420,7 @@ $manifest = [ordered]@{
     work_ledger_gate_reason = $script:ledgerGateReason
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe
-    system_tuning = [ordered]@{ selected_by_default = $false; recommended = $script:SystemTuningRecommended; source = 'tools/win/system-tuning'; recovery_state = 'ProgramData/amdgpu-wddm/system-tuning'; preserve_recovery_state = $true }
+    system_tuning = $tuningManifest
     mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
     sources = $sources.sources
     firmware = $firmware

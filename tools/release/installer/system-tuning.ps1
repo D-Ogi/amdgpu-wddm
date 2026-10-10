@@ -1,12 +1,13 @@
 # Optional Windows tuning. Only the manifest-bound package closure is executable.
 # The durable journal belongs to the backend, outside the installation directory.
 $script:SystemTuningFiles = @('system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.Native.psm1')
-$script:SystemTuningRecommended = @('service.DiagTrack', 'service.MapsBroker', 'task.ProgramDataUpdater', 'task.Consolidator', 'task.UsbCeip')
 
-function Write-SystemTuningPlan([bool]$Selected) {
+function Write-SystemTuningPlan([bool]$Selected, $Manifest) {
     if (-not $Selected) { Write-Info 'Windows tuning: not selected. Existing Windows settings stay unchanged.'; return }
-    Write-Info ('Windows tuning selected: disable the Diagnostic telemetry service, Downloaded maps service, Program telemetry task, Experience telemetry consolidation task and USB experience telemetry task. Items: ' + ($script:SystemTuningRecommended -join ', '))
-    Write-Info 'Windows Update, driver updates, update pause, SysMain, Windows Search and drive optimization stay unchanged. Saved originals remain available in the control application.'
+    if (-not $Manifest -or -not $Manifest.system_tuning -or $null -eq $Manifest.system_tuning.recommended_items) { throw 'The package has no Windows tuning plan from the control application.' }
+    Write-Info 'Windows tuning selected: apply the control application recommended background settings through its shared backend.'
+    foreach ($item in @($Manifest.system_tuning.recommended_items)) { Write-Info ("  $($item.label) [$($item.id)]: $($item.note)") }
+    Write-Info 'The control application manages individual choices and restoration of saved settings.'
 }
 
 function Get-SystemTuningScript([string]$PackageRoot) {

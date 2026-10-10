@@ -284,5 +284,5 @@ guide.upgrade-done|mt|7ed192a1|Gotowe! Sterownik jest zainstalowany i sprawdzony
 # Optional Windows tuning
 tuning.title|mt|a1f6198e|Ustawienia Windows
 tuning.opt-in|mt|d229d14d|Zastosuj opcjonalne zmiany ustawień Windows
-tuning.details|mt|1bf4ab21|Wyłącz usługi telemetrii diagnostycznej i pobranych map oraz zadania telemetrii programów, jakości obsługi i USB. Mapy offline przestaną się automatycznie aktualizować.
-tuning.restore|mt|9c2f960d|Aktualizacje, aktualizacje sterowników, SysMain, wyszukiwanie i optymalizacja dysków pozostaną bez zmian. Przywróć zapisane ustawienia w aplikacji lub podczas odinstalowania.
+tuning.details|mt|36ae26fb|Zastosuj zalecane ustawienia, aby ograniczyć aktywność Windows w tle.
+tuning.restore|mt|387d1d61|Przejrzyj poszczególne ustawienia i przywróć zapisane wartości w aplikacji sterownika. Deinstalator oferuje też przywracanie ustawień całego komputera.
