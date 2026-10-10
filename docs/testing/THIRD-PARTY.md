@@ -22,7 +22,7 @@ and NOTICE in the package root).
 | `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `70b6f8388309888690a854ddf4cdf5ab35ea594f` (branch `m15/video-encode-mft`, `driver/umd/mft-h264`) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
 | `tools\d3d11bench.exe` | amdgpu-wddm `0d6b3299dc7b4ed3d8b057755577493a85903853` (branch `train/b23`, `tools/win/d3d11bench`) |
-| `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `f183f99642470e7672211e1e9b6a46c5ecd572ab` (branch `fix/bd110-co-loader`, `compute/hip` and `compute/hipblas`), experimental |
+| `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `46a99e4712a9ad00b464f46d676900ccb6e34d77` (branch `fix/bd110-co-loader`, `compute/hip` and `compute/hipblas`), experimental |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `0d6b3299dc7b4ed3d8b057755577493a85903853` (branch `train/b23`, `tools/win/amdgpu_wddm_control`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `tools\release-witness.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 

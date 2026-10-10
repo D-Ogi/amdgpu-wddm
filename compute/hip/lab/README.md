@@ -76,7 +76,7 @@ be accepted later, and verifies a real copy/hash positive control and zero-budge
 refusal. The existing 85 tests remain enabled.
 
 The regression control accepts `-Library <old-armlib.ps1> -ExpectFailures`.
-Extract that library with `git show 8c1237b3:compute/hip/lab/armlib.ps1`. All four
+Extract that library with `git show 8d32e55a:compute/hip/lab/armlib.ps1`. All four
 shared deadline/acceptance tests must fail against it. Tests replace the old
 synchronous taskkill and copy calls with delays. The new path uses real sleeping
 worker processes and must stop waiting at its monotonic deadline. No GPU or lab
