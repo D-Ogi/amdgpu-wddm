@@ -277,8 +277,11 @@ Write-Host '  tests\host\bc250hsa_mock.c compiles against the frozen interface'
 # The host tests link the host half only, plus the vendored Linux headers for the PM4 gate.
 $hostObjects = @()
 foreach ($s in $hostSources) { $hostObjects += (Join-Path $objDir ([IO.Path]::ChangeExtension($s, 'obj'))) }
-$testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')")
-$tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c')
+# /I$here as well: test_vadd_oracle.c includes samples\vadd_expect.h, the oracle the HIP sample
+# of layer 2 uses, so the criterion and the sample cannot drift apart.
+$testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')", "/I$here")
+$tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c',
+    'test_vadd_oracle.c')
 foreach ($t in $tests) {
     $exe = Join-Path $Out ([IO.Path]::ChangeExtension($t, 'exe'))
     Invoke-Cl (@('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',
