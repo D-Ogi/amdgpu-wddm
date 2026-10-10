@@ -354,7 +354,11 @@ power").
 The governor hands the fan step a load feed beside the Tctl reading (`BC250_FAN_LOAD` in
 `driver/kmd/fan.h`). It holds the GPU busy share, the GFX clock and the SMU socket power. The busy share is
 the mean over the whole second between two fan steps, weighted by each DPM tick's own length, because one
-25 ms tick says nothing about a sustained load. A step without the feed runs on the curve alone.
+25 ms tick says nothing about a sustained load. The clock is the level the governor asks for, not a read of
+the chip in that step. A governor that governs holds its level, and a start without one hands over its last
+read-back. The power is the metrics table's socket figure. That table publishes once a second and counts as
+fresh for 3 s. The power can therefore arm the rule up to 3 s late, and it can linger up to 3 s after a
+load. A step without the feed runs on the curve alone.
 
 A step is heavy when the feed says any of this:
 
@@ -364,12 +368,21 @@ A step is heavy when the feed says any of this:
 | SMU socket power | 85 W | unit A idles at 41 to 56 W. The arm reads 107 to 122 W, and a GPU fill at 1000 MHz reads about 90 W (M828) |
 | the guard temperature's rise | 3 C over a 3 s window | 1 C a second. The arm's first seconds rise faster than that |
 
+The rise windows follow each other: the step that closes one opens the next at its own reading, so at the
+governor's cadence of a second a window closes every three steps. The rise of the window that closed last
+stands until the next one closes.
+
 Heavy time is counted in elapsed milliseconds, never in steps, so the rule does not depend on the
 governor's cadence:
 
 - A heavy step adds its own length to the account, any other step takes its length away, and the account
   stops at 4 s. That margin lets one quiet step inside a load pass without disarming the boost. The arm of
   2026-10-10 has such steps.
+- One step pays at most 1.5 s into the account, which is under the arming time: a single late step (a
+  starved governor thread, a resume, a long reader stall) can never arm the rule by itself, and sustained
+  means sustained. A step longer than that opens the rise window again instead of closing it over a gap of
+  unknown length. A step that is not heavy still takes its whole length away, because a long gap is a
+  reason to let the boost go and not to keep it.
 - The boost engages when the account reaches 2 s, so one busy second every ten (a menu, a single compile)
   never engages it.
 - The duty is then 100 % until the load ends. The write happens once: the duty byte does not change again
@@ -386,11 +399,16 @@ What the feed-forward never does:
 
 - It never lowers a duty. The curve's answer stands wherever it is the higher one.
 - It never runs in the board's mode, under a latched fault, or with `FanLoadBoost` 0.
+- It never engages while the board has the fan: before the first take-over, and in the 30 s a doubt
+  give-back waits before the retake (rule 4). The account keeps running in those steps, so a load that
+  outlives such a wait is known when the driver takes the fan again, but the state the tools and the log
+  show stays off until there is a duty of ours to raise.
 - It raises no fixed duty. A fixed duty is the operator's own number under a lease, and the 87 C emergency
   is still above it. The account keeps running under such a lease, so the curve the lease ends with is
   boosted at once when the load never stopped.
 - It survives no give-back. A boost is a duty, and after a give-back the duty is the board's. The driver has
-  to see the load again.
+  to see the load again. The blind give-back (the bugcheck callback, and `FanResetDevice` on the way to a
+  hibernation) clears it as well, so a start that comes back runs the curve until it sees the load.
 
 A quiet profile gets the boost as well. A user who wants the curve and nothing else sets `FanLoadBoost` 0.
 

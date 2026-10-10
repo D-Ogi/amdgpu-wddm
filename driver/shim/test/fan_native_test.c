@@ -584,11 +584,30 @@ static void load_boost(void)
     CHECK((f.Flags & BC250_FAN_FLAG_BOOST_BUSY) != 0u && (f.Flags & BC250_FAN_FLAG_BOOST_POWER) != 0u);
     CHECK((f.Flags & BC250_FAN_FLAG_BOOST_RISE) == 0u && f.AppliedPct == 100u && f.TargetPct == 100u);
     CHECK(native_log_has("load boost on (busy+power)"));
-    /* A step without the feed leaves the boost where it is until the hold runs out, and the duty with it. */
+    /* A step without the feed leaves the boost where it is until the hold runs out, and the duty with it. The
+     * snapshot is read again after the loop: the one taken before it says nothing about these twenty seconds. */
     for (i = 0; i < 20u; i++) Second(70000);
-    CHECK(device.Fan.Ctl.boost && f.AppliedPct == 100u);
+    Read(&f);
+    CHECK(device.Fan.Ctl.boost && f.AppliedPct == 100u && (f.Flags & BC250_FAN_FLAG_BOOST) != 0u);
+    CHECK(ec_peek8(&native_ec, TARGET1) == 255u);
     FanStop(&device, BC250_FAN_REASON_STOP);
     CHECK(AtRest() && !device.Fan.Ctl.boost && CleanWrites(0));
+
+    /* The heavy-time account's 4 s margin through the miniport: one quiet second inside a load does not disarm
+     * the boost (the arm of 2026-10-10 has such seconds), and the duty byte is not written again for it. */
+    Fresh(1);
+    Start();
+    for (i = 0; i < 4u; i++) SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost && device.Fan.Ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS);
+    CHECK(device.Fan.Ctl.boost_hold_ms == 0u && device.Fan.Ctl.writes == 2u);
+    SecondLoad(70000, 20, 500, 45000);                      /* one quiet second: the account, not the hold */
+    CHECK(device.Fan.Ctl.boost && device.Fan.Ctl.boost_hold_ms == 0u);
+    CHECK(device.Fan.Ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS - 1000u);
+    Read(&f);
+    CHECK(f.AppliedPct == 100u && ec_peek8(&native_ec, TARGET1) == 255u && device.Fan.Ctl.writes == 2u);
+    CHECK(device.Fan.Ctl.boosts == 1u);                     /* one engagement, not two */
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(AtRest() && CleanWrites(0));
 
     /* FanLoadBoost 0: the same arm never reaches full speed, and the escape says the rule is off. */
     Fresh(1);

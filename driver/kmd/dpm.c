@@ -991,8 +991,10 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->NextHwmon = now + 10000ull * BC250_HWMON_PERIOD_MS;
         HwmonSample(Device);
         // The fan control's load feed (fan.h, rule 10 of bc250_fan.h): the mean busy share of the whole second,
-        // the clock the governor holds, and the socket power of the metrics table when it is fresh. The fan
-        // decides nothing from a single 25 ms tick, so the governor hands over the window, not the sample.
+        // the clock, and the socket power of the metrics table when it is fresh. The fan decides nothing from a
+        // single 25 ms tick, so the governor hands over the window, not the sample. The clock is the level the
+        // governor asks for while it governs, which is not a read-back of the chip: the read-back T->ObservedMHz
+        // comes at most every BC250_DPM_VERIFY_MS and is what a start without a governor has.
         RtlZeroMemory(&load, sizeof(load));
         load.Valid = TRUE;
         load.BusyPermille = T->FanBusyMs != 0 ? (ULONG)(T->FanBusyWeighted / T->FanBusyMs) : T->Permille;

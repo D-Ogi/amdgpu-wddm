@@ -95,6 +95,22 @@
  * them) pass without disarming the boost. The boost engages at BC250_FAN_BOOST_ARM_MS, so a one-second spike
  * every ten seconds (a menu, one compile) never reaches it.
  *
+ * Sustained means sustained, so one step pays at most BC250_FAN_BOOST_STEP_MAX_MS into the account, which is
+ * under the arming time: a single late step (a starved governor thread, a resume, a long reader stall) can never
+ * arm the rule by itself, and two steps of a load are always needed. A step that is not heavy takes its whole
+ * length away, because a long gap is a reason to let the boost go and not to keep it. A step longer than that
+ * bound also starts the temperature's rise window again instead of closing it over a gap of unknown length,
+ * which is what made the 3 C threshold more sensitive the later a step was.
+ *
+ * The rise windows follow each other: the window that closes opens the next one at its own reading, so at the
+ * governor's 1 s cadence a window closes every three steps (3 s, the length the rule asks for). The rise of the
+ * window that closed last is what heavy_load() reads, and it stands until the next one closes.
+ *
+ * The boost engages only while the driver holds the fan. It is a duty, and the duty is the board's whenever the
+ * fan is: before the first take-over, and in the 30 s after a doubt gave the fan back. The account keeps running
+ * in those steps, so a load that outlives such a wait is already known when the driver takes the fan again, but
+ * the flag, the count and the log line stay off until there is a duty of ours to raise.
+ *
  * The way down: once the load is no longer heavy the boost holds for BC250_FAN_BOOST_HOLD_MS, and after that it
  * ends only when the curve itself asks for less than the duty in force. The ordinary slope rule (rule 7) then
  * takes the duty down, 10 points at most every 2 s, so the fan never drops in one step.
@@ -106,6 +122,7 @@
 #define BC250_FAN_BOOST_RISE_MC		3000	/* rising by this much, which is 1 C a second */
 #define BC250_FAN_BOOST_ARM_MS		2000u	/* heavy for this long: the boost engages */
 #define BC250_FAN_BOOST_LOAD_MAX_MS	4000u	/* and the heavy-time account stops here */
+#define BC250_FAN_BOOST_STEP_MAX_MS	1500u	/* one step pays at most this much in, so one late step arms nothing */
 #define BC250_FAN_BOOST_HOLD_MS		30000u	/* after the load: the boost holds at least this long */
 
 /* Why the boost is on, the bits of the last heavy step. */

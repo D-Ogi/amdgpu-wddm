@@ -889,6 +889,79 @@ static void load_boost(void)
 	for (i = 0; i < 8u; i++)
 		CHECK(tick_at(&io, &ec, &ctl, 50000 + (int)i * 1500) == 0);
 	CHECK(!ctl.boost && ctl.applied_pct < 100u);
+
+	{
+		struct bc250_fan_input in;
+
+		/* (f) The boost needs a duty of ours to raise. A doubt held for 5 s gives the fan back (rule 4), and
+		 * for the 30 s until the retake the board's own curve drives the fan: a heavy load fills the account
+		 * and engages nothing, counts nothing and writes nothing. */
+		start(&ec, &io, &ctl);
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.controlling);
+		for (i = 0; i < 5u; i++) {
+			in = input(&ec, 70000);
+			in.tctl_valid = 0;
+			CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+		}
+		CHECK(!ctl.controlling && ctl.held_back && !ctl.boost && ctl.boosts == 0u);
+		ec.logged = 0;
+		for (i = 0; i < 29u; i++) {
+			CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
+			CHECK(!ctl.controlling && !ctl.boost && ctl.boosts == 0u && ctl.boost_ms == 0ull);
+		}
+		CHECK(ec.logged == 0u && ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS);
+		/* The retake's own step takes the fan; the step after it blows, because the load is already known. */
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.controlling && !ctl.boost);
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.boost && ctl.boosts == 1u && ctl.applied_pct == 100u);
+
+		/* (g) One late step is no sustained load: a governor second that took four pays only
+		 * BC250_FAN_BOOST_STEP_MAX_MS in, so the duty stays the curve's until a second such step. */
+		start(&ec, &io, &ctl);
+		in = load_input(&ec, 61000, 990, 1500, 112000);
+		in.dt_ms = 4000;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0 && !ctl.boost);
+		CHECK(ctl.boost_load_ms == BC250_FAN_BOOST_STEP_MAX_MS);
+		CHECK(ctl.applied_pct == bc250_fan_curve_eval(&ctl.curve, 61000) && ctl.applied_pct < 100u);
+		in = load_input(&ec, 61000, 990, 1500, 112000);
+		in.dt_ms = 4000;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0 && ctl.boost && ctl.applied_pct == 100u);
+		/* And a step that took four seconds opens the rise window again instead of closing one over the gap:
+		 * a 2 C rise inside such a step is not the 3 C a second the rule looks for. */
+		start(&ec, &io, &ctl);
+		in = load_input(&ec, 50000, 0, 500, 40000);
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+		in = load_input(&ec, 52000, 0, 500, 40000);
+		in.dt_ms = 4000;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0 && !ctl.rise_valid && !ctl.boost);
+
+		/* (h) The account's 4 s margin against a quiet step inside a load (the LLM arm has them): four heavy
+		 * seconds fill it to the cap, and the first two quiet seconds leave it at or over the arming time, so
+		 * the boost never enters its hold and the duty does not move. The third starts the hold. */
+		start(&ec, &io, &ctl);
+		for (i = 0; i < 4u; i++)
+			CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
+		CHECK(ctl.boost && ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS && ctl.boost_hold_ms == 0u);
+		CHECK(idle_tick(&io, &ec, &ctl, 70000) == 0 && ctl.boost && ctl.applied_pct == 100u);
+		CHECK(ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS - 1000u && ctl.boost_hold_ms == 0u);
+		CHECK(idle_tick(&io, &ec, &ctl, 70000) == 0 && ctl.boost && ctl.applied_pct == 100u);
+		CHECK(ctl.boost_load_ms == BC250_FAN_BOOST_ARM_MS && ctl.boost_hold_ms == 0u);
+		CHECK(idle_tick(&io, &ec, &ctl, 70000) == 0 && ctl.boost && ctl.boost_hold_ms == 1000u);
+		CHECK(ctl.boosts == 1u && ctl.writes == 2u);	/* one engagement, and the duty written once */
+		/* The load comes back inside the hold: the account rises again and the hold goes with it. */
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.boost_hold_ms == 0u);
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.boost);
+		CHECK(ctl.boost_hold_ms == 0u && ctl.boosts == 1u && ctl.writes == 2u);
+
+		/* (i) The blind give-back (the bugcheck callback, FanResetDevice before a hibernation) leaves no boost
+		 * behind either, so the start that comes back has to see the load again. */
+		start(&ec, &io, &ctl);
+		for (i = 0; i < 3u; i++)
+			CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
+		CHECK(ctl.boost && ctl.boost_load_ms != 0u);
+		bc250_fan_handback_blind(&io, &ctl);
+		CHECK(!ctl.controlling && !ctl.boost && ctl.boost_why == 0u);
+		CHECK(ctl.boost_load_ms == 0u && ctl.boost_hold_ms == 0u);
+	}
 #endif
 }
 

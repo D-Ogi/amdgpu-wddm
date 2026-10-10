@@ -435,6 +435,14 @@ void bc250_fan_handback_blind(const struct bc250_hwmon_io *io, struct bc250_fan_
 {
 	unsigned int polls, mode = BC250_HWMON_MODE_REST, target;
 
+	/* Rule 10, as in bc250_fan_handback(): a boost is a duty, and this path gives the duty back. FanResetDevice
+	 * takes it on the way to a hibernation, so a start that came back with the account still armed would drive
+	 * 100 % at once instead of the curve. Cleared before the hold below, so the two give-backs are symmetric
+	 * whether this one holds the fan or not. */
+	ctl->boost = 0;
+	ctl->boost_why = 0;
+	ctl->boost_load_ms = 0;
+	ctl->boost_hold_ms = 0;
 	if (!ctl->controlling)
 		return;
 	target = ctl->restore.valid ? ctl->restore.target : BC250_HWMON_TARGET_REST;
@@ -522,15 +530,18 @@ static void track_effective(struct bc250_fan_ctl *ctl)
 
 /* The guard temperature's rise, over windows of BC250_FAN_BOOST_RISE_MS. The window is closed by elapsed time,
  * so the figure means the same whatever the governor's cadence is, and the rise of the window that closed last
- * is what the feed-forward reads. */
+ * is what the feed-forward reads. The windows follow each other: at the 1 s cadence one closes every three
+ * steps, because the step that closes a window opens the next one at its own reading. */
 static void track_rise(struct bc250_fan_ctl *ctl, unsigned int dt)
 {
 	if (!ctl->guard_valid)
 		return;
-	if (ctl->rise_ms == 0u) {
-		/* The window opens at this step's guard reading: at the first step that has a guard, and after every
-		 * window that closed. The 1 ms is the marker of an open window, so that the next step adds its own dt
-		 * instead of opening a second one; the window therefore measures a whole BC250_FAN_BOOST_RISE_MS. */
+	/* The window opens at this step's guard reading: at the first step that has a guard, and at a step that took
+	 * longer than one step may pay (a starved governor thread, a resume). Such a step says nothing about a 3 s
+	 * window, and closing one over a gap of unknown length is what would make the threshold more sensitive the
+	 * later the step is. The 1 ms is the marker of an open window, so that the next step adds its own dt instead
+	 * of opening a second one; a window therefore measures a whole BC250_FAN_BOOST_RISE_MS. */
+	if (ctl->rise_ms == 0u || dt > BC250_FAN_BOOST_STEP_MAX_MS) {
 		ctl->rise_ref_mc = ctl->guard_mc;
 		ctl->rise_ms = 1u;
 		return;
@@ -540,7 +551,8 @@ static void track_rise(struct bc250_fan_ctl *ctl, unsigned int dt)
 		return;
 	ctl->rise_mc = ctl->guard_mc - ctl->rise_ref_mc;
 	ctl->rise_valid = 1;
-	ctl->rise_ms = 0;
+	ctl->rise_ref_mc = ctl->guard_mc;
+	ctl->rise_ms = 1u;
 }
 
 /* Is this step's load heavy (rule 10)? The bits say which signal called it heavy, and zero means it is not. */
@@ -581,11 +593,25 @@ static void track_boost(struct bc250_fan_ctl *ctl, const struct bc250_fan_input 
 	}
 	why = heavy_load(ctl, in);
 	if (why != 0u) {
+		/* One step pays at most BC250_FAN_BOOST_STEP_MAX_MS in, which is under the arming time: a single late
+		 * step cannot arm the rule, and a sustained load is still two steps away from it. A step that is not
+		 * heavy takes its whole length away, because a long gap is a reason to let the boost go. */
+		unsigned int paid = dt > BC250_FAN_BOOST_STEP_MAX_MS ? BC250_FAN_BOOST_STEP_MAX_MS : dt;
+
 		ctl->boost_why = why;
-		ctl->boost_load_ms = ctl->boost_load_ms + dt > BC250_FAN_BOOST_LOAD_MAX_MS ?
-				     BC250_FAN_BOOST_LOAD_MAX_MS : ctl->boost_load_ms + dt;
+		ctl->boost_load_ms = ctl->boost_load_ms + paid > BC250_FAN_BOOST_LOAD_MAX_MS ?
+				     BC250_FAN_BOOST_LOAD_MAX_MS : ctl->boost_load_ms + paid;
 	} else {
 		ctl->boost_load_ms = ctl->boost_load_ms > dt ? ctl->boost_load_ms - dt : 0u;
+	}
+	/* The engage needs a duty of ours to raise. Before the first take-over, and in the 30 s after a doubt gave
+	 * the fan back, the board's own curve drives the fan: the account above keeps running, so a load that
+	 * outlives such a wait is already known when the driver takes the fan again, but the flag, the count, the
+	 * time and the log line stay off until the fan is ours. */
+	if (!ctl->controlling) {
+		ctl->boost = 0;
+		ctl->boost_hold_ms = 0;
+		return;
 	}
 	if (ctl->boost)
 		ctl->boost_ms += dt;

@@ -12,14 +12,18 @@
 
 C_ASSERT(BC250_FAN_CURVE_SLOTS == BC250_FAN_POINTS_MAX);
 C_ASSERT(BC250_FAN_WATCHDOG_MS > BC250_FAN_WATCHDOG_PERIOD_MS);
+// Rule 10 means a sustained load: one step pays less into the heavy-time account than the arming time, so no
+// single late step (a starved governor thread, a resume) can arm the boost by itself.
+C_ASSERT(BC250_FAN_BOOST_STEP_MAX_MS < BC250_FAN_BOOST_ARM_MS);
 
 // The governor's load feed for one control step (the load feed-forward, rule 10 of bc250_fan.h). The governor
 // thread fills it in dpm.c beside the Tctl reading: the busy share is the mean over the whole step and not one
-// 25 ms DPM tick, the clock is the one the governor holds, and the power is the SMU metrics table's socket figure.
+// 25 ms DPM tick, the clock is the level the governor asks for (its own read-back when it does not govern, never
+// a read of the chip in this step), and the power is the SMU metrics table's socket figure.
 // A step without a feed (Valid FALSE, or no pointer at all) runs on the temperature curve alone.
 typedef struct _BC250_FAN_LOAD {
     ULONG BusyPermille;                     // GPU busy over the step, 0..1000
-    ULONG Mhz;                              // the GFX clock, 0 when it is not known
+    ULONG Mhz;                              // the GFX clock the governor asks for, 0 when it is not known
     ULONG SocketMw;                         // the SMU socket power, when PowerValid
     BOOLEAN Valid;
     BOOLEAN PowerValid;
