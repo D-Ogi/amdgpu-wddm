@@ -369,6 +369,8 @@ namespace AmdgpuWddmControl
             }
             p.Controls.Add(cores);
 
+            if (UmaSetting.Visible(_uma)) p.Controls.Add(BuildUmaCard(width));
+            else p.Controls.Add(BuildReadOnlyMemoryCard(width));
             p.Controls.Add(BuildGfxGlobalCard(width));
 
             // Apply / Discard for the clock, the cores and the settings for all games (one planned action each).

@@ -40,6 +40,7 @@
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
 #define BC250_ESCAPE_RUN_FAN 30u                // case fan control: read, board, curve, fixed duty under a lease, renew
 #define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation, the state of steps 1, 2 and 4 (BC250_ESCAPE_DPAUDIO below)
+#define BC250_ESCAPE_RUN_BOARD_MEMORY 32u                // BC-250 board memory capability; writes require a qualified transport
 #define BC250_KMD_VERSION 0x000700D8u       // revision 216 (INF 0.7.216.1, on 215.1): DP audio step 2, the
                                             // stream half (dpaudio.c: wall DTO, AFMT, DP_SEC). One escape
                                             // grows, and that is why this word moves: RUN_DPAUDIO ABI 2,
@@ -442,6 +443,52 @@
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
 #define BC250_ESCAPE_STATUS_REFUSED 2u      // NtStatus says why: gate closed, offset not in the table
 #define BC250_ESCAPE_STATUS_NOT_ADMIN 3u
+
+// Board memory ABI 2. Provider 1 is the BC-250 ABL memory reservation.
+// READ is software-only. No raw port/offset/value operation exists.
+// SET/RESTORE are reserved and fail closed in this implementation.
+#define BC250_BOARD_MEMORY_ABI 2u
+#define BC250_BOARD_MEMORY_OP_READ 0u
+#define BC250_BOARD_MEMORY_OP_SET 1u
+#define BC250_BOARD_MEMORY_OP_RESTORE 2u
+#define BC250_BOARD_MEMORY_OP_PROBE 3u // administrator-only HAL reads, separate record, never a write
+#define BC250_BOARD_MEMORY_ACTIVE_VALID 1u
+#define BC250_BOARD_MEMORY_READ_VALID 2u
+#define BC250_BOARD_MEMORY_WRITE_ALLOWED 4u
+#define BC250_BOARD_MEMORY_BACKUP_VALID 8u
+#define BC250_BOARD_MEMORY_SUPPORTED 16u
+#define BC250_BOARD_MEMORY_PROVIDER_NONE 0u
+#define BC250_BOARD_MEMORY_PROVIDER_BC250_ABL 1u
+#define BC250_BOARD_MEMORY_REASON_READY 0u
+#define BC250_BOARD_MEMORY_REASON_NO_TRANSPORT 1u
+#define BC250_BOARD_MEMORY_REASON_BOARD 2u
+#define BC250_BOARD_MEMORY_REASON_FIRMWARE 3u
+#define BC250_BOARD_MEMORY_REASON_BLOCK 4u
+#define BC250_BOARD_MEMORY_REASON_READ 5u
+#define BC250_BOARD_MEMORY_REASON_UNKNOWN_STATE 6u
+typedef struct _BC250_ESCAPE_BOARD_MEMORY {
+    unsigned long Magic, Command, Status, NtStatus;
+    unsigned long AbiVersion, Op, Flags, Reason;
+    unsigned long long ActiveBytes; // complete GC/NBIO range captured at start; not the usable segment
+    unsigned long RequestedMiB;     // SET input; verified pending value on a future supported output
+    unsigned long PreviousMiB;
+    unsigned char ObservedBlock[28]; // expected snapshot input for SET/RESTORE; never replacement bytes
+    long ResultCode;
+    unsigned long ProviderId;       // zero on unsupported boards
+    unsigned long AllowedMiB[2];    // BC-250 provider: 8192, 12288
+    unsigned long NeedsRestart;    // applying a supported change needs a restart
+    unsigned long Reserved[8];
+} BC250_ESCAPE_BOARD_MEMORY; // 128 bytes; header is initialized, unused input fields are zero
+
+typedef struct _BC250_ESCAPE_BOARD_MEMORY_PROBE {
+    unsigned long Magic, Command, Status, NtStatus;
+    unsigned long AbiVersion, Op, Flags, Reason;
+    unsigned long SlotCount, OffsetCount;
+    unsigned char SlotBlock[28], OffsetBlock[28];
+    unsigned long RtcCount[4];
+    unsigned char RtcValue[4]; // register 0, 2, 4, D only; never read-to-clear register C
+    unsigned long Reserved[3];
+} BC250_ESCAPE_BOARD_MEMORY_PROBE; // 128 bytes; HAL return counts do not imply a valid memory profile
 
 #define BC250_ESCAPE_FLAG_MMIO_MAPPED 1u
 #define BC250_ESCAPE_FLAG_MMIO_WRITE 2u

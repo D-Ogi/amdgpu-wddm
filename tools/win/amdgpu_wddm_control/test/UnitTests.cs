@@ -1161,6 +1161,7 @@ static partial class UnitTests
         PlanAdditions(args[0]);
         GraphicsSettingsTests();
         TdrTests(args[0]);
+        UmaTests(args[0]);
         TunerTests(args[0], header);
         TunerViewTests();
         FanTests(args[0], header);

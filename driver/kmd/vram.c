@@ -89,6 +89,7 @@ NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device)
     Device->VramWriteEnabled = FALSE;
     Device->VramPhysical.QuadPart = 0;
     Device->VramLength = 0;
+    InterlockedExchange64(&Device->UmaActiveBytes, 0);
     Device->VramMcBase = 0;
     Device->Bar0Physical.QuadPart = 0;
     Device->Bar0Length = 0;
@@ -129,6 +130,7 @@ NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device)
 
     Device->VramPhysical.QuadPart = (LONGLONG)((ULONGLONG)offset << 24);
     Device->VramLength = length;
+    InterlockedExchange64(&Device->UmaActiveBytes, (LONG64)length);
     Device->VramMcBase = (ULONGLONG)base << 24;
     Device->VramEnabled = TRUE;
     Device->VramWriteEnabled = (GuardReadSetting(L"EnableVramWrite", 0) == 1);
@@ -139,6 +141,7 @@ NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device)
 
 void VramStop(_Inout_ BC250_DEVICE* Device)
 {
+    InterlockedExchange64(&Device->UmaActiveBytes, 0);
     Device->VramEnabled = FALSE;
     Device->VramWriteEnabled = FALSE;
 }

@@ -682,10 +682,146 @@ typedef struct _BC250_FAN_REQUEST {
     ULONGLONG ExpectedGeneration;           // every operation but READ
 } BC250_FAN_REQUEST; // 104 bytes on Windows
 
+typedef struct _BC250_CONTROL_BOARD_MEMORY_REQUEST {
+    ULONG Size, Op, TargetMiB, Reserved;
+    unsigned char ExpectedBlock[28];
+    ULONG ReservedEnd;
+} BC250_CONTROL_BOARD_MEMORY_REQUEST; // 48 bytes; no offsets, ports or arbitrary replacement data
+
 static NTSTATUS TelemetryEscape(void *data, unsigned size);
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
+
+// Same fixed block validation as driver/shim/bc250_uma.c; no hardware access.
+static int BoardMemoryBlockValid(const unsigned char *block, ULONG requested)
+{
+    ULONG signature = (ULONG)block[0] | ((ULONG)block[1] << 8) |
+        ((ULONG)block[2] << 16) | ((ULONG)block[3] << 24);
+    ULONG sum = 0, i, mib = (ULONG)block[26] | ((ULONG)block[27] << 8);
+    if (signature != 0x4c424124u && signature != 0x42435041u && signature != 0x42534d43u)
+        return 0;
+    for (i = 6; i < 28; ++i) sum += block[i];
+    return mib == requested && mib >= 256 && mib < 14336 && !(mib & 15) &&
+        ((ULONG)block[4] | ((ULONG)block[5] << 8)) == sum;
+}
+
+// Query has no hardware access. Mutations cannot reach the hardware escape unless
+// the driver first advertises a qualified transport. An unqualified provider remains read-only.
+BC250_CONTROL_API LONG WINAPI Bc250BoardMemory(BC250_ESCAPE_BOARD_MEMORY *data, ULONG bytes,
+                                      const BC250_CONTROL_BOARD_MEMORY_REQUEST *request)
+{
+    BC250_CONTROL_BOARD_MEMORY_REQUEST saved;
+    BC250_ESCAPE_BOARD_MEMORY capability;
+    NTSTATUS status;
+    ULONG i, wanted = 0;
+    typedef char BoardMemoryAbiSizeCheck[(sizeof(BC250_ESCAPE_BOARD_MEMORY) == 128 &&
+                                  sizeof(BC250_CONTROL_BOARD_MEMORY_REQUEST) == 48) ? 1 : -1];
+    (void)sizeof(BoardMemoryAbiSizeCheck);
+    if (!data || !request || bytes != sizeof(*data) || request->Size != sizeof(*request))
+        return (LONG)0xC000000D;
+    saved = *request;
+    if (saved.Op > BC250_BOARD_MEMORY_OP_RESTORE || saved.Reserved || saved.ReservedEnd ||
+        (saved.Op == BC250_BOARD_MEMORY_OP_SET ? (saved.TargetMiB != 8192 && saved.TargetMiB != 12288) : saved.TargetMiB != 0))
+        return (LONG)0xC000000D;
+    if (saved.Op == BC250_BOARD_MEMORY_OP_READ)
+        for (i = 0; i < sizeof(saved.ExpectedBlock); ++i)
+            if (saved.ExpectedBlock[i]) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    if (saved.Op != BC250_BOARD_MEMORY_OP_READ) {
+        BC250_CONTROL_BOARD_MEMORY_REQUEST query;
+        memset(&query, 0, sizeof(query));
+        query.Size = sizeof(query);
+        status = Bc250BoardMemory(&capability, sizeof(capability), &query);
+        if (!NT_SUCCESS(status)) return status;
+        if ((capability.Flags & (BC250_BOARD_MEMORY_SUPPORTED | BC250_BOARD_MEMORY_READ_VALID | BC250_BOARD_MEMORY_WRITE_ALLOWED)) !=
+            (BC250_BOARD_MEMORY_SUPPORTED | BC250_BOARD_MEMORY_READ_VALID | BC250_BOARD_MEMORY_WRITE_ALLOWED)) return (LONG)0xC00000BB;
+        if (saved.Op == BC250_BOARD_MEMORY_OP_RESTORE && !(capability.Flags & BC250_BOARD_MEMORY_BACKUP_VALID))
+            return (LONG)0xC00000BB;
+        wanted = saved.Op == BC250_BOARD_MEMORY_OP_SET ? saved.TargetMiB : capability.PreviousMiB;
+        if (wanted != 8192 && wanted != 12288) return (LONG)0xC00000BB;
+        if (memcmp(capability.ObservedBlock, saved.ExpectedBlock, sizeof(saved.ExpectedBlock)))
+            return (LONG)0xC000022D; // STATUS_RETRY: caller must confirm a fresh observation
+    }
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_BOARD_MEMORY;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_BOARD_MEMORY_ABI;
+    data->Op = saved.Op;
+    data->RequestedMiB = saved.TargetMiB;
+    memcpy(data->ObservedBlock, saved.ExpectedBlock, sizeof(data->ObservedBlock));
+    status = TelemetryEscapeFlags(data, sizeof(*data), saved.Op != BC250_BOARD_MEMORY_OP_READ);
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_BOARD_MEMORY ||
+        data->AbiVersion != BC250_BOARD_MEMORY_ABI || data->Op != saved.Op || (data->Flags & ~31u) ||
+        data->Reason > BC250_BOARD_MEMORY_REASON_UNKNOWN_STATE) return (LONG)0xC000000D;
+    if ((data->Flags & BC250_BOARD_MEMORY_WRITE_ALLOWED) &&
+        (!(data->Flags & BC250_BOARD_MEMORY_READ_VALID) || data->Reason != BC250_BOARD_MEMORY_REASON_READY))
+        return (LONG)0xC000000D;
+    for (i = 0; i < sizeof(data->Reserved) / sizeof(data->Reserved[0]); ++i)
+        if (data->Reserved[i]) return (LONG)0xC000000D;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Flags & BC250_BOARD_MEMORY_SUPPORTED) {
+        if (data->ProviderId != BC250_BOARD_MEMORY_PROVIDER_BC250_ABL ||
+            data->AllowedMiB[0] != 8192 || data->AllowedMiB[1] != 12288 || data->NeedsRestart != 1 ||
+            data->Reason == BC250_BOARD_MEMORY_REASON_BOARD || data->Reason == BC250_BOARD_MEMORY_REASON_FIRMWARE)
+            return (LONG)0xC000000D;
+    } else {
+        // An unsupported board returns no BC-250 capability or CMOS state.
+        if (data->Flags || data->ProviderId || data->AllowedMiB[0] || data->AllowedMiB[1] ||
+            data->NeedsRestart || data->ActiveBytes || data->RequestedMiB || data->PreviousMiB ||
+            data->ResultCode || saved.Op != BC250_BOARD_MEMORY_OP_READ ||
+            (data->Reason != BC250_BOARD_MEMORY_REASON_BOARD && data->Reason != BC250_BOARD_MEMORY_REASON_FIRMWARE))
+            return (LONG)0xC000000D;
+        for (i = 0; i < sizeof(data->ObservedBlock); ++i)
+            if (data->ObservedBlock[i]) return (LONG)0xC000000D;
+    }
+    if ((data->Flags & BC250_BOARD_MEMORY_READ_VALID) &&
+        !BoardMemoryBlockValid(data->ObservedBlock, data->RequestedMiB)) return (LONG)0xC000000D;
+    if ((data->Flags & BC250_BOARD_MEMORY_BACKUP_VALID) &&
+        (data->PreviousMiB < 256 || data->PreviousMiB >= 14336 || (data->PreviousMiB & 15)))
+        return (LONG)0xC000000D;
+    if (saved.Op != BC250_BOARD_MEMORY_OP_READ) {
+        if (data->Reason != BC250_BOARD_MEMORY_REASON_READY ||
+            !(data->Flags & BC250_BOARD_MEMORY_READ_VALID) || data->RequestedMiB != wanted ||
+            (data->ResultCode != 0 && data->ResultCode != 1) ||
+            memcmp(data->ObservedBlock + 6, saved.ExpectedBlock + 6, 20))
+            return (LONG)0xC000000D;
+    }
+    return 0;
+}
+
+// Explicit diagnostic command only. The GUI does not call this function.
+BC250_CONTROL_API LONG WINAPI Bc250BoardMemoryProbe(BC250_ESCAPE_BOARD_MEMORY_PROBE *data, ULONG bytes)
+{
+    NTSTATUS status;
+    ULONG i;
+    typedef char BoardMemoryProbeSizeCheck[(sizeof(BC250_ESCAPE_BOARD_MEMORY_PROBE) == 128) ? 1 : -1];
+    (void)sizeof(BoardMemoryProbeSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_BOARD_MEMORY;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_BOARD_MEMORY_ABI;
+    data->Op = BC250_BOARD_MEMORY_OP_PROBE;
+    status = TelemetryEscapeFlags(data, sizeof(*data), 1);
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_BOARD_MEMORY ||
+        data->AbiVersion != BC250_BOARD_MEMORY_ABI || data->Op != BC250_BOARD_MEMORY_OP_PROBE ||
+        (data->Flags & ~BC250_BOARD_MEMORY_SUPPORTED) ||
+        data->Reason > BC250_BOARD_MEMORY_REASON_UNKNOWN_STATE) return (LONG)0xC000000D;
+    for (i = 0; i < sizeof(data->Reserved) / sizeof(data->Reserved[0]); ++i)
+        if (data->Reserved[i]) return (LONG)0xC000000D;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Flags != BC250_BOARD_MEMORY_SUPPORTED || data->Reason != BC250_BOARD_MEMORY_REASON_READ)
+        return (LONG)0xC000000D;
+    return 0; // raw counts, including zero/short, are observations rather than admission
+}
 
 // A limit can be "none": the development PC's RTX 4090 reports an aperture CommitLimit of 2^64-1 (2026-09-30).
 static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
@@ -3899,11 +4035,31 @@ static int DpAudio(int argc, WCHAR **argv)
 #undef DPA_OK
 #undef FIELD
 
+static int Bc250BoardMemoryProbeCommand(void)
+{
+    static const unsigned int rtc[] = {0, 2, 4, 13};
+    BC250_ESCAPE_BOARD_MEMORY_PROBE p;
+    LONG status = Bc250BoardMemoryProbe(&p, sizeof(p));
+    unsigned int i;
+    printf("{\"operation\":\"bc250-board-memory-probe\",\"transport_status\":\"0x%08lX\","
+           "\"status\":%lu,\"ntstatus\":\"0x%08lX\",\"slot_count\":%lu,\"offset_count\":%lu,\"slot_hex\":\"",
+           (ULONG)status, p.Status, p.NtStatus, p.SlotCount, p.OffsetCount);
+    for (i = 0; i < sizeof(p.SlotBlock); ++i) printf("%02X", p.SlotBlock[i]);
+    printf("\",\"offset_hex\":\"");
+    for (i = 0; i < sizeof(p.OffsetBlock); ++i) printf("%02X", p.OffsetBlock[i]);
+    printf("\",\"rtc\":[");
+    for (i = 0; i < 4; ++i)
+        printf("%s{\"register\":%u,\"count\":%lu,\"value\":%u}", i ? "," : "", rtc[i], p.RtcCount[i], p.RtcValue[i]);
+    printf("]}\n");
+    return status < 0 ? 1 : 0;
+}
+
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
                         "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
+                        "       bc250kmd_cli bc250-board-memory-probe                    (admin; fixed HAL reads only, no CMOS write)\n"
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
                         "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
@@ -3940,6 +4096,7 @@ int wmain(int argc, wchar_t **argv)
         return 2;
     }
     if (!_wcsicmp(argv[1], L"cpu")) return Cpu(argc,argv);
+    if (!_wcsicmp(argv[1], L"bc250-board-memory-probe") && argc == 2) return Bc250BoardMemoryProbeCommand();
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
