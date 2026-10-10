@@ -2,12 +2,46 @@
 // Host gate of the D3D12 shell's MaxFrameLatency gate (frame-latency.h): the ring, the poll loop and the
 // counters. No GPU and no runtime: a substitute progress source answers the gate.
 #include <windows.h>
+#include <atomic>
+#include <cstdint>
 // Deterministically model a concurrent caller replacing/consuming the one timer signal.
 // Bound the old implementation too, so a regression reports failure instead of hanging the host gate.
 namespace {
 bool cancel_test_timer=false;
 unsigned cancelled_timer_waits=0,unbounded_timer_waits=0;
+// The second mode belongs to the two-thread test below: two presents of one device wait on that device's one
+// timer together, and the thread named here loses the one signal, which is what the other present's rearm or
+// its own wait does to it. Atomics, because two threads read these.
+std::atomic<bool> shared_timer_test{false};
+std::atomic<unsigned long> shared_timer_victim{0};
+std::atomic<unsigned> shared_timer_steals{0},shared_timer_unbounded{0},shared_timer_longest_us{0};
+// The performance counter in microseconds. latency_now_us() of frame-latency.h is the same clock, but that
+// header is included below this wrapper, which it has to call.
+uint64_t wrapper_now_us() noexcept {
+    LARGE_INTEGER f{},n{};
+    QueryPerformanceFrequency(&f);QueryPerformanceCounter(&n);
+    if(f.QuadPart<=0 || n.QuadPart<=0)return 0;
+    const uint64_t ticks=static_cast<uint64_t>(n.QuadPart),frequency=static_cast<uint64_t>(f.QuadPart);
+    return ticks/frequency*1000000ull+ticks%frequency*1000000ull/frequency;
+}
 DWORD WINAPI checked_timer_wait(HANDLE timer,DWORD timeout) {
+    if(shared_timer_test.load(std::memory_order_relaxed)){
+        if(timeout==INFINITE)shared_timer_unbounded.fetch_add(1,std::memory_order_relaxed);
+        if(GetCurrentThreadId()==shared_timer_victim.load(std::memory_order_relaxed)){
+            shared_timer_steals.fetch_add(1,std::memory_order_relaxed);
+            CancelWaitableTimer(timer);     // the other present of this device took the one signal
+        }
+        const uint64_t at=wrapper_now_us();
+        // The old request was INFINITE and nothing would release it. Substitute a bound, so the negative
+        // control fails an assertion instead of hanging this gate for ever.
+        const DWORD result=::WaitForSingleObject(timer,timeout==INFINITE?100:timeout);
+        const uint64_t spent=wrapper_now_us()-at;
+        unsigned longest=shared_timer_longest_us.load(std::memory_order_relaxed);
+        while(spent>longest &&
+              !shared_timer_longest_us.compare_exchange_weak(longest,static_cast<unsigned>(spent),
+                                                             std::memory_order_relaxed)){}
+        return result;
+    }
     if(!cancel_test_timer)return ::WaitForSingleObject(timer,timeout);
     ++cancelled_timer_waits;
     if(timeout==INFINITE)++unbounded_timer_waits;
@@ -88,6 +122,71 @@ void test_cancelled_timer_wait() {
     check(unbounded_timer_waits==0,"timer interruption: neither limiter requests an infinite wait");
     check(limit_elapsed>=30000,"timer interruption: 30 fps pacing still waits for the target");
     check(elapsed<500000,"timer interruption: both limiters return despite missing timer signals");
+}
+
+// Two presents of one device, on two threads, inside the limiters at the same time: the interleaving of the
+// audit's A2 / UMD-1. Both threads sleep on the device's one auto-reset timer, and the thread named as the
+// victim loses every signal. Both must still return within their own deadline. This test needs real threads:
+// no serial call can show that the second waiter of one timer is never released.
+struct SharedTimerRun {
+    HANDLE timer{};                                     // the device's one timer, for the D3D12 gate's sleep
+    amdgpu_wddm::app_settings::FrameLimiter* limiter{};  // the device's one rate limiter
+    HANDLE start{};
+    uint64_t elapsed_us{};
+};
+DWORD WINAPI shared_timer_thread(LPVOID arg) {
+    auto& run=*static_cast<SharedTimerRun*>(arg);
+    WaitForSingleObject(run.start,INFINITE);     // the real wait: the wrapper covers the two headers only
+    const uint64_t at=native12::latency_now_us();
+    native12::latency_idle(native12::kFrameLatencySpins,run.timer);
+    run.limiter->frame(30);                      // the first frame of a thread may find no target to wait for
+    run.limiter->frame(30);                      // this one pays the 30 fps interval
+    run.elapsed_us=native12::latency_now_us()-at;
+    return 0;
+}
+void test_two_callers_one_timer() {
+    // Both threads can outlive a failing assertion, so nothing they touch lives on this stack.
+    auto* limiter=new amdgpu_wddm::app_settings::FrameLimiter();
+    HANDLE timer=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS);
+    if(!timer)timer=CreateWaitableTimerExW(nullptr,nullptr,0,TIMER_ALL_ACCESS);
+    HANDLE start=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+    check(timer!=nullptr && start!=nullptr,"two callers: the device timer and the start gate exist");
+    if(!timer || !start)return;
+    auto* runs=new SharedTimerRun[2]{};
+    HANDLE threads[2]{};
+    DWORD ids[2]{};
+    for(unsigned i=0;i<2;++i){
+        runs[i].timer=timer;runs[i].limiter=limiter;runs[i].start=start;
+        threads[i]=CreateThread(nullptr,0,shared_timer_thread,&runs[i],CREATE_SUSPENDED,&ids[i]);
+    }
+    check(threads[0]!=nullptr && threads[1]!=nullptr,"two callers: both present threads started");
+    if(!threads[0] || !threads[1])return;
+    shared_timer_victim.store(ids[1],std::memory_order_relaxed);
+    shared_timer_test.store(true,std::memory_order_relaxed);
+    for(HANDLE t:threads)ResumeThread(t);
+    SetEvent(start);                             // both threads leave the gate together
+    // A watchdog, not a deadline of the code under test: a lost wake must fail this gate, never hang it.
+    const DWORD joined=WaitForMultipleObjects(2,threads,TRUE,30000);
+    const bool both=joined==WAIT_OBJECT_0;
+    check(both,"two callers: both presents of the device returned");
+    const unsigned steals=shared_timer_steals.load(std::memory_order_relaxed);
+    const unsigned unbounded=shared_timer_unbounded.load(std::memory_order_relaxed);
+    const unsigned longest=shared_timer_longest_us.load(std::memory_order_relaxed);
+    if(!both){std::printf("note: the presents did not return, wait said %lu\n",static_cast<unsigned long>(joined));return;}
+    shared_timer_test.store(false,std::memory_order_relaxed);
+    const uint64_t slowest=runs[0].elapsed_us>runs[1].elapsed_us?runs[0].elapsed_us:runs[1].elapsed_us;
+    const uint64_t paced=slowest;
+    for(HANDLE t:threads)CloseHandle(t);
+    CloseHandle(start);CloseHandle(timer);
+    delete[] runs;delete limiter;
+    check(steals>0,"two callers: the victim present really lost the signal of the shared timer");
+    check(unbounded==0,"two callers: neither present asks for an unbounded wait on the shared timer");
+    check(longest<50000,"two callers: no single wait on the shared timer exceeds its own bound");
+    check(slowest<400000,"two callers: both presents return within their deadline");
+    check(paced>=30000,"two callers: the 30 fps interval is still paid under concurrency");
+    if(slowest>=400000 || longest>=50000)
+        std::printf("note: slowest present %llu us, longest wait %u us, %u steals\n",
+                    static_cast<unsigned long long>(slowest),longest,steals);
 }
 
 void test_slot() {
@@ -279,6 +378,7 @@ int main() {
     if(!SetEnvironmentVariableA("AMDGPU_WDDM_LOG",sink.c_str()))
         check(false,"witness: the log switch is set for this process");
     test_cancelled_timer_wait();
+    test_two_callers_one_timer();
     test_slot();
     test_wait_loop();
     test_ring();
