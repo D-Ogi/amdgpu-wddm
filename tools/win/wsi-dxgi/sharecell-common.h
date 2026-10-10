@@ -775,6 +775,59 @@ inline int run_selftest(const options& o)
         check(hash.start() && hash.add("a", 1) && hash.add("bc", 2) && hash.finish(digest) &&
               std::memcmp(digest, expected, sizeof(digest)) == 0, "BCrypt SHA256 streaming matches the abc known answer");
     }
+    {
+        const auto absent = observe_native_feature(71, nullptr, true);
+        check(!absent.available && !absent.valid, "missing feature-query export is unavailable, not disabled");
+        const auto query = +[](D3DKMT_ISFEATUREENABLED* args) -> NTSTATUS {
+            if (args->FeatureId != DXGK_FEATURE_NATIVE_FENCE || args->Result.Version || args->Result.Value)
+                return NTSTATUS(0xc000000dL);
+            args->Result.Version = 9;
+            args->Result.Value = 0xa5a0; // Reserved bits must remain distinct from the four capability bits.
+            if (args->hAdapter == 71 || args->hAdapter == 73) args->Result.Enabled = 1;
+            args->Result.KnownFeature = 1;
+            args->Result.SupportedByDriver = 1;
+            args->Result.SupportedOnCurrentConfig = 0;
+            return args->hAdapter == 73 ? NTSTATUS(0xc000000dL) : 0;
+        };
+        struct adapter_mock {
+            PFND3DKMT_ISFEATUREENABLED query;
+            int scenario, opens = 0, closes = 0;
+            bool valid = true;
+            NTSTATUS open(D3DKMT_OPENADAPTERFROMLUID* args) {
+                opens++;
+                valid &= args->AdapterLuid.LowPart == 123 && args->AdapterLuid.HighPart == 456;
+                args->hAdapter = scenario == 3 ? 0 : (scenario == 5 ? 73 : 71);
+                return scenario == 1 ? NTSTATUS(0xc000000dL) : 0;
+            }
+            NTSTATUS close(const D3DKMT_CLOSEADAPTER* args) {
+                closes++;
+                valid &= args->hAdapter == (scenario == 5 ? 73u : 71u);
+                return scenario == 2 ? NTSTATUS(0xc000000dL) : 0;
+            }
+        };
+        for (int scenario = 0; scenario != 6; ++scenario) {
+            adapter_mock mock{scenario == 4 ? nullptr : query, scenario};
+            const bool result = native_feature_on_adapter(LUID{123,456}, mock, true);
+            check(result == (scenario != 2 && scenario != 3),
+                  "feature-query failures are diagnostic but unconfirmed adapter cleanup fails");
+            check(mock.valid && mock.opens == (scenario == 4 ? 0 : 1) &&
+                  mock.closes == (scenario == 1 || scenario == 3 || scenario == 4 ? 0 : 1),
+                  "native feature uses same-LUID adapter and closes only a successfully acquired handle");
+        }
+        const auto enabled = observe_native_feature(71, query, true);
+        const auto disabled = observe_native_feature(72, query, true);
+        const auto failed = observe_native_feature(73, query, true);
+        check(enabled.available && enabled.valid && enabled.status == 0 && enabled.result.Enabled == 1,
+              "successful native-fence query records enabled and the exact adapter");
+        check(disabled.available && disabled.valid && disabled.result.Enabled == 0,
+              "successful disabled result differs from an unavailable query");
+        check(failed.available && !failed.valid && failed.status == NTSTATUS(0xc000000dL) && failed.result.Enabled == 1 && failed.result.Value == 0xa5a7,
+              "failed feature query retains dirty fields but marks the result invalid");
+        check(enabled.result.Version == 9 && enabled.result.Value == 0xa5a7 &&
+              enabled.result.KnownFeature == 1 && enabled.result.SupportedByDriver == 1 &&
+              enabled.result.SupportedOnCurrentConfig == 0 && enabled.result.Reserved == 0xa5a,
+              "native-fence result version, value and every SDK bitfield remain distinct");
+    }
     std::printf("sharecell selftest: %d checks, %d failed%s\n", checks, failures,
                 o.negative_control ? " (negative control)" : "");
     return failures ? 1 : 0;

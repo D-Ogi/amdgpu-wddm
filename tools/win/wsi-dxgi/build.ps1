@@ -98,7 +98,7 @@ if (-not $SkipSelfTest) {
         Write-Host "  host mode $name : --selftest"
         $selftestOutput = @(& $exe --selftest)
         $selftestOutput | Select-Object -Last 1 | ForEach-Object { Write-Host "    $_" }
-        if ($selftestOutput -cmatch '^UNSAFE\b') { throw "selftest leaked UNSAFE marker for $name" }
+        if ($selftestOutput -cmatch '^(UNSAFE\b|INFO KMT\b)') { throw "selftest leaked KMT diagnostic or UNSAFE marker for $name" }
         if ($LASTEXITCODE -ne 0) { throw "selftest failed for $name ($LASTEXITCODE)" }
         foreach ($origin in @('radv', 'd3d12')) {
             & $exe --selftest --fence-origin $origin | Select-Object -Last 1 | Write-Host

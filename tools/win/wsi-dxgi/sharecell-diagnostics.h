@@ -71,6 +71,87 @@ inline bool replay_fence_patterns(HANDLE nt, D3DKMT_HANDLE device, Open open, De
     return complete;
 }
 
+static_assert(sizeof(D3DKMT_ISFEATUREENABLED) == 12);
+static_assert(offsetof(D3DKMT_ISFEATUREENABLED, Result) == 8);
+static_assert(DXGK_FEATURE_NATIVE_FENCE == 37);
+struct native_feature_observation {
+    bool available = false, valid = false;
+    NTSTATUS status = 0;
+    DXGK_ISFEATUREENABLED_RESULT result{};
+};
+
+inline native_feature_observation observe_native_feature(D3DKMT_HANDLE adapter,
+    PFND3DKMT_ISFEATUREENABLED query, bool quiet = false)
+{
+    native_feature_observation observed{};
+    if (!query) {
+        if (!quiet) std::printf("INFO KMT native-fence feature=37 query=unavailable result_valid=0 (not disabled)\n");
+        return observed;
+    }
+    D3DKMT_ISFEATUREENABLED args{};
+    args.hAdapter = adapter;
+    args.FeatureId = DXGK_FEATURE_NATIVE_FENCE;
+    observed.available = true;
+    observed.status = query(&args);
+    observed.valid = observed.status >= 0;
+    observed.result = args.Result; // Retain dirty failure output for diagnosis, but never mark it valid.
+    if (!quiet) std::printf("INFO KMT native-fence adapter=0x%08x feature=37 status=0x%08lx result_valid=%u "
+                            "Version=%u Value=0x%04x Enabled=%u KnownFeature=%u SupportedByDriver=%u "
+                            "SupportedOnCurrentConfig=%u Reserved=0x%03x\n",
+                            adapter, static_cast<unsigned long>(observed.status), unsigned(observed.valid),
+                            unsigned(args.Result.Version), unsigned(args.Result.Value), unsigned(args.Result.Enabled),
+                            unsigned(args.Result.KnownFeature), unsigned(args.Result.SupportedByDriver),
+                            unsigned(args.Result.SupportedOnCurrentConfig), unsigned(args.Result.Reserved));
+    return observed;
+}
+template<typename Api>
+inline bool native_feature_on_adapter(LUID luid, Api& api, bool quiet = false)
+{
+    if (!api.query) { (void)observe_native_feature(0, nullptr, quiet); return true; }
+    D3DKMT_OPENADAPTERFROMLUID adapter{};
+    adapter.AdapterLuid = luid;
+    const NTSTATUS opened = api.open(&adapter);
+    if (!quiet) std::printf("INFO KMT native-feature adapter-open same_d3d12_luid=%08lx:%08lx status=0x%08lx adapter=0x%08x\n",
+        static_cast<unsigned long>(luid.HighPart), luid.LowPart, static_cast<unsigned long>(opened), adapter.hAdapter);
+    if (opened < 0) {
+        if (!quiet) std::printf("INFO KMT native-fence feature=37 query=adapter-unavailable result_valid=0\n");
+        return true;
+    }
+    if (!adapter.hAdapter) {
+        if (!quiet) std::printf("UNSAFE KMT feature adapter success without handle; cleanup unconfirmed\n");
+        return false;
+    }
+    (void)observe_native_feature(adapter.hAdapter, api.query, quiet);
+    D3DKMT_CLOSEADAPTER close{};
+    close.hAdapter = adapter.hAdapter;
+    const NTSTATUS closed = api.close(&close);
+    if (!quiet) std::printf("INFO KMT native-feature adapter-close status=0x%08lx\n", static_cast<unsigned long>(closed));
+    if (closed < 0 && !quiet) std::printf("UNSAFE KMT feature adapter cleanup unconfirmed\n");
+    return closed >= 0;
+}
+
+inline bool probe_native_feature(LUID luid)
+{
+    HMODULE module = LoadLibraryExW(L"gdi32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!module) {
+        std::printf("INFO KMT native-fence feature=37 query=module-unavailable result_valid=0 error=%lu\n", GetLastError());
+        return true;
+    }
+    struct {
+        PFND3DKMT_OPENADAPTERFROMLUID open;
+        PFND3DKMT_CLOSEADAPTER close;
+        PFND3DKMT_ISFEATUREENABLED query;
+    } api{reinterpret_cast<PFND3DKMT_OPENADAPTERFROMLUID>(GetProcAddress(module, "D3DKMTOpenAdapterFromLuid")),
+          reinterpret_cast<PFND3DKMT_CLOSEADAPTER>(GetProcAddress(module, "D3DKMTCloseAdapter")),
+          reinterpret_cast<PFND3DKMT_ISFEATUREENABLED>(GetProcAddress(module, "D3DKMTIsFeatureEnabled"))};
+    bool ok = true;
+    if (!api.open || !api.close)
+        std::printf("INFO KMT native-fence feature=37 query=adapter-api-unavailable result_valid=0\n");
+    else
+        ok = native_feature_on_adapter(luid, api);
+    FreeLibrary(module);
+    return ok;
+}
 template<typename Api>
 inline bool replay_on_adapter(HANDLE nt, LUID luid, Api& api, bool quiet = false)
 {

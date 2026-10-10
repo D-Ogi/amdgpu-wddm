@@ -143,7 +143,7 @@ unchanged. Use a semaphore implementation with the owned-import fix from Mesa fo
 `50787ae9` or its descendant. The old importer retained the caller's handle without a duplicate.
 that known defect can invalidate this control after the application correctly closes its handle.
 
-The host selftest has 44 checks at default dimensions. It covers both origin options,
+The host selftest has 61 checks at default dimensions. It covers both origin options,
 refuses missing/unknown origins, and invokes the production import wrapper with mocked
 callbacks. Both successful and failed imports must preserve the result, use a permanent
 handle-based D3D12 import, and close the caller handle exactly once after the import call.
@@ -189,8 +189,28 @@ reused structures, successful zero handles, duplicate success, and setup or clea
 They also check Unicode conversion and the BCrypt SHA-256 known answer for `abc`.
 Module lookup and file-read failure paths have source review, not injected runtime coverage.
 Mock diagnostics are silent inside `--selftest`, which also runs before every GPU cell.
-The build gate rejects any `UNSAFE` marker in that preamble. No real KMT device is opened by that mode.
+The build gate rejects any `UNSAFE` or `INFO KMT` marker in that preamble. No real KMT device is opened by that mode.
 
 Contract: [D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmthk/ns-d3dkmthk-_d3dkmt_opensyncobjectfromnthandle2),
 SDK 10.0.26100.0 `d3dkmthk.h` 1695-1715. Compile-time checks pin size `0x58`, flags `+0xC`,
 CPU mapping `+0x18` and GPU mapping `+0x20` used by the exact runtime listing.
+
+### Native-fence feature query (BD-105 r7c)
+
+After successful D3D12 device creation, `sharecell12` opens a separate adapter handle by
+that device's LUID. Before any queue or fence work it optionally calls `D3DKMTIsFeatureEnabled`
+for `DXGK_FEATURE_NATIVE_FENCE` (37), then closes the adapter. No extra KMT device is created.
+The record includes raw NTSTATUS and all SDK result fields: Version, Value, Enabled,
+KnownFeature, SupportedByDriver, SupportedOnCurrentConfig and Reserved.
+
+Only `result_valid=1`, from a nonnegative NTSTATUS, permits interpretation of those fields.
+A failed query can leave dirty fields, which are printed as invalid. A missing export is
+`query=unavailable`, not disabled. Query and adapter-open failures are diagnostic only.
+Unconfirmed cleanup of an acquired adapter emits `UNSAFE` and fails the cell.
+The optional query is not required by the fence replay's export loader.
+
+Host controls cover missing exports, zeroed query inputs, dirty failed output, enabled and
+disabled results, distinct SDK bitfields, and adapter ownership on success or failure.
+The query structure has a compile-time 12-byte ABI check, with Result at offset 8.
+Contract: [D3DKMTIsFeatureEnabled](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmthk/nf-d3dkmthk-d3dkmtisfeatureenabled),
+SDK 10.0.26100.0 `d3dkmthk.h` 945-950 and `d3dukmdt.h` 2232-2247.
