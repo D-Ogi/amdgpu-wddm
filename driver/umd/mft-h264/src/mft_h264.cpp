@@ -137,8 +137,11 @@ private:
 
 } // namespace
 
-Bc250H264Mft::DeviceLease::~DeviceLease()
+DeviceLease::~DeviceLease()
 {
+    // The device reference goes before the unlock, so that nothing of ours still names the device
+    // after the lock that protected it is given back.
+    device.Reset();
     if (locked) {
         manager->UnlockDevice(handle, FALSE);
     }
@@ -147,17 +150,46 @@ Bc250H264Mft::DeviceLease::~DeviceLease()
     }
 }
 
-void Bc250H264Mft::DeviceLease::Take(IMFDXGIDeviceManager* m)
+HRESULT DeviceLease::Take(IMFDXGIDeviceManager* m)
 {
     manager.CopyFrom(m);
     if (!manager) {
-        return;
+        // No manager: the client sent us no MFT_MESSAGE_SET_D3D_MANAGER, the encoder owns its own
+        // device, and there is no lease to take. That is the other defined case, not a failure.
+        return S_OK;
     }
-    if (SUCCEEDED(manager->OpenDeviceHandle(&handle))) {
-        if (SUCCEEDED(manager->LockDevice(handle, __uuidof(ID3D11Device), nullptr, TRUE))) {
-            locked = true;
-        }
+    HRESULT hr = manager->OpenDeviceHandle(&handle);
+    if (FAILED(hr)) {
+        // A failed open writes no handle, whatever it leaves in the variable.
+        handle = nullptr;
+        return hr;
     }
+    // ppUnkDevice is _Outptr_ (mfobjects.h:6571-6579): a required output, and the device it names is
+    // the one this lease protects. The old nullptr asked the runtime to write through a null pointer
+    // and, when it did not, left the lease unable to say which device it had locked.
+    hr = manager->LockDevice(handle, __uuidof(ID3D11Device),
+                             reinterpret_cast<void**>(&device), TRUE);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    locked = true;
+    if (!device) {
+        // A lock that writes no device leaves nothing to compare the encoder's device with, so the
+        // one thing this lease exists to prove cannot be proved. Unlocked by the destructor.
+        return E_UNEXPECTED;
+    }
+    return S_OK;
+}
+
+HRESULT LeaseDeviceCheck(IUnknown* leased, ID3D11Device* encoder)
+{
+    if (leased == nullptr || encoder == nullptr) {
+        return S_OK;
+    }
+    // Both sides come from the same manager, one through LockDevice and one through GetVideoService
+    // in EnsureEncoder, so the same device is the same pointer. The cast is the upcast to the
+    // primary base, which is also what the void** of LockDevice carried.
+    return (leased == static_cast<IUnknown*>(encoder)) ? S_OK : MF_E_DXGI_NEW_VIDEO_DEVICE;
 }
 
 void Bc250H264Mft::FrameLock::Release()
@@ -194,8 +226,18 @@ Bc250H264Mft::~Bc250H264Mft()
     CaptureDeviceManager(manager);
     {
         DeviceLease lease;
-        lease.Take(manager.Get());
-        ResetEncoderLocked();
+        const HRESULT leased = TakeLease(lease, manager.Get());
+        if (SUCCEEDED(leased)) {
+            ResetEncoderLocked();
+        } else {
+            // A destructor cannot refuse, and without the lease it also cannot collect: every map of
+            // ours would run on the client's device while the client is free to be using it. So the
+            // encoder is let go of without touching that device, and the pictures the GPU still has
+            // are dropped. The client's device cleans them up when it is itself destroyed.
+            MftTrace("~Bc250H264Mft: no device lease (0x%08lX), abandoning the encoder\n",
+                     static_cast<unsigned long>(leased));
+            AbandonEncoderLocked();
+        }
     }
     if (m_lockInit) {
         DeleteCriticalSection(&m_lock);
@@ -212,9 +254,34 @@ void Bc250H264Mft::CaptureDeviceManager(ComPtr<IMFDXGIDeviceManager>& out)
     out.CopyFrom(m_deviceManager.Get());
 }
 
+ID3D11Device* Bc250H264Mft::EncoderDevice()
+{
+    if (!m_lockInit) {
+        return nullptr;
+    }
+    Lock probe(&m_lock);
+    return m_encoderReady ? m_encoder.Gpu().Device() : nullptr;
+}
+
+HRESULT Bc250H264Mft::TakeLease(DeviceLease& lease, IMFDXGIDeviceManager* manager)
+{
+    const HRESULT hr = lease.Take(manager);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    return LeaseDeviceCheck(lease.Device(), EncoderDevice());
+}
+
 void Bc250H264Mft::ResetEncoderLocked()
 {
     m_encoder.Shutdown();
+    m_inFlight.clear();
+    m_encoderReady = false;
+}
+
+void Bc250H264Mft::AbandonEncoderLocked()
+{
+    m_encoder.Abandon();
     m_inFlight.clear();
     m_encoderReady = false;
 }
@@ -514,7 +581,14 @@ HRESULT Bc250H264Mft::SetInputType(DWORD id, IMFMediaType* type, DWORD flags)
     ComPtr<IMFDXGIDeviceManager> manager;
     CaptureDeviceManager(manager);
     DeviceLease lease;
-    lease.Take(manager.Get());
+    const HRESULT leased = TakeLease(lease, manager.Get());
+    if (FAILED(leased)) {
+        // Nothing of this call may run on the client's device without the lease, and a type change
+        // restarts the encoder on that device. The client sees the failure here, at the call that
+        // needed the lock, instead of in a dispatch that ran without one.
+        MftTrace("SetInputType: no device lease, 0x%08lX\n", static_cast<unsigned long>(leased));
+        return leased;
+    }
     Lock guard(&m_lock);
 
     if (type == nullptr) {
@@ -610,7 +684,11 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
     ComPtr<IMFDXGIDeviceManager> manager;
     CaptureDeviceManager(manager);
     DeviceLease lease;
-    lease.Take(manager.Get());
+    const HRESULT leased = TakeLease(lease, manager.Get());
+    if (FAILED(leased)) {
+        MftTrace("SetOutputType: no device lease, 0x%08lX\n", static_cast<unsigned long>(leased));
+        return leased;
+    }
     Lock guard(&m_lock);
 
     if (type == nullptr) {
@@ -1050,8 +1128,18 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
         CaptureDeviceManager(manager);
     }
     DeviceLease lease;
+    HRESULT leased = S_OK;
     if (finishes) {
-        lease.Take(manager.Get());
+        leased = TakeLease(lease, manager.Get());
+    }
+    if (FAILED(leased) && message != MFT_MESSAGE_SET_D3D_MANAGER) {
+        // Draining, flushing and the end of streaming all collect pictures, and collecting one maps a
+        // staging buffer on the client's device. Without the lease there is no safe way to do that, so
+        // the message is refused and the pictures stay where they are: a client that gets this knows
+        // its drain did not happen, which the old silent carry-on did not tell it.
+        MftTrace("ProcessMessage 0x%lX: no device lease, 0x%08lX\n",
+                 static_cast<unsigned long>(message), static_cast<unsigned long>(leased));
+        return leased;
     }
 
     Lock guard(&m_lock);
@@ -1059,8 +1147,17 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
     switch (message) {
     case MFT_MESSAGE_SET_D3D_MANAGER: {
         // The encoder goes down before the manager it runs on is let go of: the lease above is on that
-        // manager, and a Reset first would leave no way to take one.
-        ResetEncoderLocked();
+        // manager, and a Reset first would leave no way to take one. This message must still do its
+        // work when that lease could not be had - refusing it would leave us bound to a manager we
+        // cannot lock - so the encoder is abandoned instead of collected, and no call of ours reaches
+        // the old device. The message itself then succeeds, because it did exactly what it promises.
+        if (SUCCEEDED(leased)) {
+            ResetEncoderLocked();
+        } else {
+            MftTrace("SET_D3D_MANAGER: no lease on the old manager (0x%08lX), abandoning the encoder\n",
+                     static_cast<unsigned long>(leased));
+            AbandonEncoderLocked();
+        }
         m_deviceManager.Reset();
         m_drained = false;
         if (param != 0) {
@@ -1167,7 +1264,15 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
     }
     // Outside the critical section, because the device lock is the outer one of the two.
     DeviceLease lease;
-    lease.Take(manager.Get());
+    const HRESULT leased = TakeLease(lease, manager.Get());
+    if (FAILED(leased)) {
+        // The whole encode of this picture runs inside this lease (mft_h264.h, Threading): the import
+        // dispatch, the motion estimation, the macroblock pass, the deblock and the map that collects
+        // the result, all on the client's device. Without the lease the picture is refused, and the
+        // client keeps the sample it gave us. MF_E_DXGI_NEW_VIDEO_DEVICE tells it to rebuild.
+        MftTrace("ProcessInput: no device lease, 0x%08lX\n", static_cast<unsigned long>(leased));
+        return leased;
+    }
 
     Lock guard(&m_lock);
     // Checked again: the critical section was dropped while the device lock was taken, and a client
@@ -1495,7 +1600,7 @@ HRESULT Bc250H264Mft::Shutdown()
     ComPtr<IMFDXGIDeviceManager> manager;
     CaptureDeviceManager(manager);
     DeviceLease lease;
-    lease.Take(manager.Get());
+    const HRESULT leased = TakeLease(lease, manager.Get());
     Lock guard(&m_lock);
     if (m_shutdown) {
         return S_OK;
@@ -1509,7 +1614,16 @@ HRESULT Bc250H264Mft::Shutdown()
         m_events->Shutdown();
     }
     // The input samples held for the pictures still in the GPU are released with them, inside this.
-    ResetEncoderLocked();
+    // IMFShutdown::Shutdown has to complete: a transform that refused it would keep the client's
+    // samples for ever. Without the lease it completes without one call on the client's device, which
+    // loses the results of the pictures the GPU still has and keeps the device's own use of it safe.
+    if (SUCCEEDED(leased)) {
+        ResetEncoderLocked();
+    } else {
+        MftTrace("Shutdown: no device lease (0x%08lX), abandoning the encoder\n",
+                 static_cast<unsigned long>(leased));
+        AbandonEncoderLocked();
+    }
     m_deviceManager.Reset();
     return S_OK;
 }

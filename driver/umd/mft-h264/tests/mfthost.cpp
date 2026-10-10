@@ -889,6 +889,255 @@ void SelfTestDialDefaults()
     }
 }
 
+// ---------------------------------------------------------------- the device lease
+//
+// The client's device lease is the outer lock of the two the transform takes, and the only thing that
+// serialises our dispatches, maps and collects against the client's own use of the same Direct3D
+// device. The audit of 2026-10-10 (A5 / UMD-2) found DeviceLease::Take() returning void, passing
+// nullptr for the _Outptr_ device of IMFDXGIDeviceManager::LockDevice (mfobjects.h:6571-6579), and
+// every caller carrying on into GPU work whether or not the lease was there.
+//
+// A fake manager answers here, so the three failures are reachable without a GPU, without Media
+// Foundation and without a client: the open fails, the lock fails, and the lock hands back a device
+// that is not the encoder's, which is what a client's ResetDevice leaves behind.
+
+// A device object that only has to exist and be counted: the lease holds a reference to it and
+// compares its address, and calls nothing through it.
+class FakeDevice : public IUnknown {
+public:
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override
+    {
+        if (ppv == nullptr) {
+            return E_POINTER;
+        }
+        if (riid == __uuidof(IUnknown)) {
+            *ppv = static_cast<IUnknown*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return static_cast<ULONG>(++m_refs); }
+    ULONG STDMETHODCALLTYPE Release() override { return static_cast<ULONG>(--m_refs); }
+    long Refs() const { return m_refs; }
+
+private:
+    long m_refs = 1;
+};
+
+// What the fake manager does when the lease asks for it.
+struct FakeManagerPlan {
+    HRESULT openResult = S_OK;
+    HRESULT lockResult = S_OK;
+    IUnknown* lockDevice = nullptr;   // what LockDevice writes through its _Outptr_ argument
+    bool writeDevice = true;          // false: a lock that succeeds and writes nothing
+};
+
+class FakeManager : public IMFDXGIDeviceManager {
+public:
+    explicit FakeManager(const FakeManagerPlan& plan) : m_plan(plan) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override
+    {
+        if (ppv == nullptr) {
+            return E_POINTER;
+        }
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IMFDXGIDeviceManager)) {
+            *ppv = static_cast<IMFDXGIDeviceManager*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return static_cast<ULONG>(++m_refs); }
+    ULONG STDMETHODCALLTYPE Release() override { return static_cast<ULONG>(--m_refs); }
+
+    HRESULT STDMETHODCALLTYPE OpenDeviceHandle(HANDLE* phDevice) override
+    {
+        ++opens;
+        if (FAILED(m_plan.openResult)) {
+            // A failing manager is free to leave the output alone. The lease must not keep whatever
+            // was in the variable and then close it.
+            return m_plan.openResult;
+        }
+        *phDevice = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(0x1000 + opens));
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE CloseDeviceHandle(HANDLE) override { ++closes; return S_OK; }
+    HRESULT STDMETHODCALLTYPE LockDevice(HANDLE, REFIID riid, void** ppUnkDevice, BOOL) override
+    {
+        ++locks;
+        lockedRiid = riid;
+        sawNullOutput = sawNullOutput || (ppUnkDevice == nullptr);
+        if (FAILED(m_plan.lockResult)) {
+            return m_plan.lockResult;
+        }
+        if (ppUnkDevice != nullptr && m_plan.writeDevice && m_plan.lockDevice != nullptr) {
+            m_plan.lockDevice->AddRef();
+            *ppUnkDevice = m_plan.lockDevice;
+        }
+        return m_plan.lockResult;
+    }
+    HRESULT STDMETHODCALLTYPE UnlockDevice(HANDLE, BOOL) override { ++unlocks; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetVideoService(HANDLE, REFIID, void**) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE ResetDevice(IUnknown*, UINT) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE TestDevice(HANDLE) override { return S_OK; }
+
+    unsigned opens = 0, closes = 0, locks = 0, unlocks = 0;
+    bool sawNullOutput = false;
+    IID lockedRiid = GUID_NULL;
+
+private:
+    FakeManagerPlan m_plan;
+    long m_refs = 1;
+};
+
+void CheckLeaseCase(const char* what, const FakeManagerPlan& plan, HRESULT want, bool wantHeld)
+{
+    FakeManager manager(plan);
+    HRESULT hr = S_OK;
+    {
+        DeviceLease lease;
+        hr = lease.Take(&manager);
+        if (lease.Held() != wantHeld) {
+            Fail("%s: the lease says held=%d, expected %d", what, lease.Held() ? 1 : 0,
+                 wantHeld ? 1 : 0);
+        }
+        if (SUCCEEDED(hr) && lease.Held() && lease.Device() == nullptr) {
+            Fail("%s: a held lease names no device", what);
+        }
+    }
+    if (hr != want) {
+        Fail("%s: Take returned 0x%08lX, expected 0x%08lX", what,
+             static_cast<unsigned long>(hr), static_cast<unsigned long>(want));
+    }
+    if (manager.sawNullOutput) {
+        Fail("%s: LockDevice was given a null device output, which mfobjects.h declares _Outptr_",
+             what);
+    }
+    // Whatever the answer, the lease gives back exactly what it took.
+    if (manager.unlocks != (wantHeld ? 1u : 0u)) {
+        Fail("%s: %u unlock(s) against %u lock(s) that were granted", what, manager.unlocks,
+             wantHeld ? 1u : 0u);
+    }
+    if (manager.closes != manager.opens - (FAILED(plan.openResult) ? 1u : 0u)) {
+        Fail("%s: %u handle(s) opened, %u closed", what, manager.opens, manager.closes);
+    }
+    printf("  %-34s Take 0x%08lX, %u lock, %u unlock, %u open, %u close\n", what,
+           static_cast<unsigned long>(hr), manager.locks, manager.unlocks, manager.opens,
+           manager.closes);
+}
+
+void SelfTestDeviceLease()
+{
+    printf("device lease\n");
+
+    // No manager at all: the transform owns its device and there is no lease to take. Not a failure,
+    // and the one case the old void Take() got right.
+    {
+        DeviceLease lease;
+        const HRESULT hr = lease.Take(nullptr);
+        if (hr != S_OK || lease.Held() || lease.Device() != nullptr) {
+            Fail("no manager: Take returned 0x%08lX, held=%d", static_cast<unsigned long>(hr),
+                 lease.Held() ? 1 : 0);
+        } else {
+            printf("  %-34s Take S_OK, no lease to take\n", "no device manager");
+        }
+    }
+
+    FakeDevice device;
+
+    // OpenDeviceHandle fails: no handle, no lock, and the failure reaches the caller.
+    {
+        FakeManagerPlan plan;
+        plan.openResult = MF_E_DXGI_DEVICE_NOT_INITIALIZED;
+        plan.lockDevice = &device;
+        CheckLeaseCase("OpenDeviceHandle fails", plan, MF_E_DXGI_DEVICE_NOT_INITIALIZED, false);
+    }
+
+    // LockDevice fails: the handle is closed again and the failure reaches the caller.
+    {
+        FakeManagerPlan plan;
+        plan.lockResult = E_FAIL;
+        plan.lockDevice = &device;
+        CheckLeaseCase("LockDevice fails", plan, E_FAIL, false);
+    }
+
+    // A lock that writes no device: the lease cannot say which device it protects, which is the one
+    // thing it exists to prove. It is still a held lock, so it is still given back.
+    {
+        FakeManagerPlan plan;
+        plan.lockDevice = &device;
+        plan.writeDevice = false;
+        CheckLeaseCase("LockDevice writes no device", plan, E_UNEXPECTED, true);
+    }
+
+    // The lease is granted on the device the manager holds.
+    {
+        FakeManagerPlan plan;
+        plan.lockDevice = &device;
+        CheckLeaseCase("the lease is granted", plan, S_OK, true);
+    }
+
+    // Every reference the fake manager handed out came back with the leases above.
+    if (device.Refs() != 1) {
+        Fail("the device kept %ld reference(s) after every lease was released, expected 1",
+             device.Refs());
+    } else {
+        printf("  %-34s every reference returned\n", "device references");
+    }
+
+    // The riid the lease asks for names the device the encoder was built on, which is what
+    // EnsureEncoder asks GetVideoService for. A lease on another interface could not be compared.
+    {
+        FakeManagerPlan plan;
+        plan.lockDevice = &device;
+        FakeManager manager(plan);
+        {
+            DeviceLease lease;
+            (void)lease.Take(&manager);
+        }
+        if (manager.lockedRiid != __uuidof(ID3D11Device)) {
+            Fail("the lease locked some other interface than ID3D11Device");
+        } else {
+            printf("  %-34s ID3D11Device\n", "the locked interface");
+        }
+    }
+
+    // The identity check. A client that called IMFDXGIDeviceManager::ResetDevice gave the manager
+    // another device, and our textures and views belong to the old one: MF_E_DXGI_NEW_VIDEO_DEVICE.
+    // The pointers below are only ever compared, never called through.
+    {
+        ID3D11Device* const encoderDevice = reinterpret_cast<ID3D11Device*>(&device);
+        FakeDevice other;
+        ID3D11Device* const otherDevice = reinterpret_cast<ID3D11Device*>(&other);
+        struct {
+            const char* what;
+            IUnknown* leased;
+            ID3D11Device* encoder;
+            HRESULT want;
+        } cases[] = {
+            { "the same device", static_cast<IUnknown*>(&device), encoderDevice, S_OK },
+            { "a device after ResetDevice", static_cast<IUnknown*>(&device), otherDevice,
+              MF_E_DXGI_NEW_VIDEO_DEVICE },
+            { "no encoder yet", static_cast<IUnknown*>(&device), nullptr, S_OK },
+            { "no manager", nullptr, encoderDevice, S_OK },
+            { "neither", nullptr, nullptr, S_OK },
+        };
+        for (const auto& c : cases) {
+            const HRESULT hr = LeaseDeviceCheck(c.leased, c.encoder);
+            if (hr != c.want) {
+                Fail("LeaseDeviceCheck(%s) returned 0x%08lX, expected 0x%08lX", c.what,
+                     static_cast<unsigned long>(hr), static_cast<unsigned long>(c.want));
+            }
+        }
+        printf("  %-34s %u cases, a reset device is refused\n", "the device identity check",
+               static_cast<unsigned>(sizeof(cases) / sizeof(cases[0])));
+    }
+}
+
 } // namespace
 
 int RunSelfTest()
@@ -900,6 +1149,7 @@ int RunSelfTest()
     SelfTestParameterSets();
     SelfTestFrameSizes();
     SelfTestDialDefaults();
+    SelfTestDeviceLease();
     SelfTestAdapterChoice();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
     return (g_failures == 0) ? 0 : 1;
