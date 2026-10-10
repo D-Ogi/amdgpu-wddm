@@ -169,7 +169,13 @@ int main(void)
      * budget replaces a mechanism that works with one that bugchecks. */
     CHECK(Bc250SubmitTdrMs(0) == 1000ul * BC250_SUBMIT_TDR_DEFAULT_S);  /* absent reads as Windows' own default */
     CHECK(Bc250SubmitTdrMs(2) == 2000ul && Bc250SubmitTdrMs(10) == 10000ul);
-    CHECK(Bc250SubmitTdrMs(1000000ul) == BC250_SUBMIT_BUDGET_MAX_MS);   /* a typo cannot overflow the arithmetic */
+    /* A typo cannot overflow the arithmetic: the milliseconds plus the margin still fit in an unsigned long. */
+    CHECK(Bc250SubmitTdrMs(0xFFFFFFFFul) == BC250_SUBMIT_TDR_MAX_MS / 1000ul * 1000ul);
+    CHECK(Bc250SubmitTdrMs(0xFFFFFFFFul) <= 0xFFFFFFFFul - BC250_SUBMIT_MARGIN_MS);
+    /* And a TdrDelay above the clamp on an operator's own value is NOT cut down to it: that clamp belongs to a
+     * value somebody asked for. TdrDelay 400 s clamped to 300 s would have our watchdog firing 100 s before the
+     * OS's own, which is the defect, not the protection. */
+    CHECK(Bc250SubmitTdrMs(400ul) == 400000ul && 400000ul > BC250_SUBMIT_BUDGET_MAX_MS);
     {
         int defaulted = 0, raised = 0;
         /* The lab's own configuration: TdrDelay 10 s (the GUI's default, BD-079), no SubmitWatchdogMs. */
@@ -185,13 +191,25 @@ int main(void)
         /* A value above TdrDelay is taken as asked, and an absurd one is clamped. */
         CHECK(Bc250SubmitBudgetMs(20000, 10, &defaulted, &raised) == 20000ul && raised == 0);
         CHECK(Bc250SubmitBudgetMs(1000000ul, 10, &defaulted, &raised) == BC250_SUBMIT_BUDGET_MAX_MS);
+        /* An absurd TdrDelay, above the clamp on an operator's value: the floor still wins, because the OS
+         * really will wait that long. The clamp applies to what was asked for, and the floor applies last. */
+        CHECK(Bc250SubmitBudgetMs(0, 400, &defaulted, &raised) == 400000ul + BC250_SUBMIT_MARGIN_MS);
+        CHECK(defaulted == 1 && raised == 0);
+        CHECK(Bc250SubmitBudgetMs(500, 400, &defaulted, &raised) == 400000ul && raised == 1);
+        CHECK(Bc250SubmitBudgetMs(1000000ul, 400, &defaulted, &raised) == 400000ul && raised == 1);
         /* THE FLOOR, over the whole range this driver can be configured with: whatever anybody writes anywhere,
-         * our watchdog never fires before the OS scheduler's own timeout has started. */
-        for (tdr = 0; tdr <= 300ul; tdr++)
+         * our watchdog never fires before the OS scheduler's own timeout has started.
+         *
+         * The comparison is against the time the OS ITSELF will wait - TdrDelay as seconds, times 1000 - and
+         * not against this file's own copy of it. A comparison against Bc250SubmitTdrMs cannot see a clamp
+         * inside Bc250SubmitTdrMs that is too low, and that is the one error the invariant cannot survive. */
+        for (tdr = 0; tdr <= 1000ul; tdr++)
         {
             static const unsigned long asked[] = { 0ul, 1ul, 100ul, 500ul, 2000ul, 11999ul, 60000ul, 400000ul };
+            unsigned long osWaitMs = (tdr != 0ul ? tdr : (unsigned long)BC250_SUBMIT_TDR_DEFAULT_S) * 1000ul;
+
             for (n = 0; n < sizeof(asked) / sizeof(asked[0]); n++)
-                CHECK(Bc250SubmitBudgetMs(asked[n], tdr, &defaulted, &raised) >= Bc250SubmitTdrMs(tdr));
+                CHECK(Bc250SubmitBudgetMs(asked[n], tdr, &defaulted, &raised) >= osWaitMs);
         }
     }
     /* The look-for-progress cadence stays strictly inside the budget, or a window would restart for ever. */
@@ -404,7 +422,8 @@ int main(void)
     CHECK(m.FiredStaleMs >= m.BudgetMs);
     CHECK(m.FiredHeadMs >= m.FiredStaleMs);                             /* the stall is inside the head's time */
 
-    printf("PASS: budget floor over 301 TdrDelay values, progress re-arm (g12 3.2 s, 400 ms packets, no progress,"
+    printf("PASS: budget floor over 1001 TdrDelay values against the OS's own wait, progress re-arm (g12 3.2 s,"
+           " 400 ms packets, no progress,"
            " unwatched gap, clock back), head stamp (q27 7-deep, no extend), aborted fence (q27 232226/232228,"
            " six guards, wrap, record arithmetic), measured elapsed (head %lu ms, queued %lu ms, stale %lu ms,"
            " budget %lu ms)\n",

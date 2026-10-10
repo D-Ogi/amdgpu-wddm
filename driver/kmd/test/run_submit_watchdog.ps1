@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\submit-watchdog",[switch]$FlatFiveHundred,[switch]$NoTdrFloor,[switch]$IgnoreProgress,[switch]$StampAtRingWrite,[switch]$ReportWithPendingCompletion,[switch]$NoFenceRange,[switch]$LogTheConstant,[switch]$RearmOutsideLock)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\submit-watchdog",[switch]$FlatFiveHundred,[switch]$NoTdrFloor,[switch]$IgnoreProgress,[switch]$StampAtRingWrite,[switch]$ReportWithPendingCompletion,[switch]$NoFenceRange,[switch]$LogTheConstant,[switch]$RearmOutsideLock,[switch]$ClampTdrToBudgetMax)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -11,6 +11,9 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 #   -FlatFiveHundred              7.1: the default budget is the old 500 ms literal, not TdrDelay plus a margin.
 #   -NoTdrFloor                   7.1: an operator's value is no longer raised to TdrDelay. This is the exact
 #                                      configuration that bugchecked unit A twice on 2026-10-10.
+#   -ClampTdrToBudgetMax          7.1: TdrDelay is clamped to the clamp that belongs to an operator's own value,
+#                                      so the floor becomes min(TdrDelay, 300 s) and a TdrDelay above it has our
+#                                      watchdog firing first again.
 #   -IgnoreProgress               7.2: the watchdog judges by wall clock alone, as every build before this one.
 #   -StampAtRingWrite             7.3: the budget is counted from the ring write again, so a queued packet pays
 #                                      for its wait.
@@ -86,7 +89,15 @@ Ordered (Body $wddm 'static NTSTATUS Bc250WddmResetEngine(') 'Bc250WddmResetEngi
     'completionPending = wddm->CompletionPending[pResetEngine->NodeOrdinal] != 0;',
     'Bc250HangAbortReportedFence(onRing, completionPending, lastKnown, lastCompleted, lastSubmittedKnown,',
     'GfxReopenAfterAbort(device)',
-    'verdict = BC250_HANG_VERDICT_ABORT_REPORTED;')
+    'verdict = BC250_HANG_VERDICT_ABORT_REPORTED;',
+    # The waiters are woken after the node is open in both files. A wake while WatchdogFaulted or RefusalPending
+    # is still set is refused, and WddmFailSubmission then latches the refusal the recovery has just cleared.
+    'wddm->RefusalPending[BC250_WDDM_NODE_3D] = FALSE;',
+    'KeReleaseSpinLock(&wddm->Lock, irql);',
+    'GfxRetireSignal(device);')
+if((Get-Content "$repo\driver\kmd\gfx.c" -Raw) -match '(?s)BOOLEAN GfxReopenAfterAbort\(.{0,2000}?GfxRetireSignal'){
+    Write-Output 'FAIL source check: GfxReopenAfterAbort wakes the waiters itself, before wddm.c reopens the node (BD-114 7.4)';exit 1
+}
 foreach($ddi in @('static NTSTATUS Bc250WddmSubmitCommand(','static NTSTATUS Bc250WddmSubmitCommandVirtual(')){
     Ordered (Body $wddm $ddi) $ddi.Trim('(') @(
         'KeAcquireSpinLock(&wddm->Lock, &irql);',
@@ -99,6 +110,11 @@ if($FlatFiveHundred){
     $live='    if (Requested == 0ul) { *Defaulted = 1; budget = tdr + (unsigned long)BC250_SUBMIT_MARGIN_MS; }'
     if(!$watchdog.Contains($live)){throw 'negative control: the default budget moved'}
     $watchdog=$watchdog.Replace($live,'    if (Requested == 0ul) { *Defaulted = 1; budget = 500ul; (void)tdr; }')
+}
+if($ClampTdrToBudgetMax){
+    $live="    if (seconds > BC250_SUBMIT_TDR_MAX_MS / 1000ul)`n        seconds = BC250_SUBMIT_TDR_MAX_MS / 1000ul;"
+    if(!$watchdog.Contains($live)){throw 'negative control: the TdrDelay clamp moved'}
+    $watchdog=$watchdog.Replace($live,"    if (seconds > (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS / 1000ul)`n        seconds = (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS / 1000ul;")
 }
 if($NoTdrFloor){
     $live='    if (budget < tdr) { budget = tdr; *Raised = 1; }'

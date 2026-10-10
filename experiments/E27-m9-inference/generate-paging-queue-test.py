@@ -55,6 +55,12 @@ mutations={
                  'next=completed?PagingDrainContinue:PagingDrainReturn;'),
  # A quota without the requeue: the yield leaves the head with nothing to pick it up.
  '--drop-requeue':('            WddmRequeuePagingDrain(wddm);\n','            (void)WddmRequeuePagingDrain;\n'),
+ # BD-114 7.1: node 1 prices its deadline and its timer from the flat 500 ms of every build before 0.7.216.27
+ # again, instead of the budget the start latched from TdrDelay.
+ '--flat-paging-budget':('wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*wddm->SubmitBudgetMs;\n'
+                         '                    due.QuadPart=-10000ll*(LONGLONG)wddm->SubmitBudgetMs;',
+                         'wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*BC250_WDDM_SUBMIT_TIMEOUT_MS;\n'
+                         '                    due.QuadPart=-10000ll*(LONGLONG)BC250_WDDM_SUBMIT_TIMEOUT_MS;'),
 }
 for m in sys.argv[3:]:
  old,new=mutations[m]

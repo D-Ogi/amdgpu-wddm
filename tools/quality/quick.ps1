@@ -82,6 +82,8 @@ try {
  Check 'ring-gap' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ring_gap.ps1" -Root $Workspace -Out "$Out\ring-gap" }
  Check 'paging-queue' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue" }
  Check 'paging-queue-no-quota' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-no-quota" -Mutation '--drop-quota' -ExpectFailure }
+ # BD-114 7.1: node 1's deadline and timer priced from the old flat 500 ms again must fail by a CHECK.
+ Check 'paging-queue-flat-budget' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-flat-budget" -Mutation '--flat-paging-budget' -ExpectFailure }
  Check 'surface-layout' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_translate.ps1" -Root $Workspace -Out "$Out\surface-layout" -Kits "$Workspace\toolchain\nuget" }
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Workspace\toolchain\nuget" }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Workspace\toolchain\nuget" }
@@ -195,6 +197,7 @@ try {
   @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true}
   @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
   @{n='submit-watchdog-no-tdr-floor';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoTdrFloor');Fails=$true}
+  @{n='submit-watchdog-clamp-tdr';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ClampTdrToBudgetMax');Fails=$true}
   @{n='submit-watchdog-ignore-progress';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-IgnoreProgress');Fails=$true}
   @{n='submit-watchdog-stamp-at-ring-write';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-StampAtRingWrite');Fails=$true}
   @{n='submit-watchdog-report-with-pending';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ReportWithPendingCompletion');Fails=$true}
