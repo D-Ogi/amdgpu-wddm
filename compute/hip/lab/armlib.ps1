@@ -11,7 +11,13 @@
 #   1. One deadline for the whole arm, cleanup inside it. The bound cannot exceed 180 s, which is
 #      the owner's limit for a non-game lab trial, and a cleanup reserve is kept out of the work
 #      part of it.
-#   2. Every helper is bounded. A clock read that does not answer is a failed read, not a wait.
+#   2. Every helper is bounded, and bounded by the time that is left. A helper's own timeout is
+#      clipped to the budget the deadline still has, the worst case of a kill included, and a
+#      helper is not started at all when there is no room for it. A clock read that does not
+#      answer is a failed read, not a wait. The review of 2026-10-10 found the first version of
+#      this file short of that: the in-loop read and the read after the arm took their nominal
+#      timeouts whatever the clock said, so the shipped defaults could leave the arm at about
+#      188 s, over the owner's 180 s ceiling, which is the very failure HIP-F2 reported.
 #   3. Fail closed on telemetry. No temperature before the arm means the arm does not start. No
 #      fresh temperature during the arm means the arm stops.
 #   4. The thermal rule by the clock: stop at once at or above 89 C, and stop when 87 C or more
@@ -32,6 +38,26 @@
 Set-StrictMode -Version 2.0
 
 $script:ArmMaxBoundSec = 180
+
+# The time constants of the bound, in seconds. They are named here because both the supervisor and
+# its tests have to reason about the same worst cases.
+#
+#   ArmHelperKillSec       the nominal wait for the kill of a helper that did not answer. One read
+#                          therefore costs at most its timeout plus this.
+#   ArmMinSampleSec        below this there is no room for a bounded temperature read, so no read
+#                          is started.
+#   ArmTailSlackSec        kept free at the end of the bound for what cannot be clipped: the start
+#                          of a process such as taskkill, the write of the report, the shell
+#                          itself. Measured at about 1.3 s on the development PC, so the margin is
+#                          about twice what it costs there.
+#   ArmMinCleanupReserveSec  a cleanup reserve smaller than this cannot hold the tail slack and a
+#                          kill at all, so the deadline refuses it. At the floor itself the kill
+#                          gets its one second and the temperature read after the arm is dropped
+#                          with a note, which is why the wrappers reserve 20 s.
+$script:ArmHelperKillSec = 5.0
+$script:ArmMinSampleSec = 1.0
+$script:ArmTailSlackSec = 3.0
+$script:ArmMinCleanupReserveSec = 4
 
 function Get-ArmUtc {
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -94,8 +120,10 @@ function Invoke-ArmBoundedProgram {
         [Parameter(Mandatory = $true)][string]$Path,
         [string[]]$Argv = @(),
         [double]$TimeoutSec = 10,
+        [double]$KillTimeoutSec = 0,
         [string]$TempDir = $env:TEMP
     )
+    if ($KillTimeoutSec -le 0) { $KillTimeoutSec = $script:ArmHelperKillSec }
     if (-not (Test-Path -LiteralPath $Path)) {
         return [pscustomobject]@{ Ok = $false; ExitCode = $null; Stdout = ''; Stderr = ''
                                   Reason = "$Path is absent" }
@@ -117,7 +145,7 @@ function Invoke-ArmBoundedProgram {
         $null = $proc.Handle
         $exited = $proc.WaitForExit([int]($TimeoutSec * 1000))
         if (-not $exited) {
-            $stop = Stop-ArmProcessTree -Process $proc -TimeoutSec 5
+            $stop = Stop-ArmProcessTree -Process $proc -TimeoutSec $KillTimeoutSec
             return [pscustomobject]@{ Ok = $false; ExitCode = $null; Stdout = ''; Stderr = ''
                                       Reason = ("no answer within $TimeoutSec s" +
                                                 $(if ($stop.Confirmed) { '' } else { ' and the kill was not confirmed' })) }
@@ -145,6 +173,7 @@ function Read-ArmTctl {
     param(
         [string]$Cli = '',
         [double]$TimeoutSec = 10,
+        [double]$KillTimeoutSec = 0,
         [string]$TempDir = $env:TEMP
     )
     if (-not $Cli) { $Cli = Get-ArmClockCli }
@@ -152,7 +181,8 @@ function Read-ArmTctl {
         return [pscustomobject]@{ Ok = $false; Tctl = $null; Line = ''
                                   Reason = 'no release CLI to read the clock with' }
     }
-    $run = Invoke-ArmBoundedProgram -Path $Cli -Argv @('clock', 'read') -TimeoutSec $TimeoutSec -TempDir $TempDir
+    $run = Invoke-ArmBoundedProgram -Path $Cli -Argv @('clock', 'read') -TimeoutSec $TimeoutSec `
+        -KillTimeoutSec $KillTimeoutSec -TempDir $TempDir
     $text = ''
     if ($run.Stdout) { $text = $run.Stdout }
     if ($run.Stderr) { $text = ($text + "`n" + $run.Stderr) }
@@ -178,6 +208,64 @@ function Read-ArmTctl {
                               Reason = 'the clock read carried no temperature_mc field' }
 }
 
+# How a helper's own timeout is cut down to the budget the deadline still has. One bounded read
+# costs its timeout plus the wait for the kill of a helper that did not answer, so both parts are
+# taken out of the same budget and both come back clipped. The caller must not ask for a read at
+# all below ArmMinSampleSec; the floors here only keep the numbers positive.
+function Get-ArmHelperBudget {
+    param(
+        [Parameter(Mandatory = $true)][double]$BudgetSec,
+        [Parameter(Mandatory = $true)][double]$TimeoutSec
+    )
+    $budget = $BudgetSec
+    if ($budget -lt $script:ArmMinSampleSec) { $budget = $script:ArmMinSampleSec }
+    $kill = $script:ArmHelperKillSec
+    if ($kill -gt ($budget * 0.25)) { $kill = $budget * 0.25 }
+    if ($kill -lt 0.25) { $kill = 0.25 }
+    $timeout = $budget - $kill
+    if ($timeout -gt $TimeoutSec) { $timeout = $TimeoutSec }
+    if ($timeout -lt 0.25) { $timeout = 0.25 }
+    return [pscustomobject]@{ TimeoutSec = $timeout; KillSec = $kill }
+}
+
+# The sampler the supervisor uses for real: one bounded clock read whose timeout follows the budget
+# it is given. The supervisor passes that budget as the first argument on every call, so a sampler
+# that keeps the shape of this one cannot outlive the deadline. A caller that passes no budget gets
+# the nominal timeout, which is what the wrappers of 2026-10-09 did on every call.
+function New-ArmTctlSampler {
+    param(
+        [string]$Cli = '',
+        [double]$TimeoutSec = 10,
+        [string]$TempDir = $env:TEMP
+    )
+    return {
+        param([double]$BudgetSec = 0)
+        $t = $TimeoutSec
+        $k = 0
+        if ($BudgetSec -gt 0) {
+            $split = Get-ArmHelperBudget -BudgetSec $BudgetSec -TimeoutSec $TimeoutSec
+            $t = $split.TimeoutSec
+            $k = $split.KillSec
+        }
+        Read-ArmTctl -Cli $Cli -TimeoutSec $t -KillTimeoutSec $k -TempDir $TempDir
+    }.GetNewClosure()
+}
+
+# One sample inside a budget. Below ArmMinSampleSec the sampler is not called: there is no room for
+# a read that can be bounded, and a read that cannot be bounded is what put the arm over its limit.
+function Invoke-ArmBoundedSample {
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Sampler,
+        [Parameter(Mandatory = $true)][double]$BudgetSec
+    )
+    if ($BudgetSec -lt $script:ArmMinSampleSec) {
+        return [pscustomobject]@{ Ok = $false; Tctl = $null; Line = ''
+                                  Reason = ('no room inside the bound for a temperature read: ' +
+                                            ('{0:N1} s left, {1:N1} s needed' -f $BudgetSec, $script:ArmMinSampleSec)) }
+    }
+    return & $Sampler $BudgetSec
+}
+
 # The bound of one arm, with the cleanup time reserved out of it.
 function New-ArmDeadline {
     param(
@@ -193,6 +281,11 @@ function New-ArmDeadline {
         throw ("the arm bound $BoundSec s is over the $MaxBoundSec s limit of a non-game lab " +
                'trial; cleanup is inside the bound, so the bound cannot be raised here')
     }
+    if ($CleanupReserveSec -lt $script:ArmMinCleanupReserveSec) {
+        throw ("the cleanup reserve $CleanupReserveSec s is under the " +
+               "$script:ArmMinCleanupReserveSec s the tail slack and one confirmed kill need; " +
+               'cleanup is inside the bound, so it has to be reserved out of it')
+    }
     $work = $BoundSec - $CleanupReserveSec
     if ($work -lt 2) { $work = [int]([math]::Floor($BoundSec / 2)) }
     return [pscustomobject]@{
@@ -206,6 +299,24 @@ function New-ArmDeadline {
 function Get-ArmElapsedSec {
     param([Parameter(Mandatory = $true)]$Deadline)
     return $Deadline.Watch.Elapsed.TotalSeconds
+}
+
+# The time the work part still has: what an in-loop helper may be given.
+function Get-ArmWorkLeftSec {
+    param([Parameter(Mandatory = $true)]$Deadline)
+    return ($Deadline.WorkSec - (Get-ArmElapsedSec -Deadline $Deadline))
+}
+
+# The time a cleanup step may be given: what is left of the whole bound, less the tail slack that
+# process starts and the report write need, less whatever a later step of the cleanup is owed.
+function Get-ArmCleanupLeftSec {
+    param(
+        [Parameter(Mandatory = $true)]$Deadline,
+        [double]$ReserveSec = 0
+    )
+    $left = $Deadline.TotalSec - (Get-ArmElapsedSec -Deadline $Deadline) - $script:ArmTailSlackSec - $ReserveSec
+    if ($left -lt 0) { $left = 0 }
+    return $left
 }
 
 # The whole supervised arm. Returns the report object and writes it as JSON.
@@ -244,12 +355,18 @@ function Invoke-LabArm {
     $errFile = Join-Path $Dir "$Name-$stamp.err.txt"
 
     if (-not $Sampler) {
-        $cli = Get-ArmClockCli
-        $timeout = $HelperTimeoutSec
-        $Sampler = { Read-ArmTctl -Cli $cli -TimeoutSec $timeout }.GetNewClosure()
+        $Sampler = New-ArmTctlSampler -Cli (Get-ArmClockCli) -TimeoutSec $HelperTimeoutSec
     }
     if (-not $Terminator) {
-        $Terminator = { param($p) Stop-ArmProcessTree -Process $p -TimeoutSec 8 }
+        # The kill takes the budget the cleanup reserve still has, and never less than a second: a
+        # child left running is worse than one second over the bound.
+        $Terminator = {
+            param($p, [double]$BudgetSec = 0)
+            $t = 8.0
+            if ($BudgetSec -gt 0 -and $BudgetSec -lt $t) { $t = $BudgetSec }
+            if ($t -lt 1.0) { $t = 1.0 }
+            Stop-ArmProcessTree -Process $p -TimeoutSec $t
+        }
     }
 
     $report = [pscustomobject]@{
@@ -276,6 +393,7 @@ function Invoke-LabArm {
         stderr_path = $errFile
         redirect = ''
         redirect_sha256 = ''
+        cleanup_notes = ''
         exit_status = 2
     }
     foreach ($k in $ChildEnv.Keys) { $report.env[$k] = [string]$ChildEnv[$k] }
@@ -294,8 +412,9 @@ function Invoke-LabArm {
             return $report
         }
 
-        # Precondition 1: a trusted temperature. No reading is a refusal.
-        $before = & $Sampler
+        # Precondition 1: a trusted temperature. No reading is a refusal. The read is bounded by
+        # the work part, so a CLI that does not answer refuses the arm instead of spending it.
+        $before = Invoke-ArmBoundedSample -Sampler $Sampler -BudgetSec (Get-ArmWorkLeftSec -Deadline $deadline)
         if (-not $before.Ok) {
             $report.verdict = 'REFUSED'
             $report.stop_reason = "no trusted temperature before the arm: $($before.Reason)"
@@ -339,9 +458,13 @@ function Invoke-LabArm {
                               "($($deadline.CleanupReserveSec) s are reserved for cleanup)"
                 break
             }
-            if ($now -ge $nextSample) {
+            # A read is started only when the work part can still hold a bounded one. Near the
+            # deadline the arm waits for the bound instead, which is the whole point of HIP-F2:
+            # the read must not be the thing that carries the arm past its own limit.
+            $sampleBudget = $deadline.WorkSec - $now
+            if ($now -ge $nextSample -and $sampleBudget -ge $script:ArmMinSampleSec) {
                 $nextSample = $now + $SampleEverySec
-                $sample = & $Sampler
+                $sample = Invoke-ArmBoundedSample -Sampler $Sampler -BudgetSec $sampleBudget
                 if ($sample.Ok) {
                     $lastGood = Get-ArmElapsedSec -Deadline $deadline
                     $samples += $sample.Tctl
@@ -375,16 +498,19 @@ function Invoke-LabArm {
         $report.telemetry_failures = $telemetryFailures
 
         if ($stopReason) {
-            $stop = & $Terminator $proc
+            # The kill runs inside the cleanup reserve, with the room for the read after the arm
+            # held back out of it.
+            $stop = & $Terminator $proc (Get-ArmCleanupLeftSec -Deadline $deadline -ReserveSec $script:ArmMinSampleSec)
             $terminationConfirmed = [bool]$stop.Confirmed
             if (-not $terminationConfirmed) {
                 $stopReason = ($stopReason + "; termination was NOT confirmed: $($stop.Reason)")
             }
         } else {
             # The child finished by itself. Its exit code still needs a bounded wait, because the
-            # streams can be open after the process object says it has exited.
-            $left = $deadline.TotalSec - (Get-ArmElapsedSec -Deadline $deadline)
-            if ($left -lt 1) { $left = 1 }
+            # streams can be open after the process object says it has exited. The wait keeps the
+            # room for the read after the arm out of its own budget.
+            $left = Get-ArmCleanupLeftSec -Deadline $deadline -ReserveSec $script:ArmMinSampleSec
+            if ($left -lt 0.25) { $left = 0.25 }
             $closed = $false
             try { $closed = $proc.WaitForExit([int]($left * 1000)) } catch { $closed = $false }
             $terminationConfirmed = $closed
@@ -413,15 +539,23 @@ function Invoke-LabArm {
             if ($null -eq $report.exit_code) { $report.exit_status = 5 } else { $report.exit_status = [int]$report.exit_code }
         }
 
+        # The copy and the hash of the kept output are cleanup too, so they happen only while the
+        # cleanup reserve still has room. A note in the report says when they did not.
+        $notes = @()
         if ($Redirect -and (Test-Path -LiteralPath $outFile)) {
-            $target = Join-Path $Dir $Redirect
-            Copy-Item -LiteralPath $outFile -Destination $target -Force
-            $report.redirect = $target
-            $report.redirect_sha256 = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            if ((Get-ArmCleanupLeftSec -Deadline $deadline -ReserveSec $script:ArmMinSampleSec) -le 0) {
+                $notes += 'no room inside the bound to copy and hash the kept output'
+            } else {
+                $target = Join-Path $Dir $Redirect
+                Copy-Item -LiteralPath $outFile -Destination $target -Force
+                $report.redirect = $target
+                $report.redirect_sha256 = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            }
         }
 
-        $after = & $Sampler
-        if ($after.Ok) { $report.tctl_after = $after.Tctl }
+        $after = Invoke-ArmBoundedSample -Sampler $Sampler -BudgetSec (Get-ArmCleanupLeftSec -Deadline $deadline)
+        if ($after.Ok) { $report.tctl_after = $after.Tctl } else { $notes += "no temperature after the arm: $($after.Reason)" }
+        if ($notes.Count -gt 0) { $report.cleanup_notes = ($notes -join '; ') }
         return $report
     } finally {
         # Every path: the child is not left running, the environment is restored, and the report
@@ -430,7 +564,7 @@ function Invoke-LabArm {
             $alive = $false
             try { $alive = -not $proc.HasExited } catch { $alive = $false }
             if ($alive) {
-                $stop = & $Terminator $proc
+                $stop = & $Terminator $proc (Get-ArmCleanupLeftSec -Deadline $deadline)
                 $report.termination_confirmed = [bool]$stop.Confirmed
                 if (-not $stop.Confirmed) {
                     $report.verdict = 'UNKNOWN'
@@ -472,6 +606,9 @@ function Write-ArmReport {
     }
     if ($Report.tctl_after) { "arm $($Report.arm) Tctl after $($Report.tctl_after) C" }
     if ($Report.redirect) { "arm $($Report.arm) redirect $($Report.redirect) sha256 $($Report.redirect_sha256)" }
+    if ($Report.PSObject.Properties['cleanup_notes'] -and $Report.cleanup_notes) {
+        "arm $($Report.arm) cleanup: $($Report.cleanup_notes)"
+    }
     if ($Report.stop_reason) { "arm $($Report.arm) stop reason: $($Report.stop_reason)" }
     "arm $($Report.arm) exit $($Report.exit_code) after $($Report.elapsed_sec) s, termination confirmed $($Report.termination_confirmed)"
     "arm $($Report.arm) end $($Report.verdict)"
