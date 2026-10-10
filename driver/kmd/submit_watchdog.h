@@ -36,18 +36,29 @@
  * smaller than the whole budget Windows ships with. */
 #define BC250_SUBMIT_MARGIN_MS 2000u
 
-/* The clamp. Five minutes: an operator may ask for a long budget for an offline compute run, and nothing in
- * this driver wants a 32-bit millisecond count near its own overflow. */
+/* The clamp on a value SOMEBODY ASKED FOR. Five minutes: an operator may ask for a long budget for an offline
+ * compute run, and nothing in this driver wants a 32-bit millisecond count near its own overflow. It is not a
+ * clamp on TdrDelay, and the difference is the whole of 7.1 - see BC250_SUBMIT_TDR_MAX_MS. */
 #define BC250_SUBMIT_BUDGET_MAX_MS 300000u
 
-/* TdrDelay as milliseconds, clamped so that the budget arithmetic below cannot overflow and so that an absent
- * or zero value reads as Windows' own default rather than as "no budget at all". */
+/* The widest TdrDelay this arithmetic can carry: the milliseconds plus the margin must still fit in an unsigned
+ * long (49 days, which no Windows configuration reaches).
+ *
+ * Deliberately NOT BC250_SUBMIT_BUDGET_MAX_MS, and this is the one line everything else in this file rests on.
+ * Clamping TdrDelay to the operator's clamp would turn 7.1's invariant, "never shorter than TdrDelay", into
+ * "never shorter than min(TdrDelay, 300 s)": with TdrDelay 400 s the budget would come out at 300 s and our
+ * private watchdog would fire 100 s before the OS's own, which is exactly the defect this file exists for. The
+ * budget follows TdrDelay however long it is; only a value somebody asked for is clamped. */
+#define BC250_SUBMIT_TDR_MAX_MS (0xFFFFFFFFul - (unsigned long)BC250_SUBMIT_MARGIN_MS)
+
+/* TdrDelay as milliseconds. An absent or zero value reads as Windows' own default rather than as "no budget at
+ * all", and the only clamp is the one the arithmetic below needs. */
 static __inline unsigned long Bc250SubmitTdrMs(unsigned long TdrDelaySeconds)
 {
     unsigned long seconds = TdrDelaySeconds != 0ul ? TdrDelaySeconds : (unsigned long)BC250_SUBMIT_TDR_DEFAULT_S;
 
-    if (seconds > (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS / 1000ul)
-        seconds = (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS / 1000ul;
+    if (seconds > BC250_SUBMIT_TDR_MAX_MS / 1000ul)
+        seconds = BC250_SUBMIT_TDR_MAX_MS / 1000ul;
     return seconds * 1000ul;
 }
 
@@ -57,7 +68,11 @@ static __inline unsigned long Bc250SubmitTdrMs(unsigned long TdrDelaySeconds)
  * Absent: TdrDelay plus the margin. Present: the operator's value, clamped to BC250_SUBMIT_BUDGET_MAX_MS and
  * then RAISED to TdrDelay if it is shorter. The raise is not a courtesy - a budget below the OS's is the defect
  * this file exists for, and an operator who writes 500 here would reintroduce it. *Defaulted and *Raised say
- * which of the two happened, so the start can log what it did and why. */
+ * which of the two happened, so the start can log what it did and why.
+ *
+ * The order matters: the operator's clamp is applied to the operator's value, and the TdrDelay floor is applied
+ * last and wins over it. A clamp after the floor would cut the budget back below TdrDelay for any TdrDelay above
+ * five minutes, and a watchdog that fires before the OS's own is the defect, not the protection. */
 static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsigned long TdrDelaySeconds,
                                                   int* Defaulted, int* Raised)
 {
@@ -67,8 +82,8 @@ static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsig
     *Defaulted = 0;
     *Raised = 0;
     if (Requested == 0ul) { *Defaulted = 1; budget = tdr + (unsigned long)BC250_SUBMIT_MARGIN_MS; }
-    else budget = Requested;
-    if (budget > (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS) budget = (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS;
+    else budget = Requested > (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS
+               ? (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS : Requested;
     if (budget < tdr) { budget = tdr; *Raised = 1; }
     return budget;
 }
@@ -77,7 +92,7 @@ static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsig
 
 /* How often the watchdog looks for progress. A quarter of the budget, capped: the gap between two checks must
  * stay BELOW the budget, or the staleness window below would restart itself for ever and the watchdog would
- * never fire at all. 250 ms is the cap because a check is two register reads and a fence read in a DPC, and a
+ * never fire at all. 250 ms is the cap because a check is five register reads and a fence read in a DPC, and a
  * node-0 job that is making progress changes the head long before the tick expires (the tick is re-armed by the
  * DPC itself, and a head change re-arms it from the stamp).
  *

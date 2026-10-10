@@ -1406,11 +1406,14 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
             }
         }
     }
-    // UNDER THE LOCK, and this is not a style choice. WddmStop and WddmSuspendRetained set Stopping, cancel this
-    // timer and take back its queued DPC in one critical section, on the strength of "from here nothing of ours
-    // arms a timer" (WddmStop step 1). A re-arm outside the lock could read Stopping as FALSE, lose the race to
-    // that critical section and call KeSetTimer after the cancel, the KeRemoveQueueDpc and the KeFlushQueuedDpcs -
-    // on a KTIMER and a KDPC that live inside the BC250_WDDM allocation WddmStop then frees. KeSetTimer and
+    // UNDER THE LOCK, and this is not a style choice. WddmSuspendRetained sets Stopping and cancels this timer in
+    // one critical section; WddmStop sets Stopping under the lock and cancels after releasing it (step 1 of its
+    // own comment). Either shape is safe only for a re-arm that holds the same lock: such a re-arm is either
+    // before the Stopping store, and is then taken back by the cancel, the KeRemoveQueueDpc and the
+    // KeFlushQueuedDpcs that follow it, or after it, and then reads Stopping as TRUE and does not arm at all. A
+    // re-arm outside the lock has neither guarantee: it can read Stopping as FALSE and still call KeSetTimer
+    // after the cancel, the KeRemoveQueueDpc and the KeFlushQueuedDpcs - on a KTIMER and a KDPC that live inside
+    // the BC250_WDDM allocation WddmStop then frees. KeSetTimer and
     // KeCancelTimer both run at IRQL <= DISPATCH_LEVEL, which is where this lock is held, so the invariant costs
     // nothing. WddmGfxHeadLocked arms the same timer the same way, under the same lock.
     if (rearm)
@@ -6442,11 +6445,20 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // ring-gap edge, which a hand-written HwPending = FALSE would have left open (0.7.210's histogram).
             WddmGfxHeadLocked(wddm);
             KeReleaseSpinLock(&wddm->Lock, irql);
+            // Only now: the node is open again in BOTH files. GfxReopenAfterAbort deliberately leaves the wake to
+            // this line, because a held submission woken while WatchdogFaulted or RefusalPending was still set
+            // would be refused and WddmFailSubmission would latch the refusal the recovery has just cleared. On
+            // the drained path (verdict 1 and 5) gfx.c has already signalled once; a second set of a
+            // notification event costs nothing and the waiters retest their condition anyway.
+            GfxRetireSignal(device);
             InterlockedIncrement(&wddm->SoftRecoveries);
-            // Valid by construction: hungFence was submitted and, when read, still the unreported head of the queue,
-            // so it is in [LastCompletedFenceId, last submitted]; a value outside that range would be bugcheck
-            // 0x119. ALREADY_RETIRED is the contract's special case of a packet that completed between the timeout
-            // and the reset: dxgkrnl treats it as aborted, which is what it asks for (tdr-changes-in-windows-8.md).
+            // Valid by construction, by one of two arguments. Verdicts 1 and 5: hungFence was submitted and, when
+            // read, still the unreported head of the queue, so it is in [LastCompletedFenceId, last submitted].
+            // Verdict 7: hungFence is this node's own LAST REPORTED fence and its validity comes from the range
+            // guard of Bc250HangAbortReportedFence, which refused the report if it was not inside that range. A
+            // value outside it would be bugcheck 0x119. ALREADY_RETIRED is the contract's special case of a packet
+            // that completed between the timeout and the reset: dxgkrnl treats it as aborted, which is what it
+            // asks for (tdr-changes-in-windows-8.md).
             pResetEngine->LastAbortedFenceId = hungFence;
             // Two lines, not one: the log ring's line is 159 characters and the worst-case width gate
             // (tools/quality/guardlog_width.py, BD-070) counts every %lu at ten.

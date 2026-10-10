@@ -1298,7 +1298,19 @@ BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value)
 //
 // Refused unless the ring is provably idle: either nothing is marked in flight, or the marked sequence's fence
 // has arrived. A ring that still holds work is never reopened, because the next submission would then share a
-// VMID with a job this driver has not accounted for. TRUE: the gate is open again and the waiters are woken.
+// VMID with a job this driver has not accounted for. TRUE: the gate is open again.
+//
+// The waiters are NOT woken here, and that is the one deliberate difference from GfxSoftRecover's drained tail.
+// This gfx.c gate is only half of the door: wddm.c still has to clear WatchdogFaulted and RefusalPending for the
+// node, and it does that afterwards, under its own spin lock. A held submission woken in between would find the
+// node still closed, be refused, and WddmFailSubmission would latch again exactly what this function cleared.
+// So wddm.c calls GfxRetireSignal once it has finished, outside its lock.
+//
+// The other difference from GfxSoftRecover is the lock, and it is deliberate too: that function takes GartLock
+// because it installs the GFX register path and writes SQ_CMD, and a holder of the GfxAccess reference must not
+// take GartLock. This one writes no register at all - one fence-page read, one interlocked compare-exchange on
+// SubmitInFlight and one on SubmitFailed - so the lifetime reference is the whole protection it needs, and the
+// CAS is what makes the one dangerous write (clearing the in-flight marker) safe against a concurrent observer.
 BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GFX* gfx;
@@ -1319,7 +1331,6 @@ BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
     if (idle)
     {
         InterlockedExchange(&gfx->SubmitFailed, 0);      // the one un-stick outside GfxSoftRecover's drained path
-        GfxRetireSignal(Device);                         // KMD196: a held submission is waiting for this gate
         GuardLog("gfx: ring reopened after an aborted fence was reported (seq %lu was in flight, slot 0x%X)",
                  (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT));
     }
