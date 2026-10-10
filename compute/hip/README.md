@@ -105,9 +105,14 @@ the Mesa file and line each one comes from, with the bits it drops stated: `GL2_
 a code object load is a flush point. `test_pm4` checks the dwords of both values, and the dropped
 bits are its negative control.
 
-The off-GPU cost itself is measured by `samples/hipbench.hip`, which reads the submission counters
-through the two vendor calls of layer 2 and prints submissions per dispatch beside its timings. The
-lab arms are in `scratch/m16-hip/lab/perf-README.md`, which is local.
+What a launch costs the caller is measured by `samples/hipbench.hip`, which reads the submission
+counters through the two vendor calls of layer 2 and prints submissions per dispatch beside its
+timings. Its two kernel figures are enqueue-loop wall time with backpressure: a launch inside the
+timed loop can wait for the kernel argument pool or for a free ring slot, and the `waits` and
+`waits_fast` counters printed next to the figure say how often it did. They are therefore not a
+processor-only cost, which would need the active and the blocked time of the thread measured apart
+(audit finding HIP-F3, 2026-10-10). The lab arms are in `scratch/m16-hip/lab/perf-README.md`, which
+is local.
 
 ## Build
 

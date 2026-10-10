@@ -2208,11 +2208,16 @@ it on every dispatch of a process.
 
 Two numbers of that session are worth carrying in the design, because both are easy to read wrongly.
 
-- **The gain is host time, not GPU time.** The off-GPU cost of a dispatch fell from 14.6-16.5 us
-  to 3.8 us on the chain line. For a 7-billion-parameter model that is not the first bottleneck:
-  it is about 6.2 ms of one processor core a token, which batching cuts to 1.5 ms. It decides the
-  result for a small model, a long kernel chain, or a build that wants the processor for its own
-  host side.
+- **The gain is in the caller's own time, not in GPU time.** What fell from 14.6-16.5 us to 3.8 us
+  on the chain line is the enqueue-loop wall time of one dispatch: the interval the benchmark times
+  is the loop of enqueue calls, and one of those calls can wait for the kernel argument pool or
+  for a free ring slot (`bc250hsa.h` section 8). The `waits` counters of those arms say that it did
+  wait. The figure is therefore the cost a caller sees before it waits for a result, and not the
+  time one processor core is busy. To separate those two, an arm must measure the thread's active
+  time and its blocked time apart, and no arm has done that (audit finding HIP-F3, 2026-10-10). At
+  400 kernels a token the chain figure is about 6.2 ms a token before batching and 1.5 ms after it,
+  which is an illustration of the scale and not a measured processor budget. It decides the result for a small model, a long kernel
+  chain, or a build that wants the processor for its own host side.
 - **One line got slower, and it is not in this code path.** A 4 KB device-to-host `hipMemcpy` is
   19.2-19.4 us with batching off and 28.8-28.9 us with it on, while the same arms' 1 MiB and
   64 MiB device-to-host copies do not split with the policy at all: all six arms are within

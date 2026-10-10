@@ -1,4 +1,5 @@
-// hipbench.hip - the off-GPU cost of the HIP launch path, measured.
+// hipbench.hip - what one kernel launch of the HIP path costs the caller, measured as the wall
+// time of the enqueue loop.
 //
 // Why it exists. Build 1 of M16 route B is correctness first: every hipLaunchKernel builds its
 // own indirect buffer and calls D3DKMTSubmitCommand, so one kernel costs one user-to-kernel
@@ -13,9 +14,19 @@
 //     and the counters and measures the host half of the cost (the mock runs no instruction),
 //   * on the lab against the product DLL, where the numbers are the real ones.
 //
+// What the timed loop of measurements 1 and 2 is, exactly. The interval is the wall time of the
+// loop of HIP launches: enqueue-loop wall time with backpressure. It is not the time one
+// processor core spends before any shader runs, because a launch inside the loop can wait for
+// the GPU: `hipLaunchKernel` waits for a free entry of the 64-buffer kernel argument pool
+// (runtime/hip_launch.cpp) and a submission waits for a free command slot of the ring
+// (bc250hsa.h section 8: dispatch submission "may wait for a free ring slot"). The counters
+// printed beside the number say how often that happened: `waits` and `waits_fast`. A claim about
+// processor cost alone needs the active and blocked time of the thread measured separately, and
+// this program does not measure them (independent audit of 2026-10-10, finding HIP-F3).
+//
 // Five measurements:
-//   1. launch   N empty kernels back to back, then one synchronisation. The per-launch cost is
-//               the time the launches took divided by N, and the wall is the whole thing. This
+//   1. launch   N empty kernels back to back, then one synchronisation. The per-launch figure is
+//               the enqueue-loop wall time divided by N, and the wall is the whole thing. This
 //               is the number a program sees when it does not wait per kernel.
 //   2. chain    C tiny kernels, each reading what the one before it wrote. This is the shape of
 //               a decode step, and the one the barrier between two dispatches belongs to.
@@ -140,16 +151,26 @@ static counters_delta counters_since(const bc250hipCounters& before) {
     return d;
 }
 
-static void report_json(const char* name, double us_each, double wall_ms, double rate,
-                        const char* rate_unit, const counters_delta* d, long long count) {
+// What the timed interval of this measurement is. The two kernel measurements time a loop of
+// launches and the three others time one call each, so the name is not the same for all five.
+#define HIPBENCH_ENQUEUE_METRIC "enqueue-loop wall time with backpressure"
+#define HIPBENCH_CALL_METRIC "wall time of one call"
+
+static void report_json(const char* name, double us_each, const char* metric, double wall_ms,
+                        double rate, const char* rate_unit, const counters_delta* d,
+                        long long count) {
     if (!g_json) {
         return;
     }
+    // us_each keeps its name, because the lab records of 2026-10-09 are matched against it row
+    // for row. What it means is stated beside it, so a reader of the record cannot take the
+    // kernel measurements for processor-only cost: for launch and chain the interval is the
+    // enqueue loop with its pool and ring backpressure inside it.
     printf("{\"tool\":\"hipbench\",\"measurement\":\"%s\",\"count\":%lld,\"us_each\":%.3f,"
-           "\"wall_ms\":%.3f,\"rate\":%.3f,\"rate_unit\":\"%s\",\"dispatches\":%llu,"
-           "\"submissions\":%llu,\"batches\":%llu,\"dispatches_batched\":%llu,\"waits\":%llu,"
-           "\"waits_fast\":%llu}\n",
-           name, count, us_each, wall_ms, rate, rate_unit, d->dispatches, d->submissions,
+           "\"us_each_metric\":\"%s\",\"wall_ms\":%.3f,\"rate\":%.3f,\"rate_unit\":\"%s\","
+           "\"dispatches\":%llu,\"submissions\":%llu,\"batches\":%llu,"
+           "\"dispatches_batched\":%llu,\"waits\":%llu,\"waits_fast\":%llu}\n",
+           name, count, us_each, metric, wall_ms, rate, rate_unit, d->dispatches, d->submissions,
            d->batches, d->dispatches_batched, d->waits, d->waits_fast);
 }
 
@@ -168,11 +189,11 @@ static void measure_launch(hipStream_t stream, long long launches) {
     const double per_launch_submissions =
         d.dispatches != 0 ? (double)d.submissions / (double)d.dispatches : 0.0;
     check(hipGetLastError(), "launch: the error state after the launches");
-    printf("hipbench: launch   %lld empty kernels: %.3f us each on the host, wall %.1f ms,"
-           " %.3f submissions per launch\n",
-           launches, us_each, t2 - t0, per_launch_submissions);
-    report_json("launch", us_each, t2 - t0, per_launch_submissions, "submissions/launch", &d,
-                launches);
+    printf("hipbench: launch   %lld empty kernels: %.3f us each of enqueue-loop wall time with"
+           " backpressure (%llu waits, %llu fast), wall %.1f ms, %.3f submissions per launch\n",
+           launches, us_each, d.waits, d.waits_fast, t2 - t0, per_launch_submissions);
+    report_json("launch", us_each, HIPBENCH_ENQUEUE_METRIC, t2 - t0, per_launch_submissions,
+                "submissions/launch", &d, launches);
 }
 
 // Measurement 2: a dependent chain of tiny kernels, the shape of a decode step.
@@ -216,11 +237,12 @@ static void measure_chain(hipStream_t stream, int* values, long long links) {
     }
     const double us_each = (t1 - t0) * 1000.0 / (double)links;
     const double per_link_ms = (t2 - t0) / (double)links;
-    printf("hipbench: chain    %lld dependent kernels: %.3f us each on the host, %.4f ms each"
-           " end to end, wall %.1f ms, %llu submissions, exact %s\n",
-           links, us_each, per_link_ms, t2 - t0, d.submissions,
+    printf("hipbench: chain    %lld dependent kernels: %.3f us each of enqueue-loop wall time"
+           " with backpressure (%llu waits, %llu fast), %.4f ms each end to end, wall %.1f ms,"
+           " %llu submissions, exact %s\n",
+           links, us_each, d.waits, d.waits_fast, per_link_ms, t2 - t0, d.submissions,
            g_expect_compute ? (mismatches == 0 ? "yes" : "NO") : "not checked");
-    report_json("chain", us_each, t2 - t0,
+    report_json("chain", us_each, HIPBENCH_ENQUEUE_METRIC, t2 - t0,
                 d.dispatches != 0 ? (double)d.submissions / (double)d.dispatches : 0.0,
                 "submissions/launch", &d, links);
 }
@@ -290,7 +312,8 @@ static void measure_sync(hipStream_t stream, long long calls) {
     printf("hipbench: sync     %lld synchronisations of a retired stream: %.3f us each,"
            " %llu of %llu waits answered by the fence mapping\n",
            calls, us_each, d.waits_fast, d.waits);
-    report_json("sync", us_each, wall, (double)d.waits_fast, "fast waits", &d, calls);
+    report_json("sync", us_each, HIPBENCH_CALL_METRIC, wall, (double)d.waits_fast, "fast waits",
+                &d, calls);
 }
 
 // Measurement 5: an event recorded on retired work, and the wait for it.
@@ -309,7 +332,7 @@ static void measure_event(hipStream_t stream, long long rounds) {
     const double us_each = wall * 1000.0 / (double)rounds;
     printf("hipbench: event    %lld record and wait rounds on retired work: %.3f us each\n",
            rounds, us_each);
-    report_json("event", us_each, wall, 0.0, "none", &d, rounds);
+    report_json("event", us_each, HIPBENCH_CALL_METRIC, wall, 0.0, "none", &d, rounds);
     check(hipEventDestroy(mark), "event: hipEventDestroy");
 }
 
