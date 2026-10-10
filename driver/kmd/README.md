@@ -38,7 +38,7 @@ no code from Microsoft's MS-PL sample.
 | `power.c` | adapter power coordination |
 | `startup.c/.h`, `start_health.c/.h` | device-owned initialisation with phase bits, and the start-up health witness the monitor confirms (see below) |
 | `umd_blob.c/.h` | the reader of the three private-data blobs a user-mode driver hands the KMD (`driver/contract/bc250_umd_submit.h`), host-tested |
-| `umd_caps.c/.h`, `firmware_metadata.h` | the caps blob for `KMTQAITYPE_UMDRIVERPRIVATE`, generated from the contract's filler, with the firmware section filled from this session's PSP load and an identity trailer |
+| `umd_caps.c/.h`, `firmware_metadata.h` | the private caps template, patched with session firmware, CU masks and application VRAM capacity, plus an identity trailer |
 | `gdi_private.h`, `surface_resource_private.h` | allocation private data (`LB7A`), the GDI and the E26R resource-group contracts |
 | `bc250kmd.h` | the device structure, the stage table and the interface-version notes |
 | `pnp.c` | add/start/stop/remove, the single child (always-connected video output, no EDID), power |
@@ -432,6 +432,29 @@ alone no longer identifies the process.
   "no candidate reached the driver" from "nobody was ever offered the flip", which is the one distinction
   the handshake is about. `tools\win\d3d12queue\scanout-trial.ps1` reads all four lines and names the state
   in its verdict.
+
+## Memory sizes in the private caps
+
+`VramPatchCaps` replaces the captured local and CPU-visible VRAM totals with the application segment's size.
+It uses the same `WddmMemoryLayout` calculation as `QUERYSEGMENT4`.
+The POST framebuffer, reserved tail and page-table storage are excluded.
+CPU-visible VRAM describes the same pool, so it adds no capacity.
+If the segment layout or aperture admission is unavailable, both totals are zero.
+No registry setting changes this calculation.
+
+The historical GTT word in the template is not a current Windows memory measurement.
+The winsys must use the capacity from `KMTQAITYPE_GETSEGMENTSIZE.SharedSystemMemorySize`.
+An aperture window does not bound all system memory mapped through GPU page tables.
+See the WDDM 2.0 [GPU segments contract](https://learn.microsoft.com/windows-hardware/drivers/display/gpu-segments).
+
+This patch does not change the segment descriptors, DXGI memory totals or process budgets.
+Those values come from VidMm and can include private table storage or shared system memory.
+They need not equal the application's local heap.
+RADV's separate APU heap policy and dynamic budget reporting need their own validation.
+
+The VRAM geometry host suite extracts the production patch and layout functions.
+It checks changing carve-outs and refuses the old unpatched capture as a negative control.
+The caps suite checks byte offsets against the contract structures.
 
 ## Build
 

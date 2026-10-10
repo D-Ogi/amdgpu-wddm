@@ -18,6 +18,8 @@ int main(void)
     const unsigned char* live = (const unsigned char*)bc250_unitA_blob(BC250_MUTATE_NONE, &size);
     const struct bc250_umd_private* baked = (const struct bc250_umd_private*)umd_caps_blob;
 
+    CHECK(offsetof(struct bc250_umd_private, memory.vram.total_heap_size) == UMD_CAPS_VRAM_TOTAL_OFFSET);
+    CHECK(offsetof(struct bc250_umd_private, memory.cpu_accessible_vram.total_heap_size) == UMD_CAPS_VISIBLE_VRAM_TOTAL_OFFSET);
     CHECK(size == UMD_CAPS_BYTES);
     CHECK(sizeof(struct bc250_umd_firmware)==64);
     CHECK(offsetof(struct bc250_umd_private,firmware)==UMD_CAPS_FIRMWARE_OFFSET);
