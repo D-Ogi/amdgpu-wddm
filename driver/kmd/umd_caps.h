@@ -1,5 +1,5 @@
 // Base caps template for DXGKQAITYPE_UMDRIVERPRIVATE. WDDM replaces its historical
-// firmware section with metadata cached after this session's PSP load and SMU start.
+// firmware, CU and local memory fields with this session's metadata and geometry.
 //
 // The bytes live in umd_caps.c. They are bc250_unitA_blob(BC250_MUTATE_NONE) from
 // driver/contract/test/bc250_caps_unitA.c, copied once, not retyped. driver/kmd/test/run_umd_caps.ps1
@@ -17,6 +17,12 @@
 #define UMD_CAPS_CU_AO_MASK_OFFSET 68u
 #define UMD_CAPS_CU_BITMAP_OFFSET 72u
 #define UMD_CAPS_CU_AO_BITMAP_OFFSET 288u
+
+// offsetof(bc250_umd_private, memory.{vram,cpu_accessible_vram}.total_heap_size),
+// checked by umd_caps_test.c. WDDM replaces these capture values with the
+// application segment's capacity. CPU-visible VRAM is the same pool, not extra memory.
+#define UMD_CAPS_VRAM_TOTAL_OFFSET 464u
+#define UMD_CAPS_VISIBLE_VRAM_TOTAL_OFFSET 496u
 
 // offsetof(bc250_umd_private, device.gpu_counter_freq) in kHz, checked by umd_caps_test.c. The UMD reads its
 // timestamp frequency from here, so CalibrateGpuClock (wddm.c, BD-056) reports the same number from the same bytes

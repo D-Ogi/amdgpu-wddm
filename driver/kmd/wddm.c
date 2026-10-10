@@ -3522,6 +3522,24 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     return TRUE;
 }
 
+// The private UMD report must exclude the same POST buffer, private tail and
+// page-table storage as the application segment in QUERYSEGMENT4. Geometry is
+// start-latched: this query does not access registers or change a reservation.
+// Both words describe the same fully CPU-visible pool. The captured GTT word is
+// not a Windows host-memory capacity: the winsys must use GETSEGMENTSIZE's
+// SharedSystemMemorySize. The aperture window is not that system-memory pool
+// (WDDM 2.0 GPU segments, AccessedPhysically=0).
+static void VramPatchCaps(_In_ const BC250_DEVICE* Device,
+                         _Inout_updates_bytes_(Bytes) PVOID Caps, ULONG Bytes)
+{
+    ULONGLONG offset,length,tableOffset,tableLength;
+    if (Caps==NULL || Bytes<UMD_CAPS_BYTES) return;
+    if (!WddmMemoryLayout(Device,&offset,&length,&tableOffset,&tableLength) ||
+        !PagingApertureBytesValid(Device->WddmAperture.bytes)) length=0;
+    RtlCopyMemory((PUCHAR)Caps+UMD_CAPS_VRAM_TOTAL_OFFSET,&length,sizeof(length));
+    RtlCopyMemory((PUCHAR)Caps+UMD_CAPS_VISIBLE_VRAM_TOTAL_OFFSET,&length,sizeof(length));
+}
+
 // SegmentAddress already includes the advertised MC base. Offset is an
 // allocation-relative byte offset (TransferOffset), never another segment base.
 static BOOLEAN WddmLocalPagingEndpoint(const BC250_DEVICE* Device, UINT Segment,
@@ -3921,6 +3939,7 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
         // num_cu, and with it RADV's scratch sizing, follows the registers of this start (cumode.c).
         CuModePatchCaps(device,QueryAdapterInfo->pOutputData,UMD_CAPS_BYTES);
+        VramPatchCaps(device,QueryAdapterInfo->pOutputData,UMD_CAPS_BYTES);
         // DXGK_START_INFO.AdapterLuid is supplied by dxgkrnl at StartDevice.
         // Keep old-sized queries byte-compatible; never emit a partial trailer.
         if (QueryAdapterInfo->OutputDataSize >= BC250_ADAPTER_CAPS_BYTES) {
