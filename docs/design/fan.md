@@ -484,7 +484,10 @@ fanctl state=curve mode=curve profile=standard target_pct=70 applied_pct=70 raw=
 `boost` is `on` while the load feed-forward holds the fan at full speed, `off` in a start that may boost and
 does not now, and `disabled` with `FanLoadBoost` 0. `boost_why` names every signal that called the load
 heavy: `busy`, `power`, `rise`, or them joined with `+`. The driver log carries one line when the boost
-engages and one when it lets go, and the telemetry block carries the count and the time.
+engages and one when it lets go. The telemetry block carries the count and the time, but only in a start that
+boosted at least once: a cool or idle run keeps that block at the four fan lines it had, because the log ring
+rotates 768 lines and six lines every 5 s would shorten what the ring holds of a long session (BD-097). The
+start itself logs whether the rule is enabled, so nothing about the boost is lost with those two lines.
 
 The values in this example come from the test fixture, not from the lab. The write forms need an
 administrator:

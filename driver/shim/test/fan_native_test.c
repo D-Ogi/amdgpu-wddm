@@ -611,12 +611,55 @@ static void load_boost(void)
     FanStop(&device, BC250_FAN_REASON_STOP);
 }
 
+/* The telemetry block's width (BD-097): the ring rotates 768 lines, so the block every 5 s stays at the four fan
+ * lines it had, and the boost pair joins it only in a start that has something to report. */
+static void telemetry_width(void)
+{
+    unsigned int i;
+
+    /* A run that never boosts: four lines, and not a word about a boost. */
+    Fresh(1);
+    Start();
+    Second(70000);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 4 && !native_log_has("telemetry boost"));
+
+    /* The arm of 2026-10-10 engages the boost: the pair joins the block, and says what called the load heavy. */
+    SecondLoad(70000, 990, 1500, 112000);
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 6 && native_log_has("telemetry boost on (busy+power)"));
+    CHECK(native_log_has("telemetry boost 1 times"));
+
+    /* After the hold the boost lets go, and the pair stays: the count and the time are the arm's evidence. */
+    for (i = 0; i < 31u; i++) Second(70000);
+    CHECK(!device.Fan.Ctl.boost && device.Fan.Ctl.boosts == 1u);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 6 && native_log_has("telemetry boost off"));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+
+    /* FanLoadBoost 0: the rule cannot engage, so the block never grows. The start already logged that it is off. */
+    Fresh(1);
+    NativeSetSetting(L"FanLoadBoost", 0);
+    Start();
+    for (i = 0; i < 4u; i++) SecondLoad(70000, 990, 1500, 112000);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 4 && !native_log_has("telemetry boost"));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+}
+
 int main(void)
 {
     gate();
     exit_paths();
     escape();
     load_boost();
+    telemetry_width();
     printf("fan control binding: %ld checks, %ld failures\n", native_checks, native_failures);
     return native_failures == 0 ? 0 : 1;
 }

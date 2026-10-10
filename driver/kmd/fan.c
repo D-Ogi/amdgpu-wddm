@@ -199,7 +199,8 @@ void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     snap = owner->Snap;
     KeReleaseSpinLock(&owner->SnapLock, irql);
-    // Four lines, each inside the 159 characters of one log entry (tools/quality/guardlog_width.py, BD-070).
+    // Four lines every time, each inside the 159 characters of one log entry (tools/quality/guardlog_width.py,
+    // BD-070). The boost pair below joins them only when there is a boost to report.
     GuardLog("fan: %s %s %s/%s", What, bc250_fan_state_name(snap.Ctl.state), bc250_fan_mode_name(snap.Ctl.mode),
              bc250_fan_profile_name(snap.Ctl.profile));
     GuardLog("fan: %s target %lu%% applied %lu%% raw %lu rb %lu, %lu rpm", What, snap.Ctl.target_pct,
@@ -209,7 +210,12 @@ void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
              snap.Ctl.writes);
     GuardLog("fan: %s %llu failures %llu emergencies %llu doubts", What, snap.Ctl.failures, snap.Ctl.emergencies,
              snap.Ctl.doubts);
-    // Two lines again: one with every field would lose its tail (tools/quality/guardlog_width.py, BD-070).
+    // Two more lines, and only while the feed-forward has something to say: a boost now, or at least one in this
+    // start. A cool or idle run keeps the block at the four lines it had, because the log ring rotates 768 lines
+    // and a 5 s block of six would shorten what the ring holds of a long session (BD-097). Nothing is lost: the
+    // start logs whether the rule is enabled, and FanLogBoost logs every engage and release as it happens. Two
+    // lines again, not one: one with every field would lose its tail (tools/quality/guardlog_width.py, BD-070).
+    if (!snap.Ctl.boost && snap.Ctl.boosts == 0) return;
     GuardLog("fan: %s boost %s (%s)", What, snap.Ctl.boost ? "on" : snap.Ctl.boost_enabled ? "off" : "disabled",
              bc250_fan_boost_name(snap.Ctl.boost_why));
     GuardLog("fan: %s boost %llu times, %llu ms", What, snap.Ctl.boosts, snap.Ctl.boost_ms);
