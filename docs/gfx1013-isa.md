@@ -136,6 +136,9 @@ assembler, and each word survives into the linked code object.
   needs.
 - The scalar, branch, memory and image families. An undefined word there can hang the part, and we
   have no GPU reset ([M53](facts/linux.md#m53)).
+- The image instructions that PS5 code uses and no public tool names, and the other leads from the
+  AnyPS5 shader decoder: [gfx1013 ISA leads from the AnyPS5 shader decoder](research/gfx1013-isa-leads-anyps5.md).
+  They are leads, not facts.
 
 Nie wszystko złoto, co się świeci: not all that glitters is gold. A GFX10.1 opcode on this chip
 may be a GFX10.1 instruction, an instruction of 2012, or nothing at all.
