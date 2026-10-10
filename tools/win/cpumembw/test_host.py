@@ -43,9 +43,23 @@ def main():
     assert rows[-1]["event"] == "watchdog" and rows[-1]["child_exited"] is True
     assert elapsed < 3
     results.append({"case": "blocked-child-watchdog", "seconds": elapsed, "rows": rows})
+    for path in ("", "relative.dll", "P:relative.dll", r"\\server\share\driver.dll", r"\\?\P:\driver.dll",
+                 "P:/dir/../driver.dll", "P:/driver.dll:stream", "P:/dir./driver.dll", "P:/dir//driver.dll"):
+        r, elapsed = run(args.exe, ["--api", "vulkan", "--icd", path], 2)
+        assert not r.stdout
+        results.append({"case": "reject-icd-path " + path, "seconds": elapsed})
+    r, elapsed = run(args.exe, ["--api", "d3d12", "--icd", "P:/driver.dll"], 2)
+    assert not r.stdout
+    results.append({"case": "reject-icd-other-api", "seconds": elapsed})
+    # Child sleeps before any loader call. This tests Windows quoting of an absolute path with spaces.
+    r, elapsed = run(args.exe, ["--api", "vulkan", "--icd", r"P:\fixture dir\driver.dll",
+                                "--test-stall", "--timeout-ms", "500"], 124)
+    rows = [json.loads(line) for line in r.stdout.splitlines()]
+    assert rows[0]["name"] == "selftest-stall" and rows[-1]["child_exited"] is True
+    results.append({"case": "direct-path-child-quoting-no-loader", "seconds": elapsed, "rows": rows})
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump({"status": "pass", "tests": results}, f, indent=2)
-    print("PASS: 14 CPU-only, malformed-input and child-watchdog cases")
+    print(f"PASS: {len(results)} CPU-only, malformed-input and child-watchdog cases")
 
 
 if __name__ == "__main__":

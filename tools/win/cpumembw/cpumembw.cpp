@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>
 #include <windows.h>
 #include <wrl/client.h>
@@ -36,7 +37,7 @@ static double seconds(Clock::time_point a, Clock::time_point b)
 }
 struct Options
 {
-    std::string api = "cpu", heap = "default", type = "all", luid;
+    std::string api = "cpu", heap = "default", type = "all", luid, icd;
     uint32_t adapter = 0;
     size_t bytes = 64u * 1024u * 1024u, chunk = 256u * 1024u;
     double duration = .25;
@@ -51,6 +52,30 @@ static uint64_t integer(const std::string &s)
     auto n = strtoull(s.c_str(), &end, 0);
     require(!errno && end && !*end, "invalid integer");
     return n;
+}
+// Local ASCII drive paths only. No UNC, device namespace, ADS or ambiguous components.
+static bool local_dll_path(const std::string &p)
+{
+    if (p.size() < 7 || !((p[0] >= 'A' && p[0] <= 'Z') || (p[0] >= 'a' && p[0] <= 'z')) || p[1] != ':' ||
+        (p[2] != '/' && p[2] != '\\'))
+        return false;
+    if (_stricmp(p.c_str() + p.size() - 4, ".dll"))
+        return false;
+    for (size_t i = 2; i < p.size(); ++i)
+        if ((unsigned char)p[i] < 32 || (unsigned char)p[i] > 126 || std::strchr(":*?\"<>|", p[i]))
+            return false;
+    size_t begin = 3;
+    while (begin < p.size())
+    {
+        size_t end = p.find_first_of("/\\", begin);
+        if (end == std::string::npos)
+            end = p.size();
+        auto part = p.substr(begin, end - begin);
+        if (part.empty() || part == "." || part == ".." || part.back() == '.' || part.back() == ' ')
+            return false;
+        begin = end + 1;
+    }
+    return true;
 }
 static Options options(int argc, char **argv)
 {
@@ -86,6 +111,11 @@ static Options options(int argc, char **argv)
             o.heap = v;
         else if (k == "--type")
             o.type = v;
+        else if (k == "--icd")
+        {
+            require(!v.empty(), "--icd requires a nonempty path");
+            o.icd = v;
+        }
         else if (k == "--luid")
             o.luid = v;
         else if (k == "--adapter")
@@ -122,6 +152,8 @@ static Options options(int argc, char **argv)
             fail("unknown option");
     }
     require(o.api == "cpu" || o.api == "vulkan" || o.api == "d3d12", "api must be cpu, vulkan or d3d12");
+    require(o.icd.empty() || (o.api == "vulkan" && local_dll_path(o.icd)),
+            "--icd requires Vulkan and an absolute local ASCII DLL path");
     require(o.heap == "default" || o.heap == "unified", "heap must be default or unified");
     require(!o.corrupt || o.api == "cpu", "corruption test is CPU-only");
     require(o.bytes % 8 == 0, "bytes must be divisible by8");
@@ -300,7 +332,8 @@ static void measure(void *p, const Options &o, int type, const std::function<voi
 struct Module
 {
     HMODULE h;
-    explicit Module(const wchar_t *name) : h(LoadLibraryExW(name, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32))
+    explicit Module(const wchar_t *name, DWORD flags = LOAD_LIBRARY_SEARCH_SYSTEM32)
+        : h(LoadLibraryExW(name, nullptr, flags))
     {
         require(h != nullptr, "system runtime load failed");
     }
@@ -338,8 +371,44 @@ static void vkcheck(VkResult r, const char *name)
 }
 static void vulkan(const Options &o, Clock::time_point deadline)
 {
-    Module loader(L"vulkan-1.dll");
-    auto gipa = loader.get<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    std::wstring direct(o.icd.begin(), o.icd.end());
+    printf("{\"event\":\"vulkan_route\",\"route\":\"%s\",\"requested_icd\":%s}\n",
+           o.icd.empty() ? "system-loader" : "direct-icd", quoted(o.icd.c_str()).c_str());
+    Module loader(o.icd.empty() ? L"vulkan-1.dll" : direct.c_str(),
+                  o.icd.empty() ? LOAD_LIBRARY_SEARCH_SYSTEM32
+                                : (LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32));
+    PFN_vkGetInstanceProcAddr gipa = nullptr;
+    if (o.icd.empty())
+        gipa = loader.get<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    else
+    {
+        wchar_t loaded[32768];
+        DWORD len = GetModuleFileNameW(loader.h, loaded, 32768);
+        require(len && len < 32768, "loaded ICD path unavailable");
+        char utf8[131072];
+        require(WideCharToMultiByte(CP_UTF8, 0, loaded, -1, utf8, sizeof(utf8), nullptr, nullptr) > 0,
+                "ICD path conversion failed");
+        printf("{\"event\":\"icd_module\",\"loaded_path\":%s,\"sha256\":null,\"hash_source\":\"operator-manifest\"}\n",
+               quoted(utf8).c_str());
+        gipa = reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(loader.h, "vk_icdGetInstanceProcAddr"));
+        if (!gipa)
+            gipa = loader.get<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+        auto negotiate = reinterpret_cast<PFN_vkNegotiateLoaderICDInterfaceVersion>(
+            GetProcAddress(loader.h, "vk_icdNegotiateLoaderICDInterfaceVersion"));
+        if (!negotiate)
+            negotiate = reinterpret_cast<PFN_vkNegotiateLoaderICDInterfaceVersion>(
+                gipa(nullptr, "vk_icdNegotiateLoaderICDInterfaceVersion"));
+        uint32_t version = CURRENT_LOADER_ICD_INTERFACE_VERSION;
+        if (negotiate)
+        {
+            vkcheck(negotiate(&version), "ICD interface negotiation");
+            require(version <= CURRENT_LOADER_ICD_INTERFACE_VERSION, "unsupported ICD interface version");
+        }
+        else
+            version = 0;
+        printf("{\"event\":\"icd_interface\",\"negotiation_available\":%s,\"version\":%u}\n",
+               negotiate ? "true" : "false", version);
+    }
     auto create = (PFN_vkCreateInstance)gipa(nullptr, "vkCreateInstance");
     require(create != nullptr, "vkCreateInstance unavailable");
     VkApplicationInfo ai{VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -608,7 +677,7 @@ static int supervise(int argc, char **argv, const Options &o)
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
-        require(arg.find_first_of("\"\\\r\n") == std::string::npos, "invalid argument character");
+        require(arg.find_first_of("\"\r\n") == std::string::npos, "invalid argument character");
         cmd += L" \"";
         cmd += std::wstring(arg.begin(), arg.end());
         cmd += L"\"";

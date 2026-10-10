@@ -30,4 +30,3 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CPU self-test failed' }
     Get-FileHash -LiteralPath $exe
 } finally { $env:TEMP = $oldTemp; $env:TMP = $oldTmp; $env:INCLUDE = $oldInclude; $env:LIB = $oldLib }
-

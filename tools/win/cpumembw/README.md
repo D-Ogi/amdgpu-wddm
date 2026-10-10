@@ -118,3 +118,27 @@ Local-first sources used during implementation:
 This instrument measures CPU traffic. The existing `vkmembw` shader dispatch results measure GPU traffic and are
 not interchangeable with these results. Neither is sufficient by itself to identify the cause of an LLM prefill
 regression. Preserve allocation flags, per-type selection, configuration and both read kernels for that diagnosis.
+
+## Isolated candidate ICD
+
+For an elevated lab process, `VK_DRIVER_FILES` can be ignored by the Vulkan loader. Use the optional direct route
+for an exact candidate without registry edits or deployment:
+
+```text
+cpumembw.exe --api vulkan --icd P:/candidate/vulkan_radeon.dll --adapter N --luid HHHHHHHHLLLLLLLL --heap unified --type all --timeout-ms 150000
+```
+
+`--icd` is Vulkan-only. It accepts an absolute local drive path to a DLL, with ASCII characters and spaces.
+Relative paths, UNC/device paths, alternate data streams, dot components and ambiguous trailing dots/spaces are
+refused before a child starts. The default system-loader route is unchanged. The direct route bypasses loader
+layers and manifests, loads dependencies only from the DLL directory and System32, and follows the existing
+`vkfillcheck` direct ICD route: get `vk_icdGetInstanceProcAddr` (or its legacy fallback), negotiate the ICD interface
+when available, then create the Vulkan instance. Failed negotiation is an error. An absent negotiation export is
+reported as legacy interface zero.
+
+The JSONL names `system-loader` or `direct-icd` explicitly and prints the requested and loaded DLL paths. Hash the
+exact candidate separately in the operator manifest before and after the arm. The tool reports that this hash is
+required. It does not compute a file hash and does not claim a path alone identifies immutable bytes. Preserve the
+candidate's dependent DLLs and their hashes too. Direct-route results are not measurements of normal loader discovery.
+The host suite checks invalid paths and child command-line quoting with a sleeping child before any loader call.
+No real ICD, Vulkan loader or D3D12 runtime is loaded by these tests.

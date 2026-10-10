@@ -17,6 +17,7 @@ these scripts are its executable half.
 | `test-umd-router.ps1` | the router's host gate on that output, with the hosted UMD, the CPU UMD and the DXVK shell named by parameter |
 | `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link, and the CheckSum that covers them |
 | `build-radv-queue-tests.ps1`, `radv-queue-tests.py` | host tests of the hosted queue winsys in a built RADV tree ([driver/icd/mesa-wddm2-runtime-queues](../../driver/icd/mesa-wddm2-runtime-queues/README.md)) |
+| `build-radv-paging-test.ps1`, `radv-paging-test.py` | CPU-only tests of production map/residency blocks. Pending fences survive immediate calls. A zero aggregate needs no wait. Use `-Source <Mesa tree> -OutputDir <new directory>`, or add `-Revision <commit>` to test a pinned source. |
 | `build-radv-unorm10-export-test.ps1`, `radv-unorm10-export-test.py` | host test of the 10-bit UNORM colour export rounding (BD-049) in a built RADV tree: the epilog key, the NIR export and the ACO epilog over about 1.3 million inputs, and a negative control without the rounding that must fail |
 | `common.ps1` | shared helpers: workspace root, Visual Studio environment, tool versions, source identity |
 
@@ -24,7 +25,7 @@ The build scripts load the Visual Studio developer environment themselves, keep 
 restore the caller's environment on exit, and write `recipe.json` into the build directory: source commit and
 working-tree fingerprint, exact arguments, tool versions, gate result and, after a build, artifact hashes.
 `-ConfigureOnly` stops after the gate. None of them patches a source tree or touches the lab machine.
-The two host-test runners do not build Mesa: rebuild first, then give them a new output directory, where they leave
+The queue and export test runners do not build Mesa: rebuild first, then give them a new output directory, where they leave
 `record.json` (source commit and status, input and test hashes, results) next to the logs. Run both after every
 pull of the Mesa fork ([docs/build.md](../../docs/build.md), "Host gate after every pull of the Mesa fork"). The
 last recorded run of the export test is
