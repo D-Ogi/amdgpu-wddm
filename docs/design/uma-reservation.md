@@ -1,7 +1,7 @@
 # BC-250 board memory reservation in Windows
 
 Status: implemented and host-tested, awaiting hardware acceptance. The BC-250
-provider checks the HAL read route at startup and again before each change.
+provider checks its fixed extended-CMOS route at startup and before each change.
 There is no manual probe receipt, special build or registry switch that enables
 writes. Passing host tests does not establish that Windows writes or the next
 POST succeed on the board.
@@ -54,7 +54,7 @@ Identity is captured at start and cleared at stop. The PCI read must be complete
 The SMBIOS parser checks lengths, strings, table termination and duplicate records.
 Write support also requires SMBIOS 2.6 or later with exactly one Type 1 UUID.
 Missing, all-zero and all-FF UUIDs are refused. The protected backup binds the raw
-16 UUID bytes to the known BIOS identity and selected HAL mapping. Raw SMBIOS data
+16 UUID bytes to the known BIOS identity and transport identifier. Raw SMBIOS data
 and machine identifiers are not logged.
 
 The [PCI callback contract](https://learn.microsoft.com/windows-hardware/drivers/ddi/dispmprt/nc-dispmprt-dxgkcb_read_device_space)
@@ -64,29 +64,38 @@ requires initialization and PASSIVE_LEVEL. The
 [enumeration reference](https://learn.microsoft.com/windows-hardware/drivers/ddi/aux_klib/nf-aux_klib-auxklibenumeratesystemfirmwaretables)
 identifies RSMB table zero. Both pages are dated 2023-03-13.
 
-## Runtime HAL check
+## Runtime transport check
 
 The WDK 10.0.26100.0 `ntddk.h` declarations of `HalGetBusDataByOffset` and
 `HalSetBusDataByOffset` exempt `Cmos` from the obsolete-API recommendation. The
 [HAL page](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-halgetbusdatabyoffset)
-says that only `PCIConfiguration` is supported. Under the project's header
-precedence rule, this implementation uses the WDK Cmos interface. It uses no raw
-ports. The [legacy VideoPort reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/video/nf-video-videoportgetbusdata)
-describes ECMOS as bus 1 and SlotNumber as its start location. That page alone
-does not prove this WDDM route or exclusion of firmware access.
+says that only `PCIConfiguration` is supported. Neither source defines how this
+WDDM caller selects the board's extended bank. The
+[legacy VideoPort reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/video/nf-video-videoportgetbusdata)
+describes ECMOS as bus 1, but that does not establish the HAL mapping on x64.
 
-`BoardMemoryDetect` tries both fixed forms for the 28-byte block at 0x90..0xAB:
-bus 1 with SlotNumber 0x90 and Offset zero, and bus 1 with SlotNumber zero and
-Offset 0x90. Each candidate must return two identical complete block reads and
-match repeated byte reads. Its signature and checksum must be valid, and its
-size must be 8192 or 12288 MiB. Both passing mappings are refused as ambiguous.
+The tested HAL forms did not return an ABL block. Offline inspection of the
+matching Windows kernel, version 10.0.22621.6199, shows that its exported Cmos
+branches ignore BusNumber and Offset. They use SlotNumber on ports 0x70/0x71.
+This is a finding about that binary, not a Windows ABI guarantee.
 
-The same mapping must pass an RTC control on bus 0. It reads seconds and registers
+The provider now uses the fixed index/data ports 0x72/0x73 and indices 0x90..0xAB
+from the upstream board tool. The transport identifier is 3. Legacy identifiers
+1 and 2 are refused for reads and writes. They remain reserved so an old backup
+cannot be accepted as a backup of this transport. There is no caller-selected
+port or arbitrary index. These platform ports are not GPU BARs.
+This route is admitted only after the board and firmware identity checks above.
+
+`BoardMemoryDetect` requires two identical complete reads and matching repeated
+byte reads. The signature and checksum must be valid. The size must be 8192 or
+12288 MiB. The full block must still match after a separate RTC control.
+
+The RTC control uses the HAL's SlotNumber on bus 0. It reads seconds and registers
 A, B and D, checks the valid bit, rejects update-in-progress and SET, and handles
 BCD or binary seconds. Two stable samples must advance by one second, including
-59 to zero. The loop requests at most twelve 125 ms waits per mapping. This bounds
+59 to zero. The loop requests at most twelve 125 ms waits. This bounds
 iterations and requested delay, not HAL execution time or scheduler latency.
-The memory block must still match after the RTC interval.
+It does not prove extended-bank selection. The fixed-port transport is separate.
 
 RTC register C is never read. Its interrupt flags have a read side effect, as in
 the [Linux RTC handler](https://github.com/torvalds/linux/blob/10dd1a736d557e310a77117832874729a0175d57/drivers/rtc/rtc-cmos.c).
@@ -97,6 +106,13 @@ counts and bytes do not enable writes and require no manual acceptance step.
 
 Reference revisions: WDK 10.0.26100.0, Microsoft driver DDI checkout
 `7515063cea4c9e98db6a92986c5b4ddb0463fd16`, public HAL page checked 2026-10-10.
+
+The index/data pair uses the WDK's `READ_PORT_UCHAR` and `WRITE_PORT_UCHAR`.
+All production callers hold one driver-wide transaction lock. The normal RTC
+HAL route uses another port pair. This lock excludes concurrent transactions in
+this driver. It does not establish exclusion of firmware, AML or another driver.
+No private HAL lock or reserved ACPI lock interface is called. Port instructions
+have no success status. Repeated reads and transaction read-back detect errors.
 
 ## Durable backup and transaction
 
@@ -110,7 +126,7 @@ marker, checksum and reserved fields. A checksum detects corruption. It is not
 a substitute for access control.
 
 The first change saves the original block, flushes the key and reads the record
-back. Later changes cannot replace that original. Before any HAL write, the driver
+back. Later changes cannot replace that original. Before any CMOS data write, the driver
 sets the pending marker, flushes and verifies it. A pending record at startup,
 invalid record, identity mismatch or unconfirmed rollback blocks further changes.
 A completed transaction clears pending only after another checked full read and
@@ -130,7 +146,7 @@ a verified restoration from an unknown state. RESTORE uses the exact saved block
 A client cannot supply replacement bytes. The transport also refuses writes to
 timing bytes independently of the transaction policy.
 
-HAL ownership and the provider's serialization do not prove exclusion of ACPI or
+The provider's serialization does not prove exclusion of ACPI or
 SMM. Sampled stable reads cannot exclude a later firmware change. The multi-byte
 transaction is not atomic against power loss, and a valid read-back is not proof
 of the next POST. The lab operator must still test 12 GiB, restart, compare active
@@ -144,9 +160,9 @@ The gates compile production sources with mocked hardware or registry boundaries
 
 - `run_uma.ps1`: block validation, stale state, permitted bytes, commit order,
   rollback, no-op and runtime mutation controls.
-- `run_uma_transport.ps1`: fixed HAL addresses, counts, byte/block equivalence,
-  PASSIVE_LEVEL and timing-write refusal.
-- `run_board_memory_detect.ps1`: mapping selection, ambiguity refusal, RTC control,
+- `run_uma_transport.ps1`: fixed ports and indices, byte/block equivalence,
+  PASSIVE_LEVEL, timing-write refusal, dropped writes and rollback.
+- `run_board_memory_detect.ps1`: legacy HAL refusal, RTC control, checksum,
   unchanged block and negative controls for omitted checks.
 - `run_board_memory_service.ps1`: backup ordering, persistent pending state,
   restore and failure lockout.
@@ -159,5 +175,5 @@ The gates compile production sources with mocked hardware or registry boundaries
 The DLL and app tests cover strict ABI parsing, capability checks, confirmation
 state and unavailable behavior. The KMD build compiles the real handlers. The app
 build uses `-NoSmoke`. These host checks do not open the GUI or a GPU. They do not
-measure firmware concurrency, Windows HAL behavior, persistence through an actual
+measure firmware concurrency, persistence through an actual
 power failure or successful POST.

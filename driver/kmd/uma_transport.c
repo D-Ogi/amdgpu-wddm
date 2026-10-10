@@ -1,30 +1,39 @@
-// Fixed-address HAL transport. No raw ports and no implicit mapping selection.
+// Fixed BC-250 extended-CMOS ports, not the RTC bank used by the x64 HAL.
+// PROVENANCE: fanoush/bc250_memcfg, MIT, 222420fb: ports and ABL block indices.
 #include <ntddk.h>
 #include "uma_transport.h"
 #include <string.h>
 
+#define BC250_ABL_CMOS_INDEX_PORT 0x72u
+#define BC250_ABL_CMOS_DATA_PORT 0x73u
+#define BC250_ABL_CMOS_FIRST_INDEX 0x90u
+
 static int valid_mapping(const struct bc250_uma_transport* transport)
 {
-    return transport && (transport->mapping == BC250_UMA_MAPPING_SLOT ||
-                         transport->mapping == BC250_UMA_MAPPING_OFFSET);
+    return transport && transport->mapping == BC250_UMA_MAPPING_EXTENDED_PORT;
 }
 static ULONG transfer(struct bc250_uma_transport* transport, unsigned int offset,
                        void* buffer, ULONG bytes, int write)
 {
-    ULONG slot, position, count;
+    ULONG i;
+    unsigned char* data = buffer;
     if (!valid_mapping(transport) || !buffer || offset >= BC250_UMA_BLOCK_BYTES ||
         bytes == 0 || bytes > BC250_UMA_BLOCK_BYTES - offset ||
         KeGetCurrentIrql() != PASSIVE_LEVEL) return 0;
-    slot = transport->mapping == BC250_UMA_MAPPING_SLOT ? 0x90u + offset : 0;
-    position = transport->mapping == BC250_UMA_MAPPING_OFFSET ? 0x90u + offset : 0;
-    /* WDK 26100 documents Cmos as the exception to these deprecated bus APIs.
-       Exact extended-CMOS mapping is qualified separately by the caller. */
-#pragma warning(push)
-#pragma warning(disable:4996)
-    count = write ? HalSetBusDataByOffset(Cmos, 1, slot, buffer, position, bytes) :
-                    HalGetBusDataByOffset(Cmos, 1, slot, buffer, position, bytes);
-#pragma warning(pop)
-    return count;
+    /* Every production caller holds board_memory_write.c's platform-wide lock
+       for the full transaction, including each index/data pair. This pair is
+       separate from the HAL's RTC ports 0x70/0x71; no RTC/NMI bit is changed.
+       Port I/O has no success status. Stability and write read-back are checked
+       above this adapter. Neither the lock nor read-back excludes SMM access. */
+    for (i = 0; i < bytes; ++i) {
+        WRITE_PORT_UCHAR((PUCHAR)(ULONG_PTR)BC250_ABL_CMOS_INDEX_PORT,
+                         (unsigned char)(BC250_ABL_CMOS_FIRST_INDEX + offset + i));
+        if (write)
+            WRITE_PORT_UCHAR((PUCHAR)(ULONG_PTR)BC250_ABL_CMOS_DATA_PORT, data[i]);
+        else
+            data[i] = READ_PORT_UCHAR((PUCHAR)(ULONG_PTR)BC250_ABL_CMOS_DATA_PORT);
+    }
+    return bytes;
 }
 static int read_byte(void* context, unsigned int offset, unsigned char* value)
 {

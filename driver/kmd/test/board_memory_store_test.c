@@ -97,7 +97,7 @@ static NTSTATUS ZwClose(HANDLE key){UNREFERENCED_PARAMETER(key);++closes;return 
 static void init(BC250_DEVICE* device,unsigned char* backup)
 {
     unsigned i,sum=0;
-    memset(device,0,sizeof(*device));device->BoardMemoryMapping=1;device->BoardMemoryBiosId=3;device->BoardMemoryMachineId[0]=42;
+    memset(device,0,sizeof(*device));device->BoardMemoryMapping=3;device->BoardMemoryBiosId=3;device->BoardMemoryMachineId[0]=42;
     memset(backup,0,28);memcpy(backup,"CMSB",4);backup[27]=0x20;
     for(i=6;i<28;++i)sum+=backup[i];backup[4]=(UCHAR)sum;backup[5]=(UCHAR)(sum>>8);
     stage=fail_stage=creates=sets=flushes=closes=exists=has_value=irql=corrupt_readback=0;
@@ -129,7 +129,16 @@ int main(void)
     CHECK(store.load(store.context,out,&pending)==-1 && creates==5);
     init(&device,backup);CHECK(store.save(store.context,backup,1)==1);
     device.BoardMemoryBiosId ^= 1;CHECK(store.load(store.context,out,&pending)==-1);device.BoardMemoryBiosId ^= 1;
-    device.BoardMemoryMapping = 2;CHECK(store.load(store.context,out,&pending)==-1);device.BoardMemoryMapping = 1;
+    device.BoardMemoryMapping = 2;CHECK(store.load(store.context,out,&pending)==-1);device.BoardMemoryMapping = 3;
+    for(i=1;i<=2;++i) {
+        BOARD_STORE_RECORD* record=(BOARD_STORE_RECORD*)data;
+        record->Mapping=i;record->Checksum=StoreChecksum(record);
+        CHECK(store.load(store.context,out,&pending)==-1);
+        CHECK(store.save(store.context,backup,0)==0);
+        CHECK(record->Mapping==i);
+    }
+    ((BOARD_STORE_RECORD*)data)->Mapping=3;
+    ((BOARD_STORE_RECORD*)data)->Checksum=StoreChecksum((BOARD_STORE_RECORD*)data);
     data_type=REG_SZ;CHECK(store.load(store.context,out,&pending)==-1);data_type=REG_BINARY;
     --data_bytes;CHECK(store.load(store.context,out,&pending)==-1);++data_bytes;
     data[40]^=1;CHECK(store.load(store.context,out,&pending)==-1);data[40]^=1;

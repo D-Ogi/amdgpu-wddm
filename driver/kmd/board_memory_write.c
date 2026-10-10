@@ -1,10 +1,11 @@
-// BC-250 ABL memory setting. A runtime HAL self-check gates every transaction.
+// BC-250 ABL memory setting. A runtime block self-check gates every transaction.
 #include "bc250kmd.h"
 #include "board_memory_detect.h"
 #include "board_memory_store.h"
 
 // CMOS belongs to the platform, so different adapter instances share this lock.
-// HAL supplies OS access serialization. This lock does not exclude SMM/firmware.
+// Covers all fixed extended-port accesses in this driver, including index/data
+// pairs. It does not exclude access from SMM, ACPI or another platform driver.
 static EX_PUSH_LOCK PlatformLock;
 
 static void Enter(void)

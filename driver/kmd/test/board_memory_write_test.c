@@ -69,7 +69,7 @@ static BC250_ESCAPE_BOARD_MEMORY request(unsigned op) {
 static void fresh(BC250_DEVICE* d) {
  memset(d,0,sizeof(*d));memset(&machine,0,sizeof(machine));block(machine.hw,8192);
  d->BoardMemoryProviderId=1;d->BoardMemoryBiosId=3;d->UmaActiveBytes=8ll<<30;
- irql=held=detections=0;detect_ok=1;detected_mapping=BC250_UMA_MAPPING_SLOT;
+ irql=held=detections=0;detect_ok=1;detected_mapping=BC250_UMA_MAPPING_EXTENDED_PORT;
  BoardMemoryInitialize(d);
 }
 int main(void) {
