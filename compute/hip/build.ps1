@@ -318,6 +318,13 @@ if (-not $SkipTests) {
     $labLines | ForEach-Object { if ($_ -match 'FAIL|checks,') { Write-Host "  $_" } }
     if ($labExit -ne 0) { Write-Host "  FAIL test-arm-bounds ($labExit)"; $failures++ }
 
+    $stopTest = Join-Path $here 'tests\lab\test-arm-stop-bound.ps1'
+    $stopLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopTest `
+        -Library (Join-Path $here 'lab\armlib.ps1') -WorkDir (Join-Path $Out 'stop-bound-tests') 2>&1
+    $stopExit = $LASTEXITCODE
+    $stopLines | ForEach-Object { Write-Host "  $_" }
+    if ($stopExit -ne 0) { Write-Host "  FAIL test-arm-stop-bound ($stopExit)"; $failures++ }
+
     if ($failures -gt 0) { throw "$failures host check(s) failed" }
     Write-Host '  every host test, hipprobe --selftest and the lab wrapper tests passed'
 }

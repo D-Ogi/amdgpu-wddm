@@ -7,7 +7,7 @@
 # the final WaitForExit had no bound, and the promised cleanup had no try/finally behind it. One
 # stalled helper therefore stopped both the time and the thermal enforcement.
 #
-# What this file guarantees, and what the tests under compute/hip/tests/lab prove without a GPU:
+# What this file enforces under responsive OS process/file operations, and what the tests under compute/hip/tests/lab prove without a GPU:
 #   1. One deadline for the whole arm, cleanup inside it. The bound cannot exceed 180 s, which is
 #      the owner's limit for a non-game lab trial, and a cleanup reserve is kept out of the work
 #      part of it.
@@ -30,6 +30,12 @@
 #      copy of its exits, wall times and temperatures (finding HIP-F4).
 #
 # Windows PowerShell 5.1 is the shell on the lab, so nothing here uses a feature newer than that.
+# Deadline waits use a monotonic remaining budget, including termination. Process creation,
+# Process.Kill, filesystem operations and PowerShell scheduling are OS calls and can themselves
+# stall; a userspace script cannot guarantee recovery from a kernel/filesystem stall. Tail slack
+# covers ordinary overhead, not an unbounded failure. Timed-out workers are never accepted later.
+# The copy/hash payload runs in a separate leaf process; an incomplete target is never published
+# in redirect/redirect_sha256. Report writing remains a best-effort small synchronous tail write.
 # Nothing in this file touches the lab by itself: the caller passes the program, and the sampler,
 # the launcher and the terminator can be replaced, which is how the offline tests run.
 #
@@ -80,37 +86,119 @@ function Get-ArmClockCli {
 
 # Terminates a process and everything it started, then confirms it. Confirmed is the only honest
 # basis for saying an arm is over.
+# Separate startup seams keep the deadline logic exercised by offline stalled-worker tests.
+function Start-ArmTreeKiller {
+    param([int]$TargetId)
+    $info = New-Object Diagnostics.ProcessStartInfo
+    $info.FileName = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+    $info.Arguments = "/PID $TargetId /T /F"
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    return [Diagnostics.Process]::Start($info)
+}
+
+function Get-ArmRemainingMilliseconds {
+    param($Watch, [double]$BudgetSec)
+    return [int][math]::Max(0, [math]::Min([int]::MaxValue,
+        [math]::Floor(($BudgetSec - $Watch.Elapsed.TotalSeconds) * 1000)))
+}
+
 function Stop-ArmProcessTree {
-    param(
-        [Parameter(Mandatory = $true)]$Process,
-        [double]$TimeoutSec = 10
-    )
-    $reasons = @()
-    if ($null -eq $Process) {
-        return [pscustomobject]@{ Confirmed = $true; Reason = 'no child' }
-    }
-    $targetId = -1
-    try { $targetId = [int]$Process.Id } catch { $reasons += "no process id: $_" }
-    if ($targetId -gt 0) {
-        try {
-            $null = & taskkill.exe /PID $targetId /T /F 2>&1
-        } catch {
-            $reasons += "taskkill failed: $_"
+    param([Parameter(Mandatory = $true)]$Process, [double]$TimeoutSec = 10)
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    if ($null -eq $Process) { return [pscustomobject]@{ Confirmed = $true; Reason = 'no child' } }
+    $helper = $null
+    $confirmed = $false
+    $reason = ''
+    try {
+        if ((Get-ArmRemainingMilliseconds $watch $TimeoutSec) -le 0) {
+            throw 'no time remains for termination'
+        }
+        # Even an already-exited root does not establish termination of its descendants.
+        $helper = Start-ArmTreeKiller -TargetId ([int]$Process.Id)
+        $left = Get-ArmRemainingMilliseconds $watch $TimeoutSec
+        if ($left -le 0 -or -not $helper.WaitForExit($left)) {
+            throw 'tree termination helper exceeded its deadline; termination unconfirmed'
+        }
+        $left = Get-ArmRemainingMilliseconds $watch $TimeoutSec
+        if ($left -le 0) { throw 'termination budget expired after helper exit' }
+        $confirmed = $Process.WaitForExit($left)
+        if ($watch.Elapsed.TotalSeconds -ge $TimeoutSec) { $confirmed = $false }
+        if (-not $confirmed) { $reason = 'target exit was not observed inside the termination budget' }
+        # taskkill may return nonzero for a root which exited before it was called.
+        # Its failure cannot certify descendant cleanup.
+        if ($helper.ExitCode -ne 0) {
+            $confirmed = $false
+            $reason = "tree termination helper failed with exit $($helper.ExitCode)"
+        }
+    } catch { $reason = [string]$_; $confirmed = $false }
+    finally {
+        if ($null -ne $helper) {
+            # Kill only this leaf helper, never recurse through Stop-ArmProcessTree.
+            # No fresh wait budget is granted, including on the exception path.
+            try {
+                if (-not $helper.HasExited) { $helper.Kill() }
+                $left = Get-ArmRemainingMilliseconds $watch $TimeoutSec
+                if ($left -gt 0) { $null = $helper.WaitForExit($left) }
+            } catch { $reason += "; helper cleanup unconfirmed: $_"; $confirmed = $false }
+            $helper.Dispose()
         }
     }
+    return [pscustomobject]@{ Confirmed = $confirmed; Reason = $reason }
+}
+
+function Start-ArmCopyWorker {
+    param([string]$Source, [string]$Target)
+    $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+        (@{Source=$Source;Target=$Target} | ConvertTo-Json -Compress)))
+    $body = '$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; $x=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("' +
+        $payload + '"))|ConvertFrom-Json; Copy-Item -LiteralPath $x.Source -Destination $x.Target -Force; ' +
+        '(Get-FileHash -LiteralPath $x.Target -Algorithm SHA256).Hash'
+    $info = New-Object Diagnostics.ProcessStartInfo
+    $info.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $info.Arguments = '-NoProfile -NonInteractive -EncodedCommand ' +
+        [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    return [Diagnostics.Process]::Start($info)
+}
+
+function Invoke-ArmBoundedCopyHash {
+    param([string]$Source, [string]$Target, [double]$BudgetSec)
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $worker = $null
+    $result = [pscustomobject]@{ Ok=$false; Hash=''; Reason='no copy budget'; TerminationConfirmed=$true }
     try {
-        if (-not $Process.HasExited) { $Process.Kill() }
-    } catch {
-        $reasons += "kill failed: $_"
+        if ($BudgetSec -le 0) { return $result }
+        $worker = Start-ArmCopyWorker -Source $Source -Target $Target
+        # The leaf worker never starts children. Reserve part of this same budget for killing it.
+        $reserve = [math]::Min(1.0, $BudgetSec * 0.25)
+        $left = Get-ArmRemainingMilliseconds $watch ($BudgetSec - $reserve)
+        if ($left -le 0 -or -not $worker.WaitForExit($left)) {
+            $result.Reason = 'copy/hash deadline expired; partial target is not an accepted artifact'
+            return $result
+        }
+        # Worker stdout is exactly one SHA256 line, not an unbounded output stream.
+        $hash = $worker.StandardOutput.ReadToEnd().Trim()
+        if ($worker.ExitCode -ne 0 -or $hash -notmatch '^[0-9A-Fa-f]{64}$') {
+            $result.Reason = 'copy/hash worker failed or returned no SHA256'
+        } elseif ($watch.Elapsed.TotalSeconds -ge $BudgetSec) {
+            $result.Reason = 'copy/hash result arrived after deadline'
+        } else { $result.Ok=$true; $result.Hash=$hash; $result.Reason='' }
+    } catch { $result.Reason = "copy/hash failed: $_" }
+    finally {
+        if ($null -ne $worker) {
+            try {
+                if (-not $worker.HasExited) { $worker.Kill() }
+                $left = Get-ArmRemainingMilliseconds $watch $BudgetSec
+                $result.TerminationConfirmed = $worker.WaitForExit($left)
+            } catch { $result.TerminationConfirmed=$false }
+            if (-not $result.TerminationConfirmed) { $result.Ok=$false; $result.Reason+='; worker termination unconfirmed' }
+            $worker.Dispose()
+        }
     }
-    $confirmed = $false
-    try {
-        $confirmed = $Process.WaitForExit([int]($TimeoutSec * 1000))
-    } catch {
-        $reasons += "wait after kill failed: $_"
-    }
-    if (-not $confirmed) { $reasons += "the child did not exit within $TimeoutSec s of the kill" }
-    return [pscustomobject]@{ Confirmed = $confirmed; Reason = ($reasons -join '; ') }
+    return $result
 }
 
 # One bounded run of a helper program whose one line of output matters. A helper that does not
@@ -123,7 +211,9 @@ function Invoke-ArmBoundedProgram {
         [double]$KillTimeoutSec = 0,
         [string]$TempDir = $env:TEMP
     )
+    $watch = [Diagnostics.Stopwatch]::StartNew()
     if ($KillTimeoutSec -le 0) { $KillTimeoutSec = $script:ArmHelperKillSec }
+    $totalBudget = $TimeoutSec + $KillTimeoutSec
     if (-not (Test-Path -LiteralPath $Path)) {
         return [pscustomobject]@{ Ok = $false; ExitCode = $null; Stdout = ''; Stderr = ''
                                   Reason = "$Path is absent" }
@@ -143,9 +233,11 @@ function Invoke-ArmBoundedProgram {
         # Reading .Handle once makes the object keep the handle, without which .ExitCode comes
         # back empty after the process has gone (measured on the lab, 2026-10-09).
         $null = $proc.Handle
-        $exited = $proc.WaitForExit([int]($TimeoutSec * 1000))
+        $left = Get-ArmRemainingMilliseconds $watch $TimeoutSec
+        $exited = ($left -gt 0 -and $proc.WaitForExit($left))
         if (-not $exited) {
-            $stop = Stop-ArmProcessTree -Process $proc -TimeoutSec $KillTimeoutSec
+            $killLeft = [math]::Max(0, $totalBudget - $watch.Elapsed.TotalSeconds)
+            $stop = Stop-ArmProcessTree -Process $proc -TimeoutSec $killLeft
             return [pscustomobject]@{ Ok = $false; ExitCode = $null; Stdout = ''; Stderr = ''
                                       Reason = ("no answer within $TimeoutSec s" +
                                                 $(if ($stop.Confirmed) { '' } else { ' and the kill was not confirmed' })) }
@@ -161,6 +253,13 @@ function Invoke-ArmBoundedProgram {
         return [pscustomobject]@{ Ok = $false; ExitCode = $null; Stdout = ''; Stderr = ''
                                   Reason = "cannot run $Path : $_" }
     } finally {
+        if ($null -ne $proc) {
+            try {
+                if (-not $proc.HasExited) {
+                    $null = Stop-ArmProcessTree -Process $proc -TimeoutSec ([math]::Max(0, $totalBudget - $watch.Elapsed.TotalSeconds))
+                }
+            } catch { } # The failed helper already returns Ok=false; never start a fresh budget.
+        }
         foreach ($f in @($outFile, $errFile)) {
             if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
         }
@@ -358,13 +457,12 @@ function Invoke-LabArm {
         $Sampler = New-ArmTctlSampler -Cli (Get-ArmClockCli) -TimeoutSec $HelperTimeoutSec
     }
     if (-not $Terminator) {
-        # The kill takes the budget the cleanup reserve still has, and never less than a second: a
-        # child left running is worse than one second over the bound.
+        # The kill receives only the remaining cleanup budget; zero means do not start.
+        # Failure to observe termination in time is UNKNOWN, never a fresh wait allowance.
         $Terminator = {
             param($p, [double]$BudgetSec = 0)
             $t = 8.0
-            if ($BudgetSec -gt 0 -and $BudgetSec -lt $t) { $t = $BudgetSec }
-            if ($t -lt 1.0) { $t = 1.0 }
+            $t = [math]::Max(0, [math]::Min($t, $BudgetSec))
             Stop-ArmProcessTree -Process $p -TimeoutSec $t
         }
     }
@@ -393,6 +491,8 @@ function Invoke-LabArm {
         stderr_path = $errFile
         redirect = ''
         redirect_sha256 = ''
+        redirect_status = $(if ($Redirect) { 'pending' } else { 'not_requested' })
+        deadline_exceeded = $false
         cleanup_notes = ''
         exit_status = 2
     }
@@ -510,7 +610,7 @@ function Invoke-LabArm {
             # streams can be open after the process object says it has exited. The wait keeps the
             # room for the read after the arm out of its own budget.
             $left = Get-ArmCleanupLeftSec -Deadline $deadline -ReserveSec $script:ArmMinSampleSec
-            if ($left -lt 0.25) { $left = 0.25 }
+            if ($left -lt 0) { $left = 0 }
             $closed = $false
             try { $closed = $proc.WaitForExit([int]($left * 1000)) } catch { $closed = $false }
             $terminationConfirmed = $closed
@@ -545,14 +645,30 @@ function Invoke-LabArm {
         if ($Redirect -and (Test-Path -LiteralPath $outFile)) {
             if ((Get-ArmCleanupLeftSec -Deadline $deadline -ReserveSec $script:ArmMinSampleSec) -le 0) {
                 $notes += 'no room inside the bound to copy and hash the kept output'
+                $report.redirect_status='failed'
+                if ($report.exit_status -eq 0) { $report.exit_status=6; $report.verdict='INCOMPLETE' }
             } else {
                 $target = Join-Path $Dir $Redirect
-                Copy-Item -LiteralPath $outFile -Destination $target -Force
-                $report.redirect = $target
-                $report.redirect_sha256 = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+                $copy = Invoke-ArmBoundedCopyHash -Source $outFile -Target $target -BudgetSec (
+                    Get-ArmCleanupLeftSec -Deadline $deadline -ReserveSec $script:ArmMinSampleSec)
+                if ($copy.Ok) {
+                    $report.redirect = $target
+                    $report.redirect_sha256 = $copy.Hash
+                    $report.redirect_status='complete'
+                } else {
+                    $report.redirect_status='failed'
+                    if ($report.exit_status -eq 0) { $report.exit_status=6; $report.verdict='INCOMPLETE' }
+                    $notes += $copy.Reason
+                    if (-not $copy.TerminationConfirmed) { $report.exit_status=5; $report.verdict='UNKNOWN' }
+                }
             }
         }
 
+        if ($Redirect -and $report.redirect_status -eq 'pending') {
+            $report.redirect_status='missing_output'
+            $notes += 'requested output was absent; no copied evidence accepted'
+            if ($report.exit_status -eq 0) { $report.exit_status=6; $report.verdict='INCOMPLETE' }
+        }
         $after = Invoke-ArmBoundedSample -Sampler $Sampler -BudgetSec (Get-ArmCleanupLeftSec -Deadline $deadline)
         if ($after.Ok) { $report.tctl_after = $after.Tctl } else { $notes += "no temperature after the arm: $($after.Reason)" }
         if ($notes.Count -gt 0) { $report.cleanup_notes = ($notes -join '; ') }
@@ -565,8 +681,9 @@ function Invoke-LabArm {
             try { $alive = -not $proc.HasExited } catch { $alive = $false }
             if ($alive) {
                 $stop = & $Terminator $proc (Get-ArmCleanupLeftSec -Deadline $deadline)
-                $report.termination_confirmed = [bool]$stop.Confirmed
-                if (-not $stop.Confirmed) {
+                # An earlier expiry remains unconfirmed even if a later attempt succeeds.
+                $report.termination_confirmed = ($report.termination_confirmed -ne $false -and [bool]$stop.Confirmed)
+                if (-not $report.termination_confirmed) {
                     $report.verdict = 'UNKNOWN'
                     $report.exit_status = 5
                     $report.stop_reason = ($report.stop_reason +
@@ -579,6 +696,11 @@ function Invoke-LabArm {
         }
         $report.elapsed_sec = [math]::Round((Get-ArmElapsedSec -Deadline $deadline), 2)
         $report.utc_end = Get-ArmUtc
+        $report.deadline_exceeded = ((Get-ArmElapsedSec -Deadline $deadline) -ge $deadline.TotalSec)
+        if ($report.deadline_exceeded) {
+            $report.verdict='UNKNOWN'; $report.exit_status=5
+            $report.cleanup_notes += '; observed arm deadline overrun before report write'
+        }
         try {
             $json = $report | ConvertTo-Json -Depth 4
             Set-Content -LiteralPath $ReportPath -Value $json -Encoding UTF8
