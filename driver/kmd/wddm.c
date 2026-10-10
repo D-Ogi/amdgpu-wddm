@@ -7813,8 +7813,11 @@ static NTSTATUS WddmTraced(BC250_WDDM_TRACED Slot, _In_z_ const char* Name, NTST
     LONG calls = InterlockedIncrement(&g_TracedCalls[Slot]);
     // STATUS_MONITOR_NO_DESCRIPTOR is the designed answer of GetChildContainerId (step 4 of DP audio): it keeps the
     // container ID the operating system offers. NT_SUCCESS is false for it, so without this line the designed answer
-    // of every call would be logged as a failure for the first 64 calls (b26 review finding F2).
-    BOOLEAN failed = !NT_SUCCESS(Status) && Status != STATUS_MONITOR_NO_DESCRIPTOR;
+    // of every call would be logged as a failure for the first 64 calls (b26 review finding F2). The exemption is
+    // that one slot's, because ModesetQueryDescriptor answers the same status when no EDID was served, and there it
+    // is a failure a kept log must still count (modeset.c, DescriptorServed).
+    BOOLEAN failed = !NT_SUCCESS(Status) &&
+                     !(Slot == TracedGetChildContainerId && Status == STATUS_MONITOR_NO_DESCRIPTOR);
 
     if (KeGetCurrentIrql() <= DISPATCH_LEVEL && (calls <= 6 || (failed && calls <= 64)))
         GuardLog("wddm: display %s call %ld detail 0x%X -> 0x%08X", Name, calls, Detail, Status);
