@@ -79,7 +79,7 @@ sealed class FakeTunerDriver
         return new CurveState
         {
             Version = 0x000700D5, Flags = flags, TrialMs = _curveWindow, TrialRemainingMs = _curveTrial ? _curveLeft : 0, Serial = _serial,
-            FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = Tuner.Points,
+            FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = (uint)Tuner.Points,
             Candidate = _curveTrial ? (uint[])_candidate.Clone() : new uint[Tuner.Points], Active = (uint[])_active.Clone(),
             Stored = _stored != null ? (uint[])_stored.Clone() : new uint[Tuner.Points], Default = Tuner.Table(), Floor = Tuner.Floors(),
             LevelMHz = LevelMHz, LevelMv = level >= 0 ? _active[level] : Tuner.FloorMv, CeilingMHz = 1500, Mode = Governing ? 1u : 0u,

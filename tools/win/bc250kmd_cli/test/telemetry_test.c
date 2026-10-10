@@ -24,6 +24,8 @@ static BC250_ESCAPE_DPM_CURVE sentCurve;
 static BC250_ESCAPE_CPU sentCpu;
 static BC250_ESCAPE_FAN sentFan;
 static int fanMode;
+static BC250_ESCAPE_BOARD_CAPS boardFixture;
+static int boardMode, boardCalls;
 static WCHAR adapterId[64];
 static ULONG segmentCount = 3;
 // The lab layout (driver/kmd/wddm.c WddmQuerySegment4): application local, aperture, table local.
@@ -157,6 +159,19 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
 {
     BC250_ESCAPE *head = data;
     BC250_ESCAPE_DPM *d = data;
+    if (head->Command == BC250_ESCAPE_RUN_BOARD_CAPS) {
+        BC250_ESCAPE_BOARD_CAPS *c = data;
+        boardCalls++;
+        if (size != sizeof(*c) || hardware) return (NTSTATUS)0xC000000D;
+        if (boardMode == 1) return 0; /* old driver: unchanged UNKNOWN */
+        *c = boardFixture;
+        if (boardMode == 2) { memset(c, 0, sizeof(*c)); c->Magic=BC250_ESCAPE_MAGIC; c->Command=33; c->AbiVersion=1; c->Reason=1; }
+        if (boardMode == 3) c->GpuPointCount = 17;
+        if (boardMode == 4) c->Reserved[0] = 1;
+        if (boardMode == 5) { c->Reason=2; c->Flags=1; }
+        if (boardMode == 6) { c->Status=BC250_ESCAPE_STATUS_REFUSED; c->NtStatus=1; }
+        return 0;
+    }
     escapeHardware = hardware;
     escapeCalls++; escapeSize = size;
     if (head->Command == BC250_ESCAPE_RUN_DPM_CURVE) return TelemetryCurve(data);
@@ -213,10 +228,32 @@ static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query)
 static int checks, failures;
 static void Check(int ok, int line, const char *text) { checks++; if (!ok) { failures++; printf("FAIL line %d: %s\n", line, text); } }
 #define CHECK(x) Check((x), __LINE__, #x)
-int main(void)
+int main(int argc, char **argv)
 {
     BC250_ESCAPE_DPM d;
     BC250_VIDEO_MEMORY m;
+    FILE *fixture = NULL;
+    BC250_ESCAPE_BOARD_CAPS caps;
+    if (argc != 2 || fopen_s(&fixture, argv[1], "rb") || !fixture) return 2;
+    if (fread(&boardFixture, 1, sizeof(boardFixture), fixture) != sizeof(boardFixture)) return 2;
+    fclose(fixture);
+    CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.Flags == 31 && boardCalls == 1);
+    for (boardMode = 1; boardMode <= 6; ++boardMode) {
+        BC250_FAN_REQUEST request = {0}; BC250_ESCAPE_FAN fan;
+        int before = escapeCalls;
+        request.Size = sizeof(request); request.Op = BC250_FAN_OP_BOARD;
+        CHECK(Bc250Fan(&request, &fan, sizeof(fan)) < 0 && escapeCalls == before);
+        CHECK(BoardCapabilityRequired(BC250_BOARD_CAPS_GPU) < 0);
+        { BC250_CPU_REQUEST cpu = {0}; BC250_ESCAPE_CPU reply; BC250_ESCAPE_DPM_CURVE curve;
+          BC250_ESCAPE_CU_MODE cu; cpu.Size=sizeof(cpu); cpu.Op=BC250_CPU_OP_RESET;
+          CHECK(Bc250Cpu(&cpu, &reply, sizeof(reply)) < 0 && escapeCalls == before);
+          CHECK(Bc250DpmCurve(BC250_DPM_CURVE_OP_RESET,0,NULL,0,0,&curve,sizeof(curve)) < 0 && escapeCalls == before);
+          CHECK(Bc250CuMode(BC250_CU_MODE_OP_CONFIRM,0,&cu,sizeof(cu)) < 0 && escapeCalls == before);
+        }
+
+    }
+    boardMode = 0; escapeCalls = 0;
+
 
     /* The deployed callers pass BC250_DPM_ABI1_SIZE, the layout they were built against; RUN_DPM itself grew
      * to 192 bytes with the idle state (0.7.207) and the driver takes either size with its own AbiVersion. */

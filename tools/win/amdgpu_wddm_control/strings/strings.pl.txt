@@ -1006,3 +1006,5 @@ uma.fallback.title|mt|6be52e48|Pamięć wideo
 uma.fallback.size|mt|2c73531b|Pamięć dedykowana zgłaszana przez Windows
 uma.fallback.readonly|mt|0042c9fe|To informacja o rozmiarze pamięci, tylko do odczytu. To urządzenie nie udostępnia ustawienia rezerwacji pamięci płyty BC-250.
 uma.unknown-state|mt|76c05f2a|Nie udało się zweryfikować zapisanej kopii zapasowej lub ostatniego zapisu. Dalsze zmiany są zablokowane. Nie uruchamiaj ponownie komputera w celu zastosowania tego ustawienia; skontaktuj się z pomocą.
+
+board.unsupported|mt|bdd30095|Ta płyta nie obsługuje tych ustawień. Odczyty pozostają dostępne, jeśli udostępnia je sterownik.

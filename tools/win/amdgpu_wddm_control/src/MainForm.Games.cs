@@ -323,6 +323,8 @@ namespace AmdgpuWddmControl
 
             var clock = new CardPanel(Strings.T("graphics.clock.title"), width);
             clock.Pair(Strings.T("graphics.clock.now"), installed ? ClockNow() : Strings.T("perf.no-reading"));
+            if (BoardCapabilities.Current.Allows(BoardCapabilities.Gpu))
+            {
             uint shownMax = CeilingChosen ?? DpmSettings.DefaultMaxMHz;
             clock.Pair(Strings.T("graphics.clock.after"), ClockText(AutoChosen ? 1u : 0u, shownMax), ClockWrites().Count > 0 ? Theme.Warn : (Color?)null);
             var auto = Ui.Check(Strings.T("search.graphics.clock-auto"), clock.Inner - Theme.S(40));
@@ -341,12 +343,15 @@ namespace AmdgpuWddmControl
             clock.Add(Ui.WrapRow(clock.Inner, ceilOn, picker, Explain("clock-ceiling", Strings.T("search.graphics.clock-ceiling"))));
             clock.Add(Ui.Dim(Strings.T("graphics.clock-ceiling.default", DpmSettings.DefaultMaxMHz), clock.Inner));
             clock.Add(Ui.Dim(Strings.T("graphics.thermal"), clock.Inner));
+            }
+            else clock.Add(Ui.Dim(Strings.T("board.unsupported"), clock.Inner));
             p.Controls.Add(clock);
 
             var cores = new CardPanel(Strings.T("graphics.cores.title"), width);
             Mark("graphics.cores", cores);
             var view = CuNow();
-            if (!installed) cores.Add(Ui.Dim(Strings.T("graphics.not-installed"), cores.Inner));
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Gpu)) cores.Add(Ui.Dim(Strings.T("board.unsupported"), cores.Inner));
+            else if (!installed) cores.Add(Ui.Dim(Strings.T("graphics.not-installed"), cores.Inner));
             else
             {
                 cores.Add(Ui.Label(view.Running, Theme.Bold, null, cores.Inner));

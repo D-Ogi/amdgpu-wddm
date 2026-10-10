@@ -1024,3 +1024,5 @@ uma.fallback.title|src|-|Video memory
 uma.fallback.size|src|-|Dedicated memory reported by Windows
 uma.fallback.readonly|src|-|This is a read-only memory size. This device does not offer the BC-250 board memory reservation control.
 uma.unknown-state|src|-|The saved backup or the last write could not be verified. Further changes are locked. Do not restart to apply this setting; contact support.
+
+board.unsupported|src|-|Not supported on this board. Live readings remain available where the driver provides them.

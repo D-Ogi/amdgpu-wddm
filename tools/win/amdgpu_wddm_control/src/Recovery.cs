@@ -1019,6 +1019,9 @@ namespace AmdgpuWddmControl
         {
             more = more ?? new PlanArgs();
             var p = new ActionPlan { Action = action };
+            uint permission = BoardCapabilities.ActionPermission(action ?? "");
+            if (permission != 0 && !BoardCapabilities.Current.Allows(permission))
+                return Refuse(p, Strings.T("board.unsupported"));
             if (action == OperatorEscape)
             {
                 // The operator escape for a desktop that does not respond: not in Actions, so the window never offers it.

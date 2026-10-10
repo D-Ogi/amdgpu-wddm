@@ -424,7 +424,8 @@ namespace AmdgpuWddmControl
         {
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
             try { _inv = Inventory.Read(false); } catch (Exception) { _inv = new InventoryState(); }
-            try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
+            try { Kmd.RefreshBoardCapabilities();
+            _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
             var vram = Kmd.VideoMemory();
             _vram = vram.Value;
             _uma = Kmd.BoardMemoryQuery().Value;

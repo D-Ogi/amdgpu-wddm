@@ -85,6 +85,12 @@ try {
  Check 'board-memory-service' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_service.ps1" -Root $Workspace -Out "$Out\board-memory-service" }
  Check 'board-memory-store' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_store.ps1" -Root $Workspace -Out "$Out\board-memory-store" }
  Check 'board-memory-write' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_write.ps1" -Root $Workspace -Out "$Out\board-memory-write" }
+ Check 'board-provider' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Workspace -Out "$Out\board-provider" }
+ Check 'board-provider-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Workspace -Out "$Out\board-provider-admission-control" -Mutation admission }
+ Check 'adapter-owner' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner" }
+ Check 'adapter-owner-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-admission-control" -Mutation admission }
+ Check 'adapter-owner-cleanup-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-cleanup-control" -Mutation cleanup }
+ Check 'adapter-owner-quarantine-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-quarantine-control" -Mutation poison }
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
  Check 'ring-gap' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ring_gap.ps1" -Root $Workspace -Out "$Out\ring-gap" }
  Check 'paging-queue' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue" }
@@ -228,7 +234,11 @@ try {
   @{n='sdma-copy-no-vm-flush';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits,'-OmitVmFlush');Fails=$true}
   @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$kits)}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
+  @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
+  @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
+  @{n='smu-native-board-admission';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','board-admission');Fails=$true}
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits)}
+  @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
   # the fan suite, because this is the rule that writes 255 to the chip by itself. Each -Mutation changes one line
   # of a copy of the file under test and the suite must then fail by a check.

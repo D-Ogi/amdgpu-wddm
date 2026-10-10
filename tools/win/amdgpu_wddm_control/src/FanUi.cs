@@ -27,7 +27,8 @@ namespace AmdgpuWddmControl
         public event EventHandler Changed;      // a point moved
         public event EventHandler Picked;       // the selection moved
 
-        const int LowC = 20, HighC = 95;
+        static int LowC { get { return (int)FanCurves.MinC; } }
+        static int HighC { get { return (int)FanCurves.MaxC; } }
 
         public FanChart(int width, int height)
         {

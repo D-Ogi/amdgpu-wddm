@@ -1006,3 +1006,5 @@ uma.fallback.title|mt|6be52e48|ビデオメモリ
 uma.fallback.size|mt|2c73531b|Windowsが報告する専用メモリ
 uma.fallback.readonly|mt|0042c9fe|これは読み取り専用のメモリ容量です。このデバイスはBC-250ボードのメモリ予約設定に対応していません。
 uma.unknown-state|mt|76c05f2a|保存されたバックアップ、または最後の書き込みを確認できませんでした。以降の変更はロックされています。この設定を適用するために再起動せず、サポートに連絡してください。
+
+board.unsupported|mt|bdd30095|このボードでは設定を変更できません。ドライバーが提供する値は引き続き確認できます。

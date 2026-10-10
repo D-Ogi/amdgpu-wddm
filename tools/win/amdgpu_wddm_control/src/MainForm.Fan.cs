@@ -81,6 +81,12 @@ namespace AmdgpuWddmControl
             var f = FanNow;
             _fanState = FanSignature(f);
             card.Add(Ui.Dim(Strings.T("perf.fan.intro"), card.Inner));
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Fan))
+            {
+                card.Pair(Strings.T("perf.fan.speed"), FanSpeedText(f));
+                card.Add(Ui.Dim(Strings.T("board.unsupported"), card.Inner));
+                return card;
+            }
             if (!_snap.DriverInstalled || f == null)
             {
                 card.Add(Ui.Dim(Strings.T(!_snap.DriverInstalled ? "graphics.not-installed" : "perf.fan.no-control"), card.Inner));

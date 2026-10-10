@@ -66,6 +66,15 @@ namespace AmdgpuWddmControl
     {
         const string Dll = "bc250control.dll";
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250BoardCapabilities([Out] byte[] reply, uint bytes);
+        public static KmdResult<BoardCapabilities> RefreshBoardCapabilities()
+        {
+            var result = Call(BoardCapabilities.Bytes, b => Bc250BoardCapabilities(b, (uint)b.Length), BoardCapabilities.Parse);
+            BoardCapabilities.Replace(result.Value);
+            return result;
+        }
+
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250BoardMemory([Out] byte[] reply, uint bytes, [In] byte[] request);
         public static KmdResult<UmaState> BoardMemoryQuery() { return BoardMemory(0, 0, null); }
         public static KmdResult<UmaState> BoardMemory(uint operation = 0, uint target = 0, UmaState expected = null)
