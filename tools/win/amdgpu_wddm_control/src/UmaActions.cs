@@ -1,0 +1,24 @@
+using System;
+using System.Globalization;
+
+namespace AmdgpuWddmControl
+{
+    // The write path is staged. Current driver capabilities refuse every mutation.
+    public static class UmaActions
+    {
+        public static int Run(string[] args)
+        {
+            if (args.Length != 3 || args[0] != "--uma-action" ||
+                (args[1] != "8192" && args[1] != "12288" && args[1] != "restore")) return 2;
+            if (!Program.IsElevated()) return 5;
+            var before = Kmd.Uma();
+            if (before.Value == null || !UmaSetting.Confirmed(before.Value, args[2])) return 1;
+            bool restore = args[1] == "restore";
+            uint target = restore ? 0 : uint.Parse(args[1], CultureInfo.InvariantCulture);
+            if (restore ? !UmaSetting.CanRestore(before.Value) : !UmaSetting.CanSet(before.Value, target)) return 1;
+            var result = Kmd.Uma(restore ? 2u : 1u, target, before.Value);
+            uint wanted = restore ? before.Value.PreviousMiB : target;
+            return UmaSetting.Verified(result.Value, restore ? 2u : 1u, wanted) ? 0 : 1;
+        }
+    }
+}

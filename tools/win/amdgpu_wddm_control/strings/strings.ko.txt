@@ -987,3 +987,18 @@ help.setting.tdr|mt|c224cc97|Windows가 무거운 화면을 몇 초 기다린 �
 plan.title.tdr-delay|mt-safe|ff352a9c|그래픽 대기 시간
 plan.line.tdr|mt|c88deff7|Windows가 그래픽을 {0}초 기다립니다.
 plan.line.tdr-default|mt|e906ce42|대기 시간이 Windows가 스스로 사용하는 값으로 돌아갑니다.
+
+uma.title|mt|6be52e48|비디오 메모리
+uma.active|mt|8289ad5a|현재 사용 중
+uma.requested|mt|1ccff8ba|다음 다시 시작 후
+uma.unavailable|mt|67a926f7|사용할 수 없음
+uma.tradeoff|mt|fe12ec74|비디오 메모리를 늘리면 Windows에서 사용할 메모리가 줄어듭니다. 12 GiB로 설정하면 Windows에는 약 3.8 GiB가 남습니다.
+uma.restart|mt|c790ea25|변경 사항은 다시 시작한 후 적용됩니다. 준비가 되면 Windows를 다시 시작하세요.
+uma.recovery|mt|f8e2d145|Windows가 시작되지 않으면 CMOS를 초기화하여 보드 기본값으로 복원할 수 있습니다. 부팅 순서도 초기화됩니다.
+uma.readonly|mt|7c6e555e|이 시스템에서는 이 설정을 변경할 수 없습니다.
+uma.apply|mt|6a7aeb33|비디오 메모리 설정
+uma.restore|mt|a7adc6e0|이전 설정 복원
+uma.confirm|mt|7bd00a1f|비디오 메모리를 {0}(으)로 설정할까요? 변경 전에 이전 설정을 저장합니다.
+uma.confirm-restore|mt|53929d48|저장된 이전 비디오 메모리 설정을 복원할까요?
+uma.pending|mt|f633949e|변경 사항을 적용하려면 다시 시작해야 합니다.
+uma.windows-unavailable|mt|19e431e0|Windows에서 비디오 메모리를 변경하는 기능은 아직 사용할 수 없습니다. 현재 값은 참고용으로 표시됩니다.

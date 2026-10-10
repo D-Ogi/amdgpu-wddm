@@ -1005,3 +1005,18 @@ help.setting.tdr|src|-|How many seconds Windows waits for a heavy picture before
 plan.title.tdr-delay|src|-|Waiting time for the graphics
 plan.line.tdr|src|-|Windows waits {0} seconds for the graphics.
 plan.line.tdr-default|src|-|The waiting time goes back to the one Windows uses by itself.
+
+uma.title|src|-|Video memory
+uma.active|src|-|In use now
+uma.requested|src|-|After the next restart
+uma.unavailable|src|-|Not available
+uma.tradeoff|src|-|More video memory leaves less memory for Windows. With 12 GiB, Windows has about 3.8 GiB.
+uma.restart|src|-|This change takes effect after a restart. Restart Windows when you are ready.
+uma.recovery|src|-|If Windows cannot start, clearing CMOS restores the board default and also resets the boot order.
+uma.readonly|src|-|This setting cannot be changed on this system.
+uma.apply|src|-|Set video memory
+uma.restore|src|-|Restore previous setting
+uma.confirm|src|-|Set video memory to {0}? The previous setting will be saved before the change.
+uma.confirm-restore|src|-|Restore the previously saved video memory setting?
+uma.pending|src|-|A change is waiting for a restart.
+uma.windows-unavailable|src|-|Changing video memory in Windows is not available yet. The current value is shown for reference.

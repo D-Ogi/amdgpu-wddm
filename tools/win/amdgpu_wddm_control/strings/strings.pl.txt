@@ -987,3 +987,18 @@ help.setting.tdr|mt|c224cc97|Ile sekund Windows czeka na ciężki obraz, zanim u
 plan.title.tdr-delay|mt-safe|ff352a9c|Czas oczekiwania na grafikę
 plan.line.tdr|mt|c88deff7|Windows czeka na grafikę {0} s.
 plan.line.tdr-default|mt|e906ce42|Czas oczekiwania wraca do tego, który Windows ustawia sam.
+
+uma.title|mt|6be52e48|Pamięć wideo
+uma.active|mt|8289ad5a|Używana teraz
+uma.requested|mt|1ccff8ba|Po następnym restarcie
+uma.unavailable|mt|67a926f7|Niedostępne
+uma.tradeoff|mt|fe12ec74|Więcej pamięci wideo oznacza mniej pamięci dla Windows. Przy 12 GiB Windows ma około 3,8 GiB.
+uma.restart|mt|c790ea25|Zmiana zacznie działać po restarcie. Uruchom Windows ponownie w dogodnym momencie.
+uma.recovery|mt|f8e2d145|Jeśli Windows nie uruchomi się, wyczyszczenie CMOS przywraca ustawienie domyślne płyty i resetuje kolejność rozruchu.
+uma.readonly|mt|7c6e555e|Tego ustawienia nie można zmienić w tym systemie.
+uma.apply|mt|6a7aeb33|Ustaw pamięć wideo
+uma.restore|mt|a7adc6e0|Przywróć poprzednie ustawienie
+uma.confirm|mt|7bd00a1f|Ustawić pamięć wideo na {0}? Poprzednie ustawienie zostanie zapisane przed zmianą.
+uma.confirm-restore|mt|53929d48|Przywrócić zapisane wcześniej ustawienie pamięci wideo?
+uma.pending|mt|f633949e|Zmiana oczekuje na restart.
+uma.windows-unavailable|mt|19e431e0|Zmiana pamięci wideo w Windows nie jest jeszcze dostępna. Bieżąca wartość jest pokazana informacyjnie.

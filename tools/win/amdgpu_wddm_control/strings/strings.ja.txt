@@ -987,3 +987,18 @@ help.setting.tdr|mt|c224cc97|Windows が重い画面をどれだけの秒数待�
 plan.title.tdr-delay|mt-safe|ff352a9c|グラフィックスの待ち時間
 plan.line.tdr|mt|c88deff7|Windows はグラフィックスを {0} 秒待ちます。
 plan.line.tdr-default|mt|e906ce42|待ち時間は Windows が自分で使う値に戻ります。
+
+uma.title|mt|6be52e48|ビデオメモリ
+uma.active|mt|8289ad5a|現在使用中
+uma.requested|mt|1ccff8ba|次回再起動後
+uma.unavailable|mt|67a926f7|利用できません
+uma.tradeoff|mt|fe12ec74|ビデオメモリを増やすと、Windows用のメモリが減ります。12 GiBの場合、Windows用は約3.8 GiBです。
+uma.restart|mt|c790ea25|変更は再起動後に反映されます。準備ができたらWindowsを再起動してください。
+uma.recovery|mt|f8e2d145|Windowsが起動しない場合、CMOSをクリアするとマザーボードの初期設定に戻り、起動順序もリセットされます。
+uma.readonly|mt|7c6e555e|このシステムでは設定を変更できません。
+uma.apply|mt|6a7aeb33|ビデオメモリを設定
+uma.restore|mt|a7adc6e0|以前の設定に戻す
+uma.confirm|mt|7bd00a1f|ビデオメモリを{0}に設定しますか？変更前に以前の設定を保存します。
+uma.confirm-restore|mt|53929d48|保存された以前のビデオメモリ設定に戻しますか？
+uma.pending|mt|f633949e|変更の反映には再起動が必要です。
+uma.windows-unavailable|mt|19e431e0|Windowsでのビデオメモリ変更はまだ利用できません。現在の値は参考情報として表示しています。

@@ -66,6 +66,14 @@ namespace AmdgpuWddmControl
     {
         const string Dll = "bc250control.dll";
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Uma([Out] byte[] reply, uint bytes, [In] byte[] request);
+        public static KmdResult<UmaState> UmaQuery() { return Uma(0, 0, null); }
+        public static KmdResult<UmaState> Uma(uint operation = 0, uint target = 0, UmaState expected = null)
+        {
+            var request = UmaSetting.Request(operation, target, expected);
+            return Call(128, b => Bc250Uma(b, (uint)b.Length, request), b => UmaSetting.Parse(b, 32));
+        }
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Dpm([Out] byte[] data, uint bytes);
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Interop([Out] byte[] data, uint bytes);
