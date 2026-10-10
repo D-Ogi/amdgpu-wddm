@@ -232,17 +232,27 @@ void bc250_cpu_baseline_read(const unsigned int *pstate_mhz, unsigned int pstate
 			     const unsigned int *core_mhz, unsigned int cores,
 			     const struct bc250_cpu_baseline *previous, struct bc250_cpu_baseline *out);
 
-/* 1 when the boost ceiling of this start is still unknown, so the read stage owes a boost probe: a short busy
- * window on one core, after which the per-core clocks answer the ceiling (BC250_CPU_BOOST_PROBE_MS,
- * BC250_CPU_BOOST_PROBE_ROUNDS; driver/kmd/cpu.c CpuBoostProbe). The firmware has no message for the ceiling
- * itself - the read allowlist of docs/hardware.md holds no GetMaxBoostMHz - so a busy window is the only way to
- * make it answer. A record that already carries a per-core answer owes nothing. */
+/* 1 when no per-core clock of this start is known yet, so the read stage owes a boost probe: a short busy
+ * window on one core, after which the per-core clocks are read again (BC250_CPU_BOOST_PROBE_MS,
+ * BC250_CPU_BOOST_PROBE_ROUNDS; driver/kmd/cpu.c CpuBoostProbe). The firmware has no message for its maximum -
+ * the read allowlist of docs/hardware.md holds no GetMaxBoostMHz, and 0x43 answers the clock of the moment - so
+ * what the probe records is the highest clock it OBSERVED under load and not a proved ceiling (audit finding
+ * F3, 2026-10-10). The driver uses it as the restore target, which is what BD-094 needs; it is not evidence
+ * about what the part can reach. A record that already carries a per-core answer owes nothing. */
 int bc250_cpu_boost_probe_needed(const struct bc250_cpu_baseline *baseline);
 
+/* Whether the sweep goes on after the round that has just finished (driver/kmd/cpu.c CpuBoostProbe). Only the
+ * bound ends it. `observed_mhz` is the highest in-band reply so far and is deliberately not a reason to stop:
+ * an in-band reply is a clock the part was running at, not a limit it was held at, so a sweep that stopped
+ * there would record a ramp's first step as the maximum (audit finding F3). It is an argument so that this rule
+ * is one function with one host check, and not a condition inside a loop. */
+int bc250_cpu_boost_probe_more(unsigned int rounds_done, unsigned int observed_mhz);
+
 /* The boost probe's bounds: one busy window before the per-core clocks are read again, and at most this many
- * windows. The probe stops at the first answer inside the band, so the usual cost is one window plus the
- * getters of one core. Worst case it keeps one core of six busy for about a fifth of a second, once per start,
- * and only on a start whose cores were all idle when the stage read them. */
+ * windows. Every window of every round is read and the highest reply is kept, so the cost is the same every
+ * time: one core of six busy for about a fifth of a second, once per start, and only on a start whose cores
+ * were all idle when the stage read them. (Up to 0.7.216.24 the sweep stopped at the first reply inside the
+ * band, which made a ramping firmware record its first step as the maximum.) */
 #define BC250_CPU_BOOST_PROBE_MS	25u
 #define BC250_CPU_BOOST_PROBE_ROUNDS	2u
 
