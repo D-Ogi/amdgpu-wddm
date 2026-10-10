@@ -736,6 +736,105 @@ class Promotion(unittest.TestCase):
                 self.assertLessEqual(step.timeout_s, 170 + self.plan.limits["host_grace_s"])
         self.assertIn("promoted-retained", arm.arm["expect_all"])
 
+    def new_shell_accepted_from(self, attempt: str, with_copy: bool) -> str:
+        """A baseline whose accepted shell is an older file that `attempt` promoted; engine and ICD unchanged."""
+        payload = Path(self.plan.values["pkg"]) / "payload" / "d3d12"
+        old = b"the shell of the train before"
+        block = {name: manifest.sha256(payload / name) for name in promote.NAMES}
+        block["amdgpu_wddm_d3d12.dll"] = hashlib.sha256(old).hexdigest().upper()
+        if with_copy:
+            package = self.caps / "attempts" / attempt / "package"
+            package.mkdir(parents=True)
+            (package / "amdgpu_wddm_d3d12.dll").write_bytes(old)
+        (self.caps / "lab-baseline.json").write_text(
+            json.dumps({"d3d12": {"accepted": block, "source_attempt": attempt}}), encoding="utf-8")
+        return block["amdgpu_wddm_d3d12.dll"]
+
+    def test_a_new_triplet_puts_the_accepted_files_back_before_the_stage(self):
+        # b29: the install laid the package shell down, and the attempt's Capture verifies the accepted one.
+        sha = self.new_shell_accepted_from("native-caps524", with_copy=True)
+        arm = self.plan.by_id("promote")
+        prepared = promote.attach(self.plan, arm, "python", clean=False)
+        self.assertEqual(list(prepared.putback), ["amdgpu_wddm_d3d12.dll"], "only the file the package replaces")
+        self.assertEqual(prepared.missing, [])
+        text = [step.text() for step in arm.steps]
+        at = {key: next(i for i, line in enumerate(text) if key in line)
+              for key in ("stage.py", "-Step putback", "promote-d3d12.py stage ", "--apply", "-Step clean")}
+        self.assertLess(at["stage.py"], at["-Step putback"])
+        self.assertLess(at["-Step putback"], at["promote-d3d12.py stage "])
+        self.assertLess(at["--apply"], at["-Step clean"])
+        self.assertIn("native-caps524/package/amdgpu_wddm_d3d12.dll", text[at["stage.py"]])
+        self.assertIn(f"amdgpu_wddm_d3d12.dll={sha}", text[at["-Step putback"]])
+        self.assertNotIn("amdgpu_wddm_vkd3d.dll=", text[at["-Step putback"]], "an unchanged file stays as it is")
+        for wanted in ("stage OK", "d3d12 putback OK", "d3d12 clean OK", "promoted-retained"):
+            self.assertIn(wanted, arm.arm["expect_all"])
+
+    def test_the_accepted_copy_is_found_by_its_bytes_in_another_attempt(self):
+        self.new_shell_accepted_from("native-caps524", with_copy=False)
+        package = self.caps / "attempts" / "native-caps530" / "package"
+        package.mkdir(parents=True)
+        (package / "amdgpu_wddm_d3d12.dll").write_bytes(b"the shell of the train before")
+        (self.caps / "attempts" / "native-caps531" / "package").mkdir(parents=True)
+        (self.caps / "attempts" / "native-caps531" / "package" / "amdgpu_wddm_d3d12.dll").write_bytes(b"other")
+        prepared = promote.prepare(self.plan, self.plan.by_id("promote").arm, clean=False)
+        self.assertTrue(prepared.putback["amdgpu_wddm_d3d12.dll"].endswith("native-caps530/package/amdgpu_wddm_d3d12.dll"))
+
+    def test_no_local_copy_of_the_accepted_file_stops_the_arm_before_the_lab_changes(self):
+        self.new_shell_accepted_from("native-caps524", with_copy=False)
+        arm = self.plan.by_id("promote")
+        prepared = promote.attach(self.plan, arm, "python", clean=False)
+        self.assertEqual(prepared.missing, ["amdgpu_wddm_d3d12.dll"])
+        self.assertIn("NO local copy of the accepted amdgpu_wddm_d3d12.dll", prepared.note)
+        first_lab_change = next(i for i, step in enumerate(arm.steps) if "-Step putback" in step.text())
+        staging = next(i for i, step in enumerate(arm.steps) if "stage.py" in step.text())
+        self.assertLess(staging, first_lab_change, "the stage of a path that does not exist fails first")
+        self.assertIn("NO-LOCAL-COPY-OF-ACCEPTED-amdgpu_wddm_d3d12.dll", arm.steps[staging].text())
+
+
+class PinBaseline(unittest.TestCase):
+    """pin-baseline.py retries the refusal of a new D3D12 triplet with the flag the promotion route names."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.caps = self.tmp / "caps"
+        self.caps.mkdir()
+        self.pkg = self.tmp / "pkg"
+        self.pkg.mkdir()
+        (self.pkg / "manifest.json").write_text(json.dumps({"release": "0.7.0-tester.2", "files": []}),
+                                                 encoding="utf-8")
+
+    def tool(self, body: str) -> None:
+        (self.caps / "release-baseline.py").write_text("import sys\n" + body, encoding="utf-8")
+
+    def pin(self, *extra: str):
+        import subprocess
+        import sys
+        return subprocess.run([sys.executable, str(Path(__file__).with_name("pin-baseline.py")), str(self.caps),
+                               str(self.pkg), *extra], capture_output=True, text=True)
+
+    def test_a_new_triplet_is_pinned_with_the_accepted_triplet_kept(self):
+        self.tool("if '--keep-accepted-d3d12' in sys.argv:\n"
+                  "    print('release 0.7.0-tester.2: 85 files verified'); sys.exit(0)\n"
+                  "print('REFUSED: the release D3D12 triplet differs from the accepted one: promote it with "
+                  "promote-d3d12.py first'); sys.exit(1)\n")
+        done = self.pin()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("files verified", done.stdout)
+        self.assertIn("the baseline keeps the accepted one", done.stdout)
+
+    def test_any_other_refusal_stands(self):
+        self.tool("print('REFUSED: manifest kmd_version and kmd_abi do not encode one revision'); sys.exit(1)\n")
+        done = self.pin()
+        self.assertEqual(done.returncode, 1)
+        self.assertNotIn("keeps the accepted one", done.stdout)
+
+    def test_the_flag_is_not_added_twice(self):
+        self.tool("print(' '.join(sys.argv[1:])); "
+                  "print('REFUSED: the release D3D12 triplet differs from the accepted one'); sys.exit(1)\n")
+        done = self.pin("--keep-accepted-d3d12")
+        self.assertEqual(done.returncode, 1, "a refusal with the flag already given is final")
+        self.assertEqual(done.stdout.count("--keep-accepted-d3d12"), 1)
+
 
 class Summary(unittest.TestCase):
     def setUp(self):

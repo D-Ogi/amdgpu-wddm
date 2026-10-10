@@ -96,7 +96,7 @@ The difference matters when a number is read out of this table.
 | `push-zip`, `zipcheck` | transfer, read | the package on the lab is the package on this PC |
 | `uninstall`, `restart-1`, `install`, `restart-2` | lab | the owner's installer test: nothing of ours is left, then a fresh install at 40 CU |
 | `slots`, `kmdver`, `preflight` | read | every installed file against the package manifest, the identity of what runs, and 40 CU, DPM, health and TdrDelay |
-| `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`. That script refuses a second apply of the same release. The wrapper then reads `lab-baseline.json`. It passes when that file already names this release and this manifest hash. A resumed run thus gets the same answer as the first run |
+| `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`. That script refuses a second apply of the same release. The wrapper then reads `lab-baseline.json`. It passes when that file already names this release and this manifest hash. A resumed run thus gets the same answer as the first run. The script also refuses a package with a new D3D12 triplet. The wrapper then applies it again with `--keep-accepted-d3d12`. The D3D12 block keeps the accepted triplet until `d3d12-promote` replaces it |
 | `stage-clients` | transfer | the clients that are not in the package are on the lab with the bytes of this PC. `stage.py` hashes every file on both sides and sends only what differs |
 | `vk-smoke`, `x86-smoke` | lab | the system Vulkan ICD and the 32-bit D3D11 stack answer |
 | `vkheaps` | read | the Vulkan memory heaps of the installed system ICD follow the board's carve-out, not a frozen capture |
@@ -108,7 +108,7 @@ The difference matters when a number is read out of this table.
 | `llm-dense` | lab | the dense language model batch that stopped Windows with 0x116 runs to its end (BD-114) |
 | `llm-q35` | lab | the 35B-A3B IQ2_M model runs fully offloaded at the 12 GiB carve-out |
 | `hip` | lab | the installed HIP runtime is on the machine PATH, `vadd.exe` computes, and the HIP llama.cpp backend runs `llama-bench` through it (BD-110) |
-| `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness |
+| `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness. For a new triplet it first puts the accepted files back in the install directory, because the attempt verifies them before it swaps (`lab/d3d12-putback.ps1`). The release file waits next to the accepted one as `<name>.release` until the promotion has put it back |
 | `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene |
 | `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator |
 | `bm-before`, `bm-set-8192`, `bm-restart-1`, `bm-at-8192`, `vkheaps-8192`, `bm-restore`, `bm-restart-2`, `bm-after` | read, lab, restart | the board memory operation of the control application. It sets 8192 MiB and restarts. It reads the active size, Windows RAM and the Vulkan heaps at 8192 MiB. Then Restore and a restart put back the size before the change |
@@ -158,10 +158,10 @@ Where two pieces of the workspace did the same job, the suite keeps one of them.
 | `validate.py` | the command: `run`, `run --dry-run`, `summary`, `arms` |
 | `manifest.py` | reads `arms.json` and the package, resolves the placeholders, builds the plan |
 | `runner.py` | the arm loop: the bounds, the STOP flag, the temperature gate, the health gate, the raw records |
-| `promote.py` | the D3D12 promotion step, idempotent: it moves a leftover attempt directory aside and leaves evidence alone |
+| `promote.py` | the D3D12 promotion step, idempotent. It moves a leftover attempt directory aside and leaves evidence alone. For a new triplet it finds the local copy of each accepted file that the package replaces |
 | `summary.py` | the `RESULTS.md` skeleton, the two owner gates and the symptom shapes |
 | `stage.py` | sends files to the lab and proves them by SHA-256 on both sides |
-| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1`, `kill-clients.ps1` (the client of a failed arm) and `board-memory-op.ps1 -Step set` and `-Step restore` (the board's memory block) |
+| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1`, `kill-clients.ps1` (the client of a failed arm) and `board-memory-op.ps1 -Step set` and `-Step restore` (the board's memory block). `d3d12-putback.ps1` writes too: it puts the accepted D3D12 files back before a promotion |
 | `test_train_validate.py` | the host tests, against a fake target |
 
 ## Commands

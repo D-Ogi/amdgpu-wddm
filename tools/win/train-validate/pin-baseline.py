@@ -9,6 +9,12 @@ So: run the tool. If it refuses because the release was applied already, read th
 names this package, by its release name and the SHA-256 of its manifest. If it does, the arm is satisfied and
 the file is left alone. If it names anything else, the refusal stands.
 
+A package with a new D3D12 triplet is refused too ("promote it with promote-d3d12.py first"), and the promotion
+arm comes after this one and depends on it. The tool's own answer to that order is `--keep-accepted-d3d12`: every
+pin moves to the package, and the d3d12 block stays at the accepted triplet until the promotion arm puts the
+accepted files back, promotes the package's and re-pins. So that refusal is retried once with the flag (train
+b29, the first train of this suite with a new triplet, stopped here).
+
 Usage: pin-baseline.py <caps dir> <package dir> [extra arguments for release-baseline.py]
 """
 import hashlib
@@ -18,6 +24,8 @@ import sys
 from pathlib import Path
 
 APPLIED = "this release was applied already"
+NEW_TRIPLET = "the release D3D12 triplet differs from the accepted one"
+KEEP = "--keep-accepted-d3d12"
 
 
 def sha(path: Path) -> str:
@@ -35,6 +43,14 @@ def main() -> int:
                           capture_output=True, text=True)
     out = (done.stdout or "") + (done.stderr or "")
     sys.stdout.write(out if out.endswith("\n") or not out else out + "\n")
+    if done.returncode != 0 and NEW_TRIPLET in out and KEEP not in extra:
+        print("pin: the package brings a new D3D12 triplet; the baseline keeps the accepted one, and the "
+              "promotion arm puts it back, promotes the package's and re-pins")
+        extra = [*extra, KEEP]
+        done = subprocess.run([sys.executable, str(tool), str(package), "--apply", *extra],
+                              capture_output=True, text=True)
+        out = (done.stdout or "") + (done.stderr or "")
+        sys.stdout.write(out if out.endswith("\n") or not out else out + "\n")
     if done.returncode == 0:
         return 0
     if APPLIED not in out:
