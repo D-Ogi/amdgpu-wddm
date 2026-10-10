@@ -146,12 +146,12 @@ namespace AmdgpuWddmControl
     }
 
     // DPM settings under HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters (docs/design/dpm.md, "Settings and
-    // boot guard"): DpmMode 0 fixed / 1 dpm, DpmMaxMHz 1000-2000 on the 100 MHz grid, absent = 1500. Read by the KMD
+    // boot guard"): DpmMode 0 fixed / 1 dpm, DpmMaxMHz 1000-2000 on the 100 MHz grid, absent = 2000. Read by the KMD
     // at device start only.
     public static class DpmSettings
     {
         public const string RegistryPath = @"SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters";
-        public const uint DefaultMaxMHz = 1500, HardMaxMHz = 2000, MinMHz = 1000;
+        public const uint DefaultMaxMHz = 2000, HardMaxMHz = 2000, MinMHz = 1000;
         public static readonly uint[] CeilingChoices = { 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000 };
 
         public static bool IsValidCeiling(uint mhz) { return Array.IndexOf(CeilingChoices, mhz) >= 0; }

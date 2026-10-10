@@ -445,6 +445,11 @@ function Get-RegistryDefaultPlan {
         elseif ($null -ne $closure) {
             if ($Reopen) { $decision = 'reopened'; $value = $d.Value } else { $decision = 'driver-closed'; $value = $cur }
         }
+        # Move the old release ceiling, including a manual 1500 choice. Other ceilings stay.
+        elseif ($d.Name -eq 'DpmMaxMHz') {
+            if (Test-RegistryValueSame $cur 1500) { $decision = 'update'; $value = $d.Value }
+            else { $decision = 'kept'; $value = $cur }
+        }
         elseif ($prev.ContainsKey($d.Name) -and (Test-RegistryValueSame $cur $prev[$d.Name])) { $decision = 'update'; $value = $d.Value }
         else { $decision = 'kept'; $value = $cur }
         $e = [pscustomobject]@{ name = $d.Name; value = $value; default = $d.Value; current = $cur; present = $has; decision = $decision; write = ($decision -in @('command', 'set', 'update', 'reopened')) }

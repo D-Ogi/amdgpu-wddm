@@ -78,6 +78,8 @@ try {
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
+ # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
+ Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }

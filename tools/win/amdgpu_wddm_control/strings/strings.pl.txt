@@ -217,7 +217,7 @@ plan.line.route-cpu|mt|a59306ef|Pulpit działa w bezpieczny sposób (na procesor
 plan.line.auto-on|mt|9f6b672e|Automatyczne taktowanie: włączone.
 plan.line.auto-off|mt|f5daa219|Automatyczne taktowanie: wyłączone (stałe 1000 MHz).
 plan.line.ceiling|mt|c01c44a8|Najwyższe taktowanie: {0} MHz.
-plan.line.ceiling-default|mt|6123b39c|Najwyższe taktowanie: 1500 MHz (domyślne).
+plan.line.ceiling-default|mt|07dc48a6|Górny limit taktowania: {0} MHz (domyślny).
 plan.line.other|mt|00229d42|Zostaje przywrócone wcześniejsze ustawienie sterownika.
 plan.line.cu-confirm|mt|68cc6ac8|Kolejne uruchomienia zachowają wszystkie 40 rdzeni.
 plan.line.confirm-start|mt|911bc92e|To uruchomienie zostaje oznaczone jako działające.

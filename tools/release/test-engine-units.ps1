@@ -353,7 +353,7 @@ Check (((Get-RepairSetDriverVersion '0.7.208.100-tester.13') -eq '0.7.208.100') 
 $script:StateDir = $saveStateDir
 
 '[G-EVT] settings-impact rows from the registry-default plans'
-$plan = Get-RegistryDefaultPlan -Defaults ([pscustomobject]@{ DpmMode = 1; DpmMaxMHz = 1500; EnableFullWddm = 2 }) -Previous ([pscustomobject]@{ DpmMaxMHz = 1400; EnableFullWddm = 2 }) -Current @{ DpmMaxMHz = 1400; EnableFullWddm = 1 } -Explicit @{} -Owned ([ordered]@{ UnconfirmedStarts = 0 })
+$plan = Get-RegistryDefaultPlan -Defaults ([pscustomobject]@{ DpmMode = 1; DpmMaxMHz = 2000; EnableFullWddm = 2 }) -Previous ([pscustomobject]@{ DpmMaxMHz = 1500; EnableFullWddm = 2 }) -Current @{ DpmMaxMHz = 1500; EnableFullWddm = 1 } -Explicit @{} -Owned ([ordered]@{ UnconfirmedStarts = 0 })
 $imp = Get-SettingsImpact @(@{ group = 'parameters'; plan = $plan })
 $byName = @{}; foreach ($row in $imp.rows) { $byName[$row.name] = $row.decision }
 Check (($byName.DpmMode -eq 'set') -and ($byName.DpmMaxMHz -eq 'update') -and ($byName.EnableFullWddm -eq 'kept') -and -not $byName.ContainsKey('UnconfirmedStarts')) "rows: $(($imp.rows | ForEach-Object { "$($_.name)=$($_.decision)" }) -join ', ') (installer-owned values left out)"

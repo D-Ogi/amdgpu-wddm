@@ -217,7 +217,7 @@ plan.line.route-cpu|mt|a59306ef|デスクトップは安全な方法 (プロセ�
 plan.line.auto-on|mt|9f6b672e|自動クロック速度：オン。
 plan.line.auto-off|mt|f5daa219|自動クロック速度：オフ (1000 MHz に固定)。
 plan.line.ceiling|mt|c01c44a8|最高クロック速度：{0} MHz。
-plan.line.ceiling-default|mt|6123b39c|最高クロック速度：1500 MHz (既定)。
+plan.line.ceiling-default|mt|07dc48a6|クロック速度の上限：{0} MHz（既定）。
 plan.line.other|mt|00229d42|以前のドライバー設定が復元されます。
 plan.line.cu-confirm|mt|68cc6ac8|次回以降の起動でも、40 コアすべてを使用し続けます。
 plan.line.confirm-start|mt|911bc92e|今回の起動は正常に動作していると記録されます。
