@@ -12,7 +12,7 @@ function Resolve-Bc250PackageContext([string]$Repo, [string]$Kits, [string]$Qual
     $origin = 'QualityWorkspace'
     if (-not $selected) { $selected = $env:BC250_ROOT; $origin = 'BC250_ROOT' }
     if (-not $selected) {
-        $configured = & git -C $Repo config --get bc250.workspace
+        $configured = & git -C $Repo config --local --get bc250.workspace
         if ($LASTEXITCODE -notin @(0, 1)) { throw 'Cannot read repository bc250.workspace configuration' }
         if ($LASTEXITCODE -eq 0 -and $configured) {
             $selected = [string]$configured
@@ -23,7 +23,7 @@ function Resolve-Bc250PackageContext([string]$Repo, [string]$Kits, [string]$Qual
     if (-not $selected) {
         $toolchain = Split-Path -Parent $kitsPath
         if ((Split-Path -Leaf $kitsPath) -ine 'nuget' -or (Split-Path -Leaf $toolchain) -ine 'toolchain') {
-            throw 'Cannot infer quality workspace from Kits; set -QualityWorkspace, BC250_ROOT, or git config bc250.workspace'
+            throw 'Cannot infer quality workspace from Kits; set -QualityWorkspace, BC250_ROOT, or git config --local bc250.workspace'
         }
         $selected = Split-Path -Parent $toolchain
         $origin = 'Kits'

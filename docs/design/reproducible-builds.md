@@ -115,10 +115,12 @@ is no `tools/quality/reproducible.py` gate.
 
 `tools/quality/test_kmd_reproducible.py` checks the production ordinal ordering helper under PowerShell 5.1
 and 7, with three cultures. Its negative control restores `Sort-Object Name` and must fail a behavioral check.
-`test_kmd_package.py`, run by the quality suite, runs both controls. This gate checks input ordering. It does
-not compile two drivers or certify their binary equality.
+The named `kmd-order` gate in `quick.ps1` runs this check before other quality gates. The `quality-controls`
+gate also discovers `test_kmd_package.py`, which runs the positive and negative controls. These gates check
+input ordering. They do not compile two drivers or certify their binary equality.
 
-The 2026-10-10 review of BD-114 found that the two PowerShell versions ordered SDMA object names differently.
+The 2026-10-10 review of BD-114 found that the two PowerShell versions ordered nine object name families
+differently, at 22 positions. These include `bc250_sdma` and `dcn`. The effect is not specific to SDMA.
 Relinking the same objects in those two orders reproduced the two reported unsigned hashes, `69111A1C` and
 `D1D2F1A9`. The recipe now orders source and object paths with `StringComparer.Ordinal`. A promotion must still
 compare complete unsigned rebuilds with recorded compiler, linker, kits and environment inputs. Ambient
@@ -127,10 +129,11 @@ compiler options, different tool binaries and untested environments are outside 
 ## Package builds from reviewed worktrees
 
 The package path resolves its workspace from explicit `-QualityWorkspace`, then `BC250_ROOT`, then the
-repository configuration `bc250.workspace`, then a `-Kits` path of the form `<workspace>/toolchain/nuget`.
+local repository configuration `bc250.workspace`, then a `-Kits` path of the form `<workspace>/toolchain/nuget`.
 A relative repository setting is relative to the repository root. An invalid selected setting fails. It does
-not fall back to a different workspace. Because some host tests accept only a workspace root, a package
-refuses kits outside that workspace's `toolchain/nuget`. `package-context.json` records the choice.
+not fall back to a different workspace. Because some host tests accept only a workspace root, both quality
+profiles refuse kits outside that workspace's `toolchain/nuget`. `package-context.json` records the package
+choice, and the quality result records the context its gates used.
 
 The default quality profile remains `Full`. It requires the tracked status maps to match the current source
 and WDK headers. A package uses `KmdPackage`: the same generator checks current source and headers, but

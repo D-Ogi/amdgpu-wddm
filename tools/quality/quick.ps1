@@ -2,10 +2,13 @@ param([Parameter(Mandatory)][string]$Workspace,[Parameter(Mandatory)][string]$Ou
 $ErrorActionPreference='Stop'
 $repo=if($RepoRoot){$RepoRoot}else{Join-Path $Workspace 'bc250-win'}
 if (!$Kits) { $Kits = Join-Path $Workspace 'toolchain\nuget' }
-if ($Profile -eq 'KmdPackage') {
- . (Join-Path $repo 'tools\quality\kmd-build-context.ps1')
- $context = Resolve-Bc250PackageContext -Repo $repo -Kits $Kits -QualityWorkspace $Workspace
-}
+# Both profiles mix -Kits and older -Root-only suites. Resolve one header tree
+# before running either kind, and retain the selected context in the receipt.
+. (Join-Path $repo 'tools\quality\kmd-build-context.ps1')
+$context = Resolve-Bc250PackageContext -Repo $repo -Kits $Kits -QualityWorkspace $Workspace
+$Workspace = $context.workspace
+$Kits = $context.kits
+$context.profile = $Profile
 $icd=if($env:BC250_RADV_SOURCE){$env:BC250_RADV_SOURCE}else{Join-Path $Workspace 'scratch\m12\mesa-current-src'}
 $radvBuild=if($env:BC250_RADV_BUILD){$env:BC250_RADV_BUILD}else{Join-Path $Workspace 'scratch\m12\mesa-current-build'}
 $umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Workspace 'scratch\m13-native-zink-src'}
@@ -28,6 +31,9 @@ function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
     Write-Host "$name SKIP (missing input: $needs)"
 }
 try {
+ # A named early gate makes a regression in link input order fail before builds.
+ # quality-controls also discovers the positive and negative package unit controls.
+ Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
@@ -295,9 +301,9 @@ try {
   $results+=@{name=$run.n;status='PASS';seconds=$run.seconds}
   Write-Host "$($run.n) PASS $([Math]::Round($run.seconds,2))s$(if($run.fails){' (negative control failed as it must)'})"
  }
- @{status='PASS';profile=$Profile;kits=$Kits;seconds=$clock.Elapsed.TotalSeconds;checks=$results} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
+ @{status='PASS';profile=$Profile;kits=$Kits;context=$context;seconds=$clock.Elapsed.TotalSeconds;checks=$results} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
 } catch {
- @{status='FAIL';profile=$Profile;kits=$Kits;seconds=$clock.Elapsed.TotalSeconds;checks=$results;error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
+ @{status='FAIL';profile=$Profile;kits=$Kits;context=$context;seconds=$clock.Elapsed.TotalSeconds;checks=$results;error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
  Write-Error $_
  exit 1
 }

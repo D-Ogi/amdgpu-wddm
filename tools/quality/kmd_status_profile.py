@@ -28,7 +28,9 @@ def evaluate_outputs(profile: str, repo: Path, outputs: dict[Path, str], out: Pa
         "profile": profile,
         "status": "FAIL" if code else "PASS",
         "tracked_output_freshness": "required" if profile == "Full" else "profile-exclusion",
-        "reason": "Package checks current source and headers; tracked presentation files are not build inputs.",
+        "reason": ("Package checks current source and headers; tracked presentation files are not build inputs."
+                   if profile == "KmdPackage" else
+                   "Full requires tracked status maps to match current source and headers."),
         "different_tracked_outputs": stale,
         "snapshots": snapshots,
     }
