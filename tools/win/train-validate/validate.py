@@ -61,8 +61,11 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
               f"{limits['min_poll_s']} s), host backstop bound + {limits['host_grace_s']} s", ""]
     worst = 0
     for number, arm in enumerate(plan.arms, start=1):
-        worst += arm.bound_s
-        head = f"{number:2d} {arm.id} [{arm.kind}, bound {arm.bound_s} s]"
+        # The arm's own worst case is the sum of its host timeouts, not its bound: a promote arm issues nine
+        # steps of its own, and a plan line that said 'bound 170 s' understated it by a quarter of an hour.
+        host_worst = sum(step.timeout_s for step in arm.steps) or arm.bound_s
+        worst += host_worst
+        head = f"{number:2d} {arm.id} [{arm.kind}, bound {arm.bound_s} s, host worst case {host_worst} s]"
         if arm.arm.get("gate"):
             head += f" OWNER GATE {arm.arm['gate']}"
         lines.append(head)
@@ -78,7 +81,14 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
         if arm.env:
             lines.append("     env " + " ".join(f"{k}={v}" for k, v in arm.env.items()))
         for step in arm.steps:
-            lines.append(f"     $ {step.text()}      [{step.phase}, host timeout {step.timeout_s} s]")
+            lines.append(f"     $ {step.text()}      [{step.phase}, host timeout {step.timeout_s} s"
+                         + (", optional" if step.optional else "") + "]")
+        if arm.arm.get("needs_verified"):
+            lines.append(f"     it removes the installed driver: it does not run unless "
+                         f"{arm.arm['needs_verified']} verified the package on the lab in this run")
+        if arm.arm.get("kill"):
+            lines.append("     after a failed or bound run, its client is ended on the lab: "
+                         + ", ".join(arm.arm["kill"]))
         if arm.kind == "restart":
             lines.append(f"     then the runner waits for a boot time that differs from the one before the "
                          f"restart: a first wait of {limits.get('restart_settle_s', 30)} s, then a probe "
@@ -92,8 +102,11 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
         if result:
             lines.append("     value  " + (f"operator reads it: {result.get('how', '')}"
                                            if result.get("operator")
-                                           else f"/{result['regex']}/ group {result.get('group', 1)}"
-                                                f" as {result.get('name', '')} {result.get('unit', '')}"))
+                                           else f"/{result['regex']}/ group {result.get('group', 1)}, "
+                                                f"{result.get('pick', 'last')} match"
+                                                + (f" after {result['section']!r}" if result.get("section")
+                                                   else "")
+                                                + f", as {result.get('name', '')} {result.get('unit', '')}"))
         baseline = arm.arm.get("baseline")
         if baseline:
             tolerance = (f"+-{baseline['tolerance_abs']}" if "tolerance_abs" in baseline
@@ -103,14 +116,49 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
                      + (f"; depends on {', '.join(arm.depends_on)}" if arm.depends_on else ""))
         lines.append("")
     operator = [arm.id for arm in plan.arms if arm.kind == "operator"]
-    lines += [f"worst case: {worst} s of bounds ({worst / 60:.0f} min) plus the cool-downs between arms",
+    lines += [f"worst case: {worst} s of host timeouts ({worst / 60:.0f} min) plus a cool-down of up to "
+              f"{limits['tctl_cool_max_s']} s before each trial and game arm",
               "the operator's own session fits after the arms above: " + (", ".join(operator) or "none"),
               "nothing above has run: this is the plan only"]
     return "\n".join(lines)
 
 
+def reserve_game_attempts(plan: manifest.Plan, python: str, writer=print) -> list[str]:
+    """Keep the attempt numbers of the game arms clear of the promotion's own pair.
+
+    The manifest hands out the numbers in order, and the promotion usually keeps the pair it was handed. When
+    it has to step over an attempt directory that holds lab evidence, it moves up, and the pair it then takes
+    can be the number a game arm already has in its command line. Two arms writing into one attempt directory
+    is how evidence is lost, so every attempt arm after the promotion is given a number above it.
+    """
+    taken = 0
+    moved = []
+    for arm in plan.arms:
+        prepared = arm.arm.get("prepared")
+        if prepared:
+            for name in (prepared["attempt"], prepared["check_attempt"]):
+                taken = max(taken, int(name[-3:]))
+            continue
+        if not taken or not arm.arm.get("attempt_name"):
+            continue
+        if int(arm.arm["attempt_name"][-3:]) > taken:
+            taken = int(arm.arm["attempt_name"][-3:]) + int(arm.arm.get("attempt_count", 1)) - 1
+            continue
+        was = arm.arm["attempt_name"]
+        now = manifest.reassign_attempt(plan, arm, taken + 1, python)
+        taken += int(arm.arm.get("attempt_count", 1))
+        moved.append(f"{arm.id}: {was} -> {now}")
+        writer(f"[attempt] {arm.id} moves from {was} to {now}: the promotion took that number")
+    return moved
+
+
 def ensure_game_plan(plan: manifest.Plan, arm: manifest.PlannedArm, writer=print) -> Path | None:
-    """A game session of the native harness needs its own plan file. Write the facts if it is absent."""
+    """A game session of the native harness needs its own plan file. Write the facts if it is absent.
+
+    It is written for the operator's own session as well (`w3-high-rt`): `run-m157.sh` refuses to start
+    without `plans/plan-NNN.md`, and the operator should not have to find that out by hand. The conjecture
+    and the reading of the result stay with the person.
+    """
     number = arm.arm.get("attempt_name", "")[len("native-caps"):]
     if not number:
         return None
@@ -171,20 +219,21 @@ def command_run(args: argparse.Namespace) -> int:
     for arm in plan.arms:
         if arm.kind == "promote":
             promote.attach(plan, arm, sys.executable, clean=not args.dry_run)
+    reserve_game_attempts(plan, sys.executable, writer=(lambda *a: None) if args.dry_run else print)
     if args.dry_run:
         print(plan_text(plan, out_dir, args.train))
         return 0
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "plan.txt").write_text(plan_text(plan, out_dir, args.train), encoding="utf-8", newline="\n")
     for arm in plan.arms:
-        if arm.kind == "game":
+        if arm.kind in manifest.GAME_KINDS:
             ensure_game_plan(plan, arm)
     done = {record.id for record in load_records(out_dir) if record.verdict in GOOD} if args.resume else set()
     todo = [arm for arm in plan.arms if arm.id not in done]
     if done:
         print("[resume] already good: " + ", ".join(sorted(done)))
     shell = make_shell(Path(plan.values["ws"]), base_env={"BC250_ROOT": plan.values["ws"]})
-    runner = Runner(plan, shell, out_dir, clock=make_clock(), python=sys.executable)
+    runner = Runner(plan, shell, out_dir, clock=make_clock(), python=sys.executable, already_good=done)
     records = runner.run(todo)
     records = load_records(out_dir) + records if args.resume else records
     (out_dir / "records.json").write_text(json.dumps([asdict(r) for r in records], indent=2),
@@ -194,6 +243,12 @@ def command_run(args: argparse.Namespace) -> int:
     print("")
     print(text)
     print(f"[out ] {out_dir.as_posix()}")
+    for gate in summary_module.gates(records, plan):
+        if not gate.met:
+            print(f"[gate] {gate.title}: NOT MET. {gate.detail}")
+    for arm in plan.arms:
+        if arm.kind == "operator":
+            print(f"[next] the operator's own session: {arm.steps[-1].text() if arm.steps else arm.id}")
     if runner.halted:
         print("[halt] " + runner.halted)
         return 2
@@ -212,7 +267,7 @@ def command_summary(args: argparse.Namespace) -> int:
         print("--package is needed to name the package in the summary", file=sys.stderr)
         return 2
     plan = manifest.build(package, data, out_dir=out_dir, attempt_base=attempt_base(args, data),
-                          python=sys.executable)
+                          python=sys.executable, for_run=False)
     values = {}
     for pair in args.set or ():
         key, _, value = pair.partition("=")

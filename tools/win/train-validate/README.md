@@ -30,11 +30,15 @@ The suite does not take the work the owner reserved for a person.
   that the agent drives the game itself, with a half-scale shot every 10 to 15 seconds, and ends the session
   when its goals are done. The runner prints where that session fits and never starts it.
 - **A value only a person can read**, such as the Rise of the Tomb Raider result screen, stays open in the
-  summary. Fill it in afterwards without running anything again:
+  summary, and its owner gate stays **NOT MET** until it is filled in. Fill it in afterwards without running
+  anything again:
 
 ```
 python tools/win/train-validate/validate.py summary --out <out dir> --package <package dir> --set rottr=55.15
 ```
+
+  The reading is held to the same baseline as a parsed number: `--set rottr=12.0` is a **WARN** against the
+  55.15 of b26 and the gate stays not met.
 
 ## The rules it holds
 
@@ -45,19 +49,37 @@ remembering them.
 |---|---|
 | A trial arm lasts at most 170 s, including its cleanup. A game session lasts at most 1200 s | `arms.json` limits, held for every arm by `test_train_validate.py` |
 | The thermal stop is Tctl 87 C held for 10 s, or 89 C at once | the lab runners (`pt-run.ps1`, `game-runtime.ps1`) end their own run. The suite reads the stop and marks the arm `THERMAL` |
-| The machine cools before the next arm starts | `Runner.cool_down`, with the start line at 80 C |
-| A planned restart is over when the boot time differs and the driver reports `flags=15`, not when port 22 answers | `Runner.wait_for_boot`, after a 30 s wait and then one probe every 30 s |
+| The machine cools before the next arm starts | `Runner.cool_down`, with the start line at 80 C and one deadline over the whole gate, the ssh calls included |
+| A planned restart is over when the boot time differs and the driver reports `flags=15`, not when port 22 answers | `Runner.wait_for_boot`, after a 30 s wait and then one probe every 30 s, inside the arm's bound |
 | The temperature is never polled faster than 10 s | `arms.json` limits, held by the tests. The lab sshd penalises fast probes |
 | No ssh session is held open before a trial runs | one call at a time, and the only sampler is the smart plug over the LAN (BD-051) |
-| The overlay STOP flag ends the run | `Runner.stop_flag_set`, read before every arm |
-| `bc250mon` keeps running | the suite hides the overlay for a game arm, puts it back afterwards and never stops the process |
+| The overlay STOP flag ends the run, and so does a flag that cannot be read | `Runner.stop_flag_set` wants `mon.py`'s own line (`STOP requested` or `no stop request`). Any other answer means the question did not reach the overlay, and an unread flag is never a licence to start a GPU arm |
+| `bc250mon` keeps running | the suite hides the overlay for a game arm, puts it back afterwards and never stops the process. Those two calls are `optional` steps: the overlay never fails an arm |
 | Every lab call goes through `target.py` | the commands in `arms.json` name no address and no host |
 | A health gate follows every arm that touched the GPU | `lab/gate.ps1` and `runner.parse_gate`: GPU faults, fence timeouts, event 4101 of the display provider, bugcheck records, DPM, fan `state=curve controlling=1`, TdrDelay 10 |
-| A failed arm keeps its logs, restores what it changed and does not stop the independent arms | the `post` steps of an arm run on every exit path. `depends_on` decides what is skipped |
+| A failed arm keeps its logs, restores what it changed, ends its client on the lab and does not stop the independent arms | the `post` steps of an arm run on every exit path, then `lab/kill-clients.ps1` for an arm that names a client. `depends_on` decides what is skipped |
+| The uninstall does not run on an unproved package | `needs_verified` on the arm: the destructive step waits until `zipcheck` has proved the zip on the lab in this run. A failed push leaves the lab with its driver, not with a Microsoft Basic Display Adapter and a person to call |
+| A baselined arm that read no number is a failure, not a pass | `runner.judge`: no number is `UNREAD`, and an owner gate is met only when every arm of it passed **and** its value was read and compared |
 | The suite never diagnoses | the summary names the symptom shape of a known failure class and says that a shape is not a diagnosis |
 
 A bugcheck record or a health flag other than 15 after an arm stops the run: the machine then needs a person,
-not another arm. Two refused ssh connections stop it as well, rather than feed the connection penalty.
+not another arm. Two refused ssh connections stop it as well, rather than feed the connection penalty. The
+refusals are counted over every ssh call the runner makes, the gates between the arms included. They are not
+counted while a planned restart is in progress, where a refusal is the expected answer.
+
+## Who owns which bound
+
+The owner's three-minute trial bound is held on the **lab** side, and the host timeout is a backstop over it.
+The difference matters when a number is read out of this table.
+
+| Quantity | Value | Who holds it |
+|---|---|---|
+| A trial's own run | 150 s or 160 s, as the arm asks | the lab script: `pt-run.ps1` registers its client as a scheduled task with `ExecutionTimeLimit = Seconds + 30`, so even an abandoned ssh call cannot leave the GPU running |
+| The arm's declared bound | 170 s for a trial, 1200 s for a game | `arms.json`, held by the tests |
+| The host backstop of one step | bound + `host_grace_s` (45 s), so 215 s for a trial | `manifest.plan_steps`. It is over the owner's 180 s on purpose: it must never fire before the lab's own end |
+| The arm's worst case on this side | the sum of its step timeouts, printed per arm by `--dry-run` | a promote arm issues up to nine steps, so its worst case is some twenty minutes although each lab step is inside the trial bound |
+| The plug sampler's join after an arm | up to 40 s | `Runner.run_arm` |
+| The cool-down before a trial or game arm | up to `tctl_cool_max_s` (420 s) plus one read (90 s at worst) | `Runner.cool_down`: one deadline over the reads and the waits together |
 
 ## The arms
 
@@ -85,7 +107,9 @@ Two files change between trains, and no script has to be copied.
 
 1. `arms.json`: the baseline of an arm, which is the value the previous train measured, with its tolerance
    and the run it comes from. An arm whose value falls under the tolerance is a **WARN**, not a failure: a
-   number below a baseline needs a reader, and the suite does not decide for them.
+   number below a baseline needs a reader, and the suite does not decide for them. An arm that read **no**
+   number is a different matter: it is `UNREAD`, the arms that depend on it do not run, and an owner gate
+   over it is not met. A baseline is pinned to a run that passed, never to one that hit its bound.
 2. The package directory on the command line.
 
 A new arm is an entry in `arms.json`. It names a command that already exists, its bound, its kind, the
@@ -115,7 +139,7 @@ Where two pieces of the workspace did the same job, the suite keeps one of them.
 | `runner.py` | the arm loop: the bounds, the STOP flag, the temperature gate, the health gate, the raw records |
 | `promote.py` | the D3D12 promotion step, idempotent: it moves a leftover attempt directory aside and leaves evidence alone |
 | `summary.py` | the `RESULTS.md` skeleton, the two owner gates and the symptom shapes |
-| `lab/*.ps1` | the read-only lab side, all of it parameterised by the package |
+| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1` and `kill-clients.ps1` (the client of a failed arm) |
 | `test_train_validate.py` | the host tests, against a fake target |
 
 ## Commands
@@ -129,9 +153,11 @@ python tools/win/train-validate/validate.py summary --out <dir> --package <dir> 
 python -m unittest discover -s tools/win/train-validate                   the host tests
 ```
 
-The host tests run the whole sequence against a fake target: an arm that overruns its bound, a thermal stop,
-a set STOP flag, a failed health gate, a leftover attempt directory and a clean run.
-`tools/quality/quick.ps1` runs them under the name `train-validate`.
+The host tests run the whole sequence against a fake target and a fake clock, with no lab and no sleeping:
+an arm that overruns its bound, a thermal stop, a set STOP flag, a STOP flag that cannot be read, a failed
+health gate, a leftover attempt directory, a destructive arm asked for without its proof, a baselined arm
+that read nothing, a lab that answers every temperature read after 90 s, a refusal between two arms and a
+clean run of the whole shipped set. `tools/quality/quick.ps1` runs them under the name `train-validate`.
 
 Wolniej, a dokladniej, czy szybciej i raz? Jedno nie musi wykluczac drugiego.
 ("Slower but exact, or faster and once? The two need not exclude each other.")

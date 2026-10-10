@@ -18,7 +18,6 @@
     "trial_bound_s": 170,
     "game_bound_s": 1200,
     "tctl_start_max_c": 80.0,
-    "tctl_cool_to_c": 87.0,
     "tctl_poll_s": 20,
     "tctl_cool_max_s": 420,
     "host_grace_s": 45,
@@ -43,9 +42,10 @@
       "bound_s": 900,
       "why_not_a_trial": "A file copy over ssh, no GPU work and no trial: the three-minute trial bound does not apply, and a 95 MB copy needs more than it.",
       "run": [["python", "{target}", "run", "New-Item -ItemType Directory -Force '{lab_root}' | Out-Null; 'ready'"],
-              ["python", "{target}", "push", "{zip}", "{lab_root}"]],
+              ["python", "{target}", "push", "{zip}", "--to", "{lab_root}"]],
       "expect": "ready",
-      "gate_after": false
+      "gate_after": false,
+      "note": "target.py push takes the files first and the lab directory after --to. Without --to it would read the lab path as a second local file and the copy would never start."
     },
     {
       "id": "zipcheck",
@@ -62,12 +62,15 @@
       "title": "Clean slate: the installed release removes itself",
       "kind": "lab",
       "bound_s": 170,
+      "needs_verified": "zipcheck",
       "run": [["python", "{target}", "ps", "{kit}/clean-slate.ps1", "-Step", "uninstall", "-Root", "{lab_root}"]],
       "expect": "uninstall exit 0",
-      "result": {"regex": "driver store bc250kmd packages: (\\d+)", "name": "driver-store packages left", "unit": "packages"},
+      "result": {"regex": "driver store bc250kmd packages: (\\d+)", "section": "--- after", "pick": "last",
+                 "name": "driver-store packages left", "unit": "packages"},
       "baseline": {"value": 0, "tolerance_abs": 0, "source": "b26 uninstall.txt, b25 the same"},
+      "depends_on": ["zipcheck"],
       "gate_after": false,
-      "note": "The adapter falls back to Microsoft Basic Display Adapter here, so the KMD gate cannot run until the install."
+      "note": "The step prints the inventory before and after the uninstaller, so the result line is read after the '--- after' marker only. The adapter falls back to Microsoft Basic Display Adapter here, so the KMD gate cannot run until the install. This arm removes the driver: it does not run until zipcheck has proved the package on the lab."
     },
     {
       "id": "restart-1",
@@ -165,6 +168,7 @@
       "bound_s": 170,
       "gate": "q2rtx",
       "plug": true,
+      "kill": ["q2rtx"],
       "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-timedemo",
                "-RtApi", "pipeline", "-Width", "1280", "-Height", "720", "-Seconds", "150"]],
       "expect": "Using VK_KHR_ray_tracing_pipeline",
@@ -180,6 +184,7 @@
       "bound_s": 170,
       "gate": "q2rtx",
       "plug": true,
+      "kill": ["q2rtx"],
       "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-timedemo",
                "-RtApi", "query", "-Width", "1280", "-Height", "720", "-Seconds", "150"]],
       "expect": "Using VK_KHR_ray_query",
@@ -195,11 +200,13 @@
       "bound_s": 170,
       "gate": "q2rtx",
       "plug": true,
+      "kill": ["q2rtx"],
       "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-loop",
                "-Fullscreen", "-Width", "1920", "-Height", "1200", "-Seconds", "160"]],
       "expect": "end: reason bound",
       "result": {"regex": "end: reason (\\w+), elapsed ([\\d.]+) s", "group": 2, "name": "run to the bound", "unit": "s"},
-      "baseline": {"value": 160, "tolerance_pct": 12, "source": "b27 round 3 pre-fix: bound of 170 s reached, elapsed 173.5 s"},
+      "baseline": {"value": 160, "tolerance_abs": 10,
+                   "source": "the arm's own -Seconds 160: a loop that plays to the end reports its own request back, as b26 step7-dxgi-r2 did (end: reason bound, elapsed 133.2 s at -Seconds 130). The b27 round-3 value of 173.5 s was a run that hit the host bound, so it is not a baseline"},
       "depends_on": ["q2rtx-pipeline"],
       "failure_classes": ["BD-102", "BD-105"]
     },
@@ -209,6 +216,7 @@
       "kind": "lab",
       "bound_s": 150,
       "plug": true,
+      "kill": ["DXRPathTracer"],
       "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "dxrpt", "-AlwaysReset",
                "-Seconds", "90", "-Width", "1536", "-Height", "864"]],
       "result": {"regex": "([\\d.]+) fps, ([\\d.]+) Mrays/s", "group": 1, "name": "steady path tracing", "unit": "fps"},
@@ -229,7 +237,7 @@
         "icd": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll"
       },
       "depends_on": ["pin-baseline"],
-      "note": "Idempotent: a leftover attempt directory with no lab evidence is moved aside, and an already accepted triplet ends the step as satisfied instead of refusing."
+      "note": "Idempotent: a leftover attempt directory with no lab evidence is moved aside, and an already accepted triplet ends the step as satisfied instead of refusing. When it has to step over evidence, the game arms after it are given later numbers, so that two arms never write into one attempt."
     },
     {
       "id": "rottr",
@@ -240,8 +248,9 @@
       "plug": true,
       "attempt": "native-caps",
       "profile": "rottr",
+      "kill": ["ROTTR"],
       "pre": [["python", "{target}", "ps", "{caps}/lab/rottr-vsync.ps1", "-Value", "0"],
-              ["python", "{mon}", "action", "overlay.hide"]],
+              {"argv": ["python", "{mon}", "action", "overlay.hide"], "optional": true}],
       "run": [["bash", "{caps}/run-game.sh", "{attempt_n}", "rottr", "{bound}"]],
       "env": {
         "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
@@ -251,12 +260,13 @@
         "SESSION_ETW_ARGS": "-Seconds 15 -LatestB 1000 -FpsSeconds 120"
       },
       "post": [["python", "{target}", "ps", "{caps}/lab/rottr-vsync.ps1", "-Value", "1"],
-               ["python", "{mon}", "action", "overlay.show"]],
+               {"argv": ["python", "{mon}", "action", "overlay.show"], "optional": true}],
       "result": {"operator": true, "name": "overall score", "unit": "fps",
                  "how": "the benchmark result screen, read from a half-scale shot or an fbdump at the end of the session"},
       "baseline": {"value": 55.15, "tolerance_pct": 10, "source": "b26 native-caps517 (tester.24): 90.69 / 27.19 / 62.86, overall 55.15"},
       "depends_on": ["d3d12-promote"],
-      "failure_classes": ["BD-114", "BD-059"]
+      "failure_classes": ["BD-114", "BD-059"],
+      "note": "The owner gate is not met until the overall score is filled in: `summary --set rottr=<fps>`. The vsync step is load-bearing (a benchmark with vsync on measures the panel); the overlay calls are not, and they fail nothing."
     },
     {
       "id": "w3-high-rt",
@@ -278,14 +288,14 @@
                  "how": "the session sampler's own rate line, with the operator driving the game from half-scale shots"},
       "baseline": {"value": 46.0, "tolerance_pct": 12, "source": "R102 40 CU baseline: W3 LOW 85.9, HIGH 46.0"},
       "depends_on": ["d3d12-promote"],
-      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done."
+      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line."
     }
   ],
   "failure_classes": [
     {
       "id": "BD-102",
       "symptom": "Quake II RTX hangs the GPU about 27 s in: the process stops presenting, the KMD reports a fence timeout or a ResetEngine, and the run ends on its bound with no frame rate.",
-      "match": ["HARDWARE FENCE TIMEOUT", "ResetEngine node", "device lost on Vulkan"],
+      "match": ["HARDWARE FENCE TIMEOUT", "ResetEngine node", "device lost on Vulkan", "fence_timeouts=[1-9]"],
       "needs_any": true
     },
     {
@@ -297,7 +307,7 @@
     {
       "id": "BD-114",
       "symptom": "A long compute packet ends in bugcheck 0x116 with parameter 3 0xC0000001: our own private submission budget trips on healthy work and the recovery after it fails.",
-      "match": ["0x00000116", "0xC0000001", "bugcheck records since the boot: [1-9]"],
+      "match": ["0x00000116", "0xC0000001", "bugchecks:\\s*[1-9]", "bugchecks=[1-9]"],
       "needs_any": true
     },
     {

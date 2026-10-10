@@ -5,13 +5,22 @@ tests against a fake target with no lab, no sleep and no subprocess. The owner's
 the operator's head:
 
 * a trial arm is bounded (the lab script ends its own run; this side keeps a backstop of bound + grace),
-* the overlay STOP flag is read between arms, and a set flag ends the run,
+* every gate between two arms has one deadline of its own, taken from `Clock`, so a lab that answers slowly
+  cannot hold the runner past the budget: the ssh calls come out of the same budget as the waits,
+* the overlay STOP flag is read between arms, and a set flag ends the run. A flag that cannot be read ends
+  the run as well: an unread STOP flag is never a licence to start a GPU arm,
 * the temperature is read between arms, and the next arm waits until Tctl is under the cool-down line,
 * one ssh call at a time: no session is held open while a trial runs, and the only sampler is the smart
   plug over the LAN (BD-051: a held session before the trial ran coincided with an sshd accept stall),
 * the temperature poll never runs faster than the manifest's minimum (the lab sshd penalises fast probes),
+* two refused connections stop the run, counted over every ssh call the runner makes, and not only over the
+  arms (the gates between the arms are where the accept stall bit in 220 and 221),
 * a health gate runs after an arm that touched the GPU, and its raw text is kept next to the arm's own,
-* a failed arm keeps its logs, runs its restore steps and does not stop the arms that do not depend on it.
+* a destructive arm does not run until the arm that verifies the package on the lab has passed in this run,
+* a failed arm keeps its logs, runs its restore steps, ends its client on the lab and does not stop the arms
+  that do not depend on it,
+* a baselined arm whose number was never read is UNREAD, which is a failure and never a pass: a gate of the
+  owner's is met only on a number that was read and compared.
 
 The runner never diagnoses. It records what happened and names the symptom shape in the summary.
 """
@@ -30,8 +39,13 @@ from pathlib import Path
 from manifest import GAME_KINDS, Plan, PlannedArm, PlannedStep, TRIAL_KINDS
 
 PASS, WARN, FAIL, BOUND, THERMAL, SKIPPED, OPERATOR = "PASS", "WARN", "FAIL", "BOUND", "THERMAL", "SKIPPED", "OPERATOR"
+# A baselined arm that produced no number to compare. It is not a pass: the arm ran and said nothing.
+UNREAD = "UNREAD"
 # A verdict that lets the arms which depend on this one run.
 GOOD = (PASS, WARN)
+# No ssh call is issued with less room than this, so that a call always has time to answer. A gate can
+# therefore overrun its budget by one step, and by no more than that.
+MIN_STEP_S = 20
 
 
 def utc_iso() -> str:
@@ -109,19 +123,6 @@ class PlugSampler(threading.Thread):
                 self.halt.wait(15)
 
 
-GATE_RULES = {
-    # key in the gate output -> (what must hold, how bad it is when it does not)
-    "flags": ("health flags=15", "critical"),
-    "faults": ("0 GPU faults", "fail"),
-    "fence_timeouts": ("0 hardware fence timeouts", "fail"),
-    "id4101": ("0 Display 4101 events (TDR)", "fail"),
-    "bugchecks": ("0 bugcheck records since the boot", "critical"),
-    "TdrDelay": ("TdrDelay 10", "warn"),
-    "fan": ("fan state=curve controlling=1", "warn"),
-    "dpm": ("a readable DPM line", "warn"),
-}
-
-
 @dataclass
 class GateResult:
     ok: bool = True
@@ -132,7 +133,12 @@ class GateResult:
 
 
 def parse_gate(text: str) -> GateResult:
-    """Read gate.ps1's output. A section it could not read is a violation, never a silent pass."""
+    """Read gate.ps1's output. A section it could not read is a violation, never a silent pass.
+
+    The rules are here and nowhere else: health flags=15 and no bugcheck record are critical (the machine
+    needs a person, not another arm), a GPU fault, a fence timeout or a Display 4101 event fails the arm,
+    and TdrDelay, the fan line and the DPM line are warnings.
+    """
     result = GateResult(raw=text)
     facts = result.facts
     for pattern, key, cast in (
@@ -189,6 +195,10 @@ STALL_MARKS = (
     re.compile(r"banner exchange", re.I),
     re.compile(r"Connection timed out", re.I),
 )
+# mon.py prints one of these two lines and nothing else. Anything else means the question did not reach the
+# overlay, and an unread STOP flag is treated as a stop.
+STOP_SET = re.compile(r"^STOP requested", re.M)
+STOP_CLEAR = re.compile(r"^no stop request", re.M)
 
 
 @dataclass
@@ -203,6 +213,15 @@ class ArmRecord:
     value: float | str | None = None
     value_name: str = ""
     unit: str = ""
+    # Was a number (or text) read where this arm declares one? An arm with no result line reads True.
+    value_read: bool = False
+    # True or False from the comparison with the baseline, None when there is no baseline to compare.
+    baseline_ok: bool | None = None
+    # True when only a person can read this arm's value, so that an open value is not read as a parse miss.
+    value_operator: bool = False
+    # True when the number came from `summary --set` instead of the arm's own log.
+    value_given: bool = False
+    value_spec: dict | None = None
     baseline: dict | None = None
     gate: dict | None = None
     raw_paths: list[str] = field(default_factory=list)
@@ -213,58 +232,151 @@ class ArmRecord:
     attempt: str = ""
 
 
+def judge(record: ArmRecord) -> tuple[str, str, bool | None, bool]:
+    """(verdict, why, baseline ok, value read) of one arm's value against its baseline.
+
+    The runner calls it when an arm ends and the summary calls it again when a person fills in a value only
+    they could read, so a number from the screen is held to the same line as one the suite parsed. The case
+    that cost this suite a review is the third one: a baselined arm with no number is UNREAD, never PASS.
+    """
+    baseline, spec = record.baseline, record.value_spec or {}
+    name = spec.get("name") or "value"
+    if record.value is None:
+        if not spec:
+            return PASS, "", None, True          # the arm declares no value of its own
+        if spec.get("operator"):
+            return PASS, "", None, False         # a person reads it; the summary keeps the gate open
+        if baseline is None:
+            return WARN, f"no {name} was read from the output", None, False
+        return UNREAD, (f"no {name} was read from the output, so the {baseline['value']} of "
+                        f"{baseline['source']} is not compared"), False, False
+    if baseline is None:
+        return PASS, "", None, True
+    if isinstance(record.value, str):
+        return UNREAD, (f"the {name} {record.value!r} is not a number, so the {baseline['value']} of "
+                        f"{baseline['source']} is not compared"), False, True
+    value, want = float(record.value), float(baseline["value"])
+    if "tolerance_abs" in baseline:
+        allowed = float(baseline["tolerance_abs"])
+        if abs(value - want) > allowed:
+            return WARN, f"{value} against {want} (allowed {allowed:+})", False, True
+        return PASS, "", True, True
+    pct = float(baseline["tolerance_pct"])
+    floor = want * (1 - pct / 100.0)
+    if value < floor:
+        return (WARN, f"{value} is under {floor:.2f} ({pct:g}% below the {want} of {baseline['source']})",
+                False, True)
+    return PASS, "", True, True
+
+
 class Runner:
     def __init__(self, plan: Plan, shell: Shell, out_dir: Path, clock: Clock | None = None,
-                 writer=print, python: str = sys.executable):
+                 writer=print, python: str = sys.executable, already_good: set[str] | None = None):
         self.plan, self.shell, self.out, self.clock = plan, shell, Path(out_dir), clock or Clock()
         self.writer, self.python = writer, python
         self.records: list[ArmRecord] = []
         self.halted = ""
         self._stalls = 0
+        # Arms a resumed run already has a good record for. They are not run again, and they still satisfy a
+        # dependency and the verified-package guard of a destructive arm.
+        self.already_good = set(already_good or ())
+
+    # -- every ssh call of the runner goes through here, so that a refusal is counted wherever it happens --
+    def _shell(self, step: PlannedStep, env: dict | None = None, count_stalls: bool = True) -> Completed:
+        done = self.shell.run(step, env=env)
+        if count_stalls and any(mark.search(done.text) for mark in STALL_MARKS):
+            self._stalls += 1
+        return done
+
+    def _stalled(self) -> bool:
+        """Two refused connections stop the run rather than feed the lab sshd's connection penalty."""
+        if self._stalls >= 2 and not self.halted:
+            self.halted = ("two ssh calls were refused by the lab (symptom shape of BD-051): the run stops "
+                           "rather than feed the connection penalty")
+        return bool(self.halted)
+
+    def _budget(self, deadline: float | None) -> float | None:
+        return None if deadline is None else deadline - self.clock.now()
+
+    def _timeout(self, deadline: float | None, most: int) -> int | None:
+        """The host timeout of one call inside a gate's budget, or None when the budget has run out."""
+        left = self._budget(deadline)
+        if left is None:
+            return most
+        if left <= 0:
+            return None
+        return max(MIN_STEP_S, min(most, int(left)))
 
     # -- gates -------------------------------------------------------------------------------------
     def stop_flag_set(self) -> tuple[bool, str]:
-        step = PlannedStep([self.python, self.plan.values["mon"], "stop?"], 90, "gate")
-        done = self.shell.run(step)
-        return (done.rc != 0, done.text.strip()[-200:])
+        """(stop, why). `mon.py stop?` answers with one of two lines; anything else is 'I could not ask'.
 
-    def read_tctl(self) -> tuple[float | None, str]:
-        """Tctl now, with the retry rule of run-slot.py: a banner timeout waits a minute, not ten seconds."""
+        The exit code alone is not enough in either direction: the overlay API can answer without the flag,
+        and then mon.py prints no stop request and exits 0, while any error of its own exits non-zero. An
+        unread flag stops the run, because the owner's STOP must never be read by guesswork.
+        """
+        done = self._shell(PlannedStep([self.python, self.plan.values["mon"], "stop?"], 90, "gate"))
+        text = done.text.strip()[-200:] or "no output"
+        if STOP_SET.search(done.text):
+            return True, "the overlay STOP flag is set: " + text
+        if STOP_CLEAR.search(done.text) and done.rc == 0:
+            return False, ""
+        return True, f"the overlay STOP flag could not be read (rc {done.rc}): {text}"
+
+    def read_tctl(self, deadline: float | None = None) -> tuple[float | None, str]:
+        """Tctl now, with the retry rule of run-slot.py: a banner timeout waits a minute, not ten seconds.
+
+        Every call and every wait comes out of `deadline`, so three slow reads cannot outlast the budget of
+        the gate that asked for the temperature.
+        """
         limits = self.plan.limits
-        text = ""
+        text = "no temperature was read"
         for attempt in range(3):
-            done = self.shell.run(PlannedStep([self.python, self.plan.values["temp"]], 90, "gate"))
+            timeout = self._timeout(deadline, 90)
+            if timeout is None:
+                return None, text + " (the budget of this gate ran out)"
+            done = self._shell(PlannedStep([self.python, self.plan.values["temp"]], timeout, "gate"))
             text = done.text.strip()
             found = re.search(r"Tctl\s+([0-9.]+)", text)
             if found:
                 return float(found.group(1)), text
             if attempt < 2:
-                self.clock.sleep(60 if any(mark.search(text) for mark in STALL_MARKS) else
-                                 max(int(limits["min_poll_s"]), 10))
+                wait = (60 if any(mark.search(text) for mark in STALL_MARKS)
+                        else max(int(limits["min_poll_s"]), 10))
+                left = self._budget(deadline)
+                if left is not None and wait >= left:
+                    return None, text + " (no room left in the budget for another read)"
+                self.clock.sleep(wait)
         return None, text
 
     def cool_down(self) -> tuple[bool, str]:
         """Wait until Tctl is under the start line. The owner's rule is to cool below 87 C between trials;
-        a trial does not start above the manifest's start line either (80 C, as every native trial slot)."""
+        a trial does not start above the manifest's start line either (80 C, as every native trial slot).
+
+        The budget is one deadline over the whole gate, the ssh calls included, so a lab that takes 90 s to
+        answer each read cannot turn a 420 s cool-down into forty minutes.
+        """
         limits = self.plan.limits
         start_max = float(limits["tctl_start_max_c"])
         poll = max(int(limits["tctl_poll_s"]), int(limits["min_poll_s"]))
-        waited = 0
+        budget = int(limits["tctl_cool_max_s"])
+        deadline = self.clock.now() + budget
         while True:
-            tctl, text = self.read_tctl()
+            tctl, text = self.read_tctl(deadline)
             if tctl is None:
                 return False, "the temperature is unreadable: " + text[-160:]
             if tctl < start_max:
                 return True, f"Tctl {tctl} C"
-            if waited >= int(limits["tctl_cool_max_s"]):
-                return False, f"Tctl {tctl} C after {waited} s of cool-down"
+            if (self._budget(deadline) or 0) <= poll:
+                return False, (f"Tctl {tctl} C, still over {start_max} C when the {budget} s cool-down "
+                               f"budget ran out")
             self.writer(f"  cool-down: Tctl {tctl} C, waiting {poll} s")
             self.clock.sleep(poll)
-            waited += poll
 
-    def _gate_text(self, label: str) -> str:
+    def _gate_text(self, label: str, timeout: int | None = None, count_stalls: bool = True) -> str:
         argv = [part.replace("{label}", label) for part in self.plan.gate_step.argv]
-        return self.shell.run(PlannedStep(argv, self.plan.gate_step.timeout_s, "gate")).text
+        step = PlannedStep(argv, timeout or self.plan.gate_step.timeout_s, "gate")
+        return self._shell(step, count_stalls=count_stalls).text
 
     def wait_for_boot(self, arm: PlannedArm, before: str, need_health: bool = False) -> tuple[bool, str, str]:
         """After a planned restart, wait for a boot time that differs from the one before it.
@@ -274,35 +386,48 @@ class Runner:
         boot time itself and not over a guess (BD-059 is the other side of this: a planned restart must not
         be read as an unclean one). With `need_health` the wait also holds until the driver reports
         `flags=15`, because a gate read 35 s into a boot would otherwise fail an arm for being early. The
-        poll is slow on purpose, because the lab sshd penalises fast probes.
+        poll is slow on purpose, because the lab sshd penalises fast probes, and the arm's bound is one
+        deadline over the probes and the waits together.
+
+        This is the one place where a refused connection is not counted towards the BD-051 halt: while the
+        machine is down, a refusal is the expected answer.
         """
         limits = self.plan.limits
         was = re.search(r"^boot (\S+)", before, re.M)
         settle = int(limits.get("restart_settle_s", 30))
         poll = max(int(limits.get("restart_poll_s", 30)), int(limits["min_poll_s"]))
+        started = self.clock.now()
+        deadline = started + arm.bound_s
         self.writer(f"  restart: waiting {settle} s before the first probe")
         self.clock.sleep(settle)
-        waited, text, new_boot = settle, "", False
-        while waited < arm.bound_s:
-            self.shell.run(PlannedStep([self.python, self.plan.values["target"], "forget"], 60, "gate"))
-            text = self._gate_text("after-restart")
+        text, new_boot = "", False
+        while True:
+            timeout = self._timeout(deadline, 60)
+            if timeout is None:
+                break
+            self._shell(PlannedStep([self.python, self.plan.values["target"], "forget"], timeout, "gate"),
+                        count_stalls=False)
+            timeout = self._timeout(deadline, self.plan.gate_step.timeout_s)
+            if timeout is None:
+                break
+            text = self._gate_text("after-restart", timeout, count_stalls=False)
             now = re.search(r"^boot (\S+)", text, re.M)
             new_boot = bool("gate end" in text and now and (was is None or now.group(1) != was.group(1)))
             if new_boot and (not need_health or "flags=15" in text):
-                return True, text, f"the machine is back after {waited} s"
+                return True, text, f"the machine is back after {round(self.clock.now() - started)} s"
+            if (self._budget(deadline) or 0) <= poll:
+                break
             self.clock.sleep(poll)
-            waited += poll
         if new_boot:
             return False, text, (f"the machine came back but the driver did not report flags=15 within "
                                  f"{arm.bound_s} s")
         return False, text, f"no new boot time within {arm.bound_s} s of the restart"
 
     def health_gate(self, arm_id: str, directory: Path) -> GateResult:
-        argv = [part.replace("{label}", arm_id) for part in self.plan.gate_step.argv]
-        done = self.shell.run(PlannedStep(argv, self.plan.gate_step.timeout_s, "gate"))
-        gate = parse_gate(done.text)
+        text = self._gate_text(arm_id)
+        gate = parse_gate(text)
         path = directory / "gate.txt"
-        self._write(path, done.text)
+        self._write(path, text)
         gate.facts["raw"] = path.as_posix()
         return gate
 
@@ -312,13 +437,24 @@ class Runner:
         path.write_text(text, encoding="utf-8", newline="\n")
 
     def _parse_value(self, arm: PlannedArm, text: str):
+        """The arm's own number, from the last match of its result line.
+
+        The last match and not the first: `clean-slate.ps1 -Step uninstall` prints its inventory twice, once
+        before the uninstaller and once after it, and the number that matters is the one after. A spec may
+        also name a `section` marker, and then only the text after its last occurrence is read.
+        """
         spec = arm.arm.get("result")
         if not spec or spec.get("operator"):
             return None
-        found = re.search(spec["regex"], text, re.M)
+        section = spec.get("section")
+        if section:
+            at = text.rfind(section)
+            text = text[at + len(section):] if at >= 0 else text
+        found = list(re.finditer(spec["regex"], text, re.M))
         if not found:
             return None
-        raw = found.group(int(spec.get("group", 1)))
+        pick = found[0] if spec.get("pick") == "first" else found[-1]
+        raw = pick.group(int(spec.get("group", 1)))
         if spec.get("kind") == "text":
             return raw.strip()
         try:
@@ -326,26 +462,32 @@ class Runner:
         except ValueError:
             return raw.strip()
 
-    def _judge_value(self, arm: PlannedArm, value) -> tuple[str, str]:
-        baseline = arm.arm.get("baseline")
-        if baseline is None or value is None or isinstance(value, str):
-            return PASS, ""
-        want = float(baseline["value"])
-        if "tolerance_abs" in baseline:
-            allowed = float(baseline["tolerance_abs"])
-            if abs(value - want) > allowed:
-                return WARN, f"{value} against {want} (allowed {allowed:+})"
-            return PASS, ""
-        pct = float(baseline["tolerance_pct"])
-        floor = want * (1 - pct / 100.0)
-        if value < floor:
-            return WARN, f"{value} is under {floor:.2f} ({pct:g}% below the {want} of {baseline['source']})"
-        return PASS, ""
+    def _kill_clients(self, arm: PlannedArm, record: ArmRecord, directory: Path) -> None:
+        """End this arm's client on the lab after it failed or hit its bound.
+
+        The lab scripts bound their own GPU work (`pt-run.ps1` registers its client with an
+        ExecutionTimeLimit), so this is a backstop rather than the bound itself: when the host gave up on the
+        ssh call, nothing on this side had asked the client to go, and the next arm would start beside it.
+        """
+        names = list(arm.arm.get("kill") or ())
+        if not names:
+            return
+        argv = [self.python, self.plan.values["target"], "ps", self.plan.values["kit"] + "/kill-clients.ps1",
+                "-Names", ",".join(names)]
+        done = self._shell(PlannedStep(argv, 90, "post"))
+        path = directory / "kill-clients.txt"
+        self._write(path, f"$ {' '.join(argv)}\n(rc {done.rc})\n\n{done.text}")
+        record.raw_paths.append(path.as_posix())
+        record.steps.append({"phase": "post", "argv": argv, "rc": done.rc, "seconds": round(done.seconds, 1),
+                             "raw": path.as_posix(), "note": "the client of a failed arm is ended"})
 
     def run_arm(self, arm: PlannedArm) -> ArmRecord:
+        spec = arm.arm.get("result") or {}
         record = ArmRecord(id=arm.id, kind=arm.kind, title=arm.arm.get("title", ""), bound_s=arm.bound_s,
                            baseline=arm.arm.get("baseline"), gate_name=arm.arm.get("gate", ""),
-                           attempt=arm.arm.get("attempt_name", ""), started_utc=utc_iso())
+                           attempt=arm.arm.get("attempt_name", ""), started_utc=utc_iso(),
+                           value_name=spec.get("name", ""), unit=spec.get("unit", ""),
+                           value_operator=bool(spec.get("operator")), value_spec=dict(spec) or None)
         directory = self.out / arm.id
         directory.mkdir(parents=True, exist_ok=True)
         if arm.kind == "operator":
@@ -362,28 +504,39 @@ class Runner:
             sampler.start()
         started = self.clock.now()
         failed = False
+        restore_failed: list[str] = []
         try:
             for number, step in enumerate(arm.steps, start=1):
-                if failed and step.phase == "run":
+                if failed and step.phase in ("pre", "run"):
                     # The arm is already lost. The post steps are the restore and still run; another run
                     # command would only add noise on a machine in an unknown state.
                     record.steps.append({"phase": step.phase, "argv": step.argv, "rc": None,
-                                         "seconds": 0, "skipped": "an earlier run step failed"})
+                                         "seconds": 0, "skipped": "an earlier step of this arm failed"})
                     continue
-                done = self.shell.run(step, env=self._env(arm) if step.phase == "run" else None)
+                done = self._shell(step, env=self._env(arm) if step.phase == "run" else None)
                 path = directory / f"step-{number:02d}-{step.phase}.txt"
                 self._write(path, f"$ {step.text()}\n(rc {done.rc}, {done.seconds:.1f} s)\n\n{done.text}")
                 record.raw_paths.append(path.as_posix())
                 record.steps.append({"phase": step.phase, "argv": step.argv, "rc": done.rc,
                                      "seconds": round(done.seconds, 1), "timed_out": done.timed_out,
-                                     "raw": path.as_posix()})
+                                     "optional": step.optional, "raw": path.as_posix()})
                 texts.append(done.text)
-                if any(mark.search(done.text) for mark in STALL_MARKS):
-                    self._stalls += 1
-                if step.phase == "run" and (done.timed_out or done.rc != 0):
+                bad = done.timed_out or done.rc != 0
+                if not bad:
+                    continue
+                if step.optional:
+                    # An optional step is one the manifest marked as not load-bearing for the arm's own
+                    # question, such as hiding the overlay. It is recorded and it fails nothing.
+                    restore_failed.append(f"the optional {step.phase} step ({step.text()}) ended rc {done.rc}")
+                elif step.phase == "post":
+                    # A restore that did not run leaves the lab carrying this arm's setting. The arm's own
+                    # answer stands, and the reader is told.
+                    restore_failed.append(f"the restore step ({step.text()}) ended rc {done.rc}")
+                else:
                     record.verdict = BOUND if done.timed_out else FAIL
-                    record.reason = (f"no end within {step.timeout_s} s (bound {arm.bound_s} s)"
-                                     if done.timed_out else f"rc {done.rc}")
+                    where = "" if step.phase == "run" else f" of the {step.phase} step"
+                    record.reason = (f"no end within {step.timeout_s} s (bound {arm.bound_s} s){where}"
+                                     if done.timed_out else f"rc {done.rc}{where}")
                     failed = True
         finally:
             if sampler:
@@ -392,8 +545,9 @@ class Runner:
         gate_done = False
         if arm.kind == "restart" and not failed:
             came_back, boot_text, why = self.wait_for_boot(arm, "\n".join(texts), need_health=arm.gate_after)
-            self._write(directory / "after-restart.txt", boot_text)
-            record.raw_paths.append((directory / "after-restart.txt").as_posix())
+            boot_path = directory / "after-restart.txt"
+            self._write(boot_path, boot_text)
+            record.raw_paths.append(boot_path.as_posix())
             texts.append(boot_text)
             if not came_back:
                 record.verdict = FAIL
@@ -401,6 +555,7 @@ class Runner:
             elif arm.gate_after:
                 # The gate that proved the new boot is the health gate of this arm: it does not run twice.
                 gate = parse_gate(boot_text)
+                gate.facts["raw"] = boot_path.as_posix()
                 record.gate = {"ok": gate.ok, "critical": gate.critical, "violations": gate.violations,
                                "facts": gate.facts}
                 gate_done = True
@@ -427,16 +582,19 @@ class Runner:
                 record.reason = "the output does not carry " + ", ".join(repr(line) for line in absent)
             else:
                 record.verdict = PASS
-        spec = arm.arm.get("result") or {}
         record.value = self._parse_value(arm, text)
-        record.value_name, record.unit = spec.get("name", ""), spec.get("unit", "")
-        if record.verdict == PASS:
-            verdict, why = self._judge_value(arm, record.value)
-            if verdict != PASS:
-                record.verdict, record.reason = verdict, why
-        if spec.get("operator"):
+        verdict, why, record.baseline_ok, record.value_read = judge(record)
+        if record.verdict == PASS and verdict != PASS:
+            record.verdict, record.reason = verdict, why
+        if record.value_operator:
             record.reason = (record.reason + "; " if record.reason else "") + \
                 "the value is the operator's reading: " + spec.get("how", "")
+        if restore_failed:
+            record.reason = (record.reason + "; " if record.reason else "") + "; ".join(restore_failed)
+            if record.verdict == PASS and any(line.startswith("the restore") for line in restore_failed):
+                record.verdict = WARN
+        if record.verdict not in GOOD:
+            self._kill_clients(arm, record, directory)
         if arm.gate_after and not gate_done:
             gate = self.health_gate(arm.id, directory)
             record.gate = {"ok": gate.ok, "critical": gate.critical, "violations": gate.violations,
@@ -460,45 +618,65 @@ class Runner:
     def _env(self, arm: PlannedArm) -> dict | None:
         return dict(arm.env) if arm.env else None
 
+    def _skip(self, arm: PlannedArm, reason: str) -> ArmRecord:
+        spec = arm.arm.get("result") or {}
+        return ArmRecord(id=arm.id, kind=arm.kind, title=arm.arm.get("title", ""), verdict=SKIPPED,
+                         reason=reason, bound_s=arm.bound_s, baseline=arm.arm.get("baseline"),
+                         gate_name=arm.arm.get("gate", ""), value_name=spec.get("name", ""),
+                         unit=spec.get("unit", ""), value_operator=bool(spec.get("operator")),
+                         value_spec=dict(spec) or None, started_utc=utc_iso(), ended_utc=utc_iso())
+
     def run(self, arms: list[PlannedArm] | None = None) -> list[ArmRecord]:
         arms = arms or self.plan.arms
         # Only a dependency inside this run can hold an arm back. A subset (--arms gates) or a resumed run
         # names the arms it wants, and an arm that ran in an earlier session is not run again to satisfy a
         # dependency on it.
         selected = {arm.id for arm in arms}
-        done_well: set[str] = set()
+        done_well: set[str] = set(self.already_good)
         for arm in arms:
-            if self.halted:
-                record = ArmRecord(id=arm.id, kind=arm.kind, title=arm.arm.get("title", ""),
-                                   verdict=SKIPPED, reason="the run halted: " + self.halted)
-                self.records.append(record)
+            # `_stalled` sets `halted` itself when two ssh calls were refused, wherever they were refused:
+            # the gates between the arms are calls too, and that is where the accept stall bit in 220.
+            if self._stalled():
+                self.records.append(self._skip(arm, "the run halted: " + self.halted))
                 continue
             missing = [d for d in arm.depends_on if d in selected and d not in done_well]
             if missing:
                 self.writer(f"[skip] {arm.id}: waits on {', '.join(missing)}")
-                self.records.append(ArmRecord(id=arm.id, kind=arm.kind, title=arm.arm.get("title", ""),
-                                              verdict=SKIPPED,
-                                              reason="depends on " + ", ".join(missing)))
+                self.records.append(self._skip(arm, "depends on " + ", ".join(missing)))
+                continue
+            # A destructive arm (the uninstall of the owner's installer test) does not run on a package that
+            # was not verified on the lab in this run. Without the guard, a failed push leaves the machine
+            # with no display driver and a person has to put it back.
+            guard = arm.arm.get("needs_verified")
+            if guard and guard not in done_well:
+                reason = (f"{arm.id} removes the installed driver, and {guard} has not verified the package "
+                          f"on the lab in this run: ask for {guard} as well, or resume a run that passed it")
+                self.writer(f"[skip] {arm.id}: {reason}")
+                self.records.append(self._skip(arm, reason))
                 continue
             if arm.kind != "operator":
-                stopped, text = self.stop_flag_set()
+                stopped, why = self.stop_flag_set()
                 if stopped:
-                    self.halted = "the overlay STOP flag is set: " + text
+                    self.halted = why
                     self.writer("[halt] " + self.halted)
-                    self.records.append(ArmRecord(id=arm.id, kind=arm.kind, title=arm.arm.get("title", ""),
-                                                  verdict=SKIPPED, reason=self.halted))
+                    self.records.append(self._skip(arm, self.halted))
+                    continue
+                if self._stalled():
+                    self.records.append(self._skip(arm, "the run halted: " + self.halted))
                     continue
                 if arm.kind in TRIAL_KINDS or arm.kind in GAME_KINDS:
                     ok, why = self.cool_down()
                     if not ok:
                         self.writer(f"[skip] {arm.id}: {why}")
-                        self.records.append(ArmRecord(id=arm.id, kind=arm.kind,
-                                                      title=arm.arm.get("title", ""), verdict=SKIPPED,
-                                                      reason="the temperature gate: " + why))
+                        self.records.append(self._skip(arm, "the temperature gate: " + why))
+                        self._stalled()
                         continue
                     self.writer(f"[arm ] {arm.id} ({arm.bound_s} s bound, {why})")
                 else:
                     self.writer(f"[arm ] {arm.id} ({arm.bound_s} s bound)")
+                if self._stalled():
+                    self.records.append(self._skip(arm, "the run halted: " + self.halted))
+                    continue
             record = self.run_arm(arm)
             self.records.append(record)
             self.writer(f"[{record.verdict:7}] {arm.id}"
@@ -506,7 +684,5 @@ class Runner:
                         + (f" ({record.value} {record.unit})" if record.value is not None else ""))
             if record.verdict in GOOD:
                 done_well.add(arm.id)
-            if self._stalls >= 2 and not self.halted:
-                self.halted = ("two arms saw the lab's sshd refuse a connection (symptom shape of BD-051): "
-                               "the run stops rather than feed the connection penalty")
+            self._stalled()
         return self.records

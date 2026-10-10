@@ -114,6 +114,9 @@ class PlannedStep:
     argv: list[str]
     timeout_s: int
     phase: str = "run"  # pre | run | post | gate
+    # A step the manifest marked as not load-bearing for the arm's question (hiding the overlay, say). It is
+    # recorded when it fails and it fails no arm. Every other pre or run step failing fails the arm.
+    optional: bool = False
 
     def text(self) -> str:
         return " ".join(part if " " not in part else f'"{part}"' for part in self.argv)
@@ -197,11 +200,23 @@ def check_manifest(data: dict) -> None:
         for dependency in arm.get("depends_on", ()):
             if dependency not in seen:
                 raise ManifestError(f"{arm_id}: depends on {dependency}, which does not come before it")
+        guard = arm.get("needs_verified")
+        if guard and guard not in seen:
+            raise ManifestError(f"{arm_id}: it needs {guard} to verify the package, and {guard} does not "
+                                f"come before it")
+        result = arm.get("result") or {}
+        if result.get("pick") not in (None, "first", "last"):
+            raise ManifestError(f"{arm_id}: a result picks the first or the last match, not "
+                                f"{result['pick']!r}")
+        if not isinstance(arm.get("kill", []), list):
+            raise ManifestError(f"{arm_id}: kill is the list of client process names to end")
         baseline = arm.get("baseline")
         if baseline and not ("tolerance_pct" in baseline or "tolerance_abs" in baseline):
             raise ManifestError(f"{arm_id}: a baseline needs a tolerance")
         if baseline and "source" not in baseline:
             raise ManifestError(f"{arm_id}: a baseline must name the train it comes from")
+        if baseline and not result:
+            raise ManifestError(f"{arm_id}: a baseline with no result line can never be compared")
     for name, members in data["sets"].items():
         for arm_id in members:
             if arm_id not in seen:
@@ -220,10 +235,63 @@ def expand(template: str, values: dict) -> str:
     return PLACEHOLDER.sub(replace, template)
 
 
+def plan_steps(arm: dict, values: dict, limits: dict, python: str) -> list[PlannedStep]:
+    """The steps of one arm, in order, with the host backstop of each.
+
+    A step is a command line, or an object `{"argv": [...], "optional": true}` for a step that fails nothing
+    (the overlay calls of a game arm). The host timeout of a run step is the arm's bound plus the grace of
+    the manifest; the lab script itself owns the bound.
+    """
+    grace = int(limits["host_grace_s"]) if arm["kind"] in TRIAL_KINDS + GAME_KINDS else 0
+    steps: list[PlannedStep] = []
+    for phase in ("pre", "run", "post"):
+        for entry in arm.get(phase, ()):
+            argv = entry["argv"] if isinstance(entry, dict) else entry
+            optional = bool(entry.get("optional")) if isinstance(entry, dict) else False
+            resolved = [expand(str(part), values) for part in argv]
+            if resolved and resolved[0] == "python":
+                resolved[0] = python
+            timeout = int(arm["bound_s"]) + grace if phase == "run" else min(180, int(arm["bound_s"]) + grace)
+            steps.append(PlannedStep(argv=resolved, timeout_s=timeout, phase=phase, optional=optional))
+    return steps
+
+
+def arm_values(values: dict, arm: dict, number: int | None) -> tuple[dict, list[str]]:
+    """(the placeholder values of one arm, the attempt names it takes). `number` is its first free one."""
+    out = dict(values, bound=arm["bound_s"], attempt_n="", attempt="")
+    if not arm.get("attempt"):
+        return out, []
+    if number is None:
+        raise ManifestError(f"{arm['id']} needs an attempt number: pass --attempt-base")
+    names = [f"{arm['attempt']}{number + offset:03d}" for offset in range(int(arm.get("attempt_count", 1)))]
+    out["attempt_n"], out["attempt"] = f"{number:03d}", names[0]
+    return out, names
+
+
+def reassign_attempt(plan: "Plan", arm: PlannedArm, number: int, python: str = "python") -> str:
+    """Hand one attempt arm another number, and build its steps again from the manifest templates.
+
+    `promote.prepare` may step over an attempt directory that holds lab evidence, and the pair it then uses
+    can be the pair this plan already handed a later game arm. An attempt number is inside the game arm's
+    command line, so the steps and the environment are expanded again here and never patched.
+    """
+    values, names = arm_values(plan.values, arm.arm, number)
+    arm.arm["attempt_name"] = names[0]
+    if len(names) > 1:
+        arm.arm["check_attempt_name"] = names[1]
+    arm.steps = plan_steps(arm.arm, values, plan.limits, python)
+    arm.env = {key: expand(value, values) for key, value in arm.arm.get("env", {}).items()}
+    return names[0]
+
+
 def build(package: Package, data: dict | None = None, arm_ids: list[str] | None = None,
           out_dir: Path | None = None, roots: tuple[Path, Path] | None = None,
-          attempt_base: int | None = None, python: str = "python") -> Plan:
-    """Resolve the manifest against one package into a plan of arms to run, in order."""
+          attempt_base: int | None = None, python: str = "python", for_run: bool = True) -> Plan:
+    """Resolve the manifest against one package into a plan of arms to run, in order.
+
+    `for_run=False` is for a plan built to write a summary of a run that already happened: the arms are not
+    going to start, so the package's zip and its hash are not required.
+    """
     data = data or load_manifest()
     repo, workspace = roots or find_roots()
     values = {
@@ -241,34 +309,31 @@ def build(package: Package, data: dict | None = None, arm_ids: list[str] | None 
     if unknown:
         raise ManifestError("no such arm: " + ", ".join(unknown))
     order = [arm["id"] for arm in data["arms"] if arm["id"] in set(wanted)]
+    # An arm that names the package zip or its hash cannot run without them. The push arm would otherwise
+    # hand target.py an empty path, and zipcheck would compare the lab's hash against nothing.
+    needs_zip = [arm_id for arm_id in order if "{zip}" in json.dumps(index[arm_id])] if for_run else []
+    needs_hash = [arm_id for arm_id in order if "{zip_sha256}" in json.dumps(index[arm_id])] if for_run else []
+    if needs_zip and not package.zip_path:
+        raise ManifestError(f"no {package.name}.zip beside {package.directory.parent.as_posix()}, and "
+                            f"{', '.join(needs_zip)} needs it: build the package zip, or ask for arms that "
+                            f"do not install it")
+    if needs_hash and not package.zip_sha256:
+        raise ManifestError(f"{', '.join(needs_hash)} compares the zip's SHA-256, so the zip must be "
+                            f"hashed: drop --no-hash")
     planned: list[PlannedArm] = []
     attempt = attempt_base
     for arm_id in order:
         arm = dict(index[arm_id])
-        arm_values = dict(values, bound=arm["bound_s"], attempt_n="", attempt="")
-        if arm.get("attempt"):
-            if attempt is None:
-                raise ManifestError(f"{arm_id} needs an attempt number: pass --attempt-base")
-            names = [f"{arm['attempt']}{attempt + offset:03d}" for offset in range(int(arm.get("attempt_count", 1)))]
-            arm_values["attempt_n"] = f"{attempt:03d}"
-            arm_values["attempt"] = names[0]
+        per_arm, names = arm_values(values, arm, attempt)
+        if names:
             arm["attempt_name"] = names[0]
             if len(names) > 1:
                 arm["check_attempt_name"] = names[1]
             attempt += len(names)
         if arm.get("promote"):
-            arm["promote"] = {key: expand(value, arm_values) for key, value in arm["promote"].items()}
-        grace = int(limits["host_grace_s"]) if arm["kind"] in TRIAL_KINDS + GAME_KINDS else 0
-        steps = []
-        for phase in ("pre", "run", "post"):
-            for argv in arm.get(phase, ()):
-                resolved = [expand(str(part), arm_values) for part in argv]
-                if resolved and resolved[0] == "python":
-                    resolved[0] = python
-                timeout = int(arm["bound_s"]) + grace if phase == "run" else min(180, int(arm["bound_s"]) + grace)
-                steps.append(PlannedStep(argv=resolved, timeout_s=timeout, phase=phase))
-        planned.append(PlannedArm(arm=arm, steps=steps, env={k: expand(v, arm_values)
-                                                             for k, v in arm.get("env", {}).items()}))
+            arm["promote"] = {key: expand(value, per_arm) for key, value in arm["promote"].items()}
+        planned.append(PlannedArm(arm=arm, steps=plan_steps(arm, per_arm, limits, python),
+                                  env={k: expand(v, per_arm) for k, v in arm.get("env", {}).items()}))
     gate = PlannedStep(argv=[python, values["target"], "ps", values["kit"] + "/gate.ps1", "-Label", "{label}"],
                        timeout_s=180, phase="gate")
     return Plan(package=package, arms=planned, limits=limits, values=values,
