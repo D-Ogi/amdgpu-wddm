@@ -195,6 +195,17 @@ Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey
 } | Out-Null
 
 Write-Step 'Files'
+# The HIP folder's entry of the machine PATH that install.ps1 appended, and no other entry (common.ps1).
+$hipEntries = @(@((Get-HipPathEntry $root), $(if ($state -and $state.PSObject.Properties['hip_path_entry']) { [string]$state.hip_path_entry })) | Where-Object { $_ } | Select-Object -Unique)
+$hipOnPath = @($hipEntries | Where-Object { Test-PathEntry (Get-MachinePath).value $_ })
+if ($hipOnPath.Count) {
+    Invoke-Change "remove $($hipOnPath -join ', ') from the machine PATH (the HIP runtime folder of this release)" {
+        $p = Get-MachinePath
+        $v = $p.value
+        foreach ($e in $hipOnPath) { $v = Remove-PathEntry $v $e }
+        Set-MachinePath $v $p.kind
+    } | Out-Null
+}
 Invoke-Change "remove $root" { Remove-PathOrSchedule $root } | Out-Null
 # The D3D9 stub in System32 and its x86 copy in SysWOW64 (BD-064), each kept when it was there before the install.
 # This release installs no stub (D3D9 goes through D3D9On12). The releases up to 0.7.213.102-tester.17 did; an install

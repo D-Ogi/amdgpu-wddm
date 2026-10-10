@@ -943,6 +943,19 @@ foreach ($d in $dirs) {
         Copy-TreeSafe -Source $src -Destination (Join-Path $InstallRoot $d)
     } | Out-Null
 }
+# The HIP runtime (experimental) works without a step of the tester's: its folder goes at the end of the machine PATH,
+# once (common.ps1, Get-HipPathEntry). A package without tools\hip leaves PATH alone.
+if (Test-Path -LiteralPath (Join-Path $package 'payload\tools\hip')) {
+    $hipEntry = Get-HipPathEntry $InstallRoot
+    if (Test-PathEntry (Get-MachinePath).value $hipEntry) { Write-Info "the machine PATH holds $hipEntry already: kept" }
+    else {
+        Invoke-Change "append $hipEntry to the machine PATH (the HIP runtime of this release; an amdhip64.dll in System32 or earlier on PATH still wins)" {
+            $p = Get-MachinePath
+            Set-MachinePath (Add-PathEntry $p.value $hipEntry) $p.kind
+        } | Out-Null
+    }
+    Set-StateValue $state 'hip_path_entry' $hipEntry
+}
 # A release that does not register the encoder takes the registration and the files of an earlier install away again. A
 # repair with the switch off is therefore a rollback. The keys go first, in this stage, and the file after them, as
 # uninstall.ps1 does it: a step between the two (pnputil, the firmware, a restart, a failure of any of them) would

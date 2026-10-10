@@ -314,6 +314,44 @@ function Set-StateValueOnce($State, [string]$Name, $Value) {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
+# The HIP runtime (experimental) in <install root>\tools\hip is on by default: install.ps1 appends its folder to the
+# machine PATH, so an amdhip64.dll that comes earlier (AMD's own in System32, or an earlier PATH entry) still wins, and
+# uninstall.ps1 removes that one entry and no other. The value is read and written as Windows stores it (REG_EXPAND_SZ,
+# %SystemRoot% not expanded). A new process sees the entry after the restart that the install asks for.
+$script:EnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+function Get-HipPathEntry([string]$Root) { return (Join-Path $Root 'tools\hip') }
+# Pure: is $Entry one of the entries of $PathValue (case and a trailing backslash do not count)?
+function Test-PathEntry([string]$PathValue, [string]$Entry) {
+    $want = $Entry.TrimEnd('\')
+    foreach ($e in @($PathValue -split ';')) { if ($e.Trim().TrimEnd('\') -ieq $want) { return $true } }
+    return $false
+}
+# Pure: $PathValue with $Entry at the end, or unchanged when it is there already.
+function Add-PathEntry([string]$PathValue, [string]$Entry) {
+    if (Test-PathEntry $PathValue $Entry) { return $PathValue }
+    $v = $PathValue.TrimEnd(';')
+    if ($v) { return "$v;$Entry" }
+    return $Entry
+}
+# Pure: $PathValue without $Entry. Every other entry stays as it is written, empty ones included.
+function Remove-PathEntry([string]$PathValue, [string]$Entry) {
+    $want = $Entry.TrimEnd('\')
+    return ((@($PathValue -split ';') | Where-Object { $_.Trim().TrimEnd('\') -ine $want }) -join ';')
+}
+function Get-MachinePath {
+    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($script:EnvironmentKey, $false)
+    try {
+        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+        if ($k.GetValueNames() -contains 'Path') { $kind = $k.GetValueKind('Path') }
+        return [pscustomobject]@{ value = [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); kind = $kind }
+    } finally { $k.Close() }
+}
+function Set-MachinePath([string]$Value, $Kind) {
+    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($script:EnvironmentKey, $true)
+    try { $k.SetValue('Path', $Value, $Kind) } finally { $k.Close() }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
 # Registry defaults. installer\registry-defaults.json holds the one table of defaults; build-release.ps1 copies it into
 # manifest.json ("defaults"), where the control application's reset reads it. An upgrade keeps what the tester changed:
 #   set       the value is absent: write the default
