@@ -35,7 +35,10 @@ Write-Info "install root: $root"
 $lab = @(Get-LabInstallPaths)
 if ($lab.Count -and -not $Force) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine (-Force removes the release anyway)"; exit 2 }
 if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', ')) is present; -Force given: the release is removed, those folders stay" }
-if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) {
+# Inventory must succeed before the first change. A failed read is not an empty driver store.
+try { $pkgs = @(Get-OurDriverPackages) }
+catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
+if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not $pkgs.Count) {
     # No installation, but an earlier release (or an uninstaller older than this one) can have left per-user data.
     $userData = @(Get-OurUserDataDirs)
     if ($userData.Count) {
@@ -171,14 +174,27 @@ Invoke-Change "remove the H.264 encoder MFT registration ($(if ($mftKeys.Count) 
 # The GPU leaves the driver now, under the running desktop: pnputil has no documented way to defer the removal of a
 # driver from a started device to the next restart, and a package kept until then could leave the GPU without a
 # driver at that start. The restart that ends the uninstall gives a fresh session (BD-060, common.ps1).
-$pkgs = @(Get-OurDriverPackages)
 if (-not $pkgs.Count) { Write-Info 'no bc250kmd driver package in the driver store' }
+$packageRestart = $false
 foreach ($p in $pkgs) {
-    Invoke-Change "pnputil /delete-driver $p /uninstall /force (the GPU falls back to Microsoft Basic Display Adapter)" {
-        $n = Invoke-Native pnputil.exe @('/delete-driver', $p, '/uninstall', '/force')
-        Write-Log $n.text
-        if ($n.code -ne 0 -and $n.code -ne 3010) { Write-Warn2 "pnputil /delete-driver $p exit $($n.code): $($n.text)" }
-    } | Out-Null
+    try {
+        $deleteResult = Invoke-Change "pnputil /delete-driver $p /uninstall /force (the GPU falls back to Microsoft Basic Display Adapter)" {
+            $n = Invoke-Native pnputil.exe @('/delete-driver', $p, '/uninstall', '/force')
+            Write-Log $n.text
+            if ($n.code -ne 0 -and $n.code -ne 3010) { throw "pnputil /delete-driver $p exit $($n.code): $($n.text)" }
+            return $n.code
+        }
+        if ($deleteResult -eq 3010) { $packageRestart = $true }
+    } catch { Write-Fail "Driver removal failed. Driver files and service are kept. Run uninstall again after resolving this error: $($_.Exception.Message)"; exit 6 }
+}
+if (-not $DryRun) {
+    try { $packagesLeft = @(Get-OurDriverPackages) }
+    catch { Write-Fail "Driver removal could not be verified. Driver files and service are kept: $($_.Exception.Message)"; exit 6 }
+    if ($packagesLeft.Count) {
+        Write-Warn2 "Driver packages remain ($($packagesLeft -join ', ')). Driver files and service are kept. Restart if requested, then run uninstall again."
+        if ($packageRestart) { exit 3010 }
+        exit 6
+    }
 }
 Invoke-Change 'pnputil /scan-devices (bind the GPU to its inbox driver now)' { [void](Invoke-Native pnputil.exe @('/scan-devices')) } | Out-Null
 $serviceKey = Split-Path $script:ParametersKey
@@ -297,16 +313,18 @@ Write-Step 'What is left of this release'
 $footprint = @(Get-ReleaseFootprint -InstallRoot $root -State $state -MftKeys @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey))
 foreach ($f in $footprint) {
     $mark = 'gone'
-    if ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }
+    if (-not $f.known) { $mark = 'UNKNOWN' } elseif ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }
     Write-Host ('   [{0,-4}] {1,-24} {2}' -f $mark, $f.item, $f.detail) -ForegroundColor $(if ($mark -eq 'LEFT') { 'Yellow' } else { 'Gray' })
     Write-Log ('   footprint {0}: {1} {2}' -f $f.item, $mark, $f.detail)
 }
 $left = @($footprint | Where-Object { $_.present -and -not $_.kept })
+$unknown = @($footprint | Where-Object { -not $_.known })
 if ($DryRun) {
     Write-Host ''
     Write-Host "Dry run complete: nothing was changed, so the list above is this computer as it is now ($($left.Count) item(s) of this release)." -ForegroundColor Green
     exit 0
 }
+if ($unknown.Count) { Write-Fail "Uninstall verification is incomplete: $($unknown.Count) item(s) could not be read. Resolve the reading errors and run uninstall again."; exit 6 }
 if ($left.Count) { Write-Warn2 "$($left.Count) item(s) above are marked LEFT. A file or a registry key that Windows still holds goes at the restart below; run uninstall.cmd again afterwards if one of them stays." }
 else { Write-Info 'nothing of this release is left, apart from the items marked kept' }
 Write-Host ''

@@ -17,6 +17,11 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# Dry runs use a recorded shape, not a DISM query against this development PC.
+[void][IO.Directory]::CreateDirectory($WorkBase)
+$inventoryFixture = Join-Path $WorkBase 'driver-store-empty.json'
+[IO.File]::WriteAllText($inventoryFixture, '[]')
+$env:AMDGPU_WDDM_TEST_DRIVER_STORE = $inventoryFixture
 # One RunOnce argument as common.ps1 Format-CommandLine writes it (quoted unless plain path characters).
 function Format-RunOnceArg([string]$A) { if ($A -match '[^A-Za-z0-9_.:\\/=,+-]') { return '"' + $A + '"' } else { return $A } }
 function Get-Footprint {
@@ -196,7 +201,7 @@ Check (($audioRestarts -join '; ') -eq 'install.ps1: Restart-GpuAudioDevice -Ins
 $bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
 Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
 $pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, 'Invoke-Native pnputil\.exe @\(\s*[''"]?(/[a-z-]+)[''"]?')) { "$($s.name) $($mm.Groups[1].Value)" } })
-Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'install.ps1 /add-driver, install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
 # BD-089: the install deletes an older package of ours from the driver store, and it must not touch the device while
 # it does it. The uninstall takes the GPU off our driver on purpose, so there both switches belong.
 Check (($src -match "Invoke-Native pnputil\.exe @\('/delete-driver', \`$oldPackage\)") -and ($src -notmatch "'/delete-driver'[^\r\n]*/uninstall")) 'install.ps1 deletes an older driver package without /uninstall and without /force'
@@ -461,6 +466,14 @@ foreach ($c in @(
 }
 
 # The setup window's contract with the engine (GUI plan, docs/gui/interfaces-setup.md).
+'locale: structured package inventory and unknown readings, five languages'
+$r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-driver-store-locale.ps1'), '-Installer', (Join-Path $Package 'installer'))
+$r.text
+Check ($r.code -eq 0) 'driver-store locale regression checks pass'
+$r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-boot-locale.ps1'), '-Installer', (Join-Path $Package 'installer'))
+$r.text
+Check ($r.code -eq 0) 'boot and BitLocker locale regression checks pass'
+
 'engine units: RunOnce command line, closure, repair set, witness, compatibility record, lock (test-engine-units.ps1 under 5.1)'
 $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-engine-units.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', $WorkBase)
 $r.text
@@ -481,7 +494,7 @@ if (Test-Path -LiteralPath $setupExe) {
     'setup window against the real engine (--smoke-engine: plan and dry run, no window)'
     foreach ($c in @(
             @{ name = 'plan'; flags = @('--plan'); engine = @('-Plan', '-DryRunIgnoreBoard', '-FirmwareDir', $goodDir); expect = @('result: bound', 'outcome: planned', 'view: Plan result.planned.title nothing-changed', 'decision: install') }
-            @{ name = 'dry run'; flags = @(); engine = @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-FirmwareDir', $goodDir); expect = @('result: bound', 'message: result.dry-run-complete', 'mutated: false', 'view: Information result.dry-run-complete.title') })) {
+            @{ name = 'dry run'; flags = @(); engine = @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey', '-FirmwareDir', $goodDir); expect = @('result: bound', 'message: result.dry-run-complete', 'mutated: false', 'view: Information result.dry-run-complete.title') })) {
         $out = Join-Path $WorkBase ('setup-smoke-' + ($c.name -replace ' ', '-') + '-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
         $stateDir = "$out-state"
         [void][IO.Directory]::CreateDirectory($stateDir)
@@ -512,6 +525,14 @@ Check (($sc0 -match "Write-RunningReleaseWitness -InstallRoot \(Split-Path \`$he
 Check (($src -match "Write-RunningReleaseWitness -InstallRoot \`$InstallRoot -RecordedBy 'verify'")) 'verify writes the running-release witness'
 $forced = @(foreach ($s in $scripts) { if ($s.text -match 'Restart-Computer|shutdown(\.exe)?\s+/r') { $s.name } })
 Check ($forced.Count -eq 0) "no installer script forces a restart (planned ExitWindowsEx after the user's yes only)$(if ($forced.Count) { ': ' + ($forced -join ', ') })"
+
+'uninstall refuses an unreadable store before any removal'
+$badInventory = Join-Path $WorkBase 'driver-store-invalid.json'
+[IO.File]::WriteAllText($badInventory, 'not JSON')
+$env:AMDGPU_WDDM_TEST_DRIVER_STORE = $badInventory
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun') }
+finally { $env:AMDGPU_WDDM_TEST_DRIVER_STORE = $inventoryFixture }
+Check (($r.code -eq 6) -and ($r.text -match 'No removal was started') -and ($r.text -notmatch 'would:|doing:|Uninstall complete')) 'failed inventory cannot start removal or report success'
 
 'uninstall -DryRun'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun')

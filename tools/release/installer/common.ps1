@@ -950,11 +950,27 @@ function Get-TestSigningActive {
     return ([string]$o -match 'TESTSIGNING')
 }
 function Get-TestSigningConfigured {
-    # What the next boot will use; needs elevation. $null when unknown.
+    # The explicit setting on the current loader entry; $null when the provider cannot read it.
+    # BCD WMI uses a Boolean, unlike the localized bcdedit display value.
+    # https://learn.microsoft.com/previous-versions/windows/desktop/bcd/bcdlibraryelementtypes
+    # https://learn.microsoft.com/previous-versions/windows/desktop/bcd/bcdbooleanelement
     if (-not (Test-IsAdmin)) { return $null }
-    $n = Invoke-Native bcdedit.exe @('/enum', '{current}')
-    if ($n.code -ne 0) { return $null }
-    return ($n.text -match '(?im)^\s*testsigning\s+Yes\s*$')
+    try {
+        $provider = Get-WmiObject -Namespace 'root\WMI' -Class BcdStore -List -EnableAllPrivileges -ErrorAction Stop
+        $opened = $provider.OpenStore('') # Empty path denotes the system store.
+        if ($opened.ReturnValue -isnot [bool] -or -not $opened.ReturnValue -or $null -eq $opened.Store) { return $null }
+        # GUID_CURRENT_BOOT_ENTRY from Microsoft's Windows-classic-samples BCD Constants.cs.
+        $current = $opened.Store.OpenObject('{fa926493-6f1c-4193-a414-58f0b2456d1e}')
+        if ($current.ReturnValue -isnot [bool] -or -not $current.ReturnValue -or $null -eq $current.Object) { return $null }
+        $enumerated = $current.Object.EnumerateElements()
+        if ($enumerated.ReturnValue -isnot [bool] -or -not $enumerated.ReturnValue) { return $null }
+        # BcdLibraryBoolean_AllowPrereleaseSignatures. Successful enumeration distinguishes
+        # an absent explicit setting from a failed GetElement call. Inherited options are separate.
+        $setting = @($enumerated.Elements | Where-Object { $_.Type -eq [uint32]0x16000049 })
+        if ($setting.Count -eq 0) { return $false }
+        if ($setting.Count -ne 1 -or $setting[0].Boolean -isnot [bool]) { return $null }
+        return $setting[0].Boolean
+    } catch { return $null }
 }
 function Get-SecureBootState {
     # 'on', 'off', 'legacy-bios' or 'unknown'
@@ -969,18 +985,34 @@ function Get-SecureBootState {
 }
 function Get-BitLockerState {
     # 'off', 'on', 'suspended' or 'unknown'
+    # Read live method results, not the cached WMI properties or localized manage-bde output.
+    # https://learn.microsoft.com/windows/win32/secprov/getprotectionstatus-win32-encryptablevolume
+    # https://learn.microsoft.com/windows/win32/secprov/getconversionstatus-win32-encryptablevolume
     if (-not (Test-IsAdmin)) { return 'unknown' }
     try {
-        $v = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop
-        if ([string]$v.ProtectionStatus -eq 'On') { return 'on' }
-        if ([string]$v.VolumeStatus -eq 'FullyDecrypted') { return 'off' }
-        return 'suspended'
-    } catch {
-        $out = (Invoke-Native manage-bde.exe @('-status', $env:SystemDrive)).text
-        if ($out -match '(?im)Protection Status:\s+Protection On') { return 'on' }
-        if ($out -match '(?im)Protection Status:\s+Protection Off') { return 'off' }
-        return 'unknown'
-    }
+        if ($env:SystemDrive -notmatch '^[A-Za-z]:$') { return 'unknown' }
+        $volumes = @(Get-CimInstance -Namespace 'root\CIMV2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -Filter "DriveLetter='$($env:SystemDrive)'" -ErrorAction Stop)
+        if ($volumes.Count -ne 1) { return 'unknown' }
+        $protection = Invoke-CimMethod -InputObject $volumes[0] -MethodName GetProtectionStatus -ErrorAction Stop
+        if ($null -eq $protection.ReturnValue -or [uint32]$protection.ReturnValue -ne 0 -or $null -eq $protection.ProtectionStatus) { return 'unknown' }
+        switch ([uint32]$protection.ProtectionStatus) {
+            1 { return 'on' }
+            0 {
+                $conversion = Invoke-CimMethod -InputObject $volumes[0] -MethodName GetConversionStatus -Arguments @{ PrecisionFactor = [uint32]0 } -ErrorAction Stop
+                if ($null -eq $conversion.ReturnValue -or [uint32]$conversion.ReturnValue -ne 0 -or $null -eq $conversion.ConversionStatus) { return 'unknown' }
+                if ([uint32]$conversion.ConversionStatus -eq 0) { return 'off' }
+                if ([uint32]$conversion.ConversionStatus -eq 1) { return 'suspended' }
+                # A conversion in progress/paused can change protection at completion.
+                return 'unknown'
+            }
+            default { return 'unknown' }
+        }
+    } catch { return 'unknown' }
+}
+function Test-BitLockerConsentRequired {
+    param([AllowNull()][string]$State)
+    # Only verified unencrypted or suspended protection can skip this boot-change decision.
+    return ($State -notin @('off', 'suspended'))
 }
 function Get-MemoryIntegrityState {
     $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
@@ -1101,24 +1133,34 @@ function Get-DeviceServiceName {
 function Get-LabInstallPaths {
     @('C:\BC250\m15', 'C:\BC250\m14', 'C:\BC250\m10' | Where-Object { Test-Path -LiteralPath $_ })
 }
-# Our driver packages in the driver store (pnputil /enum-drivers), one row each: the published name (oem<n>.inf) and
-# the version of the package's DriverVer line, which pnputil prints as "<date> <version>". The version is $null when
-# this reading cannot take it from the block, as on a Windows that prints the labels in another language.
-function Get-OurDriverPackageList {
-    return (Get-OurDriverPackageRows (Invoke-Native pnputil.exe @('/enum-drivers')).text)
+# DISM returns package objects, including packages not bound to a device. Never parse translated pnputil labels.
+# https://learn.microsoft.com/powershell/module/dism/get-windowsdriver
+function Read-DriverStorePackages {
+    # A test inventory is accepted only by a dry run. A real uninstall always reads Windows.
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_DRIVER_STORE) {
+        return @(Get-Content -LiteralPath $env:AMDGPU_WDDM_TEST_DRIVER_STORE -Raw -ErrorAction Stop | ConvertFrom-Json)
+    }
+    return @(Get-WindowsDriver -Online -ErrorAction Stop)
 }
-# Pure: the same rows from the text of pnputil /enum-drivers.
-function Get-OurDriverPackageRows([string]$Text) {
-    $blocks = $Text -split "(\r?\n){2,}"
+# One row per package of ours: published oem INF name and DriverVer version. An unreadable inventory throws.
+function Get-OurDriverPackageList {
+    return @(Get-OurDriverPackageRows -Packages @(Read-DriverStorePackages))
+}
+# Pure: validate the structured inventory before returning any removal candidate.
+function Get-OurDriverPackageRows {
+    param([AllowEmptyCollection()][object[]]$Packages)
     $r = @()
-    foreach ($b in $blocks) {
-        if ($b -notmatch '(?im)^\s*Original Name:\s*bc250kmd\.inf\s*$') { continue }
-        $published = $null
-        if ($b -match '(?im)^\s*Published Name:\s*(oem\d+\.inf)\s*$') { $published = $Matches[1] }
-        if (-not $published) { continue }
-        $version = $null
-        if ($b -match '(?im)^\s*Driver Version:\s*\S+\s+(\d+(?:\.\d+){1,3})\s*$') { $version = $Matches[1] }
-        $r += [pscustomobject]@{ published = $published; version = $version }
+    $seen = @{}
+    foreach ($p in $Packages) {
+        if (-not $p -or -not $p.OriginalFileName) { throw 'Driver-store inventory has a package without an original INF name' }
+        if (-not [string]::Equals([IO.Path]::GetFileName([string]$p.OriginalFileName), 'bc250kmd.inf', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $published = [string]$p.Driver
+        if ($published -notmatch '\Aoem[0-9]+\.inf\z') { throw 'Driver-store inventory has an invalid published INF name for our driver' }
+        if ($seen.ContainsKey($published)) { throw "Driver-store inventory repeats $published" }
+        $seen[$published] = $true
+        $version = [string]$p.Version
+        if (-not ($version -as [version])) { throw "Driver-store inventory has no valid version for $published" }
+        $r += [pscustomobject]@{ published = $published.ToLowerInvariant(); version = $version }
     }
     return $r
 }
@@ -1207,14 +1249,22 @@ function Get-OurCertificates {
 #   present $true when something of ours is there
 #   detail  what was found, or why nothing could be read
 #   kept    $true when the uninstaller leaves it on purpose (then present is not a leftover)
+#   known   $false when the probe could not read; this never means that an item is gone
+function Read-ReleaseFootprintItem {
+    param([string]$Item, [scriptblock]$Read, [bool]$Kept = $false)
+    try {
+        $x = & $Read
+        return [pscustomobject]@{ item = $Item; present = [bool]$x.present; detail = [string]$x.detail; kept = $Kept; known = $true }
+    } catch {
+        return [pscustomobject]@{ item = $Item; present = $false; detail = "not read: $($_.Exception.Message)"; kept = $Kept; known = $false }
+    }
+}
 function Get-ReleaseFootprint {
     param([string]$InstallRoot, $State, [string[]]$MftKeys = @())
     $rows = New-Object System.Collections.ArrayList
-    function Add-Row([string]$Item, [bool]$Present, [string]$Detail, [bool]$Kept = $false) { [void]$rows.Add([pscustomobject]@{ item = $Item; present = $Present; detail = $Detail; kept = $Kept }) }
     $probe = {
         param([string]$Item, [scriptblock]$Read, [bool]$Kept = $false)
-        try { $x = & $Read; Add-Row $Item ([bool]$x.present) ([string]$x.detail) $Kept }
-        catch { Add-Row $Item $false "not read: $($_.Exception.Message)" $Kept }
+        [void]$rows.Add((Read-ReleaseFootprintItem -Item $Item -Read $Read -Kept $Kept))
     }
     & $probe 'install root' { $p = (Test-Path -LiteralPath $InstallRoot); @{ present = $p; detail = "$InstallRoot$(if ($p) { ' is there' } else { ' is gone' })" } }
     foreach ($d in 'System32', 'SysWOW64') {

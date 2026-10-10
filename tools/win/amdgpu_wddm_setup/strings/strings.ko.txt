@@ -144,7 +144,7 @@ settings.decision.driver-closed|mt|cff55d7f|드라이버가 껐습니다. 복구
 consent.title|mt-safe|34a195af|시작하기 전에
 consent.test-signing|mt|71d16537|Windows 테스트 모드 켜기
 consent.test-signing.note|mt|bebc2e37|드라이버가 테스트 인증서로 서명되어 있어 Windows를 테스트 모드로 실행해야 합니다. 바탕 화면 구석에 "테스트 모드"가 표시됩니다.
-consent.bitlocker|mt|628faadf|BitLocker가 드라이브 C:를 보호하고 있습니다. 시작 옵션을 변경하면 다음 시작 때 Windows가 복구 키를 요청합니다.
+consent.bitlocker|mt|7b5d44a4|BitLocker가 켜져 있거나 설치 프로그램이 상태를 읽지 못했습니다. 시작 옵션을 변경하면 다음 시작 때 Windows가 복구 키를 요청할 수 있습니다.
 consent.bitlocker.have-key|mt|081b65b7|복구 키가 있습니다
 consent.bitlocker.suspend|mt|dcf26b02|다음 두 번의 다시 시작 동안 BitLocker 일시 중지 (자동으로 다시 켜짐)
 

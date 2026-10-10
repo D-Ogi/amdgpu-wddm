@@ -39,6 +39,7 @@ static class UnitTests
             Prepared();
             Guide();
             Arguments();
+            LocaleContracts();
             Quoting();
             NativeLayout();
         }
@@ -344,6 +345,28 @@ static class UnitTests
         a = SetupArgs.Parse(new[] { "--smoke-engine", "p", "o", "--cancel", "--", "-DryRun", "-FirmwareDir", "f" });
         Check(a.Mode == "smoke-engine" && a.Cancel && a.EngineArgs.SequenceEqual(new[] { "-DryRun", "-FirmwareDir", "f" }), "args: --smoke-engine with engine arguments");
         Check(SetupArgs.Parse(new[] { "--", "-Force" }).Error != null, "args: engine arguments refused for the window");
+    }
+
+    static void LocaleContracts()
+    {
+        var before = System.Threading.Thread.CurrentThread.CurrentCulture;
+        var beforeUi = System.Threading.Thread.CurrentThread.CurrentUICulture;
+        try
+        {
+            foreach (var name in new[] { "en-US", "pl-PL", "es-ES", "ja-JP", "ko-KR" })
+            {
+                System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo(name);
+                System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo(name);
+                var args = SetupArgs.Parse(new[] { "--smoke-render", "d", "1.25", "en", "--text-scale", "1.5" });
+                Check(args.Error == null && args.Scale == 1.25f && args.TextScale == 1.5f, name + ": invariant command-line decimals");
+                Check(SetupArgs.Parse(new[] { "--smoke-render", "d", "1,25", "en" }).Error != null, name + ": comma decimal is not a machine argument");
+                var json = Json.Parse("{\"fraction\":1.25,\"count\":42,\"enabled\":true}");
+                Equal("1.25", Json.Str(json, "fraction"), name + ": JSON decimal stays invariant");
+                Equal(42, Json.Int(json, "count"), name + ": JSON integer");
+                Check(Json.Bool(json, "enabled"), name + ": JSON boolean");
+            }
+        }
+        finally { System.Threading.Thread.CurrentThread.CurrentCulture = before; System.Threading.Thread.CurrentThread.CurrentUICulture = beforeUi; }
     }
 
     [DllImport("shell32.dll", SetLastError = true)]

@@ -109,17 +109,24 @@ Check (($sp.Count -eq 1) -and (@($sp[0].rows).Count -ge 20) -and -not @($sp[0].r
 Check ((Get-Seq $r 'decision') -lt (Get-Seq $r 'settings-plan')) 'the decision comes before the settings plan'
 Check (-not (Get-Events $r 'step').Count -and -not (Get-Events $r 'install-action').Count) 'a plan has no step and records no install action'
 $fresh = $r
+$expectedConsents = @($d[0].consents)
 
 '[G-EVT] setup-window run without the consent: stops before any change'
-if (-not $tsActive) {
+if ($expectedConsents.Count) {
     $r = Invoke-Engine 'needs consent' @('-DryRun', '-DryRunIgnoreBoard')
     Test-Stream $r 'needs consent'
-    Check (($r.code -eq 4) -and ($r.result.outcome -eq 'needs-consent') -and ((@($r.result.consents_needed) -join ',') -eq 'test-signing')) "needs-consent, consents_needed: $(@($r.result.consents_needed) -join ', ')"
+    Check (($r.code -eq 4) -and ($r.result.outcome -eq 'needs-consent') -and ((@($r.result.consents_needed) -join ',') -eq ($expectedConsents -join ','))) "needs-consent matches the plan, consents_needed: $(@($r.result.consents_needed) -join ', ')"
     Check (-not (Get-Events $r 'step').Count -and ($r.text -notmatch 'would ask')) 'no step, no question asked'
-} else { '  (skipped: test signing is active on this PC, the install needs no test-signing consent)' }
+} else { '  (skipped: the plan requires no consent on this PC)' }
+if ($expectedConsents -contains 'bitlocker') {
+    $r = Invoke-Engine 'needs BitLocker choice' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning')
+    Test-Stream $r 'needs BitLocker choice'
+    Check (($r.code -eq 4) -and ($r.result.outcome -eq 'needs-consent') -and ((@($r.result.consents_needed) -join ',') -eq 'bitlocker')) 'test-signing consent alone does not authorize unknown or active BitLocker protection'
+    Check (-not (Get-Events $r 'step').Count -and -not $r.result.mutated) 'missing BitLocker choice stops before any change'
+}
 
 '[G-EVT] full dry run with the consent: stages in order, settings plan before the first step, cancel window, restart handed over'
-$r = Invoke-Engine 'dry run' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning')
+$r = Invoke-Engine 'dry run' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey')
 Test-Stream $r 'dry run'
 Check (($r.code -eq 0) -and ($r.result.outcome -eq 'completed') -and ($r.result.message_id -eq 'result.dry-run-complete') -and $r.result.dry_run -and -not $r.result.mutated) 'completed (dry run), nothing changed'
 $stages = @(Get-Events $r 'stage' | ForEach-Object { $_.id })
@@ -153,7 +160,7 @@ Test-Stream $r 'generated id'
 Check ($r.result.invocation -match '^[0-9a-f]{8}-[0-9a-f]{4}-') "an id is generated when the window gives none: $($r.result.invocation)"
 
 '[G-EVT] cancel at the safe point'
-$r = Invoke-Engine 'cancel' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning') -Cancel
+$r = Invoke-Engine 'cancel' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey') -Cancel
 Test-Stream $r 'cancel'
 Check (($r.code -eq 8) -and ($r.result.outcome -eq 'cancelled') -and ($r.result.message_id -eq 'result.cancelled') -and -not $r.result.mutated -and ($r.result.stop.by -eq 'cancel')) "cancelled before any change: exit 8, result.cancelled, stop by cancel at $($r.result.stop.where)"
 Check (-not (Get-Events $r 'step').Count) 'no step after the cancel'
@@ -189,7 +196,7 @@ Remove-Item -LiteralPath $tbl
 $mb = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
 foreach ($f in $mb.files) { if ($f.path -eq 'installer/registry-defaults.json') { $f.sha256 = (Get-FileHash -LiteralPath $tbl -Algorithm SHA256).Hash; $f.size = (Get-Item -LiteralPath $tbl).Length } }
 [IO.File]::WriteAllText((Join-Path $broken 'manifest.json'), ($mb | ConvertTo-Json -Depth 8))
-$r = Invoke-Engine 'failed step' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning') -PackageDir $broken
+$r = Invoke-Engine 'failed step' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey') -PackageDir $broken
 Test-Stream $r 'failed step'
 Check (($r.code -eq 6) -and ($r.result.outcome -eq 'failed') -and ($r.result.message_id -eq 'result.step-failed') -and $r.result.detail) "failed: exit 6, result.step-failed, detail for the log only ($($r.result.detail))"
 
@@ -249,11 +256,11 @@ if ($null -ne $bootId) {
 
 '[G-STAGE] deadline: the run stops at the first stop point after -DeadlineUtc (interfaces-setup.md section 10)'
 $past = [DateTime]::UtcNow.AddMinutes(-1).ToString('o')
-$r = Invoke-Engine 'deadline passed' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-DeadlineUtc', $past)
+$r = Invoke-Engine 'deadline passed' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey', '-DeadlineUtc', $past)
 Test-Stream $r 'deadline passed'
 Check (($r.code -eq 8) -and ($r.result.outcome -eq 'cancelled') -and ($r.result.message_id -eq 'result.deadline') -and -not $r.result.mutated -and ($r.result.stop.by -eq 'deadline') -and ($r.result.stop.where -eq 'stage:preflight') -and -not (Get-Events $r 'step').Count) "deadline passed: exit 8, result.deadline at $($r.result.stop.where), nothing changed, no step"
 Check ((@(Get-Events $r 'start')[0].job -eq 'kill-on-close') -and ($r.result.children.job -eq 'kill-on-close') -and ($r.result.children.left_at_exit -eq 0) -and ($r.result.children.closure -eq 'complete')) "the run's own job object: $($r.result.children.job), $($r.result.children.left_at_exit) process(es) left at its end"
-$r = Invoke-Engine 'deadline unreadable' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-DeadlineUtc', 'soon')
+$r = Invoke-Engine 'deadline unreadable' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey', '-DeadlineUtc', 'soon')
 Check (($r.code -eq 8) -and ($r.result.message_id -eq 'result.deadline') -and ($r.result.deadline_utc -match '^unreadable')) 'an unreadable deadline counts as passed: stopped before any change'
 $future = [DateTime]::UtcNow.AddMinutes(10).ToString('o')
 $r = Invoke-Engine 'deadline later' @('-Plan', '-DryRunIgnoreBoard', '-DeadlineUtc', $future)
@@ -277,7 +284,7 @@ if (-not $tsActive) {
             @{ at = 'after-staging:after'; code = 8; where = 'stage:install'; withdrawn = 'test-signing' }
             @{ at = 'before-driver-install:before'; code = 8; where = 'before-driver-install' }
             @{ at = 'before-driver-install:after'; code = 0; where = $null; withdrawn = 'driver-install' })) {
-        $r = Invoke-Engine "cancel $($c.at)" @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning') -Env @{ AMDGPU_WDDM_TEST_CANCEL_AT = $c.at }
+        $r = Invoke-Engine "cancel $($c.at)" @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey') -Env @{ AMDGPU_WDDM_TEST_CANCEL_AT = $c.at }
         Test-Stream $r "cancel $($c.at)"
         $offers = Get-CancelOffers $r
         $ok = ($r.code -eq $c.code) -and ([string]$r.result.stop.where -eq [string]$c.where)
@@ -321,7 +328,7 @@ $kdir = Join-Path $work 'kill'
 $kev = Join-Path $kdir 'events.jsonl'
 $psi = New-Object Diagnostics.ProcessStartInfo
 $psi.FileName = $ps51
-foreach ($x in @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Package 'installer\install.ps1'), '-Gui', '-InvocationId', ([guid]::NewGuid().ToString()), '-EventsFile', $kev, '-ResultFile', (Join-Path $kdir 'result.json'), '-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning')) { [void]$psi.ArgumentList.Add($x) }
+foreach ($x in @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Package 'installer\install.ps1'), '-Gui', '-InvocationId', ([guid]::NewGuid().ToString()), '-EventsFile', $kev, '-ResultFile', (Join-Path $kdir 'result.json'), '-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey')) { [void]$psi.ArgumentList.Add($x) }
 $psi.Environment['PSModulePath'] = (@([Environment]::GetEnvironmentVariable('PSModulePath', 'Machine'), [Environment]::GetEnvironmentVariable('PSModulePath', 'User')) | Where-Object { $_ }) -join ';'
 $psi.Environment['AMDGPU_WDDM_TEST_CHILD_SECONDS'] = '120'
 $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden

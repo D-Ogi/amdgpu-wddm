@@ -168,12 +168,12 @@ function Invoke-Preflight {
     $tsNext = Get-TestSigningConfigured
     $script:TestSigningActive = $tsActive
     $script:TestSigningConfigured = $tsNext
-    Add-Check 'test signing' 'ok' ("active in this boot: $tsActive; set for the next boot: $(if ($null -eq $tsNext) { 'unknown' } else { $tsNext })") $(if ($tsActive) { 'testsigning.active' } else { 'testsigning.inactive' })
+    Add-Check 'test signing' 'ok' ("active in this boot: $tsActive; explicit setting on this boot entry: $(if ($null -eq $tsNext) { 'unknown' } else { $tsNext })") $(if ($tsActive) { 'testsigning.active' } else { 'testsigning.inactive' })
 
     $bl = Get-BitLockerState
     $script:BitLockerState = $bl
     if ($bl -eq 'on') { Add-Check 'BitLocker' 'warn' "protection on for $($env:SystemDrive): changing the boot options makes Windows ask for the recovery key at the next start. You must have the key, or let the installer suspend BitLocker for two restarts." 'bitlocker.on' }
-    elseif ($bl -eq 'unknown') { Add-Check 'BitLocker' 'warn' 'state unknown: if BitLocker is on, have the recovery key ready' 'bitlocker.unknown' }
+    elseif ($bl -eq 'unknown') { Add-Check 'BitLocker' 'warn' 'state unknown: changing boot options requires the recovery-key or suspension choice' 'bitlocker.unknown' }
     else { Add-Check 'BitLocker' 'ok' $bl 'bitlocker.ok' }
 
     $hvci = Get-MemoryIntegrityState
@@ -697,7 +697,7 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive) { $restarts = 2 }
     if ($state.phase -eq 'new' -and -not $script:TestSigningActive) {
         $consents += 'test-signing'
-        if ($script:BitLockerState -eq 'on') { $consents += 'bitlocker' }
+        if (Test-BitLockerConsentRequired $script:BitLockerState) { $consents += 'bitlocker' }
     }
 }
 $firmwareSource = $(if (-not $FirmwareDir) { 'download' } elseif (Test-SamePath $FirmwareDir (Join-Path $package 'firmware')) { 'package-folder' } else { 'folder' })
@@ -820,10 +820,13 @@ if ($state.phase -eq 'new') {
             $script:EngineConsents = @('test-signing')
             Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail 'test signing not confirmed'
         }
-        if ($script:BitLockerState -eq 'on') {
+        # Recheck before the boot change; preparation may have taken long enough for protection to change.
+        $script:BitLockerState = Get-BitLockerState
+        if (Test-BitLockerConsentRequired $script:BitLockerState) {
             $choice = $BitLocker
             if (-not $choice) {
-                if (Read-Confirmation -Question 'BitLocker is on. Do you have the recovery key for this drive (it will be asked for after the restart)?' -Answer $null) { $choice = 'HaveKey' }
+                $question = if ($script:BitLockerState -eq 'on') { 'BitLocker is on. Do you have the recovery key for this drive (Windows may ask for it after the restart)?' } else { 'BitLocker protection could not be confirmed. Do you have the recovery key for this drive if Windows asks for it after the restart?' }
+                if (Read-Confirmation -Question $question -Answer $null) { $choice = 'HaveKey' }
                 elseif (Read-Confirmation -Question 'Suspend BitLocker for the next two restarts instead?' -Answer $null) { $choice = 'Suspend' }
             }
             if (-not $choice) {
@@ -832,7 +835,10 @@ if ($state.phase -eq 'new') {
                 Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail 'BitLocker not handled'
             }
             if ($choice -eq 'Suspend') {
-                Invoke-Change "suspend BitLocker on $($env:SystemDrive) for two restarts" { Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 2 | Out-Null } | Out-Null
+                Invoke-Change "suspend BitLocker on $($env:SystemDrive) for two restarts" {
+                    Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 2 -ErrorAction Stop | Out-Null
+                    if (Test-BitLockerConsentRequired (Get-BitLockerState)) { throw 'BitLocker suspension could not be verified; boot options were not changed.' }
+                } | Out-Null
             }
             Set-StateValue $state 'bitlocker' $choice
         }

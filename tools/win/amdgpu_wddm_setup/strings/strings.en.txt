@@ -146,7 +146,7 @@ settings.decision.driver-closed|src|-|switched off by the driver. A repair sets 
 consent.title|src|-|Before setup starts
 consent.test-signing|src|-|Turn on Windows test mode
 consent.test-signing.note|src|-|The driver is signed with a test certificate, so Windows must run in test mode. "Test Mode" then shows in a corner of the desktop.
-consent.bitlocker|src|-|BitLocker protects drive C:. Changing the start options makes Windows ask for the recovery key at the next start.
+consent.bitlocker|src|-|BitLocker is on, or Setup could not read its state. Changing the start options may make Windows ask for the recovery key at the next start.
 consent.bitlocker.have-key|src|-|I have the recovery key
 consent.bitlocker.suspend|src|-|Pause BitLocker for the next two restarts (it turns on again by itself)
 

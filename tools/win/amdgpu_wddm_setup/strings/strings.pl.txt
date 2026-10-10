@@ -144,7 +144,7 @@ settings.decision.driver-closed|mt|cff55d7f|wyłączone przez sterownik. Naprawa
 consent.title|mt-safe|34a195af|Zanim instalator zacznie
 consent.test-signing|mt|71d16537|Włącz tryb testowy Windows
 consent.test-signing.note|mt|bebc2e37|Sterownik jest podpisany certyfikatem testowym, więc Windows musi działać w trybie testowym. W rogu pulpitu pojawi się wtedy napis „Tryb testowy”.
-consent.bitlocker|mt|628faadf|BitLocker chroni dysk C:. Zmiana opcji uruchamiania sprawi, że Windows przy następnym starcie poprosi o klucz odzyskiwania.
+consent.bitlocker|mt|7b5d44a4|BitLocker jest włączony lub instalator nie mógł odczytać jego stanu. Po zmianie opcji uruchamiania Windows może przy następnym starcie poprosić o klucz odzyskiwania.
 consent.bitlocker.have-key|mt|081b65b7|Mam klucz odzyskiwania
 consent.bitlocker.suspend|mt|dcf26b02|Wstrzymaj BitLockera na dwa następne uruchomienia (sam włączy się ponownie)
 

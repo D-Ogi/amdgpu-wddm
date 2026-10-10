@@ -144,7 +144,7 @@ settings.decision.driver-closed|mt|cff55d7f|ドライバーが無効にしまし
 consent.title|mt-safe|34a195af|開始する前に
 consent.test-signing|mt|71d16537|Windows のテスト モードをオンにする
 consent.test-signing.note|mt|bebc2e37|ドライバーはテスト証明書で署名されているため、Windows をテスト モードで実行する必要があります。デスクトップの隅に「テスト モード」と表示されます。
-consent.bitlocker|mt|628faadf|BitLocker がドライブ C: を保護しています。起動オプションを変更すると、次回の起動時に回復キーを求められます。
+consent.bitlocker|mt|7b5d44a4|BitLocker がオンか、セットアップでその状態を読み取れませんでした。起動オプションを変更すると、次回の起動時に回復キーを求められる場合があります。
 consent.bitlocker.have-key|mt|081b65b7|回復キーを持っています
 consent.bitlocker.suspend|mt|dcf26b02|次の 2 回の再起動の間 BitLocker を一時停止する (自動的に再開します)
 

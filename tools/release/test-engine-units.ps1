@@ -258,39 +258,13 @@ $states = @{}; foreach ($row in $rows) { $states[$row.path] = $row.state }
 Check ((@($rows).Count -eq 3) -and ($states[$sameFile] -eq 'remove') -and ($states[$changedFile] -eq 'changed') -and ($states[(Join-Path $bdRoot 'tools\gone.dll')] -eq 'absent')) "the file with the recorded SHA256 is removed, the one with other bytes is kept and reported, the one that is gone is absent: $(@($rows | ForEach-Object { "$(Split-Path $_.path -Leaf)=$($_.state)" }) -join ', ')"
 Check (([IO.File]::ReadAllText($changedFile) -eq $keptText) -and (Test-Path -LiteralPath $sameFile)) 'the plan reads only: no file is removed while it is computed'
 
-$pnputil = @"
-Microsoft PnP Utility
-
-Published Name:     oem9.inf
-Original Name:      bc250kmd.inf
-Provider Name:      amdgpu-wddm
-Class Name:         Display adapters
-Driver Version:     10/02/2026 0.7.198.100
-Signer Name:        amdgpu-wddm test
-
-Published Name:     oem12.inf
-Original Name:      bc250kmd.inf
-Provider Name:      amdgpu-wddm
-Class Name:         Display adapters
-Driver Version:     10/04/2026 0.7.208.100
-Signer Name:        amdgpu-wddm test
-
-Published Name:     oem13.inf
-Original Name:      nvidia.inf
-Provider Name:      NVIDIA
-Class Name:         Display adapters
-Driver Version:     09/01/2026 32.0.15.6094
-Signer Name:        Microsoft Windows Hardware Compatibility Publisher
-
-Published Name:     oem15.inf
-Original Name:      bc250kmd.inf
-Provider Name:      amdgpu-wddm
-Class Name:         Display adapters
-Driver Version:     10/06/2026 0.7.213.101
-Signer Name:        amdgpu-wddm test
-"@
-$rowsPnp = @(Get-OurDriverPackageRows $pnputil)
-Check (((@($rowsPnp | ForEach-Object { "$($_.published)=$($_.version)" }) -join ', ') -eq 'oem9.inf=0.7.198.100, oem12.inf=0.7.208.100, oem15.inf=0.7.213.101')) "pnputil /enum-drivers: only our packages, each with its version ($(@($rowsPnp | ForEach-Object { $_.published }) -join ', '))"
+$inventory = @(
+    [pscustomobject]@{ Driver = 'oem9.inf'; OriginalFileName = 'bc250kmd.inf'; Version = '0.7.198.100' }
+    [pscustomobject]@{ Driver = 'oem12.inf'; OriginalFileName = 'bc250kmd.inf'; Version = '0.7.208.100' }
+    [pscustomobject]@{ Driver = 'oem13.inf'; OriginalFileName = 'nvidia.inf'; Version = '32.0.15.6094' }
+    [pscustomobject]@{ Driver = 'oem15.inf'; OriginalFileName = 'bc250kmd.inf'; Version = '0.7.213.101' })
+$rowsPnp = @(Get-OurDriverPackageRows -Packages $inventory)
+Check (((@($rowsPnp | ForEach-Object { "$($_.published)=$($_.version)" }) -join ', ') -eq 'oem9.inf=0.7.198.100, oem12.inf=0.7.208.100, oem15.inf=0.7.213.101')) 'structured inventory: only our packages, each with its version'
 $store = @(
     [pscustomobject]@{ published = 'oem9.inf'; version = '0.7.198.100' }
     [pscustomobject]@{ published = 'oem12.inf'; version = '0.7.208.100' }
@@ -311,6 +285,9 @@ $sp = Get-DriverStoreRemovePlan -Packages @($store[2]) -BoundPublished 'oem15.in
 Check ((-not @($sp.remove).Count) -and ((@($sp.keep) -join ',') -eq 'oem15.inf')) 'a first install leaves one package and removes nothing'
 
 '[BD-089] what is left of this release (the list uninstall.ps1 prints at the end)'
+# Inventory is mocked: this test must not query DISM or depend on host elevation/language.
+$savedInventoryReader = ${function:Read-DriverStorePackages}
+function Read-DriverStorePackages { return @() }
 $saveStateDir = $script:StateDir
 $script:StateDir = Join-Path $work 'footprint-state\installer'
 $fpRoot = Join-Path $work 'footprint\install-root'
@@ -342,6 +319,7 @@ $fp3 = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State $null)
 Check (@($fp3 | Where-Object { $_.item -eq 'per-user data' -and $_.present -and -not $_.kept }).Count -eq 1) 'per-user data that is there is reported as LEFT, not kept'
 Remove-PathOrSchedule $udB
 Check ((-not (Test-Path -LiteralPath $udB)) -and (-not @(Get-OurUserDataDirs).Count)) 'the uninstaller removal takes the per-user folder away'
+${function:Read-DriverStorePackages} = $savedInventoryReader
 $script:ProfilePathsOverride = $saveProfiles
 $script:StateDir = $saveStateDir
 
@@ -411,9 +389,10 @@ Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x0007
 Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 41; mutation_utc = '2026-10-04T07:59:00.0000000Z' })).valid) 'reader: an install action before the witness leaves it valid'
 Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 40; mutation_utc = '2026-10-04T09:00:00.0000000Z' })).valid) 'reader: an install action of another boot leaves it valid'
 $wpath = Join-Path $work 'running-release.json'
-$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'verify' -Boot $boot -Path $wpath
+$testStatePath = Join-Path $work 'absent-state\state.json'
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'verify' -Boot $boot -Path $wpath -StatePath $testStatePath
 Check (($why -match 'no bc250kmd\.sys among the loaded drivers|no driver reply') -and -not (Test-Path -LiteralPath $wpath)) "on this PC (no driver): nothing written ($why)"
-$why = Write-RunningReleaseWitness -InstallRoot (Join-Path $work 'nowhere') -RecordedBy 'start-confirm' -Path $wpath
+$why = Write-RunningReleaseWitness -InstallRoot (Join-Path $work 'nowhere') -RecordedBy 'start-confirm' -Path $wpath -StatePath $testStatePath
 Check (($why -match 'no manifest\.json') -and -not (Test-Path -LiteralPath $wpath)) 'no installed release: nothing written, no exception'
 Check ($script:WitnessPath -eq (Join-Path $env:ProgramData 'amdgpu-wddm\installer\running-release.json')) "the witness lives in the installer's state folder: $($script:WitnessPath)"
 
