@@ -112,8 +112,12 @@ if((Get-Content "$repo\driver\kmd\gfx.c" -Raw) -match '(?s)BOOLEAN GfxReopenAfte
 foreach($ddi in @('static NTSTATUS Bc250WddmSubmitCommand(','static NTSTATUS Bc250WddmSubmitCommandVirtual(')){
     Ordered (Body $wddm $ddi) $ddi.Trim('(') @(
         'KeAcquireSpinLock(&wddm->Lock, &irql);',
-        'WddmNoteSubmittedLocked(wddm, node, pSubmitCommand->SubmissionFenceId);')
+        'WddmBeginSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId);')
 }
+Ordered (Body $wddm 'static BOOLEAN WddmBeginSubmissionLocked(') 'WddmBeginSubmissionLocked' @(
+    'WddmNoteSubmittedLocked(Wddm, Node, Fence);',
+    'if (Wddm->Recovery[Node].ResetActive) return FALSE;',
+    'Wddm->ActiveSubmissions[Node]++;')
 
 # ---- the copies the host test compiles --------------------------------------------------------------------------
 $watchdog=Get-Content "$repo\driver\kmd\submit_watchdog.h" -Raw

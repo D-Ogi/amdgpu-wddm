@@ -1018,11 +1018,11 @@ static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
     // pointer is left where it stands, because facts M59/M60 say a hardware pointer only counts up and a re-init has
     // to adopt it, so abandoning the ring is the safe act and rewinding it is not.
     if (InterlockedExchange(&gfx->SubmitFailed, 1) == 0)
-        GuardLog("gfx: submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
+        GuardLog("gfx: submission gate closed pending recovery (seq %lu in flight, slot 0x%X)",
                  gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
-    // KMD196: unconditionally, not only on the first call. A held submission is waiting for a fence that will
-    // now never come; GfxSubmitArmed is false from here, so it wakes, fails its submission and lets the OS TDR
-    // path have the fence. Before this it sat out its whole 500 ms bound after the ring was already abandoned.
+    // KMD196: signal on every closure, so a held submission retests the closed
+    // gate rather than waiting out its whole 500 ms budget. A recovery admission
+    // has already drained those callers; its extra wake is harmless.
     GfxRetireSignal(Device);
 }
 
@@ -1057,15 +1057,22 @@ void GfxPagingLogCounts(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Submits, _
     GfxAccessRelease(Device);
 }
 
-void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+// Temporary admission closure for an OS-requested engine reset. A successful
+// reset need not fault StartHealth; a prior real fault is never cleared here.
+void GfxSubmitClose(_Inout_ BC250_DEVICE* Device)
 {
-    StartHealthFault(Device);
     if (GfxAccessAcquire(Device) == NULL)
     {
         return;
     }
     GfxSubmitFailAccess(Device);
     GfxAccessRelease(Device);
+}
+
+void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    StartHealthFault(Device);
+    GfxSubmitClose(Device);
 }
 
 // KMD196. The generation is bumped before the event is set, so a waiter that cleared the event and then found
@@ -1078,8 +1085,9 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
 }
 
 // M15.12 stage 1 (docs/design/hang-recovery.md). Drain only: the WDDM reset transaction
-// reopens both gates together later. Called from DxgkDdiResetEngine (PASSIVE_LEVEL, GPU-scheduler class,
-// so no concurrent submit) under HangRecoveryMode, never on the normal path, after the caller has put a pending
+// reopens both gates together later. Called from DxgkDdiResetEngine at PASSIVE_LEVEL,
+// with WDDM submission admission frozen and active submitters drained, under HangRecoveryMode,
+// never on the normal path, after the caller has put a pending
 // record on the disk (GuardRecordHangRecovery).
 //
 // amdgpu_ring_soft_recovery's loop (hang_recovery.h Bc250HangKillLoop): while the fence has not signalled and the
@@ -1286,6 +1294,9 @@ BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value)
 // BD-114: final stage of every successful ResetEngine, after a late completion or
 // a proven drain. Caller holds WDDM Lock across this gate change and its own gate
 // change. This helper cannot wait, take GartLock or call back into the scheduler.
+// WatchdogFaulted[3D] is still TRUE when SubmitFailed is cleared: every node-0
+// WDDM ring entry tests that gate under this same lock. ResetActive also excludes
+// new submit Impl calls until both gates and the queue are committed together.
 //
 // Refused unless the ring is provably idle: either nothing is marked in flight, or the marked sequence's fence
 // has arrived. A ring that still holds work is never reopened, because the next submission would then share a
@@ -1318,7 +1329,7 @@ BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
         DpmBusyEnd(&Device->Dpm);       // the ring went idle: the share the normal fence path would have ended
     if (idle)
     {
-        InterlockedExchange(&gfx->SubmitFailed, 0);      // the one un-stick outside GfxSoftRecover's drained path
+        InterlockedExchange(&gfx->SubmitFailed, 0);      // only the locked recovery commit reopens admission
         GuardLog("gfx: ring reopened after an aborted fence was reported (seq %lu was in flight, slot 0x%X)",
                  (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT));
     }

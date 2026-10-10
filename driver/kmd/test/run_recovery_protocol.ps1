@@ -4,11 +4,12 @@ param(
     [switch]$IgnoreReportInFlight, [switch]$IgnoreLostReport,
     [switch]$UseNotifiedAsCompleted, [switch]$ShareNodeWatermark,
     [switch]$ResetWritesCompleted, [switch]$IgnoreEpoch, [switch]$TimeoutAfterUnlock,
-    [switch]$ReadAfterRelease, [switch]$KeepCoveredBoundary
+    [switch]$ReadAfterRelease, [switch]$KeepCoveredBoundary, [switch]$DropAdmissionReason, [switch]$RejectActiveImmediately, [switch]$IgnoreDrainDeadline, [switch]$FaultHealthOnAdmission, [switch]$AdmitDuringReset
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
-$env:TEMP = Join-Path $Root 'scratch\tmp'
+$env:TEMP = Join-Path $Out 'tmp'
+New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 function Function-Body([string]$Source, [string]$Name) {
@@ -56,18 +57,84 @@ if ($IgnoreEpoch) {
 if ($KeepCoveredBoundary) {
     $header = $header.Replace('state->BoundaryKnown = 0;', 'state->BoundaryKnown = 1;')
 }
+if ($DropAdmissionReason) {
+    $live='state->ReportLost ? BC250_HANG_ADMISSION_REPORT_LOST : 0u'
+    if (!$header.Contains($live)) { throw 'admission reason mutation anchor changed' }
+    $header=$header.Replace($live,'state->ReportLost ? 0u : 0u')
+}
 [IO.File]::WriteAllText((Join-Path $Out 'hang_recovery.h'), $header)
 $latch = 'static BOOLEAN ' + (Function-Body $source 'WddmLatchSubmitTimeoutLocked').Text
 $mock = @'
 typedef int BOOLEAN;
 typedef unsigned long long ULONGLONG;
+typedef unsigned long ULONG;
+typedef unsigned UINT;
+typedef long LONG;
+typedef int KIRQL;
+typedef struct { long long QuadPart; } LARGE_INTEGER;
 #define TRUE 1
 #define FALSE 0
+#define KernelMode 0
+#define STATUS_NOT_SUPPORTED 1
 #define BC250_WDDM_NODE_3D 0
-typedef struct { int GfxClosed; int Calls; void *Gfx; } BC250_DEVICE;
-typedef struct { int Stopping; BC250_HANG_NODE_STATE Recovery[2]; int WatchdogFaulted[2]; int DeferredValid; } BC250_WDDM;
-static void GfxSubmitFail(BC250_DEVICE *d) { d->GfxClosed = 1; d->Calls++; }
+#define BC250_SUBMIT_FENCE_SLOT 0
+typedef struct { void *SubmitAdev; LONG SubmitFailed; ULONG SubmitSeq; } BC250_GFX;
+typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault; unsigned Wakes, DrainWakes; } BC250_DEVICE;
+typedef struct {
+    int Stopping, Lock, SubmitTimer;
+    BC250_HANG_NODE_STATE Recovery[2];
+    int WatchdogFaulted[2], DeferredValid, CompletionPending[2], ActiveSubmissions[2];
+    unsigned NoteCalls, NotedFence[2];
+} BC250_WDDM;
+static BC250_WDDM *MockWddm;
+static BC250_DEVICE *MockDevice;
+static ULONGLONG MockNow, MockStart;
+static unsigned MockDrainMs, MockSecondaryMs, MockFaultMs, MockWaits, MockLockDepth, MockSafetyTrips, MockPoisonRelease;
+static void *GfxAccessAcquire(BC250_DEVICE *d) { return d->Gfx; }
+static void GfxAccessRelease(BC250_DEVICE *d) {
+    if (MockPoisonRelease && d->Gfx) ((BC250_GFX *)d->Gfx)->SubmitAdev = NULL;
+}
+static ULONG bc250_gfx_fence_read(void *adev, int slot) { (void)adev; (void)slot; return 123; }
+static LONG InterlockedExchange(LONG *p, LONG value) { LONG old = *p; *p = value; return old; }
+static void GuardLog(const char *format, ...) { (void)format; }
+static void StartHealthFault(BC250_DEVICE *d) { d->HealthFault = 1; d->Calls++; }
+static void StartHealthClose(BC250_DEVICE *d) { StartHealthFault(d); }
+static void GfxRetireSignal(BC250_DEVICE *d) {
+    d->Wakes++;
+    d->GfxClosed = d->Gfx && ((BC250_GFX *)d->Gfx)->SubmitFailed;
+    if (!d->GfxClosed) d->DrainWakes++;
+}
+static void KeAcquireSpinLock(int *lock, KIRQL *irql) {
+    (void)lock; CHECK(MockLockDepth == 0); *irql = 0; MockLockDepth++;
+}
+static void KeReleaseSpinLock(int *lock, KIRQL irql) {
+    (void)lock; CHECK(irql == 0 && MockLockDepth == 1); MockLockDepth--;
+}
+static int KeCancelTimer(int *timer) { CHECK(MockLockDepth == 1); *timer = 0; return 0; }
+static ULONGLONG KeQueryInterruptTime(void) { return MockNow; }
+static void GfxSubmitFail(BC250_DEVICE *d);
+static int KeDelayExecutionThread(int mode, int alertable, LARGE_INTEGER *delay) {
+    CHECK(MockLockDepth == 0 && mode == KernelMode && !alertable && delay->QuadPart == -10000ll);
+    MockWaits++;
+    MockNow += 10000ull;
+    if ((MockNow - MockStart)/10000ull >= MockFaultMs) {
+        GfxSubmitFail(MockDevice); MockFaultMs = ~0u;
+    }
+    if ((MockNow - MockStart)/10000ull >= MockDrainMs) MockWddm->ActiveSubmissions[0] = 0;
+    if ((MockNow - MockStart)/10000ull >= MockSecondaryMs) MockWddm->Recovery[0].ReportLost = 1;
+    if (MockWaits >= 600) { MockSafetyTrips++; MockWddm->Stopping = 1; }
+    return 0;
+}
+static void WddmNoteSubmittedLocked(BC250_WDDM *w, unsigned node, UINT fence) {
+    w->NoteCalls++; w->NotedFence[node] = fence;
+}
 '@
+# Extract actual closure and health-fault wrapper, not a mock of the distinction.
+foreach($name in @('GfxSubmitFailAccess','GfxSubmitClose','GfxSubmitFail')) {
+    $body=(Function-Body $gfxSource $name).Text
+    $body=$body.Replace('_Inout_ ','').Replace('_In_ ','')
+    $mock += "`nstatic void $body`n"
+}
 $mock += "`n$latch`n"
 $observed = 'static BOOLEAN ' + (Function-Body $gfxSource 'GfxFenceObserved').Text
 $observed = $observed.Replace('_Inout_ ', '').Replace('_Out_ ', '')
@@ -75,28 +142,45 @@ if ($ReadAfterRelease) {
     if (!$observed.Contains('return observed;')) { throw 'GfxFenceObserved return anchor changed' }
     $observed = $observed.Replace('return observed;', 'return gfx != NULL && gfx->SubmitAdev != NULL;')
 }
-$mock += @'
-typedef unsigned long ULONG;
-#define BC250_SUBMIT_FENCE_SLOT 0
-typedef struct { void *SubmitAdev; } BC250_GFX;
-static void *GfxAccessAcquire(BC250_DEVICE *d) { return d->Gfx; }
-static void GfxAccessRelease(BC250_DEVICE *d) { ((BC250_GFX *)d->Gfx)->SubmitAdev = NULL; }
-static ULONG bc250_gfx_fence_read(void *adev, int slot) { (void)adev; (void)slot; return 123; }
-'@
 $mock += "`n$observed`n"
+$admit = 'static ULONG ' + (Function-Body $source 'WddmResetAdmit').Text
+$begin = 'static BOOLEAN ' + (Function-Body $source 'WddmBeginSubmissionLocked').Text
+if ($FaultHealthOnAdmission) {
+    if (!$admit.Contains('GfxSubmitClose(Device);')) { throw 'admission closure anchor changed' }
+    $admit=$admit.Replace('GfxSubmitClose(Device);','GfxSubmitFail(Device);')
+}
+if ($AdmitDuringReset) {
+    $live='if (Wddm->Recovery[Node].ResetActive) return FALSE;'
+    if (!$begin.Contains($live)) { throw 'submit freeze anchor changed' }
+    $begin=$begin.Replace($live,'if (0 && Wddm->Recovery[Node].ResetActive) return FALSE;')
+}
+if ($RejectActiveImmediately) {
+    $live='reasons != BC250_HANG_ADMISSION_ACTIVE_SUBMISSIONS ||'
+    if (!$admit.Contains($live)) { throw 'active drain mutation anchor changed' }
+    $admit=$admit.Replace($live,'reasons != 0 ||')
+}
+if ($IgnoreDrainDeadline) {
+    $live='KeQueryInterruptTime() >= deadline'
+    if (!$admit.Contains($live)) { throw 'drain deadline mutation anchor changed' }
+    $admit=$admit.Replace($live,'(KeQueryInterruptTime() >= deadline && 0)')
+}
+$mock += "`n$admit`n$begin`n"
 $mock += @'
 static void recover(BC250_DEVICE *d, BC250_WDDM *w)
 {
     CHECK(Bc250HangResetBegin(&w->Recovery[0], 0));
     w->WatchdogFaulted[0] = 0;
     d->GfxClosed = 0;
+    ((BC250_GFX *)d->Gfx)->SubmitFailed = 0;
     Bc250HangResetEnd(&w->Recovery[0], 1, 20);
 }
 static void test_timeout_latch(void)
 {
     BC250_DEVICE d = {0};
+    BC250_GFX gfx = {0};
     BC250_WDDM w = {0};
     ULONGLONG observed = w.Recovery[0].Epoch;
+    d.Gfx = &gfx;
     w.DeferredValid = 1;
     CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, observed));
     CHECK(d.GfxClosed && w.WatchdogFaulted[0] && !w.DeferredValid && d.Calls == 1);
@@ -124,6 +208,8 @@ static void test_timeout_latch(void)
     {
         BC250_GFX g;
         ULONG value = 0;
+        memset(&g, 0, sizeof(g));
+        MockPoisonRelease = 1;
         g.SubmitAdev = &g;
         d.Gfx = &g;
         CHECK(GfxFenceObserved(&d, &value));
@@ -154,6 +240,28 @@ if ($soft.Contains('GfxRetireSignal(') -or $soft.Contains('InterlockedExchange(&
 $record = (Function-Body $source 'WddmRecordCompletionLocked').Text
 if ($record.IndexOf('Bc250HangObserveCompleted(') -lt 0 -or
     $record.IndexOf('Bc250HangObserveCompleted(') -gt $record.IndexOf('Wddm->CompletionPending[NodeOrdinal] = 1;')) { $sourceOk = $false }
+$admissionOk=$true
+if (!$reset.Contains('GuardRecordHangRecovery(BC250_HANG_VERDICT_ADMISSION_GUARD, reasons, 0, 0, 0);')) { $admissionOk=$false }
+if (!$reset.Contains('reasons = WddmResetAdmit(device, wddm, node, &irql);')) { $admissionOk=$false }
+foreach($name in @('Bc250WddmSubmitCommand','Bc250WddmSubmitCommandVirtual')) {
+    $wrapper=(Function-Body $source $name).Text
+    $entry=$wrapper.IndexOf('admitted = WddmBeginSubmissionLocked(')
+    $frozen=[regex]::Match($wrapper,'if \(!admitted\)\s*\{\s*ProgressExit\([^;]+;\s*return STATUS_SUCCESS;\s*\}')
+    $impl=$wrapper.IndexOf('status = '+$name+'Impl(')
+    if ($entry -lt 0 -or !$frozen.Success -or $entry -gt $frozen.Index -or $frozen.Index -gt $impl) { $admissionOk=$false }
+}
+$tailAt=$reset.IndexOf('refuseReset:')
+if ($tailAt -lt 0) { throw 'refusal tail missing' }
+$tail=$reset.Substring($tailAt+'refuseReset:'.Length)
+if (!$tail.Contains('StartHealthClose(device);') -or $tail.Contains('GfxSubmitClose(') -or $tail.Contains('GfxReopenAfterAbort(')) { $admissionOk=$false }
+$mock += @'
+static int run_refusal_tail(BC250_DEVICE *device)
+{
+    BC250_DEVICE *hAdapter = device;
+    struct { UINT NodeOrdinal, EngineOrdinal; } args = {0, 0}, *pResetEngine = &args;
+'@
+$mock += $tail
+$mock = '#define PRODUCTION_ADMISSION_PROTOCOL ' + [int]$admissionOk + "`n" + $mock
 $mock = '#define PRODUCTION_SOURCE_PROTOCOL ' + [int]$sourceOk + "`n" + $mock
 [IO.File]::WriteAllText((Join-Path $Out 'timeout_latch.inc'), $mock)
 Copy-Item "$PSScriptRoot\recovery_protocol_test.c" "$Out\recovery_protocol_test.c" -Force

@@ -76,6 +76,18 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 #define BC250_HANG_VERDICT_ABORT_REPORTED   7u  /* BD-114: nothing on the ring, so this node's observed completion
                                                    is named as aborted. Nothing was killed: the packet completed
                                                    between the watchdog and the TDR, and the ring is already idle */
+#define BC250_HANG_VERDICT_ADMISSION_GUARD  8u  /* no reset transaction began; LastSeq is the reason mask below,
+                                                   not a hardware sequence. LastFence/Kills/Micros are zero */
+
+/* Stable on-disk bit assignments for verdict 8 (Parameters\HangRecovery\LastSeq).
+ * Multiple bits preserve every failed condition from the same locked observation. */
+#define BC250_HANG_ADMISSION_STOPPING           0x01u
+#define BC250_HANG_ADMISSION_COMPLETION_PENDING 0x02u
+#define BC250_HANG_ADMISSION_REPORT_LOST        0x04u
+#define BC250_HANG_ADMISSION_REPORT_IN_FLIGHT   0x08u
+#define BC250_HANG_ADMISSION_ACTIVE_SUBMISSIONS 0x10u
+#define BC250_HANG_ADMISSION_RESET_ACTIVE       0x20u
+#define BC250_HANG_ADMISSION_WAIT_MS            500u
 
 /* Before any kill: stage 1 needs a job of the reset's own node on the ring (the WDDM queue's view, after late
  * fences have been retired), an abort fence the engine-reset contract accepts, and a VMID a kill may name.
@@ -93,7 +105,7 @@ static __inline unsigned Bc250HangPreKillVerdict(int jobOnRing, unsigned abortFe
 }
 
 /* Per-node state, always under the WDDM lock. CompletedFence is written ONLY by
- * ordered packet retirement, before publication. It is neither the notification
+ * ordered packet retirement (hardware or completed software work), before publication. It is neither the notification
  * watermark nor BoundaryFence (the scheduler's reset/rejected-packet boundary).
  * A failed publication remains uncertain until a later successful report covers
  * it. ResetActive excludes new retirement/publication while a reset is in progress.
@@ -109,6 +121,17 @@ typedef struct bc250_hang_node_state {
     unsigned BoundaryFence;
     int BoundaryKnown;
 } BC250_HANG_NODE_STATE;
+
+static __inline unsigned Bc250HangAdmissionReasons(const BC250_HANG_NODE_STATE* state,
+                                                    int stopping, int pending, int active)
+{
+    return (stopping ? BC250_HANG_ADMISSION_STOPPING : 0u) |
+           (pending ? BC250_HANG_ADMISSION_COMPLETION_PENDING : 0u) |
+           (state->ReportLost ? BC250_HANG_ADMISSION_REPORT_LOST : 0u) |
+           (state->ReportInFlight ? BC250_HANG_ADMISSION_REPORT_IN_FLIGHT : 0u) |
+           (active ? BC250_HANG_ADMISSION_ACTIVE_SUBMISSIONS : 0u) |
+           (state->ResetActive ? BC250_HANG_ADMISSION_RESET_ACTIVE : 0u);
+}
 
 static __inline void Bc250HangObserveCompleted(BC250_HANG_NODE_STATE* state, unsigned fence)
 {

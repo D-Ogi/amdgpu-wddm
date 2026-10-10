@@ -869,6 +869,7 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 //     Attempts, Recovered, NotDrained, Refused  REG_DWORD  counters (Bc250HangVerdictCounts), never reset here
 //     LastVerdict                               REG_DWORD  BC250_HANG_VERDICT_*; 0 = a kill was under way
 //     LastSeq, LastFence                        REG_DWORD  the newest ring sequence, the OS fence it would abort
+//                                               verdict 8: LastSeq is BC250_HANG_ADMISSION_*; LastFence is 0
 //     LastKills, LastMicros                     REG_DWORD  SQ_CMD writes issued, time spent in the kill loop
 //     LastTime                                  REG_QWORD  KeQuerySystemTime of this write (UTC FILETIME)
 //     LastVersion                               REG_DWORD  BC250_KMD_VERSION of the writer

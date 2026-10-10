@@ -789,9 +789,10 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_S
 //   GfxSubmitReady   whether a submission would be taken: stage 8 done, nothing failed, nothing in flight and the
 //                    EnableGpuSubmit gate open. Advisory - GfxSubmitIb checks the same things under the lock.
 //   GfxSubmitBusy    the same gates, but the one in-flight IB has not arrived. Advisory, same as Ready.
-//   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
-//                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
-//                    only safe answer to a submission that never completed.
+//   GfxSubmitClose   closes ring admission at DISPATCH_LEVEL until a validated engine recovery commits.
+//                    Does not fault StartHealth. Used when preparing an OS-requested reset.
+//   GfxSubmitFail    closes admission and faults StartHealth for the rest of this device start.
+//                    A later successful engine recovery never clears that health fault.
 // KMD193 (bsod-245 item 4): who the submission belongs to, as values. gfx.c does not know what a WDDM context
 // is and must not learn; it copies these three words into the journal's BC250_PJ_GFX_SUBMIT record and into its
 // own job-frame log line, and dereferences nothing. NULL from a caller with no context (the IB_AT escape).
@@ -808,6 +809,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
+void GfxSubmitClose(_Inout_ BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //   GfxSoftRecover   M15.12 stage 1 (docs/design/hang-recovery.md). PASSIVE_LEVEL, from DxgkDdiResetEngine only,
 //                    under the HangRecoveryMode switch: kill the waves on Vmid (amdgpu's

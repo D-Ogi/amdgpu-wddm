@@ -202,6 +202,11 @@ try {
   @{n='submit-watchdog-IgnoreAlternatingActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-IgnoreAlternatingActivity');Fails=$true}
   @{n='submit-watchdog-AssumeOsClockAtHead';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AssumeOsClockAtHead');Fails=$true}
   @{n='submit-watchdog-HeadAgeAtRetirement';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-HeadAgeAtRetirement');Fails=$true}
+  @{n='recovery-protocol-DropAdmissionReason';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-DropAdmissionReason');Fails=$true}
+  @{n='recovery-protocol-RejectActiveImmediately';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-RejectActiveImmediately');Fails=$true}
+  @{n='recovery-protocol-IgnoreDrainDeadline';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-IgnoreDrainDeadline');Fails=$true}
+  @{n='recovery-protocol-FaultHealthOnAdmission';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-FaultHealthOnAdmission');Fails=$true}
+  @{n='recovery-protocol-AdmitDuringReset';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace, '-AdmitDuringReset');Fails=$true}
   @{n='recovery-protocol-ReadAfterRelease';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReadAfterRelease');Fails=$true}
   @{n='recovery-protocol-KeepCoveredBoundary';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-KeepCoveredBoundary');Fails=$true}
   @{n='recovery-protocol-IgnoreReportInFlight';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreReportInFlight');Fails=$true}

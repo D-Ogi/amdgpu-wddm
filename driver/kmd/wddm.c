@@ -5885,6 +5885,18 @@ static void WddmNoteSubmittedLocked(_Inout_ BC250_WDDM* Wddm, UINT Node, UINT Fe
     }
 }
 
+// Caller holds Lock. The upper watermark records entry BEFORE Impl, including
+// an entry that Impl later rejects. It is an upper bound, not proof of execution.
+// A reset freezes both hardware submissions and CPU/software completion paths.
+// Keep any new packet outstanding for reset/replay; never invent a completion.
+static BOOLEAN WddmBeginSubmissionLocked(BC250_WDDM* Wddm, UINT Node, UINT Fence)
+{
+    WddmNoteSubmittedLocked(Wddm, Node, Fence);
+    if (Wddm->Recovery[Node].ResetActive) return FALSE;
+    Wddm->ActiveSubmissions[Node]++;
+    return TRUE;
+}
+
 static NTSTATUS Bc250WddmSubmitCommandImpl(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
@@ -5926,7 +5938,7 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     BC250_WDDM* wddm = WddmOf(hAdapter);
     BC250_WDDM_OBJECT* context;
     UINT node;
-    BOOLEAN tracked;
+    BOOLEAN tracked, admitted = TRUE;
     NTSTATUS status;
     KIRQL irql;
     ProgressEnterInput(ProgressSiteSubmitCommand, (LONG)pSubmitCommand->SubmissionFenceId);   // before WddmObject: its list walk counts as inside
@@ -5936,9 +5948,12 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        wddm->ActiveSubmissions[node]++;
-        WddmNoteSubmittedLocked(wddm, node, pSubmitCommand->SubmissionFenceId);      // BD-114 7.4
+        admitted = WddmBeginSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId);
         KeReleaseSpinLock(&wddm->Lock, irql);
+    }
+    if (!admitted) {
+        ProgressExit(ProgressSiteSubmitCommand, (LONG)pSubmitCommand->SubmissionFenceId);
+        return STATUS_SUCCESS;
     }
     status = Bc250WddmSubmitCommandImpl(hAdapter, pSubmitCommand);
     if (tracked)
@@ -6280,7 +6295,7 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ c
     BC250_WDDM* wddm = WddmOf(hAdapter);
     BC250_WDDM_OBJECT* context;
     UINT node;
-    BOOLEAN tracked;
+    BOOLEAN tracked, admitted = TRUE;
     NTSTATUS status;
     KIRQL irql;
     ProgressEnterInput(ProgressSiteSubmitCommandVirtual, (LONG)pSubmitCommand->SubmissionFenceId);    // before WddmObject: its list walk counts as inside
@@ -6290,9 +6305,12 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ c
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        wddm->ActiveSubmissions[node]++;
-        WddmNoteSubmittedLocked(wddm, node, pSubmitCommand->SubmissionFenceId);      // BD-114 7.4
+        admitted = WddmBeginSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId);
         KeReleaseSpinLock(&wddm->Lock, irql);
+    }
+    if (!admitted) {
+        ProgressExit(ProgressSiteSubmitCommandVirtual, (LONG)pSubmitCommand->SubmissionFenceId);
+        return STATUS_SUCCESS;
     }
     status = Bc250WddmSubmitCommandVirtualImpl(hAdapter, pSubmitCommand);
     if (tracked)
@@ -6394,6 +6412,44 @@ static NTSTATUS Bc250WddmQueryEngineStatus(_In_ const HANDLE hAdapter, _Inout_ D
     return STATUS_SUCCESS;
 }
 
+// PASSIVE_LEVEL only. On success return 0 WITH Lock held, so the caller's
+// fence snapshot belongs to this admission. On refusal return the complete
+// reason mask with Lock released and both submission gates unchanged.
+// The first-level scheduler list does not name SubmitCommandVirtual. Do not
+// assume that it excludes an existing held submitter. Give that call at most
+// 500 ms to finish, with no lock held across the sleep and no DPC join. This
+// is a software wait budget, not a guarantee about OS thread scheduling.
+static ULONG WddmResetAdmit(BC250_DEVICE* Device, BC250_WDDM* Wddm, UINT Node, KIRQL* Irql)
+{
+    ULONGLONG deadline = KeQueryInterruptTime() + 10000ull * BC250_HANG_ADMISSION_WAIT_MS;
+    BOOLEAN signalled = FALSE;
+    ULONG reasons;
+    LARGE_INTEGER delay;
+
+    for (;;) {
+        KeAcquireSpinLock(&Wddm->Lock, Irql);
+        reasons = Bc250HangAdmissionReasons(&Wddm->Recovery[Node], Wddm->Stopping,
+                                            Wddm->CompletionPending[Node], Wddm->ActiveSubmissions[Node]);
+        if (reasons == 0) {
+            // Same lock and conditions as the mask, so ResetBegin must succeed.
+            (void)Bc250HangResetBegin(&Wddm->Recovery[Node], 0);
+            Wddm->WatchdogFaulted[Node] = TRUE;
+            GfxSubmitClose(Device);
+            KeCancelTimer(&Wddm->SubmitTimer);
+            return 0;
+        }
+        KeReleaseSpinLock(&Wddm->Lock, *Irql);
+        if (reasons != BC250_HANG_ADMISSION_ACTIVE_SUBMISSIONS ||
+            KeQueryInterruptTime() >= deadline) return reasons;
+        if (!signalled) {
+            GfxRetireSignal(Device);
+            signalled = TRUE;
+        }
+        delay.QuadPart = -10000; // one millisecond, outside Lock at PASSIVE_LEVEL
+        (void)KeDelayExecutionThread(KernelMode, FALSE, &delay);
+    }
+}
+
 static DXGKDDI_RESETENGINE Bc250WddmResetEngine;
 static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_RESETENGINE* pResetEngine)
 {
@@ -6409,7 +6465,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     {
         const BC250_GFX_COMPLETION* head;
         const BC250_GFX_COMPLETION* tail;
-        ULONG verdict, seq, kills = 0, micros = 0, vmid = 0;
+        ULONG verdict, seq, kills = 0, micros = 0, vmid = 0, reasons;
         UINT hungFence = 0, lastCompleted = 0, lastSubmitted = 0, abortFence = 0, notifiedFence;
         BOOLEAN onRing;
         int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0;
@@ -6419,25 +6475,18 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         KIRQL irql;
 
         WddmGpuFence(device);           // retire anything that arrived late before deciding there is still a hang
-        KeAcquireSpinLock(&wddm->Lock, &irql);
-        // Completion publication and recovery exclude one another. No callback is
-        // invoked under Lock, and no DPC is joined here. Pending/lost reports and
-        // active submitters are uncertain: leave recovery to the failure path.
-        if (wddm->Stopping || wddm->CompletionPending[node] || wddm->Recovery[node].ReportLost ||
-            !Bc250HangResetBegin(&wddm->Recovery[node], wddm->ActiveSubmissions[node])) {
-            KeReleaseSpinLock(&wddm->Lock, irql);
-            GuardLog("wddm: ResetEngine node %u: publication, submission or stop state uncertain; refused", node);
-            // No stable fence snapshot: record a refusal, not a stale success
-            // retained from an earlier reset. No kill or attempt record precedes it.
-            GuardRecordHangRecovery(BC250_HANG_VERDICT_FENCE_GUARD, 0, 0, 0, 0);
+        reasons = WddmResetAdmit(device, wddm, node, &irql);
+        if (reasons != 0) {
+            GuardLog("wddm: ResetEngine node %u admission refused, reasons 0x%02lX", node, reasons);
+            // Persist every failed gate from the same observation, even if a
+            // later adapter reset/0x116 destroys the volatile log ring.
+            GuardRecordHangRecovery(BC250_HANG_VERDICT_ADMISSION_GUARD, reasons, 0, 0, 0);
             goto refuseReset;
         }
+        // WddmResetAdmit returned with Lock held and both gates closed. No
+        // callback is in flight, no new submit Impl or retirement can start.
         epoch = wddm->Recovery[node].Epoch;
         snapshot = wddm->Recovery[node];
-        // Also exclude held work through the physical gate until the locked commit.
-        wddm->WatchdogFaulted[node] = TRUE;
-        GfxSubmitFail(device);
-        KeCancelTimer(&wddm->SubmitTimer);
         head = Bc250GfxQueueHead(&wddm->GfxPending);
         // Only a job of the node being reset. GfxPending is node 0's queue, but the entry carries its node and the
         // DDI names one, so the two are compared instead of assumed.

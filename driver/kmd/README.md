@@ -79,10 +79,13 @@ no code from Microsoft's MS-PL sample.
   last reported fence of node 0 only. In trial D1 the kill of 0.7.216.16 used the GART register path, which
   refused `SQ_CMD`, so no kill reached the register. 0.7.216.17 issues it through the GFX sequence. In trial D1 of
   0.7.216.17 one kill drained the ring, the client got `DXGI_ERROR_DEVICE_HUNG`, and the desktop stayed. From
-  0.7.216.27 admits an empty-ring recovery only when the per-node observed completion agrees with successful
+  0.7.216.27 the driver admits an empty-ring recovery only when the per-node observed completion agrees with successful
   publication, no report is pending/in flight/lost, the fence is in range and the GFX ring is proven idle.
   Verdict 7 names that completed fence as aborted. Uncertain cases still refuse and can end in 0x116.
-  Recovery epochs serialize watchdog failure gates with reopen. See `docs/design/hang-recovery.md`.
+  Recovery epochs serialize watchdog failure gates with reopen. An active submission alone gets a bounded
+  500 ms admission recheck. Other unstable states refuse with verdict 8 and a persisted reason mask.
+  Temporary admission closure does not fault StartHealth. Existing genuine faults remain sticky.
+  See `docs/design/hang-recovery.md`.
 - **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
   observable progress before the driver closes the ring and takes a register snapshot. The INF does not write it.
   Absent means Windows' own `TdrDelay` plus 2 s, which is 12 s on a machine where the control application wrote

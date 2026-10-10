@@ -95,9 +95,10 @@ In the original stage-1 implementation, `GfxSoftRecover` cleared the sticky `Sub
 fence retired. The current transaction instead defers reopening and waking until the final commit described
 under "Verdict 7". It also clears `SubmitInFlight`, ends the DPM busy share and signals the retire waiters
 (KMD 196: a submission held in `GfxSubmitWait` is waiting for exactly this gate). `DpmBusyEnd` is idempotent, so
-this is harmless when the interrupt path got there first. StartHealth stays closed: the start did see a fault.
-Rendering does not depend on StartHealth, but the custom DPM and CU-mode escapes do. Until the next device
-restart they answer `STATUS_DEVICE_NOT_READY`, while the governor inside the KMD keeps running.
+this is harmless when the interrupt path got there first. In that original implementation the fault path
+closed StartHealth until restart. Rendering does not depend on StartHealth, but custom DPM and CU-mode escapes do.
+The revised admission path uses a temporary gate without creating a health fault. An existing genuine fault
+remains sticky, as described in the current recovery protocol below.
 
 ## The VMID
 
@@ -130,8 +131,12 @@ Each stage-1 call leaves its verdict in the registry, under
 and flushes it with `ZwFlushKey`. The log ring is about 1024 lines and lives in memory, so it does not survive the
 0x116 that follows a refusal. The registry record does.
 
-- Counters: `Attempts`, `Recovered` (verdicts 1, 5 and 7), `NotDrained` (2) and `Refused` (3, 4 and 6). The
+- Counters: `Attempts`, `Recovered` (verdicts 1, 5 and 7), `NotDrained` (2) and `Refused` (3, 4, 6 and 8). The
   driver never resets them.
+- Verdict 8 (`ADMISSION_GUARD`) records an unstable admission refusal. `LastSeq` is a reason bitmask on this
+  verdict only: STOPPING 1, COMPLETION_PENDING 2, REPORT_LOST 4, REPORT_IN_FLIGHT 8, ACTIVE_SUBMISSIONS 16,
+  RESET_ACTIVE 32. Combined bits retain simultaneous causes. This is distinct from the stable fence guard,
+  verdict 4. `LastKills` and `LastMicros` are zero because no kill was attempted.
 - The last call: `LastVerdict`, `LastSeq`, `LastFence`, `LastKills`, `LastMicros`, `LastTime` (a UTC FILETIME,
   REG_QWORD) and `LastVersion`. Since 0.7.216.17, `LastKills` counts only the kills that reached the register. A
   verdict 2 with `LastKills` 0 is a refused kill, and the log ring then has `gfx: soft recovery kill refused`.
@@ -180,7 +185,7 @@ long hang), the log ring of the dump has these lines in sequence:
 - `ResetFromTimeout failed`, then bugcheck 0x116.
 
 The record says `Attempts 1`, `Refused 1`, `LastVerdict 4`. Thus the fence guard refused before any kill. The
-fence values in the dump show the cause:
+fence values in the dump identify the cause:
 
 | Value in the dump | Fence |
 |---|---|
@@ -229,7 +234,7 @@ installed, which was the GART sequence. The first kill was refused with `STATUS_
 the sequence, so the next 94 writes were dropped. The loop counted all 95 as kills, but no kill reached the
 register.
 
-The snapshot of the timeout agrees with waves that nothing killed. It shows the client's spin and no fault:
+The snapshot of the timeout agrees with waves that nothing killed. It records the client's spin and no fault:
 
 | Register | Value | Fields that are set |
 |---|---|---|
@@ -279,7 +284,7 @@ bugcheck. After the recovery the desktop stayed black:
 - When the thread was stopped (DWM killed), the new DWM set the source visible and the desktop came back.
 
 A full user dump of DWM, read with `cdb -z` and the PDB of the deployed hosted UMD (`bc250d3d_zink.dll` SHA-256
-`D9C4DF68`, Mesa `amdgpu-wddm/b19-hosted-umd` at `7eb7861d`), shows the cause:
+`D9C4DF68`, Mesa `amdgpu-wddm/b19-hosted-umd` at `7eb7861d`), identifies the cause:
 
 | Item in the dump | Value |
 |---|---|
@@ -301,7 +306,7 @@ Three conclusions:
 - **The UMD change is in zink.** The Mesa branch `amdgpu-wddm/hang-recovery-zink` returns the current batch state
   only if neither list of the context holds it (`zink_bc250_batch_list.h`). Its host test
   (`zink/tests/bc250_batch_list.py`) holds the D1 shape, and the negative control without the guard spins on it.
-- **Why DWM declared its device lost was open here.** The next section answers it. The dump shows the result but
+- **Why DWM declared its device lost was open here.** The next section answers it. The dump records the result but
   not the path. An innocent device is not put into the error state by an engine reset. Two paths of the hosted UMD can declare the loss without that:
   a runtime callback that returned a device-lost result, or the 10 s CPU bound of the Present-idle wait
   (`Bc250WaitPresentIdle`) while DWM's work waited about 14 s behind the hang (122.35 s to 136.47 s). The same
@@ -389,7 +394,7 @@ carries on. The watchdog therefore still only closes the ring and records its re
 
 Node 0 has a watchdog of its own, a `KTIMER` and a DPC in `wddm.c`, because this part has no working GPU reset
 (facts M53) and a fence that never arrives has to be noticed by somebody. Until 0.7.216.26 it was one constant,
-`BC250_WDDM_SUBMIT_TIMEOUT_MS` 500, counted from the moment the packet was written to the ring. BD-114 shows what
+`BC250_WDDM_SUBMIT_TIMEOUT_MS` 500, counted from the moment the packet was written to the ring. BD-114 establishes what
 that cost. A dense 512-token LLM prefill submits packets whose own execution time is 400 ms or more. The
 watchdog fired on one of them. `GfxSubmitFail` closed node 0. The next submission was refused, which latched
 `RefusalPending[0]`. That flag blocks the `DXGK_INTERRUPT_DMA_PREEMPTED` acknowledgement for ever. The OS then
@@ -492,6 +497,9 @@ Gap counts observation-gap resets. TimerRearms counts timer scheduling. The fiel
 `SubmitPrimes`, `SubmitGapResets` and `SubmitRearms`, respectively. Only Activity establishes that a changed
 token was observed. It still does not prove useful forward progress or that rearming was necessary for completion.
 The host constant-token and alternating-token controls exercise these distinctions without GPU execution.
+Read the `SubmitChecks` delta first. If it is zero, no observation was made during the interval. Frequent
+submission or retirement can postpone the timer throughout healthy work. Zero Activity in that case is not
+an unchanged-token observation. Even with checks above zero, samples cannot establish continuous inactivity.
 
 ### Verdict 7: a completed fence with successful publication
 
@@ -504,7 +512,9 @@ permit guessing from the last notification or claiming a reset stopped an active
 
 `BC250_HANG_NODE_STATE` keeps three different facts per node under `wddm->Lock`:
 
-- `CompletedFence` comes from ordered hardware-completion observation, before publication.
+- `CompletedFence` comes from `WddmRecordCompletionLocked` before publication. Its producers include ordered
+  hardware retirement and `WddmCompleteSoftware` for commands completed without entering the ring.
+  The watermark is a driver completion observation, not proof that every named command executed on the GPU.
 - `LastReportedFence` records successful notification to Windows. `ReportInFlight` spans publication, and
   `ReportLost` preserves uncertainty after an exhausted report. A later successful report covering the lost
   fence can clear that uncertainty.
@@ -516,34 +526,65 @@ permit guessing from the last notification or claiming a reset stopped an active
 `Bc250HangAbortCompletedFence` requires the observed completion to equal the published fence, no queued,
 in-flight or lost completion report, and a wrap-aware fence range against the node's submitted and scheduler
 boundaries. Comparisons retain the existing assumption of fewer than 2^31 outstanding fence IDs. Another node's
-completion cannot satisfy these guards. `LastSubmittedFence` is maintained by both submit DDI wrappers.
+completion cannot satisfy these guards. Both submit DDI wrappers record `LastSubmittedFence` before calling
+their implementation. A fence rejected inside the implementation can therefore widen this upper bound.
+The returned abort fence must still be an observed, successfully published completion. Moving the store
+after the implementation would lose the submitted fence when that implementation faults.
 
 | State when resetting node 0 | Result |
 | --- | --- |
 | Empty node queue, authoritative completed/published agreement, valid range, no active submit/publication, and independently proven idle GFX ring | Verdict 7 can reopen the ring and report the completed fence as aborted |
-| Publication in flight, including after `CompletionPending` was cleared | Admission refuses with verdict 4 and zero snapshot fields |
-| Report exhausted after a newer completion, without a covering successful report | Admission refuses with verdict 4 and zero snapshot fields. Preserve `ReportLost` |
-| Pending report | Admission refuses with verdict 4 and zero snapshot fields |
+| Publication in flight, including after `CompletionPending` was cleared | Admission refuses with verdict 8 and the reason mask in `LastSeq` |
+| Report exhausted after a newer completion, without a covering successful report | Admission refuses with verdict 8 and the reason mask in `LastSeq`. Preserve `ReportLost` |
+| Pending report | Admission refuses with verdict 8 and the reason mask in `LastSeq` |
 | Missing observed completion, unequal completed/published fences, or invalid empty-queue fence range | Verdict 7 refuses. Neither a reset boundary nor an older notification substitutes for completion |
-| Reset already active or submission still entering the ring | Admission refuses with verdict 4 and zero snapshot fields |
+| Reset already active | Immediate verdict 8 with RESET_ACTIVE |
+| Active submissions are the only admission blocker | Recheck against the 500 ms software wait budget before verdict 8 with ACTIVE_SUBMISSIONS. Admit if the count reaches zero and no other blocker appears |
 | Work still on the ring | Verdict 7 is unavailable. The existing guarded stage-1 kill path must establish drain before success |
 | Final empty-ring reopen fails | Verdict 3 refuses. Adapter recovery can still fail with 0x116 |
 | Stage-1 kill/drain or its final reopen fails | Verdict 2 refuses. Adapter recovery can still fail with 0x116 |
 | Node 1 reset or recovery disabled | Existing refusal path remains |
 
-An admission refusal has no stable reset snapshot. Its verdict-4 record therefore uses zero sequence, fence,
-kill and duration fields rather than reporting stale values. This is distinct from a stable fence-range refusal.
+An admission refusal has no stable packet snapshot. Verdict 8 persists its reason mask in `LastSeq`, with
+zero kill count and duration. This allows post-bugcheck attribution without treating the mask as a GPU sequence.
 
-Recovery is an exclusive per-node transaction. `ResetActive` blocks new retirement/publication and submission
-admission while recovery is active. Admission first refuses pending/lost reports, in-flight publication and
-active submissions. These guards also apply to the existing on-ring kill path. `Epoch` invalidates a watchdog observation captured before reset began.
+`WddmResetAdmit` waits only when ACTIVE_SUBMISSIONS is the sole blocker. It wakes the held submitters through
+`GfxRetireSignal`, then rechecks against one monotonic 500 ms budget, waiting 1 ms outside `wddm->Lock`.
+Any additional blocker refuses immediately. During the wait and an early refusal, neither submission gate changes.
+This is a software waiting budget, not a hard real-time return bound. The scheduler can delay resuming the thread.
+If active submissions have reached zero on that later wake, admission can succeed without requesting another wait.
+Success returns with `wddm->Lock` held through the caller's fence snapshot. Refusal returns with the lock released.
+
+The first-level synchronization contract names `DxgkDdiSubmitCommand` and `DxgkDdiResetEngine` in the GPU Scheduler
+Class. It does not list `DxgkDdiSubmitCommandVirtual`, so this driver does not assume their mutual exclusion.
+See [Microsoft's first-level synchronization contract][first-level-contract]. The source revision reviewed is
+`windows-driver-docs` commit `110f60eaf2ac5836e644d320c1e92c1011f2af5e`.
+
+[first-level-contract]: https://learn.microsoft.com/windows-hardware/drivers/display/threading-and-synchronization-first-level
+
+ResetEngine runs at PASSIVE_LEVEL. The bounded wait holds no spin lock and joins no DPC.
+
+Recovery is an exclusive per-node transaction. Once active submissions reach zero, admission claims `ResetActive`
+and increments `Epoch` under the WDDM lock. It then closes both gates in that same critical section.
+`ResetActive` blocks retirement/publication and new submission implementation calls. A submission wrapper arriving
+during reset returns success without executing or completing that packet. It remains outstanding for the
+scheduler's reset boundary and replay, rather than becoming a fabricated completion or health fault.
+Pending or lost reports and publication in flight still refuse. This includes a late completion first observed
+by ResetEngine itself. No relaxation of that conservative case is implemented.
+
 A timeout checks its epoch and latches both WDDM and GFX failure gates in one serialized action. A stale action
 released after successful recovery must leave both reopened gates unchanged. Conversely, a timeout committed
 before reset is part of the state that reset evaluates. No DPC join waits while holding the lock that DPC needs.
 
-Beginning recovery closes both WDDM and GFX gates under the lock. `GfxSoftRecover` only establishes drain. It
+Admission uses `GfxSubmitClose`, which closes the physical submission gate without calling `StartHealthFault`.
+A successful recovery therefore does not create a health failure solely by taking this temporary gate.
+It also does not clear any existing health fault. Genuine `GfxSubmitFail` paths retain their sticky fault.
+An admitted recovery that later refuses leaves both gates closed. `refuseReset` still calls `StartHealthClose`.
+`GfxSoftRecover` only establishes drain. It
 does not reopen or wake early. The final commit rechecks the epoch, `Stopping` and GFX idle state, then calls
-`GfxReopenAfterAbort` and opens both gates in the same WDDM critical section. It records only the scheduler
+`GfxReopenAfterAbort` and opens both gates in the same WDDM critical section. Clearing GFX `SubmitFailed`
+before WDDM `WatchdogFaulted[3D]` is safe only because every node-0 ring entry passes the WDDM gate under
+that same lock. This ordering must not be reused by an entry path that bypasses the gate. The commit records only the scheduler
 boundary, leaving the actual-completion and notification watermarks unchanged. The retire wake follows that commit
 and lock release. Waking earlier could cause a held submission to encounter the still-closed gate. A successful
 reset loses the affected application's device. An uncertain case still refuses and can end in 0x116. This is
