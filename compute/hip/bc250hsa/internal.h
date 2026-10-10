@@ -147,7 +147,7 @@ typedef struct bc250hsa_kernel_internal {
     bc250hsa_kernel_descriptor descriptor;
     char*                      name;     /* owned; pub.name points at it */
     bc250hsa_arg*              args;     /* owned; pub.args points at it */
-    char                       symbol[128]; /* the metadata .symbol, "<name>.kd" */
+    char*                      symbol;      /* owned metadata descriptor symbol */
 } bc250hsa_kernel_internal;
 
 struct bc250hsa_module {

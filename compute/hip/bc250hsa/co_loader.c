@@ -321,6 +321,7 @@ static void module_free_contents(struct bc250hsa_module* mod)
     if (mod->kernels != NULL) {
         for (i = 0; i < mod->kernel_count; i++) {
             free(mod->kernels[i].name);
+            free(mod->kernels[i].symbol);
             free(mod->kernels[i].args);
         }
         free(mod->kernels);
