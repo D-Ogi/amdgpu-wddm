@@ -94,19 +94,35 @@ does not quote a throughput. `--encode` also reports, always, how long the threa
 picture's commands and how long it then waited in the one blocking `Map`.
 
 Two more switches pick an implementation rather than a measurement, both read once in
-`GpuEncoder::Initialize`: `BC250_MFT_DEBLOCK=waves` drives the deblocking filter as one dispatch per
-wavefront of clause 8.7 instead of one dispatch for the whole picture, and `BC250_MFT_SERIAL_DEBLOCK`
-drives it one **macroblock** at a time in raster order, which is clause 8.7 read literally, is the
-narrowest shape and wins over the other. All three produce the same bytes, which `sweep.ps1` holds them
-to. They exist so that a lab machine on which the single dispatch misbehaves can be bisected without a
-rebuild; `mfthost.exe --deblock-mode rows|waves|serial` picks the same three from the command line, which
-is what the sweep's two schedule cases use.
+`GpuEncoder::Initialize` through `DeblockModeFromEnvironment`: `BC250_MFT_DEBLOCK=rows` drives the
+deblocking filter as one dispatch for the whole picture instead of one dispatch per wavefront of
+clause 8.7, and `BC250_MFT_SERIAL_DEBLOCK` drives it one **macroblock** at a time in raster order,
+which is clause 8.7 read literally, is the narrowest shape and wins over the other. All three produce
+the same bytes, which `sweep.ps1` holds them to. They exist so that a lab machine on which one shape
+misbehaves can be bisected without a rebuild; `mfthost.exe --deblock-mode rows|waves|serial` picks the
+same three from the command line, which is what the sweep's two schedule cases use.
 
-The single dispatch is the default, and the thing it rests on is worth stating: every macroblock row is
-one thread group, and a group waits on a counter the group above it publishes, so all `heightMb` groups
-have to be resident at once. Direct3D promises no such thing. The wait is therefore bounded; when the
-bound expires the group filters anyway, which gives a wrong picture that every `--encode` and sweep case
-catches against the inbox decoder, instead of a spinning GPU that unit A cannot preempt its way out of.
+**The one dispatch per wavefront is the default since 2026-10-10, and the single dispatch is off.**
+This is the change the independent audit of that day asked for (finding A11 / UMD-3). The single
+dispatch rests on something Direct3D does not promise: every macroblock row is one thread group, a
+group waits on a counter the group above it publishes, so all `heightMb` groups have to be resident at
+once. The wait is therefore bounded, and when the bound expires the group filters anyway **and
+publishes the same progress count as a properly ordered row**. Nothing marks the picture, so a
+reconstruction filtered in the wrong order becomes the reference of the pictures after it and a
+recording says it succeeded. The `--encode` and sweep cases catch it where they run, but a recorder on
+a machine whose scheduler disagrees has nothing that would.
+
+One dispatch per wavefront has no such assumption: the dispatch boundary is the synchronisation, and
+`DeblockWaveRows` states the order in arithmetic that the host gate checks - every macroblock in the
+dispatch of its own `t = mbx + 2 * mby`, exactly once, and each of the three neighbours the filter
+writes into with a smaller `t`, so it was filtered in an earlier dispatch. `mfthost --selftest` proves
+that over eight picture sizes, and its forced-exhaustion case holds the default to this shape for as
+long as `kDeblockRowsPublishesOnTimeout` says the single dispatch publishes progress after a wait that
+gave up. Whoever gives that wait a failure path, or makes it reconstruct the picture correctly, clears
+that constant and may default to the single dispatch again.
+
+The measured numbers of E52 are unchanged: they were taken with the shape each run names, and the
+encoder's throughput rows are not restated here.
 
 ### Pictures in flight
 

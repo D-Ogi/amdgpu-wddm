@@ -889,6 +889,149 @@ void SelfTestDialDefaults()
     }
 }
 
+// ---------------------------------------------------------------- the deblock schedule
+//
+// Audit of 2026-10-10 (A11 / UMD-3). The Rows schedule walks a macroblock row per thread group and
+// waits on the row above through the rwProgress counters, with a finite spin budget. When that budget
+// runs out the group filters anyway and publishes the same count as a properly ordered row, so a
+// predecessor that Direct3D never scheduled gives a wrong reconstruction, later pictures reference it,
+// and the encoder reports success. Forward progress there needs every row's group to be resident at
+// once, which no Direct3D contract promises. The containment is the Waves schedule, whose
+// synchronisation is the dispatch boundary; the cases below prove that order and hold the default to
+// it for as long as the Rows timeout publishes progress.
+
+// One group of the Rows schedule as the shader writes it. Waiting for the row above to have published
+// `need` macroblocks, with a budget, and then: did the wait succeed, and what does the group do?
+struct RowsWaitResult {
+    bool satisfied = false;     // the predecessor's count arrived
+    bool filtered = false;      // the group filtered the macroblock
+    bool published = false;     // the group published normal progress for it
+};
+RowsWaitResult ModelRowsWait(uint32_t need, uint32_t published, uint32_t budget)
+{
+    RowsWaitResult out;
+    for (uint32_t spin = 0; spin < budget; ++spin) {
+        if (published >= need) {
+            out.satisfied = true;
+            break;
+        }
+    }
+    // What the shipped shader does after the loop, in both cases: it filters and publishes. The
+    // budget's only effect is how long it takes to get there.
+    out.filtered = true;
+    out.published = kDeblockRowsPublishesOnTimeout || out.satisfied;
+    return out;
+}
+
+void SelfTestDeblockSchedule()
+{
+    printf("deblock schedule\n");
+
+    // The Waves schedule covers every macroblock exactly once, each in the dispatch of its own
+    // t = mbx + 2 * mby, and the dispatches run in order of t. Every neighbour the filter writes into
+    // has a smaller t, so it was filtered in an earlier dispatch: that is the dependency proof, and it
+    // rests on the dispatch boundary alone.
+    const uint32_t sizes[][2] = { { 1, 1 }, { 2, 1 }, { 1, 2 }, { 3, 2 }, { 40, 30 },
+                                  { 80, 45 }, { 120, 68 }, { 256, 256 } };
+    bool scheduleOk = true;
+    uint32_t checked = 0;
+    for (const auto& size : sizes) {
+        const uint32_t widthMb = size[0], heightMb = size[1];
+        std::vector<uint32_t> seen(static_cast<size_t>(widthMb) * heightMb, 0);
+        const uint32_t waves = DeblockWaveCount(widthMb, heightMb);
+        for (uint32_t t = 0; t <= waves; ++t) {
+            const DeblockWave wave = DeblockWaveRows(t, widthMb, heightMb);
+            if (!wave.any) {
+                continue;
+            }
+            if (wave.first > wave.last || wave.last >= heightMb) {
+                Fail("%ux%u mb: wave %u dispatches rows %u..%u", widthMb, heightMb, t, wave.first,
+                     wave.last);
+                scheduleOk = false;
+                continue;
+            }
+            for (uint32_t mby = wave.first; mby <= wave.last; ++mby) {
+                // The shader's own index: one group of this dispatch takes this macroblock.
+                if (t < 2u * mby || t - 2u * mby >= widthMb) {
+                    Fail("%ux%u mb: wave %u gives row %u a macroblock outside the picture", widthMb,
+                         heightMb, t, mby);
+                    scheduleOk = false;
+                    continue;
+                }
+                const uint32_t mbx = t - 2u * mby;
+                ++seen[static_cast<size_t>(mby) * widthMb + mbx];
+                ++checked;
+            }
+        }
+        for (uint32_t mby = 0; mby < heightMb; ++mby) {
+            for (uint32_t mbx = 0; mbx < widthMb; ++mbx) {
+                const uint32_t times = seen[static_cast<size_t>(mby) * widthMb + mbx];
+                if (times != 1) {
+                    Fail("%ux%u mb: macroblock (%u,%u) is filtered %u time(s)", widthMb, heightMb,
+                         mbx, mby, times);
+                    scheduleOk = false;
+                }
+            }
+        }
+    }
+    if (scheduleOk) {
+        printf("  %-34s %u macroblocks over %u sizes, each in the dispatch of its own t\n",
+               "the Waves schedule", checked,
+               static_cast<unsigned>(sizeof(sizes) / sizeof(sizes[0])));
+    }
+
+    // Forced exhaustion. The predecessor group never publishes anything, so the wait cannot be
+    // satisfied whatever the budget is. The shipped Rows shader answers that by filtering the
+    // macroblock and publishing progress for it, which is a reconstruction that a later picture
+    // references and an encoder that says nothing. The budget below is small because the outcome does
+    // not depend on its size: an exhausted wait is an exhausted wait.
+    {
+        const RowsWaitResult starved = ModelRowsWait(2, 0, 4096);
+        const RowsWaitResult ordered = ModelRowsWait(2, 2, 4096);
+        if (starved.satisfied) {
+            Fail("forced exhaustion: a predecessor that published nothing satisfied the wait");
+        }
+        if (!ordered.satisfied) {
+            Fail("forced exhaustion: a predecessor that published enough did not satisfy the wait");
+        }
+        const bool silentlyWrong = !starved.satisfied && starved.filtered && starved.published;
+        if (silentlyWrong != kDeblockRowsPublishesOnTimeout) {
+            Fail("forced exhaustion: the model and kDeblockRowsPublishesOnTimeout disagree");
+        }
+        // The containment, and the whole point of this case: while the exhausted branch publishes
+        // normal progress, no recording may get that schedule by default.
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+        SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+        const DeblockMode fallback = DeblockModeFromEnvironment();
+        if (silentlyWrong && fallback == DeblockMode::Rows) {
+            Fail("forced exhaustion: Rows is the default although its timeout publishes progress "
+                 "for a macroblock whose predecessor never ran");
+        } else {
+            printf("  %-34s predecessor silent, wait exhausted, filtered=%d published=%d, "
+                   "default mode %u\n", "forced exhaustion", starved.filtered ? 1 : 0,
+                   starved.published ? 1 : 0, static_cast<unsigned>(fallback));
+        }
+
+        // And the shape is still selectable for a measurement, with the two diagnostics unchanged.
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "rows");
+        const DeblockMode rows = DeblockModeFromEnvironment();
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "wavefront");
+        const DeblockMode waves = DeblockModeFromEnvironment();
+        SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", "1");
+        const DeblockMode serial = DeblockModeFromEnvironment();
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+        SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+        if (fallback != DeblockMode::Waves || rows != DeblockMode::Rows ||
+            waves != DeblockMode::Waves || serial != DeblockMode::Serial) {
+            Fail("deblock mode selection: default %u, rows %u, wavefront %u, serial %u",
+                 static_cast<unsigned>(fallback), static_cast<unsigned>(rows),
+                 static_cast<unsigned>(waves), static_cast<unsigned>(serial));
+        } else {
+            printf("  %-34s default Waves, rows, wavefront, serial\n", "mode selection");
+        }
+    }
+}
+
 // ---------------------------------------------------------------- the device lease
 //
 // The client's device lease is the outer lock of the two the transform takes, and the only thing that
@@ -1149,6 +1292,7 @@ int RunSelfTest()
     SelfTestParameterSets();
     SelfTestFrameSizes();
     SelfTestDialDefaults();
+    SelfTestDeblockSchedule();
     SelfTestDeviceLease();
     SelfTestAdapterChoice();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
@@ -2135,7 +2279,9 @@ int wmain(int argc, wchar_t** argv)
             } else if (wcscmp(m, L"serial") == 0) {
                 SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", "1");
             } else if (wcscmp(m, L"rows") == 0) {
-                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+                // Named, not cleared: Waves is the default since the audit of 2026-10-10 (A11), so
+                // clearing the variable would run the case the caller did not ask for.
+                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "rows");
                 SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
             } else {
                 wprintf(L"--deblock-mode takes rows, waves or serial\n");
