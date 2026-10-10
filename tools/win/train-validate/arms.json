@@ -1,0 +1,320 @@
+{
+  "schema": 1,
+  "note": "The standard validation set of a release train, as one list. Every arm names an entry point that already exists; this file holds the order, the bounds, the result line and the baseline, and nothing else. Change the set here, not in a per-train copy of a shell script.",
+  "config": {
+    "target": "{repo}/tools/win/target.py",
+    "mon": "{repo}/tools/win/bc250mon/mon.py",
+    "temp": "{repo}/tools/win/bc250rd/temp.py",
+    "kit": "{repo}/tools/win/train-validate/lab",
+    "caps": "{ws}/scratch/m15/native-caps001",
+    "pathtrace": "{ws}/scratch/pathtrace",
+    "plug": "{ws}/scratch/smartplug/plug.py",
+    "lab_root": "C:\\BC250\\tmp\\train-{release}",
+    "lab_pkg": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}",
+    "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
+  },
+  "limits": {
+    "note": "Owner rules. The runner holds them; do not tune them here.",
+    "trial_bound_s": 170,
+    "game_bound_s": 1200,
+    "tctl_start_max_c": 80.0,
+    "tctl_cool_to_c": 87.0,
+    "tctl_poll_s": 20,
+    "tctl_cool_max_s": 420,
+    "host_grace_s": 45,
+    "min_poll_s": 10
+  },
+  "sets": {
+    "standard": ["push-zip", "zipcheck", "uninstall", "restart-1", "install", "restart-2", "slots", "kmdver",
+                 "preflight", "pin-baseline", "vk-smoke", "x86-smoke", "q2rtx-pipeline", "q2rtx-query",
+                 "q2rtx-loop", "dxrpt", "d3d12-promote", "rottr", "w3-high-rt"],
+    "install": ["push-zip", "zipcheck", "uninstall", "restart-1", "install", "restart-2", "slots", "kmdver",
+                "preflight", "pin-baseline"],
+    "gates": ["q2rtx-pipeline", "q2rtx-query", "q2rtx-loop", "rottr"],
+    "smoke": ["vk-smoke", "x86-smoke", "dxrpt"]
+  },
+  "arms": [
+    {
+      "id": "push-zip",
+      "title": "Push the package zip to the lab",
+      "kind": "transfer",
+      "bound_s": 900,
+      "why_not_a_trial": "A file copy over ssh, no GPU work and no trial: the three-minute trial bound does not apply, and a 95 MB copy needs more than it.",
+      "run": [["python", "{target}", "run", "New-Item -ItemType Directory -Force '{lab_root}' | Out-Null; 'ready'"],
+              ["python", "{target}", "push", "{zip}", "{lab_root}"]],
+      "expect": "ready",
+      "gate_after": false
+    },
+    {
+      "id": "zipcheck",
+      "title": "The pushed zip is the development PC's zip",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [["python", "{target}", "ps", "{kit}/zipcheck.ps1", "-Zip", "{lab_zip}", "-Want", "{zip_sha256}"]],
+      "expect": "zip OK",
+      "depends_on": ["push-zip"],
+      "gate_after": false
+    },
+    {
+      "id": "uninstall",
+      "title": "Clean slate: the installed release removes itself",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [["python", "{target}", "ps", "{kit}/clean-slate.ps1", "-Step", "uninstall", "-Root", "{lab_root}"]],
+      "expect": "uninstall exit 0",
+      "result": {"regex": "driver store bc250kmd packages: (\\d+)", "name": "driver-store packages left", "unit": "packages"},
+      "baseline": {"value": 0, "tolerance_abs": 0, "source": "b26 uninstall.txt, b25 the same"},
+      "gate_after": false,
+      "note": "The adapter falls back to Microsoft Basic Display Adapter here, so the KMD gate cannot run until the install."
+    },
+    {
+      "id": "restart-1",
+      "title": "Restart after the uninstall",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [["python", "{target}", "ps", "{kit}/restart-now.ps1", "-Reason", "clean-slate uninstall"]],
+      "depends_on": ["uninstall"],
+      "gate_after": false
+    },
+    {
+      "id": "install",
+      "title": "Install the package fresh, 40 CU",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [["python", "{target}", "ps", "{kit}/clean-slate.ps1", "-Step", "install", "-Name", "{pkg_name}",
+               "-Sha", "{zip_sha256}", "-Root", "{lab_root}"]],
+      "expect": "install exit 0",
+      "depends_on": ["restart-1"],
+      "gate_after": false
+    },
+    {
+      "id": "restart-2",
+      "title": "Restart after the install",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [["python", "{target}", "ps", "{kit}/restart-now.ps1", "-Reason", "package install"]],
+      "depends_on": ["install"],
+      "gate_after": true
+    },
+    {
+      "id": "slots",
+      "title": "Every installed payload file against the package manifest",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [["python", "{target}", "ps", "{kit}/slots.ps1", "-Pkg", "{lab_pkg}"]],
+      "result": {"regex": "slot check: (\\d+) match, (\\d+) differ, (\\d+) absent", "group": 2,
+                 "name": "slots differing", "unit": "files"},
+      "baseline": {"value": 0, "tolerance_abs": 0, "source": "b26 slots.txt: 36 match, 0 differ, 1 absent (the cert the installer does not lay down)"},
+      "depends_on": ["restart-2"],
+      "gate_after": false
+    },
+    {
+      "id": "kmdver",
+      "title": "Identity of the running driver, the ICD and the DWM modules",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [["python", "{target}", "ps", "{kit}/kmdver.ps1"]],
+      "depends_on": ["restart-2"],
+      "gate_after": false
+    },
+    {
+      "id": "preflight",
+      "title": "Preflight: 40 CU confirmed, DPM, start health, TdrDelay, no competing trial",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [["python", "{target}", "ps", "{kit}/preflight.ps1"]],
+      "expect": "preflight: ok",
+      "depends_on": ["restart-2"],
+      "gate_after": false
+    },
+    {
+      "id": "pin-baseline",
+      "title": "Pin the trial harness to this package",
+      "kind": "host",
+      "bound_s": 300,
+      "why_not_a_trial": "Runs on the development PC against the package files; it never reaches the lab.",
+      "run": [["python", "{caps}/release-baseline.py", "{pkg}", "--apply"]],
+      "result": {"regex": "release \\S+: (\\d+) files verified", "name": "files verified", "unit": "files"},
+      "expect": "files verified",
+      "depends_on": ["slots"],
+      "gate_after": false
+    },
+    {
+      "id": "vk-smoke",
+      "title": "Vulkan smoke on the installed system ICD, x64 and x86",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [["python", "{target}", "ps", "{kit}/vk-smoke.ps1", "-Step", "all"]],
+      "result": {"regex": "driverInfo\\s*=\\s*(.+)", "name": "ICD driverInfo", "kind": "text"},
+      "depends_on": ["preflight"]
+    },
+    {
+      "id": "x86-smoke",
+      "title": "A 32-bit D3D11 client on the installed wow64 stack",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [["python", "{target}", "ps", "{kit}/x86-d3d11-smoke.ps1"]],
+      "depends_on": ["preflight"]
+    },
+    {
+      "id": "q2rtx-pipeline",
+      "title": "GATE Quake II RTX timedemo, VK_KHR_ray_tracing_pipeline",
+      "kind": "lab",
+      "bound_s": 170,
+      "gate": "q2rtx",
+      "plug": true,
+      "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-timedemo",
+               "-RtApi", "pipeline", "-Width", "1280", "-Height", "720", "-Seconds", "150"]],
+      "expect": "Using VK_KHR_ray_tracing_pipeline",
+      "result": {"regex": "(\\d+) frames, ([\\d.]+) seconds: ([\\d.]+) fps", "group": 3, "name": "timedemo", "unit": "fps"},
+      "baseline": {"value": 60.40, "tolerance_pct": 10, "source": "b26 (tester.24) step 8: 631 frames, 10.45 s, 60.40 fps"},
+      "depends_on": ["preflight"],
+      "failure_classes": ["BD-102", "BD-105"]
+    },
+    {
+      "id": "q2rtx-query",
+      "title": "GATE Quake II RTX timedemo, VK_KHR_ray_query",
+      "kind": "lab",
+      "bound_s": 170,
+      "gate": "q2rtx",
+      "plug": true,
+      "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-timedemo",
+               "-RtApi", "query", "-Width", "1280", "-Height", "720", "-Seconds", "150"]],
+      "expect": "Using VK_KHR_ray_query",
+      "result": {"regex": "(\\d+) frames, ([\\d.]+) seconds: ([\\d.]+) fps", "group": 3, "name": "timedemo", "unit": "fps"},
+      "baseline": {"value": 60.86, "tolerance_pct": 10, "source": "b26 (tester.24) step 8: 631 frames, 10.37 s, 60.86 fps"},
+      "depends_on": ["preflight"],
+      "failure_classes": ["BD-102", "BD-105"]
+    },
+    {
+      "id": "q2rtx-loop",
+      "title": "GATE Quake II RTX, fullscreen play loop to the bound",
+      "kind": "lab",
+      "bound_s": 170,
+      "gate": "q2rtx",
+      "plug": true,
+      "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-loop",
+               "-Fullscreen", "-Width", "1920", "-Height", "1200", "-Seconds", "160"]],
+      "expect": "end: reason bound",
+      "result": {"regex": "end: reason (\\w+), elapsed ([\\d.]+) s", "group": 2, "name": "run to the bound", "unit": "s"},
+      "baseline": {"value": 160, "tolerance_pct": 12, "source": "b27 round 3 pre-fix: bound of 170 s reached, elapsed 173.5 s"},
+      "depends_on": ["q2rtx-pipeline"],
+      "failure_classes": ["BD-102", "BD-105"]
+    },
+    {
+      "id": "dxrpt",
+      "title": "DXRPathTracer, Sponza, path tracing through D3D12",
+      "kind": "lab",
+      "bound_s": 150,
+      "plug": true,
+      "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "dxrpt", "-AlwaysReset",
+               "-Seconds", "90", "-Width", "1536", "-Height", "864"]],
+      "result": {"regex": "([\\d.]+) fps, ([\\d.]+) Mrays/s", "group": 1, "name": "steady path tracing", "unit": "fps"},
+      "baseline": {"value": 19.13, "tolerance_pct": 10, "source": "b26 (tester.24) 20261009T140217Z-dxrpt: 436 frames in 30.0 s, 19.13 fps, 126.9 Mrays/s"},
+      "depends_on": ["preflight"],
+      "failure_classes": ["BD-102"]
+    },
+    {
+      "id": "d3d12-promote",
+      "title": "Promote the package D3D12 triplet to the registered baseline",
+      "kind": "promote",
+      "bound_s": 170,
+      "attempt": "native-caps",
+      "attempt_count": 2,
+      "promote": {
+        "shell": "{pkg}/payload/d3d12/amdgpu_wddm_d3d12.dll",
+        "engine": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "icd": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll"
+      },
+      "depends_on": ["pin-baseline"],
+      "note": "Idempotent: a leftover attempt directory with no lab evidence is moved aside, and an already accepted triplet ends the step as satisfied instead of refusing."
+    },
+    {
+      "id": "rottr",
+      "title": "GATE Rise of the Tomb Raider, D3D12 benchmark, preset HIGH",
+      "kind": "game",
+      "bound_s": 1200,
+      "gate": "rottr",
+      "plug": true,
+      "attempt": "native-caps",
+      "profile": "rottr",
+      "pre": [["python", "{target}", "ps", "{caps}/lab/rottr-vsync.ps1", "-Value", "0"],
+              ["python", "{mon}", "action", "overlay.hide"]],
+      "run": [["bash", "{caps}/run-game.sh", "{attempt_n}", "rottr", "{bound}"]],
+      "env": {
+        "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "M157_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
+        "SESSION_SAMPLER": "1",
+        "SAMPLER_SAMPLES": "1100",
+        "SESSION_ETW_ARGS": "-Seconds 15 -LatestB 1000 -FpsSeconds 120"
+      },
+      "post": [["python", "{target}", "ps", "{caps}/lab/rottr-vsync.ps1", "-Value", "1"],
+               ["python", "{mon}", "action", "overlay.show"]],
+      "result": {"operator": true, "name": "overall score", "unit": "fps",
+                 "how": "the benchmark result screen, read from a half-scale shot or an fbdump at the end of the session"},
+      "baseline": {"value": 55.15, "tolerance_pct": 10, "source": "b26 native-caps517 (tester.24): 90.69 / 27.19 / 62.86, overall 55.15"},
+      "depends_on": ["d3d12-promote"],
+      "failure_classes": ["BD-114", "BD-059"]
+    },
+    {
+      "id": "w3-high-rt",
+      "title": "The Witcher 3 Remaster, HIGH with ray tracing, interactive",
+      "kind": "operator",
+      "bound_s": 1200,
+      "attempt": "native-caps",
+      "profile": "witcher3",
+      "run": [["bash", "{caps}/run-m157.sh", "{attempt_n}", "high-rt", "{bound}"]],
+      "env": {
+        "SESSION_SAMPLER": "1",
+        "SESSION_SAMPLER_SAMPLES": "600",
+        "SESSION_EXPERIMENT": "none",
+        "SESSION_VSYNC": "false",
+        "SESSION_LIMIT_FPS": "240",
+        "SESSION_ETW_ARGS": "-Seconds 40 -LatestB 447 -FpsSeconds 90"
+      },
+      "result": {"operator": true, "name": "world average", "unit": "fps",
+                 "how": "the session sampler's own rate line, with the operator driving the game from half-scale shots"},
+      "baseline": {"value": 46.0, "tolerance_pct": 12, "source": "R102 40 CU baseline: W3 LOW 85.9, HIGH 46.0"},
+      "depends_on": ["d3d12-promote"],
+      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done."
+    }
+  ],
+  "failure_classes": [
+    {
+      "id": "BD-102",
+      "symptom": "Quake II RTX hangs the GPU about 27 s in: the process stops presenting, the KMD reports a fence timeout or a ResetEngine, and the run ends on its bound with no frame rate.",
+      "match": ["HARDWARE FENCE TIMEOUT", "ResetEngine node", "device lost on Vulkan"],
+      "needs_any": true
+    },
+    {
+      "id": "BD-105",
+      "symptom": "A Vulkan client freezes before its first present: the route and the swap chain are created, no present row is ever written, and the process stays alive with no fault and no TDR.",
+      "match": ["0 present rows", "no frame rate"],
+      "needs_any": true
+    },
+    {
+      "id": "BD-114",
+      "symptom": "A long compute packet ends in bugcheck 0x116 with parameter 3 0xC0000001: our own private submission budget trips on healthy work and the recovery after it fails.",
+      "match": ["0x00000116", "0xC0000001", "bugcheck records since the boot: [1-9]"],
+      "needs_any": true
+    },
+    {
+      "id": "BD-059",
+      "symptom": "A planned restart is read back as unclean: the arm after a restart reports an unexpected shutdown although the restart was this suite's own.",
+      "match": ["unclean", "unexpected shutdown"],
+      "needs_any": true
+    },
+    {
+      "id": "BD-061",
+      "symptom": "A WinUI window of the control application comes up blank: the window exists and its content never renders.",
+      "match": ["blank", "no content"],
+      "needs_any": true
+    },
+    {
+      "id": "BD-051",
+      "symptom": "The lab's sshd accepts nothing for minutes: the call itself returns no output, or fails at the banner exchange, while the machine is otherwise alive.",
+      "match": ["banner exchange", "Connection timed out", "kex_exchange_identification"],
+      "needs_any": true
+    }
+  ]
+}
