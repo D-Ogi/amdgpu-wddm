@@ -16,6 +16,7 @@ tools/diagusb/overlay/** text eol=lf
 # A gate reads this list and a tool rewrites it: one line ending, on every machine
 tools/quality/guardlog_width_baseline.txt text eol=lf
 tools/quality/doclint_baseline.txt text eol=lf
+tools/quality/claim_shares_baseline.txt text eol=lf
 # The vendored STE linter and its licence are hash pinned in tools/quality/third_party/PROVENANCE.md
 tools/quality/third_party/LICENSE-asd-ste100-skill.txt text eol=lf
 # Evidence is stored byte for byte, never normalized
