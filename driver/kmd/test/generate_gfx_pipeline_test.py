@@ -11,9 +11,15 @@ a=s.index('static void WddmGfxHeadLocked(')
 b=s.index('// ---- ADR 0008 stage D:',a)
 # KMD196: the held submission's bucket count sizes a BC250_WDDM field, so it goes ahead of the harness's struct;
 # WddmStopping (above the region) and gfx.c's GfxRetireSignal are production code the region calls.
-defines=re.findall(r'^#define BC250_WDDM_HOLD_BUCKETS\b.*$',s,re.M)
-assert len(defines)==1, 'BC250_WDDM_HOLD_BUCKETS must be defined once in wddm.c'
-Path(sys.argv[1]).with_name('gfx_pipeline_defines.inc').write_text(defines[0]+'\n')
+# BD-114: BC250_WDDM_HOLD_DEADLINE_MS joins it. The held submission's bound stayed at 500 ms when the submit
+# watchdog's budget became TdrDelay-derived, because it bounds a CPU wait on a dxgkrnl worker thread and not
+# the GPU's execution. The test asserts that bound, so it must read wddm.c's number and never a copy of it.
+defines=[]
+for name in ('BC250_WDDM_HOLD_BUCKETS','BC250_WDDM_HOLD_DEADLINE_MS'):
+    found=re.findall(r'^#define '+name+r'\b.*$',s,re.M)
+    assert len(found)==1, name+' must be defined once in wddm.c'
+    defines.append(found[0])
+Path(sys.argv[1]).with_name('gfx_pipeline_defines.inc').write_text('\n'.join(defines)+'\n')
 gfx=(source/'driver/kmd/gfx.c').read_text()
 Path(sys.argv[1]).write_text(function(s,'static BOOLEAN WddmStopping(')+function(gfx,'void GfxRetireSignal(')+s[a:b])
 

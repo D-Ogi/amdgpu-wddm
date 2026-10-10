@@ -1,6 +1,15 @@
 
+/* BD-114 7.1: the budget the driver latches once at WddmStart (submit_watchdog.h, Bc250SubmitBudgetMs) and
+ * node 1 then shares with node 0. Every fixture below sets it, because the harness never runs WddmStart. The
+ * value is the lab's own shipping default (TdrDelay 10 s plus the 2 s margin) and deliberately not the old flat
+ * BC250_WDDM_SUBMIT_TIMEOUT_MS: a drain that prices its deadline or its timer from a constant again fails the
+ * two checks in retention() instead of passing them by accident. */
+#define TEST_BUDGET_MS 12000ul
+static void budget_ms(BC250_WDDM* w){w->SubmitBudgetMs=(ULONG)TEST_BUDGET_MS;}
+
 static void legacy(void) {
  BC250_WDDM w={0};BC250_DEVICE d={&w};unsigned a[7]={0};
+ budget_ms(&w);
  PagingPrivateHeader(a,sizeof(a),0,0,4);a[6]=11;
  check(!WddmSubmitPagingHardware(&d,&w,a,sizeof(a),0,4,TRUE,11),"legacy record rejected without allocator fallback");
  check(!WddmSubmitPagingHardware(&d,&w,NULL,0,0,0,FALSE,12),"empty submission is not admitted by paging callers");
@@ -19,7 +28,7 @@ static void borrowed(void) {
  __declspec(align(8)) unsigned a[64]={0},b[64]={0},native[32]={0};
  BC250_PAGING_JOB *one,*two,*three,*four;int before=allocationCalls;
  unsigned size=PagingPrivateQueuedSize(PAGING_PRIVATE_QUEUED_DIRECT,12);
- reset();a[6]=11;a[7]=22;a[8]=33;b[6]=44;b[7]=55;b[8]=66;
+ reset();budget_ms(&w);a[6]=11;a[7]=22;a[8]=33;b[6]=44;b[7]=55;b[8]=66;
  check(PagingPrivateQueuedHeader(a,sizeof(a),0,0x10000,12),"queued A construction");
  check(PagingPrivateQueuedHeader(b,sizeof(b),0,0x10000,12),"queued B construction");
  check(PagingPrivateQueuedNativeHeader(native,sizeof(native),0,0x20000,192,0x4000,64,8,0),"queued native construction");
@@ -63,18 +72,24 @@ static void borrowed(void) {
 static void retention(void) {
  BC250_WDDM w={0};BC250_DEVICE d={&w};
  __declspec(align(8)) unsigned a[24]={0};BC250_PAGING_JOB* slot;
- int before=allocationCalls;reset();a[6]=9;
+ int before=allocationCalls;reset();budget_ms(&w);a[6]=9;
  PagingPrivateQueuedHeader(a,sizeof(a),0,0x10000,4);
  slot=PagingPrivateQueueSlot(a,sizeof(a),0x10000,4,TRUE);
  completionSlots[31]=slot;
  check(WddmSubmitPagingHardware(&d,&w,a,sizeof(a),0x10000,4,TRUE,31),"timeout fixture admitted");
+ // BD-114 7.1: the deadline and the one-shot timer are both priced from the budget the start latched, never
+ // from a constant of this driver's own. reset() left the clock at 0, so the deadline is the whole budget.
+ check(w.PagingDeadline==10000ull*TEST_BUDGET_MS,"node 1 deadline is the latched budget");
+ check(w.PagingSubmitTimer==1&&w.PagingSubmitDpc==-(int)(10000ul*TEST_BUDGET_MS),"node 1 timer armed for the latched budget");
+ now=w.PagingDeadline-1;WddmPagingSubmitDpcRoutine(NULL,&d,NULL,NULL);
+ check(w.PagingHwPending&&!w.WatchdogFaulted[1]&&!failureCount,"node 1 does not fire one clock tick before the budget");
  now=w.PagingDeadline;WddmPagingSubmitDpcRoutine(NULL,&d,NULL,NULL);
  check(w.PagingHead==slot&&slot->Borrowed&&w.PagingHwPending&&!completionCount,"timeout retains borrowed memory and pending fence");
  check(w.WatchdogFaulted[1]&&failureCount==1,"timeout closes engine admission");
  arrived=activeSeq;WddmGpuFencePaging(&d);
  check(completionCount==1&&!w.PagingHead,"late real fence permits retirement");
  check(allocationCalls==before&&!allocated,"timeout path never allocates/frees OS memory");
- reset();memset(&w,0,sizeof(w));PagingPrivateQueuedHeader(a,sizeof(a),0,0x10000,4);
+ reset();memset(&w,0,sizeof(w));budget_ms(&w);PagingPrivateQueuedHeader(a,sizeof(a),0,0x10000,4);
  check(WddmSubmitPagingHardware(&d,&w,a,sizeof(a),0x10000,4,TRUE,32),"stop fixture admitted");
  w.Stopping=1;TestStopDrain(&w);
  check(!w.PagingHead&&!w.PagingTail&&!slot->Borrowed&&!allocated,"stop drain clears borrowed ownership without freeing OS storage");
@@ -88,7 +103,7 @@ static void built_records(void) {
  unsigned headers[2][4]={{0}};ULONGLONG starts[2]={0};unsigned i;
  char folder[512],path[600];size_t required=0;int before=allocationCalls;
  if(getenv_s(&required,folder,sizeof(folder),"BC250_QUEUE_FIXTURE_DIR") || !required)return;
- reset();
+ reset();budget_ms(&w);
  for(i=0;i<2;i++) {
   FILE* file=NULL;
   check(sprintf_s(path,sizeof(path),"%s/%s",folder,names[i])>0,"import fixture path");
@@ -119,7 +134,7 @@ static __declspec(align(8)) unsigned quotaBuffers[QUOTA_JOBS][64];
 static BC250_PAGING_JOB* quotaSlots[QUOTA_JOBS];
 static void quota_fixture(BC250_WDDM* w,BC250_DEVICE* d,unsigned n) {
  unsigned i,size=PagingPrivateQueuedSize(PAGING_PRIVATE_QUEUED_DIRECT,12);
- reset();memset(w,0,sizeof(*w));memset(quotaBuffers,0,sizeof(quotaBuffers));
+ reset();memset(w,0,sizeof(*w));budget_ms(w);memset(quotaBuffers,0,sizeof(quotaBuffers));
  for(i=0;i<n;i++) {
   quotaBuffers[i][6]=i+1;
   check(PagingPrivateQueuedHeader(quotaBuffers[i],sizeof(quotaBuffers[i]),0,0x10000,12),"quota job construction");

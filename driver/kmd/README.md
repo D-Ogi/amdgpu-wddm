@@ -78,8 +78,25 @@ no code from Microsoft's MS-PL sample.
   compared the hung node-0 fence with the newest fence of either node and refused. 0.7.216.16 compares it with the
   last reported fence of node 0 only. In trial D1 the kill of 0.7.216.16 used the GART register path, which
   refused `SQ_CMD`, so no kill reached the register. 0.7.216.17 issues it through the GFX sequence. In trial D1 of
-  0.7.216.17 one kill drained the ring, the client got `DXGI_ERROR_DEVICE_HUNG`, and the desktop stayed. See
-  `docs/design/hang-recovery.md`.
+  0.7.216.17 one kill drained the ring, the client got `DXGI_ERROR_DEVICE_HUNG`, and the desktop stayed. From
+  0.7.216.27 the driver admits an empty-ring recovery only when the per-node observed completion agrees with successful
+  publication, no report is pending/in flight/lost, the fence is in range and the GFX ring is proven idle.
+  Verdict 7 names that completed fence as aborted. Uncertain cases still refuse and can end in 0x116.
+  Recovery epochs serialize watchdog failure gates with reopen. An active submission alone gets a bounded
+  500 ms admission recheck. Other unstable states refuse with verdict 8 and a persisted reason mask.
+  Temporary admission closure does not fault StartHealth. Existing genuine faults remain sticky.
+  See `docs/design/hang-recovery.md`.
+- **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
+  observable progress before the driver closes the ring and takes a register snapshot. The INF does not write it.
+  Absent means Windows' own `TdrDelay` plus 2 s, which is 12 s on a machine where the control application wrote
+  `TdrDelay` 10, and a value an operator writes is clamped to five minutes and raised to `TdrDelay` if it is
+  shorter. This is a duration floor, not an ordering guarantee: Windows starts its timeout at the preemption
+  request. The private window starts at head admission or observed activity. Either may expire first.
+  The former 500 ms budget could close the ring during legitimate dense LLM work. The new activity token mixes
+  the fence, ring read pointer and `CP_IB*` fetch registers. Activity changes can extend its window, but an
+  alternating token need not represent useful progress. Activity, Prime, Gap and TimerRearms are separate
+  counters. The head high water is sampled software-head age, not measured GPU execution time. See
+  `docs/design/hang-recovery.md` for recovery guards and remaining refusal cases.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and

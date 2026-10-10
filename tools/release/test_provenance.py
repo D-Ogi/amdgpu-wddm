@@ -277,7 +277,14 @@ class ProvenanceGate(unittest.TestCase):
         m = self.manifest()
         self.file(m, "payload/built.dll")["unverified"] = " "
         self.assertFails(m, "'unverified' needs the reason as text")
+        # Three words are not a reason either: the gate asks for the sentence that says why these bytes
+        # have no bit-identical rebuild, at least 40 characters and 6 words of it.
         self.file(m, "payload/built.dll")["unverified"] = "built before /Brepro"
+        self.assertFails(m, "which is not a reason")
+        self.file(m, "payload/built.dll")["unverified"] = (
+            "These bytes were built before the recipe carried /Brepro, so no rebuild of that commit "
+            "can give them again."
+        )
         errors, rows, counts = self.ws.check(m)
         self.assertEqual(errors, [])
         self.assertEqual(counts["unverified"], 1)

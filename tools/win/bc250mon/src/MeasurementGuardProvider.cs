@@ -153,6 +153,9 @@ namespace Bc250Mon
             { "EnableDpAudioStream", 1 },       // dpaudio.c: GuardReadSetting(..., 1), the DP audio stream (0.7.216)
             { "EnableDisplayModes", 2 },        // modeset.c: GuardReadSetting(..., 2), EDID and scaled modes (0.7.216.19)
             { "HangRecoveryMode", 1 },          // wddm.c: GuardReadSetting(..., 1), stage-1 hang recovery (0.7.216.18)
+            { "SubmitWatchdogMs", 0 },          // wddm.c: GuardReadSetting(..., 0), and 0 means "price the submit
+                                                // watchdog from TdrDelay" (submit_watchdog.h, BD-114 7.1). The INF
+                                                // writes no value, so absent is the shipping case.
             { "CpuTune", 0 },                   // cpu.c: absent = 0, read-only; the INF writes 1 from 0.7.216
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED

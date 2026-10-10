@@ -6,7 +6,17 @@
 #define BC250_GFX_PENDING_MAX 7u
 typedef struct BC250_GFX_COMPLETION {
     unsigned int Seq, Fence, ReportFence, Node;
-    unsigned long long Epoch, Deadline;
+    unsigned long long Epoch;
+    /* BD-114 (scratch\bd114\ANALYSIS.md 7.3): two stamps, not one, both KeQueryInterruptTime.
+     *   Submitted: when the packet was written to the ring. Until 0.7.216.27 the watchdog's budget was counted
+     *              from here, so a packet behind six others on this seven-deep queue could have its whole budget
+     *              spent before it began. It is kept because the queue wait is worth a number of its own in the
+     *              timeout line (7.7): it is the term the q27 arm of the two 0x116 dumps needed and the g12 arm,
+     *              whose queue held exactly one job, did not.
+     *   Deadline:  0 until the job becomes the HEAD, then its budget from that moment on. A job that already
+     *              carries a deadline keeps it, so appending work never extends a running job's watchdog.
+     *   HeadSince: when it became the head, 0 until then. The measured execution-time bound of the timeout line. */
+    unsigned long long Submitted, Deadline, HeadSince;
     /* KMD193 (bsod-245): the queue entry of the faulting job named a sequence, a fence and a node and nothing
      * else, so the dump could not say which context - let alone which process - had submitted it. Values only,
      * never dereferenced: the context object may be freed before anyone reads them. */

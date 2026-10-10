@@ -1,6 +1,12 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\paging-queue",[ValidateSet('','--late-slot-release','--drop-quota','--drop-requeue')][string]$Mutation='',[switch]$ExpectFailure)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\paging-queue",[ValidateSet('','--late-slot-release','--drop-quota','--drop-requeue','--flat-paging-budget')][string]$Mutation='',[switch]$ExpectFailure)
 # The paging queue host test (experiments/E27-m9-inference/generate-paging-queue-test.py) against this tree:
 # the actual drain, requeue, watchdog, stop drain and admission, with the real private-record parser.
+# The mutations are negative controls, each of which must fail by a CHECK and never by a build error:
+#   --late-slot-release     the completion is published before the OS slot is released.
+#   --drop-quota            KMD171 behaviour: a drain retires for as long as retirements keep coming.
+#   --drop-requeue          a quota without the requeue: the yield leaves the head with nothing to pick it up.
+#   --flat-paging-budget    BD-114 7.1: node 1's deadline and timer are priced from the old flat 500 ms again,
+#                           not from the budget WddmStart latched from TdrDelay.
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP

@@ -30,6 +30,7 @@ typedef size_t SIZE_T;
 typedef unsigned char BOOLEAN;
 typedef int KIRQL;
 typedef long NTSTATUS,LONG;
+typedef long long LONGLONG;
 typedef struct { long long QuadPart; } LARGE_INTEGER;
 typedef void KDPC;
 typedef void* PVOID;
@@ -40,6 +41,11 @@ typedef struct {
  /* FENCE_LEDGER_FIELD */
  int Stopping,WatchdogFaulted[2],PagingHwPending,PagingDeferredValid,PreemptionPending[2];
  ULONG PagingHwSeq;
+ /* BD-114 7.1: the watchdog budget node 1 shares with node 0. The driver prices it from TdrDelay once, at
+  * WddmStart (submit_watchdog.h, Bc250SubmitBudgetMs); this harness never runs WddmStart, so each fixture sets
+  * it with budget_ms() below - deliberately not to BC250_WDDM_SUBMIT_TIMEOUT_MS, so that a deadline or a timer
+  * priced from the old flat constant again is caught by a CHECK and not by a passing test. */
+ ULONG SubmitBudgetMs;
  UINT PagingHwFence;
  /* Timer and DPC stand-ins count arms; PagingDrainDpc keeps the drain timer's last due time. */
  int Lock,PagingSubmitTimer,PagingSubmitDpc,PagingDrainTimer,PagingDrainDpc;
