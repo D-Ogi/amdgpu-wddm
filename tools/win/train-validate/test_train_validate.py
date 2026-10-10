@@ -869,6 +869,25 @@ class OneCommand(unittest.TestCase):
         self.assertFalse(out.exists())
         self.assertEqual(self.shells, [], "the dry run opened no shell")
 
+    def test_a_resumed_run_with_nothing_left_runs_nothing(self):
+        # `run --arms <id> --resume` on an arm that already passed used to run the whole plan again,
+        # because an empty list of arms read as "no list given" (b28, 2026-10-10).
+        out = self.tmp / "out-resume"
+        first = self.validate.main(["--manifest", str(self.manifest_path), "run",
+                                    "--package", str(self.package.directory), "--out", str(out),
+                                    "--attempt-base", "600", "--no-hash"])
+        self.assertEqual(first, 0)
+        before = json.loads((out / "records.json").read_text(encoding="utf-8"))
+        shells = len(self.shells)
+        again = self.validate.main(["--manifest", str(self.manifest_path), "run",
+                                    "--package", str(self.package.directory), "--out", str(out),
+                                    "--arms", "smoke", "--resume", "--attempt-base", "601",
+                                    "--no-hash"])
+        self.assertEqual(again, 0)
+        after = json.loads((out / "records.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(after), len(before), "no arm ran again")
+        self.assertEqual(len(self.shells), shells + 1, "the second run opened its shell and used none of it")
+
     def test_a_failed_arm_makes_the_command_exit_non_zero(self):
         self.replies = [*self.replies[:2], ("vk-smoke.ps1", Completed(1, "nothing")),
                         ("gate.ps1", Completed(0, GATE_OK))]

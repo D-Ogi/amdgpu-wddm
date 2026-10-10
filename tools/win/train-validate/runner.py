@@ -653,7 +653,9 @@ class Runner:
                          value_spec=dict(spec) or None, started_utc=utc_iso(), ended_utc=utc_iso())
 
     def run(self, arms: list[PlannedArm] | None = None) -> list[ArmRecord]:
-        arms = arms or self.plan.arms
+        # An empty list is a run with nothing left to do, which a resumed run reaches when every arm it
+        # names has already passed. Only `None` means "the whole plan".
+        arms = self.plan.arms if arms is None else arms
         # Only a dependency inside this run can hold an arm back. A subset (--arms gates) or a resumed run
         # names the arms it wants, and an arm that ran in an earlier session is not run again to satisfy a
         # dependency on it.

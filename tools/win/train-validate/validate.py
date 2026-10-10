@@ -254,6 +254,9 @@ def command_run(args: argparse.Namespace) -> int:
     todo = [arm for arm in plan.arms if arm.id not in done]
     if done:
         print("[resume] already good: " + ", ".join(sorted(done)))
+    if args.resume and not todo:
+        print("[resume] nothing left to run: every arm this run names has passed in this directory "
+              "already. Run it without --resume to run them again.")
     shell = make_shell(Path(plan.values["ws"]), base_env={"BC250_ROOT": plan.values["ws"]})
     runner = Runner(plan, shell, out_dir, clock=make_clock(), python=sys.executable, already_good=done)
     records = runner.run(todo)
