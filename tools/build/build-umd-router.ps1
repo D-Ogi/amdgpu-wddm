@@ -51,10 +51,12 @@ try {
     # /Brepro: a content hash where cl and link write a time. /FC with /d1trimfile: __FILE__ and the name that MSVC
     # gives an anonymous namespace (a hash of the source path) see only the path below the repository.
     $repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
+    # /GL with /LTCG at link and /arch:AVX2 on the router and its host gate: owner decision 2026-10-10 (b29).
+    $opt = @('/O2', '/GL', '/arch:AVX2')
     Push-Location $OutputDir
     try {
         $front = @("$src\front-adapter.cpp", "$src\front-device.cpp", "$src\front-dxgi.cpp")
-        & cl.exe /nologo /O2 $crt /W4 /WX /Zi /LD @repro "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front "/Fe:$OutputDir\bc250d3d_router.dll" /link /Brepro /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
+        & cl.exe /nologo @opt $crt /W4 /WX /Zi /LD @repro "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front "/Fe:$OutputDir\bc250d3d_router.dll" /link /Brepro /LTCG /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
         if ($LASTEXITCODE -ne 0) { throw 'router build failed' }
         # The doubles: one source, a tag per role (cpu, hosted, app), one without OpenAdapter10_2, one that fails.
         $doubles = @(
@@ -68,7 +70,7 @@ try {
             & cl.exe /nologo /O2 $crt /W4 /WX /LD @repro @defines "/Fo$obj\$name.obj" "$src\tests\fake-umd.cpp" "/Fe:$OutputDir\$name.dll" /link /Brepro
             if ($LASTEXITCODE -ne 0) { throw "$name build failed" }
         }
-        & cl.exe /nologo /O2 $crt /W4 /WX /EHsc /std:c++17 @repro "/I$contract" "/Fo$obj\host\" "$src\tests\test-router.cpp" @front "/Fe:$OutputDir\test-router.exe" /link /Brepro
+        & cl.exe /nologo @opt $crt /W4 /WX /EHsc /std:c++17 @repro "/I$contract" "/Fo$obj\host\" "$src\tests\test-router.cpp" @front "/Fe:$OutputDir\test-router.exe" /link /Brepro /LTCG
         if ($LASTEXITCODE -ne 0) { throw 'test-router build failed' }
         $machine = (& dumpbin.exe /nologo /headers bc250d3d_router.dll | Select-String 'machine \(') -join ' '
         $want = if ($Arch -eq 'x86') { '14C machine (x86)' } else { '8664 machine (x64)' }
