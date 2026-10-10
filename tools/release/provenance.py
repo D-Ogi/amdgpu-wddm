@@ -233,8 +233,18 @@ def check(sources_path, root, repo, package=None):
             have = sha256_file(src)
             if have != sha:
                 errors.append(f"{path}: source {f.get('source')} is {have[:8]}, the entry says {sha[:8]}")
-        if "unverified" in f and (not isinstance(f["unverified"], str) or not f["unverified"].strip()):
-            errors.append(f"{path}: 'unverified' needs the reason as text")
+        if "unverified" in f:
+            # The reason is the only provenance these bytes have, so it must read as a sentence a person can use.
+            # One word, an initial or a placeholder is not a reason: b27 shipped "T" here and this gate passed it.
+            reason = f["unverified"] if isinstance(f["unverified"], str) else ""
+            words = [w for w in reason.split() if any(c.isalpha() for c in w)]
+            if not isinstance(f["unverified"], str) or not reason.strip():
+                errors.append(f"{path}: 'unverified' needs the reason as text")
+            elif len(reason.strip()) < 40 or len(words) < 6:
+                errors.append(
+                    f"{path}: 'unverified' is {reason.strip()!r}, which is not a reason: write the sentence that "
+                    f"says why these bytes have no bit-identical rebuild (at least 40 characters and 6 words)"
+                )
         for key in ("unsigned_sha256", "authenticode_sha256"):
             if key in f and not HEX64.match(f[key] or ""):
                 errors.append(f"{path}: {key} {f[key]!r} is not 64 upper-case hex digits")
