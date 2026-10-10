@@ -73,6 +73,7 @@ CLOCK_MODEL = re.compile(r'elasticity|equivalent clock|/ ?GHz\)|per GHz|normalis
 MODEL_LABEL = re.compile(r'estimat|model', re.I)
 
 TOLERANCE = 0.1                 # percentage points: a truncated third digit, not a swap
+NEAR = 160                      # characters: how far from a difference its pair may stand
 ID = re.compile(r'\s*- id: (\S+)')
 
 
@@ -108,12 +109,17 @@ def check_difference(fid, text):
     It fires only where the reversed denominator is the one that matches: the percentage is
     the share of the smaller of the two measurements and not of the one the difference came
     down from. That is demonstrable, not a matter of taste, and the fix is one phrase.
+
+    The pair must stand near the difference, inside NEAR characters of it. A facts row is
+    one long line with twenty numbers in it, and two of them a coincidence apart are not the
+    pair that a reader would read.
     """
     if DENOMINATOR_NAMED.search(text):
         return []
-    numbers = [float(t) for t in NUMBER.findall(text)]
+    at = [(m.start(), float(m.group(0))) for m in NUMBER.finditer(text)]
     found = []
-    for diff_text, pct_text in DIFF_PCT.findall(text):
+    for m in DIFF_PCT.finditer(text):
+        diff_text, pct_text = m.group(1), m.group(2)
         diff, pct = float(diff_text), float(pct_text)
         if diff <= 0:
             continue
@@ -121,6 +127,7 @@ def check_difference(fid, text):
         # differ by half of its last digit.
         decimals = len(diff_text.split('.')[1]) if '.' in diff_text else 0
         slack = 0.5 * 10 ** -decimals
+        numbers = [v for pos, v in at if abs(pos - m.start()) <= NEAR]
         for i, a in enumerate(numbers):
             for b in numbers[i + 1:]:
                 lo, hi = min(a, b), max(a, b)
