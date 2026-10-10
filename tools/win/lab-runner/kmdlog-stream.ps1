@@ -45,6 +45,86 @@ function Run-Bounded([string]$exe,[string]$arguments,[string]$tag){
  }catch{Put ('lost '+$tag+': '+$_.Exception.Message);return $null}
  finally{if($p){$p.Dispose()}}
 }
+# PDH's English API is language-neutral; localized PerformanceCounter/Get-Counter paths are not.
+# Kept self-contained for target.py and trial staging. test_tool_locale.py checks both copies.
+# https://learn.microsoft.com/windows/win32/api/pdh/nf-pdh-pdhaddenglishcounterw
+# https://learn.microsoft.com/windows/win32/api/pdh/nf-pdh-pdhgetformattedcountervalue
+function Initialize-EnglishCounter {
+ if ('Bc250Tools.EnglishCounter' -as [type]) { return }
+ Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.Globalization;
+using System.Runtime.InteropServices;
+namespace Bc250Tools {
+ [StructLayout(LayoutKind.Explicit, Size=16)]
+ public struct CounterValue {
+  [FieldOffset(0)] public uint Status;
+  [FieldOffset(8)] public double Value;
+ }
+ public interface ICounterApi {
+  uint Open(out IntPtr query);
+  uint Add(IntPtr query, string path, out IntPtr counter);
+  uint Collect(IntPtr query);
+  uint Read(IntPtr counter, out CounterValue value);
+  void Close(IntPtr query);
+ }
+ sealed class WindowsCounterApi : ICounterApi {
+  [DllImport("pdh.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
+  static extern uint PdhOpenQueryW(string source, UIntPtr user, out IntPtr query);
+  [DllImport("pdh.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
+  static extern uint PdhAddEnglishCounterW(IntPtr query, string path, UIntPtr user, out IntPtr counter);
+  [DllImport("pdh.dll", ExactSpelling=true)]
+  static extern uint PdhCollectQueryData(IntPtr query);
+  [DllImport("pdh.dll", ExactSpelling=true)]
+  static extern uint PdhGetFormattedCounterValue(IntPtr counter, uint format, IntPtr type, out CounterValue value);
+  [DllImport("pdh.dll", ExactSpelling=true)]
+  static extern uint PdhCloseQuery(IntPtr query);
+  public uint Open(out IntPtr query) { return PdhOpenQueryW(null, UIntPtr.Zero, out query); }
+  public uint Add(IntPtr query, string path, out IntPtr counter) { return PdhAddEnglishCounterW(query, path, UIntPtr.Zero, out counter); }
+  public uint Collect(IntPtr query) { return PdhCollectQueryData(query); }
+  public uint Read(IntPtr counter, out CounterValue value) {
+   // PDH_FMT_DOUBLE | PDH_FMT_NOCAP100: CPU performance can exceed nominal (100%).
+   return PdhGetFormattedCounterValue(counter, 0x200 | 0x8000, IntPtr.Zero, out value);
+  }
+  public void Close(IntPtr query) { PdhCloseQuery(query); }
+ }
+ public sealed class EnglishCounter : IDisposable {
+  readonly ICounterApi api;
+  IntPtr query, counter;
+  public EnglishCounter(string path) : this(path, new WindowsCounterApi()) {}
+  public EnglishCounter(string path, ICounterApi api) {
+   if (api == null) throw new ArgumentNullException("api");
+   if (String.IsNullOrEmpty(path)) throw new ArgumentException("Counter path missing", "path");
+   this.api = api;
+   Check(api.Open(out query), "PdhOpenQuery");
+   try {
+    Check(api.Add(query, path, out counter), "PdhAddEnglishCounter");
+    // A rate needs two observations. Prime once now; never interpret an invalid first value as zero.
+    Check(api.Collect(query), "PdhCollectQueryData");
+   } catch { Dispose(); throw; }
+  }
+  static void Check(uint status, string call) {
+   if (status != 0) throw new InvalidOperationException(call + " status 0x" + status.ToString("X8", CultureInfo.InvariantCulture));
+  }
+  public double NextValue() {
+   if (query == IntPtr.Zero) throw new ObjectDisposedException("EnglishCounter");
+   Check(api.Collect(query), "PdhCollectQueryData");
+   CounterValue result;
+   Check(api.Read(counter, out result), "PdhGetFormattedCounterValue");
+   // PDH_CSTATUS_VALID_DATA=0, PDH_CSTATUS_NEW_DATA=1. Other statuses are not readings.
+   if (result.Status > 1 || Double.IsNaN(result.Value) || Double.IsInfinity(result.Value))
+    throw new InvalidOperationException("Counter data unavailable, status 0x" + result.Status.ToString("X8", CultureInfo.InvariantCulture));
+   return result.Value;
+  }
+  public void Dispose() {
+   if (query != IntPtr.Zero) { var old = query; query = IntPtr.Zero; api.Close(old); }
+  }
+ }
+}
+'@
+}
+
+try { Initialize-EnglishCounter } catch { Put ('lost native counters: '+$_.Exception.Message) }
 $timer=[Diagnostics.Stopwatch]::StartNew();$next=-1;$tick=0
 # 101 had 548-765 MB available at the menu and the lab slowed (paging is the hypothesis these lines test; review
 # 845). CPU of dwm and the game as percent of the whole
@@ -53,12 +133,13 @@ $timer=[Diagnostics.Stopwatch]::StartNew();$next=-1;$tick=0
 $cpus=[Environment]::ProcessorCount
 $cpuPrev=@{}
 $pagesIn=$null
-try{$pagesIn=New-Object Diagnostics.PerformanceCounter('Memory','Pages Input/sec');$null=$pagesIn.NextValue()}catch{Put ('lost pages counter: '+$_.Exception.Message)}
+try{$pagesIn=New-Object Bc250Tools.EnglishCounter('\Memory\Pages Input/sec')}catch{Put ('lost pages counter: '+$_.Exception.Message)}
 # 149+: the slow-start A/B (engine-slowstart REPORT.md) asks whether the machine itself was slower during
 # 139-147: the CPU's actual clock as a percentage of nominal and the disk read rate, both machine-wide.
-$cpuPerf=$null;$diskRead=$null
-try{$cpuPerf=New-Object Diagnostics.PerformanceCounter('Processor Information','% Processor Performance','_Total');$null=$cpuPerf.NextValue()}catch{Put ('lost cpu perf counter: '+$_.Exception.Message)}
-try{$diskRead=New-Object Diagnostics.PerformanceCounter('PhysicalDisk','Disk Read Bytes/sec','_Total');$null=$diskRead.NextValue()}catch{Put ('lost disk counter: '+$_.Exception.Message)}
+$cpuPerf=$null;$diskRead=$null;$availableMemory=$null
+try{$cpuPerf=New-Object Bc250Tools.EnglishCounter('\Processor Information(_Total)\% Processor Performance')}catch{Put ('lost cpu perf counter: '+$_.Exception.Message)}
+try{$diskRead=New-Object Bc250Tools.EnglishCounter('\PhysicalDisk(_Total)\Disk Read Bytes/sec')}catch{Put ('lost disk counter: '+$_.Exception.Message)}
+try{$availableMemory=New-Object Bc250Tools.EnglishCounter('\Memory\Available MBytes')}catch{Put ('lost memory counter: '+$_.Exception.Message)}
 function Put-Cpu([string]$name){
  try{
   $p=Get-Process $name -ErrorAction Stop|Select-Object -First 1
@@ -134,8 +215,7 @@ try{
      $g=Get-Process $counter -ErrorAction SilentlyContinue|Select-Object -First 1
      if($g){Put ('game pid='+$g.Id+' ws_mb='+[int]($g.WorkingSet64/1MB)+' private_mb='+[int]($g.PrivateMemorySize64/1MB)+' threads='+$g.Threads.Count+' handles='+$g.HandleCount+$(if($counters.Count -gt 1){' name='+$counter}else{''}))}
     }
-    $free=(New-Object Diagnostics.PerformanceCounter('Memory','Available MBytes')).NextValue()
-    Put ('memory free_mb='+[int]$free)
+    if($availableMemory){Put ('memory free_mb='+[int]$availableMemory.NextValue())}
    }catch{Put ('lost counters: '+$_.Exception.Message)}
    Put-Cpu 'dwm';foreach($counter in $counters){Put-Cpu $counter}
    if($pagesIn){try{Put ('memory pages_input_per_s='+[int]$pagesIn.NextValue())}catch{Put ('lost pages counter: '+$_.Exception.Message)}}
@@ -147,4 +227,4 @@ try{
  }
  Put 'stream end'
 }catch{try{Put ('stream error: '+$_.Exception.Message)}catch{}}
-finally{$file.Dispose()}
+finally{foreach($sample in @($pagesIn,$cpuPerf,$diskRead,$availableMemory)){if($sample){$sample.Dispose()}};$file.Dispose()}

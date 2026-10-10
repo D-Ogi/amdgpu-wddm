@@ -16,4 +16,12 @@ Get-ChildItem -LiteralPath $d -File -Recurse | Where-Object { $_.Name -match 've
 $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 (Get-Item $k).Property | Where-Object { $_ -match '^(Unconfirmed|LastStage|StageHistory|KeepStatus|Dpm|Cu)' } | ForEach-Object { "$_ = $((Get-ItemProperty $k).$_)" }
 "--- driverstore"
-pnputil /enum-drivers | Select-String -Pattern 'oem\d+\.inf|Original Name|Driver Version' | ForEach-Object { $_.Line.Trim() } | Select-Object -Last 12
+# Keep the complete package record: field labels are localized, INF filenames are not.
+# This is a report only; it never selects a package for removal.
+function Select-DriverStoreRecords([string[]]$Lines) {
+  $blocks = (($Lines -join "`n") -split '(?:\r?\n)[\t ]*(?:\r?\n)')
+  @($blocks | Where-Object { $_ -match '(?i)(?<![\w.-])oem[0-9]+\.inf(?![\w.-])' } | Select-Object -Last 4)
+}
+$driverStore = @(& pnputil.exe /enum-drivers 2>&1)
+if ($LASTEXITCODE -ne 0) { throw "Driver-store query failed (pnputil exit $LASTEXITCODE)" }
+Select-DriverStoreRecords $driverStore | ForEach-Object { $_; '' }

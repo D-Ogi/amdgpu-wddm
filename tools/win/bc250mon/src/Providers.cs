@@ -87,16 +87,25 @@ namespace Bc250Mon
 
     public sealed class SystemProvider : IProvider
     {
-        readonly PerformanceCounter _cpu = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-        readonly PerformanceCounter _mem = new PerformanceCounter("Memory", "Available MBytes");
+        SystemCpuTimes? _cpuPrevious;
         public string Name { get { return "system"; } }
         public TimeSpan Period { get { return TimeSpan.FromSeconds(2); } }
 
         public void Poll(State state)
         {
             var p = new Panel { Name = Name, Title = "System", Order = 20 };
-            p.Rows.Add(new Row("CPU", _cpu.NextValue().ToString("0") + " %"));
-            p.Rows.Add(new Row("Free memory", _mem.NextValue().ToString("0") + " MB"));
+            try
+            {
+                var current = SystemMetrics.ReadCpu();
+                double? busy = _cpuPrevious.HasValue ? SystemMetrics.CpuPercent(_cpuPrevious.Value, current) : null;
+                _cpuPrevious = current;
+                // GetSystemTimes covers the calling thread's group on machines with more than one group.
+                string label = SystemMetrics.GetActiveProcessorGroupCount() > 1 ? "CPU (processor group)" : "CPU";
+                p.Rows.Add(new Row(label, busy.HasValue ? busy.Value.ToString("0") + " %" : "waiting for next sample"));
+            }
+            catch (Exception e) { _cpuPrevious = null; p.Rows.Add(new Row("CPU", "unavailable: " + e.Message, Level.Warn)); }
+            try { p.Rows.Add(new Row("Free memory", SystemMetrics.AvailableMemoryMiB() + " MB")); }
+            catch (Exception e) { p.Rows.Add(new Row("Free memory", "unavailable: " + e.Message, Level.Warn)); }
             var ips = NetworkInterface.GetAllNetworkInterfaces()
                 .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 .SelectMany(n => n.GetIPProperties().UnicastAddresses)

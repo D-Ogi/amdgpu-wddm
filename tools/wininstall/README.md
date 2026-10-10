@@ -10,6 +10,7 @@ then moved into the board. The first boot configures itself from an answer file.
 | `unattend.template.xml` | Answer file: `specialize` (computer name, no device encryption, no drivers from Windows Update) and `oobeSystem` (no OOBE questions, local admin account, auto logon, first-logon script) |
 | `firstlogon.ps1` | First logon: Wi-Fi profile, OpenSSH server with key login, RDP, ping, power settings, kernel dumps without auto reboot |
 | `install_to_disk.ps1` | Partitions the disk, applies the image, writes boot files and a BCD with test signing on, injects drivers, copies the payload. Dry run unless `-Execute` |
+| `net-watchdog.ps1`, `WlanProfiles.cs` | Reconnect Wi-Fi from the saved profile. Deploy both files together. Profile names come from the WLAN API, not translated command output |
 
 ## Use
 
@@ -49,3 +50,17 @@ else except the disk's EFI system partition (which it backs up first).
   vendor's Windows 10 x64 package does. Driver binaries are not kept in this repository.
 - Test signing is switched on in the offline BCD, so the first boot already accepts test-signed drivers.
   Secure Boot is off on unit A (facts M14).
+
+## Locale checks
+
+`powershell -NoProfile -File tools\wininstall\test-locale.ps1 -Out <test-output>` tests WLAN profile queries
+with synthetic buffers under en-US, pl-PL, es-ES, ja-JP and ko-KR. It calls no native WLAN function and
+changes no Windows setting. The checks cover Unicode names, preference order, empty lists, failed
+queries and release of every returned buffer.
+
+The WLAN layouts and declarations follow `wlanapi.h` from Windows SDK 10.0.26100.0.
+[`WlanGetProfileList`](https://learn.microsoft.com/windows/win32/api/wlanapi/nf-wlanapi-wlangetprofilelist)
+returns profile names in preference order. The watchdog does not read profile keys or print names.
+The `Administrators` value in the answer file is intentional: Shell-Setup maps this
+[language-neutral group name](https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup-useraccounts-localaccounts-localaccount-group)
+to the group for the image language.

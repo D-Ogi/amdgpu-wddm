@@ -47,6 +47,13 @@ if(!$DryRun){
 $noteEncoding=New-Object Text.UTF8Encoding($false)
 function Note([string]$text){$b=$noteEncoding.GetBytes(('{0:o} {1}' -f [DateTime]::UtcNow,$text)+"`n");$noteFile.Write($b,0,$b.Length);$noteFile.Flush($true)}
 function Stop-Requested{try{[bool](Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 2).stop}catch{$false}}
+function Get-AvailableMemoryMiB {
+ # Numeric KiB property, not the localized Memory\Available MBytes performance-counter path.
+ # https://learn.microsoft.com/windows/win32/cimwin32prov/win32-operatingsystem
+ $os=Get-CimInstance -ClassName Win32_OperatingSystem -Property FreePhysicalMemory -OperationTimeoutSec 5 -ErrorAction Stop
+ if($null -eq $os.FreePhysicalMemory){throw 'Available physical memory is unreadable'}
+ return [long][Math]::Floor([double]$os.FreePhysicalMemory/1024)
+}
 # The KMD's own temperature; -1 means unreadable, never a temperature (066 and 067 read -1 from the other tool).
 # The release client (tester.10 on): HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe; "clock read"
 # goes to the client Resolve-KmdClient names, resolved at the first reading.
@@ -617,7 +624,7 @@ if($DryRun){
  # 825e4a49: the game's old msvcp140.dll under a newer STL's mutex). The session's msvcp140.dll module note shows it.
  $crt=@(@('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll')|Where-Object{Test-Path -LiteralPath (Join-Path $game $_)})
  'game-local C++ runtime '+$(if($crt.Count){@($crt|ForEach-Object{$_+' '+[string](Get-Item -LiteralPath (Join-Path $game $_)).VersionInfo.FileVersion}) -join ', '}else{'none in '+$game})
- $mb=[int](New-Object Diagnostics.PerformanceCounter('Memory','Available MBytes')).NextValue()
+ $mb=Get-AvailableMemoryMiB
  Gate 'available memory' ($mb -ge 3500) ([string]$mb+' MB of 3500 (the low-memory pre-step otherwise)')
  $tempNow=Temp-Now
  Gate 'temperature' ($tempNow -ge 0 -and $tempNow -lt 80) ('tctl '+$tempNow+' through '+$script:ClockCli)
@@ -655,7 +662,7 @@ try{
  if($saves){$result.saves.before=Save-State}
  # 101 started with 2898 MB available and paged at the menu (616-750 MB); the owner's low-memory pre-step
  # (Edge closed, Steam lighter) brings it to about 4.2 GB.
- $result.available_mb_before=[int](New-Object Diagnostics.PerformanceCounter('Memory','Available MBytes')).NextValue()
+ $result.available_mb_before=Get-AvailableMemoryMiB
  Note ('available_mb_before '+$result.available_mb_before)
  $result.admission_min_available_mb=3500
  if($result.available_mb_before -lt $result.admission_min_available_mb){throw 'Less than 3500 MB available; run the low-memory pre-step'}

@@ -19,6 +19,32 @@ $ErrorActionPreference = 'Continue'
 if ($Step -eq 'install' -and -not $Name) { 'clean-slate: -Name is needed for the install step'; exit 2 }
 $root = $Root
 $pkg = "$root\$Name"
+# Query package fields, never pnputil's translated display labels.
+# https://learn.microsoft.com/powershell/module/dism/get-windowsdriver
+function Get-KmdDriverStorePackages {
+    $packages = @(Get-WindowsDriver -Online -ErrorAction Stop)
+    $ours = @()
+    foreach ($package in $packages) {
+        if (-not $package -or -not $package.OriginalFileName) {
+            throw 'Driver-store inventory has an unreadable original INF name'
+        }
+        $original = [IO.Path]::GetFileName([string]$package.OriginalFileName)
+        if (-not [string]::Equals($original, 'bc250kmd.inf', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $published = [string]$package.Driver
+        $version = [string]$package.Version
+        if ($published -notmatch '^oem[0-9]+\.inf$' -or $version -notmatch '^[0-9]+(?:\.[0-9]+){1,3}$' -or
+            $package.Date -isnot [DateTime]) {
+            throw 'Driver-store inventory has incomplete bc250kmd package details'
+        }
+        $ours += [pscustomobject]@{
+            Published = $published
+            Version = $version
+            Date = $package.Date.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+        }
+    }
+    return $ours
+}
+
 function Inventory {
     'boot {0:o}' -f (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
     foreach ($d in 'C:\Program Files\amdgpu-wddm', 'C:\ProgramData\amdgpu-wddm', "$env:LOCALAPPDATA\amdgpu-wddm", 'C:\Users\bc250\AppData\Local\amdgpu-wddm', 'C:\Users\bc250\AppData\Roaming\amdgpu-wddm') {
@@ -43,8 +69,7 @@ function Inventory {
     }
     $mft = 'HKLM:\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}'
     if (Test-Path -LiteralPath $mft) { 'LEFT mft clsid' } else { 'gone mft clsid' }
-    $drv = (pnputil /enum-drivers) -join "`n"
-    $ours = @([regex]::Matches($drv, 'Published Name:\s+(oem\d+\.inf)\s+Original Name:\s+bc250kmd\.inf[\s\S]*?Driver Version:\s+(\S+ \S+)') | ForEach-Object { '{0} {1}' -f $_.Groups[1].Value, $_.Groups[2].Value })
+    $ours = @(Get-KmdDriverStorePackages | ForEach-Object { '{0} {1} {2}' -f $_.Published, $_.Date, $_.Version })
     'driver store bc250kmd packages: {0} {1}' -f $ours.Count, ($ours -join '; ')
     $t = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like 'amdgpu-wddm*' } | ForEach-Object { $_.TaskName })
     'scheduled tasks amdgpu-wddm*: {0} {1}' -f $t.Count, ($t -join ', ')
@@ -79,7 +104,7 @@ switch ($Step) {
         if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
         Expand-Archive "$pkg.zip" -DestinationPath $root -Force
         $extra = @(); if ($Repair) { $extra += '-Repair' }
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkg\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-String -Pattern 'firmware|pnputil|DWM|restart|fail|complete|kept|default|phase|remove|orphan|error|WARN' | Select-Object -Last 30
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkg\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-Object -Last 30
         "install exit $LASTEXITCODE"
         '--- after install'
         Inventory

@@ -1160,6 +1160,7 @@ static partial class UnitTests
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
         Strings.Directory = Path.Combine(args[0], @"tools\win\amdgpu_wddm_control\strings");
         StringTables();
+        LocaleTests();
         Replies(header);
         CuLayout(header);
         CuReasons(args[0]);

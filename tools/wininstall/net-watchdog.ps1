@@ -15,9 +15,12 @@ param(
 $ErrorActionPreference = 'Continue'
 
 if ($Register) {
+    if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'WlanProfiles.cs') -PathType Leaf)) {
+        throw 'Deploy WlanProfiles.cs next to net-watchdog.ps1 before registering the watchdog.'
+    }
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
     $trigger = New-ScheduledTaskTrigger -AtStartup
-    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1)
     Register-ScheduledTask -TaskName 'BC250 net watchdog' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
     Start-ScheduledTask -TaskName 'BC250 net watchdog'
@@ -39,9 +42,11 @@ function Test-Link([string]$gateway) {
 }
 
 function Get-WlanProfile {
-    # First profile of the machine; there is exactly one in this lab.
-    $m = (netsh wlan show profiles) | Select-String ':\s(.+)$' | Select-Object -First 1
-    if ($m) { $m.Matches[0].Groups[1].Value.Trim() }
+    # Compile only once. This script and WlanProfiles.cs must be deployed together.
+    if (-not ('AmdgpuWddm.WinInstall.WlanProfiles' -as [type])) {
+        Add-Type -Path (Join-Path $PSScriptRoot 'WlanProfiles.cs') -ErrorAction Stop
+    }
+    [AmdgpuWddm.WinInstall.WlanProfiles]::First()
 }
 
 Write-Log 'watchdog started'
@@ -60,7 +65,8 @@ while ($true) {
     $failures++
     if ($failures -lt $FailuresBeforeAction -or ($failures % $FailuresBeforeAction) -ne 0) { continue }
     $stage++
-    $wlanProfile = Get-WlanProfile
+    $wlanProfile = $null
+    try { $wlanProfile = Get-WlanProfile } catch { Write-Log 'WLAN profile query failed' }
     if ($stage % 3 -ne 0) {
         Write-Log "link down for $failures checks: asking WLAN to connect"
         if ($wlanProfile) { netsh wlan connect name="$wlanProfile" | Out-Null }

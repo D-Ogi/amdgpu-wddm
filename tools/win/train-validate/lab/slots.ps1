@@ -3,6 +3,32 @@
 # every train.
 param([Parameter(Mandatory = $true)][string]$Pkg)
 $ErrorActionPreference = 'Continue'
+# Query package fields, never pnputil's translated display labels.
+# https://learn.microsoft.com/powershell/module/dism/get-windowsdriver
+function Get-KmdDriverStorePackages {
+    $packages = @(Get-WindowsDriver -Online -ErrorAction Stop)
+    $ours = @()
+    foreach ($package in $packages) {
+        if (-not $package -or -not $package.OriginalFileName) {
+            throw 'Driver-store inventory has an unreadable original INF name'
+        }
+        $original = [IO.Path]::GetFileName([string]$package.OriginalFileName)
+        if (-not [string]::Equals($original, 'bc250kmd.inf', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $published = [string]$package.Driver
+        $version = [string]$package.Version
+        if ($published -notmatch '^oem[0-9]+\.inf$' -or $version -notmatch '^[0-9]+(?:\.[0-9]+){1,3}$' -or
+            $package.Date -isnot [DateTime]) {
+            throw 'Driver-store inventory has incomplete bc250kmd package details'
+        }
+        $ours += [pscustomobject]@{
+            Published = $published
+            Version = $version
+            Date = $package.Date.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+        }
+    }
+    return $ours
+}
+
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
 "install root  : $inst"
 "package       : $Pkg"
@@ -32,8 +58,9 @@ foreach ($e in ($m.files | Where-Object { $_.path -like 'payload/*' } | Sort-Obj
 $rows
 "slot check: $ok match, $bad differ, $absent absent (of $($ok + $bad + $absent) payload files outside kmd\)"
 '--- kernel driver in the driver store'
-$drv = (pnputil /enum-drivers) -join "`n"
-([regex]::Matches($drv, 'Published Name:\s+(oem\d+\.inf)\s+Original Name:\s+bc250kmd\.inf[\s\S]*?Driver Version:\s+(\S+ \S+)') | ForEach-Object { 'store {0} {1}' -f $_.Groups[1].Value, $_.Groups[2].Value })
+$packages = @(Get-KmdDriverStorePackages)
+'driver store bc250kmd packages: {0}' -f $packages.Count
+$packages | ForEach-Object { 'store {0} {1} {2}' -f $_.Published, $_.Date, $_.Version }
 $dev = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'PCI\VEN_1002&DEV_13FE*' } | Select-Object -First 1
 'device: status {0}, name {1}, inf {2}, version {3}' -f $dev.Status, $dev.FriendlyName, (Get-PnpDeviceProperty -InstanceId $dev.InstanceId -KeyName DEVPKEY_Device_DriverInfPath).Data, (Get-PnpDeviceProperty -InstanceId $dev.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data
 '--- sidecars or stray copies under the install root'
