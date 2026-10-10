@@ -1,6 +1,11 @@
 # Pure host regression checks. All Windows inventory and native calls are mocked.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Out = '')
 $ErrorActionPreference = 'Stop'
+# The parent dry-run suite may supply its own inventory. This test owns its fake
+# Windows provider and fixture inputs; do not let that process-only override leak in.
+$inheritedDriverStore = [Environment]::GetEnvironmentVariable('AMDGPU_WDDM_TEST_DRIVER_STORE', 'Process')
+[Environment]::SetEnvironmentVariable('AMDGPU_WDDM_TEST_DRIVER_STORE', $null, 'Process')
+try {
 . (Join-Path $Installer 'common.ps1')
 $fail = 0; $checks = 0
 function Check([bool]$Ok, [string]$Text) {
@@ -47,6 +52,29 @@ function Invoke-Native { param($File, $Arguments)
         throw 'Unexpected fake native invocation'
     }
     return @{code=$(if ($script:inventoryError) {5} else {0});text=$(if ($script:inventoryError) {$script:inventoryError} else {$script:translated})}
+}
+# Test the real dry-run fixture reader too. PS5.1 can preserve an empty JSON array
+# as one nested object when ConvertFrom-Json is returned directly inside @(...).
+function Get-Content { param($LiteralPath, [switch]$Raw, $ErrorAction)
+    if ($LiteralPath -cne 'fixture:driver-store.json' -or -not $Raw -or $ErrorAction -ne 'Stop') { throw 'Unexpected fake content read' }
+    $script:fixtureReads++
+    return $script:fixtureJson
+}
+$script:DryRunMode = $true; $script:fixtureReads = 0
+$env:AMDGPU_WDDM_TEST_DRIVER_STORE = 'fixture:driver-store.json'
+try {
+    $script:fixtureJson = '[]'
+    Check (@(Read-DriverStorePackages).Count -eq 0) 'empty JSON fixture enumerates zero packages under PS5.1'
+    Check (@(Get-OurDriverPackageList).Count -eq 0) 'empty JSON fixture maps to an empty driver list'
+    $script:fixtureJson = '[{"Driver":"oem9.inf","OriginalFileName":"bc250kmd.inf","Version":"0.7.198.100"}]'
+    $one = @(Get-OurDriverPackageList)
+    Check ($one.Count -eq 1 -and $one[0].published -ceq 'oem9.inf' -and $one[0].version -ceq '0.7.198.100') 'one JSON package keeps its identity and version'
+    $script:DryRunMode = $false
+    $rows = @(Read-DriverStorePackages)
+    Check ($rows.Count -eq 4 -and $script:fixtureReads -eq 3 -and $script:inventoryCalls -eq 1) 'non-dry provider ignores the fixture override and uses mocked Windows'
+} finally {
+    [Environment]::SetEnvironmentVariable('AMDGPU_WDDM_TEST_DRIVER_STORE', $null, 'Process')
+    $script:DryRunMode = $false
 }
 # Exact previous parser from be8c9ae1, renamed as a negative control. The English
 # fixture must first return all three packages before a translated fixture can prove regression.
@@ -229,3 +257,6 @@ if ($Out) {
     [IO.File]::WriteAllText((Join-Path $Out 'driver-store-locale-tests.json'), ($report | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
 }
 if ($fail) { exit 1 }
+} finally {
+    [Environment]::SetEnvironmentVariable('AMDGPU_WDDM_TEST_DRIVER_STORE', $inheritedDriverStore, 'Process')
+}

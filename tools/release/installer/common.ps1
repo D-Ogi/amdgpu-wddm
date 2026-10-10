@@ -1138,7 +1138,8 @@ function Get-LabInstallPaths {
 function Read-DriverStorePackages {
     # A test inventory is accepted only by a dry run. A real uninstall always reads Windows.
     if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_DRIVER_STORE) {
-        return @(Get-Content -LiteralPath $env:AMDGPU_WDDM_TEST_DRIVER_STORE -Raw -ErrorAction Stop | ConvertFrom-Json)
+        $recorded = Get-Content -LiteralPath $env:AMDGPU_WDDM_TEST_DRIVER_STORE -Raw -ErrorAction Stop | ConvertFrom-Json
+        return $recorded
     }
     return @(Get-WindowsDriver -Online -ErrorAction Stop)
 }
