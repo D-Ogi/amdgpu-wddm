@@ -317,6 +317,7 @@ struct vk_api {
     PFN_vkWaitSemaphores WaitSemaphores{};
     PFN_vkSignalSemaphore SignalSemaphore{};
     PFN_vkGetSemaphoreWin32HandleKHR GetSemaphoreWin32HandleKHR{};
+    PFN_vkImportSemaphoreWin32HandleKHR ImportSemaphoreWin32HandleKHR{};
 
     bool load(std::string* why)
     {
@@ -396,6 +397,8 @@ struct vk_api {
         SHARECELL_DEVICE_FN(WaitSemaphores)
         SHARECELL_DEVICE_FN(SignalSemaphore)
         SHARECELL_DEVICE_FN(GetSemaphoreWin32HandleKHR)
+        ImportSemaphoreWin32HandleKHR = reinterpret_cast<PFN_vkImportSemaphoreWin32HandleKHR>(
+            GetDeviceProcAddr(device, "vkImportSemaphoreWin32HandleKHR"));
         return true;
     }
 #undef SHARECELL_DEVICE_FN
@@ -404,7 +407,9 @@ struct vk_api {
 // ---------------------------------------------------------------------------------------------
 // Options, shared by both clients.
 // ---------------------------------------------------------------------------------------------
+enum class fence_origin { radv, d3d12 };
 struct options {
+    fence_origin origin = fence_origin::radv;
     uint32_t width = 64;
     uint32_t height = 64;
     uint32_t rounds = 3;
@@ -444,6 +449,10 @@ inline options parse_options(int argc, char** argv)
             o.selftest = true;
         } else if (arg == "--negative-control") {
             o.negative_control = true;
+        } else if (arg == "--fence-origin" && next &&
+                   (std::strcmp(next, "radv") == 0 || std::strcmp(next, "d3d12") == 0)) {
+            o.origin = std::strcmp(next, "d3d12") == 0 ? fence_origin::d3d12 : fence_origin::radv;
+            i++;
         } else if (arg == "--width" && parse_u32(next, &o.width)) {
             i++;
         } else if (arg == "--height" && parse_u32(next, &o.height)) {
@@ -463,6 +472,120 @@ inline options parse_options(int argc, char** argv)
         o.bad = "a width, a height and a round count must all be above zero";
     }
     return o;
+}
+
+// Vulkan imports a reference, not ownership of the application's NT handle. Close it on either
+// result. Callbacks let the host control exercise this exact path without opening any real handle.
+template<typename Import, typename Close>
+inline VkResult import_application_fence(VkSemaphore semaphore, HANDLE handle,
+                                         Import import, Close close)
+{
+    VkImportSemaphoreWin32HandleInfoKHR info{};
+    info.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR;
+    info.semaphore = semaphore;
+    info.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
+    info.handle = handle;
+    // A timeline uses a permanent import (flags == 0); a handle import has no name.
+    const VkResult result = import(&info);
+    close(handle);
+    return result;
+}
+
+inline bool observe_fence_flags(ID3D12Fence* fence, const char* label)
+{
+    ID3D12Fence1* fence1 = nullptr;
+    const HRESULT hr = fence->QueryInterface(IID_PPV_ARGS(&fence1));
+    check_hr(hr, label);
+    if (SUCCEEDED(hr)) {
+        std::printf("INFO %s creation_flags=0x%08x\n", label,
+                    static_cast<unsigned>(fence1->GetCreationFlags()));
+        const bool expected = fence1->GetCreationFlags() == D3D12_FENCE_FLAG_SHARED;
+        check(expected, "the D3D12-origin fence reports SHARED without NON_MONITORED");
+        fence1->Release();
+        return expected;
+    }
+    return false;
+}
+
+inline bool create_d3d12_origin(vk_api& api, VkDevice vk_device, ID3D12Device* device,
+                                VkSemaphore* timeline, ID3D12Fence** shared)
+{
+    check(api.ImportSemaphoreWin32HandleKHR != nullptr,
+          "vkImportSemaphoreWin32HandleKHR is available");
+    if (!api.ImportSemaphoreWin32HandleKHR)
+        return false;
+    ID3D12Fence* created = nullptr;
+    HRESULT hr = device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&created));
+    check_hr(hr, "D3D12 CreateFence(initial=0, SHARED)");
+    if (FAILED(hr))
+        return false;
+    const bool created_flags = observe_fence_flags(created, "D3D12 created fence");
+    const bool created_zero = observe_completed(created, "D3D12 created initial fence") == 0;
+    check(created_zero, "the created D3D12 fence reads zero");
+    if (!created_flags || !created_zero) {
+        created->Release();
+        return false;
+    }
+    HANDLE handle = nullptr;
+    hr = device->CreateSharedHandle(created, nullptr, GENERIC_ALL, nullptr, &handle);
+    check_hr(hr, "D3D12 CreateSharedHandle(fence, GENERIC_ALL)");
+    if (FAILED(hr)) {
+        created->Release();
+        return false;
+    }
+    // Independent D3D12 -> D3D12 control, before any Vulkan import, on the same device.
+    if (FAILED(observe_device_reason(device, "device before D3D12-origin reopen"))) {
+        CloseHandle(handle);
+        created->Release();
+        return false;
+    }
+    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(shared));
+    check_hr(hr, "D3D12 reopened its own exported fence on the same device");
+    const HRESULT reason = observe_device_reason(device, "device after D3D12-origin reopen");
+    if (FAILED(hr) || FAILED(reason)) {
+        CloseHandle(handle);
+        created->Release();
+        return false;
+    }
+    const bool opened_flags = observe_fence_flags(*shared, "D3D12 reopened fence before Vulkan import");
+    const bool opened_zero = observe_completed(*shared, "D3D12 reopened initial fence before Vulkan import") == 0;
+    check(opened_zero, "the reopened D3D12 fence reads zero before Vulkan import");
+    if (!opened_flags || !opened_zero) {
+        CloseHandle(handle);
+        created->Release();
+        return false;
+    }
+
+    VkSemaphoreTypeCreateInfo type{};
+    type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+    type.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+    type.initialValue = 0;
+    VkSemaphoreCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    info.pNext = &type;
+    VkResult result = api.CreateSemaphore(vk_device, &info, nullptr, timeline);
+    check_vk(result, "RADV created a timeline for permanent D3D12-fence import");
+    if (result != VK_SUCCESS) {
+        CloseHandle(handle);
+        created->Release();
+        return false;
+    }
+    result = import_application_fence(*timeline, handle,
+        [&](const VkImportSemaphoreWin32HandleInfoKHR* import_info) {
+            return api.ImportSemaphoreWin32HandleKHR(vk_device, import_info);
+        }, [](HANDLE owned) { CloseHandle(owned); });
+    check_vk(result, "RADV permanently imported the D3D12-created fence");
+    created->Release(); // The reopened fence and imported semaphore retain their own references.
+    if (result != VK_SUCCESS)
+        return false;
+    uint64_t value = UINT64_MAX;
+    result = api.GetSemaphoreCounterValue(vk_device, *timeline, &value);
+    check_vk(result, "RADV reads the imported D3D12-origin timeline");
+    std::printf("INFO imported D3D12-origin timeline value=%llu\n",
+                static_cast<unsigned long long>(value));
+    check(value == 0, "the imported D3D12-origin timeline reads zero");
+    return result == VK_SUCCESS && value == 0 &&
+           SUCCEEDED(observe_device_reason(device, "device after D3D12-origin import"));
 }
 
 // The pure rules, driven with no device at all. Both clients run this in --selftest and before every
@@ -513,6 +636,42 @@ inline int run_selftest(const options& o)
           "neither side can produce the other side's value");
     check(!schedule_is_consumer(0), "a timeline that never moved belongs to neither side");
 
+    {
+        char executable[] = "selftest";
+        char option[] = "--fence-origin";
+        char radv[] = "radv";
+        char d3d12[] = "d3d12";
+        char invalid[] = "invalid";
+        char* args[] = {executable, option, d3d12};
+        check(parse_options(1, args).origin == fence_origin::radv,
+              "the default fence origin preserves the RADV baseline");
+        check(parse_options(3, args).origin == fence_origin::d3d12 &&
+              !parse_options(3, args).bad_option, "the D3D12 origin is selectable");
+        args[2] = radv;
+        check(parse_options(3, args).origin == fence_origin::radv &&
+              !parse_options(3, args).bad_option, "the RADV origin is selectable");
+        args[2] = invalid;
+        check(parse_options(3, args).bad_option && parse_options(2, args).bad_option,
+              "unknown and missing origins are refused");
+        for (VkResult expected : {VK_SUCCESS, VK_ERROR_INVALID_EXTERNAL_HANDLE}) {
+            int imports = 0, closes = 0;
+            bool descriptor_ok = false;
+            const HANDLE token = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(0x1234));
+            const VkSemaphore semaphore = reinterpret_cast<VkSemaphore>(static_cast<uintptr_t>(0x5678));
+            const VkResult actual = import_application_fence(semaphore, token,
+                [&](const VkImportSemaphoreWin32HandleInfoKHR* info) {
+                    imports++;
+                    descriptor_ok = info->sType == VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR &&
+                        info->pNext == nullptr && info->semaphore == semaphore && info->flags == 0 &&
+                        info->handleType == VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT &&
+                        info->handle == token && info->name == nullptr && closes == 0;
+                    return expected;
+                }, [&](HANDLE handle) { if (handle == token && imports == 1) closes++; });
+            check(descriptor_ok && imports == 1, "permanent D3D12 import uses the exact caller handle and semaphore");
+            check(actual == expected && closes == 1,
+                  "import result is preserved and caller handle closes once after success or failure");
+        }
+    }
     std::printf("sharecell selftest: %d checks, %d failed%s\n", checks, failures,
                 o.negative_control ? " (negative control)" : "");
     return failures ? 1 : 0;
@@ -569,6 +728,7 @@ inline uint32_t transfer_queue_family(vk_api& vk, VkPhysicalDevice physical)
 inline const char* const kUsage =
     "  --width N --height N     the shared texture's size (default 64x64)\n"
     "  --rounds N               fence round trips and image reuses (default 3)\n"
+    "  --fence-origin radv|d3d12 the shared fence creator (default radv)\n"
     "  --adapter N              the DXGI adapter index; the default matches the Vulkan device's LUID\n"
     "  --selftest               the pure rules only: no Vulkan device, no D3D12 device\n"
     "  --negative-control       every expectation inverted; every case must then fail\n"

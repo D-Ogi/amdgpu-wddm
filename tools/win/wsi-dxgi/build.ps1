@@ -98,6 +98,14 @@ if (-not $SkipSelfTest) {
         Write-Host "  host mode $name : --selftest"
         & $exe --selftest | Select-Object -Last 1 | ForEach-Object { Write-Host "    $_" }
         if ($LASTEXITCODE -ne 0) { throw "selftest failed for $name ($LASTEXITCODE)" }
+        foreach ($origin in @('radv', 'd3d12')) {
+            & $exe --selftest --fence-origin $origin | Select-Object -Last 1 | Write-Host
+            if ($LASTEXITCODE -ne 0) { throw "origin $origin selftest failed for $name" }
+        }
+        & $exe --selftest --fence-origin invalid | Out-Null
+        if ($LASTEXITCODE -ne 2) { throw "invalid origin was accepted by $name" }
+        & $exe --selftest --fence-origin | Out-Null
+        if ($LASTEXITCODE -ne 2) { throw "missing origin was accepted by $name" }
         Write-Host "  negative control $name : --selftest --negative-control (every case must fail)"
         & $exe --selftest --negative-control | Select-Object -Last 1 | ForEach-Object { Write-Host "    $_" }
         if ($LASTEXITCODE -ne 1) { throw "negative control did not fail as required for $name ($LASTEXITCODE)" }

@@ -124,3 +124,32 @@ measured here is the vsync pace of that machine. None of it is evidence about ou
 The import and export offsets that M794 records come from Microsoft binaries and can move with a Windows
 update. The WSI gate must read the bindings at run time. The listings behind those offsets stay outside this
 repository.
+
+### Fence origin control (BD-105)
+
+Both cells accept `--fence-origin radv|d3d12`. The `radv` option remains the default and preserves the
+RADV-export baseline. With `d3d12`, the cell creates a D3D12 fence with initial value 0 and
+`D3D12_FENCE_FLAG_SHARED`, exports an unnamed NT handle with `GENERIC_ALL`, and opens that
+same handle on the same D3D12 device. It records the created and reopened fence flags and
+values before Vulkan import. This is a separate D3D12-to-D3D12 classification control even
+if the subsequent Vulkan import fails. This adapter control expects `SHARED` on both fences.
+A successful control does not by itself prove the cause of the RADV-export failure.
+
+RADV then imports that handle permanently as `D3D12_FENCE` into a timeline semaphore. The
+application closes its NT handle after import on both success and failure. Import does not
+transfer ownership. The reopened D3D12 fence and the Vulkan semaphore remain alive through
+the existing odd/even signal, wait and image checks. The texture path and wait bounds stay
+unchanged. Use a semaphore implementation with the owned-import fix from Mesa fork commit
+`50787ae9` or its descendant. The old importer retained the caller's handle without a duplicate.
+that known defect can invalidate this control after the application correctly closes its handle.
+
+The host selftest now has 19 checks at default dimensions. It covers both origin options,
+refuses missing/unknown origins, and invokes the production import wrapper with mocked
+callbacks. Both successful and failed imports must preserve the result, use a permanent
+handle-based D3D12 import, and close the caller handle exactly once after the import call.
+These checks do not prove cross-API synchronization. That requires the bounded lab cells.
+
+Contracts: [Vulkan Win32 semaphore import](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#vkImportSemaphoreWin32HandleKHR)
+(local Vulkan-Docs `01aaacd9`, synchronization.adoc 5033-5037 and 5087-5115), and
+[D3D12 CreateSharedHandle](https://learn.microsoft.com/windows/win32/api/d3d12/nf-d3d12-id3d12device-createsharedhandle)
+(local sdk-api-docs `a4fd3f7e`, parameters Access and pAttributes).

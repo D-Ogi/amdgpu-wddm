@@ -673,51 +673,60 @@ int run(const options& o)
         vk.readback_pitch = VkDeviceSize(o.width) * 4u;
     }
 
-    step("the shared timeline: RADV exports it as a D3D12_FENCE, D3D12 opens it");
+    step(o.origin == fence_origin::d3d12 ?
+         "the shared timeline: D3D12 creates and reopens SHARED, RADV imports D3D12_FENCE" :
+         "the shared timeline: RADV exports it as a D3D12_FENCE, D3D12 opens it");
     observe_graphics_modules();
     {
-        VkSemaphoreTypeCreateInfo type{};
-        type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-        type.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-        type.initialValue = 0;
-        VkExportSemaphoreCreateInfo export_info{};
-        export_info.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
-        export_info.pNext = &type;
-        export_info.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
-        VkSemaphoreCreateInfo semaphore_info{};
-        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        semaphore_info.pNext = &export_info;
-        if (!check_vk(vk.api.CreateSemaphore(vk.device, &semaphore_info, nullptr, &vk.timeline),
-                      "RADV created an exportable timeline semaphore")) {
-            exit_code = kExitFailed;
-            goto done;
-        }
-        HANDLE fence_handle = nullptr;
-        uint64_t before_export = UINT64_MAX;
-        if (check_vk(vk.api.GetSemaphoreCounterValue(vk.device, vk.timeline, &before_export),
-                     "RADV reads the fresh timeline before export")) {
-            std::printf("INFO RADV timeline before export value=%llu hex=0x%016llx\n",
-                        static_cast<unsigned long long>(before_export),
-                        static_cast<unsigned long long>(before_export));
-            check(before_export == 0, "the RADV timeline is zero before export");
-        }
-        VkSemaphoreGetWin32HandleInfoKHR get{};
-        get.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR;
-        get.semaphore = vk.timeline;
-        get.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
-        if (!check_vk(vk.api.GetSemaphoreWin32HandleKHR(vk.device, &get, &fence_handle),
-                      "RADV exported it as a D3D12_FENCE handle") ||
-            !check(fence_handle != nullptr, "the exported handle is not null")) {
-            exit_code = kExitFailed;
-            goto done;
-        }
-        observe_device_reason(d3d.device, "device before OpenSharedHandle(fence)");
-        const HRESULT opened = d3d.device->OpenSharedHandle(fence_handle, IID_PPV_ARGS(&d3d.shared));
-        observe_device_reason(d3d.device, "device after OpenSharedHandle(fence)");
-        CloseHandle(fence_handle);   // the semaphore handle is the application's, as in the route
-        if (!check_hr(opened, "D3D12 opened the exported timeline as an ID3D12Fence")) {
-            exit_code = kExitFailed;
-            goto done;
+        if (o.origin == fence_origin::d3d12) {
+            if (!create_d3d12_origin(vk.api, vk.device, d3d.device, &vk.timeline, &d3d.shared)) {
+                exit_code = kExitFailed;
+                goto done;
+            }
+        } else {
+            VkSemaphoreTypeCreateInfo type{};
+            type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+            type.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+            type.initialValue = 0;
+            VkExportSemaphoreCreateInfo export_info{};
+            export_info.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
+            export_info.pNext = &type;
+            export_info.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
+            VkSemaphoreCreateInfo semaphore_info{};
+            semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            semaphore_info.pNext = &export_info;
+            if (!check_vk(vk.api.CreateSemaphore(vk.device, &semaphore_info, nullptr, &vk.timeline),
+                          "RADV created an exportable timeline semaphore")) {
+                exit_code = kExitFailed;
+                goto done;
+            }
+            HANDLE fence_handle = nullptr;
+            uint64_t before_export = UINT64_MAX;
+            if (check_vk(vk.api.GetSemaphoreCounterValue(vk.device, vk.timeline, &before_export),
+                         "RADV reads the fresh timeline before export")) {
+                std::printf("INFO RADV timeline before export value=%llu hex=0x%016llx\n",
+                            static_cast<unsigned long long>(before_export),
+                            static_cast<unsigned long long>(before_export));
+                check(before_export == 0, "the RADV timeline is zero before export");
+            }
+            VkSemaphoreGetWin32HandleInfoKHR get{};
+            get.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR;
+            get.semaphore = vk.timeline;
+            get.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
+            if (!check_vk(vk.api.GetSemaphoreWin32HandleKHR(vk.device, &get, &fence_handle),
+                          "RADV exported it as a D3D12_FENCE handle") ||
+                !check(fence_handle != nullptr, "the exported handle is not null")) {
+                exit_code = kExitFailed;
+                goto done;
+            }
+            observe_device_reason(d3d.device, "device before OpenSharedHandle(fence)");
+            const HRESULT opened = d3d.device->OpenSharedHandle(fence_handle, IID_PPV_ARGS(&d3d.shared));
+            observe_device_reason(d3d.device, "device after OpenSharedHandle(fence)");
+            CloseHandle(fence_handle);   // the semaphore handle is the application's, as in the route
+            if (!check_hr(opened, "D3D12 opened the exported timeline as an ID3D12Fence")) {
+                exit_code = kExitFailed;
+                goto done;
+            }
         }
         ID3D12Fence1* fence1 = nullptr;
         if (SUCCEEDED(observe_hr(d3d.shared->QueryInterface(IID_PPV_ARGS(&fence1)),
