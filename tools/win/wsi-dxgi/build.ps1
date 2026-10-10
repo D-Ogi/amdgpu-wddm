@@ -77,7 +77,7 @@ foreach ($name in $names) {
     if ($sharecells -contains $name) { $clArgs += "/external:W0", "/external:I$VulkanInclude" }
     $clArgs += @("/Fo$Out\$name.obj", "/Fe$exe", $source, '/link',
         "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
-        'psapi.lib')
+        'psapi.lib', 'bcrypt.lib')
     & $cl @clArgs | ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
     if ($LASTEXITCODE -ne 0) { throw "cl failed for $name ($LASTEXITCODE)" }
     Get-Item $exe | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }
@@ -96,7 +96,9 @@ if (-not $SkipSelfTest) {
         & $exe --bad-option 2>$null | Out-Null
         if ($LASTEXITCODE -ne 2) { throw "usage check failed for $name ($LASTEXITCODE)" }
         Write-Host "  host mode $name : --selftest"
-        & $exe --selftest | Select-Object -Last 1 | ForEach-Object { Write-Host "    $_" }
+        $selftestOutput = @(& $exe --selftest)
+        $selftestOutput | Select-Object -Last 1 | ForEach-Object { Write-Host "    $_" }
+        if ($selftestOutput -cmatch '^UNSAFE\b') { throw "selftest leaked UNSAFE marker for $name" }
         if ($LASTEXITCODE -ne 0) { throw "selftest failed for $name ($LASTEXITCODE)" }
         foreach ($origin in @('radv', 'd3d12')) {
             & $exe --selftest --fence-origin $origin | Select-Object -Last 1 | Write-Host

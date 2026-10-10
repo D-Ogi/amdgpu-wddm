@@ -143,7 +143,7 @@ unchanged. Use a semaphore implementation with the owned-import fix from Mesa fo
 `50787ae9` or its descendant. The old importer retained the caller's handle without a duplicate.
 that known defect can invalidate this control after the application correctly closes its handle.
 
-The host selftest now has 19 checks at default dimensions. It covers both origin options,
+The host selftest has 44 checks at default dimensions. It covers both origin options,
 refuses missing/unknown origins, and invokes the production import wrapper with mocked
 callbacks. Both successful and failed imports must preserve the result, use a permanent
 handle-based D3D12 import, and close the caller handle exactly once after the import call.
@@ -153,3 +153,44 @@ Contracts: [Vulkan Win32 semaphore import](https://registry.khronos.org/vulkan/s
 (local Vulkan-Docs `01aaacd9`, synchronization.adoc 5033-5037 and 5087-5115), and
 [D3D12 CreateSharedHandle](https://learn.microsoft.com/windows/win32/api/d3d12/nf-d3d12-id3d12device-createsharedhandle)
 (local sdk-api-docs `a4fd3f7e`, parameters Access and pAttributes).
+
+### KMT replay and loaded runtime identity (BD-105 r7b)
+
+`sharecell12` automatically runs six diagnostic opens for either fence origin while the
+exporter's NT handle remains alive. It opens the adapter by the D3D12 device's LUID and
+creates a separate diagnostic KMT device. This is the same adapter, not the runtime's
+private KMT device. No diagnostic submission or wait occurs.
+
+The first pattern uses a fresh structure for each flag value: `0x483`, `0x83`, `0x3`.
+The second starts with one zeroed structure and retains its outputs across all three calls.
+Both force all attempts regardless of status. They do not reproduce the runtime's conditional
+retry policy. Each attempt records requested flags and the retained structure Flags field before and after the call.
+Flags is an input field, not a contracted output. Logs also include device, handle, engine affinity,
+raw NTSTATUS, synchronization handle and CPU/GPU mappings. `0x80` is NoGPUAccess.
+`0x400` is UnwaitCpuWaitersOnlyOnDestroy in the SDK 26100 definitions.
+
+Successful synchronization handles remain alive through both patterns, then each distinct
+handle is destroyed once. Failed calls do not grant ownership of their output fields.
+Zero or duplicate successful handles make ownership uncertain and emit `UNSAFE`.
+Unconfirmed synchronization-object, device or adapter cleanup also emits `UNSAFE`.
+Setup and cleanup failures fail the cell. Negative open statuses alone are diagnostic data.
+`sharecellvk` retains the ordinary cross-API test without this extra KMT device.
+
+Both clients identify the core module after device creation, before fence open and at exit.
+`GetModuleHandleW` and `GetModuleFileNameW` select the actual loaded `d3d12core.dll`.
+The witness prints its UTF-8 path and a streaming BCrypt SHA-256 of the backing file.
+It does not load a missing module. `identity=absent` or `identity=unavailable` prevents
+attribution to a particular runtime listing, but does not change the functional test result.
+`identity=ok` requires a complete file hash within the 128 MiB bound. This is not a hash
+of mapped process memory. The operator must compare the complete SHA-256 with the listing's image.
+
+The host controls use mock KMT functions only. They cover stale failure outputs, fresh and
+reused structures, successful zero handles, duplicate success, and setup or cleanup refusal.
+They also check Unicode conversion and the BCrypt SHA-256 known answer for `abc`.
+Module lookup and file-read failure paths have source review, not injected runtime coverage.
+Mock diagnostics are silent inside `--selftest`, which also runs before every GPU cell.
+The build gate rejects any `UNSAFE` marker in that preamble. No real KMT device is opened by that mode.
+
+Contract: [D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmthk/ns-d3dkmthk-_d3dkmt_opensyncobjectfromnthandle2),
+SDK 10.0.26100.0 `d3dkmthk.h` 1695-1715. Compile-time checks pin size `0x58`, flags `+0xC`,
+CPU mapping `+0x18` and GPU mapping `+0x20` used by the exact runtime listing.

@@ -449,11 +449,13 @@ int run(const options& o)
     step("loading the two runtimes");
     if (!d3d_api.load(&why)) {
         std::printf("SKIP %s\n", why.c_str());
+        observe_loaded_core("early-exit");
         return kExitNoDevice;
     }
     if (!make_vulkan_instance(vk, &why)) {
         std::printf("SKIP %s\n", why.c_str());
         vk.release();
+        observe_loaded_core("early-exit");
         return kExitNoDevice;
     }
 
@@ -464,6 +466,7 @@ int run(const options& o)
     if (!check(has_luid || o.adapter != UINT32_MAX,
                "the Vulkan device reports a LUID, or an adapter index was given")) {
         vk.release();
+        observe_loaded_core("early-exit");
         return kExitFailed;
     }
 
@@ -471,6 +474,7 @@ int run(const options& o)
     if (!adapter) {
         std::printf("SKIP no DXGI adapter matches the Vulkan device; pass --adapter N to name one\n");
         vk.release();
+        observe_loaded_core("early-exit");
         return kExitNoDevice;
     }
     std::printf("INFO DXGI adapter '%s'\n", adapter_name.c_str());
@@ -480,11 +484,13 @@ int run(const options& o)
         const HRESULT created =
             d3d_api.D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d.device));
         observe_hr(created, "D3D12CreateDevice");
+        observe_loaded_core("after-D3D12CreateDevice");
         adapter->Release();
         if (FAILED(created)) {
             std::printf("SKIP D3D12CreateDevice refused this adapter: hr=0x%08lx\n",
                         static_cast<unsigned long>(created));
             vk.release();
+            observe_loaded_core("early-exit");
             return kExitNoDevice;
         }
         D3D12_COMMAND_QUEUE_DESC queue_desc{};
@@ -677,9 +683,10 @@ int run(const options& o)
          "the shared timeline: D3D12 creates and reopens SHARED, RADV imports D3D12_FENCE" :
          "the shared timeline: RADV exports it as a D3D12_FENCE, D3D12 opens it");
     observe_graphics_modules();
+    observe_loaded_core("before-fence-open");
     {
         if (o.origin == fence_origin::d3d12) {
-            if (!create_d3d12_origin(vk.api, vk.device, d3d.device, &vk.timeline, &d3d.shared)) {
+            if (!create_d3d12_origin(vk.api, vk.device, d3d.device, &vk.timeline, &d3d.shared, true)) {
                 exit_code = kExitFailed;
                 goto done;
             }
@@ -716,6 +723,11 @@ int run(const options& o)
             if (!check_vk(vk.api.GetSemaphoreWin32HandleKHR(vk.device, &get, &fence_handle),
                           "RADV exported it as a D3D12_FENCE handle") ||
                 !check(fence_handle != nullptr, "the exported handle is not null")) {
+                exit_code = kExitFailed;
+                goto done;
+            }
+            if (!replay_exported_fence(fence_handle, d3d.device->GetAdapterLuid())) {
+                CloseHandle(fence_handle);
                 exit_code = kExitFailed;
                 goto done;
             }
@@ -785,6 +797,7 @@ int run(const options& o)
           "every round passed on the same image, the same memory and the same timeline");
 
 done:
+    observe_loaded_core("final-before-release");
     if (vk.api.DeviceWaitIdle && vk.device != VK_NULL_HANDLE)
         vk.api.DeviceWaitIdle(vk.device);
     vk.release();
@@ -800,6 +813,7 @@ done:
 
 int main(int argc, char** argv)
 {
+    std::setvbuf(stdout, nullptr, _IONBF, 0); // Preserve diagnostics if a driver call never returns.
     const options o = parse_options(argc, argv);
     if (o.help) {
         std::printf("sharecell12 - a D3D12 producer and a RADV consumer over one shared texture and\n"

@@ -36,6 +36,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "sharecell-diagnostics.h"
 
 namespace sharecell {
 
@@ -508,7 +509,7 @@ inline bool observe_fence_flags(ID3D12Fence* fence, const char* label)
 }
 
 inline bool create_d3d12_origin(vk_api& api, VkDevice vk_device, ID3D12Device* device,
-                                VkSemaphore* timeline, ID3D12Fence** shared)
+                                VkSemaphore* timeline, ID3D12Fence** shared, bool kmt_replay = false)
 {
     check(api.ImportSemaphoreWin32HandleKHR != nullptr,
           "vkImportSemaphoreWin32HandleKHR is available");
@@ -530,6 +531,11 @@ inline bool create_d3d12_origin(vk_api& api, VkDevice vk_device, ID3D12Device* d
     hr = device->CreateSharedHandle(created, nullptr, GENERIC_ALL, nullptr, &handle);
     check_hr(hr, "D3D12 CreateSharedHandle(fence, GENERIC_ALL)");
     if (FAILED(hr)) {
+        created->Release();
+        return false;
+    }
+    if (kmt_replay && !replay_exported_fence(handle, device->GetAdapterLuid())) {
+        CloseHandle(handle);
         created->Release();
         return false;
     }
@@ -671,6 +677,103 @@ inline int run_selftest(const options& o)
             check(actual == expected && closes == 1,
                   "import result is preserved and caller handle closes once after success or failure");
         }
+    }
+    {
+        struct replay_mock {
+            int scenario, calls = 0, destroys = 0, device_closes = 0, adapter_closes = 0;
+            bool valid = true;
+            D3DKMT_HANDLE successes[6]{};
+            unsigned success_count = 0;
+            NTSTATUS OpenAdapterFromLuid(D3DKMT_OPENADAPTERFROMLUID* args) {
+                valid &= args->AdapterLuid.LowPart == 123 && args->AdapterLuid.HighPart == 456;
+                args->hAdapter = scenario == 8 ? 0 : 71;
+                return scenario == 1 ? NTSTATUS(0xc000000dL) : 0;
+            }
+            NTSTATUS CreateDevice(D3DKMT_CREATEDEVICE* args) {
+                const D3DKMT_CREATEDEVICEFLAGS zero{};
+                valid &= args->hAdapter == 71 && std::memcmp(&args->Flags, &zero, sizeof(zero)) == 0;
+                args->hDevice = scenario == 9 ? 0 : 72;
+                return scenario == 2 ? NTSTATUS(0xc000000dL) : 0;
+            }
+            NTSTATUS OpenSyncObjectFromNtHandle2(D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2* args) {
+                const unsigned i = unsigned(calls++);
+                const UINT flags[] = {0x483, 0x83, 0x3};
+                valid &= destroys == 0 && args->Flags.Value == flags[i % 3] && args->hDevice == 72 &&
+                         args->hNtHandle == reinterpret_cast<HANDLE>(static_cast<uintptr_t>(73)) &&
+                         args->MonitoredFence.EngineAffinity == 0;
+                if (i < 4 || scenario != 0) {
+                    // Fresh attempts and the first reused attempt start zero. Other scenarios
+                    // below only fail or return zero, so they never install output fields.
+                    if (i < 4) valid &= args->hSyncObject == 0 &&
+                        args->MonitoredFence.FenceValueCPUVirtualAddress == nullptr &&
+                        args->MonitoredFence.FenceValueGPUVirtualAddress == 0;
+                }
+                if (scenario == 0) {
+                    // Fresh refusal/success/success; reused success/refusal/success. The failed
+                    // reused attempt leaves the preceding successful output untouched.
+                    if (i >= 4) valid &= args->hSyncObject == 104 &&
+                        args->MonitoredFence.FenceValueCPUVirtualAddress == reinterpret_cast<void*>(static_cast<uintptr_t>(204)) &&
+                        args->MonitoredFence.FenceValueGPUVirtualAddress == 304;
+                    if (i == 0 || i == 4) return NTSTATUS(0xc000000dL);
+                    args->hSyncObject = 101 + i;
+                    args->MonitoredFence.FenceValueCPUVirtualAddress = reinterpret_cast<void*>(static_cast<uintptr_t>(201 + i));
+                    args->MonitoredFence.FenceValueGPUVirtualAddress = 301 + i;
+                    successes[success_count++] = args->hSyncObject;
+                    return 0;
+                }
+                if (scenario == 10) {
+                    args->hSyncObject = 101;
+                    if (!success_count) successes[success_count++] = 101;
+                    return 0;
+                }
+                if (scenario == 3) return 0; // Malformed success with zero handle.
+                if (scenario == 4) { // One success, then stale failure, and failed destroy.
+                    if (i != 0) return NTSTATUS(0xc000000dL);
+                    args->hSyncObject = 101;
+                    successes[success_count++] = 101;
+                    return 0;
+                }
+                return NTSTATUS(0xc000000dL); // All negative opens remain a diagnostic result.
+            }
+            NTSTATUS DestroySynchronizationObject(const D3DKMT_DESTROYSYNCHRONIZATIONOBJECT* args) {
+                valid &= calls == 6 && unsigned(destroys) < success_count;
+                if (unsigned(destroys) < success_count) valid &= args->hSyncObject == successes[destroys];
+                destroys++;
+                return scenario == 4 ? NTSTATUS(0xc000000dL) : 0;
+            }
+            NTSTATUS DestroyDevice(const D3DKMT_DESTROYDEVICE* args) {
+                valid &= args->hDevice == 72;
+                device_closes++;
+                return scenario == 5 ? NTSTATUS(0xc000000dL) : 0;
+            }
+            NTSTATUS CloseAdapter(const D3DKMT_CLOSEADAPTER* args) {
+                valid &= args->hAdapter == 71;
+                adapter_closes++;
+                return scenario == 6 ? NTSTATUS(0xc000000dL) : 0;
+            }
+        };
+        for (int scenario = 0; scenario != 11; ++scenario) {
+            replay_mock mock{scenario};
+            const bool result = replay_on_adapter(reinterpret_cast<HANDLE>(static_cast<uintptr_t>(73)), LUID{123,456}, mock, true);
+            const bool expected = scenario == 0 || scenario == 7;
+            check(result == expected, "KMT setup/cleanup failures fail; negative opens alone remain diagnostic");
+            check(mock.valid && mock.calls == (scenario == 1 || scenario == 2 || scenario == 8 || scenario == 9 ? 0 : 6) &&
+                  mock.destroys == int(mock.success_count) &&
+                  mock.device_closes == (scenario == 1 || scenario == 2 || scenario == 8 || scenario == 9 ? 0 : 1) &&
+                  mock.adapter_closes == (scenario == 1 || scenario == 8 ? 0 : 1),
+                  "KMT mocks preserve same LUID, fresh/reused fields and exactly-once deferred cleanup");
+        }
+        std::string utf8;
+        check(path_to_utf8(L"C:\\za\u017c\u00f3\u0142\u0107\\core.dll", &utf8) &&
+              utf8 == "C:\\za\xc5\xbc\xc3\xb3\xc5\x82\xc4\x87\\core.dll", "module path preserves Unicode as UTF8");
+        const wchar_t invalid_path[] = {wchar_t(0xd800), 0};
+        check(!path_to_utf8(invalid_path, &utf8), "malformed UTF16 path refuses an identity witness");
+        sha256_state hash;
+        UCHAR digest[32]{};
+        const UCHAR expected[] = {0xba,0x78,0x16,0xbf,0x8f,0x01,0xcf,0xea,0x41,0x41,0x40,0xde,0x5d,0xae,0x22,0x23,
+                                 0xb0,0x03,0x61,0xa3,0x96,0x17,0x7a,0x9c,0xb4,0x10,0xff,0x61,0xf2,0x00,0x15,0xad};
+        check(hash.start() && hash.add("a", 1) && hash.add("bc", 2) && hash.finish(digest) &&
+              std::memcmp(digest, expected, sizeof(digest)) == 0, "BCrypt SHA256 streaming matches the abc known answer");
     }
     std::printf("sharecell selftest: %d checks, %d failed%s\n", checks, failures,
                 o.negative_control ? " (negative control)" : "");
