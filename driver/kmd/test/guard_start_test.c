@@ -56,9 +56,14 @@ static void GuardLogKeepEpisode(PCWSTR label){if(!wcscmp(label,L"start"))episode
 #include "guard_actual.inc"
 #include "release_actual.inc"
 #include "gate_actual.inc"
-// The start bookkeeping after the guard (start_health.c, cumode.c) is not what this test is about.
+// The start bookkeeping after the guard (start_health.c, cumode.c, board_memory_identity.c) is not what
+// this test is about.
 static void StartHealthBegin(BC250_DEVICE* d,BOOLEAN full){(void)d;(void)full;}
 static void CuModeBegin(BC250_DEVICE* d){(void)d;}
+static void BoardMemoryIdentityClear(BC250_DEVICE* d){(void)d;}
+static void BoardMemoryIdentityCapture(BC250_DEVICE* d){(void)d;}
+static void BoardMemoryStart(BC250_DEVICE* d){(void)d;}
+static void BoardMemoryStop(BC250_DEVICE* d){(void)d;}
 #include "pnp_actual.inc"
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)

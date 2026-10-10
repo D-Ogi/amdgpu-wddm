@@ -9,7 +9,7 @@ typedef unsigned char* PUCHAR;
 #define RtlCopyMemory(p,s,n) memcpy(p,s,n)
 typedef unsigned long ULONG;
 typedef unsigned long long ULONGLONG,u64;
-typedef long long LONGLONG;
+typedef long long LONGLONG,LONG64;
 typedef long NTSTATUS;
 typedef int BOOLEAN;
 #define TRUE 1
@@ -26,12 +26,16 @@ typedef int BOOLEAN;
 #define BC250_GART_SCRATCH_OFFSET 4096ull
 #define GuardLog(...) ((void)0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
+/* vram.c publishes the active board memory size for the board memory card while it sets the geometry.
+   The host model keeps the written value so that nothing in the extracted code is a stub. */
+static LONG64 InterlockedExchange64(volatile LONG64*target,LONG64 value){LONG64 old=*target;*target=value;return old;}
 typedef struct {LONGLONG QuadPart;} PHYSICAL_ADDRESS;
 typedef struct {
  struct {ULONGLONG bytes;} WddmAperture;
  void* Mmio;BOOLEAN VramEnabled,VramWriteEnabled;
  PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
+ volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
 struct fake_adev {void *dev,*backend;struct {ULONGLONG mc_vram_size,real_vram_size,vram_start;} gmc;};
 struct bc250_gmc_inputs {u64 gart_table_mc,mem_scratch_mc,dummy_page_dma;int noretry;};
