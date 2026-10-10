@@ -436,6 +436,33 @@ semaphores on a device that is alive. The retirement answers `NOTHING` there, sa
 and the acquire reports `VK_ERROR_OUT_OF_DATE_KHR`: reporting it as outstanding would end a client with
 `VK_ERROR_DEVICE_LOST` over a wait that does not exist.
 
+**V1 a third time: which value?** The second review of the same round found that fact aliasing one level up.
+The debt was a **bit** - "the presenter owes one more value" - and a bit names no value, while the entry it is
+read against moves without it: `wsi_common_queue_present` pre-increments `blit.timeline_values[i]` to `W + 1`
+for the application's next submission **before** that submission is made, and the clear of the debt lives
+inside `wsi_dxgi_blit`, which that path skips when the submission fails. After any `vkQueuePresentKHR` whose
+internal submit failed, the entry therefore holds `W + 1` while the bit still records the accepted `Signal` of
+`W`, and a retirement with the presenter proved removed read `want = W + 1`, `have = W`, `owes = true` and
+host-signalled `W + 1`: a value nobody promised, and, when the application's own signal of `W + 1` is pending
+on a lost queue, 03259 again. The same window is open to any concurrent retirement, and the record is read
+across threads by construction, so no argument about which thread calls what closes it.
+
+The record now carries the owed **value** next to the word, stored before it, and the question is `owes =
+word != 0 && value == entry`. Every stale or aliased reading then collapses to `NOTHING` by construction: a
+newer cycle's word with an older cycle's value fails the comparison, and a newer value with no word yet fails
+the word. `NOTHING` is the direction a mistake has to fall, because it costs the client an
+`VK_ERROR_OUT_OF_DATE_KHR` it can recreate from, while an unproved host signal is the defect being fixed. The
+64-bit half of the pair is spelled with `_InterlockedCompareExchange64` alone, because `_InterlockedOr64` and
+`_InterlockedExchange64` are x64/ARM intrinsics while the 64-bit compare-exchange is documented for x86 too,
+and the release ships an x86 ICD beside the x64 one.
+
+**One unbounded wait of ours is left on the route.** `wsi_common.c`'s throttle inside `vkQueuePresentKHR`
+waits on an image's own `VkFence` with `WaitForFences(..., ~0ull)` before it reuses that image. In practice the
+bounded acquire is always reached first - a chain of `N` images gives `N` fast-path acquires before any image
+is presented twice - so BD-105 cannot move into that call. It is named here because it is the one wait on this
+path that no deadline of ours covers, and because a future change to the image count or to the acquire's
+fast path is what would make it reachable.
+
 **V2. The HRESULTs of the blit path were dropped.** `ID3D12GraphicsCommandList::Close`,
 `ID3D12CommandQueue::Wait` and `::Signal` all return an HRESULT that the caller is expected to read
 (`sdk-api-docs`, `nf-d3d12-id3d12graphicscommandlist-close.md` and the queue pages), and
