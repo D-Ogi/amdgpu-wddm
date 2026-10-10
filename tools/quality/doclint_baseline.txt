@@ -133,7 +133,7 @@
 6	driver/shim/test/README.md
 26	driver/shim/test/sdma_faults_report.md
 24	driver/umd/d3d12/README.md
-211	driver/umd/d3d12/engine-ddi/INTEGRATION.md
+210	driver/umd/d3d12/engine-ddi/INTEGRATION.md
 29	driver/umd/d3d12/engine-ddi/README.md
 31	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
@@ -159,7 +159,7 @@
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
 20	tools/win/d3d12caps/README.md
-57	tools/win/d3d12queue/README.md
+56	tools/win/d3d12queue/README.md
 1	tools/win/dxgimodes/README.md
 53	tools/win/frameloop/README.md
 3	tools/win/gpu-timeline/README.md

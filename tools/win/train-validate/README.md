@@ -90,7 +90,7 @@ The difference matters when a number is read out of this table.
 | `push-zip`, `zipcheck` | transfer, read | the package on the lab is the package on this PC |
 | `uninstall`, `restart-1`, `install`, `restart-2` | lab | the owner's installer test: nothing of ours is left, then a fresh install at 40 CU |
 | `slots`, `kmdver`, `preflight` | read | every installed file against the package manifest, the identity of what runs, and 40 CU, DPM, health and TdrDelay |
-| `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`, which refuses a second apply of the same release; the wrapper then reads `lab-baseline.json` and passes when it already names this release and this manifest hash, so a resumed run answers as the first one did |
+| `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`. That script refuses a second apply of the same release. The wrapper then reads `lab-baseline.json`. It passes when that file already names this release and this manifest hash. A resumed run thus gets the same answer as the first run |
 | `vk-smoke`, `x86-smoke` | lab | the system Vulkan ICD and the 32-bit D3D11 stack answer |
 | `q2rtx-pipeline`, `q2rtx-query`, `q2rtx-loop` | lab, **owner gate** | Quake II RTX runs with `VK_KHR_ray_tracing_pipeline` and with `VK_KHR_ray_query` |
 | `cache-0`, `cache-1`, `q2rtx-warm`, `cache-2` | read, lab | the shader disk cache of a new Vulkan driver build is written and then read. A new build has a cache namespace of its own (BD-100), so this is the b25 B1 proof again |
