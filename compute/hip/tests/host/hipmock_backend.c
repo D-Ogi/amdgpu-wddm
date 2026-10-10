@@ -418,7 +418,10 @@ void bc250hsa_counters_reset(void) {
  * Device
  * ---------------------------------------------------------------------------------------- */
 
+static uint32_t mock_open_calls;
+uint32_t bc250hsa_mock_open_calls(void) { return mock_open_calls; }
 bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_device** out) {
+    ++mock_open_calls;
     if (out == NULL) {
         return BC250HSA_EINVAL;
     }

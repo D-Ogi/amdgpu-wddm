@@ -16,6 +16,8 @@
 # -Bc250hsaLib names the static library of layer 1 (branch m16/hip-dispatch). Without it the
 # script builds the mock DLL and every test, and it says that the product DLL needs that
 # library.
+# -DisableGpu builds an optional product DLL that refuses device opening. It requires
+# -Bc250hsaLib and does not change the enabled mock fixtures used by the host gates.
 #
 # -Rebuild compiles the committed code object fixture again with the AMDGPU clang and compares
 # its SHA-256 with the hash in tests\data\PROVENANCE-runtime.txt. It is off by default, because
@@ -40,12 +42,16 @@ param(
     [string]$Bc250hsaLib = '',
     [string]$ClangBin = '',
     [string]$DeviceLibPath = '',
+    [switch]$DisableGpu,
     [switch]$SkipClang,
     [switch]$SkipTests,
     [switch]$Rebuild
 )
 
 $ErrorActionPreference = 'Stop'
+if ($DisableGpu -and (-not $Bc250hsaLib -or -not (Test-Path -LiteralPath $Bc250hsaLib -PathType Leaf))) {
+    throw '-DisableGpu requires an existing -Bc250hsaLib; no containment artifact was built.'
+}
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Kits) { $Kits = Join-Path $Root 'toolchain\nuget' }
 if (-not $Out) { $Out = Join-Path $Root 'scratch\build\m16-hip-runtime' }
@@ -231,6 +237,30 @@ if (-not $SkipTests) {
     }
 }
 
+# Both containment outcomes are exercised only against the host mock backend.
+if (-not $SkipTests) {
+    $containmentSource = Join-Path $hip 'tests\host\test_hip_disabled.cpp'
+    $enabledExe = Join-Path $Out 'test_hip_enabled.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', "/Fo$testObjDir\", "/Fe$enabledExe", $containmentSource) +
+        $includes + $objects + @('/link') + $libpaths) 'containment enabled control'
+    & $enabledExe enabled
+    if ($LASTEXITCODE -ne 0) { throw 'Enabled mock containment control failed' }
+    $disabledDir = Join-Path $Out 'obj-disabled'
+    New-Item -ItemType Directory -Force $disabledDir | Out-Null
+    Invoke-Cl ($warn + @('/c', '/MT', '/std:c++17', '/EHsc', '/DBC250_HIP_GPU_DISABLED=1', "/Fo$disabledDir\") +
+        $includes + @((Join-Path $hip 'runtime\hip_device.cpp'))) 'disabled device object'
+    $disabledObjects = @($objects | Where-Object { (Split-Path $_ -Leaf) -ne 'hip_device.obj' }) + @("$disabledDir\hip_device.obj")
+    $disabledExe = Join-Path $Out 'test_hip_disabled.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', "/Fo$testObjDir\", "/Fe$disabledExe", $containmentSource) +
+        $includes + $disabledObjects + @('/link') + $libpaths) 'containment disabled control'
+    & $disabledExe disabled
+    if ($LASTEXITCODE -ne 0) { throw 'Disabled mock containment control failed' }
+    # Restore the old open behavior: this must fail CHECKs, not compilation.
+    $negative = @(& $enabledExe disabled)
+    if ($LASTEXITCODE -ne 1 -or -not ($negative -match '^FAIL CHECK')) { throw 'Containment negative control did not fail' }
+    $negative | Set-Content (Join-Path $Out 'containment-negative.txt')
+}
+
 # ---------------------------------------------------------------------------------------------
 # 3. The mock build of the DLL: the same runtime over the mock backend, so that a real HIP
 #    program runs on a machine with no BC-250 adapter.
@@ -261,6 +291,8 @@ Invoke-Cl ($warn + @('/LD', '/MD', '/std:c++17', '/EHsc', '/DBC250_HIP_NO_DISPAT
 # ---------------------------------------------------------------------------------------------
 # 4. The product DLL, when the static library of layer 1 is available.
 # ---------------------------------------------------------------------------------------------
+$productFlags = @()
+if ($DisableGpu) { $productFlags = @('/DBC250_HIP_GPU_DISABLED=1') }
 $productDll = Join-Path $Out 'amdhip64.dll'
 if ($Bc250hsaLib -and (Test-Path $Bc250hsaLib)) {
     $productObjDir = Join-Path $Out 'obj-product'
@@ -272,7 +304,7 @@ if ($Bc250hsaLib -and (Test-Path $Bc250hsaLib)) {
     # /MT, so a /MD link of this DLL pulls LIBCMT and MSVCRT into one module: the linker says
     # LNK4098 and the module gets two C runtimes, each with its own heap. Second, the DLL goes
     # to the lab beside a program: a /MT module needs no Visual C runtime on the target.
-    Invoke-Cl ($warn + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
+    Invoke-Cl ($warn + $productFlags + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
         $includes + $runtimeSources + @($dllSource, $Bc250hsaLib) +
         @('/link', "/DEF:$def") + $libpaths + @('gdi32.lib')) 'amdhip64.dll (bc250hsa)'
 } else {

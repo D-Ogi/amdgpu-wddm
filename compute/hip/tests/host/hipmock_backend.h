@@ -58,6 +58,8 @@ typedef struct bc250hsa_mock_record {
 /* Empties the record and the counters. It does not free the allocations of the device, so a
  * test may reset between two runs of the same process and still count live allocations. */
 void bc250hsa_mock_reset(void);
+/* Lifetime open attempts, not reset by mock_reset. */
+uint32_t bc250hsa_mock_open_calls(void);
 
 /* How long a dispatch takes to retire, in milliseconds. 0, the default, retires it at once and
  * is what every test before the multithreaded one expects. A hold time makes bc250hsa_wait
