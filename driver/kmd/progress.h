@@ -18,8 +18,10 @@ typedef enum BC250_PROGRESS_SITE_ID {
     ProgressSiteGfxSubmit,              // GfxSubmitIb, GartLock wait included; Value: sequence, 0 when refused
     ProgressSiteVmFlush,                // bc250_gmc_set_vmid_pd in the graphics submit; Input: the VMID; Value: its result
     ProgressSiteReportDpc,              // WddmReportDpcRoutine
-    ProgressSiteSubmitWatchdogDpc,      // node 0's 500 ms deadline timer
-    ProgressSitePagingWatchdogDpc,      // node 1's 500 ms deadline timer
+    ProgressSiteSubmitWatchdogDpc,      // node 0's submit watchdog: it now ticks inside the budget and re-arms
+                                        // itself while a head exists (BD-114, submit_watchdog.h), so Entries
+                                        // grows by about 4 a second under load and says nothing about a hang
+    ProgressSitePagingWatchdogDpc,      // node 1's deadline timer, one shot at SubmitBudgetMs
     ProgressSitePagingDrainDpc,         // node 1's quota requeue timer
     ProgressSiteVSyncDpc,               // the software VSync timer (flip gate closed)
     ProgressSiteBuildPagingBuffer,      // PagingBuildLock wait included; Input and Value: DXGK_BUILDPAGINGBUFFER_OPERATION

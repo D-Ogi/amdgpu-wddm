@@ -509,6 +509,11 @@ void GuardReleaseStart(void);       // orderly stop of a started device: give th
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+// BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
+// one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
+// must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
+// does (tools/release/installer/install.ps1, BD-079).
+ULONG GuardReadGraphicsSetting(_In_z_ PCWSTR Name, ULONG Default);
 NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value); // absent is STATUS_OBJECT_NAME_NOT_FOUND
 NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written and flushed
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
@@ -815,6 +820,17 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //                    issued, *Micros the time spent.
 ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
                      _Out_ ULONG* Micros);
+//   GfxFenceObserved BD-114: the raw submission fence slot for the submit watchdog's progress token
+//                    (submit_watchdog.h). DISPATCH_LEVEL, read-only, no side effect at all - unlike
+//                    GfxFenceArrived it retires nothing and wakes nobody. FALSE: there was nothing to read.
+//   GfxReopenAfterAbort
+//                    BD-114: the ring is idle and ResetEngine has named this node's last reported fence as
+//                    aborted without a kill (verdict BC250_HANG_VERDICT_ABORT_REPORTED). Clears the sticky
+//                    SubmitFailed the watchdog wrote and wakes the held submissions, exactly as
+//                    GfxSoftRecover's drained path does. FALSE and nothing changed if a sequence is still in
+//                    flight. PASSIVE_LEVEL, from DxgkDdiResetEngine only.
+BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
+BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);

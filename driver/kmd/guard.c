@@ -206,6 +206,30 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
     return NT_SUCCESS(status) ? value : Default;
 }
 
+// BD-114: the one value this driver reads outside its own Parameters key. Windows' graphics key holds TdrDelay,
+// the number of seconds the GPU scheduler waits for a preempt request before it declares a timeout
+// (tdr-registry-keys.md), and our private submit watchdog is priced against it (submit_watchdog.h). Opened for
+// KEY_READ alone, so a bug here cannot write to a key that belongs to the OS; an absent key or value leaves the
+// caller's default, which is Windows' own 2 seconds.
+ULONG GuardReadGraphicsSetting(_In_z_ PCWSTR Name, ULONG Default)
+{
+    static const WCHAR path[] = L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers";
+    UNICODE_STRING key;
+    OBJECT_ATTRIBUTES attributes;
+    HANDLE handle;
+    ULONG value;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return Default;
+    RtlInitUnicodeString(&key, path);
+    InitializeObjectAttributes(&attributes, &key, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
+    status = ZwOpenKey(&handle, KEY_READ, &attributes);
+    if (!NT_SUCCESS(status)) return Default;
+    status = ReadDword(handle, Name, &value);
+    ZwClose(handle);
+    return NT_SUCCESS(status) ? value : Default;
+}
+
 // A one-shot gate: the value 1 is read and put back to 0 on disk before anything it opens has run, so a bugcheck
 // behind the gate cannot repeat itself at the next boot (E16 run 007 did, once). Any other value is left alone.
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default)

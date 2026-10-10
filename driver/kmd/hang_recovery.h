@@ -73,6 +73,9 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 #define BC250_HANG_VERDICT_FENCE_GUARD      4u  /* the abort fence fails the 0x119 range guard: refused */
 #define BC250_HANG_VERDICT_ALREADY_RETIRED  5u  /* retired before the first kill: the ring is idle, reset reported */
 #define BC250_HANG_VERDICT_VMID_GUARD       6u  /* the hung job named no VMID of the pool: refused, nothing killed */
+#define BC250_HANG_VERDICT_ABORT_REPORTED   7u  /* BD-114: nothing on the ring, so this node's last reported fence
+                                                   is named as aborted. Nothing was killed: the packet completed
+                                                   between the watchdog and the TDR, and the ring is already idle */
 
 /* Before any kill: stage 1 needs a job of the reset's own node on the ring (the WDDM queue's view, after late
  * fences have been retired), an abort fence the engine-reset contract accepts, and a VMID a kill may name.
@@ -87,6 +90,35 @@ static __inline unsigned Bc250HangPreKillVerdict(int jobOnRing, unsigned abortFe
     if (!Bc250AbortedFenceValid(abortFence, lastCompleted, abortFence)) return BC250_HANG_VERDICT_FENCE_GUARD;
     if (!Bc250KillVmidValid(vmid)) return BC250_HANG_VERDICT_VMID_GUARD;
     return BC250_HANG_VERDICT_PENDING;
+}
+
+/* BD-114, ANALYSIS.md 7.4: verdict 3 is what a packet that ran past our private watchdog and then completed
+ * before the TDR gets today, and verdict 3 is a refusal, after which ResetFromTimeout fails and the machine
+ * bugchecks 0x116. The contract sanctions the other answer, tdr-changes-in-windows-8.md:100: "A special
+ * situation can occur when a packet is completed on the GPU between steps 3 and 7. In this case, the driver
+ * should set LastAbortedFenceId to the fence ID of the last completed packet if there are no packets in the
+ * hardware queue from the driver's point of view. From the scheduler's point of view, it appears that such a
+ * packet was aborted."
+ *
+ * The design document's objection has to be answered rather than waved away (hang-recovery.md, "Limits"): "our
+ * view of 'last completed' can lag a pending report, and a wrong choice re-executes a packet". The answer is in
+ * the three guards below, and every one of them is a condition the report DPC already tracks:
+ *   - nothing of this node on the ring. Only then is there no packet whose completion we would be pre-empting.
+ *   - no completion pending for this node (CompletionPending[node] == 0). A pending completion is exactly the
+ *     lag the objection names: a fence the hardware has produced and dxgkrnl has not been told about. With one
+ *     outstanding, "last reported" is not the last completed and the fence named would be wrong.
+ *   - the node has a reported fence at all (LastReportedValid[node]), and that fence is inside the engine-reset
+ *     contract's range against the last fence dxgkrnl submitted on this node. Out of range is bugcheck 0x119.
+ * The fence named is the node's own LastReportedFence, so the lower bound of the range holds by construction and
+ * only the upper bound can refuse. A refusal leaves verdict 3 and today's behaviour exactly as it was. */
+static __inline int Bc250HangAbortReportedFence(int jobOnRing, int completionPending, int lastReportedKnown,
+                                                unsigned lastReported, int lastSubmittedKnown,
+                                                unsigned lastSubmitted, unsigned* abortFence)
+{
+    if (jobOnRing || completionPending || !lastReportedKnown || !lastSubmittedKnown) return 0;
+    if (!Bc250AbortedFenceValid(lastReported, lastReported, lastSubmitted)) return 0;
+    *abortFence = lastReported;
+    return 1;
 }
 
 /* The kill loop of amdgpu_ring_soft_recovery, with its hardware behind four callbacks so that gfx.c and the host
@@ -122,16 +154,19 @@ static __inline unsigned Bc250HangKillLoop(const BC250_HANG_KILL_OPS* ops, void*
     }
 }
 
-/* The verdicts after which ResetEngine reports success: either way the newest sequence retired and the ring is idle. */
+/* The verdicts after which ResetEngine reports success: in each the newest sequence retired and the ring is
+ * idle. ABORT_REPORTED (BD-114) is the third: no kill ran there, because the packet had already completed, and
+ * the fence named as aborted is the one dxgkrnl was last told about. */
 static __inline int Bc250HangVerdictRecovered(unsigned verdict)
 {
-    return verdict == BC250_HANG_VERDICT_DRAINED || verdict == BC250_HANG_VERDICT_ALREADY_RETIRED;
+    return verdict == BC250_HANG_VERDICT_DRAINED || verdict == BC250_HANG_VERDICT_ALREADY_RETIRED ||
+           verdict == BC250_HANG_VERDICT_ABORT_REPORTED;
 }
 
 /* Which counters of the record one write adds 1 to. Every attempt counts one Attempt in its first write (the
- * pending record before a kill, or a refusal decided before any kill) and one outcome in its last, so after every
- * finished attempt Attempts == Recovered + NotDrained + Refused; an attempt the machine did not survive leaves
- * Attempts one ahead with LastVerdict 0. */
+ * pending record before a kill, or an outcome decided before any kill - a refusal, or BD-114's ABORT_REPORTED)
+ * and one outcome in its last, so after every finished attempt Attempts == Recovered + NotDrained + Refused; an
+ * attempt the machine did not survive leaves Attempts one ahead with LastVerdict 0. */
 #define BC250_HANG_COUNT_ATTEMPT     0x1u
 #define BC250_HANG_COUNT_RECOVERED   0x2u
 #define BC250_HANG_COUNT_NOT_DRAINED 0x4u
@@ -143,6 +178,9 @@ static __inline unsigned Bc250HangVerdictCounts(unsigned verdict)
     case BC250_HANG_VERDICT_PENDING:          return BC250_HANG_COUNT_ATTEMPT;
     case BC250_HANG_VERDICT_DRAINED:
     case BC250_HANG_VERDICT_ALREADY_RETIRED:  return BC250_HANG_COUNT_RECOVERED;
+    /* BD-114: decided before any kill, like the refusals, so it counts its own attempt - there is no PENDING
+     * write ahead of it to have counted one. Without this the record's invariant would break the other way. */
+    case BC250_HANG_VERDICT_ABORT_REPORTED:   return BC250_HANG_COUNT_ATTEMPT | BC250_HANG_COUNT_RECOVERED;
     case BC250_HANG_VERDICT_NOT_DRAINED:      return BC250_HANG_COUNT_NOT_DRAINED;
     default:                                  return BC250_HANG_COUNT_ATTEMPT | BC250_HANG_COUNT_REFUSED;
     }

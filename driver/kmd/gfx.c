@@ -1273,6 +1273,63 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
     return result;
 }
 
+// BD-114 (ANALYSIS.md 7.2): the raw submission fence slot, for the submit watchdog's progress token. The same
+// read GfxFenceArrivedAccess does, without its comparison and without any of its side effects: a progress check
+// must not retire anything, end a DPM busy share or wake a waiter. FALSE means there was nothing to read (no
+// device, no fence page yet), which the caller reads as "no progress observed from this source".
+BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value)
+{
+    BC250_GFX* gfx;
+
+    *Value = 0;
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx != NULL && gfx->SubmitAdev != NULL)
+        *Value = (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT);
+    GfxAccessRelease(Device);
+    return gfx != NULL && gfx->SubmitAdev != NULL;
+}
+
+// BD-114 (ANALYSIS.md 7.4): the ring is idle, and DxgkDdiResetEngine is about to report this node's last
+// reported fence as aborted without killing anything - the packet the watchdog accused completed on its own
+// between the timeout and the TDR. The only thing left to undo is the sticky refusal that the watchdog's
+// GfxSubmitFail wrote, which is the tail of GfxSoftRecover's drained path and nothing else: there was no kill,
+// so there is no sequence to stop and no wave state to wonder about.
+//
+// Refused unless the ring is provably idle: either nothing is marked in flight, or the marked sequence's fence
+// has arrived. A ring that still holds work is never reopened, because the next submission would then share a
+// VMID with a job this driver has not accounted for. TRUE: the gate is open again and the waiters are woken.
+BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev;
+    LONG pending;
+    BOOLEAN idle;
+
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    adev = (gfx != NULL) ? gfx->SubmitAdev : NULL;
+    if (gfx == NULL || adev == NULL) { GfxAccessRelease(Device); return FALSE; }
+    pending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
+    idle = pending == 0 ||
+           bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), (ULONG)pending);
+    if (idle && pending != 0 &&
+        InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
+        DpmBusyEnd(&Device->Dpm);       // the ring went idle: the share the normal fence path would have ended
+    if (idle)
+    {
+        InterlockedExchange(&gfx->SubmitFailed, 0);      // the one un-stick outside GfxSoftRecover's drained path
+        GfxRetireSignal(Device);                         // KMD196: a held submission is waiting for this gate
+        GuardLog("gfx: ring reopened after an aborted fence was reported (seq %lu was in flight, slot 0x%X)",
+                 (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT));
+    }
+    else
+        GuardLog("gfx: ring NOT reopened after an aborted fence: seq %lu is still in flight (slot 0x%X)",
+                 (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT));
+    GfxAccessRelease(Device);
+    return idle;
+}
+
 // The bring-up read's reader. The gfx table holds the page-table base pairs of VMIDs 1..15 and the GART table the
 // pair of VMID 0, which gart.c programs; both lists are generated from the register headers, and the offsets come
 // from the shim's hub table (bc250_gmc_get_vmid_pd), so nothing here names an address.
