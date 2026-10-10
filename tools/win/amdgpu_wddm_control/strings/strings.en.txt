@@ -799,6 +799,16 @@ plan.line.fan-curve|src|-|The driver runs the fan by the curve "{0}", now and at
 plan.line.fan-points|src|-|Fan speeds: {0}
 plan.title.fan-auto|src|-|Let the board run the fan
 plan.title.fan-curve|src|-|Use a fan curve
+perf.fan.boost|src|-|Full fan speed under heavy load
+perf.fan.boost.help|src|-|When the graphics work hard for more than two seconds, the fan goes to full speed at once instead of waiting for the chip to get hot. Switch it off if you want the curve alone. A new setting works after you restart Windows.
+perf.fan.boost.now|src|-|The fan is at full speed now, because the graphics are working hard.
+perf.fan.boost.after-restart|src|-|The new setting works after you restart Windows.
+perf.fan.refuse.boost-on-already|src|-|Full fan speed under heavy load is on already.
+perf.fan.refuse.boost-off-already|src|-|Full fan speed under heavy load is off already.
+plan.line.fan-boost-on|src|-|The fan runs at full speed when the graphics work hard.
+plan.line.fan-boost-off|src|-|The fan follows the curve alone, also when the graphics work hard.
+plan.title.fan-boost-on|src|-|Turn full fan speed under heavy load on
+plan.title.fan-boost-off|src|-|Turn full fan speed under heavy load off
 
 # ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
 graphics.tuning.hide|src|-|Hide advanced tuning

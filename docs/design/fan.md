@@ -446,7 +446,8 @@ All are `REG_DWORD` under `Services\bc250kmd\Parameters`.
 | `FanCurvePoints`, `FanCurve0` to `FanCurve7` | with `FanProfile` 0: the point count (2 to 8) and each point as `(degrees C << 8) \| percent` |
 | `FanLoadBoost` | 1 (also when absent) runs the load feed-forward. 0, and any other value, leaves the duty to the curve alone |
 
-The INF writes `EnableFanControl` only. The driver writes the stored choice when a request carries
+The INF writes `EnableFanControl` only. The control application's own check box writes `FanLoadBoost`
+(0 for off, and it removes the value for on). The driver writes the stored choice when a request carries
 `Store` 1. A stored choice that the policy refuses runs the Standard curve, and the log says so.
 
 The control also needs the reader of Part A online and the chip identified as unit A's. A start that
@@ -532,6 +533,12 @@ The control application has a Case fan card on the Performance page. It shows:
   point is an accessible child with its own name and value. Compact rows under the chart show every point
   again, with an inline message when a row breaks a rule.
 - Rules 4 to 8 above in plain words.
+- One check box, "Full fan speed under heavy load", for the load feed-forward of rule 10, on unless somebody
+  switched it off. It is the one control of this card that writes a registry value (`FanLoadBoost`) through the
+  elevated helper (`--action fan-boost-on` or `--action fan-boost-off`) instead of sending a request, because the
+  driver reads the value when it starts: the card says so until Windows has restarted, and offers the restart. On
+  is the default, so "on" removes the value and "off" writes 0. While the boost holds the fan, the card says that
+  too. The words are plain and in the four languages. `FanLoadBoost` itself never reaches the window.
 - "Apply curve" (or "Hand the fan to the board"), enabled only when the choice differs from the one in
   force and stored. After an apply, "Go back to the previous setting" applies the choice from before.
 - A short test: one speed from 30 to 100 % for 10 s (`--action fan-test --fan-test-pct N`). The helper sends
@@ -545,9 +552,9 @@ The choices go through the elevated helper (`--action fan-auto` or `--action fan
 `Store` 1. "Reset to defaults" puts the Driver curve back. The support report carries one `fan control:`
 line.
 
-The card has no switch for the load feed-forward yet. The next step on the application side is one check box
-on the same card, in plain words and in the four languages, that writes `FanLoadBoost` through the elevated
-helper, plus the state of the boost beside the fan speed.
+The choices and the heavy-load switch are the card's whole surface. What is still missing on the application
+side is the boost's own history: how long it held and how often it engaged are in the driver log and in
+`bc250kmd_cli fan`, and the support report carries the flags, but no card shows them.
 
 The read check of Part A, `lab-fan-read.ps1`, judges the board's own curve. With the fan control on, run
 `bc250kmd_cli fan auto` before it, or the RPM trend it judges is the driver's curve.

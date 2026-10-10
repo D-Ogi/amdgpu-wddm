@@ -781,6 +781,16 @@ plan.line.fan-curve|mt|8917f825|今から、そして起動のたびに、ドラ
 plan.line.fan-points|mt|787b6e90|ファンの速度: {0}
 plan.title.fan-auto|mt|16d8024e|ファンをボードに任せる
 plan.title.fan-curve|mt|df6aeaec|ファン カーブを使う
+perf.fan.boost|mt|b044d1f7|高負荷時はファンを最大速度にする
+perf.fan.boost.help|mt|60253290|グラフィックスが2秒より長く忙しく動くと、チップが熱くなるのを待たずに、ファンがすぐ最大速度になります。カーブだけを使いたいときはオフにしてください。新しい設定はWindowsを再起動したあとで有効になります。
+perf.fan.boost.now|mt|1a7edb80|グラフィックスが忙しく動いているため、ファンは今、最大速度で回っています。
+perf.fan.boost.after-restart|mt|41495538|新しい設定はWindowsを再起動したあとで有効になります。
+perf.fan.refuse.boost-on-already|mt|9da898c4|高負荷時のファン最大速度はすでにオンです。
+perf.fan.refuse.boost-off-already|mt|2076873d|高負荷時のファン最大速度はすでにオフです。
+plan.line.fan-boost-on|mt|0233bb62|グラフィックスが忙しく動くと、ファンが最大速度で回ります。
+plan.line.fan-boost-off|mt|043650b9|グラフィックスが忙しく動いても、ファンはカーブだけに従います。
+plan.title.fan-boost-on|mt|60ac49bb|高負荷時のファン最大速度をオンにする
+plan.title.fan-boost-off|mt|37126bef|高負荷時のファン最大速度をオフにする
 
 # ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
 graphics.tuning.hide|mt|59b507b0|詳細な調整を隠す

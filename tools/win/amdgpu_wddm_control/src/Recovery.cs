@@ -348,7 +348,7 @@ namespace AmdgpuWddmControl
 
         // The only values an action or an undo may write. Never: the temperature limits, firmware paths, the other
         // KMD service values, BIOS or firmware settings, test signing.
-        public static readonly string[] ParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune" };
+        public static readonly string[] ParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost" };
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
         public static readonly string[] DefaultParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "DpmMode", "DpmMaxMHz" };
@@ -362,7 +362,8 @@ namespace AmdgpuWddmControl
             "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
             "cpu-trial", "cpu-keep", "cpu-stop", "cpu-reset", "core-mask",
             // The case fan card of the Performance page: one escape each, and the driver stores the choice.
-            "fan-auto", "fan-curve", "fan-test",
+            // fan-boost-on and fan-boost-off are the card's one registry switch (FanLoadBoost, fan.md rule 10).
+            "fan-auto", "fan-curve", "fan-test", "fan-boost-on", "fan-boost-off",
             // The graphics settings for all games (the Graphics page); a game's own ones go with game-profile.
             "graphics-defaults",
             // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079).
@@ -1333,6 +1334,8 @@ namespace AmdgpuWddmControl
                 case "fan-auto":
                 case "fan-curve":
                 case "fan-test":
+                case "fan-boost-on":
+                case "fan-boost-off":
                 {
                     var why = FanPlan.Fill(action, s, more, p);
                     if (why != null) return Refuse(p, why);

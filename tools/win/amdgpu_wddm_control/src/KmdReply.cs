@@ -150,6 +150,10 @@ namespace AmdgpuWddmControl
 
         public const uint FlagEnabled = 1, FlagControlling = 2, FlagEmergency = 4, FlagLeased = 8, FlagStored = 16,
             FlagFault = 32, FlagGated = 64, FlagPaused = 128, FlagRestoreSaved = 256, FlagSubstituted = 512, FlagHeldBack = 1024;
+        // The load feed-forward (fan.md rule 10): FlagBoost is full speed under a heavy load now, FlagBoostOff is
+        // a start that read FanLoadBoost as off. The three flags that say which signal called the load heavy
+        // (2048 << 1 and up) are for the driver log and the command line, not for the window.
+        public const uint FlagBoost = 2048, FlagBoostOff = 32768;
         public const uint ModeBoard = 0, ModeCurve = 1, ModeFixed = 2;
         public const uint StateOff = 0, StateBoard = 1, StateCurve = 2, StateFixed = 3, StateEmergency = 4, StateDoubt = 5, StateFault = 6;
         public const uint ProfileCustom = 0, ProfileStandard = 1, ProfileQuiet = 2, ProfilePerformance = 3;

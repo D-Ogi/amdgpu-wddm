@@ -781,6 +781,16 @@ plan.line.fan-curve|mt|8917f825|지금부터, 그리고 시작할 때마다 드�
 plan.line.fan-points|mt|787b6e90|팬 속도: {0}
 plan.title.fan-auto|mt|16d8024e|팬을 보드에 맡기기
 plan.title.fan-curve|mt|df6aeaec|팬 곡선 사용
+perf.fan.boost|mt|b044d1f7|높은 부하에서 팬 최대 속도
+perf.fan.boost.help|mt|60253290|그래픽이 2초보다 길게 바쁘게 작동하면, 칩이 뜨거워질 때까지 기다리지 않고 팬이 바로 최대 속도로 돕니다. 곡선만 쓰려면 이 설정을 끄십시오. 새 설정은 Windows를 다시 시작한 뒤에 적용됩니다.
+perf.fan.boost.now|mt|1a7edb80|그래픽이 바쁘게 작동하므로 팬이 지금 최대 속도로 돌고 있습니다.
+perf.fan.boost.after-restart|mt|41495538|새 설정은 Windows를 다시 시작한 뒤에 적용됩니다.
+perf.fan.refuse.boost-on-already|mt|9da898c4|높은 부하에서 팬 최대 속도가 이미 켜져 있습니다.
+perf.fan.refuse.boost-off-already|mt|2076873d|높은 부하에서 팬 최대 속도가 이미 꺼져 있습니다.
+plan.line.fan-boost-on|mt|0233bb62|그래픽이 바쁘게 작동하면 팬이 최대 속도로 돕니다.
+plan.line.fan-boost-off|mt|043650b9|그래픽이 바쁘게 작동해도 팬은 곡선만 따릅니다.
+plan.title.fan-boost-on|mt|60ac49bb|높은 부하에서 팬 최대 속도 켜기
+plan.title.fan-boost-off|mt|37126bef|높은 부하에서 팬 최대 속도 끄기
 
 # ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
 graphics.tuning.hide|mt|59b507b0|고급 조정 숨기기

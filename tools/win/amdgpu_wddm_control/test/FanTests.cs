@@ -39,6 +39,7 @@ static partial class UnitTests
         FanRequestText(root, header);
         FanModel(root);
         FanPlans();
+        FanBoostPlans(header);
         FanWords();
         FanChartRules();
         FanTestPlans();
@@ -385,6 +386,51 @@ static partial class UnitTests
         Check(!rs.Refused && rs.TuneSteps.Any(t => t.Kind == "fan-curve" && t.FanProfile == FanState.ProfileStandard), "reset-defaults takes the fan back to the standard curve: " + rs.Refusal);
         rs = TunePlan("reset-defaults", FanSnapshot(storedStandard));
         Check(!rs.Refused && !rs.TuneSteps.Any(t => t.Kind.StartsWith("fan-", StringComparison.Ordinal)), "reset-defaults leaves the standard curve alone");
+    }
+
+    // The one registry switch of the card: full fan speed under a sustained heavy load (docs/design/fan.md rule
+    // 10, the driver's FanLoadBoost). It is on unless somebody switched it off, so "on" removes the value, and
+    // the driver reads it when it starts.
+    static void FanBoostPlans(string header)
+    {
+        Check(Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST " + FanState.FlagBoost + @"u\b"), "FlagBoost = BC250_FAN_FLAG_BOOST");
+        Check(Regex.IsMatch(header, @"#define BC250_FAN_FLAG_BOOST_OFF " + FanState.FlagBoostOff + @"u\b"), "FlagBoostOff = BC250_FAN_FLAG_BOOST_OFF");
+        Check(FanCurves.BoostOn(null) && FanCurves.BoostOn(1) && !FanCurves.BoostOn(0) && !FanCurves.BoostOn(7),
+            "nothing stored and 1 are on, 0 and any other value off, as the driver reads the value");
+
+        var clean = FanSnapshot(FanFixture());
+        clean.Parameters.Remove("FanLoadBoost");
+        Refused(TunePlan("fan-boost-on", clean), "already", "turning it on with nothing stored");
+        var off = TunePlan("fan-boost-off", clean);
+        Check(!off.Refused && Writes(off, "FanLoadBoost=0"), "turning it off writes one value: " + off.Refusal);
+        Equal("at the next restart of Windows", off.Effect, "the driver reads the switch at its next start");
+        Check(off.Undoable && off.OfferRestart, "the switch is undoable and offers the restart");
+        Equal("plan.line.fan-boost-off", PlainPlan.LineId(off.Writes[0]), "G-PLAN: the off write has its own sentence");
+        Check(off.Preview.Count == 1 && off.Tune == null && off.GameWrites.Count == 0, "it is one write and no request");
+        Check(!PlainWords.Findings(off.Preview.Concat(new[] { PlainPlan.Describe(off).Title }).ToList()).Any(), "G-NOINT: the switch's dialog");
+
+        var stored = FanSnapshot(FanFixture());
+        stored.Parameters["FanLoadBoost"] = 0;
+        Refused(TunePlan("fan-boost-off", stored), "already", "turning it off twice");
+        var on = TunePlan("fan-boost-on", stored);
+        Check(!on.Refused && Writes(on, "FanLoadBoost-"), "turning it on again removes the value");
+        Equal("plan.line.fan-boost-on", PlainPlan.LineId(on.Writes[0]), "G-PLAN: the on write is the delete form");
+        Check(Recovery.Allowed(Recovery.ParametersPath, "FanLoadBoost"), "the value is in the allowlist of the actions");
+
+        // The switch is a setting and not a fan request, so it needs neither a reading nor a start that runs the
+        // fan: the driver reads the value when it starts.
+        var noRead = FanSnapshot(null);
+        noRead.Parameters["FanLoadBoost"] = 0;
+        Check(!TunePlan("fan-boost-on", noRead).Refused, "the switch needs no fan reading");
+        var gated = FanSnapshot(FanFixture(FanState.FlagGated));
+        gated.Parameters["FanLoadBoost"] = 0;
+        gated.Fan.Gate = FanState.GateSetting;
+        Check(!TunePlan("fan-boost-on", gated).Refused, "nor a start whose fan control is enabled");
+
+        var words = new List<string> { Strings.T("perf.fan.boost"), Strings.T("perf.fan.boost.help"),
+            Strings.T("perf.fan.boost.now"), Strings.T("perf.fan.boost.after-restart") };
+        foreach (var t in words) Check(t.Length > 0 && !t.StartsWith("[", StringComparison.Ordinal), "fan boost sentence: " + t);
+        Check(!PlainWords.Findings(words).Any(), "G-NOINT: the switch's own words");
     }
 
     // Every state and gate has a plain sentence.

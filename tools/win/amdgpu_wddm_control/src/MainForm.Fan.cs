@@ -190,6 +190,24 @@ namespace AmdgpuWddmControl
                 card.Add(Ui.Label(Strings.T("perf.fan.rules"), Theme.Bold, null, card.Inner));
                 foreach (var rule in new[] { "input", "doubt", "slow", "hot", "floor" })
                     card.Add(Ui.Dim("• " + Strings.T("perf.fan.rule." + rule), card.Inner));
+
+                // Full fan speed under a sustained heavy load (fan.md rule 10). The one switch of this card that
+                // is a setting and not a choice: the driver reads it when it starts, so a change says so until
+                // Windows has restarted. On unless somebody switched it off.
+                bool boostOn = FanCurves.BoostOn(_snap.P("FanLoadBoost"));
+                var boost = Ui.Check(Strings.T("perf.fan.boost"), card.Inner - Theme.S(40));
+                boost.Checked = boostOn;
+                boost.CheckedChanged += (s, e) =>
+                {
+                    if (boost.Checked == boostOn) return;
+                    RunAction(boost.Checked ? "fan-boost-on" : "fan-boost-off");
+                };
+                card.Add(boost);
+                card.Add(Ui.Dim(Strings.T("perf.fan.boost.help"), card.Inner));
+                if (boostOn == f.Has(FanState.FlagBoostOff))
+                    card.Add(Ui.Label(Strings.T("perf.fan.boost.after-restart"), null, Theme.Warn, card.Inner));
+                else if (f.Has(FanState.FlagBoost))
+                    card.Add(Ui.Label(Strings.T("perf.fan.boost.now"), Theme.Bold, null, card.Inner));
             }
 
             bool changed = FanCurves.Changed(f, choice, c, pct);

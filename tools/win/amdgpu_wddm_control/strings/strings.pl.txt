@@ -781,6 +781,16 @@ plan.line.fan-curve|mt|8917f825|Sterownik steruje wentylatorem według krzywej �
 plan.line.fan-points|mt|787b6e90|Obroty wentylatora: {0}
 plan.title.fan-auto|mt|16d8024e|Niech wentylatorem steruje płyta
 plan.title.fan-curve|mt|df6aeaec|Użyj krzywej wentylatora
+perf.fan.boost|mt|b044d1f7|Pełne obroty wentylatora przy dużym obciążeniu
+perf.fan.boost.help|mt|60253290|Gdy grafika pracuje intensywnie dłużej niż dwie sekundy, wentylator od razu przechodzi na pełne obroty, zamiast czekać, aż układ się nagrzeje. Wyłącz to, jeśli wolisz samą krzywą. Nowe ustawienie działa po ponownym uruchomieniu systemu Windows.
+perf.fan.boost.now|mt|1a7edb80|Wentylator pracuje teraz na pełnych obrotach, bo grafika jest mocno obciążona.
+perf.fan.boost.after-restart|mt|41495538|Nowe ustawienie działa po ponownym uruchomieniu systemu Windows.
+perf.fan.refuse.boost-on-already|mt|9da898c4|Pełne obroty przy dużym obciążeniu są już włączone.
+perf.fan.refuse.boost-off-already|mt|2076873d|Pełne obroty przy dużym obciążeniu są już wyłączone.
+plan.line.fan-boost-on|mt|0233bb62|Wentylator pracuje na pełnych obrotach, gdy grafika jest mocno obciążona.
+plan.line.fan-boost-off|mt|043650b9|Wentylator trzyma się tylko krzywej, także gdy grafika jest mocno obciążona.
+plan.title.fan-boost-on|mt|60ac49bb|Włącz pełne obroty wentylatora przy dużym obciążeniu
+plan.title.fan-boost-off|mt|37126bef|Wyłącz pełne obroty wentylatora przy dużym obciążeniu
 
 # ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
 graphics.tuning.hide|mt|59b507b0|Ukryj zaawansowane dostrajanie
