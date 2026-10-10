@@ -112,7 +112,8 @@ timed loop can wait for the kernel argument pool or for a free ring slot, and th
 `waits_fast` counters printed next to the figure say how often it did. They are therefore not a
 processor-only cost, which would need the active and the blocked time of the thread measured apart
 (audit finding HIP-F3, 2026-10-10). The lab arms are in `scratch/m16-hip/lab/perf-README.md`, which
-is local.
+is local, and the wrappers that run one arm are `lab/`, whose rules and exit statuses are in
+`lab/README.md`.
 
 ## Build
 

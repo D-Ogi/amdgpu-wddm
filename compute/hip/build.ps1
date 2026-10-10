@@ -303,8 +303,23 @@ if (-not $SkipTests) {
     & "$Out\hipprobe.exe" --selftest $dataDir
     if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL hipprobe --selftest ($LASTEXITCODE)"; $failures++ }
     & "$Out\hipprobe.exe" --help | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+
+    # ------------------------------------------------------------------------------------------
+    # The lab wrappers of lab\ and their failure paths (audit finding HIP-F2, 2026-10-10). No
+    # GPU, no lab and no driver: each case replaces the sampler, the launcher or the terminator
+    # with a fake, among them a helper that hangs, a sampler that answers nothing and a child
+    # that never stops by itself. It runs under Windows PowerShell, which is the shell of the
+    # lab, so the scripts are exercised by the shell that will run them.
+    # ------------------------------------------------------------------------------------------
+    $labTest = Join-Path $here 'tests\lab\test-arm-bounds.ps1'
+    $labWork = Join-Path $Out 'lab-tests'
+    $labLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $labTest -WorkDir $labWork 2>&1
+    $labExit = $LASTEXITCODE
+    $labLines | ForEach-Object { if ($_ -match 'FAIL|checks,') { Write-Host "  $_" } }
+    if ($labExit -ne 0) { Write-Host "  FAIL test-arm-bounds ($labExit)"; $failures++ }
+
     if ($failures -gt 0) { throw "$failures host check(s) failed" }
-    Write-Host '  every host test and hipprobe --selftest passed'
+    Write-Host '  every host test, hipprobe --selftest and the lab wrapper tests passed'
 }
 
 Write-Host "  artifacts in $Out (bc250hsa.lib's hash belongs to this directory, see above)"
