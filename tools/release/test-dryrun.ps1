@@ -168,14 +168,26 @@ Check (([string]$m.kmd_abi -eq '0x000700D8' -and [version]($m.kmd_build) -ge [ve
 # package changes the GPU at the restart (INF Reboot directive), and only uninstall moves it in place (documented
 # there). The GPU's HD Audio function is a different device on the same part, and the installer restarts that one
 # function on purpose (BD-092: DisplayPort audio plays at the right rate only with a message-signalled interrupt,
-# which the function reads when it starts). The three checks below hold that restart to that one function, so a
+# which the function reads when it starts). The four checks below hold that restart to that one function, so a
 # restart of the display device, of a service or of DWM still fails here.
 $scripts = @(Get-ChildItem -LiteralPath (Join-Path $Package 'installer') -Filter *.ps1 | ForEach-Object { [pscustomobject]@{ name = $_.Name; text = [IO.File]::ReadAllText($_.FullName) } })
 $byName = @{}; foreach ($s in $scripts) { $byName[$s.name] = $s.text }
 $bad = @(foreach ($s in $scripts) { foreach ($p in 'Stop-Process', 'taskkill', 'Restart-Service', 'Stop-Service', '/disable-device', '/enable-device', '/remove-device', 'Disable-PnpDevice', 'Enable-PnpDevice', 'Restart-PnpDevice') { if ($s.text -match [regex]::Escape($p)) { "$($s.name): $p" } } })
 Check ($bad.Count -eq 0) "no installer script stops or restarts DWM, a service or the display device$(if ($bad.Count) { ': ' + ($bad -join '; ') })"
-$restartIn = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, "'/restart-device'")) { $s.name } })
-Check (($restartIn -join ', ') -eq 'common.ps1') "one pnputil /restart-device call in the package, in common.ps1: $(if ($restartIn.Count) { $restartIn -join ', ' } else { 'none' })"
+# The argument lists, not the whole text: the scripts name /restart-device in comments and in the words they print,
+# and those are not a restart. An argument list reaches a binary either as `Invoke-Native <exe> @(...)` or as
+# `-Arguments @(...)`, and the match below reads /restart-device out of one whatever its quoting is ('x', "x" or
+# bare x), so a second restart cannot hide behind a different quote. The call site is counted as well as the
+# argument text, because an argument can also come from a variable: $script:PnpUtilPath is bounded-invoked once.
+$argLists = @(foreach ($s in $scripts) {
+    foreach ($mm in [regex]::Matches($s.text, '(?:Invoke-Native(?:Bounded)?\s+(?:-File\s+)?\S+\s+(?:-Arguments\s+)?|-Arguments\s+)@\(([^)]*)\)')) {
+        [pscustomobject]@{ name = $s.name; args = $mm.Groups[1].Value }
+    }
+})
+$restartIn = @($argLists | Where-Object { $_.args -match '(?<![\w/-])[''"]?/restart-device[''"]?(?![\w-])' } | ForEach-Object { $_.name })
+Check (($restartIn -join ', ') -eq 'common.ps1') "one pnputil /restart-device argument in the package, in common.ps1: $(if ($restartIn.Count) { $restartIn -join ', ' } else { 'none' })"
+$pnpUtilCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, 'Invoke-Native(?:Bounded)?\s+-File\s+\$script:PnpUtilPath')) { $s.name } })
+Check (($pnpUtilCalls -join ', ') -eq 'common.ps1') "one bounded pnputil call site in the package, in common.ps1: $(if ($pnpUtilCalls.Count) { $pnpUtilCalls -join ', ' } else { 'none' })"
 Check ($byName['common.ps1'] -match '(?s)function Restart-GpuAudioDevice \{.{0,400}?Invoke-NativeBounded -File \$script:PnpUtilPath -Arguments @\(''/restart-device'', \$InstanceId\)') 'that one call is Restart-GpuAudioDevice, and it restarts the device whose instance id it is given'
 $audioRestarts = @(foreach ($n in 'install.ps1', 'uninstall.ps1') { foreach ($mm in [regex]::Matches($byName[$n], 'Restart-GpuAudioDevice[^\r\n]*')) { "$($n): $($mm.Value.Trim())" } })
 Check (($audioRestarts -join '; ') -eq 'install.ps1: Restart-GpuAudioDevice -InstanceId $audio.instance; uninstall.ps1: Restart-GpuAudioDevice -InstanceId $audio.instance') "install and uninstall restart the HD Audio function of the audio plan and nothing else: $(if ($audioRestarts.Count) { $audioRestarts -join '; ' } else { 'no call' })"
@@ -183,7 +195,7 @@ Check (($audioRestarts -join '; ') -eq 'install.ps1: Restart-GpuAudioDevice -Ins
 # writes its COM registration itself.
 $bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
 Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
-$pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, "Invoke-Native pnputil\.exe @\('(/[a-z-]+)'")) { "$($s.name) $($mm.Groups[1].Value)" } })
+$pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, 'Invoke-Native pnputil\.exe @\(\s*[''"]?(/[a-z-]+)[''"]?')) { "$($s.name) $($mm.Groups[1].Value)" } })
 Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
 # BD-089: the install deletes an older package of ours from the driver store, and it must not touch the device while
 # it does it. The uninstall takes the GPU off our driver on purpose, so there both switches belong.
