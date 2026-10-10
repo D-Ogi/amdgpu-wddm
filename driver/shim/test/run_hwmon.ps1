@@ -19,6 +19,11 @@
 #
 #   pwsh driver\shim\test\run_hwmon.ps1
 #   pwsh driver\shim\test\run_hwmon.ps1 -Out P:\BC-250\scratch\build\hwmon
+#   pwsh driver\shim\test\run_hwmon.ps1 -Mutation no-boost-raise      (a negative control: the suite must fail)
+#
+# -Mutation is the suite's own negative control (tools\quality\quick.ps1, Fails=$true). It changes one line of a
+# COPY of the file under test, never the tree, and the suite must then fail by a FAIL line. A mutation whose line
+# has moved stops the run instead of passing quietly, which is the half that keeps a control honest.
 #
 # Host-side only: nothing here touches the lab machine, and no port is written anywhere but in the model.
 # Everything is written under -Out, never into the repository and never onto drive C:.
@@ -26,7 +31,8 @@
 param(
     [string]$Out = 'P:\BC-250\scratch\build\hwmon',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    [ValidateSet('', 'no-boost-raise', 'boost-held-back', 'step-pays-all', 'telemetry-always')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,6 +40,38 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = Resolve-Path (Join-Path $here '..\..\..')
 $shim = Join-Path $repo 'driver\shim'
 $kmd = Join-Path $repo 'driver\kmd'
+# A mutated run keeps its own output directory unless the caller named one, so it never leaves a changed copy
+# where the ordinary run's build is read afterwards.
+if ($Mutation -and -not $PSBoundParameters.ContainsKey('Out')) { $Out = "$Out-$Mutation" }
+
+# The negative controls of the fan rules (rule 10 of driver/shim/include/bc250_fan.h). Each one: which file, the
+# one line it changes (a regular expression that must match exactly once), what takes its place, and which test
+# must then report a FAIL.
+$mutations = @{
+    # "> BC250_FAN_FULL_PCT" and not "0 &&": a condition that is never true, and not one the compiler calls a
+    # constant expression (/W4 /WX refuses C4127, and a control that cannot compile proves nothing).
+    'no-boost-raise'   = @{ file = 'policy'; find = 'if \(ctl->boost && target < BC250_FAN_FULL_PCT\)'
+                            with = 'if (ctl->boost && target > BC250_FAN_FULL_PCT)'
+                            why = 'the feed-forward raises no duty: fan_test.c load_boost must fail' }
+    'boost-held-back'  = @{ file = 'policy'; find = 'if \(!ctl->controlling\) \{(\s+)ctl->boost = 0;'
+                            with = 'if (0) {$1ctl->boost = 0;'
+                            why = 'the boost engages while the board has the fan: fan_test.c trace (f) must fail' }
+    'step-pays-all'    = @{ file = 'policy'; find = 'dt > BC250_FAN_BOOST_STEP_MAX_MS \? BC250_FAN_BOOST_STEP_MAX_MS : dt'
+                            with = 'dt'
+                            why = 'one late step arms the boost alone: fan_test.c trace (g) must fail' }
+    'telemetry-always' = @{ file = 'binding'; find = 'if \(!snap\.Ctl\.boost && snap\.Ctl\.boosts == 0\) return;'
+                            with = 'if (0) return;'
+                            why = 'the 5 s telemetry block grows to six fan lines (BD-097): telemetry_width must fail' }
+}
+
+function Use-Mutation([string]$text, [string]$which) {
+    if (-not $Mutation -or $mutations[$Mutation].file -ne $which) { return $text }
+    $m = $mutations[$Mutation]
+    $hits = [regex]::Matches($text, $m.find).Count
+    if ($hits -ne 1) { throw "negative control $Mutation : its line matched $hits times, once expected (has it moved?)" }
+    Write-Host "mutation $Mutation ($which): $($m.why)"
+    return [regex]::Replace($text, $m.find, $m.with)
+}
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
@@ -67,6 +105,13 @@ $incUser = @("/I$shim\include",
     "/I$($msvc.FullName)\include")
 
 $fan = Join-Path $shim 'bc250_fan.c'
+if ($Mutation -and $mutations[$Mutation].file -eq 'policy') {
+    # The copy is compiled in place of the tree's file. Its own includes still come from driver\shim\include.
+    $mutated = Join-Path $Out 'bc250_fan.mutated.c'
+    [IO.File]::WriteAllText($mutated, (Use-Mutation (Get-Content -LiteralPath $fan -Raw) 'policy'),
+        [Text.UTF8Encoding]::new($false))
+    $fan = $mutated
+}
 
 # /wd4505: the model helpers that only one of the tests uses.
 Write-Host 'compile (policy, user mode)'
@@ -93,7 +138,7 @@ $native = $source.Replace($needle, '#include "hwmon_native_mock.h"')
 [IO.File]::WriteAllText((Join-Path $Out 'hwmon-native.inc'), $native, [Text.UTF8Encoding]::new($false))
 # The fan control's binding and the reader beside it, both against fan_native_mock.h (the same mock plus the
 # watchdog's timer, the bugcheck callback and the request mutex).
-$fanSource = Get-Content -LiteralPath (Join-Path $kmd 'fan.c') -Raw
+$fanSource = Use-Mutation (Get-Content -LiteralPath (Join-Path $kmd 'fan.c') -Raw) 'binding'
 if (-not $fanSource.Contains($needle)) { throw "driver\kmd\fan.c no longer includes the miniport header: the mock cannot replace it" }
 [IO.File]::WriteAllText((Join-Path $Out 'fan-native.inc'), $fanSource.Replace($needle, '#include "fan_native_mock.h"'),
     [Text.UTF8Encoding]::new($false))
