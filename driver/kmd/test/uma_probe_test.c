@@ -27,6 +27,8 @@ typedef struct {
     volatile LONG RetainedPowerPhase;
     volatile LONG BoardMemoryProviderId;
     ULONG BoardMemoryReason;
+    ULONG BoardMemoryBiosId;
+    unsigned char BoardMemoryMachineId[16];
 } BC250_DEVICE;
 typedef struct BC250_BOARD_MEMORY_PROVIDER {
     void (*Query)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY*);
@@ -61,6 +63,10 @@ static ULONG HalGetBusDataByOffset(int type, ULONG bus, ULONG slot, void* out, U
     memset(out,0x80+index,length);
     return counts[index];
 }
+/* Write provider is outside this older boundary fixture's scope. */
+static void BoardMemoryWriteQuery(BC250_DEVICE* d, BC250_ESCAPE_BOARD_MEMORY* q) { (void)d; (void)q; }
+static NTSTATUS AblBoardMemorySet(BC250_DEVICE* d, const BC250_ESCAPE_BOARD_MEMORY* q) { (void)d; (void)q; return STATUS_NOT_SUPPORTED; }
+static NTSTATUS AblBoardMemoryRestore(BC250_DEVICE* d, const BC250_ESCAPE_BOARD_MEMORY* q) { (void)d; (void)q; return STATUS_NOT_SUPPORTED; }
 /* ACTUAL_UMA */
 /* ACTUAL_PROBE */
 static BC250_ESCAPE_BOARD_MEMORY_PROBE request(void)

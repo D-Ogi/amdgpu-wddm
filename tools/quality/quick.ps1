@@ -78,7 +78,13 @@ try {
  Check 'uma-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma.ps1" -Root $Workspace -Out "$Out\uma-policy" }
  Check 'uma-request' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_request.ps1" -Root $Workspace -Out "$Out\uma-request" }
  Check 'uma-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_probe.ps1" -Root $Workspace -Out "$Out\uma-probe" }
-  Check 'board-memory-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity.ps1" -Root $Workspace -Out "$Out\board-memory-identity" }
+ Check 'board-memory-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity.ps1" -Root $Workspace -Out "$Out\board-memory-identity" }
+ Check 'board-memory-identity-qualification' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity_qualification.ps1" -Root $Workspace -Out "$Out\board-memory-identity-qualification" }
+ Check 'board-memory-detect' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_detect.ps1" -Root $Workspace -Out "$Out\board-memory-detect" }
+ Check 'board-memory-transport' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_transport.ps1" -Root $Workspace -Out "$Out\board-memory-transport" }
+ Check 'board-memory-service' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_service.ps1" -Root $Workspace -Out "$Out\board-memory-service" }
+ Check 'board-memory-store' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_store.ps1" -Root $Workspace -Out "$Out\board-memory-store" }
+ Check 'board-memory-write' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_write.ps1" -Root $Workspace -Out "$Out\board-memory-write" }
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
  Check 'ring-gap' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ring_gap.ps1" -Root $Workspace -Out "$Out\ring-gap" }
  Check 'paging-queue' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue" }

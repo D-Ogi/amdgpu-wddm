@@ -28,10 +28,20 @@ struct bc250_uma_result {
    The caller durably backs up expected before apply. Power loss is not atomic.
    Current UMA must be 256..14320 MiB, aligned to 16 MiB; requested targets are
    restricted to 8192/12288. Failed signature invalidation stops all data writes.
-   Rollback never publishes a valid signature after an earlier failed write. */
+   Payload bytes are read and written only when different; signature invalidation
+   and final commit remain mandatory; byte 0 must read back zero before payload writes. Rollback never publishes a valid signature
+   after an earlier failed read or write. */
 int bc250_uma_validate(const unsigned char block[BC250_UMA_BLOCK_BYTES]);
 int bc250_uma_read(const struct bc250_uma_io* io,
                    unsigned char block[BC250_UMA_BLOCK_BYTES]);
 int bc250_uma_apply(const struct bc250_uma_io* io,
                     const unsigned char expected[BC250_UMA_BLOCK_BYTES],
                     unsigned int target_mib, struct bc250_uma_result* result);
+
+/* Restore the exact original signature/checksum/UMA from a durable backup.
+   Backup UMA is restricted to 8192/12288; timing bytes 6..25 must agree.
+   Caller authenticates and retrieves the backup; never pass a client substitute. */
+int bc250_uma_restore(const struct bc250_uma_io* io,
+                      const unsigned char expected[BC250_UMA_BLOCK_BYTES],
+                      const unsigned char backup[BC250_UMA_BLOCK_BYTES],
+                      struct bc250_uma_result* result);

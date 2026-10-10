@@ -17,6 +17,8 @@ typedef struct {
     volatile LONG RetainedPowerPhase;
     volatile LONG BoardMemoryProviderId;
     ULONG BoardMemoryReason;
+    ULONG BoardMemoryBiosId;
+    unsigned char BoardMemoryMachineId[16];
 } BC250_DEVICE;
 typedef struct BC250_BOARD_MEMORY_PROVIDER {
     void (*Query)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY*);
@@ -31,6 +33,10 @@ void AblBoardMemoryProbeRequest(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*,
 
 void AblBoardMemoryProbeRequest(BC250_DEVICE* d, BC250_ESCAPE_BOARD_MEMORY_PROBE* q, BOOLEAN a, ULONG f)
 { (void)d; (void)q; (void)a; (void)f; }
+/* Write provider is outside this older boundary fixture's scope. */
+static void BoardMemoryWriteQuery(BC250_DEVICE* d, BC250_ESCAPE_BOARD_MEMORY* q) { (void)d; (void)q; }
+static NTSTATUS AblBoardMemorySet(BC250_DEVICE* d, const BC250_ESCAPE_BOARD_MEMORY* q) { (void)d; (void)q; return STATUS_NOT_SUPPORTED; }
+static NTSTATUS AblBoardMemoryRestore(BC250_DEVICE* d, const BC250_ESCAPE_BOARD_MEMORY* q) { (void)d; (void)q; return STATUS_NOT_SUPPORTED; }
 /* ACTUAL_UMA */
 static unsigned checks, failures;
 static void check(int ok,unsigned line,const char* text) { ++checks;if(!ok){++failures;printf("FAIL CHECK line %u: %s\n",line,text);} }
@@ -46,7 +52,7 @@ static void expected(BC250_DEVICE* d, BC250_ESCAPE_BOARD_MEMORY* q, BOOLEAN admi
  BC250_ESCAPE_BOARD_MEMORY want; ULONG op=q->Op;memset(&want,0,sizeof(want));
  want.Magic=BC250_ESCAPE_MAGIC;want.Command=BC250_ESCAPE_RUN_BOARD_MEMORY;want.AbiVersion=BC250_BOARD_MEMORY_ABI;
  want.Op=op;want.Status=result;want.NtStatus=(ULONG)status;want.Reason=d->BoardMemoryProviderId ? BC250_BOARD_MEMORY_REASON_NO_TRANSPORT : d->BoardMemoryReason;
- if(status==0 && d->BoardMemoryProviderId){
+ if(d->BoardMemoryProviderId && (status==0 || (status==STATUS_NOT_SUPPORTED && admin && op>=1 && op<=2))){
  want.ProviderId=1;want.AllowedMiB[0]=8192;want.AllowedMiB[1]=12288;want.NeedsRestart=1;
  want.Flags=BC250_BOARD_MEMORY_SUPPORTED;want.ActiveBytes=(ULONGLONG)d->UmaActiveBytes;
  if(want.ActiveBytes)want.Flags|=BC250_BOARD_MEMORY_ACTIVE_VALID;}

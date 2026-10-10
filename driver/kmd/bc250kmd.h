@@ -79,6 +79,7 @@
 #include "interop.h"
 #include "dpaudio.h"
 #include "modeset.h"
+#include "board_memory_service.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -299,6 +300,12 @@ typedef struct _BC250_DEVICE {
     volatile LONG BoardMemoryProviderId; // immutable after start capture until stop
     ULONG BoardMemoryReason;
     volatile LONG64 UmaActiveBytes; // atomic software view; zero outside a successful VRAM start
+    UCHAR BoardMemoryMachineId[16];
+    ULONG BoardMemoryBiosId;
+    ULONG BoardMemoryMapping;
+    BOOLEAN BoardMemoryStarted;
+    KSPIN_LOCK BoardMemorySnapshotLock;
+    struct board_memory_state BoardMemoryState;
     ULONGLONG VramMcBase;               // GPU physical (MC) address of VRAM byte 0
     PHYSICAL_ADDRESS Bar0Physical;
     ULONGLONG Bar0Length;
@@ -436,6 +443,12 @@ typedef struct BC250_BOARD_MEMORY_PROVIDER {
 const BC250_BOARD_MEMORY_PROVIDER* BoardMemoryProvider(BC250_DEVICE* Device);
 void BoardMemoryIdentityClear(BC250_DEVICE* Device);
 void BoardMemoryIdentityCapture(BC250_DEVICE* Device);
+void BoardMemoryInitialize(BC250_DEVICE* Device);
+void BoardMemoryStart(BC250_DEVICE* Device);
+void BoardMemoryStop(BC250_DEVICE* Device);
+void BoardMemoryWriteQuery(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_MEMORY* Data);
+NTSTATUS AblBoardMemorySet(BC250_DEVICE* Device, const BC250_ESCAPE_BOARD_MEMORY* Data);
+NTSTATUS AblBoardMemoryRestore(BC250_DEVICE* Device, const BC250_ESCAPE_BOARD_MEMORY* Data);
 void AblBoardMemoryProbeRequest(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
 // uma.c: capability query only until a supported CMOS transport is established.
 void BoardMemoryRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD_MEMORY* Data,

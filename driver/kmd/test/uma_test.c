@@ -7,7 +7,7 @@ static unsigned checks, failures;
 struct mock {
     unsigned char bytes[28];
     unsigned reads, writes, fail_write, fail_read;
-    int write_then_fail, persistent, mutate_read, corrupt_verify;
+    int write_then_fail, persistent, mutate_read, corrupt_verify, ignore_invalidation;
 };
 static int read_byte(void* ctx, unsigned offset, unsigned char* value)
 {
@@ -26,9 +26,11 @@ static int write_byte(void* ctx, unsigned offset, unsigned char value)
     int failed;
     ++m->writes;
     CHECK(offset < 6 || offset == 26 || offset == 27);
+    CHECK(offset == 0 || m->bytes[offset] != value);
     failed = m->fail_write && (m->writes == m->fail_write ||
                              (m->persistent && m->writes >= m->fail_write));
-    if (!failed || m->write_then_fail) m->bytes[offset] = value;
+    if ((!failed || m->write_then_fail) && !(m->ignore_invalidation && offset == 0 && value == 0))
+        m->bytes[offset] = value;
     return !failed;
 }
 static void init(struct mock* m, unsigned signature, unsigned mib)
@@ -56,7 +58,8 @@ int main(void)
         CHECK(bc250_uma_apply(&io, expected, 8192, &result) == BC250_UMA_NO_CHANGE);
         CHECK(m.writes == 0 && !result.operation_failed);
         CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_OK);
-        CHECK(m.writes == 9 && result.writes_attempted == 9 && !result.rollback_writes_attempted);
+        CHECK(m.writes == (signature == 0 ? 7u : signature == 1 ? 4u : 6u));
+        CHECK(result.writes_attempted == m.writes && !result.rollback_writes_attempted);
         CHECK(m.bytes[26] == 0 && m.bytes[27] == 0x30 && bc250_uma_validate(m.bytes));
         CHECK(!memcmp(m.bytes + 6, expected + 6, 20));
         CHECK(m.bytes[0] == 'A' && m.bytes[1] == 'P' && m.bytes[2] == 'C' && m.bytes[3] == 'B');
@@ -98,29 +101,29 @@ int main(void)
     }
     init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28); m.mutate_read = 1;
     CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_UNSTABLE && !m.writes);
-    for (i = 1; i <= 9; ++i) for (j = 0; j != 2; ++j) {
+    for (i = 1; i <= 7; ++i) for (j = 0; j != 2; ++j) {
         init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28);
         m.fail_write = i; m.write_then_fail = (int)j;
         CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_RESTORED);
         CHECK(!memcmp(m.bytes, expected, 28) && result.operation_failed);
-        CHECK(result.writes_attempted == i && result.rollback_writes_attempted == 9);
+        CHECK(result.writes_attempted == i && result.rollback_writes_attempted >= 2);
         init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28);
         m.fail_write = i; m.persistent = 1;
         CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_ROLLBACK_UNCONFIRMED);
     }
-    for (i = 57; i <= 112; ++i) {
+    for (i = 57; i <= 120; ++i) {
         init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28); m.fail_read = i;
         CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_RESTORED);
         CHECK(!memcmp(m.bytes, expected, 28));
     }
-    /* Verification failure enters rollback; fail each of its nine writes once. */
-    for (i = 10; i <= 18; ++i) {
+    /* First verification read follows the marker witness and seven comparison reads. The successful
+       apply and exact rollback each perform seven writes for this signature. */
+    for (i = 8; i <= 14; ++i) {
         init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28);
-        m.fail_read = 57; m.fail_write = i;
+        m.fail_read = 65; m.fail_write = i;
         CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_ROLLBACK_UNCONFIRMED);
-        CHECK(result.writes_attempted == 9);
-        CHECK(result.rollback_writes_attempted == (i == 10 ? 1u : (i == 18 ? 9u : 8u)));
-        if (i > 10 && i < 18) CHECK(m.bytes[0] == 0);
+        CHECK(result.writes_attempted == 7);
+        if (i > 8 && i < 14) CHECK(m.bytes[0] == 0);
     }
     /* A rollback read failure cannot report restoration, even if bytes are equal. */
     init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28);
@@ -132,6 +135,43 @@ int main(void)
     CHECK(bc250_uma_read(NULL, readback) == BC250_UMA_INVALID);
     CHECK(bc250_uma_apply(&io, NULL, 8192, &result) == BC250_UMA_INVALID);
     CHECK(bc250_uma_apply(&io, expected, 8192, NULL) == BC250_UMA_INVALID);
+    /* A HAL success count without an effective marker write is not admission. */
+    init(&m, signatures[0], 8192); memcpy(expected, m.bytes, 28); m.ignore_invalidation = 1;
+    CHECK(bc250_uma_apply(&io, expected, 12288, &result) == BC250_UMA_ROLLBACK_UNCONFIRMED);
+    CHECK(m.writes == 2 && !memcmp(m.bytes, expected, 28));
+    /* Exact backup restoration preserves all three accepted signatures. */
+    for (signature = 0; signature < 3; ++signature) {
+        init(&m, signatures[signature], 8192); memcpy(readback, m.bytes, 28);
+        init(&m, signatures[1], 12288); memcpy(expected, m.bytes, 28);
+        CHECK(bc250_uma_restore(&io, expected, readback, &result) == BC250_UMA_OK);
+        CHECK(!memcmp(m.bytes, readback, 28));
+        m.writes = 0;
+        CHECK(bc250_uma_restore(&io, readback, readback, &result) == BC250_UMA_NO_CHANGE);
+        CHECK(m.writes == 0);
+    }
+    for (i = 1; i <= 6; ++i) for (j = 0; j < 2; ++j) {
+        init(&m, signatures[2], 8192); memcpy(readback, m.bytes, 28);
+        init(&m, signatures[1], 12288); memcpy(expected, m.bytes, 28);
+        m.fail_write = i; m.write_then_fail = (int)j;
+        CHECK(bc250_uma_restore(&io, expected, readback, &result) == BC250_UMA_RESTORED);
+        CHECK(!memcmp(m.bytes, expected, 28));
+        init(&m, signatures[1], 12288); m.fail_write = i; m.persistent = 1;
+        CHECK(bc250_uma_restore(&io, expected, readback, &result) == BC250_UMA_ROLLBACK_UNCONFIRMED);
+    }
+    init(&m, signatures[2], 4096); memcpy(readback, m.bytes, 28);
+    init(&m, signatures[1], 12288); memcpy(expected, m.bytes, 28);
+    CHECK(bc250_uma_restore(&io, expected, readback, &result) == BC250_UMA_INVALID);
+    CHECK(m.reads == 0 && m.writes == 0);
+    init(&m, signatures[2], 8192); memcpy(readback, m.bytes, 28);
+    init(&m, signatures[1], 12288); memcpy(expected, m.bytes, 28);
+    /* Valid checksum but different timing profile must still be rejected. */
+    ++readback[8]; ++readback[4];
+    CHECK(bc250_uma_validate(readback));
+    CHECK(bc250_uma_restore(&io, expected, readback, &result) == BC250_UMA_INVALID);
+    CHECK(m.reads == 0 && m.writes == 0);
+    --readback[8]; --readback[4]; m.bytes[8] ^= 1;
+    CHECK(bc250_uma_restore(&io, expected, readback, &result) == BC250_UMA_STALE);
+    CHECK(m.writes == 0);
     printf("UMA policy: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

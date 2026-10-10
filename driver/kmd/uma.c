@@ -1,5 +1,4 @@
-// BC-250 board memory capability. The selected provider permits the read-only
-// CMOS mapping probe; writes remain unavailable until the transport is qualified.
+// Board memory capability and the strict public escape boundary.
 #include "bc250kmd.h"
 
 static void AblQuery(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_MEMORY* Data)
@@ -12,17 +11,12 @@ static void AblQuery(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_MEMORY* Data)
     Data->ActiveBytes = (ULONGLONG)InterlockedCompareExchange64(&Device->UmaActiveBytes, 0, 0);
     if (Data->ActiveBytes) Data->Flags |= BC250_BOARD_MEMORY_ACTIVE_VALID;
     Data->Reason = BC250_BOARD_MEMORY_REASON_NO_TRANSPORT;
-}
-static NTSTATUS AblWriteUnavailable(BC250_DEVICE* Device, const BC250_ESCAPE_BOARD_MEMORY* Data)
-{
-    UNREFERENCED_PARAMETER(Device);
-    UNREFERENCED_PARAMETER(Data);
-    return STATUS_NOT_SUPPORTED;
+    BoardMemoryWriteQuery(Device, Data);
 }
 const BC250_BOARD_MEMORY_PROVIDER* BoardMemoryProvider(BC250_DEVICE* Device)
 {
     static const BC250_BOARD_MEMORY_PROVIDER abl = {
-        AblQuery, AblWriteUnavailable, AblWriteUnavailable, AblBoardMemoryProbeRequest
+        AblQuery, AblBoardMemorySet, AblBoardMemoryRestore, AblBoardMemoryProbeRequest
     };
     return InterlockedCompareExchange(&Device->BoardMemoryProviderId, 0, 0) ==
         BC250_BOARD_MEMORY_PROVIDER_BC250_ABL ? &abl : NULL;
@@ -74,6 +68,8 @@ void BoardMemoryRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD
             // ports, guessed HAL parameters or a private lock for OS ownership.
             status = provider ? (request.Op == BC250_BOARD_MEMORY_OP_SET ?
                 provider->Set(Device, &request) : provider->Restore(Device, &request)) : STATUS_NOT_SUPPORTED;
+            if (provider) provider->Query(Device, Data);
+            if (NT_SUCCESS(status)) Data->Status = BC250_ESCAPE_STATUS_DONE;
         }
     }
 done:

@@ -50,11 +50,24 @@ static int publish(const struct bc250_uma_io* io, const unsigned char* block,
     ok = io->write(io->context, 0, 0);
     /* Without confirmed invalidation, never modify a potentially live block. */
     if (!ok) return 0;
+    {
+        unsigned char marker;
+        if (!io->read(io->context, 0, &marker) || marker != 0) return 0;
+    }
     for (i = 0; i < sizeof(offsets) / sizeof(offsets[0]); ++i) {
         int written;
         /* A rollback may attempt the remaining data bytes, but cannot publish
            a valid signature after any unconfirmed earlier write. */
         if (offsets[i] == 0 && !ok) break;
+        if (offsets[i] != 0) {
+            unsigned char current;
+            if (!io->read(io->context, offsets[i], &current)) {
+                ok = 0;
+                if (!best_effort) return 0;
+                continue;
+            }
+            if (current == block[offsets[i]]) continue;
+        }
         ++*attempts;
         written = io->write(io->context, offsets[i], block[offsets[i]]);
         ok = ok && written;
@@ -86,6 +99,33 @@ int bc250_uma_apply(const struct bc250_uma_io* io, const unsigned char* expected
     if (publish(io, candidate, &result->writes_attempted, 0) &&
         bc250_uma_read(io, current) == BC250_UMA_OK &&
         !memcmp(current, candidate, sizeof(current))) return BC250_UMA_OK;
+    result->operation_failed = 1;
+    restored = publish(io, expected, &result->rollback_writes_attempted, 1);
+    if (bc250_uma_read(io, current) != BC250_UMA_OK ||
+        memcmp(current, expected, sizeof(current))) restored = 0;
+    return restored ? BC250_UMA_RESTORED : BC250_UMA_ROLLBACK_UNCONFIRMED;
+}
+
+/* Restore uses only the caller's durable backup, not synthesized settings.
+   Timing bytes must agree before any I/O; this operation cannot repair a block
+   belonging to another board/firmware configuration. */
+int bc250_uma_restore(const struct bc250_uma_io* io, const unsigned char* expected,
+                      const unsigned char* backup, struct bc250_uma_result* result)
+{
+    unsigned char current[BC250_UMA_BLOCK_BYTES];
+    int status, restored;
+    if (result) memset(result, 0, sizeof(*result));
+    if (!io || !io->read || !io->write || !result ||
+        !bc250_uma_validate(expected) || !bc250_uma_validate(backup) ||
+        (word(backup + 26) != 8192 && word(backup + 26) != 12288) ||
+        memcmp(expected + 6, backup + 6, 20)) return BC250_UMA_INVALID;
+    status = bc250_uma_read(io, current);
+    if (status != BC250_UMA_OK) return status;
+    if (memcmp(expected, current, sizeof(current))) return BC250_UMA_STALE;
+    if (!memcmp(current, backup, sizeof(current))) return BC250_UMA_NO_CHANGE;
+    if (publish(io, backup, &result->writes_attempted, 0) &&
+        bc250_uma_read(io, current) == BC250_UMA_OK &&
+        !memcmp(current, backup, sizeof(current))) return BC250_UMA_OK;
     result->operation_failed = 1;
     restored = publish(io, expected, &result->rollback_writes_attempted, 1);
     if (bc250_uma_read(io, current) != BC250_UMA_OK ||

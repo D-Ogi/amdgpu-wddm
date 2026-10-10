@@ -6,6 +6,8 @@ void BoardMemoryIdentityClear(BC250_DEVICE* Device)
 {
     InterlockedExchange(&Device->BoardMemoryProviderId, BC250_BOARD_MEMORY_PROVIDER_NONE);
     Device->BoardMemoryReason = BC250_BOARD_MEMORY_REASON_BOARD;
+    Device->BoardMemoryBiosId = 0;
+    RtlZeroMemory(Device->BoardMemoryMachineId, sizeof(Device->BoardMemoryMachineId));
 }
 void BoardMemoryIdentityCapture(BC250_DEVICE* Device)
 {
@@ -33,6 +35,11 @@ void BoardMemoryIdentityCapture(BC250_DEVICE* Device)
     status = AuxKlibGetSystemFirmwareTable('RSMB', 0, data, capacity, &bytes);
     if (NT_SUCCESS(status) && bytes == capacity) {
         provider = BoardIdentitySelect(pci, sizeof(pci), data, bytes, &reason);
+        if (provider == BC250_BOARD_MEMORY_PROVIDER_BC250_ABL) {
+            unsigned bios = 0;
+            if (BoardIdentityQualification(data, bytes, &bios, Device->BoardMemoryMachineId))
+                Device->BoardMemoryBiosId = bios;
+        }
         Device->BoardMemoryReason = reason;
         InterlockedExchange(&Device->BoardMemoryProviderId, (LONG)provider);
     }
