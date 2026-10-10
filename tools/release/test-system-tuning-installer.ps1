@@ -114,7 +114,9 @@ $script:SoftwareKey='HKLM:\SOFTWARE\unused-test-key'
 function Test-IsAdmin { $true }
 function Read-InstallState { [pscustomobject]@{install_root=$PSScriptRoot} }
 function Write-Info($s) { }
+function Write-Fail($s) { Write-Output ('FAIL: ' + $s) }
 function Get-LabInstallPaths { @() }
+function Get-OurDriverPackages { @() }
 function Read-Confirmation { $false }
 function Invoke-Change { throw 'MUTATION BEFORE CONSENT' }
 '@
@@ -122,4 +124,9 @@ function Invoke-Change { throw 'MUTATION BEFORE CONSENT' }
 $hostExe = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $declined = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
 Assert ($declined.code -eq 4 -and $declined.text -match 'Nothing was changed' -and $declined.text -notmatch 'MUTATION') 'Declining removal changed Windows settings or kept recovery tools'
+# An unreadable driver store stops before tuning restoration or recovery copies, even with explicit consent.
+$failedInventory = $fakeCommon.Replace('function Get-OurDriverPackages { @() }', "function Get-OurDriverPackages { throw 'fixture inventory failure' }")
+[IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $failedInventory)
+$refused = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-Yes','-RestoreSystemTuning')
+Assert ($refused.code -eq 6 -and $refused.text -match 'No removal was started' -and $refused.text -match 'fixture inventory failure' -and $refused.text -notmatch 'MUTATION') 'Failed inventory did not stop before Windows tuning or recovery-file changes'
 Write-Host "PASS: $script:checks system-tuning installer checks. No Windows settings changed."
