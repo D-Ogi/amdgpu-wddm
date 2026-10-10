@@ -382,6 +382,49 @@ class ArmLoop(unittest.TestCase):
         self.assertTrue(all(Path(path).is_file() for path in record.raw_paths if path))
 
 
+class Restart(unittest.TestCase):
+    """A planned restart is over when the boot time differs, not when port 22 answers."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        data = small_manifest()
+        data["arms"] = [{"id": "restart-1", "title": "restart", "kind": "restart", "bound_s": 600,
+                         "gate_after": True,
+                         "run": [["python", "{target}", "ps", "{kit}/restart-now.ps1", "-Reason", "test"]]}]
+        data["sets"]["standard"] = ["restart-1"]
+        self.plan = small_plan(self.tmp, data)
+        self.clock = FakeClock()
+
+    def run_with(self, replies):
+        shell = FakeShell(replies)
+        run = Runner(self.plan, shell, self.tmp / "out", clock=self.clock, writer=lambda *a: None,
+                     python="python")
+        return run, shell, {record.id: record for record in run.run(self.plan.arms)}
+
+    def test_the_wait_ends_on_a_new_boot_time(self):
+        boots = iter([GATE_OK, GATE_OK, GATE_OK.replace("2026-10-10T07:47:40Z", "2026-10-10T09:00:00Z")])
+        run, shell, records = self.run_with([
+            ("mon.py stop?", Completed(0, "")),
+            ("restart-now.ps1", Completed(0, "boot 2026-10-10T07:47:40Z\nrestart in 5 s: test")),
+            ("gate.ps1", lambda step: Completed(0, next(boots, GATE_OK))),
+        ])
+        self.assertEqual(records["restart-1"].verdict, PASS)
+        self.assertEqual(self.clock.slept[0], 30, "it waits before the first probe")
+        self.assertTrue(all(wait >= 10 for wait in self.clock.slept))
+        self.assertEqual(len(shell.said("gate.ps1")), 3, "it probed until the boot time changed")
+        self.assertTrue((self.tmp / "out" / "restart-1" / "after-restart.txt").is_file())
+        self.assertFalse(run.halted)
+
+    def test_a_machine_that_never_comes_back_fails_the_arm(self):
+        run, _, records = self.run_with([
+            ("mon.py stop?", Completed(0, "")),
+            ("restart-now.ps1", Completed(0, "boot 2026-10-10T07:47:40Z\nrestart in 5 s: test")),
+            ("gate.ps1", Completed(255, "", "Connection refused")),
+        ])
+        self.assertEqual(records["restart-1"].verdict, FAIL)
+        self.assertIn("no new boot time", records["restart-1"].reason)
+
+
 class Promotion(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))

@@ -77,6 +77,10 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
             lines.append("     env " + " ".join(f"{k}={v}" for k, v in arm.env.items()))
         for step in arm.steps:
             lines.append(f"     $ {step.text()}      [{step.phase}, host timeout {step.timeout_s} s]")
+        if arm.kind == "restart":
+            lines.append(f"     then the runner waits for a boot time that differs from the one before the "
+                         f"restart: a first wait of {limits.get('restart_settle_s', 30)} s, then a probe "
+                         f"every {limits.get('restart_poll_s', 30)} s, up to the bound")
         if arm.kind == "operator":
             lines.append("     the suite never starts this arm: " + arm.arm.get("note", ""))
         wanted = ([arm.arm["expect"]] if arm.arm.get("expect") else []) + list(arm.arm.get("expect_all", ()))

@@ -262,6 +262,35 @@ class Runner:
             self.clock.sleep(poll)
             waited += poll
 
+    def _gate_text(self, label: str) -> str:
+        argv = [part.replace("{label}", label) for part in self.plan.gate_step.argv]
+        return self.shell.run(PlannedStep(argv, self.plan.gate_step.timeout_s, "gate")).text
+
+    def wait_for_boot(self, arm: PlannedArm, before: str) -> tuple[bool, str]:
+        """After a planned restart, wait for a boot time that differs from the one before it.
+
+        A restart is not over when port 22 answers: the machine is still up for a few seconds after
+        `shutdown /r` and answers the first probe. The gate prints the boot time, so the wait is over the
+        boot time itself and not over a guess (BD-059 is the other side of this: a planned restart must not
+        be read as an unclean one). The poll is slow on purpose, because the lab sshd penalises fast probes.
+        """
+        limits = self.plan.limits
+        was = re.search(r"^boot (\S+)", before, re.M)
+        settle = int(limits.get("restart_settle_s", 30))
+        poll = max(int(limits.get("restart_poll_s", 30)), int(limits["min_poll_s"]))
+        self.writer(f"  restart: waiting {settle} s before the first probe")
+        self.clock.sleep(settle)
+        waited, text = settle, ""
+        while waited < arm.bound_s:
+            self.shell.run(PlannedStep([self.python, self.plan.values["target"], "forget"], 60, "gate"))
+            text = self._gate_text("after-restart")
+            now = re.search(r"^boot (\S+)", text, re.M)
+            if "gate end" in text and now and (was is None or now.group(1) != was.group(1)):
+                return True, text
+            self.clock.sleep(poll)
+            waited += poll
+        return False, text
+
     def health_gate(self, arm_id: str, directory: Path) -> GateResult:
         argv = [part.replace("{label}", arm_id) for part in self.plan.gate_step.argv]
         done = self.shell.run(PlannedStep(argv, self.plan.gate_step.timeout_s, "gate"))
@@ -354,6 +383,27 @@ class Runner:
             if sampler:
                 sampler.halt.set()
                 sampler.join(timeout=40)
+        gate_done = False
+        if arm.kind == "restart" and not failed:
+            came_back, boot_text = self.wait_for_boot(arm, "\n".join(texts))
+            self._write(directory / "after-restart.txt", boot_text)
+            record.raw_paths.append((directory / "after-restart.txt").as_posix())
+            texts.append(boot_text)
+            if not came_back:
+                record.verdict = FAIL
+                record.reason = f"no new boot time within {arm.bound_s} s of the restart"
+            elif arm.gate_after:
+                # The gate that proved the new boot is the health gate of this arm: it does not run twice.
+                gate = parse_gate(boot_text)
+                record.gate = {"ok": gate.ok, "critical": gate.critical, "violations": gate.violations,
+                               "facts": gate.facts}
+                gate_done = True
+                if not gate.ok:
+                    failing = [v for v in gate.violations if not v.startswith("warn")]
+                    record.verdict = FAIL if failing else WARN
+                    record.reason = "the health gate after the restart: " + "; ".join(gate.violations)
+                if gate.critical:
+                    self.halted = f"the health gate after {arm.id} is critical: " + "; ".join(gate.violations)
         record.seconds = round(self.clock.now() - started, 1)
         text = "\n".join(texts)
         self._write(directory / "arm.txt", text)
@@ -381,7 +431,7 @@ class Runner:
         if spec.get("operator"):
             record.reason = (record.reason + "; " if record.reason else "") + \
                 "the value is the operator's reading: " + spec.get("how", "")
-        if arm.gate_after:
+        if arm.gate_after and not gate_done:
             gate = self.health_gate(arm.id, directory)
             record.gate = {"ok": gate.ok, "critical": gate.critical, "violations": gate.violations,
                            "facts": gate.facts}

@@ -22,7 +22,9 @@
     "tctl_poll_s": 20,
     "tctl_cool_max_s": 420,
     "host_grace_s": 45,
-    "min_poll_s": 10
+    "min_poll_s": 10,
+    "restart_settle_s": 30,
+    "restart_poll_s": 30
   },
   "sets": {
     "standard": ["push-zip", "zipcheck", "uninstall", "restart-1", "install", "restart-2", "slots", "kmdver",
