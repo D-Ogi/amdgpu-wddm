@@ -296,6 +296,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN VramWriteEnabled;
     PHYSICAL_ADDRESS VramPhysical;      // system physical address of VRAM byte 0
     ULONGLONG VramLength;
+    volatile LONG64 UmaActiveBytes; // atomic software view; zero outside a successful VRAM start
     ULONGLONG VramMcBase;               // GPU physical (MC) address of VRAM byte 0
     PHYSICAL_ADDRESS Bar0Physical;
     ULONGLONG Bar0Length;
@@ -423,6 +424,12 @@ void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size
 
 // driver_version.c: the per-application graphics setting ReportAmdDriverVersion, at each adapter start
 void DriverVersionStart(BC250_DEVICE* Device);
+
+// uma.c: capability query only until a supported CMOS transport is established.
+void UmaRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA* Data,
+                _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
+void UmaProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA_PROBE* Data,
+                    _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
 
 // hwmon.c
 struct _BC250_ESCAPE_HWMON;

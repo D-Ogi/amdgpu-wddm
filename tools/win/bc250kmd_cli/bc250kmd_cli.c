@@ -682,10 +682,101 @@ typedef struct _BC250_FAN_REQUEST {
     ULONGLONG ExpectedGeneration;           // every operation but READ
 } BC250_FAN_REQUEST; // 104 bytes on Windows
 
+typedef struct _BC250_CONTROL_UMA_REQUEST {
+    ULONG Size, Op, TargetMiB, Reserved;
+    unsigned char ExpectedBlock[28];
+    ULONG ReservedEnd;
+} BC250_CONTROL_UMA_REQUEST; // 48 bytes; no offsets, ports or arbitrary replacement data
+
 static NTSTATUS TelemetryEscape(void *data, unsigned size);
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
+
+// Query has no hardware access. Mutations cannot reach the hardware escape unless
+// the driver first advertises a qualified transport. Current KMDs do not do so.
+BC250_CONTROL_API LONG WINAPI Bc250Uma(BC250_ESCAPE_UMA *data, ULONG bytes,
+                                      const BC250_CONTROL_UMA_REQUEST *request)
+{
+    BC250_CONTROL_UMA_REQUEST saved;
+    BC250_ESCAPE_UMA capability;
+    NTSTATUS status;
+    ULONG i;
+    typedef char UmaAbiSizeCheck[(sizeof(BC250_ESCAPE_UMA) == 128 &&
+                                  sizeof(BC250_CONTROL_UMA_REQUEST) == 48) ? 1 : -1];
+    (void)sizeof(UmaAbiSizeCheck);
+    if (!data || !request || bytes != sizeof(*data) || request->Size != sizeof(*request))
+        return (LONG)0xC000000D;
+    saved = *request;
+    if (saved.Op > BC250_UMA_OP_RESTORE || saved.Reserved || saved.ReservedEnd ||
+        (saved.Op == BC250_UMA_OP_SET ? (saved.TargetMiB != 8192 && saved.TargetMiB != 12288) : saved.TargetMiB != 0))
+        return (LONG)0xC000000D;
+    if (saved.Op == BC250_UMA_OP_READ)
+        for (i = 0; i < sizeof(saved.ExpectedBlock); ++i)
+            if (saved.ExpectedBlock[i]) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    if (saved.Op != BC250_UMA_OP_READ) {
+        BC250_CONTROL_UMA_REQUEST query;
+        memset(&query, 0, sizeof(query));
+        query.Size = sizeof(query);
+        status = Bc250Uma(&capability, sizeof(capability), &query);
+        if (!NT_SUCCESS(status)) return status;
+        if ((capability.Flags & (BC250_UMA_READ_VALID | BC250_UMA_WRITE_ALLOWED)) !=
+            (BC250_UMA_READ_VALID | BC250_UMA_WRITE_ALLOWED)) return (LONG)0xC00000BB;
+        if (saved.Op == BC250_UMA_OP_RESTORE && !(capability.Flags & BC250_UMA_BACKUP_VALID))
+            return (LONG)0xC00000BB;
+        if (memcmp(capability.ObservedBlock, saved.ExpectedBlock, sizeof(saved.ExpectedBlock)))
+            return (LONG)0xC000022D; // STATUS_RETRY: caller must confirm a fresh observation
+    }
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_UMA;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_UMA_ABI;
+    data->Op = saved.Op;
+    data->RequestedMiB = saved.TargetMiB;
+    memcpy(data->ObservedBlock, saved.ExpectedBlock, sizeof(data->ObservedBlock));
+    status = TelemetryEscapeFlags(data, sizeof(*data), saved.Op != BC250_UMA_OP_READ);
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_UMA ||
+        data->AbiVersion != BC250_UMA_ABI || data->Op != saved.Op || (data->Flags & ~15u) ||
+        data->Reason > BC250_UMA_REASON_UNKNOWN_STATE) return (LONG)0xC000000D;
+    if ((data->Flags & BC250_UMA_WRITE_ALLOWED) &&
+        (!(data->Flags & BC250_UMA_READ_VALID) || data->Reason != BC250_UMA_REASON_READY))
+        return (LONG)0xC000000D;
+    for (i = 0; i < sizeof(data->Reserved) / sizeof(data->Reserved[0]); ++i)
+        if (data->Reserved[i]) return (LONG)0xC000000D;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    return 0;
+}
+
+// Explicit diagnostic command only. The GUI does not call this function.
+BC250_CONTROL_API LONG WINAPI Bc250UmaProbe(BC250_ESCAPE_UMA_PROBE *data, ULONG bytes)
+{
+    NTSTATUS status;
+    ULONG i;
+    typedef char UmaProbeSizeCheck[(sizeof(BC250_ESCAPE_UMA_PROBE) == 128) ? 1 : -1];
+    (void)sizeof(UmaProbeSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_UMA;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_UMA_ABI;
+    data->Op = BC250_UMA_OP_PROBE;
+    status = TelemetryEscapeFlags(data, sizeof(*data), 1);
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_UMA ||
+        data->AbiVersion != BC250_UMA_ABI || data->Op != BC250_UMA_OP_PROBE || data->Flags ||
+        data->Reason != BC250_UMA_REASON_READ) return (LONG)0xC000000D;
+    for (i = 0; i < sizeof(data->Reserved) / sizeof(data->Reserved[0]); ++i)
+        if (data->Reserved[i]) return (LONG)0xC000000D;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    return 0; // raw counts, including zero/short, are observations rather than admission
+}
 
 // A limit can be "none": the development PC's RTX 4090 reports an aperture CommitLimit of 2^64-1 (2026-09-30).
 static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
@@ -3899,11 +3990,31 @@ static int DpAudio(int argc, WCHAR **argv)
 #undef DPA_OK
 #undef FIELD
 
+static int UmaProbe(void)
+{
+    static const unsigned int rtc[] = {0, 2, 4, 13};
+    BC250_ESCAPE_UMA_PROBE p;
+    LONG status = Bc250UmaProbe(&p, sizeof(p));
+    unsigned int i;
+    printf("{\"operation\":\"uma-probe\",\"transport_status\":\"0x%08lX\","
+           "\"status\":%lu,\"ntstatus\":\"0x%08lX\",\"slot_count\":%lu,\"offset_count\":%lu,\"slot_hex\":\"",
+           (ULONG)status, p.Status, p.NtStatus, p.SlotCount, p.OffsetCount);
+    for (i = 0; i < sizeof(p.SlotBlock); ++i) printf("%02X", p.SlotBlock[i]);
+    printf("\",\"offset_hex\":\"");
+    for (i = 0; i < sizeof(p.OffsetBlock); ++i) printf("%02X", p.OffsetBlock[i]);
+    printf("\",\"rtc\":[");
+    for (i = 0; i < 4; ++i)
+        printf("%s{\"register\":%u,\"count\":%lu,\"value\":%u}", i ? "," : "", rtc[i], p.RtcCount[i], p.RtcValue[i]);
+    printf("]}\n");
+    return status < 0 ? 1 : 0;
+}
+
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
                         "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
+                        "       bc250kmd_cli uma-probe                    (admin; fixed HAL reads only, no CMOS write)\n"
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
                         "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
@@ -3940,6 +4051,7 @@ int wmain(int argc, wchar_t **argv)
         return 2;
     }
     if (!_wcsicmp(argv[1], L"cpu")) return Cpu(argc,argv);
+    if (!_wcsicmp(argv[1], L"uma-probe") && argc == 2) return UmaProbe();
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
