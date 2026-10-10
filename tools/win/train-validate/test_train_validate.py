@@ -875,6 +875,13 @@ class ShippedSetEndToEnd(unittest.TestCase):
              Completed(0, "Using VK_KHR_ray_query\n631 frames, 10.37 seconds: 60.86 fps")),
             ("pt-run.ps1 -Demo q2rtx-loop", Completed(0, "end: reason bound, elapsed 163.5 s")),
             ("pt-run.ps1 -Demo dxrpt", Completed(0, "436 frames in 30.0 s, 19.13 fps, 126.9 Mrays/s")),
+            ("mesacache.ps1", Completed(0, "cache C:\\Users\\bc250\\AppData\\Local\\mesa_shader_cache: 541 "
+                                           "files, 2775706 bytes, newest 2026-10-10T07:30:37Z")),
+            ("run-batch.ps1", Completed(0, "list-rt-k97 run=trainr route=direct icd=1D4DAD41 exit=1 "
+                                           "complete=True done=140/140 attempts=1 elapsed=8.7s\n"
+                                           "counts: Pass=137 NotRun=3")),
+            ("llm-dense.ps1", Completed(0, "llm-dense result verdict PASS arm_exit 0 pp512 207.38 t/s "
+                                           "tg128 32.94 t/s")),
             ("promote-d3d12.py stage ", Completed(0, "plan written")),
             ("promote-d3d12.py stage-check", Completed(0, "plan written")),
             ("run-slot.py", Completed(0, "Start Running")),
@@ -902,7 +909,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 19)
+        self.assertEqual(len(records), 25)
         self.assertEqual([row["value"] for row in records if row["id"] == "uninstall"], [0.0],
                          "the number comes from the inventory after the uninstaller, not before it")
         plans = Path(self.tmp) / "scratch" / "m15" / "native-caps001" / "plans"

@@ -27,12 +27,15 @@
   },
   "sets": {
     "standard": ["push-zip", "zipcheck", "uninstall", "restart-1", "install", "restart-2", "slots", "kmdver",
-                 "preflight", "pin-baseline", "vk-smoke", "x86-smoke", "q2rtx-pipeline", "q2rtx-query",
-                 "q2rtx-loop", "dxrpt", "d3d12-promote", "rottr", "w3-high-rt"],
+                 "preflight", "pin-baseline", "vk-smoke", "x86-smoke", "cache-0", "q2rtx-pipeline",
+                 "q2rtx-query", "q2rtx-loop", "cache-1", "q2rtx-warm", "cache-2", "dxrpt", "cts-rt",
+                 "llm-dense", "d3d12-promote", "rottr", "w3-high-rt"],
     "install": ["push-zip", "zipcheck", "uninstall", "restart-1", "install", "restart-2", "slots", "kmdver",
                 "preflight", "pin-baseline"],
     "gates": ["q2rtx-pipeline", "q2rtx-query", "q2rtx-loop", "rottr"],
-    "smoke": ["vk-smoke", "x86-smoke", "dxrpt"]
+    "smoke": ["vk-smoke", "x86-smoke", "dxrpt", "cts-rt"],
+    "cache": ["cache-0", "q2rtx-pipeline", "cache-1", "q2rtx-warm", "cache-2"],
+    "llm": ["llm-dense"]
   },
   "arms": [
     {
@@ -162,6 +165,16 @@
       "depends_on": ["preflight"]
     },
     {
+      "id": "cache-0",
+      "title": "The shader disk cache of the new Vulkan driver, before the first ray tracing run",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [["python", "{target}", "ps", "{kit}/mesacache.ps1", "-Step", "read"]],
+      "result": {"regex": "mesa_shader_cache: (\\d+) files", "name": "cache files before", "kind": "text"},
+      "depends_on": ["preflight"],
+      "note": "The first of three readings of the b25 B1 proof. A release whose Vulkan driver is a new build has a cache namespace of its own (BD-100), so this reading is the cold state of that namespace."
+    },
+    {
       "id": "q2rtx-pipeline",
       "title": "GATE Quake II RTX timedemo, VK_KHR_ray_tracing_pipeline",
       "kind": "lab",
@@ -211,6 +224,42 @@
       "failure_classes": ["BD-102", "BD-105"]
     },
     {
+      "id": "cache-1",
+      "title": "The shader disk cache after the first ray tracing runs: it grew",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [["python", "{target}", "ps", "{kit}/mesacache.ps1", "-Step", "read"]],
+      "result": {"regex": "mesa_shader_cache: (\\d+) files", "name": "cache files after the cold runs", "kind": "text"},
+      "depends_on": ["q2rtx-loop"],
+      "note": "The second reading of the b25 B1 proof: the cache of the new build exists and holds what the first runs compiled."
+    },
+    {
+      "id": "q2rtx-warm",
+      "title": "Quake II RTX timedemo again, warm shader cache",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": ["q2rtx"],
+      "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "q2rtx-timedemo",
+               "-RtApi", "pipeline", "-Width", "1280", "-Height", "720", "-Seconds", "150"]],
+      "expect": "Using VK_KHR_ray_tracing_pipeline",
+      "result": {"regex": "(\\d+) frames, ([\\d.]+) seconds: ([\\d.]+) fps", "group": 3, "name": "warm timedemo", "unit": "fps"},
+      "baseline": {"value": 60.26, "tolerance_pct": 10, "source": "b25 (tester.23) B1 warm 1: 631 frames, 10.47 s, 60.26 fps"},
+      "depends_on": ["cache-1"],
+      "failure_classes": ["BD-102", "BD-105"],
+      "note": "The same timedemo as q2rtx-pipeline, with the cache that run wrote. This arm and the reading after it are what say the cache is read, and not only written."
+    },
+    {
+      "id": "cache-2",
+      "title": "The shader disk cache after the warm run: it did not grow",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [["python", "{target}", "ps", "{kit}/mesacache.ps1", "-Step", "read"]],
+      "result": {"regex": "mesa_shader_cache: (\\d+) files", "name": "cache files after the warm run", "kind": "text"},
+      "depends_on": ["q2rtx-warm"],
+      "note": "The third reading of the b25 B1 proof. The same file count, byte count and newest write time as cache-1 means that the warm run compiled nothing: it found everything."
+    },
+    {
       "id": "dxrpt",
       "title": "DXRPathTracer, Sponza, path tracing through D3D12",
       "kind": "lab",
@@ -223,6 +272,37 @@
       "baseline": {"value": 19.13, "tolerance_pct": 10, "source": "b26 (tester.24) 20261009T140217Z-dxrpt: 436 frames in 30.0 s, 19.13 fps, 126.9 Mrays/s"},
       "depends_on": ["preflight"],
       "failure_classes": ["BD-102"]
+    },
+    {
+      "id": "cts-rt",
+      "title": "Vulkan CTS, the 140 ray tracing cases, on the installed system driver",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [["python", "{target}", "ps", "{repo}/tools/win/cts/run-batch.ps1",
+               "-CaseList", "C:\\BC250\\cts\\batches\\rt-k97.txt", "-RunId", "train{release}",
+               "-Route", "direct", "-IcdPath", "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+               "-BoundSeconds", "150"]],
+      "expect": "complete=True",
+      "result": {"regex": "Pass=(\\d+)", "name": "CTS ray tracing cases passed", "unit": "cases"},
+      "baseline": {"value": 137, "tolerance_abs": 0, "source": "b27 (tester.25) cts-rt-k97.txt: 137 Pass and 3 NotRun of 140, case for case the same as b25 and b26"},
+      "depends_on": ["preflight"],
+      "failure_classes": ["BD-102"],
+      "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision. The lab needs the CTS package at C:\\BC250\\cts."
+    },
+    {
+      "id": "llm-dense",
+      "title": "The dense language model batch that stopped Windows with 0x116 (BD-114)",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": ["llama-bench"],
+      "run": [["python", "{target}", "ps", "{kit}/llm-dense.ps1", "-Deadline", "160", "-WorkloadStop", "120"]],
+      "expect": "verdict PASS",
+      "result": {"regex": "pp512 ([\\d.]+) t/s", "name": "prompt tokens a second", "unit": "t/s"},
+      "baseline": {"value": 207.38, "tolerance_pct": 10, "source": "BD-114 lab round 1 of 2026-10-10, arm C on the candidate kernel driver (gemma-4-12b-it-qat-q4_0, -ub 512 -p 512 -n 128 -r 3): pp512 207.38 +- 0.52 t/s, tg128 32.94 +- 2.76 t/s in 63.4 s"},
+      "depends_on": ["preflight"],
+      "failure_classes": ["BD-114"],
+      "note": "The regression of this release's own fix: the same model, batch and repeat count that stopped Windows on 0.7.216.100-tester.25. It runs through the seg0 supervisor kit on the lab, which owns the bound, the thermal rule and the cleanup."
     },
     {
       "id": "d3d12-promote",

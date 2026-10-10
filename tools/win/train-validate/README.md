@@ -93,13 +93,20 @@ The difference matters when a number is read out of this table.
 | `pin-baseline` | host | the trial harness is pinned to this package |
 | `vk-smoke`, `x86-smoke` | lab | the system Vulkan ICD and the 32-bit D3D11 stack answer |
 | `q2rtx-pipeline`, `q2rtx-query`, `q2rtx-loop` | lab, **owner gate** | Quake II RTX runs with `VK_KHR_ray_tracing_pipeline` and with `VK_KHR_ray_query` |
+| `cache-0`, `cache-1`, `q2rtx-warm`, `cache-2` | read, lab | the shader disk cache of a new Vulkan driver build is written and then read. A new build has a cache namespace of its own (BD-100), so this is the b25 B1 proof again |
 | `dxrpt` | lab | path tracing through D3D12 holds its frame rate |
+| `cts-rt` | lab | the 140 ray tracing cases of the pinned Vulkan CTS, on the installed system driver |
+| `llm-dense` | lab | the dense language model batch that stopped Windows with 0x116 runs to its end (BD-114) |
 | `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness |
 | `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene |
 | `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator |
 
-Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, or a list such as
-`--arms q2rtx-pipeline,q2rtx-query`.
+Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms cache`, `--arms llm`, or a
+list such as `--arms q2rtx-pipeline,q2rtx-query`.
+
+Three arms stand on lab staging that is not part of this kit, and each one says so when it is absent:
+`cts-rt` needs the CTS package at `C:\BC250\cts`, and `llm-dense` needs the seg0 supervisor kit, the model
+and the llama.cpp build where the BD-114 round left them under `C:\BC250\bd114` and `C:\BC250\llmvram`.
 
 ## The next train
 
