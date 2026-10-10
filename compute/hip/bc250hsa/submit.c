@@ -190,7 +190,12 @@ static bc250hsa_status take_slot(struct bc250hsa_device* dev, uint32_t* slot_out
 
     for (tried = 0; tried < dev->ring_slots; tried++) {
         const uint32_t slot = (dev->next_slot + tried) % dev->ring_slots;
-        if (dev->slot_fence[slot] == 0u || bc250hsa_fence_read(dev) >= dev->slot_fence[slot]) {
+        const uint64_t observed = bc250hsa_fence_read(dev);
+        if (observed == UINT64_MAX) {
+            bc250hsa_mark_lost(dev, "removed device cannot retire an IB or scratch slot");
+            return BC250HSA_EDEVICELOST;
+        }
+        if (dev->slot_fence[slot] == 0u || observed >= dev->slot_fence[slot]) {
             dev->next_slot = (slot + 1u) % dev->ring_slots;
             *slot_out = slot;
             return BC250HSA_OK;
@@ -442,6 +447,23 @@ static bc250hsa_status submit_one(struct bc250hsa_device* dev, const bc250hsa_di
     }
     slot_host = (uint32_t*)((uint8_t*)dev->ring.host + (size_t)slot * dev->ring_slot_bytes);
     fill_env(dev, &env, dispatch->flags, fence_value);
+    if (dispatch->kernel->private_segment_bytes != 0u) {
+        bc250hsa_scratch_plan scratch;
+        bc250hsa_allocator allocator;
+        result = bc250hsa_plan_scratch(dispatch->kernel->private_segment_bytes,
+                                         dispatch->kernel->wave_size, &scratch);
+        if (result != BC250HSA_OK) { return result; }
+        result = bc250hsa_device_allocator(dev, &allocator);
+        if (result != BC250HSA_OK) { return result; }
+        /* The slot has retired and the device lock excludes a concurrent owner.
+         * Re-check the removal sentinel before any replacement allocation is freed.
+         * The allocation remains on the device list until retirement or teardown. */
+        result = bc250hsa_prepare_scratch(&dev->slot_scratch[slot], dev->slot_fence[slot],
+                                           bc250hsa_fence_read(dev), &scratch, &allocator);
+        if (result != BC250HSA_OK) { return result; }
+        env.scratch_va = dev->slot_scratch[slot].va;
+        env.scratch_bytes = dev->slot_scratch[slot].bytes;
+    }
 
     result = bc250hsa_pm4_build_dispatch(dispatch, &env, slot_host,
                                          dev->ring_slot_bytes / 4u, &dwords_written);
@@ -570,7 +592,16 @@ bc250hsa_status bc250hsa_dispatch_submit(struct bc250hsa_device* dev,
     }
 
     EnterCriticalSection(&dev->lock);
-    if (dev->batch.enabled != 0u) {
+    if (dev->closing || dev->device_lost) {
+        LeaveCriticalSection(&dev->lock);
+        return BC250HSA_EDEVICELOST;
+    }
+    if (dispatch->kernel->private_segment_bytes != 0u) {
+        /* One fixed ring stride per IB; submit any promised batch first so fence
+         * ordering remains monotonic. Scratch-free dispatches retain batching. */
+        result = bc250hsa_batch_submit_locked(dev);
+        if (result == BC250HSA_OK) { result = submit_one(dev, dispatch, fence_value_out); }
+    } else if (dev->batch.enabled != 0u) {
         result = submit_batched(dev, dispatch, fence_value_out);
     } else {
         result = submit_one(dev, dispatch, fence_value_out);

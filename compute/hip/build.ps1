@@ -56,6 +56,8 @@ New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 $srcDir = Join-Path $here 'bc250hsa'
 $testDir = Join-Path $here 'tests\host'
 $dataDir = Join-Path $here 'tests\data'
+& python (Join-Path $testDir 'check_scratch_contract.py')
+if ($LASTEXITCODE -ne 0) { throw 'GFX10 scratch descriptor contract differs' }
 $toolDir = Join-Path $here 'tools'
 
 # ---------------------------------------------------------------------------------------------
@@ -130,7 +132,7 @@ Write-Host '  tools\run-lab.ps1 parses'
 $pinned = 0
 $leaves = @{}
 foreach ($file in Get-ChildItem -LiteralPath $dataDir -File) { $leaves[$file.Name] = $file.FullName }
-foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt')) {
+foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt', 'PROVENANCE-scratch.txt')) {
     $notePath = Join-Path $dataDir $note
     if (-not (Test-Path $notePath)) { throw "$notePath is missing" }
     $current = $null
@@ -160,7 +162,7 @@ foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt')) {
     }
 }
 if ($pinned -eq 0) { throw 'the PROVENANCE notes of tests\data pin no fixture at all' }
-Write-Host "  $pinned fixture hashes of tests\data match PROVENANCE.txt and PROVENANCE-runtime.txt"
+Write-Host "  $pinned fixture hashes of tests\data match the PROVENANCE notes"
 
 # ---------------------------------------------------------------------------------------------
 # The test code objects. Committed under tests\data so the gate runs with no AMDGPU compiler.

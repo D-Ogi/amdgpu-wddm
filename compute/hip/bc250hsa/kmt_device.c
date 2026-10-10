@@ -200,6 +200,8 @@ static void device_teardown(struct bc250hsa_device* dev)
     }
     close_adapter(dev->adapter);
     dev->adapter = 0u;
+    free(dev->slot_scratch);
+    dev->slot_scratch = NULL;
     free(dev->slot_fence);
     dev->slot_fence = NULL;
     free(dev->last_ib);
@@ -375,11 +377,12 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
             goto failed;
         }
         dev->slot_fence = (uint64_t*)calloc(ring_slots, sizeof(uint64_t));
+        dev->slot_scratch = (bc250hsa_mem*)calloc(ring_slots, sizeof(bc250hsa_mem));
         /* One whole slot, because a batched buffer carries many dispatches and the
          * failure report must hold all of it (section 8.1). */
         dev->last_ib_capacity = ring_slot_bytes / 4u;
         dev->last_ib = (uint32_t*)calloc(dev->last_ib_capacity, sizeof(uint32_t));
-        if (dev->slot_fence == NULL || dev->last_ib == NULL) {
+        if (dev->slot_fence == NULL || dev->slot_scratch == NULL || dev->last_ib == NULL) {
             result = BC250HSA_ENOMEM;
             goto failed;
         }
@@ -395,20 +398,61 @@ failed:
     return result;
 }
 
-void bc250hsa_close(struct bc250hsa_device* dev)
+static bc250hsa_status close_flush(void* ctx)
 {
-    if (dev == NULL) {
-        return;
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    if (dev->device_lost) { return BC250HSA_EDEVICELOST; }
+    return bc250hsa_flush(dev, NULL);
+}
+
+static bc250hsa_status close_wait(void* ctx)
+{
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    if (dev->device_lost) { return BC250HSA_EDEVICELOST; }
+    if (dev->submit_capable && dev->fence_last_submitted != 0u) {
+        return bc250hsa_wait(dev, dev->fence_last_submitted, 0u, 0u);
     }
-    /* The open batch goes out first, so that a program which closed the device without
-     * a synchronisation does not lose the work it asked for (section 8.1). */
-    (void)bc250hsa_flush(dev, NULL);
-    if (dev->submit_capable && !dev->device_lost && dev->fence_last_submitted != 0u) {
-        (void)bc250hsa_wait(dev, dev->fence_last_submitted, 0u, 0u);
-    }
+    return BC250HSA_OK;
+}
+
+static void close_release(void* ctx)
+{
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    LeaveCriticalSection(&dev->lock);
     device_teardown(dev);
     DeleteCriticalSection(&dev->lock);
     free(dev);
+}
+
+static void close_quarantine(void* ctx, bc250hsa_status status)
+{
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    /* No destroy/unmap/free: the OS owns final process cleanup. DestroyContext's
+     * public contract alone does not establish a drained-hardware witness after
+     * failed recovery. Repeated failures can retain more than one device. */
+    dev->device_lost = 1;
+    bc250hsa_log(BC250HSA_LOG_ERROR,
+        "close could not prove retirement (status %d); device and allocations retained until process exit",
+        (int)status);
+    LeaveCriticalSection(&dev->lock);
+}
+
+void bc250hsa_close(struct bc250hsa_device* dev)
+{
+    bc250hsa_close_ops ops;
+    if (dev == NULL) { return; }
+    EnterCriticalSection(&dev->lock);
+    if (dev->closing) {
+        LeaveCriticalSection(&dev->lock);
+        return;
+    }
+    dev->closing = 1;
+    ops.ctx = dev;
+    ops.flush = close_flush;
+    ops.wait = close_wait;
+    ops.release = close_release;
+    ops.quarantine = close_quarantine;
+    bc250hsa_finish_close(&ops);
 }
 
 bc250hsa_status bc250hsa_props_read(struct bc250hsa_device* dev, bc250hsa_props* out)

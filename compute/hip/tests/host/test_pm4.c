@@ -1011,8 +1011,7 @@ static void check_refusals(void)
     k.group_segment_bytes = 65536u;
     CHECK_STATUS(bc250hsa_pm4_check_dispatch(&d, 65536u), BC250HSA_OK);
 
-    /* A kernel that spills. Open question 4 of the design: a scratch ring is not
-     * measured on this silicon, so it is refused by name. */
+    /* A fixed-private kernel with no SCRATCH_EN descriptor contract is refused. */
     golden_inputs(&d, &env, &k);
     k.private_segment_bytes = 256u;
     CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written),
@@ -1124,6 +1123,265 @@ static void check_refusals(void)
                  BC250HSA_EINVAL);
 }
 
+typedef struct scratch_allocator_test {
+    uint32_t allocations;
+    uint32_t frees;
+    uint32_t fail;
+    uint32_t malformed;
+} scratch_allocator_test;
+
+static bc250hsa_status scratch_test_alloc(void* ctx, uint64_t bytes, uint64_t alignment,
+                                          uint32_t flags, bc250hsa_mem* out)
+{
+    scratch_allocator_test* a = (scratch_allocator_test*)ctx;
+    CHECK_U64(alignment, 4096u);
+    CHECK_U64(flags, BC250HSA_MEM_DEVICE);
+    if (a->fail) { return BC250HSA_ENOMEM; }
+    a->allocations++;
+    memset(out, 0, sizeof(*out));
+    out->va = 0x4000000000ull + (uint64_t)a->allocations * 0x10000000ull;
+    if (a->malformed) { out->va++; }
+    out->bytes = bytes;
+    out->opaque = (void*)(uintptr_t)a->allocations;
+    return BC250HSA_OK;
+}
+
+static void scratch_test_free(void* ctx, bc250hsa_mem* mem)
+{
+    scratch_allocator_test* a = (scratch_allocator_test*)ctx;
+    a->frees++;
+    memset(mem, 0, sizeof(*mem));
+}
+
+static uint32_t scratch_reg(const uint32_t* stream, uint32_t count, uint32_t reg)
+{
+    uint32_t at = 0u;
+    while (at < count) {
+        uint32_t op = (stream[at] >> 8) & 255u;
+        uint32_t body = ((stream[at] >> 16) & 0x3FFFu) + 1u;
+        if (op == BC250HSA_PKT3_NOP) { at++; continue; }
+        if (body > count - at - 1u) { break; }
+        if (op == BC250HSA_PKT3_SET_SH_REG && body >= 2u && stream[at + 1u] == reg) {
+            return stream[at + 2u];
+        }
+        at += body + 1u;
+    }
+    return UINT32_MAX;
+}
+
+typedef struct close_test {
+    bc250hsa_status flush_status, wait_status;
+    uint32_t order, release_count, quarantine_count;
+} close_test;
+static bc250hsa_status test_close_flush(void* ctx)
+{
+    close_test* t = (close_test*)ctx;
+    t->order = t->order * 10u + 1u;
+    return t->flush_status;
+}
+static bc250hsa_status test_close_wait(void* ctx)
+{
+    close_test* t = (close_test*)ctx;
+    t->order = t->order * 10u + 2u;
+    return t->wait_status;
+}
+static void test_close_release(void* ctx)
+{
+    close_test* t = (close_test*)ctx;
+    t->order = t->order * 10u + 3u;
+    t->release_count++;
+}
+static void test_close_quarantine(void* ctx, bc250hsa_status status)
+{
+    close_test* t = (close_test*)ctx;
+    CHECK(status != BC250HSA_OK);
+    t->order = t->order * 10u + 4u;
+    t->quarantine_count++;
+}
+static void check_close_retirement(void)
+{
+    close_test t;
+    bc250hsa_close_ops ops = { &t, test_close_flush, test_close_wait,
+                                test_close_release, test_close_quarantine };
+    memset(&t, 0, sizeof(t));
+    bc250hsa_finish_close(&ops);
+    CHECK_U64(t.order, 123u);
+    CHECK_U64(t.release_count, 1u);
+    CHECK_U64(t.quarantine_count, 0u);
+    memset(&t, 0, sizeof(t));
+    t.flush_status = BC250HSA_EDEVICELOST;
+    bc250hsa_finish_close(&ops);
+    CHECK_U64(t.order, 14u);
+    CHECK_U64(t.release_count, 0u);
+    CHECK_U64(t.quarantine_count, 1u);
+    memset(&t, 0, sizeof(t));
+    t.wait_status = BC250HSA_ETIMEOUT;
+    bc250hsa_finish_close(&ops);
+    CHECK_U64(t.order, 124u);
+    CHECK_U64(t.release_count, 0u);
+    CHECK_U64(t.quarantine_count, 1u);
+    memset(&t, 0, sizeof(t));
+    t.wait_status = BC250HSA_EDEVICELOST;
+    bc250hsa_finish_close(&ops);
+    CHECK_U64(t.order, 124u);
+    CHECK_U64(t.release_count, 0u);
+    CHECK_U64(t.quarantine_count, 1u);
+}
+
+static void check_scratch(void)
+{
+    bc250hsa_scratch_plan plan, larger;
+    uint32_t resource[4], out[GOLDEN_MAX], written = 0u;
+    bc250hsa_kernel k;
+    bc250hsa_dispatch d, batch[2];
+    bc250hsa_pm4_env env;
+    bc250hsa_user_sgpr_plan sgprs;
+    scratch_allocator_test a = { 0, 0, 0, 0 };
+    bc250hsa_allocator allocator = { &a, scratch_test_alloc, scratch_test_free };
+    bc250hsa_mem slots[2];
+    uint64_t old_va;
+    memset(slots, 0, sizeof(slots));
+    CHECK_U64(BC250HSA_SCRATCH_EN, COMPUTE_PGM_RSRC2__SCRATCH_EN_MASK);
+    CHECK_U64(BC250HSA_SCRATCH_WAVESIZE_SHIFT, COMPUTE_TMPRING_SIZE__WAVESIZE__SHIFT);
+    CHECK_U64(BC250HSA_SCRATCH_WAVESIZE_MASK << BC250HSA_SCRATCH_WAVESIZE_SHIFT,
+              COMPUTE_TMPRING_SIZE__WAVESIZE_MASK);
+    CHECK_U64(BC250HSA_SCRATCH_FORMAT_32_FLOAT, BUF_FMT_32_FLOAT);
+    CHECK_STATUS(bc250hsa_plan_scratch(0u, 32u, &plan), BC250HSA_OK);
+    CHECK_U64(plan.bytes, 0u);
+    CHECK_STATUS(bc250hsa_plan_scratch(1u, 32u, &plan), BC250HSA_OK);
+    CHECK_U64(plan.bytes_per_thread, 4u);
+    CHECK_U64(plan.bytes_per_wave, 1024u);
+    CHECK_U64(plan.bytes, 32768u);
+    CHECK_U64(plan.tmpring_size, (1u << 12) | 32u);
+    CHECK_STATUS(bc250hsa_plan_scratch(3516u, 32u, &plan), BC250HSA_OK);
+    CHECK_U64(plan.bytes_per_wave, 112640u);
+    CHECK_U64(plan.bytes, 3604480u);
+    CHECK_STATUS(bc250hsa_scratch_resource(0x140ABCD2000ull, plan.bytes, &plan, 32u, resource), BC250HSA_OK);
+    CHECK_U64(resource[0], 0xABCD2000u);
+    CHECK_U64(resource[1], 0x80000140u);
+    CHECK_U64(resource[2], UINT32_MAX);
+    CHECK_U64(resource[3], 0x31C16000u);
+    CHECK_STATUS(bc250hsa_scratch_resource(0x140ABCD2000ull, plan.bytes - 1u, &plan, 32u, resource), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_scratch_resource(0x140ABCD2001ull, plan.bytes, &plan, 32u, resource), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_scratch_resource((1ull << 48) - 4096u, plan.bytes, &plan, 32u, resource), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_plan_scratch(3516u, 64u, &larger), BC250HSA_OK);
+    CHECK_U64(larger.bytes_per_wave, 225280u);
+    CHECK_STATUS(bc250hsa_scratch_resource(0x140ABCD2000ull, larger.bytes, &larger, 64u, resource), BC250HSA_OK);
+    CHECK_U64(resource[3], 0x31E16000u);
+    CHECK_STATUS(bc250hsa_plan_scratch(262112u, 32u, &larger), BC250HSA_OK);
+    CHECK_U64(larger.tmpring_size >> 12, 8191u);
+    CHECK_STATUS(bc250hsa_plan_scratch(262113u, 32u, &larger), BC250HSA_EUNSUPPORTED);
+    CHECK_STATUS(bc250hsa_plan_scratch(UINT32_MAX, 32u, &larger), BC250HSA_EUNSUPPORTED);
+    CHECK_STATUS(bc250hsa_plan_scratch(1u, 16u, &larger), BC250HSA_EINVAL);
+
+    /* Two live slots never alias. A pending fence and removal cannot cause a free;
+     * allocation failure preserves ownership, and only retirement permits growth. */
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 0u, 0u, &plan, &allocator), BC250HSA_OK);
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[1], 0u, 0u, &plan, &allocator), BC250HSA_OK);
+    CHECK(slots[0].va != slots[1].va);
+    old_va = slots[0].va;
+    CHECK_STATUS(bc250hsa_plan_scratch(4096u, 32u, &larger), BC250HSA_OK);
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 7u, 6u, &larger, &allocator), BC250HSA_EBUSY);
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 7u, UINT64_MAX, &larger, &allocator), BC250HSA_EDEVICELOST);
+    CHECK_U64(a.allocations, 2u);
+    CHECK_U64(a.frees, 0u);
+    a.fail = 1u;
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 7u, 7u, &larger, &allocator), BC250HSA_ENOMEM);
+    CHECK_U64(slots[0].va, old_va);
+    a.fail = 0u;
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 7u, 7u, &larger, &allocator), BC250HSA_OK);
+    CHECK_U64(a.allocations, 3u);
+    CHECK_U64(a.frees, 1u);
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 8u, 8u, &plan, &allocator), BC250HSA_OK);
+    CHECK_U64(a.allocations, 3u);
+    CHECK_U64(a.frees, 1u);
+
+    /* An allocator claiming success with an unusable VA is not allowed to replace
+     * the last valid retired buffer. Only the malformed new allocation is freed. */
+    CHECK_STATUS(bc250hsa_plan_scratch(8192u, 32u, &larger), BC250HSA_OK);
+    old_va = slots[0].va;
+    a.malformed = 1u;
+    CHECK_STATUS(bc250hsa_prepare_scratch(&slots[0], 9u, 9u, &larger, &allocator), BC250HSA_EINVAL);
+    CHECK_U64(slots[0].va, old_va);
+    CHECK_U64(a.frees, 2u);
+    a.malformed = 0u;
+
+    golden_kernel(&k);
+    golden_inputs(&d, &env, &k);
+    k.private_segment_bytes = 3516u;
+    k.compute_pgm_rsrc2 |= BC250HSA_SCRATCH_EN;
+    k.kernel_code_properties |= BC250HSA_KCP_FLAT_SCRATCH_INIT | BC250HSA_KCP_PRIVATE_SEGMENT_SIZE;
+    k.user_sgpr_count += 3u;
+    /* Old environment refuses fixed-private without reading beyond its old size. */
+    env.struct_bytes = (uint32_t)offsetof(bc250hsa_pm4_env, scratch_va);
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written), BC250HSA_EINVAL);
+    env.struct_bytes = sizeof(env);
+    env.scratch_va = 0x140ABCD2000ull;
+    env.scratch_bytes = plan.bytes;
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written), BC250HSA_OK);
+    CHECK_U64(scratch_reg(out, written, BC250HSA_REG_COMPUTE_TMPRING_SIZE), plan.tmpring_size);
+    CHECK_U64(scratch_reg(out, written, BC250HSA_REG_COMPUTE_USER_DATA_0), 0xABCD2000u);
+    CHECK_STATUS(bc250hsa_scratch_resource(env.scratch_va, plan.bytes, &plan, 32u, resource), BC250HSA_OK);
+    sgprs.struct_bytes = sizeof(sgprs);
+    CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, d.kernarg_va, 0u, resource, &sgprs), BC250HSA_OK);
+    CHECK_U64(sgprs.value[6], 0xABCD2000u);
+    CHECK_U64(sgprs.value[7], 0x140u); /* swizzle flag does not enter FLAT_SCRATCH_INIT */
+    CHECK_U64(sgprs.value[8], 3516u);
+    k.kernel_code_properties |= BC250HSA_KCP_DISPATCH_PTR;
+    k.user_sgpr_count += 2u;
+    CHECK_STATUS(bc250hsa_plan_user_sgprs(&k, d.kernarg_va, 0x140FFFF0040ull, resource, &sgprs), BC250HSA_OK);
+    CHECK_U64(sgprs.value[4], 0xFFFF0040u);
+    CHECK_U64(sgprs.value[5], 0x140u);
+    CHECK_U64(sgprs.value[8], 0xABCD2000u);
+    CHECK_U64(sgprs.value[9], 0x140u);
+    CHECK_U64(sgprs.value[10], 3516u);
+    k.kernel_code_properties &= ~(uint16_t)BC250HSA_KCP_DISPATCH_PTR;
+    k.user_sgpr_count -= 2u;
+    {
+        bc250hsa_pm4_writer writer;
+        bc250hsa_pm4_state state;
+        memset(&state, 0, sizeof(state));
+        bc250hsa_pm4_writer_init(&writer, out, GOLDEN_MAX, 0u);
+        CHECK_STATUS(bc250hsa_pm4_ib_append(&writer, &d, &env, 1, &state), BC250HSA_OK);
+        CHECK_U64(state.tmpring_size, plan.tmpring_size);
+        golden_kernel(&k);
+        bc250hsa_pm4_writer_init(&writer, out, GOLDEN_MAX, 0u);
+        CHECK_STATUS(bc250hsa_pm4_ib_append(&writer, &d, &env, 0, &state), BC250HSA_OK);
+        CHECK_U64(scratch_reg(out, writer.count, BC250HSA_REG_COMPUTE_TMPRING_SIZE), 0u);
+        CHECK_U64(state.tmpring_size, 0u);
+        k.private_segment_bytes = 3516u;
+        k.compute_pgm_rsrc2 |= BC250HSA_SCRATCH_EN;
+    }
+    batch[0] = d; batch[1] = d;
+    CHECK_STATUS(bc250hsa_pm4_build_batch(batch, 2u, &env, out, GOLDEN_MAX, &written), BC250HSA_EUNSUPPORTED);
+    d.launch.block[0] = 1025u;
+    CHECK_STATUS(bc250hsa_pm4_check_dispatch(&d, 65536u), BC250HSA_EINVAL);
+    d.launch.block[0] = UINT32_MAX;
+    d.launch.block[1] = UINT32_MAX;
+    d.launch.block[2] = UINT32_MAX;
+    CHECK_STATUS(bc250hsa_pm4_check_dispatch(&d, 65536u), BC250HSA_EINVAL);
+    golden_inputs(&d, &env, &k);
+    golden_kernel(&k);
+    env.struct_bytes = (uint32_t)offsetof(bc250hsa_pm4_env, scratch_va);
+    CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, &env, out, GOLDEN_MAX, &written), BC250HSA_OK);
+    CHECK_U64(written, g_golden_count);
+    {
+        const size_t legacy_bytes = offsetof(bc250hsa_pm4_env, scratch_va);
+        void* legacy = malloc(legacy_bytes);
+        CHECK(legacy != NULL);
+        if (legacy != NULL) {
+            memcpy(legacy, &env, legacy_bytes);
+            CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, (const bc250hsa_pm4_env*)legacy,
+                         out, GOLDEN_MAX, &written), BC250HSA_OK);
+            k.private_segment_bytes = 3516u;
+            k.compute_pgm_rsrc2 |= BC250HSA_SCRATCH_EN;
+            CHECK_STATUS(bc250hsa_pm4_build_dispatch(&d, (const bc250hsa_pm4_env*)legacy,
+                         out, GOLDEN_MAX, &written), BC250HSA_EINVAL);
+            free(legacy);
+        }
+    }
+}
+
 static void check_helpers(void)
 {
     uint32_t rsrc[4];
@@ -1167,5 +1425,7 @@ int main(int argc, char** argv)
     check_variants();
     check_refusals();
     check_helpers();
+    check_scratch();
+    check_close_retirement();
     return test_report("test_pm4");
 }

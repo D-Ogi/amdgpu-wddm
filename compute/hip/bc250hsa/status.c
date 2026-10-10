@@ -151,3 +151,13 @@ void bc250hsa_counters_reset(void)
 #endif
     }
 }
+
+/* FreeGpuVirtualAddress permits immediate VA reuse. A timeout or removal sentinel
+ * therefore cannot serve as permission to unmap memory a submitted IB may use. */
+void bc250hsa_finish_close(const bc250hsa_close_ops* ops)
+{
+    bc250hsa_status status = ops->flush(ops->ctx);
+    if (status == BC250HSA_OK) { status = ops->wait(ops->ctx); }
+    if (status == BC250HSA_OK) { ops->release(ops->ctx); }
+    else { ops->quarantine(ops->ctx, status); }
+}

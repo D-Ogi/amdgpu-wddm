@@ -45,9 +45,10 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 2u   /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 3u   /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
-                                         * that ENABLE_SGPR_DISPATCH_PTR needs */
+                                         * that ENABLE_SGPR_DISPATCH_PTR needs;
+                                         * 1.3 adds fixed-private scratch PM4 environments */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -170,6 +171,9 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_devic
 
 /* Waits for the last submission under the default bound, frees every allocation this
  * device still owns, and closes the adapter. Safe with dev NULL. */
+/* Consumes the handle. If flush or retirement cannot be proved, resources stay
+ * quarantined until process exit rather than being unmapped under GPU work.
+ * Repeated failed closes can retain multiple devices. */
 void bc250hsa_close(bc250hsa_device* dev);
 
 typedef struct bc250hsa_props {
@@ -586,10 +590,17 @@ typedef struct bc250hsa_pm4_env {
     uint64_t fence_value;
     uint32_t private_segment_rsrc[4];   /* the 128-bit buffer resource for s[0:3] */
     uint32_t ib_pad_dwords;             /* 8 on the graphics ring, 0 takes 8 */
+    /* Optional extension: old 48-byte environments remain valid for zero-private
+     * kernels. Fixed-private dispatches require the complete structure. The buffer
+     * is device-local, 4096-aligned, resident, and owned until this IB retires. */
+    uint64_t scratch_va;
+    uint64_t scratch_bytes;
 } bc250hsa_pm4_env;
 
 /* Writes the dispatch of section 8 of the design as PM4 dwords into the caller's
- * buffer. It touches no device and no operating system, so a host test compares the
+ * buffer. The 48-byte ABI 1.2 environment remains accepted for zero-private kernels.
+ * Fixed-private kernels require scratch_va/scratch_bytes in the full environment.
+ * It touches no device and no operating system, so a host test compares the
  * result with a golden stream. */
 bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
                                             const bc250hsa_pm4_env* env,
@@ -600,7 +611,8 @@ bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
  * ring CONTEXT_CONTROL and the full acquire), count dispatch bodies with the barrier of
  * env->flags between them, and one completion write at the end. count 1 writes exactly
  * what bc250hsa_pm4_build_dispatch writes, dword for dword. A batch of n dispatches
- * needs at most n * BC250HSA_PM4_MAX_DWORDS dwords. */
+ * needs at most n * BC250HSA_PM4_MAX_DWORDS dwords. Fixed-private kernels are
+ * accepted only with count 1, so one live BO never changes its ring stride. */
 bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, uint32_t count,
                                          const bc250hsa_pm4_env* env,
                                          uint32_t* dwords, uint32_t dword_capacity,

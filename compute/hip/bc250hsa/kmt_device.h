@@ -77,6 +77,7 @@ struct bc250hsa_device {
     uint32_t     ring_slot_bytes;
     uint64_t*    slot_fence;          /* ring_slots values */
     uint32_t     next_slot;
+    bc250hsa_mem* slot_scratch;       /* independent BO per retired IB slot */
 
     bc250hsa_mem zero_page;
     uint32_t     private_segment_rsrc[4];
@@ -107,6 +108,7 @@ struct bc250hsa_device {
     uint8_t caps[BC250HSA_CAPS_BYTES];
     int     caps_valid;
 
+    int closing;
     int device_lost;
     int submit_capable;               /* 0 with BC250HSA_OPEN_NO_GPU_SUBMIT */
 };

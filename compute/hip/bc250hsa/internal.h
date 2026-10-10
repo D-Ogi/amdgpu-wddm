@@ -179,6 +179,40 @@ bc250hsa_status bc250hsa_descriptor_read(const uint8_t* bytes, size_t byte_count
 bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
                                             uint32_t lds_bytes_per_workgroup);
 
+/* Close only releases resources after positive retirement. The callbacks make the
+ * exact close decision testable without a KMT device, including failure ordering. */
+typedef struct bc250hsa_close_ops {
+    void* ctx;
+    bc250hsa_status (*flush)(void* ctx);
+    bc250hsa_status (*wait)(void* ctx);
+    void (*release)(void* ctx);
+    void (*quarantine)(void* ctx, bc250hsa_status status);
+} bc250hsa_close_ops;
+void bc250hsa_finish_close(const bc250hsa_close_ops* ops);
+
+/* Fixed-private scratch for gfx1013. GFX10 WAVES counts the whole GPU, not
+ * per-SE slots. 32 resident waves accommodate the admitted 1024-thread maximum.
+ * Slots are disjoint between in-flight IBs; reuse requires the slot fence. */
+#define BC250HSA_SCRATCH_WAVES 32u
+#define BC250HSA_SCRATCH_ALIGNMENT 4096u
+typedef struct bc250hsa_scratch_plan {
+    uint32_t bytes_per_thread;
+    uint32_t bytes_per_wave;
+    uint32_t tmpring_size;
+    uint64_t bytes;
+} bc250hsa_scratch_plan;
+bc250hsa_status bc250hsa_plan_scratch(uint32_t private_bytes, uint32_t wave_size,
+                                      bc250hsa_scratch_plan* out);
+bc250hsa_status bc250hsa_scratch_resource(uint64_t va, uint64_t bytes,
+                                          const bc250hsa_scratch_plan* plan,
+                                          uint32_t wave_size, uint32_t out[4]);
+/* Allocator seam is shared by the real retired-slot path and offline lifetime tests.
+ * UINT64_MAX is removal, never a completed fence. Failure leaves the old BO intact. */
+bc250hsa_status bc250hsa_prepare_scratch(bc250hsa_mem* slot, uint64_t required_fence,
+                                         uint64_t observed_fence,
+                                         const bc250hsa_scratch_plan* plan,
+                                         const bc250hsa_allocator* allocator);
+
 /* The dword writer of pm4_dispatch.c, and the three steps of one indirect buffer.
  * bc250hsa_pm4_build_batch is these three in a row, and submit.c calls them one at a
  * time: the head when it opens a batch, one append per dispatch, the tail when it
@@ -228,6 +262,7 @@ typedef struct bc250hsa_pm4_state {
     uint32_t rsrc1;
     uint32_t rsrc2;
     uint32_t rsrc3;
+    uint32_t tmpring_size;
     uint32_t block[3];
     uint32_t user_sgpr_count;
     uint32_t user_sgpr[BC250HSA_MAX_USER_SGPR];
