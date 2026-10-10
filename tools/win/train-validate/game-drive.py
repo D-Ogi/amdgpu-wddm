@@ -7,10 +7,18 @@ as its child and, beside it, does what the operator did:
 
 1. waits until the game runs (`game-control.py <attempt> peek`, one call every `--peek-every` s);
 2. reads the screen (`shot:0.5;ocr`, one call every `--every` s, the owner's 10-15 s rule) until the menu item
-   shows, points at it, clicks, and holds Enter when the click alone did not leave the menu;
-3. checks itself: a shot and a read `--check-after` s later must show the scene, not the menu. It tries once
-   more, then fails the arm with `menu not left`;
+   shows, moves the menu's highlight onto it with the arrow keys, reads the screen again to see the highlight
+   there, and only then presses Enter;
+3. checks itself: a shot and a read `--check-after` s later must show neither the menu nor a submenu (a BACK
+   button: the wrong item opened). From a submenu it presses Esc. It tries once more, then fails the arm with
+   `menu not left`;
 4. reads the screen on until the result line shows, prints it, confirms the dialog and ends the session.
+
+The arrow keys, not the mouse (b29 native-caps550): a click at the centre of the START BENCHMARK box that the OCR
+found left the game's highlight on CREDITS, one item up, the Enter after it opened the credits, and the self-check
+of that version took the credits for the benchmark because the menu was gone. The game draws its highlighted item
+about 1.3 times wider, which the OCR boxes show, so the driver reads where the highlight is instead of assuming
+where a click put it.
 
 The score stays the operator's reading in the summary; the line this prints is where to read it from. Exit code:
 the session command's own, or 5 when the drive failed (the session is then ended through the channel first).
@@ -39,9 +47,17 @@ DRIVES = {
         # The profile's apis.d3d12.world_after_confirm_s: the scenes start 46-56 s after the confirm.
         "world_note": "note:world+60",
         "confirm": "hold:1C:300",
+        # Down and Up arrows (extended scan codes 50 and 48), Esc, and the text of a submenu's way back.
+        "down": "tapx:50",
+        "up": "tapx:48",
+        "back": "tap:01",
+        "submenu": "BACK",
     },
 }
 FAILED = 5
+# A menu item drawn this much wider per character than the column's median is the highlighted one (550: the
+# highlighted MARKETPLACE and CREDITS read 1.39 and 1.27 times the median).
+HIGHLIGHT_RATIO = 1.18
 
 
 class Channel:
@@ -84,6 +100,27 @@ def in_menu(lines: list[dict], drive: dict) -> bool:
     return sum(1 for item in drive["menu_items"] if find(lines, item)) >= 2
 
 
+def menu_column(lines: list[dict], target: dict) -> list[dict]:
+    """The menu's items, top to bottom: capital-letter lines whose left edge is the target item's."""
+    left = target["b"][0]
+    column = [line for line in lines if re.fullmatch(r"[A-Z][A-Z ]{2,}", str(line.get("t", "")).strip())
+              and abs(line["b"][0] - left) <= 0.03]
+    return sorted(column, key=lambda line: line["b"][1])
+
+
+def per_char(line: dict) -> float:
+    return (line["b"][2] - line["b"][0]) / len(line["t"].strip())
+
+
+def highlighted(column: list[dict]) -> dict | None:
+    """The item drawn wider than the others (the game's highlight), or None when no item stands out."""
+    if len(column) < 3:
+        return None
+    widths = sorted(per_char(line) for line in column)
+    best = max(column, key=per_char)
+    return best if per_char(best) >= HIGHLIGHT_RATIO * widths[len(widths) // 2] else None
+
+
 class Driver:
     def __init__(self, drive: dict, channel: Channel, alive, every: float, peek_every: float,
                  check_after: float, wait_game: float, wait_menu: float, wait_result: float,
@@ -113,20 +150,51 @@ class Driver:
             self.sleep(every)
         return None
 
-    def start(self, item: dict) -> None:
-        x0, y0, x1, y1 = item["b"]
-        x, y = round((x0 + x1) / 2, 3), round((y0 + y1) / 2, 3)
-        self.channel.call(f"point:{x}:{y};click:left;wait:2000")
-        lines, _ = self.channel.look()
-        if in_menu(lines, self.drive):
-            # The click selected the item but did not start it: a held Enter does (rottr4, 2026-10-01).
-            self.channel.call(self.drive["confirm"])
+    def select(self, lines: list[dict]) -> bool:
+        """Moves the highlight onto the menu item with the arrow keys. True once a read shows it there."""
+        want = self.drive["menu"]
+        for _ in range(4):
+            target = find(lines, want)
+            column = menu_column(lines, target) if target else []
+            names = [line["t"].strip().upper() for line in column]
+            if want not in names:
+                self.say(f"[drive] {want} is not in the menu column of the read: {names}")
+                return False
+            lit = highlighted(column)
+            if lit is not None and lit["t"].strip().upper() == want:
+                self.say(f"[drive] the highlight is on {want}")
+                return True
+            if lit is None:
+                keys = [self.drive["down"]]         # the first arrow key makes the highlight show
+                where = "no highlight in the read"
+            else:
+                steps = names.index(want) - names.index(lit["t"].strip().upper())
+                keys = [self.drive["down"] if steps > 0 else self.drive["up"]] * abs(steps)
+                where = f"the highlight is on {lit['t'].strip()}"
+            self.say(f"[drive] {where}: {len(keys)} x {keys[0]}")
+            self.channel.call(";".join(f"{key};wait:300" for key in keys))
+            lines, _ = self.channel.look()
+            if not in_menu(lines, self.drive):
+                self.say("[drive] the menu went away under the arrow keys")
+                return False
+        return False
+
+    def start(self, lines: list[dict]) -> bool:
+        if not self.select(lines):
+            return False
+        self.channel.call(self.drive["confirm"])
         self.channel.call(self.drive["world_note"])
-        self.say(f"[drive] {self.drive['menu']} at {x},{y}: clicked")
+        self.say(f"[drive] {self.drive['menu']}: Enter on the highlighted item")
+        return True
 
     def left_menu(self) -> bool:
         self.sleep(self.check_after)
         lines, shot = self.channel.look()
+        if find(lines, self.drive["submenu"]) and not in_menu(lines, self.drive):
+            self.say(f"[drive] self-check {shot or 'no shot'}: a submenu ({self.drive['submenu']}), not the scene; "
+                     f"Esc back to the menu")
+            self.channel.call(self.drive["back"] + ";wait:2000")
+            return False
         left = not in_menu(lines, self.drive)
         self.say(f"[drive] self-check {shot or 'no shot'}: {'the menu is gone' if left else 'still the menu'}")
         return left
@@ -140,17 +208,20 @@ class Driver:
 
         def menu():
             lines, shot = self.channel.look()
-            item = find(lines, self.drive["menu"]) if in_menu(lines, self.drive) else None
-            self.say(f"[drive] {shot or 'no shot'}: {'menu' if item else 'not the menu yet'}")
-            return item
+            found = in_menu(lines, self.drive) and find(lines, self.drive["menu"]) is not None
+            self.say(f"[drive] {shot or 'no shot'}: {'menu' if found else 'not the menu yet'}")
+            return lines if found else None
 
         for attempt in (1, 2):
-            item = self.until(self.wait_menu, self.every, menu)
-            if item is None:
+            lines = self.until(self.wait_menu, self.every, menu)
+            if lines is None:
                 if self.alive():
                     self.fail(f"the main menu never showed {self.drive['menu']}")
                 return
-            self.start(item)
+            if not self.start(lines):
+                if self.alive():
+                    self.fail(f"the highlight did not reach {self.drive['menu']}")
+                return
             if self.left_menu():
                 break
             if attempt == 2:

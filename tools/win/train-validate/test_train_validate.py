@@ -362,48 +362,88 @@ class GameWindow(unittest.TestCase):
         self.assertEqual(len(shell.said("vsync.ps1 -Value 1")), 1, "the restore still runs")
 
 
-MENU = [{"t": "OPTIONS", "b": [0.11, 0.303, 0.168, 0.329]}, {"t": "QUIT GAME", "b": [0.108, 0.384, 0.18, 0.41]},
-        {"t": "START BENCHMARK", "b": [0.106, 0.465, 0.235, 0.492]}]
+# The Rise of the Tomb Raider main menu, top to bottom, and two reads of it by the lab's OCR in native-caps550:
+# before any input (MARKETPLACE highlighted) and after a click at the centre of START BENCHMARK (CREDITS highlighted).
+ITEMS = ("CONTINUE", "LOAD GAME", "NEW GAME", "EXPEDITIONS", "LEADERBOARDS", "OPTIONS", "MARKETPLACE", "QUIT GAME",
+         "CREDITS", "START BENCHMARK")
+OCR_550_FIRST = [
+    {"t": "CONTINUE", "b": [0.116, 0.102, 0.183, 0.137]}, {"t": "LOAD GAME", "b": [0.115, 0.142, 0.191, 0.177]},
+    {"t": "NEW GAME", "b": [0.114, 0.182, 0.185, 0.215]}, {"t": "EXPEDITIONS", "b": [0.112, 0.222, 0.199, 0.256]},
+    {"t": "LEADERBOARDS", "b": [0.111, 0.262, 0.216, 0.298]}, {"t": "OPTIONS", "b": [0.11, 0.303, 0.168, 0.33]},
+    {"t": "MARKETPLACE", "b": [0.11, 0.34, 0.238, 0.381]}, {"t": "QUIT GAME", "b": [0.108, 0.384, 0.18, 0.41]},
+    {"t": "CREDITS", "b": [0.107, 0.425, 0.164, 0.448]}, {"t": "START BENCHMARK", "b": [0.106, 0.465, 0.235, 0.492]},
+    {"t": "1/1", "b": [0.151, 0.572, 0.167, 0.591]}]
+OCR_550_AFTER_CLICK = [
+    {"t": "14", "b": [0.068, 0.342, 0.081, 0.361]}, {"t": "CONTINUE", "b": [0.115, 0.104, 0.182, 0.138]},
+    {"t": "LOAD GAME", "b": [0.114, 0.144, 0.19, 0.179]}, {"t": "NEW GAME", "b": [0.113, 0.184, 0.185, 0.217]},
+    {"t": "EXPEDITIONS", "b": [0.112, 0.224, 0.198, 0.258]}, {"t": "LEADERBOARDS", "b": [0.111, 0.265, 0.216, 0.3]},
+    {"t": "OPTIONS", "b": [0.11, 0.305, 0.168, 0.332]}, {"t": "MARKETPLACE", "b": [0.109, 0.346, 0.207, 0.376]},
+    {"t": "QUIT GAME", "b": [0.108, 0.386, 0.18, 0.412]}, {"t": "CREDITS", "b": [0.107, 0.422, 0.182, 0.453]},
+    {"t": "START BENCHMARK", "b": [0.106, 0.468, 0.234, 0.493]}]
 LOADING = [{"t": "GATHERING", "b": [0.8, 0.76, 0.9, 0.78]}]
+CREDITS = [{"t": "EIDOS MONTREAL CORE TEAM", "b": [0.35, 0.44, 0.67, 0.47]}, {"t": "BACK", "b": [0.935, 0.898, 0.966, 0.912]}]
 RESULT = [{"t": "Mountain Peak: 78.67 FPS (min: 11.60, max: 135.43)", "b": [0.36, 0.39, 0.67, 0.41]},
           {"t": "Overall score: 51.24 FPS", "b": [0.444, 0.472, 0.591, 0.488]}, {"t": "0K", "b": [0.4, 0.54, 0.42, 0.56]}]
 
 
 class FakeChannel:
-    """The control channel of a session: screens in order, and a click or Enter that may leave the menu."""
+    """The control channel of a session with the game's own menu: the arrow keys move a highlight that the OCR
+    sees as a wider box, Enter opens the highlighted item (START BENCHMARK loads the benchmark, any other item a
+    submenu with a BACK button), Esc leaves a submenu, and a mouse click does nothing."""
 
-    def __init__(self, before_menu=1, leaves_on="click", scenes=2, never_leaves=False):
+    def __init__(self, before_menu=1, items=ITEMS, lit=6, scenes=2, keys_work=True, never_leaves=False,
+                 first_enter_opens=None):
         self.calls: list[str] = []
-        self.before_menu, self.leaves_on, self.scenes, self.never_leaves = before_menu, leaves_on, scenes, never_leaves
-        self.state, self.shown = "black", 0
+        self.before_menu, self.items, self.lit, self.scenes = before_menu, list(items), lit, scenes
+        self.keys_work, self.never_leaves, self.first_enter_opens = keys_work, never_leaves, first_enter_opens
+        self.state, self.shown, self.enters = "black", 0, 0
+
+    def go(self, state):
+        self.state, self.shown = state, 0
 
     def call(self, actions):
         self.calls.append(actions)
-        if not self.never_leaves and self.state == "menu" and (
-                (self.leaves_on == "click" and "click:left" in actions) or
-                (self.leaves_on == "enter" and actions == "hold:1C:300")):
-            self.state, self.shown = "loading", 0
+        for action in actions.split(";"):
+            if self.state == "menu" and action in ("tapx:50", "tapx:48") and self.keys_work:
+                if self.lit is None:
+                    self.lit = 0
+                else:
+                    self.lit = max(0, min(len(self.items) - 1, self.lit + (1 if action == "tapx:50" else -1)))
+            elif self.state == "menu" and action == "hold:1C:300" and not self.never_leaves:
+                self.enters += 1
+                opens = self.first_enter_opens if self.enters == 1 and self.first_enter_opens else self.items[self.lit]
+                self.go("loading" if opens == "START BENCHMARK" else "submenu")
+            elif self.state == "submenu" and action == "tap:01":
+                self.go("menu")
         return ""
 
     def running(self):
         self.calls.append("peek")
         return True
 
+    def menu(self):
+        lines = []
+        for i, name in enumerate(self.items):
+            width = 0.0084 * len(name) * (1.35 if i == self.lit else 1.0)
+            lines.append({"t": name, "b": [0.11, 0.10 + 0.04 * i, round(0.11 + width, 3), 0.13 + 0.04 * i]})
+        return lines
+
     def look(self):
         self.calls.append("look")
         self.shown += 1
         if self.state == "black" and self.shown > self.before_menu:
-            self.state = "menu"
+            self.go("menu")
         elif self.state == "loading" and self.shown > 1:
-            self.state = "scene"
-        elif self.state == "scene" and self.shown > self.scenes + 1:
-            self.state = "result"
-        screens = {"black": [], "menu": MENU, "loading": LOADING, "scene": [], "result": RESULT}
+            self.go("scene")
+        elif self.state == "scene" and self.shown > self.scenes:
+            self.go("result")
+        screens = {"black": [], "menu": self.menu(), "loading": LOADING, "submenu": CREDITS, "scene": [],
+                   "result": RESULT}
         return list(screens[self.state]), f"shot-{len(self.calls):03d}.jpg"
 
 
 class GameDrive(unittest.TestCase):
-    """game-drive.py: START BENCHMARK selected, the menu left, the result read (b29 native-caps548)."""
+    """game-drive.py: START BENCHMARK selected with the arrow keys, the menu left, the result read (b29 548, 550)."""
 
     def drive(self, channel, alive=lambda: True):
         import importlib
@@ -415,32 +455,73 @@ class GameDrive(unittest.TestCase):
         driver.run()
         return driver, said
 
-    def test_the_click_starts_the_benchmark_and_the_result_ends_the_session(self):
-        channel = FakeChannel(leaves_on="click")
+    def test_the_highlight_is_read_from_the_550_menu(self):
+        import importlib
+        module = importlib.import_module("game-drive")
+        for name, lines, lit in (("first read", OCR_550_FIRST, "MARKETPLACE"),
+                                 ("after the click", OCR_550_AFTER_CLICK, "CREDITS")):
+            with self.subTest(read=name):
+                column = module.menu_column(lines, module.find(lines, "START BENCHMARK"))
+                self.assertEqual([line["t"] for line in column], list(ITEMS), "the menu column, without 14 and 1/1")
+                self.assertEqual(module.highlighted(column)["t"], lit)
+        even = [dict(line, b=[line["b"][0], line["b"][1], line["b"][0] + 0.0084 * len(line["t"]), line["b"][3]])
+                for line in OCR_550_FIRST if line["t"] in ITEMS]
+        self.assertIsNone(module.highlighted(even), "no item stands out: no highlight")
+
+    def test_the_arrow_keys_reach_the_benchmark_and_the_result_ends_the_session(self):
+        channel = FakeChannel(lit=6)
         driver, said = self.drive(channel)
         self.assertEqual(driver.failed, "")
-        click = next(call for call in channel.calls if "click:left" in call)
-        self.assertIn("point:0.17:0.479", click, "the centre of the item the OCR found")
-        self.assertNotIn("hold:1C:300", channel.calls[:channel.calls.index(click) + 3],
-                         "no Enter when the click alone left the menu: Enter on the menu would open OPTIONS")
+        self.assertIn("tapx:50;wait:300;tapx:50;wait:300;tapx:50;wait:300", channel.calls,
+                      "MARKETPLACE to START BENCHMARK is three items down")
+        self.assertFalse([call for call in channel.calls if "click" in call or "point" in call], "no mouse")
+        enter = channel.calls.index("hold:1C:300")
+        self.assertEqual(channel.calls[enter - 1], "look", "Enter only after a read showed the highlight there")
+        self.assertIn("[drive] the highlight is on START BENCHMARK", said)
         self.assertIn("note:world+60", channel.calls)
         self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
         self.assertEqual(channel.calls[-2:], ["hold:1C:300", "quit"], "the dialog confirmed, then the session ends")
 
-    def test_a_click_that_only_selects_gets_a_held_enter(self):
-        channel = FakeChannel(leaves_on="enter")
+    def test_a_highlight_below_the_item_moves_up(self):
+        items = ("CONTINUE", "OPTIONS", "START BENCHMARK", "QUIT GAME", "CREDITS", "EXPEDITIONS")
+        channel = FakeChannel(items=items, lit=5)
         driver, said = self.drive(channel)
         self.assertEqual(driver.failed, "")
-        click = next(i for i, call in enumerate(channel.calls) if "click:left" in call)
-        self.assertEqual(channel.calls[click + 2], "hold:1C:300")
+        self.assertIn("tapx:48;wait:300;tapx:48;wait:300;tapx:48;wait:300", channel.calls)
+        self.assertNotIn("tapx:50", " ".join(channel.calls))
+
+    def test_no_highlight_in_the_read_gets_one_arrow_key_first(self):
+        channel = FakeChannel(lit=None)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        keys = [call for call in channel.calls if call.startswith("tapx:")]
+        self.assertEqual(keys[0], "tapx:50;wait:300", "one key to make the highlight show")
+        self.assertEqual(keys[1].count("tapx:50"), 9, "then CONTINUE to START BENCHMARK")
+
+    def test_a_submenu_is_left_with_esc_and_the_drive_tries_again(self):
+        # 550: the first Enter opened CREDITS, and a check that only looked for the menu took the credits for
+        # the benchmark. A BACK button on the screen is a submenu: Esc, then once more from the menu.
+        channel = FakeChannel(lit=9, first_enter_opens="CREDITS")
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertIn("tap:01;wait:2000", channel.calls)
+        self.assertTrue(any("a submenu (BACK), not the scene" in line for line in said))
+        self.assertEqual(channel.calls.count("hold:1C:300"), 3, "two Enters on the menu, one on the result")
         self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
 
     def test_a_menu_that_is_never_left_fails_after_one_retry_and_ends_the_session(self):
         channel = FakeChannel(never_leaves=True)
         driver, said = self.drive(channel)
         self.assertEqual(driver.failed, "menu not left")
-        self.assertEqual(sum(1 for call in channel.calls if "click:left" in call), 2, "one retry")
+        self.assertEqual(channel.calls.count("hold:1C:300"), 2, "one retry")
         self.assertIn("[drive] FAILED menu not left", said)
+        self.assertEqual(channel.calls[-1], "quit")
+
+    def test_arrow_keys_that_move_nothing_fail_without_an_enter(self):
+        channel = FakeChannel(keys_work=False)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "the highlight did not reach START BENCHMARK")
+        self.assertNotIn("hold:1C:300", channel.calls, "never Enter on an item the read does not show highlighted")
         self.assertEqual(channel.calls[-1], "quit")
 
     def test_no_menu_within_the_wait_fails_and_says_so(self):
@@ -454,7 +535,7 @@ class GameDrive(unittest.TestCase):
                                clock=lambda: float(next(clock)), say=said.append)
         driver.run()
         self.assertEqual(driver.failed, "the main menu never showed START BENCHMARK")
-        self.assertNotIn("click:left", " ".join(channel.calls))
+        self.assertNotIn("hold:1C:300", channel.calls)
 
     def test_a_session_that_ends_by_itself_is_not_a_drive_failure(self):
         channel = FakeChannel(before_menu=10 ** 6)
