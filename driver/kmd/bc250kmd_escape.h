@@ -1964,3 +1964,31 @@ typedef struct _BC250_ESCAPE_DPAUDIO {
 } BC250_ESCAPE_DPAUDIO; // 536 bytes on Windows, ABI 3 (ABI 2: the first 480, ABI 1: the first 408)
 typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 536) ? 1 : -1];
 typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUDIO_OBS_SLOTS) ? 1 : -1];
+
+// Board provider ABI 1. Query only; all reserved input and output words are zero.
+#define BC250_ESCAPE_RUN_BOARD_CAPS 33u
+#define BC250_BOARD_CAPS_ABI 1u
+#define BC250_BOARD_CAPS_SUPPORTED 1u
+#define BC250_BOARD_CAPS_FAN 2u
+#define BC250_BOARD_CAPS_GPU 4u
+#define BC250_BOARD_CAPS_CPU 8u
+#define BC250_BOARD_CAPS_MEMORY 16u
+#define BC250_BOARD_CAPS_REASON_NONE 0u
+#define BC250_BOARD_CAPS_REASON_BOARD 1u
+#define BC250_BOARD_CAPS_REASON_INACTIVE 2u
+typedef struct _BC250_BOARD_GPU_POINT { unsigned long MHz, Mv, Vid; } BC250_BOARD_GPU_POINT;
+typedef struct _BC250_BOARD_FAN_POINT { unsigned long TempC, DutyPct; } BC250_BOARD_FAN_POINT;
+typedef struct _BC250_ESCAPE_BOARD_CAPS {
+    unsigned long Magic, Command, Status, NtStatus, AbiVersion, ProviderId, Flags, Reason;
+    unsigned long GpuMinMHz, GpuFloorMHz, GpuMaxMHz, GpuStepMHz, GpuPointCount;
+    unsigned long GpuMinMv, GpuMaxMv, GpuUndervoltMv, GpuHotMc;
+    unsigned long CpuMinMHz, CpuMaxMHz, CpuLabMaxMHz, CpuStepMHz, CpuUvMaxSteps;
+    unsigned long CpuTempMinC, CpuTempMaxC, CpuRefuseMv, CpuStockMask, CpuFullMask, CpuCoreCount;
+    unsigned long FanMinC, FanMaxC, FanFloorPct, FanFullPct, FanEmergencyMc;
+    unsigned long FanPointMin, FanPointMax, FanLeaseMinMs, FanLeaseMaxMs, FanLeaseDefaultMs;
+    BC250_BOARD_GPU_POINT GpuPoints[16];
+    unsigned long FanPresetCounts[3]; // Standard, Quiet, Performance.
+    BC250_BOARD_FAN_POINT FanPresets[3][8];
+    unsigned long GpuDefaultMaxMHz, CpuStockCoreCount;
+    unsigned long Reserved[53];
+} BC250_ESCAPE_BOARD_CAPS;

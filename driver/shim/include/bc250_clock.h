@@ -1,3 +1,4 @@
+#include "bc250_board_envelope.h"
 /* Fixed-clock startup transaction. Caller supplies the single serialized SMU owner. */
 #ifndef BC250_CLOCK_H
 #define BC250_CLOCK_H
@@ -51,14 +52,6 @@ struct bc250_clock_report {
  * its sysfs there) although unit A's firmware accepts 800 and 900 MHz at VID 116 (facts M785), so the KMD
  * still treats a refused transition under the floor as "this part has no such point" (driver/kmd/dpm.c):
  * the thermal sub-floor or the idle point is withdrawn for the rest of the start. */
-#define BC250_CLOCK_MIN_MHZ 500u        /* the table's lowest clock: the idle point, below the lab floor */
-#define BC250_CLOCK_FLOOR_MHZ 1000u     /* the lab point, and the lowest clock the load may ask for */
-#define BC250_CLOCK_CEILING_MHZ 2000u
-#define BC250_CLOCK_STEP_MHZ 100u
-#define BC250_CLOCK_LEVELS 16u
-#define BC250_CLOCK_FLOOR_MV 820u
-#define BC250_CLOCK_CEILING_MV 1000u
-#define BC250_CLOCK_HOT_MC 87000     /* no raise of clock or voltage at or above this (owner, 2026-10-01; was 85000) */
 /* After the commit the SMU reports the clock on its way to a raised request (unit A, KMD 0.7.176.1: 1028-1029 MHz
  * right after 1000 -> 1200, 1200 one 25 ms governor tick later; lowerings read back exact). While the readback lies
  * between the initial clock and the request, it is read again, at most this often, with this pause before each. */
@@ -74,7 +67,6 @@ struct bc250_clock_report {
  * already covers the community's interpolated 900 mV at 1500 MHz (the table's line is 919 mV there). */
 #define BC250_CURVE_FIRST_LEVEL 5u      /* 1000 MHz: the lowest level a curve may change (== BC250_DPM_FLOOR_LEVEL) */
 #define BC250_CURVE_POINTS 11u          /* levels 5..15, 1000..2000 MHz */
-#define BC250_CURVE_UNDERVOLT_MV 25u    /* how far under the table's line one level may go */
 struct bc250_clock_point { unsigned int mhz, mv, vid; };
 extern const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS];
 struct bc250_clock_curve { unsigned int mv[BC250_CURVE_POINTS]; };

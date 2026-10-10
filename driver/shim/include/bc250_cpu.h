@@ -1,3 +1,4 @@
+#include "bc250_board_envelope.h"
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * BC-250 CPU control policy (0.7.210; docs/design/tuner.md, docs/hardware.md, ADR 0020). Pure: no locks, no time
@@ -107,27 +108,15 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
  * release asks for no more than stock. A clock above the release bound needs an undervolt of at least
  * BC250_CPU_LAB_MIN_UV_STEPS and not merely one step: one step is about 5 mV at 3500 MHz by the community's
  * own fitted model, which is not "an undervolt already in force". */
-#define BC250_CPU_MIN_MHZ		2800u
-#define BC250_CPU_MAX_MHZ		3500u
-#define BC250_CPU_MAX_MHZ_LAB		4000u
-#define BC250_CPU_LAB_MIN_UV_STEPS	4u	/* about 13 to 17 mV: what the lab bound needs first */
 /* The undervolt is a step count, not a millivolt count: one step of the firmware's curve scale removes about
  * 0.004325 x f - 10 mV, so 3.0 mV at 3000 MHz and 7.3 mV at 4000 MHz (REPORTED, the community's own fitted
  * model). The reference Control Center's "6.25 mV a step" is exact near 3745 MHz only. The applied voltage
  * therefore comes from BC250_CPU_MSG_READ_CPU_MV, never from arithmetic on the step count. */
-#define BC250_CPU_UV_MAX_STEPS		16u	/* about 50 to 115 mV; the reference tool's own GUI stops at 40 */
-#define BC250_CPU_TEMP_MIN_C		85u
-#define BC250_CPU_TEMP_MAX_C		100u	/* the firmware default, and the value a restore puts back */
 /* Above this the driver reverts at once. The reported bricking ceiling is 1325 mV; we never go near it. */
-#define BC250_CPU_REFUSE_MV		1300u
-#define BC250_CPU_PLAUSIBLE_MIN_MV	700u	/* a readback outside this band is not a voltage we understand */
-#define BC250_CPU_PLAUSIBLE_MAX_MV	1600u
 /* Clock stretching: the effective clock this far or further under the target is the failure sign. The reference
  * GUI aborts at 200 MHz under, its detect tool at 50 MHz under. */
-#define BC250_CPU_STRETCH_MHZ		200u
 /* No CPU message while the GPU is this busy or busier: "no mailbox traffic during sustained compute"
  * (docs/design/rejected-options.md). The same share the idle state leaves on. */
-#define BC250_CPU_GPU_BUSY_PERMILLE	500u
 #define BC250_CPU_MESSAGE_GAP_MS	100u	/* one setter per this, and the lock is released between them */
 /* A getter changes nothing, so it needs the firmware's mailbox turnaround and not a settling time. This keeps a
  * whole read stage (three single getters, eight P-states, eight cores) inside a fifth of a second. */
@@ -324,8 +313,6 @@ enum bc250_cpu_search_action bc250_cpu_search_next(struct bc250_cpu_search *s, c
  * this part, so one lab trial settles whether it is a live route or a no-op on a harvested die - and either
  * answer closes an open question. The cores appear after a reset, so this is the CU mode's shape: a registry
  * value, a two-step boot guard, and "after the next restart" in the window. */
-#define BC250_CPU_MASK_STOCK	0x77u
-#define BC250_CPU_MASK_FULL	0xFFu
 int bc250_cpu_mask_allowed(unsigned int mask);
 /* How many cores a mask names, for the log and the report. */
 unsigned int bc250_cpu_mask_cores(unsigned int mask);

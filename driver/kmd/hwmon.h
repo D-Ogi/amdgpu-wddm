@@ -40,6 +40,7 @@ typedef struct _BC250_HWMON_OWNER {
     // One register transaction. A leaf lock: the holder takes nothing else, so no lock order changes.
     KSPIN_LOCK PortLock;
     KSPIN_LOCK SnapLock;                    // Snap, written by the sampler and read by the escape
+    BOOLEAN BoardAllowed;                  // Positive board selection precedes even probe latch writes.
     BOOLEAN Enabled;                        // EnableHwmon was 1 at this start
     BOOLEAN Online;                         // the identity passed: the sampler may read
     BOOLEAN DutyProven;                     // HwmonDutyProven

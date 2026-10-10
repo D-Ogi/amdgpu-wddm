@@ -21,7 +21,7 @@ static int OwnerBegin(void* context)
     BC250_SMU_OWNER* owner=context;
     if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return -22;
     OwnerLock(owner);
-    if(!owner->Online || !owner->Registers) { OwnerUnlock(owner);return -19; }
+    if(!owner->BoardAllowed || !owner->Online || !owner->Registers) { OwnerUnlock(owner);return -19; }
     owner->Caller=PsGetCurrentThread();
     return 0;
 }
@@ -35,7 +35,7 @@ static void OwnerEnd(void* context)
 static int OwnerHeld(void* context)
 {
     BC250_SMU_OWNER* owner=context;
-    return owner->Caller==PsGetCurrentThread() && owner->Online && owner->Registers;
+    return owner->BoardAllowed && owner->Caller==PsGetCurrentThread() && owner->Online && owner->Registers;
 }
 // The six mailbox offsets of the two queues, by name, and nothing else. Queue 3's three (0.7.210) come from the
 // firmware's own queue descriptor table through bc250_cpu_queue3(); all three are already in the escape read
@@ -274,6 +274,7 @@ NTSTATUS SmuOwnerStart(BC250_SMU_OWNER* owner,volatile ULONG* registers)
 {
     struct bc250_smu_io io={owner,OwnerHeld,MailboxRead,MailboxWrite,MailboxNow,MailboxDelay};
     int result;
+    if(!owner->BoardAllowed)return STATUS_NOT_SUPPORTED;
     if(KeGetCurrentIrql()!=PASSIVE_LEVEL || !registers)return STATUS_INVALID_PARAMETER;
     OwnerLock(owner);
     if(owner->Online) { OwnerUnlock(owner);return STATUS_INVALID_DEVICE_STATE; }

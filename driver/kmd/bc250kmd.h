@@ -1134,3 +1134,7 @@ BOOLEAN VidMmPagingRootTracked(ULONGLONG Root);
 NTSTATUS GfxPagingBuildVirtualPtes(BC250_DEVICE* Device, ULONGLONG Source,
     ULONGLONG Destination, ULONG Entries, PVOID Buffer, ULONGLONG DmaBase,
     ULONG Offset, ULONG Free, struct PAGING_NATIVE_RESULT* Built);
+
+void BoardProviderBind(BC250_DEVICE* Device);
+void BoardProviderUnbind(BC250_DEVICE* Device);
+void BoardProviderCaps(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_CAPS* Data, ULONG Flags);

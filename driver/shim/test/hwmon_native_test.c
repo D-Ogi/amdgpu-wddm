@@ -29,6 +29,7 @@ static void Fresh(void)
     memset(&device, 0, sizeof(device));
     device.StartHealth.Generation = 7;
     HwmonInitialize(&device.Hwmon);
+    device.Hwmon.BoardAllowed = TRUE; // Fixture represents the qualified BC-250.
     native_port_lock = &device.Hwmon.PortLock;
 }
 
@@ -642,6 +643,20 @@ static void give_up(void)
 
 int main(void)
 {
+    Fresh();
+    device.Hwmon.BoardAllowed = FALSE;
+    HwmonStart(&device);
+    CHECK(!device.Hwmon.Online && !device.Hwmon.Enabled);
+    CHECK(native_ec.reads == 0 && native_ec.writes_latch == 0 && native_ec.writes_data == 0 && native_ports_outside == 0);
+    {
+        BC250_HWMON_PORTS ports;
+        struct bc250_hwmon_io io;
+        HwmonWriteIo(&ports, &device.Hwmon, &io, FALSE);
+        HwmonOut8(&ports, BC250_HWMON_PORT_PAGE, 0xff);
+        HwmonOut8Data(&ports, 1);
+        CHECK(HwmonIn8(&ports, BC250_HWMON_PORT_DATA) == 0xff);
+        CHECK(native_ec.reads == 0 && native_ec.writes_latch == 0 && native_ec.writes_data == 0 && native_ports_outside == 0);
+    }
     wire();
     gate();
     start();
