@@ -190,12 +190,33 @@ def ensure_game_plan(plan: manifest.Plan, arm: manifest.PlannedArm, writer=print
 
 
 def load_records(out_dir: Path) -> list[ArmRecord]:
-    records = []
+    """The records of the earlier runs in this directory.
+
+    `records.json` is written when a run ends, so a run that was stopped in the middle leaves none. Each arm
+    writes its own `<arm>/record.json` as it ends, and those are read here for every arm that `records.json`
+    does not name, so that `--resume` after an interrupted run does not install the package a second time.
+    """
+    records, seen = [], set()
     path = out_dir / "records.json"
     if path.is_file():
         for row in json.loads(path.read_text(encoding="utf-8")):
             records.append(ArmRecord(**row))
-    return records
+            seen.add(records[-1].id)
+    loose = []
+    for child in sorted(out_dir.iterdir()) if out_dir.is_dir() else ():
+        record = child / "record.json"
+        if not child.is_dir() or not record.is_file():
+            continue
+        try:
+            row = json.loads(record.read_text(encoding="utf-8"))
+            arm = ArmRecord(**row)
+        except (ValueError, TypeError):
+            continue
+        if arm.id not in seen:
+            loose.append(arm)
+            seen.add(arm.id)
+    loose.sort(key=lambda arm: arm.started_utc or "")
+    return records + loose
 
 
 def attempt_base(args: argparse.Namespace, data: dict) -> int | None:
