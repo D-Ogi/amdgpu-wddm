@@ -13,6 +13,7 @@
 #include "bc250_gfx.h"
 #include "dcn_translate.h"
 #include "umd_blob.h"
+#include "hip_journal.h"
 #include "umd_caps.h"
 #include "gpu_clock.h"            // BD-056: the SMUIO TSC read and its pairing with the QPC
 #include "firmware_metadata.h"
@@ -225,6 +226,7 @@ typedef struct _BC250_WDDM_OBJECT {
     ULONGLONG UmdGemFlags;              // allocations: the BC2A gem_flags
     unsigned long CreatorProcessId;     // allocations and contexts: PsGetCurrentProcessId at creation
     volatile LONG InteropUser;          // devices: 1 once an interop Blt present of it was counted (interop.c)
+    BC250_HIP_JOURNAL_OWNER HipJournalOwner;
 } BC250_WDDM_OBJECT;
 
 #define BC250_PRESENT_OBSERVATIONS 16
@@ -848,6 +850,7 @@ static BC250_WDDM_OBJECT* WddmNewContext(BC250_DEVICE* Device,BOOLEAN SystemCont
 
 static void WddmReleaseCaptures(BC250_WDDM_OBJECT* Object)
 {
+    HipJournalOwnerDestroy(&Object->HipJournalOwner);
     WddmReleaseCaptureOwner(&Object->Captures);
 }
 
@@ -1331,6 +1334,7 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
         done = TRUE;
         node = job->Node;
         fence = job->ReportFence;
+        HipJournalComplete(job->HipJournalId);
         Bc250GfxQueuePop(&wddm->GfxPending);
         if (!wddm->GfxPending.Count && wddm->DeferredValid) {
             fence = wddm->DeferredFence;
@@ -1502,7 +1506,7 @@ static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
 
 // PASSIVE_LEVEL (SubmitCommandVirtual). TRUE = the packet is on the ring and its completion will come by itself.
 static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
-                                  ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
+                                  ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node, ULONGLONG HipId)
 {
     ULONG seq = 0, vmid = 0;
     NTSTATUS status;
@@ -1542,6 +1546,8 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     job.ProcessId = identity.ProcessId;
     job.ContextFlags = identity.ContextFlags;
     job.Vmid = vmid;
+    job.HipJournalId = HipId;
+    HipJournalSubmitted(HipId, seq, vmid, Context->RootPhysical);
     // BD-114 (ANALYSIS.md 7.3): the ring write is recorded, not charged. WddmGfxHeadLocked stamps the deadline
     // when this job reaches the head, so the budget pays for execution and not for the queue.
     job.Submitted = KeQueryInterruptTime();
@@ -1749,7 +1755,7 @@ static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ B
     WddmHoldBegin(Device, &hold);
     for (;;) {
         if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
-            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) {
+            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node, 0)) {
             WddmHoldReport(Wddm, &hold, FenceId, "present");
             return TRUE;
         }
@@ -1758,7 +1764,7 @@ static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ B
         WddmGpuFence(Device);
         if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold)) {
             BOOLEAN submitted = (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
-                WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node);
+                WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node, 0);
             WddmHoldReport(Wddm, &hold, FenceId, "present");
             return submitted;
         }
@@ -4121,6 +4127,10 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     {
         object->UmdContext = TRUE;
         object->UmdIpType = umdView.ip_type;
+        if (!object->SystemContext) {
+            NTSTATUS journalStatus = HipJournalOwnerCreate(&object->HipJournalOwner, parent->Device, object, hDevice);
+            if (!NT_SUCCESS(journalStatus)) { WddmFreeObject(object); return journalStatus; }
+        }
     }
     pCreateContext->hContext = object;
 
@@ -5999,11 +6009,14 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
     int st = UMD_BLOB_TOO_SMALL;
     const char* why = "unknown";
     unsigned nIbs = 0;
+    ULONGLONG hipId = 0;
+    NTSTATUS journalStatus;
 
     ib.num_ibs = 0;
     ib.ib_va = 0;
     ib.ib_bytes = 0;
     ib.single_ib = 0;
+    ib.fence_va = ib.fence_value = 0;
     if (bytes != NULL && umdLen != 0 && umdLen <= bufLen)
         st = UmdBlobParseSubmit(bytes, umdLen, &ib);
     if (st != UMD_BLOB_OK || !ib.single_ib || Node != BC250_WDDM_NODE_3D)
@@ -6012,6 +6025,11 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
                  Submit->SubmissionFenceId,st,ib.single_ib,Node);
         return STATUS_INVALID_PARAMETER;
     }
+
+    if (Context == NULL) return STATUS_INVALID_PARAMETER;
+    journalStatus = HipJournalBind(&Context->HipJournalOwner, ib.ib_va, ib.fence_va, ib.fence_value,
+                                   Submit->SubmissionFenceId, ib.ib_bytes, &hipId);
+    if (!NT_SUCCESS(journalStatus)) return journalStatus;
 
     // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
     // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
@@ -6088,7 +6106,7 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
         for (;;)
         {
             if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
-                WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
+                WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node, hipId))
             {
                 WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
                 if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
@@ -6105,7 +6123,7 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
             if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold))
             {
                 if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
-                    WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
+                    WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node, hipId))
                 {
                     WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
                     if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
@@ -6129,6 +6147,7 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
         GuardLog("wddm: umd submit fence %u not run: %s (%u ibs, private %u/%u, first 0x%08lX)",
                  Submit->SubmissionFenceId, why, nIbs, umdLen, bufLen, UmdBlobFirstWord(bytes, umdLen));
     WddmFailSubmission(Device, Submit->SubmissionFenceId, Node);
+    HipJournalFailed(hipId, STATUS_DEVICE_NOT_READY);
     return STATUS_SUCCESS;
 }
 
@@ -6300,7 +6319,7 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
         device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
         WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress,
-                           pSubmitCommand->DmaBufferSize, pSubmitCommand->SubmissionFenceId, node))
+                           pSubmitCommand->DmaBufferSize, pSubmitCommand->SubmissionFenceId, node, 0))
         return STATUS_SUCCESS;
     if (pSubmitCommand->DmaBufferSize != 0)
         WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);
@@ -6576,7 +6595,10 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // Drop the hung job (and anything queued behind it on this node) so no stale entry double-reports;
             // the ring is idle, GfxReopenAfterAbort cleared SubmitInFlight. dxgkrnl resubmits the later render packets
             // with new fence ids ("Packets unaffected by engine reset"), so dropping them loses no work.
-            while (Bc250GfxQueueHead(&wddm->GfxPending) != NULL) Bc250GfxQueuePop(&wddm->GfxPending);
+            while ((head = Bc250GfxQueueHead(&wddm->GfxPending)) != NULL) {
+                HipJournalReset(head->HipJournalId, head->Fence != hungFence);
+                Bc250GfxQueuePop(&wddm->GfxPending);
+            }
             wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = FALSE;      // reopen node 0: submits are admitted again
             wddm->RefusalPending[BC250_WDDM_NODE_3D] = FALSE;
             // A rejected packet was never dispatched. After a reported reset dxgkrnl re-issues the render packets

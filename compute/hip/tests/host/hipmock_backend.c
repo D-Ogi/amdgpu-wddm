@@ -37,6 +37,7 @@
 
 #include "bc250hsa.h"
 #include "hipmock_backend.h"
+#include "../../../../driver/shim/include/bc250_hip_journal.h"
 #if defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
 #include "internal.h"
 #define BC250HSA_MOCK_KCP_DISPATCH_PTR BC250HSA_KCP_DISPATCH_PTR
@@ -2293,4 +2294,49 @@ int bc250hsa_mock_write_record(const char* path) {
     }
     fclose(file);
     return 1;
+}
+
+/* The runtime always calls this entry point. The mock owns the retained copy. */
+static unsigned char g_journal[BC250_HIP_JOURNAL_MAX_RECORD_BYTES];
+static uint32_t g_journal_bytes;
+static uint32_t g_journal_calls;
+static int g_journal_fail;
+void bc250hsa_mock_journal_fail(int fail) { g_journal_fail = fail; }
+uint32_t bc250hsa_mock_journal_calls(void) { return g_journal_calls; }
+const void* bc250hsa_mock_journal(uint32_t* bytes) {
+    *bytes = g_journal_bytes;
+    return g_journal;
+}
+bc250hsa_status bc250hsa_dispatch_submit_recorded(bc250hsa_device* dev,
+    const bc250hsa_dispatch* dispatch, const void* bytes, uint32_t size,
+    uint64_t* fence) {
+    BC250_HIP_DISPATCH_RECORD record;
+    bc250hsa_status status;
+    if (!bytes || size < sizeof(record) || size > sizeof(g_journal) || !dispatch || !dispatch->kernel)
+        return BC250HSA_EINVAL;
+    if (!Bc250HipRecordValid(bytes, size)) return BC250HSA_EINVAL;
+    memcpy(&record, bytes, sizeof(record));
+    if (record.Bytes != size || !record.DispatchId ||
+        record.EntryVa != dispatch->kernel->entry_va ||
+        record.DescriptorVa != dispatch->kernel->descriptor_va ||
+        record.KernargVa != dispatch->kernarg_va ||
+        memcmp(record.Grid, dispatch->launch.grid, sizeof(record.Grid)) ||
+        memcmp(record.Block, dispatch->launch.block, sizeof(record.Block)) ||
+        record.DynamicLdsBytes != dispatch->launch.dynamic_group_bytes ||
+        record.SymbolOffset != sizeof(record) || !record.SymbolBytes ||
+        record.SymbolBytes > BC250_HIP_JOURNAL_MAX_SYMBOL ||
+        record.SymbolBytes > size - record.SymbolOffset ||
+        ((const unsigned char*)bytes)[record.SymbolOffset + record.SymbolBytes - 1] != 0 ||
+        record.KernargOffset > size || record.KernargBytes > size - record.KernargOffset ||
+        record.BindingsOffset > size || record.BindingCount > BC250_HIP_JOURNAL_MAX_BINDINGS ||
+        record.BindingCount * sizeof(BC250_HIP_POINTER_BINDING) != size - record.BindingsOffset)
+        return BC250HSA_EINVAL;
+    mock_lock();
+    ++g_journal_calls;
+    if (g_journal_fail) { mock_unlock(); return BC250HSA_ENOMEM; }
+    memcpy(g_journal, bytes, size);
+    g_journal_bytes = size;
+    status = bc250hsa_dispatch_submit(dev, dispatch, fence);
+    mock_unlock();
+    return status;
 }

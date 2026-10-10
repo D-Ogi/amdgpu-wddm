@@ -100,6 +100,7 @@ struct umd_submit_view {
     unsigned long long ib_va;
     unsigned long ib_bytes;
     int single_ib;
+    unsigned long long fence_va, fence_value; /* existing BC2S prefix at 24/32, diagnostic join only */
 };
 
 // Cached backing store is requested only for CPU-accessible GTT without USWC.

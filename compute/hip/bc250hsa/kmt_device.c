@@ -206,6 +206,8 @@ static void device_teardown(struct bc250hsa_device* dev)
     dev->slot_fence = NULL;
     free(dev->last_ib);
     dev->last_ib = NULL;
+    free(dev->journal_upload);
+    dev->journal_upload = NULL;
 }
 
 bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hsa_device** out)

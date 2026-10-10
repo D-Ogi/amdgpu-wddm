@@ -527,10 +527,11 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 3u   /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 4u   /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
                                          * that ENABLE_SGPR_DISPATCH_PTR needs;
-                                         * 1.3 adds fixed-private scratch PM4 environments */
+                                         * 1.3 adds fixed-private scratch PM4 environments;
+                                         * 1.4 adds retained dispatch records */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -1001,6 +1002,18 @@ typedef struct bc250hsa_dispatch {
 bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev,
                                          const bc250hsa_dispatch* dispatch,
                                          uint64_t* fence_value_out);
+
+/* HIP runtime submissions carry an immutable BC250_HIP_DISPATCH_RECORD from
+ * driver/shim/include/bc250_hip_journal.h. The backend copies it before it
+ * returns and uploads the batch to the KMD journal before SubmitCommand.
+ * An upload refusal prevents that batch from reaching the GPU. The record
+ * is required even when diagnostic logging is disabled. The legacy entry
+ * above remains available to the standalone layer-1 measurement tools. */
+bc250hsa_status bc250hsa_dispatch_submit_recorded(bc250hsa_device* dev,
+                                                  const bc250hsa_dispatch* dispatch,
+                                                  const void* record,
+                                                  uint32_t record_bytes,
+                                                  uint64_t* fence_value_out);
 
 /* ---------------------------------------------------------------------------------
  * 8.1 Batching

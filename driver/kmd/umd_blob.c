@@ -81,6 +81,7 @@ static void ClearSubmit(struct umd_submit_view* out)
     out->ib_va = 0;
     out->ib_bytes = 0;
     out->single_ib = 0;
+    out->fence_va = out->fence_value = 0;
 }
 
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out)
@@ -254,6 +255,8 @@ int UmdBlobParseSubmit(const void* bytes, unsigned len, struct umd_submit_view* 
         out->ib_va = firstVa;
         out->ib_bytes = firstBytes;
         out->single_ib = (num == 1);
+        out->fence_va = Rd64(p + 24);
+        out->fence_value = Rd64(p + 32);
     }
     return UMD_BLOB_OK;
 }

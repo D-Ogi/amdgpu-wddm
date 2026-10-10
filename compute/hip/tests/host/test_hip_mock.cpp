@@ -33,6 +33,7 @@
 #include "bc250hsa.h"
 #include "hip/hip_runtime.h"
 #include "hipmock_backend.h"
+#include "../../../../driver/shim/include/bc250_hip_journal.h"
 
 namespace {
 
@@ -226,9 +227,34 @@ void run_sequence(int n) {
     args[1] = &b;
     args[2] = &c;
     args[3] = &n;
+    const uint32_t records_before = bc250hsa_mock_record_count();
+    bc250hsa_mock_journal_fail(1);
+    check(hipLaunchKernel(&g_stub_vadd, dim3(static_cast<unsigned>(n) / 256u, 1u, 1u),
+                          dim3(256u, 1u, 1u), args, 0, stream) == hipErrorOutOfMemory,
+          "journal refusal reaches caller before dispatch");
+    check(bc250hsa_mock_record_count() == records_before, "journal failure publishes no dispatch");
+    bc250hsa_mock_journal_fail(0);
     check(hipLaunchKernel(&g_stub_vadd, dim3(static_cast<unsigned>(n) / 256u, 1u, 1u),
                           dim3(256u, 1u, 1u), args, 0, stream) == hipSuccess,
           "run hipLaunchKernel");
+    uint32_t journal_bytes = 0;
+    const void* journal = bc250hsa_mock_journal(&journal_bytes);
+    check(journal_bytes >= sizeof(BC250_HIP_DISPATCH_RECORD), "successful runtime launch retained journal");
+    if (journal_bytes >= sizeof(BC250_HIP_DISPATCH_RECORD)) {
+        BC250_HIP_DISPATCH_RECORD record{};
+        std::memcpy(&record, journal, sizeof(record));
+        check(record.BindingCount == 3, "three pointer arguments, scalar n excluded");
+        check(record.KernargBytes >= 28, "entire vadd argument segment retained");
+        const auto* data = static_cast<const unsigned char*>(journal);
+        BC250_HIP_POINTER_BINDING bindings[3]{};
+        if (record.BindingCount == 3 && record.BindingsOffset <= journal_bytes &&
+            sizeof(bindings) <= journal_bytes - record.BindingsOffset) {
+            std::memcpy(bindings, data + record.BindingsOffset, sizeof(bindings));
+            for (const auto& binding : bindings)
+                check(binding.Flags == BC250_HIP_BINDING_INTERVAL_KNOWN && binding.Bytes >= bytes,
+                      "runtime allocation interval accompanies each vadd pointer");
+        } else check(false, "complete bounded bindings array");
+    }
     check(hipStreamSynchronize(stream) == hipSuccess, "run hipStreamSynchronize");
     check(hipStreamDestroy(stream) == hipSuccess, "run hipStreamDestroy");
     check(hipFree(c) == hipSuccess, "run hipFree c");
