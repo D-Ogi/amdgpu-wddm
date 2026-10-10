@@ -83,6 +83,10 @@ SEQUENCES = [
       # CHECK_VMID, VM_ID). Writable through the GFX table so the shim's bc250_gfx_soft_recover_vmid can issue it;
       # reached only from DxgkDdiResetEngine under the HangRecoveryMode switch. Already on the escape read list.
       ("GC", "mmSQ_CMD", "not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery"),
+      # Wave observations use only selector writes and data reads. This legacy GFX table is mixed;
+      # the dedicated wave backend further restricts writes to GRBM_GFX_INDEX and SQ_IND_INDEX.
+      ("GC", "mmSQ_IND_INDEX", "not traced: amdgpu gfx_v10_0 wave_read_ind selector"),
+      ("GC", "mmSQ_IND_DATA", "not traced: amdgpu gfx_v10_0 wave_read_ind, read only in wave backend"),
       ("GC", "mmGRBM_STATUS2", "read observation for opt-in RLC reload reset, M349"),
       ("GC", "mmGRBM_SOFT_RESET", "not traced: AMD RLC reset callback, opt-in M349"),
       ("GC", "mmRLC_SAFE_MODE", "not traced: AMD paired safe-mode scope, M370"),
@@ -129,6 +133,8 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmGRBM_GFX_CNTL"),
          # test/hang_recovery_test.c: the M15.12 wave kill's register, to check which sequence table holds it
          ("GC", "mmSQ_CMD"),
+         # The bounded live wave reader and its unconditional selector cleanup.
+         ("GC", "mmGRBM_GFX_INDEX"), ("GC", "mmSQ_IND_INDEX"), ("GC", "mmSQ_IND_DATA"),
          # gfx.c: the one write that passes a stopped sequence (gpumem.c flushes the TLB after its binds)
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other

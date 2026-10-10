@@ -13,8 +13,10 @@
 // The registry part runs at PASSIVE_LEVEL. DDIs that can run higher (present is not one of them on a
 // display-only driver, the pointer and interrupt DDIs are) must not call in. GuardLog is the exception: since
 // 0.7.1 it is safe up to DISPATCH_LEVEL, because the M7 submission and DPC paths log.
+#include <ntifs.h>
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "wave_snapshot.h"
 #include "guard_keep_prune.h"
 #include "hang_recovery.h"
 #include <ntstrsafe.h>
@@ -932,6 +934,54 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     GuardLog("hang record: verdict %lu seq %lu fence %lu kills %lu %lu us, persisted 0x%08X", Verdict, Seq, Fence,
              Kills, Micros, status);
 }
+// The buffer is driver-owned and initialized, never an escape pointer. Keep the
+// failure header too: an empty partial read must not leave an old success visible.
+NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
+{
+    HANDLE parameters, key;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    SECURITY_DESCRIPTOR descriptor;
+    union { ULONG Align; UCHAR Bytes[128]; } aclStorage;
+    PACL acl = (PACL)aclStorage.Bytes;
+    // S-1-5-18 (SYSTEM) and S-1-5-32-544 (Administrators). Shader instructions
+    // can belong to another client: keep the saved snapshot behind the live
+    // command's administrator boundary, without restricting existing counters.
+    static const ULONG systemSid[] = {0x00000101u, 0x05000000u, 18u};
+    static const ULONG adminSid[] = {0x00000201u, 0x05000000u, 32u, 544u};
+    NTSTATUS status;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL)
+        return STATUS_INVALID_DEVICE_STATE;
+    if (Header->AbiVersion != BC250_WAVE_ABI_VERSION ||
+        Header->WaveCount > BC250_WAVE_MAX_RECORDS || Header->Kind != BC250_WAVE_KIND_PRE_KILL ||
+        Header->Bytes != sizeof(*Header) + Header->WaveCount * sizeof(BC250_WAVE_RECORD))
+        return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(&aclStorage, sizeof(aclStorage));
+    status = RtlCreateSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION);
+    if (NT_SUCCESS(status)) status = RtlCreateAcl(acl, sizeof(aclStorage.Bytes), ACL_REVISION);
+    if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_ALL_ACCESS, (PSID)systemSid);
+    if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_READ, (PSID)adminSid);
+    if (NT_SUCCESS(status)) status = RtlSetDaclSecurityDescriptor(&descriptor, TRUE, acl, FALSE);
+    if (NT_SUCCESS(status)) status = RtlSetOwnerSecurityDescriptor(&descriptor, (PSID)systemSid, FALSE);
+    if (!NT_SUCCESS(status)) return status;
+    descriptor.Control |= SE_DACL_PROTECTED;
+    status = OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name, L"HangRecovery\\Waves");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, &descriptor);
+    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE | WRITE_DAC | WRITE_OWNER, &attributes, 0, NULL,
+                         REG_OPTION_NON_VOLATILE, NULL);
+    ZwClose(parameters);
+    if (!NT_SUCCESS(status)) return status;
+    status = ZwSetSecurityObject(key, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+                                PROTECTED_DACL_SECURITY_INFORMATION, &descriptor);
+    RtlInitUnicodeString(&name, L"Snapshot");
+    if (NT_SUCCESS(status)) status = ZwSetValueKey(key, &name, 0, REG_BINARY, (PVOID)Header, Header->Bytes);
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+    ZwClose(key);
+    return status;
+}
+
 // ---- BD-090: a runtime restart in a confirmed boot -----------------------------------------------------------
 //
 // UnconfirmedStarts protects against a boot loop: a start that crashes the machine never reaches its stop, and

@@ -215,3 +215,54 @@ All of them open the adapter per call and close it again. The interface path is 
 adapter is looked for again at most every 2 s, since the SetupAPI walk costs ~0.8 ms of CPU against ~6-9 us
 for a cached call (development PC, `vram`). `test-telemetry.ps1`, run by `build.ps1`, tests both exports with
 the D3DKMT calls replaced.
+
+## Wave state
+
+The wave snapshot reads registers in sequence. It does not stop waves or give an atomic context image.
+Equal identity and status rechecks do not prove atomicity. A changed recheck marks the record as unstable.
+Read raw values beside the named fields. Do not infer the cause of a hang from one counter alone.
+
+Use an elevated administrator prompt:
+
+```text
+bc250kmd_cli waves
+bc250kmd_cli waves saved
+bc250kmd_cli waves --expect-idle
+bc250kmd_cli waves --expect-pc 0xSTART 0xEND
+```
+
+`waves` takes a live snapshot through command 33, ABI 1.
+It sets both `HardwareAccess` and `NoAdapterSynchronization`.
+The KMD owns the register lock. Run the known-spin control below to measure live delivery.
+There is no fallback to other escape flags.
+
+`waves saved` reads the last `Snapshot` binary value under the service's `Parameters/HangRecovery/Waves` key.
+This child key grants access only to administrators and SYSTEM.
+It does not access the GPU. The snapshot contains a header and exactly `WaveCount` records.
+The tool checks the ABI, length, count, flags and selectors before it prints any record.
+Missing or unreadable data fails the command. A failed capture never counts as an idle result.
+Use the sequence, fence, VMID and timestamps to associate saved data with its recovery attempt.
+The saved record is historical. The tool does not establish that it belongs to the latest recovery attempt.
+A failed registry write can leave an older record. The tool prints this warning before the saved data.
+
+Each record prints SE, SH, WGP, SIMD and wave slot selectors.
+The tool does not invent a CU number from the WGP selector.
+It prints all 16 raw registers, their named fields, PC, EXEC and the status/identity rechecks.
+The field table comes from `gc_10_1_0_sh_mask.h` through `gen_wave_decode.py`.
+Regenerate it after a source header change:
+
+```text
+python tools/win/bc250kmd_cli/gen_wave_decode.py
+python tools/win/bc250kmd_cli/gen_wave_decode.py --check
+```
+
+`--expect-idle` requires a complete successful scan with zero valid waves and zero read errors.
+`--expect-pc` takes hexadecimal GPU addresses and uses the interval `[START, END)`.
+It requires a complete successful scan and at least one stable wave inside that interval.
+Other desktop waves can remain outside the interval. An empty snapshot fails this positive control.
+Both checks return 1 on failure. Invalid arguments return 2, and an unelevated caller gets 3.
+A plain read also returns 1 for an incomplete capture, after it prints the available records.
+
+`waves_test.c` checks fixed register values, damaged saved blobs, capture failures and the control checks.
+It replaces all adapter, registry and token calls. The build runs this host test before it builds the tool.
+These tests do not establish a working hardware read. Run the idle and known-spin controls on the target first.

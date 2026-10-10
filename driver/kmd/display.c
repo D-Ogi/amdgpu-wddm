@@ -2,6 +2,7 @@
 // CPU copy into the firmware's framebuffer. No MMIO. Written against the documented display-only DDI.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "wave_snapshot.h"
 #include "paging_journal.h"
 #include "log_rate.h"
 #include "display_timing.h"
@@ -369,6 +370,64 @@ static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* 
     return STATUS_SUCCESS;
 }
 
+static BOOLEAN WaveCallerIsAdmin(void)
+{
+    SECURITY_SUBJECT_CONTEXT subject;
+    BOOLEAN admin;
+    // Use the effective caller, including an impersonated client. A service's
+    // privileged primary token must not authorize its unprivileged client.
+    SeCaptureSubjectContext(&subject);
+    SeLockSubjectContext(&subject);
+    admin = SeTokenIsAdmin(SeQuerySubjectContextToken(&subject));
+    SeUnlockSubjectContext(&subject);
+    SeReleaseSubjectContext(&subject);
+    return admin;
+}
+
+static void WaveEscape(BC250_DEVICE* Device, BC250_ESCAPE_WAVES* Data, ULONG Flags)
+{
+    ULONG abi = Data->AbiVersion, op = Data->Op, reserved = Data->Reserved;
+    D3DDDI_ESCAPEFLAGS required = {0};
+    BC250_WAVE_SNAPSHOT* snapshot;
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+    C_ASSERT(sizeof(BC250_WAVE_RECORD) == 96);
+    C_ASSERT(sizeof(BC250_WAVE_HEADER) == 128);
+    C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Snapshot) == 32);
+
+    // Capture inputs once, then work only on private storage. No caller-controlled
+    // count, pointer, register offset or write value enters the hardware loop.
+    RtlZeroMemory(Data, sizeof(*Data));
+    Data->Magic = BC250_ESCAPE_MAGIC;
+    Data->Command = BC250_ESCAPE_GET_WAVES;
+    Data->Version = BC250_KMD_VERSION;
+    Data->AbiVersion = BC250_WAVE_ABI_VERSION;
+    Data->Status = BC250_ESCAPE_STATUS_REFUSED;
+    Data->Snapshot.Header.AbiVersion = BC250_WAVE_ABI_VERSION;
+    Data->Snapshot.Header.DriverVersion = BC250_KMD_VERSION;
+    Data->Snapshot.Header.Bytes = sizeof(BC250_WAVE_HEADER);
+    Data->Snapshot.Header.Flags = BC250_WAVE_READ_ERROR;
+    required.HardwareAccess = 1;
+    required.NoAdapterSynchronization = 1;
+    if (!WaveCallerIsAdmin()) {
+        status = STATUS_ACCESS_DENIED;
+        Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+    } else if (Flags == required.Value && abi == BC250_WAVE_ABI_VERSION && op == 0 && reserved == 0) {
+        if (KeGetCurrentIrql() != PASSIVE_LEVEL) status = STATUS_INVALID_DEVICE_STATE;
+        else {
+            snapshot = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*snapshot), 'vW2B');
+            if (snapshot == NULL) status = STATUS_INSUFFICIENT_RESOURCES;
+            else {
+                status = GfxCaptureWaves(Device, snapshot);
+                RtlCopyMemory(&Data->Snapshot, snapshot, sizeof(*snapshot));
+                ExFreePoolWithTag(snapshot, 'vW2B');
+            }
+        }
+        if (NT_SUCCESS(status)) Data->Status = BC250_ESCAPE_STATUS_DONE;
+    }
+    Data->NtStatus = status;
+    Data->Snapshot.Header.Result = status;
+}
+
 NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Escape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
@@ -385,6 +444,11 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     if (command == BC250_ESCAPE_RUN_BOARD_CAPS) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_BOARD_CAPS)) return STATUS_INVALID_PARAMETER;
         BoardProviderCaps(device, (BC250_ESCAPE_BOARD_CAPS*)data, Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    if (command == BC250_ESCAPE_GET_WAVES) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_WAVES)) return STATUS_INVALID_PARAMETER;
+        WaveEscape(device, (BC250_ESCAPE_WAVES*)data, Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
     if (command == BC250_ESCAPE_RUN_BOARD_MEMORY) {
