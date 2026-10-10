@@ -45,36 +45,64 @@ union __bc250_half_bits {
   _Float16 h;
 };
 
-BC250_HALF_HD _Float16 __bc250_float_to_half(const float f) {
-#if defined(__HIP_DEVICE_COMPILE__)
-  return (_Float16)f;
-#else
+// The four rounding modes CUDA and HIP name in a conversion's own name. A caller that writes
+// __float2half_rd asks for the value toward negative infinity and not for the nearest one, so
+// each mode is implemented and none of them is a second name for round to nearest even.
+#define BC250_HALF_RN 0  // to nearest, ties to even
+#define BC250_HALF_RZ 1  // toward zero
+#define BC250_HALF_RD 2  // toward negative infinity
+#define BC250_HALF_RU 3  // toward positive infinity
+
+// float -> binary16 in one named rounding mode, in integer arithmetic. The same code serves the
+// host pass, which has no float16 conversion helper to call, and the device pass, where
+// v_cvt_f16_f32 rounds to nearest even and a directed mode would otherwise need the hardware
+// rounding mode changed around every conversion.
+//
+// Each branch computes the truncated value and whether anything was cut off (`rest`). The
+// nearest-even mode compares the remainder with a half step; a directed mode raises the
+// magnitude only when it rounds away from zero, which is `away` below. Raising the magnitude of
+// the packed form carries into the exponent by itself, up to 0x7c00, which is infinity.
+BC250_HALF_HD _Float16 __bc250_float_to_half_mode(const float f, const int mode) {
   union {
     float f;
     unsigned int u;
   } in;
   in.f = f;
   const unsigned int sign = (in.u >> 16) & 0x8000u;
-  const int exp = (int)((in.u >> 23) & 0xffu) - 127 + 15;
+  const unsigned int exp_field = (in.u >> 23) & 0xffu;
+  const int exp = (int)exp_field - 127 + 15;
   const unsigned int mant = in.u & 0x007fffffu;
+  const int negative = sign != 0u;
+  const int away = (mode == BC250_HALF_RU && !negative) || (mode == BC250_HALF_RD && negative);
   __bc250_half_bits out;
-  if (((in.u >> 23) & 0xffu) == 0xffu) {
-    // Infinity keeps its sign; a NaN keeps a non-zero mantissa so that it stays a NaN.
+  if (exp_field == 0xffu) {
+    // Infinity keeps its sign; a NaN keeps a non-zero mantissa so that it stays a NaN. No
+    // rounding mode applies to either.
     out.u = (unsigned short)(sign | 0x7c00u | (mant != 0 ? 0x0200u : 0u));
   } else if (exp >= 0x1f) {
-    out.u = (unsigned short)(sign | 0x7c00u);  // overflow becomes infinity
+    // Above every finite binary16 value. Only a mode that rounds away from zero reaches
+    // infinity; toward zero, and toward the other infinity, the answer is the largest finite
+    // value of that sign.
+    out.u = (unsigned short)(sign | ((away || mode == BC250_HALF_RN) ? 0x7c00u : 0x7bffu));
   } else if (exp <= 0) {
     if (exp < -10) {
-      out.u = (unsigned short)sign;  // underflow becomes zero
+      // Below half of the smallest subnormal. Zero stays zero in every mode; a non-zero value
+      // becomes the smallest subnormal when the mode rounds away from zero.
+      const unsigned int nonzero = (in.u & 0x7fffffffu) != 0u;
+      out.u = (unsigned short)(sign | ((nonzero && away) ? 1u : 0u));
     } else {
-      // Subnormal: put the implied one back and shift, rounding to nearest even.
+      // Subnormal: put the implied one back and shift.
       const unsigned int m = mant | 0x00800000u;
       const int shift = 14 - exp;
       const unsigned int value = m >> shift;
       const unsigned int rest = m & ((1u << shift) - 1u);
       const unsigned int half = 1u << (shift - 1);
       unsigned int rounded = value;
-      if (rest > half || (rest == half && (value & 1u) != 0u)) {
+      if (mode == BC250_HALF_RN) {
+        if (rest > half || (rest == half && (value & 1u) != 0u)) {
+          rounded += 1u;
+        }
+      } else if (away && rest != 0u) {
         rounded += 1u;
       }
       out.u = (unsigned short)(sign | rounded);
@@ -83,12 +111,23 @@ BC250_HALF_HD _Float16 __bc250_float_to_half(const float f) {
     const unsigned int value = ((unsigned int)exp << 10) | (mant >> 13);
     const unsigned int rest = mant & 0x1fffu;
     unsigned int rounded = value;
-    if (rest > 0x1000u || (rest == 0x1000u && (value & 1u) != 0u)) {
+    if (mode == BC250_HALF_RN) {
+      if (rest > 0x1000u || (rest == 0x1000u && (value & 1u) != 0u)) {
+        rounded += 1u;
+      }
+    } else if (away && rest != 0u) {
       rounded += 1u;
     }
     out.u = (unsigned short)(sign | rounded);
   }
   return out.h;
+}
+
+BC250_HALF_HD _Float16 __bc250_float_to_half(const float f) {
+#if defined(__HIP_DEVICE_COMPILE__)
+  return (_Float16)f;
+#else
+  return __bc250_float_to_half_mode(f, BC250_HALF_RN);
 #endif
 }
 
@@ -228,9 +267,15 @@ typedef __half2 half2;
 
 BC250_HALF_HD __half __float2half(const float v) { return __half(v); }
 BC250_HALF_HD __half __float2half_rn(const float v) { return __half(v); }
-BC250_HALF_HD __half __float2half_rz(const float v) { return __half(v); }
-BC250_HALF_HD __half __float2half_rd(const float v) { return __half(v); }
-BC250_HALF_HD __half __float2half_ru(const float v) { return __half(v); }
+BC250_HALF_HD __half __float2half_rz(const float v) {
+  return __half(__bc250_float_to_half_mode(v, BC250_HALF_RZ));
+}
+BC250_HALF_HD __half __float2half_rd(const float v) {
+  return __half(__bc250_float_to_half_mode(v, BC250_HALF_RD));
+}
+BC250_HALF_HD __half __float2half_ru(const float v) {
+  return __half(__bc250_float_to_half_mode(v, BC250_HALF_RU));
+}
 BC250_HALF_HD __half __double2half(const double v) { return __half(v); }
 BC250_HALF_HD float __half2float(const __half h) { return __bc250_half_to_float(h.__x); }
 BC250_HALF_HD __half __int2half_rn(const int v) { return __half(v); }

@@ -452,6 +452,34 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     Write-Host "  the threads sample measured $inWindow operations inside one thread's wait for the device"
 
     # ------------------------------------------------------------------------------------------
+    # The device-header contracts of hip/hip_fp16.h and hip/hip_runtime.h: the directed
+    # float-to-half conversions and the block collectives (audit findings HS-1 and HS-2 of
+    # 2026-10-10). The host half of this program needs no device, so the run below is a real
+    # gate on the conversion arithmetic; the block collectives need the GPU and are checked on
+    # the lab with --expect-compute.
+    # ------------------------------------------------------------------------------------------
+    $halfExe = Join-Path $Out 'mock\halfblock.exe'
+    & $clang @flags -o $halfExe (Join-Path $hip 'samples\halfblock.hip') "-L$Out"
+    if ($LASTEXITCODE -ne 0) { $env:PATH = $savedPath; throw "clang failed for halfblock ($LASTEXITCODE)" }
+    Copy-Item $halfExe (Join-Path $Out 'halfblock.exe') -Force
+
+    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-halfblock.txt'
+    $halfOut = & $halfExe '--wait-total' '20000' 2>&1
+    $halfExit = $LASTEXITCODE
+    $halfOut | ForEach-Object { Write-Host "  $_" }
+    if ($halfExit -ne 0) { $env:PATH = $savedPath; throw "halfblock failed against the mock DLL ($halfExit)" }
+    $hostChecks = $halfOut | Select-String -Pattern 'host checks (\d+), failed (\d+)' |
+        Select-Object -First 1
+    if (-not $hostChecks) { $env:PATH = $savedPath; throw 'halfblock printed no host check count' }
+    $ran = [int]$hostChecks.Matches[0].Groups[1].Value
+    $failed = [int]$hostChecks.Matches[0].Groups[2].Value
+    if ($ran -lt 100 -or $failed -ne 0) {
+        $env:PATH = $savedPath
+        throw "halfblock ran $ran host checks with $failed failed; the table is 108 checks and must pass"
+    }
+    Write-Host "  halfblock passed $ran host conversion checks with no device"
+
+    # ------------------------------------------------------------------------------------------
     # The microbenchmark. On the lab it answers what one kernel launch costs off the GPU; here
     # it proves the harness and the counters, against the mock DLL, which runs no instruction.
     # The run is short on purpose: the numbers of a mock say nothing about the hardware, only
@@ -510,7 +538,8 @@ foreach ($file in @((Join-Path $Out 'mock\amdhip64.dll'), (Join-Path $Out 'amdhi
         (Join-Path $Out 'test_hip_batch.exe'),
         (Join-Path $Out 'vadd.exe'), (Join-Path $Out 'mock\vadd.exe'),
         (Join-Path $Out 'hipthreads.exe'), (Join-Path $Out 'mock\hipthreads.exe'),
-        (Join-Path $Out 'hipbench.exe'), (Join-Path $Out 'mock\hipbench.exe'))) {
+        (Join-Path $Out 'hipbench.exe'), (Join-Path $Out 'mock\hipbench.exe'),
+        (Join-Path $Out 'halfblock.exe'), (Join-Path $Out 'mock\halfblock.exe'))) {
     if (-not (Test-Path $file)) { continue }
     $item = Get-Item $file
     $label = $item.FullName.Substring($Out.Length).TrimStart('\')

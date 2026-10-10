@@ -537,22 +537,45 @@ __device__ __forceinline__ void __nanosleep(unsigned int ns) {
   __builtin_amdgcn_s_sleep(1);
 }
 
-__device__ __forceinline__ int __syncthreads_count(int predicate) {
-  // The count over the whole workgroup needs a shared counter, which a header cannot give.
-  // Over one wave it is the population count of the ballot, and ggml-cuda uses the form only
-  // inside a single wave. A workgroup wider than one wave would need the LDS version.
+// The three block collectives of CUDA and HIP. They reduce over the whole workgroup, which is
+// what their names promise and what clang's own CUDA header maps them to: `__nvvm_bar0_popc`,
+// `__nvvm_bar0_or` and `__nvvm_bar0_and` (toolchain/llvm-amdgpu-22.1.8/mingw64/lib/clang/22/
+// include/__clang_cuda_device_functions.h:524-526). A ballot answers for one wave only, so a
+// 64-thread block in wave32 mode would have counted 32 of 64 and a predicate that is true in
+// the second wave alone would have been invisible to the first. The reduction is therefore a
+// counter in group memory, with the barrier before it as well as after it: the leading barrier
+// is what lets a second call reuse the same word, because every thread has read the previous
+// value before thread 0 clears it.
+//
+// LDS cost: four bytes of the workgroup's group segment, whatever the block size.
+__device__ __forceinline__ int __bc250_syncthreads_count_block(int predicate) {
+  __shared__ int __bc250_block_predicate_count;
   __syncthreads();
-  return __builtin_popcountll(__builtin_amdgcn_uicmp(predicate != 0, 0, 33 /* ne */));
+  if (__builtin_amdgcn_workitem_id_x() == 0u && __builtin_amdgcn_workitem_id_y() == 0u &&
+      __builtin_amdgcn_workitem_id_z() == 0u) {
+    __bc250_block_predicate_count = 0;
+  }
+  __syncthreads();
+  if (predicate != 0) {
+    (void)__atomic_fetch_add(&__bc250_block_predicate_count, 1, __ATOMIC_RELAXED);
+  }
+  __syncthreads();
+  return __bc250_block_predicate_count;
+}
+
+__device__ __forceinline__ int __syncthreads_count(int predicate) {
+  return __bc250_syncthreads_count_block(predicate);
 }
 
 __device__ __forceinline__ bool __syncthreads_or(int predicate) {
-  __syncthreads();
-  return __builtin_amdgcn_uicmp(predicate != 0, 0, 33 /* ne */) != 0;
+  return __bc250_syncthreads_count_block(predicate) != 0;
 }
 
 __device__ __forceinline__ bool __syncthreads_and(int predicate) {
-  __syncthreads();
-  return __builtin_amdgcn_uicmp(predicate == 0, 0, 33 /* ne */) == 0;
+  const int threads = (int)(__builtin_amdgcn_workgroup_size_x() *
+                            __builtin_amdgcn_workgroup_size_y() *
+                            __builtin_amdgcn_workgroup_size_z());
+  return __bc250_syncthreads_count_block(predicate) == threads;
 }
 
 // The ballot of a wave32 part still has the HIP signature, which is 64 bits wide.
