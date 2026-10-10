@@ -158,11 +158,16 @@ class ShippedManifest(unittest.TestCase):
     def test_the_board_memory_operation_comes_last_and_ends_where_it_started(self):
         # The carve-out moves away from the size the language model arms need, so every arm that reads the
         # lab at its own carve-out runs before the change, and Restore and its restart close the operation.
+        # The games are the other way round: they run at the smaller size, inside the window.
         ids = [arm["id"] for arm in self.data["arms"]]
         standard = self.data["sets"]["standard"]
-        for arm_id in ("llm-q35", "llm-dense", "hip", "rottr", "w3-high-rt", "vkheaps"):
+        for arm_id in ("llm-q35", "llm-dense", "hip", "vkheaps"):
             self.assertLess(ids.index(arm_id), ids.index("bm-set-8192"), arm_id)
-        self.assertEqual(standard[-8:], self.data["sets"]["board-memory"])
+        for arm_id in ("rottr", "w3-high-rt"):
+            self.assertLess(ids.index("vkheaps-8192"), ids.index(arm_id), arm_id)
+            self.assertLess(ids.index(arm_id), ids.index("bm-restore"), arm_id)
+        board = self.data["sets"]["board-memory"]
+        self.assertEqual([arm_id for arm_id in standard if arm_id in board], board)
         self.assertEqual(standard[-1], "bm-after")
         arms = {arm["id"]: arm for arm in self.data["arms"]}
         self.assertEqual(arms["bm-after"]["baseline"]["value"], 12288)
@@ -170,6 +175,25 @@ class ShippedManifest(unittest.TestCase):
         for arm_id in ("bm-set-8192", "bm-restore"):
             self.assertIn("{kit}/board-memory-op.ps1", arms[arm_id]["run"][0], arm_id)
             self.assertEqual(arms[arm_id]["expect"], "verified True", arm_id)
+        self.assertEqual((arms["bm-set-8192"]["board_memory"], arms["bm-restore"]["board_memory"]),
+                         ("set", "restore"), "the plan finds the window by these marks")
+
+    def test_every_game_arm_first_reads_the_memory_its_session_needs(self):
+        # The b29 RotTR arm (native-caps547) at the 12288 MiB carve-out: 1302 MB available against the
+        # harness's 3500 MB, and the run step held the runner until it was stopped by hand.
+        plan = manifest.build(Package(directory=Path("."), release="r", name="n", kmd_build="", kmd_abi="",
+                                      built_utc="", zip_path=None, zip_sha256="", zip_bytes=0), self.data,
+                              arm_ids=["rottr", "w3-high-rt"], attempt_base=700, python="python")
+        for arm in plan.arms:
+            first = arm.steps[0]
+            self.assertEqual(first.phase, "pre", arm.id)
+            self.assertIn("game-memory.ps1", first.text(), arm.id)
+            self.assertEqual(first.argv[-2:], ["-NeedMB", "3500"], arm.id)
+            self.assertFalse(first.optional, "the admission is load-bearing")
+        script = (LAB / "game-memory.ps1").read_text(encoding="utf-8")
+        self.assertIn("$NeedMB", script)
+        self.assertIn("'Memory', 'Available MBytes'", script, "the harness's own counter")
+        self.assertIn("carve-out too large for games", script)
 
     def test_the_staged_clients_reach_the_arms_that_run_them(self):
         arms = {arm["id"]: arm for arm in self.data["arms"]}
@@ -260,6 +284,82 @@ class ShippedManifest(unittest.TestCase):
     def test_an_unknown_placeholder_is_refused(self):
         with self.assertRaises(ManifestError):
             manifest.expand("{nothing}", {"repo": "x"})
+
+
+def board_memory_manifest() -> dict:
+    """The small manifest with a board memory window after the game: set, restart, read, restore."""
+    data = small_manifest()
+    data["arms"] += [
+        {"id": "set", "title": "set", "kind": "lab", "bound_s": 150, "board_memory": "set",
+         "run": [["python", "{target}", "ps", "{kit}/board-memory-op.ps1", "-Step", "set", "-Target", "8192"]]},
+        {"id": "boot", "title": "boot", "kind": "restart", "bound_s": 600, "depends_on": ["set"],
+         "run": [["python", "{target}", "ps", "{kit}/restart-now.ps1"]]},
+        {"id": "read", "title": "read", "kind": "lab-read", "bound_s": 150, "depends_on": ["boot"],
+         "run": [["python", "{target}", "ps", "{kit}/board-memory-op.ps1", "-Step", "read"]]},
+        {"id": "restore", "title": "restore", "kind": "lab", "bound_s": 150, "board_memory": "restore",
+         "run": [["python", "{target}", "ps", "{kit}/board-memory-op.ps1", "-Step", "restore"]]},
+    ]
+    data["sets"]["standard"] += ["set", "boot", "read", "restore"]
+    return data
+
+
+class GameWindow(unittest.TestCase):
+    """A game runs at the smaller carve-out: after the board memory set and before Restore (b29 547)."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+
+    def test_a_game_arm_before_the_set_runs_after_the_restart_and_before_the_restore(self):
+        plan = small_plan(self.tmp, board_memory_manifest())
+        self.assertEqual([arm.id for arm in plan.arms], ["smoke", "demo", "set", "boot", "read", "game", "restore"])
+        self.assertEqual(plan.by_id("game").arm["attempt_name"], "native-caps600")
+
+    def test_a_game_arm_after_the_restore_moves_into_the_window_too(self):
+        data = board_memory_manifest()
+        game = data["arms"].pop(2)
+        data["arms"].append(dict(game, id="late", depends_on=["read"]))
+        data["arms"].insert(2, game)
+        data["sets"]["standard"].append("late")
+        plan = small_plan(self.tmp, data)
+        self.assertEqual([arm.id for arm in plan.arms],
+                         ["smoke", "demo", "set", "boot", "read", "game", "late", "restore"])
+
+    def test_a_plan_with_no_set_keeps_the_manifest_order(self):
+        plan = manifest.build(fake_package(self.tmp), board_memory_manifest(),
+                              arm_ids=["smoke", "demo", "game", "restore"], out_dir=self.tmp / "out",
+                              roots=(HERE.parents[2], self.tmp), attempt_base=600, python="python")
+        self.assertEqual([arm.id for arm in plan.arms], ["smoke", "demo", "game", "restore"])
+        self.assertIn("game-memory.ps1", plan.by_id("game").steps[0].text(),
+                      "without the window the admission step still stops a game the carve-out cannot admit")
+
+    def test_an_arm_that_needs_the_game_before_the_set_is_refused(self):
+        data = board_memory_manifest()
+        data["arms"][3]["depends_on"] = ["game"]
+        with self.assertRaises(ManifestError):
+            small_plan(self.tmp, data)
+
+    def test_an_unknown_board_memory_mark_is_refused(self):
+        data = board_memory_manifest()
+        data["arms"][3]["board_memory"] = "grow"
+        with self.assertRaises(ManifestError):
+            manifest.check_manifest(data)
+
+    def test_a_carve_out_too_large_fails_the_game_at_once_and_says_why(self):
+        plan = small_plan(self.tmp)
+        shell = FakeShell([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("game-memory.ps1", Completed(1, "game memory: Windows sees 3816 MB, 1302 MB available, the game "
+                                             "harness needs 3500 MB available\ngame memory FAILED carve-out "
+                                             "too large for games: 3816 MB of RAM cannot hold 3500 MB")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        run = Runner(plan, shell, self.tmp / "out", clock=FakeClock(), writer=lambda *a: None, python="python")
+        record = run.run([plan.by_id("game")])[0]
+        self.assertEqual(record.verdict, FAIL)
+        self.assertIn("of the pre step: game memory FAILED carve-out too large for games", record.reason)
+        self.assertEqual(shell.said("run-game.sh"), [], "the session never starts")
+        self.assertEqual(len(shell.said("vsync.ps1 -Value 1")), 1, "the restore still runs")
 
 
 class Staging(unittest.TestCase):
@@ -1136,6 +1236,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
              Completed(0, "vk heaps: device-local 7897 MiB, host 2672 MiB, total 10569 MiB")),
             ("vkheaps.ps1", Completed(0, "vk heaps: device-local 11865 MiB, host 1908 MiB, total 13773 MiB")),
             ("board-memory.ps1", Completed(0, "probe status 0\nwindows ram 7629 MiB")),
+            ("game-memory.ps1", self.game_memory),
             ("board-memory-op.ps1 -Step read", self.board_read),
             ("board-memory-op.ps1 -Step set", self.board_write),
             ("board-memory-op.ps1 -Step restore", self.board_write),
@@ -1180,6 +1281,14 @@ class ShippedSetEndToEnd(unittest.TestCase):
                             f"previous {self.carve_out[2] or 0} MiB, backup False, write True, reason 0, "
                             f"pending {active != following}\nboard memory done")
 
+    def game_memory(self, step):
+        # The lab's RAM is the board's 16 GiB less the carve-out: 3816 MB at 12288 MiB, 7912 MB at 8192 MiB.
+        visible = 3816 if self.carve_out[0] == 12288 else 7912
+        if visible < 3500 + 2048:
+            return Completed(1, f"game memory: Windows sees {visible} MB\n"
+                                f"game memory FAILED carve-out too large for games")
+        return Completed(0, f"game memory: Windows sees {visible} MB\ngame memory OK")
+
     def board_write(self, step):
         restore = "restore" in step.argv
         if self.carve_out[2] is None:
@@ -1213,6 +1322,17 @@ class ShippedSetEndToEnd(unittest.TestCase):
         self.assertTrue((plans / "plan-003.md").is_file(), "the plan file of the rottr arm")
         self.assertTrue((plans / "plan-004.md").is_file(),
                         "the operator's own game arm got its plan file too: run-m157.sh refuses without it")
+
+    def test_a_game_alone_at_the_large_carve_out_fails_at_once(self):
+        # `--arms rottr` on a lab left at 12288 MiB: no window in the plan, and the admission step says why.
+        out = self.tmp / "out-rottr"
+        code = self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
+                                   "--train", "b99", "--attempt-base", "1", "--arms", "rottr"])
+        self.assertEqual(code, 1)
+        records = json.loads((out / "records.json").read_text(encoding="utf-8"))
+        self.assertEqual([row["verdict"] for row in records], ["FAIL"])
+        self.assertIn("carve-out too large for games", records[0]["reason"])
+        self.assertEqual(self.shell.said("run-game.sh"), [])
 
     def test_the_push_arm_hands_target_py_the_lab_directory_after_the_to_flag(self):
         out = self.tmp / "out-push"

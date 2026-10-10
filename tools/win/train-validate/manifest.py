@@ -21,6 +21,9 @@ TRIAL_KINDS = ("lab", "lab-read", "promote")
 # bound does not apply; each one still carries a bound of its own.
 HOST_KINDS = ("host", "transfer", "restart")
 GAME_KINDS = ("game", "operator")
+# An arm that changes the board's memory carve-out says which way: `set` writes the size the games run at, and
+# `restore` puts back the size before the change. `game_window` orders the game arms between the two.
+BOARD_MEMORY_MARKS = ("set", "restore")
 
 
 class ManifestError(Exception):
@@ -235,6 +238,9 @@ def check_manifest(data: dict) -> None:
                                 f"{result['pick']!r}")
         if not isinstance(arm.get("kill", []), list):
             raise ManifestError(f"{arm_id}: kill is the list of client process names to end")
+        if arm.get("board_memory") not in (None, *BOARD_MEMORY_MARKS):
+            raise ManifestError(f"{arm_id}: board_memory is one of {', '.join(BOARD_MEMORY_MARKS)}, not "
+                                f"{arm['board_memory']!r}")
         baseline = arm.get("baseline")
         if baseline and not ("tolerance_pct" in baseline or "tolerance_abs" in baseline):
             raise ManifestError(f"{arm_id}: a baseline needs a tolerance")
@@ -277,7 +283,10 @@ def plan_steps(arm: dict, values: dict, limits: dict, python: str) -> list[Plann
         grace += int(limits.get("game_evidence_s", 900))
     steps: list[PlannedStep] = []
     for phase in ("pre", "run", "post"):
-        for entry in arm.get(phase, ()):
+        entries = list(arm.get(phase, ()))
+        if phase == "pre" and arm["kind"] in GAME_KINDS:
+            entries.insert(0, game_memory_step(limits))
+        for entry in entries:
             argv = entry["argv"] if isinstance(entry, dict) else entry
             optional = bool(entry.get("optional")) if isinstance(entry, dict) else False
             resolved = [expand(str(part), values) for part in argv]
@@ -286,6 +295,49 @@ def plan_steps(arm: dict, values: dict, limits: dict, python: str) -> list[Plann
             timeout = int(arm["bound_s"]) + grace if phase == "run" else min(180, int(arm["bound_s"]) + grace)
             steps.append(PlannedStep(argv=resolved, timeout_s=timeout, phase=phase, optional=optional))
     return steps
+
+
+def game_memory_step(limits: dict) -> list[str]:
+    """The first pre step of every game arm: the session's memory admission, read before anything starts.
+
+    The lab's game harness (`game-runtime.ps1`) admits a session only with `game_available_mb` available, and on
+    this board the carve-out takes its share of the RAM before Windows starts. At 12288 MiB Windows had 1302 MB
+    available, and the b29 RotTR arm (native-caps547) did not start the game but held the runner on its host
+    backstop until it was stopped by hand. `lab/game-memory.ps1` reads the same counter and fails the arm at
+    once, with the reason.
+    """
+    return ["python", "{target}", "ps", "{kit}/game-memory.ps1", "-NeedMB",
+            str(int(limits.get("game_available_mb", 3500)))]
+
+
+def game_window(order: list[str], index: dict) -> list[str]:
+    """The running order, with every game arm inside the board memory window when the plan has one.
+
+    A game runs at the smaller carve-out (`game_memory_step`). A plan that sets the board memory therefore runs
+    its game arms after the last `set` arm and before the first `restore` arm after it, which is after the
+    restart and the reads at the new size. Game arms already in the window keep their places; the others move to
+    the end of it, or to the end of the plan when it has no restore. A plan with no `set` arm keeps its order,
+    and the memory step still stops a game that the carve-out cannot admit.
+    """
+    marks = [index[arm_id].get("board_memory") for arm_id in order]
+    if "set" not in marks:
+        return order
+    last_set = len(marks) - 1 - marks[::-1].index("set")
+    restore = next((i for i in range(last_set + 1, len(order)) if marks[i] == "restore"), len(order))
+    moving = [arm_id for i, arm_id in enumerate(order)
+              if index[arm_id]["kind"] in GAME_KINDS and not last_set < i < restore]
+    if not moving:
+        return order
+    rest = [arm_id for arm_id in order if arm_id not in moving]
+    at = rest.index(order[restore]) if restore < len(order) else len(rest)
+    moved = rest[:at] + moving + rest[at:]
+    position = {arm_id: i for i, arm_id in enumerate(moved)}
+    for arm_id in moved:
+        for dependency in index[arm_id].get("depends_on", ()):
+            if position.get(dependency, -1) > position[arm_id]:
+                raise ManifestError(f"{arm_id} depends on {dependency}, and the game arms move after the board "
+                                    f"memory set: {dependency} would run after {arm_id}")
+    return moved
 
 
 def arm_values(values: dict, arm: dict, number: int | None) -> tuple[dict, list[str]]:
@@ -341,7 +393,7 @@ def build(package: Package, data: dict | None = None, arm_ids: list[str] | None 
     unknown = [arm_id for arm_id in wanted if arm_id not in index]
     if unknown:
         raise ManifestError("no such arm: " + ", ".join(unknown))
-    order = [arm["id"] for arm in data["arms"] if arm["id"] in set(wanted)]
+    order = game_window([arm["id"] for arm in data["arms"] if arm["id"] in set(wanted)], index)
     # An arm that names the package zip or its hash cannot run without them. The push arm would otherwise
     # hand target.py an empty path, and zipcheck would compare the lab's hash against nothing.
     needs_zip = [arm_id for arm_id in order if "{zip}" in json.dumps(index[arm_id])] if for_run else []

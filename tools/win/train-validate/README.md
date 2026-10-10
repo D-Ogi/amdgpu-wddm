@@ -31,7 +31,7 @@ The suite does not take the work the owner reserved for a person.
   application's own code computes from the state it reads (`lab/board-memory-op.ps1`). That is the command
   line the card starts after its confirmation dialog, so the arms cover the write, the restart and Restore,
   and not the dialog. The owner's physical CMOS clear stays the only recovery if the board does not start
-  again, which is why these arms come last.
+  again, which is why these arms come last. The game arms run inside them, at 8192 MiB (see the rules).
 - **The interactive Witcher 3 Remaster session** (`w3-high-rt`) stays with the operator: the owner's rule is
   that the agent drives the game itself, with a half-scale shot every 10 to 15 seconds, and ends the session
   when its goals are done. The runner prints where that session fits and never starts it.
@@ -60,6 +60,7 @@ remembering them.
 | The temperature is never polled faster than 10 s | `arms.json` limits, held by the tests. The lab sshd penalises fast probes |
 | No ssh session is held open before a trial runs | one call at a time, and the only sampler is the smart plug over the LAN (BD-051) |
 | The overlay STOP flag ends the run, and so does a flag that cannot be read | `Runner.stop_flag_set` wants `mon.py`'s own line (`STOP requested` or `no stop request`). Any other answer means the question did not reach the overlay, and an unread flag is never a licence to start a GPU arm |
+| A game session starts only when the carve-out leaves it the memory its harness needs (3500 MB available) | `manifest.game_memory_step` puts `lab/game-memory.ps1` first in every game arm: it reads the harness's own counter and fails the arm at once with `carve-out too large for games`. `manifest.game_window` runs the game arms after the board memory `set` and before its `restore`. At 12288 MiB Windows has about 1300 MB available, and the b29 RotTR arm (native-caps547) waited on its host backstop instead |
 | `bc250mon` keeps running | the suite hides the overlay for a game arm, puts it back afterwards and never stops the process. Those two calls are `optional` steps: the overlay never fails an arm |
 | Every lab call goes through `target.py` | the commands in `arms.json` name no address and no host |
 | A health gate follows every arm that touched the GPU | `lab/gate.ps1` and `runner.parse_gate`: GPU faults, fence timeouts, event 4101 of the display provider, bugcheck records, DPM, fan `state=curve controlling=1`, TdrDelay 10 |
@@ -109,9 +110,9 @@ The difference matters when a number is read out of this table.
 | `llm-q35` | lab | the 35B-A3B IQ2_M model runs fully offloaded at the 12 GiB carve-out |
 | `hip` | lab | the installed HIP runtime is on the machine PATH, `vadd.exe` computes, and the HIP llama.cpp backend runs `llama-bench` through it (BD-110) |
 | `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness. For a new triplet it first puts the accepted files back in the install directory, because the attempt verifies them before it swaps (`lab/d3d12-putback.ps1`). The release file waits next to the accepted one as `<name>.release` until the promotion has put it back |
-| `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene |
-| `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator |
 | `bm-before`, `bm-set-8192`, `bm-restart-1`, `bm-at-8192`, `vkheaps-8192`, `bm-restore`, `bm-restart-2`, `bm-after` | read, lab, restart | the board memory operation of the control application. It sets 8192 MiB and restarts. It reads the active size, Windows RAM and the Vulkan heaps at 8192 MiB. Then Restore and a restart put back the size before the change |
+| `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene. It runs after `vkheaps-8192`, at 8192 MiB |
+| `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator, at 8192 MiB before `bm-restore` |
 
 Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms cache`, `--arms llm`,
 `--arms hip`, `--arms semaphore`, `--arms board-memory`, or a list such as `--arms q2rtx-pipeline,q2rtx-query`.

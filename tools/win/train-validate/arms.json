@@ -23,6 +23,7 @@
     "tctl_cool_max_s": 420,
     "host_grace_s": 45,
     "game_evidence_s": 900,
+    "game_available_mb": 3500,
     "min_poll_s": 10,
     "restart_settle_s": 30,
     "restart_poll_s": 30
@@ -57,13 +58,13 @@
       "llm-q35",
       "hip",
       "d3d12-promote",
-      "rottr",
-      "w3-high-rt",
       "bm-before",
       "bm-set-8192",
       "bm-restart-1",
       "bm-at-8192",
       "vkheaps-8192",
+      "rottr",
+      "w3-high-rt",
       "bm-restore",
       "bm-restart-2",
       "bm-after"
@@ -1008,6 +1009,201 @@
       "note": "Idempotent: a leftover attempt directory with no lab evidence is moved aside, and an already accepted triplet ends the step as satisfied instead of refusing. When it has to step over evidence, the game arms after it are given later numbers, so that two arms never write into one attempt."
     },
     {
+      "id": "bm-before",
+      "title": "Board memory before the change: the card's state, the probe, Windows RAM",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-before.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "slots"
+      ],
+      "gate_after": false,
+      "note": "The start of the operation: the lab is at 12288 MiB for the LLM work, so the change is 12288 -> 8192 and Restore brings it back. The game arms run inside this window, at 8192 MiB: at 12288 MiB Windows has about 1300 MB available and the game harness admits a session only at 3500 MB (b29 native-caps547)."
+    },
+    {
+      "id": "bm-set-8192",
+      "title": "Board memory 8192 MiB through the control application's elevated verb",
+      "kind": "lab",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "set",
+          "-Target",
+          "8192",
+          "-Render"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-pending-8192.png"
+          ],
+          "optional": true
+        }
+      ],
+      "expect": "verified True",
+      "result": {
+        "regex": "board memory set: exit (\\d+)",
+        "name": "verb exit code",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the verb's contract: 0 means written and read back"
+      },
+      "depends_on": [
+        "bm-before"
+      ],
+      "note": "Writes the board's memory block (extended CMOS) through the driver's RUN_BOARD_MEMORY escape, with the owner's consent of 2026-10-10 for this change. The token is computed by the application's own code. The click and the confirmation dialog of the card are not exercised. Recovery if the board does not start: the owner's CMOS clear, which also resets the boot order.",
+      "board_memory": "set"
+    },
+    {
+      "id": "bm-restart-1",
+      "title": "Restart: the board starts with 8192 MiB",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "board memory 8192 MiB"
+        ]
+      ],
+      "depends_on": [
+        "bm-set-8192"
+      ],
+      "gate_after": true
+    },
+    {
+      "id": "bm-at-8192",
+      "title": "Board memory after the restart: 8192 MiB active, Windows RAM, segment size",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-after-8192.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "bm-restart-1"
+      ],
+      "gate_after": false,
+      "baseline": {
+        "value": 8192,
+        "tolerance_abs": 0,
+        "source": "the size bm-set-8192 asked for"
+      }
+    },
+    {
+      "id": "vkheaps-8192",
+      "title": "The Vulkan heaps at the 8192 MiB carve-out",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vkheaps.ps1",
+          "-Out",
+          "C:\\BC250\\tmp\\train-vkheaps-8192"
+        ]
+      ],
+      "result": {
+        "regex": "vk heaps: device-local (\\d+) MiB",
+        "name": "DEVICE_LOCAL heap",
+        "unit": "MiB"
+      },
+      "baseline": {
+        "value": 7897,
+        "tolerance_abs": 200,
+        "source": "the 8192 MiB carve-out: the host model of the vram-caps wagon of tester.27. With the vkheaps arm at 12288 MiB, the two readings must differ by about the 4096 MiB the board moved."
+      },
+      "depends_on": [
+        "bm-at-8192"
+      ],
+      "gate_after": false
+    },
+    {
       "id": "rottr",
       "title": "GATE Rise of the Tomb Raider, D3D12 benchmark, preset HIGH",
       "kind": "game",
@@ -1152,200 +1348,6 @@
       "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line."
     },
     {
-      "id": "bm-before",
-      "title": "Board memory before the change: the card's state, the probe, Windows RAM",
-      "kind": "lab-read",
-      "bound_s": 150,
-      "run": [
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/board-memory-op.ps1",
-          "-Step",
-          "read",
-          "-Render"
-        ],
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/board-memory.ps1",
-          "-Step",
-          "all"
-        ]
-      ],
-      "post": [
-        {
-          "argv": [
-            "python",
-            "{target}",
-            "pull",
-            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
-            "{out}/board-memory/graphics-before.png"
-          ],
-          "optional": true
-        }
-      ],
-      "result": {
-        "regex": "board memory state \\(before\\): active (\\d+) MiB",
-        "name": "active carve-out",
-        "unit": "MiB"
-      },
-      "depends_on": [
-        "slots"
-      ],
-      "gate_after": false,
-      "note": "The start of the operation: the lab is at 12288 MiB for the LLM work, so the change is 12288 -> 8192 and Restore brings it back."
-    },
-    {
-      "id": "bm-set-8192",
-      "title": "Board memory 8192 MiB through the control application's elevated verb",
-      "kind": "lab",
-      "bound_s": 150,
-      "run": [
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/board-memory-op.ps1",
-          "-Step",
-          "set",
-          "-Target",
-          "8192",
-          "-Render"
-        ]
-      ],
-      "post": [
-        {
-          "argv": [
-            "python",
-            "{target}",
-            "pull",
-            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
-            "{out}/board-memory/graphics-pending-8192.png"
-          ],
-          "optional": true
-        }
-      ],
-      "expect": "verified True",
-      "result": {
-        "regex": "board memory set: exit (\\d+)",
-        "name": "verb exit code",
-        "unit": ""
-      },
-      "baseline": {
-        "value": 0,
-        "tolerance_abs": 0,
-        "source": "the verb's contract: 0 means written and read back"
-      },
-      "depends_on": [
-        "bm-before"
-      ],
-      "note": "Writes the board's memory block (extended CMOS) through the driver's RUN_BOARD_MEMORY escape, with the owner's consent of 2026-10-10 for this change. The token is computed by the application's own code. The click and the confirmation dialog of the card are not exercised. Recovery if the board does not start: the owner's CMOS clear, which also resets the boot order."
-    },
-    {
-      "id": "bm-restart-1",
-      "title": "Restart: the board starts with 8192 MiB",
-      "kind": "restart",
-      "bound_s": 600,
-      "run": [
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/restart-now.ps1",
-          "-Reason",
-          "board memory 8192 MiB"
-        ]
-      ],
-      "depends_on": [
-        "bm-set-8192"
-      ],
-      "gate_after": true
-    },
-    {
-      "id": "bm-at-8192",
-      "title": "Board memory after the restart: 8192 MiB active, Windows RAM, segment size",
-      "kind": "lab-read",
-      "bound_s": 150,
-      "run": [
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/board-memory-op.ps1",
-          "-Step",
-          "read",
-          "-Render"
-        ],
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/board-memory.ps1",
-          "-Step",
-          "all"
-        ]
-      ],
-      "post": [
-        {
-          "argv": [
-            "python",
-            "{target}",
-            "pull",
-            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
-            "{out}/board-memory/graphics-after-8192.png"
-          ],
-          "optional": true
-        }
-      ],
-      "result": {
-        "regex": "board memory state \\(before\\): active (\\d+) MiB",
-        "name": "active carve-out",
-        "unit": "MiB"
-      },
-      "depends_on": [
-        "bm-restart-1"
-      ],
-      "gate_after": false,
-      "baseline": {
-        "value": 8192,
-        "tolerance_abs": 0,
-        "source": "the size bm-set-8192 asked for"
-      }
-    },
-    {
-      "id": "vkheaps-8192",
-      "title": "The Vulkan heaps at the 8192 MiB carve-out",
-      "kind": "lab-read",
-      "bound_s": 150,
-      "run": [
-        [
-          "python",
-          "{target}",
-          "ps",
-          "{kit}/vkheaps.ps1",
-          "-Out",
-          "C:\\BC250\\tmp\\train-vkheaps-8192"
-        ]
-      ],
-      "result": {
-        "regex": "vk heaps: device-local (\\d+) MiB",
-        "name": "DEVICE_LOCAL heap",
-        "unit": "MiB"
-      },
-      "baseline": {
-        "value": 7897,
-        "tolerance_abs": 200,
-        "source": "the 8192 MiB carve-out: the host model of the vram-caps wagon of tester.27. With the vkheaps arm at 12288 MiB, the two readings must differ by about the 4096 MiB the board moved."
-      },
-      "depends_on": [
-        "bm-at-8192"
-      ],
-      "gate_after": false
-    },
-    {
       "id": "bm-restore",
       "title": "Board memory Restore through the control application's elevated verb",
       "kind": "lab",
@@ -1387,7 +1389,8 @@
       "depends_on": [
         "bm-at-8192"
       ],
-      "note": "Restore writes back the block saved before the first write, which is 12288 MiB on this lab."
+      "note": "Restore writes back the block saved before the first write, which is 12288 MiB on this lab.",
+      "board_memory": "restore"
     },
     {
       "id": "bm-restart-2",

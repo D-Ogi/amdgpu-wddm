@@ -583,6 +583,11 @@ class Runner:
                     where = "" if step.phase == "run" else f" of the {step.phase} step"
                     record.reason = (f"no end within {step.timeout_s} s (bound {arm.bound_s} s){where}"
                                      if done.timed_out else f"rc {done.rc}{where}")
+                    said = [line.strip() for line in done.text.splitlines() if line.strip()]
+                    if step.phase == "pre" and not done.timed_out and said:
+                        # A pre step that refuses the arm says why in its last line (the memory admission of
+                        # a game arm: 'carve-out too large for games'). The reader gets it without the file.
+                        record.reason += ": " + said[-1]
                     failed = True
         finally:
             if sampler:
