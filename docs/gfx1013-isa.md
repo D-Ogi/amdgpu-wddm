@@ -140,6 +140,8 @@ assembler, and each word survives into the linked code object.
   PS5 shader decoders of AnyPS5, KytyPS5 and sharpemu:
   [gfx1013 ISA leads from PS5 shader decoders](research/gfx1013-isa-leads-ps5-decoders.md).
   They are leads, not facts.
+- The 18 image instructions that AMD's ISA XML describes and LLVM and the PDF guides do not:
+  [GFX10 image instructions that only AMD's ISA XML describes](gfx10-image-ops-amd-xml.md).
 
 Nie wszystko złoto, co się świeci: not all that glitters is gold. A GFX10.1 opcode on this chip
 may be a GFX10.1 instruction, an instruction of 2012, or nothing at all.

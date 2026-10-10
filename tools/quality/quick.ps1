@@ -64,6 +64,7 @@ try {
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
  Check 'train-validate' { & python -m unittest discover -s "$repo\tools\win\train-validate" }
  Check 'gpu-timeline' { & python -m unittest discover -s "$repo\tools\win\gpu-timeline" -p 'test_*.py' }
+ Check 'isa-xml' { & python -m unittest discover -s "$repo\tools\isa" }
  Check 'gui-trials' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\gui-trials").FullName; & python -m unittest discover -s "$repo\tools\win\gui-trials" -p 'test_run_trial.py'; if($LASTEXITCODE -eq 0){ & pwsh -NoProfile -File "$repo\tools\win\gui-trials\validate-T2.ps1" } }
  Check 'conformance-shaders' { & pwsh -NoProfile -File "$repo\tools\win\conformance-clients\check-shaders.ps1" -Kits "$Kits" -Out "$Out\conformance-shaders" }
  # -CompileOnly, not -ExportCommandsOnly: the same recipe wrote compile_commands.json for the two contract gates

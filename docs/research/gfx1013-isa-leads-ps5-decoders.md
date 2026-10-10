@@ -55,18 +55,37 @@ A refusal by LLVM says only that the public tool does not describe the slot. It 
 ## The first lead: MIMG opcode 0xE5 in Ghost of Yōtei
 
 [AnyPS5 issue 1941](https://github.com/boykopovar/AnyPS5/issues/1941) reports that Ghost of Yōtei (PPSA26344)
-emits MIMG opcode 0xE5 at 38 sites, and that no decoder names it. Two of the first dwords that the issue quotes
-are `f1949f05` (with second dword `00060018`) and `f1962969`. Both carry the GFX10 MIMG encoding, opcode bits
-`0x65` and the high opcode bit in bit 0. The address dwords of the NSA form follow them.
+emits MIMG opcode 0xE5, and that no decoder names it. The title's shader store has 38 such words: `f1949f05` at
+34 sites and `f1962969` at 4. The issue quotes one site in full: `f1949f05 00060018 121b1a19 00003715`. The
+project closed the issue with two changes. One names the opcode in the error message. The other defers the
+shader that contains it. 0xE5 stays unidentified.
 
-- LLVM has no instruction at 0xE5 for any GFX10 target. No file of AMD's machine-readable ISA names it.
-- The two slots beside it, 0xE6 and 0xE7, hold `image_bvh_intersect_ray` and `image_bvh64_intersect_ray`. LLVM
-  gives them to gfx1013 among the GFX10.1 parts, and the RDNA2 file names 0xE6.
-- The project closed the issue with two changes. One names the opcode in the error message. The other defers
-  the shader that contains it. 0xE5 stays unidentified. The issue says that only a hardware oracle on AMD can
-  tell what it does, and the project measures on RDNA2.
+What the thread settles:
 
-Unit A is the PS5 GPU. The MIMG phase of the sweep starts with 0xE5, with the game's own instruction words.
+- The store is GFX10-family code. Its 0xE6 and 0xE7 words decode as the BVH instructions on gfx1030 and gfx1013
+  and on no GFX11 target, which moved those two to other opcodes.
+- A reading of the 0xE5 words as the GFX11 `image_gather4_c_b_cl` was withdrawn by its own author. GFX11 reads
+  the opcode from other bits, and the gfx1013 encoding of that gather is 0x4E, which the decoder already
+  carries.
+- LLVM has no instruction at 0xE5 for any target. No file of AMD's machine-readable ISA names it, and the
+  RDNA 2 PDF guide does not either.
+
+What we add, from the assembler of LLVM 22.1.8 for gfx1013 (`llvm-mc -arch=amdgcn -mcpu=gfx1013 -show-encoding`):
+
+- The first word, `f1949f05 00060018`, has exactly the fixed fields of the two BVH instructions: DMASK 0xf,
+  UNORM, R128, dimension 0, no sampler. The assembler encodes `image_bvh_intersect_ray v[0:3], [v24, v25, v26,
+  v27, v18, v21, v55, v1], s[24:27] a16` as `f1989f05 40060018 121b1a19 00013715`. The first dword differs from
+  the game's in the opcode bits only (0x66 against 0x65). The second differs in the A16 bit only. The first
+  address dword is identical.
+- So 0xE5 takes a BVH-style list of separate address registers. With A16 clear, the game's word gives seven
+  addresses (`v24`, `v25`, `v26`, `v27`, `v18`, `v21`, `v55`) if its two zero bytes are padding, or nine if they
+  name `v0`. The BVH instructions take 11 addresses, or 8 with A16.
+- The second word, `f1962969`, has another shape: DMASK 0x9, a 2D array, GLC and LWE, and bit 6 set, which GFX10
+  does not assign. Its four sites may be data in the store and not code.
+
+So the first word has the shape of a ray-tracing instruction beside the two that the public documents give
+gfx1013 alone. That is a reading of bits, not a measurement. Unit A is the PS5 GPU. The MIMG phase of the sweep
+starts with 0xE5, with the game's own instruction words.
 
 ## Lead group A: MIMG instructions that LLVM does not know at all
 
@@ -76,8 +95,10 @@ keeps in bit 0 of the first dword.
 ### A1: 18 load, store and gather forms that AMD documents and LLVM does not
 
 AMD's machine-readable ISA for RDNA1 and RDNA2 names all 18 at these opcodes, with the names that AnyPS5 uses.
-The RDNA3 file gives six of these slots (0x42, 0x43, 0x4a, 0x4b, 0x62, 0x63) to other instructions. So these
-slots are not a gap in AMD's map. They are a gap in LLVM.
+The public RDNA and RDNA 2 PDF guides do not list them. The RDNA3 file gives six of these slots (0x42, 0x43,
+0x4a, 0x4b, 0x62, 0x63) to other instructions. So these slots are not a gap in AMD's map. They are a gap in LLVM
+and in the PDF guides. AMD's text for each of them is on
+[GFX10 image instructions that only AMD's ISA XML describes](../gfx10-image-ops-amd-xml.md).
 
 | MIMG opcode | name | AMD's description (RDNA1 file) | what AnyPS5 records | gfx1013 |
 |---|---|---|---|---|
