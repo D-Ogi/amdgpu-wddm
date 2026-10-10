@@ -70,18 +70,18 @@ Nie ufaj czujnikowi, ktory milczy. Trust no sensor that says nothing.
 
 ## Deadline regression controls (2026-10-10)
 
-`tests/lab/test-arm-stop-bound.ps1` adds nine offline checks to the build gate. It
-runs stalled termination and copy workers, checks that expired operations cannot
+`tests/lab/test-arm-stop-bound.ps1` adds nine offline tests to the build gate. It
+runs stalled termination and copy workers, confirms that expired operations cannot
 be accepted later, and verifies a real copy/hash positive control and zero-budget
-refusal. The existing 85 checks remain enabled.
+refusal. The existing 85 tests remain enabled.
 
 The regression control accepts `-Library <old-armlib.ps1> -ExpectFailures`.
-Extract that library with `git show 8c1237b3:compute/hip/lab/armlib.ps1`; all four
-shared deadline/acceptance checks must fail against it. Tests replace the old
+Extract that library with `git show 8c1237b3:compute/hip/lab/armlib.ps1`. All four
+shared deadline/acceptance tests must fail against it. Tests replace the old
 synchronous taskkill and copy calls with delays. The new path uses real sleeping
 worker processes and must stop waiting at its monotonic deadline. No GPU or lab
 is involved. Use Windows PowerShell `-File`, with `-WorkDir` under the build output.
-The inherited suite needs permission to terminate its own process trees; if the
+The inherited suite needs permission to stop its own process trees. If the
 host sandbox denies taskkill, an UNKNOWN result is correct, not a reason to
 silently certify root-only termination.
 
@@ -97,7 +97,7 @@ worker termination is unconfirmed. Successful copies report `complete`.
 `elapsed_sec` and `deadline_exceeded` are sampled before the small report write.
 Process creation, process termination syscalls, filesystem calls and PowerShell
 scheduling can themselves stall. These waits are bounded under responsive OS
-operations; they are not a guarantee against a kernel or filesystem hang. The
+operations. They are not a guarantee against a kernel or filesystem hang. The
 report write is best effort and synchronous. An observed overrun before it sets
 `UNKNOWN`, status5, and a cleanup note. A timed-out partial copy target may remain
-on disk; only paths accompanied by an accepted hash in the report are evidence.
+on disk. Only paths accompanied by an accepted hash in the report are evidence.
