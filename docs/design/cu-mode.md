@@ -56,8 +56,10 @@ Either register alone changes nothing measurable (the reference's four-state A/B
 M1(c) and M4 (M4 also records that the BIOS leaves the SPI mask at `0xFFFF` and that it reads `0x7` only after
 amdgpu's init, with no host write to it: facts M17).
 
-KMD 0.7.174 added the mode as a driver setting, applied at device start. There is no live switch: the mode
-changes on the next start of the driver, which normally means a reboot.
+The mode is a driver setting, applied at device start. It has been in the kernel driver since 0.7.174, and a
+cold boot applies 40 since 0.7.179 (the power-gating check below). Every tester release is newer than that, so
+every tester release has it. There is no live switch: the mode changes on the next start of the driver, which
+normally means a reboot.
 
 PROVENANCE: register names, values and the write point come from duggasco/bc250-40cu-unlock (GPL-2.0); no code was imported.
 
