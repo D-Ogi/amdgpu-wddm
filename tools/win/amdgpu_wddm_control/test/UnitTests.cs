@@ -302,8 +302,24 @@ static partial class UnitTests
         Equal(2000u, DpmSettings.CeilingChoices.Max(), "hard ceiling");
         Check(DpmSettings.CeilingChoices.Contains(DpmSettings.DefaultMaxMHz), "default among the choices");
         Check(DpmSettings.IsValidMode(0) && DpmSettings.IsValidMode(1) && !DpmSettings.IsValidMode(2), "modes");
-        Equal("Fixed (default), ceiling 1500 MHz (default)", DpmSettings.Describe(null, null), "describe defaults");
+        Equal("Fixed (default), ceiling 2000 MHz (default)", DpmSettings.Describe(null, null), "describe defaults");
         Equal("Automatic, ceiling 2000 MHz", DpmSettings.Describe(1, 2000), "describe dpm 2000");
+        var languageBefore = Strings.Language;
+        try
+        {
+            foreach (var language in Strings.Languages)
+            {
+                Strings.Language = language;
+                var plan = new ActionPlan { Action = "set-clocks" };
+                plan.Writes.Add(RegWrite.Remove(Recovery.ParametersPath, "DpmMaxMHz"));
+                var text = PlainPlan.Describe(plan).Changes.Single();
+                Check(text.Contains(DpmSettings.DefaultMaxMHz.ToString(System.Globalization.CultureInfo.InvariantCulture)) &&
+                    !text.Contains("1500") && !text.Contains("{0}"), "default ceiling preview uses current limit in " + language);
+            }
+        }
+        finally { Strings.Language = languageBefore; }
+
+
     }
 
     static void DpmDesignDoc(string root)
@@ -311,7 +327,7 @@ static partial class UnitTests
         var doc = File.ReadAllText(Path.Combine(root, @"docs\design\dpm.md"));
         Check(doc.Contains("`DpmMode`") && doc.Contains("`DpmMaxMHz`"), "DPM setting names in docs/design/dpm.md");
         Check(doc.Contains(@"Services\bc250kmd\Parameters"), "DPM registry path in docs/design/dpm.md");
-        Check(Regex.IsMatch(doc, @"absent = 1500"), "default ceiling 1500 in docs/design/dpm.md");
+        Check(Regex.IsMatch(doc, @"absent = 2000"), "default ceiling 2000 in docs/design/dpm.md");
     }
 
     static void Redaction()
@@ -579,7 +595,7 @@ static partial class UnitTests
         // 4. Clocks.
         p = Recovery.Plan("enable-dpm", Closed(), null, 1800);
         Check(!p.Refused && Writes(p, "DpmMode=1", "DpmMaxMHz=1800") && p.OfferRestart && p.Undoable, "enable-dpm writes mode 1 and the ceiling");
-        Check(p.Notes.Any(n => n.Contains("hotter")), "a ceiling above 1500 warns");
+        Check(!p.Notes.Any(n => n.Contains("hotter")), "a ceiling below the 2000 default is not an above-default warning");
         Check(Writes(Recovery.Plan("enable-dpm", Closed()), "DpmMode=1"), "enable-dpm without a chosen ceiling keeps the stored one");
         var noCeiling = Closed(); noCeiling.Parameters.Remove("DpmMaxMHz");
         Check(Writes(Recovery.Plan("enable-dpm", noCeiling), "DpmMode=1"), "enable-dpm writes no implicit ceiling");

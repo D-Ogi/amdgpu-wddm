@@ -222,7 +222,7 @@ plan.line.route-cpu|src|-|The desktop uses the safe way (the processor).
 plan.line.auto-on|src|-|Automatic clock speed: on.
 plan.line.auto-off|src|-|Automatic clock speed: off (fixed at 1000 MHz).
 plan.line.ceiling|src|-|Highest clock speed: {0} MHz.
-plan.line.ceiling-default|src|-|Highest clock speed: 1500 MHz (default).
+plan.line.ceiling-default|src|-|Clock speed upper limit: {0} MHz (default).
 plan.line.other|src|-|An earlier driver setting is restored.
 plan.line.cu-confirm|src|-|The next starts keep all 40 cores.
 plan.line.confirm-start|src|-|This start is marked as working.

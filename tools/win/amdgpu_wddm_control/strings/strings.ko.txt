@@ -217,7 +217,7 @@ plan.line.route-cpu|mt|a59306ef|데스크톱이 안전한 방식(프로세서)�
 plan.line.auto-on|mt|9f6b672e|자동 클럭 속도: 켜짐.
 plan.line.auto-off|mt|f5daa219|자동 클럭 속도: 꺼짐(1000 MHz로 고정).
 plan.line.ceiling|mt|c01c44a8|최고 클럭 속도: {0} MHz.
-plan.line.ceiling-default|mt|6123b39c|최고 클럭 속도: 1500 MHz(기본값).
+plan.line.ceiling-default|mt|07dc48a6|클럭 속도 상한: {0} MHz(기본값).
 plan.line.other|mt|00229d42|이전 드라이버 설정이 복원됩니다.
 plan.line.cu-confirm|mt|68cc6ac8|다음 시작부터 40코어를 모두 유지합니다.
 plan.line.confirm-start|mt|911bc92e|이번 시작이 정상 작동으로 표시됩니다.

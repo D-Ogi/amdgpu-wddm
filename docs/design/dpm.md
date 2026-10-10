@@ -3,7 +3,9 @@
 Until 0.7.174 the native KMD clock owner pinned the GPU at the lab point, 1000 MHz / 820 mV, from start to stop.
 The Witcher 3 with RT then runs at 24-28 fps with DMA packets in flight 91.5-94 % of the time (ETW, trial 135): the
 clock looked like the limit ("Busy" below says what that figure is and is not). The owner decided on 2026-09-30 to let the driver scale clock and voltage with load up to
-2000 MHz, starting at 1500 MHz: the default ceiling is 1500, and `DpmMaxMHz` may raise it later to the hard ceiling of 2000. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
+2000 MHz, with an initial upper limit of 1500 MHz. The base and start clock stays at 1000 MHz. The automatic range is
+500-2000 MHz, with a default upper limit of 2000 MHz (owner decision 2026-10-10). `DpmMaxMHz` can select a lower
+ceiling. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
 
 ## Sources
 
@@ -42,9 +44,8 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 - The 2000 MHz ceiling is not a safe clock. The community reports a board-level over-current protection that
   hard-locks the machine between about 1850 and 2200 MHz on 40-CU boards, and on every tested board at 2400 MHz,
   with AC removal as the only exit ([M790](../facts/hardware.md#m790), third-party, no log). Our hard ceiling lies
-  inside that band and unit A has 24 CU, so where the band sits on our part is unknown. This is the standing reason
-  for the 1500 MHz release default, for `DpmMaxMHz` as a deliberate act, and for having the smart plug ready before
-  a run above 1500 MHz.
+  inside that band. The release upper limit is 2000 MHz by owner decision 2026-10-10. The report still supports
+  having the smart plug ready for runs near that band. It does not qualify any point above the hard ceiling.
 - `bc250_clock_prepare` accepts only table points: a clock on the 100 MHz grid with a voltage between the table's
   value and 1000 mV. The escape SET and the governor go through the same gate, so the administrator's `clock set` can
   also ask for a point from 500 to 900 MHz while the governor is not running.
@@ -652,7 +653,7 @@ keeps its busy gate for the same message.
 | Value | Meaning |
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
-| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
+| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-10-10); 2000 is the hard ceiling |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
@@ -670,6 +671,11 @@ request's encoding and deletes the pending mark. A start that finds `DpmPending`
 healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode = 0` and runs fixed-lab, reason
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
+
+The installer moves a stored 1500 MHz ceiling to 2000 MHz. Other stored limits stay as they are.
+An older release stored no record that distinguishes its default 1500 MHz from a manual choice of that value.
+If you set 1500 MHz yourself, set it again in the control app after the upgrade.
+An explicit `-DpmMaxMHz` installer argument takes precedence over this migration.
 
 ### The durable record of a fallback (0.7.208, BD-069)
 
@@ -875,7 +881,10 @@ that the machine does not survive costs the curve and not the machine, and the d
 - Display clocks (DCN) are independent of sclk. Unaffected.
 - The escape SET (the legacy manual owner) is refused with STATUS_DEVICE_BUSY while the governor runs; READ works.
 
-## Lab plan and risks
+## Original lab plan and risks
+
+The following is the original 2026-09-30 plan, retained as history. The current default upper limit is 2000 MHz
+and current lab-session limits follow the owner's standing instructions.
 
 The lead runs the lab steps (deploy through `scratch\kmd-deploy`, idle, load step, thermal, game); each has a
 three-minute bound (five for the game). The lab starts at the 1500 MHz default, the firmware's own operating point; 2000 comes only with an explicit `DpmMaxMHz` after that passes. Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it);

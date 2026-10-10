@@ -44,7 +44,7 @@ namespace AmdgpuWddmControl
             _vram = new VideoMemoryState { Segments = 1, LocalResident = 3L << 30, Dedicated = 8L << 30, LocalLimit = 8L << 30 };
             // The "Now" card with every row filled: a recorded snapshot keeps its mode, reason and ceiling, and gets the
             // live readings it never recorded (37 % load, 62 C, the clock of its mode, 78 W from the SMU metrics table).
-            if (_snap.Dpm == null) _snap.Dpm = new DpmState { Version = 0x000700D7, Mode = 1, Requested = 1, MaxMHz = 1500 };
+            if (_snap.Dpm == null) _snap.Dpm = new DpmState { Version = 0x000700D7, Mode = 1, Requested = 1, MaxMHz = DpmSettings.DefaultMaxMHz };
             {
                 var d = _snap.Dpm;
                 const uint live = DpmState.FlagTemperature | DpmState.FlagClock | DpmState.FlagHwBusy | DpmState.FlagPower;
