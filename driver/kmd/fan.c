@@ -29,6 +29,9 @@
 //   FanMode            the stored choice: 0 the board's curve, 1 the driver's curve. Absent is the driver's curve.
 //   FanProfile         with FanMode 1: 1 standard (absent), 2 quiet, 3 performance, 0 custom.
 //   FanCurvePoints     with FanProfile 0: 2..8, and FanCurve0..FanCurve7 each (degrees C << 8) | percent.
+//   FanLoadBoost       1 (the default) lets the load feed-forward take the fan to full speed under a sustained
+//                      heavy load, before the temperature curve gets there (rule 10 of bc250_fan.h, owner
+//                      2026-10-10). 0, and any other value, leaves the duty to the curve alone.
 // A stored choice the policy refuses runs the standard curve, and the log says so.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
@@ -37,6 +40,7 @@
 #define FAN_SETTING_MODE L"FanMode"
 #define FAN_SETTING_PROFILE L"FanProfile"
 #define FAN_SETTING_POINTS L"FanCurvePoints"
+#define FAN_SETTING_BOOST L"FanLoadBoost"
 
 static const PCWSTR g_FanCurveSetting[BC250_FAN_POINTS_MAX] = {
     L"FanCurve0", L"FanCurve1", L"FanCurve2", L"FanCurve3",
@@ -127,6 +131,11 @@ static void FanPublish(BC250_DEVICE* Device, const struct bc250_fan_input* In)
     if (owner->Ctl.held_back) snap.Flags |= BC250_FAN_FLAG_HELD_BACK;
     if (owner->Ctl.restore.valid) snap.Flags |= BC250_FAN_FLAG_RESTORE_SAVED;
     if (owner->Ctl.restore.substituted) snap.Flags |= BC250_FAN_FLAG_SUBSTITUTED;
+    if (owner->Ctl.boost) snap.Flags |= BC250_FAN_FLAG_BOOST;
+    if (!owner->Ctl.boost_enabled) snap.Flags |= BC250_FAN_FLAG_BOOST_OFF;
+    if ((owner->Ctl.boost_why & BC250_FAN_BOOST_WHY_BUSY) != 0u) snap.Flags |= BC250_FAN_FLAG_BOOST_BUSY;
+    if ((owner->Ctl.boost_why & BC250_FAN_BOOST_WHY_POWER) != 0u) snap.Flags |= BC250_FAN_FLAG_BOOST_POWER;
+    if ((owner->Ctl.boost_why & BC250_FAN_BOOST_WHY_RISE) != 0u) snap.Flags |= BC250_FAN_FLAG_BOOST_RISE;
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     if (In == NULL) {
         snap.ReadbackRaw = owner->Snap.ReadbackRaw;
@@ -148,9 +157,26 @@ static void FanLogTemperature(_In_z_ const char* What, const BC250_FAN_OWNER* Ow
              bc250_fan_reason_name(Owner->Ctl.doubt));
 }
 
+// One line when the load feed-forward engages or lets go (rule 10), and not one per second.
+static void FanLogBoost(BC250_FAN_OWNER* Owner)
+{
+    LONG guard = Owner->Ctl.guard_mc;
+
+    if (Owner->Ctl.boost == Owner->LoggedBoost) return;
+    Owner->LoggedBoost = Owner->Ctl.boost;
+    if (Owner->Ctl.boost)
+        GuardLog("fan: load boost on (%s): full speed at guard %ld.%01ld C, duty was %lu%%",
+                 bc250_fan_boost_name(Owner->Ctl.boost_why), guard / 1000,
+                 (guard < 0 ? -guard : guard) % 1000 / 100, Owner->Ctl.applied_pct);
+    else
+        GuardLog("fan: load boost off after %llu ms, duty %lu%%, guard %ld.%01ld C", Owner->Ctl.boost_ms,
+                 Owner->Ctl.applied_pct, guard / 1000, (guard < 0 ? -guard : guard) % 1000 / 100);
+}
+
 // One line when the state, the reason or the doubt changes, and not one per second.
 static void FanLogChange(BC250_FAN_OWNER* Owner, int Status)
 {
+    FanLogBoost(Owner);
     if (Owner->Ctl.state == Owner->LoggedState && Owner->Ctl.reason == Owner->LoggedReason &&
         Owner->Ctl.doubt == Owner->LoggedDoubt && Status == 0)
         return;
@@ -183,14 +209,18 @@ void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
              snap.Ctl.writes);
     GuardLog("fan: %s %llu failures %llu emergencies %llu doubts", What, snap.Ctl.failures, snap.Ctl.emergencies,
              snap.Ctl.doubts);
+    // Two lines again: one with every field would lose its tail (tools/quality/guardlog_width.py, BD-070).
+    GuardLog("fan: %s boost %s (%s)", What, snap.Ctl.boost ? "on" : snap.Ctl.boost_enabled ? "off" : "disabled",
+             bc250_fan_boost_name(snap.Ctl.boost_why));
+    GuardLog("fan: %s boost %llu times, %llu ms", What, snap.Ctl.boosts, snap.Ctl.boost_ms);
 }
 
 // ---- the inputs -------------------------------------------------------------------------------------------------
 
 // One second of inputs out of the reader's last sample (hwmon.c), which HwmonSample took a moment earlier in the same
 // governor tick. The reader's fields are the governor thread's own, and so is this call.
-static void FanInput(BC250_FAN_OWNER* Owner, LONG TctlMc, BOOLEAN TctlValid, ULONG DtMs, ULONGLONG Now,
-                     struct bc250_fan_input* In)
+static void FanInput(BC250_FAN_OWNER* Owner, LONG TctlMc, BOOLEAN TctlValid, const BC250_FAN_LOAD* Load, ULONG DtMs,
+                     ULONGLONG Now, struct bc250_fan_input* In)
 {
     const BC250_HWMON_OWNER* hwmon = Owner->Hwmon;
     const ULONG fan = BC250_FAN_CHANNEL;
@@ -200,6 +230,15 @@ static void FanInput(BC250_FAN_OWNER* Owner, LONG TctlMc, BOOLEAN TctlValid, ULO
     In->dt_ms = DtMs;
     In->tctl_mc = TctlMc;
     In->tctl_valid = TctlValid ? 1 : 0;
+    // The governor's load feed (rule 10). A step without one leaves every field at zero, and the feed-forward
+    // then never engages: load_valid is what admits it.
+    if (Load != NULL && Load->Valid) {
+        In->load_valid = 1;
+        In->busy_permille = Load->BusyPermille > 1000u ? 1000u : Load->BusyPermille;
+        In->gfx_mhz = Load->Mhz;
+        In->power_valid = Load->PowerValid ? 1 : 0;
+        In->socket_mw = Load->PowerValid ? Load->SocketMw : 0u;
+    }
     // Fresh: online, and an accepted sample inside the reader's own freshness window.
     In->reader_valid = hwmon->Online && hwmon->LastValid && hwmon->LastAt != 0 && Now >= hwmon->LastAt &&
                        (Now - hwmon->LastAt) / 10000ull <= BC250_HWMON_FRESH_MS;
@@ -227,7 +266,7 @@ static void FanInput(BC250_FAN_OWNER* Owner, LONG TctlMc, BOOLEAN TctlValid, ULO
 
 // The governor thread, PASSIVE_LEVEL, once per hardware-monitor sample (dpm.c, right after HwmonSample). A held
 // controller (an exit path or the watchdog) skips this step: the next one comes a second later.
-void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid)
+void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid, const BC250_FAN_LOAD* Load)
 {
     BC250_FAN_OWNER* owner = &Device->Fan;
     BC250_HWMON_PORTS ports;
@@ -259,7 +298,7 @@ void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid)
                  bc250_fan_profile_name(request.profile), (ULONG)request.fixed_pct, (ULONG)request.lease_ms, error);
     }
     if (renew) (void)bc250_fan_renew(&owner->Ctl, lease);
-    FanInput(owner, TctlMc, TctlValid, dt, now, &in);
+    FanInput(owner, TctlMc, TctlValid, Load, dt, now, &in);
     HwmonWriteIo(&ports, owner->Hwmon, &io, FALSE);
     // A closed gate never reaches the policy: no port access at all, whatever the controller holds.
     status = owner->Paused || !owner->Enabled ? 0 : bc250_fan_tick(&io, &owner->Ctl, &in);
@@ -423,6 +462,8 @@ void FanStart(BC250_DEVICE* Device)
     else gate = BC250_FAN_GATE_OK;
     stored = FanReadChoice(&start, &points);
     bc250_fan_init(&owner->Ctl, gate == BC250_FAN_GATE_OK, stored ? &start : NULL);
+    // The load feed-forward (rule 10), on unless this start's registry says otherwise.
+    bc250_fan_load_boost(&owner->Ctl, GuardReadSetting(FAN_SETTING_BOOST, 1) == 1);
     if (stored && (owner->Ctl.mode != start.mode ||
                    (start.mode == BC250_FAN_MODE_CURVE && owner->Ctl.profile != start.profile)))
         GuardLog("fan: the stored choice FanMode %lu FanProfile %lu (%lu points) is refused: the standard curve runs",
@@ -439,7 +480,7 @@ void FanStart(BC250_DEVICE* Device)
     owner->BlindDone = FALSE;
     owner->WatchdogRetryAt = 0;
     owner->LoggedState = owner->Ctl.state;
-    owner->LoggedReason = owner->LoggedDoubt = 0;
+    owner->LoggedReason = owner->LoggedDoubt = owner->LoggedBoost = 0;
     InterlockedExchange64(&owner->LastStepAt, (LONG64)KeQueryInterruptTime());
     owner->Configured = TRUE;
     g_FanDevice = Device;
@@ -452,6 +493,7 @@ void FanStart(BC250_DEVICE* Device)
         owner->TimerArmed = TRUE;
         GuardLog("fan: control on: mode %s profile %s", bc250_fan_mode_name(owner->Ctl.mode),
                  bc250_fan_profile_name(owner->Ctl.profile));
+        GuardLog("fan: load boost %s (FanLoadBoost)", owner->Ctl.boost_enabled ? "on" : "off");
         GuardLog("fan: restore record %s, bugcheck callback %s",
                  owner->Ctl.restore.valid ? "kept" : "taken at the first change",
                  owner->BugCheckRegistered ? "on" : "REFUSED");

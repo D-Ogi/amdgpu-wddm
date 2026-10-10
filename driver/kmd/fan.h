@@ -13,6 +13,18 @@
 C_ASSERT(BC250_FAN_CURVE_SLOTS == BC250_FAN_POINTS_MAX);
 C_ASSERT(BC250_FAN_WATCHDOG_MS > BC250_FAN_WATCHDOG_PERIOD_MS);
 
+// The governor's load feed for one control step (the load feed-forward, rule 10 of bc250_fan.h). The governor
+// thread fills it in dpm.c beside the Tctl reading: the busy share is the mean over the whole step and not one
+// 25 ms DPM tick, the clock is the one the governor holds, and the power is the SMU metrics table's socket figure.
+// A step without a feed (Valid FALSE, or no pointer at all) runs on the temperature curve alone.
+typedef struct _BC250_FAN_LOAD {
+    ULONG BusyPermille;                     // GPU busy over the step, 0..1000
+    ULONG Mhz;                              // the GFX clock, 0 when it is not known
+    ULONG SocketMw;                         // the SMU socket power, when PowerValid
+    BOOLEAN Valid;
+    BOOLEAN PowerValid;
+} BC250_FAN_LOAD;
+
 // What the escape reads. Written under SnapLock by whoever holds the controller, after every change.
 typedef struct _BC250_FAN_SNAP {
     struct bc250_fan_ctl Ctl;
@@ -52,6 +64,6 @@ typedef struct _BC250_FAN_OWNER {
     KDPC Dpc;
     KBUGCHECK_CALLBACK_RECORD BugCheck;
     // The log's memory, so that a state is logged once when it changes and not once a second.
-    ULONG LoggedState, LoggedReason, LoggedDoubt;
+    ULONG LoggedState, LoggedReason, LoggedDoubt, LoggedBoost;
     BC250_FAN_SNAP Snap;                    // under SnapLock
 } BC250_FAN_OWNER;

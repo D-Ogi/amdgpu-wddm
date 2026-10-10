@@ -5,7 +5,8 @@
  * open phase, the handshake runs in the measured order, the restore record is taken once and never records our own
  * bit as the board's, every exit path leaves the chip at the board's own values, doubt means full speed and then
  * the board, the duty never goes under the floor, the emergency, the slope rule, the lease and the watchdog's
- * hold-back. Against the real driver/shim/bc250_fan.c, not a copy of it.
+ * hold-back. Since the load feed-forward (rule 10) also: a sustained heavy load drives the fan to full speed and
+ * a short spike does not. Against the real driver/shim/bc250_fan.c, not a copy of it.
  *
  *   pwsh driver\shim\test\run_hwmon.ps1
  */
@@ -662,6 +663,235 @@ static void emergency(void)
 	CHECK(clean_writes(&ec) && ec.protocol_errors == 0);
 }
 
+/* ---- the load feed-forward (rule 10) ------------------------------------------------------------------------- */
+
+/* The governor's load feed is what rule 10 is built on. These traces are written so that they also compile
+ * against a policy that has no feed: the input fields and the controller's own boost state are then left out,
+ * and what stays is the duty the trace must produce. A build without the rule answers those checks with the
+ * curve's own duty, which is the point the owner raised on 2026-10-10: the curve alone is late.
+ *
+ *   (a) the LLM arm of 2026-10-10: 99 % busy for 50 s, Tctl 61 -> 77 C
+ *   (b) an idle desktop
+ *   (c) one-second spikes every ten seconds
+ *   (d) a 20-minute game at 70 to 90 % busy
+ *   (e) a boost with a lease, an EC fault and a handback inside it
+ */
+#ifdef BC250_FAN_BOOST_ARM_MS
+#define HAVE_BOOST 1
+#else
+#define HAVE_BOOST 0
+#endif
+
+/* One second of inputs with the governor's load feed beside them. */
+static struct bc250_fan_input load_input(struct ec_mock *ec, int tctl_mc, unsigned int permille, unsigned int mhz,
+					 unsigned int mw)
+{
+	struct bc250_fan_input in = input(ec, tctl_mc);
+
+#if HAVE_BOOST
+	in.load_valid = 1;
+	in.busy_permille = permille;
+	in.gfx_mhz = mhz;
+	in.socket_mw = mw;
+	in.power_valid = 1;
+#else
+	(void)permille;
+	(void)mhz;
+	(void)mw;
+#endif
+	return in;
+}
+
+static int load_tick(struct bc250_hwmon_io *io, struct ec_mock *ec, struct bc250_fan_ctl *ctl, int mc,
+		     unsigned int permille, unsigned int mhz, unsigned int mw)
+{
+	struct bc250_fan_input in = load_input(ec, mc, permille, mhz, mw);
+
+	return bc250_fan_tick(io, ctl, &in);
+}
+
+/* The LLM arm: 99 % busy at 1500 MHz and 112 W, the temperature of the 2026-10-10 run. */
+static int llm_tick(struct bc250_hwmon_io *io, struct ec_mock *ec, struct bc250_fan_ctl *ctl, int mc)
+{
+	return load_tick(io, ec, ctl, mc, 990, 1500, 112000);
+}
+
+/* An idle desktop: the GPU at its 500 MHz point, 45 W, a few permille of composition. */
+static int idle_tick(struct bc250_hwmon_io *io, struct ec_mock *ec, struct bc250_fan_ctl *ctl, int mc)
+{
+	return load_tick(io, ec, ctl, mc, 4, 500, 45000);
+}
+
+static void load_boost(void)
+{
+	struct ec_mock ec;
+	struct bc250_hwmon_io io;
+	struct bc250_fan_ctl ctl;
+	struct bc250_fan_request r;
+	unsigned int i, curve_at_77;
+
+	/* (a) The arm of 2026-10-10. The first second is the curve's answer, because one heavy second is a spike.
+	 * The second second reaches BC250_FAN_BOOST_ARM_MS, and from there the fan runs at full speed although the
+	 * curve asks for 72 % at 62 C: that is the whole point of the rule. */
+	start(&ec, &io, &ctl);
+	CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0);
+	CHECK(ctl.applied_pct == bc250_fan_curve_eval(&ctl.curve, 61000) && ctl.applied_pct < 100u);
+	CHECK(llm_tick(&io, &ec, &ctl, 61500) == 0);
+	CHECK(ctl.applied_pct == 100u && ec_peek8(&ec, TARGET1) == 255u);
+	CHECK(bc250_fan_curve_eval(&ctl.curve, 61500) < 100u);		/* the curve would still be at 72 % */
+#if HAVE_BOOST
+	CHECK(ctl.boost && ctl.boosts == 1u && (ctl.boost_why & BC250_FAN_BOOST_WHY_BUSY) != 0u);
+	CHECK((ctl.boost_why & BC250_FAN_BOOST_WHY_POWER) != 0u);	/* 112 W is over the threshold as well */
+#endif
+	/* The arm's own ramp, 62 C to 77 C: full speed all the way, and the chip is written once. */
+	for (i = 0; i < 46u; i++) {
+		CHECK(llm_tick(&io, &ec, &ctl, 62000 + (int)i * 330) == 0);
+		CHECK(ctl.applied_pct == 100u && ctl.target_pct == 100u);
+	}
+	CHECK(ctl.writes == 2u);		/* the take-over's duty and the boost's; nothing after that */
+	CHECK(clean_writes(&ec) && ec.protocol_errors == 0);
+
+	/* The load stops. The curve asks for 97 % at 77 C, and the boost holds full speed for its hold time all the
+	 * same: BC250_FAN_BOOST_HOLD_MS after the heavy-time account has run out. */
+	curve_at_77 = bc250_fan_curve_eval(&ctl.curve, 77000);
+	CHECK(curve_at_77 == 97u);
+	for (i = 0; i < 31u; i++) {
+		CHECK(idle_tick(&io, &ec, &ctl, 77000) == 0);
+		CHECK(ctl.applied_pct == 100u);
+	}
+#if HAVE_BOOST
+	CHECK(ctl.boost);
+	CHECK(idle_tick(&io, &ec, &ctl, 77000) == 0 && !ctl.boost);	/* the hold is over, the curve is under 100 % */
+	CHECK(ctl.applied_pct == 100u && ctl.target_pct == curve_at_77);
+	/* And the way down is the ordinary slope rule (rule 7): 10 s below, then at most 10 points every 2 s. The
+	 * curve is 3 points under the duty in force, so the first step lands on it. */
+	for (i = 0; i < 8u; i++)
+		CHECK(idle_tick(&io, &ec, &ctl, 77000) == 0 && ctl.applied_pct == 100u);
+	CHECK(idle_tick(&io, &ec, &ctl, 77000) == 0 && ctl.applied_pct == curve_at_77);
+	CHECK(ctl.boost_ms >= 48000ull && ctl.boosts == 1u);
+#endif
+
+	/* (b) An idle desktop never boosts: two minutes of it, and the duty is the curve's. */
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 120u; i++) {
+		CHECK(idle_tick(&io, &ec, &ctl, 55000) == 0);
+		CHECK(ctl.applied_pct == bc250_fan_curve_eval(&ctl.curve, 55000));
+	}
+	CHECK(ec_peek8(&ec, TARGET1) != 255u && ec.logged == 4u);
+#if HAVE_BOOST
+	CHECK(!ctl.boost && ctl.boosts == 0u && ctl.boost_ms == 0ull);
+#endif
+
+	/* (c) One busy second every ten: a menu, a single compile. The account never reaches the arming time. */
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 12u; i++) {
+		unsigned int j;
+
+		CHECK(load_tick(&io, &ec, &ctl, 60000, 1000, 1500, 110000) == 0);
+		for (j = 0; j < 9u; j++)
+			CHECK(idle_tick(&io, &ec, &ctl, 60000) == 0);
+		CHECK(ctl.applied_pct == bc250_fan_curve_eval(&ctl.curve, 60000));
+	}
+	CHECK(ec_peek8(&ec, TARGET1) != 255u);
+#if HAVE_BOOST
+	CHECK(!ctl.boost && ctl.boosts == 0u);
+#endif
+
+	/* (d) Twenty minutes of a game: 70 to 90 % busy at 1500 MHz and 100 W, 70 to 74 C. The boost engages once
+	 * and holds, and the fan is written once more than the take-over: no thrashing for 20 minutes. */
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 1200u; i++) {
+		CHECK(load_tick(&io, &ec, &ctl, 70000 + (int)(i % 5u) * 1000, i % 2u ? 700u : 900u, 1500,
+				100000) == 0);
+		if (i >= 2u)
+			CHECK(ctl.applied_pct == 100u);
+	}
+	CHECK(ctl.writes == 2u && ctl.failures == 0u);
+#if HAVE_BOOST
+	CHECK(ctl.boost && ctl.boosts == 1u);
+	CHECK((ctl.boost_why & BC250_FAN_BOOST_WHY_POWER) != 0u);
+#endif
+	CHECK(clean_writes(&ec) && ec.protocol_errors == 0);
+
+	/* (e) A lease inside a boost: a fixed duty is the operator's own number, and the feed-forward raises
+	 * nothing while it runs (the emergency still does). The curve the lease ends with is boosted at once,
+	 * because the load never stopped. */
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 3u; i++)
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
+	CHECK(ctl.applied_pct == 100u);
+	memset(&r, 0, sizeof(r));
+	r.mode = BC250_FAN_MODE_FIXED;
+	r.fixed_pct = 40;
+	r.lease_ms = 5000;
+	CHECK(bc250_fan_set(&ctl, &r) == BC250_FAN_ERROR_OK);
+	for (i = 0; i < 4u; i++) {
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
+		CHECK(ctl.applied_pct == 40u && ctl.state == BC250_FAN_STATE_FIXED);
+	}
+	CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);		/* the fifth second is the lease's last */
+	CHECK(ctl.mode == BC250_FAN_MODE_CURVE && ctl.state == BC250_FAN_STATE_CURVE);
+	CHECK(ctl.applied_pct == 100u && bc250_fan_curve_eval(&ctl.curve, 70000) == 85u);
+	/* A handback ends the boost: the duty is the board's again, and the driver has to see the load once more. */
+	CHECK(bc250_fan_handback(&io, &ctl, BC250_FAN_REASON_USER) == 0);
+	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST));
+#if HAVE_BOOST
+	CHECK(!ctl.boost && ctl.boost_load_ms == 0u);
+#endif
+
+	/* The chip refuses while the boost holds the fan: the fault wins. The duty read-back does not follow, so
+	 * the way back runs, the fault latches, and the boost is over with the duty it drove. */
+	start(&ec, &io, &ctl);
+	ec.readback_stuck = 1;
+	CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.controlling);
+	CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && ctl.applied_pct == 100u);
+	/* The boost's own write restarted the settle time, so the read-back is judged a second later. */
+	CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0 && !ctl.fault);
+	CHECK(llm_tick(&io, &ec, &ctl, 70000) == BC250_FAN_E_VERIFY);
+	CHECK(!ctl.controlling && ctl.fault && ctl.reason == BC250_FAN_REASON_READBACK);
+	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST) && clean_writes(&ec));
+#if HAVE_BOOST
+	CHECK(!ctl.boost);
+	/* And a fault is final for the start: a heavy load after it writes nothing at all. */
+	ec.logged = 0;
+	for (i = 0; i < 30u; i++)
+		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
+	CHECK(ec.logged == 0u && !ctl.boost);
+
+	/* FanLoadBoost 0: the same arm, and the duty stays the curve's. */
+	start(&ec, &io, &ctl);
+	bc250_fan_load_boost(&ctl, 0);
+	for (i = 0; i < 30u; i++) {
+		CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0);
+		CHECK(ctl.applied_pct == bc250_fan_curve_eval(&ctl.curve, 61000) && !ctl.boost);
+	}
+	/* Switched on again, the same load arms it. */
+	bc250_fan_load_boost(&ctl, 1);
+	CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0 && !ctl.boost);
+	CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0 && ctl.boost && ctl.applied_pct == 100u);
+	/* Switched off while it holds: the boost ends, and the slope rule takes the duty down from there. */
+	bc250_fan_load_boost(&ctl, 0);
+	CHECK(!ctl.boost);
+	CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0 && ctl.applied_pct == 100u);
+	for (i = 0; i < 8u; i++)
+		CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0 && ctl.applied_pct == 100u);
+	CHECK(llm_tick(&io, &ec, &ctl, 61000) == 0 && ctl.applied_pct == 90u);
+
+	/* The temperature's own rise is a heavy load too, even with the GPU quiet: 1 C a second with the load feed
+	 * present arms the boost. The window is BC250_FAN_BOOST_RISE_MS long, so the first one closes at 3 s. */
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 8u; i++)
+		CHECK(load_tick(&io, &ec, &ctl, 50000 + (int)i * 1500, 0, 500, 40000) == 0);
+	CHECK(ctl.boost && (ctl.boost_why & BC250_FAN_BOOST_WHY_RISE) != 0u);
+	CHECK(ctl.applied_pct == 100u);
+	/* A rise without the feed is the curve's and the emergency's work, not the feed-forward's. */
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 8u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 50000 + (int)i * 1500) == 0);
+	CHECK(!ctl.boost && ctl.applied_pct < 100u);
+#endif
+}
+
 static void disabled(void)
 {
 	struct ec_mock ec;
@@ -691,6 +921,7 @@ int main(void)
 	refusals();
 	slope_rule();
 	emergency();
+	load_boost();
 	disabled();
 	printf("fan control: %d checks, %d failures\n", checks, failures);
 	return failures == 0 ? 0 : 1;

@@ -31,6 +31,12 @@
  *   6. Emergency: a guard temperature at or above 87 C forces 100 % until it stays at or below 82 C for 10 s.
  *   7. The curve output rises at once and falls only after 10 s below, by 10 points at most every 2 s.
  *   8. A leased mode (a fixed duty, or a curve that was not stored) ends with the fan given back to the board.
+ *   9. A sustained heavy load drives the fan to full speed before the curve gets there (the load feed-forward,
+ *      rule 10 in docs/design/fan.md, whose list counts a refusal by the chip as a rule of its own,
+ *      owner 2026-10-10: "Robiąc takie testy sterownik powinien sam ogarnąć, że trzeba wiać z maksymalną mocą!",
+ *      "doing such tests the driver should work out by itself that it has to blow at full power"). The
+ *      feed-forward only ever RAISES the duty above the curve, it needs the governor's load feed, and the
+ *      FanLoadBoost setting switches it off.
  *
  * Register facts: Linux mainline drivers/hwmon/nct6683.c and the out-of-tree nct6687d (both GPL-2.0, facts only, no
  * code taken), confirmed on unit A by M803.
@@ -69,6 +75,44 @@
 #define BC250_FAN_READBACK_TOLERANCE	8u	/* duty read-back against the written target, counts of 255 */
 #define BC250_FAN_SETTLE_MS		2000u	/* after a write, before the read-back and the tachometer are judged */
 #define BC250_FAN_STOPPED_SAMPLES	3u
+
+/* ---- the load feed-forward (rule 10) -------------------------------------------------------------------------
+ *
+ * The curve alone always answers late: it reads the heat that the load has already made. On 2026-10-10 an LLM
+ * benchmark arm on unit A held the GPU at 93 to 100 % busy and 107 to 122 W of SMU socket power, and Tctl walked
+ * from 62.8 C to 76.9 C in 14 s. The Standard curve answered with 95 % duty, and the owner asked for the obvious:
+ * the driver sees the load, so it must blow at full power without waiting for the temperature.
+ *
+ * A step is HEAVY when the load feed says any of these:
+ *   - the GPU busy share of the whole step is at or above BC250_FAN_BOOST_BUSY_PERMILLE, and the GFX clock is at
+ *     or above BC250_FAN_BOOST_MHZ (a busy GPU at the 500 MHz idle point is not a heavy load);
+ *   - the SMU socket power is at or above BC250_FAN_BOOST_POWER_MW (unit A idles at 41 to 56 W);
+ *   - the guard temperature rose by BC250_FAN_BOOST_RISE_MC or more over the last BC250_FAN_BOOST_RISE_MS.
+ *
+ * Heavy time is counted in elapsed milliseconds, never in steps, so the rule does not depend on the governor's
+ * cadence: a heavy step adds its own dt and any other step takes its dt away. The account stops at
+ * BC250_FAN_BOOST_LOAD_MAX_MS, which is the margin that lets a single quiet step inside a load (the LLM arm has
+ * them) pass without disarming the boost. The boost engages at BC250_FAN_BOOST_ARM_MS, so a one-second spike
+ * every ten seconds (a menu, one compile) never reaches it.
+ *
+ * The way down: once the load is no longer heavy the boost holds for BC250_FAN_BOOST_HOLD_MS, and after that it
+ * ends only when the curve itself asks for less than the duty in force. The ordinary slope rule (rule 7) then
+ * takes the duty down, 10 points at most every 2 s, so the fan never drops in one step.
+ */
+#define BC250_FAN_BOOST_BUSY_PERMILLE	850u	/* the GPU busy share of the whole step */
+#define BC250_FAN_BOOST_MHZ		1000u	/* and the GFX clock at or above the lab floor */
+#define BC250_FAN_BOOST_POWER_MW	85000u	/* or the socket power: idle 41 to 56 W, the LLM arm 107 to 122 W */
+#define BC250_FAN_BOOST_RISE_MS		3000u	/* or the guard temperature over this window */
+#define BC250_FAN_BOOST_RISE_MC		3000	/* rising by this much, which is 1 C a second */
+#define BC250_FAN_BOOST_ARM_MS		2000u	/* heavy for this long: the boost engages */
+#define BC250_FAN_BOOST_LOAD_MAX_MS	4000u	/* and the heavy-time account stops here */
+#define BC250_FAN_BOOST_HOLD_MS		30000u	/* after the load: the boost holds at least this long */
+
+/* Why the boost is on, the bits of the last heavy step. */
+#define BC250_FAN_BOOST_WHY_BUSY	1u
+#define BC250_FAN_BOOST_WHY_POWER	2u
+#define BC250_FAN_BOOST_WHY_RISE	4u
+#define BC250_FAN_BOOST_WHY_ALL		7u
 
 #define BC250_FAN_LEASE_MIN_MS		5000u
 #define BC250_FAN_LEASE_MAX_MS		300000u
@@ -213,6 +257,13 @@ struct bc250_fan_input {
 	int		rpm_valid;
 	unsigned int	readback_raw;	/* duty read-back 0x160 + BC250_FAN_CHANNEL */
 	int		readback_valid;
+	/* The governor's load feed (rule 10). A step without it runs on the curve alone: the feed-forward then never
+	 * engages, because a temperature that rises without a load reading is the curve's and the emergency's work. */
+	int		load_valid;	/* the feed below belongs to this step */
+	unsigned int	busy_permille;	/* GPU busy, the mean over the whole step, 0..1000 */
+	unsigned int	gfx_mhz;	/* the GFX clock the governor holds; 0 means unknown, which passes the test */
+	unsigned int	socket_mw;	/* the SMU socket power, when power_valid */
+	int		power_valid;
 };
 
 struct bc250_fan_ctl {
@@ -241,6 +292,16 @@ struct bc250_fan_ctl {
 	unsigned int		applied_pct;	/* what the slope rule let through */
 	unsigned int		below_ms, fall_wait_ms;
 	unsigned int		emergency, emergency_cool_ms;
+	/* the load feed-forward (rule 10) */
+	unsigned int		boost_enabled;	/* FanLoadBoost: 1 unless the user switched the feed-forward off */
+	unsigned int		boost;		/* the feed-forward holds the fan at full speed now */
+	unsigned int		boost_why;	/* BC250_FAN_BOOST_WHY_* of the last heavy step */
+	unsigned int		boost_load_ms;	/* the heavy-time account, 0..BC250_FAN_BOOST_LOAD_MAX_MS */
+	unsigned int		boost_hold_ms;	/* since the load stopped being heavy */
+	int			rise_ref_mc;	/* the guard temperature the open rise window started at */
+	unsigned int		rise_ms;	/* into that window */
+	int			rise_mc;	/* the rise of the window that closed last */
+	unsigned int		rise_valid;	/* a window has closed since the start */
 	unsigned int		doubt_ms, held_back, clean_ms, retakes;
 	unsigned int		stopped_samples;
 	unsigned int		fault, fault_retry_ms;
@@ -250,11 +311,17 @@ struct bc250_fan_ctl {
 	int			last_error;	/* the last chip operation's answer */
 	/* counters */
 	unsigned long long	takeovers, handbacks, writes, failures, emergencies, doubts, lease_expiries;
+	unsigned long long	boosts, boost_ms;	/* engagements of the feed-forward, and the time it held */
 };
 
 /* A start: `enabled` says whether this start may drive the chip at all, `start` is the mode the start runs
  * (the stored choice, already checked; null means the STANDARD curve). The restore record survives. */
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start);
+
+/* The FanLoadBoost setting (rule 10), at the start and when the operator changes it. The feed-forward is on
+ * unless this says otherwise; switching it off also ends a boost that holds now, and the slope rule then takes
+ * the duty down. */
+void bc250_fan_load_boost(struct bc250_fan_ctl *ctl, int enabled);
 
 /* Checks a request and resolves its curve. enum bc250_fan_error. */
 int bc250_fan_request_check(const struct bc250_fan_request *request, struct bc250_fan_curve *resolved);
@@ -288,5 +355,6 @@ const char *bc250_fan_state_name(unsigned int state);
 const char *bc250_fan_reason_name(unsigned int reason);
 const char *bc250_fan_mode_name(unsigned int mode);
 const char *bc250_fan_profile_name(unsigned int profile);
+const char *bc250_fan_boost_name(unsigned int why);	/* the BC250_FAN_BOOST_WHY_* bits as one word */
 
 #endif

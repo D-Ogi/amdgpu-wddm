@@ -319,6 +319,9 @@ time source, so the host test runs it against a model of the chip. These are its
    (or the mode of the start): the driver's curve, which keeps the fan and follows the temperature again, or
    the board, which gets the fan back. Until 0.7.215 every lease ended with the board, so a fan test from the
    control application left the board's curve in force instead of the one the user chose.
+10. **A sustained heavy load drives the fan to full speed.** The load feed-forward below reads the governor's
+    load, not only the temperature. It raises the duty to 100 % and never lowers it, and every rule above it
+    keeps its place.
 
 ### The curves
 
@@ -337,6 +340,59 @@ The Standard curve rests on four measurements under the BIOS Standard Mode: 65 C
 the Standard curve gives 76 %, 81 %, 82 % and 98 %. It gives 95 % (about 1650 RPM) at 80 C and 100 % from
 85 C. No measurement exists below 60 C, so the curve holds 50 % or more there. Every profile reaches 100 %
 at or below 85 C. The 87 C emergency is the backstop for a quiet custom curve.
+
+### The load feed-forward
+
+A curve answers late. It reads the heat that the load has already made, so the fan reaches full speed when
+the board is hot already. On 2026-10-10 an LLM benchmark arm on unit A held the GPU at 93 to 100 % busy and
+107 to 122 W of SMU socket power, and Tctl walked from 62.8 C to 76.9 C in 14 s. The Standard curve answered
+with 95 % duty. The owner asked for the obvious: the driver sees the load, so it must blow at full power
+without waiting for the temperature ("Robiąc takie testy sterownik powinien sam ogarnąć, że trzeba wiać z
+maksymalną mocą!", "doing such tests the driver should work out by itself that it has to blow at full
+power").
+
+The governor hands the fan step a load feed beside the Tctl reading (`BC250_FAN_LOAD` in
+`driver/kmd/fan.h`). It holds the GPU busy share, the GFX clock and the SMU socket power. The busy share is
+the mean over the whole second between two fan steps, weighted by each DPM tick's own length, because one
+25 ms tick says nothing about a sustained load. A step without the feed runs on the curve alone.
+
+A step is heavy when the feed says any of this:
+
+| Signal | Threshold | Why this number |
+| --- | --- | --- |
+| GPU busy, with the GFX clock at or above 1000 MHz | 850 permille | the LLM arm reads 930 to 1000 permille at 1500 MHz. A busy GPU at the 500 MHz idle point is a desktop that composes |
+| SMU socket power | 85 W | unit A idles at 41 to 56 W. The arm reads 107 to 122 W, and a GPU fill at 1000 MHz reads about 90 W (M828) |
+| the guard temperature's rise | 3 C over a 3 s window | 1 C a second. The arm's first seconds rise faster than that |
+
+Heavy time is counted in elapsed milliseconds, never in steps, so the rule does not depend on the
+governor's cadence:
+
+- A heavy step adds its own length to the account, any other step takes its length away, and the account
+  stops at 4 s. That margin lets one quiet step inside a load pass without disarming the boost. The arm of
+  2026-10-10 has such steps.
+- The boost engages when the account reaches 2 s, so one busy second every ten (a menu, a single compile)
+  never engages it.
+- The duty is then 100 % until the load ends. The write happens once: the duty byte does not change again
+  while the boost holds.
+
+The way down is deliberately slow:
+
+- The boost holds for 30 s after the account has run out.
+- After that it ends only when the curve itself asks for less than the duty in force. The board must be
+  under the curve's own point for that duty before the fan is allowed to slow down at all.
+- The duty then falls by rule 8, which is 10 points at most every 2 s after 10 s below.
+
+What the feed-forward never does:
+
+- It never lowers a duty. The curve's answer stands wherever it is the higher one.
+- It never runs in the board's mode, under a latched fault, or with `FanLoadBoost` 0.
+- It raises no fixed duty. A fixed duty is the operator's own number under a lease, and the 87 C emergency
+  is still above it. The account keeps running under such a lease, so the curve the lease ends with is
+  boosted at once when the load never stopped.
+- It survives no give-back. A boost is a duty, and after a give-back the duty is the board's. The driver has
+  to see the load again.
+
+A quiet profile gets the boost as well. A user who wants the curve and nothing else sets `FanLoadBoost` 0.
 
 ### The exit paths
 
@@ -370,6 +426,7 @@ All are `REG_DWORD` under `Services\bc250kmd\Parameters`.
 | `FanMode` | the stored choice: 0 the board's curve, 1 the driver's curve. Absent means the driver's curve |
 | `FanProfile` | with `FanMode` 1: 1 Standard (also when absent), 2 Quiet, 3 Performance, 0 custom |
 | `FanCurvePoints`, `FanCurve0` to `FanCurve7` | with `FanProfile` 0: the point count (2 to 8) and each point as `(degrees C << 8) \| percent` |
+| `FanLoadBoost` | 1 (also when absent) runs the load feed-forward. 0, and any other value, leaves the duty to the curve alone |
 
 The INF writes `EnableFanControl` only. The driver writes the stored choice when a request carries
 `Store` 1. A stored choice that the policy refuses runs the Standard curve, and the log says so.
@@ -420,8 +477,14 @@ operation.
 ```
 fanctl state=curve mode=curve profile=standard target_pct=70 applied_pct=70 raw=179 readback=179 rpm=1180 \
     guard_c=60.5 enabled=1 controlling=1 emergency=0 leased=0 lease_ms=0 fault=0 paused=0 held_back=0 \
-    gate=ok reason=none doubt=none takeovers=1 handbacks=0 writes=3 ... curve=40:50,60:70,70:85,76:95,80:100
+    gate=ok reason=none doubt=none takeovers=1 handbacks=0 writes=3 ... curve=40:50,60:70,70:85,76:95,80:100 \
+    saved_mode=0xE0 saved_target=128 boost=on boost_why=busy+power
 ```
+
+`boost` is `on` while the load feed-forward holds the fan at full speed, `off` in a start that may boost and
+does not now, and `disabled` with `FanLoadBoost` 0. `boost_why` names every signal that called the load
+heavy: `busy`, `power`, `rise`, or them joined with `+`. The driver log carries one line when the boost
+engages and one when it lets go, and the telemetry block carries the count and the time.
 
 The values in this example come from the test fixture, not from the lab. The write forms need an
 administrator:
@@ -461,6 +524,10 @@ The choices go through the elevated helper (`--action fan-auto` or `--action fan
 `Store` 1. "Reset to defaults" puts the Driver curve back. The support report carries one `fan control:`
 line.
 
+The card has no switch for the load feed-forward yet. The next step on the application side is one check box
+on the same card, in plain words and in the four languages, that writes `FanLoadBoost` through the elevated
+helper, plus the state of the boost beside the fan speed.
+
 The read check of Part A, `lab-fan-read.ps1`, judges the board's own curve. With the fan control on, run
 `bc250kmd_cli fan auto` before it, or the RPM trend it judges is the driver's curve.
 
@@ -478,6 +545,11 @@ The Windows write path is host-tested only. One lab trial of at most three minut
    `controlling=1` again.
 
 During the whole trial Tctl stays below 87 C, and the trial stops at once if it does not.
+
+The load feed-forward needs a load, so it has a trial of its own: the LLM arm `g35-up-uh-d4k` of
+2026-10-10, which is 170 s and whose baseline is Tctl 76.9 C with the fan at 95 % duty. Pass: `boost=on`
+within 3 s of the arm's first heavy second, `raw=255` for the whole arm, and a Tctl maximum under that
+baseline. The arm's own numbers (tokens a second) must not fall.
 
 ### Open risks
 
