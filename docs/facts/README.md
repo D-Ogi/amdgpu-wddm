@@ -56,6 +56,20 @@ them.
   entry is fixed in place: its status and text say what holds now and why. Never append a second version.
 - Moving a fact to another area means moving its entry to the other file; its ID stays. Links elsewhere in the
   repository to its old page (`facts/<area>.md#m123`) then fail the gate until they are updated.
+- A share is the share of the counts next to it, and a rate normalised to another clock says which of its
+  numbers the model made. `python tools/quality/claim_shares.py` is that gate (`claim-shares` in
+  `tools/quality/quick.ps1`): it reads every data file, compares each percentage with its own count pair or
+  difference, and asks a row that normalises a rate for the words `estimated` or `modelled`. The ratchet of
+  rows that already carried an unlabelled normalisation is `tools/quality/claim_shares_baseline.txt`. With
+  `--files` it reads any document the same way, line by line, so a write-up can be checked before it is
+  published. It came out of the audit of 2026-10-10, which found a measured frame-time difference presented as
+  time inside a shader pass ([M842](games.md#m842)) and a share taken over the wrong one of two costs.
+- A row that explains its result by a decision of the compiler says that the explanation is an inference, unless
+  it kept the evidence of that decision: intermediate IR or `-Rpass` remarks. The same gate asks for the label
+  (`mechanism-label`). It also came out of the audit of 2026-10-10, over [M849](icd.md#m849), which counted five
+  disassemblies and then named the pass that it says did not fire. The counts show the difference. They do not
+  show which pass makes it, so the evidence of such a row gets a correction file next to it
+  (`evidence/m16/gfx1013-dp4a-barrier-2026-10-09/CORRECTION.md`) and the row itself is fixed in place.
 - `python tools/facts/gen_facts.py --check` is the gate (also run by `tools/quality/quick.ps1`): IDs unique and
   well formed, statuses valid, every edge resolves, every cited `evidence/` path and every relative link exists
   in the tree, links to fact anchors name the right page, data files canonical, generated pages up to date.

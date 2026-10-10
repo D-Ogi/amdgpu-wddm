@@ -47,18 +47,25 @@ boundaries of session 418, and exactly one packet is retired per report.
 
 What follows is dxgkrnl refusing to run the work it is holding:
 
-1. The thread that processes the completion sets the stalling context's status to `0x0000000a`. That status
-   never appears at a fast boundary (0 of 16593).
+1. The thread that processes the completion sets the stalling context's status to `0x0000000a`, in 270 of the
+   418 stalls (64.6 %, the completion thread itself in 60.5 %). That status never appears at a fast boundary
+   (0 of 16593). This step is the one with the smallest coverage of the five, so it is not the whole set.
 2. The scheduler worker wakes a median 19 us after the completion. Its node-0 `SelectContext2` reports
-   `ReadyNodeSwMapBits` bit 0 **clear** while `ReadyNodeHwMapBits` bit 0 is **set**. The software ready set says
-   there is nothing to run. The hardware map says the engine is free.
+   `ReadyNodeSwMapBits` bit 0 **clear** while `ReadyNodeHwMapBits` bit 0 is **set**, in 418 of 418. The software
+   ready set says there is nothing to run. The hardware map says the engine is free.
 3. The worker selects nothing and parks on the VSync event.
 4. After the VSync an adapter-wide context-status sweep sets the stalling context to `0x00000005`, a median
-   97 us after the VSync interrupt and 23 us before the submit. It is in the sweep in 418 of 418.
+   97 us after the VSync interrupt and 23 us before the submit, in 404 of 418. It is in the sweep in 418 of 418.
 5. Then the context is selected and the packet starts.
 
 So the long stall is a refusal in the software ready set, released by a VSync-paced sweep. It is not a missing
-wake-up, and it is not a gap in our completion path.
+wake-up, and it is not a gap in our completion path. The refusal itself is the step with the full denominator:
+the ready map reads clear against set in every stall. The `0x0000000a` mark before it is a strong correlate at
+64.6 %, not a step that every stall takes.
+
+Correction of 2026-10-10, from the independent audit of that day (finding A19, appendix PF3): step 1 read as
+unconditional until then, although `what_actually_happens.2_context_marked` of the retained C48 result gives it
+270 of 418. The denominators of steps 1, 2 and 4 are now in the text, and the fact row M797 carries them too.
 
 ## 4. C49: contested, and why the stacks are not evidence
 

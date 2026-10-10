@@ -24,6 +24,9 @@ function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
 }
 try {
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
+ # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
+ # counts next to it, and a rate normalised to another clock must say which numbers the model made.
+ Check 'claim-shares' { & python "$repo\tools\quality\claim_shares.py" --root $repo --out "$Out\claim-shares" }
  # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
  # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
