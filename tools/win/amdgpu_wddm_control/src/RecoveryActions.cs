@@ -692,6 +692,7 @@ namespace AmdgpuWddmControl
 
         public static int Run(string[] args)
         {
+            Kmd.RefreshBoardCapabilities();
             var o = Parse(args);
             if (o == null)
             {

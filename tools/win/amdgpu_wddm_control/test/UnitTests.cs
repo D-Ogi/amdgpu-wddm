@@ -1159,6 +1159,7 @@ static partial class UnitTests
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
         Strings.Directory = Path.Combine(args[0], @"tools\win\amdgpu_wddm_control\strings");
+        BoardCapabilityTests(args[0], header);
         StringTables();
         LocaleTests();
         Replies(header);

@@ -20,12 +20,7 @@
  * (the curve gave 100 % only at 85 C until 0.7.216, which the owner found late). Below 60 C no measurement exists;
  * the curve then holds 50 % or more, which is a floor the idle board (55 C and up) never reaches.
  * QUIET is quieter than the board below 80 C and is a user's choice. PERFORMANCE is louder everywhere. */
-static const struct bc250_fan_curve g_fan_profiles[BC250_FAN_PROFILE_COUNT] = {
-	{ 0u, { { 0u, 0u } } },							/* CUSTOM: from the request */
-	{ 5u, { { 40u, 50u }, { 60u, 70u }, { 70u, 85u }, { 76u, 95u }, { 80u, 100u } } },
-	{ 5u, { { 40u, 30u }, { 60u, 45u }, { 70u, 60u }, { 80u, 80u }, { 85u, 100u } } },
-	{ 4u, { { 40u, 60u }, { 55u, 75u }, { 65u, 90u }, { 75u, 100u } } },
-};
+#include "bc250_board_fan_profiles.inc"
 
 int bc250_fan_profile_curve(unsigned int profile, struct bc250_fan_curve *out)
 {

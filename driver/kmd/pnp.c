@@ -1,16 +1,23 @@
 // Device life cycle, the one child (the monitor output), power. M3: no MMIO, no interrupt (ADR 0006).
 #include "bc250kmd.h"
+#include "adapter_owner.h"
 
 NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_ PVOID* MiniportDeviceContext)
 {
     BC250_DEVICE* device;
 
-    GuardStage(StageAddDevice);
+    *MiniportDeviceContext = NULL;
+    if (!AdapterOwnerClaim(PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
     device = (BC250_DEVICE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*device), BC250_TAG);
-    if (device == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    if (device == NULL) {
+        AdapterOwnerRelease(PhysicalDeviceObject, 0);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    GuardStage(StageAddDevice);
     BoardMemoryInitialize(device);
     BoardMemoryIdentityClear(device);
     device->PhysicalDeviceObject = PhysicalDeviceObject;
+    device->StopDone = TRUE; // No hardware start has been attempted yet.
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
     StartHealthInitialize(device);
     CuModeInitialize(device);
@@ -38,6 +45,9 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_SUCCESS;
+    // Remove may follow a failed start without an ordinary StopDevice.
+    if (!device->StopDone) (void)Bc250StopDevice(device);
     BoardMemoryStop(device);
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
     CpuStop(device);        // before DpmStop: a trial's revert still needs the mailbox and the governor's busy share
@@ -48,6 +58,8 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     InteropRemove(device);  // the power callback must not find the device once its memory goes
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
+    // Keep admission closed until every cleanup above has completed.
+    AdapterOwnerRelease(device->PhysicalDeviceObject, device->GpuStopUnconfirmed);
     ExFreePoolWithTag(device, BC250_TAG);
     return STATUS_SUCCESS;
 }
@@ -61,15 +73,15 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     NTSTATUS status;
 
-    BoardMemoryIdentityClear(device);
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
+    BoardMemoryIdentityClear(device);
     GuardStage(StageStartEnter);
     // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does
     // nothing unless Parameters\KeepLog is set.
     GuardLogKeepEpisode(L"start");
     device->InheritedSignalValid=FALSE;
-    device->StopDone=FALSE;     // a PnP stop and start without a remove reuses this context
     if (device->GpuStopUnconfirmed) {
         GuardLog("start refused: previous GPU stop is unconfirmed for this device object");
         return STATUS_DEVICE_HARDWARE_ERROR;
@@ -82,6 +94,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         return status;
     }
     GuardStage(StageStartGuardPassed);
+    device->StopDone=FALSE; // Only an admitted start may require hardware unwind.
 
     StartHealthBegin(device,WddmFullTableSelected());
     CuModeBegin(device);
@@ -95,6 +108,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartDeviceInfo);
     BoardMemoryIdentityCapture(device);
+    BoardProviderBind(device);
 
     // The firmware's mode and framebuffer. Without it there is nothing this driver could show: M3 sets no mode.
     status = device->Dxgk.DxgkCbAcquirePostDisplayOwnership(device->Dxgk.DeviceHandle, &device->Post);
@@ -189,6 +203,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     return STATUS_SUCCESS;
 
 failed:
+    if (!device->StopDone) (void)Bc250StopDevice(device);
     BoardMemoryStop(device);
     BoardMemoryIdentityClear(device);
     StartHealthClose(device);
@@ -202,8 +217,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     BOOLEAN wasStarted;
 
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_SUCCESS;
     BoardMemoryStop(device);
-    BoardMemoryIdentityClear(device);
 
     // BD-090. When DxgkDdiStopDeviceAndReleasePostDisplayOwnership fails, dxgkrnl calls DxgkDdiStopDevice after it
     // (plug-and-play--pnp--start-and-stop-cases.md, "or after a call to DxgkDdiStopDeviceAndReleasePostDisplay-
@@ -228,6 +243,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
     DpAudioStop(device);        // before WddmStop/DcnStop, with BAR5 mapped: the next owner inherits AUDIO_ENABLED 0
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
+    BoardProviderUnbind(device); // Only after fan hand-back and the final mailbox client.
+    BoardMemoryIdentityClear(device);
     device->SystemDisplayReady=FALSE;
     device->PostDisplayStopAttempted=FALSE;
     device->PostDisplayStopStatus=STATUS_DEVICE_NOT_READY;
@@ -275,6 +292,7 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
     NTSTATUS status;
     UNREFERENCED_PARAMETER(TargetId); // one active output; return its actual id below
     RtlZeroMemory(DisplayInfo,sizeof(*DisplayInfo));
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_NOT_READY;
     // WDDM 1.2 (plug-and-play--pnp--start-and-stop-cases.md): the surface the pipe scans out when this call returns
     // must be filled with black before source visibility goes TRUE. That surface is the POST framebuffer
     // (DcnRestorePostDisplay below puts the scanout back on it), which the memory segment is carved clear of
@@ -301,7 +319,7 @@ void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
     // this driver takes from the board, so it goes back here too, with port writes only (fan.c).
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
-    if (device == NULL) return;
+    if (device == NULL || !AdapterOwnerIs(device->PhysicalDeviceObject)) return;
     if (device->Modeset.PipeChanged)
     {
         (void)DcnRestorePostDisplay(device);
@@ -453,6 +471,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
                             _In_ DEVICE_POWER_STATE DevicePowerState, _In_ POWER_ACTION ActionType)
 {
     BC250_DEVICE* device=(BC250_DEVICE*)MiniportDeviceContext;
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_NOT_READY;
     // BD-059: down for a system sleep or shutdown ends the GPU DWM session while the registry is still up (registry
     // only, before any hardware step); the way back to D0 marks it again if devices still use the path.
     if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0)

@@ -49,8 +49,13 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs' |
+    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
+
+# Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
+$providerOut = Join-Path $obj 'board-provider'
+& (Join-Path $repo 'driver\kmd\test\run_board_provider.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out $providerOut
+$env:AMDGPU_WDDM_BOARD_FIXTURE = Join-Path $providerOut 'board-caps.bin'
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
 # temp folder. With -Oracle the review oracles (oracle-cu.json, oracle-ver.json, oracle-art.json) in that directory are
@@ -65,6 +70,9 @@ if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unitArgs = @($repo) + @(if ($StartConfirmCore) { (Resolve-Path $StartConfirmCore).Path })
 & "$obj\unit-tests.exe" @unitArgs | ForEach-Object { Write-Host "  $_" }
 if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
+
+# The actual exported native request code must reject absent/malformed board admission before mutation.
+& (Join-Path $repo 'tools\win\bc250kmd_cli\test-telemetry.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out (Join-Path $obj 'native-controls')
 
 # 2. bc250control.dll, the same translation unit and flags as tools\win\bc250kmd_cli\build.ps1.
 $env:INCLUDE = ''; $env:LIB = ''

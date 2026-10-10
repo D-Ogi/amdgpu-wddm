@@ -8,6 +8,7 @@ read the driver's breadcrumbs on a machine with no kernel debugger.
 bc250kmd_cli info [hardware-id]   the escape, to the adapter with that PnP hardware id
                                   (default PCI\VEN_1002&DEV_13FE)
 bc250kmd_cli list                 every graphics adapter, with hardware id, interface path, handle and LUID
+bc250kmd_cli board-caps           board capabilities and limits from the driver, without hardware access
 bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts, with names
 bc250kmd_cli confirm              explicit human confirmation, checked durable zero (elevated)
 bc250kmd_cli health read          cached device-start identity and completed-presentation witness
@@ -55,6 +56,9 @@ bc250kmd_cli dpaudio [state]                      DP audio: the step 0 check tab
 bc250kmd_cli journal [from]                       the paging journal (docs/design/paging-journal.md)
 bc250kmd_cli journal follow SECONDS [MS]          one process, one held adapter, new records every MS (default 1000)
 ```
+
+Use `board-caps` for the current fan, CPU and GPU limits.
+Board setters require an admitted provider. An older driver without this query does not authorize setters.
 
 The last line of `log` counts its escapes: `escapes: N without adapter synchronization, M with HardwareAccess`.
 A `log summary` against 0.7.184.1 or later takes exactly one HardwareAccess escape, the summary itself; every

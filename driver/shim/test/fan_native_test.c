@@ -95,6 +95,7 @@ static void Fresh(int enable)
     device.StartHealth.Generation = 7;
     device.PhysicalDeviceObject = &native_pdo;      /* what FanStart allocates the work item against */
     HwmonInitialize(&device.Hwmon);
+    device.Hwmon.BoardAllowed = TRUE; // Fixture represents the qualified BC-250.
     native_port_lock = &device.Hwmon.PortLock;
     FanInitialize(&device);
     native_busy = &device.Fan.Busy;

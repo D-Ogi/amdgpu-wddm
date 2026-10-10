@@ -1,13 +1,8 @@
 // The case fan card of the Performance page (docs/design/fan.md Part B): the four choices, the curve rules and the
 // plans of the card's two actions.
 //
-// The rules live twice on purpose, as on the tuning page: the driver decides (driver/shim/bc250_fan.c), and this file
-// says why before the window asks. test/FanTests.cs keeps the two copies the same, and reads the presets out of the
-// driver's own source, so a changed preset there fails the build here until both agree.
-//
-// The fan is a choice, not a trial: a curve cannot hang the machine, because the driver runs the fan at full speed
-// from 87 C whatever the curve says, and at a floor of 20 % below that. So the card stores what the person picks at
-// once, for every start, and needs no Keep.
+// The capability query supplies the admitted range and preset vectors. The driver checks each
+// request again; an absent or malformed capability reply makes this page read-only.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -20,21 +15,18 @@ namespace AmdgpuWddmControl
     public static class FanCurves
     {
         // driver/shim/include/bc250_fan.h
-        public const uint MinPoints = 2, MaxPoints = 8, FloorPct = 20, FullPct = 100, MinC = 20, MaxC = 95, EmergencyC = 87;
+        public static uint MinPoints { get { return BoardCapabilities.Current[33]; } }
+        public static uint MaxPoints { get { return BoardCapabilities.Current[34]; } }
+        public static uint FloorPct { get { return BoardCapabilities.Current[30]; } }
+        public static uint FullPct { get { return BoardCapabilities.Current[31]; } }
+        public static uint MinC { get { return BoardCapabilities.Current[28]; } }
+        public static uint MaxC { get { return BoardCapabilities.Current[29]; } }
+        public static uint EmergencyC { get { return BoardCapabilities.Current[32] / 1000; } }
         public const uint StepC = 5, StepPct = 5;
 
         // The card's choices, in the order it shows them. "board" is the BIOS fan setting; the other three are the
         // driver's presets, and "custom" is a curve the person edited.
         public static readonly string[] Choices = { "board", "standard", "quiet", "performance" };
-
-        // driver/shim/bc250_fan.c g_fan_profiles, as (temperature C, duty %) pairs.
-        static readonly uint[][] PresetPoints =
-        {
-            null,
-            new uint[] { 40, 50, 60, 70, 70, 85, 76, 95, 80, 100 },
-            new uint[] { 40, 30, 60, 45, 70, 60, 80, 80, 85, 100 },
-            new uint[] { 40, 60, 55, 75, 65, 90, 75, 100 },
-        };
 
         public static uint ProfileOf(string name)
         {
@@ -61,12 +53,7 @@ namespace AmdgpuWddmControl
         // The curve of a preset: temperatures in c, duties in pct. False for "custom" and for a name that is no preset.
         public static bool Preset(uint profile, out uint[] c, out uint[] pct)
         {
-            c = null; pct = null;
-            if (profile == FanState.ProfileCustom || profile >= PresetPoints.Length) return false;
-            var v = PresetPoints[profile];
-            c = Enumerable.Range(0, v.Length / 2).Select(i => v[2 * i]).ToArray();
-            pct = Enumerable.Range(0, v.Length / 2).Select(i => v[2 * i + 1]).ToArray();
-            return true;
+            return BoardCapabilities.Current.FanPreset(profile, out c, out pct);
         }
 
         // The driver's rule, in its order (bc250_fan_curve_check): the count, then point by point the temperature range,
@@ -74,7 +61,7 @@ namespace AmdgpuWddmControl
         public static FanCurveError Check(uint[] c, uint[] pct, out int point)
         {
             point = -1;
-            if (c == null || pct == null || c.Length != pct.Length || c.Length < MinPoints || c.Length > MaxPoints) return FanCurveError.Points;
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Fan) || c == null || pct == null || c.Length != pct.Length || c.Length < MinPoints || c.Length > MaxPoints) return FanCurveError.Points;
             for (int i = 0; i < c.Length; i++)
             {
                 point = i;
@@ -173,12 +160,17 @@ namespace AmdgpuWddmControl
         // The test of the card: one duty for TestMs under a lease of TestLeaseMs, then the choice in force again. The
         // lease outlives the test by 5 s, so a helper that dies in the middle leaves the fan with the board, never stuck.
         public const uint TestMs = 10000, TestLeaseMs = 15000;
-        public static readonly uint[] TestChoices = { 30, 40, 50, 60, 70, 80, 90, 100 };
+        public static uint[] TestChoices { get {
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Fan)) return new uint[0];
+            // Presentation uses ten-percent steps strictly above the provider's floor.
+            uint first = (FloorPct / 10 + 1) * 10;
+            return first > FullPct ? new uint[0] : Enumerable.Range(0, (int)((FullPct - first) / 10 + 1)).Select(i => first + (uint)i * 10).ToArray();
+        } }
 
         // Whether a short test may run now: the driver runs the fan, and nothing more urgent has it.
         public static bool TestAllowed(FanState f)
         {
-            return f != null && f.Has(FanState.FlagEnabled) && !f.Has(FanState.FlagLeased) && !f.Has(FanState.FlagPaused) &&
+            return BoardCapabilities.Current.Allows(BoardCapabilities.Fan) && TestLeaseMs >= BoardCapabilities.Current[35] && TestLeaseMs <= BoardCapabilities.Current[36] && f != null && f.Has(FanState.FlagEnabled) && !f.Has(FanState.FlagLeased) && !f.Has(FanState.FlagPaused) &&
                 !f.Has(FanState.FlagFault) && !f.Has(FanState.FlagEmergency) && !f.Has(FanState.FlagHeldBack) &&
                 f.State != FanState.StateEmergency && f.State != FanState.StateDoubt && f.State != FanState.StateFault;
         }

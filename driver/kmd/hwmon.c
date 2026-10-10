@@ -111,6 +111,7 @@ static void HwmonOut8(void* Context, unsigned int Index, unsigned char Value)
     // The latch ports only. The shim issues no other write, and this is the second place that says so.
     NT_ASSERT(Index == BC250_HWMON_PORT_PAGE || Index == BC250_HWMON_PORT_INDEX);
     if (Index != BC250_HWMON_PORT_PAGE && Index != BC250_HWMON_PORT_INDEX) return;
+    if (!ports->Owner->BoardAllowed) return;
     WRITE_PORT_UCHAR(HwmonPort(ports, Index), Value);
 }
 
@@ -122,6 +123,7 @@ static unsigned char HwmonIn8(void* Context, unsigned int Index)
     // SmmGenericSio owns. The shim asks for nothing else; this is the second place that says so.
     NT_ASSERT(Index == BC250_HWMON_PORT_DATA);
     if (Index != BC250_HWMON_PORT_DATA) return 0xFF;
+    if (!ports->Owner->BoardAllowed) return 0xFF;
     return READ_PORT_UCHAR(HwmonPort(ports, Index));
 }
 
@@ -165,6 +167,7 @@ static void HwmonIo(BC250_HWMON_PORTS* Ports, BC250_HWMON_OWNER* Owner, struct b
 static void HwmonOut8Data(void* Context, unsigned char Value)
 {
     BC250_HWMON_PORTS* ports = (BC250_HWMON_PORTS*)Context;
+    if (!ports->Owner->BoardAllowed) return;
     WRITE_PORT_UCHAR(HwmonPort(ports, BC250_HWMON_PORT_DATA), Value);
 }
 
@@ -359,12 +362,13 @@ void HwmonStart(BC250_DEVICE* Device)
     owner->Samples = owner->Errors = owner->Retries = owner->Refusals = 0;
     RtlZeroMemory(&owner->Identity, sizeof(owner->Identity));
     RtlZeroMemory(&owner->Last, sizeof(owner->Last));
-    owner->Enabled = GuardReadSetting(HWMON_SETTING_ENABLE, 1) == 1;
+    owner->Enabled = owner->BoardAllowed && GuardReadSetting(HWMON_SETTING_ENABLE, 1) == 1;
     if (!owner->Enabled) {
         owner->Reason = BC250_HWMON_REASON_GATED;
         owner->BasePort = 0;
         HwmonPublish(Device, NULL, 0);
-        GuardLog("hwmon: off (EnableHwmon 0): the board's monitor is not read, no port access happens");
+        if (!owner->BoardAllowed) GuardLog("hwmon: board provider not admitted: no port access happens");
+        else GuardLog("hwmon: off (EnableHwmon 0): the board's monitor is not read, no port access happens");
         return;
     }
     base = GuardReadSetting(HWMON_SETTING_BASE, 0);

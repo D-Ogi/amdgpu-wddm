@@ -103,7 +103,7 @@ namespace AmdgpuWddmControl
         }
         public static bool Visible(UmaState state)
         {
-            return state != null && state.Supported && state.ProviderId == 1 && state.AllowedFirstMiB == 8192 &&
+            return BoardCapabilities.Current.Allows(BoardCapabilities.Memory) && state != null && state.Supported && state.ProviderId == 1 && state.AllowedFirstMiB == 8192 &&
                 state.AllowedSecondMiB == 12288 && state.NeedsRestart == 1;
         }
         public static bool OfferedBy(UmaState state,uint target)

@@ -17,7 +17,7 @@ static partial class UnitTests
     {
         return new CurveState
         {
-            Version = 0x000700D2, Flags = flags, FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = Tuner.Points,
+            Version = 0x000700D2, Flags = flags, FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = (uint)Tuner.Points,
             Candidate = new uint[Tuner.Points], Active = Tuner.Table(), Stored = new uint[Tuner.Points],
             Default = Tuner.Table(), Floor = Tuner.Floors(), Level = 5, LevelMHz = 1500, LevelMv = 919,
             CeilingMHz = 1500, Mode = 1, Generation = 5,

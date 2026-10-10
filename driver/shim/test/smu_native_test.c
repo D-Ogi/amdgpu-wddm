@@ -26,6 +26,7 @@ static unsigned cpu_phase,cpu_pending,cpu_command,cpu_argument,cpu_reply=1u,cpu_
 static unsigned cpu_sent;          // the argument the last queue 3 message carried (cpu_argument becomes the answer)
 static LONG cpu_calls;
 static LONG calls;
+static LONG board_transport_reads;
 static unsigned smu_version=0x00580600u,version_refuse;
 static HANDLE entered,release_write,stop_started,stop_done;
 static volatile LONG hold_write;
@@ -53,6 +54,7 @@ static void MetricsFirmwareWrite(void)
     *(volatile USHORT*)(p+BC250_SMU_METRICS_OFF_SOC_TEMP)=6000;
 }
 ULONG NativeRead(PULONG address) {
+    InterlockedIncrement(&board_transport_reads);
     unsigned offset=(unsigned)((ULONG_PTR)address-(ULONG_PTR)registers);
     CHECK(OwnerHeld(&owner));
     if(offset==BC250_SMU_mmTHM_TCON_CUR_TMP) return (cur_tmp<<THM_TCON_CUR_TMP__CUR_TEMP__SHIFT); // 536 = 67 C
@@ -130,7 +132,10 @@ static DWORD WINAPI Stop(void* ignored) {
 int main(void) {
     HANDLE threads[4],writer,stopper;
     ULONG f,v,version;LONG t;unsigned i;
-    SmuOwnerInitialize(&owner);reply=1;mhz=1500;vid=104;
+    SmuOwnerInitialize(&owner);
+    CHECK(SmuOwnerStart(&owner,registers)==STATUS_NOT_SUPPORTED);
+    CHECK(calls==0 && board_transport_reads==0 && !owner.Online);
+    owner.BoardAllowed=TRUE;reply=1;mhz=1500;vid=104;
     CHECK(SmuReadClock(&owner,&f,&v,&t)==STATUS_DEVICE_NOT_READY);
     CHECK(SmuReadTemperature(&owner,&t)==STATUS_DEVICE_NOT_READY && !t);
     CHECK(SmuReadFirmwareVersion(&owner,&version)==STATUS_DEVICE_NOT_READY && !version);
@@ -461,7 +466,7 @@ int main(void) {
     SmuOwnerStop(&owner);
     CHECK(SmuReadFirmwareVersion(&owner,&version)==STATUS_SUCCESS && version==0);
     // A genuinely new owner has no inherited snapshot, even after a failed start.
-    SmuOwnerInitialize(&owner);version_refuse=1;reply=1;
+    SmuOwnerInitialize(&owner);owner.BoardAllowed=TRUE;version_refuse=1;reply=1;
     CHECK(SmuOwnerStart(&owner,registers)!=STATUS_SUCCESS);
     CHECK(SmuReadFirmwareVersion(&owner,&version)==STATUS_DEVICE_NOT_READY && !version);
     printf("SMU native owner: %ld checks, %ld failures\n",native_checks,native_failures);

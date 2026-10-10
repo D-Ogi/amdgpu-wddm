@@ -257,8 +257,8 @@ static partial class UnitTests
     // The presets and the bounds come from the driver's own source, never from memory.
     static void FanModel(string root)
     {
-        var hpath = Path.Combine(root, @"driver\shim\include\bc250_fan.h");
-        var cpath = Path.Combine(root, @"driver\shim\bc250_fan.c");
+        var hpath = Path.Combine(root, @"driver\shim\include\bc250_board_envelope.h");
+        var cpath = Path.Combine(root, @"driver\shim\bc250_board_fan_profiles.inc");
         Check(File.Exists(hpath) && File.Exists(cpath), "driver/shim fan sources exist");
         if (!File.Exists(hpath) || !File.Exists(cpath)) return;
         var h = File.ReadAllText(hpath);

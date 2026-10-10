@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\telemetry-client-tests")
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\telemetry-client-tests", [switch]$BypassBoardAdmission)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path;$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 # The directory must exist: cl given a TEMP that does not reports D8018 or D8050 and names no path at all.
@@ -8,6 +8,11 @@ $first=$source.IndexOf('#ifndef BC250_ESCAPE_RUN_DPM')
 $last=$source.IndexOf('// ---- telemetry: adapter access',$first)
 if($first -lt 0 -or $last -lt 0){throw 'Telemetry block not found in bc250kmd_cli.c'}
 $actual=$source.Substring($first,$last-$first)
+if ($BypassBoardAdmission) {
+    $pattern = '(?s)static NTSTATUS BoardCapabilityRequired\(ULONG flag\)\s*\{.*?\n\}'
+    if ([regex]::Matches($actual, $pattern).Count -ne 1) { throw 'Board admission mutation anchor changed' }
+    $actual = [regex]::Replace($actual, $pattern, 'static NTSTATUS BoardCapabilityRequired(ULONG flag) { (void)flag; return 0; }')
+}
 $template=Get-Content "$repo\tools\win\bc250kmd_cli\test\telemetry_test.c" -Raw
 [IO.File]::WriteAllText("$Out\test.c",$template.Replace('// ACTUAL_TELEMETRY',$actual))
 Copy-Item "$repo\driver\kmd\bc250kmd_escape.h" "$Out\bc250kmd_escape.h" -Force
@@ -16,5 +21,11 @@ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-O
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\telemetry_test.exe" "$Out\test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Telemetry client test build failed'}
-& "$Out\telemetry_test.exe"
-if($LASTEXITCODE -ne 0){throw 'Telemetry client tests failed'}
+& "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Root -Out "$Out\provider"
+$result = @(& "$Out\telemetry_test.exe" "$Out\provider\board-caps.bin")
+$code = $LASTEXITCODE
+$result | Set-Content "$Out\result.txt"
+$result | Write-Output
+if ($BypassBoardAdmission) {
+    if ($code -ne 1 -or -not ($result -match '^FAIL line')) { throw 'Board admission mutation did not fail runtime checks' }
+} elseif ($code -ne 0) { throw 'Telemetry client tests failed' }
