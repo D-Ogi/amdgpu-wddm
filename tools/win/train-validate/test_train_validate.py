@@ -731,6 +731,24 @@ class Summary(unittest.TestCase):
         self.assertIn("**Rise of the Tomb Raider**: MET", text)
         self.assertIn("56.4 fps", text)
 
+    def test_an_interactive_arm_is_answered_by_the_reading_a_person_fills_in(self):
+        # The Witcher 3 arm is the operator's own session: the runner never starts it. Once the reading is
+        # in and it holds against the baseline, the arm is answered and the summary stops calling it open.
+        records = self.records([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("vk-smoke.ps1", Completed(0, "smoke ok")),
+            ("pt-run.ps1", Completed(0, "631 frames, 10.45 seconds: 60.40 fps")),
+            ("run-game.sh", Completed(0, "status ok")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        hand = next(r for r in records if r.id == "game")
+        hand.verdict, hand.value, hand.value_read = OPERATOR, None, False
+        text = summary_module.write(self.plan, records, self.tmp / "out", train="b99",
+                                    operator_values={"game": 56.4})
+        self.assertEqual(hand.verdict, PASS)
+        self.assertNotIn("Still open for the operator", text)
+
     def test_an_arm_that_ran_again_keeps_only_its_last_record(self):
         # A --resume run appends a second record for a repaired arm. The last one is the verdict; the first
         # one is history and must not stand in the table, in the gates or in the counts (b28, 2026-10-10).

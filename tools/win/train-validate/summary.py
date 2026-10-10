@@ -123,7 +123,10 @@ def fill_operator_values(records: list[ArmRecord], operator_values: dict) -> lis
         verdict, why, record.baseline_ok, record.value_read = judge(record)
         if verdict != PASS and record.verdict in (PASS, OPERATOR, WARN, UNREAD):
             record.verdict, record.reason = verdict, why
-        elif verdict == PASS and record.verdict == UNREAD:
+        elif verdict == PASS and record.verdict in (UNREAD, OPERATOR):
+            # An arm that waits for a person (the interactive Witcher 3 session) is answered the moment
+            # that person's reading is in and it holds against the baseline. Before this it stayed
+            # OPERATOR with its number beside it, and the summary still called it open (b28, 2026-10-10).
             record.verdict, record.reason = PASS, ""
         if not record.value_operator:
             # This arm's value was meant to come from its own log. A number given on the command line is
