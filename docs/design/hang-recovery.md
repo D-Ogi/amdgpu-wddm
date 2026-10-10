@@ -414,6 +414,15 @@ which of the three happened:
 
     wddm: submit watchdog 12000 ms (TdrDelay 10000 ms, setting 0, default), looks for progress every 250 ms
 
+The five-minute clamp belongs to the value somebody asked for, and only to it. `TdrDelay` itself is not clamped
+to five minutes and the floor is applied last, so the invariant is "never shorter than `TdrDelay`" and not "never
+shorter than `min(TdrDelay, 300 s)`": with `TdrDelay` 400 s the budget is 400 s (402 s when the setting is
+absent), because the OS really will wait that long and a watchdog that fires 100 s before it is the defect, not
+the protection. The only clamp on `TdrDelay` is `BC250_SUBMIT_TDR_MAX_MS`, which exists so that the milliseconds
+plus the margin still fit in a `ULONG`. `run_submit_watchdog.ps1` holds that order with `-ClampTdrToBudgetMax`,
+and the floor test compares the budget with the OS's own wait (`TdrDelay` x 1000) rather than with this driver's
+own copy of it, because a comparison against the copy cannot see a clamp inside the copy.
+
 Node 1 (paging) gets the same budget. Its hang class is not BD-114's, but its refusal path is the same one-way
 door to a 0x116, and the argument does not care which ring the packet is on. Two bounds keep a constant of their
 own and are deliberately NOT the watchdog's budget. `BC250_WDDM_HOLD_DEADLINE_MS` (500 ms) bounds a CPU wait
@@ -455,12 +464,15 @@ longer changes WHEN the watchdog fires: the window restarts at every head change
 changes is the deadline a queued job carries, the second (redundant) condition of the fire, and the two measured
 numbers below. It is kept for all three, not for a fire it would prevent.
 
-The timer is re-armed inside `wddm->Lock`, and that is not a style choice. `WddmStop` and `WddmSuspendRetained`
-set `Stopping`, cancel this timer and take back its queued DPC in one critical section, on the strength of "from
-here nothing of ours arms a timer". A re-arm outside the lock could read `Stopping` as FALSE, lose the race to
-that critical section and call `KeSetTimer` after the cancel, the `KeRemoveQueueDpc` and the `KeFlushQueuedDpcs` -
-on a `KTIMER` and a `KDPC` that live inside the `BC250_WDDM` allocation `WddmStop` then frees.
-`run_submit_watchdog.ps1` gates that order with `-RearmOutsideLock`.
+The timer is re-armed inside `wddm->Lock`, and that is not a style choice. `WddmSuspendRetained` sets `Stopping`
+and cancels this timer in one critical section. `WddmStop` sets `Stopping` under the lock and cancels after it
+releases the lock. Both are safe for a re-arm that holds the same lock, and for no other: that re-arm is either
+before the `Stopping` store, and is then taken back by the cancel, the `KeRemoveQueueDpc` and the
+`KeFlushQueuedDpcs` that follow it, or after it, and then it reads `Stopping` as TRUE and arms nothing. A re-arm
+outside the lock has neither guarantee: it can read `Stopping` as FALSE and still call `KeSetTimer` after the
+cancel, the `KeRemoveQueueDpc` and the `KeFlushQueuedDpcs` - on a `KTIMER` and a `KDPC` that live inside the
+`BC250_WDDM` allocation `WddmStop` then frees. `run_submit_watchdog.ps1` gates that order with
+`-RearmOutsideLock`.
 
 ### The timeout line says what it measured
 
@@ -509,6 +521,14 @@ alone would admit submissions that `gfx.c` then refuses, which closes the node a
 `GfxReopenAfterAbort` does the tail of `GfxSoftRecover`'s drained path and nothing else - there was no kill, so
 there is no sequence to stop - and it refuses unless the ring is provably idle.
 
+It leaves one step of that tail to its caller: the wake. `GfxSoftRecover` signals `GfxRetireEvent` inside
+`gfx.c`, which on that path is before `wddm.c` clears `WatchdogFaulted` and `RefusalPending` for the node, so a
+held submission can wake while the node is still closed, be refused, and have `WddmFailSubmission` latch again
+exactly what the recovery cleared. `GfxReopenAfterAbort` therefore does not signal at all, and `wddm.c` calls
+`GfxRetireSignal` once the flags are clear and the lock is released. `run_submit_watchdog.ps1` holds both halves:
+the ordered source check of `Bc250WddmResetEngine` requires the wake after the release, and a second check fails
+if `GfxReopenAfterAbort` wakes the waiters itself again.
+
 Expected effect: the guilty device goes into the error state, the application sees a device loss, and the machine
 stays up. BD-114 becomes a lost `llama-bench` run instead of a bugcheck. It does not stop the trip, so it is not a
 substitute for the budget or the progress window.
@@ -542,9 +562,21 @@ reset.
   still leaves verdict 3.
 - `BC250_WDDM_HOLD_DEADLINE_MS` is still 500 ms, and a held submission that runs out of it still closes node 0
   through `GfxSubmitFail`, which is the first step of the BD-114 chain. It is kept short on purpose, because it
-  bounds a CPU wait on a dxgkrnl worker thread. The hold is measured in microseconds in practice (the histogram
-  of sessions 313 and 314), so a 500 ms hold is already a hang of something else. It is still the one instance of
-  the class the budget change does not remove.
+  bounds a CPU wait on a dxgkrnl worker thread. It is still the one instance of the class the budget change does
+  not remove, and the shape of the workload decides how close it comes:
+  - While the completion queue has a free slot the hold is measured in microseconds (the histogram of sessions
+    313 and 314), so a 500 ms hold is a hang of something else.
+  - When all seven slots are busy, the hold is the wait for one retirement. With the 400 ms packets of the q27
+    dump that is about 400 ms against a 500 ms bound, and a single packet above 500 ms refuses the eighth
+    submission - `WddmFailSubmission` latches `RefusalPending[0]` and the BD-114 chain starts at step one.
+  - So for a QUEUED workload of that shape the protection is verdict 7 (the reported aborted fence), not the
+    budget: 7.1 and 7.2 remove the false trip of the watchdog, which is the whole of the un-queued g12 case, and
+    leave this door. Raising the hold bound is not the answer, because it blocks a dxgkrnl worker thread for as
+    long as it waits.
+- `TdrDelay` is latched once, in `WddmStart`, while the GUI can write it without a restart. A driver restart after
+  somebody LOWERED `TdrDelay` would therefore price the budget against a value the OS no longer uses. The common
+  direction is the safe one (a budget longer than the OS's wait only lets the OS act first), and verdict 7 is the
+  answer to the rest. A re-read on every submission would cost a registry open on the submit path.
 - The progress token cannot name the head job. The `CP_IB*` registers are banked by `GRBM_GFX_INDEX` and describe
   where the command processor is now, so a token that moves while the head stands still re-arms the budget. That
   is the conservative direction - the OS fires first - but it means the watchdog's reaction to a hang behind
@@ -554,9 +586,11 @@ reset.
   `TdrLimitCount`.
 - The watchdog's host suite models `WddmGfxHeadLocked` and the DPC. It does not compile `wddm.c` either.
   `run_submit_watchdog.ps1` therefore reads `wddm.c` by text for the registry reads, the stamp, the re-arm under
-  the lock, the measured log line, the aborted-fence call and the two submit wrappers, and it carries eight
-  negative controls that must fail: `-FlatFiveHundred`, `-NoTdrFloor`, `-IgnoreProgress`, `-StampAtRingWrite`,
-  `-ReportWithPendingCompletion`, `-NoFenceRange`, `-LogTheConstant` and `-RearmOutsideLock`.
+  the lock, the measured log line, the aborted-fence call, the wake after the reopen and the two submit wrappers,
+  and it carries nine negative controls that must fail: `-FlatFiveHundred`, `-NoTdrFloor`,
+  `-ClampTdrToBudgetMax`, `-IgnoreProgress`, `-StampAtRingWrite`, `-ReportWithPendingCompletion`,
+  `-NoFenceRange`, `-LogTheConstant` and `-RearmOutsideLock`. Node 1's own share of the budget is held by the
+  paging-queue suite and its `--flat-paging-budget` control, both in `quick.ps1`.
 - The host suite covers the decisions and the kill loop, never the kill on the hardware. `hang_recovery_test.c`
   holds the gate, both guards, the per-node bound of the fence guard, the pre-kill verdict, the kill loop over a
   model of the register path and the record's arithmetic. `run_hang_recovery.ps1` also reads the backend switch in
