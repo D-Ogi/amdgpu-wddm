@@ -9,17 +9,12 @@
  * RefusalPending[0], that flag blocked the DXGK_INTERRUPT_DMA_PREEMPTED acknowledgement for ever, and the OS
  * waited out its whole TdrDelay before DxgkDdiResetEngine was asked to recover a packet that had meanwhile
  * completed. The end of that chain is bugcheck 0x116, because this part has no working GPU reset (facts M53).
- * A false trip of this watchdog is therefore not a lost frame; it is a guaranteed bugcheck.
+ * A false trip can therefore lead to a bugcheck when recovery cannot reopen the node.
  *
- * Three decisions follow, and they are deliberately ordered from the crude to the exact:
- *   7.1 the budget is a setting, defaulted FROM TdrDelay and never shorter than it. The OS measures execution
- *       time itself and owns recovery (timeout-detection-and-recovery.md:43, tdr-registry-keys.md:53-55). A
- *       private watchdog shorter than the OS's budget preempts a mechanism that works with one that bugchecks.
- *   7.2 the budget is re-armed while progress is observed, so a long healthy job is not judged by wall clock.
- *   7.3 the deadline is stamped when the job becomes the HEAD, not when it is written to the ring, so a packet
- *       behind six others on a seven-deep queue does not spend its budget waiting.
- * 7.1 is the floor and 7.2 is the fix: if the progress token never moves, the watchdog degrades to 7.1, which is
- * already safe because the OS fires first. That is why every uncertain reading in 7.2 is read as progress. */
+ * The duration floor and default margin are conservative policy, not an ordering guarantee. Windows times a
+ * scheduler preemption request; this watchdog times sampled inactivity of a software queue head. Those clocks
+ * have different origins, so this watchdog can still expire before Windows' TDR. Activity can postpone it
+ * indefinitely, and inactivity is not proof that shader execution has stopped. */
 #ifndef BC250_SUBMIT_WATCHDOG_H
 #define BC250_SUBMIT_WATCHDOG_H
 
@@ -29,11 +24,8 @@
  * (tdr-registry-keys.md:55, "2 seconds is the default value"). Our installer writes 10 (BD-079). */
 #define BC250_SUBMIT_TDR_DEFAULT_S 2u
 
-/* The margin the default carries above TdrDelay. The point of the margin is that our watchdog must fire AFTER
- * the OS has started its own TDR, never before it: a watchdog that fires second only adds a log line and a
- * closed node to a recovery that is already running, while one that fires first destroys the recovery's own
- * precondition (a job still on the ring). Two seconds is the OS's own default TdrDelay, so the margin is never
- * smaller than the whole budget Windows ships with. */
+/* Conservative default margin above the configured TdrDelay duration. The distinct clock origins mean
+ * that this margin does not establish which watchdog expires first. */
 #define BC250_SUBMIT_MARGIN_MS 2000u
 
 /* The clamp on a value SOMEBODY ASKED FOR. Five minutes: an operator may ask for a long budget for an offline
@@ -47,7 +39,7 @@
  * Deliberately NOT BC250_SUBMIT_BUDGET_MAX_MS, and this is the one line everything else in this file rests on.
  * Clamping TdrDelay to the operator's clamp would turn 7.1's invariant, "never shorter than TdrDelay", into
  * "never shorter than min(TdrDelay, 300 s)": with TdrDelay 400 s the budget would come out at 300 s and our
- * private watchdog would fire 100 s before the OS's own, which is exactly the defect this file exists for. The
+ * private duration would be 100 s below the configured OS duration. The
  * budget follows TdrDelay however long it is; only a value somebody asked for is clamped. */
 #define BC250_SUBMIT_TDR_MAX_MS (0xFFFFFFFFul - (unsigned long)BC250_SUBMIT_MARGIN_MS)
 
@@ -72,7 +64,7 @@ static __inline unsigned long Bc250SubmitTdrMs(unsigned long TdrDelaySeconds)
  *
  * The order matters: the operator's clamp is applied to the operator's value, and the TdrDelay floor is applied
  * last and wins over it. A clamp after the floor would cut the budget back below TdrDelay for any TdrDelay above
- * five minutes, and a watchdog that fires before the OS's own is the defect, not the protection. */
+ * five minutes. This is a duration invariant, not a guarantee about the order of expiration. */
 static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsigned long TdrDelaySeconds,
                                                   int* Defaulted, int* Raised)
 {
@@ -92,8 +84,8 @@ static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsig
 
 /* How often the watchdog looks for progress. A quarter of the budget, capped: the gap between two checks must
  * stay BELOW the budget, or the staleness window below would restart itself for ever and the watchdog would
- * never fire at all. 250 ms is the cap because a check is five register reads and a fence read in a DPC, and a
- * node-0 job that is making progress changes the head long before the tick expires (the tick is re-armed by the
+ * never fire at all. 250 ms is the cap because a check is five register reads and a fence read in a DPC. Software
+ * head changes can also restart the cadence (the tick is re-armed by the
  * DPC itself, and a head change re-arms it from the stamp).
  *
  * A budget of 3 ms or less yields a tick equal to the budget and the watchdog then never fires. That is the
@@ -118,9 +110,9 @@ static __inline unsigned long Bc250SubmitTickMs(unsigned long BudgetMs)
  *
  * Two honest limits, the same two the snapshot's comment states. The CP_IB* family is banked by GRBM_GFX_INDEX,
  * which this driver must not write, so the bank is whatever the shim left selected; and those registers describe
- * where the CP is now, not necessarily the head job. Both limits can only make the token change when the head
- * made no progress, which is read as progress, which re-arms - the conservative direction. The opposite error, a
- * mix collision that hides a real change, is read as no progress and firing is then today's behaviour. */
+ * where the CP is now, not necessarily the head job. These limits can make the token change when the head
+ * made no progress. A/B/A/B changes can postpone expiration forever without useful forward progress. A
+ * mix collision or a long shader with stationary fetch registers can hide useful work and permit expiration. */
 #define BC250_SUBMIT_PROGRESS_SEED 0xCBF29CE484222325ull        /* FNV-1a's 64-bit offset basis */
 
 static __inline unsigned long long Bc250SubmitProgressMix(unsigned long long Token, unsigned long Value)
@@ -132,48 +124,65 @@ static __inline unsigned long long Bc250SubmitProgressMix(unsigned long long Tok
 
 /* The staleness window of one node. Times are KeQueryInterruptTime units (100 ns), the clock the deadlines and
  * the log's own ticks use. */
+typedef enum BC250_SUBMIT_OBSERVATION {
+    BC250_SUBMIT_OBSERVATION_NONE = 0,
+    BC250_SUBMIT_OBSERVATION_PRIME,
+    BC250_SUBMIT_OBSERVATION_ACTIVITY,
+    BC250_SUBMIT_OBSERVATION_GAP_RESET,
+    BC250_SUBMIT_OBSERVATION_UNCHANGED
+} BC250_SUBMIT_OBSERVATION;
+
 typedef struct BC250_SUBMIT_WATCHDOG {
-    unsigned long long Progress;        /* the token last seen to change */
-    unsigned long long Advanced;        /* when it was last seen to change, or the head stamp */
-    unsigned long long Checked;         /* the previous check */
+    unsigned long long Progress;        /* last sampled token, not a monotonic progress measure */
+    unsigned long long Advanced;        /* beginning of the current observed inactivity window */
+    unsigned long long Checked;         /* previous check */
     int Primed;                         /* a window is open; 0 while no job is the head */
+    int Observed;                       /* a token has actually been sampled in this window */
+    BC250_SUBMIT_OBSERVATION LastObservation;
 } BC250_SUBMIT_WATCHDOG;
 
-/* Opened when a job becomes the head. The token is not read here: wddm.c stamps the head under its spin lock and
- * the token costs register reads, so the first check of the DPC supplies it. Progress 0 is not a claim about the
- * hardware - it is a value the first check will almost certainly find changed, which starts the window at that
- * check instead of at the stamp. The window that matters is the one that does NOT move. */
+/* The first DPC sample primes the window even when its token is zero. Opening a window or
+ * restarting observation after a gap is not an observed activity change. */
 static __inline void Bc250SubmitWatchdogArm(BC250_SUBMIT_WATCHDOG* Watchdog, unsigned long long Now)
 {
     Watchdog->Progress = 0ull;
     Watchdog->Advanced = Now;
     Watchdog->Checked = Now;
     Watchdog->Primed = 1;
+    Watchdog->Observed = 0;
+    Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_NONE;
 }
 
 static __inline void Bc250SubmitWatchdogIdle(BC250_SUBMIT_WATCHDOG* Watchdog)
 {
     Watchdog->Primed = 0;
+    Watchdog->Observed = 0;
+    Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_NONE;
 }
 
-/* One check. Nonzero when the budget passed with the token standing still WHILE THE CHECKS WERE WATCHING IT.
- * *Age is the stale time, 0 when the token moved.
- *
- * The "watched" rule is the one Bc250HangWatchCheck (progress.h) already uses and it is load-bearing here: a gap
- * of a whole budget or more between two checks means nobody was looking, and a token that nobody watched stand
- * still is not evidence of a hang. A debugger break, a DPC storm or a timer that fired late therefore starts a
- * new window rather than firing. Now < Advanced (a clock that went backwards) does the same. */
+/* Nonzero when sampled inactivity reaches Budget. A full-budget observation gap or a backwards
+ * clock resets the window. Classify exactly once per check, independently of any caller timer rearm.
+ * GAP_RESET takes precedence over a changed token because continuity of observation was lost. */
 static __inline int Bc250SubmitWatchdogCheck(BC250_SUBMIT_WATCHDOG* Watchdog, unsigned long long Progress,
                                              unsigned long long Now, unsigned long long Budget,
                                              unsigned long long* Age)
 {
     int watched = Watchdog->Primed && Now >= Watchdog->Checked && Now - Watchdog->Checked < Budget;
 
-    Watchdog->Checked = Now;
     *Age = 0ull;
-    if (!watched || Progress != Watchdog->Progress || Now < Watchdog->Advanced)
+    if (!Watchdog->Primed || !Watchdog->Observed)
+        Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_PRIME;
+    else if (!watched || Now < Watchdog->Advanced)
+        Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_GAP_RESET;
+    else if (Progress != Watchdog->Progress)
+        Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_ACTIVITY;
+    else
+        Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_UNCHANGED;
+    Watchdog->Checked = Now;
+    if (Watchdog->LastObservation != BC250_SUBMIT_OBSERVATION_UNCHANGED)
     {
         Watchdog->Primed = 1;
+        Watchdog->Observed = 1;
         Watchdog->Progress = Progress;
         Watchdog->Advanced = Now;
         return 0;

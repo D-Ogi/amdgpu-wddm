@@ -78,6 +78,7 @@ try {
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
  # BD-114: the private submit watchdog's budget, its progress window, its head stamp and the aborted-fence
  # answer, with the source checks that hold wddm.c to the same decisions (the host test cannot compile it).
+ Check 'recovery-protocol' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_recovery_protocol.ps1" -Root $Workspace -Out "$Out\recovery-protocol" }
  Check 'submit-watchdog' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_submit_watchdog.ps1" -Root $Workspace -Out "$Out\submit-watchdog" }
  Check 'ring-gap' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ring_gap.ps1" -Root $Workspace -Out "$Out\ring-gap" }
  Check 'paging-queue' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue" }
@@ -195,6 +196,21 @@ try {
   @{n='hang-recovery-gart-backend';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-GartBackend');Fails=$true}
   @{n='hang-recovery-count-refused';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-CountRefusedKills');Fails=$true}
   @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true}
+  @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
+  @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
+  @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
+  @{n='submit-watchdog-IgnoreAlternatingActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-IgnoreAlternatingActivity');Fails=$true}
+  @{n='submit-watchdog-AssumeOsClockAtHead';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AssumeOsClockAtHead');Fails=$true}
+  @{n='submit-watchdog-HeadAgeAtRetirement';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-HeadAgeAtRetirement');Fails=$true}
+  @{n='recovery-protocol-ReadAfterRelease';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReadAfterRelease');Fails=$true}
+  @{n='recovery-protocol-KeepCoveredBoundary';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-KeepCoveredBoundary');Fails=$true}
+  @{n='recovery-protocol-IgnoreReportInFlight';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreReportInFlight');Fails=$true}
+  @{n='recovery-protocol-IgnoreLostReport';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreLostReport');Fails=$true}
+  @{n='recovery-protocol-UseNotifiedAsCompleted';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-UseNotifiedAsCompleted');Fails=$true}
+  @{n='recovery-protocol-ShareNodeWatermark';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ShareNodeWatermark');Fails=$true}
+  @{n='recovery-protocol-ResetWritesCompleted';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ResetWritesCompleted');Fails=$true}
+  @{n='recovery-protocol-IgnoreEpoch';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreEpoch');Fails=$true}
+  @{n='recovery-protocol-TimeoutAfterUnlock';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-TimeoutAfterUnlock');Fails=$true}
   @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
   @{n='submit-watchdog-no-tdr-floor';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoTdrFloor');Fails=$true}
   @{n='submit-watchdog-clamp-tdr';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ClampTdrToBudgetMax');Fails=$true}
@@ -276,4 +292,3 @@ try {
  Write-Error $_
  exit 1
 }
-

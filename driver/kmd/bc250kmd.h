@@ -815,7 +815,7 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //                    Vmid is the hung job's own VMID, which the caller reads out of the completion-queue entry
 //                    (since the VMID pool of 0.7.214 there is no single application VMID to assume).
 //                    Returns a BC250_HANG_VERDICT_* (hang_recovery.h): ALREADY_RETIRED or DRAINED = the ring is idle
-//                    and reopened (SubmitInFlight and the sticky SubmitFailed cleared); NOT_DRAINED = nothing changed,
+//                    but gates remain closed until the WDDM reset commit; NOT_DRAINED = nothing changed,
 //                    the caller keeps today's refusal. *Seq is the sequence waited for, *Kills the SQ_CMD writes
 //                    issued, *Micros the time spent.
 ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
@@ -824,11 +824,10 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
 //                    (submit_watchdog.h). DISPATCH_LEVEL, read-only, no side effect at all - unlike
 //                    GfxFenceArrived it retires nothing and wakes nobody. FALSE: there was nothing to read.
 //   GfxReopenAfterAbort
-//                    BD-114: the ring is idle and ResetEngine has named this node's last reported fence as
-//                    aborted without a kill (verdict BC250_HANG_VERDICT_ABORT_REPORTED). Clears the sticky
-//                    SubmitFailed the watchdog wrote and wakes the held submissions, exactly as
-//                    GfxSoftRecover's drained path does. FALSE and nothing changed if a sequence is still in
-//                    flight. PASSIVE_LEVEL, from DxgkDdiResetEngine only.
+//                    BD-114: final reset commit, at DISPATCH_LEVEL under WDDM Lock.
+//                    Proves the ring idle and clears SubmitInFlight/SubmitFailed; no wake.
+//                    FALSE if work remains in flight. The caller opens its WDDM gate
+//                    in the same critical section, then signals after releasing the lock.
 BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
 BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet

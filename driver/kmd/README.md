@@ -79,20 +79,21 @@ no code from Microsoft's MS-PL sample.
   last reported fence of node 0 only. In trial D1 the kill of 0.7.216.16 used the GART register path, which
   refused `SQ_CMD`, so no kill reached the register. 0.7.216.17 issues it through the GFX sequence. In trial D1 of
   0.7.216.17 one kill drained the ring, the client got `DXGI_ERROR_DEVICE_HUNG`, and the desktop stayed. From
-  0.7.216.27 a packet that ran past our own watchdog and then completed before the TDR is no longer a refusal
-  either: with nothing of the node on the ring, no completion pending and the fence in range, the node's last
-  reported fence is named as aborted (verdict 7) and the ring is reopened. See `docs/design/hang-recovery.md`.
+  0.7.216.27 admits an empty-ring recovery only when the per-node observed completion agrees with successful
+  publication, no report is pending/in flight/lost, the fence is in range and the GFX ring is proven idle.
+  Verdict 7 names that completed fence as aborted. Uncertain cases still refuse and can end in 0x116.
+  Recovery epochs serialize watchdog failure gates with reopen. See `docs/design/hang-recovery.md`.
 - **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
   observable progress before the driver closes the ring and takes a register snapshot. The INF does not write it.
   Absent means Windows' own `TdrDelay` plus 2 s, which is 12 s on a machine where the control application wrote
   `TdrDelay` 10, and a value an operator writes is clamped to five minutes and raised to `TdrDelay` if it is
-  shorter. It is never shorter than the OS's own budget, because the OS measures execution time itself and owns
-  recovery, and a private watchdog that fires first turns a recoverable timeout into bugcheck 0x116 on this part
-  (facts M53). Up to 0.7.216.26 the value was a constant 500 ms counted from the ring write, and a dense LLM
-  prefill tripped it on a healthy packet. The watchdog also re-arms itself while it observes progress - the fence
-  slot, the ring read pointer and the `CP_IB*` fetch registers - so a long job is not judged by wall clock, and
-  the timeout line reports the measured head, queue and stall times instead of the budget. See
-  `docs/design/hang-recovery.md`, "The private submit watchdog".
+  shorter. This is a duration floor, not an ordering guarantee: Windows starts its timeout at the preemption
+  request. The private window starts at head admission or observed activity. Either may expire first.
+  The former 500 ms budget could close the ring during legitimate dense LLM work. The new activity token mixes
+  the fence, ring read pointer and `CP_IB*` fetch registers. Activity changes can extend its window, but an
+  alternating token need not represent useful progress. Activity, Prime, Gap and TimerRearms are separate
+  counters. The head high water is sampled software-head age, not measured GPU execution time. See
+  `docs/design/hang-recovery.md` for recovery guards and remaining refusal cases.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and

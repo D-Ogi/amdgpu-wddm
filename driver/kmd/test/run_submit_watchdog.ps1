@@ -1,7 +1,7 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\submit-watchdog",[switch]$FlatFiveHundred,[switch]$NoTdrFloor,[switch]$IgnoreProgress,[switch]$StampAtRingWrite,[switch]$ReportWithPendingCompletion,[switch]$NoFenceRange,[switch]$LogTheConstant,[switch]$RearmOutsideLock,[switch]$ClampTdrToBudgetMax)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\submit-watchdog",[switch]$FlatFiveHundred,[switch]$NoTdrFloor,[switch]$IgnoreProgress,[switch]$StampAtRingWrite,[switch]$ReportWithPendingCompletion,[switch]$NoFenceRange,[switch]$LogTheConstant,[switch]$RearmOutsideLock,[switch]$ClampTdrToBudgetMax,[switch]$CountUnchangedAsActivity,[switch]$CountPrimeAsActivity,[switch]$CountGapAsActivity,[switch]$IgnoreAlternatingActivity,[switch]$AssumeOsClockAtHead,[switch]$HeadAgeAtRetirement)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
-$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
+$env:TEMP=Join-Path $Out 'tmp';$env:TMP=$env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 New-Item -ItemType Directory -Force $Out | Out-Null
 # BD-114 (scratch\bd114\ANALYSIS.md 7.1, 7.2, 7.3, 7.4, 7.7; docs/design/hang-recovery.md). The headers and the
 # test under test are copied next to the build, so a negative control changes the copy and never the tree (the
@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 #                                      configuration that bugchecked unit A twice on 2026-10-10.
 #   -ClampTdrToBudgetMax          7.1: TdrDelay is clamped to the clamp that belongs to an operator's own value,
 #                                      so the floor becomes min(TdrDelay, 300 s) and a TdrDelay above it has our
-#                                      watchdog firing first again.
+#                                      watchdog duration below the configured OS duration.
 #   -IgnoreProgress               7.2: the watchdog judges by wall clock alone, as every build before this one.
 #   -StampAtRingWrite             7.3: the budget is counted from the ring write again, so a queued packet pays
 #                                      for its wait.
@@ -24,6 +24,11 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 #                                      price a workload against the budget without a bugcheck.
 #   -RearmOutsideLock             the watchdog DPC re-arms its timer after releasing wddm->Lock, which is the
 #                                      use-after-free WddmStop's ordering rule exists to prevent.
+
+#   -CountUnchangedAsActivity / -CountPrimeAsActivity / -CountGapAsActivity: collapse distinct observations.
+#   -IgnoreAlternatingActivity: incorrectly treat token as an ordered counter instead of equality-only.
+#   -AssumeOsClockAtHead: counterfactual model with the OS preemption clock starting at our head stamp.
+#   -HeadAgeAtRetirement: counterfactual model conflating a sampled high water with retirement residence.
 
 # ---- the source checks ------------------------------------------------------------------------------------------
 #
@@ -77,7 +82,12 @@ Ordered $dpc 'the submit watchdog DPC' @(
     'progress = WddmSubmitProgress(device);',
     'KeAcquireSpinLock(&wddm->Lock, &irql);',
     'Bc250SubmitWatchdogCheck(&wddm->SubmitWatchdog, progress, now,',
+    'switch (wddm->SubmitWatchdog.LastObservation)',
+    'case BC250_SUBMIT_OBSERVATION_PRIME: wddm->SubmitPrimes++; break;',
+    'case BC250_SUBMIT_OBSERVATION_ACTIVITY: wddm->SubmitActivityChanges++; break;',
+    'case BC250_SUBMIT_OBSERVATION_GAP_RESET: wddm->SubmitGapResets++; break;',
     'if (stale && head != NULL && now >= head->Deadline)',
+    'wddm->SubmitRearms++;',
     'KeSetTimer(&wddm->SubmitTimer, due, &wddm->SubmitDpc);',
     'KeReleaseSpinLock(&wddm->Lock, irql);')
 # 7.7: the timeout line carries the measured numbers.
@@ -87,9 +97,10 @@ if($wddm -notmatch 'timeout measured: head %lu ms, queued %lu ms, stale %lu ms, 
 # guard refusing a report the contract asks for.
 Ordered (Body $wddm 'static NTSTATUS Bc250WddmResetEngine(') 'Bc250WddmResetEngine' @(
     'completionPending = wddm->CompletionPending[pResetEngine->NodeOrdinal] != 0;',
-    'Bc250HangAbortReportedFence(onRing, completionPending, lastKnown, lastCompleted, lastSubmittedKnown,',
-    'GfxReopenAfterAbort(device)',
+    'Bc250HangAbortCompletedFence(&snapshot, onRing, completionPending,',
     'verdict = BC250_HANG_VERDICT_ABORT_REPORTED;',
+    'KeAcquireSpinLock(&wddm->Lock, &irql);',
+    'GfxReopenAfterAbort(device)',
     # The waiters are woken after the node is open in both files. A wake while WatchdogFaulted or RefusalPending
     # is still set is refused, and WddmFailSubmission then latches the refusal the recovery has just cleared.
     'wddm->RefusalPending[BC250_WDDM_NODE_3D] = FALSE;',
@@ -122,14 +133,26 @@ if($NoTdrFloor){
     $watchdog=$watchdog.Replace($live,'    if (budget < tdr && tdr == 0xDEADul) { budget = tdr; *Raised = 1; }')
 }
 if($IgnoreProgress){
-    $live='    if (!watched || Progress != Watchdog->Progress || Now < Watchdog->Advanced)'
+    $live='    else if (Progress != Watchdog->Progress)'
     if(!$watchdog.Contains($live)){throw 'negative control: the progress comparison moved'}
-    $watchdog=$watchdog.Replace($live,'    if (!watched)')
+    $watchdog=$watchdog.Replace($live,'    else if (0 && Progress != Watchdog->Progress)')
 }
 if($LogTheConstant){
     $live='    return Now > Start ? (unsigned long)((Now - Start) / 10000ull) : 0ul;'
     if(!$watchdog.Contains($live)){throw 'negative control: the elapsed-time helper moved'}
     $watchdog=$watchdog.Replace($live,'    (void)Start; (void)Now; return 500ul;')
+}
+# R4 classification controls mutate production decisions, not the assertions.
+foreach($mutation in @(
+    @($CountUnchangedAsActivity,'Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_UNCHANGED;', 'Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_ACTIVITY;'),
+    @($CountPrimeAsActivity,'Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_PRIME;', 'Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_ACTIVITY;'),
+    @($CountGapAsActivity,'Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_GAP_RESET;', 'Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_ACTIVITY;'),
+    @($IgnoreAlternatingActivity,'else if (Progress != Watchdog->Progress)', 'else if (Progress > Watchdog->Progress)')
+)) {
+    if($mutation[0]) {
+        if(!$watchdog.Contains($mutation[1])){throw 'negative control: classification site moved'}
+        $watchdog=$watchdog.Replace($mutation[1],$mutation[2])
+    }
 }
 [IO.File]::WriteAllText((Join-Path $Out 'submit_watchdog.h'),$watchdog)
 
@@ -140,7 +163,7 @@ if($ReportWithPendingCompletion){
     $hang=$hang.Replace($live,'    if (jobOnRing || !lastReportedKnown || !lastSubmittedKnown) return 0; (void)completionPending;')
 }
 if($NoFenceRange){
-    $live='    if (!Bc250AbortedFenceValid(lastReported, lastReported, lastSubmitted)) return 0;'
+    $live='    if (!Bc250AbortedFenceValid(state->CompletedFence, lower, lastSubmitted)) return 0;'
     if(!$hang.Contains($live)){throw 'negative control: the fence-range guard of the aborted-fence answer moved'}
     $hang=$hang.Replace($live,'    if (lastSubmitted == 0xDEADu) return 0;')
 }
@@ -151,6 +174,18 @@ if($StampAtRingWrite){
     $live='        job->Deadline = Bc250SubmitHeadDeadline(job->Deadline, m->Now, m->BudgetMs); /* STAMP SITE */'
     if(!$test.Contains($live)){throw 'negative control: the stamp site moved'}
     $test=$test.Replace($live,'        job->Deadline = Bc250SubmitHeadDeadline(job->Deadline, job->Submitted, m->BudgetMs); /* STAMP SITE */')
+}
+# R3 counterexample mutation: incorrectly give Windows the software-head clock origin.
+if($AssumeOsClockAtHead){
+    $live='unsigned long long osPreempt = m.Now + 5000ull * MS;'
+    if(!$test.Contains($live)){throw 'negative control: independent OS clock site moved'}
+    $test=$test.Replace($live,'unsigned long long osPreempt = m.Now;')
+}
+# Counterfactual measurement model: silently treat the sampled high water as retirement age.
+if($HeadAgeAtRetirement){
+    $live='    if (m->Count == 0) return;'
+    if(!$test.Contains($live)){throw 'negative control: model retirement site moved'}
+    $test=$test.Replace($live,$live+"`n    m->HeadMaxMs = Bc250SubmitElapsedMs(m->Job[0].HeadSince, m->Now);")
 }
 [IO.File]::WriteAllText((Join-Path $Out 'submit_watchdog_test.c'),$test)
 

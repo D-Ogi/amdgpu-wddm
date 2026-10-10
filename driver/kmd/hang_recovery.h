@@ -73,7 +73,7 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 #define BC250_HANG_VERDICT_FENCE_GUARD      4u  /* the abort fence fails the 0x119 range guard: refused */
 #define BC250_HANG_VERDICT_ALREADY_RETIRED  5u  /* retired before the first kill: the ring is idle, reset reported */
 #define BC250_HANG_VERDICT_VMID_GUARD       6u  /* the hung job named no VMID of the pool: refused, nothing killed */
-#define BC250_HANG_VERDICT_ABORT_REPORTED   7u  /* BD-114: nothing on the ring, so this node's last reported fence
+#define BC250_HANG_VERDICT_ABORT_REPORTED   7u  /* BD-114: nothing on the ring, so this node's observed completion
                                                    is named as aborted. Nothing was killed: the packet completed
                                                    between the watchdog and the TDR, and the ring is already idle */
 
@@ -92,32 +92,102 @@ static __inline unsigned Bc250HangPreKillVerdict(int jobOnRing, unsigned abortFe
     return BC250_HANG_VERDICT_PENDING;
 }
 
-/* BD-114, ANALYSIS.md 7.4: verdict 3 is what a packet that ran past our private watchdog and then completed
- * before the TDR gets today, and verdict 3 is a refusal, after which ResetFromTimeout fails and the machine
- * bugchecks 0x116. The contract sanctions the other answer, tdr-changes-in-windows-8.md:100: "A special
- * situation can occur when a packet is completed on the GPU between steps 3 and 7. In this case, the driver
- * should set LastAbortedFenceId to the fence ID of the last completed packet if there are no packets in the
- * hardware queue from the driver's point of view. From the scheduler's point of view, it appears that such a
- * packet was aborted."
- *
- * The design document's objection has to be answered rather than waved away (hang-recovery.md, "Limits"): "our
- * view of 'last completed' can lag a pending report, and a wrong choice re-executes a packet". The answer is in
- * the three guards below, and every one of them is a condition the report DPC already tracks:
- *   - nothing of this node on the ring. Only then is there no packet whose completion we would be pre-empting.
- *   - no completion pending for this node (CompletionPending[node] == 0). A pending completion is exactly the
- *     lag the objection names: a fence the hardware has produced and dxgkrnl has not been told about. With one
- *     outstanding, "last reported" is not the last completed and the fence named would be wrong.
- *   - the node has a reported fence at all (LastReportedValid[node]), and that fence is inside the engine-reset
- *     contract's range against the last fence dxgkrnl submitted on this node. Out of range is bugcheck 0x119.
- * The fence named is the node's own LastReportedFence, so the lower bound of the range holds by construction and
- * only the upper bound can refuse. A refusal leaves verdict 3 and today's behaviour exactly as it was. */
-static __inline int Bc250HangAbortReportedFence(int jobOnRing, int completionPending, int lastReportedKnown,
-                                                unsigned lastReported, int lastSubmittedKnown,
-                                                unsigned lastSubmitted, unsigned* abortFence)
+/* Per-node state, always under the WDDM lock. CompletedFence is written ONLY by
+ * ordered packet retirement, before publication. It is neither the notification
+ * watermark nor BoundaryFence (the scheduler's reset/rejected-packet boundary).
+ * A failed publication remains uncertain until a later successful report covers
+ * it. ResetActive excludes new retirement/publication while a reset is in progress.
+ * Epoch invalidates observations taken before that reset began. */
+typedef struct bc250_hang_node_state {
+    unsigned CompletedFence;
+    int CompletedKnown;
+    int ReportInFlight;
+    int ReportLost;
+    unsigned ReportLostFence;
+    int ResetActive;
+    unsigned long long Epoch;
+    unsigned BoundaryFence;
+    int BoundaryKnown;
+} BC250_HANG_NODE_STATE;
+
+static __inline void Bc250HangObserveCompleted(BC250_HANG_NODE_STATE* state, unsigned fence)
 {
+    state->CompletedFence = fence;
+    state->CompletedKnown = 1;
+}
+
+static __inline int Bc250HangReportBegin(BC250_HANG_NODE_STATE* state)
+{
+    if (state->ResetActive || state->ReportInFlight) return 0;
+    state->ReportInFlight = 1;
+    return 1;
+}
+
+static __inline void Bc250HangReportEnd(BC250_HANG_NODE_STATE* state, unsigned fence,
+                                        int success, int dropped)
+{
+    if (success && state->ReportLost && (int)(fence - state->ReportLostFence) >= 0)
+        state->ReportLost = 0;
+    // Do not retain an already covered boundary in modular comparisons forever.
+    // After 2^31 later IDs an ancient value would otherwise appear to be ahead.
+    if (success && state->BoundaryKnown && (int)(fence - state->BoundaryFence) >= 0)
+        state->BoundaryKnown = 0;
+    if (dropped) { state->ReportLost = 1; state->ReportLostFence = fence; }
+    state->ReportInFlight = 0;
+}
+
+static __inline int Bc250HangResetBegin(BC250_HANG_NODE_STATE* state, int activeSubmissions)
+{
+    if (state->ResetActive || state->ReportInFlight || activeSubmissions) return 0;
+    state->Epoch++;
+    state->ResetActive = 1;
+    return 1;
+}
+
+static __inline void Bc250HangResetEnd(BC250_HANG_NODE_STATE* state, int success, unsigned boundary)
+{
+    if (success) { state->BoundaryFence = boundary; state->BoundaryKnown = 1; }
+    state->ResetActive = 0;
+}
+
+static __inline int Bc250HangTimeoutCurrent(const BC250_HANG_NODE_STATE* state,
+                                            unsigned long long epoch)
+{
+    return !state->ResetActive && state->Epoch == epoch;
+}
+
+/* The scheduler can account for a reset or rejected packet without a DMA_COMPLETED
+ * callback. Combine its boundary with the notification watermark for preemption
+ * and range checks, without inventing a hardware completion or notification. */
+static __inline int Bc250HangSchedulerBoundary(const BC250_HANG_NODE_STATE* state,
+                                               int notifiedKnown, unsigned notified, unsigned* fence)
+{
+    if (!notifiedKnown && !state->BoundaryKnown) return 0;
+    *fence = notified;
+    if (state->BoundaryKnown && (!notifiedKnown || (int)(state->BoundaryFence - notified) > 0))
+        *fence = state->BoundaryFence;
+    return 1;
+}
+
+/* Empty hardware queue special case (TDR changes in Windows 8). Pending, in-flight
+ * or lost publication is deliberately refused. Equality is a cross-check, not the
+ * source of truth: the returned fence comes from ordered completion observation.
+ * Modular comparisons assume fewer than 2^31 outstanding fence IDs, as elsewhere.
+ * The caller freezes this node under the same lock before dropping it for recovery,
+ * and separately proves the gfx ring idle before committing the reopen. */
+static __inline int Bc250HangAbortCompletedFence(const BC250_HANG_NODE_STATE* state,
+                                                 int jobOnRing, int completionPending,
+                                                 int lastReportedKnown, unsigned lastReported,
+                                                 int lastSubmittedKnown, unsigned lastSubmitted,
+                                                 unsigned* abortFence)
+{
+    unsigned lower = 0;
     if (jobOnRing || completionPending || !lastReportedKnown || !lastSubmittedKnown) return 0;
-    if (!Bc250AbortedFenceValid(lastReported, lastReported, lastSubmitted)) return 0;
-    *abortFence = lastReported;
+    if (!state->CompletedKnown || state->ReportInFlight || state->ReportLost) return 0;
+    if (state->CompletedFence != lastReported) return 0;
+    if (!Bc250HangSchedulerBoundary(state, lastReportedKnown, lastReported, &lower)) return 0;
+    if (!Bc250AbortedFenceValid(state->CompletedFence, lower, lastSubmitted)) return 0;
+    *abortFence = state->CompletedFence;
     return 1;
 }
 
@@ -156,7 +226,7 @@ static __inline unsigned Bc250HangKillLoop(const BC250_HANG_KILL_OPS* ops, void*
 
 /* The verdicts after which ResetEngine reports success: in each the newest sequence retired and the ring is
  * idle. ABORT_REPORTED (BD-114) is the third: no kill ran there, because the packet had already completed, and
- * the fence named as aborted is the one dxgkrnl was last told about. */
+ * the fence named as aborted is the observed completed packet (publication must be settled). */
 static __inline int Bc250HangVerdictRecovered(unsigned verdict)
 {
     return verdict == BC250_HANG_VERDICT_DRAINED || verdict == BC250_HANG_VERDICT_ALREADY_RETIRED ||

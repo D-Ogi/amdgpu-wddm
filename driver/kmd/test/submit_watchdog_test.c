@@ -10,7 +10,7 @@
  * DXGK_INTERRUPT_DMA_PREEMPTED acknowledgement for ever, and the OS waited out its whole TdrDelay before
  * DxgkDdiResetEngine was asked to recover a packet that had meanwhile completed. The end of that chain is
  * bugcheck 0x116, because this part has no working GPU reset (facts M53). A false trip of this watchdog is
- * therefore not a lost frame; it is a guaranteed bugcheck.
+ * therefore capable of escalating to a bugcheck when recovery cannot reopen the node.
  *
  * One thing this test establishes that the analysis did not: with 7.2's window armed when a job becomes the head,
  * 7.3's stamp no longer changes WHEN the watchdog fires - the staleness window restarts at every head change
@@ -21,7 +21,8 @@
 #include "submit_watchdog.h"
 #include "hang_recovery.h"
 
-#define CHECK(x) do { if (!(x)) { printf("FAIL line %d: %s\n", __LINE__, #x); return 1; } } while (0)
+static unsigned CheckCount;
+#define CHECK(x) do { CheckCount++; if (!(x)) { printf("FAIL line %d: %s\n", __LINE__, #x); return 1; } } while (0)
 
 #define MS 10000ull                     /* KeQueryInterruptTime units in a millisecond */
 #define MODEL_PENDING_MAX 7u            /* BC250_GFX_PENDING_MAX of gfx_completion_queue.h */
@@ -46,8 +47,8 @@ typedef struct {
     int Fired;                                  /* the watchdog closed the node in this run */
     unsigned FiredSeq;
     unsigned long FiredHeadMs, FiredQueuedMs, FiredStaleMs;
-    unsigned long HeadMaxMs, QueueMaxMs;        /* the two high-water marks of the wddm summary */
-    unsigned Checks, Rearms;
+    unsigned long HeadMaxMs, QueueMaxMs;        /* sampled software-head age and queue wait, not GPU execution durations */
+    unsigned Checks, Rearms, Primes, ActivityChanges, GapResets, Unchanged;
 } MODEL;
 
 static void ModelStart(MODEL* m, unsigned long requested, unsigned long tdrSeconds)
@@ -115,6 +116,13 @@ static void ModelCheck(MODEL* m)
     m->Checks++;
     if (head == NULL || m->Fired) return;
     stale = Bc250SubmitWatchdogCheck(&m->Watch, m->Token, m->Now, MS * (unsigned long long)m->BudgetMs, &age);
+    switch (m->Watch.LastObservation) {
+    case BC250_SUBMIT_OBSERVATION_PRIME: m->Primes++; break;
+    case BC250_SUBMIT_OBSERVATION_ACTIVITY: m->ActivityChanges++; break;
+    case BC250_SUBMIT_OBSERVATION_GAP_RESET: m->GapResets++; break;
+    case BC250_SUBMIT_OBSERVATION_UNCHANGED: m->Unchanged++; break;
+    default: break;
+    }
     if (stale && m->Now >= head->Deadline)
     {
         m->Fired = 1;
@@ -153,6 +161,19 @@ static void ModelRun(MODEL* m, unsigned long forMs, unsigned long moveEveryMs)
     }
 }
 
+/* Retain the original range/pending controls with an independently initialized hardware-completion
+ * watermark equal to the notified fence. Publication interleavings are covered by the protocol suite. */
+static int AbortAtNotified(int jobOnRing, int completionPending, int lastKnown, unsigned lastNotified,
+                           int submittedKnown, unsigned lastSubmitted, unsigned* abortFence)
+{
+    BC250_HANG_NODE_STATE state;
+    memset(&state, 0, sizeof(state));
+    state.CompletedKnown = lastKnown;
+    state.CompletedFence = lastNotified;
+    return Bc250HangAbortCompletedFence(&state, jobOnRing, completionPending, lastKnown, lastNotified,
+                                        submittedKnown, lastSubmitted, abortFence);
+}
+
 int main(void)
 {
     MODEL m;
@@ -164,17 +185,16 @@ int main(void)
     /* ---- 7.1: the budget is a setting, defaulted FROM TdrDelay, never shorter than it ------------------------
      *
      * "TdrDelay ... specifies the number of seconds that the GPU can delay the preempt request from the GPU
-     * scheduler ... 2 seconds is the default value" (tdr-registry-keys.md:53-55). The OS measures execution time
-     * itself and owns recovery (timeout-detection-and-recovery.md:43). A private watchdog shorter than the OS's
-     * budget replaces a mechanism that works with one that bugchecks. */
+     * scheduler ... 2 seconds is the default value" (tdr-registry-keys.md:53-55). The configured private duration
+     * is floored to this duration; the independent OS preemption clock is modeled below. */
     CHECK(Bc250SubmitTdrMs(0) == 1000ul * BC250_SUBMIT_TDR_DEFAULT_S);  /* absent reads as Windows' own default */
     CHECK(Bc250SubmitTdrMs(2) == 2000ul && Bc250SubmitTdrMs(10) == 10000ul);
     /* A typo cannot overflow the arithmetic: the milliseconds plus the margin still fit in an unsigned long. */
     CHECK(Bc250SubmitTdrMs(0xFFFFFFFFul) == BC250_SUBMIT_TDR_MAX_MS / 1000ul * 1000ul);
     CHECK(Bc250SubmitTdrMs(0xFFFFFFFFul) <= 0xFFFFFFFFul - BC250_SUBMIT_MARGIN_MS);
     /* And a TdrDelay above the clamp on an operator's own value is NOT cut down to it: that clamp belongs to a
-     * value somebody asked for. TdrDelay 400 s clamped to 300 s would have our watchdog firing 100 s before the
-     * OS's own, which is the defect, not the protection. */
+     * value somebody asked for. TdrDelay 400 s clamped to 300 s would put its duration 100 s below the
+     * configured OS duration. */
     CHECK(Bc250SubmitTdrMs(400ul) == 400000ul && 400000ul > BC250_SUBMIT_BUDGET_MAX_MS);
     {
         int defaulted = 0, raised = 0;
@@ -198,7 +218,7 @@ int main(void)
         CHECK(Bc250SubmitBudgetMs(500, 400, &defaulted, &raised) == 400000ul && raised == 1);
         CHECK(Bc250SubmitBudgetMs(1000000ul, 400, &defaulted, &raised) == 400000ul && raised == 1);
         /* THE FLOOR, over the whole range this driver can be configured with: whatever anybody writes anywhere,
-         * our watchdog never fires before the OS scheduler's own timeout has started.
+         * our configured duration is no shorter than TdrDelay; expiration order is not implied.
          *
          * The comparison is against the time the OS ITSELF will wait - TdrDelay as seconds, times 1000 - and
          * not against this file's own copy of it. A comparison against Bc250SubmitTdrMs cannot see a clamp
@@ -232,7 +252,7 @@ int main(void)
     ModelRetire(&m);
     CHECK(m.Count == 0);
 
-    /* The same packet with the measured per-packet bound as the cadence: a token that moves once every 400 ms,
+    /* A modeled packet with a 400 ms token cadence (not a measured execution duration):
      * for twice the budget. Progress is progress even when it is slow. */
     ModelStart(&m, 0, 10);
     CHECK(ModelSubmit(&m, 1));
@@ -279,6 +299,62 @@ int main(void)
     memset(&w, 0, sizeof(w));
     Bc250SubmitWatchdogIdle(&w);
     CHECK(!Bc250SubmitWatchdogCheck(&w, 0ull, 500000ull * MS, 1000ull * MS, &age));
+
+    /* R4: constant token has timer rearms but no activity, including the valid zero token. */
+    ModelStart(&m, 0, 10);
+    m.Token = 0ull;
+    CHECK(ModelSubmit(&m, 1));
+    ModelRun(&m, 1000, 0);
+    CHECK(m.Primes == 1u && m.ActivityChanges == 0u && m.GapResets == 0u);
+    CHECK(m.Unchanged == 3u && m.Rearms == 4u);
+    CHECK(m.Watch.Advanced == (MODEL_START_MS + 250ull) * MS);
+    /* An observation gap is not activity, even if the next sampled token differs. */
+    m.Now += MS * m.BudgetMs;
+    m.Token++;
+    ModelCheck(&m);
+    CHECK(m.GapResets == 1u && m.ActivityChanges == 0u && m.Primes == 1u);
+    m.Now -= MS;
+    ModelCheck(&m);
+    CHECK(m.GapResets == 2u && m.ActivityChanges == 0u);
+    ModelRetire(&m);
+    CHECK(m.Watch.LastObservation == BC250_SUBMIT_OBSERVATION_NONE && !m.Watch.Observed);
+    CHECK(ModelSubmit(&m, 2));
+    m.Now += MS * m.TickMs;
+    ModelCheck(&m);
+    CHECK(m.Primes == 2u && m.ActivityChanges == 0u);
+
+    /* A/B/A/B can defer expiry indefinitely. These are activity changes, not proven forward progress. */
+    ModelStart(&m, 0, 10);
+    CHECK(ModelSubmit(&m, 1));
+    for (n = 0; n < 100ul; n++) {
+        m.Now += MS * m.TickMs;
+        m.Token = n & 1ul;
+        ModelCheck(&m);
+    }
+    CHECK(!m.Fired && m.Primes == 1u && m.ActivityChanges == 99u);
+    CHECK(m.GapResets == 0u && m.Unchanged == 0u && m.Rearms == 100u);
+
+    /* R3: independent clock origins. OS preemption begins 5 s after the software-head stamp.
+     * Its 10 s TdrDelay ends later than this private 12 s stale window; no ordering guarantee. */
+    ModelStart(&m, 0, 10);
+    CHECK(ModelSubmit(&m, 1));
+    {
+        unsigned long long osPreempt = m.Now + 5000ull * MS;
+        unsigned long long osExpiry = osPreempt + 10000ull * MS;
+        ModelRun(&m, m.BudgetMs + m.TickMs, 0);
+        CHECK(m.Fired && m.Now < osExpiry && m.Now >= osPreempt);
+        CHECK(m.FiredStaleMs == m.BudgetMs);
+    }
+
+    /* R4: samples at 250/500 ms, retirement at 600 ms. The retained high water is a
+     * sampled software-head age lower bound, not retirement residence or shader duration. */
+    ModelStart(&m, 0, 10);
+    CHECK(ModelSubmit(&m, 1));
+    ModelRun(&m, 500, 0);
+    m.Now += 100ull * MS;
+    CHECK(Bc250SubmitElapsedMs(m.Job[0].HeadSince, m.Now) == 600ul);
+    ModelRetire(&m);
+    CHECK(m.HeadMaxMs == 500ul);
 
     /* ---- 7.3: the deadline is stamped when the job becomes the HEAD ------------------------------------------
      *
@@ -342,23 +418,23 @@ int main(void)
     CHECK(Bc250HangPreKillVerdict(0, 0, 1, 100, 1) == BC250_HANG_VERDICT_NOTHING_ON_RING);
     /* The q27 numbers: last reported 232226, last submitted 232228. */
     abortFence = 0xFFFFFFFFu;
-    CHECK(Bc250HangAbortReportedFence(0, 0, 1, 232226u, 1, 232228u, &abortFence) && abortFence == 232226u);
+    CHECK(AbortAtNotified(0, 0, 1, 232226u, 1, 232228u, &abortFence) && abortFence == 232226u);
     /* Each guard refuses on its own, and a refusal leaves verdict 3 and today's behaviour. */
-    CHECK(!Bc250HangAbortReportedFence(1, 0, 1, 232226u, 1, 232228u, &abortFence));  /* a job IS on the ring */
-    CHECK(!Bc250HangAbortReportedFence(0, 1, 1, 232226u, 1, 232228u, &abortFence));  /* a completion is pending */
-    CHECK(!Bc250HangAbortReportedFence(0, 0, 0, 232226u, 1, 232228u, &abortFence));  /* nothing reported yet */
-    CHECK(!Bc250HangAbortReportedFence(0, 0, 1, 232226u, 0, 232228u, &abortFence));  /* nothing submitted yet */
+    CHECK(!AbortAtNotified(1, 0, 1, 232226u, 1, 232228u, &abortFence));  /* a job IS on the ring */
+    CHECK(!AbortAtNotified(0, 1, 1, 232226u, 1, 232228u, &abortFence));  /* a completion is pending */
+    CHECK(!AbortAtNotified(0, 0, 0, 232226u, 1, 232228u, &abortFence));  /* nothing reported yet */
+    CHECK(!AbortAtNotified(0, 0, 1, 232226u, 0, 232228u, &abortFence));  /* nothing submitted yet */
     /* Out of the engine-reset contract's range is bugcheck 0x119, so it is refused: a reported fence NEWER than
      * the last submitted one cannot be named. */
-    CHECK(!Bc250HangAbortReportedFence(0, 0, 1, 232229u, 1, 232228u, &abortFence));
+    CHECK(!AbortAtNotified(0, 0, 1, 232229u, 1, 232228u, &abortFence));
     /* Equal is in range: the last submitted packet is also the last reported one. */
-    CHECK(Bc250HangAbortReportedFence(0, 0, 1, 232228u, 1, 232228u, &abortFence) && abortFence == 232228u);
+    CHECK(AbortAtNotified(0, 0, 1, 232228u, 1, 232228u, &abortFence) && abortFence == 232228u);
     /* Fence ids are 32 bits and wrap, and the comparison is the wrap-aware one. */
-    CHECK(Bc250HangAbortReportedFence(0, 0, 1, 0xFFFFFFFEu, 1, 1u, &abortFence) && abortFence == 0xFFFFFFFEu);
-    CHECK(!Bc250HangAbortReportedFence(0, 0, 1, 1u, 1, 0xFFFFFFFEu, &abortFence));
+    CHECK(AbortAtNotified(0, 0, 1, 0xFFFFFFFEu, 1, 1u, &abortFence) && abortFence == 0xFFFFFFFEu);
+    CHECK(!AbortAtNotified(0, 0, 1, 1u, 1, 0xFFFFFFFEu, &abortFence));
     /* A guard that refuses must not have written an answer. */
     abortFence = 0x5A5Au;
-    CHECK(!Bc250HangAbortReportedFence(0, 1, 1, 232226u, 1, 232228u, &abortFence) && abortFence == 0x5A5Au);
+    CHECK(!AbortAtNotified(0, 1, 1, 232226u, 1, 232228u, &abortFence) && abortFence == 0x5A5Au);
 
     /* The verdict is a recovery, it is a verdict of its own, and the record's arithmetic still closes: an
      * outcome decided before any kill counts its own attempt, because no PENDING record counted one for it. */
@@ -422,11 +498,13 @@ int main(void)
     CHECK(m.FiredStaleMs >= m.BudgetMs);
     CHECK(m.FiredHeadMs >= m.FiredStaleMs);                             /* the stall is inside the head's time */
 
-    printf("PASS: budget floor over 1001 TdrDelay values against the OS's own wait, progress re-arm (g12 3.2 s,"
+    printf("PASS: classification (constant zero, prime, gap, clock back, A/B/A/B), independent OS clock,"
+           " sampled head age, budget floor over 1001 TdrDelay values against the OS's own wait, progress re-arm (g12 3.2 s,"
            " 400 ms packets, no progress,"
            " unwatched gap, clock back), head stamp (q27 7-deep, no extend), aborted fence (q27 232226/232228,"
            " six guards, wrap, record arithmetic), measured elapsed (head %lu ms, queued %lu ms, stale %lu ms,"
            " budget %lu ms)\n",
            m.FiredHeadMs, m.FiredQueuedMs, m.FiredStaleMs, m.BudgetMs);
+    printf("CHECK count: %u\n", CheckCount);
     return 0;
 }

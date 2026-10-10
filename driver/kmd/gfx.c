@@ -1077,8 +1077,8 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
     KeSetEvent(&Device->GfxRetireEvent, IO_NO_INCREMENT, FALSE);
 }
 
-// M15.12 stage 1 (docs/design/hang-recovery.md). The one place that undoes GfxSubmitFail, and only
-// when the ring has provably drained: this is called from DxgkDdiResetEngine (PASSIVE_LEVEL, GPU-scheduler class,
+// M15.12 stage 1 (docs/design/hang-recovery.md). Drain only: the WDDM reset transaction
+// reopens both gates together later. Called from DxgkDdiResetEngine (PASSIVE_LEVEL, GPU-scheduler class,
 // so no concurrent submit) under HangRecoveryMode, never on the normal path, after the caller has put a pending
 // record on the disk (GuardRecordHangRecovery).
 //
@@ -1100,11 +1100,9 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
 //
 // Vmid is the hung job's VMID, chosen by the caller out of the completion-queue entry and checked against
 // Bc250KillVmidValid: with the VMID pool (0.7.214, vmid_pool.h) there is no single application VMID any more, so
-// this function must not assume one. On ALREADY_RETIRED or DRAINED it clears SubmitInFlight (the ring is idle),
-// un-sticks SubmitFailed (the gate reopens), ends the DPM busy share the way GfxFenceArrived would have (DpmBusyEnd
-// is a no-op if that already ran) and signals the retire waiters, because a submission held in GfxSubmitWait is
-// waiting for exactly this gate to reopen (KMD196). On NOT_DRAINED it changes nothing: the sticky state stands and
-// the caller falls back to today's refusal.
+// this function must not assume one. ALREADY_RETIRED or DRAINED means the newest
+// sequence retired. The caller must still validate and commit both gates under
+// WDDM Lock, then signal held submissions. NOT_DRAINED leaves the gates closed.
 typedef struct _GFX_KILL_CONTEXT {
     BC250_GFX* Gfx;
     struct amdgpu_device* Adev;
@@ -1209,15 +1207,8 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
     *Kills = kills;
     *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
 
-    if (verdict != BC250_HANG_VERDICT_NOT_DRAINED) {
-        // The ring went idle: clear the in-flight marker if it is still this sequence, and reopen the gate.
-        LONG pending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
-        if (pending != 0 && bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), (ULONG)pending))
-            InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending);
-        InterlockedExchange(&gfx->SubmitFailed, 0);     // the one un-stick, only on the proven-drained path
-        DpmBusyEnd(&Device->Dpm);                       // match the retirement the normal fence path would have reported
-        GfxRetireSignal(Device);                        // KMD196: a held submission is waiting for this gate
-    }
+    // Do not reopen or signal here. ResetEngine still has to commit its WDDM queue
+    // and scheduler boundary under the same lock as the private timeout latch.
     ExReleaseFastMutex(&Device->GartLock);
 
     // A refusal says which register and why, because a refused kill and a kill the waves outlived look the same
@@ -1226,7 +1217,7 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         GuardLog("gfx: soft recovery kill refused: register 0x%05lX (0x%08lX) after %lu kill(s) of VMID %lu",
                  faultOffset, (ULONG)fault, *Kills, Vmid);
     if (verdict != BC250_HANG_VERDICT_NOT_DRAINED)
-        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; ring reopened",
+        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; awaiting commit",
                  *Seq, *Kills, Vmid, *Micros);
     else
         GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
@@ -1280,31 +1271,28 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value)
 {
     BC250_GFX* gfx;
+    BOOLEAN observed;
 
     *Value = 0;
     if (GfxAccessAcquire(Device) == NULL) return FALSE;
     gfx = (BC250_GFX*)Device->Gfx;
-    if (gfx != NULL && gfx->SubmitAdev != NULL)
+    observed = gfx != NULL && gfx->SubmitAdev != NULL;
+    if (observed)
         *Value = (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT);
     GfxAccessRelease(Device);
-    return gfx != NULL && gfx->SubmitAdev != NULL;
+    return observed;
 }
 
-// BD-114 (ANALYSIS.md 7.4): the ring is idle, and DxgkDdiResetEngine is about to report this node's last
-// reported fence as aborted without killing anything - the packet the watchdog accused completed on its own
-// between the timeout and the TDR. The only thing left to undo is the sticky refusal that the watchdog's
-// GfxSubmitFail wrote, which is the tail of GfxSoftRecover's drained path and nothing else: there was no kill,
-// so there is no sequence to stop and no wave state to wonder about.
+// BD-114: final stage of every successful ResetEngine, after a late completion or
+// a proven drain. Caller holds WDDM Lock across this gate change and its own gate
+// change. This helper cannot wait, take GartLock or call back into the scheduler.
 //
 // Refused unless the ring is provably idle: either nothing is marked in flight, or the marked sequence's fence
 // has arrived. A ring that still holds work is never reopened, because the next submission would then share a
 // VMID with a job this driver has not accounted for. TRUE: the gate is open again.
 //
-// The waiters are NOT woken here, and that is the one deliberate difference from GfxSoftRecover's drained tail.
-// This gfx.c gate is only half of the door: wddm.c still has to clear WatchdogFaulted and RefusalPending for the
-// node, and it does that afterwards, under its own spin lock. A held submission woken in between would find the
-// node still closed, be refused, and WddmFailSubmission would latch again exactly what this function cleared.
-// So wddm.c calls GfxRetireSignal once it has finished, outside its lock.
+// Neither this helper nor GfxSoftRecover wakes waiters. The caller signals only
+// after both gates and the queue have committed and its lock has been released.
 //
 // The other difference from GfxSoftRecover is the lock, and it is deliberate too: that function takes GartLock
 // because it installs the GFX register path and writes SQ_CMD, and a holder of the GfxAccess reference must not

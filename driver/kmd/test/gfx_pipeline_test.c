@@ -6,6 +6,7 @@
 #include "gfx_completion_queue.h"
 #include "bc250_fence_order.h"
 #include "submit_watchdog.h"          /* BD-114: the budget, the progress window and the two stamps */
+#include "hang_recovery.h"
 #include "gfx_pipeline_defines.inc"    /* wddm.c's own BC250_WDDM_HOLD_BUCKETS and hold deadline, by the generator */
 #define KernelMode 0
 #define Executive 0
@@ -46,6 +47,8 @@ typedef struct {
      * is latched in WddmStart, which is above the extracted region, so main() sets it the way a start would. */
     ULONG SubmitBudgetMs, SubmitTickMs, SubmitTdrMs;
     BC250_SUBMIT_WATCHDOG SubmitWatchdog;
+    BC250_HANG_NODE_STATE Recovery[2];
+    volatile LONG SubmitActivityChanges, SubmitPrimes, SubmitGapResets;
     volatile LONG SubmitRearms, SubmitChecks, SubmitHeadMaxMs, SubmitQueueMaxMs;
     /* KMD196: the held-submission counters, types as in wddm.c */
     volatile LONG SubmitHolds, SubmitHoldSpinOnly, SubmitHeldHistogram[BC250_WDDM_HOLD_BUCKETS];

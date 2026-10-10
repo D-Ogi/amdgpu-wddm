@@ -321,6 +321,7 @@ typedef struct _BC250_WDDM {
     volatile LONG ActiveSubmissions[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG LastReportedFence[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN LastReportedValid[BC250_WDDM_NODE_COUNT_MAX];
+    BC250_HANG_NODE_STATE Recovery[BC250_WDDM_NODE_COUNT_MAX]; // under Lock, per-node completion/publication/reset
     // BD-114: the newest fence id dxgkrnl has submitted on this node, in the wrap-aware order
     // bc250_fence_reached uses. SubmittedFence above is NOT this value - it carries the fence of a completion
     // waiting to be reported - and the engine-reset contract's upper bound (hang_recovery.h,
@@ -437,9 +438,12 @@ typedef struct _BC250_WDDM {
     ULONG SubmitTickMs;
     ULONG SubmitTdrMs;                  // TdrDelay as read, in ms: what the budget was priced against
     BC250_SUBMIT_WATCHDOG SubmitWatchdog;
-    volatile LONG SubmitRearms;         // checks that found progress and re-armed instead of firing
+    volatile LONG SubmitRearms;         // timer rearms, independent of activity observations
+    volatile LONG SubmitActivityChanges;
+    volatile LONG SubmitPrimes;
+    volatile LONG SubmitGapResets;
     volatile LONG SubmitChecks;         // checks the DPC made at all
-    volatile LONG SubmitHeadMaxMs;      // the longest a job has been the head, measured (the per-packet bound 7.7 asks for)
+    volatile LONG SubmitHeadMaxMs;      // sampled software-head age high water, not GPU execution time
     volatile LONG SubmitQueueMaxMs;     // the longest a job waited in the queue before it became the head
     volatile LONG HwSubmitted;
     volatile LONG HwCompleted;
@@ -1002,6 +1006,7 @@ static void WddmQueueReport(_Inout_ BC250_WDDM* Wddm)
 // otherwise a preemption DPC can observe idle hardware before its completion is queued.
 static void WddmRecordCompletionLocked(BC250_WDDM* Wddm, UINT FenceId, UINT NodeOrdinal)
 {
+    Bc250HangObserveCompleted(&Wddm->Recovery[NodeOrdinal], FenceId);
     Wddm->SubmittedNode[NodeOrdinal] = (LONG)NodeOrdinal;
     Wddm->SubmittedFence[NodeOrdinal] = (LONG)FenceId;
     Wddm->CompletionPending[NodeOrdinal] = 1;
@@ -1111,9 +1116,9 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
     wddm->WatchdogFaulted[Node]=TRUE;
     if (Node==BC250_WDDM_NODE_COPY) wddm->PagingDeferredValid=FALSE;
     else wddm->DeferredValid=FALSE;
-    KeReleaseSpinLock(&wddm->Lock,irql);
     if (Node==BC250_WDDM_NODE_COPY) GfxPagingSubmitFail(Device);
     else GfxSubmitFail(Device);
+    KeReleaseSpinLock(&wddm->Lock,irql);
     // KMD196: node 0's wake is inside GfxSubmitFail; node 1 does not come here on the held path, but the flag
     // this function just set (WatchdogFaulted) closes node 0's submissions too, so waiters are woken either way.
     if (Node==BC250_WDDM_NODE_COPY) GfxRetireSignal(Device);
@@ -1190,9 +1195,10 @@ static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT
 //     for hundreds of milliseconds, so the fence slot alone would say nothing about it.
 // The honest limits of the second source are the ones WddmTimeoutSnapshot states above: the CP_IB* family is
 // banked by GRBM_GFX_INDEX, which this driver must not write, and those registers describe where the CP is now
-// rather than the head job. Both limits can only make the token change when the head made no progress, which is
-// read AS progress and re-arms the budget. That is the safe error: the budget is already at least the OS's own
-// TdrDelay, so a watchdog that is too patient merely lets the OS's own recovery arrive first.
+// rather than the head job. Token changes reset our inactivity window without
+// proving head progress; A/B/A/B activity can postpone this watchdog indefinitely.
+// A healthy long shader can also keep a constant token. Windows' independent
+// preemption timeout remains responsible for recovery; no ordering is guaranteed.
 //
 // A register the path refuses contributes its zero, and a mix collision is read as no progress, which is the
 // behaviour of every build before this one.
@@ -1318,7 +1324,8 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     BC250_GFX_COMPLETION* job;
     if (wddm == NULL) return;
     KeAcquireSpinLock(&wddm->Lock, &irql);
-    while ((job = Bc250GfxQueueHead(&wddm->GfxPending)) != NULL &&
+    while (!wddm->Recovery[BC250_WDDM_NODE_3D].ResetActive &&
+           (job = Bc250GfxQueueHead(&wddm->GfxPending)) != NULL &&
            GfxFenceArrived(Device, job->Seq))
     {
         done = TRUE;
@@ -1342,6 +1349,20 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     WddmQueueReport(wddm);
 }
 
+// Caller holds Lock. The epoch check and BOTH gate latches are one transaction.
+// GfxSubmitFail takes only a short lifetime reference, sets an interlocked flag
+// and signals an event; it does not acquire GartLock or join a DPC. After unlock,
+// the timeout tail may log, but must never change either submission gate.
+static BOOLEAN WddmLatchSubmitTimeoutLocked(BC250_DEVICE* Device, BC250_WDDM* Wddm, ULONGLONG Epoch)
+{
+    if (Wddm->Stopping ||
+        !Bc250HangTimeoutCurrent(&Wddm->Recovery[BC250_WDDM_NODE_3D], Epoch)) return FALSE;
+    Wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = TRUE;
+    Wddm->DeferredValid = FALSE;
+    GfxSubmitFail(Device);
+    return TRUE;
+}
+
 static KDEFERRED_ROUTINE WddmSubmitDpcRoutine;
 static KDEFERRED_ROUTINE WddmSubmitDpcCheck;
 static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
@@ -1352,7 +1373,8 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     UINT fence = 0, node = 0;
     ULONG seq = 0, process = 0, contextFlags = 0, vmid = 0;
     ULONG headMs = 0, queuedMs = 0, staleMs = 0, budgetMs = 0, tick = 0;
-    ULONGLONG context = 0, now, progress, age = 0;
+    ULONGLONG context = 0, now, progress, age = 0, epoch;
+    ULONG sampledSeq;
     KIRQL irql;
 
     UNREFERENCED_PARAMETER(Dpc);
@@ -1360,26 +1382,45 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     UNREFERENCED_PARAMETER(Arg2);
     if (device == NULL || (wddm = (BC250_WDDM*)device->Wddm) == NULL) return;
     WddmGpuFence(device);               // late is still arrived
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    epoch = wddm->Recovery[BC250_WDDM_NODE_3D].Epoch;
+    sampledSeq = wddm->HwSeq;
+    if (wddm->Stopping || wddm->Recovery[BC250_WDDM_NODE_3D].ResetActive) {
+        KeReleaseSpinLock(&wddm->Lock, irql);
+        return;
+    }
+    KeReleaseSpinLock(&wddm->Lock, irql);
     // BD-114 (ANALYSIS.md 7.2): what the hardware is doing, read BEFORE the lock, because it costs register
     // reads. A watchdog that knows only the wall clock cannot tell a long healthy job from a dead one; this is
     // the only input that can. The token is read as "progress observed" whenever it changes at all, which is the
-    // conservative direction: the budget is already at least the OS's own, so a watchdog that is too patient
-    // only lets the OS TDR arrive first, and that mechanism works.
+    // conservative direction. Token activity can belong to other work; it does not
+    // prove head-job progress. This clock and Windows' preemption clock differ.
     progress = WddmSubmitProgress(device);
     now = KeQueryInterruptTime();
     KeAcquireSpinLock(&wddm->Lock, &irql);
+    if (wddm->Stopping || sampledSeq != wddm->HwSeq ||
+        !Bc250HangTimeoutCurrent(&wddm->Recovery[BC250_WDDM_NODE_3D], epoch)) {
+        KeReleaseSpinLock(&wddm->Lock, irql);
+        return;
+    }
     budgetMs = wddm->SubmitBudgetMs;
     if (wddm->HwPending && !wddm->WatchdogFaulted[wddm->HwNode])
     {
         const BC250_GFX_COMPLETION* head = Bc250GfxQueueHead(&wddm->GfxPending);
         int stale = Bc250SubmitWatchdogCheck(&wddm->SubmitWatchdog, progress, now,
                                              10000ull * (ULONGLONG)budgetMs, &age);
+        switch (wddm->SubmitWatchdog.LastObservation) {
+        case BC250_SUBMIT_OBSERVATION_PRIME: wddm->SubmitPrimes++; break;
+        case BC250_SUBMIT_OBSERVATION_ACTIVITY: wddm->SubmitActivityChanges++; break;
+        case BC250_SUBMIT_OBSERVATION_GAP_RESET: wddm->SubmitGapResets++; break;
+        default: break;
+        }
 
         // Both, not either: the staleness window alone already implies the deadline (the window opens no earlier
         // than the head stamp), and saying so twice means no refactor of one can fault a job before its budget.
         if (stale && head != NULL && now >= head->Deadline)
         {
-            timedOut = TRUE;
+            timedOut = WddmLatchSubmitTimeoutLocked(device, wddm, epoch);
             fence = wddm->HwFence;
             node = wddm->HwNode;
             seq = wddm->HwSeq;
@@ -1390,8 +1431,6 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
             headMs = Bc250SubmitElapsedMs(head->HeadSince, now);
             queuedMs = head->Submitted != 0ull ? Bc250SubmitElapsedMs(head->Submitted, head->HeadSince) : 0ul;
             staleMs = (ULONG)(age / 10000ull);
-            wddm->WatchdogFaulted[node] = TRUE;
-            wddm->DeferredValid = FALSE;
             // Preserve HwPending: timeout is not a hardware completion.
         }
         else if (head != NULL)
@@ -1432,7 +1471,6 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     // Stop further submissions, but leave the uncompleted fence visible to the OS.
     // Its normal TDR path owns recovery. A later real fence may still complete this job.
     InterlockedIncrement(&wddm->HwTimeouts);
-    GfxSubmitFail(device);
     // BD-114 (ANALYSIS.md 7.7): the measured numbers, not the constant. Until 0.7.216.27 this line printed the
     // budget itself, so "after 500 ms" meant "after at least 500 ms, by an unknown amount" and the offline
     // analysis of two bugchecks could bound a packet's duration but never measure one. Three numbers now:
@@ -2015,9 +2053,13 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
         UINT preemptFence = 0, lastFence = 0;
 
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        complete = wddm->CompletionPending[node] != 0;
+        if (wddm->Recovery[node].ResetActive) {
+            KeReleaseSpinLock(&wddm->Lock, irql);
+            continue;
+        }
+        complete = wddm->CompletionPending[node] != 0 && Bc250HangReportBegin(&wddm->Recovery[node]);
         fence = wddm->SubmittedFence[node];
-        wddm->CompletionPending[node] = 0;
+        if (complete) wddm->CompletionPending[node] = 0;
         KeReleaseSpinLock(&wddm->Lock, irql);
         if (complete)
         {
@@ -2030,10 +2072,13 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
             {
                 WddmPairingReport(wddm, FALSE);
                 reported = TRUE;
+                KeAcquireSpinLock(&wddm->Lock, &irql);
                 InterlockedExchange(&wddm->LastCompletedFence, fence);
                 InterlockedExchange(&wddm->LastReportedFence[node], fence);
                 wddm->LastReportedValid[node] = TRUE;
                 InterlockedExchange(&wddm->CompletionRetries[node], 0);
+                Bc250HangReportEnd(&wddm->Recovery[node], (UINT)fence, TRUE, FALSE);
+                KeReleaseSpinLock(&wddm->Lock, irql);
             }
             else
             {
@@ -2052,6 +2097,7 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
                     wddm->ReportAgain = TRUE;
                 }
                 else InterlockedIncrement(&wddm->CompletionsDropped[node]);
+                Bc250HangReportEnd(&wddm->Recovery[node], (UINT)fence, FALSE, !retry);
                 KeReleaseSpinLock(&wddm->Lock, irql);
                 GuardLog("wddm: completion report node %u fence %ld not delivered, %s (retry %ld of %ld)",
                          node, fence, retry ? "pending again" : "DROPPED",
@@ -2064,6 +2110,10 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
         // also covers GfxSubmitIb before it installs HwPending. Completion and submit
         // exit requeue this DPC, so no spinning or timer is needed while we defer.
         KeAcquireSpinLock(&wddm->Lock, &irql);
+        if (wddm->Recovery[node].ResetActive) {
+            KeReleaseSpinLock(&wddm->Lock, irql);
+            continue;
+        }
         // SubmitCommandVirtual's invalid-parameter contract: the OS retires a
         // rejected fence after prior work. Update our notion without reporting a
         // successful DMA completion for work that was never submitted.
@@ -2072,12 +2122,11 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
             !(node == BC250_WDDM_NODE_COPY ? (wddm->PagingHead != NULL) : wddm->HwPending))
         {
             UINT rejected=wddm->RejectedFence[node];
-            if (!wddm->LastReportedValid[node] ||
-                (LONG)(rejected-(UINT)wddm->LastReportedFence[node]) > 0)
+            if (!wddm->Recovery[node].BoundaryKnown ||
+                (LONG)(rejected-wddm->Recovery[node].BoundaryFence) > 0)
             {
-                wddm->LastReportedFence[node]=(LONG)rejected;
-                wddm->LastReportedValid[node]=TRUE;
-                wddm->LastCompletedFence=(LONG)rejected;
+                wddm->Recovery[node].BoundaryFence=rejected;
+                wddm->Recovery[node].BoundaryKnown=TRUE;
             }
             wddm->RejectedPending[node]=FALSE;
         }
@@ -2089,8 +2138,14 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
                   !(node == BC250_WDDM_NODE_COPY && wddm->PagingHead && wddm->WatchdogFaulted[node]);
         if (preempt)
         {
+            preempt = Bc250HangReportBegin(&wddm->Recovery[node]) != 0;
+        }
+        if (preempt)
+        {
             preemptFence = (UINT)wddm->PreemptionFence[node];
             lastFence = (UINT)wddm->LastReportedFence[node];
+            (void)Bc250HangSchedulerBoundary(&wddm->Recovery[node], wddm->LastReportedValid[node],
+                                             lastFence, &lastFence);
             if (node==BC250_WDDM_NODE_COPY) WddmReleasePreemptedPagingLocked(wddm);
             wddm->PreemptionPending[node] = 0;
         }
@@ -2116,6 +2171,10 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
                 GuardLog("wddm: preemption report fence %u node %u NOT delivered (lost %ld); recovery is the"
                          " watchdog's", preemptFence, node, wddm->PreemptionReportsLost);
             }
+            KeAcquireSpinLock(&wddm->Lock, &irql);
+            // Preemption is publication, but never a packet completion.
+            Bc250HangReportEnd(&wddm->Recovery[node], 0, FALSE, FALSE);
+            KeReleaseSpinLock(&wddm->Lock, irql);
         }
     }
     KeAcquireSpinLock(&wddm->Lock, &reportIrql);
@@ -2481,12 +2540,13 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Calls[WddmDdiPreemptCommand], Wddm->LastCompletedFence);
     GuardLog("wddm summary: node 0 hardware: %ld submitted, %ld completed, %ld timeouts, %ld refused, %ld soft-recovered",
              Wddm->HwSubmitted, Wddm->HwCompleted, Wddm->HwTimeouts, Wddm->HwRefused, Wddm->SoftRecoveries);
-    // BD-114: how a workload priced itself against the watchdog, without a bugcheck to read it from. The two
-    // high-water marks are the per-packet and queue-wait numbers the offline analysis of the two 0x116 dumps
-    // could only bound; "re-armed" is how often a check found progress inside a budget and waited instead.
+    // Timer rearming is not activity. Head age is sampled software residence, not
+    // a retirement timestamp or GPU execution duration.
     GuardLog("wddm summary: submit watchdog %lu ms (TdrDelay %lu ms), %ld checks, %ld re-armed",
              Wddm->SubmitBudgetMs, Wddm->SubmitTdrMs, Wddm->SubmitChecks, Wddm->SubmitRearms);
-    GuardLog("wddm summary: submit watchdog high water: head %ld ms, queue wait %ld ms", Wddm->SubmitHeadMaxMs,
+    GuardLog("wddm summary: submit watchdog observations: activity %ld, primes %ld, gap resets %ld",
+             Wddm->SubmitActivityChanges, Wddm->SubmitPrimes, Wddm->SubmitGapResets);
+    GuardLog("wddm summary: sampled software-head high water %ld ms, queue wait %ld ms", Wddm->SubmitHeadMaxMs,
              Wddm->SubmitQueueMaxMs);
     GuardLog("wddm summary: umd: %ld allocs (%ld refused), %ld contexts, %ld submits on the ring, %ld not run",
              Wddm->UmdAllocs, Wddm->UmdAllocRefused, Wddm->UmdContexts, Wddm->UmdSubmitHw, Wddm->UmdSubmitSoft);
@@ -3069,8 +3129,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // more than the permitted amount of time to execute a particular task ... The preempt operation has a 'wait'
     // timeout, which is the actual TDR timeout" (timeout-detection-and-recovery.md:43), and TdrDelay "specifies
     // the number of seconds that the GPU can delay the preempt request" (tdr-registry-keys.md:55). Our private
-    // watchdog exists to close the ring and take a register snapshot, not to replace that mechanism, so it must
-    // never fire first. Absent setting (the shipping case: the INF writes no value) = TdrDelay plus the margin;
+    // watchdog closes the ring and takes a register snapshot. Its activity clock
+    // and the OS preemption clock have different epochs: either can expire first.
+    // Absent setting (the INF writes no value) = TdrDelay plus the margin;
     // an operator's value is clamped and then raised to TdrDelay if it is shorter.
     {
         int defaulted = 0, raised = 0;
@@ -3082,6 +3143,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         wddm->SubmitTickMs = Bc250SubmitTickMs(wddm->SubmitBudgetMs);
         Bc250SubmitWatchdogIdle(&wddm->SubmitWatchdog);
         wddm->SubmitRearms = 0;             // one statement each: the counters are volatile, and a chained
+        wddm->SubmitActivityChanges = 0;
+        wddm->SubmitPrimes = 0;
+        wddm->SubmitGapResets = 0;
         wddm->SubmitChecks = 0;             // assignment reads each one back as the value of the next
         wddm->SubmitHeadMaxMs = 0;
         wddm->SubmitQueueMaxMs = 0;
@@ -6346,13 +6410,34 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         const BC250_GFX_COMPLETION* head;
         const BC250_GFX_COMPLETION* tail;
         ULONG verdict, seq, kills = 0, micros = 0, vmid = 0;
-        UINT hungFence = 0, lastCompleted = 0, lastSubmitted = 0, abortFence = 0;
+        UINT hungFence = 0, lastCompleted = 0, lastSubmitted = 0, abortFence = 0, notifiedFence;
         BOOLEAN onRing;
-        int lastKnown, lastSubmittedKnown, completionPending, abortReported = 0;
+        int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0;
+        unsigned node = pResetEngine->NodeOrdinal;
+        ULONGLONG epoch;
+        BC250_HANG_NODE_STATE snapshot;
         KIRQL irql;
 
         WddmGpuFence(device);           // retire anything that arrived late before deciding there is still a hang
         KeAcquireSpinLock(&wddm->Lock, &irql);
+        // Completion publication and recovery exclude one another. No callback is
+        // invoked under Lock, and no DPC is joined here. Pending/lost reports and
+        // active submitters are uncertain: leave recovery to the failure path.
+        if (wddm->Stopping || wddm->CompletionPending[node] || wddm->Recovery[node].ReportLost ||
+            !Bc250HangResetBegin(&wddm->Recovery[node], wddm->ActiveSubmissions[node])) {
+            KeReleaseSpinLock(&wddm->Lock, irql);
+            GuardLog("wddm: ResetEngine node %u: publication, submission or stop state uncertain; refused", node);
+            // No stable fence snapshot: record a refusal, not a stale success
+            // retained from an earlier reset. No kill or attempt record precedes it.
+            GuardRecordHangRecovery(BC250_HANG_VERDICT_FENCE_GUARD, 0, 0, 0, 0);
+            goto refuseReset;
+        }
+        epoch = wddm->Recovery[node].Epoch;
+        snapshot = wddm->Recovery[node];
+        // Also exclude held work through the physical gate until the locked commit.
+        wddm->WatchdogFaulted[node] = TRUE;
+        GfxSubmitFail(device);
+        KeCancelTimer(&wddm->SubmitTimer);
         head = Bc250GfxQueueHead(&wddm->GfxPending);
         // Only a job of the node being reset. GfxPending is node 0's queue, but the entry carries its node and the
         // DDI names one, so the two are compared instead of assumed.
@@ -6369,6 +6454,9 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         // made the guard refuse a valid recovery (hang_recovery.h, Bc250HangNodeLastCompleted).
         lastKnown = Bc250HangNodeLastCompleted(wddm->LastReportedFence, wddm->LastReportedValid,
                                                BC250_WDDM_NODE_COUNT_MAX, pResetEngine->NodeOrdinal, &lastCompleted);
+        reportedKnown = lastKnown;
+        notifiedFence = lastCompleted;
+        lastKnown = Bc250HangSchedulerBoundary(&snapshot, lastKnown, lastCompleted, &lastCompleted);
         // BD-114 (ANALYSIS.md 7.4): the two further reads the aborted-fence answer needs, taken in the same pass
         // under the same lock, so that "nothing on the ring" and "no completion pending" describe one moment.
         completionPending = wddm->CompletionPending[pResetEngine->NodeOrdinal] != 0;
@@ -6382,21 +6470,12 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         // the last completed and no newer than itself, but we check rather than trust - and before the kill, so
         // that a refusal never follows a kill we cannot report.
         verdict = Bc250HangPreKillVerdict(onRing, hungFence, lastKnown, lastCompleted, vmid);
-        // BD-114 (ANALYSIS.md 7.4): verdict 3 - nothing of this node on the ring - is the outcome of a packet
-        // that ran past our private watchdog and then completed on its own before the TDR arrived. Both 0x116
-        // dumps of 2026-10-10 end there, and verdict 3 is a refusal, after which ResetFromTimeout fails and the
-        // machine goes down. The contract asks for the other answer in exactly this situation
-        // (tdr-changes-in-windows-8.md:100), so the fence dxgkrnl was last told about is named as aborted, under
-        // the three guards hang_recovery.h states. A refusal there leaves verdict 3 and today's behaviour.
-        //
-        // The ring must be reopened as well, and that is not cosmetic: the watchdog's GfxSubmitFail left a
-        // sticky refusal in gfx.c, and reopening node 0 in this file alone would admit submissions that gfx.c
-        // then refuses, which closes the node again on the next packet. GfxReopenAfterAbort does the tail of
-        // GfxSoftRecover's drained path and refuses if a sequence is somehow still in flight.
+        // The empty-queue answer is the observed completion, not the last callback
+        // or reset boundary. The frozen snapshot remains stable for this node.
         if (verdict == BC250_HANG_VERDICT_NOTHING_ON_RING &&
-            Bc250HangAbortReportedFence(onRing, completionPending, lastKnown, lastCompleted, lastSubmittedKnown,
-                                        lastSubmitted, &abortFence) &&
-            GfxReopenAfterAbort(device))
+            Bc250HangAbortCompletedFence(&snapshot, onRing, completionPending, reportedKnown,
+                                         notifiedFence, lastSubmittedKnown,
+                                         lastSubmitted, &abortFence))
         {
             abortReported = 1;
             hungFence = abortFence;
@@ -6411,14 +6490,23 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // recovered verdict means the end-of-pipe behind the killed waves fired and the ring drained to idle.
             verdict = GfxSoftRecover(device, vmid, &seq, &kills, &micros);
         }
-        // The verdict, on the disk before the return: a refusal is followed by ResetFromTimeout and 0x116, and the
-        // log ring does not survive that.
-        GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
         if (Bc250HangVerdictRecovered(verdict))
         {
             KeAcquireSpinLock(&wddm->Lock, &irql);
+            // Reopen both gates atomically with the epoch validation. The timer's
+            // latch uses this same lock; its unlocked tail contains diagnostics only.
+            if (wddm->Stopping || !wddm->Recovery[node].ResetActive ||
+                wddm->Recovery[node].Epoch != epoch || !GfxReopenAfterAbort(device)) {
+                Bc250HangResetEnd(&wddm->Recovery[node], FALSE, 0);
+                KeReleaseSpinLock(&wddm->Lock, irql);
+                // The empty-queue path has not written PENDING (which counts an
+                // attempt); retain its refusal class so the counters stay balanced.
+                verdict = abortReported ? BC250_HANG_VERDICT_NOTHING_ON_RING : BC250_HANG_VERDICT_NOT_DRAINED;
+                GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
+                goto refuseReset;
+            }
             // Drop the hung job (and anything queued behind it on this node) so no stale entry double-reports;
-            // the ring is idle, GfxSoftRecover cleared SubmitInFlight. dxgkrnl resubmits the later render packets
+            // the ring is idle, GfxReopenAfterAbort cleared SubmitInFlight. dxgkrnl resubmits the later render packets
             // with new fence ids ("Packets unaffected by engine reset"), so dropping them loses no work.
             while (Bc250GfxQueueHead(&wddm->GfxPending) != NULL) Bc250GfxQueuePop(&wddm->GfxPending);
             wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = FALSE;      // reopen node 0: submits are admitted again
@@ -6439,23 +6527,20 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // report of either node, and node 1's ids run ahead of node 0's, so writing hungFence there (0.7.216.13)
             // moved it backwards below fences node 1 had already reported.
             wddm->SubmittedFence[BC250_WDDM_NODE_3D] = (LONG)hungFence;
-            wddm->LastReportedFence[BC250_WDDM_NODE_3D] = (LONG)hungFence;
-            wddm->LastReportedValid[BC250_WDDM_NODE_3D] = TRUE;
+            Bc250HangResetEnd(&wddm->Recovery[node], TRUE, hungFence);
             // Last, with the queue already empty: it clears HwPending, cancels the submit watchdog and closes the
             // ring-gap edge, which a hand-written HwPending = FALSE would have left open (0.7.210's histogram).
             WddmGfxHeadLocked(wddm);
             KeReleaseSpinLock(&wddm->Lock, irql);
             // Only now: the node is open again in BOTH files. GfxReopenAfterAbort deliberately leaves the wake to
-            // this line, because a held submission woken while WatchdogFaulted or RefusalPending was still set
-            // would be refused and WddmFailSubmission would latch the refusal the recovery has just cleared. On
-            // the drained path (verdict 1 and 5) gfx.c has already signalled once; a second set of a
-            // notification event costs nothing and the waiters retest their condition anyway.
+            // this line. GfxSoftRecover only drains; it never opens or signals either gate.
             GfxRetireSignal(device);
             InterlockedIncrement(&wddm->SoftRecoveries);
+            GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
             // Valid by construction, by one of two arguments. Verdicts 1 and 5: hungFence was submitted and, when
             // read, still the unreported head of the queue, so it is in [LastCompletedFenceId, last submitted].
-            // Verdict 7: hungFence is this node's own LAST REPORTED fence and its validity comes from the range
-            // guard of Bc250HangAbortReportedFence, which refused the report if it was not inside that range. A
+            // Verdict 7: hungFence is this node's observed completion and its validity comes from the range
+            // guard of Bc250HangAbortCompletedFence, which refused the report if it was not inside that range. A
             // value outside it would be bugcheck 0x119. ALREADY_RETIRED is the contract's special case of a packet
             // that completed between the timeout and the reset: dxgkrnl treats it as aborted, which is what it
             // asks for (tdr-changes-in-windows-8.md).
@@ -6463,7 +6548,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // Two lines, not one: the log ring's line is 159 characters and the worst-case width gate
             // (tools/quality/guardlog_width.py, BD-070) counts every %lu at ten.
             if (abortReported)
-                GuardLog("wddm: *** ResetEngine node %u: nothing on the ring, last reported fence %u named as"
+                GuardLog("wddm: *** ResetEngine node %u: nothing on the ring, completed fence %u named as"
                          " aborted, node 0 reopened ***", pResetEngine->NodeOrdinal, hungFence);
             else
                 GuardLog("wddm: *** ResetEngine node %u: SOFT RECOVERED, aborted fence %u, node 0 reopened ***",
@@ -6471,11 +6556,15 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             GuardLog("wddm: soft recovery: verdict %lu seq %lu vmid %lu, %lu kill(s) in %lu us", verdict, seq, vmid,
                      kills, micros);
             if (abortReported)
-                GuardLog("wddm: aborted-fence report: node %u last reported %u, last submitted %u (BD-114 7.4)",
+                GuardLog("wddm: aborted-fence report: node %u lower boundary %u, last submitted %u (BD-114 7.4)",
                          pResetEngine->NodeOrdinal, lastCompleted, lastSubmitted);
             return STATUS_SUCCESS;
         }
-        // Not recovered (verdict 2, 3, 4 or 6, or a verdict 3 the aborted-fence guards refused): change nothing
+        KeAcquireSpinLock(&wddm->Lock, &irql);
+        Bc250HangResetEnd(&wddm->Recovery[node], FALSE, 0);
+        KeReleaseSpinLock(&wddm->Lock, irql);
+        GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
+        // Not recovered (verdict 2, 3, 4 or 6): retain both closed gates
         // and fall through to today's refusal (then 0x116).
         GuardLog("wddm: ResetEngine node %u: soft recovery verdict %lu, refusing as before",
                  pResetEngine->NodeOrdinal, verdict);
@@ -6493,9 +6582,10 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     // the scheduler falls back to the adapter-wide ResetFromTimeout. It is also the careful answer: a success
     // with a LastAbortedFenceId outside [last completed, last submitted] is bugcheck 0x119, and a failure names
     // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
+refuseReset:
     StartHealthClose(device);
-    // KMD196: this refusal changes no submission gate, so a held submission would keep waiting out its deadline
-    // while the scheduler moves on to ResetFromTimeout (which does close the path, through GfxSubmitFail). Wake
+    // A refusal before recovery admission may leave a held submission waiting
+    // while the scheduler moves on to ResetFromTimeout (which closes the path). Wake
     // the waiters anyway: one extra retest on a TDR path is cheaper than reasoning about which recovery DDI the
     // scheduler happens to call first.
     if (hAdapter != NULL) GfxRetireSignal((BC250_DEVICE*)hAdapter);
