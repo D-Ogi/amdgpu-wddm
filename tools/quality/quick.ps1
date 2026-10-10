@@ -218,6 +218,8 @@ try {
   @{n='hwmon-boost-held-back';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','boost-held-back');Fails=$true}
   @{n='hwmon-step-pays-all';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','step-pays-all');Fails=$true}
   @{n='hwmon-telemetry-always';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','telemetry-always');Fails=$true}
+  @{n='hwmon-boost-claims-fixed';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','boost-claims-fixed');Fails=$true}
+  @{n='hwmon-rise-outlives-doubt';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','rise-outlives-doubt');Fails=$true}
   @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$kits)}
   @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$kits,'-Mesa',"$Workspace\ref\mesa")}
  )

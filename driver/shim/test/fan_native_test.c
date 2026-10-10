@@ -583,7 +583,26 @@ static void load_boost(void)
     CHECK((f.Flags & BC250_FAN_FLAG_BOOST) != 0u && (f.Flags & BC250_FAN_FLAG_BOOST_OFF) == 0u);
     CHECK((f.Flags & BC250_FAN_FLAG_BOOST_BUSY) != 0u && (f.Flags & BC250_FAN_FLAG_BOOST_POWER) != 0u);
     CHECK((f.Flags & BC250_FAN_FLAG_BOOST_RISE) == 0u && f.AppliedPct == 100u && f.TargetPct == 100u);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST_ARMED) != 0u);    /* armed and raising: the CLI line says "on" */
     CHECK(native_log_has("load boost on (busy+power)"));
+    /* A fixed duty under a lease takes the fan from the rule: the account and the arm run on, and everything the
+     * driver reports stops saying full speed, because the fan turns at the operator's 40 % (round 2 review). */
+    memset(&f, 0, sizeof(f));
+    f.FixedPct = 40;
+    f.LeaseMs = 5000;
+    Ask(&f, BC250_FAN_OP_FIXED, TRUE);
+    CHECK(f.Status == BC250_ESCAPE_STATUS_DONE && f.Error == BC250_FAN_ERROR_OK);
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost && !device.Fan.Ctl.boost_raised);
+    CHECK(ec_peek8(&native_ec, TARGET1) == bc250_fan_pct_to_raw(40));
+    Read(&f);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST) == 0u && (f.Flags & BC250_FAN_FLAG_BOOST_ARMED) != 0u);
+    CHECK(native_log_has("load boost off after"));           /* the release is logged with the fixed duty */
+    /* And the curve the lease ends with is raised at once, because the load never stopped. */
+    for (i = 0; i < 4u; i++) SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.mode == BC250_FAN_MODE_CURVE && device.Fan.Ctl.boost_raised);
+    Read(&f);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST) != 0u && f.AppliedPct == 100u);
     /* A step without the feed leaves the boost where it is until the hold runs out, and the duty with it. The
      * snapshot is read again after the loop: the one taken before it says nothing about these twenty seconds. */
     for (i = 0; i < 20u; i++) Second(70000);

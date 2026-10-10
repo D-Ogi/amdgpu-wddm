@@ -1249,9 +1249,12 @@ static void FanCtlLine(const BC250_ESCAPE_FAN *f)
     if (f->Points == 0) printf("none");
     printf(" saved_mode=0x%02lX saved_target=%lu", f->SavedMode, f->SavedTarget);
     // The load feed-forward (rule 10 of bc250_fan.h): whether it holds the fan at full speed now, and which
-    // signal called the load heavy. "off" is a start that may boost and does not now; "disabled" is FanLoadBoost 0.
+    // signal called the load heavy. "armed" is the rule holding a heavy load with no duty of ours to raise (a
+    // lease's fixed duty, the 30 s wait for a retake): the account runs, the fan answers to somebody else. "off"
+    // is a start that may boost and does not now; "disabled" is FanLoadBoost 0.
     printf(" boost=%s boost_why=%s\n",
-           (f->Flags & BC250_FAN_FLAG_BOOST) ? "on" : (f->Flags & BC250_FAN_FLAG_BOOST_OFF) ? "disabled" : "off",
+           (f->Flags & BC250_FAN_FLAG_BOOST) ? "on" : (f->Flags & BC250_FAN_FLAG_BOOST_ARMED) ? "armed" :
+           (f->Flags & BC250_FAN_FLAG_BOOST_OFF) ? "disabled" : "off",
            FanBoostWhy(f->Flags));
 }
 

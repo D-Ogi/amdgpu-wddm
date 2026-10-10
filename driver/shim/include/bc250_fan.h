@@ -104,12 +104,22 @@
  *
  * The rise windows follow each other: the window that closes opens the next one at its own reading, so at the
  * governor's 1 s cadence a window closes every three steps (3 s, the length the rule asks for). The rise of the
- * window that closed last is what heavy_load() reads, and it stands until the next one closes.
+ * window that closed last is what heavy_load() reads, and it stands until the next one closes - but only while
+ * there is a guard temperature and a duty of ours. A doubt about the reading, and every give-back, throw the
+ * measured rise away and open a new window, because a latched "3 C in 3 s" that nothing can refresh would call
+ * every step of a cold and idle chip heavy.
  *
  * The boost engages only while the driver holds the fan. It is a duty, and the duty is the board's whenever the
  * fan is: before the first take-over, and in the 30 s after a doubt gave the fan back. The account keeps running
  * in those steps, so a load that outlives such a wait is already known when the driver takes the fan again, but
  * the flag, the count and the log line stay off until there is a duty of ours to raise.
+ *
+ * `boost` says the rule is armed; `boost_raised` says this step's duty is the full speed it asks for. They are
+ * the same thing in the curve the rule was written for, and they are not under a fixed duty: a lease of the
+ * operator's own number (the card's fan test, `bc250kmd_cli fan fixed N`) keeps the account and the arm running,
+ * because the load does not stop while the lease runs, but nothing raises that duty. What the driver reports -
+ * the escape's BOOST flag, the log line, the window's "at full speed now" - follows `boost_raised`, so the
+ * driver never says full speed while the fan turns at somebody else's number.
  *
  * The way down: once the load is no longer heavy the boost holds for BC250_FAN_BOOST_HOLD_MS, and after that it
  * ends only when the curve itself asks for less than the duty in force. The ordinary slope rule (rule 7) then
@@ -311,7 +321,8 @@ struct bc250_fan_ctl {
 	unsigned int		emergency, emergency_cool_ms;
 	/* the load feed-forward (rule 10) */
 	unsigned int		boost_enabled;	/* FanLoadBoost: 1 unless the user switched the feed-forward off */
-	unsigned int		boost;		/* the feed-forward holds the fan at full speed now */
+	unsigned int		boost;		/* the feed-forward is armed: the load has been heavy long enough */
+	unsigned int		boost_raised;	/* and this step's duty is the full speed it asks for */
 	unsigned int		boost_why;	/* BC250_FAN_BOOST_WHY_* of the last heavy step */
 	unsigned int		boost_load_ms;	/* the heavy-time account, 0..BC250_FAN_BOOST_LOAD_MAX_MS */
 	unsigned int		boost_hold_ms;	/* since the load stopped being heavy */

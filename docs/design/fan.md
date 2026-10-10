@@ -370,7 +370,10 @@ A step is heavy when the feed says any of this:
 
 The rise windows follow each other: the step that closes one opens the next at its own reading, so at the
 governor's cadence of a second a window closes every three steps. The rise of the window that closed last
-stands until the next one closes.
+stands until the next one closes, and only while the reading that made it is still there: a doubt about the
+guard temperature, and every give-back, throw the measured rise away and open a new window. A latched
+"3 C in 3 s" that no step can refresh would otherwise call every step of the 30 s wait after a give-back
+heavy, with the chip cool and the GPU idle, and blow at full speed the step after the retake.
 
 Heavy time is counted in elapsed milliseconds, never in steps, so the rule does not depend on the
 governor's cadence:
@@ -405,7 +408,10 @@ What the feed-forward never does:
   show stays off until there is a duty of ours to raise.
 - It raises no fixed duty. A fixed duty is the operator's own number under a lease, and the 87 C emergency
   is still above it. The account keeps running under such a lease, so the curve the lease ends with is
-  boosted at once when the load never stopped.
+  boosted at once when the load never stopped. The rule stays armed there and raises nothing, and the
+  driver says so: the BOOST flag, the log line and the window's "at full speed now" follow the raise and
+  not the arm, because a card that said full speed over a fan turning at the operator's 40 % would be a
+  plain untruth. The telemetry block calls that state `armed`.
 - It survives no give-back. A boost is a duty, and after a give-back the duty is the board's. The driver has
   to see the load again. The blind give-back (the bugcheck callback, and `FanResetDevice` on the way to a
   hibernation) clears it as well, so a start that comes back runs the curve until it sees the load.
@@ -500,8 +506,9 @@ fanctl state=curve mode=curve profile=standard target_pct=70 applied_pct=70 raw=
     saved_mode=0xE0 saved_target=128 boost=on boost_why=busy+power
 ```
 
-`boost` is `on` while the load feed-forward holds the fan at full speed, `off` in a start that may boost and
-does not now, and `disabled` with `FanLoadBoost` 0. `boost_why` names every signal that called the load
+`boost` is `on` while the load feed-forward holds the fan at full speed, `armed` while it holds a heavy load
+with no duty of ours to raise (a lease's fixed duty, or the wait after a give-back), `off` in a start that may
+boost and does not now, and `disabled` with `FanLoadBoost` 0. `boost_why` names every signal that called the load
 heavy: `busy`, `power`, `rise`, or them joined with `+`. The driver log carries one line when the boost
 engages and one when it lets go. The telemetry block carries the count and the time, but only in a start that
 boosted at least once: a cool or idle run keeps that block at the four fan lines it had, because the log ring
@@ -537,8 +544,13 @@ The control application has a Case fan card on the Performance page. It shows:
   switched it off. It is the one control of this card that writes a registry value (`FanLoadBoost`) through the
   elevated helper (`--action fan-boost-on` or `--action fan-boost-off`) instead of sending a request, because the
   driver reads the value when it starts: the card says so until Windows has restarted, and offers the restart. On
-  is the default, so "on" removes the value and "off" writes 0. While the boost holds the fan, the card says that
-  too. The words are plain and in the four languages. `FanLoadBoost` itself never reaches the window.
+  is the default, so "on" removes the value and "off" writes 0. While the boost holds the fan at full speed, the
+  card says that too, and never while the rule is only armed. The box stands on every choice of the segmented
+  row, the board's own curve included, and under a shut `EnableFanControl` gate as well, because the rule needs
+  neither a curve of ours nor a fan reading: what it needs is the next start of the driver. A cancelled
+  confirmation draws the card again, so the box never shows a setting the machine does not have. The words are
+  plain and in the four languages, and the settings search finds the box by the words a person types about a loud
+  fan ("loud", "noise"). `FanLoadBoost` itself never reaches the window.
 - "Apply curve" (or "Hand the fan to the board"), enabled only when the choice differs from the one in
   force and stored. After an apply, "Go back to the previous setting" applies the choice from before.
 - A short test: one speed from 30 to 100 % for 10 s (`--action fan-test --fan-test-pct N`). The helper sends

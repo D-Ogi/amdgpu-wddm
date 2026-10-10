@@ -675,6 +675,11 @@ static void emergency(void)
  *   (c) one-second spikes every ten seconds
  *   (d) a 20-minute game at 70 to 90 % busy
  *   (e) a boost with a lease, an EC fault and a handback inside it
+ *   (f) a doubt that gives the fan back: the account runs, nothing engages until the retake
+ *   (g) one late step, and a rise window that will not close over a gap
+ *   (h) the account's margin against a quiet step inside a load
+ *   (i) the blind give-back of a bugcheck or a hibernation
+ *   (j) a measured rise outliving the reading that made it
  */
 #ifdef BC250_FAN_BOOST_ARM_MS
 #define HAVE_BOOST 1
@@ -742,6 +747,7 @@ static void load_boost(void)
 #if HAVE_BOOST
 	CHECK(ctl.boost && ctl.boosts == 1u && (ctl.boost_why & BC250_FAN_BOOST_WHY_BUSY) != 0u);
 	CHECK((ctl.boost_why & BC250_FAN_BOOST_WHY_POWER) != 0u);	/* 112 W is over the threshold as well */
+	CHECK(ctl.boost_raised);	/* the duty in force is the rule's own answer: that is what the driver reports */
 #endif
 	/* The arm's own ramp, 62 C to 77 C: full speed all the way, and the chip is written once. */
 	for (i = 0; i < 46u; i++) {
@@ -828,15 +834,25 @@ static void load_boost(void)
 	for (i = 0; i < 4u; i++) {
 		CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
 		CHECK(ctl.applied_pct == 40u && ctl.state == BC250_FAN_STATE_FIXED);
+#if HAVE_BOOST
+		/* The arm stays, the raise does not: the fan turns at the operator's 40 %, so nothing the driver
+		 * reports (the escape's BOOST flag, the log line, the window's card) may say full speed. */
+		CHECK(ctl.boost && !ctl.boost_raised);
+#endif
 	}
 	CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);		/* the fifth second is the lease's last */
 	CHECK(ctl.mode == BC250_FAN_MODE_CURVE && ctl.state == BC250_FAN_STATE_CURVE);
 	CHECK(ctl.applied_pct == 100u && bc250_fan_curve_eval(&ctl.curve, 70000) == 85u);
+#if HAVE_BOOST
+	CHECK(ctl.boost && ctl.boost_raised && ctl.boosts == 1u);	/* one engagement, before the lease */
+#endif
 	/* A handback ends the boost: the duty is the board's again, and the driver has to see the load once more. */
 	CHECK(bc250_fan_handback(&io, &ctl, BC250_FAN_REASON_USER) == 0);
 	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST));
 #if HAVE_BOOST
-	CHECK(!ctl.boost && ctl.boost_load_ms == 0u);
+	CHECK(!ctl.boost && !ctl.boost_raised && ctl.boost_load_ms == 0u);
+	/* And the measured rise goes with the duty: it was measured while this driver drove the fan. */
+	CHECK(!ctl.rise_valid && ctl.rise_mc == 0 && ctl.rise_ms == 0u);
 #endif
 
 	/* The chip refuses while the boost holds the fan: the fault wins. The duty read-back does not follow, so
@@ -955,12 +971,38 @@ static void load_boost(void)
 		/* (i) The blind give-back (the bugcheck callback, FanResetDevice before a hibernation) leaves no boost
 		 * behind either, so the start that comes back has to see the load again. */
 		start(&ec, &io, &ctl);
-		for (i = 0; i < 3u; i++)
+		for (i = 0; i < 4u; i++)
 			CHECK(llm_tick(&io, &ec, &ctl, 70000) == 0);
-		CHECK(ctl.boost && ctl.boost_load_ms != 0u);
+		CHECK(ctl.boost && ctl.boost_raised && ctl.boost_load_ms != 0u && ctl.rise_valid);
 		bc250_fan_handback_blind(&io, &ctl);
-		CHECK(!ctl.controlling && !ctl.boost && ctl.boost_why == 0u);
+		CHECK(!ctl.controlling && !ctl.boost && !ctl.boost_raised && ctl.boost_why == 0u);
 		CHECK(ctl.boost_load_ms == 0u && ctl.boost_hold_ms == 0u);
+		/* The rise too: a hibernation taken in the middle of a ramp would otherwise come back with a 3 C
+		 * rise measured before the sleep and re-arm the rule on a cold chip. */
+		CHECK(!ctl.rise_valid && ctl.rise_mc == 0 && ctl.rise_ms == 0u);
+
+		/* (j) A measured rise is worth nothing without the reading that made it. The ramp of 1.5 C a second
+		 * arms the boost through WHY_RISE alone; then the reader goes quiet, the doubt hands the fan back
+		 * after 5 s (rule 4), and the 30 s wait for the retake runs with the GPU idle and the chip cool.
+		 * A latched rise that no step can refresh would call every one of those steps heavy, fill the
+		 * account to its cap and blow at full speed the step after the retake, on an idle board. */
+		start(&ec, &io, &ctl);
+		for (i = 0; i < 8u; i++)
+			CHECK(load_tick(&io, &ec, &ctl, 50000 + (int)i * 1500, 0, 500, 40000) == 0);
+		CHECK(ctl.rise_valid && ctl.boost && ctl.boost_why == BC250_FAN_BOOST_WHY_RISE);
+		for (i = 0; i < 5u; i++) {
+			in = input(&ec, 62000);
+			in.tctl_valid = 0;
+			CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+			CHECK(!ctl.rise_valid && ctl.rise_mc == 0 && ctl.rise_ms == 0u);
+		}
+		CHECK(!ctl.controlling && ctl.held_back && !ctl.boost && ctl.boost_load_ms == 0u);
+		for (i = 0; i < 29u; i++) {
+			CHECK(load_tick(&io, &ec, &ctl, 62000, 0, 500, 40000) == 0);
+			CHECK(ctl.boost_load_ms == 0u && !ctl.boost);
+		}
+		CHECK(load_tick(&io, &ec, &ctl, 62000, 0, 500, 40000) == 0 && ctl.controlling);
+		CHECK(load_tick(&io, &ec, &ctl, 62000, 0, 500, 40000) == 0 && !ctl.boost && ctl.applied_pct < 100u);
 	}
 #endif
 }

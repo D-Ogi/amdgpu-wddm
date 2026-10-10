@@ -156,6 +156,26 @@ static void apply_request(struct bc250_fan_ctl *ctl, const struct bc250_fan_requ
 	}
 }
 
+/* The feed-forward's two accounts (rule 10), and what throws each one away. The boost is a duty, so whoever
+ * gives the duty back gives the arm and the heavy-time account back with it. The rise is a measurement of the
+ * guard temperature, and it is worth nothing once there is no guard to refresh it. */
+static void forget_boost(struct bc250_fan_ctl *ctl)
+{
+	ctl->boost = 0;
+	ctl->boost_raised = 0;
+	ctl->boost_why = 0;
+	ctl->boost_load_ms = 0;
+	ctl->boost_hold_ms = 0;
+}
+
+static void forget_rise(struct bc250_fan_ctl *ctl)
+{
+	ctl->rise_valid = 0;
+	ctl->rise_mc = 0;
+	ctl->rise_ref_mc = 0;
+	ctl->rise_ms = 0;
+}
+
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start)
 {
 	struct bc250_fan_restore restore = ctl->restore;
@@ -199,10 +219,7 @@ void bc250_fan_load_boost(struct bc250_fan_ctl *ctl, int enabled)
 	if (!ctl->boost_enabled) {
 		/* The duty itself is not touched here: the next step reads the curve again and the slope rule (rule 7)
 		 * walks the fan down, as it does at the end of a boost that ran its course. */
-		ctl->boost = 0;
-		ctl->boost_why = 0;
-		ctl->boost_load_ms = 0;
-		ctl->boost_hold_ms = 0;
+		forget_boost(ctl);
 	}
 }
 
@@ -422,11 +439,10 @@ int bc250_fan_handback(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ct
 	ctl->since_write_ms = 0;
 	ctl->stopped_samples = 0;
 	/* Rule 10: a boost is a duty, and the duty is now the board's. The heavy-time account goes with it, so a
-	 * driver that takes the fan again has to see the load again before it blows at full speed. */
-	ctl->boost = 0;
-	ctl->boost_why = 0;
-	ctl->boost_load_ms = 0;
-	ctl->boost_hold_ms = 0;
+	 * driver that takes the fan again has to see the load again before it blows at full speed, and the measured
+	 * rise goes too: it was measured while this driver drove the fan. */
+	forget_boost(ctl);
+	forget_rise(ctl);
 	ctl->state = ctl->fault ? BC250_FAN_STATE_FAULT : ctl->enabled ? BC250_FAN_STATE_BOARD : BC250_FAN_STATE_OFF;
 	return 0;
 }
@@ -436,13 +452,12 @@ void bc250_fan_handback_blind(const struct bc250_hwmon_io *io, struct bc250_fan_
 	unsigned int polls, mode = BC250_HWMON_MODE_REST, target;
 
 	/* Rule 10, as in bc250_fan_handback(): a boost is a duty, and this path gives the duty back. FanResetDevice
-	 * takes it on the way to a hibernation, so a start that came back with the account still armed would drive
-	 * 100 % at once instead of the curve. Cleared before the hold below, so the two give-backs are symmetric
-	 * whether this one holds the fan or not. */
-	ctl->boost = 0;
-	ctl->boost_why = 0;
-	ctl->boost_load_ms = 0;
-	ctl->boost_hold_ms = 0;
+	 * takes it on the way to a hibernation, so a start that came back with the account still armed, or with a
+	 * rise measured before the sleep, would drive 100 % at once instead of the curve. Both go before the write
+	 * below, which is the one that can fail silently: there is no second chance on this path, and a controller
+	 * that says "armed" after it has given the duty back is the worse of the two outcomes. */
+	forget_boost(ctl);
+	forget_rise(ctl);
 	if (!ctl->controlling)
 		return;
 	target = ctl->restore.valid ? ctl->restore.target : BC250_HWMON_TARGET_REST;
@@ -534,8 +549,14 @@ static void track_effective(struct bc250_fan_ctl *ctl)
  * steps, because the step that closes a window opens the next one at its own reading. */
 static void track_rise(struct bc250_fan_ctl *ctl, unsigned int dt)
 {
-	if (!ctl->guard_valid)
+	if (!ctl->guard_valid) {
+		/* No guard, no rise. The measured one goes with the reading: a doubt that lasts hands the fan back
+		 * for 30 s (rule 4), and a latched "3 C in 3 s" that no step can refresh would call every one of
+		 * those steps heavy with the chip cold and the GPU idle. The open window goes too, because its
+		 * reference is a temperature from before a gap of unknown length. */
+		forget_rise(ctl);
 		return;
+	}
 	/* The window opens at this step's guard reading: at the first step that has a guard, and at a step that took
 	 * longer than one step may pay (a starved governor thread, a resume). Such a step says nothing about a 3 s
 	 * window, and closing one over a gap of unknown length is what would make the threshold more sensitive the
@@ -580,15 +601,16 @@ static void track_boost(struct bc250_fan_ctl *ctl, const struct bc250_fan_input 
 {
 	unsigned int why;
 
+	/* Every step starts with "nothing is raised": the one place that raises a duty is the curve branch of
+	 * bc250_fan_tick(), and it says so there. A step that never reaches it (a fault, a fixed duty, the board's
+	 * own curve, an emergency that drives full speed for its own reason) therefore reports no boost. */
+	ctl->boost_raised = 0;
 	track_rise(ctl, dt);
 	/* The board's own curve and a latched fault are states in which this file writes no duty at all, so there is
 	 * nothing for a feed-forward to raise. A fixed duty under a lease keeps the account running: the raise waits
 	 * for the curve the lease ends with, and a load that outlives the lease is then already known. */
 	if (!ctl->boost_enabled || ctl->mode == BC250_FAN_MODE_BOARD || ctl->fault) {
-		ctl->boost = 0;
-		ctl->boost_why = 0;
-		ctl->boost_load_ms = 0;
-		ctl->boost_hold_ms = 0;
+		forget_boost(ctl);
 		return;
 	}
 	why = heavy_load(ctl, in);
@@ -838,9 +860,13 @@ int bc250_fan_tick(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, c
 	} else {
 		target = bc250_fan_curve_eval(&ctl->curve, ctl->effective_mc);
 		/* Rule 10. The feed-forward only ever raises: the curve's own answer stands wherever it is the higher
-		 * one, and every rule above this line (the emergency, a fixed duty, doubt, a fault) keeps its place. */
-		if (ctl->boost && target < BC250_FAN_FULL_PCT)
-			target = BC250_FAN_FULL_PCT;
+		 * one, and every rule above this line (the emergency, a fixed duty, doubt, a fault) keeps its place.
+		 * This is the one branch in which the rule decides a duty, so it is also the one that may report it. */
+		if (ctl->boost) {
+			ctl->boost_raised = 1;
+			if (target < BC250_FAN_FULL_PCT)
+				target = BC250_FAN_FULL_PCT;
+		}
 	}
 	ctl->target_pct = target;
 	if (ctl->mode == BC250_FAN_MODE_CURVE && !ctl->emergency)

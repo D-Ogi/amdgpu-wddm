@@ -131,7 +131,10 @@ static void FanPublish(BC250_DEVICE* Device, const struct bc250_fan_input* In)
     if (owner->Ctl.held_back) snap.Flags |= BC250_FAN_FLAG_HELD_BACK;
     if (owner->Ctl.restore.valid) snap.Flags |= BC250_FAN_FLAG_RESTORE_SAVED;
     if (owner->Ctl.restore.substituted) snap.Flags |= BC250_FAN_FLAG_SUBSTITUTED;
-    if (owner->Ctl.boost) snap.Flags |= BC250_FAN_FLAG_BOOST;
+    // The raise and not the arm: while a lease holds the fan at the operator's own duty the rule stays armed, and
+    // a window that said "at full speed now" over a fan turning at 40 % would be a plain untruth (rule 10).
+    if (owner->Ctl.boost_raised) snap.Flags |= BC250_FAN_FLAG_BOOST;
+    if (owner->Ctl.boost) snap.Flags |= BC250_FAN_FLAG_BOOST_ARMED;
     if (!owner->Ctl.boost_enabled) snap.Flags |= BC250_FAN_FLAG_BOOST_OFF;
     if ((owner->Ctl.boost_why & BC250_FAN_BOOST_WHY_BUSY) != 0u) snap.Flags |= BC250_FAN_FLAG_BOOST_BUSY;
     if ((owner->Ctl.boost_why & BC250_FAN_BOOST_WHY_POWER) != 0u) snap.Flags |= BC250_FAN_FLAG_BOOST_POWER;
@@ -162,9 +165,11 @@ static void FanLogBoost(BC250_FAN_OWNER* Owner)
 {
     LONG guard = Owner->Ctl.guard_mc;
 
-    if (Owner->Ctl.boost == Owner->LoggedBoost) return;
-    Owner->LoggedBoost = Owner->Ctl.boost;
-    if (Owner->Ctl.boost)
+    // The step that raises a duty, not the step that arms the rule: under a fixed duty (a lease) the account runs
+    // on and raises nothing, and a line saying "full speed, duty was 40%" would be about a fan at 40 %.
+    if (Owner->Ctl.boost_raised == Owner->LoggedBoost) return;
+    Owner->LoggedBoost = Owner->Ctl.boost_raised;
+    if (Owner->Ctl.boost_raised)
         GuardLog("fan: load boost on (%s): full speed at guard %ld.%01ld C, duty was %lu%%",
                  bc250_fan_boost_name(Owner->Ctl.boost_why), guard / 1000,
                  (guard < 0 ? -guard : guard) % 1000 / 100, Owner->Ctl.applied_pct);
@@ -216,7 +221,10 @@ void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
     // start logs whether the rule is enabled, and FanLogBoost logs every engage and release as it happens. Two
     // lines again, not one: one with every field would lose its tail (tools/quality/guardlog_width.py, BD-070).
     if (!snap.Ctl.boost && snap.Ctl.boosts == 0) return;
-    GuardLog("fan: %s boost %s (%s)", What, snap.Ctl.boost ? "on" : snap.Ctl.boost_enabled ? "off" : "disabled",
+    // "armed" is the rule holding a heavy load with no duty of ours to raise: a lease's fixed duty, or the wait
+    // after a give-back. The account runs there, the fan does not answer to it.
+    GuardLog("fan: %s boost %s (%s)", What,
+             snap.Ctl.boost_raised ? "on" : snap.Ctl.boost ? "armed" : snap.Ctl.boost_enabled ? "off" : "disabled",
              bc250_fan_boost_name(snap.Ctl.boost_why));
     GuardLog("fan: %s boost %llu times, %llu ms", What, snap.Ctl.boosts, snap.Ctl.boost_ms);
 }
@@ -339,6 +347,10 @@ static int FanHandBack(BC250_DEVICE* Device, unsigned int Reason, _In_z_ const c
 
 // Port writes only: no lock, no log, no allocation. The bugcheck callback and Bc250ResetDevice, at HIGH_LEVEL with
 // the other processors stopped. Nothing happens unless the driver holds the fan.
+// The blind restore. It runs only while the controller it is given holds the fan, so the boost and rise accounts
+// that bc250_fan_handback_blind() clears are cleared here for the one caller whose controller lives on: this
+// device's own, through FanResetDevice before a hibernation. The bugcheck callback's start never comes back, and
+// the watchdog hands it a copy on purpose, so the real controller keeps its accounts for the step that holds it.
 static void FanBlind(BC250_FAN_OWNER* Owner, struct bc250_fan_ctl* Ctl)
 {
     BC250_HWMON_PORTS ports;

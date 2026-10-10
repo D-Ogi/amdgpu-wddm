@@ -15,6 +15,11 @@ C_ASSERT(BC250_FAN_WATCHDOG_MS > BC250_FAN_WATCHDOG_PERIOD_MS);
 // Rule 10 means a sustained load: one step pays less into the heavy-time account than the arming time, so no
 // single late step (a starved governor thread, a resume) can arm the boost by itself.
 C_ASSERT(BC250_FAN_BOOST_STEP_MAX_MS < BC250_FAN_BOOST_ARM_MS);
+// And the step itself must stay inside that bound, or every step is a late one: the rise window would open again
+// at each step and never close, which switches the temperature's rise signal (WHY_RISE) off without a word. The
+// step runs at the hwmon cadence (dpm.c calls FanStep right after HwmonSample, and that period is the dt a step
+// without a reading falls back to), so this is the tie between the two files.
+C_ASSERT(BC250_HWMON_PERIOD_MS <= BC250_FAN_BOOST_STEP_MAX_MS);
 
 // The governor's load feed for one control step (the load feed-forward, rule 10 of bc250_fan.h). The governor
 // thread fills it in dpm.c beside the Tctl reading: the busy share is the mean over the whole step and not one

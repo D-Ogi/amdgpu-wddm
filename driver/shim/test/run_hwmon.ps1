@@ -32,7 +32,8 @@ param(
     [string]$Out = 'P:\BC-250\scratch\build\hwmon',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
-    [ValidateSet('', 'no-boost-raise', 'boost-held-back', 'step-pays-all', 'telemetry-always')][string]$Mutation = ''
+    [ValidateSet('', 'no-boost-raise', 'boost-held-back', 'step-pays-all', 'telemetry-always', 'boost-claims-fixed',
+                 'rise-outlives-doubt')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,8 +51,8 @@ if ($Mutation -and -not $PSBoundParameters.ContainsKey('Out')) { $Out = "$Out-$M
 $mutations = @{
     # "> BC250_FAN_FULL_PCT" and not "0 &&": a condition that is never true, and not one the compiler calls a
     # constant expression (/W4 /WX refuses C4127, and a control that cannot compile proves nothing).
-    'no-boost-raise'   = @{ file = 'policy'; find = 'if \(ctl->boost && target < BC250_FAN_FULL_PCT\)'
-                            with = 'if (ctl->boost && target > BC250_FAN_FULL_PCT)'
+    'no-boost-raise'   = @{ file = 'policy'; find = 'if \(target < BC250_FAN_FULL_PCT\)'
+                            with = 'if (target > BC250_FAN_FULL_PCT)'
                             why = 'the feed-forward raises no duty: fan_test.c load_boost must fail' }
     'boost-held-back'  = @{ file = 'policy'; find = 'if \(!ctl->controlling\) \{(\s+)ctl->boost = 0;'
                             with = 'if (0) {$1ctl->boost = 0;'
@@ -62,6 +63,12 @@ $mutations = @{
     'telemetry-always' = @{ file = 'binding'; find = 'if \(!snap\.Ctl\.boost && snap\.Ctl\.boosts == 0\) return;'
                             with = 'if (0) return;'
                             why = 'the 5 s telemetry block grows to six fan lines (BD-097): telemetry_width must fail' }
+    'boost-claims-fixed' = @{ file = 'policy'; find = 'ctl->boost_raised = 0;(\s+)track_rise\(ctl, dt\);'
+                            with = 'ctl->boost_raised = ctl->boost;$1track_rise(ctl, dt);'
+                            why = 'the arm claims a raise it has not made: fan_test.c trace (e) must fail' }
+    'rise-outlives-doubt' = @{ file = 'policy'; find = 'forget_rise\(ctl\);(\s+)return;'
+                            with = '(void)ctl;$1return;'
+                            why = 'a measured rise outlives its reading: fan_test.c trace (j) must fail' }
 }
 
 function Use-Mutation([string]$text, [string]$which) {
@@ -176,4 +183,11 @@ foreach ($test in 'hwmon_test', 'hwmon_native_test', 'fan_test', 'fan_native_tes
     if ($LASTEXITCODE -ne 0) { $code = $LASTEXITCODE; break }
 }
 Write-Host "hardware monitor host tests exit code $code"
+# A mutated run's build is an intermediate: its output directory is its own (the -Out above), nothing reads it
+# after this line, and quick.ps1 keeps only the exit code. Six negative controls at 45 MB each is a quarter of a
+# gigabyte on a disk this project may not fill, so each one takes its own away again.
+if ($Mutation -and -not $PSBoundParameters.ContainsKey('Out')) {
+    $env:TEMP = [IO.Path]::GetTempPath(); $env:TMP = $env:TEMP
+    Remove-Item -LiteralPath $Out -Recurse -Force -ErrorAction SilentlyContinue
+}
 exit $code
