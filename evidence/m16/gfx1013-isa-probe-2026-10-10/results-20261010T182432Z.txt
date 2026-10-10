@@ -1,0 +1,509 @@
+dotprobe: start, lanes 4096, grid 64, block 64, one kernel, one code object
+dotprobe: device 'AMD BC-250' arch 'gfx1013' warp 32 cu 40
+LAUNCH v_pk_fma_f16         op  0 control (gfx1013 has it)
+RESULT v_pk_fma_f16         EXECUTES-CORRECTLY lanes 4096 mismatches 0 in 1.0 ms
+LAUNCH v_fma_mix_f32        op  1 control (gfx1013 has it)
+RESULT v_fma_mix_f32        EXECUTES-CORRECTLY lanes 4096 mismatches 0 in 0.0 ms
+LAUNCH v_mul_i32_i24_sdwa   op  2 control (gfx1013 has it)
+RESULT v_mul_i32_i24_sdwa   EXECUTES-CORRECTLY lanes 4096 mismatches 0 in 0.0 ms
+LAUNCH v_dot4_i32_i8        op  3 probe dot1-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000005
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 0000ffff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 8000fc03
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 7fff0200
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 000081fe
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 1234566a
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want ffff8100
+RESULT v_dot4_i32_i8        WRONG-RESULT lanes 4096 mismatches 4095 first 1 sentinel 0 zero 4096 equal-to-src2 2 in 0.0 ms
+  ALT v_dot4_i32_i8        zero               4096 of 4096   <= all lanes
+  ALT v_dot4_i32_i8        src0                  1 of 4096
+  ALT v_dot4_i32_i8        src1                  0 of 4096
+  ALT v_dot4_i32_i8        src2-unwritten        2 of 4096
+  ALT v_dot4_i32_i8        min-f32-legacy        0 of 4096
+  ALT v_dot4_i32_i8        min-f32-legacy-ftz   13 of 4096
+  ALT v_dot4_i32_i8        min-f32-ieee          1 of 4096
+  ALT v_dot4_i32_i8        min-f32-nanprop       0 of 4096
+  ALT v_dot4_i32_i8        max-f32-legacy        0 of 4096
+  ALT v_dot4_i32_i8        max-f32-legacy-ftz    8 of 4096
+  ALT v_dot4_i32_i8        max-f32-ieee          1 of 4096
+  ALT v_dot4_i32_i8        max-f32-nanprop       0 of 4096
+  ALT v_dot4_i32_i8        min-i32               0 of 4096
+  ALT v_dot4_i32_i8        max-i32               1 of 4096
+  ALT v_dot4_i32_i8        min-u32               1 of 4096
+  ALT v_dot4_i32_i8        max-u32               0 of 4096
+LAUNCH v_dot2_f32_f16       op  4 probe dot10-insts
+  lane   0 a 3c000000 b 4000bc00 c 00000000 -> got 00000000 want 40000000
+  lane   1 a b8004000 b 40004800 c 3f800000 -> got 00000000 want 41800000
+  lane   2 a 0000b800 b 40003800 c c0400000 -> got 00000000 want c0500000
+  lane   3 a 38004800 b 40003c00 c 41800000 -> got 00000000 want 41c80000
+  lane   4 a c8003c00 b 4000c400 c 3e800000 -> got 00000000 want c19e0000
+  lane   5 a c000c000 b 4000c000 c bf000000 -> got 00000000 want bf000000
+  lane   6 a 48004400 b 40000000 c 42800000 -> got 00000000 want 42a00000
+  lane   7 a 4000c800 b 40004400 c 00000000 -> got 00000000 want c1e00000
+RESULT v_dot2_f32_f16       WRONG-RESULT lanes 4096 mismatches 3990 first 0 sentinel 0 zero 4096 equal-to-src2 586 in 0.0 ms
+  ALT v_dot2_f32_f16       zero               4096 of 4096   <= all lanes
+  ALT v_dot2_f32_f16       src0                  0 of 4096
+  ALT v_dot2_f32_f16       src1                  0 of 4096
+  ALT v_dot2_f32_f16       src2-unwritten      586 of 4096
+  ALT v_dot2_f32_f16       min-f32-legacy        0 of 4096
+  ALT v_dot2_f32_f16       min-f32-legacy-ftz  373 of 4096
+  ALT v_dot2_f32_f16       min-f32-ieee          0 of 4096
+  ALT v_dot2_f32_f16       min-f32-nanprop       0 of 4096
+  ALT v_dot2_f32_f16       max-f32-legacy        0 of 4096
+  ALT v_dot2_f32_f16       max-f32-legacy-ftz    0 of 4096
+  ALT v_dot2_f32_f16       max-f32-ieee          0 of 4096
+  ALT v_dot2_f32_f16       max-f32-nanprop       0 of 4096
+  ALT v_dot2_f32_f16       min-i32               0 of 4096
+  ALT v_dot2_f32_f16       max-i32               0 of 4096
+  ALT v_dot2_f32_f16       min-u32               0 of 4096
+  ALT v_dot2_f32_f16       max-u32               0 of 4096
+LAUNCH v_dot4_u32_u8        op  5 probe dot7-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 0003f805
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 0000ffff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 8000fc03
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 8000fe00
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 00017ffe
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 12345a6a
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want 00007f00
+RESULT v_dot4_u32_u8        WRONG-RESULT lanes 4096 mismatches 4095 first 1 sentinel 0 zero 4096 equal-to-src2 2 in 0.0 ms
+  ALT v_dot4_u32_u8        zero               4096 of 4096   <= all lanes
+  ALT v_dot4_u32_u8        src0                  1 of 4096
+  ALT v_dot4_u32_u8        src1                  0 of 4096
+  ALT v_dot4_u32_u8        src2-unwritten        2 of 4096
+  ALT v_dot4_u32_u8        min-f32-legacy        0 of 4096
+  ALT v_dot4_u32_u8        min-f32-legacy-ftz   13 of 4096
+  ALT v_dot4_u32_u8        min-f32-ieee          1 of 4096
+  ALT v_dot4_u32_u8        min-f32-nanprop       0 of 4096
+  ALT v_dot4_u32_u8        max-f32-legacy        0 of 4096
+  ALT v_dot4_u32_u8        max-f32-legacy-ftz    8 of 4096
+  ALT v_dot4_u32_u8        max-f32-ieee          1 of 4096
+  ALT v_dot4_u32_u8        max-f32-nanprop       0 of 4096
+  ALT v_dot4_u32_u8        min-i32               0 of 4096
+  ALT v_dot4_u32_u8        max-i32               1 of 4096
+  ALT v_dot4_u32_u8        min-u32               1 of 4096
+  ALT v_dot4_u32_u8        max-u32               0 of 4096
+LAUNCH v_dot4c_i32_i8       op  6 probe dot6-insts
+  lane   0 a 00000000 b ffffffff c 00000000 -> got ffffffff want 00000000
+  lane   1 a ffffffff b ffffffff c 00000001 -> got ffffffff want 00000005
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 80808080 want 0000ffff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 7f7f7f7f want 8000fc03
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 80808080 want 7fff0200
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 807f7f01 want 000081fe
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 01020304 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got fefdfcfb want 1234566a
+RESULT v_dot4c_i32_i8       WRONG-RESULT lanes 4096 mismatches 4096 first 0 sentinel 0 zero 0 equal-to-src2 0 in 0.0 ms
+  ALT v_dot4c_i32_i8       zero                  0 of 4096
+  ALT v_dot4c_i32_i8       src0               2044 of 4096
+  ALT v_dot4c_i32_i8       src1               2055 of 4096
+  ALT v_dot4c_i32_i8       src2-unwritten        0 of 4096
+  ALT v_dot4c_i32_i8       min-f32-legacy     4096 of 4096   <= all lanes
+  ALT v_dot4c_i32_i8       min-f32-legacy-ftz 4072 of 4096
+  ALT v_dot4c_i32_i8       min-f32-ieee       4068 of 4096
+  ALT v_dot4c_i32_i8       min-f32-nanprop    4069 of 4096
+  ALT v_dot4c_i32_i8       max-f32-legacy       58 of 4096
+  ALT v_dot4c_i32_i8       max-f32-legacy-ftz   56 of 4096
+  ALT v_dot4c_i32_i8       max-f32-ieee         30 of 4096
+  ALT v_dot4c_i32_i8       max-f32-nanprop      31 of 4096
+  ALT v_dot4c_i32_i8       min-i32            3088 of 4096
+  ALT v_dot4c_i32_i8       max-i32            1011 of 4096
+  ALT v_dot4c_i32_i8       min-u32            1072 of 4096
+  ALT v_dot4c_i32_i8       max-u32            3027 of 4096
+LAUNCH v_dot2c_f32_f16      op  7 probe dot5-insts
+  lane   0 a 3c000000 b 4000bc00 c 00000000 -> got 00000000 want 40000000
+  lane   1 a b8004000 b 40004800 c 3f800000 -> got 00000000 want 41800000
+  lane   2 a 0000b800 b 40003800 c c0400000 -> got 00000000 want c0500000
+  lane   3 a 38004800 b 40003c00 c 41800000 -> got 00000000 want 41c80000
+  lane   4 a c8003c00 b 4000c400 c 3e800000 -> got 00000000 want c19e0000
+  lane   5 a c000c000 b 4000c000 c bf000000 -> got 00000000 want bf000000
+  lane   6 a 48004400 b 40000000 c 42800000 -> got 00000000 want 42a00000
+  lane   7 a 4000c800 b 40004400 c 00000000 -> got 00000000 want c1e00000
+RESULT v_dot2c_f32_f16      WRONG-RESULT lanes 4096 mismatches 3990 first 0 sentinel 0 zero 4096 equal-to-src2 586 in 0.0 ms
+  ALT v_dot2c_f32_f16      zero               4096 of 4096   <= all lanes
+  ALT v_dot2c_f32_f16      src0                  0 of 4096
+  ALT v_dot2c_f32_f16      src1                  0 of 4096
+  ALT v_dot2c_f32_f16      src2-unwritten      586 of 4096
+  ALT v_dot2c_f32_f16      min-f32-legacy        0 of 4096
+  ALT v_dot2c_f32_f16      min-f32-legacy-ftz  373 of 4096
+  ALT v_dot2c_f32_f16      min-f32-ieee          0 of 4096
+  ALT v_dot2c_f32_f16      min-f32-nanprop       0 of 4096
+  ALT v_dot2c_f32_f16      max-f32-legacy        0 of 4096
+  ALT v_dot2c_f32_f16      max-f32-legacy-ftz    0 of 4096
+  ALT v_dot2c_f32_f16      max-f32-ieee          0 of 4096
+  ALT v_dot2c_f32_f16      max-f32-nanprop       0 of 4096
+  ALT v_dot2c_f32_f16      min-i32               0 of 4096
+  ALT v_dot2c_f32_f16      max-i32               0 of 4096
+  ALT v_dot2c_f32_f16      min-u32               0 of 4096
+  ALT v_dot2c_f32_f16      max-u32               0 of 4096
+LAUNCH v_dot2_i32_i16       op  8 probe dot2-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000003
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 7f007fff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want fefe8201
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 01007f00
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want c13e42ff
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 000b1609
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 12304a70
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want c0803f80
+RESULT v_dot2_i32_i16       WRONG-RESULT lanes 4096 mismatches 4095 first 1 sentinel 0 zero 4096 equal-to-src2 2 in 0.0 ms
+  ALT v_dot2_i32_i16       zero               4096 of 4096   <= all lanes
+  ALT v_dot2_i32_i16       src0                  1 of 4096
+  ALT v_dot2_i32_i16       src1                  0 of 4096
+  ALT v_dot2_i32_i16       src2-unwritten        2 of 4096
+  ALT v_dot2_i32_i16       min-f32-legacy        0 of 4096
+  ALT v_dot2_i32_i16       min-f32-legacy-ftz   13 of 4096
+  ALT v_dot2_i32_i16       min-f32-ieee          1 of 4096
+  ALT v_dot2_i32_i16       min-f32-nanprop       0 of 4096
+  ALT v_dot2_i32_i16       max-f32-legacy        0 of 4096
+  ALT v_dot2_i32_i16       max-f32-legacy-ftz    8 of 4096
+  ALT v_dot2_i32_i16       max-f32-ieee          1 of 4096
+  ALT v_dot2_i32_i16       max-f32-nanprop       0 of 4096
+  ALT v_dot2_i32_i16       min-i32               0 of 4096
+  ALT v_dot2_i32_i16       max-i32               1 of 4096
+  ALT v_dot2_i32_i16       min-u32               1 of 4096
+  ALT v_dot2_i32_i16       max-u32               0 of 4096
+LAUNCH v_dot2_u32_u16       op  9 probe dot2-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want fffc0003
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 81007fff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want fefe8201
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want fffe7f00
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 40be42ff
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 000b1609
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 14324a70
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want 3f803f80
+RESULT v_dot2_u32_u16       WRONG-RESULT lanes 4096 mismatches 4095 first 1 sentinel 0 zero 4096 equal-to-src2 2 in 0.0 ms
+  ALT v_dot2_u32_u16       zero               4096 of 4096   <= all lanes
+  ALT v_dot2_u32_u16       src0                  1 of 4096
+  ALT v_dot2_u32_u16       src1                  0 of 4096
+  ALT v_dot2_u32_u16       src2-unwritten        2 of 4096
+  ALT v_dot2_u32_u16       min-f32-legacy        0 of 4096
+  ALT v_dot2_u32_u16       min-f32-legacy-ftz   13 of 4096
+  ALT v_dot2_u32_u16       min-f32-ieee          1 of 4096
+  ALT v_dot2_u32_u16       min-f32-nanprop       0 of 4096
+  ALT v_dot2_u32_u16       max-f32-legacy        0 of 4096
+  ALT v_dot2_u32_u16       max-f32-legacy-ftz    8 of 4096
+  ALT v_dot2_u32_u16       max-f32-ieee          1 of 4096
+  ALT v_dot2_u32_u16       max-f32-nanprop       0 of 4096
+  ALT v_dot2_u32_u16       min-i32               0 of 4096
+  ALT v_dot2_u32_u16       max-i32               1 of 4096
+  ALT v_dot2_u32_u16       min-u32               1 of 4096
+  ALT v_dot2_u32_u16       max-u32               0 of 4096
+LAUNCH v_dot8_i32_i4        op 10 probe dot1-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000009
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 000000ff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 800000c7
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 7fffff20
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 0000ff8e
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 1234566a
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want ffffff90
+RESULT v_dot8_i32_i4        WRONG-RESULT lanes 4096 mismatches 4095 first 1 sentinel 0 zero 4096 equal-to-src2 2 in 0.0 ms
+  ALT v_dot8_i32_i4        zero               4096 of 4096   <= all lanes
+  ALT v_dot8_i32_i4        src0                  1 of 4096
+  ALT v_dot8_i32_i4        src1                  0 of 4096
+  ALT v_dot8_i32_i4        src2-unwritten        2 of 4096
+  ALT v_dot8_i32_i4        min-f32-legacy        0 of 4096
+  ALT v_dot8_i32_i4        min-f32-legacy-ftz   13 of 4096
+  ALT v_dot8_i32_i4        min-f32-ieee          1 of 4096
+  ALT v_dot8_i32_i4        min-f32-nanprop       0 of 4096
+  ALT v_dot8_i32_i4        max-f32-legacy        0 of 4096
+  ALT v_dot8_i32_i4        max-f32-legacy-ftz    8 of 4096
+  ALT v_dot8_i32_i4        max-f32-ieee          1 of 4096
+  ALT v_dot8_i32_i4        max-f32-nanprop       0 of 4096
+  ALT v_dot8_i32_i4        min-i32               0 of 4096
+  ALT v_dot8_i32_i4        max-i32               1 of 4096
+  ALT v_dot8_i32_i4        min-u32               1 of 4096
+  ALT v_dot8_i32_i4        max-u32               0 of 4096
+LAUNCH v_dot8_u32_u4        op 11 probe dot7-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000709
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 000000ff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 80000447
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 800000e0
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 0001008e
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 123456aa
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want 00000070
+RESULT v_dot8_u32_u4        WRONG-RESULT lanes 4096 mismatches 4095 first 1 sentinel 0 zero 4096 equal-to-src2 2 in 0.0 ms
+  ALT v_dot8_u32_u4        zero               4096 of 4096   <= all lanes
+  ALT v_dot8_u32_u4        src0                  1 of 4096
+  ALT v_dot8_u32_u4        src1                  0 of 4096
+  ALT v_dot8_u32_u4        src2-unwritten        2 of 4096
+  ALT v_dot8_u32_u4        min-f32-legacy        0 of 4096
+  ALT v_dot8_u32_u4        min-f32-legacy-ftz   13 of 4096
+  ALT v_dot8_u32_u4        min-f32-ieee          1 of 4096
+  ALT v_dot8_u32_u4        min-f32-nanprop       0 of 4096
+  ALT v_dot8_u32_u4        max-f32-legacy        0 of 4096
+  ALT v_dot8_u32_u4        max-f32-legacy-ftz    8 of 4096
+  ALT v_dot8_u32_u4        max-f32-ieee          1 of 4096
+  ALT v_dot8_u32_u4        max-f32-nanprop       0 of 4096
+  ALT v_dot8_u32_u4        min-i32               0 of 4096
+  ALT v_dot8_u32_u4        max-i32               1 of 4096
+  ALT v_dot8_u32_u4        min-u32               1 of 4096
+  ALT v_dot8_u32_u4        max-u32               0 of 4096
+LAUNCH v_min_f32            op 12 control (gfx1013 has it)
+  lane  12 a 00000000 b 7fc00000 c b91a5536 -> got 00000000 want 7fc00000
+  lane  13 a 00000000 b ffc00000 c 778e225a -> got 00000000 want ffc00000
+  lane  14 a 00000000 b 7f800001 c 51a91b4e -> got 7fc00001 want 7f800001
+  lane  15 a 00000000 b ff800001 c 940ea3bf -> got ffc00001 want ff800001
+  lane  16 a 00000000 b 7fffffff c 00a4148b -> got 00000000 want 7fffffff
+  lane  25 a 80000000 b 00000000 c ae0afb8b -> got 80000000 want 00000000
+  lane  37 a 80000000 b 7fc00000 c 4b54c6e7 -> got 80000000 want 7fc00000
+  lane  38 a 80000000 b ffc00000 c 8ccf79ae -> got 80000000 want ffc00000
+RESULT v_min_f32            WRONG-RESULT lanes 4096 mismatches 508 first 12 sentinel 0 zero 77 equal-to-src2 0 in 0.0 ms
+  ALT v_min_f32            zero                 77 of 4096
+  ALT v_min_f32            src0               1914 of 4096
+  ALT v_min_f32            src1               1908 of 4096
+  ALT v_min_f32            src2-unwritten        0 of 4096
+  ALT v_min_f32            min-f32-legacy     3588 of 4096
+  ALT v_min_f32            min-f32-legacy-ftz 3297 of 4096
+  ALT v_min_f32            min-f32-ieee       3792 of 4096
+  ALT v_min_f32            min-f32-nanprop    3391 of 4096
+  ALT v_min_f32            max-f32-legacy      227 of 4096
+  ALT v_min_f32            max-f32-legacy-ftz  216 of 4096
+  ALT v_min_f32            max-f32-ieee        431 of 4096
+  ALT v_min_f32            max-f32-nanprop      30 of 4096
+  ALT v_min_f32            min-i32            2924 of 4096
+  ALT v_min_f32            max-i32             898 of 4096
+  ALT v_min_f32            min-u32            1164 of 4096
+  ALT v_min_f32            max-u32            2658 of 4096
+LAUNCH v_max_f32            op 13 control (gfx1013 has it)
+  lane   1 a 00000000 b 80000000 c 09abdd58 -> got 00000000 want 80000000
+  lane  12 a 00000000 b 7fc00000 c b91a5536 -> got 00000000 want 7fc00000
+  lane  13 a 00000000 b ffc00000 c 778e225a -> got 00000000 want ffc00000
+  lane  14 a 00000000 b 7f800001 c 51a91b4e -> got 7fc00001 want 7f800001
+  lane  15 a 00000000 b ff800001 c 940ea3bf -> got ffc00001 want ff800001
+  lane  16 a 00000000 b 7fffffff c 00a4148b -> got 00000000 want 7fffffff
+  lane  37 a 80000000 b 7fc00000 c 4b54c6e7 -> got 80000000 want 7fc00000
+  lane  38 a 80000000 b ffc00000 c 8ccf79ae -> got 80000000 want ffc00000
+RESULT v_max_f32            WRONG-RESULT lanes 4096 mismatches 508 first 1 sentinel 0 zero 67 equal-to-src2 0 in 0.0 ms
+  ALT v_max_f32            zero                 67 of 4096
+  ALT v_max_f32            src0               1915 of 4096
+  ALT v_max_f32            src1               1907 of 4096
+  ALT v_max_f32            src2-unwritten        0 of 4096
+  ALT v_max_f32            min-f32-legacy      227 of 4096
+  ALT v_max_f32            min-f32-legacy-ftz  216 of 4096
+  ALT v_max_f32            min-f32-ieee        431 of 4096
+  ALT v_max_f32            min-f32-nanprop      30 of 4096
+  ALT v_max_f32            max-f32-legacy     3588 of 4096
+  ALT v_max_f32            max-f32-legacy-ftz 3309 of 4096
+  ALT v_max_f32            max-f32-ieee       3792 of 4096
+  ALT v_max_f32            max-f32-nanprop    3391 of 4096
+  ALT v_max_f32            min-i32            1161 of 4096
+  ALT v_max_f32            max-i32            2661 of 4096
+  ALT v_max_f32            min-u32            2787 of 4096
+  ALT v_max_f32            max-u32            1035 of 4096
+LAUNCH raw-vop2-0x00f       op 14 control (gfx1013 has it)
+  lane  12 a 00000000 b 7fc00000 c b91a5536 -> got 00000000 want 7fc00000
+  lane  13 a 00000000 b ffc00000 c 778e225a -> got 00000000 want ffc00000
+  lane  14 a 00000000 b 7f800001 c 51a91b4e -> got 7fc00001 want 7f800001
+  lane  15 a 00000000 b ff800001 c 940ea3bf -> got ffc00001 want ff800001
+  lane  16 a 00000000 b 7fffffff c 00a4148b -> got 00000000 want 7fffffff
+  lane  25 a 80000000 b 00000000 c ae0afb8b -> got 80000000 want 00000000
+  lane  37 a 80000000 b 7fc00000 c 4b54c6e7 -> got 80000000 want 7fc00000
+  lane  38 a 80000000 b ffc00000 c 8ccf79ae -> got 80000000 want ffc00000
+RESULT raw-vop2-0x00f       WRONG-RESULT lanes 4096 mismatches 508 first 12 sentinel 0 zero 77 equal-to-src2 0 in 0.0 ms
+  ALT raw-vop2-0x00f       zero                 77 of 4096
+  ALT raw-vop2-0x00f       src0               1914 of 4096
+  ALT raw-vop2-0x00f       src1               1908 of 4096
+  ALT raw-vop2-0x00f       src2-unwritten        0 of 4096
+  ALT raw-vop2-0x00f       min-f32-legacy     3588 of 4096
+  ALT raw-vop2-0x00f       min-f32-legacy-ftz 3297 of 4096
+  ALT raw-vop2-0x00f       min-f32-ieee       3792 of 4096
+  ALT raw-vop2-0x00f       min-f32-nanprop    3391 of 4096
+  ALT raw-vop2-0x00f       max-f32-legacy      227 of 4096
+  ALT raw-vop2-0x00f       max-f32-legacy-ftz  216 of 4096
+  ALT raw-vop2-0x00f       max-f32-ieee        431 of 4096
+  ALT raw-vop2-0x00f       max-f32-nanprop      30 of 4096
+  ALT raw-vop2-0x00f       min-i32            2924 of 4096
+  ALT raw-vop2-0x00f       max-i32             898 of 4096
+  ALT raw-vop2-0x00f       min-u32            1164 of 4096
+  ALT raw-vop2-0x00f       max-u32            2658 of 4096
+LAUNCH raw-vop2-0x010       op 15 control (gfx1013 has it)
+  lane   1 a 00000000 b 80000000 c 09abdd58 -> got 00000000 want 80000000
+  lane  12 a 00000000 b 7fc00000 c b91a5536 -> got 00000000 want 7fc00000
+  lane  13 a 00000000 b ffc00000 c 778e225a -> got 00000000 want ffc00000
+  lane  14 a 00000000 b 7f800001 c 51a91b4e -> got 7fc00001 want 7f800001
+  lane  15 a 00000000 b ff800001 c 940ea3bf -> got ffc00001 want ff800001
+  lane  16 a 00000000 b 7fffffff c 00a4148b -> got 00000000 want 7fffffff
+  lane  37 a 80000000 b 7fc00000 c 4b54c6e7 -> got 80000000 want 7fc00000
+  lane  38 a 80000000 b ffc00000 c 8ccf79ae -> got 80000000 want ffc00000
+RESULT raw-vop2-0x010       WRONG-RESULT lanes 4096 mismatches 508 first 1 sentinel 0 zero 67 equal-to-src2 0 in 0.0 ms
+  ALT raw-vop2-0x010       zero                 67 of 4096
+  ALT raw-vop2-0x010       src0               1915 of 4096
+  ALT raw-vop2-0x010       src1               1907 of 4096
+  ALT raw-vop2-0x010       src2-unwritten        0 of 4096
+  ALT raw-vop2-0x010       min-f32-legacy      227 of 4096
+  ALT raw-vop2-0x010       min-f32-legacy-ftz  216 of 4096
+  ALT raw-vop2-0x010       min-f32-ieee        431 of 4096
+  ALT raw-vop2-0x010       min-f32-nanprop      30 of 4096
+  ALT raw-vop2-0x010       max-f32-legacy     3588 of 4096
+  ALT raw-vop2-0x010       max-f32-legacy-ftz 3309 of 4096
+  ALT raw-vop2-0x010       max-f32-ieee       3792 of 4096
+  ALT raw-vop2-0x010       max-f32-nanprop    3391 of 4096
+  ALT raw-vop2-0x010       min-i32            1161 of 4096
+  ALT raw-vop2-0x010       max-i32            2661 of 4096
+  ALT raw-vop2-0x010       min-u32            2787 of 4096
+  ALT raw-vop2-0x010       max-u32            1035 of 4096
+LAUNCH raw-vop2-0x00d       op 16 probe v_dot4c slot
+RESULT raw-vop2-0x00d       EXECUTES-CORRECTLY lanes 4096 mismatches 0 in 0.0 ms
+  ALT raw-vop2-0x00d       zero                 77 of 4096
+  ALT raw-vop2-0x00d       src0               1705 of 4096
+  ALT raw-vop2-0x00d       src1               2416 of 4096
+  ALT raw-vop2-0x00d       src2-unwritten        0 of 4096
+  ALT raw-vop2-0x00d       min-f32-legacy     4096 of 4096   <= all lanes
+  ALT raw-vop2-0x00d       min-f32-legacy-ftz 3795 of 4096
+  ALT raw-vop2-0x00d       min-f32-ieee       3749 of 4096
+  ALT raw-vop2-0x00d       min-f32-nanprop    3733 of 4096
+  ALT raw-vop2-0x00d       max-f32-legacy      735 of 4096
+  ALT raw-vop2-0x00d       max-f32-legacy-ftz  714 of 4096
+  ALT raw-vop2-0x00d       max-f32-ieee        388 of 4096
+  ALT raw-vop2-0x00d       max-f32-nanprop     372 of 4096
+  ALT raw-vop2-0x00d       min-i32            2930 of 4096
+  ALT raw-vop2-0x00d       max-i32            1191 of 4096
+  ALT raw-vop2-0x00d       min-u32            1267 of 4096
+  ALT raw-vop2-0x00d       max-u32            2854 of 4096
+LAUNCH raw-vop2-0x002       op 17 probe v_dot2c slot
+  lane   1 a 00000000 b 80000000 c 09abdd58 -> got 00000000 want 80000000
+  lane   3 a 00000000 b bf800000 c faeab132 -> got 00000000 want bf800000
+  lane   5 a 00000000 b c0000000 c 08718688 -> got 00000000 want c0000000
+  lane   7 a 00000000 b bf000000 c e138a8f2 -> got 00000000 want bf000000
+  lane   9 a 00000000 b beaaaaab c f70ff481 -> got 00000000 want beaaaaab
+  lane  11 a 00000000 b ff800000 c 8b4c140b -> got 00000000 want ff800000
+  lane  12 a 00000000 b 7fc00000 c b91a5536 -> got 00000000 want 7fc00000
+  lane  13 a 00000000 b ffc00000 c 778e225a -> got 00000000 want ffc00000
+RESULT raw-vop2-0x002       WRONG-RESULT lanes 4096 mismatches 4019 first 1 sentinel 0 zero 4096 equal-to-src2 0 in 0.0 ms
+  ALT raw-vop2-0x002       zero               4096 of 4096   <= all lanes
+  ALT raw-vop2-0x002       src0                 71 of 4096
+  ALT raw-vop2-0x002       src1                 71 of 4096
+  ALT raw-vop2-0x002       src2-unwritten        0 of 4096
+  ALT raw-vop2-0x002       min-f32-legacy       77 of 4096
+  ALT raw-vop2-0x002       min-f32-legacy-ftz  224 of 4096
+  ALT raw-vop2-0x002       min-f32-ieee         82 of 4096
+  ALT raw-vop2-0x002       min-f32-nanprop      72 of 4096
+  ALT raw-vop2-0x002       max-f32-legacy       65 of 4096
+  ALT raw-vop2-0x002       max-f32-legacy-ftz  210 of 4096
+  ALT raw-vop2-0x002       max-f32-ieee         70 of 4096
+  ALT raw-vop2-0x002       max-f32-nanprop      60 of 4096
+  ALT raw-vop2-0x002       min-i32              77 of 4096
+  ALT raw-vop2-0x002       max-i32              65 of 4096
+  ALT raw-vop2-0x002       min-u32             141 of 4096
+  ALT raw-vop2-0x002       max-u32               1 of 4096
+LAUNCH raw-vop2-0x00e       op 18 probe empty on GFX10
+  lane   1 a 00000000 b 80000000 c 09abdd58 -> got 00000000 want 80000000
+  lane  25 a 80000000 b 00000000 c ae0afb8b -> got 80000000 want 00000000
+RESULT raw-vop2-0x00e       WRONG-RESULT lanes 4096 mismatches 2 first 1 sentinel 0 zero 65 equal-to-src2 0 in 0.0 ms
+  ALT raw-vop2-0x00e       zero                 65 of 4096
+  ALT raw-vop2-0x00e       src0               1708 of 4096
+  ALT raw-vop2-0x00e       src1               2413 of 4096
+  ALT raw-vop2-0x00e       src2-unwritten        0 of 4096
+  ALT raw-vop2-0x00e       min-f32-legacy      733 of 4096
+  ALT raw-vop2-0x00e       min-f32-legacy-ftz  712 of 4096
+  ALT raw-vop2-0x00e       min-f32-ieee        390 of 4096
+  ALT raw-vop2-0x00e       min-f32-nanprop     370 of 4096
+  ALT raw-vop2-0x00e       max-f32-legacy     4094 of 4096
+  ALT raw-vop2-0x00e       max-f32-legacy-ftz 3805 of 4096
+  ALT raw-vop2-0x00e       max-f32-ieee       3751 of 4096
+  ALT raw-vop2-0x00e       max-f32-nanprop    3731 of 4096
+  ALT raw-vop2-0x00e       min-i32            1169 of 4096
+  ALT raw-vop2-0x00e       max-i32            2952 of 4096
+  ALT raw-vop2-0x00e       min-u32            2888 of 4096
+  ALT raw-vop2-0x00e       max-u32            1233 of 4096
+dotprobe: agreement between opcodes, lane for lane, out of 4096 lanes
+  SAME v_min_f32        v_max_f32         733 of 4096
+       lane    1 v_min_f32 80000000  v_max_f32 00000000
+       lane    2 v_min_f32 00000000  v_max_f32 3f800000
+       lane    3 v_min_f32 bf800000  v_max_f32 00000000
+       lane    4 v_min_f32 00000000  v_max_f32 40000000
+  SAME v_min_f32        raw-vop2-0x00f   4096 of 4096   <= identical
+  SAME v_min_f32        raw-vop2-0x010    733 of 4096
+       lane    1 v_min_f32 80000000  raw-vop2-0x010 00000000
+       lane    2 v_min_f32 00000000  raw-vop2-0x010 3f800000
+       lane    3 v_min_f32 bf800000  raw-vop2-0x010 00000000
+       lane    4 v_min_f32 00000000  raw-vop2-0x010 40000000
+  SAME v_min_f32        raw-vop2-0x00d   3588 of 4096
+       lane   12 v_min_f32 00000000  raw-vop2-0x00d 7fc00000
+       lane   13 v_min_f32 00000000  raw-vop2-0x00d ffc00000
+       lane   14 v_min_f32 7fc00001  raw-vop2-0x00d 7f800001
+       lane   15 v_min_f32 ffc00001  raw-vop2-0x00d ff800001
+  SAME v_min_f32        raw-vop2-0x002     77 of 4096
+       lane    1 v_min_f32 80000000  raw-vop2-0x002 00000000
+       lane    3 v_min_f32 bf800000  raw-vop2-0x002 00000000
+       lane    5 v_min_f32 c0000000  raw-vop2-0x002 00000000
+       lane    7 v_min_f32 bf000000  raw-vop2-0x002 00000000
+  SAME v_min_f32        raw-vop2-0x00e    227 of 4096
+       lane    1 v_min_f32 80000000  raw-vop2-0x00e 00000000
+       lane    2 v_min_f32 00000000  raw-vop2-0x00e 3f800000
+       lane    3 v_min_f32 bf800000  raw-vop2-0x00e 00000000
+       lane    4 v_min_f32 00000000  raw-vop2-0x00e 40000000
+  SAME v_max_f32        raw-vop2-0x00f    733 of 4096
+       lane    1 v_max_f32 00000000  raw-vop2-0x00f 80000000
+       lane    2 v_max_f32 3f800000  raw-vop2-0x00f 00000000
+       lane    3 v_max_f32 00000000  raw-vop2-0x00f bf800000
+       lane    4 v_max_f32 40000000  raw-vop2-0x00f 00000000
+  SAME v_max_f32        raw-vop2-0x010   4096 of 4096   <= identical
+  SAME v_max_f32        raw-vop2-0x00d    227 of 4096
+       lane    1 v_max_f32 00000000  raw-vop2-0x00d 80000000
+       lane    2 v_max_f32 3f800000  raw-vop2-0x00d 00000000
+       lane    3 v_max_f32 00000000  raw-vop2-0x00d bf800000
+       lane    4 v_max_f32 40000000  raw-vop2-0x00d 00000000
+  SAME v_max_f32        raw-vop2-0x002     67 of 4096
+       lane    2 v_max_f32 3f800000  raw-vop2-0x002 00000000
+       lane    4 v_max_f32 40000000  raw-vop2-0x002 00000000
+       lane    6 v_max_f32 3f000000  raw-vop2-0x002 00000000
+       lane    8 v_max_f32 3eaaaaab  raw-vop2-0x002 00000000
+  SAME v_max_f32        raw-vop2-0x00e   3588 of 4096
+       lane   12 v_max_f32 00000000  raw-vop2-0x00e 7fc00000
+       lane   13 v_max_f32 00000000  raw-vop2-0x00e ffc00000
+       lane   14 v_max_f32 7fc00001  raw-vop2-0x00e 7f800001
+       lane   15 v_max_f32 ffc00001  raw-vop2-0x00e ff800001
+  SAME raw-vop2-0x00f   raw-vop2-0x010    733 of 4096
+       lane    1 raw-vop2-0x00f 80000000  raw-vop2-0x010 00000000
+       lane    2 raw-vop2-0x00f 00000000  raw-vop2-0x010 3f800000
+       lane    3 raw-vop2-0x00f bf800000  raw-vop2-0x010 00000000
+       lane    4 raw-vop2-0x00f 00000000  raw-vop2-0x010 40000000
+  SAME raw-vop2-0x00f   raw-vop2-0x00d   3588 of 4096
+       lane   12 raw-vop2-0x00f 00000000  raw-vop2-0x00d 7fc00000
+       lane   13 raw-vop2-0x00f 00000000  raw-vop2-0x00d ffc00000
+       lane   14 raw-vop2-0x00f 7fc00001  raw-vop2-0x00d 7f800001
+       lane   15 raw-vop2-0x00f ffc00001  raw-vop2-0x00d ff800001
+  SAME raw-vop2-0x00f   raw-vop2-0x002     77 of 4096
+       lane    1 raw-vop2-0x00f 80000000  raw-vop2-0x002 00000000
+       lane    3 raw-vop2-0x00f bf800000  raw-vop2-0x002 00000000
+       lane    5 raw-vop2-0x00f c0000000  raw-vop2-0x002 00000000
+       lane    7 raw-vop2-0x00f bf000000  raw-vop2-0x002 00000000
+  SAME raw-vop2-0x00f   raw-vop2-0x00e    227 of 4096
+       lane    1 raw-vop2-0x00f 80000000  raw-vop2-0x00e 00000000
+       lane    2 raw-vop2-0x00f 00000000  raw-vop2-0x00e 3f800000
+       lane    3 raw-vop2-0x00f bf800000  raw-vop2-0x00e 00000000
+       lane    4 raw-vop2-0x00f 00000000  raw-vop2-0x00e 40000000
+  SAME raw-vop2-0x010   raw-vop2-0x00d    227 of 4096
+       lane    1 raw-vop2-0x010 00000000  raw-vop2-0x00d 80000000
+       lane    2 raw-vop2-0x010 3f800000  raw-vop2-0x00d 00000000
+       lane    3 raw-vop2-0x010 00000000  raw-vop2-0x00d bf800000
+       lane    4 raw-vop2-0x010 40000000  raw-vop2-0x00d 00000000
+  SAME raw-vop2-0x010   raw-vop2-0x002     67 of 4096
+       lane    2 raw-vop2-0x010 3f800000  raw-vop2-0x002 00000000
+       lane    4 raw-vop2-0x010 40000000  raw-vop2-0x002 00000000
+       lane    6 raw-vop2-0x010 3f000000  raw-vop2-0x002 00000000
+       lane    8 raw-vop2-0x010 3eaaaaab  raw-vop2-0x002 00000000
+  SAME raw-vop2-0x010   raw-vop2-0x00e   3588 of 4096
+       lane   12 raw-vop2-0x010 00000000  raw-vop2-0x00e 7fc00000
+       lane   13 raw-vop2-0x010 00000000  raw-vop2-0x00e ffc00000
+       lane   14 raw-vop2-0x010 7fc00001  raw-vop2-0x00e 7f800001
+       lane   15 raw-vop2-0x010 ffc00001  raw-vop2-0x00e ff800001
+  SAME raw-vop2-0x00d   raw-vop2-0x002     77 of 4096
+       lane    1 raw-vop2-0x00d 80000000  raw-vop2-0x002 00000000
+       lane    3 raw-vop2-0x00d bf800000  raw-vop2-0x002 00000000
+       lane    5 raw-vop2-0x00d c0000000  raw-vop2-0x002 00000000
+       lane    7 raw-vop2-0x00d bf000000  raw-vop2-0x002 00000000
+  SAME raw-vop2-0x00d   raw-vop2-0x00e    733 of 4096
+       lane    1 raw-vop2-0x00d 80000000  raw-vop2-0x00e 00000000
+       lane    2 raw-vop2-0x00d 00000000  raw-vop2-0x00e 3f800000
+       lane    3 raw-vop2-0x00d bf800000  raw-vop2-0x00e 00000000
+       lane    4 raw-vop2-0x00d 00000000  raw-vop2-0x00e 40000000
+  SAME raw-vop2-0x002   raw-vop2-0x00e     65 of 4096
+       lane    2 raw-vop2-0x002 00000000  raw-vop2-0x00e 3f800000
+       lane    4 raw-vop2-0x002 00000000  raw-vop2-0x00e 40000000
+       lane    6 raw-vop2-0x002 00000000  raw-vop2-0x00e 3f000000
+       lane    8 raw-vop2-0x002 00000000  raw-vop2-0x00e 3eaaaaab
+dotprobe: ran 19 of 19 instructions, worst WRONG-RESULT

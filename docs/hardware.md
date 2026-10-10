@@ -9,6 +9,12 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 - Memory: the community specification gives 256-bit GDDR6 at 14 Gbps, about 448 GB/s of peak bandwidth, and 1750 MHz with `tCL` 24 ([M789](facts/hardware.md#m789), third-party). Our measured copy is 386-389 GB/s, about 86 % of that peak ([M776](facts/games.md#m776)). On that reading the `mclk and fclk 450 MHz` that amdgpu reports is a misreport of the same state and not a low memory state. One instrument has yet to read both sides (wishlist L39).
 - Video block: VCN 2.0.3 is present (hardware id 12, instance 0, [M787](facts/hardware.md#m787), third-party). amdgpu adds no driver block for it on this family, so it offers no UVD, VCE or VCN ring ([M46](facts/linux.md#m46)). The community reports the island power- and clock-gated and the PSP refusing its firmware (`fw_type` 13, `ITEM_NOT_FOUND`). It also reports the first VCN MMIO access wedging the machine. **Never read or write the UVD0 window.** `tools/diagusb/gen_probes.py` and `tools/win/bc250rd/gen_allowlist.py` deny it by rule, each with a host test.
 - Display: the DisplayPort reference clock is 600.000 MHz, read from `CLK4_0_CLK4_CLK2_CURRENT_CNT` ([M788](facts/display.md#m788)). Take the reference from that counter, never from a nominal constant, and do not trust the VBIOS downspread flag. The part has two timing generators against four pipes (`dcn_2_0_1_offset.h`, `num_timing_generator` 2 in `dcn201_resource.c`), so a two-screen limit follows from the timing generators.
+- Shader ISA: what the silicon does, against what LLVM and Mesa say it does, is in
+  [gfx1013-isa.md](gfx1013-isa.md). Two findings belong beside the IP versions above. No GFX10.1
+  dot-product instruction computes a dot product on this part, and it reports no error when asked
+  ([M853](facts/hardware.md#m853)). VOP2 opcodes 0x0d and 0x0e still hold the SI and CI legacy
+  minimum and maximum, which GFX10 leaves empty and GFX10.1 reassigned on paper
+  ([M854](facts/hardware.md#m854)).
 - Our unit: board revision TBD, BIOS version TBD, VRAM carve-out TBD.
 
 ## Platform setup (community consensus)
