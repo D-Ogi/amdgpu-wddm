@@ -321,6 +321,20 @@ HRESULT GpuEncoder::CompileShaders()
     return S_OK;
 }
 
+DeblockMode DeblockModeFromEnvironment()
+{
+    DeblockMode mode = DeblockMode::Waves;
+    char buf[16] = {};
+    if (GetEnvironmentVariableA("BC250_MFT_DEBLOCK", buf, sizeof(buf)) > 0 &&
+        (buf[0] == 'r' || buf[0] == 'R')) {
+        mode = DeblockMode::Rows;
+    }
+    if (GetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr, 0) != 0) {
+        mode = DeblockMode::Serial;
+    }
+    return mode;
+}
+
 HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint32_t visibleHeight)
 {
     // Odd sizes are refused, not rounded down. The coded picture is a whole number of macroblocks and
@@ -447,18 +461,7 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
         }
     }
     // How the deblocking wavefront is driven; see DeblockMode. Read once, for the same reason.
-    // BC250_MFT_SERIAL_DEBLOCK wins over BC250_MFT_DEBLOCK, because it is the narrower diagnostic.
-    m_deblockMode = DeblockMode::Rows;
-    {
-        char buf[16] = {};
-        if (GetEnvironmentVariableA("BC250_MFT_DEBLOCK", buf, sizeof(buf)) > 0 &&
-            (buf[0] == 'w' || buf[0] == 'W')) {
-            m_deblockMode = DeblockMode::Waves;
-        }
-        if (GetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr, 0) != 0) {
-            m_deblockMode = DeblockMode::Serial;
-        }
-    }
+    m_deblockMode = DeblockModeFromEnvironment();
 
     // The reconstruction textures are created without initial data, so their first contents are
     // whatever Direct3D leaves there. Nothing reads them before they are written: the first picture
@@ -905,18 +908,16 @@ HRESULT GpuEncoder::Submit(const GpuFrameInput& in, const GpuFrameParams& p)
                     }
                 }
             } else {
-                const uint32_t waves = m_widthMb + 2u * m_heightMb - 2u;
+                const uint32_t waves = DeblockWaveCount(m_widthMb, m_heightMb);
                 for (uint32_t t = 0; t <= waves; ++t) {
-                    const uint32_t deficit = (t + 1u > m_widthMb) ? (t + 1u - m_widthMb) : 0u;
-                    const uint32_t first = (deficit + 1u) / 2u;
-                    const uint32_t lastRow = (t / 2u < m_heightMb - 1u) ? (t / 2u) : (m_heightMb - 1u);
-                    if (first > lastRow) {
+                    const DeblockWave wave = DeblockWaveRows(t, m_widthMb, m_heightMb);
+                    if (!wave.any) {
                         continue;
                     }
-                    UpdateConstants(p, t, first);
+                    UpdateConstants(p, t, wave.first);
                     m_ctx->CSSetShader(m_csDeblock.Get(), nullptr, 0);
-                    m_ctx->Dispatch(lastRow - first + 1u, 1, 1);
-                    CountDispatch(GpuStageDeblock, lastRow - first + 1u);
+                    m_ctx->Dispatch(wave.last - wave.first + 1u, 1, 1);
+                    CountDispatch(GpuStageDeblock, wave.last - wave.first + 1u);
                 }
             }
             MarkStageEnd(GpuStageDeblock);

@@ -175,6 +175,14 @@ void Encoder::Shutdown()
     m_initialized = false;
 }
 
+void Encoder::Abandon()
+{
+    // No DiscardPending: that collects, and collecting maps a staging buffer on the client's device.
+    m_pending.clear();
+    m_gpu.Shutdown();
+    m_initialized = false;
+}
+
 void Encoder::UpdateRateControl(uint32_t frameBytes, uint32_t frameQp, bool idr)
 {
     if (m_cfg.rateControl == RateControl::Quality) {

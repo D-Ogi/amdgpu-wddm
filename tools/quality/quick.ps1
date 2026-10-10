@@ -89,6 +89,10 @@ try {
  # ReportAmdDriverVersion number scheme and decision, and the user-mode reader with its precedence and ranges.
  Check 'driver-version' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_driver_version.ps1" -Root $Workspace -Out "$Out\driver-version" -Kits "$Workspace\toolchain\nuget" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
+ # The encoder MFT's source-against-sweep checks: every deblocking schedule the source admits still has a case
+ # in tests\sweep.ps1 that holds it to the inbox decoder. The sweep itself needs a GPU and is not in this list;
+ # this gate needs nothing but the files, and it is what catches a shape that loses its case when the default moves.
+ Check 'mft-h264-host' { & pwsh -NoProfile -File "$repo\driver\umd\mft-h264\tests\host-checks.ps1" }
  Check 'umd-caps' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_caps.ps1" -Out "$Out\umd-caps" -Kits "$Workspace\toolchain\nuget" }
  # The only host coverage of the DXGKQAITYPE_UMDRIVERPRIVATE branch itself: the firmware section, the
  # adapter identity trailer and the M15.14 scan-out caps trailer, all extracted from wddm.c by text. It was

@@ -93,13 +93,74 @@ struct GpuFrameParams {
     int32_t betaOffsetDiv2 = 0;
 };
 
-// How the deblocking wavefront is driven. Rows is the default: one dispatch of heightMb thread
-// groups, each walking its macroblock row and waiting on the row above through the rwProgress
-// counters (cs_deblock.hlsl, CSDeblockRows). Waves is the earlier shape, one dispatch per value of
-// t = mbx + 2 * mby, which needs no assumption about thread group residency. Serial is one macroblock
-// per dispatch in raster order, which is clause 8.7 read literally and tells a schedule defect from a
-// filter defect. BC250_MFT_DEBLOCK=wavefront and BC250_MFT_SERIAL_DEBLOCK select the other two.
+// How the deblocking wavefront is driven.
+//
+// Waves is the default: one dispatch per value of t = mbx + 2 * mby, holding the macroblock rows that
+// have a macroblock on that anti-diagonal. The dispatch boundary is the synchronisation, so the
+// schedule needs no assumption about which thread groups are resident together, and the order is
+// proved by arithmetic that DeblockWaveRows below states and the host gate checks.
+//
+// Rows is one dispatch of heightMb thread groups, each walking its macroblock row and waiting on the
+// row above through the rwProgress counters (cs_deblock.hlsl, CSDeblockRows). It is the faster shape
+// where the dispatch is the cost, and it is off by default since the audit of 2026-10-10 (A11 /
+// UMD-3): its wait has a finite spin budget, and when that budget runs out the group filters anyway
+// and publishes the same progress count as a properly ordered row, so a predecessor that was never
+// scheduled gives a wrong reconstruction that later pictures reference, and nothing says so. Forward
+// progress there rests on every one of the heightMb groups being resident at once, which Direct3D
+// does not promise. BC250_MFT_DEBLOCK=rows asks for it anyway, for a measurement.
+//
+// Serial is one macroblock per dispatch in raster order, which is clause 8.7 read literally and tells
+// a schedule defect from a filter defect. BC250_MFT_SERIAL_DEBLOCK selects it.
 enum class DeblockMode : uint32_t { Rows = 0, Waves = 1, Serial = 2 };
+
+// The deblock mode this process encodes with. Waves unless the environment names another shape:
+// BC250_MFT_SERIAL_DEBLOCK wins over BC250_MFT_DEBLOCK because it is the narrower diagnostic, and
+// BC250_MFT_DEBLOCK takes `rows` for the single-dispatch shape. A value starting with `w` still names
+// Waves, so every script and evidence directory that selected `wavefront` keeps selecting it. A
+// function, not a block inside Initialize, because the host gate checks the answer without a device.
+DeblockMode DeblockModeFromEnvironment();
+
+// Does the Rows shader, after its wait gives up, publish the same progress as a properly ordered row?
+// It does (cs_deblock.hlsl, CSDeblockRows): the exhausted group filters anyway and its lane 0
+// publishes mbx + 1, so a successor reads a count that does not mean what it says and the
+// reconstruction that later pictures reference is wrong, with nothing to show it. Whoever gives that
+// branch a failure path, or makes it reconstruct the picture correctly, sets this to false and may
+// then default to Rows again; the host gate holds the two together.
+inline constexpr bool kDeblockRowsPublishesOnTimeout = true;
+
+// One dispatch of the Waves schedule: the macroblock rows [first, last] that have a macroblock on the
+// anti-diagonal t, and whether t has any at all. The shader takes mbx = t - 2 * mby, so a row belongs
+// to t when that mbx is inside the picture: mby <= t / 2 for mbx >= 0, and 2 * mby >= t + 1 - widthMb
+// for mbx <= widthMb - 1. Every macroblock therefore appears in exactly one dispatch, the one of its
+// own t, and each of the three neighbours the filter writes into - (mbx-1, mby), (mbx, mby-1) and
+// (mbx+1, mby-1) - has a smaller t, so it was filtered in an earlier dispatch. That is the whole
+// dependency argument, and DeblockWaveCount says how many dispatches it takes.
+struct DeblockWave {
+    uint32_t first = 0;
+    uint32_t last = 0;
+    bool any = false;
+};
+inline uint32_t DeblockWaveCount(uint32_t widthMb, uint32_t heightMb)
+{
+    return (widthMb == 0 || heightMb == 0) ? 0u : widthMb + 2u * heightMb - 2u;
+}
+inline DeblockWave DeblockWaveRows(uint32_t t, uint32_t widthMb, uint32_t heightMb)
+{
+    DeblockWave out;
+    if (widthMb == 0 || heightMb == 0) {
+        return out;
+    }
+    const uint32_t deficit = (t + 1u > widthMb) ? (t + 1u - widthMb) : 0u;
+    const uint32_t first = (deficit + 1u) / 2u;
+    const uint32_t last = (t / 2u < heightMb - 1u) ? (t / 2u) : (heightMb - 1u);
+    if (first > last) {
+        return out;
+    }
+    out.first = first;
+    out.last = last;
+    out.any = true;
+    return out;
+}
 
 // The stages of one picture's GPU work, in the order the command stream holds them. GpuStageMode is
 // the macroblock pass: on an I picture the anti-diagonal sweep of cs_mb's intra entry point, one
@@ -335,7 +396,7 @@ private:
     std::vector<uint32_t> m_markGroups;   // its thread groups
     uint32_t m_markCount = 0;
     uint32_t m_stageLevel = 0;
-    DeblockMode m_deblockMode = DeblockMode::Rows;
+    DeblockMode m_deblockMode = DeblockMode::Waves;
     GpuStageProfile m_profile;
 
     uint32_t m_visW = 0, m_visH = 0;

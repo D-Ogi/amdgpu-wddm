@@ -77,7 +77,9 @@ inline void latency_idle(uint64_t poll,HANDLE timer) noexcept {
     if(timer){
         LARGE_INTEGER due{};due.QuadPart=-static_cast<LONGLONG>(kFrameLatencySleepUs)*10;  // 100 ns units
         if(SetWaitableTimerEx(timer,&due,0,nullptr,nullptr,nullptr,0)){
-            WaitForSingleObject(timer,INFINITE);return;
+            // Another Present can rearm this per-device synchronization timer or consume its signal.
+            // It is only a sleep hint: a finite wait always returns control to the fence/deadline loop.
+            WaitForSingleObject(timer,1);return;
         }
     }
     Sleep(1);

@@ -58,10 +58,13 @@ $cases = @(
     # picture that was never submitted.
     @(176, 144, 1, 60, 26, @('--deblock', '--depth', '2')),
     @(1280, 720, 4, 60, 26, @('--deblock', '--depth', '2')),
-    # The schedule of the deblocking filter, not the filter: the single-dispatch wavefront is the default
-    # and these two pin the other two shapes to the same bytes, so a mismatch on a machine where the
-    # single dispatch misbehaves can be told from a filter defect inside one sweep.
-    @(320, 240, 4, 60, 26, @('--deblock', '--deblock-mode', 'waves')),
+    # The schedule of the deblocking filter, not the filter. One dispatch per wavefront is the default
+    # since 2026-10-10, so every case above already runs it; these two hold the two shapes a caller has
+    # to ask for - the single dispatch for the whole picture (`--deblock-mode rows`) and one macroblock
+    # per dispatch (`--deblock-mode serial`) - to the same bytes. A mismatch on a machine where one of
+    # them misbehaves can then be told from a filter defect inside one sweep. `tests\host-checks.ps1`
+    # holds this list against the shapes the source admits, so a shape cannot lose its case again.
+    @(320, 240, 4, 60, 26, @('--deblock', '--deblock-mode', 'rows')),
     @(176, 144, 3, 60, 26, @('--deblock', '--deblock-mode', 'serial'))
 )
 

@@ -50,6 +50,48 @@ void ModuleUnlock();
 // True when nothing this DLL handed out is alive any more. DllCanUnloadNow's whole answer.
 bool ModuleIsIdle();
 
+// The client's Direct3D device lock, for as long as our dispatches run on its device. The documented
+// contract for a D3D11-aware MFT, and the outer lock of the two: taken before the transform's own
+// critical section on every path, never the other way round.
+//
+// Take() answers with an HRESULT and every caller reads it. The lease is the only thing that
+// serialises our dispatches, maps and collects against the client's own use of the same device, so a
+// caller that did not get one has no safe way to touch that device: it refuses the call, or - where
+// the call must complete, which is a teardown - lets go of everything without one call on the device.
+// The audit of 2026-10-10 (A5 / UMD-2) found the old void Take() with every caller carrying on.
+struct DeviceLease {
+    ComPtr<IMFDXGIDeviceManager> manager;
+    // What LockDevice handed back. mfobjects.h:6571-6579 declares
+    //   LockDevice(_In_ HANDLE hDevice, _In_ REFIID riid, _Outptr_ void **ppUnkDevice, _In_ BOOL fBlock)
+    // and _Outptr_ is not an optional output: the device is the manager's answer to which device this
+    // lease protects, and the old nullptr threw both the answer and its reference away. Held as
+    // IUnknown because this code wants the object's identity and a reference, not its methods; the
+    // pointer LockDevice writes is an ID3D11Device*, whose IUnknown is its primary base.
+    ComPtr<IUnknown> device;
+    HANDLE handle = nullptr;
+    bool locked = false;
+    DeviceLease() = default;
+    // Not copyable: the destructor unlocks the device and closes the handle, so a copy would do
+    // both twice and the second unlock would be against a lock this object no longer holds.
+    DeviceLease(const DeviceLease&) = delete;
+    DeviceLease& operator=(const DeviceLease&) = delete;
+    ~DeviceLease();
+    // S_OK: the lease is held, or there is no manager and the transform runs on its own device, which
+    // is the separately defined case and not a failure. Anything else: the device must not be touched.
+    HRESULT Take(IMFDXGIDeviceManager* m);
+    // The device this lease is held on, null when there is no manager.
+    IUnknown* Device() const { return device.Get(); }
+    bool Held() const { return locked; }
+};
+
+// Does a lease protect the device the encoder runs on? A client that called
+// IMFDXGIDeviceManager::ResetDevice gave the manager another device, and then our textures, views and
+// contexts belong to a device that is no longer the manager's: MF_E_DXGI_NEW_VIDEO_DEVICE, which is
+// the documented answer of a D3D-aware transform to that event, and tells the client to rebuild.
+// A null on either side is no mismatch: a transform without a manager owns its device, and a lease
+// taken before the encoder exists has nothing to compare against.
+HRESULT LeaseDeviceCheck(IUnknown* leased, ID3D11Device* encoder);
+
 class Bc250H264Mft : public IMFTransform,
                      public IMFMediaEventGenerator,
                      public IMFShutdown,
@@ -196,25 +238,20 @@ private:
         LONGLONG duration = 0;
     };
 
-    // The client's Direct3D device lock, for as long as our dispatches run on its device. The
-    // documented contract for a D3D11-aware MFT, and the outer lock of the two: taken before the
-    // object's own critical section on every path, never the other way round.
-    struct DeviceLease {
-        ComPtr<IMFDXGIDeviceManager> manager;
-        HANDLE handle = nullptr;
-        bool locked = false;
-        DeviceLease() = default;
-        // Not copyable: the destructor unlocks the device and closes the handle, so a copy would do
-        // both twice and the second unlock would be against a lock this object no longer holds.
-        DeviceLease(const DeviceLease&) = delete;
-        DeviceLease& operator=(const DeviceLease&) = delete;
-        ~DeviceLease();
-        void Take(IMFDXGIDeviceManager* m);
-    };
-
     // The client's device manager, read under the critical section and handed back for a lease the
     // caller then takes before it enters the critical section itself.
     void CaptureDeviceManager(ComPtr<IMFDXGIDeviceManager>& out);
+
+    // The device the encoder runs on, or null when no encoder exists yet. Takes the object's critical
+    // section, so a caller calls it before it takes that section itself, never while it holds it. The
+    // pointer names an object this transform holds a reference to for the life of the encoder; it is
+    // compared with the device of a lease and never called through.
+    ID3D11Device* EncoderDevice();
+
+    // The whole lease check of one call: take the lease and prove it protects the encoder's device.
+    // S_OK means our dispatches may run; anything else means they may not, and the caller decides
+    // between refusing its call and abandoning the encoder.
+    HRESULT TakeLease(DeviceLease& lease, IMFDXGIDeviceManager* manager);
 
     // Turns one retired picture into the output sample the client collects, and queues its
     // METransformHaveOutput. m_bitstream holds the access unit; `held` is the picture's input record.
@@ -232,6 +269,12 @@ private:
     // Encoder::Shutdown collects what the GPU still has and collecting one picture maps a staging
     // buffer on the client's device. Caller holds the device lease and the critical section.
     void ResetEncoderLocked();
+
+    // The same teardown for a path that could not take the device lease: everything the transform
+    // holds goes, and not one call is made on the client's device. Nothing is collected, so the
+    // results of the pictures the GPU still has are lost, which is the honest outcome when the lock
+    // that would make collecting them safe cannot be had. Caller holds the critical section.
+    void AbandonEncoderLocked();
 
     // How many pictures the GPU may hold at once, from the configuration and the environment. One for a
     // client that asked for low latency, two otherwise, and BC250_MFT_DEPTH overrides both.

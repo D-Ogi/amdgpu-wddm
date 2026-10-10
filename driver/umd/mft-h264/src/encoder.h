@@ -148,6 +148,13 @@ public:
     HRESULT Initialize(ID3D11Device* device, const EncoderConfig& cfg);
     void Shutdown();
 
+    // Shutdown without one call on the device: for a teardown whose caller could not take the
+    // client's device lease, where every collect of ours would map a staging buffer on a device the
+    // client is free to be using at the same moment. The pictures the GPU still holds are dropped
+    // rather than collected, and releasing our own Direct3D objects is not a call on the device:
+    // GpuEncoder::Shutdown only drops references, which is reference counting and needs no lock.
+    void Abandon();
+
     // SPS and PPS as an Annex B byte sequence, for MF_MT_MPEG_SEQUENCE_HEADER.
     const std::vector<uint8_t>& ParameterSets() const { return m_parameterSets; }
 

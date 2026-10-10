@@ -889,6 +889,398 @@ void SelfTestDialDefaults()
     }
 }
 
+// ---------------------------------------------------------------- the deblock schedule
+//
+// Audit of 2026-10-10 (A11 / UMD-3). The Rows schedule walks a macroblock row per thread group and
+// waits on the row above through the rwProgress counters, with a finite spin budget. When that budget
+// runs out the group filters anyway and publishes the same count as a properly ordered row, so a
+// predecessor that Direct3D never scheduled gives a wrong reconstruction, later pictures reference it,
+// and the encoder reports success. Forward progress there needs every row's group to be resident at
+// once, which no Direct3D contract promises. The containment is the Waves schedule, whose
+// synchronisation is the dispatch boundary; the cases below prove that order and hold the default to
+// it for as long as the Rows timeout publishes progress.
+
+// One group of the Rows schedule as the shader writes it. Waiting for the row above to have published
+// `need` macroblocks, with a budget, and then: did the wait succeed, and what does the group do?
+struct RowsWaitResult {
+    bool satisfied = false;     // the predecessor's count arrived
+    bool filtered = false;      // the group filtered the macroblock
+    bool published = false;     // the group published normal progress for it
+};
+RowsWaitResult ModelRowsWait(uint32_t need, uint32_t published, uint32_t budget)
+{
+    RowsWaitResult out;
+    for (uint32_t spin = 0; spin < budget; ++spin) {
+        if (published >= need) {
+            out.satisfied = true;
+            break;
+        }
+    }
+    // What the shipped shader does after the loop, in both cases: it filters and publishes. The
+    // budget's only effect is how long it takes to get there.
+    out.filtered = true;
+    out.published = kDeblockRowsPublishesOnTimeout || out.satisfied;
+    return out;
+}
+
+void SelfTestDeblockSchedule()
+{
+    printf("deblock schedule\n");
+
+    // The Waves schedule covers every macroblock exactly once, each in the dispatch of its own
+    // t = mbx + 2 * mby, and the dispatches run in order of t. Every neighbour the filter writes into
+    // has a smaller t, so it was filtered in an earlier dispatch: that is the dependency proof, and it
+    // rests on the dispatch boundary alone.
+    const uint32_t sizes[][2] = { { 1, 1 }, { 2, 1 }, { 1, 2 }, { 3, 2 }, { 40, 30 },
+                                  { 80, 45 }, { 120, 68 }, { 256, 256 } };
+    bool scheduleOk = true;
+    uint32_t checked = 0;
+    for (const auto& size : sizes) {
+        const uint32_t widthMb = size[0], heightMb = size[1];
+        std::vector<uint32_t> seen(static_cast<size_t>(widthMb) * heightMb, 0);
+        const uint32_t waves = DeblockWaveCount(widthMb, heightMb);
+        for (uint32_t t = 0; t <= waves; ++t) {
+            const DeblockWave wave = DeblockWaveRows(t, widthMb, heightMb);
+            if (!wave.any) {
+                continue;
+            }
+            if (wave.first > wave.last || wave.last >= heightMb) {
+                Fail("%ux%u mb: wave %u dispatches rows %u..%u", widthMb, heightMb, t, wave.first,
+                     wave.last);
+                scheduleOk = false;
+                continue;
+            }
+            for (uint32_t mby = wave.first; mby <= wave.last; ++mby) {
+                // The shader's own index: one group of this dispatch takes this macroblock.
+                if (t < 2u * mby || t - 2u * mby >= widthMb) {
+                    Fail("%ux%u mb: wave %u gives row %u a macroblock outside the picture", widthMb,
+                         heightMb, t, mby);
+                    scheduleOk = false;
+                    continue;
+                }
+                const uint32_t mbx = t - 2u * mby;
+                ++seen[static_cast<size_t>(mby) * widthMb + mbx];
+                ++checked;
+            }
+        }
+        for (uint32_t mby = 0; mby < heightMb; ++mby) {
+            for (uint32_t mbx = 0; mbx < widthMb; ++mbx) {
+                const uint32_t times = seen[static_cast<size_t>(mby) * widthMb + mbx];
+                if (times != 1) {
+                    Fail("%ux%u mb: macroblock (%u,%u) is filtered %u time(s)", widthMb, heightMb,
+                         mbx, mby, times);
+                    scheduleOk = false;
+                }
+            }
+        }
+    }
+    if (scheduleOk) {
+        printf("  %-34s %u macroblocks over %u sizes, each in the dispatch of its own t\n",
+               "the Waves schedule", checked,
+               static_cast<unsigned>(sizeof(sizes) / sizeof(sizes[0])));
+    }
+
+    // Forced exhaustion. The predecessor group never publishes anything, so the wait cannot be
+    // satisfied whatever the budget is. The shipped Rows shader answers that by filtering the
+    // macroblock and publishing progress for it, which is a reconstruction that a later picture
+    // references and an encoder that says nothing. The budget below is small because the outcome does
+    // not depend on its size: an exhausted wait is an exhausted wait.
+    {
+        const RowsWaitResult starved = ModelRowsWait(2, 0, 4096);
+        const RowsWaitResult ordered = ModelRowsWait(2, 2, 4096);
+        if (starved.satisfied) {
+            Fail("forced exhaustion: a predecessor that published nothing satisfied the wait");
+        }
+        if (!ordered.satisfied) {
+            Fail("forced exhaustion: a predecessor that published enough did not satisfy the wait");
+        }
+        const bool silentlyWrong = !starved.satisfied && starved.filtered && starved.published;
+        if (silentlyWrong != kDeblockRowsPublishesOnTimeout) {
+            Fail("forced exhaustion: the model and kDeblockRowsPublishesOnTimeout disagree");
+        }
+        // The containment, and the whole point of this case: while the exhausted branch publishes
+        // normal progress, no recording may get that schedule by default.
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+        SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+        const DeblockMode fallback = DeblockModeFromEnvironment();
+        if (silentlyWrong && fallback == DeblockMode::Rows) {
+            Fail("forced exhaustion: Rows is the default although its timeout publishes progress "
+                 "for a macroblock whose predecessor never ran");
+        } else {
+            printf("  %-34s predecessor silent, wait exhausted, filtered=%d published=%d, "
+                   "default mode %u\n", "forced exhaustion", starved.filtered ? 1 : 0,
+                   starved.published ? 1 : 0, static_cast<unsigned>(fallback));
+        }
+
+        // And the shape is still selectable for a measurement, with the two diagnostics unchanged.
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "rows");
+        const DeblockMode rows = DeblockModeFromEnvironment();
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "wavefront");
+        const DeblockMode waves = DeblockModeFromEnvironment();
+        SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", "1");
+        const DeblockMode serial = DeblockModeFromEnvironment();
+        SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+        SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+        if (fallback != DeblockMode::Waves || rows != DeblockMode::Rows ||
+            waves != DeblockMode::Waves || serial != DeblockMode::Serial) {
+            Fail("deblock mode selection: default %u, rows %u, wavefront %u, serial %u",
+                 static_cast<unsigned>(fallback), static_cast<unsigned>(rows),
+                 static_cast<unsigned>(waves), static_cast<unsigned>(serial));
+        } else {
+            printf("  %-34s default Waves, rows, wavefront, serial\n", "mode selection");
+        }
+    }
+}
+
+// ---------------------------------------------------------------- the device lease
+//
+// The client's device lease is the outer lock of the two the transform takes, and the only thing that
+// serialises our dispatches, maps and collects against the client's own use of the same Direct3D
+// device. The audit of 2026-10-10 (A5 / UMD-2) found DeviceLease::Take() returning void, passing
+// nullptr for the _Outptr_ device of IMFDXGIDeviceManager::LockDevice (mfobjects.h:6571-6579), and
+// every caller carrying on into GPU work whether or not the lease was there.
+//
+// A fake manager answers here, so the three failures are reachable without a GPU, without Media
+// Foundation and without a client: the open fails, the lock fails, and the lock hands back a device
+// that is not the encoder's, which is what a client's ResetDevice leaves behind.
+
+// A device object that only has to exist and be counted: the lease holds a reference to it and
+// compares its address, and calls nothing through it.
+class FakeDevice : public IUnknown {
+public:
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override
+    {
+        if (ppv == nullptr) {
+            return E_POINTER;
+        }
+        if (riid == __uuidof(IUnknown)) {
+            *ppv = static_cast<IUnknown*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return static_cast<ULONG>(++m_refs); }
+    ULONG STDMETHODCALLTYPE Release() override { return static_cast<ULONG>(--m_refs); }
+    long Refs() const { return m_refs; }
+
+private:
+    long m_refs = 1;
+};
+
+// What the fake manager does when the lease asks for it.
+struct FakeManagerPlan {
+    HRESULT openResult = S_OK;
+    HRESULT lockResult = S_OK;
+    IUnknown* lockDevice = nullptr;   // what LockDevice writes through its _Outptr_ argument
+    bool writeDevice = true;          // false: a lock that succeeds and writes nothing
+};
+
+class FakeManager : public IMFDXGIDeviceManager {
+public:
+    explicit FakeManager(const FakeManagerPlan& plan) : m_plan(plan) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override
+    {
+        if (ppv == nullptr) {
+            return E_POINTER;
+        }
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IMFDXGIDeviceManager)) {
+            *ppv = static_cast<IMFDXGIDeviceManager*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return static_cast<ULONG>(++m_refs); }
+    ULONG STDMETHODCALLTYPE Release() override { return static_cast<ULONG>(--m_refs); }
+
+    HRESULT STDMETHODCALLTYPE OpenDeviceHandle(HANDLE* phDevice) override
+    {
+        ++opens;
+        if (FAILED(m_plan.openResult)) {
+            // A failing manager is free to leave the output alone. The lease must not keep whatever
+            // was in the variable and then close it.
+            return m_plan.openResult;
+        }
+        *phDevice = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(0x1000 + opens));
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE CloseDeviceHandle(HANDLE) override { ++closes; return S_OK; }
+    HRESULT STDMETHODCALLTYPE LockDevice(HANDLE, REFIID riid, void** ppUnkDevice, BOOL) override
+    {
+        ++locks;
+        lockedRiid = riid;
+        sawNullOutput = sawNullOutput || (ppUnkDevice == nullptr);
+        if (FAILED(m_plan.lockResult)) {
+            return m_plan.lockResult;
+        }
+        if (ppUnkDevice != nullptr && m_plan.writeDevice && m_plan.lockDevice != nullptr) {
+            m_plan.lockDevice->AddRef();
+            *ppUnkDevice = m_plan.lockDevice;
+        }
+        return m_plan.lockResult;
+    }
+    HRESULT STDMETHODCALLTYPE UnlockDevice(HANDLE, BOOL) override { ++unlocks; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetVideoService(HANDLE, REFIID, void**) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE ResetDevice(IUnknown*, UINT) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE TestDevice(HANDLE) override { return S_OK; }
+
+    unsigned opens = 0, closes = 0, locks = 0, unlocks = 0;
+    bool sawNullOutput = false;
+    IID lockedRiid = GUID_NULL;
+
+private:
+    FakeManagerPlan m_plan;
+    long m_refs = 1;
+};
+
+void CheckLeaseCase(const char* what, const FakeManagerPlan& plan, HRESULT want, bool wantHeld)
+{
+    FakeManager manager(plan);
+    HRESULT hr = S_OK;
+    {
+        DeviceLease lease;
+        hr = lease.Take(&manager);
+        if (lease.Held() != wantHeld) {
+            Fail("%s: the lease says held=%d, expected %d", what, lease.Held() ? 1 : 0,
+                 wantHeld ? 1 : 0);
+        }
+        if (SUCCEEDED(hr) && lease.Held() && lease.Device() == nullptr) {
+            Fail("%s: a held lease names no device", what);
+        }
+    }
+    if (hr != want) {
+        Fail("%s: Take returned 0x%08lX, expected 0x%08lX", what,
+             static_cast<unsigned long>(hr), static_cast<unsigned long>(want));
+    }
+    if (manager.sawNullOutput) {
+        Fail("%s: LockDevice was given a null device output, which mfobjects.h declares _Outptr_",
+             what);
+    }
+    // Whatever the answer, the lease gives back exactly what it took.
+    if (manager.unlocks != (wantHeld ? 1u : 0u)) {
+        Fail("%s: %u unlock(s) against %u lock(s) that were granted", what, manager.unlocks,
+             wantHeld ? 1u : 0u);
+    }
+    if (manager.closes != manager.opens - (FAILED(plan.openResult) ? 1u : 0u)) {
+        Fail("%s: %u handle(s) opened, %u closed", what, manager.opens, manager.closes);
+    }
+    printf("  %-34s Take 0x%08lX, %u lock, %u unlock, %u open, %u close\n", what,
+           static_cast<unsigned long>(hr), manager.locks, manager.unlocks, manager.opens,
+           manager.closes);
+}
+
+void SelfTestDeviceLease()
+{
+    printf("device lease\n");
+
+    // No manager at all: the transform owns its device and there is no lease to take. Not a failure,
+    // and the one case the old void Take() got right.
+    {
+        DeviceLease lease;
+        const HRESULT hr = lease.Take(nullptr);
+        if (hr != S_OK || lease.Held() || lease.Device() != nullptr) {
+            Fail("no manager: Take returned 0x%08lX, held=%d", static_cast<unsigned long>(hr),
+                 lease.Held() ? 1 : 0);
+        } else {
+            printf("  %-34s Take S_OK, no lease to take\n", "no device manager");
+        }
+    }
+
+    FakeDevice device;
+
+    // OpenDeviceHandle fails: no handle, no lock, and the failure reaches the caller.
+    {
+        FakeManagerPlan plan;
+        plan.openResult = MF_E_DXGI_DEVICE_NOT_INITIALIZED;
+        plan.lockDevice = &device;
+        CheckLeaseCase("OpenDeviceHandle fails", plan, MF_E_DXGI_DEVICE_NOT_INITIALIZED, false);
+    }
+
+    // LockDevice fails: the handle is closed again and the failure reaches the caller.
+    {
+        FakeManagerPlan plan;
+        plan.lockResult = E_FAIL;
+        plan.lockDevice = &device;
+        CheckLeaseCase("LockDevice fails", plan, E_FAIL, false);
+    }
+
+    // A lock that writes no device: the lease cannot say which device it protects, which is the one
+    // thing it exists to prove. It is still a held lock, so it is still given back.
+    {
+        FakeManagerPlan plan;
+        plan.lockDevice = &device;
+        plan.writeDevice = false;
+        CheckLeaseCase("LockDevice writes no device", plan, E_UNEXPECTED, true);
+    }
+
+    // The lease is granted on the device the manager holds.
+    {
+        FakeManagerPlan plan;
+        plan.lockDevice = &device;
+        CheckLeaseCase("the lease is granted", plan, S_OK, true);
+    }
+
+    // Every reference the fake manager handed out came back with the leases above.
+    if (device.Refs() != 1) {
+        Fail("the device kept %ld reference(s) after every lease was released, expected 1",
+             device.Refs());
+    } else {
+        printf("  %-34s every reference returned\n", "device references");
+    }
+
+    // The riid the lease asks for names the device the encoder was built on, which is what
+    // EnsureEncoder asks GetVideoService for. A lease on another interface could not be compared.
+    {
+        FakeManagerPlan plan;
+        plan.lockDevice = &device;
+        FakeManager manager(plan);
+        {
+            DeviceLease lease;
+            (void)lease.Take(&manager);
+        }
+        if (manager.lockedRiid != __uuidof(ID3D11Device)) {
+            Fail("the lease locked some other interface than ID3D11Device");
+        } else {
+            printf("  %-34s ID3D11Device\n", "the locked interface");
+        }
+    }
+
+    // The identity check. A client that called IMFDXGIDeviceManager::ResetDevice gave the manager
+    // another device, and our textures and views belong to the old one: MF_E_DXGI_NEW_VIDEO_DEVICE.
+    // The pointers below are only ever compared, never called through.
+    {
+        ID3D11Device* const encoderDevice = reinterpret_cast<ID3D11Device*>(&device);
+        FakeDevice other;
+        ID3D11Device* const otherDevice = reinterpret_cast<ID3D11Device*>(&other);
+        struct {
+            const char* what;
+            IUnknown* leased;
+            ID3D11Device* encoder;
+            HRESULT want;
+        } cases[] = {
+            { "the same device", static_cast<IUnknown*>(&device), encoderDevice, S_OK },
+            { "a device after ResetDevice", static_cast<IUnknown*>(&device), otherDevice,
+              MF_E_DXGI_NEW_VIDEO_DEVICE },
+            { "no encoder yet", static_cast<IUnknown*>(&device), nullptr, S_OK },
+            { "no manager", nullptr, encoderDevice, S_OK },
+            { "neither", nullptr, nullptr, S_OK },
+        };
+        for (const auto& c : cases) {
+            const HRESULT hr = LeaseDeviceCheck(c.leased, c.encoder);
+            if (hr != c.want) {
+                Fail("LeaseDeviceCheck(%s) returned 0x%08lX, expected 0x%08lX", c.what,
+                     static_cast<unsigned long>(hr), static_cast<unsigned long>(c.want));
+            }
+        }
+        printf("  %-34s %u cases, a reset device is refused\n", "the device identity check",
+               static_cast<unsigned>(sizeof(cases) / sizeof(cases[0])));
+    }
+}
+
 } // namespace
 
 int RunSelfTest()
@@ -900,6 +1292,8 @@ int RunSelfTest()
     SelfTestParameterSets();
     SelfTestFrameSizes();
     SelfTestDialDefaults();
+    SelfTestDeblockSchedule();
+    SelfTestDeviceLease();
     SelfTestAdapterChoice();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
     return (g_failures == 0) ? 0 : 1;
@@ -1885,7 +2279,9 @@ int wmain(int argc, wchar_t** argv)
             } else if (wcscmp(m, L"serial") == 0) {
                 SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", "1");
             } else if (wcscmp(m, L"rows") == 0) {
-                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+                // Named, not cleared: Waves is the default since the audit of 2026-10-10 (A11), so
+                // clearing the variable would run the case the caller did not ask for.
+                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "rows");
                 SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
             } else {
                 wprintf(L"--deblock-mode takes rows, waves or serial\n");
