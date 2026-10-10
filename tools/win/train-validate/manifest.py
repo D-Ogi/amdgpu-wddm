@@ -268,6 +268,13 @@ def plan_steps(arm: dict, values: dict, limits: dict, python: str) -> list[Plann
     the manifest; the lab script itself owns the bound.
     """
     grace = int(limits["host_grace_s"]) if arm["kind"] in TRIAL_KINDS + GAME_KINDS else 0
+    if arm["kind"] in GAME_KINDS:
+        # A game arm's bound is the session's own, which the session script holds. The host step around it
+        # also stages the trial and pulls its evidence afterwards (the deferred ICD logs, the ETW files, the
+        # closure), and in the b28 run those pulls were still going 10 minutes after the game had closed and
+        # the session had restored the lab. That is not the game running over its bound, so the host backstop
+        # of a game run step is the bound plus this margin.
+        grace += int(limits.get("game_evidence_s", 900))
     steps: list[PlannedStep] = []
     for phase in ("pre", "run", "post"):
         for entry in arm.get(phase, ()):
