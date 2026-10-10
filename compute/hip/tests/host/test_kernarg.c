@@ -450,6 +450,38 @@ static void check_dispatch_packet(void)
     }
 }
 
+static void check_requirement_bounds(void)
+{
+    const uint32_t sizes[] = {UINT32_MAX - 126u, UINT32_MAX - 63u, UINT32_MAX};
+    bc250hsa_kernel k;
+    bc250hsa_launch launch;
+    bc250hsa_pack_result result;
+    uint32_t i, j, bytes, align;
+    memset(&k, 0, sizeof(k));
+    k.name = "checked_requirements";
+    k.kernarg_align = 16u;
+    k.kernel_code_properties = TEST_KCP_DISPATCH_PTR;
+    k.kernarg_bytes = UINT32_MAX - 127u;
+    CHECK_STATUS(bc250hsa_kernarg_requirements(&k, &bytes, &align), BC250HSA_OK);
+    CHECK_U64(bytes, UINT32_MAX - 63u);
+    CHECK_U64(align, 64u);
+    launch_of(&launch, 1u, 1u, 1u, 1u, 1u, 1u);
+    for (i = 0; i < TEST_COUNT(sizes); ++i) {
+        bc250hsa_status status;
+        k.kernarg_bytes = sizes[i];
+        status = bc250hsa_kernarg_requirements(&k, &bytes, &align);
+        CHECK_STATUS(status, BC250HSA_EINVAL);
+        /* Never exercise an admitted invalid size, even in a negative control. */
+        if (status != BC250HSA_EINVAL) continue;
+        CHECK_U64(bytes, 0u);
+        memset(g_buffer, 0xA5, sizeof(g_buffer));
+        zero_result(&result);
+        CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, NULL, 0u, g_buffer,
+                     sizeof(g_buffer), 0u, &result), BC250HSA_EINVAL);
+        for (j = 0; j < sizeof(g_buffer); ++j) CHECK_U64(g_buffer[j], 0xA5u);
+    }
+}
+
 int main(int argc, char** argv)
 {
     const char*             dir = test_data_dir(argc, argv);
@@ -473,5 +505,6 @@ int main(int argc, char** argv)
     }
     check_hidden_fields();
     check_dispatch_packet();
+    check_requirement_bounds();
     return test_report("test_kernarg");
 }

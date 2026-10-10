@@ -23,9 +23,9 @@ static int wants_dispatch_packet(const bc250hsa_kernel* kernel)
 }
 
 /* Where the packet goes: behind the kernel arguments, at its own 64-byte alignment. */
-static uint32_t dispatch_packet_offset(const bc250hsa_kernel* kernel)
+static uint64_t dispatch_packet_offset(const bc250hsa_kernel* kernel)
 {
-    return (uint32_t)bc250hsa_align_up_u64((uint64_t)kernel->kernarg_bytes,
+    return bc250hsa_align_up_u64((uint64_t)kernel->kernarg_bytes,
                                            BC250HSA_AQL_PACKET_ALIGN);
 }
 
@@ -42,7 +42,14 @@ bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel, uin
          * and its one lifetime (section 7.1). The buffer therefore grows by the packet
          * and its alignment, and the whole buffer is aligned at least as strictly as
          * the packet needs, so the offset below lands on a 64-byte boundary. */
-        *bytes = dispatch_packet_offset(kernel) + BC250HSA_AQL_PACKET_BYTES;
+        const uint64_t packet_offset = dispatch_packet_offset(kernel);
+        /* Keep alignment and the packet tail wide until the public size is proven
+         * representable. A wrapped size would defeat the packer's capacity check. */
+        if (packet_offset > UINT32_MAX - (uint64_t)BC250HSA_AQL_PACKET_BYTES) {
+            *bytes = 0u;
+            return BC250HSA_EINVAL;
+        }
+        *bytes = (uint32_t)(packet_offset + BC250HSA_AQL_PACKET_BYTES);
         if (*alignment < BC250HSA_AQL_PACKET_ALIGN) {
             *alignment = BC250HSA_AQL_PACKET_ALIGN;
         }
@@ -338,7 +345,7 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
     }
 
     if (wants_dispatch_packet(kernel)) {
-        const uint32_t        offset = dispatch_packet_offset(kernel);
+        const uint32_t        offset = (uint32_t)dispatch_packet_offset(kernel);
         const bc250hsa_status status =
             write_dispatch_packet(kernel, launch, kernarg_va, base + offset);
         if (status != BC250HSA_OK) {

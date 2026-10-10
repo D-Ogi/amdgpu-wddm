@@ -438,7 +438,9 @@ typedef struct bc250hsa_pack_result {
 
 /* The size and the alignment that the caller must allocate for one launch. It covers
  * the kernel arguments and, for a kernel that enables ENABLE_SGPR_DISPATCH_PTR, the
- * AQL dispatch packet behind them. */
+ * AQL dispatch packet behind them. A kernel whose arguments and that packet do not fit
+ * in the uint32_t of this interface is refused with BC250HSA_EINVAL and bytes 0: a size
+ * that wrapped would defeat the capacity check of bc250hsa_kernarg_pack. */
 bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel,
                                               uint32_t* bytes, uint32_t* alignment);
 
