@@ -42,7 +42,7 @@ typedef struct {
 #define NT_SUCCESS(s) ((s)>=0)
 #define BC250_CHILD_UID 0x250001u
 #define D3DDDI_ID_UNINITIALIZED 0xffffffffu
-#define BC250_WDDM_SUBMIT_TIMEOUT_MS 1
+#define BC250_WDDM_STOP_DRAIN_MS 1          // BD-114: the stop drain has its own bound now, not the watchdog budget
 #define BC250_WDDM_TAG 1
 #define KernelMode 0
 #define StageStopEnter 70
