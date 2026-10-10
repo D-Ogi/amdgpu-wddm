@@ -23,6 +23,7 @@ namespace AmdgpuWddmControl
 
         public void UseFixture(RecoverySnapshot s)
         {
+            if (!_smoke) throw new InvalidOperationException("fixtures require a smoke form");
             _fixture = true;
             _snap = s ?? new RecoverySnapshot();
             if (_snap.GameProfiles == null) _snap.GameProfiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -107,7 +108,7 @@ namespace AmdgpuWddmControl
             // the one in force), and processor tuning on with one readback and saved settings. A fixture that brings
             // its own readings (test/snapshot-tuner.json) keeps them.
             _tuningOpen = true;
-            if (_snap.Curve == null)
+            if (_snap.Curve == null && BoardCapabilities.Current.Allows(BoardCapabilities.Gpu))
             {
                 var line = Tuner.Table(); var floor = Tuner.Floors();
                 var trial = Tuner.Preset("medium", line, floor);
@@ -201,6 +202,17 @@ namespace AmdgpuWddmControl
                     foreach (var p in Overflows(this)) w.AppendLine(where + ": " + p);
                     foreach (var p in NoInternals(Texts(this, true))) w.AppendLine(where + ": G-NOINT " + p);
                     foreach (var p in Accessibility(this)) w.AppendLine(where + ": G-A11Y " + p);
+                    if (_fixture && page == "graphics")
+                    {
+                        bool admitted = BoardCapabilities.Current.Allows(BoardCapabilities.Gpu | BoardCapabilities.Cpu);
+                        if (_anchors.ContainsKey("graphics.tuning") != admitted)
+                            w.AppendLine(where + ": board capability admission does not match the tuning controls");
+                        if (!admitted && !Texts(built, false).Contains(Strings.T("board.unsupported")))
+                            w.AppendLine(where + ": the unsupported board has no explanation");
+                    }
+                    if (_fixture && page == "system")
+                        foreach (var anchor in new[] { "system.background", "system.updates", "system.drivers", "system.drive" })
+                            if (!_anchors.ContainsKey(anchor)) w.AppendLine(where + ": Windows setting missing for this board: " + anchor);
                     if (_guide == null || string.IsNullOrEmpty(_guide.Text2)) w.AppendLine(where + ": the guide panel has no text");
                     if (_guide != null && _guide.ArtShown && !_prefs.ShowNagi) w.AppendLine(where + ": G-ART art shown with Show Nagi unchecked");
                     if (_guide != null && _guide.Playing) w.AppendLine(where + ": G-PERF a frame sequence plays in a window that is not shown");

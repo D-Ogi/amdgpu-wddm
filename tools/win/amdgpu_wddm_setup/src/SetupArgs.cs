@@ -26,7 +26,7 @@ namespace AmdgpuWddmSetup
         public string[] Raw = new string[0];
         public string Mode = "welcome";
         public string Package, RunRoot, Error;
-        public bool DryRun;
+        public bool DryRun, ApplySystemTuning;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
         public string SmokeDir, Language = "en", Script = "install.ps1";
@@ -47,6 +47,7 @@ namespace AmdgpuWddmSetup
                 switch (x)
                 {
                     case "--version": a.SetMode("version"); break;
+                    case "--apply-system-tuning": a.ApplySystemTuning = true; break;
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;
@@ -95,6 +96,11 @@ namespace AmdgpuWddmSetup
             if (a.Error == null && a.DryRun && a.Mode != "welcome" && a.Mode != "repair") a.Error = "--dry-run only with the welcome or --repair";
             if (a.Error == null && (a.Cancel || a.PlanRun) && a.Mode != "smoke-engine") a.Error = "--cancel and --plan only with --smoke-engine";
             return a;
+        }
+
+        public static string[] TuningArguments(bool? choice)
+        {
+            return choice.HasValue ? new[] { choice.Value ? "-ApplySystemTuning" : "-SkipSystemTuning" } : new string[0];
         }
 
         void SetMode(string mode)

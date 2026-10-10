@@ -53,6 +53,7 @@ namespace AmdgpuWddmControl
             if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
             if (args.Length > 0 && args[0] == "--status") return Status(args);
             if (args.Length > 0 && args[0] == "--action") return Dispatch(args);
+            if (args.Length > 0 && args[0] == "--system-tuning") return Dispatch(args);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length == 2 && args[0] == "--smoke") return Smoke(args[1]);
@@ -169,7 +170,7 @@ namespace AmdgpuWddmControl
                 Directory.CreateDirectory(dir);
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 float scale = float.Parse(args[2], inv), textScale = 1;
-                string lang = "en", fixture = null;
+                string lang = "en", fixture = null, boardFixture = null;
                 var o = new MainForm.RenderOptions { Directory = dir };
                 for (int i = 3; i < args.Length; i++)
                 {
@@ -178,9 +179,13 @@ namespace AmdgpuWddmControl
                     else if (args[i] == "--nagi") o.Nagi = true;
                     else if (args[i] == "--switch-to" && i + 1 < args.Length) o.SwitchTo = args[++i];
                     else if (args[i] == "--fixture" && i + 1 < args.Length) fixture = args[++i];
+                    else if (args[i] == "--board-fixture" && i + 1 < args.Length) boardFixture = args[++i];
                     else throw new ArgumentException("unknown option " + args[i]);
                 }
                 if (Array.IndexOf(Strings.Languages, lang) < 0) throw new ArgumentException("unknown language " + lang);
+                if (boardFixture != null && fixture == null) throw new ArgumentException("a board fixture requires a render snapshot");
+                // Explicit render-only fixture. Production admission never reads a file or environment override.
+                if (boardFixture != null) BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(boardFixture)));
                 var prefs = new AppPrefs(new MemoryPrefStore()) { Language = lang, ShowNagi = o.Nagi };
                 Strings.Language = lang;
                 Theme.Init(scale, textScale);
@@ -236,6 +241,7 @@ namespace AmdgpuWddmControl
         static int Dispatch(string[] args)
         {
             if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
+            if (args.Length > 0 && args[0] == "--system-tuning") return SystemTuningProcess.Dispatch(args);
             // Existing recovery verbs. Game settings go through --action game-profile (planned, backed up, undoable); the
             // old unplanned --apply-profiles verb is gone.
             return args.Length > 0 && args[0] == "--action" ? RecoveryRunner.Run(args) : RecoveryRunner.Usage;
@@ -264,6 +270,12 @@ namespace AmdgpuWddmControl
             {
                 using (var p = Process.Start(psi))
                 {
+                    if (verb.Length > 0 && verb[0] == "--system-tuning")
+                    {
+                        // Its backend has its own 120 s deadline. A delayed child does not freeze the window.
+                        if (!p.WaitForExit(150000)) return SystemTuningProcess.Timeout;
+                        return p.ExitCode;
+                    }
                     p.WaitForExit();
                     return p.ExitCode;
                 }

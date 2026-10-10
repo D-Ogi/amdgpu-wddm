@@ -12,7 +12,7 @@
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF), and
-# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 8 pages at 96, 120, 144 and 192 DPI in the four
+# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with Nagi shown and hidden, and a language switch at run time; every page is drawn to
 # PNG without a window and checked for overlap, overflow, internals in the text and accessible names.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
@@ -49,13 +49,18 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs' |
+    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
 $providerOut = Join-Path $obj 'board-provider'
 & (Join-Path $repo 'driver\kmd\test\run_board_provider.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out $providerOut
 $env:AMDGPU_WDDM_BOARD_FIXTURE = Join-Path $providerOut 'board-caps.bin'
+$unknownBoardFixture = Join-Path $providerOut 'board-unknown.bin'
+$unknownBoard = New-Object byte[] 768
+[Array]::Copy([IO.File]::ReadAllBytes($env:AMDGPU_WDDM_BOARD_FIXTURE), $unknownBoard, 20)
+[Array]::Copy([BitConverter]::GetBytes([uint32]1), 0, $unknownBoard, 28, 4)
+[IO.File]::WriteAllBytes($unknownBoardFixture, $unknownBoard)
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
 # temp folder. With -Oracle the review oracles (oracle-cu.json, oracle-ver.json, oracle-art.json) in that directory are
@@ -64,6 +69,11 @@ $testTmp = Join-Path $obj 'tmp'
 New-Item -ItemType Directory -Force $testTmp | Out-Null
 $env:TEMP = $testTmp; $env:TMP = $testTmp
 $env:AMDGPU_WDDM_ORACLE = $(if ($Oracle) { (Resolve-Path $Oracle).Path } else { '' })
+$env:AMDGPU_WDDM_SYSTEM_TUNING_FIXTURES = Join-Path $obj 'system-tuning-fixtures'
+# Pure injected-system tests emit the exact backend JSON consumed by the C# contract tests. No native adapter loads.
+& "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+    -File (Join-Path $repo 'tools\win\system-tuning\test-system-tuning.ps1') -Out $env:AMDGPU_WDDM_SYSTEM_TUNING_FIXTURES
+if ($LASTEXITCODE -ne 0) { throw 'system tuning fake-system tests failed' }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
     "/out:$obj\unit-tests.exe" @pure (Get-ChildItem "$here\test\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
@@ -121,6 +131,11 @@ if ($NagiArt) {
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
+$systemTuningOutput = Join-Path $Out 'system-tuning'
+New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
+foreach ($part in 'system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.Native.psm1') {
+    Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$part") -Destination (Join-Path $systemTuningOutput $part)
+}
 # The exe declares its framework (A5: SecurityProtocolType.SystemDefault means the OS's TLS choice only for a 4.7+ target).
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe"))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_control.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
@@ -165,6 +180,9 @@ if (-not $NoSmoke) {
 
     # The Recovery dry runs: the plans of the exe itself, from the recorded BD-059 state and from this PC.
     function Invoke-DryRun([string[]]$ArgList, [string]$Name) {
+        if ($ArgList -contains '--snapshot' -and $ArgList -notcontains '--board-fixture') {
+            $ArgList += @('--board-fixture', $env:AMDGPU_WDDM_BOARD_FIXTURE)
+        }
         $file = Join-Path $obj "dry-$Name.txt"
         Remove-Item $file -ErrorAction SilentlyContinue
         $quoted = $ArgList | ForEach-Object { if ($_ -match ' ') { "`"$_`"" } else { $_ } }
@@ -173,6 +191,16 @@ if (-not $NoSmoke) {
         [pscustomobject]@{ Code = $p.ExitCode; Text = $(if (Test-Path $file) { Get-Content $file -Raw } else { '' }) }
     }
     $snapshot = Join-Path $here 'test\snapshot-bd059.json'
+    $r = Invoke-DryRun @('--action', 'fan-auto', '--dry-run', '--board-fixture', $env:AMDGPU_WDDM_BOARD_FIXTURE) 'board-fixture-no-snapshot'
+    if ($r.Code -ne 2) { throw "board fixture without a dry-run snapshot must be refused (exit $($r.Code))" }
+    $r = Invoke-DryRun @('--action', 'fan-auto', '--snapshot', $snapshot, '--board-fixture', $env:AMDGPU_WDDM_BOARD_FIXTURE) 'board-fixture-no-dry-run'
+    if ($r.Code -ne 2) { throw "board fixture without dry-run must be refused (exit $($r.Code))" }
+    $r = Invoke-DryRun @('--action', 'fan-auto', '--dry-run', '--snapshot', $snapshot, '--board-fixture', $unknownBoardFixture) 'board-fixture-unknown'
+    if ($r.Code -ne 3 -or -not $r.Text.Contains('dry run: nothing was written')) { throw "unknown board must refuse mutation planning (exit $($r.Code)): $($r.Text)" }
+    $badBoardFixture = Join-Path $providerOut 'board-malformed.bin'
+    [IO.File]::WriteAllBytes($badBoardFixture, [byte[]]@(0))
+    $r = Invoke-DryRun @('--action', 'fan-auto', '--dry-run', '--snapshot', $snapshot, '--board-fixture', $badBoardFixture) 'board-fixture-malformed'
+    if ($r.Code -ne 1 -or -not $r.Text.Contains('board fixture failed:')) { throw "malformed board fixture must be refused (exit $($r.Code)): $($r.Text)" }
     $params = 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
     $expect = [ordered]@{
         'reopen-gpu-path' = @(0, "set $params EnableGpuPresentBlit = 1 (DWord)", "delete $params InteropClosedReason")
@@ -432,6 +460,7 @@ if (-not $NoSmoke) {
     $runs = @()
     foreach ($lang in 'en', 'pl', 'ja', 'ko') {
         foreach ($scale in '1', '1.25', '1.5', '2') { $runs += , @("$lang-$scale", $scale, '--lang', $lang, '--fixture', "`"$fixture`"") }
+        $runs += , @("$lang-1-unknown-board", '1', '--lang', $lang, '--fixture', "`"$fixture`"", '--board-fixture', "`"$unknownBoardFixture`"")
     }
     $runs += , @('en-1-pc', '1')
     $runs += , @('pl-1-text150', '1', '--lang', 'pl', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
@@ -453,12 +482,16 @@ if (-not $NoSmoke) {
     $failed = @()
     foreach ($r in $runs) {
         $dir = Join-Path $obj "render\$($r[0])"
-        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList (@('--smoke-render', "`"$dir`"") + $r[1..($r.Count - 1)]) -PassThru -WindowStyle Hidden
+        $renderArgs = @('--smoke-render', "`"$dir`"") + $r[1..($r.Count - 1)]
+        if ($renderArgs -contains '--fixture' -and $renderArgs -notcontains '--board-fixture') {
+            $renderArgs += @('--board-fixture', "`"$env:AMDGPU_WDDM_BOARD_FIXTURE`"")
+        }
+        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList $renderArgs -PassThru -WindowStyle Hidden
         if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "render $($r[0]) did not exit within 120 s" }
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (8 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch, tuning states): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch, tuning states): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name

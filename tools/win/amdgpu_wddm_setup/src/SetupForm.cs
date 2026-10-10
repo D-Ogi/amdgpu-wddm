@@ -37,6 +37,7 @@ namespace AmdgpuWddmSetup
         EngineResult _planResult, _result;
         ResultView _view;
         bool _consentTestSigning;
+        bool? _systemTuningChoice;
         string _bitLocker = "";
         bool _restartLater;
         string _restartError, _supportSaved, _supportError;
@@ -52,6 +53,7 @@ namespace AmdgpuWddmSetup
         public SetupForm(SetupArgs args, bool smoke)
         {
             _args = args;
+            _systemTuningChoice = args.ApplySystemTuning ? (bool?)true : null;
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
@@ -509,6 +511,14 @@ namespace AmdgpuWddmSetup
                 sc.Add(Ui.Label(Strings.T("plan.settings.note"), Theme.Small, Theme.Dim, sc.Inner));
             }
 
+            var tuning = Card(Strings.T("tuning.title"));
+            var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
+            tune.Checked = _systemTuningChoice ?? (d != null && d.SystemTuning);
+            tune.CheckedChanged += (s, e) => { _systemTuningChoice = tune.Checked; };
+            tuning.Add(tune);
+            tuning.Add(Ui.Label(Strings.T("tuning.details"), Theme.Small, Theme.Dim, tuning.Inner));
+            tuning.Add(Ui.Label(Strings.T("tuning.restore"), Theme.Small, Theme.Dim, tuning.Inner));
+
             var consents = d != null ? d.Consents : new string[0];
             if (_planResult != null && _planResult.ConsentsNeeded.Length > 0) consents = consents.Union(_planResult.ConsentsNeeded).ToArray();
             Button go = null;
@@ -669,6 +679,7 @@ namespace AmdgpuWddmSetup
         void RunPlan()
         {
             var args = new List<string> { "-Plan" };
+            args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             if (_flow == "repair") args.Add("-Repair");
             args.AddRange(_args.EngineArgs);
             StartRun("plan", Path.Combine(_package, "installer", "install.ps1"), args, Screen.Checking);
@@ -677,6 +688,7 @@ namespace AmdgpuWddmSetup
         void RunInstall()
         {
             var args = new List<string>();
+            args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             if (_flow == "repair") args.Add("-Repair");
             if (_consentTestSigning) args.Add("-AcceptTestSigning");
             if (_bitLocker.Length > 0) { args.Add("-BitLocker"); args.Add(_bitLocker); }
@@ -758,6 +770,7 @@ namespace AmdgpuWddmSetup
             _active = run;
             _result = result;
             _view = ResultView.For(result, run);
+            if (!_systemTuningChoice.HasValue && run.Decision != null) _systemTuningChoice = run.Decision.SystemTuning;
             if (_runKind == "plan")
             {
                 _plan = run;

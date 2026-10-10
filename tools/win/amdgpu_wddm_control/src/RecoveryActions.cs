@@ -620,7 +620,7 @@ namespace AmdgpuWddmControl
 
         sealed class Options
         {
-            public string Action, SnapshotFile, OutFile, RunId;
+            public string Action, SnapshotFile, BoardFixtureFile, OutFile, RunId;
             public uint? Mode, Ceiling;
             public bool DryRun, ModeGiven, CeilingGiven, AcceptBd060;
             public readonly Recovery.PlanArgs More = new Recovery.PlanArgs();
@@ -634,11 +634,11 @@ namespace AmdgpuWddmControl
             {
                 string a = args[i];
                 uint n;
-                uint[] fanC, fanPct;
                 if (a == "--dry-run") o.DryRun = true;
                 else if (a == "--accept-bd060") o.AcceptBd060 = true;
                 else if (i + 1 >= args.Length) return null;
                 else if (a == "--snapshot") o.SnapshotFile = args[++i];
+                else if (a == "--board-fixture") o.BoardFixtureFile = args[++i];
                 else if (a == "--out") o.OutFile = args[++i];
                 else if (a == "--run-id" && System.Text.RegularExpressions.Regex.IsMatch(args[i + 1], "^[a-z0-9]{1,32}$")) o.RunId = args[++i];
                 else if (a == "--mode" && args[i + 1] == "unset") { o.ModeGiven = true; i++; }
@@ -650,14 +650,14 @@ namespace AmdgpuWddmControl
                 else if (a == "--image" && Profiles.IsValidImage(args[i + 1])) o.More.Image = args[++i];
                 else if (a == "--value" && (args[i + 1].Length == 0 || Profiles.IsValidValue(args[i + 1]))) o.More.Value = args[++i];
                 else if (a == "--gfx" && GraphicsSettings.ParseEdits(args[i + 1]) != null) o.More.Gfx = args[++i];
-                else if (a == "--curve" && TunerPlan.ParseCurve(args[i + 1]) != null) o.More.Curve = args[++i];
+                else if (a == "--curve") o.More.Curve = args[++i];
                 else if (a == "--window" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Window = n; i++; }
                 else if (a == "--cpu-clock" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.CpuClock = n; i++; }
                 else if (a == "--cpu-uv" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.CpuUv = n; i++; }
                 else if (a == "--cpu-temp" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.CpuTemp = n; i++; }
                 else if (a == "--cores" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Cores = n; i++; }
                 else if (a == "--fan-profile" && FanPlan.ValidProfileName(args[i + 1])) o.More.FanProfile = args[++i];
-                else if (a == "--fan-curve" && FanCurves.ParseCurve(args[i + 1], out fanC, out fanPct)) o.More.FanCurve = args[++i];
+                else if (a == "--fan-curve") o.More.FanCurve = args[++i];
                 else if (a == "--fan-test-pct" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.FanTestPct = n; i++; }
                 else if (a == "--tdr" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Tdr = n; i++; }
                 else return null;
@@ -686,13 +686,13 @@ namespace AmdgpuWddmControl
             // The waiting time for the graphics belongs to its own action only.
             if ((o.More.Tdr != null) != (o.Action == "tdr-delay")) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
+            if (o.BoardFixtureFile != null && (!o.DryRun || o.SnapshotFile == null)) return null;
             if (o.RunId == null) o.RunId = Guid.NewGuid().ToString("N").Substring(0, 12);
             return o;
         }
 
         public static int Run(string[] args)
         {
-            Kmd.RefreshBoardCapabilities();
             var o = Parse(args);
             if (o == null)
             {
@@ -709,6 +709,17 @@ namespace AmdgpuWddmControl
                 Console.Error.WriteLine("       --action " + Recovery.OperatorEscape + " --accept-bd060   (operator escape for a desktop that does not respond; see README)");
                 return Usage;
             }
+            if (o.BoardFixtureFile != null)
+            {
+                // Parse admits this option only with --dry-run and --snapshot, before any native request.
+                Kmd.Blocked = true;
+                try { BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(o.BoardFixtureFile))); }
+                catch (Exception e) { Emit(o, "board fixture failed: " + e.Message + "\n"); return Failed; }
+            }
+            else Kmd.RefreshBoardCapabilities();
+            uint[] fanC, fanPct;
+            if (o.More.Curve != null && TunerPlan.ParseCurve(o.More.Curve) == null) return Usage;
+            if (o.More.FanCurve != null && !FanCurves.ParseCurve(o.More.FanCurve, out fanC, out fanPct)) return Usage;
             if (o.DryRun) return DryRun(o);
             // The real run writes its lines (and the exit code) to --out too, as the dry run does.
             _runText = new StringBuilder();
