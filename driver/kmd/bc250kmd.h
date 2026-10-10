@@ -554,6 +554,11 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 // M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
 void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros);
+struct BC250_WAVE_HEADER;
+struct BC250_WAVE_SNAPSHOT;
+NTSTATUS GuardRecordWaveSnapshot(const struct BC250_WAVE_HEADER* Header);
+NTSTATUS GfxCaptureWaves(BC250_DEVICE* Device, struct BC250_WAVE_SNAPSHOT* Snapshot);
+void GfxRecordWavesBeforeKill(BC250_DEVICE* Device, ULONG Seq, ULONG Fence, ULONG Vmid);
 
 // The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.

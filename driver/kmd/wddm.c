@@ -6554,6 +6554,8 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // On the disk before the first SQ_CMD write: should the kill itself take the machine down, the record
             // read after the reboot still says an attempt was under way (LastVerdict 0, Attempts one ahead).
             GuardRecordHangRecovery(BC250_HANG_VERDICT_PENDING, seq, hungFence, 0, 0);
+            // Capture and flush before the first destructive recovery write. Failure is diagnostic only.
+            GfxRecordWavesBeforeKill(device, seq, hungFence, vmid);
             // Kill the waves of the hung job's VMID until the newest sequence retires, for at most 10 ms. A
             // recovered verdict means the end-of-pipe behind the killed waves fired and the ring drained to idle.
             verdict = GfxSoftRecover(device, vmid, &seq, &kills, &micros);

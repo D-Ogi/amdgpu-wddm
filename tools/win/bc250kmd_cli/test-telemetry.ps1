@@ -1,6 +1,6 @@
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\telemetry-client-tests")
 $ErrorActionPreference='Stop'
-$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path;$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path;$env:TEMP=Join-Path $Out 'tmp';$env:TMP=$env:TEMP
 # The directory must exist: cl given a TEMP that does not reports D8018 or D8050 and names no path at all.
 New-Item -ItemType Directory -Force $Out,$env:TEMP | Out-Null
 $source=Get-Content "$repo\tools\win\bc250kmd_cli\bc250kmd_cli.c" -Raw

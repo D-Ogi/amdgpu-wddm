@@ -4054,11 +4054,14 @@ static int Bc250BoardMemoryProbeCommand(void)
     return status < 0 ? 1 : 0;
 }
 
+#include "waves_command.h"
+
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
                         "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
+                        "       bc250kmd_cli waves [saved] [--expect-idle | --expect-pc <hex-start> <hex-end>]\n"
                         "       bc250kmd_cli bc250-board-memory-probe                    (admin; fixed HAL reads only, no CMOS write)\n"
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
@@ -4096,6 +4099,7 @@ int wmain(int argc, wchar_t **argv)
         return 2;
     }
     if (!_wcsicmp(argv[1], L"cpu")) return Cpu(argc,argv);
+    if (!_wcsicmp(argv[1], L"waves")) return WavesCommand(argc,argv);
     if (!_wcsicmp(argv[1], L"bc250-board-memory-probe") && argc == 2) return Bc250BoardMemoryProbeCommand();
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
