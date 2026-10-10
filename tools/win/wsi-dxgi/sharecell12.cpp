@@ -99,15 +99,18 @@ IDXGIAdapter1* pick_adapter(d3d12_api& d3d, const options& o, const LUID* want_l
                             std::string* description)
 {
     IDXGIFactory4* factory = nullptr;
-    if (FAILED(d3d.CreateDXGIFactory2(0, IID_PPV_ARGS(&factory))))
+    if (FAILED(observe_hr(d3d.CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)),
+                          "CreateDXGIFactory2")))
         return nullptr;
     IDXGIAdapter1* chosen = nullptr;
     for (UINT i = 0;; i++) {
         IDXGIAdapter1* adapter = nullptr;
-        if (factory->EnumAdapters1(i, &adapter) != S_OK)
+        char query[80];
+        std::snprintf(query, sizeof(query), "EnumAdapters1 index=%u", i);
+        if (observe_hr(factory->EnumAdapters1(i, &adapter), query) != S_OK)
             break;
         DXGI_ADAPTER_DESC1 desc{};
-        if (FAILED(adapter->GetDesc1(&desc))) {
+        if (FAILED(observe_hr(adapter->GetDesc1(&desc), "IDXGIAdapter1::GetDesc1"))) {
             adapter->Release();
             continue;
         }
@@ -314,13 +317,16 @@ bool run_round(d3d12_side& d3d, vk_side& vk, const options& o, uint32_t round)
         return false;
     ID3D12CommandList* lists[] = {d3d.list};
     d3d.queue->ExecuteCommandLists(1, lists);
-    if (!check_hr(d3d.device->GetDeviceRemovedReason(),
+    if (!check_hr(observe_device_reason(d3d.device, "device after ExecuteCommandLists"),
                   "the D3D12 device is live right after ExecuteCommandLists"))
         return false;
 
     std::snprintf(what, sizeof(what), "D3D12 queue signals the shared timeline to %llu (odd)",
                   static_cast<unsigned long long>(odd));
-    if (!check_hr(d3d.queue->Signal(d3d.shared, odd), what))
+    const HRESULT signalled = d3d.queue->Signal(d3d.shared, odd);
+    observe_device_reason(d3d.device, "device after queue Signal");
+    observe_completed(d3d.shared, "D3D12 fence after queue Signal");
+    if (!check_hr(signalled, what))
         return false;
 
     // The consumer waits that odd value ON ITS QUEUE, not on the CPU: a GPU-side wait is what the
@@ -401,7 +407,7 @@ bool run_round(d3d12_side& d3d, vk_side& vk, const options& o, uint32_t round)
         return false;
 
     // The round trip: a value RADV signalled, read through the D3D12 side of the same object.
-    const UINT64 seen = d3d.shared->GetCompletedValue();
+    const UINT64 seen = observe_completed(d3d.shared, "D3D12 fence after RADV completion");
     std::snprintf(what, sizeof(what),
                   "the D3D12 side of the timeline reads %llu or more, the value RADV signalled",
                   static_cast<unsigned long long>(even));
@@ -425,7 +431,10 @@ bool run_round(d3d12_side& d3d, vk_side& vk, const options& o, uint32_t round)
     // makes the image reuse of the next round safe, and it is the second direction of the round trip.
     std::snprintf(what, sizeof(what), "D3D12 queue waits %llu before the next round",
                   static_cast<unsigned long long>(even));
-    return check_hr(d3d.queue->Wait(d3d.shared, even), what);
+    const HRESULT waited = d3d.queue->Wait(d3d.shared, even);
+    observe_device_reason(d3d.device, "device after queue Wait");
+    observe_completed(d3d.shared, "D3D12 fence after queue Wait");
+    return check_hr(waited, what);
 }
 
 int run(const options& o)
@@ -470,6 +479,7 @@ int run(const options& o)
     {
         const HRESULT created =
             d3d_api.D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d.device));
+        observe_hr(created, "D3D12CreateDevice");
         adapter->Release();
         if (FAILED(created)) {
             std::printf("SKIP D3D12CreateDevice refused this adapter: hr=0x%08lx\n",
@@ -664,6 +674,7 @@ int run(const options& o)
     }
 
     step("the shared timeline: RADV exports it as a D3D12_FENCE, D3D12 opens it");
+    observe_graphics_modules();
     {
         VkSemaphoreTypeCreateInfo type{};
         type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
@@ -682,6 +693,14 @@ int run(const options& o)
             goto done;
         }
         HANDLE fence_handle = nullptr;
+        uint64_t before_export = UINT64_MAX;
+        if (check_vk(vk.api.GetSemaphoreCounterValue(vk.device, vk.timeline, &before_export),
+                     "RADV reads the fresh timeline before export")) {
+            std::printf("INFO RADV timeline before export value=%llu hex=0x%016llx\n",
+                        static_cast<unsigned long long>(before_export),
+                        static_cast<unsigned long long>(before_export));
+            check(before_export == 0, "the RADV timeline is zero before export");
+        }
         VkSemaphoreGetWin32HandleInfoKHR get{};
         get.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR;
         get.semaphore = vk.timeline;
@@ -692,14 +711,45 @@ int run(const options& o)
             exit_code = kExitFailed;
             goto done;
         }
+        observe_device_reason(d3d.device, "device before OpenSharedHandle(fence)");
         const HRESULT opened = d3d.device->OpenSharedHandle(fence_handle, IID_PPV_ARGS(&d3d.shared));
+        observe_device_reason(d3d.device, "device after OpenSharedHandle(fence)");
         CloseHandle(fence_handle);   // the semaphore handle is the application's, as in the route
         if (!check_hr(opened, "D3D12 opened the exported timeline as an ID3D12Fence")) {
             exit_code = kExitFailed;
             goto done;
         }
-        check(d3d.shared->GetCompletedValue() == 0,
+        ID3D12Fence1* fence1 = nullptr;
+        if (SUCCEEDED(observe_hr(d3d.shared->QueryInterface(IID_PPV_ARGS(&fence1)),
+                                 "QueryInterface(ID3D12Fence1) for creation flags"))) {
+            std::printf("INFO shared fence creation_flags=0x%08x\n",
+                        static_cast<unsigned>(fence1->GetCreationFlags()));
+            fence1->Release();
+        }
+        ID3D12Device* fence_device = nullptr;
+        const HRESULT got_device = d3d.shared->GetDevice(IID_PPV_ARGS(&fence_device));
+        check_hr(got_device, "ID3D12Fence::GetDevice");
+        if (SUCCEEDED(got_device)) {
+            const LUID fence_luid = fence_device->GetAdapterLuid();
+            const LUID queue_luid = d3d.device->GetAdapterLuid();
+            check(fence_luid.LowPart == queue_luid.LowPart &&
+                  fence_luid.HighPart == queue_luid.HighPart,
+                  "the opened fence and the queue device use the same adapter LUID");
+            std::printf("INFO fence device nodes=%u queue device nodes=%u\n",
+                        fence_device->GetNodeCount(), d3d.device->GetNodeCount());
+            fence_device->Release();
+        }
+        check(observe_completed(d3d.shared, "fresh D3D12 shared fence") == 0,
               "the freshly shared timeline reads 0 on the D3D12 side");
+        uint64_t initial = UINT64_MAX;
+        if (check_vk(vk.api.GetSemaphoreCounterValue(vk.device, vk.timeline, &initial),
+                     "the RADV side reads the fresh timeline")) {
+            std::printf("INFO fresh RADV timeline value=%llu hex=0x%016llx\n",
+                        static_cast<unsigned long long>(initial),
+                        static_cast<unsigned long long>(initial));
+            check(initial == 0, "the freshly shared timeline reads 0 on the RADV side");
+        }
+        observe_device_reason(d3d.device, "device after initial fence reads");
     }
 
     step("the imported image leaves UNDEFINED once, before any producer write");

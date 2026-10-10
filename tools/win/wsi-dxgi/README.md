@@ -41,8 +41,17 @@ Each round writes a pattern whose every texel is a function of its own coordinat
 misread therefore appears as a diagonal, a channel-order error appears in one byte of four, and a stale image
 appears as the wrong round constant. The producer owns the odd values of the shared timeline and the consumer
 the even ones, so a value that arrives on the wrong side cannot be explained away. The consumer waits on its
-own queue and not on the CPU, because the route waits that way too. Every CPU wait is bounded at 2000 ms. The
+own queue and not on the CPU, because the route waits that way too. The timeline CPU wait is bounded at 2000 ms. The
 same image, allocation and timeline serve every round, which is the image reuse the route does per frame.
+
+For a shared fence, each cell prints the completed value in decimal and hex, the creation flags, and the
+device status before and after the open and after a queue signal. The fresh value is read through both APIs.
+The fence's device and the queue's device must use the same adapter. Every D3D12 HRESULT is printed,
+including enumeration results. An `UNSAFE` line names a timed-out Vulkan wait or a lost device. The lab
+runner owns the process deadline: queue and device idle calls have no timeout argument.
+
+Set `AMDGPU_WDDM_LOG` to a file and `AMDGPU_WDDM_DDI_TRACE=1` for each cell to record entry and exit of
+the shell's bound DDI slots. A missing failure line alone does not locate a refusal above the driver.
 
 `--selftest` drives the pure rules with no device of either stack, and `--negative-control` inverts every
 case. `build.ps1` runs both for each cell. Exit codes: 0 every case passed, 1 a case failed, 2 the arguments

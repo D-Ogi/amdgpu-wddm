@@ -23,6 +23,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <psapi.h>
 #include <dxgi1_6.h>
 #include <d3d12.h>
 
@@ -147,8 +148,16 @@ inline bool check(bool condition, const char* what)
     return pass;
 }
 
+inline void report_unsafe_hr(HRESULT hr)
+{
+    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_HUNG ||
+        hr == DXGI_ERROR_DEVICE_RESET)
+        std::printf("UNSAFE D3D12 device failure hr=0x%08lx\n", static_cast<unsigned long>(hr));
+}
+
 inline bool check_hr(HRESULT hr, const char* what)
 {
+    report_unsafe_hr(hr);
     checks++;
     const bool pass = SUCCEEDED(hr) != negative_control;
     if (!pass) {
@@ -161,8 +170,64 @@ inline bool check_hr(HRESULT hr, const char* what)
     return pass;
 }
 
+// Observations do not turn an ordinary enumeration terminator into a failed check.
+inline HRESULT observe_hr(HRESULT hr, const char* what)
+{
+    report_unsafe_hr(hr);
+    std::printf("INFO %s hr=0x%08lx\n", what, static_cast<unsigned long>(hr));
+    std::fflush(stdout);
+    return hr;
+}
+
+inline HRESULT observe_device_reason(ID3D12Device* device, const char* what)
+{
+    const HRESULT reason = device->GetDeviceRemovedReason();
+    // Every failed removal reason means loss, including DRIVER_INTERNAL_ERROR and INVALID_CALL.
+    // An ordinary API's E_INVALIDARG is different: it is not itself a removal report.
+    if (FAILED(reason))
+        std::printf("UNSAFE D3D12 removal reason hr=0x%08lx\n", static_cast<unsigned long>(reason));
+    return observe_hr(reason, what);
+}
+
+inline UINT64 observe_completed(ID3D12Fence* fence, const char* what)
+{
+    const UINT64 value = fence->GetCompletedValue();
+    std::printf("INFO %s completed=%llu hex=0x%016llx removed_sentinel=%u\n", what,
+                static_cast<unsigned long long>(value), static_cast<unsigned long long>(value),
+                value == UINT64_MAX ? 1u : 0u);
+    std::fflush(stdout);
+    return value;
+}
+
+// Only graphics modules of this client, never other processes. The operator compares these
+// paths with the installed-file hashes; a registry entry alone does not prove which DLL loaded.
+inline void observe_graphics_modules()
+{
+    HMODULE modules[512];
+    DWORD bytes = 0;
+    if (!EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &bytes) ||
+        bytes > sizeof(modules)) {
+        std::printf("INFO graphics module witness unavailable or truncated\n");
+        return;
+    }
+    for (size_t i = 0; i < bytes / sizeof(HMODULE); ++i) {
+        wchar_t path[32768];
+        const DWORD length = GetModuleFileNameW(modules[i], path, DWORD(std::size(path)));
+        if (!length || length >= std::size(path)) continue;
+        const wchar_t* slash = std::wcsrchr(path, L'\\');
+        const wchar_t* name = slash ? slash + 1 : path;
+        if (_wcsicmp(name, L"vulkan_radeon.dll") && _wcsicmp(name, L"amdgpu_wddm_d3d12.dll") &&
+            _wcsicmp(name, L"vulkan-1.dll") && _wcsicmp(name, L"d3d12.dll") &&
+            _wcsicmp(name, L"d3d12core.dll") && _wcsicmp(name, L"dxgi.dll")) continue;
+        std::printf("INFO graphics module %ls\n", path);
+    }
+    std::fflush(stdout);
+}
+
 inline bool check_vk(VkResult result, const char* what)
 {
+    if (result == VK_TIMEOUT || result == VK_ERROR_DEVICE_LOST)
+        std::printf("UNSAFE Vulkan wait or device failure vk=%d\n", int(result));
     checks++;
     const bool pass = (result == VK_SUCCESS) != negative_control;
     if (!pass) {
