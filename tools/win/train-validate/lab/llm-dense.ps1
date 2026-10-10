@@ -46,6 +46,43 @@ if (Test-Path -LiteralPath $manifest) {
 # where it wants the pin map and refuses with 'workload hash pin missing'.
 $pinMap = Get-Content -LiteralPath (Join-Path $Root $Pins) -Raw | ConvertFrom-Json
 if ($pinMap -isnot [psobject] -or -not $pinMap.PSObject.Properties[$Exe]) { "MISSING pin for $Exe in $Pins"; exit 2 }
+# The pin map of the BD-114 round names that round's own driver files: the candidate kernel image in its
+# driver-store directory and the ICD beside it. A release validation runs the installed release instead, and
+# which bytes those are is the question of the `slots` and `kmdver` arms, not of this one. So the driver pins
+# are refreshed here from what the OS actually loads (the service image path) and from the install directory,
+# and each refreshed pin is printed. A stale driver-store path of an earlier install is dropped: hashing a
+# leftover copy proves nothing.
+$imagePath = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd' -ErrorAction SilentlyContinue).ImagePath
+if ($imagePath) {
+    $running = $imagePath -replace '^\\SystemRoot\\', ($env:SystemRoot + '\') -replace '^\\\?\?\\', ''
+    if (-not [IO.Path]::IsPathRooted($running)) { $running = Join-Path $env:SystemRoot $running }
+}
+foreach ($key in @($pinMap.PSObject.Properties.Name)) {
+    $isStore = $key -like '*\DriverStore\FileRepository\*bc250kmd.sys'
+    $isInstall = $key -like 'C:\Program Files\amdgpu-wddm\*'
+    if (-not ($isStore -or $isInstall)) { continue }
+    if ($isStore) {
+        $pinMap.PSObject.Properties.Remove($key)
+        "pin dropped $key (the kernel image is pinned by the path the OS loads)"
+        continue
+    }
+    $old = $pinMap.$key
+    if (Test-Path -LiteralPath $key) {
+        $now = (Get-FileHash -LiteralPath $key -Algorithm SHA256).Hash
+        $pinMap.$key = $now
+        if ($now -ne $old) { "pin refreshed $key $now (the pins file had $($old.Substring(0, 8)))" }
+    } else {
+        $pinMap.PSObject.Properties.Remove($key)
+        "pin dropped $key (absent on this install)"
+    }
+}
+if ($running -and (Test-Path -LiteralPath $running)) {
+    $hash = (Get-FileHash -LiteralPath $running -Algorithm SHA256).Hash
+    $pinMap | Add-Member -NotePropertyName $running -NotePropertyValue $hash -Force
+    "pin running kernel image $running $hash"
+} else {
+    "MISSING the running kernel image ($imagePath)"; exit 2
+}
 $modelPin = ((Get-Content -LiteralPath (Join-Path $Root $ModelPins) -Raw | ConvertFrom-Json).PSObject.Properties[$Model]).Value
 if (-not $modelPin) { "MISSING pin for $Model in $ModelPins"; exit 2 }
 $started = Get-Date

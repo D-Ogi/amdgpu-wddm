@@ -137,7 +137,10 @@ def steps(plan: Plan, arm: dict, prepared: Prepared, python: str) -> list[Planne
     host([f"{caps}/promote-d3d12.py", "stage-check", "--attempt", prepared.check_attempt])
     lab([f"{caps}/run-slot.py", prepared.check_attempt])
     lab([f"{caps}/close-attempt.py", prepared.check_attempt], 300)
-    host([f"{caps}/release-baseline.py", plan.values["pkg"], "--apply", "--keep-accepted-d3d12"])
+    # Through `pin-baseline.py`, for the reason that script carries: `release-baseline.py --apply` refuses a
+    # second apply of one release, and a repeated or resumed validation run must answer as the first one did.
+    host([f"{plan.values['repo']}/tools/win/train-validate/pin-baseline.py", caps, plan.values["pkg"],
+          "--keep-accepted-d3d12"])
     return out
 
 

@@ -647,7 +647,7 @@ class Promotion(unittest.TestCase):
         self.assertTrue(any("promote-d3d12.py stage " in line for line in text))
         self.assertTrue(any("run-slot.py" in line for line in text))
         self.assertTrue(any("accept --attempt" in line and "--apply" in line for line in text))
-        self.assertTrue(any("release-baseline.py" in line and "--keep-accepted-d3d12" in line
+        self.assertTrue(any("pin-baseline.py" in line and "--keep-accepted-d3d12" in line
                             for line in text))
         for step in arm.steps:
             if "run-slot.py" in step.text():
