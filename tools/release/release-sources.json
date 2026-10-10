@@ -999,6 +999,90 @@
       "unverified": "Built at 1884b33d, where this recipe has no /Brepro at all (f7aabf05 of this branch adds it with /FC and /d1trimfile): the image carries a COFF and a debug directory time stamp of its build, and the MSVC name of each anonymous namespace holds a hash of the absolute source path, which reorders the functions. Not rebuilt in the b26 repro lane, which rebuilt the kernel driver and the system Vulkan ICD. tools/release/rebuild-check.ps1 -Entry <path> builds this entry again from the commit above.",
       "size": 279040,
       "role": "D3D11 self-test (tools/win/d3d11bench, bc250-win 1884b33d, train/b24): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it. Built with /W4 /WX after the compare.py and imgdiff.py tests. Carried from 0.7.216.100-tester.21: D3D11 self-test (tools/win/d3d11bench, bc250-win 0d6b3299, train/b23): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it; the verify step and the support report do not run it yet. Built with /W4 /WX after the compare.py and imgdiff.py tests"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/amdhip64.dll",
+      "source": "scratch/m16-hip/bd110/runtime-rebase/amdhip64.dll",
+      "sha256": "80FB9D6BEA3C3745277EEE7F0655271F15F0E6553B1B90BABEF5DC9D5665564B",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "f183f99642470e7672211e1e9b6a46c5ecd572ab",
+        "recipe": "compute/hip/build-runtime.ps1",
+        "args": [
+          "-Root",
+          "{root}",
+          "-Out",
+          "{out}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/m16-hip/bd110/layer1-rebase"
+          }
+        },
+        "output": "amdhip64.dll"
+      },
+      "unverified": "Built offline at f183f996 (scratch/m16-hip/bd110/REBASE-VALIDATION.json) by build-runtime.ps1 over the bc250hsa.lib of build.ps1 at the same commit, with clang for the device code. Not rebuilt bit-identically: the recipe has no /Brepro, so the image carries the time stamps of its build.",
+      "size": 273408,
+      "role": "Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win f183f996, branch fix/bd110-co-loader over m16/hip-step3), with the BD-110 code-object loader fix. It is installed to <install root>\\tools\\hip and is not put on PATH, so no program loads it unless it is started from that folder or told where it is. llama.cpp's HIP backend over it is still being validated (BD-110)."
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/vadd.exe",
+      "source": "scratch/m16-hip/bd110/runtime-rebase/vadd.exe",
+      "sha256": "DCCC3A62636A7A5D4A1774FFD5534F2E8FDBE59C0A169941020EE6C6EC6623B9",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "f183f99642470e7672211e1e9b6a46c5ecd572ab",
+        "recipe": "compute/hip/build-runtime.ps1",
+        "args": [
+          "-Root",
+          "{root}",
+          "-Out",
+          "{out}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/m16-hip/bd110/layer1-rebase"
+          }
+        },
+        "output": "vadd.exe"
+      },
+      "unverified": "Built offline at f183f996 (scratch/m16-hip/bd110/REBASE-VALIDATION.json) by build-runtime.ps1 over the bc250hsa.lib of build.ps1 at the same commit, with clang for the device code. Not rebuilt bit-identically: the recipe has no /Brepro, so the image carries the time stamps of its build.",
+      "size": 165376,
+      "role": "Experimental: the HIP self-check (compute/hip/samples/vadd.hip) from the same build as tools\\hip\\amdhip64.dll. It adds two vectors on the GPU, compares every element with the CPU result and checks the order of its events, and loads the amdhip64.dll beside it."
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/bc250hipblas.dll",
+      "source": "scratch/build/m16-bd110-hipblas/bc250hipblas.dll",
+      "sha256": "DB972FFB08050A2F39CB8FAFE686EA45C7D19BC7AA4942A7ABDF83D12E886414",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "f183f99642470e7672211e1e9b6a46c5ecd572ab",
+        "recipe": "compute/hipblas/build-hipblas.ps1",
+        "args": [
+          "-Root",
+          "{root}",
+          "-Out",
+          "{out}",
+          "-HipLib",
+          "{input:runtime}"
+        ],
+        "inputs": {
+          "runtime": {
+            "workspace": "scratch/m16-hip/bd110/runtime-rebase"
+          }
+        },
+        "output": "bc250hipblas.dll"
+      },
+      "unverified": "Built offline on 2026-10-09 from the compute/hipblas tree of 8769c99d, which f183f996 carries unchanged, and used with the amdhip64.dll above in the BD-110 loader validation (scratch/m16-hip/bd110/LAB-REQUESTS-loader.md). Not rebuilt bit-identically: the recipe has no /Brepro and links against the import library of the runtime build of that day.",
+      "size": 156672,
+      "role": "Experimental: our hipBLAS subset for gfx1013 (compute/hipblas, the GEMM entry points that llama.cpp's HIP backend calls), next to tools\\hip\\amdhip64.dll. No program of this package loads it."
     }
   ],
   "firmware": {
