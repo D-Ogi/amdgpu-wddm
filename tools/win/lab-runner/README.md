@@ -21,11 +21,23 @@ game's graphics options, so the operator sets them and checks them again after e
 Witcher 3 HIGH preset sets anti-aliasing to AMD FSR by itself. `test_lab_runner.py` refuses a profile whose
 command line asks for an upscaler or a dynamic resolution.
 
+## Before readiness
+
+A session is ready when the Witcher 3 menu pass sees the transition (or after 180 s), or when a generic
+profile's `control_after_window_seconds` have passed after the first game window. Before that, the interactive
+channel takes only the keys that pass an intro or a prompt: a tap or a hold of Space (39), Esc (01) or Enter
+(1C). It also takes the actions that send no input: shot, ocr, note, wait and quit. It refuses any other command
+at once and writes the reason in the answer. It also refuses a world mark. A profile with `readiness.intro_skip`
+presses its key every few seconds until a menu shows or the session is ready. The Witcher 3 profile skips its
+intro with Space: in b29 session 549 the intro waited for that key for 105 s. `intro-skip-check.ps1` holds
+these rules against the script.
+
 ## What is here
 
 | File | What it does |
 |---|---|
 | `game-runtime.ps1` | The session on the lab: the start (the Steam client or the executable), the running gate, the module witness, the frame and job counters, the temperature watch with the thermal stop, the interactive channel, and the end of the session. `-DryRun [-Offline]` prints the plan and starts nothing |
+| `intro-skip-check.ps1` | Host check of the channel before readiness and of the intro skip. It runs the functions of `game-runtime.ps1` under Windows PowerShell 5.1. The keys, the foreground and the readiness answers are mocks, so no key goes to this PC |
 | `ocr-frame.ps1` | Full-resolution OCR of the lab screen for the interactive channel (Windows.Media.Ocr, in process, no window). `game-runtime.ps1` dot-sources it. The frame is read and deleted at once: only text and boxes leave the lab |
 | `kmdlog-stream.ps1` | Appends the kernel driver log, the clock and temperature readings and the memory counters to `game-kernel.log` while the game runs, each write through the cache, so a machine-wide stop keeps what was read |
 | `profiles/*.json` | One profile per game: the Steam entry, the executable, the APIs with their router rule and module witness, the process names, the readiness mode, the settings policy, the modules to witness and the default session length |

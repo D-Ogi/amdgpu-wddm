@@ -270,6 +270,8 @@ function Focus-Game{
  return (Game-Foreground)
 }
 function Send-E{return ,[Bc.Input]::Key(0x12)}
+# Any key by scan code, released like Send-E: the intro skip's sender, a function so that a host check can replace it.
+function Send-Key([uint16]$scan){return ,[Bc.Input]::Key($scan)}
 # The input guard holds at the moment of input. An attempt is bounded (three in all); only SendInput 2/2 counts as
 # injected (838), and no press is inferred from 0/1.
 function Press-E([int]$t,$sig){
@@ -311,6 +313,40 @@ function Menu-Step([int]$t){
  $menu.diffs+=,@($t,$diff)
  Note ('menu '+$t+'s: mean '+$mean+' grid diff '+$diff)
  if($diff -ge 4){$menu.changed=$true;$menu.changed_at=$t;Note ('menu '+$t+'s: grid changed, transition candidate')}else{Press-E $t $s}
+}
+# Intro skip (2026-10-10, after 549): the Witcher 3 Remaster holds its intro video ("Space Skip") until a key comes,
+# and in 549 none could come before the channel opened at 180 s. A profile with readiness.intro_skip presses its key
+# every every_seconds, from after_window_seconds after the game's first window, while no menu is detected. It stops
+# at the menu cue (Menu-Signal's settings write, which the account panel and the main menu both make), when the menu
+# pass starts, at readiness (the control channel open), after max_presses, or when a key-up is not accepted. The
+# foreground rule and the key accounting are Press-E's; every press and the stop are noted.
+$introSkip=$gp.readiness.intro_skip
+$intro=[ordered]@{enabled=[bool]$introSkip;key='';every_seconds=0;after_window_seconds=0;max_presses=0;presses=0;injected=0;refusals=0;key_results=@();last_at=$null;stopped_at=$null;stop_reason='';errors=@()}
+if($introSkip){$intro.key=([string]$introSkip.key).ToUpperInvariant();$intro.every_seconds=[int]$introSkip.every_seconds;$intro.after_window_seconds=[int]$introSkip.after_window_seconds;$intro.max_presses=[int]$introSkip.max_presses}
+function Intro-Stop([int]$t,[string]$why){$intro.stopped_at=$t;$intro.stop_reason=$why;Note ('intro '+$t+'s: skip stopped, '+$why+', '+$intro.presses+' presses, '+$intro.injected+' injected')}
+function Intro-Step([int]$t){
+ if(!$intro.enabled -or $null -ne $intro.stopped_at){return}
+ # Seconds since the first window: the Witcher 3 route's window title, a generic profile's window_at.
+ if($witcherMenu){if(!$windowUtc){return};$since=([DateTime]::UtcNow-$windowUtc).TotalSeconds}
+ else{if($null -eq $generic.window_at){return};$since=$t-$generic.window_at}
+ if(Control-Open){Intro-Stop $t 'readiness: the control channel is open';return}
+ if($witcherMenu){
+  if($menu.attempts -or $menu.changed){Intro-Stop $t 'the menu pass has started';return}
+  $cue=if($null -ne $menu.settings_write_seen_at){$menu.settings_write_cue}else{Menu-Signal $t}
+  if($cue){Intro-Stop $t ('menu detected: '+$cue);return}
+ }
+ if($intro.presses -ge $intro.max_presses){Intro-Stop $t ('the limit of '+$intro.max_presses+' presses');return}
+ if($since -lt $intro.after_window_seconds){return}
+ $now=$timer.Elapsed.TotalSeconds
+ if($null -ne $intro.last_at -and $now-$intro.last_at -lt $intro.every_seconds){return}
+ $intro.last_at=$now
+ if(!(Focus-Game)){$intro.refusals++;Note ('intro '+$t+'s: game not foreground, no input');return}
+ $k=Send-Key ([uint16][Convert]::ToInt32($intro.key,16))
+ $intro.presses++;$intro.key_results+=,@($t,$k[0],$k[1],$k[2])
+ if($k[0] -eq 1 -and $k[1] -eq 1){$intro.injected++}
+ Note ('intro '+$t+'s: key '+$intro.key+' press '+$intro.presses+', down '+$k[0]+' up '+$k[1]+' release retries '+$k[2])
+ # A key-down without its key-up stays injected after the game ends: no further press, as in the menu pass.
+ if($k[0] -eq 1 -and $k[1] -ne 1){Intro-Stop $t 'RELEASE UNRESOLVED'}
 }
 # 143+ (owner, 2026-09-30): once the world is up, Geralt walks and looks around: forward with the key held,
 # a full turn, a look up and down, strafes, backwards; each step at most 3 s so the sampling above goes on.
@@ -355,7 +391,22 @@ function Walk-Step([int]$t){
 # readiness.control_after_window_seconds after the game's first window (launchers, dialogs and menus are the
 # operator's), there a command of only shot/ocr/note/wait/quit runs without taking the foreground, and note:world
 # marks the world (the walk marker below).
-$control=[ordered]@{enabled=[bool]$stageConfig.interactive_game;dir='';commands=0;actions=0;shots=0;refusals=0;quit=$false;walk_marked=$false;walk_mark_reason='';errors=@()}
+# Before readiness (2026-10-10, after 549: a Space for the intro waited until the channel opened at 183 s) the
+# channel takes the keys that pass an intro or a prompt - tap or hold of Space 39, Esc 01 and Enter 1C - and the
+# actions that send no input: shot, ocr, note, wait, quit. Any other action, and a world mark, refuses the whole
+# command at once, with the reason in its done file, instead of leaving it queued until the channel opens.
+$control=[ordered]@{enabled=[bool]$stageConfig.interactive_game;dir='';commands=0;actions=0;shots=0;refusals=0;preready_commands=0;preready_refusals=0;quit=$false;walk_marked=$false;walk_mark_reason='';errors=@()}
+$script:PreReadyKeys=@('39','01','1C')
+# The first action of a command that the channel refuses before readiness, or an empty string.
+function PreReady-Refusal([string[]]$actions){
+ foreach($a in $actions){$a=$a.Trim();if(!$a){continue}
+  if($a -match '^(world|note:world)$'){return $a}
+  if($a -match '^(shot|ocr|note|wait|quit)(:|$)'){continue}
+  if($a -match '^(tap|hold):([0-9A-Fa-f]{1,2})(:\d+)?$' -and $Matches[2].ToUpperInvariant().PadLeft(2,'0') -in $script:PreReadyKeys){continue}
+  return $a
+ }
+ return ''
+}
 if($control.enabled){$control.dir=Join-Path 'C:\BC250\tmp\control' (Split-Path $d -Leaf);if(!$DryRun){$null=New-Item -ItemType Directory -Force -Path $control.dir;. "$d\ocr-frame.ps1"}}
 function Run-Action([string]$a){
  $p=$a -split ':'
@@ -398,13 +449,25 @@ function Control-Open{
  return $true
 }
 function Control-Step([int]$t){
- if(!$control.enabled -or !(Control-Open)){return}
+ if(!$control.enabled){return}
+ $open=Control-Open
  $pending=@(Get-ChildItem -LiteralPath $control.dir -Filter 'cmd-*.txt' -File|Where-Object{!(Test-Path -LiteralPath ($_.FullName -replace 'cmd-','done-'))}|Sort-Object Name)
  foreach($c in $pending){
-  $control.commands++
-  if($control.commands -eq 1){Note ('control '+$t+'s: session open')}
-  $lines=@()
   $actions=(Get-Content -LiteralPath $c.FullName -Raw).Trim() -split ';'
+  if(!$open){
+   $bad=PreReady-Refusal $actions
+   if($bad){
+    $control.preready_refusals++
+    $line='refused before readiness: '+$bad+' (until the channel opens: tap or hold of Space 39, Esc 01, Enter 1C; shot, ocr, note, wait, quit)'
+    Note ('control '+$t+'s: '+$c.Name+' '+$line)
+    [IO.File]::WriteAllText(($c.FullName -replace 'cmd-','done-'),($line+"`n"),(New-Object Text.UTF8Encoding($false)))
+    continue
+   }
+   $control.preready_commands++
+  }
+  $control.commands++
+  if($control.commands -eq 1){Note ('control '+$t+'s: session open'+$(if(!$open){' before readiness: intro keys only'}else{''}))}
+  $lines=@()
   # 170: the walk marker (the ETW window B trigger) belongs to the first INPUT command (hold/tap/look/click), not
   # to a note or a screenshot: the operator confirms the world on a shot first, then starts moving. In 170 the
   # marker came from a note sent during the loading screen and window B measured the loading screen.
@@ -419,7 +482,8 @@ function Control-Step([int]$t){
    $marked=@($actions|Where-Object{$_.Trim() -match '^note:world$'}).Count
    $control.walk_mark_reason=if($marked){'world verified: operator mark'}else{'world unverified: an input command after the menu transition, no telemetry rule in this runner'}
    Note ('walk '+$t+'s: start ('+$control.walk_mark_reason+')');Set-GamePriority}
-  $viewOnly=!$witcherMenu -and !@($actions|Where-Object{$_.Trim() -and $_.Trim() -notmatch '^(shot|ocr|note|wait|quit)(:|$)'}).Count
+  # Before readiness a command without a key needs no foreground on either route: the game may not have a window yet.
+  $viewOnly=(!$witcherMenu -or !$open) -and !@($actions|Where-Object{$_.Trim() -and $_.Trim() -notmatch '^(shot|ocr|note|wait|quit)(:|$)'}).Count
   if(!$viewOnly -and !(Focus-Game)){$control.refusals++;$lines+=,'refused: game not foreground'}
   else{
    foreach($a in $actions){$a=$a.Trim();if(!$a){continue};$control.actions++
@@ -610,6 +674,8 @@ if($DryRun){
  'witness '+$witness.module+' '+$witness.sha256
  'bound '+$bound+' s; control '+$(if(!$control.enabled){'off'}elseif($witcherMenu){'after the menu transition'}else{'open '+$gp.readiness.control_after_window_seconds+' s after the first game window'})
  if(!$witcherMenu){'readiness: a game process with a window, '+$witness.module+' loaded and '+$gp.readiness.min_jobs+' KMD jobs'}
+ if($control.enabled){'before readiness the channel takes only tap or hold of Space 39, Esc 01, Enter 1C, and shot, ocr, note, wait, quit'}
+ if($intro.enabled){'intro skip: key '+$intro.key+' every '+$intro.every_seconds+' s from '+$intro.after_window_seconds+' s after the first window, until the menu cue or readiness, at most '+$intro.max_presses+' presses'}else{'intro skip: off'}
  if($Offline){exit 0}
  $fail=0
  function Gate([string]$name,[bool]$ok,[string]$detail){if(!$ok){$script:fail++};'{0} {1}: {2}' -f $(if($ok){'PASS'}else{'FAIL'}),$name,$detail}
@@ -866,6 +932,8 @@ try{
    # A failed capture resets readiness like an untied one (844).
    if($result.last_title){try{Menu-Step $t}catch{$menu.failed_captures++;$menu.tied_run=0;$menu.errors+=,$_.Exception.Message;Note ('menu '+$t+'s failed: '+$_.Exception.Message)}}
   }else{try{Generic-Step $t $procs}catch{$generic.errors+=,$_.Exception.Message;Note ('generic '+$t+'s failed: '+$_.Exception.Message)}}
+  # After the readiness step, so that the intro skip sees this turn's menu cue and channel state.
+  if($intro.enabled){try{Intro-Step $t}catch{$intro.errors+=,$_.Exception.Message;Note ('intro '+$t+'s failed: '+$_.Exception.Message)}}
   if($control.enabled){
    try{Control-Step $t}catch{$control.errors+=,$_.Exception.Message;Note ('control '+$t+'s failed: '+$_.Exception.Message)}
    if($control.quit){$result.stop_reason='operator-quit';break}
@@ -906,6 +974,7 @@ try{
  $result.menu_pass=$menu
  $result.walk=$walk
  $result.control=$control
+ $result.intro_skip=$intro
  $result.game_profile=[ordered]@{id=[string]$gp.id;app_id=$gp.app_id;api=$gameApi;readiness=[string]$gp.readiness.mode;settings=$settingsPolicy}
  if(!$witcherMenu){$result.generic=$generic}
  try{Note 'wrapper end'}catch{}
