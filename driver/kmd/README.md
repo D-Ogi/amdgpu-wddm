@@ -86,6 +86,12 @@ no code from Microsoft's MS-PL sample.
   500 ms admission recheck. Other unstable states refuse with verdict 8 and a persisted reason mask.
   Temporary admission closure does not fault StartHealth. Existing genuine faults remain sticky.
   See `docs/design/hang-recovery.md`.
+- **Board memory size** (0.7.216.28). A positively identified BC-250 can report its memory reservation, and
+  change it between 8192 and 12288 MiB, through the `RUN_BOARD_MEMORY` escape. A change needs an
+  administrator. It runs as a guarded transaction over a protected backup. Every other board answers that the
+  control is not supported, and has no board-specific hardware access. A change takes effect at the next
+  start. The running segments are not resized. See
+  [docs/design/uma-reservation.md](../../docs/design/uma-reservation.md).
 - **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
   observable progress before the driver closes the ring and takes a register snapshot. The INF does not write it.
   Absent means Windows' own `TdrDelay` plus 2 s, which is 12 s on a machine where the control application wrote
@@ -450,7 +456,7 @@ alone no longer identifies the process.
   the handshake is about. `tools\win\d3d12queue\scanout-trial.ps1` reads all four lines and names the state
   in its verdict.
 
-## Memory sizes in the private caps
+## Memory sizes in the private caps (0.7.216.28)
 
 `VramPatchCaps` replaces the captured local and CPU-visible VRAM totals with the application segment's size.
 It uses the same `WddmMemoryLayout` calculation as `QUERYSEGMENT4`.
