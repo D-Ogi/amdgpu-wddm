@@ -997,11 +997,12 @@ uma.recovery|mt|f8e2d145|Jeśli Windows nie uruchomi się, wyczyszczenie CMOS pr
 uma.readonly|mt|7c6e555e|Tego ustawienia nie można zmienić w tym systemie.
 uma.apply|mt|6a7aeb33|Ustaw pamięć wideo
 uma.restore|mt|a7adc6e0|Przywróć poprzednie ustawienie
-uma.confirm-restore|mt|53929d48|Przywrócić zapisane wcześniej ustawienie pamięci wideo?
+uma.confirm-restore|mt|c5081ee3|Przywrócić zapisaną rezerwację pamięci płyty BC-250: {0}?
 uma.pending|mt|f633949e|Zmiana oczekuje na restart.
 uma.title|mt|bac35af8|Rezerwacja pamięci płyty BC-250
 uma.confirm|mt|b1ad9514|Ustawić rezerwację pamięci płyty BC-250 na {0}? Poprzednie ustawienie zostanie zapisane przed zmianą.
-uma.windows-unavailable|mt|b6b6d668|Zmiana rezerwacji pamięci płyty BC-250 w Windows nie jest jeszcze dostępna.
+uma.windows-unavailable|mt|9da5686d|Automatyczne sprawdzenie nie potwierdziło bezpiecznego dostępu do tego ustawienia pamięci płyty. Zmiany są niedostępne.
 uma.fallback.title|mt|6be52e48|Pamięć wideo
 uma.fallback.size|mt|2c73531b|Pamięć dedykowana zgłaszana przez Windows
 uma.fallback.readonly|mt|0042c9fe|To informacja o rozmiarze pamięci, tylko do odczytu. To urządzenie nie udostępnia ustawienia rezerwacji pamięci płyty BC-250.
+uma.unknown-state|mt|76c05f2a|Nie udało się zweryfikować zapisanej kopii zapasowej lub ostatniego zapisu. Dalsze zmiany są zablokowane. Nie uruchamiaj ponownie komputera w celu zastosowania tego ustawienia; skontaktuj się z pomocą.

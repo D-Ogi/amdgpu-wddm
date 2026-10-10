@@ -3,9 +3,19 @@ using System.IO;
 using AmdgpuWddmControl;
 static partial class UnitTests
 {
+    static byte[] UmaBlock(uint mib)
+    {
+        var b = new byte[28];
+        Array.Copy(BitConverter.GetBytes(0x42435041u), b, 4);
+        b[26] = (byte)mib; b[27] = (byte)(mib >> 8);
+        ushort sum = (ushort)(b[26] + b[27]);
+        Array.Copy(BitConverter.GetBytes(sum), 0, b, 4, 2);
+        return b;
+    }
     static void UmaTests(string root)
     {
         var s = new UmaState { Supported=true, ProviderId=1, AllowedFirstMiB=8192, AllowedSecondMiB=12288, NeedsRestart=1, ActiveValid = true, ReadValid = true, WriteAllowed = true, ActiveBytes = 8ul << 30, RequestedMiB = 8192 };
+        s.ObservedBlock=UmaBlock(8192);
         s.Supported=false;
         Check(!UmaSetting.Visible(s) && !UmaSetting.CanSet(s,12288),"Missing supported flag hides valid-looking provider and forbids action");
         s.Supported=true;
@@ -13,7 +23,7 @@ static partial class UnitTests
         Check(!UmaSetting.CanSet(s, 8192), "UMA unchanged request does not write");
         Check(!UmaSetting.CanSet(s, 14336) && !UmaSetting.CanSet(s, 0), "UMA rejects unoffered sizes");
         Check(!UmaSetting.Pending(s), "UMA active eight equals requested eight");
-        s.RequestedMiB = 12288;
+        s.RequestedMiB = 12288; s.ObservedBlock = UmaBlock(12288);
         Check(UmaSetting.Pending(s) && s.ActiveBytes == (8ul << 30), "UMA request never becomes active before restart");
         Check(!UmaSetting.CanRestore(s), "UMA no backup cannot restore");
         s.BackupAvailable = true; s.PreviousMiB=8192;
@@ -32,14 +42,15 @@ static partial class UnitTests
         Check(UmaSetting.Request(0,0,null).Length==48, "UMA exact query ABI length");
         bool refused=false;try{UmaSetting.Request(1,12288,unavailable);}catch(ArgumentException){refused=true;}
         Check(refused,"UMA native request builder rejects unavailable mutation");
-        s.ReadValid=true;s.RequestedMiB=8192;s.ObservedBlock[27]=0x7a;
+        s.ReadValid=true;s.RequestedMiB=8192;s.ObservedBlock=UmaBlock(8192);
         var request=UmaSetting.Request(1,12288,s);
         Check(BitConverter.ToUInt32(request,0)==48 && BitConverter.ToUInt32(request,4)==1 &&
-              BitConverter.ToUInt32(request,8)==12288 && request[43]==0x7a &&
+              BitConverter.ToUInt32(request,8)==12288 && request[43]==0x20 &&
               BitConverter.ToUInt32(request,12)==0 && BitConverter.ToUInt32(request,44)==0,"UMA mutation bounded expected block and zero reserved fields");
         word(16,1);refused=false;try{UmaSetting.Parse(reply,32);}catch(FormatException){refused=true;}
         Check(refused,"UMA incompatible reply ABI rejected");
         var done=new UmaState { Supported=true, ProviderId=1, AllowedFirstMiB=8192, AllowedSecondMiB=12288, NeedsRestart=1,ReadValid=true,Operation=2,RequestedMiB=8192,ResultCode=0,BackupAvailable=false};
+        done.ObservedBlock=UmaBlock(8192);
         Check(UmaSetting.Verified(done,2,8192),"UMA verified restore can consume backup");
         done.ResultCode=-5;Check(!UmaSetting.Verified(done,2,8192),"UMA rolled-back write is failure");
         done.ResultCode=1;Check(UmaSetting.Verified(done,2,8192),"UMA verified no-change is success");
@@ -71,12 +82,20 @@ static partial class UnitTests
         Check(!UmaSetting.Confirmed(s,token) && !UmaSetting.CanSet(s,12288),"Provider identity bound to confirmation and mutation");s.ProviderId=1;
         token=UmaSetting.ConfirmationToken(s);s.AllowedFirstMiB=4096;Check(!UmaSetting.Confirmed(s,token),"Allowed values bound to confirmation");s.AllowedFirstMiB=8192;
         token=UmaSetting.ConfirmationToken(s);s.NeedsRestart=0;Check(!UmaSetting.Confirmed(s,token),"Restart capability bound to confirmation");
+        s.NeedsRestart=1;s.Reason=6;
+        Check(!UmaSetting.CanSet(s,12288) && !UmaSetting.CanRestore(s),"Unknown state locks both writes");
+        done.ReadValid=true;done.Reason=0;done.ResultCode=0;
+        done.ObservedBlock[4]++;
+        Check(!UmaSetting.Verified(done,2,8192),"Bad checksum cannot report write success");
+        done.ObservedBlock=UmaBlock(12288);
+        Check(!UmaSetting.Verified(done,2,8192),"Correct checksum with wrong observed target refused");
         var app=Path.Combine(root,"tools/win/amdgpu_wddm_control/src");
         var graphics=File.ReadAllText(Path.Combine(app,"MainForm.Games.cs"));
         Check(graphics.Contains("if (UmaSetting.Visible(_uma)) p.Controls.Add(BuildUmaCard(width));") &&
               graphics.Contains("else p.Controls.Add(BuildReadOnlyMemoryCard(width));"),"GUI hides board control and selects read-only fallback by capability");
         var card=File.ReadAllText(Path.Combine(app,"MainForm.Uma.cs"));
         Check(card.Contains("_vram.Dedicated") && card.Contains("uma.fallback.readonly"),"Other devices show existing segment memory statistics");
+        Check(card.Contains("if (code == 0) OfferRestart();"),"Restart offer follows verified success only");
         var program=File.ReadAllText(Path.Combine(app,"Program.cs"));
         Check(program.Contains("--bc250-board-memory-action") && !program.Contains("--uma-action"),"Only board-specific public action verb accepted");
         var native=File.ReadAllText(Path.Combine(app,"Native.cs"));

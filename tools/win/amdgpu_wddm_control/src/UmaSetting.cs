@@ -19,6 +19,16 @@ namespace AmdgpuWddmControl
 
     public static class UmaSetting
     {
+        public static bool BlockValid(byte[] block, uint requested)
+        {
+            if (block == null || block.Length != 28) return false;
+            uint signature = BitConverter.ToUInt32(block, 0);
+            if (signature != 0x4c424124u && signature != 0x42435041u && signature != 0x42534d43u) return false;
+            uint sum = 0;
+            for (int i = 6; i < 28; i++) sum += block[i];
+            return requested >= 256 && requested < 14336 && (requested & 15) == 0 &&
+                BitConverter.ToUInt16(block, 26) == requested && BitConverter.ToUInt16(block, 4) == sum;
+        }
         public static byte[] Request(uint op, uint target, UmaState expected)
         {
             if (op > 2 || (op == 0 && target != 0) || (op == 1 && !CanSet(expected, target)) ||
@@ -60,6 +70,10 @@ namespace AmdgpuWddmControl
                 for(int i=32;i<80;i++) if(b[i]!=0) throw new FormatException("Unsupported board returned board data");
             }
             Array.Copy(b, 48, s.ObservedBlock, 0, 28);
+            if (s.ReadValid && !BlockValid(s.ObservedBlock, s.RequestedMiB))
+                throw new FormatException("BC-250 board memory readback mismatch");
+            if (s.BackupAvailable && (s.PreviousMiB < 256 || s.PreviousMiB >= 14336 || (s.PreviousMiB & 15) != 0))
+                throw new FormatException("BC-250 board memory backup size invalid");
             return s;
         }
         public static string ConfirmationToken(UmaState state)
@@ -84,7 +98,7 @@ namespace AmdgpuWddmControl
         }
         public static bool Verified(UmaState result, uint operation, uint target)
         {
-            return Visible(result) && OfferedBy(result,target) && result.ReadValid && result.Reason == 0 && result.Operation == operation &&
+            return Visible(result) && OfferedBy(result,target) && result.ReadValid && BlockValid(result.ObservedBlock, target) && result.Reason == 0 && result.Operation == operation &&
                 (result.ResultCode == 0 || result.ResultCode == 1) && result.RequestedMiB == target;
         }
         public static bool Visible(UmaState state)
@@ -100,11 +114,11 @@ namespace AmdgpuWddmControl
         public static bool Offered(uint mib) { return mib == 8192 || mib == 12288; }
         public static bool CanSet(UmaState state, uint mib)
         {
-            return Visible(state) && state.ReadValid && state.WriteAllowed && state.Reason == 0 && OfferedBy(state,mib) && state.RequestedMiB != mib;
+            return Visible(state) && state.ReadValid && state.WriteAllowed && state.Reason == 0 && BlockValid(state.ObservedBlock, state.RequestedMiB) && OfferedBy(state,mib) && state.RequestedMiB != mib;
         }
         public static bool CanRestore(UmaState state)
         {
-            return Visible(state) && state.ReadValid && state.WriteAllowed && state.Reason == 0 && state.BackupAvailable && OfferedBy(state,state.PreviousMiB);
+            return Visible(state) && state.ReadValid && state.WriteAllowed && state.Reason == 0 && state.BackupAvailable && BlockValid(state.ObservedBlock, state.RequestedMiB) && OfferedBy(state,state.PreviousMiB);
         }
         public static bool Pending(UmaState state)
         {

@@ -997,11 +997,12 @@ uma.recovery|mt|f8e2d145|Windowsが起動しない場合、CMOSをクリアす�
 uma.readonly|mt|7c6e555e|このシステムでは設定を変更できません。
 uma.apply|mt|6a7aeb33|ビデオメモリを設定
 uma.restore|mt|a7adc6e0|以前の設定に戻す
-uma.confirm-restore|mt|53929d48|保存された以前のビデオメモリ設定に戻しますか？
+uma.confirm-restore|mt|c5081ee3|保存された BC-250 のメモリ予約 {0} を復元しますか？
 uma.pending|mt|f633949e|変更の反映には再起動が必要です。
 uma.title|mt|bac35af8|BC-250ボードのメモリ予約
 uma.confirm|mt|b1ad9514|BC-250ボードのメモリ予約を{0}に設定しますか？変更前に以前の設定を保存します。
-uma.windows-unavailable|mt|b6b6d668|WindowsでのBC-250ボードのメモリ予約変更はまだ利用できません。
+uma.windows-unavailable|mt|9da5686d|自動チェックで、このボードのメモリ設定に安全にアクセスできることを確認できませんでした。変更できません。
 uma.fallback.title|mt|6be52e48|ビデオメモリ
 uma.fallback.size|mt|2c73531b|Windowsが報告する専用メモリ
 uma.fallback.readonly|mt|0042c9fe|これは読み取り専用のメモリ容量です。このデバイスはBC-250ボードのメモリ予約設定に対応していません。
+uma.unknown-state|mt|76c05f2a|保存されたバックアップ、または最後の書き込みを確認できませんでした。以降の変更はロックされています。この設定を適用するために再起動せず、サポートに連絡してください。

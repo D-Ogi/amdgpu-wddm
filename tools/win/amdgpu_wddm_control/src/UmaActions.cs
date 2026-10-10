@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace AmdgpuWddmControl
 {
-    // The write path is staged. Current driver capabilities refuse every mutation.
+    // Mutations require an unchanged confirmed observation and a qualified provider.
     public static class UmaActions
     {
         public static int Run(string[] args)

@@ -693,15 +693,28 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
 
+// Same fixed block validation as driver/shim/bc250_uma.c; no hardware access.
+static int BoardMemoryBlockValid(const unsigned char *block, ULONG requested)
+{
+    ULONG signature = (ULONG)block[0] | ((ULONG)block[1] << 8) |
+        ((ULONG)block[2] << 16) | ((ULONG)block[3] << 24);
+    ULONG sum = 0, i, mib = (ULONG)block[26] | ((ULONG)block[27] << 8);
+    if (signature != 0x4c424124u && signature != 0x42435041u && signature != 0x42534d43u)
+        return 0;
+    for (i = 6; i < 28; ++i) sum += block[i];
+    return mib == requested && mib >= 256 && mib < 14336 && !(mib & 15) &&
+        ((ULONG)block[4] | ((ULONG)block[5] << 8)) == sum;
+}
+
 // Query has no hardware access. Mutations cannot reach the hardware escape unless
-// the driver first advertises a qualified transport. Current KMDs do not do so.
+// the driver first advertises a qualified transport. An unqualified provider remains read-only.
 BC250_CONTROL_API LONG WINAPI Bc250BoardMemory(BC250_ESCAPE_BOARD_MEMORY *data, ULONG bytes,
                                       const BC250_CONTROL_BOARD_MEMORY_REQUEST *request)
 {
     BC250_CONTROL_BOARD_MEMORY_REQUEST saved;
     BC250_ESCAPE_BOARD_MEMORY capability;
     NTSTATUS status;
-    ULONG i;
+    ULONG i, wanted = 0;
     typedef char BoardMemoryAbiSizeCheck[(sizeof(BC250_ESCAPE_BOARD_MEMORY) == 128 &&
                                   sizeof(BC250_CONTROL_BOARD_MEMORY_REQUEST) == 48) ? 1 : -1];
     (void)sizeof(BoardMemoryAbiSizeCheck);
@@ -725,6 +738,8 @@ BC250_CONTROL_API LONG WINAPI Bc250BoardMemory(BC250_ESCAPE_BOARD_MEMORY *data, 
             (BC250_BOARD_MEMORY_SUPPORTED | BC250_BOARD_MEMORY_READ_VALID | BC250_BOARD_MEMORY_WRITE_ALLOWED)) return (LONG)0xC00000BB;
         if (saved.Op == BC250_BOARD_MEMORY_OP_RESTORE && !(capability.Flags & BC250_BOARD_MEMORY_BACKUP_VALID))
             return (LONG)0xC00000BB;
+        wanted = saved.Op == BC250_BOARD_MEMORY_OP_SET ? saved.TargetMiB : capability.PreviousMiB;
+        if (wanted != 8192 && wanted != 12288) return (LONG)0xC00000BB;
         if (memcmp(capability.ObservedBlock, saved.ExpectedBlock, sizeof(saved.ExpectedBlock)))
             return (LONG)0xC000022D; // STATUS_RETRY: caller must confirm a fresh observation
     }
@@ -762,6 +777,18 @@ BC250_CONTROL_API LONG WINAPI Bc250BoardMemory(BC250_ESCAPE_BOARD_MEMORY *data, 
             return (LONG)0xC000000D;
         for (i = 0; i < sizeof(data->ObservedBlock); ++i)
             if (data->ObservedBlock[i]) return (LONG)0xC000000D;
+    }
+    if ((data->Flags & BC250_BOARD_MEMORY_READ_VALID) &&
+        !BoardMemoryBlockValid(data->ObservedBlock, data->RequestedMiB)) return (LONG)0xC000000D;
+    if ((data->Flags & BC250_BOARD_MEMORY_BACKUP_VALID) &&
+        (data->PreviousMiB < 256 || data->PreviousMiB >= 14336 || (data->PreviousMiB & 15)))
+        return (LONG)0xC000000D;
+    if (saved.Op != BC250_BOARD_MEMORY_OP_READ) {
+        if (data->Reason != BC250_BOARD_MEMORY_REASON_READY ||
+            !(data->Flags & BC250_BOARD_MEMORY_READ_VALID) || data->RequestedMiB != wanted ||
+            (data->ResultCode != 0 && data->ResultCode != 1) ||
+            memcmp(data->ObservedBlock + 6, saved.ExpectedBlock + 6, 20))
+            return (LONG)0xC000000D;
     }
     return 0;
 }

@@ -1015,11 +1015,12 @@ uma.recovery|src|-|If Windows cannot start, clearing CMOS restores the board def
 uma.readonly|src|-|This setting cannot be changed on this system.
 uma.apply|src|-|Set video memory
 uma.restore|src|-|Restore previous setting
-uma.confirm-restore|src|-|Restore the previously saved video memory setting?
+uma.confirm-restore|src|-|Restore the saved BC-250 board memory reservation of {0}?
 uma.pending|src|-|A change is waiting for a restart.
 uma.title|src|-|BC-250 board memory reservation
 uma.confirm|src|-|Set the BC-250 board memory reservation to {0}? The previous setting will be saved before the change.
-uma.windows-unavailable|src|-|Changing the BC-250 board memory reservation in Windows is not available yet.
+uma.windows-unavailable|src|-|The automatic check could not confirm safe access to this board memory setting. Changes are unavailable.
 uma.fallback.title|src|-|Video memory
 uma.fallback.size|src|-|Dedicated memory reported by Windows
 uma.fallback.readonly|src|-|This is a read-only memory size. This device does not offer the BC-250 board memory reservation control.
+uma.unknown-state|src|-|The saved backup or the last write could not be verified. Further changes are locked. Do not restart to apply this setting; contact support.

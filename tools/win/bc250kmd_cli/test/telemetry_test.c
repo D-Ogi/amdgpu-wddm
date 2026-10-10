@@ -92,6 +92,11 @@ static NTSTATUS TelemetryFan(BC250_ESCAPE_FAN *f)
 }
 // The same shape as the DLL: one function with the flag, and TelemetryEscape as its software-only wrapper, so
 // that the test sees exactly which flag each export asked for.
+static void UmaMockBlock(unsigned char *b, unsigned long mib)
+{
+ memset(b,0,28);b[0]=0x41;b[1]=0x50;b[2]=0x43;b[3]=0x42;
+ b[26]=(unsigned char)mib;b[27]=(unsigned char)(mib>>8);b[4]=(unsigned char)(b[26]+b[27]);
+}
 static int umaMode, umaHardwareCalls;
 static BC250_ESCAPE_BOARD_MEMORY sentUma;
 static NTSTATUS TelemetryUma(BC250_ESCAPE_BOARD_MEMORY* u)
@@ -121,8 +126,8 @@ static NTSTATUS TelemetryUma(BC250_ESCAPE_BOARD_MEMORY* u)
  if(umaMode==7)u->Reason=99;
  if(umaMode==8)u->Reserved[7]=1;
  if(umaMode==9){u->Status=BC250_ESCAPE_STATUS_REFUSED;u->NtStatus=0xC0000022u;}
- if(umaMode>=10 && umaMode<=13){u->Reason=BC250_BOARD_MEMORY_REASON_READY;u->Flags|=BC250_BOARD_MEMORY_READ_VALID|BC250_BOARD_MEMORY_WRITE_ALLOWED;memset(u->ObservedBlock,0x37,28);}
- if(umaMode==11)u->Flags|=BC250_BOARD_MEMORY_BACKUP_VALID;
+ if(umaMode>=10 && umaMode<=13){u->Reason=BC250_BOARD_MEMORY_REASON_READY;u->Flags|=BC250_BOARD_MEMORY_READ_VALID|BC250_BOARD_MEMORY_WRITE_ALLOWED;u->RequestedMiB=u->Op==BC250_BOARD_MEMORY_OP_SET?sentUma.RequestedMiB:8192;UmaMockBlock(u->ObservedBlock,u->RequestedMiB);}
+ if(umaMode==11){u->Flags|=BC250_BOARD_MEMORY_BACKUP_VALID;u->PreviousMiB=8192;}
  if(umaMode==12)u->Reason=BC250_BOARD_MEMORY_REASON_NO_TRANSPORT;
  if(umaMode==13)u->Flags&=~BC250_BOARD_MEMORY_READ_VALID;
  if(umaMode==14) {u->Flags=0;u->ProviderId=0;u->AllowedMiB[0]=u->AllowedMiB[1]=u->NeedsRestart=0;u->ActiveBytes=0;u->Reason=BC250_BOARD_MEMORY_REASON_BOARD;}
@@ -133,6 +138,19 @@ static NTSTATUS TelemetryUma(BC250_ESCAPE_BOARD_MEMORY* u)
  if(umaMode==19)u->Flags=BC250_BOARD_MEMORY_READ_VALID|BC250_BOARD_MEMORY_WRITE_ALLOWED;
  if(umaMode==20)u->AbiVersion=1;
  if(umaMode==21)u->Reason=BC250_BOARD_MEMORY_REASON_BOARD;
+ if(umaMode>=22 && umaMode<=27){
+  u->Reason=BC250_BOARD_MEMORY_REASON_READY;u->Flags|=BC250_BOARD_MEMORY_READ_VALID|BC250_BOARD_MEMORY_WRITE_ALLOWED;
+  u->RequestedMiB=u->Op==BC250_BOARD_MEMORY_OP_SET?sentUma.RequestedMiB:8192;
+  UmaMockBlock(u->ObservedBlock,u->RequestedMiB);
+  if(escapeHardware){
+   if(umaMode==22)u->ResultCode=-5;
+   if(umaMode==23)u->RequestedMiB=8192;
+   if(umaMode==24)u->ObservedBlock[4]++;
+   if(umaMode==25){u->ObservedBlock[6]=1;u->ObservedBlock[4]++;}
+   if(umaMode==26){u->Flags&=~BC250_BOARD_MEMORY_WRITE_ALLOWED;u->Reason=BC250_BOARD_MEMORY_REASON_UNKNOWN_STATE;u->Status=BC250_ESCAPE_STATUS_REFUSED;u->NtStatus=0xC00000A3u;}
+   if(umaMode==27)u->ResultCode=1;
+  }
+ }
  return 0;
 }
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
@@ -440,12 +458,16 @@ int main(void)
         r.TargetMiB=14336;escapeCalls=0;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D && escapeCalls==0);
         r.TargetMiB=12288;umaMode=10;escapeCalls=0;
         CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000022D && escapeCalls==1 && umaHardwareCalls==0);
-        memcpy(r.ExpectedBlock,"7777777777777777777777777777",28);escapeCalls=0;
+        UmaMockBlock(r.ExpectedBlock,8192);escapeCalls=0;
         CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && escapeCalls==2 && umaHardwareCalls==1 && escapeHardware==1);
         CHECK(sentUma.RequestedMiB==12288 && !memcmp(sentUma.ObservedBlock,r.ExpectedBlock,28));
         r.Op=BC250_BOARD_MEMORY_OP_RESTORE;r.TargetMiB=0;umaHardwareCalls=0;
         CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000BB && umaHardwareCalls==0);
         umaMode=11;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && umaHardwareCalls==1);
+        r.Op=BC250_BOARD_MEMORY_OP_SET;r.TargetMiB=12288;
+        for(i=22;i<=25;i++){umaMode=(int)i;umaHardwareCalls=0;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D && umaHardwareCalls==1);}
+        umaMode=26;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000A3 && u.Reason==6);
+        umaMode=27;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && u.ResultCode==1 && u.RequestedMiB==12288);
         umaMode=0;
     }
     {

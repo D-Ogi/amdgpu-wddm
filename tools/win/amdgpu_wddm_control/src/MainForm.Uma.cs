@@ -24,6 +24,7 @@ namespace AmdgpuWddmControl
             c.Add(Ui.Dim(Strings.T("uma.tradeoff"), c.Inner));
             c.Add(Ui.Dim(Strings.T("uma.restart"), c.Inner));
             c.Add(Ui.Dim(Strings.T("uma.recovery"), c.Inner));
+            if (_uma != null && _uma.Reason == 6) c.Add(Ui.Dim(Strings.T("uma.unknown-state"), c.Inner));
             if (_uma == null || !_uma.WriteAllowed) c.Add(Ui.Dim(Strings.T("uma.windows-unavailable"), c.Inner));
             if (UmaSetting.Pending(_uma)) c.Add(Ui.Dim(Strings.T("uma.pending"), c.Inner));
             var row = Ui.WrapRow(c.Inner);
@@ -43,8 +44,9 @@ namespace AmdgpuWddmControl
         {
             if (restore ? !UmaSetting.CanRestore(_uma) : !UmaSetting.CanSet(_uma, target)) return;
             string confirmed = UmaSetting.ConfirmationToken(_uma);
-            string prompt = Strings.T(restore ? "uma.confirm-restore" : "uma.confirm", UmaSetting.Size(target)) +
-                "\n\n" + Strings.T("uma.tradeoff") + "\n\n" + Strings.T("uma.restart");
+            string prompt = Strings.T(restore ? "uma.confirm-restore" : "uma.confirm", UmaSetting.Size(restore ? _uma.PreviousMiB : target)) +
+                "\n\n" + Strings.T("uma.tradeoff") + "\n\n" + Strings.T("uma.restart") +
+                "\n\n" + Strings.T("uma.recovery");
             if (MessageBox.Show(this, prompt, Strings.T("uma.title"), MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
             Enabled = false;
@@ -54,6 +56,7 @@ namespace AmdgpuWddmControl
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : 1;
                 RefreshAll();
                 Result(Strings.T(code == Program.NotElevated ? "action.not-elevated" : code == 0 ? "uma.restart" : "action.failed"), code == 0);
+                if (code == 0) OfferRestart();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
     }
