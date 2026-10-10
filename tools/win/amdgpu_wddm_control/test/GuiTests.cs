@@ -260,7 +260,7 @@ static partial class UnitTests
         Equal("graphics.cores", first(Strings.In("ko", "search.graphics.cores"), "ko"), "a Korean name finds the CU setting");
         Equal("graphics.cores", first("graphics cores", "ko"), "the English name works in every language");
         foreach (var e in SettingsSearch.Index)
-            Check(Array.IndexOf(new[] { "home", "games", "graphics", "display", "performance", "driver", "settings", "help" }, e.Page) >= 0, "search entry " + e.Id + " names a page");
+            Check(Array.IndexOf(new[] { "home", "games", "graphics", "display", "performance", "driver", "system", "settings", "help" }, e.Page) >= 0, "search entry " + e.Id + " names a page");
     }
 
     // WU-036: a window outside every screen comes back fully visible; one that is visible stays.
@@ -556,7 +556,7 @@ static partial class UnitTests
         }
         foreach (var e in SettingsSearch.Index)
             Check(Strings.Has("help.setting." + e.Id.Substring(e.Id.IndexOf('.') + 1)), "WU-064: " + e.Id + " has an explanation");
-        foreach (var page in new[] { "home", "games", "graphics", "display", "performance", "driver", "settings", "help" })
+        foreach (var page in new[] { "home", "games", "graphics", "display", "performance", "driver", "system", "settings", "help" })
             Check(Strings.Has("nav." + page) && Strings.Has("page." + page + ".title") && Strings.Has("page." + page + ".intro") && Strings.Has("help.page." + page), "WU-008: page " + page + " has its texts");
         Check(Strings.T("ui.later.reason").Contains("cannot") && !Regex.IsMatch(Strings.T("ui.later.reason"), @"(?i)phase|ph \d"), "WU-029: the reason is phase-free");
     }
@@ -572,7 +572,7 @@ static partial class UnitTests
         Equal("", string.Join(",", where(@"\b(WebRequest|HttpWebRequest|HttpClient|WebClient|TcpClient|UdpClient|Socket|ServicePointManager)\b", new[] { "UpdateCheck.cs" })), "G-SRC: network code only in UpdateCheck.cs");
         Equal("", string.Join(",", where(@"\b(ChangeDisplaySettings\w*|SetDisplayConfig)\b", new[] { "DisplayModes.cs" })), "G-SRC: display-mode writes only in DisplayModes.cs");
         Check(Regex.IsMatch(files["DisplayModes.cs"], @"CdsTest") && Regex.IsMatch(files["MainForm.Display.cs"], @"KeepDisplayDialog\.Ask"), "G-SRC: a mode is tested first and kept only on the person's word");
-        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape and the report's own timed-out child");
+        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs" })), "G-SRC: process kills limited to accepted recovery and each helper's own timed-out child");
         Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", null)), "G-SRC: no PnP disable or enable");
         Equal("", string.Join(",", where(@"\b(EWX_FORCE\w*|Restart-Computer|shutdown(\.exe)?\s+/r)\b", null)), "G-SRC: no forced restart");
         Equal("", string.Join(",", where(@"(?i)\b(oauth|access_token|Authorization)\b", null)), "G-SRC: no sign-in or token code");

@@ -156,6 +156,18 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 }
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
 foreach ($f in $taskScripts) { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
+# Source-owned scripts accompany every package, including installations without the control app.
+. (Join-Path $PSScriptRoot 'installer\system-tuning.ps1')
+$tuningRows = @()
+$tuningDestinations = @('payload/system-tuning')
+if (Test-Path -LiteralPath (Join-Path $pkg 'payload\control')) { $tuningDestinations += 'payload/control/system-tuning' }
+foreach ($destination in $tuningDestinations) {
+    [void][IO.Directory]::CreateDirectory((Join-Path $pkg $destination))
+    foreach ($name in $script:SystemTuningFiles) {
+        Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$name") -Destination (Join-Path $pkg "$destination/$name")
+        $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$name" }
+    }
+}
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 # TESTERS.md is not shipped any more. It named one package version of its own ("0.7.199.100-tester.11") in every
 # package up to tester.12, it read as the tester-facing note, and no gate held it to the release that carried it. The
@@ -336,12 +348,12 @@ function Get-InstallLocation([string]$PackagePath) {
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
-        '^payload/(\w+)/' { return "<InstallDir>\$($Matches[1])\$leaf" }
+        '^payload/(.+)$' { return ('<InstallDir>\' + $Matches[1].Replace('/', '\')) }
     }
     return $null
 }
 $components = @()
-$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' })
+$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows
 foreach ($f in $sources.files + $extra) {
     $p = Join-Path $pkg ($f.path -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
@@ -406,6 +418,7 @@ $manifest = [ordered]@{
     work_ledger_gate_reason = $script:ledgerGateReason
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe
+    system_tuning = [ordered]@{ selected_by_default = $false; recommended = $script:SystemTuningRecommended; source = 'tools/win/system-tuning'; recovery_state = 'ProgramData/amdgpu-wddm/system-tuning'; preserve_recovery_state = $true }
     mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
     sources = $sources.sources
     firmware = $firmware

@@ -12,7 +12,7 @@
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF), and
-# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 8 pages at 96, 120, 144 and 192 DPI in the four
+# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with Nagi shown and hidden, and a language switch at run time; every page is drawn to
 # PNG without a window and checked for overlap, overflow, internals in the text and accessible names.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
@@ -49,7 +49,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs' |
+    'LayoutRules.cs', 'SystemTuning.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
@@ -59,6 +59,11 @@ $testTmp = Join-Path $obj 'tmp'
 New-Item -ItemType Directory -Force $testTmp | Out-Null
 $env:TEMP = $testTmp; $env:TMP = $testTmp
 $env:AMDGPU_WDDM_ORACLE = $(if ($Oracle) { (Resolve-Path $Oracle).Path } else { '' })
+$env:AMDGPU_WDDM_SYSTEM_TUNING_FIXTURES = Join-Path $obj 'system-tuning-fixtures'
+# Pure injected-system tests emit the exact backend JSON consumed by the C# contract tests. No native adapter loads.
+& "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+    -File (Join-Path $repo 'tools\win\system-tuning\test-system-tuning.ps1') -Out $env:AMDGPU_WDDM_SYSTEM_TUNING_FIXTURES
+if ($LASTEXITCODE -ne 0) { throw 'system tuning fake-system tests failed' }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
     "/out:$obj\unit-tests.exe" @pure (Get-ChildItem "$here\test\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
@@ -113,6 +118,11 @@ if ($NagiArt) {
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
+$systemTuningOutput = Join-Path $Out 'system-tuning'
+New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
+foreach ($part in 'system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.Native.psm1') {
+    Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$part") -Destination (Join-Path $systemTuningOutput $part)
+}
 # The exe declares its framework (A5: SecurityProtocolType.SystemDefault means the OS's TLS choice only for a 4.7+ target).
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe"))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_control.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
@@ -450,7 +460,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (8 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch, tuning states): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch, tuning states): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name

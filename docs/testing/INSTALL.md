@@ -241,3 +241,32 @@ Before the preview, the application removes from every file: your user name, you
 number, machine ID, product ID or UUID. Versions, hashes and hardware IDs stay, because we need them.
 If you find personal data in the preview, do not send the file, and tell us in the bug report so that we can
 correct the application.
+
+## Optional Windows tuning
+
+The setup window offers Windows tuning. This option starts unchecked.
+Select it to disable diagnostic telemetry, downloaded maps, and the program, experience and USB telemetry tasks.
+Offline maps will stop updating automatically.
+Windows Update, driver updates, SysMain, Search and drive optimization stay unchanged.
+Use the control application's Windows settings page for individual changes and recovery.
+
+For a command-line installation, add `-ApplySystemTuning` to `install.cmd`.
+The choice survives an installation restart or a failed attempt.
+Use `-SkipSystemTuning` to cancel a saved choice when retrying.
+The setup executable accepts `--apply-system-tuning`.
+Plan and dry-run modes show the choice without running the tuning backend.
+
+The uninstaller offers to restore machine-wide settings before removal.
+Use `uninstall.cmd -RestoreSystemTuning` to select this action or `-KeepSystemTuning` to keep the settings.
+A failed restoration stops removal.
+The uninstaller preserves machine and user recovery records, including those belonging to other accounts.
+It also keeps verified recovery scripts under `%ProgramData%\amdgpu-wddm\system-tuning-recovery`.
+
+After removal, restore each account's settings from that account:
+
+```powershell
+powershell -NoProfile -File "$env:ProgramData\amdgpu-wddm\system-tuning-recovery\system-tuning.ps1" -Action RestoreAll -Scope User
+```
+
+Elevation with another account does not restore the original account's settings.
+Machine-wide recovery uses the same command with `-Scope Machine` from an administrator terminal.

@@ -331,6 +331,11 @@ static class UnitTests
 
     static void Arguments()
     {
+        Check(!SetupArgs.Parse(new string[0]).ApplySystemTuning, "tuning: absent is not consent");
+        Check(SetupArgs.Parse(new[] { "--apply-system-tuning" }).ApplySystemTuning, "tuning: explicit opt-in");
+        Equal(0, SetupArgs.TuningArguments(null).Length, "tuning: continuation retains saved choice");
+        Equal("-ApplySystemTuning", SetupArgs.TuningArguments(true)[0], "tuning: selected argument");
+        Equal("-SkipSystemTuning", SetupArgs.TuningArguments(false)[0], "tuning: explicit deselection overrides resume");
         Equal("welcome", SetupArgs.Parse(new string[0]).Mode, "args: none = welcome");
         Equal("continue", SetupArgs.Parse(new[] { "--continue" }).Mode, "args: --continue");
         var a = SetupArgs.Parse(new[] { "--repair", "--package", @"C:\x y" });

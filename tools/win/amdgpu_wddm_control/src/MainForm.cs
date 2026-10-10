@@ -1,4 +1,4 @@
-// The window (WU-008): a header with search and the language switch, the eight pages in a navigation bar on the
+// The window (WU-008): a header with search and the language switch, the nine pages in a navigation bar on the
 // left, the page in the middle and a side panel on the right (the explanation of a setting, WU-064, and the guide
 // panel, section 6). Pages are built from the models below, so a language switch, a resize or a refresh rebuilds
 // them without losing unsaved edits. Live values come from Level-One escapes every 2 s, and only while Home or
@@ -16,7 +16,7 @@ namespace AmdgpuWddmControl
 {
     public sealed partial class MainForm : Form
     {
-        public static readonly string[] PageNames = { "home", "games", "graphics", "display", "performance", "driver", "settings", "help" };
+        public static readonly string[] PageNames = { "home", "games", "graphics", "display", "performance", "driver", "system", "settings", "help" };
 
         readonly bool _smoke;
         readonly AppPrefs _prefs;
@@ -263,6 +263,7 @@ namespace AmdgpuWddmControl
             if (page != _page) _back.Push(Here());
             _explainId = null;
             ShowPage(page, anchor, true);
+            if (page == "system") ReadSystemTuning();
         }
 
         void GoBack()
@@ -273,6 +274,7 @@ namespace AmdgpuWddmControl
             if (p.Game != null) _game = p.Game;
             _explainId = null;
             ShowPage(p.Page, null, true);
+            if (p.Page == "system") ReadSystemTuning();
             _content.AutoScrollPosition = new Point(0, p.Scroll);
         }
 
@@ -344,6 +346,7 @@ namespace AmdgpuWddmControl
                 case "performance": return BuildPerformance(width);
                 case "driver": return BuildDriver(width);
                 case "settings": return BuildSettings(width);
+                case "system": return BuildSystemTuning(width);
                 case "help": return BuildHelp(width);
                 default: return BuildHome(width);
             }
@@ -422,6 +425,7 @@ namespace AmdgpuWddmControl
 
         public void RefreshAll()
         {
+            if (_page == "system") { ReadSystemTuning(); return; }
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
             try { _inv = Inventory.Read(false); } catch (Exception) { _inv = new InventoryState(); }
             try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }

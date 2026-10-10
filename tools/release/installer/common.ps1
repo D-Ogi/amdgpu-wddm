@@ -269,9 +269,16 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning')
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
+    if ($Bound.ContainsKey('ApplySystemTuning') -and [bool]$Bound['ApplySystemTuning'] -and
+        $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) {
+        throw '-ApplySystemTuning and -SkipSystemTuning cannot be used together'
+    }
     $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
+    $resumeTuning = $State -and ([string]$State.package_version -eq $PackageVersion) -and
+        ([string]$State.phase -in @('new', 'testsigning-pending', 'testsigning-active', 'files-copied',
+            'driver-pending-restart', 'driver-installed', 'install-incomplete'))
     $in = [pscustomobject]@{ firmware_dir = $null; parameters = @{}; switches = @(); restored = @() }
     if ($Bound.ContainsKey('FirmwareDir') -and $Bound['FirmwareDir']) { $in.firmware_dir = [string]$Bound['FirmwareDir'] }
     elseif ($resume -and $State.firmware_source_dir) { $in.firmware_dir = [string]$State.firmware_source_dir; $in.restored += "-FirmwareDir $($in.firmware_dir)" }
@@ -281,8 +288,9 @@ function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
         foreach ($p in $State.command_line_parameters.PSObject.Properties) { $in.parameters[$p.Name] = [int]$p.Value; $in.restored += "-$($p.Name) $([int]$p.Value)" }
     }
     foreach ($s in $script:InstallSwitches) {
+        if ($s -eq 'ApplySystemTuning' -and $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) { continue }
         if ($Bound.ContainsKey($s)) { if ([bool]$Bound[$s]) { $in.switches += $s } }
-        elseif ($resume -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
+        elseif (($resume -or ($s -eq 'ApplySystemTuning' -and $resumeTuning)) -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
     }
     return $in
 }
@@ -1206,13 +1214,23 @@ function Get-ReleaseFootprint {
         @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
-    & $probe 'per-user data' { $u = @(Get-OurUserDataDirs); @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no %LOCALAPPDATA%\amdgpu-wddm in any profile' }) } }
+    & $probe 'per-user data' {
+        $u = @(Get-OurUserDataDirs | Where-Object { @(Get-ChildItem -LiteralPath $_ -Force | Where-Object { $_.Name -ine 'system-tuning' }).Count -gt 0 })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no per-user release data other than retained tuning recovery journals' }) }
+    }
+    & $probe 'per-user tuning recovery' {
+        $u = @(Get-OurUserDataDirs | ForEach-Object { Join-Path $_ 'system-tuning' } | Where-Object { Test-Path -LiteralPath $_ })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'per-user tuning journals retained for their owners' } else { 'no per-user tuning journal' }) }
+    } $true
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
     # application's own files (the tester's setting backups and action log).
     $fwKept = [bool]($State -and $State.firmware_dir_existed)
     & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
     & $probe 'control application data' { $d = Join-Path (Split-Path $script:StateDir) 'control'; $p = (Test-Path -LiteralPath $d); @{ present = $p; detail = "$d$(if ($p) { ' is there (the tester''s setting backups and action log)' } else { ' is gone' })" } } $true
+    foreach ($name in 'system-tuning','system-tuning-recovery') {
+        & $probe $name { $d = Join-Path (Split-Path $script:StateDir) $name; @{ present = (Test-Path -LiteralPath $d); detail = "$d is retained when present for optional Windows settings recovery" } } $true
+    }
     return $rows.ToArray()
 }
 

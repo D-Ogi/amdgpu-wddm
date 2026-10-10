@@ -1100,6 +1100,12 @@ static partial class UnitTests
             var matches = System.Text.RegularExpressions.Regex.Matches(text, @"\.Kill\s*\(");
             int k = matches.Count;
             if (name == "BugReport.cs") Equal(1, k, "static check: BugReport.cs kills only its own timed-out child tool");
+            else if (name == "SystemTuningProcess.cs")
+            {
+                Equal(1, k, "static check: Windows tuning kills only its bounded child");
+                Check(text.Contains("using (var process = Process.Start(start))") && text.Contains("try { process.Kill(); }") &&
+                    !text.Contains("GetProcessById") && !text.Contains("GetProcesses"), "static check: Windows tuning child handle belongs to this invocation");
+            }
             else Equal(0, k, "static check: " + name + " calls no Kill()");
             if (name == "RecoveryActions.cs")
             {
@@ -1126,7 +1132,7 @@ static partial class UnitTests
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(1, kills, "static check: one Kill() in all sources (the bug report's child tool)");
+        Equal(2, kills, "static check: two Kill() calls, each for the helper's own bounded child");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
@@ -1161,6 +1167,7 @@ static partial class UnitTests
         PlanAdditions(args[0]);
         GraphicsSettingsTests();
         TdrTests(args[0]);
+        SystemTuningTests();
         TunerTests(args[0], header);
         TunerViewTests();
         FanTests(args[0], header);

@@ -1005,3 +1005,92 @@ help.setting.tdr|src|-|How many seconds Windows waits for a heavy picture before
 plan.title.tdr-delay|src|-|Waiting time for the graphics
 plan.line.tdr|src|-|Windows waits {0} seconds for the graphics.
 plan.line.tdr-default|src|-|The waiting time goes back to the one Windows uses by itself.
+nav.system|src|-|Windows
+page.system.title|src|-|Windows settings
+page.system.intro|src|-|Choose which background activities run. Each change is optional and can be restored.
+help.page.system|src|-|These settings apply to Windows on any graphics card. Review the effect of each item before changing it. Restore returns the saved settings; it does not remove Windows components.
+system.overview|src|-|Background activities
+system.backup|src|-|The previous settings are saved before a change and kept across app updates. Restore only affects settings saved by this tool.
+system.read-failed|src|-|The current settings could not be read. Refresh before making a change.
+system.reading|src|-|Reading Windows settings...
+system.refresh|src|-|Refresh
+system.recommended|src|-|Apply recommended
+system.restore-all|src|-|Restore all saved settings
+system.current|src|-|Current setting
+system.managed|src|-|A previous setting is saved.
+system.unmanaged|src|-|No previous setting is saved.
+system.apply|src|-|Apply
+system.restore|src|-|Restore
+system.days|src|-|Pause duration in days (1-35)
+system.pause|src|-|Pause updates
+system.resume|src|-|Resume updates
+system.pause-policy|src|-|This sets the requested pause. Windows may apply it later; its reported state is shown separately. Unsupported Windows editions cannot apply these controls.
+system.requested-until|src|-|Requested pause until
+system.observed|src|-|Windows reports
+system.observed.paused|src|-|Paused
+system.observed.resumed|src|-|Not paused
+system.observed.mixed|src|-|Different states for feature and quality updates
+system.observed.unknown|src|-|Not available
+system.scope.machine|src|-|All Windows accounts
+system.scope.user|src|-|Startup for this Windows account
+system.plan.title|src|-|Change Windows settings
+system.plan.apply|src|-|Apply the described change: {0}
+system.plan.restore|src|-|Restore the saved setting: {0}
+system.plan.pause|src|-|Request an update pause for {0} days.
+system.plan.resume|src|-|Remove this tool's update pause and return to the saved update settings.
+system.plan.restore-all|src|-|Restore the saved settings listed below, including this account's startup settings where present.
+system.plan.recommended|src|-|Reduce the background activities listed below. Drive optimization, app startup and update settings are not included.
+system.plan.recheck|src|-|Settings are checked again before writing. Items that changed or cannot be read may be refused. Security, networking and the update service stay enabled.
+system.working|src|-|Applying the requested settings...
+system.done|src|-|The operation completed. Current settings are being read again.
+system.cancelled|src|-|Administrator permission was not given. This operation was not started.
+system.timeout|src|-|The operation did not finish in time. Some settings may have changed. Refresh the state before trying again.
+system.failed|src|-|The operation did not complete fully. Some settings may have changed. Review the refreshed state and restore saved settings if needed.
+system.state.unknown|src|-|Not read
+system.state.absent|src|-|Not present
+system.state.unavailable|src|-|Not available on this Windows installation
+system.state.enabled|src|-|Enabled
+system.state.disabled|src|-|Disabled
+system.state.mixed|src|-|Partly configured
+system.state.configured|src|-|Configured
+system.state.not-configured|src|-|Not configured
+system.item.sysmain|src|-|App preloading
+system.item.sysmain.description|src|-|Disable background app preloading. This can reduce memory use but may make apps start more slowly.
+system.item.search|src|-|File search indexing
+system.item.search.description|src|-|Disable background file indexing. File and mail searches may become slower or less complete.
+system.item.diagnostics|src|-|Background diagnostics
+system.item.diagnostics.description|src|-|Disable the connected user experience diagnostics service.
+system.item.maps|src|-|Downloaded maps
+system.item.maps.description|src|-|Disable background management of downloaded maps. Offline maps may not update.
+system.item.drive|src|-|Scheduled drive optimization
+system.item.drive.description|src|-|Disable scheduled drive optimization, including SSD maintenance. Manual optimization remains available. Leave this enabled unless you maintain drives yourself.
+system.item.compatibility|src|-|Upgrade compatibility checks
+system.item.compatibility.description|src|-|Disable the scheduled compatibility assessment. Windows may have less information when checking readiness for a major upgrade.
+system.item.program-data|src|-|App usage inventory task
+system.item.program-data.description|src|-|Disable the scheduled application experience data task.
+system.item.experience|src|-|Experience improvement task
+system.item.experience.description|src|-|Disable the scheduled customer experience data consolidation task.
+system.item.usb|src|-|USB experience task
+system.item.usb.description|src|-|Disable the scheduled USB experience data task. USB devices keep working.
+system.item.teams|src|-|Classic Teams machine startup
+system.item.teams.description|src|-|Remove the classic Teams installer startup entry for all accounts. Teams itself is not removed; newer Teams startup settings are separate.
+system.item.onedrive|src|-|OneDrive startup
+system.item.onedrive.description|src|-|Stop OneDrive starting at sign-in for this account. Files will not sync until you open OneDrive yourself.
+system.item.teams-user|src|-|Classic Teams account startup
+system.item.teams-user.description|src|-|Remove the classic Teams startup entry for this account. New Teams or Store startup settings are separate.
+system.item.drivers|src|-|Keep installed drivers
+system.item.drivers.description|src|-|Exclude drivers from regular Windows quality updates for all devices. Critical drivers bundled with Windows and drivers in feature upgrades can still be replaced.
+system.item.updates|src|-|Windows Update pause
+system.item.updates.description|src|-|Temporarily pause feature and quality updates, including security updates. The update service stays enabled. Resume restores the saved pause settings.
+search.system.background|src|-|Background activities
+search.system.background.terms|src|-|debloat services tasks startup memory
+search.system.updates|src|-|Pause Windows Update
+search.system.updates.terms|src|-|updates pause resume windows
+search.system.drivers|src|-|Keep installed drivers
+search.system.drivers.terms|src|-|driver replacement automatic update
+search.system.drive|src|-|Drive optimization schedule
+search.system.drive.terms|src|-|disk ssd trim defrag optimize
+help.setting.background|src|-|Each optional item explains its tradeoff. The recommended set changes only diagnostics and downloaded-map background tasks, not security or Windows Update.
+help.setting.updates|src|-|Choose 1 to 35 days. The requested end date and Windows' reported pause state are separate. Restoring returns the previous settings, which may themselves request a pause.
+help.setting.drivers|src|-|This applies to regular quality-update driver offers for every device, not just this graphics driver. It does not block every possible driver replacement.
+help.setting.drive|src|-|Scheduled optimization also maintains SSDs. Disabling it is optional and is not part of the recommended set. Restore returns the saved schedule state.

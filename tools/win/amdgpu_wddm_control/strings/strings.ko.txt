@@ -987,3 +987,92 @@ help.setting.tdr|mt|c224cc97|Windows가 무거운 화면을 몇 초 기다린 �
 plan.title.tdr-delay|mt-safe|ff352a9c|그래픽 대기 시간
 plan.line.tdr|mt|c88deff7|Windows가 그래픽을 {0}초 기다립니다.
 plan.line.tdr-default|mt|e906ce42|대기 시간이 Windows가 스스로 사용하는 값으로 돌아갑니다.
+nav.system|mt|d598026a|Windows
+page.system.title|mt|78ecd832|Windows 설정
+page.system.intro|mt|743deb73|백그라운드 작업을 선택하세요. 모든 변경은 선택 사항이며 되돌릴 수 있습니다.
+help.page.system|mt|fb622a5a|이 설정은 모든 그래픽 카드에서 사용할 수 있습니다. 변경 전에 각 항목의 영향을 확인하세요. 복원은 저장된 설정으로 되돌리며 Windows 구성 요소를 제거하지 않습니다.
+system.overview|mt|67e610e8|백그라운드 작업
+system.backup|mt|db982ac0|변경 전에 이전 설정을 저장하며 앱 업데이트 후에도 유지합니다. 이 도구가 저장한 설정만 복원합니다.
+system.read-failed|mt|28e2faa8|현재 설정을 읽지 못했습니다. 변경 전에 새로 고침하세요.
+system.reading|mt|296c909a|Windows 설정을 읽는 중...
+system.refresh|mt|0e916101|새로 고침
+system.recommended|mt|7c59956a|권장 설정 적용
+system.restore-all|mt|01d04991|저장된 설정 모두 복원
+system.current|mt|e9f9320d|현재 설정
+system.managed|mt|b93f9481|이전 설정이 저장되어 있습니다.
+system.unmanaged|mt|6aa491ee|저장된 이전 설정이 없습니다.
+system.apply|mt|31e392d1|적용
+system.restore|mt|a76e13b9|복원
+system.days|mt|52fe4b04|일시 중지 기간(1-35일)
+system.pause|mt|28fdf83b|업데이트 일시 중지
+system.resume|mt|adcaa107|업데이트 다시 시작
+system.pause-policy|mt|afd58f7a|일시 중지를 요청하는 설정입니다. Windows가 나중에 적용할 수 있으며 보고된 상태는 별도로 표시됩니다. 지원하지 않는 Windows 에디션에서는 적용할 수 없습니다.
+system.requested-until|mt|9257abb6|요청한 중지 종료일
+system.observed|mt|4fa86770|Windows 보고 상태
+system.observed.paused|mt|e159b061|일시 중지됨
+system.observed.resumed|mt|1cfd0052|일시 중지되지 않음
+system.observed.mixed|mt|e29a44d0|기능 및 품질 업데이트 상태가 다름
+system.observed.unknown|mt|67a926f7|확인할 수 없음
+system.scope.machine|mt|102db83e|모든 Windows 계정
+system.scope.user|mt|f5ad11e3|현재 Windows 계정의 시작 프로그램
+system.plan.title|mt|f482ec59|Windows 설정 변경
+system.plan.apply|mt|f3954418|설명된 변경 적용: {0}
+system.plan.restore|mt|2083b0f3|저장된 설정 복원: {0}
+system.plan.pause|mt|47735b56|업데이트를 {0}일 동안 일시 중지하도록 요청합니다.
+system.plan.resume|mt|2a631fe8|이 도구의 업데이트 일시 중지를 해제하고 저장된 업데이트 설정으로 되돌립니다.
+system.plan.restore-all|mt|4ec97464|아래 저장된 설정을 복원합니다. 현재 계정의 시작 설정이 저장되어 있으면 함께 복원합니다.
+system.plan.recommended|mt|55d2022a|아래 백그라운드 작업을 줄입니다. 드라이브 최적화, 앱 시작 및 업데이트 설정은 포함되지 않습니다.
+system.plan.recheck|mt|f35e7163|쓰기 전에 설정을 다시 확인합니다. 변경되었거나 읽을 수 없는 항목은 거부될 수 있습니다. 보안, 네트워크 및 업데이트 서비스는 계속 켜져 있습니다.
+system.working|mt|6349602b|요청한 설정을 적용하는 중...
+system.done|mt|6e604bdb|작업이 완료되었습니다. 현재 설정을 다시 읽고 있습니다.
+system.cancelled|mt|8758b752|관리자 권한이 허용되지 않아 이 작업을 시작하지 않았습니다.
+system.timeout|mt|1ff9b40f|작업이 제한 시간 안에 끝나지 않았습니다. 일부 설정은 변경되었을 수 있습니다. 다시 시도하기 전에 상태를 새로 고침하세요.
+system.failed|mt|d2d04724|작업이 완전히 끝나지 않았습니다. 일부 설정은 변경되었을 수 있습니다. 새로 읽은 상태를 확인하고 필요하면 저장된 설정을 복원하세요.
+system.state.unknown|mt|63977a32|아직 읽지 않음
+system.state.absent|mt|3372d1ec|없음
+system.state.unavailable|mt|2e4a0a37|이 Windows 설치에서 사용할 수 없음
+system.state.enabled|mt|92c1cdfd|사용
+system.state.disabled|mt|75081b59|사용 안 함
+system.state.mixed|mt|5f56858c|일부 설정됨
+system.state.configured|mt|84aebc69|설정됨
+system.state.not-configured|mt|dd1841d2|설정되지 않음
+system.item.sysmain|mt|e8c3a42c|앱 미리 로드
+system.item.sysmain.description|mt|139310b7|백그라운드 앱 미리 로드를 끕니다. 메모리 사용이 줄 수 있지만 앱 시작이 느려질 수 있습니다.
+system.item.search|mt|25aa964c|파일 검색 인덱싱
+system.item.search.description|mt|82e0e975|백그라운드 파일 인덱싱을 끕니다. 파일 및 메일 검색이 느려지거나 일부 결과가 누락될 수 있습니다.
+system.item.diagnostics|mt|89414c70|백그라운드 진단
+system.item.diagnostics.description|mt|a0f40177|연결된 사용자 환경 및 진단 서비스를 끕니다.
+system.item.maps|mt|65354f53|다운로드한 지도
+system.item.maps.description|mt|55498afa|다운로드한 지도의 백그라운드 관리를 끕니다. 오프라인 지도가 업데이트되지 않을 수 있습니다.
+system.item.drive|mt|2620764b|예약된 드라이브 최적화
+system.item.drive.description|mt|a942887e|SSD 유지 관리를 포함한 예약 최적화를 끕니다. 수동 최적화는 계속 사용할 수 있습니다. 직접 관리하지 않는다면 켜 두세요.
+system.item.compatibility|mt|8a1113d8|업그레이드 호환성 확인
+system.item.compatibility.description|mt|5b28cbd9|예약된 호환성 평가를 끕니다. Windows가 주요 업그레이드 준비 상태를 확인할 정보가 줄어들 수 있습니다.
+system.item.program-data|mt|f772ca9f|앱 사용 정보 작업
+system.item.program-data.description|mt|d489b1a1|예약된 애플리케이션 경험 데이터 작업을 끕니다.
+system.item.experience|mt|0c03e40b|사용자 환경 개선 작업
+system.item.experience.description|mt|c6cf5ace|사용자 환경 데이터 통합 예약 작업을 끕니다.
+system.item.usb|mt|b041ca28|USB 환경 개선 작업
+system.item.usb.description|mt|ef62167a|예약된 USB 환경 데이터 작업을 끕니다. USB 장치는 계속 작동합니다.
+system.item.teams|mt|69e79a08|기존 Teams의 컴퓨터 시작 항목
+system.item.teams.description|mt|051d9751|모든 계정의 기존 Teams 설치 프로그램 시작 항목을 제거합니다. Teams 자체는 제거하지 않습니다. 새 Teams의 시작 설정은 별도입니다.
+system.item.onedrive|mt|5c1ab86d|OneDrive 시작
+system.item.onedrive.description|mt|166cbdd5|현재 계정의 로그인 시 OneDrive 시작을 끕니다. OneDrive를 직접 열 때까지 파일이 동기화되지 않습니다.
+system.item.teams-user|mt|5ce9ebb4|기존 Teams의 계정 시작 항목
+system.item.teams-user.description|mt|1e25b15f|현재 계정의 기존 Teams 시작 항목을 제거합니다. 새 Teams 및 스토어 앱의 시작 설정은 별도입니다.
+system.item.drivers|mt|ebb42406|설치된 드라이버 유지
+system.item.drivers.description|mt|03ed5ef4|모든 장치의 드라이버를 일반 Windows 품질 업데이트에서 제외합니다. Windows에 포함된 중요 드라이버와 기능 업그레이드의 드라이버는 여전히 교체될 수 있습니다.
+system.item.updates|mt|b94adecb|Windows 업데이트 일시 중지
+system.item.updates.description|mt|1fc64af6|보안 업데이트를 포함한 기능 및 품질 업데이트를 잠시 중지합니다. 업데이트 서비스는 켜 둡니다. 다시 시작하면 저장된 일시 중지 설정을 복원합니다.
+search.system.background|mt|67e610e8|백그라운드 작업
+search.system.background.terms|mt|c6d2c919|서비스 작업 시작 메모리
+search.system.updates|mt|a7059736|Windows 업데이트 일시 중지
+search.system.updates.terms|mt|7d884345|업데이트 일시 중지 다시 시작
+search.system.drivers|mt|ebb42406|설치된 드라이버 유지
+search.system.drivers.terms|mt|fb85e197|드라이버 자동 업데이트 교체
+search.system.drive|mt|8c2c1356|드라이브 최적화 일정
+search.system.drive.terms|mt|cc085891|디스크 ssd 조각 모음 최적화
+help.setting.background|mt|013bf8ab|각 선택 항목에 영향을 설명합니다. 권장 설정은 진단과 다운로드한 지도 관련 백그라운드 작업만 바꾸며 보안이나 Windows 업데이트는 바꾸지 않습니다.
+help.setting.updates|mt|5062c6b1|1-35일을 선택하세요. 요청 종료일과 Windows가 보고한 상태는 별개입니다. 복원하면 이전 설정으로 돌아가며 이전에도 일시 중지 상태였을 수 있습니다.
+help.setting.drivers|mt|d355e59e|이 그래픽 드라이버뿐 아니라 모든 장치의 일반 품질 업데이트 드라이버에 적용됩니다. 가능한 모든 드라이버 교체를 차단하지는 않습니다.
+help.setting.drive|mt|9bc0a9f6|예약 최적화는 SSD도 유지 관리합니다. 끄기는 선택 사항이며 권장 설정에 포함되지 않습니다. 복원하면 저장된 일정 상태로 되돌립니다.

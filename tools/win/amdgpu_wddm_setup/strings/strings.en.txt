@@ -283,3 +283,8 @@ guide.pending-restart|src|-|Your changes are saved. Setup continues after the ne
 guide.install-stopped|src|-|Setup did not finish. The page says what to do next.
 guide.verification-failed|src|-|The driver did not pass its checks. A repair usually helps.
 guide.upgrade-done|src|-|Done! The driver is installed and checked. Have fun!
+# Optional Windows tuning
+tuning.title|src|-|Windows tuning
+tuning.opt-in|src|-|Apply optional Windows tuning
+tuning.details|src|-|Disable diagnostic telemetry, downloaded maps, and the program, experience and USB telemetry tasks. Offline maps will stop updating automatically.
+tuning.restore|src|-|Updates, driver updates, SysMain, Search and drive optimization stay unchanged. Restore saved settings in the control app or during removal.

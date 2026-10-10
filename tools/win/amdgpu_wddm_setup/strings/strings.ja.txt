@@ -281,3 +281,8 @@ guide.pending-restart|mt|d31250df|変更は保存されました。次に Window
 guide.install-stopped|mt|47319a31|セットアップは完了しませんでした。次に行うことは画面に表示されています。
 guide.verification-failed|mt|1abe91c5|ドライバーが確認に合格しませんでした。たいていは修復で直ります。
 guide.upgrade-done|mt|7ed192a1|完了です! ドライバーはインストールされ、確認も済みました。楽しんでください!
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Windows の設定調整
+tuning.opt-in|mt|d229d14d|任意の Windows 設定調整を適用する
+tuning.details|mt|1bf4ab21|診断テレメトリとダウンロードした地図のサービス、およびプログラム、ユーザー体験、USB のテレメトリタスクを無効にします。オフライン地図は自動更新されなくなります。
+tuning.restore|mt|9c2f960d|更新、ドライバー更新、SysMain、検索、ドライブの最適化は変更しません。保存した設定は制御アプリまたはアンインストール時に復元できます。

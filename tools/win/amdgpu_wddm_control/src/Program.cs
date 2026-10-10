@@ -52,6 +52,7 @@ namespace AmdgpuWddmControl
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
             if (args.Length > 0 && args[0] == "--status") return Status(args);
             if (args.Length > 0 && args[0] == "--action") return Dispatch(args);
+            if (args.Length > 0 && args[0] == "--system-tuning") return Dispatch(args);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length == 2 && args[0] == "--smoke") return Smoke(args[1]);
@@ -234,6 +235,7 @@ namespace AmdgpuWddmControl
 
         static int Dispatch(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--system-tuning") return SystemTuningProcess.Dispatch(args);
             // The only elevated verb. Game settings go through --action game-profile (planned, backed up, undoable); the
             // old unplanned --apply-profiles verb is gone.
             return args.Length > 0 && args[0] == "--action" ? RecoveryRunner.Run(args) : RecoveryRunner.Usage;
@@ -262,6 +264,12 @@ namespace AmdgpuWddmControl
             {
                 using (var p = Process.Start(psi))
                 {
+                    if (verb.Length > 0 && verb[0] == "--system-tuning")
+                    {
+                        // Its backend has its own 120 s deadline. A delayed child does not freeze the window.
+                        if (!p.WaitForExit(150000)) return SystemTuningProcess.Timeout;
+                        return p.ExitCode;
+                    }
                     p.WaitForExit();
                     return p.ExitCode;
                 }

@@ -5,12 +5,15 @@
 # -Force removes the release also from a development-lab machine (as install.ps1 -Force installs on one); the lab's
 # own folders (C:\BC250\m10, m14, m15) are not ours to remove and stay.
 [CmdletBinding()]
-param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force)
+param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force,
+    [switch]$RestoreSystemTuning, [switch]$KeepSystemTuning)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 . (Join-Path $here 'mft-h264.ps1')
+. (Join-Path $here 'system-tuning.ps1')
+if ($RestoreSystemTuning -and $KeepSystemTuning) { throw 'Choose either -RestoreSystemTuning or -KeepSystemTuning.' }
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -35,20 +38,31 @@ Write-Info "install root: $root"
 $lab = @(Get-LabInstallPaths)
 if ($lab.Count -and -not $Force) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine (-Force removes the release anyway)"; exit 2 }
 if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', ')) is present; -Force given: the release is removed, those folders stay" }
+if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
+# Restore runs before removing any release files. Failure aborts removal and keeps the recovery tools.
+if (-not $RestoreSystemTuning -and -not $KeepSystemTuning -and -not $Yes -and -not $DryRun) {
+    $RestoreSystemTuning = [switch](Read-Confirmation -Question 'Restore machine-wide Windows settings managed by our optional tuning before removal? Press Enter to keep them. Per-user settings remain available for recovery in each account.' -Expect 'YES')
+}
+if ($RestoreSystemTuning) { Invoke-SelectedSystemTuning -Selected $true -Action RestoreAll -PackageRoot $package }
+else { Write-Info 'Windows tuning is kept. Use -RestoreSystemTuning to restore managed settings.' }
+Write-Info 'The Windows tuning recovery journal in ProgramData\amdgpu-wddm\system-tuning is retained.'
+$hasTuning = Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning\system-tuning.ps1')
+if (-not $hasTuning) { $hasTuning = Test-Path -LiteralPath (Join-Path $package 'system-tuning\system-tuning.ps1') }
+if ($hasTuning) {
+    Invoke-Change 'keep the verified Windows tuning recovery tools for this and other accounts after removal' { Save-SystemTuningRecovery -PackageRoot $package } | Out-Null
+}
 if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) {
     # No installation, but an earlier release (or an uninstaller older than this one) can have left per-user data.
     $userData = @(Get-OurUserDataDirs)
     if ($userData.Count) {
         Write-Step 'Per-user data'
         Invoke-Change "remove the per-user data an earlier release left (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
-            foreach ($d in $userData) { Remove-PathOrSchedule $d }
+            foreach ($d in $userData) { Remove-UserDataExceptTuning $d }
         } | Out-Null
         Write-Host 'No amdgpu-wddm installation found; the per-user data of an earlier release is removed.' -ForegroundColor Green; exit 0
     }
     Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0
 }
-if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
-
 Write-Step 'Scheduled task, RunOnce entry, shortcut'
 # Every task of ours, not only the one this release registers: a task that an older release named differently would
 # otherwise stay and run a script that is gone.
@@ -275,7 +289,7 @@ Write-Step 'Per-user data'
 $userData = @(Get-OurUserDataDirs)
 if ($userData.Count) {
     Invoke-Change "remove the per-user data of this release (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
-        foreach ($d in $userData) { Remove-PathOrSchedule $d }
+        foreach ($d in $userData) { Remove-UserDataExceptTuning $d }
     } | Out-Null
 } else { Write-Info 'no per-user data of ours' }
 if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the control application's setting backups and action log; delete it by hand if you do not need them)" }

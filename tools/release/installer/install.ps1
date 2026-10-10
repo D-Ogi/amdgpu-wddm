@@ -39,6 +39,8 @@ param(
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
+    [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
+    [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
     [string]$FirmwareDir,                   # offline: the 9 firmware files (INSTALL.md, "GPU firmware") instead of a download
     [switch]$DryRunIgnoreBoard             # host test only, honoured with -DryRun: walk all phases on a PC without a BC-250
@@ -52,6 +54,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'release-witness.ps1')
 . (Join-Path $here 'compatibility.ps1')
 . (Join-Path $here 'mft-h264.ps1')
+. (Join-Path $here 'system-tuning.ps1')
 if ($Plan) { $DryRun = [Management.Automation.SwitchParameter]$true }
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
@@ -305,6 +308,7 @@ $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
 $Repair = [switch](@($installInputs.switches) -contains 'Repair')
+$ApplySystemTuning = [switch](@($installInputs.switches) -contains 'ApplySystemTuning')
 # BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
 # itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
 # keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
@@ -711,7 +715,8 @@ if ($action.action -ne 'verify' -and $script:Manifest) {
 Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $action.message; installed_version = $installedVersion; package_version = $packageVersion; phase = [string]$state.phase
     consents = @($consents); consents_given = [ordered]@{ test_signing = [bool]$AcceptTestSigning; bitlocker = $BitLocker }; restarts = $restarts
     firmware_source = $firmwareSource; firmware_dir = $FirmwareDir; notes = @($notes); secure_boot = $script:SecureBoot; bitlocker = $script:BitLockerState
-    compatibility = $compat })
+    compatibility = $compat; system_tuning = [bool]$ApplySystemTuning })
+Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning)
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
     Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line, {5} reopened after the driver closed them, {6} left closed by the driver" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command, $impact.summary.reopened, $impact.summary.driver_closed)
@@ -913,6 +918,7 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
 $dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
+if (Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning')) { $dirs += 'system-tuning' }
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
 # The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
 # it is installed at all (manifest.json "mft_h264"). The decision is taken here, before the first change of this
@@ -1331,7 +1337,6 @@ if ($controlExe -and $dirs -contains 'control') {
     } | Out-Null
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
-Clear-InstallInputs $state
 Set-StateValue $state 'parameters_before_install' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 if ($dwmSession) {
@@ -1372,6 +1377,8 @@ if ($storePlan) {
         } | Out-Null
     }
 }
+Invoke-SelectedSystemTuning -Selected ([bool]$ApplySystemTuning) -Action ApplyRecommended -PackageRoot $package
+Clear-InstallInputs $state
 Save-Phase 'installed'
 Set-ResumeAtLogon 'verify'
 Write-Host ''

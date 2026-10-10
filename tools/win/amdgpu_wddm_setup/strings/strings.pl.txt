@@ -281,3 +281,8 @@ guide.pending-restart|mt|d31250df|Twoje zmiany są zapisane. Instalator będzie 
 guide.install-stopped|mt|47319a31|Instalator nie dokończył pracy. Strona mówi, co zrobić dalej.
 guide.verification-failed|mt|1abe91c5|Sterownik nie przeszedł sprawdzeń. Naprawa zwykle pomaga.
 guide.upgrade-done|mt|7ed192a1|Gotowe! Sterownik jest zainstalowany i sprawdzony. Miłej zabawy!
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Ustawienia Windows
+tuning.opt-in|mt|d229d14d|Zastosuj opcjonalne zmiany ustawień Windows
+tuning.details|mt|1bf4ab21|Wyłącz usługi telemetrii diagnostycznej i pobranych map oraz zadania telemetrii programów, jakości obsługi i USB. Mapy offline przestaną się automatycznie aktualizować.
+tuning.restore|mt|9c2f960d|Aktualizacje, aktualizacje sterowników, SysMain, wyszukiwanie i optymalizacja dysków pozostaną bez zmian. Przywróć zapisane ustawienia w aplikacji lub podczas odinstalowania.

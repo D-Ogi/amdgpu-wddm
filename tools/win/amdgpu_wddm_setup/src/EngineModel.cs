@@ -25,7 +25,7 @@ namespace AmdgpuWddmSetup
         public string Action, InstalledVersion, PackageVersion, Phase, FirmwareSource, FirmwareDir, SecureBoot, BitLocker;
         public string[] Consents = new string[0], Notes = new string[0], CompatibilityReasons = new string[0];
         public int Restarts;
-        public bool CompatibilityOk;
+        public bool CompatibilityOk, SystemTuning;
     }
 
     public sealed class SettingsPlan
@@ -119,6 +119,7 @@ namespace AmdgpuWddmSetup
                         Phase = Json.Str(e, "phase"), Consents = Json.Strs(e, "consents"), Restarts = Json.Int(e, "restarts"),
                         FirmwareSource = Json.Str(e, "firmware_source"), FirmwareDir = Json.Str(e, "firmware_dir"), Notes = Json.Strs(e, "notes"),
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
+                        SystemTuning = Json.Bool(e, "system_tuning"),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;

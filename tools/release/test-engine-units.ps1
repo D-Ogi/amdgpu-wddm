@@ -318,13 +318,13 @@ $saveProfiles = $script:ProfilePathsOverride
 $script:ProfilePathsOverride = @((Join-Path $work 'footprint\profiles\a'), (Join-Path $work 'footprint\profiles\b'))
 $fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
 $items = @($fp | ForEach-Object { $_.item })
-$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'certificates', 'GPU firmware', 'control application data')
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'per-user tuning recovery', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
 Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
 Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
 $byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
 Check ((-not $byItem['install root'].present) -and ($byItem['install root'].detail -match 'is gone')) 'an install root that is not there is gone'
 Check ((@($byItem['H.264 encoder keys']).present) -and ($byItem['H.264 encoder keys'].detail -match '\{test\}')) 'the encoder keys come from the caller (uninstall.ps1 reads them with the classes key it uses)'
-Check (($byItem['GPU firmware'].kept) -and ($byItem['control application data'].kept) -and -not @($fp | Where-Object { $_.kept -and $_.item -notin @('GPU firmware', 'control application data') }).Count) 'only the firmware folder that was there before the install and the control data are kept on purpose'
+Check (($byItem['GPU firmware'].kept) -and ($byItem['control application data'].kept) -and ($byItem['per-user tuning recovery'].kept) -and ($byItem['system-tuning'].kept) -and ($byItem['system-tuning-recovery'].kept) -and -not @($fp | Where-Object { $_.kept -and $_.item -notin @('GPU firmware', 'control application data','per-user tuning recovery','system-tuning','system-tuning-recovery') }).Count) 'only pre-existing firmware, control backups and tuning recovery are kept on purpose'
 Write-Text (Join-Path $fpRoot 'manifest.json') '{}'
 Write-Text (Join-Path $script:StateDir 'state.json') '{}'
 $fp2 = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State $null)
@@ -333,7 +333,7 @@ Check ($byItem2['install root'].present -and ($byItem2['install root'].detail -m
 Check ($byItem2['installer state'].present -and -not $byItem2['installer state'].kept) 'the installer state folder is reported, and it is not a kept item'
 Check (-not $byItem2['GPU firmware'].kept) 'a firmware folder that the install created itself is not a kept item'
 Check (-not @($fp2 | Where-Object { $_.item -eq 'H.264 encoder keys' } | Where-Object { $_.present }).Count) 'no encoder key given: the row says none'
-Check ((-not $byItem['per-user data'].present) -and ($byItem['per-user data'].detail -match 'in any profile')) 'no profile with our folder: the per-user row is gone'
+Check ((-not $byItem['per-user data'].present) -and ($byItem['per-user data'].detail -match 'no per-user release data')) 'no profile with our folder: the per-user row is gone'
 $udB = Join-Path $work 'footprint\profiles\b\AppData\Local\amdgpu-wddm'
 Write-Text (Join-Path $udB 'vkd3d\x.cache') 'x'
 $ud = @(Get-OurUserDataDirs)
@@ -411,9 +411,9 @@ Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x0007
 Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 41; mutation_utc = '2026-10-04T07:59:00.0000000Z' })).valid) 'reader: an install action before the witness leaves it valid'
 Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 40; mutation_utc = '2026-10-04T09:00:00.0000000Z' })).valid) 'reader: an install action of another boot leaves it valid'
 $wpath = Join-Path $work 'running-release.json'
-$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'verify' -Boot $boot -Path $wpath
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'verify' -Boot $boot -Path $wpath -StatePath (Join-Path $work 'witness-negative\state.json')
 Check (($why -match 'no bc250kmd\.sys among the loaded drivers|no driver reply') -and -not (Test-Path -LiteralPath $wpath)) "on this PC (no driver): nothing written ($why)"
-$why = Write-RunningReleaseWitness -InstallRoot (Join-Path $work 'nowhere') -RecordedBy 'start-confirm' -Path $wpath
+$why = Write-RunningReleaseWitness -InstallRoot (Join-Path $work 'nowhere') -RecordedBy 'start-confirm' -Path $wpath -StatePath (Join-Path $work 'witness-negative\state.json')
 Check (($why -match 'no manifest\.json') -and -not (Test-Path -LiteralPath $wpath)) 'no installed release: nothing written, no exception'
 Check ($script:WitnessPath -eq (Join-Path $env:ProgramData 'amdgpu-wddm\installer\running-release.json')) "the witness lives in the installer's state folder: $($script:WitnessPath)"
 

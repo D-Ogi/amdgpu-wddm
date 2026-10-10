@@ -281,3 +281,8 @@ guide.pending-restart|mt|d31250df|변경 내용이 저장되었습니다. 다음
 guide.install-stopped|mt|47319a31|설치 프로그램이 끝나지 않았습니다. 다음에 할 일은 화면에 나와 있습니다.
 guide.verification-failed|mt|1abe91c5|드라이버가 확인을 통과하지 못했습니다. 대개 복구하면 해결됩니다.
 guide.upgrade-done|mt|7ed192a1|완료! 드라이버가 설치되고 확인되었습니다. 즐거운 시간 되세요!
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Windows 설정 조정
+tuning.opt-in|mt|d229d14d|선택적 Windows 설정 조정 적용
+tuning.details|mt|1bf4ab21|진단 원격 분석과 다운로드한 지도 서비스를 끄고 프로그램, 사용자 환경 및 USB 원격 분석 작업을 중지합니다. 오프라인 지도가 자동으로 업데이트되지 않습니다.
+tuning.restore|mt|9c2f960d|업데이트, 드라이버 업데이트, SysMain, 검색 및 드라이브 최적화는 변경하지 않습니다. 제어 앱이나 제거 과정에서 저장된 설정을 복원할 수 있습니다.

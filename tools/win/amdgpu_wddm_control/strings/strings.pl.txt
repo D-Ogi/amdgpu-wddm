@@ -987,3 +987,92 @@ help.setting.tdr|mt|c224cc97|Ile sekund Windows czeka na ciężki obraz, zanim u
 plan.title.tdr-delay|mt-safe|ff352a9c|Czas oczekiwania na grafikę
 plan.line.tdr|mt|c88deff7|Windows czeka na grafikę {0} s.
 plan.line.tdr-default|mt|e906ce42|Czas oczekiwania wraca do tego, który Windows ustawia sam.
+nav.system|mt|d598026a|Windows
+page.system.title|mt|78ecd832|Ustawienia Windows
+page.system.intro|mt|743deb73|Wybierz, jakie działania mają odbywać się w tle. Każda zmiana jest opcjonalna i można ją cofnąć.
+help.page.system|mt|fb622a5a|Te ustawienia dotyczą Windows na dowolnej karcie graficznej. Przed zmianą przeczytaj jej opis. Przywracanie odtwarza zapisane ustawienia i nie usuwa składników Windows.
+system.overview|mt|67e610e8|Działania w tle
+system.backup|mt|db982ac0|Poprzednie ustawienia są zapisywane przed zmianą i zachowywane przy aktualizacji aplikacji. Przywracanie dotyczy tylko ustawień zapisanych przez to narzędzie.
+system.read-failed|mt|28e2faa8|Nie udało się odczytać bieżących ustawień. Odśwież je przed zmianą.
+system.reading|mt|296c909a|Odczytywanie ustawień Windows...
+system.refresh|mt|0e916101|Odśwież
+system.recommended|mt|7c59956a|Zastosuj zalecane
+system.restore-all|mt|01d04991|Przywróć wszystkie zapisane ustawienia
+system.current|mt|e9f9320d|Bieżące ustawienie
+system.managed|mt|b93f9481|Poprzednie ustawienie jest zapisane.
+system.unmanaged|mt|6aa491ee|Brak zapisanego poprzedniego ustawienia.
+system.apply|mt|31e392d1|Zastosuj
+system.restore|mt|a76e13b9|Przywróć
+system.days|mt|52fe4b04|Liczba dni wstrzymania (1-35)
+system.pause|mt|28fdf83b|Wstrzymaj aktualizacje
+system.resume|mt|adcaa107|Wznów aktualizacje
+system.pause-policy|mt|afd58f7a|To ustawia żądane wstrzymanie. Windows może zastosować je później; zgłaszany przez niego stan pokazujemy osobno. Nieobsługiwane edycje Windows nie mogą zastosować tych ustawień.
+system.requested-until|mt|9257abb6|Żądane wstrzymanie do
+system.observed|mt|4fa86770|Windows zgłasza
+system.observed.paused|mt|e159b061|Wstrzymane
+system.observed.resumed|mt|1cfd0052|Niewstrzymane
+system.observed.mixed|mt|e29a44d0|Różne stany aktualizacji funkcji i jakości
+system.observed.unknown|mt|67a926f7|Brak danych
+system.scope.machine|mt|102db83e|Wszystkie konta Windows
+system.scope.user|mt|f5ad11e3|Autostart dla tego konta Windows
+system.plan.title|mt|f482ec59|Zmień ustawienia Windows
+system.plan.apply|mt|f3954418|Zastosuj opisaną zmianę: {0}
+system.plan.restore|mt|2083b0f3|Przywróć zapisane ustawienie: {0}
+system.plan.pause|mt|47735b56|Zażądaj wstrzymania aktualizacji na {0} dni.
+system.plan.resume|mt|2a631fe8|Usuń wstrzymanie tego narzędzia i odtwórz zapisane ustawienia aktualizacji.
+system.plan.restore-all|mt|4ec97464|Przywróć wymienione poniżej zapisane ustawienia, w tym ustawienia autostartu tego konta, jeśli są zapisane.
+system.plan.recommended|mt|55d2022a|Ogranicz wymienione poniżej działania w tle. Optymalizacja dysków, autostart aplikacji i ustawienia aktualizacji nie są objęte tą zmianą.
+system.plan.recheck|mt|f35e7163|Przed zapisem ustawienia są sprawdzane ponownie. Elementy zmienione lub nieczytelne mogą zostać odrzucone. Zabezpieczenia, sieć i usługa aktualizacji pozostają włączone.
+system.working|mt|6349602b|Stosowanie żądanych ustawień...
+system.done|mt|6e604bdb|Operacja zakończona. Trwa ponowny odczyt bieżących ustawień.
+system.cancelled|mt|8758b752|Nie udzielono uprawnień administratora. Ta operacja nie została rozpoczęta.
+system.timeout|mt|1ff9b40f|Operacja nie zakończyła się w wyznaczonym czasie. Część ustawień mogła się zmienić. Przed kolejną próbą odśwież stan.
+system.failed|mt|d2d04724|Operacja nie zakończyła się w całości. Część ustawień mogła się zmienić. Sprawdź odświeżony stan i w razie potrzeby przywróć zapisane ustawienia.
+system.state.unknown|mt|63977a32|Nieodczytane
+system.state.absent|mt|3372d1ec|Nieobecne
+system.state.unavailable|mt|2e4a0a37|Niedostępne w tej instalacji Windows
+system.state.enabled|mt|92c1cdfd|Włączone
+system.state.disabled|mt|75081b59|Wyłączone
+system.state.mixed|mt|5f56858c|Częściowo skonfigurowane
+system.state.configured|mt|84aebc69|Skonfigurowane
+system.state.not-configured|mt|dd1841d2|Nieskonfigurowane
+system.item.sysmain|mt|e8c3a42c|Wstępne ładowanie aplikacji
+system.item.sysmain.description|mt|139310b7|Wyłącz wstępne ładowanie aplikacji w tle. Może to zmniejszyć użycie pamięci, ale spowolnić uruchamianie aplikacji.
+system.item.search|mt|25aa964c|Indeksowanie wyszukiwania plików
+system.item.search.description|mt|82e0e975|Wyłącz indeksowanie plików w tle. Wyszukiwanie plików i poczty może być wolniejsze lub mniej kompletne.
+system.item.diagnostics|mt|89414c70|Diagnostyka w tle
+system.item.diagnostics.description|mt|a0f40177|Wyłącz usługę diagnostyki środowisk i telemetrii użytkowników.
+system.item.maps|mt|65354f53|Pobrane mapy
+system.item.maps.description|mt|55498afa|Wyłącz zarządzanie pobranymi mapami w tle. Mapy offline mogą nie być aktualizowane.
+system.item.drive|mt|2620764b|Zaplanowana optymalizacja dysków
+system.item.drive.description|mt|a942887e|Wyłącz zaplanowaną optymalizację dysków, w tym konserwację SSD. Ręczna optymalizacja pozostaje dostępna. Pozostaw ją włączoną, jeśli nie zajmujesz się tym samodzielnie.
+system.item.compatibility|mt|8a1113d8|Sprawdzanie zgodności aktualizacji
+system.item.compatibility.description|mt|5b28cbd9|Wyłącz zaplanowaną ocenę zgodności. Windows może mieć mniej informacji o gotowości do dużej aktualizacji.
+system.item.program-data|mt|f772ca9f|Zadanie ewidencji użycia aplikacji
+system.item.program-data.description|mt|d489b1a1|Wyłącz zaplanowane zadanie danych dotyczących używania aplikacji.
+system.item.experience|mt|0c03e40b|Zadanie poprawy jakości obsługi
+system.item.experience.description|mt|c6cf5ace|Wyłącz zaplanowane zadanie łączenia danych o jakości obsługi klienta.
+system.item.usb|mt|b041ca28|Zadanie jakości obsługi USB
+system.item.usb.description|mt|ef62167a|Wyłącz zaplanowane zadanie danych o jakości obsługi USB. Urządzenia USB nadal działają.
+system.item.teams|mt|69e79a08|Autostart klasycznego Teams dla komputera
+system.item.teams.description|mt|051d9751|Usuń wpis autostartu instalatora klasycznego Teams dla wszystkich kont. Teams nie jest usuwany; nowszy Teams ma osobne ustawienia uruchamiania.
+system.item.onedrive|mt|5c1ab86d|Autostart OneDrive
+system.item.onedrive.description|mt|166cbdd5|Wyłącz uruchamianie OneDrive przy logowaniu na to konto. Pliki nie będą synchronizowane, dopóki samodzielnie nie otworzysz OneDrive.
+system.item.teams-user|mt|5ce9ebb4|Autostart klasycznego Teams dla konta
+system.item.teams-user.description|mt|1e25b15f|Usuń wpis autostartu klasycznego Teams dla tego konta. Nowy Teams i aplikacje ze Sklepu mają osobne ustawienia autostartu.
+system.item.drivers|mt|ebb42406|Zachowaj zainstalowane sterowniki
+system.item.drivers.description|mt|03ed5ef4|Wyklucz sterowniki wszystkich urządzeń ze zwykłych aktualizacji jakości Windows. Krytyczne sterowniki dołączone do Windows i sterowniki w aktualizacjach funkcji nadal mogą być zastępowane.
+system.item.updates|mt|b94adecb|Wstrzymanie Windows Update
+system.item.updates.description|mt|1fc64af6|Tymczasowo wstrzymaj aktualizacje funkcji i jakości, w tym aktualizacje zabezpieczeń. Usługa aktualizacji pozostaje włączona. Wznowienie odtwarza zapisane ustawienia wstrzymania.
+search.system.background|mt|67e610e8|Działania w tle
+search.system.background.terms|mt|c6d2c919|odchudzanie usługi zadania autostart pamięć
+search.system.updates|mt|a7059736|Wstrzymaj Windows Update
+search.system.updates.terms|mt|7d884345|aktualizacje wstrzymanie wznowienie windows
+search.system.drivers|mt|ebb42406|Zachowaj zainstalowane sterowniki
+search.system.drivers.terms|mt|fb85e197|sterowniki zastępowanie automatyczna aktualizacja
+search.system.drive|mt|8c2c1356|Harmonogram optymalizacji dysków
+search.system.drive.terms|mt|cc085891|dysk ssd trim defragmentacja optymalizacja
+help.setting.background|mt|013bf8ab|Każdy opcjonalny element opisuje swój wpływ. Zalecany zestaw zmienia tylko diagnostykę i obsługę pobranych map w tle, nie zabezpieczenia ani Windows Update.
+help.setting.updates|mt|5062c6b1|Wybierz od 1 do 35 dni. Żądana data końcowa i stan zgłaszany przez Windows są osobne. Przywrócenie odtwarza poprzednie ustawienia, które też mogły wstrzymywać aktualizacje.
+help.setting.drivers|mt|d355e59e|Dotyczy ofert sterowników w zwykłych aktualizacjach jakości dla każdego urządzenia, nie tylko tej karty graficznej. Nie blokuje wszystkich możliwych sposobów zastąpienia sterownika.
+help.setting.drive|mt|9bc0a9f6|Zaplanowana optymalizacja obejmuje też konserwację SSD. Jej wyłączenie jest opcjonalne i nie należy do zalecanego zestawu. Przywracanie odtwarza zapisany stan harmonogramu.
