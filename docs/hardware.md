@@ -12,9 +12,9 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 - Shader ISA: what the silicon does, against what LLVM and Mesa say it does, is in
   [gfx1013-isa.md](gfx1013-isa.md). Two findings belong beside the IP versions above. No GFX10.1
   dot-product instruction computes a dot product on this part, and it reports no error when asked
-  ([M853](facts/hardware.md#m853)). VOP2 opcodes 0x0d and 0x0e still hold the SI and CI legacy
+  ([M865](facts/hardware.md#M865)). VOP2 opcodes 0x0d and 0x0e still hold the SI and CI legacy
   minimum and maximum, which GFX10 leaves empty and GFX10.1 reassigned on paper
-  ([M854](facts/hardware.md#m854)).
+  ([M866](facts/hardware.md#M866)).
 - Our unit: board revision TBD, BIOS version TBD, VRAM carve-out TBD.
 
 ## Platform setup (community consensus)

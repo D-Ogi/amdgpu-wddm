@@ -15,7 +15,7 @@ cites both. State what the measurement does not show.
 ## Dot products: the part has none, and it does not say so
 
 Nine GFX10.1 dot-product instructions were issued on unit A. None of them computes a dot product
-([M853](facts/hardware.md#m853)).
+([M865](facts/hardware.md#M865)).
 
 | instruction | encoding | LLVM feature | what the silicon does |
 |---|---|---|---|
@@ -49,7 +49,7 @@ The GFX10 VOP2 opcode map runs 0x00c, then jumps to 0x00f `V_MIN_F32` and 0x010 
 (`VOP2Instructions.td` of LLVM 23.1.2). The two slots between them are empty on GFX10. SI and CI
 put `V_MIN_LEGACY_F32` and `V_MAX_LEGACY_F32` there. GFX10.1 later put `v_dot4c_i32_i8` on 0x00d.
 
-On this part the old instructions are still alive ([M854](facts/hardware.md#m854)):
+On this part the old instructions are still alive ([M866](facts/hardware.md#M866)):
 
 | slot | word with `v5`, `v8`, `v9` | GFX10.1 says | the silicon gives, over 4096 lane pairs |
 |---|---|---|---|
@@ -77,7 +77,7 @@ document for gfx1013, and `llvm-objdump` cannot decode the word at all.
 ## Traps of the toolchain
 
 Two of them cost a day each, so they are here and not only in a commit message
-([M855](facts/tooling.md#m855)).
+([M867](facts/tooling.md#M867)).
 
 **Do not force a target feature on a HIP device pass.** With `-Xclang -target-feature -Xclang
 +dot1-insts`, clang 22.1.8 exits 0, prints no warning, and writes a code object with
