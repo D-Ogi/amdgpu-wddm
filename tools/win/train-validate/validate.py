@@ -176,7 +176,8 @@ def ensure_game_plan(plan: manifest.Plan, arm: manifest.PlannedArm, writer=print
             f"- Question: does this arm complete on {package.release} within its bound of {arm.bound_s} s?",
             f"- Reference: {baseline.get('value', 'none')} {arm.arm.get('result', {}).get('unit', '')} "
             f"from {baseline.get('source', 'no earlier run')}.",
-            f"- Method: the train validation suite runs `{arm.steps[-1].text() if arm.steps else arm.id}`. "
+            f"- Method: the train validation suite runs "
+            f"`{next((step.text() for step in arm.steps if step.phase == 'run'), arm.id)}`. "
             f"The operator drives the game itself from half-scale shots, with no upscaler and no dynamic "
             f"resolution, and the session ends on its own bound or on the thermal stop.",
             "- Conjecture and the reading of the result screen belong to the session record, next to this "
