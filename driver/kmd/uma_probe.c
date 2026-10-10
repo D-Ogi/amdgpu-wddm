@@ -15,28 +15,28 @@ static ULONG UmaProbeRead(ULONG Bus, ULONG Slot, PVOID Buffer, ULONG Offset, ULO
     return count;
 }
 
-void UmaProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA_PROBE* Data,
+void AblBoardMemoryProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD_MEMORY_PROBE* Data,
                      _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags)
 {
-    BC250_ESCAPE_UMA_PROBE request = *Data, canonical;
+    BC250_ESCAPE_BOARD_MEMORY_PROBE request = *Data, canonical;
     D3DDDI_ESCAPEFLAGS wanted = {0};
     static const ULONG rtcSlots[4] = {0, 2, 4, 0x0d};
     ULONG i;
     NTSTATUS status = STATUS_INVALID_PARAMETER;
-    C_ASSERT(sizeof(BC250_ESCAPE_UMA_PROBE) == 128);
+    C_ASSERT(sizeof(BC250_ESCAPE_BOARD_MEMORY_PROBE) == 128);
     RtlZeroMemory(&canonical, sizeof(canonical));
     canonical.Magic = BC250_ESCAPE_MAGIC;
-    canonical.Command = BC250_ESCAPE_RUN_UMA;
+    canonical.Command = BC250_ESCAPE_RUN_BOARD_MEMORY;
     canonical.Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-    canonical.AbiVersion = BC250_UMA_ABI;
-    canonical.Op = BC250_UMA_OP_PROBE;
+    canonical.AbiVersion = BC250_BOARD_MEMORY_ABI;
+    canonical.Op = BC250_BOARD_MEMORY_OP_PROBE;
     RtlZeroMemory(Data, sizeof(*Data));
     Data->Magic = canonical.Magic;
     Data->Command = canonical.Command;
     Data->AbiVersion = canonical.AbiVersion;
     Data->Op = canonical.Op;
     Data->Status = BC250_ESCAPE_STATUS_REFUSED;
-    Data->Reason = BC250_UMA_REASON_READ;
+    Data->Reason = BC250_BOARD_MEMORY_REASON_READ;
     if (RtlCompareMemory(&request, &canonical, sizeof(request)) != sizeof(request)) goto done;
     if (!Admin) {
         Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
@@ -51,6 +51,7 @@ void UmaProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA_PROB
         status = STATUS_INVALID_DEVICE_STATE;
         goto done;
     }
+    Data->Flags = BC250_BOARD_MEMORY_SUPPORTED;
     Data->SlotCount = UmaProbeRead(1, 0x90, Data->SlotBlock, 0, sizeof(Data->SlotBlock));
     Data->OffsetCount = UmaProbeRead(1, 0, Data->OffsetBlock, 0x90, sizeof(Data->OffsetBlock));
     for (i = 0; i < 4; ++i)
@@ -69,4 +70,22 @@ void UmaProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA_PROB
     status = STATUS_SUCCESS;
 done:
     Data->NtStatus = (ULONG)status;
+}
+
+void BoardMemoryProbeRequest(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_MEMORY_PROBE* Data,
+                             BOOLEAN Admin, ULONG EscapeFlags)
+{
+    const BC250_BOARD_MEMORY_PROVIDER* provider = BoardMemoryProvider(Device);
+    if (provider) {
+        provider->Probe(Device, Data, Admin, EscapeFlags);
+    } else {
+        RtlZeroMemory(Data, sizeof(*Data));
+        Data->Magic = BC250_ESCAPE_MAGIC;
+        Data->Command = BC250_ESCAPE_RUN_BOARD_MEMORY;
+        Data->AbiVersion = BC250_BOARD_MEMORY_ABI;
+        Data->Op = BC250_BOARD_MEMORY_OP_PROBE;
+        Data->Status = BC250_ESCAPE_STATUS_REFUSED;
+        Data->NtStatus = (ULONG)STATUS_NOT_SUPPORTED;
+        Data->Reason = Device->BoardMemoryReason;
+    }
 }

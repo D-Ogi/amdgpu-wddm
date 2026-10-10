@@ -93,35 +93,46 @@ static NTSTATUS TelemetryFan(BC250_ESCAPE_FAN *f)
 // The same shape as the DLL: one function with the flag, and TelemetryEscape as its software-only wrapper, so
 // that the test sees exactly which flag each export asked for.
 static int umaMode, umaHardwareCalls;
-static BC250_ESCAPE_UMA sentUma;
-static NTSTATUS TelemetryUma(BC250_ESCAPE_UMA* u)
+static BC250_ESCAPE_BOARD_MEMORY sentUma;
+static NTSTATUS TelemetryUma(BC250_ESCAPE_BOARD_MEMORY* u)
 {
  sentUma=*u;if(escapeHardware)umaHardwareCalls++;
- if(u->Op==BC250_UMA_OP_PROBE){
-  BC250_ESCAPE_UMA_PROBE* p=(BC250_ESCAPE_UMA_PROBE*)u;
+ if(u->Op==BC250_BOARD_MEMORY_OP_PROBE){
+  BC250_ESCAPE_BOARD_MEMORY_PROBE* p=(BC250_ESCAPE_BOARD_MEMORY_PROBE*)u;
   if(umaMode==1)return 0;
-  p->Status=BC250_ESCAPE_STATUS_DONE;p->Reason=BC250_UMA_REASON_READ;
+  p->Status=BC250_ESCAPE_STATUS_DONE;p->Reason=BC250_BOARD_MEMORY_REASON_READ;p->Flags=BC250_BOARD_MEMORY_SUPPORTED;
   p->SlotCount=28;p->OffsetCount=0;p->SlotBlock[0]=0x24;p->RtcCount[3]=1;p->RtcValue[3]=0x80;
   if(umaMode==2){p->Status=BC250_ESCAPE_STATUS_REFUSED;p->NtStatus=0xC0000022u;}
   if(umaMode==3)p->Magic=0;
   if(umaMode==4)p->Reserved[2]=1;
+  if(umaMode==5){p->Flags=0;p->Reason=BC250_BOARD_MEMORY_REASON_BOARD;p->Status=BC250_ESCAPE_STATUS_REFUSED;p->NtStatus=0xC00000BBu;}
+  if(umaMode==6)p->Flags=0;
   return 0;
  }
  if(umaMode==1)return 0;
  if(umaMode==2)return (NTSTATUS)0xC00000A3;
- u->Status=BC250_ESCAPE_STATUS_DONE;u->Flags=BC250_UMA_ACTIVE_VALID;
- u->ActiveBytes=12ull<<30;u->Reason=BC250_UMA_REASON_NO_TRANSPORT;
+ u->Status=BC250_ESCAPE_STATUS_DONE;u->Flags=BC250_BOARD_MEMORY_ACTIVE_VALID|BC250_BOARD_MEMORY_SUPPORTED;
+ u->ProviderId=BC250_BOARD_MEMORY_PROVIDER_BC250_ABL;u->AllowedMiB[0]=8192;u->AllowedMiB[1]=12288;u->NeedsRestart=1;
+ u->ActiveBytes=12ull<<30;u->Reason=BC250_BOARD_MEMORY_REASON_NO_TRANSPORT;
  if(umaMode==3)u->Magic^=1;
  if(umaMode==4)u->AbiVersion++;
  if(umaMode==5)u->Op=9;
- if(umaMode==6)u->Flags=16;
+ if(umaMode==6)u->Flags=32;
  if(umaMode==7)u->Reason=99;
- if(umaMode==8)u->Reserved[11]=1;
+ if(umaMode==8)u->Reserved[7]=1;
  if(umaMode==9){u->Status=BC250_ESCAPE_STATUS_REFUSED;u->NtStatus=0xC0000022u;}
- if(umaMode>=10){u->Reason=BC250_UMA_REASON_READY;u->Flags|=BC250_UMA_READ_VALID|BC250_UMA_WRITE_ALLOWED;memset(u->ObservedBlock,0x37,28);}
- if(umaMode==11)u->Flags|=BC250_UMA_BACKUP_VALID;
- if(umaMode==12)u->Reason=BC250_UMA_REASON_NO_TRANSPORT;
- if(umaMode==13)u->Flags&=~BC250_UMA_READ_VALID;
+ if(umaMode>=10 && umaMode<=13){u->Reason=BC250_BOARD_MEMORY_REASON_READY;u->Flags|=BC250_BOARD_MEMORY_READ_VALID|BC250_BOARD_MEMORY_WRITE_ALLOWED;memset(u->ObservedBlock,0x37,28);}
+ if(umaMode==11)u->Flags|=BC250_BOARD_MEMORY_BACKUP_VALID;
+ if(umaMode==12)u->Reason=BC250_BOARD_MEMORY_REASON_NO_TRANSPORT;
+ if(umaMode==13)u->Flags&=~BC250_BOARD_MEMORY_READ_VALID;
+ if(umaMode==14) {u->Flags=0;u->ProviderId=0;u->AllowedMiB[0]=u->AllowedMiB[1]=u->NeedsRestart=0;u->ActiveBytes=0;u->Reason=BC250_BOARD_MEMORY_REASON_BOARD;}
+ if(umaMode==15)u->ProviderId=0;
+ if(umaMode==16)u->ProviderId=2;
+ if(umaMode==17)u->AllowedMiB[1]=14336;
+ if(umaMode==18)u->NeedsRestart=0;
+ if(umaMode==19)u->Flags=BC250_BOARD_MEMORY_READ_VALID|BC250_BOARD_MEMORY_WRITE_ALLOWED;
+ if(umaMode==20)u->AbiVersion=1;
+ if(umaMode==21)u->Reason=BC250_BOARD_MEMORY_REASON_BOARD;
  return 0;
 }
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
@@ -133,7 +144,7 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
     if (head->Command == BC250_ESCAPE_RUN_DPM_CURVE) return TelemetryCurve(data);
     if (head->Command == BC250_ESCAPE_RUN_CPU) return TelemetryCpu(data);
     if (head->Command == BC250_ESCAPE_RUN_FAN) return TelemetryFan(data);
-    if (head->Command == BC250_ESCAPE_RUN_UMA) return TelemetryUma(data);
+    if (head->Command == BC250_ESCAPE_RUN_BOARD_MEMORY) return TelemetryUma(data);
     sent = *d;
     if (escapeMode == 1) return (NTSTATUS)0xC00000A3;          // a KMD before the DPM escape
     if (escapeMode == 2) return 0;                             // untouched: UNKNOWN_COMMAND
@@ -395,51 +406,61 @@ int main(void)
     statsMode = 2; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == (LONG)0xC0000001);
     statsMode = 0;
     {
-        BC250_CONTROL_UMA_REQUEST r; BC250_ESCAPE_UMA u; unsigned i;
+        BC250_CONTROL_BOARD_MEMORY_REQUEST r; BC250_ESCAPE_BOARD_MEMORY u; unsigned i;
         memset(&r,0,sizeof(r));r.Size=sizeof(r);umaMode=0;umaHardwareCalls=0;escapeCalls=0;
-        CHECK(sizeof(r)==48 && offsetof(BC250_CONTROL_UMA_REQUEST,ExpectedBlock)==16);
-        CHECK(offsetof(BC250_CONTROL_UMA_REQUEST,ReservedEnd)==44);
-        CHECK(Bc250Uma(&u,sizeof(u),&r)==0 && escapeCalls==1 && escapeHardware==0);
-        CHECK(u.ActiveBytes==(12ull<<30) && u.Flags==BC250_UMA_ACTIVE_VALID);
+        CHECK(sizeof(r)==48 && offsetof(BC250_CONTROL_BOARD_MEMORY_REQUEST,ExpectedBlock)==16);
+        CHECK(offsetof(BC250_CONTROL_BOARD_MEMORY_REQUEST,ReservedEnd)==44);
+        CHECK(sizeof(u)==128 && offsetof(BC250_ESCAPE_BOARD_MEMORY,ProviderId)==80 &&
+              offsetof(BC250_ESCAPE_BOARD_MEMORY,AllowedMiB)==84 &&
+              offsetof(BC250_ESCAPE_BOARD_MEMORY,NeedsRestart)==92 &&
+              offsetof(BC250_ESCAPE_BOARD_MEMORY,Reserved)==96);
+        CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && escapeCalls==1 && escapeHardware==0);
+        CHECK(u.ActiveBytes==(12ull<<30) && u.Flags==(BC250_BOARD_MEMORY_ACTIVE_VALID|BC250_BOARD_MEMORY_SUPPORTED));
         CHECK(sentUma.Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND && sentUma.RequestedMiB==0);
-        CHECK(Bc250Uma(NULL,sizeof(u),&r)==(LONG)0xC000000D);
-        CHECK(Bc250Uma(&u,sizeof(u),NULL)==(LONG)0xC000000D);
-        CHECK(Bc250Uma(&u,127,&r)==(LONG)0xC000000D);
-        r.Size--;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);r.Size++;
-        r.Reserved=1;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);r.Reserved=0;
-        r.ReservedEnd=1;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);r.ReservedEnd=0;
-        r.Op=3;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);r.Op=0;
-        r.ExpectedBlock[27]=1;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);r.ExpectedBlock[27]=0;
+        CHECK(Bc250BoardMemory(NULL,sizeof(u),&r)==(LONG)0xC000000D);
+        CHECK(Bc250BoardMemory(&u,sizeof(u),NULL)==(LONG)0xC000000D);
+        CHECK(Bc250BoardMemory(&u,127,&r)==(LONG)0xC000000D);
+        r.Size--;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);r.Size++;
+        r.Reserved=1;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);r.Reserved=0;
+        r.ReservedEnd=1;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);r.ReservedEnd=0;
+        r.Op=3;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);r.Op=0;
+        r.ExpectedBlock[27]=1;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);r.ExpectedBlock[27]=0;
         CHECK(escapeCalls==1);
-        umaMode=1;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC00000BB);
-        umaMode=2;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC00000A3);
-        for(i=3;i<=8;i++){umaMode=(int)i;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);}
-        umaMode=9;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC0000022);
-        for(i=12;i<=13;i++){umaMode=(int)i;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D);}
-        umaMode=0;r.Op=BC250_UMA_OP_SET;r.TargetMiB=8192;escapeCalls=0;
-        CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC00000BB && escapeCalls==1 && umaHardwareCalls==0);
-        r.TargetMiB=14336;escapeCalls=0;CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000000D && escapeCalls==0);
+        umaMode=1;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000BB);
+        umaMode=2;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000A3);
+        for(i=3;i<=8;i++){umaMode=(int)i;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);}
+        umaMode=9;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC0000022);
+        for(i=12;i<=13;i++){umaMode=(int)i;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);}
+        for(i=15;i<=21;i++){umaMode=(int)i;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D);}
+        umaMode=14;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && u.Flags==0 && u.ProviderId==0);
+        r.Op=BC250_BOARD_MEMORY_OP_SET;r.TargetMiB=8192;umaHardwareCalls=0;escapeCalls=0;
+        CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000BB && escapeCalls==1 && umaHardwareCalls==0);
+        umaMode=0;r.Op=BC250_BOARD_MEMORY_OP_SET;r.TargetMiB=8192;escapeCalls=0;
+        CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000BB && escapeCalls==1 && umaHardwareCalls==0);
+        r.TargetMiB=14336;escapeCalls=0;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000000D && escapeCalls==0);
         r.TargetMiB=12288;umaMode=10;escapeCalls=0;
-        CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC000022D && escapeCalls==1 && umaHardwareCalls==0);
+        CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC000022D && escapeCalls==1 && umaHardwareCalls==0);
         memcpy(r.ExpectedBlock,"7777777777777777777777777777",28);escapeCalls=0;
-        CHECK(Bc250Uma(&u,sizeof(u),&r)==0 && escapeCalls==2 && umaHardwareCalls==1 && escapeHardware==1);
+        CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && escapeCalls==2 && umaHardwareCalls==1 && escapeHardware==1);
         CHECK(sentUma.RequestedMiB==12288 && !memcmp(sentUma.ObservedBlock,r.ExpectedBlock,28));
-        r.Op=BC250_UMA_OP_RESTORE;r.TargetMiB=0;umaHardwareCalls=0;
-        CHECK(Bc250Uma(&u,sizeof(u),&r)==(LONG)0xC00000BB && umaHardwareCalls==0);
-        umaMode=11;CHECK(Bc250Uma(&u,sizeof(u),&r)==0 && umaHardwareCalls==1);
+        r.Op=BC250_BOARD_MEMORY_OP_RESTORE;r.TargetMiB=0;umaHardwareCalls=0;
+        CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==(LONG)0xC00000BB && umaHardwareCalls==0);
+        umaMode=11;CHECK(Bc250BoardMemory(&u,sizeof(u),&r)==0 && umaHardwareCalls==1);
         umaMode=0;
     }
     {
-        BC250_ESCAPE_UMA_PROBE p;
+        BC250_ESCAPE_BOARD_MEMORY_PROBE p;
         umaMode=0;escapeCalls=0;
-        CHECK(Bc250UmaProbe(NULL,sizeof(p))==(LONG)0xC000000D);
-        CHECK(Bc250UmaProbe(&p,127)==(LONG)0xC000000D && escapeCalls==0);
-        CHECK(Bc250UmaProbe(&p,sizeof(p))==0 && escapeCalls==1 && escapeHardware==1);
+        CHECK(Bc250BoardMemoryProbe(NULL,sizeof(p))==(LONG)0xC000000D);
+        CHECK(Bc250BoardMemoryProbe(&p,127)==(LONG)0xC000000D && escapeCalls==0);
+        CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==0 && escapeCalls==1 && escapeHardware==1);
         CHECK(p.SlotCount==28 && p.OffsetCount==0 && p.SlotBlock[0]==0x24 && p.RtcValue[3]==0x80);
-        umaMode=1;CHECK(Bc250UmaProbe(&p,sizeof(p))==(LONG)0xC00000BB);
-        umaMode=2;CHECK(Bc250UmaProbe(&p,sizeof(p))==(LONG)0xC0000022);
-        umaMode=3;CHECK(Bc250UmaProbe(&p,sizeof(p))==(LONG)0xC000000D);
-        umaMode=4;CHECK(Bc250UmaProbe(&p,sizeof(p))==(LONG)0xC000000D);
+        umaMode=1;CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==(LONG)0xC00000BB);
+        umaMode=2;CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==(LONG)0xC0000022);
+        umaMode=3;CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==(LONG)0xC000000D);
+        umaMode=4;CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==(LONG)0xC000000D);
+        umaMode=5;CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==(LONG)0xC00000BB);
+        umaMode=6;CHECK(Bc250BoardMemoryProbe(&p,sizeof(p))==(LONG)0xC000000D);
     }
     printf("Telemetry exports: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;

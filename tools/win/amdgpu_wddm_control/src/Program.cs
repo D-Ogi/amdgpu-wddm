@@ -50,7 +50,7 @@ namespace AmdgpuWddmControl
         static int Main(string[] args)
         {
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
-            if (args.Length > 0 && args[0] == "--uma-action") return UmaActions.Run(args);
+            if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
             if (args.Length > 0 && args[0] == "--status") return Status(args);
             if (args.Length > 0 && args[0] == "--action") return Dispatch(args);
             Application.EnableVisualStyles();
@@ -235,7 +235,7 @@ namespace AmdgpuWddmControl
 
         static int Dispatch(string[] args)
         {
-            if (args.Length > 0 && args[0] == "--uma-action") return UmaActions.Run(args);
+            if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
             // Existing recovery verbs. Game settings go through --action game-profile (planned, backed up, undoable); the
             // old unplanned --apply-profiles verb is gone.
             return args.Length > 0 && args[0] == "--action" ? RecoveryRunner.Run(args) : RecoveryRunner.Usage;

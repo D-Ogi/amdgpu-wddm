@@ -988,7 +988,6 @@ plan.title.tdr-delay|mt-safe|ff352a9c|Czas oczekiwania na grafikę
 plan.line.tdr|mt|c88deff7|Windows czeka na grafikę {0} s.
 plan.line.tdr-default|mt|e906ce42|Czas oczekiwania wraca do tego, który Windows ustawia sam.
 
-uma.title|mt|6be52e48|Pamięć wideo
 uma.active|mt|8289ad5a|Używana teraz
 uma.requested|mt|1ccff8ba|Po następnym restarcie
 uma.unavailable|mt|67a926f7|Niedostępne
@@ -998,7 +997,11 @@ uma.recovery|mt|f8e2d145|Jeśli Windows nie uruchomi się, wyczyszczenie CMOS pr
 uma.readonly|mt|7c6e555e|Tego ustawienia nie można zmienić w tym systemie.
 uma.apply|mt|6a7aeb33|Ustaw pamięć wideo
 uma.restore|mt|a7adc6e0|Przywróć poprzednie ustawienie
-uma.confirm|mt|7bd00a1f|Ustawić pamięć wideo na {0}? Poprzednie ustawienie zostanie zapisane przed zmianą.
 uma.confirm-restore|mt|53929d48|Przywrócić zapisane wcześniej ustawienie pamięci wideo?
 uma.pending|mt|f633949e|Zmiana oczekuje na restart.
-uma.windows-unavailable|mt|19e431e0|Zmiana pamięci wideo w Windows nie jest jeszcze dostępna. Bieżąca wartość jest pokazana informacyjnie.
+uma.title|mt|bac35af8|Rezerwacja pamięci płyty BC-250
+uma.confirm|mt|b1ad9514|Ustawić rezerwację pamięci płyty BC-250 na {0}? Poprzednie ustawienie zostanie zapisane przed zmianą.
+uma.windows-unavailable|mt|b6b6d668|Zmiana rezerwacji pamięci płyty BC-250 w Windows nie jest jeszcze dostępna.
+uma.fallback.title|mt|6be52e48|Pamięć wideo
+uma.fallback.size|mt|2c73531b|Pamięć dedykowana zgłaszana przez Windows
+uma.fallback.readonly|mt|0042c9fe|To informacja o rozmiarze pamięci, tylko do odczytu. To urządzenie nie udostępnia ustawienia rezerwacji pamięci płyty BC-250.

@@ -21,8 +21,9 @@ if ($Mutation -ne 'none') {
     if ($source.Split(@($anchor),[StringSplitOptions]::None).Count -ne 2) { throw 'Mutation anchor changed' }
     $source=$source.Replace($anchor,$replacement)
 }
+$uma=(Get-Content -Raw "$repo\driver\kmd\uma.c").Replace('#include "bc250kmd.h"','')
 $template=Get-Content -Raw "$PSScriptRoot\uma_probe_test.c"
-[IO.File]::WriteAllText("$Out\actual.c",$template.Replace('/* ACTUAL_PROBE */',$source))
+[IO.File]::WriteAllText("$Out\actual.c",$template.Replace('/* ACTUAL_PROBE */',$source).Replace('/* ACTUAL_UMA */',$uma))
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
 $sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"

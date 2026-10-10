@@ -78,6 +78,7 @@ try {
  Check 'uma-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma.ps1" -Root $Workspace -Out "$Out\uma-policy" }
  Check 'uma-request' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_request.ps1" -Root $Workspace -Out "$Out\uma-request" }
  Check 'uma-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_probe.ps1" -Root $Workspace -Out "$Out\uma-probe" }
+  Check 'board-memory-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity.ps1" -Root $Workspace -Out "$Out\board-memory-identity" }
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
  Check 'ring-gap' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ring_gap.ps1" -Root $Workspace -Out "$Out\ring-gap" }
  Check 'paging-queue' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue" }

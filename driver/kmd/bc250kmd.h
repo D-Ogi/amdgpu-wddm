@@ -296,6 +296,8 @@ typedef struct _BC250_DEVICE {
     BOOLEAN VramWriteEnabled;
     PHYSICAL_ADDRESS VramPhysical;      // system physical address of VRAM byte 0
     ULONGLONG VramLength;
+    volatile LONG BoardMemoryProviderId; // immutable after start capture until stop
+    ULONG BoardMemoryReason;
     volatile LONG64 UmaActiveBytes; // atomic software view; zero outside a successful VRAM start
     ULONGLONG VramMcBase;               // GPU physical (MC) address of VRAM byte 0
     PHYSICAL_ADDRESS Bar0Physical;
@@ -425,10 +427,20 @@ void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size
 // driver_version.c: the per-application graphics setting ReportAmdDriverVersion, at each adapter start
 void DriverVersionStart(BC250_DEVICE* Device);
 
+typedef struct BC250_BOARD_MEMORY_PROVIDER {
+    void (*Query)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY*);
+    NTSTATUS (*Set)(BC250_DEVICE*, const BC250_ESCAPE_BOARD_MEMORY*);
+    NTSTATUS (*Restore)(BC250_DEVICE*, const BC250_ESCAPE_BOARD_MEMORY*);
+    void (*Probe)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
+} BC250_BOARD_MEMORY_PROVIDER;
+const BC250_BOARD_MEMORY_PROVIDER* BoardMemoryProvider(BC250_DEVICE* Device);
+void BoardMemoryIdentityClear(BC250_DEVICE* Device);
+void BoardMemoryIdentityCapture(BC250_DEVICE* Device);
+void AblBoardMemoryProbeRequest(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
 // uma.c: capability query only until a supported CMOS transport is established.
-void UmaRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA* Data,
+void BoardMemoryRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD_MEMORY* Data,
                 _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
-void UmaProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_UMA_PROBE* Data,
+void BoardMemoryProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD_MEMORY_PROBE* Data,
                     _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
 
 // hwmon.c

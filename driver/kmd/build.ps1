@@ -149,7 +149,7 @@ Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
     '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
-    'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
+    'aux_klib.lib', 'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
     "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
     (Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName)   # fixed order: /OPT:ICF folds by input order
 Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force

@@ -427,7 +427,7 @@ namespace AmdgpuWddmControl
             try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
             var vram = Kmd.VideoMemory();
             _vram = vram.Value;
-            _uma = Kmd.UmaQuery().Value;
+            _uma = Kmd.BoardMemoryQuery().Value;
             _fan = Kmd.Hwmon().Value;
             _upd = UpdateCheck.LoadCache();
             ReadRecent();

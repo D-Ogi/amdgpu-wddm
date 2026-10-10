@@ -1,13 +1,16 @@
-# VRAM reservation in Windows
+# BC-250 board memory reservation in Windows
 
-Status: partial implementation. The app can show the active reservation and why
-Windows changes are unavailable. The driver refuses every set and restore
-request. Only an explicit administrator diagnostic can read CMOS through HAL.
+Status: partial implementation. On a recognized BC-250 board, the app shows the
+active reservation and why changes are unavailable. Other boards get a read-only
+VRAM value from the Windows segment statistics. The driver refuses every
+set and restore request. Only an explicit administrator diagnostic on a recognized
+board can read CMOS through HAL.
 
 ## Implemented boundary
 
-`RUN_UMA` is command 32, operation ABI 1, with a 128-byte record. READ uses only
-`NoAdapterSynchronization`. It returns the complete GC/NBIO memory range
+`RUN_BOARD_MEMORY` is command 32, operation ABI 2, with a 128-byte record.
+ABI 1 was an unreleased prototype. The DLL and app reject it. READ uses only
+`NoAdapterSynchronization`. On the BC-250 it returns the complete GC/NBIO memory range
 captured during VRAM start, separate from the smaller application segment.
 The snapshot is atomic and becomes unavailable at VRAM stop. READ does not
 access CMOS, registers, firmware, the registry or a disk.
@@ -16,7 +19,50 @@ SET and RESTORE are reserved operations. The driver returns `STATUS_NOT_SUPPORTE
 for an administrator and never calls a hardware transport. Unknown sizes, ABI
 versions, flags, operations and nonzero reserved fields are refused. There is
 no registry switch that enables writes. The control DLL first reads capabilities.
-it sends no hardware escape when write support is absent.
+It sends no hardware escape when write support is absent.
+
+## Board selection
+
+This operation is a board capability. It is not a generic way to resize memory
+on AMD GPUs. A provider supplies query, set, restore and the read probe. Provider
+zero means unsupported. Provider one is the BC-250 ABL block. A failed identity
+query or an unknown board selects no provider. No CMOS probe runs in that case.
+
+Selection requires all of these values:
+
+| Source | Required value |
+|---|---|
+| PCI vendor and device | `1002:13FE`, ordinary device header |
+| PCI subsystem vendor and device | `1022:0000` |
+| SMBIOS Type 2 manufacturer and product | `ASRock`, `AMD BC-250` |
+| SMBIOS Type 0 vendor | `American Megatrends Inc.` |
+| BIOS version and date | P2.00: 11/09/2021, P3.00: 12/09/2021, P5.00: 05/03/2022 |
+
+The PCI and P3.00 board strings come from the
+[saved unit A inventory](../../evidence/linux/2026-09-21-E01-recon/dmidecode.txt)
+and its [PCI report](../../evidence/linux/2026-09-21-E01-recon/lspci-gpu-vvv.txt).
+P2.00 and P5.00 are known firmware-image identities. Their inclusion does not
+claim a Windows CMOS test on those versions. Modified firmware can keep the same
+version strings. This match identifies the board. It does not authenticate firmware.
+
+The driver captures identity at device start and clears selection at stop. PCI
+reads must return the requested byte count. The SMBIOS parser checks lengths,
+string indices, table termination and duplicate identity records. Missing or
+malformed data selects no provider. The raw table is not logged.
+
+The [PCI callback contract](https://learn.microsoft.com/windows-hardware/drivers/ddi/dispmprt/nc-dispmprt-dxgkcb_read_device_space)
+and WDK 10.0.26100.0 define the configuration read. The local WDK also declares
+`AuxKlibGetSystemFirmwareTable`. The missing narrative contract was checked against
+the [Microsoft reference](https://learn.microsoft.com/windows-hardware/drivers/ddi/aux_klib/nf-aux_klib-auxklibgetsystemfirmwaretable)
+on 2026-10-10: initialize AuxKlib first, query at PASSIVE_LEVEL, and parse the raw
+SMBIOS header. The [enumeration reference](https://learn.microsoft.com/windows-hardware/drivers/ddi/aux_klib/nf-aux_klib-auxklibenumeratesystemfirmwaretables)
+identifies RSMB table zero. Both pages are dated 2023-03-13.
+
+In ABI 2, the support bit is `0x10`. At byte 80 the query returns the provider ID,
+followed by two allowed MiB values and a restart requirement. Unsupported replies
+contain none of those capabilities or any board memory data. A supported BC-250
+returns choices 8192 and 12288, with restart required. Support for the board does
+not imply write permission: the write capability stays clear in this stage.
 
 The app has separate active and next-start values. An unavailable next-start
 value is not shown as zero or as a pending change. The initial choices are
@@ -47,8 +93,9 @@ Reference revisions: WDK 10.0.26100.0, Microsoft driver DDI checkout
 
 ## Read-only HAL diagnostic
 
-`bc250kmd_cli uma-probe` calls command 32, operation 3, with a separate 128-byte
-record. It needs an administrator, HardwareAccess alone, PASSIVE_LEVEL and a
+`bc250kmd_cli bc250-board-memory-probe` calls command 32, operation 3, with a separate
+128-byte record. It needs a selected BC-250 provider, an administrator,
+HardwareAccess alone, PASSIVE_LEVEL and a
 started, awake adapter. It performs six `HalGetBusDataByOffset(Cmos, ...)`
 calls and returns raw counts and bytes:
 
@@ -96,8 +143,8 @@ update is not atomic against power loss.
 ## Work required before writes can be enabled
 
 1. Establish the supported transport, address mapping and serialization.
-2. Restrict access by BC-250 SMBIOS identity and checked firmware revisions.
-   A matching GPU PCI ID alone is insufficient.
+2. Check the board selection and the exact firmware revision on the target.
+   The identity checks are implemented. A matching tuple does not qualify writes.
 3. Add a flushed, checked backup owned by the driver and a bounded restore
    operation. Do not accept arbitrary replacement bytes from a client.
 4. Apply effective caller authorization, device lifetime exclusion, stale-state
@@ -114,5 +161,7 @@ injected failures. Compiled checksum, stale-state and no-op mutants must fail
 runtime checks. These tests do not check platform arbitration or POST.
 
 The native control DLL test suite and the app's pure tests cover the ABI and
-the unavailable state. The KMD build compiles the exact software-only handler.
+the unavailable state. The board tests cover foreign device, subsystem, board and
+BIOS identities, malformed records and capture failures. Mocked HAL calls must
+remain zero for unsupported identities. The KMD build compiles the actual handlers.
 The app build uses `-NoSmoke`. Host checks do not open the GUI or a GPU.

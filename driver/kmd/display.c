@@ -382,12 +382,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     // they are answered ahead of the power-phase check (SoftwareReadEscape). The command is read once, so the read
     // that runs is the read that was admitted; every other flag combination takes the path below, as before.
     command = data->Command;
-    if (command == BC250_ESCAPE_RUN_UMA) {
-        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_UMA)) return STATUS_INVALID_PARAMETER;
-        if (((BC250_ESCAPE_UMA*)data)->Op == BC250_UMA_OP_PROBE)
-            UmaProbeRequest(device, (BC250_ESCAPE_UMA_PROBE*)data, CallerIsAdmin(), Escape->Flags.Value);
+    if (command == BC250_ESCAPE_RUN_BOARD_MEMORY) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_BOARD_MEMORY)) return STATUS_INVALID_PARAMETER;
+        if (((BC250_ESCAPE_BOARD_MEMORY*)data)->Op == BC250_BOARD_MEMORY_OP_PROBE)
+            BoardMemoryProbeRequest(device, (BC250_ESCAPE_BOARD_MEMORY_PROBE*)data, CallerIsAdmin(), Escape->Flags.Value);
         else
-            UmaRequest(device, (BC250_ESCAPE_UMA*)data, CallerIsAdmin(), Escape->Flags.Value);
+            BoardMemoryRequest(device, (BC250_ESCAPE_BOARD_MEMORY*)data, CallerIsAdmin(), Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
     softwareRead.NoAdapterSynchronization = 1;

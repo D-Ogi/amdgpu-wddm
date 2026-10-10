@@ -8,6 +8,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     GuardStage(StageAddDevice);
     device = (BC250_DEVICE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*device), BC250_TAG);
     if (device == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    BoardMemoryIdentityClear(device);
     device->PhysicalDeviceObject = PhysicalDeviceObject;
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
     StartHealthInitialize(device);
@@ -58,6 +59,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     NTSTATUS status;
 
+    BoardMemoryIdentityClear(device);
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
     GuardStage(StageStartEnter);
@@ -90,6 +92,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     status = device->Dxgk.DxgkCbGetDeviceInformation(device->Dxgk.DeviceHandle, &device->DeviceInfo);
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartDeviceInfo);
+    BoardMemoryIdentityCapture(device);
 
     // The firmware's mode and framebuffer. Without it there is nothing this driver could show: M3 sets no mode.
     status = device->Dxgk.DxgkCbAcquirePostDisplayOwnership(device->Dxgk.DeviceHandle, &device->Post);
@@ -183,6 +186,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     return STATUS_SUCCESS;
 
 failed:
+    BoardMemoryIdentityClear(device);
     StartHealthClose(device);
     GuardLog("start failed 0x%08X", status);
     GuardStage(StageStartFailed);
@@ -193,6 +197,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     BOOLEAN wasStarted;
+
+    BoardMemoryIdentityClear(device);
 
     // BD-090. When DxgkDdiStopDeviceAndReleasePostDisplayOwnership fails, dxgkrnl calls DxgkDdiStopDevice after it
     // (plug-and-play--pnp--start-and-stop-cases.md, "or after a call to DxgkDdiStopDeviceAndReleasePostDisplay-

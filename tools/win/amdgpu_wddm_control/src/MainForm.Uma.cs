@@ -8,6 +8,14 @@ namespace AmdgpuWddmControl
     public sealed partial class MainForm
     {
         UmaState _uma;
+        Control BuildReadOnlyMemoryCard(int width)
+        {
+            var c = new CardPanel(Strings.T("uma.fallback.title"), width);
+            c.Pair(Strings.T("uma.fallback.size"), _vram == null || _vram.Segments == 0 ? Strings.T("uma.unavailable") :
+                (_vram.Dedicated / 1073741824.0).ToString("0.##", CultureInfo.CurrentCulture) + " GiB");
+            c.Add(Ui.Dim(Strings.T("uma.fallback.readonly"),c.Inner));
+            return c;
+        }
         Control BuildUmaCard(int width)
         {
             var c = new CardPanel(Strings.T("uma.title"), width);
@@ -40,7 +48,7 @@ namespace AmdgpuWddmControl
             if (MessageBox.Show(this, prompt, Strings.T("uma.title"), MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
             Enabled = false;
-            Task.Run(() => Program.RunElevatedCode("--uma-action", restore ? "restore" : target.ToString(CultureInfo.InvariantCulture), confirmed)).ContinueWith(t =>
+            Task.Run(() => Program.RunElevatedCode("--bc250-board-memory-action", restore ? "restore" : target.ToString(CultureInfo.InvariantCulture), confirmed)).ContinueWith(t =>
             {
                 Enabled = true;
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : 1;
