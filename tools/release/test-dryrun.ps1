@@ -69,7 +69,7 @@ $r.text
 Check ($r.code -eq 0) "walk-through exit $($r.code)"
 Check ($r.text -match 'would: bcdedit /set \{current\} testsigning on') 'phase 1 shows the test-signing change'
 Check ($r.text -match 'would: pnputil /add-driver') 'phase 2 shows the driver install'
-Check ($r.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: .*DpmMode=1 \(new\); DpmMaxMHz=1500 \(new\)') 'phase 2 shows DPM on, 1500 MHz'
+Check ($r.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: .*DpmMode=1 \(new\); DpmMaxMHz=2000 \(new\)') 'phase 2 shows DPM on, 2000 MHz'
 Check ($r.text -match 'Parameters: .*UnconfirmedStarts=0') 'UnconfirmedStarts reset (installer-owned)'
 Check ($r.text -match 'previous installer defaults: the defaults of tester\.1 to tester\.7 \(no record\)') 'no AppliedDefaults record on this computer: legacy table'
 Check ($r.text -match 'would: .*\\Release: .*AppliedDefaults') 'Release\AppliedDefaults recorded'
