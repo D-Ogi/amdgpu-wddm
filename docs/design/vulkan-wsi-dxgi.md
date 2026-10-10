@@ -507,6 +507,35 @@ not transfer ownership of the handle: the application keeps it and must close it
 `CreateSharedHandle` and leaked it on both paths. Round 4b closes it after the import attempt, on success and
 on failure, and the host test drives both outcomes against a model of the handle table.
 
+### The teardown writes a reading no deadline announces
+
+The pinning rule above has a second reader, and it is the lab verdict. Three of the drain's answers are
+`UNPROVEN`, and one of them is silent: `if (!queue || !device) return WSI_WIN32_FLUSH_UNPROVEN;` logs nothing
+and does not retire the route, so no deadline line of the route appears anywhere for it. The destroy path then
+pins the chain and retires its blit waits on **every** DXGI swapchain destroy, a resize included, and an image
+whose debt the presenter still owes, with the presenter not proved removed, writes the refusal line. A log can
+therefore say that a submission of the application was left waiting on a shared blit timeline nobody will
+signal - BD-105's own symptom - with no expired wait in it at all.
+
+The lines that say so are the ones the teardown writes, and they are the lines to read when a route looks
+healthy and a client does not:
+
+- `chain <p>: queue drain drained|removed|unproven` - what the drain could prove. The three early returns of
+  the drain write no such line at all, which is the case above.
+- `chain <p>: destroyed with the queue's use of its resources <r>: ... (work still outstanding: yes|no)` -
+  `yes` is the freeze. The chain, its images, its D3D12 resources, its shared blit fences and its swap chain
+  are kept either way.
+- `chain <p>: destroyed with a submission of this device still waiting on a shared blit timeline: presenter <s>`
+  - the same reading on the releasing path.
+- `chain <p>: no drain fence (hr=...)` and `chain <p>: the drain Signal failed (hr=...)` - the drain could not
+  be made.
+
+A retirement line with no expired wait before it is therefore not the contract-keeping reading of the plan's
+outcome 3: it is this teardown. The lab kit reads all of them from round 4c (`EXPECTED.md` of the kit carries
+the list, with which of them fail an arm), with a rule control that measures the pre-fix rule passing such an
+arm and the fixed rule failing it. What is still open on the driver's side is the silence of that one return:
+it should write a line of its own, so that the reading does not depend on the teardown lines downstream of it.
+
 ### The cross-stack share cells
 
 The route shares two kinds of object, and until round 4b nothing had measured either of them in the
