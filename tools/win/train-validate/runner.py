@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -50,6 +51,22 @@ MIN_STEP_S = 20
 
 def utc_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def keep_earlier_attempt(directory: Path) -> Path | None:
+    """Keep the raw logs of an attempt that is about to be written over, as `<arm>-attempt-N`.
+
+    An arm that runs again writes its steps into the same directory. In the b28 round that erased the
+    logs of the Rise of the Tomb Raider session whose score the release gate stands on. The copy is made
+    before the new attempt writes anything, and the arm's own directory always holds the last attempt.
+    """
+    if not (directory / "record.json").is_file():
+        return None
+    number = 1
+    while (kept := directory.with_name(f"{directory.name}-attempt-{number}")).exists():
+        number += 1
+    shutil.copytree(directory, kept)
+    return kept
 
 
 @dataclass
@@ -505,6 +522,9 @@ class Runner:
                            value_operator=bool(spec.get("operator")), value_spec=dict(spec) or None)
         directory = self.out / arm.id
         directory.mkdir(parents=True, exist_ok=True)
+        kept = keep_earlier_attempt(directory)
+        if kept:
+            self.writer(f"[keep] {arm.id}: the earlier attempt's raw logs are kept as {kept.name}/")
         if arm.kind == "operator":
             record.verdict = OPERATOR
             record.reason = arm.arm.get("note", "the operator runs this arm")

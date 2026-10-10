@@ -226,7 +226,8 @@ def write(plan, records: list[ArmRecord], out_dir: Path, texts: dict | None = No
     if superseded:
         lines += ["", "## Earlier attempts of an arm that ran again", "",
                   "Each row is a record of this same directory that a later attempt of its arm superseded. "
-                  "They are the history of the round, not its verdict.", "",
+                  "They are the history of the round, not its verdict. The raw logs of each one are kept "
+                  "next to the arm's own directory as `<arm>-attempt-N`, in the order they ran.", "",
                   "| Arm | Verdict | What ended it |", "|---|---|---|"]
         for record in superseded:
             lines.append(f"| `{record.id}` | {record.verdict} | {record.reason or 'see the raw log'} |")

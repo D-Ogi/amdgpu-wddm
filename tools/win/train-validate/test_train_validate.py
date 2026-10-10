@@ -869,6 +869,19 @@ class OneCommand(unittest.TestCase):
         self.assertFalse(out.exists())
         self.assertEqual(self.shells, [], "the dry run opened no shell")
 
+    def test_an_arm_that_runs_again_keeps_the_earlier_attempts_logs(self):
+        # The arm writes its steps into its own directory. Without this, a second attempt erased the logs
+        # of the first one, and in the b28 round that was the benchmark session the release gate stands on.
+        out = self.tmp / "out-twice"
+        for attempt in ("600", "601"):
+            code = self.validate.main(["--manifest", str(self.manifest_path), "run",
+                                       "--package", str(self.package.directory), "--out", str(out),
+                                       "--arms", "demo", "--attempt-base", attempt, "--no-hash"])
+            self.assertEqual(code, 0)
+        self.assertTrue((out / "demo" / "record.json").is_file())
+        self.assertTrue((out / "demo-attempt-1" / "record.json").is_file(),
+                        "the first attempt's logs are kept")
+
     def test_a_resumed_run_with_nothing_left_runs_nothing(self):
         # `run --arms <id> --resume` on an arm that already passed used to run the whole plan again,
         # because an empty list of arms read as "no list given" (b28, 2026-10-10).
