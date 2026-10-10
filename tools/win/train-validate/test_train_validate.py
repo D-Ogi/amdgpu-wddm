@@ -866,6 +866,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
             ("slots.ps1", Completed(0, "slot check: 36 match, 0 differ, 1 absent (of 37 payload files)")),
             ("kmdver.ps1", Completed(0, "install root C:\\Program Files\\amdgpu-wddm")),
             ("preflight.ps1", Completed(0, "preflight: ok")),
+            ("pin-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("vk-smoke.ps1", Completed(0, "driverInfo = Mesa 26.3.0-devel (git-18e0f56be7)")),
             ("x86-d3d11-smoke.ps1", Completed(0, "exit 0 after 12.0 s")),

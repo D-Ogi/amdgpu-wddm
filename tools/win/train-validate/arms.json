@@ -142,7 +142,7 @@
       "kind": "host",
       "bound_s": 300,
       "why_not_a_trial": "Runs on the development PC against the package files; it never reaches the lab.",
-      "run": [["python", "{caps}/release-baseline.py", "{pkg}", "--apply"]],
+      "run": [["python", "{repo}/tools/win/train-validate/pin-baseline.py", "{caps}", "{pkg}"]],
       "result": {"regex": "release \\S+: (\\d+) files verified", "name": "files verified", "unit": "files"},
       "expect": "files verified",
       "depends_on": ["slots"],
