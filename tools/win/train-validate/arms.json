@@ -7,6 +7,7 @@
     "temp": "{repo}/tools/win/bc250rd/temp.py",
     "kit": "{repo}/tools/win/train-validate/lab",
     "caps": "{ws}/scratch/m15/native-caps001",
+    "gamecontrol": "{ws}/scratch/m15/game-recon/game-control.py",
     "pathtrace": "{ws}/scratch/pathtrace",
     "plug": "{ws}/scratch/smartplug/plug.py",
     "adapter_dir": "adapter137",
@@ -1242,6 +1243,15 @@
       ],
       "run": [
         [
+          "python",
+          "{repo}/tools/win/train-validate/game-drive.py",
+          "--profile",
+          "rottr",
+          "--attempt",
+          "{attempt}",
+          "--control",
+          "{gamecontrol}",
+          "--",
           "{bash}",
           "{caps}/run-game.sh",
           "{attempt_n}",
@@ -1295,7 +1305,8 @@
         "BD-114",
         "BD-059"
       ],
-      "note": "The owner gate is not met until the overall score is filled in: `summary --set rottr=<fps>`. The vsync step is load-bearing (a benchmark with vsync on measures the panel); the overlay calls are not, and they fail nothing."
+      "note": "The owner gate is not met until the overall score is filled in: `summary --set rottr=<fps>`. The vsync step is load-bearing (a benchmark with vsync on measures the panel); the overlay calls are not, and they fail nothing. The run step wraps the session in game-drive.py: in b29 native-caps548 nothing selected START BENCHMARK and the game sat in its menu for eleven minutes at 84 C. The wrapper selects it, checks that the menu is gone (one retry, then 'menu not left') and ends the session after the result dialog.",
+      "operator_line": "{attempt}: game-drive.py selects START BENCHMARK once the menu shows and reads the result dialog; read the score from its '[drive] result:' lines or the shots in scratch/m15/control/{attempt}, then fill it in with summary --set rottr=<fps>"
     },
     {
       "id": "w3-high-rt",

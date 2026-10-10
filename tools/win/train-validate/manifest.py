@@ -417,6 +417,8 @@ def build(package: Package, data: dict | None = None, arm_ids: list[str] | None 
             attempt += len(names)
         if arm.get("promote"):
             arm["promote"] = {key: expand(value, per_arm) for key, value in arm["promote"].items()}
+        if arm.get("operator_line"):
+            arm["operator_line"] = expand(arm["operator_line"], per_arm)
         planned.append(PlannedArm(arm=arm, steps=plan_steps(arm, per_arm, limits, python),
                                   env={k: expand(v, per_arm) for k, v in arm.get("env", {}).items()}))
     gate = PlannedStep(argv=[python, values["target"], "ps", values["kit"] + "/gate.ps1", "-Label", "{label}"],

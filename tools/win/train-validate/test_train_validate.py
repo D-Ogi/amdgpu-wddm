@@ -362,6 +362,155 @@ class GameWindow(unittest.TestCase):
         self.assertEqual(len(shell.said("vsync.ps1 -Value 1")), 1, "the restore still runs")
 
 
+MENU = [{"t": "OPTIONS", "b": [0.11, 0.303, 0.168, 0.329]}, {"t": "QUIT GAME", "b": [0.108, 0.384, 0.18, 0.41]},
+        {"t": "START BENCHMARK", "b": [0.106, 0.465, 0.235, 0.492]}]
+LOADING = [{"t": "GATHERING", "b": [0.8, 0.76, 0.9, 0.78]}]
+RESULT = [{"t": "Mountain Peak: 78.67 FPS (min: 11.60, max: 135.43)", "b": [0.36, 0.39, 0.67, 0.41]},
+          {"t": "Overall score: 51.24 FPS", "b": [0.444, 0.472, 0.591, 0.488]}, {"t": "0K", "b": [0.4, 0.54, 0.42, 0.56]}]
+
+
+class FakeChannel:
+    """The control channel of a session: screens in order, and a click or Enter that may leave the menu."""
+
+    def __init__(self, before_menu=1, leaves_on="click", scenes=2, never_leaves=False):
+        self.calls: list[str] = []
+        self.before_menu, self.leaves_on, self.scenes, self.never_leaves = before_menu, leaves_on, scenes, never_leaves
+        self.state, self.shown = "black", 0
+
+    def call(self, actions):
+        self.calls.append(actions)
+        if not self.never_leaves and self.state == "menu" and (
+                (self.leaves_on == "click" and "click:left" in actions) or
+                (self.leaves_on == "enter" and actions == "hold:1C:300")):
+            self.state, self.shown = "loading", 0
+        return ""
+
+    def running(self):
+        self.calls.append("peek")
+        return True
+
+    def look(self):
+        self.calls.append("look")
+        self.shown += 1
+        if self.state == "black" and self.shown > self.before_menu:
+            self.state = "menu"
+        elif self.state == "loading" and self.shown > 1:
+            self.state = "scene"
+        elif self.state == "scene" and self.shown > self.scenes + 1:
+            self.state = "result"
+        screens = {"black": [], "menu": MENU, "loading": LOADING, "scene": [], "result": RESULT}
+        return list(screens[self.state]), f"shot-{len(self.calls):03d}.jpg"
+
+
+class GameDrive(unittest.TestCase):
+    """game-drive.py: START BENCHMARK selected, the menu left, the result read (b29 native-caps548)."""
+
+    def drive(self, channel, alive=lambda: True):
+        import importlib
+        module = importlib.import_module("game-drive")
+        said: list[str] = []
+        driver = module.Driver(module.DRIVES["rottr"], channel, alive, every=0, peek_every=0, check_after=0,
+                               wait_game=50, wait_menu=50, wait_result=50, sleep=lambda s: None,
+                               clock=FakeClock().now, say=said.append)
+        driver.run()
+        return driver, said
+
+    def test_the_click_starts_the_benchmark_and_the_result_ends_the_session(self):
+        channel = FakeChannel(leaves_on="click")
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        click = next(call for call in channel.calls if "click:left" in call)
+        self.assertIn("point:0.17:0.479", click, "the centre of the item the OCR found")
+        self.assertNotIn("hold:1C:300", channel.calls[:channel.calls.index(click) + 3],
+                         "no Enter when the click alone left the menu: Enter on the menu would open OPTIONS")
+        self.assertIn("note:world+60", channel.calls)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+        self.assertEqual(channel.calls[-2:], ["hold:1C:300", "quit"], "the dialog confirmed, then the session ends")
+
+    def test_a_click_that_only_selects_gets_a_held_enter(self):
+        channel = FakeChannel(leaves_on="enter")
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        click = next(i for i, call in enumerate(channel.calls) if "click:left" in call)
+        self.assertEqual(channel.calls[click + 2], "hold:1C:300")
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+
+    def test_a_menu_that_is_never_left_fails_after_one_retry_and_ends_the_session(self):
+        channel = FakeChannel(never_leaves=True)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "menu not left")
+        self.assertEqual(sum(1 for call in channel.calls if "click:left" in call), 2, "one retry")
+        self.assertIn("[drive] FAILED menu not left", said)
+        self.assertEqual(channel.calls[-1], "quit")
+
+    def test_no_menu_within_the_wait_fails_and_says_so(self):
+        import importlib
+        module = importlib.import_module("game-drive")
+        channel = FakeChannel(before_menu=10 ** 6)
+        clock = iter(range(0, 10 ** 6, 2))
+        said: list[str] = []
+        driver = module.Driver(module.DRIVES["rottr"], channel, lambda: True, every=0, peek_every=0,
+                               check_after=0, wait_game=5, wait_menu=5, wait_result=5, sleep=lambda s: None,
+                               clock=lambda: float(next(clock)), say=said.append)
+        driver.run()
+        self.assertEqual(driver.failed, "the main menu never showed START BENCHMARK")
+        self.assertNotIn("click:left", " ".join(channel.calls))
+
+    def test_a_session_that_ends_by_itself_is_not_a_drive_failure(self):
+        channel = FakeChannel(before_menu=10 ** 6)
+        alive = iter([True, True, True, False])
+        driver, said = self.drive(channel, alive=lambda: next(alive, False))
+        self.assertEqual(driver.failed, "")
+        self.assertNotIn("quit", channel.calls)
+
+    def test_the_command_line_runs_the_session_and_returns_the_drive_failure(self):
+        import importlib
+        import sys
+        module = importlib.import_module("game-drive")
+        tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        control = tmp / "control.py"
+        control.write_text("import sys\nopen(sys.argv[0] + '.log', 'a').write(sys.argv[2] + '\\n')\n"
+                           "print('queue: 0 commands, 0 done, game running: False')\n", encoding="utf-8")
+        rc = module.main(["--profile", "rottr", "--attempt", "native-caps001", "--control", str(control),
+                          "--wait-game", "0", "--peek-every", "0", "--",
+                          sys.executable, "-c", "import time; time.sleep(3)"])
+        self.assertEqual(rc, module.FAILED)
+        self.assertEqual((tmp / "control.py.log").read_text(encoding="utf-8").split(), ["peek", "quit"])
+
+    def test_the_shipped_rottr_arm_runs_its_session_through_the_driver(self):
+        data = manifest.load_manifest()
+        arm = next(a for a in data["arms"] if a["id"] == "rottr")
+        run = arm["run"][0]
+        self.assertIn("{repo}/tools/win/train-validate/game-drive.py", run)
+        self.assertEqual(run[run.index("--attempt") + 1], "{attempt}")
+        self.assertEqual(run[run.index("--") + 1:], ["{bash}", "{caps}/run-game.sh", "{attempt_n}", "rottr", "{bound}"])
+        import importlib
+        self.assertIn(arm["profile"], importlib.import_module("game-drive").DRIVES)
+        plan = manifest.build(Package(directory=Path("."), release="r", name="n", kmd_build="", kmd_abi="",
+                                      built_utc="", zip_path=None, zip_sha256="", zip_bytes=0), data,
+                              arm_ids=["rottr"], attempt_base=700, python="python")
+        self.assertIn("native-caps700", plan.by_id("rottr").arm["operator_line"])
+
+    def test_the_runner_prints_the_operator_line_and_names_a_drive_failure(self):
+        tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        data = small_manifest()
+        data["arms"][2]["operator_line"] = "{attempt}: watch the shots"
+        plan = small_plan(tmp, data)
+        lines: list[str] = []
+        shell = FakeShell([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("run-game.sh", Completed(5, "[drive] self-check shot-009.jpg: still the menu\n"
+                                         "[drive] FAILED menu not left\nsession closed")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        run = Runner(plan, shell, tmp / "out", clock=FakeClock(), writer=lines.append, python="python")
+        record = run.run([plan.by_id("game")])[0]
+        self.assertIn("[oper] game: native-caps600: watch the shots", lines)
+        self.assertEqual(record.verdict, FAIL)
+        self.assertEqual(record.reason.split(";")[0], "rc 5: FAILED menu not left")
+
+
 class Staging(unittest.TestCase):
     """stage.py names every file of a staged directory by the path that target.py push gives it on the lab."""
 

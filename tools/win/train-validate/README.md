@@ -61,6 +61,7 @@ remembering them.
 | No ssh session is held open before a trial runs | one call at a time, and the only sampler is the smart plug over the LAN (BD-051) |
 | The overlay STOP flag ends the run, and so does a flag that cannot be read | `Runner.stop_flag_set` wants `mon.py`'s own line (`STOP requested` or `no stop request`). Any other answer means the question did not reach the overlay, and an unread flag is never a licence to start a GPU arm |
 | A game session starts only when the carve-out leaves it the memory its harness needs (3500 MB available) | `manifest.game_memory_step` puts `lab/game-memory.ps1` first in every game arm: it reads the harness's own counter and fails the arm at once with `carve-out too large for games`. `manifest.game_window` runs the game arms after the board memory `set` and before its `restore`. At 12288 MiB Windows has about 1300 MB available, and the b29 RotTR arm (native-caps547) waited on its host backstop instead |
+| A game benchmark that sits in a menu starts without waiting for a person | `game-drive.py` wraps the run step of `rottr`, and the runner prints the arm's `operator_line` when the arm starts. In b29 native-caps548 nothing selected START BENCHMARK, and the game held its menu for eleven minutes at 84 C |
 | `bc250mon` keeps running | the suite hides the overlay for a game arm, puts it back afterwards and never stops the process. Those two calls are `optional` steps: the overlay never fails an arm |
 | Every lab call goes through `target.py` | the commands in `arms.json` name no address and no host |
 | A health gate follows every arm that touched the GPU | `lab/gate.ps1` and `runner.parse_gate`: GPU faults, fence timeouts, event 4101 of the display provider, bugcheck records, DPM, fan `state=curve controlling=1`, TdrDelay 10 |
@@ -162,6 +163,7 @@ Where two pieces of the workspace did the same job, the suite keeps one of them.
 | `promote.py` | the D3D12 promotion step, idempotent. It moves a leftover attempt directory aside and leaves evidence alone. For a new triplet it finds the local copy of each accepted file that the package replaces |
 | `summary.py` | the `RESULTS.md` skeleton, the two owner gates and the symptom shapes |
 | `stage.py` | sends files to the lab and proves them by SHA-256 on both sides |
+| `game-drive.py` | the run step of a game arm whose benchmark sits in a menu (`rottr`). It starts the session and reads the screen through the control channel every 12 s. It selects START BENCHMARK and then reads the screen again: the menu must be gone (one retry, then `menu not left`). At the end it prints the result dialog and ends the session |
 | `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1`, `kill-clients.ps1` (the client of a failed arm) and `board-memory-op.ps1 -Step set` and `-Step restore` (the board's memory block). `d3d12-putback.ps1` writes too: it puts the accepted D3D12 files back before a promotion |
 | `test_train_validate.py` | the host tests, against a fake target |
 
