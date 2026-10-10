@@ -1,8 +1,8 @@
-# Hang recovery, stage 1: soft recovery in ResetEngine (KMD 0.7.216.18)
+# Hang recovery, stage 1: soft recovery in ResetEngine (KMD 0.7.216.27)
 
 Every GPU hang on unit A so far has ended the same way: bugcheck 0x116. The trials behind the reports (147, 151,
 153, 208, 245, 251) share one shape. A job's waves take no-retry GFXHUB faults, latch `MEM_VIOL` and stop, and the
-end-of-pipe behind them never fires. The 500 ms submit watchdog closes node 0, so the desktop stops too. About
+end-of-pipe behind them never fires. The submit watchdog closes node 0, so the desktop stops too. About
 10 s later (`TdrDelay` 10 on the lab), dxgkrnl runs its per-engine TDR. `DxgkDdiResetEngine` refuses,
 `DxgkDdiResetFromTimeout` fails, and the machine bugchecks. KMD 0.7.216.13 added stage 1 of M15.12, behind the
 registry switch `HangRecoveryMode`: kill the waves, wait for the fence, and if it retires, report a successful
@@ -15,6 +15,10 @@ DWM spun in the hosted UMD when it destroyed its lost device. The KMD did not ca
 change (see "Lab trial D1 of 0.7.216.17" below). With that change (zink b25) the same trial recovered and the desktop
 stayed, but DWM still lost its device and made a new one. The cause is a 10 s CPU wait in the hosted ICD, not the
 KMD (see "Lab trial D1 of 0.7.216.17 with zink b25" below). From 0.7.216.18 stage 1 is on by default.
+
+BD-114 of 2026-10-10 found a second way into the same bugcheck, and this time the driver's own watchdog started
+it. 0.7.216.27 answers it in two places: the watchdog itself ("The private submit watchdog" below) and a verdict
+that was a refusal and is now a reported reset (verdict 7, "The record"). The hang class above is unchanged.
 
 ## The switch
 
@@ -122,14 +126,15 @@ Each stage-1 call leaves its verdict in the registry, under
 and flushes it with `ZwFlushKey`. The log ring is about 1024 lines and lives in memory, so it does not survive the
 0x116 that follows a refusal. The registry record does.
 
-- Counters: `Attempts`, `Recovered` (verdicts 1 and 5), `NotDrained` (2) and `Refused` (3, 4 and 6). The driver
-  never resets them.
+- Counters: `Attempts`, `Recovered` (verdicts 1, 5 and 7), `NotDrained` (2) and `Refused` (3, 4 and 6). The
+  driver never resets them.
 - The last call: `LastVerdict`, `LastSeq`, `LastFence`, `LastKills`, `LastMicros`, `LastTime` (a UTC FILETIME,
   REG_QWORD) and `LastVersion`. Since 0.7.216.17, `LastKills` counts only the kills that reached the register. A
   verdict 2 with `LastKills` 0 is a refused kill, and the log ring then has `gfx: soft recovery kill refused`.
 
 A call that kills writes twice: a pending entry (`LastVerdict` 0, `Attempts` + 1) before the first `SQ_CMD` write,
-and its verdict before it returns. A refusal decided before any kill writes once. After every call that the
+and its verdict before it returns. An outcome decided before any kill writes once - a refusal, or verdict 7 - and
+counts its own attempt in that one write, because no pending entry counted one for it. After every call that the
 machine survives, `Attempts == Recovered + NotDrained + Refused`. If `Attempts` is one ahead and `LastVerdict` is 0,
 the machine went down during the kill. `test/hang_recovery_test.c` checks this arithmetic.
 
@@ -367,12 +372,146 @@ The change is in the user-mode layers, and the KMD keeps 0.7.216.17's recovery:
 The 120 s bound is far above one TDR cycle. A job that is still pending on a live device after 120 s is reported as
 lost, as before.
 
-## Why not in the 500 ms watchdog
+## Why the kill is not in the submit watchdog
 
-Killing at watchdog time would cut the freeze from about 10 s to 0.5 s. It would also turn the hang into an
-ordinary `DMA_COMPLETED`: the guilty application would keep its device and read garbage. Only a successful
-`DxgkDdiResetEngine` lets dxgkrnl put the guilty device into the error state while the system device carries on.
-The watchdog therefore still closes the ring and records its register snapshot, unchanged.
+Killing at watchdog time would cut the freeze from about 10 s to the watchdog's own budget. It would also turn the
+hang into an ordinary `DMA_COMPLETED`: the guilty application would keep its device and read garbage. Only a
+successful `DxgkDdiResetEngine` lets dxgkrnl put the guilty device into the error state while the system device
+carries on. The watchdog therefore still only closes the ring and records its register snapshot.
+
+## The private submit watchdog
+
+Node 0 has a watchdog of its own, a `KTIMER` and a DPC in `wddm.c`, because this part has no working GPU reset
+(facts M53) and a fence that never arrives has to be noticed by somebody. Until 0.7.216.26 it was one constant,
+`BC250_WDDM_SUBMIT_TIMEOUT_MS` 500, counted from the moment the packet was written to the ring. BD-114 shows what
+that cost. A dense 512-token LLM prefill submits packets whose own execution time is 400 ms or more. The
+watchdog fired on one of them. `GfxSubmitFail` closed node 0. The next submission was refused, which latched
+`RefusalPending[0]`. That flag blocks the `DXGK_INTERRUPT_DMA_PREEMPTED` acknowledgement for ever. The OS then
+waited out its whole `TdrDelay` on an unacknowledged preempt request. `DxgkDdiResetEngine` found nothing of node 0
+on the ring, because the accused packet had completed successfully in the meantime, and refused with verdict 3.
+`Bc250WddmResetFromTimeout` then returned `STATUS_UNSUCCESSFUL`, which is bugcheck parameter 3 verbatim. Every
+step after the first is unconditional, in both captured boots. **A false trip of this watchdog is not a lost
+frame. It is a bugcheck.** The analysis is `scratch/bd114/ANALYSIS.md` (local, not in this repository). The
+decisions are `driver/kmd/submit_watchdog.h` and the host suite is `test/submit_watchdog_test.c`.
+
+### The budget is a setting, and it is never shorter than the OS's
+
+The OS measures execution time itself and owns recovery: "The GPU scheduler ... detects when the GPU takes more
+than the permitted amount of time to execute a particular task ... The preempt operation has a 'wait' timeout,
+which is the actual TDR timeout" (`display/timeout-detection-and-recovery.md`), and `TdrDelay` "specifies the
+number of seconds that the GPU can delay the preempt request from the GPU scheduler ... 2 seconds is the default
+value" (`display/tdr-registry-keys.md`). A private watchdog shorter than that budget replaces a mechanism that
+works with one that bugchecks.
+
+`SubmitWatchdogMs` is a REG_DWORD under the service's `Parameters` key, read once in `WddmStart` the way
+`HangRecoveryMode` is. The INF does not write it, so the shipping case is the absent value, and the absent value
+is `TdrDelay` plus a 2 s margin: 12 s on the lab, where the GUI writes `TdrDelay` 10, and 4 s on a machine that
+has no `TdrDelay` at all. `TdrDelay` is read from Windows' own
+`HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers` through `GuardReadGraphicsSetting`, which opens that
+key for `KEY_READ` alone. An operator's own value is taken as asked, clamped to five minutes, and **raised to
+`TdrDelay` if it is shorter** - a value of 500 here would put BD-114 back, so it cannot be set. The start says
+which of the three happened:
+
+    wddm: submit watchdog 12000 ms (TdrDelay 10000 ms, setting 0, default), looks for progress every 250 ms
+
+Node 1 (paging) gets the same budget. Its hang class is not BD-114's, but its refusal path is the same one-way
+door to a 0x116, and the argument does not care which ring the packet is on. Two bounds keep a constant of their
+own and are deliberately NOT the watchdog's budget. `BC250_WDDM_HOLD_DEADLINE_MS` (500 ms) bounds a CPU wait
+inside `SubmitCommandVirtual`, on a dxgkrnl worker thread, and letting it grow to a ten-second budget would block
+that thread for ten seconds. `BC250_WDDM_STOP_DRAIN_MS` (600 ms) bounds the drain of `WddmStop`, which must not
+wait out a long budget. A held submission that runs out of its 500 ms still closes the node, so that is a
+remaining instance of the same class, and it is in the "Limits" list below.
+
+### The budget is re-armed while progress is observed
+
+The budget alone is a floor, not an answer. The old watchdog had one input, wall clock, so it could not tell a
+healthy job from a dead one at all. The DPC now looks for progress every `min(budget / 4, 250)` ms and re-arms
+itself, and what it looks at is a 64-bit token mixed out of the things that move while a node-0 packet is healthy:
+the submission fence slot the command processor writes, the ring read pointer `CP_RB0_RPTR`, and the `CP_IB1` and
+`CP_IB2` base and size pairs. It fires only when that token has stood still for the whole budget **while the
+checks were watching it**: a gap of a budget or more between two checks means nobody was looking, and a token that
+nobody watched stand still is not evidence of a hang. That is the rule `Bc250HangWatchCheck` (`progress.h`)
+already uses for the heartbeat, and it means a fire needs at least three looks, not two.
+
+Every uncertain reading is read as progress, and that direction is chosen on purpose. The `CP_IB*` family is
+banked by `GRBM_GFX_INDEX`, which this driver must not write, so the bank is whatever the shim left selected, and
+those registers describe where the command processor is now rather than the head job. Both limits can only make
+the token change when the head made no progress, which re-arms the budget - and a watchdog that is too patient
+merely lets the OS's own recovery arrive first, which is the mechanism that works.
+
+### The deadline belongs to the job at the head
+
+`job.Deadline` was stamped at the ring write, so a packet behind six others on this seven-deep queue could have
+its whole budget consumed before it began - the q27 arm of the two dumps. It is stamped when the job becomes the
+head now (`WddmGfxHeadLocked`), and a job that already carries a deadline keeps it, which is the rule that
+function has always stated: appending work must not extend a running job's watchdog. What a push behind a running
+head may move is the moment the watchdog next looks, because the look is a set cadence and not a fresh budget.
+The queue is seven deep, so a deferral costs at most six ticks of detection latency. In exchange the function
+keeps the property it had before BD-114 - it leaves the timer armed whenever a head exists - instead of making the
+watchdog depend on an unbroken chain of DPC self-re-arms.
+
+**One honest correction to the analysis.** Once the staleness window is armed at the head change, the stamp no
+longer changes WHEN the watchdog fires: the window restarts at every head change either way. What the stamp
+changes is the deadline a queued job carries, the second (redundant) condition of the fire, and the two measured
+numbers below. It is kept for all three, not for a fire it would prevent.
+
+The timer is re-armed inside `wddm->Lock`, and that is not a style choice. `WddmStop` and `WddmSuspendRetained`
+set `Stopping`, cancel this timer and take back its queued DPC in one critical section, on the strength of "from
+here nothing of ours arms a timer". A re-arm outside the lock could read `Stopping` as FALSE, lose the race to
+that critical section and call `KeSetTimer` after the cancel, the `KeRemoveQueueDpc` and the `KeFlushQueuedDpcs` -
+on a `KTIMER` and a `KDPC` that live inside the `BC250_WDDM` allocation `WddmStop` then frees.
+`run_submit_watchdog.ps1` gates that order with `-RearmOutsideLock`.
+
+### The timeout line says what it measured
+
+The line printed the budget itself, so "after 500 ms" meant "after at least 500 ms, by an unknown amount", and the
+offline analysis of two bugchecks could bound a packet's duration but never measure one. It now reports three
+measured times, and the `wddm summary` carries the two high-water marks, so a workload can be priced against the
+budget without a bugcheck to read it from:
+
+    wddm: timeout measured: head 3250 ms, queued 2400 ms, stale 3000 ms, budget 12000 ms
+    wddm summary: submit watchdog 12000 ms (TdrDelay 10000 ms), 4821 checks, 4820 re-armed
+    wddm summary: submit watchdog high water: head 412 ms, queue wait 2208 ms
+
+### Verdict 7: the last reported fence named as aborted
+
+The situation BD-114 ends in - nothing of node 0 on the ring, because the accused packet completed between the
+watchdog and the TDR - is verdict 3, a refusal, after which `ResetFromTimeout` fails and the machine goes down.
+The contract asks for the other answer in exactly this situation (`display/tdr-changes-in-windows-8.md`): "A
+special situation can occur when a packet is completed on the GPU between steps 3 and 7. In this case, the driver
+should set **LastAbortedFenceId** to the fence ID of the last completed packet if there are no packets in the
+hardware queue from the driver's point of view. From the scheduler's point of view, it appears that such a packet
+was aborted."
+
+The objection in the "Limits" list of 0.7.216.18 - "our view of 'last completed' can lag a pending report, and a
+wrong choice re-executes a packet" - is answered by guards rather than waved away, and every one of them is a
+condition the report DPC already tracks (`Bc250HangAbortReportedFence`, `hang_recovery.h`):
+
+- nothing of this node on the ring. Only then is there no packet whose completion we would be pre-empting.
+- `CompletionPending[node] == 0`. A pending completion is exactly the lag the objection names: a fence the
+  hardware has produced and dxgkrnl has not been told about. With one outstanding, "last reported" is not the
+  last completed and the fence named would be wrong.
+- `LastReportedValid[node]`, and that fence inside the engine-reset contract's range against the last fence
+  dxgkrnl submitted on this node. Out of range is bugcheck 0x119. The lower bound holds by construction, because
+  the fence named is the node's own `LastReportedFence`. Only the upper bound can refuse.
+
+The upper bound needed a value this driver did not keep. `SubmittedFence[]` carries the fence of a completion
+waiting to be reported, not the newest submission, so `LastSubmittedFence[]` was added and is written in both
+submit DDI wrappers - `DxgkDdiSubmitCommand` as well as `DxgkDdiSubmitCommandVirtual` - with the wrap-aware
+comparison `bc250_fence_reached` uses. A node-0 context that submitted through the non-virtual DDI would otherwise
+leave that value behind the fence the report DPC has already published, and the guard would refuse a report the
+contract asks for.
+
+A refusal by any guard leaves verdict 3 and today's behaviour, byte for byte. On a report, the recovered path is
+the one verdicts 1 and 5 already take, and it also reopens node 0 in `gfx.c` through `GfxReopenAfterAbort`. That
+is not cosmetic: the watchdog's `GfxSubmitFail` left a sticky refusal there, and reopening node 0 in `wddm.c`
+alone would admit submissions that `gfx.c` then refuses, which closes the node again on the next packet.
+`GfxReopenAfterAbort` does the tail of `GfxSoftRecover`'s drained path and nothing else - there was no kill, so
+there is no sequence to stop - and it refuses unless the ring is provably idle.
+
+Expected effect: the guilty device goes into the error state, the application sees a device loss, and the machine
+stays up. BD-114 becomes a lost `llama-bench` run instead of a bugcheck. It does not stop the trip, so it is not a
+substitute for the budget or the progress window.
 
 ## Why there is no stage 2
 
@@ -396,12 +535,28 @@ reset.
 - When the ring holds several jobs (up to `BC250_GFX_PENDING_MAX`, 7), the drain waits for the newest, but the
   reset names the head as aborted. With the VMID pool open, the later jobs may belong to other processes. The
   scheduler resubmits them with new fence ids, and only the head's device goes into the error state.
-- A job that ran past the 500 ms watchdog but completed before the TDR leaves nothing on the ring, so it gets
-  verdict 3 and today's refusal. The contract would allow reporting the last completed fence as aborted, but our
-  view of "last completed" can lag a pending report, and a wrong choice re-executes a packet.
+- A job that ran past the watchdog but completed before the TDR leaves nothing on the ring. Until 0.7.216.26
+  that was verdict 3 and a refusal. It is verdict 7 and a reported reset now, under three guards (see "Verdict 7"
+  above). The objection that stood here - our view of "last completed" can lag a pending report, and a wrong
+  choice re-executes a packet - is what the `CompletionPending[node] == 0` guard answers. A refusal by any guard
+  still leaves verdict 3.
+- `BC250_WDDM_HOLD_DEADLINE_MS` is still 500 ms, and a held submission that runs out of it still closes node 0
+  through `GfxSubmitFail`, which is the first step of the BD-114 chain. It is kept short on purpose, because it
+  bounds a CPU wait on a dxgkrnl worker thread. The hold is measured in microseconds in practice (the histogram
+  of sessions 313 and 314), so a 500 ms hold is already a hang of something else. It is still the one instance of
+  the class the budget change does not remove.
+- The progress token cannot name the head job. The `CP_IB*` registers are banked by `GRBM_GFX_INDEX` and describe
+  where the command processor is now, so a token that moves while the head stands still re-arms the budget. That
+  is the conservative direction - the OS fires first - but it means the watchdog's reaction to a hang behind
+  healthy work on the same ring is bounded only by the OS's own TDR.
 - Reopening the node re-admits work onto hardware that has just faulted. Proof that the ring drained is the
   precondition, and the next job brings its own VM flush. A second hang is still bounded by dxgkrnl's
   `TdrLimitCount`.
+- The watchdog's host suite models `WddmGfxHeadLocked` and the DPC. It does not compile `wddm.c` either.
+  `run_submit_watchdog.ps1` therefore reads `wddm.c` by text for the registry reads, the stamp, the re-arm under
+  the lock, the measured log line, the aborted-fence call and the two submit wrappers, and it carries eight
+  negative controls that must fail: `-FlatFiveHundred`, `-NoTdrFloor`, `-IgnoreProgress`, `-StampAtRingWrite`,
+  `-ReportWithPendingCompletion`, `-NoFenceRange`, `-LogTheConstant` and `-RearmOutsideLock`.
 - The host suite covers the decisions and the kill loop, never the kill on the hardware. `hang_recovery_test.c`
   holds the gate, both guards, the per-node bound of the fence guard, the pre-kill verdict, the kill loop over a
   model of the register path and the record's arithmetic. `run_hang_recovery.ps1` also reads the backend switch in
