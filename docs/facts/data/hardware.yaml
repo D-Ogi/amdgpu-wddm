@@ -783,6 +783,25 @@ facts:
     edges:
       - {"type": "uses", "to": "M785"}
       - {"type": "uses", "to": "M828"}
+  - id: M865
+    status: MEASURED
+    date: "2026-10-10"
+    claim: "On gfx1013 silicon none of the nine GFX10.1 dot-product instructions computes a dot product. Eight of them write zero into the destination in every lane: `v_dot2_f32_f16`, `v_dot2_i32_i16`, `v_dot2_u32_u16`, `v_dot4_i32_i8`, `v_dot4_u32_u8`, `v_dot8_i32_i4`, `v_dot8_u32_u4` and `v_dot2c_f32_f16`. The ninth, `v_dot4c_i32_i8`, computes a floating-point legacy minimum of its two sources (M866). Nothing faulted: no TDR, no bugcheck, no timeout and no error from the runtime, so a wrong answer from these instructions arrives silently. Three positive controls that gfx1013 has without a forced feature, `v_pk_fma_f16`, `v_fma_mix_f32` and `v_mul_i32_i24` with SDWA, are correct in all 4096 lanes of the same kernel and the same code object"
+    status_text: "MEASURED (unit A, n = 5 runs, 256 lanes in three of them and 4096 in two)"
+    detail: "The instruction bytes are not ours. gfx1013 has no Dot feature, so the device text comes from `clang -S`, which does not assemble, and `llvm-mc` assembles it with the Dot features forced on the assembler alone; a build gate then re-assembles each instruction's own operand text for gfx1013, gfx1012 and gfx1030 and refuses the build unless all three give the same four bytes. The destination is preloaded with a sentinel under a tied constraint, so a destination that holds zero is separated from one that was not written: the sentinel count is 0 and the zero count is the whole launch for the eight rows, so the destination is written and the instruction retires. This measures the instructions, not the LLVM definitions. It does not show why the part retires them without computing, and it does not cover the VOP3P operand modifiers or the `op_sel` forms. clang 22.1.8, LLVM 23.1.2 definitions, our own `amdhip64.dll` over `bc250hsa` (M16 route B), kernel driver escape ABI `0x000700D8`, `DpmMaxMHz` 2000, the GPU idle at 500 MHz and 60.5 C"
+    evidence: "[gfx1013 ISA probe](../evidence/m16/gfx1013-isa-probe-2026-10-10/README.md)"
+    edges:
+      - {"type": "uses", "to": "M847"}
+      - {"type": "uses", "to": "M867"}
+  - id: M866
+    status: MEASURED
+    date: "2026-10-10"
+    claim: "GFX10 VOP2 opcode 0x00d holds `V_MIN_LEGACY_F32` on gfx1013 and 0x00e holds `V_MAX_LEGACY_F32`: the instructions SI and CI put in those two slots, which GFX10 leaves empty and no GFX10 mnemonic reaches. Over 4096 lane pairs on unit A, 0x00d gives `D = (S0 < S1) ? S0 : S1` in 4096 of 4096 lanes and 0x00e gives `D = (S0 >= S1) ? S0 : S1` in 4096 of 4096, the tie direction included. They are not the part's own `v_min_f32` (0x00f) and `v_max_f32` (0x010): those two ran in the same kernel under the same mode register and agree with them in only 3588 of 4096 lanes, because the documented pair returns the number against a NaN and quiets a signalling NaN, where the legacy pair returns `S1` and passes a signalling NaN through unchanged. VOP2 0x002, where GFX10.1 puts `v_dot2c_f32_f16`, writes zero in 4096 of 4096 lanes"
+    status_text: "MEASURED (unit A, n = 2 runs, 4096 lane pairs each)"
+    detail: "This is why the `v_dot4c_i32_i8` of M865 computes something instead of writing zero: on this part its encoding is a live SI-era instruction that GFX10.1 reassigned in the documentation alone. 0x00e has no GFX10 mnemonic, so the probe writes the word out by hand and names the physical registers in the inline assembly. Each word is gated against the VOP2 field arithmetic and against the assembler's own encoding of the mnemonic that occupies the slot on another generation, and `llvm-objdump` decodes `1A0A1308` back to `v_dot4c_i32_i8 v5, v8, v9`. The operand set is every ordered pair of 25 f32 bit patterns (both zeros, both infinities, quiet and signalling NaNs of both signs, the smallest and largest denormal, the smallest normal, the largest finite and ordinary values) and a deterministic random stream for the other lanes. Hand-written words for 0x00f and 0x010 agree with their mnemonic twins in all 4096 lanes, which is the control for that route. Fourteen other candidate rules were evaluated on the same lanes and none reached 4096; for 0x00d the next best is the denormal-flushing legacy minimum at 3795, the IEEE minimum at 3749 and `src1` at 2416. The tie direction is measured: against `<=` the 0x00d row gives 4094 and against `>` the 0x00e row gives 4094, and in both the two missing lanes are the two orderings of `+0` against `-0`. Not identified, and not needed for any decision here: the exact rule this part's own `v_min_f32` follows, whose best candidate reached 3792 of 4096"
+    evidence: "[gfx1013 ISA probe](../evidence/m16/gfx1013-isa-probe-2026-10-10/README.md)"
+    edges:
+      - {"type": "uses", "to": "M865"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

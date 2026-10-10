@@ -28,10 +28,13 @@ flowchart LR
   M654["M654"]
   M740["M740"]
   M743["M743"]
+  M865["M865<br/>hardware"]
+  M867["M867"]
+  M865 --> M867
   M553 --> M546
   M654 --> M653
   M743 --> M740
   classDef other stroke-dasharray:4 3
-  class M546,M653 other
+  class M546,M653,M865 other
 ```
 
