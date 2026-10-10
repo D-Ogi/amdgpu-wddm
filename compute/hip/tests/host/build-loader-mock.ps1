@@ -38,4 +38,3 @@ $headers=@(Get-ChildItem -LiteralPath (Join-Path $hip 'include'),(Join-Path $hip
 foreach($p in $headers){$manifest.headers+=@{path=$p.FullName;sha256=(Get-FileHash $p.FullName).Hash}}
 $manifest | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $Out 'mock-build.json')
 Get-FileHash $exe
-
