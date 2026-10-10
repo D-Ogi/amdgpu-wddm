@@ -184,8 +184,22 @@ namespace AmdgpuWddmControl
         }
 
         // The curve in force, as the driver reports it.
+        // What the fan card is drawn from: the window rebuilds the card when this changes (MainForm.Fan.cs). The
+        // three flags that say which signal called the load heavy are left out, because they cross every few
+        // seconds while a temperature ramps and the card draws nothing from them.
+        public static string Signature(FanState f)
+        {
+            return f == null ? "-" : (f.Flags & ~FanState.FlagsBoostWhy) + ":" + f.State + ":" + f.Mode + ":" + f.Profile +
+                ":" + f.StoredMode + ":" + f.StoredProfile + ":" + CurveText(ShownC(f), ShownPct(f));
+        }
+
         public static uint[] ShownC(FanState f) { return f == null ? null : f.CurveC.Take((int)Math.Min(f.Points, MaxPoints)).ToArray(); }
         public static uint[] ShownPct(FanState f) { return f == null ? null : f.CurvePct.Take((int)Math.Min(f.Points, MaxPoints)).ToArray(); }
+
+        // Full speed under a sustained heavy load (docs/design/fan.md rule 10, the driver's FanLoadBoost). The
+        // driver reads the value at its start and treats anything but 1 as off; nothing stored means on, so a
+        // machine that never touched the switch has nothing in the registry. The argument is the registry value.
+        public static bool BoostOn(uint? stored) { return stored == null || stored.Value == 1; }
 
         // Which of the four choices (or "custom") the driver's stored choice is. A start without a stored choice runs
         // the standard curve, so that is what "nothing stored" means here as well.
@@ -245,7 +259,7 @@ namespace AmdgpuWddmControl
 
     public static class FanPlan
     {
-        public static readonly string[] Actions = { "fan-auto", "fan-curve", "fan-test" };
+        public static readonly string[] Actions = { "fan-auto", "fan-curve", "fan-test", "fan-boost-on", "fan-boost-off" };
 
         public static bool Owns(string action) { return Actions.Contains(action); }
 
@@ -262,6 +276,9 @@ namespace AmdgpuWddmControl
             var f = s.Fan;
             p.Undoable = false;                 // the card itself is the way back: pick the other choice
             p.Effect = "at once";
+            // The one switch of this card that is a registry value and not an escape: it needs no running driver
+            // and no fan reading, because the driver reads it when it starts.
+            if (action == "fan-boost-on" || action == "fan-boost-off") return Boost(action == "fan-boost-on", s, p);
             p.Title = action == "fan-auto" ? "Let the board run the fan" : "Let the driver run the fan by a curve";
             if (!s.DriverRunning) return No(p, "The graphics driver is not running.", "tuner.refuse.not-running");
             if (f == null) return No(p, "The driver did not answer the fan read.", "perf.fan.refuse.no-read");
@@ -313,6 +330,27 @@ namespace AmdgpuWddmControl
             p.Notes.Add("From 87 C the driver runs the fan at full speed whatever the curve says.");
             p.PlainNotes.Add(Strings.T("perf.fan.note"));
             p.Tune = request;
+            return null;
+        }
+
+        // Full speed under a sustained heavy load: the one registry switch of this card. The driver reads
+        // FanLoadBoost at its start, so the change applies at the next restart of Windows; on is the default, so
+        // "on" removes the value and "off" writes 0.
+        static string Boost(bool on, RecoverySnapshot s, ActionPlan p)
+        {
+            p.Title = on ? "Turn full fan speed under heavy load on" : "Turn full fan speed under heavy load off";
+            p.Change = on ? "the driver runs the fan at full speed under a sustained heavy load, from its next start"
+                : "the driver leaves the fan to the curve under load, from its next start";
+            p.Effect = "at the next restart of Windows";
+            p.Undoable = true;
+            if (on == FanCurves.BoostOn(s.P("FanLoadBoost")))
+                return No(p, on ? "The fan runs at full speed under a heavy load already."
+                    : "The fan is left to the curve under a heavy load already.",
+                    on ? "perf.fan.refuse.boost-on-already" : "perf.fan.refuse.boost-off-already");
+            if (on) p.Writes.Add(RegWrite.Remove(Recovery.ParametersPath, "FanLoadBoost"));
+            else p.Writes.Add(RegWrite.Dword(Recovery.ParametersPath, "FanLoadBoost", 0));
+            p.Preview.Add(Strings.T(on ? "plan.line.fan-boost-on" : "plan.line.fan-boost-off"));
+            p.OfferRestart = true;
             return null;
         }
 

@@ -313,6 +313,8 @@ search.later.power|mt-safe|fba85679|電力制限
 search.later.power.terms|mt|db72d2b0|電力制限|消費電力|ワット|TDP|パワー リミット
 search.perf.fan|mt-safe|8c9a2877|ファン制御
 search.perf.fan.terms|mt|f8a14c23|ファン|ファン カーブ|騒音|静音|冷却
+search.perf.fan-boost|mt-safe|b044d1f7|高負荷時はファンを最大速度にする
+search.perf.fan-boost.terms|mt|458693d7|うるさい|騒音|最大速度|ファンの速度|高負荷|熱い
 search.later.cache-clear|mt-safe|6b923412|シェーダー キャッシュを消去
 search.later.cache-clear.terms|mt|bd9dc929|キャッシュの消去|キャッシュの削除|キャッシュ クリア|削除
 # ---- window frame (WU-008, WU-011) ----
@@ -613,6 +615,7 @@ help.setting.hdr|mt|af54494e|ハイ ダイナミック レンジ：明るい部�
 help.setting.vrr|mt|4662d04f|モニターがゲームのフレーム レートに合わせて動作し、動きが滑らかになります。今後対応予定です。
 help.setting.power|mt|3659317e|チップが使用できる最大電力です。今後対応予定です。
 help.setting.fan|mt|e5088079|ケース ファンを誰が制御するかを選びます。自動はボードの BIOS 設定に任せます。ドライバーのカーブは、チップが熱いときにボードの標準設定より少し速くファンを回します。静音は 80 °C 未満で遅く、パフォーマンスは全体で速くなります。87 °C 以上ではファンは常に全速で回ります。
+help.setting.fan-boost|mt|6e077955|グラフィックスが忙しく動き始めたとき、チップが熱くなるのを待たずに、ドライバーがファンをすぐ最大速度にします。最初からオンです。速度をカーブだけで決めたいときはオフにしてください。新しい設定はWindowsを再起動したあとで有効になります。
 help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|mt|e6d2df01|詳細な調整
@@ -781,6 +784,16 @@ plan.line.fan-curve|mt|8917f825|今から、そして起動のたびに、ドラ
 plan.line.fan-points|mt|787b6e90|ファンの速度: {0}
 plan.title.fan-auto|mt|16d8024e|ファンをボードに任せる
 plan.title.fan-curve|mt|df6aeaec|ファン カーブを使う
+perf.fan.boost|mt|b044d1f7|高負荷時はファンを最大速度にする
+perf.fan.boost.help|mt|60253290|グラフィックスが2秒以上忙しく動くと、チップが熱くなるのを待たずに、ファンがすぐ最大速度になります。カーブだけを使いたいときはオフにしてください。新しい設定はWindowsを再起動したあとで有効になります。
+perf.fan.boost.now|mt|1a7edb80|グラフィックスが忙しく動いているため、ファンは今、最大速度で回っています。
+perf.fan.boost.after-restart|mt|41495538|新しい設定はWindowsを再起動したあとで有効になります。
+perf.fan.refuse.boost-on-already|mt|9da898c4|高負荷時のファン最大速度はすでにオンです。
+perf.fan.refuse.boost-off-already|mt|2076873d|高負荷時のファン最大速度はすでにオフです。
+plan.line.fan-boost-on|mt|0233bb62|グラフィックスが忙しく動くと、ファンが最大速度で回ります。
+plan.line.fan-boost-off|mt|043650b9|グラフィックスが忙しく動いても、ファンはカーブだけに従います。
+plan.title.fan-boost-on|mt|60ac49bb|高負荷時のファン最大速度をオンにする
+plan.title.fan-boost-off|mt|37126bef|高負荷時のファン最大速度をオフにする
 
 # ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
 graphics.tuning.hide|mt|59b507b0|詳細な調整を隠す

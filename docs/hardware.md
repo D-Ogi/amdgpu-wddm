@@ -70,7 +70,10 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   [M803](facts/hardware.md#m803) measured. The give-back writes the recorded duty target (the M803 rest value
   128 when no board record exists) and clears bit 1 only. The duty stays at 20 to 100 %. A guard temperature (the hotter of Tctl and
   the EC's SB-TSI channel) at or above 87 C forces 100 % until it stays at or below 82 C for 10 s. A doubtful
-  input also forces 100 %. `EnableFanControl` 1 is the default and 0 is the bisect switch.
+  input also forces 100 %. A sustained heavy load also forces 100 %, before the curve gets there (the load
+  feed-forward of `docs/design/fan.md`, which reads the governor's busy share, the GFX clock and the SMU
+  socket power). `EnableFanControl` 1 is the default and 0 is the bisect switch. `FanLoadBoost` 1 is the
+  default of the feed-forward and 0 leaves the duty to the curve alone.
 - CPU clock, undervolt and cores (KMD 0.7.213.1, `driver/shim/include/bc250_cpu.h`, ADR 0020). These messages go to
   the firmware's **queue 3** (`C2PMSG_72`, `C2PMSG_98`, `C2PMSG_96`, the byte offsets `regcalc` computes,
   derived from the queue 0 constants and asserted at compile time), through the same owner lock as the GPU clock.

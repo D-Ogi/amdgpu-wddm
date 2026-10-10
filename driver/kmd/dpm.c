@@ -448,6 +448,10 @@ typedef struct _DPM_TICK {
     ULONGLONG LastLog;                      // interrupt time of the last telemetry block in the driver log
     ULONG IdleLogMs;                        // the block's period at the idle point (BD-097, Parameters\TelemetryIdleLogMs)
     ULONG Permille, ObservedMHz, ObservedVid, Target;
+    // The fan control's load feed (fan.h): the busy share weighted by each tick's own length, gathered over the
+    // whole second between two fan steps. One 25 ms tick is too short a window for a rule about a sustained load.
+    ULONGLONG FanBusyWeighted;
+    ULONG FanBusyMs;
     ULONG SubmitPermille, SdmaPermille, HwSamples;
     enum bc250_dpm_busy_source Source;
     LONG TemperatureMc;
@@ -860,9 +864,15 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
     T->LastBusy = busy;
     T->Ticks++;
     if (InterlockedCompareExchange(&S->Paused, 0, 0)) {
+        // Out of D0: what the fan's load feed had gathered goes, because the step that would have read it never
+        // runs (FanPause gave the fan back already).
+        T->FanBusyWeighted = 0;
+        T->FanBusyMs = 0;
         DpmPublish(Device, S, T, TRUE);
         return;
     }
+    T->FanBusyWeighted += (ULONGLONG)T->Permille * dtMs;
+    T->FanBusyMs += dtMs;
     status = SmuReadTemperature(&Device->Smu, &T->TemperatureMc);
     T->TemperatureValid = NT_SUCCESS(status);
     governing = Governing(S);
@@ -976,11 +986,26 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // cannot move the fan cadence. This thread is an ordinary system thread at PASSIVE_LEVEL, which is
         // what the chip's port sequence needs, and it runs in fixed-lab mode as well as under DPM. The gate
         // EnableHwmon decides whether anything happens at all; HwmonSample returns at once when it is closed.
+        BC250_FAN_LOAD load;
+        BC250_DPM_METRICS metrics;
         T->NextHwmon = now + 10000ull * BC250_HWMON_PERIOD_MS;
         HwmonSample(Device);
+        // The fan control's load feed (fan.h, rule 10 of bc250_fan.h): the mean busy share of the whole second,
+        // the clock, and the socket power of the metrics table when it is fresh. The fan decides nothing from a
+        // single 25 ms tick, so the governor hands over the window, not the sample. The clock is the level the
+        // governor asks for while it governs, which is not a read-back of the chip: the read-back T->ObservedMHz
+        // comes at most every BC250_DPM_VERIFY_MS and is what a start without a governor has.
+        RtlZeroMemory(&load, sizeof(load));
+        load.Valid = TRUE;
+        load.BusyPermille = T->FanBusyMs != 0 ? (ULONG)(T->FanBusyWeighted / T->FanBusyMs) : T->Permille;
+        load.Mhz = Governing(S) ? bc250_dpm_level_mhz(S->Gov.level) : T->ObservedMHz;
+        load.PowerValid = SmuMetricsFill(Device, &metrics);
+        load.SocketMw = load.PowerValid ? metrics.SocketPowerMw : 0;
+        T->FanBusyWeighted = 0;
+        T->FanBusyMs = 0;
         // The fan control (fan.c) on the sample just taken and this tick's Tctl. Its own gate, EnableFanControl,
         // decides whether it writes anything; with the gate closed it only publishes its state.
-        FanStep(Device, T->TemperatureMc, T->TemperatureValid);
+        FanStep(Device, T->TemperatureMc, T->TemperatureValid, &load);
     }
     DpmPublish(Device, S, T, TRUE);
     if (now >= T->NextLog) {

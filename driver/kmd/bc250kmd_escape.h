@@ -1017,6 +1017,18 @@ typedef struct _BC250_ESCAPE_CPU {
 #define BC250_FAN_FLAG_RESTORE_SAVED 256u   // the board's own mode and target were recorded before the first change
 #define BC250_FAN_FLAG_SUBSTITUTED 512u     // that record holds the rest values: our bit was already set when it was taken
 #define BC250_FAN_FLAG_HELD_BACK 1024u      // a doubt gave the fan back; the driver takes it again after 30 s clean
+// The load feed-forward (rule 10 of bc250_fan.h): a sustained heavy load holds the fan at full speed before the
+// temperature curve gets there. BOOST says the duty in force is that full speed, which is the rule's own answer
+// and not an arm it cannot carry out (under a lease's fixed duty the rule stays armed and the flag stays off), and
+// the three WHY flags say which signal called the load heavy. BOOST_OFF says the FanLoadBoost setting switched the
+// whole rule off for this start.
+#define BC250_FAN_FLAG_BOOST 2048u
+#define BC250_FAN_FLAG_BOOST_BUSY 4096u     // the GPU busy share, at a clock above the idle point
+#define BC250_FAN_FLAG_BOOST_POWER 8192u    // the SMU socket power
+#define BC250_FAN_FLAG_BOOST_RISE 16384u    // the guard temperature's rise over the last window
+#define BC250_FAN_FLAG_BOOST_OFF 32768u     // FanLoadBoost 0: the feed-forward never engages in this start
+#define BC250_FAN_FLAG_BOOST_ARMED 65536u   // the load is heavy enough; set with BOOST, and alone while there is no
+                                            // duty of ours to raise (a lease's fixed duty, the wait for a retake)
 // Why a start's fan control is not enabled.
 #define BC250_FAN_GATE_OK 0u
 #define BC250_FAN_GATE_SETTING 1u           // EnableFanControl is 0

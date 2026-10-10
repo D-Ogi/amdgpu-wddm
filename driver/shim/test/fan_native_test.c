@@ -108,12 +108,30 @@ static void Start(void)
     FanStart(&device);
 }
 
-/* One governor second: the reader's sample, then the fan step on this Tctl. */
+/* One governor second: the reader's sample, then the fan step on this Tctl. No load feed, so the duty is the
+ * temperature curve's alone (rule 10 engages on the feed only). */
 static void Second(LONG tctl)
 {
     native_time += SECOND;
     HwmonSample(&device);
-    FanStep(&device, tctl, TRUE);
+    FanStep(&device, tctl, TRUE, NULL);
+}
+
+/* One governor second with the load feed the governor hands over (dpm.c): the busy share of the whole second,
+ * the clock, and the socket power of the metrics table. */
+static void SecondLoad(LONG tctl, ULONG permille, ULONG mhz, ULONG mw)
+{
+    BC250_FAN_LOAD load;
+
+    RtlZeroMemory(&load, sizeof(load));
+    load.Valid = TRUE;
+    load.BusyPermille = permille;
+    load.Mhz = mhz;
+    load.SocketMw = mw;
+    load.PowerValid = TRUE;
+    native_time += SECOND;
+    HwmonSample(&device);
+    FanStep(&device, tctl, TRUE, &load);
 }
 
 static int Held(void) { return (ec_peek8(&native_ec, BC250_HWMON_REG_MODE) & (1u << BC250_FAN_CHANNEL)) != 0u; }
@@ -422,11 +440,11 @@ static void exit_paths(void)
     device.Hwmon.Online = FALSE;
     for (i = 0; i < 4u; i++) {
         native_time += SECOND;
-        FanStep(&device, 70000, TRUE);
+        FanStep(&device, 70000, TRUE, NULL);
         CHECK(Held() && ec_peek8(&native_ec, TARGET1) == 255u);
     }
     native_time += SECOND;
-    FanStep(&device, 70000, TRUE);
+    FanStep(&device, 70000, TRUE, NULL);
     CHECK(AtRest() && device.Fan.Ctl.reason == BC250_FAN_REASON_READER);
     FanStop(&device, BC250_FAN_REASON_STOP);
 
@@ -605,11 +623,142 @@ static void escape(void)
     FanStop(&device, BC250_FAN_REASON_STOP);
 }
 
+/* The load feed-forward through the miniport (rule 10): the FanLoadBoost setting, the feed the governor hands to
+ * the step, and the flags the escape and the CLI line read. */
+static void load_boost(void)
+{
+    BC250_ESCAPE_FAN f;
+    unsigned int i;
+
+    /* The setting is absent, so the feed-forward is on. The arm of 2026-10-10: 99 % busy at 1500 MHz, 112 W. */
+    Fresh(1);
+    Start();
+    CHECK(device.Fan.Ctl.boost_enabled && native_log_has("load boost on"));
+    /* 70 C is what the EC's own channel reads in this model, so the guard is 70 C and the curve asks 85 %. */
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(Held() && !device.Fan.Ctl.boost);                 /* one heavy second is a spike */
+    CHECK(ec_peek8(&native_ec, TARGET1) == bc250_fan_pct_to_raw(85));
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost && ec_peek8(&native_ec, TARGET1) == 255u);
+    Read(&f);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST) != 0u && (f.Flags & BC250_FAN_FLAG_BOOST_OFF) == 0u);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST_BUSY) != 0u && (f.Flags & BC250_FAN_FLAG_BOOST_POWER) != 0u);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST_RISE) == 0u && f.AppliedPct == 100u && f.TargetPct == 100u);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST_ARMED) != 0u);    /* armed and raising: the CLI line says "on" */
+    CHECK(native_log_has("load boost on (busy+power)"));
+    /* A fixed duty under a lease takes the fan from the rule: the account and the arm run on, and everything the
+     * driver reports stops saying full speed, because the fan turns at the operator's 40 % (round 2 review). */
+    memset(&f, 0, sizeof(f));
+    f.FixedPct = 40;
+    f.LeaseMs = 5000;
+    Ask(&f, BC250_FAN_OP_FIXED, TRUE);
+    CHECK(f.Status == BC250_ESCAPE_STATUS_DONE && f.Error == BC250_FAN_ERROR_OK);
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost && !device.Fan.Ctl.boost_raised);
+    CHECK(ec_peek8(&native_ec, TARGET1) == bc250_fan_pct_to_raw(40));
+    Read(&f);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST) == 0u && (f.Flags & BC250_FAN_FLAG_BOOST_ARMED) != 0u);
+    CHECK(native_log_has("load boost off after"));           /* the release is logged with the fixed duty */
+    /* And the curve the lease ends with is raised at once, because the load never stopped. */
+    for (i = 0; i < 4u; i++) SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.mode == BC250_FAN_MODE_CURVE && device.Fan.Ctl.boost_raised);
+    Read(&f);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST) != 0u && f.AppliedPct == 100u);
+    /* A step without the feed leaves the boost where it is until the hold runs out, and the duty with it. The
+     * snapshot is read again after the loop: the one taken before it says nothing about these twenty seconds. */
+    for (i = 0; i < 20u; i++) Second(70000);
+    Read(&f);
+    CHECK(device.Fan.Ctl.boost && f.AppliedPct == 100u && (f.Flags & BC250_FAN_FLAG_BOOST) != 0u);
+    CHECK(ec_peek8(&native_ec, TARGET1) == 255u);
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(AtRest() && !device.Fan.Ctl.boost && CleanWrites(0));
+
+    /* The heavy-time account's 4 s margin through the miniport: one quiet second inside a load does not disarm
+     * the boost (the arm of 2026-10-10 has such seconds), and the duty byte is not written again for it. */
+    Fresh(1);
+    Start();
+    for (i = 0; i < 4u; i++) SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost && device.Fan.Ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS);
+    CHECK(device.Fan.Ctl.boost_hold_ms == 0u && device.Fan.Ctl.writes == 2u);
+    SecondLoad(70000, 20, 500, 45000);                      /* one quiet second: the account, not the hold */
+    CHECK(device.Fan.Ctl.boost && device.Fan.Ctl.boost_hold_ms == 0u);
+    CHECK(device.Fan.Ctl.boost_load_ms == BC250_FAN_BOOST_LOAD_MAX_MS - 1000u);
+    Read(&f);
+    CHECK(f.AppliedPct == 100u && ec_peek8(&native_ec, TARGET1) == 255u && device.Fan.Ctl.writes == 2u);
+    CHECK(device.Fan.Ctl.boosts == 1u);                     /* one engagement, not two */
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(AtRest() && CleanWrites(0));
+
+    /* FanLoadBoost 0: the same arm never reaches full speed, and the escape says the rule is off. */
+    Fresh(1);
+    NativeSetSetting(L"FanLoadBoost", 0);
+    Start();
+    CHECK(!device.Fan.Ctl.boost_enabled && native_log_has("load boost off (FanLoadBoost)"));
+    for (i = 0; i < 20u; i++) SecondLoad(61000 + (LONG)i * 200, 1000, 1500, 120000);
+    CHECK(Held() && !device.Fan.Ctl.boost && ec_peek8(&native_ec, TARGET1) != 255u);
+    Read(&f);
+    CHECK((f.Flags & BC250_FAN_FLAG_BOOST) == 0u && (f.Flags & BC250_FAN_FLAG_BOOST_OFF) != 0u);
+    CHECK(f.AppliedPct < 100u);
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(AtRest() && CleanWrites(0));
+
+    /* Any other value of the setting is 0 as well, as EnableFanControl's is (fan.c's header). */
+    Fresh(1);
+    NativeSetSetting(L"FanLoadBoost", 7);
+    Start();
+    CHECK(!device.Fan.Ctl.boost_enabled);
+    FanStop(&device, BC250_FAN_REASON_STOP);
+}
+
+/* The telemetry block's width (BD-097): the ring rotates 768 lines, so the block every 5 s stays at the four fan
+ * lines it had, and the boost pair joins it only in a start that has something to report. */
+static void telemetry_width(void)
+{
+    unsigned int i;
+
+    /* A run that never boosts: four lines, and not a word about a boost. */
+    Fresh(1);
+    Start();
+    Second(70000);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 4 && !native_log_has("telemetry boost"));
+
+    /* The arm of 2026-10-10 engages the boost: the pair joins the block, and says what called the load heavy. */
+    SecondLoad(70000, 990, 1500, 112000);
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 6 && native_log_has("telemetry boost on (busy+power)"));
+    CHECK(native_log_has("telemetry boost 1 times"));
+
+    /* After the hold the boost lets go, and the pair stays: the count and the time are the arm's evidence. */
+    for (i = 0; i < 31u; i++) Second(70000);
+    CHECK(!device.Fan.Ctl.boost && device.Fan.Ctl.boosts == 1u);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 6 && native_log_has("telemetry boost off"));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+
+    /* FanLoadBoost 0: the rule cannot engage, so the block never grows. The start already logged that it is off. */
+    Fresh(1);
+    NativeSetSetting(L"FanLoadBoost", 0);
+    Start();
+    for (i = 0; i < 4u; i++) SecondLoad(70000, 990, 1500, 112000);
+    native_lines = 0;
+    FanLogLine(&device, "telemetry");
+    CHECK(native_lines == 4 && !native_log_has("telemetry boost"));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+}
+
 int main(void)
 {
     gate();
     exit_paths();
     escape();
+    load_boost();
+    telemetry_width();
     printf("fan control binding: %ld checks, %ld failures\n", native_checks, native_failures);
     return native_failures == 0 ? 0 : 1;
 }

@@ -313,6 +313,8 @@ search.later.power|mt-safe|fba85679|전력 제한
 search.later.power.terms|mt|db72d2b0|전력 제한|와트|TDP|파워 리밋
 search.perf.fan|mt-safe|8c9a2877|팬 제어
 search.perf.fan.terms|mt|f8a14c23|팬|팬 커브|소음|냉각
+search.perf.fan-boost|mt-safe|b044d1f7|높은 부하에서 팬 최대 속도
+search.perf.fan-boost.terms|mt|458693d7|시끄러움|소음|최대 속도|팬 속도|높은 부하|뜨거움
 search.later.cache-clear|mt-safe|6b923412|셰이더 캐시 지우기
 search.later.cache-clear.terms|mt|bd9dc929|캐시 지우기|캐시 삭제
 # ---- window frame (WU-008, WU-011) ----
@@ -613,6 +615,7 @@ help.setting.hdr|mt|af54494e|하이 다이내믹 레인지: 더 밝은 하이라
 help.setting.vrr|mt|4662d04f|모니터가 게임의 프레임 속도에 맞춰 더 부드러운 움직임을 보여 줍니다. 나중에 제공됩니다.
 help.setting.power|mt|3659317e|칩이 사용할 수 있는 최대 전력입니다. 나중에 제공됩니다.
 help.setting.fan|mt|e5088079|케이스 팬을 누가 제어할지 고릅니다. 자동은 보드의 BIOS 설정에 맡깁니다. 드라이버 곡선은 칩이 뜨거울 때 보드의 표준 설정보다 팬을 조금 더 빠르게 돌립니다. 저소음은 80 °C 미만에서 더 느리고, 성능은 전 구간에서 더 빠릅니다. 87 °C부터는 팬이 항상 최대 속도로 돕니다.
+help.setting.fan-boost|mt|6e077955|그래픽이 바빠지기 시작하면 칩이 뜨거워질 때까지 기다리지 않고 드라이버가 팬을 바로 최대 속도로 올립니다. 기본값은 켜짐입니다. 속도를 곡선만으로 정하고 싶으면 이 설정을 끄십시오. 새 설정은 Windows를 다시 시작한 뒤에 적용됩니다.
 help.setting.cache-clear|mt|c75227ac|셰이더 캐시를 삭제합니다. 나중에 제공됩니다.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
 graphics.tuning.title|mt|e6d2df01|고급 조정
@@ -781,6 +784,16 @@ plan.line.fan-curve|mt|8917f825|지금부터, 그리고 시작할 때마다 드�
 plan.line.fan-points|mt|787b6e90|팬 속도: {0}
 plan.title.fan-auto|mt|16d8024e|팬을 보드에 맡기기
 plan.title.fan-curve|mt|df6aeaec|팬 곡선 사용
+perf.fan.boost|mt|b044d1f7|높은 부하에서 팬 최대 속도
+perf.fan.boost.help|mt|60253290|그래픽이 2초 넘게 바쁘게 작동하면, 칩이 뜨거워질 때까지 기다리지 않고 팬이 바로 최대 속도로 돕니다. 곡선만 쓰려면 이 설정을 끄십시오. 새 설정은 Windows를 다시 시작한 뒤에 적용됩니다.
+perf.fan.boost.now|mt|1a7edb80|그래픽이 바쁘게 작동하므로 팬이 지금 최대 속도로 돌고 있습니다.
+perf.fan.boost.after-restart|mt|41495538|새 설정은 Windows를 다시 시작한 뒤에 적용됩니다.
+perf.fan.refuse.boost-on-already|mt|9da898c4|높은 부하에서 팬 최대 속도가 이미 켜져 있습니다.
+perf.fan.refuse.boost-off-already|mt|2076873d|높은 부하에서 팬 최대 속도가 이미 꺼져 있습니다.
+plan.line.fan-boost-on|mt|0233bb62|그래픽이 바쁘게 작동하면 팬이 최대 속도로 돕니다.
+plan.line.fan-boost-off|mt|043650b9|그래픽이 바쁘게 작동해도 팬은 곡선만 따릅니다.
+plan.title.fan-boost-on|mt|60ac49bb|높은 부하에서 팬 최대 속도 켜기
+plan.title.fan-boost-off|mt|37126bef|높은 부하에서 팬 최대 속도 끄기
 
 # ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
 graphics.tuning.hide|mt|59b507b0|고급 조정 숨기기

@@ -442,7 +442,8 @@ void FanPause(BC250_DEVICE* Device);
 void FanResume(BC250_DEVICE* Device);
 void FanResetDevice(BC250_DEVICE* Device);             // HIGH_LEVEL: port writes only
 void FanDriverUnload(void);
-void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid);    // the governor thread, after HwmonSample
+// The governor thread, after HwmonSample. Load is that step's load feed (fan.h) and may be null.
+void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid, const BC250_FAN_LOAD* Load);
 void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
 

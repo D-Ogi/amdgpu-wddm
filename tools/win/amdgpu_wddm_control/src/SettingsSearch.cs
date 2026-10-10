@@ -36,6 +36,9 @@ namespace AmdgpuWddmControl
             E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.scaling", "display"), E("display.identify", "display"), E("display.scale", "display"),
             E("perf.sensors", "performance"), E("perf.fan", "performance"), E("perf.cache", "performance"),
+            // Full fan speed under a heavy load (fan.md rule 10): on the fan card, and the words a person types
+            // about it ("loud", "noise") are not the words of the card itself.
+            E("perf.fan-boost", "performance"),
             E("driver.version", "driver"), E("driver.update", "driver"),
             E("settings.language", "settings"), E("settings.update-start", "settings"), E("settings.recent", "settings"), E("settings.nagi", "settings"),
             E("settings.tips", "settings"), E("settings.animations", "settings"), E("settings.support", "settings"), E("settings.data", "settings"),

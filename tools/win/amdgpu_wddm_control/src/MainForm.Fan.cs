@@ -37,11 +37,8 @@ namespace AmdgpuWddmControl
 
         FanState FanNow { get { return _snap != null ? _snap.Fan : null; } }
 
-        static string FanSignature(FanState f)
-        {
-            return f == null ? "-" : f.Flags + ":" + f.State + ":" + f.Mode + ":" + f.Profile + ":" + f.StoredMode + ":" + f.StoredProfile +
-                ":" + FanCurves.CurveText(FanCurves.ShownC(f), FanCurves.ShownPct(f));
-        }
+        // The card is rebuilt when this changes (FanCurves.Signature, which the unit tests read).
+        static string FanSignature(FanState f) { return FanCurves.Signature(f); }
 
         // The choice the card shows: the person's pick, else what the driver runs (a lease of the command line shows as
         // the stored choice, because that is what comes back when it ends).
@@ -98,6 +95,9 @@ namespace AmdgpuWddmControl
             if (gate != null)
             {
                 card.Add(Ui.Label(gate, null, Theme.Dim, card.Inner));
+                // The switch below stays: the driver reads FanLoadBoost at its next start, so a person whose
+                // fan control is shut today can still say what the rule does when it opens again.
+                AddFanBoost(card, f);
                 return card;
             }
 
@@ -190,7 +190,11 @@ namespace AmdgpuWddmControl
                 card.Add(Ui.Label(Strings.T("perf.fan.rules"), Theme.Bold, null, card.Inner));
                 foreach (var rule in new[] { "input", "doubt", "slow", "hot", "floor" })
                     card.Add(Ui.Dim("• " + Strings.T("perf.fan.rule." + rule), card.Inner));
+
             }
+            // Full fan speed under a sustained heavy load, on every choice of the row above: the rule needs
+            // neither a curve of ours nor a fan reading, so the board's own curve shows the switch as well.
+            AddFanBoost(card, f);
 
             bool changed = FanCurves.Changed(f, choice, c, pct);
             var row = Ui.WrapRow(card.Inner);
@@ -222,6 +226,29 @@ namespace AmdgpuWddmControl
             if (_fanTestResult != null)
                 card.Add(Ui.Label(_fanTestResult, null, Theme.Text, card.Inner));
             return card;
+        }
+
+        // Full fan speed under a sustained heavy load (fan.md rule 10). The one switch of this card that is a
+        // setting and not a choice: the driver reads it when it starts, so a change says so until Windows has
+        // restarted. On unless somebody switched it off. The driver's own "at full speed now" line follows the
+        // BOOST flag, which the driver raises only while that full speed is the duty in force.
+        void AddFanBoost(CardPanel card, FanState f)
+        {
+            bool boostOn = FanCurves.BoostOn(_snap.P("FanLoadBoost"));
+            var boost = Ui.Check(Strings.T("perf.fan.boost"), card.Inner - Theme.S(40));
+            boost.Checked = boostOn;
+            boost.CheckedChanged += (s, e) =>
+            {
+                if (boost.Checked == boostOn) return;
+                RunAction(boost.Checked ? "fan-boost-on" : "fan-boost-off");
+            };
+            card.Add(boost);
+            Mark("perf.fan-boost", boost);
+            card.Add(Ui.Dim(Strings.T("perf.fan.boost.help"), card.Inner));
+            if (boostOn == f.Has(FanState.FlagBoostOff))
+                card.Add(Ui.Label(Strings.T("perf.fan.boost.after-restart"), null, Theme.Warn, card.Inner));
+            else if (f.Has(FanState.FlagBoost))
+                card.Add(Ui.Label(Strings.T("perf.fan.boost.now"), Theme.Bold, null, card.Inner));
         }
 
         // One mode of the segmented row: a radio button drawn as a flat toggle, so the five fit on one or two even rows.

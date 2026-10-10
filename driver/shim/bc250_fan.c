@@ -156,6 +156,26 @@ static void apply_request(struct bc250_fan_ctl *ctl, const struct bc250_fan_requ
 	}
 }
 
+/* The feed-forward's two accounts (rule 10), and what throws each one away. The boost is a duty, so whoever
+ * gives the duty back gives the arm and the heavy-time account back with it. The rise is a measurement of the
+ * guard temperature, and it is worth nothing once there is no guard to refresh it. */
+static void forget_boost(struct bc250_fan_ctl *ctl)
+{
+	ctl->boost = 0;
+	ctl->boost_raised = 0;
+	ctl->boost_why = 0;
+	ctl->boost_load_ms = 0;
+	ctl->boost_hold_ms = 0;
+}
+
+static void forget_rise(struct bc250_fan_ctl *ctl)
+{
+	ctl->rise_valid = 0;
+	ctl->rise_mc = 0;
+	ctl->rise_ref_mc = 0;
+	ctl->rise_ms = 0;
+}
+
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start)
 {
 	struct bc250_fan_restore restore = ctl->restore;
@@ -165,6 +185,7 @@ void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_f
 	memset(ctl, 0, sizeof(*ctl));
 	ctl->restore = restore;			/* rule 2: once per power-on, so a stop and a start keep it */
 	ctl->enabled = enabled ? 1u : 0u;
+	ctl->boost_enabled = 1u;		/* rule 10: on unless FanLoadBoost says otherwise */
 	memset(&standard, 0, sizeof(standard));
 	standard.mode = BC250_FAN_MODE_CURVE;
 	standard.profile = BC250_FAN_PROFILE_STANDARD;
@@ -190,6 +211,16 @@ int bc250_fan_set(struct bc250_fan_ctl *ctl, const struct bc250_fan_request *req
 	ctl->held_back = 0;
 	ctl->clean_ms = 0;
 	return BC250_FAN_ERROR_OK;
+}
+
+void bc250_fan_load_boost(struct bc250_fan_ctl *ctl, int enabled)
+{
+	ctl->boost_enabled = enabled ? 1u : 0u;
+	if (!ctl->boost_enabled) {
+		/* The duty itself is not touched here: the next step reads the curve again and the slope rule (rule 7)
+		 * walks the fan down, as it does at the end of a boost that ran its course. */
+		forget_boost(ctl);
+	}
 }
 
 int bc250_fan_renew(struct bc250_fan_ctl *ctl, unsigned int lease_ms)
@@ -407,6 +438,11 @@ int bc250_fan_handback(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ct
 	ctl->applied_pct = 0;
 	ctl->since_write_ms = 0;
 	ctl->stopped_samples = 0;
+	/* Rule 10: a boost is a duty, and the duty is now the board's. The heavy-time account goes with it, so a
+	 * driver that takes the fan again has to see the load again before it blows at full speed, and the measured
+	 * rise goes too: it was measured while this driver drove the fan. */
+	forget_boost(ctl);
+	forget_rise(ctl);
 	ctl->state = ctl->fault ? BC250_FAN_STATE_FAULT : ctl->enabled ? BC250_FAN_STATE_BOARD : BC250_FAN_STATE_OFF;
 	return 0;
 }
@@ -415,6 +451,13 @@ void bc250_fan_handback_blind(const struct bc250_hwmon_io *io, struct bc250_fan_
 {
 	unsigned int polls, mode = BC250_HWMON_MODE_REST, target;
 
+	/* Rule 10, as in bc250_fan_handback(): a boost is a duty, and this path gives the duty back. FanResetDevice
+	 * takes it on the way to a hibernation, so a start that came back with the account still armed, or with a
+	 * rise measured before the sleep, would drive 100 % at once instead of the curve. Both go before the write
+	 * below, which is the one that can fail silently: there is no second chance on this path, and a controller
+	 * that says "armed" after it has given the duty back is the worse of the two outcomes. */
+	forget_boost(ctl);
+	forget_rise(ctl);
 	if (!ctl->controlling)
 		return;
 	target = ctl->restore.valid ? ctl->restore.target : BC250_HWMON_TARGET_REST;
@@ -500,6 +543,123 @@ static void track_effective(struct bc250_fan_ctl *ctl)
 	}
 }
 
+/* The guard temperature's rise, over windows of BC250_FAN_BOOST_RISE_MS. The window is closed by elapsed time,
+ * so the figure means the same whatever the governor's cadence is, and the rise of the window that closed last
+ * is what the feed-forward reads. The windows follow each other: at the 1 s cadence one closes every three
+ * steps, because the step that closes a window opens the next one at its own reading. */
+static void track_rise(struct bc250_fan_ctl *ctl, unsigned int dt)
+{
+	if (!ctl->guard_valid) {
+		/* No guard, no rise. The measured one goes with the reading: a doubt that lasts hands the fan back
+		 * for 30 s (rule 4), and a latched "3 C in 3 s" that no step can refresh would call every one of
+		 * those steps heavy with the chip cold and the GPU idle. The open window goes too, because its
+		 * reference is a temperature from before a gap of unknown length. */
+		forget_rise(ctl);
+		return;
+	}
+	/* The window opens at this step's guard reading: at the first step that has a guard, and at a step that took
+	 * longer than one step may pay (a starved governor thread, a resume). Such a step says nothing about a 3 s
+	 * window, and closing one over a gap of unknown length is what would make the threshold more sensitive the
+	 * later the step is. The 1 ms is the marker of an open window, so that the next step adds its own dt instead
+	 * of opening a second one; a window therefore measures a whole BC250_FAN_BOOST_RISE_MS. */
+	if (ctl->rise_ms == 0u || dt > BC250_FAN_BOOST_STEP_MAX_MS) {
+		ctl->rise_ref_mc = ctl->guard_mc;
+		ctl->rise_ms = 1u;
+		return;
+	}
+	ctl->rise_ms += dt;
+	if (ctl->rise_ms < BC250_FAN_BOOST_RISE_MS)
+		return;
+	ctl->rise_mc = ctl->guard_mc - ctl->rise_ref_mc;
+	ctl->rise_valid = 1;
+	ctl->rise_ref_mc = ctl->guard_mc;
+	ctl->rise_ms = 1u;
+}
+
+/* Is this step's load heavy (rule 10)? The bits say which signal called it heavy, and zero means it is not. */
+static unsigned int heavy_load(const struct bc250_fan_ctl *ctl, const struct bc250_fan_input *in)
+{
+	unsigned int why = 0;
+
+	if (!in->load_valid)
+		return 0;
+	/* A busy GPU at the idle point is a desktop that composes, not a load that heats the board. An unknown
+	 * clock passes: a missing reading is no reason to run the fan slower. */
+	if (in->busy_permille >= BC250_FAN_BOOST_BUSY_PERMILLE &&
+	    (in->gfx_mhz == 0u || in->gfx_mhz >= BC250_FAN_BOOST_MHZ))
+		why |= BC250_FAN_BOOST_WHY_BUSY;
+	if (in->power_valid && in->socket_mw >= BC250_FAN_BOOST_POWER_MW)
+		why |= BC250_FAN_BOOST_WHY_POWER;
+	if (ctl->rise_valid && ctl->rise_mc >= BC250_FAN_BOOST_RISE_MC)
+		why |= BC250_FAN_BOOST_WHY_RISE;
+	return why;
+}
+
+/* The feed-forward itself: the heavy-time account, the engagement and the way out of it. It decides nothing about
+ * the duty; it only says whether the step's target is raised to full speed below. */
+static void track_boost(struct bc250_fan_ctl *ctl, const struct bc250_fan_input *in, unsigned int dt)
+{
+	unsigned int why;
+
+	/* Every step starts with "nothing is raised": the one place that raises a duty is the curve branch of
+	 * bc250_fan_tick(), and it says so there. A step that never reaches it (a fault, a fixed duty, the board's
+	 * own curve, an emergency that drives full speed for its own reason) therefore reports no boost. */
+	ctl->boost_raised = 0;
+	track_rise(ctl, dt);
+	/* The board's own curve and a latched fault are states in which this file writes no duty at all, so there is
+	 * nothing for a feed-forward to raise. A fixed duty under a lease keeps the account running: the raise waits
+	 * for the curve the lease ends with, and a load that outlives the lease is then already known. */
+	if (!ctl->boost_enabled || ctl->mode == BC250_FAN_MODE_BOARD || ctl->fault) {
+		forget_boost(ctl);
+		return;
+	}
+	why = heavy_load(ctl, in);
+	if (why != 0u) {
+		/* One step pays at most BC250_FAN_BOOST_STEP_MAX_MS in, which is under the arming time: a single late
+		 * step cannot arm the rule, and a sustained load is still two steps away from it. A step that is not
+		 * heavy takes its whole length away, because a long gap is a reason to let the boost go. */
+		unsigned int paid = dt > BC250_FAN_BOOST_STEP_MAX_MS ? BC250_FAN_BOOST_STEP_MAX_MS : dt;
+
+		ctl->boost_why = why;
+		ctl->boost_load_ms = ctl->boost_load_ms + paid > BC250_FAN_BOOST_LOAD_MAX_MS ?
+				     BC250_FAN_BOOST_LOAD_MAX_MS : ctl->boost_load_ms + paid;
+	} else {
+		ctl->boost_load_ms = ctl->boost_load_ms > dt ? ctl->boost_load_ms - dt : 0u;
+	}
+	/* The engage needs a duty of ours to raise. Before the first take-over, and in the 30 s after a doubt gave
+	 * the fan back, the board's own curve drives the fan: the account above keeps running, so a load that
+	 * outlives such a wait is already known when the driver takes the fan again, but the flag, the count, the
+	 * time and the log line stay off until the fan is ours. */
+	if (!ctl->controlling) {
+		ctl->boost = 0;
+		ctl->boost_hold_ms = 0;
+		return;
+	}
+	if (ctl->boost)
+		ctl->boost_ms += dt;
+	if (ctl->boost_load_ms >= BC250_FAN_BOOST_ARM_MS) {
+		if (!ctl->boost)
+			ctl->boosts++;
+		ctl->boost = 1;
+		ctl->boost_hold_ms = 0;
+		return;
+	}
+	if (!ctl->boost)
+		return;
+	/* The load has stopped being heavy. The boost holds for BC250_FAN_BOOST_HOLD_MS, and after that until the
+	 * curve itself asks for less than the duty in force: the board must be back under the curve's own point for
+	 * that duty before the fan is allowed to slow down at all. */
+	ctl->boost_hold_ms += dt;
+	if (ctl->boost_hold_ms < BC250_FAN_BOOST_HOLD_MS)
+		return;
+	if (ctl->mode == BC250_FAN_MODE_CURVE && ctl->applied_pct != 0u &&
+	    bc250_fan_curve_eval(&ctl->curve, ctl->effective_mc) >= ctl->applied_pct)
+		return;
+	ctl->boost = 0;
+	ctl->boost_why = 0;
+	ctl->boost_hold_ms = 0;
+}
+
 /* Raise fast, fall slowly. A first duty after a takeover, an emergency and a fixed duty skip the rule. */
 static unsigned int slope(struct bc250_fan_ctl *ctl, unsigned int target, unsigned int dt)
 {
@@ -574,6 +734,9 @@ int bc250_fan_tick(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, c
 	ctl->doubt = doubt;
 	track_emergency(ctl, dt);
 	track_effective(ctl);
+	/* Rule 10, before every branch below: the heavy-time account must keep running while a doubt forces full
+	 * speed, so that a load which outlasts the doubt does not have to be learned twice. */
+	track_boost(ctl, in, dt);
 
 	/* A fault: no write in this start, except the way back for as long as the fan may still be ours. */
 	if (ctl->fault) {
@@ -696,6 +859,14 @@ int bc250_fan_tick(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, c
 		ctl->fall_wait_ms = 0;
 	} else {
 		target = bc250_fan_curve_eval(&ctl->curve, ctl->effective_mc);
+		/* Rule 10. The feed-forward only ever raises: the curve's own answer stands wherever it is the higher
+		 * one, and every rule above this line (the emergency, a fixed duty, doubt, a fault) keeps its place.
+		 * This is the one branch in which the rule decides a duty, so it is also the one that may report it. */
+		if (ctl->boost) {
+			ctl->boost_raised = 1;
+			if (target < BC250_FAN_FULL_PCT)
+				target = BC250_FAN_FULL_PCT;
+		}
 	}
 	ctl->target_pct = target;
 	if (ctl->mode == BC250_FAN_MODE_CURVE && !ctl->emergency)
@@ -737,4 +908,13 @@ const char *bc250_fan_profile_name(unsigned int profile)
 	static const char *const names[] = { "custom", "standard", "quiet", "performance" };
 
 	return profile < sizeof(names) / sizeof(names[0]) ? names[profile] : "?";
+}
+
+const char *bc250_fan_boost_name(unsigned int why)
+{
+	/* Indexed by the three BC250_FAN_BOOST_WHY_* bits, so one word says every signal that called the load heavy. */
+	static const char *const names[] = { "none", "busy", "power", "busy+power", "rise", "busy+rise",
+					     "power+rise", "busy+power+rise" };
+
+	return why <= BC250_FAN_BOOST_WHY_ALL ? names[why] : "?";
 }

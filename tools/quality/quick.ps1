@@ -179,6 +179,7 @@ try {
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
   @{n='log-rate-no-gap';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-NoGapReset');Fails=$true}
+  @{n='log-rate-fan-block';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-FanBlockGrow');Fails=$true}
   @{n='dpm-log-cadence';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace)}
   @{n='dpm-log-cadence-no-idle';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-NoIdleCadence');Fails=$true}
   @{n='dpm-log-cadence-60s';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-IdleSixtySeconds');Fails=$true}
@@ -218,6 +219,15 @@ try {
   @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$kits)}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits)}
+  # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
+  # the fan suite, because this is the rule that writes 255 to the chip by itself. Each -Mutation changes one line
+  # of a copy of the file under test and the suite must then fail by a check.
+  @{n='hwmon-no-boost-raise';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','no-boost-raise');Fails=$true}
+  @{n='hwmon-boost-held-back';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','boost-held-back');Fails=$true}
+  @{n='hwmon-step-pays-all';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','step-pays-all');Fails=$true}
+  @{n='hwmon-telemetry-always';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','telemetry-always');Fails=$true}
+  @{n='hwmon-boost-claims-fixed';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','boost-claims-fixed');Fails=$true}
+  @{n='hwmon-rise-outlives-doubt';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','rise-outlives-doubt');Fails=$true}
   @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$kits)}
   @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$kits,'-Mesa',"$Workspace\ref\mesa")}
  )

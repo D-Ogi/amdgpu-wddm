@@ -12,6 +12,27 @@
 
 C_ASSERT(BC250_FAN_CURVE_SLOTS == BC250_FAN_POINTS_MAX);
 C_ASSERT(BC250_FAN_WATCHDOG_MS > BC250_FAN_WATCHDOG_PERIOD_MS);
+// Rule 10 means a sustained load: one step pays less into the heavy-time account than the arming time, so no
+// single late step (a starved governor thread, a resume) can arm the boost by itself.
+C_ASSERT(BC250_FAN_BOOST_STEP_MAX_MS < BC250_FAN_BOOST_ARM_MS);
+// And the step itself must stay inside that bound, or every step is a late one: the rise window would open again
+// at each step and never close, which switches the temperature's rise signal (WHY_RISE) off without a word. The
+// step runs at the hwmon cadence (dpm.c calls FanStep right after HwmonSample, and that period is the dt a step
+// without a reading falls back to), so this is the tie between the two files.
+C_ASSERT(BC250_HWMON_PERIOD_MS <= BC250_FAN_BOOST_STEP_MAX_MS);
+
+// The governor's load feed for one control step (the load feed-forward, rule 10 of bc250_fan.h). The governor
+// thread fills it in dpm.c beside the Tctl reading: the busy share is the mean over the whole step and not one
+// 25 ms DPM tick, the clock is the level the governor asks for (its own read-back when it does not govern, never
+// a read of the chip in this step), and the power is the SMU metrics table's socket figure.
+// A step without a feed (Valid FALSE, or no pointer at all) runs on the temperature curve alone.
+typedef struct _BC250_FAN_LOAD {
+    ULONG BusyPermille;                     // GPU busy over the step, 0..1000
+    ULONG Mhz;                              // the GFX clock the governor asks for, 0 when it is not known
+    ULONG SocketMw;                         // the SMU socket power, when PowerValid
+    BOOLEAN Valid;
+    BOOLEAN PowerValid;
+} BC250_FAN_LOAD;
 
 // What the escape reads. Written under SnapLock by whoever holds the controller, after every change.
 typedef struct _BC250_FAN_SNAP {
@@ -62,6 +83,6 @@ typedef struct _BC250_FAN_OWNER {
     ULONGLONG WorkerQueuedAt;
     KBUGCHECK_CALLBACK_RECORD BugCheck;
     // The log's memory, so that a state is logged once when it changes and not once a second.
-    ULONG LoggedState, LoggedReason, LoggedDoubt;
+    ULONG LoggedState, LoggedReason, LoggedDoubt, LoggedBoost;
     BC250_FAN_SNAP Snap;                    // under SnapLock
 } BC250_FAN_OWNER;

@@ -34,6 +34,9 @@ namespace AmdgpuWddmControl
                 case "DpmMode": return !w.Delete && w.Number == 1 ? "plan.line.auto-on" : "plan.line.auto-off";
                 case "DpmMaxMHz": return w.Delete ? "plan.line.ceiling-default" : "plan.line.ceiling";
                 case "CpuTune": return w.Delete || w.Number == 0 ? "plan.line.cpu-tune-off" : "plan.line.cpu-tune-on";
+                // Full fan speed under heavy load (fan.md rule 10). On is the driver's default, so the delete form
+                // is the "on" sentence here, the other way round from the switches above.
+                case "FanLoadBoost": return w.Delete || w.Number == 1 ? "plan.line.fan-boost-on" : "plan.line.fan-boost-off";
                 // The waiting time for the graphics (TdrSetting.cs). The app only ever writes a number; the delete
                 // form is here for an undo of a backup taken before the value existed.
                 case TdrSetting.ValueName: return w.Delete ? "plan.line.tdr-default" : "plan.line.tdr";

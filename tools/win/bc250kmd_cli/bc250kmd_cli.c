@@ -1214,6 +1214,18 @@ static const char *const g_fanReasons[] = { "none", "user", "stop", "power", "un
 static const char *const g_fanErrors[] = { "ok", "mode", "profile", "points", "temperature", "duty", "lease" };
 static const char *const g_fanGates[] = { "ok", "setting", "reader", "chip" };
 
+// The BC250_FAN_FLAG_BOOST_* why bits as one word, spelled as bc250_fan_boost_name() spells it in the KMD log.
+static const char *FanBoostWhy(unsigned long flags)
+{
+    static const char *const names[] = { "none", "busy", "power", "busy+power", "rise", "busy+rise",
+                                         "power+rise", "busy+power+rise" };
+    unsigned long why = ((flags & BC250_FAN_FLAG_BOOST_BUSY) ? 1u : 0u) |
+                        ((flags & BC250_FAN_FLAG_BOOST_POWER) ? 2u : 0u) |
+                        ((flags & BC250_FAN_FLAG_BOOST_RISE) ? 4u : 0u);
+
+    return names[why];
+}
+
 // One line of the fan control's state. The "fan " line above it stays as it was: the lab samplers read it.
 static void FanCtlLine(const BC250_ESCAPE_FAN *f)
 {
@@ -1235,7 +1247,15 @@ static void FanCtlLine(const BC250_ESCAPE_FAN *f)
     for (i = 0; i < f->Points && i < BC250_FAN_CURVE_SLOTS; i++)
         printf("%s%lu:%lu", i ? "," : "", f->CurveC[i], f->CurvePct[i]);
     if (f->Points == 0) printf("none");
-    printf(" saved_mode=0x%02lX saved_target=%lu\n", f->SavedMode, f->SavedTarget);
+    printf(" saved_mode=0x%02lX saved_target=%lu", f->SavedMode, f->SavedTarget);
+    // The load feed-forward (rule 10 of bc250_fan.h): whether it holds the fan at full speed now, and which
+    // signal called the load heavy. "armed" is the rule holding a heavy load with no duty of ours to raise (a
+    // lease's fixed duty, the 30 s wait for a retake): the account runs, the fan answers to somebody else. "off"
+    // is a start that may boost and does not now; "disabled" is FanLoadBoost 0.
+    printf(" boost=%s boost_why=%s\n",
+           (f->Flags & BC250_FAN_FLAG_BOOST) ? "on" : (f->Flags & BC250_FAN_FLAG_BOOST_ARMED) ? "armed" :
+           (f->Flags & BC250_FAN_FLAG_BOOST_OFF) ? "disabled" : "off",
+           FanBoostWhy(f->Flags));
 }
 
 // "fan auto [store]", "fan curve [standard|quiet|performance] [store]", "fan set <pct> <seconds>",

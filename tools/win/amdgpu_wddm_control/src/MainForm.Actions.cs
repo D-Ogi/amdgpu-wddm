@@ -23,7 +23,10 @@ namespace AmdgpuWddmControl
             if (plan.Refused) { Result(PlainPlan.Refusal(plan), false); return; }
             var dialog = PlainPlan.Describe(plan);
             var hints = dialog.Restart ? Hints.Decide(Hints.Read(_recent)) : null;
-            if (!ConfirmDialog.Ask(this, dialog, hints)) return;
+            // A cancelled dialog changes nothing, so the page is drawn again from the machine's own state: a check
+            // box the person clicked (the fan's load boost, fan.md rule 10) would otherwise keep the position of a
+            // setting that was never written, until something else rebuilt its card.
+            if (!ConfirmDialog.Ask(this, dialog, hints)) { ShowPage(_page, null, false); return; }
 
             string runId = Guid.NewGuid().ToString("N").Substring(0, 12);
             var verb = new List<string> { "--action", action, "--run-id", runId };

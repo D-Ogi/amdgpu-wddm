@@ -218,6 +218,10 @@ if (-not $NoSmoke) {
         'fan-curve'   = @(0, 'tuning request fan-curve, fan profile quiet', 'takes effect: at once')
         # The card's short test: one speed under a lease, then the standard curve in force again, nothing stored.
         'fan-test'    = @(0, 'tuning request fan-fixed, fixed 60 % for 10000 ms, lease 15000 ms, then fan-curve profile standard', 'takes effect: at once', 'undo: no')
+        # The card's one registry switch (fan.md rule 10): the snapshot stores nothing, so the boost is on and
+        # only switching it off has something to write.
+        'fan-boost-off' = @(0, "set $params FanLoadBoost = 0 (DWord)", 'at the next restart of Windows')
+        'fan-boost-on'  = @(3, 'refused: The fan runs at full speed under a heavy load already.')
     }
     foreach ($e in $tune.GetEnumerator()) {
         $extra = @(switch ($e.Key) { 'tune-trial' { '--curve', '820,830,850,870,889,909,925,942,958,974,990' }
