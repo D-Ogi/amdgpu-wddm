@@ -1,4 +1,4 @@
-"""Shares, denominators and modelled labels in the facts rows of docs/facts/data.
+"""Shares, denominators, modelled labels and mechanism labels in the facts rows of docs/facts/data.
 
     python claim_shares.py [--root <repo>] [--baseline <file>] [--out <dir>]
     python claim_shares.py --files <path...>       # these files only; a file with no facts
@@ -6,9 +6,9 @@
                                                   # can be checked before it is published
     python claim_shares.py --list-failing         # the failing rows as baseline lines
 
-Four rules, all of them mechanical, all of them from the independent audit of 2026-10-10
-(agent-discussion, findings A18 P3 and A19). They catch the ways a share went wrong in this
-project's write-ups:
+Five rules, all of them mechanical, all of them from the independent audit of 2026-10-10
+(agent-discussion, findings A18 P3, A19 and the appendix on M843-M849). They catch the ways a
+share, a normalisation or a cause went wrong in this project's write-ups:
 
 `share-arithmetic`
     A percentage that stands next to its own count pair must be that pair. `270 of the 418
@@ -35,6 +35,17 @@ project's write-ups:
     its frame in RT"; the 76 % is `(76.4 - 18.1) / 76.4` of two frame times that a fitted
     `rate x (1.5 / GHz)^0.75` produced, not time read off a GPU timestamp inside an RT pass.
     No shader or driver change is needed to tell those apart, only the label.
+
+`mechanism-label`
+    A row that explains its result by a decision of the compiler or of one of its passes says
+    that the explanation is an inference, unless it holds the only evidence that can establish
+    one: intermediate IR or optimization remarks. M849 counted five retained disassemblies and
+    then wrote "The cause is that the generic C loop already compiles to the same sequence,
+    while the `asm` block is opaque to the compiler, so ... it blocks the common subexpression
+    elimination of the byte extraction and the merging of the LDS reads". The three builds show
+    that one `asm` branch makes the whole difference; they do not record which pass makes each
+    change, and `-Rpass` or `-save-temps` of the same three builds is what would. The marker
+    words are `inference`/`inferred`, `not measured`, `hypothes`, `remark` and `IR`.
 
 The baseline is a ratchet, as in doclint and guardlog_width: it names the rows that already
 carried an unlabelled normalisation when this gate landed, by rule and fact ID, and the gate
@@ -71,6 +82,20 @@ DENOMINATOR_NAMED = re.compile(r'relative to|against the|share of|overhead', re.
 CLOCK_MODEL = re.compile(r'elasticity|equivalent clock|/ ?GHz\)|per GHz|normalised rate|'
                          r'frequency exponent|fitted|clock-normalis', re.I)
 MODEL_LABEL = re.compile(r'estimat|model', re.I)
+
+# A decision of the compiler or of one of its passes, named as the cause of a result. The two
+# halves must both be there: the mechanism itself, and a categorical cause for it. "Its shader
+# compiles and links in both runs" names a compiler without explaining anything by it.
+COMPILER_MECHANISM = re.compile(r'opaque to the compiler|the compiler (?:cannot|can not|could not|'
+                                r'does not see|sees|knows|chooses)|common subexpression|'
+                                r'constant fold|instruction scheduler|register allocator|'
+                                r'the optimis\w+|the optimiz\w+|optimis\w+ pass|optimiz\w+ pass',
+                                re.I)
+CAUSAL = re.compile(r'the cause is|the reason is|this is why|\bblocks the\b|\bprevents the\b|'
+                    r'because the compiler', re.I)
+# Intermediate IR or optimization remarks are the only evidence that establishes a pass-level
+# explanation. A row that says the explanation is an inference, or is not measured, also passes.
+INFERENCE_LABEL = re.compile(r'inferen|inferred|not measured|hypothes|remark|\bIR\b', re.I)
 
 TOLERANCE = 0.1                 # percentage points: a truncated third digit, not a swap
 NEAR = 160                      # characters: how far from a difference its pair may stand
@@ -168,6 +193,14 @@ def check_row(fid, text):
         found.append(('clock-model-label', fid,
                       '%s: the row normalises to a clock ("%s") and no number is labelled '
                       'estimated or modelled' % (fid, m.group(0))))
+    m = COMPILER_MECHANISM.search(text)
+    cause = CAUSAL.search(text)
+    if m and cause and not INFERENCE_LABEL.search(text):
+        found.append(('mechanism-label', fid,
+                      '%s: the row explains a result by a compiler decision ("%s", "%s") and '
+                      'does not say that the explanation is an inference. Instruction counts '
+                      'show the difference, not which pass makes it: keep IR or -Rpass remarks, '
+                      'or label it' % (fid, cause.group(0), m.group(0))))
     return found
 
 
@@ -189,9 +222,9 @@ def check(paths, baseline):
     return failures, baselined
 
 
-# Only clock-model-label may be baselined. An arithmetic error has no ratchet: a share that
+# Only the two label rules may be baselined. An arithmetic error has no ratchet: a share that
 # does not match its own counts is wrong in every row, old or new.
-BASELINEABLE = ('clock-model-label',)
+BASELINEABLE = ('clock-model-label', 'mechanism-label')
 
 
 def load(path):

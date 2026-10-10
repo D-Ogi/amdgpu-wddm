@@ -13,6 +13,9 @@ actually wrote, from the independent audit of 2026-10-10:
 - M798's "112 of 113 ... fell inside those six spans (14.2 % of the window)" and M800's "6420 of
   416's counted gaps" must not fail: the first percentage belongs to another population, and the
   second number is a session, not a denominator;
+- M849's "The cause is that ... the `asm` block is opaque to the compiler, so ... it blocks the
+  common subexpression elimination" must fail `mechanism-label`, and the corrected row must pass;
+  a row that names a compiler without explaining a result by it must not fail;
 - the real `docs/facts/data/*.yaml` with the baseline next to the gate must pass.
 """
 import os
@@ -33,6 +36,20 @@ M842_ORIGINAL = ('The Witcher 3 Remaster (D3D12) at HIGH with RT spends 76 % of 
                  'RT: at a 1.5 GHz equivalent clock the frame is 18.1 ms with RT off and '
                  '76.4 ms with all four, so every rate is normalised as '
                  'rate x (1.5 / GHz)^0.75 with an elasticity of about 0.75')
+
+# The M849 mechanism sentence, as the row carried it, and as the correction of 2026-10-10
+# rewrote it. The counts around it are unchanged in both.
+M849_ORIGINAL = ('The cause is that the generic C loop already compiles to the same '
+                 'v_mul_i32_i24_sdwa plus v_add3_u32 sequence, while the asm block is opaque '
+                 'to the compiler, so across the accumulators of one tile it blocks the common '
+                 'subexpression elimination of the byte extraction and the merging of the LDS '
+                 'reads')
+M849_FIXED = ('An inference, not measured here: the generic C loop already compiles to the '
+              'same v_mul_i32_i24_sdwa plus v_add3_u32 sequence, while the asm block is opaque '
+              'to the compiler, so across the accumulators of one tile it would block the '
+              'common subexpression elimination of the byte extraction and the merging of the '
+              'LDS reads. The three builds establish that this one branch makes the whole '
+              'difference, not which optimizer pass makes each part of it')
 
 
 class ClaimShares(unittest.TestCase):
@@ -98,6 +115,31 @@ class ClaimShares(unittest.TestCase):
 
     def test_labelled_clock_model_passes(self):
         self.assertEqual(self.rules([('M842', M842_FIXED)]), [])
+
+    def test_unlabelled_compiler_mechanism_fails(self):
+        self.assertEqual(self.rules([('M849', M849_ORIGINAL)]), ['mechanism-label'])
+
+    def test_labelled_compiler_mechanism_passes(self):
+        self.assertEqual(self.rules([('M849', M849_FIXED)]), [])
+
+    def test_optimization_remarks_pass(self):
+        """A row that kept the only evidence of a pass decision needs no label."""
+        rows = [('M905', 'the cause is the loop unroller, which -Rpass-missed names in the '
+                         'remark of both builds, and the optimizer leaves the asm block alone')]
+        self.assertEqual(self.rules(rows), [])
+
+    def test_a_compiler_without_an_explanation_passes(self):
+        """E57's M783: "Its shader compiles and links in both runs" explains nothing by a pass."""
+        rows = [('M783', 'the failing case passes in 11.1 s with the default settings and '
+                         'fails in 15.8 s under wave64. Its shader compiles and links in both '
+                         'runs, so the cause is in the executed code')]
+        self.assertEqual(self.rules(rows), [])
+
+    def test_a_hardware_cause_passes(self):
+        """M78's hang row: a cause with no compiler in it is another rule's business."""
+        rows = [('M78', 'unit A hung hard inside gfx run 8, and the cause is the second '
+                        'bring-up of one boot, with psp unload left out')]
+        self.assertEqual(self.rules(rows), [])
 
     def test_baseline_admits_a_named_row_only(self):
         rows = [('M842', M842_ORIGINAL)]
