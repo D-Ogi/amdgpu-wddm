@@ -1,4 +1,4 @@
-# wsi-dxgi - the two harnesses behind the DLL shadowing and present-route evidence
+# wsi-dxgi - the harnesses behind the DLL shadowing and present-route evidence, and the share cells
 
 A Vulkan WSI on Windows loads `DXGI.DLL`, `DComp.DLL` and `D3D11.DLL` by full System32 path. A game that
 ships DXVK or vkd3d-proton has its own `dxgi.dll` next to the executable. The Windows loader resolves a
@@ -13,7 +13,10 @@ no window, they start nothing resident, and they run on the development PC. The 
 |---|---|
 | `shadowtest.cpp` | The loader experiment: what a shadowed `dxgi.dll` reaches, and three candidate mitigations |
 | `presenttest.cpp` | The present route the WSI needs, run inside three simulated game directories |
-| `build.ps1` | Builds one or both harnesses from the NuGet kits |
+| `sharecell12.cpp` | The b27 cross-stack share cell: a D3D12 producer with a RADV consumer |
+| `sharecellvk.cpp` | The same pair the other way round: a RADV producer with a D3D12 consumer |
+| `sharecell-common.h` | What the two cells have in common: the pattern, the fence schedule, the loaders |
+| `build.ps1` | Builds the harnesses and the cells from the NuGet kits (`-Harness all`) |
 | `run-shadowtest.ps1` | Runs each `shadowtest` mode in its own process and writes a manifest |
 | `run-presenttest.ps1` | Runs each `presenttest` mode in its own process and writes a manifest |
 
@@ -23,6 +26,27 @@ a call reaches.
 
 The source files keep their exact bytes in this repository. `.gitattributes` holds them out of line-ending
 normalization, because the E56 manifests record their SHA-256 sums. `build.ps1` prints those sums.
+
+## The share cells
+
+The DXGI present route of the Vulkan WSI shares two kinds of object between RADV and our D3D12 shell. One is
+a D3D12 committed texture that RADV imports as `VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT`. The other
+is a RADV timeline semaphore that D3D12 opens as an `ID3D12Fence`
+(`VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT`). An audit of 2026-10-10 found that nothing had measured
+either of them in the direction the route uses: M802 measured a D3D12 producer with a D3D12 and a D3D11
+consumer, which is prerequisite coverage of the kernel driver's sharing. These two cells are the smallest
+thing that measures the pair, in both directions, over exactly those handle types.
+
+Each round writes a pattern whose every texel is a function of its own coordinates and of the round. A stride
+misread therefore appears as a diagonal, a channel-order error appears in one byte of four, and a stale image
+appears as the wrong round constant. The producer owns the odd values of the shared timeline and the consumer
+the even ones, so a value that arrives on the wrong side cannot be explained away. The consumer waits on its
+own queue and not on the CPU, because the route waits that way too. Every CPU wait is bounded at 2000 ms. The
+same image, allocation and timeline serve every round, which is the image reuse the route does per frame.
+
+`--selftest` drives the pure rules with no device of either stack, and `--negative-control` inverts every
+case. `build.ps1` runs both for each cell. Exit codes: 0 every case passed, 1 a case failed, 2 the arguments
+were wrong, 3 this machine offers no device of one of the two stacks, which is a skip and not a pass.
 
 ## The shadowtest modes
 

@@ -50,7 +50,7 @@ fullscreen (M15.14), with room for 10-bit and HDR.
 | | (a) Mesa's DXGI WSI over a D3D device of our adapter | (b) RADV scan-out primaries, presented by a composition swapchain | (c) Reuse of the D3D12 shell's present |
 |---|---|---|---|
 | Mechanism | The upstream path of `wsi_common_win32.cpp`. A flip-model DXGI swap chain runs on a D3D12 queue. Each present does one `CopyResource` from the shared resource under the Vulkan image, ordered by shared fences | RADV allocates the swapchain images as scan-out primaries with the E26R record. The WSI gives them to `IPresentationManager` or to a DXGI wrapper of our own | The Vulkan swapchain feeds the present code of `amdgpu_wddm_d3d12.dll` directly |
-| What exists | The whole user-mode path is in upstream Mesa. A native D3D12 device on our adapter is the default for games (trials 053-056, M15.1). D3D12 shared resources and cross-API sharing work on unit A on the GPU route ([M802](../facts/d3d.md#m802)). The D3D12 shell describes a shared resource as an LB7A linear surface ([D3D12 shared resources](../d3d12-shared-resources.md)), and RADV imports LB7A | Nothing. RADV writes no E26R record, and no public API wraps foreign allocations into an `IDXGISwapChain` | The shell presents only for a D3D12 device and a DXGI swap chain that the runtime created. Its present is a DDI behind the D3D12 runtime and dxgkrnl, not a call another module can make |
+| What exists | The whole user-mode path is in upstream Mesa. A native D3D12 device on our adapter is the default for games (trials 053-056, M15.1). D3D12 shared resources and cross-API sharing work on unit A on the GPU route ([M802](../facts/d3d.md#m802)). That is prerequisite coverage. M802 measured a D3D12 producer with a D3D12 consumer and with a D3D11 consumer. It did not measure a RADV-exported timeline opened by D3D12, so the pair this route shares has its own cells ([the cross-stack share cells](#the-cross-stack-share-cells)). The D3D12 shell describes a shared resource as an LB7A linear surface ([D3D12 shared resources](../d3d12-shared-resources.md)), and RADV imports LB7A | Nothing. RADV writes no E26R record, and no public API wraps foreign allocations into an `IDXGISwapChain` | The shell presents only for a D3D12 device and a DXGI swap chain that the runtime created. Its present is a DDI behind the D3D12 runtime and dxgkrnl, not a call another module can make |
 | Window composition | Yes, a GPU copy into the swap chain buffer | Yes | Only through (a) |
 | Independent flip | Yes in principle. The swap chain has the shape of a native D3D12 game, so it inherits M15.14 increment 2 (main `3eca5f98`). That is the shell's E26R v3 scan-out record under `AMDGPU_WDDM_D3D12_EXPERIMENT=scanout-flip-1920x1200`, and the answer of the router front to `pfnCheckDirectFlipSupport` | No. Direct scan-out and iflip of the composition swapchain API need WDDM 3.0 (`ref/win32-docs/desktop-src/comp_swapchain/comp-swapchain.md`, lines 30 and 41). The kernel driver is WDDM 2.9 (`DXGKDDI_INTERFACE_VERSION` 0xE003, `driver/kmd/bc250kmd.h`). The API also takes a D3D11 device, and the D3D11 shell writes v3 without SCANOUT ([M15.14 row](../m15-reconciliation.md)) | Through (a) |
 | Second device | A D3D12 device on the same adapter in the Vulkan process: our D3D12 shell with its hosted RADV | A D3D11 device | Same as (a) |
@@ -272,7 +272,11 @@ buffer, and that fence is the D3D12 side of the Vulkan timeline semaphore of the
 `GetCompletedValue() >= that value` says, in one read of an object the chain already holds, that the presenter
 queue's `Wait` for the application's own signal was satisfied, that the copy executed and that the queue
 retired the `Signal`. That is the end of the route's own GPU work, and it is exactly what the trial says never
-happens: the kernel driver counted `blits 0` while both driver stacks waited.
+happens: the kernel driver's **presentation** counter `blits` stayed at 0 while both driver stacks waited.
+That counter, with `scanout_requests` and `scanout_flips`, counts what passes the kernel driver's present
+path: `Blits` is "presents copied", `ScanoutRequests` and `ScanoutFlips` are counted in
+`SetVidPnSourceAddress` (`driver/kmd/wddm.c`, the counter block of the device record). They say nothing about
+other submissions, so "no blit" is a statement about the presentation path and not about an idle GPU.
 
 Two candidates were rejected from the code, not on taste. DXGI frame statistics
 (`IDXGISwapChain::GetFrameStatistics`) describe the presentation engine and not our copy, are documented to
@@ -331,10 +335,11 @@ is out of date.
 So a route that retires **signals the Vulkan side of every outstanding shared blit timeline from the CPU**, to
 the value the presenter's `Signal` should have reached:
 
-- `wsi_win32_route_retire_value` in `wsi_win32_deadline.h` is the rule, in plain C, so the host test drives
-  it: an image with a recorded present value above the semaphore's current value wants that value, and
-  anything else wants nothing. An image that never presented, and a timeline the presenter did reach, are both
-  left alone, and a second pass over the same chain finds nothing to do.
+- `wsi_win32_route_retire_action` in `wsi_win32_deadline.h` is the rule, in plain C, so the host test drives
+  it: an image with a recorded present value above the semaphore's current value is a candidate, and anything
+  else is left alone. An image that never presented, and a timeline the presenter did reach, are both left
+  alone, and a second pass over the same chain finds nothing to do. Round 4b made the rule answer one of
+  three actions instead of a value, because a candidate is not yet a licence to signal (below).
 - `wsi_win32_retire_blit_waits` applies it with `vkGetSemaphoreCounterValue` and `vkSignalSemaphore`, both
   core in Vulkan 1.2 and both new entries of the WSI dispatch table. It runs on the two expiry paths (the
   acquire and the queue flush) and on swapchain destroy of a route that is already retired, never on a live
@@ -342,9 +347,9 @@ the value the presenter's `Signal` should have reached:
 - A CPU signal exists for a timeline semaphore and for nothing else. There is no `vkSignalFence`, and none is
   needed: the released second submission signals the image's fence and binary semaphores itself, which is
   exactly the state the application is waiting for.
-- Signalling a timeline from the CPU to a value the GPU was going to signal is safe here because the GPU will
-  not signal it: the presenter is dead, which is the condition of this path. Over-signalling a live timeline
-  is a specification violation, so the live route is never touched.
+- Signalling a timeline from the CPU to a value the GPU was going to signal is safe **only** when the GPU will
+  not signal it. Over-signalling a live timeline is a specification violation, so the live route is never
+  touched, and round 4b replaced "the route retired" with a proof that the presenter is gone (below).
 
 Two smaller changes come with it. A retired route stops offering the three surface formats that have no CPU
 path, so the swapchain the client creates after the error falls back to CPU images instead of answering
@@ -376,6 +381,103 @@ worker is the one that would explain round 3 exactly: a `Present1` that returned
 it from another thread. The lab arm reads the ICD's HRESULT line first and the shell's site line in the round
 that installs a shell, because the d3d12 slot is a hash-pinned registered triplet and not a file copy.
 
+## Round 4b: the contract defects of round 4
+
+Round 4 was reviewed and approved inside this work. An independent audit of exactly the same two revisions
+then read the route call by call against the Vulkan specification and the D3D12 reference and found six
+contract defects that the review had missed. None of them is a style question: each one is a rule of a
+contract we do not own. They are listed here with the clause they break, because the next reader of this file
+needs the clause and not the verdict.
+
+**V1. A host signal must not pass a pending signal.** `vkSignalSemaphore` requires the new value to be
+greater than the current value and **less than** the value of any pending signal operation on the same
+semaphore (`chapters/synchronization.adoc`, VUID-VkSemaphoreSignalInfo-value-03258 and -03259). Round 4
+signalled the blit timeline to `V` whenever the route had retired. But `V` is the value the application's
+**first** submission signals, and that submission is still pending whenever the freeze is in the first window
+rather than the second. A 2000 ms timeout proves neither that the work completed nor that the presenter is
+dead, so round 4 could break the VUID on a route that was merely slow.
+
+Round 4b separates three states and acts only in one.
+`wsi_win32_presenter_state` answers `REMOVED` on a proof (`GetDeviceRemovedReason` other than `S_OK`, or a
+blit fence whose completed value is `UINT64_MAX`), `LIVE` on a reading that contradicts removal, and
+`UNPROVEN` when neither read succeeded. The retire path signals only when the presenter is **proved removed**
+and the preceding Vulkan signal of `V` has completed on our own device, which it establishes with a bounded
+`vkWaitSemaphores` on `V - 1` inside `WSI_WIN32_ROUTE_RETIRE_DEADLINE_NS` (200 ms) and a re-read. When that
+wait expires, or the presenter is not proved removed, the route **refuses** and logs the refusal with the
+VUID. It does not manufacture a completion. The caller then reports `VK_ERROR_DEVICE_LOST` when work is still
+outstanding and `VK_ERROR_OUT_OF_DATE_KHR` when it is not, which `wsi_win32_route_report` decides. Both are
+answers the WSI contract allows for `vkAcquireNextImageKHR`, and `OUT_OF_DATE` is the one that lets the
+client fall back to the CPU route, so a proved-dead presenter whose queue could be retired safely still ends
+as a recreated swapchain and not as a lost device.
+
+**V2. The HRESULTs of the blit path were dropped.** `ID3D12GraphicsCommandList::Close`,
+`ID3D12CommandQueue::Wait` and `::Signal` all return an HRESULT that the caller is expected to read
+(`sdk-api-docs`, `nf-d3d12-id3d12graphicscommandlist-close.md` and the queue pages), and
+`ExecuteCommandLists` returns `void`, so its failures appear only as a removed device. Round 4 ignored all of
+them and returned `VK_SUCCESS` from the blit regardless. A route that cannot close its list then presented an
+image it had not copied, and `wsi_common_queue_present` went on to its second submission and its present:
+exactly the shape of a freeze with nothing in the log.
+
+Round 4b checks every one of them, and the first failure of the route is kept in one place.
+`wsi_win32_route_note_error` claims the record with a compare-and-swap, so exactly one caller logs
+`FIRST route failure: <call> hr=0x... image <n>, presenter removed reason 0x...`, always on, once per route.
+`ExecuteCommandLists` is followed by a read of the removed reason, which is the only failure channel a `void`
+call has. A failure stops the dependent work instead of queueing more of it: a refused `Close` fails the blit,
+a refused `Signal` leaves `base.blit.timeline_values[i]` **unraised**, so the value the retire rule compares
+against is still the truth.
+
+**V3. Route flags were plain `bool`s shared between threads.** A non-atomic object read by one thread while
+another writes it has no defined value (`llvm/docs/Atomics.rst`, the section on data races). The two flags
+were written on the present path and read on the acquire path of other swapchains. Round 4b makes the route
+state one `uint32_t` of bits with compare-and-swap accessors. The header is compiled as C11 by `cl /TC` and
+as C++ by the Mesa MSVC build, so the shims are `_InterlockedOr` and `_InterlockedCompareExchange` on MSVC
+and `__atomic_load_n` and `__atomic_compare_exchange_n` elsewhere, not `<stdatomic.h>`. Each transition is
+claimed by exactly one caller, which is what makes "log this once" true rather than likely. The host test
+drives eight threads over two thousand rounds on distinct swapchains and counts the claims.
+
+**V5. A drain timeout released resources the GPU might still read.** D3D12 requires a resource to stay alive
+until the GPU has finished referencing it (`direct3d12/binding-model.md`: resources are kept alive by the
+application, not by the runtime). `wsi_win32_flush_d3d12_queue` returned `void`, and its callers released or
+reused the chain's resources whether it had drained or not: on a fence-creation refusal, on a failed
+`Signal`, and on the expiry of its own wait. Round 4b has it answer `DRAINED`, `REMOVED` or `UNPROVEN`.
+`DRAINED` and `REMOVED` release. `UNPROVEN` pins the whole dependent set (the imported memory, the source and
+destination resources, the allocator and the drain fence) by setting `resources_pinned` on the chain and
+returning without freeing anything, and a later `vkCreateSwapchainKHR` for the same window answers
+`VK_ERROR_INITIALIZATION_FAILED` rather than reusing a chain whose buffers may be in flight. A leak that the
+process gives back at exit is the right trade against a use-after-free in a shared surface. The command
+**list** is not in that set: destroying that interface before its prior executions have completed is
+explicitly allowed (`DirectX-Specs`, `d3d/CPUEfficiency.md`).
+
+**V6. The NT handle of our own shared resource was never closed.** `VkImportMemoryWin32HandleInfoKHR` does
+not transfer ownership of the handle: the application keeps it and must close it
+(`chapters/memory.adoc`, the import-ownership paragraph). The route created the handle with
+`CreateSharedHandle` and leaked it on both paths. Round 4b closes it after the import attempt, on success and
+on failure, and the host test drives both outcomes against a model of the handle table.
+
+### The cross-stack share cells
+
+The route shares two kinds of object, and until round 4b nothing had measured either of them in the
+direction the route uses: M802 is a D3D12 producer with a D3D12 or D3D11 consumer, which is prerequisite
+coverage of the kernel driver's sharing, not of a RADV timeline opened by D3D12. Two clients now measure the
+pair, `tools/win/wsi-dxgi/sharecell12.cpp` and `tools/win/wsi-dxgi/sharecellvk.cpp`, over exactly the handle
+types the route uses: a D3D12 committed texture created with `D3D12_HEAP_FLAG_SHARED` and imported as
+`VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT`, and a RADV timeline semaphore exported as
+`VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT` and opened by `ID3D12Device::OpenSharedHandle`.
+
+Each round writes a pattern whose every texel is a function of its coordinates and of the round, so a stride
+misread appears as a diagonal, a channel-order error appears in one byte of four, and a stale image appears as the
+wrong round constant. The fence schedule gives the producer the odd values and the consumer the even ones, so
+a value that arrives on the wrong side cannot be explained away. The consumer waits on its own **queue**, not
+on the CPU, because a CPU wait would not measure what the route depends on. Every CPU wait is bounded and
+never `INFINITE`. The same image, allocation and timeline serve every round, which is the image reuse the
+route does per frame. `sharecell12` is the D3D12 producer with the RADV consumer. `sharecellvk` is the
+direction the route itself needs, RADV writing and the D3D12 queue reading.
+
+Both carry a host mode (`--selftest`) that needs no device of either stack and drives the pure rules with a
+negative control, and both stop at the first refusal with the name of the call that refused. They are the
+first arms of the lab plan: a route that presents nothing because this pair does not work would otherwise be
+debugged at the swap chain.
+
 ## Code
 
 | Repository, branch | Change |
@@ -395,9 +497,12 @@ that installs a shell, because the d3d12 slot is a hash-pinned registered triple
 | | `8f0bfdfb` after round 2 of the review. The route test's own deadline comment had kept the present cost that was never measured |
 | | `b433f564`, `281fbbcb` and `0c0ffa4c` after the second lab trial. `route.presented` follows a completed present and an acquire that returned. The seventh stage name is `acquire-wait`, and the stage log is gated per chain. The present log flushes a row of an unproved route at once. An expired acquire writes the blit-fence reading. The fence that proves the route is the acquired image's own. The chain's last present belongs to another image and lags by one frame for ever |
 | | `cfa220dd` after the third lab trial. A retired route releases the submissions it left waiting on the shared blit timeline: `wsi_win32_route_retire_value` is the rule and `wsi_win32_retire_blit_waits` applies it. Both expiry paths log the presenter's `GetDeviceRemovedReason`. A retired route stops offering the formats with no CPU path. `wsi_common.c` takes `vkSignalSemaphore` and `vkGetSemaphoreCounterValue` into the WSI dispatch table. The route test takes the round-4 case |
+| | Round 4b, after the independent audit of `cfa220dd` ([the section above](#round-4b-the-contract-defects-of-round-4)). V1: `wsi_win32_presenter_state` and `wsi_win32_route_retire_action` replace the value rule, and a host signal needs a proved-removed presenter and a completed `V - 1`. V2: every HRESULT of the blit path is read, and the route's first failure is claimed once and logged always-on. V3: the route flags become one word with compare-and-swap accessors. V5: `wsi_win32_flush_d3d12_queue` answers drained, removed or unproven, and an unproven drain pins the chain's resources. V6: the resource handle of the import is closed on both outcomes. The route test grows to seventeen cases, among them the refcount and handle-table models and the concurrent flag claims |
 | bc250-win, `wsi/b26-vk-dxgi` (`wsi/vk-dxgi-b23` and `wsi/vk-dxgi` are the same note on the earlier bases) | This note, `tools/build/build-radv-wsi-route-test.ps1` and `radv-wsi-route-test.py` |
 | bc250-win, `wsi/b27-vk-dxgi` | This note's BD-105 sections, and `radv-wsi-route-test.py` hashing the second header into its record |
 | | `driver/umd/d3d12`: the first device removal of a process names its own site on the always-on channel (`ddi_first_removal`, one shot). `Device::remove` takes `__builtin_FILE()` and `__builtin_LINE()` defaults, so each call site names itself |
+| | Round 4b, `driver/umd/d3d12`: `ddi_first_failure` keeps the first failing DDI of the process and of each group of the presenter's path. The groups are the list close, the queue synchronisation, the fence, the shared-resource open and the present. The ledger is always on and writes at most six lines in a process. `EntryPolicy::leave` and `::fast_denied` feed it. A refusal therefore names its call, its HRESULT and whether the device was lost by then |
+| | Round 4b, `tools/win/wsi-dxgi`: `sharecell12.cpp`, `sharecellvk.cpp` and `sharecell-common.h`, the two cross-stack share cells and their host mode |
 
 **32-bit processes.** The release carries two Vulkan ICDs: `payload/vulkan/vulkan_radeon.dll` from the system
 line, which this branch changes, and `payload/wow64/vulkan/vulkan_radeon.dll`, which is the x86 build of the
@@ -575,9 +680,10 @@ step 7 blocks the wagon in any case: Quake II RTX is a release gate (owner, 2026
 | `tools/build/build-radv-wsi-route-test.ps1` | The route rules: the switch and its three sources, the report of application-local modules, the D3D12 implementation check, and the LB7A import rules. Its negative control must fail every case |
 | The pipeline stage-cover host test of this line | The ported tree still builds and passes the host test the shipped line carries |
 | The fence-wait shape check and the BVH node address check | The port did not undo the two BD-102 fixes of tester.23. Each check reads its rule out of the tree first, and each one has a negative control |
-| The source gates of the round, each one with a control revision | Every rule this note describes is in the tree, and none of them passes on the revision before it. Twenty-four of them after round 4 |
+| The source gates of the round, each one with a control revision | Every rule this note describes is in the tree, and none of them passes on the revision before it. Forty-three of them after round 4b, nineteen of which were added by it and are controlled against `cfa220dd` |
 | The pre-fix controls | The round's own host-test cases refuse to compile or fail against the headers of the rounds before them. Four after round 4, the last one the retire rule against `0c0ffa4c` |
-| The D3D12 shell's experiment test | The one-shot first-removal line exists, spends exactly one refusal of the budget, and spends none on the removals after it |
+| The D3D12 shell's experiment test | The one-shot first-removal line exists, spends exactly one refusal of the budget, and spends none on the removals after it. Round 4b adds the per-group first-failure ledger. Its cases are the group of every boundary name of the route's path and the refusal rule. It also costs the budget per outcome. The outcomes are a success, an `E_PENDING`, the first failure, a second failure of one group, a failure of another |
+| The host mode of the two share cells, with its negative control | The pattern, the comparison and the odd/even fence schedule of the cross-stack cells are right before they reach a GPU. Eleven cases pass, and all eleven fail inverted |
 
 The queue, sync and memory host tests belong to the D3D ICD line (`src/amd/vulkan/winsys/wddm2/tests/` on that
 line). The system line has no source for them, so they cannot run on this candidate. The lab arms and the route

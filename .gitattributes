@@ -29,6 +29,7 @@ tools/win/cts/lists/** -text
 # The two M16 WSI harness sources are hash pinned: the E56 manifests record the SHA-256 of each source
 # file, and line-ending normalization would break both sums.
 tools/win/wsi-dxgi/*.cpp -text
+tools/win/wsi-dxgi/*.h -text
 
 # The kmd168 transition helpers are hash pinned: check-offline.py and stage.py compare each file with the
 # recorded 171 stage manifest and refuse a difference. Line-ending normalization would break every hash.

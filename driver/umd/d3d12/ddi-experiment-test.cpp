@@ -137,7 +137,67 @@ int main() {
     native12::ddi_first_removal("device-remove", __FILE__, 3);
     assert(native12::ddi_refusal_budget.load() == budget_after_first);
 
+    // The first failing DDI of each group of the Vulkan WSI's DXGI present route, named with its
+    // HRESULT and its site, on the always-on channel (ddi_first_failure). Round 4 of BD-105 named
+    // only the first device REMOVAL, and the audit of 2026-10-10 is right that a removal is a
+    // consequence: the question left open is which call of the route refused first, and a removal
+    // reason read at the end of a two-second timeout cannot answer it.
+    //
+    // The classification is pure, so every boundary of the route's call table is driven here.
+    using native12::DdiFailureGroup;
+    assert(native12::ddi_failure_group("pfnCloseCommandList") == DdiFailureGroup::List);
+    assert(native12::ddi_failure_group("pfnCloseCommandList_0040") == DdiFailureGroup::List);
+    assert(native12::ddi_failure_group("pfnExecuteCommandLists") == DdiFailureGroup::Queue);
+    assert(native12::ddi_failure_group("pfnCreateCommandQueue") == DdiFailureGroup::Queue);
+    assert(native12::ddi_failure_group("pfnSignalSynchronizationObject") == DdiFailureGroup::Queue);
+    assert(native12::ddi_failure_group("pfnWaitForSynchronizationObject") == DdiFailureGroup::Queue);
+    assert(native12::ddi_failure_group("pfnCreateFence") == DdiFailureGroup::Fence);
+    assert(native12::ddi_failure_group("pfnSetFenceEventOnCompletion") == DdiFailureGroup::Fence);
+    assert(native12::ddi_failure_group("pfnOpenSharedHandle") == DdiFailureGroup::Shared);
+    assert(native12::ddi_failure_group("pfnOpenHeap") == DdiFailureGroup::Shared);
+    assert(native12::ddi_failure_group("pfnOpenResource") == DdiFailureGroup::Shared);
+    assert(native12::ddi_failure_group("pfnPresent") == DdiFailureGroup::Present);
+    assert(native12::ddi_failure_group("pfnCheckFormatSupport") == DdiFailureGroup::Any);
+    assert(native12::ddi_failure_group(nullptr) == DdiFailureGroup::Any);
+    assert(!std::strcmp(native12::ddi_failure_group_name(DdiFailureGroup::Queue), "queue-sync"));
+    assert(!std::strcmp(native12::ddi_failure_group_name(DdiFailureGroup::Present), "present"));
+
+    // A refusal is a failure that is not the ordinary "not yet". This test takes no display DDI
+    // header, so the removal code is written out here as ddi-entry.h's kDdiDriverDeviceRemoved
+    // states it (D3DDDIERR_DEVICEREMOVED, 0x88760870).
+    const HRESULT kDeviceRemoved = static_cast<HRESULT>(0x88760870);
+    assert(native12::ddi_failure_is_refusal(E_FAIL));
+    assert(native12::ddi_failure_is_refusal(kDeviceRemoved));
+    assert(!native12::ddi_failure_is_refusal(S_OK));
+    assert(!native12::ddi_failure_is_refusal(E_PENDING));
+
+    // The budget, which is what is observable from here: a success and an E_PENDING cost nothing.
+    const int32_t before_failures = native12::ddi_refusal_budget.load();
+    native12::ddi_first_failure("pfnPresent", S_OK, false);
+    native12::ddi_first_failure("pfnPresent", E_PENDING, false);
+    assert(native12::ddi_refusal_budget.load() == before_failures);
+
+    // The first failing DDI of the process writes ONE line, although it claims both the process-wide
+    // slot and its own group: one refusal is one line.
+    native12::ddi_first_failure("pfnExecuteCommandLists", E_FAIL, false);
+    const int32_t after_first_failure = native12::ddi_refusal_budget.load();
+    assert(before_failures - after_first_failure == 1);
+    // The next refusal of the SAME group is silent: it is a consequence of the one above.
+    native12::ddi_first_failure("pfnExecuteCommandLists", kDeviceRemoved, true);
+    native12::ddi_first_failure("pfnCreateCommandQueue", E_OUTOFMEMORY, false);
+    assert(native12::ddi_refusal_budget.load() == after_first_failure);
+    // A refusal of ANOTHER group of the route's path still gets its line, because a present that
+    // refused after a queue call that refused is a second reading and not the same one.
+    native12::ddi_first_failure("pfnPresent", E_FAIL, true);
+    assert(after_first_failure - native12::ddi_refusal_budget.load() == 1);
+    const int32_t after_present = native12::ddi_refusal_budget.load();
+    native12::ddi_first_failure("pfnPresent", E_FAIL, true);
+    assert(native12::ddi_refusal_budget.load() == after_present);
+    // Five groups and the process-wide one: at most six lines, whatever a game does.
+    assert(unsigned(DdiFailureGroup::Count) == 6);
+
     std::puts("PASS ddi experiment sources: syntax, matching, profile key, machine-wide value, variable "
-              "precedence, none, refusals, the -off form of every default, and the one-shot first-removal line");
+              "precedence, none, refusals, the -off form of every default, the one-shot first-removal line "
+              "and the first failing DDI of each group of the presenter's path");
     return 0;
 }

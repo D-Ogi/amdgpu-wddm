@@ -3013,14 +3013,14 @@
       {
        "name": "pfnCreateHeapAndResource",
        "function": "create_heap_and_resource",
-       "source": "driver/umd/d3d12/native-tables.cpp:215",
+       "source": "driver/umd/d3d12/native-tables.cpp:224",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDestroyHeapAndResource",
        "function": "destroy_heap_and_resource",
-       "source": "driver/umd/d3d12/native-tables.cpp:247",
+       "source": "driver/umd/d3d12/native-tables.cpp:256",
        "done": true,
        "reason": "does work"
       },
@@ -3048,7 +3048,7 @@
       {
        "name": "pfnOpenHeapAndResource",
        "function": "open_heap_and_resource",
-       "source": "driver/umd/d3d12/native-tables.cpp:237",
+       "source": "driver/umd/d3d12/native-tables.cpp:246",
        "done": true,
        "reason": "does work"
       },
@@ -3162,7 +3162,7 @@
       {
        "name": "pfnGetPresentPrivateDriverDataSize",
        "function": "present_private_size",
-       "source": "driver/umd/d3d12/native-tables.cpp:191",
+       "source": "driver/umd/d3d12/native-tables.cpp:200",
        "done": true,
        "reason": "returns the answer"
       },
@@ -3941,7 +3941,7 @@
       {
        "name": "pfnPresent",
        "function": "present",
-       "source": "driver/umd/d3d12/native-tables.cpp:289",
+       "source": "driver/umd/d3d12/native-tables.cpp:298",
        "done": true,
        "reason": "does work"
       },

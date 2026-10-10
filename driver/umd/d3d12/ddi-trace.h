@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cwchar>
+#include <initializer_list>
 #include "stdio-log.h"
 #pragma comment(lib,"advapi32.lib") // RegGetValueW: the application profile below
 
@@ -72,6 +73,76 @@ inline void ddi_first_removal(const char* what,const char* file,int line) noexce
     if(seen.exchange(true,std::memory_order_relaxed))return;
     ddi_refusal("device removed: %s at %s:%d, the first removal in this process",
         what?what:"?",ddi_source_name(file),line);
+}
+// The FIRST failing DDI of each group of the presenter's path, named where it failed, on the
+// always-on channel.
+//
+// Why a group and not one line per process. ddi_first_removal above answers "which decision removed
+// the device". It does not answer the question BD-105 round 3 actually left open, which is which CALL
+// of the Vulkan WSI's DXGI present route first refused: the command list's Close, the queue's Wait,
+// Signal or ExecuteCommandLists, the fence, the shared-resource open, or the Present. Each of those
+// reaches this driver as a DDI of its own, and the removal - if there is one - is a consequence of
+// the first refusal, not the refusal itself. One line per process would be spent by whichever
+// unrelated slot refused first in a game's start-up; one line per GROUP keeps the presenter's path
+// readable while still bounding the cost to a handful of lines per process, inside the same refusal
+// budget every refusal shares.
+//
+// The groups are the boundaries the audit of 2026-10-10 named (the "Vulkan/DXGI call-by-call
+// conclusion" table): the recording close, the queue's synchronisation and submission, the fence
+// objects, the shared-resource open, and the present. Any is the process's very first failing DDI
+// whatever it was, so a refusal on a path nobody listed is still named once.
+//
+// What this does NOT do: it does not say that the named DDI is the cause. It says which DDI of that
+// group failed first, with its HRESULT and the site of the binding that reported it, which is the
+// reading a timeout two seconds later cannot produce.
+enum class DdiFailureGroup:unsigned {Any=0,List,Queue,Fence,Shared,Present,Count};
+inline const char* ddi_failure_group_name(DdiFailureGroup group) noexcept {
+    switch(group){
+    case DdiFailureGroup::Any:return "any";
+    case DdiFailureGroup::List:return "list-close";
+    case DdiFailureGroup::Queue:return "queue-sync";
+    case DdiFailureGroup::Fence:return "fence";
+    case DdiFailureGroup::Shared:return "shared-open";
+    case DdiFailureGroup::Present:return "present";
+    default:return "?";
+    }
+}
+// Which group a DDI slot name belongs to. The names are the WDK's own pfn* spellings
+// (toolchain/nuget microsoft.windows.sdk.cpp Include/10.0.26100.0/um/d3d12umddi.h), matched by
+// substring so that a versioned slot (pfnCreateFence_0003 and the like) lands in its own group.
+// Pure, and the experiment test drives it against every name of the route.
+inline DdiFailureGroup ddi_failure_group(const char* name) noexcept {
+    if(!name)return DdiFailureGroup::Any;
+    const auto has=[name](const char* part) noexcept {return std::strstr(name,part)!=nullptr;};
+    if(has("CloseCommandList"))return DdiFailureGroup::List;
+    if(has("Present"))return DdiFailureGroup::Present;
+    if(has("Fence"))return DdiFailureGroup::Fence;   // CreateFence, SetFenceEventOnCompletion, ...
+    if(has("Shared") || has("OpenHeap") || has("OpenResource"))return DdiFailureGroup::Shared;
+    if(has("ExecuteCommandLists") || has("SignalSynchronizationObject") ||
+       has("WaitForSynchronizationObject") || has("CommandQueue"))return DdiFailureGroup::Queue;
+    return DdiFailureGroup::Any;
+}
+// E_PENDING is a slot's ordinary "not yet", not a refusal: ddi_failure_note already excludes it and
+// so does this ledger.
+inline bool ddi_failure_is_refusal(HRESULT outcome) noexcept {
+    return FAILED(outcome) && outcome!=E_PENDING;
+}
+inline std::atomic<bool> ddi_first_failure_seen[unsigned(DdiFailureGroup::Count)]{};
+inline void ddi_first_failure(const char* name,HRESULT outcome,bool device_lost,
+    const char* file=__builtin_FILE(),int line=__builtin_LINE()) noexcept {
+    if(!ddi_failure_is_refusal(outcome))return;
+    const DdiFailureGroup group=ddi_failure_group(name);
+    bool wrote=false;
+    // The process's very first failing DDI, and then the first of this slot's own group. A refusal
+    // that is both writes one line, because Any is claimed first and the group is claimed after it.
+    for(const DdiFailureGroup g:{DdiFailureGroup::Any,group}){
+        if(ddi_first_failure_seen[unsigned(g)].exchange(true,std::memory_order_relaxed))continue;
+        if(wrote)break;   // the same refusal: one line names both
+        ddi_refusal("first failing DDI of group %s: %s hr=%08lx at %s:%d, device %s",
+            ddi_failure_group_name(g),name?name:"?",static_cast<unsigned long>(outcome),
+            ddi_source_name(file),line,device_lost?"lost":"live");
+        wrote=true;
+    }
 }
 inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
     if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;

@@ -37,11 +37,20 @@ struct EntryPolicy:EntryOwner<Device> {
     // The leave hook's failure record for a call refused on the fast path (failures-only trace mode 2; the
     // binding is never published in mode 1).
     // Out of line: 134 recording thunks would otherwise each carry the note's formatting on their cold path.
-    __declspec(noinline) static void fast_denied(Device*,const char* name,HRESULT outcome) noexcept {
+    __declspec(noinline) static void fast_denied(Device* device,const char* name,HRESULT outcome) noexcept {
         if(FAILED(outcome) && outcome!=E_PENDING)ddi_failure_note(name,outcome);
+        ddi_first_failure(name,outcome,device && device->lost.load());
     }
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
-    static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
+    // Two records, and only the second one is always on. ddi_trace_end writes a line per failed call
+    // under AMDGPU_WDDM_DDI_TRACE=2; ddi_first_failure writes the FIRST failing DDI of each group of
+    // the presenter's path with no switch at all, which is the reading BD-105 round 3 did not have:
+    // the Vulkan WSI's DXGI route read a removed device from a shared fence of this driver and no log
+    // of the process said which call had refused first. One line per group bounds it.
+    static void leave(Device* device,const char* name,uint64_t id,HRESULT outcome) noexcept {
+        ddi_trace_end(name,id,outcome);
+        ddi_first_failure(name,outcome,device && device->lost.load());
+    }
     // Sizes only: other scalar returns can be addresses, which a trace must not carry.
     static void returned(Device*,const char* name,uint64_t id,uint64_t value) noexcept {
         if(!id || !ddi_trace_enabled() || (std::strncmp(name,"pfnCalcPrivate",14) && std::strcmp(name,"pfnGetDescriptorSizeInBytes")))return;
