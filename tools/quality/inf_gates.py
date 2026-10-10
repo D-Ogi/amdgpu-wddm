@@ -22,6 +22,12 @@ This gate does. For every `HKR, Parameters, <name>, <flags>, <value>` line of th
 And for every release default of the table: the INF writes it, or NOT_IN_INF below says why it
 does not. Each of the three tables is a decision somebody took on purpose, with a reason, and a
 line that no longer applies fails the gate as well, so none of them rots into a blanket excuse.
+
+The gate also holds one deviation closed. The driver can write DriverVersion of the adapter's
+software key, which the installation guideline forbids, and the setting that asks for it stays off
+unless the control application turns it on. No install of the package may enable it, and no AddReg
+line of the package may write a device property of that key. INSTALLATION_OWNED below has the ten
+names and the citation (audit finding K1).
 """
 import argparse
 import json
@@ -60,7 +66,36 @@ NOT_IN_INF = {
     "DpmIdleMHz": "a clock limit the installer and the control application own",
 }
 
+# The device properties of a device's software key that a driver must not modify, from
+# `ref/windows-driver-docs/windows-driver-docs-pr/install/opening-a-device-s-software-key.md:33-46`
+# (staging 110f60ea): "You must not modify the values of the following registry entries (device
+# properties) in a device's software key". The same page: "Changing driver version or driver date
+# might break Windows Update functionality". Its "installation-time only" note is about writes
+# during an installation and exempts no write after it.
+#
+# This driver has one write of that kind, DriverVersion for the games that read it (C69, BD-104,
+# driver/kmd/driver_version.c), and holds it closed: the setting that asks for it is absent after an
+# install, and only the control application turns it on. The gate keeps it that way. No AddReg line
+# of the package writes one of these properties, and neither the INF nor the release table names the
+# setting, so no install of the package can enable the write (audit finding K1, 2026-10-10).
+INSTALLATION_OWNED = (
+    "DriverDate",
+    "DriverDateData",
+    "DriverDesc",
+    "DriverVersion",
+    "InfPath",
+    "InfSection",
+    "InfSectionExt",
+    "MatchingDeviceId",
+    "ProviderName",
+    "EnumPropPages32",
+)
+RUNTIME_VERSION_SETTING = "ReportAmdDriverVersion"
+SOFTWARE_KEY_PAGE = "install/opening-a-device-s-software-key.md:33-46"
+
 LINE = re.compile(r"^\s*HKR\s*,\s*Parameters\s*,\s*([A-Za-z0-9_]+)\s*,\s*(0x[0-9A-Fa-f]+)\s*,\s*(.*?)\s*$")
+# Any AddReg line, whatever root and subkey it writes: HKR, HKLM, HKCU, HKCR, HKU.
+ADDREG = re.compile(r"^\s*HK(?:R|LM|CU|CR|U)\s*,[^,]*,\s*([A-Za-z0-9_]+)\s*,")
 
 
 def read_inf(path):
@@ -98,6 +133,59 @@ def same_value(inf_text, default):
     except ValueError:
         return False, "the INF value %r is not a number" % (inf_text,)
     return written == default, "the INF writes %d, the release default is %d" % (written, default)
+
+
+def value_names(node):
+    """Every value name of the defaults document: the keys of its objects, at any depth."""
+    if isinstance(node, dict):
+        for name, child in node.items():
+            yield name
+            for deeper in value_names(child):
+                yield deeper
+    elif isinstance(node, list):
+        for child in node:
+            for deeper in value_names(child):
+                yield deeper
+
+
+def check_installation_state(inf_path, defaults_path):
+    """The write the software-key page forbids stays out of the package (finding K1).
+
+    No AddReg line writes one of the installation-owned device properties, and no file of the
+    package names the setting that makes the driver write DriverVersion at an adapter start.
+    """
+    failures = []
+    gate = pathlib.Path(__file__).name
+    for number, text in enumerate(inf_path.read_text(encoding="ascii").splitlines(), 1):
+        if text.lstrip().startswith(";"):
+            continue
+        match = ADDREG.match(text)
+        if not match:
+            continue
+        name = match.group(1)
+        if name in INSTALLATION_OWNED:
+            failures.append("%s (line %d): an AddReg line of the package writes %s, a device property "
+                            "that holds the installation state of the device. %s: \"You must not modify "
+                            "the values of the following registry entries (device properties) in a "
+                            "device's software key\". Remove the line"
+                            % (name, number, name, SOFTWARE_KEY_PAGE))
+        if name == RUNTIME_VERSION_SETTING:
+            failures.append("%s (line %d): the INF turns the runtime DriverVersion write on. That write "
+                            "deviates from %s and stays off unless the control application asks for it, "
+                            "so no install of the package may name the setting (%s)"
+                            % (name, number, SOFTWARE_KEY_PAGE, gate))
+    document = json.loads(defaults_path.read_text(encoding="utf-8"))
+    for name in sorted(set(value_names(document))):
+        if name == RUNTIME_VERSION_SETTING:
+            failures.append("%s: %s names it, so an install of the package would turn the runtime "
+                            "DriverVersion write on. That write deviates from %s and belongs to the "
+                            "control application alone (%s)"
+                            % (name, defaults_path.name, SOFTWARE_KEY_PAGE, gate))
+        elif name in INSTALLATION_OWNED:
+            failures.append("%s: %s names a device property that holds the installation state of the "
+                            "device. %s forbids a driver to modify it"
+                            % (name, defaults_path.name, SOFTWARE_KEY_PAGE))
+    return failures
 
 
 def check(inf_path, defaults_path):
@@ -163,6 +251,7 @@ def check(inf_path, defaults_path):
         elif name in rows:
             failures.append("%s: in NOT_IN_INF, but the INF does write it now. Remove the line, so that "
                             "the gate compares its value with the table" % name)
+    failures += check_installation_state(inf_path, defaults_path)
     return failures
 
 

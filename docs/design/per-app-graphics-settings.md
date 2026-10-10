@@ -312,13 +312,33 @@ that the open gives back, through `ZwQueryKey` with `KeyNameInformation`, and wr
 key or one adapter key of the adapter class `{4d36e968-e325-11ce-bfc1-08002be10318}`. A path that the KMD builds
 itself is in addition admitted only below `Control\Video`.
 
-The guideline for device installation asks a driver not to change `DriverVersion` in a software key
-(`windows-driver-docs-pr/install/opening-a-device-s-software-key.md`), because the value carries the installation
-state of the device. The same page records that Windows imposes those restrictions at installation time, and that
-"Values can be replicated for compatibility". This driver changes the value after installation, on purpose and only
-while an explicit setting asks for it: `Bc250DriverVersion` keeps the installed number, the next start with the
-setting cleared writes it back, and the driver store copy is never touched. That is the price of the games that
-refuse to run well against the number this driver installs.
+The guideline for device installation forbids this write. `install/opening-a-device-s-software-key.md:33-46`,
+staging `110f60ea`, holds the rule and names `DriverVersion` among the ten entries it covers:
+
+```
+You must not modify the values of the following registry entries (device properties) in a device's software key:
+  DriverDate, DriverDateData, DriverDesc, DriverVersion, InfPath, InfSection, InfSectionExt, MatchingDeviceId,
+  ProviderName, EnumPropPages32
+```
+
+The reason is on the same page: "These device properties represent a device's installation state", and "Changing
+driver version or driver date might break Windows Update functionality". The note of that page says that Windows
+imposes the restrictions
+"installation-time only", that "Values can be replicated for compatibility", and that a direct change of a value
+"during device installation" does not change internal state. That note is about writes during an installation. It
+gives no permission for a write after the installation, which is the write this driver does, so the prohibition
+holds for it (audit finding K1, 2026-10-10).
+
+The driver keeps the deviation closed. An install leaves `ReportAmdDriverVersion` absent, and the KMD reads an
+absent, unreadable or out-of-range value as 0. The `inf-gates` gate (`tools/quality/inf_gates.py`) fails if
+`bc250kmd.inf` or `registry-defaults.json` names the setting, and if an `AddReg` line of the package writes one of
+the ten device properties. The control application alone turns the setting on, for the tester who wants it.
+`Bc250DriverVersion` then keeps the installed number, the next start with the setting cleared writes it back, and
+the driver store copy is never touched. The gain is the games that refuse to run well against the number this
+driver installs. The cost is the installation state of the device, and Windows Update with it.
+
+A mechanism the platform supports has still to replace the setting: a version policy that the installation owns, or
+an application compatibility mechanism. Until then the write stays off by default.
 
 The two facts above were measured on the development PC on 2026-10-08, read-only, with
 `RegOpenKeyEx(REG_OPTION_OPEN_LINK)` and `RegQueryValueEx("SymbolicLinkValue")` on the video keys of its graphics

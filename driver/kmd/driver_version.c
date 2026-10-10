@@ -29,6 +29,17 @@
 // place and write nothing. The GUID of those keys is the VideoID value of the adapter's hardware key
 // (IoOpenDeviceRegistryKey, PLUGPLAY_REGKEY_DEVICE), and each four-digit subkey below it is one video key.
 //
+// The installation guideline forbids this write, and the driver keeps it closed. "You must not modify the values of
+// the following registry entries (device properties) in a device's software key" names DriverVersion among the ten
+// (ref/windows-driver-docs/windows-driver-docs-pr/install/opening-a-device-s-software-key.md:33-46, staging
+// 110f60ea), and the same page says that a change of the driver version might break Windows Update. The
+// "installation-time only" note of that page is about writes during an installation and permits no write after one,
+// which is what this file does, so the prohibition holds for it (audit finding K1, 2026-10-10). Therefore the
+// setting is absent after an install, no install of the package may name it (tools/quality/inf_gates.py, the
+// inf-gates gate), and only the control application turns it on, for a tester who accepts the cost. The installed
+// number stays in Bc250DriverVersion, the next start with the setting cleared writes it back, and the copy in the
+// driver store is never touched. docs/design/per-app-graphics-settings.md holds the full reasoning.
+//
 // Whichever path is used, the key that the open gives back must name a video key or one adapter key of the display
 // class before anything is written (DriverVersionIsAdapterKey), and a path this file builds itself is opened only
 // below Control\Video.
