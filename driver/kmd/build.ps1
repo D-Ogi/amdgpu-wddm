@@ -95,11 +95,16 @@ function Write-UmdInf([string]$Source, [string]$Target) {
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
-$sources = (Get-ChildItem (Join-Path $here '*.c')).FullName
+. (Join-Path $here '..\..\tools\quality\kmd-build-context.ps1')
+$sources = @(Get-OrdinalBuildFiles (Join-Path $here '*.c'))
 # M4, M5: AMD's imported code and the shim it compiles against (ADR 0002). Same flags; the imports get the warning
 # disables documented in driver\amdgpu-import\PROVENANCE.md, from the build line, never by editing them.
 $repo = Split-Path (Split-Path $here)
-if(!$QualityWorkspace){$QualityWorkspace=if($env:BC250_ROOT){$env:BC250_ROOT}else{Split-Path $repo}}
+if ((-not $CompileOnly) -and (-not $ExportCommandsOnly)) {
+    $packageContext = Resolve-Bc250PackageContext -Repo $repo -Kits $Kits -QualityWorkspace $QualityWorkspace
+    $QualityWorkspace = $packageContext.workspace
+    $packageContext | ConvertTo-Json | Set-Content (Join-Path $Out 'package-context.json') -Encoding utf8
+}
 $shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", "/I$repo\third_party\libdrm", '/DBC250_SHIM_KERNEL')
 $shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_pte.c", "$repo\driver\shim\bc250_psp.c")
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
@@ -138,7 +143,7 @@ if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation 
 if(-not $CompileOnly) {
     & python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
     if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
-    & (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
+    & (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo 'KmdPackage' $Kits
     if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
 }
 
@@ -151,7 +156,7 @@ Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NAT
     '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
     'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
     "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
-    (Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName)   # fixed order: /OPT:ICF folds by input order
+    (Get-OrdinalBuildFiles "$obj\*.obj"))   # fixed order: /OPT:ICF folds by input order
 Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 
 # What does the prologue of each function take off rsp? A kernel thread has 24 KB and dxgmms2 has already
