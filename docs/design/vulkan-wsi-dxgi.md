@@ -402,13 +402,39 @@ Round 4b separates three states and acts only in one.
 blit fence whose completed value is `UINT64_MAX`), `LIVE` on a reading that contradicts removal, and
 `UNPROVEN` when neither read succeeded. The retire path signals only when the presenter is **proved removed**
 and the preceding Vulkan signal of `V` has completed on our own device, which it establishes with a bounded
-`vkWaitSemaphores` on `V - 1` inside `WSI_WIN32_ROUTE_RETIRE_DEADLINE_NS` (200 ms) and a re-read. When that
+`vkWaitSemaphores` on `V` - one below the presenter's `V + 1` - inside
+`WSI_WIN32_ROUTE_RETIRE_DEADLINE_NS` (200 ms) and a re-read. When that
 wait expires, or the presenter is not proved removed, the route **refuses** and logs the refusal with the
 VUID. It does not manufacture a completion. The caller then reports `VK_ERROR_DEVICE_LOST` when work is still
 outstanding and `VK_ERROR_OUT_OF_DATE_KHR` when it is not, which `wsi_win32_route_report` decides. Both are
 answers the WSI contract allows for `vkAcquireNextImageKHR`, and `OUT_OF_DATE` is the one that lets the
 client fall back to the CPU route, so a proved-dead presenter whose queue could be retired safely still ends
 as a recreated swapchain and not as a lost device.
+
+**V1 again: whose value is it?** The review of round 4b found the VUID still reachable, through round 4b's own
+change. `blit.timeline_values[i]` is written by two signallers: `wsi_common_queue_present` pre-increments it to
+`V` for the application's own first submission, and `wsi_dxgi_blit` raises it to `V + 1` only after an accepted
+`ID3D12CommandQueue::Signal` - which is the V2 fix above, and which is what leaves the application's own pending
+value in the entry on every failure return of the blit. The rule proved its signal with
+`semaphore == present value - 1`, and in that state the equality means the application's signal of `V` is
+**pending** and the semaphore reads `V - 1`: the one state 03259 forbids passing. The measured shape, on the
+two-image chain of lab round 3: present image 0, the submission signalling `V = 1` still pending so the
+semaphore reads 0, the blit fails and returns `VK_ERROR_DEVICE_LOST`, `timeline_values[0]` keeps 1, the second
+submission and the present are skipped. A later acquire expires, the route retires, the presenter reads
+`REMOVED` - and the retirement would signal 1 with 1 pending. The same after one good cycle with `V = 3` and
+the semaphore at 2, and the chain's teardown reaches it too.
+
+So the rule asks a second question that no arithmetic on those values can answer: **did the presenter's Signal
+of the value this image carries get accepted?** `struct wsi_win32_image_debt` is one atomic word per image,
+cleared when `wsi_dxgi_blit` is entered for that image and set after the accepted `Signal` has raised the value,
+in that order, so a reader that sees the debt always sees the presenter's value with it. The clear loses
+nothing: entering the blit for an image means the application acquired it, and that acquire waited for the
+fence the previous cycle's second submission signals. An image the presenter owes nothing for has nothing of
+**ours** outstanding behind it, because a blit that does not return `VK_SUCCESS` skips the second submission
+and the present, so the only submission left is the application's own, waiting on the application's own
+semaphores on a device that is alive. The retirement answers `NOTHING` there, says so in one line per image,
+and the acquire reports `VK_ERROR_OUT_OF_DATE_KHR`: reporting it as outstanding would end a client with
+`VK_ERROR_DEVICE_LOST` over a wait that does not exist.
 
 **V2. The HRESULTs of the blit path were dropped.** `ID3D12GraphicsCommandList::Close`,
 `ID3D12CommandQueue::Wait` and `::Signal` all return an HRESULT that the caller is expected to read
