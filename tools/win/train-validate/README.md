@@ -26,10 +26,12 @@ python tools/win/train-validate/validate.py run --train b28 --package <package d
 
 The suite does not take the work the owner reserved for a person.
 
-- **The board memory acceptance** (`board-memory`) stays with the operator as well. It needs the control
-  application's Board memory card, an elevated confirmation and two restarts of Windows, and the owner's
-  physical CMOS clear is its only recovery if the board does not start again. The arm's lab script is the
-  read-only reading the operator takes at each of the four steps.
+- **The click on the Board memory card** is not part of the run. The board memory arms (`bm-*`) call the
+  control application's own elevated verb, `--bc250-board-memory-action`, with a confirmation token that the
+  application's own code computes from the state it reads (`lab/board-memory-op.ps1`). That is the command
+  line the card starts after its confirmation dialog, so the arms cover the write, the restart and Restore,
+  and not the dialog. The owner's physical CMOS clear stays the only recovery if the board does not start
+  again, which is why these arms come last.
 - **The interactive Witcher 3 Remaster session** (`w3-high-rt`) stays with the operator: the owner's rule is
   that the agent drives the game itself, with a half-scale shot every 10 to 15 seconds, and ends the session
   when its goals are done. The runner prints where that session fits and never starts it.
@@ -95,24 +97,30 @@ The difference matters when a number is read out of this table.
 | `uninstall`, `restart-1`, `install`, `restart-2` | lab | the owner's installer test: nothing of ours is left, then a fresh install at 40 CU |
 | `slots`, `kmdver`, `preflight` | read | every installed file against the package manifest, the identity of what runs, and 40 CU, DPM, health and TdrDelay |
 | `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`. That script refuses a second apply of the same release. The wrapper then reads `lab-baseline.json`. It passes when that file already names this release and this manifest hash. A resumed run thus gets the same answer as the first run |
+| `stage-clients` | transfer | the clients that are not in the package are on the lab with the bytes of this PC. `stage.py` hashes every file on both sides and sends only what differs |
 | `vk-smoke`, `x86-smoke` | lab | the system Vulkan ICD and the 32-bit D3D11 stack answer |
 | `vkheaps` | read | the Vulkan memory heaps of the installed system ICD follow the board's carve-out, not a frozen capture |
+| `vk-semaphore` | lab | a Win32 export and import of a timeline semaphore across two processes, unnamed and named, in session 0 and in the interactive session (`tools/win/vksemcheck`). The 32-bit run is a control that decides nothing |
 | `q2rtx-pipeline`, `q2rtx-query`, `q2rtx-loop` | lab, **owner gate** | Quake II RTX runs with `VK_KHR_ray_tracing_pipeline` and with `VK_KHR_ray_query` |
 | `cache-0`, `cache-1`, `q2rtx-warm`, `cache-2` | read, lab | the shader disk cache of a new Vulkan driver build is written and then read. A new build has a cache namespace of its own (BD-100), so this is the b25 B1 proof again |
 | `dxrpt` | lab | path tracing through D3D12 holds its frame rate |
 | `cts-rt` | lab | the 140 ray tracing cases of the pinned Vulkan CTS, on the installed system driver |
 | `llm-dense` | lab | the dense language model batch that stopped Windows with 0x116 runs to its end (BD-114) |
+| `llm-q35` | lab | the 35B-A3B IQ2_M model runs fully offloaded at the 12 GiB carve-out |
+| `hip` | lab | the installed HIP runtime is on the machine PATH, `vadd.exe` computes, and the HIP llama.cpp backend runs `llama-bench` through it (BD-110) |
 | `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness |
 | `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene |
 | `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator |
-| `board-memory` | operator | the board memory acceptance: 12288 MiB in the control application, a restart, then Restore |
+| `bm-before`, `bm-set-8192`, `bm-restart-1`, `bm-at-8192`, `vkheaps-8192`, `bm-restore`, `bm-restart-2`, `bm-after` | read, lab, restart | the board memory operation of the control application. It sets 8192 MiB and restarts. It reads the active size, Windows RAM and the Vulkan heaps at 8192 MiB. Then Restore and a restart put back the size before the change |
 
-Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms cache`, `--arms llm`, or a
-list such as `--arms q2rtx-pipeline,q2rtx-query`.
+Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms cache`, `--arms llm`,
+`--arms hip`, `--arms semaphore`, `--arms board-memory`, or a list such as `--arms q2rtx-pipeline,q2rtx-query`.
 
-Three arms stand on lab staging that is not part of this kit, and each one says so when it is absent:
-`cts-rt` needs the CTS package at `C:\BC250\cts`, and `llm-dense` needs the seg0 supervisor kit, the model
-and the llama.cpp build where the BD-114 round left them under `C:\BC250\bd114` and `C:\BC250\llmvram`.
+Some arms stand on lab staging that is not part of this kit, and each one says so when it is absent:
+`cts-rt` needs the CTS package at `C:\BC250\cts`. `llm-dense` and `llm-q35` need the seg0 supervisor kit, the
+models and the llama.cpp build where the BD-114 round and the LLM work left them, under `C:\BC250\bd114`,
+`C:\BC250\llmvram` and `C:\BC250\strata\models`. `hip` uses the same supervisor kit. The arm `stage-clients`
+sends what the `vk-semaphore` and `hip` arms run.
 
 ## The next train
 
@@ -152,7 +160,8 @@ Where two pieces of the workspace did the same job, the suite keeps one of them.
 | `runner.py` | the arm loop: the bounds, the STOP flag, the temperature gate, the health gate, the raw records |
 | `promote.py` | the D3D12 promotion step, idempotent: it moves a leftover attempt directory aside and leaves evidence alone |
 | `summary.py` | the `RESULTS.md` skeleton, the two owner gates and the symptom shapes |
-| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1` and `kill-clients.ps1` (the client of a failed arm) |
+| `stage.py` | sends files to the lab and proves them by SHA-256 on both sides |
+| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1`, `kill-clients.ps1` (the client of a failed arm) and `board-memory-op.ps1 -Step set` and `-Step restore` (the board's memory block) |
 | `test_train_validate.py` | the host tests, against a fake target |
 
 ## Commands

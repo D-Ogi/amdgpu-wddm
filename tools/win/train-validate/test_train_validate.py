@@ -10,6 +10,7 @@ calls, so a renamed parameter fails here and not in the middle of a validation.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unittest
@@ -154,6 +155,32 @@ class ShippedManifest(unittest.TestCase):
     def setUp(self):
         self.data = manifest.load_manifest()
 
+    def test_the_board_memory_operation_comes_last_and_ends_where_it_started(self):
+        # The carve-out moves away from the size the language model arms need, so every arm that reads the
+        # lab at its own carve-out runs before the change, and Restore and its restart close the operation.
+        ids = [arm["id"] for arm in self.data["arms"]]
+        standard = self.data["sets"]["standard"]
+        for arm_id in ("llm-q35", "llm-dense", "hip", "rottr", "w3-high-rt", "vkheaps"):
+            self.assertLess(ids.index(arm_id), ids.index("bm-set-8192"), arm_id)
+        self.assertEqual(standard[-8:], self.data["sets"]["board-memory"])
+        self.assertEqual(standard[-1], "bm-after")
+        arms = {arm["id"]: arm for arm in self.data["arms"]}
+        self.assertEqual(arms["bm-after"]["baseline"]["value"], 12288)
+        self.assertEqual(arms["bm-at-8192"]["baseline"]["value"], 8192)
+        for arm_id in ("bm-set-8192", "bm-restore"):
+            self.assertIn("{kit}/board-memory-op.ps1", arms[arm_id]["run"][0], arm_id)
+            self.assertEqual(arms[arm_id]["expect"], "verified True", arm_id)
+
+    def test_the_staged_clients_reach_the_arms_that_run_them(self):
+        arms = {arm["id"]: arm for arm in self.data["arms"]}
+        staged = " ".join(" ".join(step) for step in arms["stage-clients"]["run"])
+        self.assertIn("{lab_root}\\vksemcheck", staged)
+        self.assertIn("{lab_root}\\hip", staged)
+        self.assertIn("{lab_root}\\vksemcheck", " ".join(arms["vk-semaphore"]["run"][0]))
+        self.assertIn("{lab_root}\\hip\\bin", " ".join(arms["hip"]["run"][0]))
+        for arm_id in ("vk-semaphore", "hip"):
+            self.assertIn("stage-clients", arms[arm_id]["depends_on"], arm_id)
+
     def test_a_session_script_is_never_run_by_the_wsl_launcher(self):
         # `bash` on PATH is System32\bash.exe, which only starts WSL. The manifest says {bash} and the value
         # is a Git bash, or the bare name when this machine has none.
@@ -233,6 +260,32 @@ class ShippedManifest(unittest.TestCase):
     def test_an_unknown_placeholder_is_refused(self):
         with self.assertRaises(ManifestError):
             manifest.expand("{nothing}", {"repo": "x"})
+
+
+class Staging(unittest.TestCase):
+    """stage.py names every file of a staged directory by the path that target.py push gives it on the lab."""
+
+    def test_a_directory_keeps_its_own_name_and_tree_under_the_lab_directory(self):
+        import tempfile
+        import stage
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp) / "bin"
+            (build / "sub").mkdir(parents=True)
+            (build / "llama-bench.exe").write_bytes(b"exe")
+            (build / "sub" / "x.dll").write_bytes(b"dll")
+            model = Path(tmp) / "m.gguf"
+            model.write_bytes(b"model")
+            files = stage.inventory([build, model], "C:\\BC250\\tmp\\train-r\\hip\\")
+            remote = sorted(entry[2] for entry in files)
+            self.assertEqual(remote, ["C:\\BC250\\tmp\\train-r\\hip\\bin\\llama-bench.exe",
+                                      "C:\\BC250\\tmp\\train-r\\hip\\bin\\sub\\x.dll",
+                                      "C:\\BC250\\tmp\\train-r\\hip\\m.gguf"])
+            self.assertEqual(stage.sha256(model), hashlib.sha256(b"model").hexdigest().upper())
+
+    def test_a_missing_source_stops_the_stage_before_any_copy(self):
+        import stage
+        with self.assertRaises(SystemExit):
+            stage.inventory([Path("no-such-directory-here")], "C:\\x")
 
 
 class GateParsing(unittest.TestCase):
@@ -949,8 +1002,13 @@ class ShippedSetEndToEnd(unittest.TestCase):
             return Completed(0, GATE_OK.replace("2026-10-10T07:47:40Z", self.booted[-1]))
 
         def restart(step):
-            self.booted.append(f"2026-10-10T0{len(self.booted) + 7}:00:00Z")
+            self.booted.append(f"2026-10-10T{len(self.booted) + 7:02d}:00:00Z")
+            # The board starts with the size its memory block names: a restart applies a pending change.
+            self.carve_out[0] = self.carve_out[1]
             return Completed(0, f"boot {self.booted[-2]}\nrestart in 5 s")
+
+        # The board memory of the fake lab: [active MiB, next start MiB, the backup the first write saved].
+        self.carve_out = [12288, 12288, None]
 
         replies = [
             ("mon.py", Completed(0, "no stop request")),
@@ -975,8 +1033,18 @@ class ShippedSetEndToEnd(unittest.TestCase):
             ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("vk-smoke.ps1", Completed(0, "driverInfo = Mesa 26.3.0-devel (git-18e0f56be7)")),
             ("x86-d3d11-smoke.ps1", Completed(0, "exit 0 after 12.0 s")),
-            ("vkheaps.ps1", Completed(0, "vk heaps: device-local 7897 MiB, host 2672 MiB, total 10569 MiB")),
+            ("vkheaps.ps1 -Out C:\\BC250\\tmp\\train-vkheaps-8192",
+             Completed(0, "vk heaps: device-local 7897 MiB, host 2672 MiB, total 10569 MiB")),
+            ("vkheaps.ps1", Completed(0, "vk heaps: device-local 11865 MiB, host 1908 MiB, total 13773 MiB")),
             ("board-memory.ps1", Completed(0, "probe status 0\nwindows ram 7629 MiB")),
+            ("board-memory-op.ps1 -Step read", self.board_read),
+            ("board-memory-op.ps1 -Step set", self.board_write),
+            ("board-memory-op.ps1 -Step restore", self.board_write),
+            ("stage.py", Completed(0, "stage: 2 files, 0 sent, 2 already there, 0 differ after the copy\n"
+                                      "stage OK")),
+            ("vk-semaphore.ps1", Completed(0, "vk-semaphore x64 failures 0\nvk-semaphore x64: PASS")),
+            ("hip.ps1", Completed(0, "hip result vadd ok verdict PASS arm_exit 0 pp512 1402.5 t/s tg128 "
+                                     "151.2 t/s\nBD-110 PASS exit 0, pp512 and tg128 rows")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi pipeline",
              Completed(0, "Using VK_KHR_ray_tracing_pipeline\n631 frames, 10.45 seconds: 60.40 fps")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi query",
@@ -990,6 +1058,8 @@ class ShippedSetEndToEnd(unittest.TestCase):
             ("run-batch.ps1", Completed(1, "list-rt-k97 run=trainr route=direct icd=1D4DAD41 exit=1 "
                                            "complete=True done=140/140 attempts=1 elapsed=8.7s\n"
                                            "counts: Pass=137 NotRun=3")),
+            ("llm-dense.ps1 -Model C:\\BC250\\strata",
+             Completed(0, "llm-dense result verdict PASS arm_exit 0 pp512 491.88 t/s tg128 82.06 t/s")),
             ("llm-dense.ps1", Completed(0, "llm-dense result verdict PASS arm_exit 0 pp512 207.38 t/s "
                                            "tg128 32.94 t/s")),
             ("promote-d3d12.py stage ", Completed(0, "plan written")),
@@ -1005,6 +1075,20 @@ class ShippedSetEndToEnd(unittest.TestCase):
             validate, "make_shell", lambda cwd, base_env=None, writer=print: self.shell))
         self.enterContext(unittest.mock.patch.object(validate, "make_clock", FakeClock))
 
+    def board_read(self, step):
+        active, following, _ = self.carve_out
+        return Completed(0, f"board memory state (before): active {active} MiB, next start {following} MiB, "
+                            f"previous {self.carve_out[2] or 0} MiB, backup False, write True, reason 0, "
+                            f"pending {active != following}\nboard memory done")
+
+    def board_write(self, step):
+        restore = "restore" in step.argv
+        if self.carve_out[2] is None:
+            self.carve_out[2] = self.carve_out[1]
+        self.carve_out[1] = self.carve_out[2] if restore else int(step.argv[step.argv.index("-Target") + 1])
+        word = "restore" if restore else "set"
+        return Completed(0, f"board memory {word}: exit 0, next start {self.carve_out[1]} MiB, verified True")
+
     def test_every_arm_of_the_standard_set_passes_against_the_fake_target(self):
         out = self.tmp / "out"
         code = self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
@@ -1019,7 +1103,11 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 27)
+        self.assertEqual(len(records), 38)
+        values = {row["id"]: row["value"] for row in records}
+        self.assertEqual((values["bm-before"], values["bm-at-8192"], values["bm-after"]), (12288, 8192, 12288),
+                         "the operation moves the board to 8192 MiB and Restore brings it back")
+        self.assertEqual(self.carve_out[:2], [12288, 12288], "the lab ends at the size it started with")
         self.assertEqual([row["value"] for row in records if row["id"] == "uninstall"], [0.0],
                          "the number comes from the inventory after the uninstaller, not before it")
         plans = Path(self.tmp) / "scratch" / "m15" / "native-caps001" / "plans"
@@ -1063,7 +1151,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
                             "--train", "b99", "--attempt-base", "1", "--set", "rottr=12.0"])
         results = (out / "RESULTS.md").read_text(encoding="utf-8")
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
-        self.assertIn("12.0 is under 49.63", results)
+        self.assertIn("12.0 is under 50.98", results)
 
     def test_the_whole_set_is_met_once_the_operator_fills_the_benchmark_score_in(self):
         out = self.tmp / "out"

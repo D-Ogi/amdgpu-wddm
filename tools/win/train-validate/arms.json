@@ -9,7 +9,7 @@
     "caps": "{ws}/scratch/m15/native-caps001",
     "pathtrace": "{ws}/scratch/pathtrace",
     "plug": "{ws}/scratch/smartplug/plug.py",
-    "adapter_dir": "adapter136",
+    "adapter_dir": "adapter137",
     "lab_root": "C:\\BC250\\tmp\\train-{release}",
     "lab_pkg": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}",
     "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
@@ -39,8 +39,10 @@
       "kmdver",
       "preflight",
       "pin-baseline",
+      "stage-clients",
       "vk-smoke",
       "vkheaps",
+      "vk-semaphore",
       "x86-smoke",
       "cache-0",
       "q2rtx-pipeline",
@@ -52,10 +54,19 @@
       "dxrpt",
       "cts-rt",
       "llm-dense",
+      "llm-q35",
+      "hip",
       "d3d12-promote",
       "rottr",
       "w3-high-rt",
-      "board-memory"
+      "bm-before",
+      "bm-set-8192",
+      "bm-restart-1",
+      "bm-at-8192",
+      "vkheaps-8192",
+      "bm-restore",
+      "bm-restart-2",
+      "bm-after"
     ],
     "install": [
       "push-zip",
@@ -90,7 +101,26 @@
       "cache-2"
     ],
     "llm": [
-      "llm-dense"
+      "llm-dense",
+      "llm-q35"
+    ],
+    "hip": [
+      "stage-clients",
+      "hip"
+    ],
+    "semaphore": [
+      "stage-clients",
+      "vk-semaphore"
+    ],
+    "board-memory": [
+      "bm-before",
+      "bm-set-8192",
+      "bm-restart-1",
+      "bm-at-8192",
+      "vkheaps-8192",
+      "bm-restore",
+      "bm-restart-2",
+      "bm-after"
     ]
   },
   "arms": [
@@ -341,6 +371,43 @@
       "gate_after": false
     },
     {
+      "id": "stage-clients",
+      "title": "Stage the clients that are not in the package: vksemcheck, the HIP llama.cpp build, TinyLlama",
+      "kind": "transfer",
+      "bound_s": 900,
+      "why_not_a_trial": "File copies over ssh with a hash of every file on both sides, no GPU work and no trial. A file the lab already holds with the same hash is not sent again (the model, 637 MB, was staged by the M16 sessions).",
+      "run": [
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "{lab_root}\\vksemcheck",
+          "{ws}/scratch/build/vksemcheck/vksemcheck-x64.exe",
+          "{ws}/scratch/build/vksemcheck/vksemcheck-x86.exe"
+        ],
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "{lab_root}\\hip",
+          "{ws}/scratch/m16-hip/step3/out3/cmake-hip/bin"
+        ],
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "C:\\BC250\\tmp\\models",
+          "{ws}/scratch/m9/models/tinyllama-1.1b-chat-v1.0.Q4_0.gguf"
+        ]
+      ],
+      "expect": "stage OK",
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": false,
+      "note": "Every step must end with 'stage OK'. The HIP build directory holds no amdhip64.dll on purpose: the benchmark must load the runtime from the installed tools\\hip on PATH, which the hip arm checks."
+    },
+    {
       "id": "vk-smoke",
       "title": "Vulkan smoke on the installed system ICD, x64 and x86",
       "kind": "lab",
@@ -383,14 +450,53 @@
         "unit": "MiB"
       },
       "baseline": {
-        "value": 7897,
+        "value": 11865,
         "tolerance_abs": 200,
-        "source": "the 8192 MiB carve-out this train is cut on: the application segment is the carve-out less the POST framebuffer, the reserved tail and the page tables, and RADV's split mode advertises two thirds of local plus shared as its local heap. At the 12288 MiB carve-out the same arm must read about 11865 MiB, which is the reading that proves the heaps are not frozen any more."
+        "source": "the 12288 MiB carve-out of the lab from 2026-10-10 16:13Z on: the application segment is the carve-out less the POST framebuffer, the reserved tail and the page tables, and RADV's split mode advertises two thirds of local plus shared as its local heap (the host model of the vram-caps wagon of tester.27). Until tester.27 the heaps were frozen at 8017.5 MiB whatever the carve-out; the vkheaps-8192 arm reads the same heap at 8192 MiB, where it must be about 7897 MiB."
       },
       "depends_on": [
         "vk-smoke"
       ],
       "gate_after": false
+    },
+    {
+      "id": "vk-semaphore",
+      "title": "Win32 semaphore export and import across two processes, on the installed Vulkan drivers",
+      "kind": "lab",
+      "bound_s": 170,
+      "kill": [
+        "vksemcheck-x64",
+        "vksemcheck-x86"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vk-semaphore.ps1",
+          "-Dir",
+          "{lab_root}\\vksemcheck"
+        ]
+      ],
+      "expect": "vk-semaphore x64: PASS",
+      "result": {
+        "regex": "vk-semaphore x64 failures (\\d+)",
+        "name": "x64 runs that failed",
+        "unit": "runs"
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the first lab run of this check (tester.27, mesa 2fbc4913 in the system ICD). Its host gate drove the same paths against a KMT mock; the client passed every check on another vendor's driver at build time (tools/win/vksemcheck/build.ps1)."
+      },
+      "depends_on": [
+        "stage-clients",
+        "vk-smoke"
+      ],
+      "failure_classes": [
+        "BD-105"
+      ],
+      "note": "x64 in session 0 and in the interactive session decide. The x86 run is the negative control: the 32-bit ICD of tester.27 is the earlier build, so its named cell is expected to fail or to end the process, and the arm reports that and decides nothing on it."
     },
     {
       "id": "x86-smoke",
@@ -470,9 +576,9 @@
         "unit": "fps"
       },
       "baseline": {
-        "value": 60.4,
+        "value": 56.87,
         "tolerance_pct": 10,
-        "source": "b26 (tester.24) step 8: 631 frames, 10.45 s, 60.40 fps"
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: q2rtx-pipeline 56.87 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
       },
       "depends_on": [
         "preflight"
@@ -518,9 +624,9 @@
         "unit": "fps"
       },
       "baseline": {
-        "value": 60.86,
+        "value": 56.78,
         "tolerance_pct": 10,
-        "source": "b26 (tester.24) step 8: 631 frames, 10.37 s, 60.86 fps"
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: q2rtx-query 56.78 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
       },
       "depends_on": [
         "preflight"
@@ -637,9 +743,9 @@
         "unit": "fps"
       },
       "baseline": {
-        "value": 60.26,
+        "value": 56.66,
         "tolerance_pct": 10,
-        "source": "b25 (tester.23) B1 warm 1: 631 frames, 10.47 s, 60.26 fps"
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: q2rtx-warm 56.66 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
       },
       "depends_on": [
         "cache-1"
@@ -708,9 +814,9 @@
         "unit": "fps"
       },
       "baseline": {
-        "value": 19.13,
+        "value": 18.78,
         "tolerance_pct": 10,
-        "source": "b26 (tester.24) 20261009T140217Z-dxrpt: 436 frames in 30.0 s, 19.13 fps, 126.9 Mrays/s"
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: dxrpt 18.78 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
       },
       "depends_on": [
         "preflight"
@@ -754,7 +860,7 @@
       "baseline": {
         "value": 137,
         "tolerance_abs": 0,
-        "source": "b27 (tester.25) cts-rt-k97.txt: 137 Pass and 3 NotRun of 140, case for case the same as b25 and b26"
+        "source": "b28 (tester.26) cts-rt: 137 Pass and 3 NotRun of 140, case for case the same as b25, b26 and b27"
       },
       "depends_on": [
         "preflight"
@@ -792,9 +898,9 @@
         "unit": "t/s"
       },
       "baseline": {
-        "value": 207.38,
+        "value": 207.81,
         "tolerance_pct": 10,
-        "source": "BD-114 lab round 1 of 2026-10-10, arm C on the candidate kernel driver (gemma-4-12b-it-qat-q4_0, -ub 512 -p 512 -n 128 -r 3): pp512 207.38 +- 0.52 t/s, tg128 32.94 +- 2.76 t/s in 63.4 s"
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: llm-dense pp512 207.81 t/s, tg128 33.07 t/s, the first run of this arm on a shipped kernel image. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
       },
       "depends_on": [
         "preflight"
@@ -803,6 +909,86 @@
         "BD-114"
       ],
       "note": "The regression of this release's own fix: the same model, batch and repeat count that stopped Windows on 0.7.216.100-tester.25. It runs through the seg0 supervisor kit on the lab, which owns the bound, the thermal rule and the cleanup."
+    },
+    {
+      "id": "llm-q35",
+      "title": "Qwen3.6-35B-A3B IQ2_M fully offloaded at the 12 GiB carve-out",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-bench"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/llm-dense.ps1",
+          "-Model",
+          "C:\\BC250\\strata\\models\\Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+          "-ModelSha",
+          "2BE7EF1ED7E1AF8B10D3829102CF9A6C2BD5DDB64D675B4ECE23A60799403D43",
+          "-Repeats",
+          "2",
+          "-Tag",
+          "train-llm-q35",
+          "-Deadline",
+          "100",
+          "-WorkloadStop",
+          "75"
+        ]
+      ],
+      "expect": "verdict PASS",
+      "result": {
+        "regex": "pp512 ([\\d.]+) t/s",
+        "name": "prompt tokens a second",
+        "unit": "t/s"
+      },
+      "baseline": {
+        "value": 491.88,
+        "tolerance_pct": 10,
+        "source": "scratch/llm-vram/RESULT-12g.md arm g35-up-ctl-512 of 2026-10-10 (12288 MiB, 1500 MHz ceiling, upstream b11539, -ub 512, r=2): pp512 491.88 +- 0.48, tg128 82.06 +- 1.95 t/s, 41 of 41 layers on the GPU. The 505 MiB that the full offload lacked was at the 8192 MiB carve-out (BD-096)."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-114"
+      ],
+      "note": "Needs the 12288 MiB carve-out, so it runs before the board-memory arms move it. The model file (11.5 GB) is hashed against its pin before and after the run, about 20 s each way, outside the supervisor's 100 s deadline."
+    },
+    {
+      "id": "hip",
+      "title": "HIP runtime on PATH: vadd, then llama-bench of the HIP llama.cpp build (BD-110)",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-bench",
+        "vadd"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/hip.ps1",
+          "-Bin",
+          "{lab_root}\\hip\\bin"
+        ]
+      ],
+      "expect": "BD-110 PASS",
+      "result": {
+        "regex": "pp512 ([\\d.]+) t/s",
+        "name": "HIP prompt tokens a second",
+        "unit": "t/s"
+      },
+      "depends_on": [
+        "stage-clients",
+        "preflight"
+      ],
+      "note": "The first run of the HIP llama.cpp backend on a released runtime (amdhip64.dll 80FB9D6B, the BD-110 co-loader fix f183f996). No baseline: no earlier run of this benchmark completed. The arm prints 'BD-110 PASS' or 'BD-110 FAIL' with the first error line of the runtime log (BC250_HIP_LOG=1)."
     },
     {
       "id": "d3d12-promote",
@@ -902,9 +1088,9 @@
         "how": "the benchmark result screen, read from a half-scale shot or an fbdump at the end of the session"
       },
       "baseline": {
-        "value": 55.15,
+        "value": 56.65,
         "tolerance_pct": 10,
-        "source": "b26 native-caps517 (tester.24): 90.69 / 27.19 / 62.86, overall 55.15"
+        "source": "b28 native-caps539 (tester.26), cold shader cache: 97.20 / 25.83 / 63.61, overall 56.65 (542 on the warm cache: 71.90). b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
       },
       "depends_on": [
         "d3d12-promote"
@@ -956,9 +1142,9 @@
         "how": "the rate of ETW window B, which the operator opens with the action note:world and holds for its 120 s, with the operator driving the game from half-scale shots"
       },
       "baseline": {
-        "value": 12.8,
+        "value": 12.9,
         "tolerance_pct": 12,
-        "source": "b27 native-caps530 (tester.25): window B 12.8 present/s at a mean 1353 MHz, 9.50 per GHz; b26 519 12.5/s; b25 516 13.5/s. The 46.0 of the R102 40 CU baseline is HIGH without ray tracing, which is not this arm's workload."
+        "source": "b28 native-caps540 (tester.26): window B 12.9 present/s over 120.4 s at a mean 1336 MHz, 9.66 per GHz; b27 530 12.8/s; b26 519 12.5/s. The 46.0 of the R102 40 CU baseline is HIGH without ray tracing, which is not this arm's workload."
       },
       "depends_on": [
         "d3d12-promote"
@@ -966,11 +1152,20 @@
       "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line."
     },
     {
-      "id": "board-memory",
-      "title": "The board memory acceptance: 12288 MiB in the control application, a restart, then Restore",
-      "kind": "operator",
-      "bound_s": 1200,
+      "id": "bm-before",
+      "title": "Board memory before the change: the card's state, the probe, Windows RAM",
+      "kind": "lab-read",
+      "bound_s": 150,
       "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
         [
           "python",
           "{target}",
@@ -980,21 +1175,298 @@
           "all"
         ]
       ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-before.png"
+          ],
+          "optional": true
+        }
+      ],
       "result": {
-        "operator": true,
-        "name": "next-start size after the change",
-        "unit": "MiB",
-        "how": "the Board memory card of the control application, read at the four steps of the operation: before the change, after the change and before the restart, after the restart, and after Restore and a second restart. The lab script of this arm is the read-only reading the operator takes at each step."
-      },
-      "baseline": {
-        "value": 12288,
-        "tolerance_abs": 0,
-        "source": "the first hardware acceptance of this control. Nothing measured it before b29: every gate of the wagon is a host gate on a machine without a board."
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
       },
       "depends_on": [
         "slots"
       ],
-      "note": "The runner never starts this one. It needs the control application's card, an elevated confirmation and two restarts of Windows, and the owner's physical CMOS clear is its only recovery if the board does not start again. The operator runs the reading command of this arm at each step and fills the value in afterwards."
+      "gate_after": false,
+      "note": "The start of the operation: the lab is at 12288 MiB for the LLM work, so the change is 12288 -> 8192 and Restore brings it back."
+    },
+    {
+      "id": "bm-set-8192",
+      "title": "Board memory 8192 MiB through the control application's elevated verb",
+      "kind": "lab",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "set",
+          "-Target",
+          "8192",
+          "-Render"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-pending-8192.png"
+          ],
+          "optional": true
+        }
+      ],
+      "expect": "verified True",
+      "result": {
+        "regex": "board memory set: exit (\\d+)",
+        "name": "verb exit code",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the verb's contract: 0 means written and read back"
+      },
+      "depends_on": [
+        "bm-before"
+      ],
+      "note": "Writes the board's memory block (extended CMOS) through the driver's RUN_BOARD_MEMORY escape, with the owner's consent of 2026-10-10 for this change. The token is computed by the application's own code. The click and the confirmation dialog of the card are not exercised. Recovery if the board does not start: the owner's CMOS clear, which also resets the boot order."
+    },
+    {
+      "id": "bm-restart-1",
+      "title": "Restart: the board starts with 8192 MiB",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "board memory 8192 MiB"
+        ]
+      ],
+      "depends_on": [
+        "bm-set-8192"
+      ],
+      "gate_after": true
+    },
+    {
+      "id": "bm-at-8192",
+      "title": "Board memory after the restart: 8192 MiB active, Windows RAM, segment size",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-after-8192.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "bm-restart-1"
+      ],
+      "gate_after": false,
+      "baseline": {
+        "value": 8192,
+        "tolerance_abs": 0,
+        "source": "the size bm-set-8192 asked for"
+      }
+    },
+    {
+      "id": "vkheaps-8192",
+      "title": "The Vulkan heaps at the 8192 MiB carve-out",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vkheaps.ps1",
+          "-Out",
+          "C:\\BC250\\tmp\\train-vkheaps-8192"
+        ]
+      ],
+      "result": {
+        "regex": "vk heaps: device-local (\\d+) MiB",
+        "name": "DEVICE_LOCAL heap",
+        "unit": "MiB"
+      },
+      "baseline": {
+        "value": 7897,
+        "tolerance_abs": 200,
+        "source": "the 8192 MiB carve-out: the host model of the vram-caps wagon of tester.27. With the vkheaps arm at 12288 MiB, the two readings must differ by about the 4096 MiB the board moved."
+      },
+      "depends_on": [
+        "bm-at-8192"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "bm-restore",
+      "title": "Board memory Restore through the control application's elevated verb",
+      "kind": "lab",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "restore",
+          "-Render"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-pending-restore.png"
+          ],
+          "optional": true
+        }
+      ],
+      "expect": "verified True",
+      "result": {
+        "regex": "board memory restore: exit (\\d+)",
+        "name": "verb exit code",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the verb's contract: 0 means written and read back"
+      },
+      "depends_on": [
+        "bm-at-8192"
+      ],
+      "note": "Restore writes back the block saved before the first write, which is 12288 MiB on this lab."
+    },
+    {
+      "id": "bm-restart-2",
+      "title": "Restart: the board starts with the restored size",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "board memory restore"
+        ]
+      ],
+      "depends_on": [
+        "bm-restore"
+      ],
+      "gate_after": true
+    },
+    {
+      "id": "bm-after",
+      "title": "Board memory after Restore and the restart: 12288 MiB active again",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vkheaps.ps1",
+          "-Out",
+          "C:\\BC250\\tmp\\train-vkheaps-restored"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-after-restore.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "bm-restart-2"
+      ],
+      "gate_after": false,
+      "baseline": {
+        "value": 12288,
+        "tolerance_abs": 0,
+        "source": "the size of the backup that Restore wrote, the lab's carve-out before the operation"
+      }
     }
   ],
   "failure_classes": [

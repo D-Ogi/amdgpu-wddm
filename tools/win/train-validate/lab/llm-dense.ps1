@@ -10,6 +10,8 @@
 #   -Deadline        the supervisor's own bound, inside the arm's bound
 #   -WorkloadStop    when the supervisor stops the child, so that its cleanup is inside the bound
 #   -Tag             the name of the run directory under <Root>\runs
+#   -ModelSha        the pin of -Model, in place of its entry in -ModelPins (a model that file does not name)
+#   -Repeats         llama-bench -r, when -BenchArgs is not given
 #
 # It prints one result line that the train validation reads:
 #   llm-dense result verdict <PASS|FAILED> arm_exit <n> pp512 <t/s> tg128 <t/s>
@@ -18,22 +20,27 @@
 param(
     [string]$Model = 'C:\BC250\llmvram\models\gemma-4-12b-it-qat-q4_0.gguf',
     [string]$Exe = 'C:\BC250\llmvram\bin-upstream\llama-bench.exe',
-    [string]$BenchArgs = '-ub 512 -p 512 -n 128 -r 3',
+    [string]$BenchArgs = '',
+    [ValidateRange(1, 5)][int]$Repeats = 3,
     [string]$Root = 'C:\BC250\bd114',
     [string]$Pins = 'BD114-pins-gemma-nomodel.json',
     [string]$ModelPins = 'BD114-pins-all.json',
+    [ValidatePattern('^([0-9A-Fa-f]{64})?$')][string]$ModelSha = '',
     [string]$Tag = 'train-llm-dense',
     [ValidateRange(30, 170)][int]$Deadline = 160,
     [int]$WorkloadStop = 120
 )
 $ErrorActionPreference = 'Continue'
 function Encode([string]$Text) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Text)) }
+# -BenchArgs is built here and not passed in: a value that starts with a dash does not survive the way
+# through ssh and powershell -File as one argument.
+if (-not $BenchArgs) { $BenchArgs = "-ub 512 -p 512 -n 128 -r $Repeats" }
 "utc $([DateTime]::UtcNow.ToString('o'))"
 $kit = Join-Path $Root 'kit'
 $supervisor = Join-Path $kit 'seg0-arm3.ps1'
 $cli = 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe'
 foreach ($needed in @($supervisor, (Join-Path $kit 'seg0-operations.ps1'), $Exe, $Model,
-        (Join-Path $Root $Pins), (Join-Path $Root $ModelPins))) {
+        (Join-Path $Root $Pins), $(if ($ModelSha) { $Model } else { Join-Path $Root $ModelPins }))) {
     if (-not (Test-Path -LiteralPath $needed)) { "MISSING $needed"; exit 2 }
 }
 "supervisor $supervisor sha256 $((Get-FileHash -LiteralPath $supervisor -Algorithm SHA256).Hash)"
@@ -83,7 +90,8 @@ if ($running -and (Test-Path -LiteralPath $running)) {
 } else {
     "MISSING the running kernel image ($imagePath)"; exit 2
 }
-$modelPin = ((Get-Content -LiteralPath (Join-Path $Root $ModelPins) -Raw | ConvertFrom-Json).PSObject.Properties[$Model]).Value
+$modelPin = if ($ModelSha) { $ModelSha.ToUpperInvariant() } else {
+    ((Get-Content -LiteralPath (Join-Path $Root $ModelPins) -Raw | ConvertFrom-Json).PSObject.Properties[$Model]).Value }
 if (-not $modelPin) { "MISSING pin for $Model in $ModelPins"; exit 2 }
 $started = Get-Date
 $before = (Get-FileHash -LiteralPath $Model -Algorithm SHA256).Hash
