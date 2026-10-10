@@ -5,6 +5,21 @@ $icd=if($env:BC250_RADV_SOURCE){$env:BC250_RADV_SOURCE}else{Join-Path $Workspace
 $radvBuild=if($env:BC250_RADV_BUILD){$env:BC250_RADV_BUILD}else{Join-Path $Workspace 'scratch\m12\mesa-current-build'}
 $umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Workspace 'scratch\m13-native-zink-src'}
 $umdBuild=if($env:BC250_UMD_BUILD){$env:BC250_UMD_BUILD}else{Join-Path $Workspace 'scratch\m13-native-zink-build'}
+# The analysis gates re-run an actual build command with /analyze, and msvc_analysis.py takes the include
+# lookup from the INCLUDE variable. The d3d10umd frontend includes d3d10umddi.h, which is in the WDK and not
+# in the SDK that vcvars sets up, so a run from a plain MSVC shell failed that gate on the operator's
+# environment and not on the tree. The kits are in the workspace, so the gate takes them from there.
+$wdkInclude=Join-Path $Workspace 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include'
+if(Test-Path -LiteralPath $wdkInclude){
+    # The package holds a version directory and a wdf directory side by side; only the version one is a kit.
+    $kitVersion=Get-ChildItem -LiteralPath $wdkInclude -Directory | Where-Object { $_.Name -match '^\d+(\.\d+)+$' } | Sort-Object Name | Select-Object -Last 1
+    if($kitVersion){
+        $add=@('um','shared','km') | ForEach-Object { Join-Path $kitVersion.FullName $_ } | Where-Object { Test-Path -LiteralPath $_ }
+        $have=($env:INCLUDE -split ';')
+        $missing=@($add | Where-Object { $have -notcontains $_ })
+        if($missing.Count){ $env:INCLUDE=(($missing+$have) | Where-Object { $_ }) -join ';' }
+    }
+}
 $clock=[Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $Out | Out-Null
 $results=@()
