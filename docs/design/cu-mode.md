@@ -1,8 +1,51 @@
-# CU mode: 24 or 40 compute units (KMD 0.7.174)
+# CU mode: 24 or 40 compute units
 
-The BC-250 leaves the factory with 24 of its 40 compute units enabled: in each of the four shader arrays
-(2 SE x 2 SA), WGPs 3 and 4 are marked inactive. The `bc250-40cu-unlock` reference showed that two
-registers per shader array, written together, give all 40 to the dispatcher:
+## In short
+
+- The GPU of the BC-250 has 40 compute units (CUs). The board leaves the factory with 24 of them enabled.
+- The GPU has four shader arrays with five WGPs each, and one WGP holds two CUs. In each shader array, the
+  firmware marks WGPs 3 and 4 inactive. That is 4 x 3 x 2 = 24 CUs.
+- Our kernel driver can enable all 40. When the driver starts, it writes two registers in each shader array
+  and reads them back.
+- The unlock does not flash the BIOS. It does not write the SPI flash, CMOS or NVRAM, and it does not change a
+  clock or a voltage. The only lasting state is one registry value. Remove the value, restart, and the GPU
+  has 24 CUs again.
+- The default is 24. You choose 40.
+- A 40 CU start must reach a healthy desktop. If it does not, the next start goes back to 24 by itself and
+  records why.
+
+## How to turn on 40 CUs
+
+With the tester package, use one of these:
+
+- **When you install:** `install.cmd -CuMode 40`.
+- **After the install:** open the amdgpu-wddm control app, go to the Graphics page, select 40 compute units,
+  and restart Windows when the app offers it.
+
+After the restart, the start confirmation task (the small blue window after logon) confirms the 40 CU start
+once the desktop has run healthy for one minute. Do not end that task.
+
+To check the result:
+
+- A Vulkan application started with `RADV_DEBUG=info` prints `num_cu = 40`.
+- `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` holds `CuModeLastApplied = 40` and
+  `CuModeConfirmed`.
+- `CuModeLastReason` tells why a start applied 24. The reasons are in the "Settings and the boot guard" section
+  below.
+
+To go back to 24, select 24 on the same page, or remove the `CuMode` value, and restart.
+
+If one WGP of your board does not work, `CuDisableWgp` keeps it masked while the others run (see the settings
+table below). Only the WGPs that the firmware disables are accepted there.
+
+The lab unit first applied 40 CUs on a cold boot on 2026-09-30 (KMD 0.7.179.1: 40 counted on all four shader
+arrays). The release validation installs with `-CuMode 40` and checks the applied mode before it measures.
+Each game and LLM result that we publish states the CU count it ran with.
+
+## How it works
+
+The `bc250-40cu-unlock` reference showed that two registers per shader array, written together, give all 40
+to the dispatcher:
 
 | Register (regcalc, BAR5 byte offset) | Field | Stock on unit A | 40 CU |
 |---|---|---|---|
@@ -13,7 +56,7 @@ Either register alone changes nothing measurable (the reference's four-state A/B
 M1(c) and M4 (M4 also records that the BIOS leaves the SPI mask at `0xFFFF` and that it reads `0x7` only after
 amdgpu's init, with no host write to it: facts M17).
 
-This change adds the mode as a driver setting, applied at device start. There is no live switch: the mode
+KMD 0.7.174 added the mode as a driver setting, applied at device start. There is no live switch: the mode
 changes on the next start of the driver, which normally means a reboot.
 
 PROVENANCE: register names, values and the write point come from duggasco/bc250-40cu-unlock (GPL-2.0); no code was imported.
@@ -204,6 +247,9 @@ Even so, `cumode restart-device` (DICS_PROPCHANGE) is opt-in and marked lab vali
 default.
 
 ## Lab validation plan (each step at most three minutes)
+
+This is the original plan, kept as written. The cold-boot result on KMD 0.7.179.1 is in the "Where it runs"
+section above.
 
 | Step | Action | Pass |
 |---|---|---|
