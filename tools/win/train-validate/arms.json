@@ -373,9 +373,9 @@
         "SESSION_LIMIT_FPS": "240",
         "SESSION_ETW_ARGS": "-Seconds 40 -LatestB 900 -FpsSeconds 120"
       },
-      "result": {"operator": true, "name": "world average", "unit": "fps",
-                 "how": "the session sampler's own rate line, with the operator driving the game from half-scale shots"},
-      "baseline": {"value": 46.0, "tolerance_pct": 12, "source": "R102 40 CU baseline: W3 LOW 85.9, HIGH 46.0"},
+      "result": {"operator": true, "name": "world rate", "unit": "present/s",
+                 "how": "the rate of ETW window B, which the operator opens with the action note:world and holds for its 120 s, with the operator driving the game from half-scale shots"},
+      "baseline": {"value": 12.8, "tolerance_pct": 12, "source": "b27 native-caps530 (tester.25): window B 12.8 present/s at a mean 1353 MHz, 9.50 per GHz; b26 519 12.5/s; b25 516 13.5/s. The 46.0 of the R102 40 CU baseline is HIGH without ray tracing, which is not this arm's workload."},
       "depends_on": ["d3d12-promote"],
       "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line."
     }
