@@ -194,6 +194,12 @@ def parse_gate(text: str) -> GateResult:
     return result
 
 
+# What a session script prints when another session holds the lab's one-session-at-a-time lock. The arm did
+# not start, so it has nothing to restore.
+REFUSED_MARKS = (
+    "is still running: wait for its end",
+    "a session holds the lock",
+)
 THERMAL_MARKS = (
     re.compile(r"end:\s*reason\s*thermal", re.I),
     re.compile(r"thermal stop", re.I),
@@ -542,6 +548,16 @@ class Runner:
                     # A restore that did not run leaves the lab carrying this arm's setting. The arm's own
                     # answer stands, and the reader is told.
                     restore_failed.append(f"the restore step ({step.text()}) ended rc {done.rc}")
+                elif any(mark in done.text for mark in REFUSED_MARKS):
+                    # The session script refused the arm because another session holds its lock: nothing of
+                    # this arm ran. Its post steps are restores of shared game settings, and in the b28 run
+                    # one of them (RotTR vsync back to 1) landed on a session another run had just started.
+                    # An arm that did not start restores nothing.
+                    record.verdict, record.reason = FAIL, (
+                        "another session holds the session lock, so this arm did not start and its restore "
+                        "steps did not run: " + done.text.strip().splitlines()[-1])
+                    failed = True
+                    break
                 else:
                     record.verdict = BOUND if done.timed_out else FAIL
                     where = "" if step.phase == "run" else f" of the {step.phase} step"

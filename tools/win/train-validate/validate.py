@@ -265,6 +265,8 @@ def command_run(args: argparse.Namespace) -> int:
     print("")
     print(text)
     print(f"[out ] {out_dir.as_posix()}")
+    # An arm that ran again supersedes its own earlier record: the last attempt is the arm's verdict.
+    records, _ = summary_module.latest_attempts(records)
     for gate in summary_module.gates(records, plan):
         if not gate.met:
             print(f"[gate] {gate.title}: NOT MET. {gate.detail}")

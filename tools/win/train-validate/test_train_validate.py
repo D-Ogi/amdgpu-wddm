@@ -367,6 +367,23 @@ class ArmLoop(unittest.TestCase):
         records = run.run(arms or self.plan.arms)
         return run, shell, {record.id: record for record in records}
 
+    def test_an_arm_the_session_lock_refused_restores_nothing(self):
+        # Two runs of the suite at once: the second one's game arm is refused by the lab's one-session lock.
+        # Nothing of it ran, so its restore steps must stay away from the settings of the live session. In
+        # the b28 round such a post step put RotTR's vsync back to 1 under a benchmark that had just started.
+        run, shell, records = self.run_with([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("vk-smoke.ps1", Completed(0, "smoke ok")),
+            ("pt-run.ps1", Completed(0, "631 frames, 10.45 seconds: 60.40 fps")),
+            ("run-game.sh", Completed(4, "== the game\nanother session (pid 14672) is still running: "
+                                         "wait for its end")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        self.assertEqual(records["game"].verdict, FAIL)
+        self.assertIn("another session holds the session lock", records["game"].reason)
+        self.assertEqual(len(shell.said("vsync.ps1")), 1, "only the pre step ran; the restore did not")
+
     def test_the_whole_sequence_passes_and_the_game_arm_keeps_its_restore(self):
         run, shell, records = self.run_with([
             ("mon.py stop?", Completed(0, "no stop request")),
@@ -713,6 +730,32 @@ class Summary(unittest.TestCase):
                                     operator_values={"game": 56.4})
         self.assertIn("**Rise of the Tomb Raider**: MET", text)
         self.assertIn("56.4 fps", text)
+
+    def test_an_arm_that_ran_again_keeps_only_its_last_record(self):
+        # A --resume run appends a second record for a repaired arm. The last one is the verdict; the first
+        # one is history and must not stand in the table, in the gates or in the counts (b28, 2026-10-10).
+        records = self.records([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("vk-smoke.ps1", Completed(1, "smoke broken")),
+            ("pt-run.ps1", Completed(0, "631 frames, 10.45 seconds: 60.40 fps")),
+            ("run-game.sh", Completed(0, "status ok")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        again = self.records([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("vk-smoke.ps1", Completed(0, "smoke ok")),
+            ("pt-run.ps1", Completed(0, "631 frames, 10.45 seconds: 60.40 fps")),
+            ("run-game.sh", Completed(0, "status ok")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        latest, earlier = summary_module.latest_attempts(records + again)
+        self.assertEqual([r.verdict for r in latest], [r.verdict for r in again])
+        self.assertEqual({r.id for r in earlier}, {r.id for r in records})
+        text = summary_module.write(self.plan, records + again, self.tmp / "out", train="b99")
+        self.assertIn("## Earlier attempts of an arm that ran again", text)
+        self.assertNotIn("| 7 |", text)
 
     def test_a_number_given_on_the_command_line_for_a_parsed_arm_says_where_it_came_from(self):
         records = self.records([
@@ -1199,6 +1242,20 @@ class Budgets(unittest.TestCase):
         shell = FakeShell(replies, clock=self.clock, cost=cost)
         return Runner(plan or self.plan, shell, self.tmp / "out", clock=self.clock,
                       writer=lambda *a: None, python="python"), shell
+
+    def test_a_game_arm_gives_its_session_room_to_pull_the_evidence(self):
+        # The session script holds the owner's game bound itself and then pulls the deferred ICD logs, the
+        # ETW files and the closure. In the b28 run those pulls were still going 10 minutes after the game
+        # had closed, and the host backstop (bound + 45 s) marked a finished benchmark BOUND.
+        data = manifest.load_manifest()
+        plan = manifest.build(fake_package(self.tmp), data, arm_ids=["rottr"], attempt_base=700,
+                              python="python")
+        arm = plan.by_id("rottr")
+        run_steps = [step for step in arm.steps if step.phase == "run"]
+        self.assertTrue(run_steps)
+        floor = arm.bound_s + plan.limits["host_grace_s"] + plan.limits["game_evidence_s"]
+        for step in run_steps:
+            self.assertGreaterEqual(step.timeout_s, floor, step.text())
 
     def test_a_cool_down_whose_reads_take_ninety_seconds_still_ends_on_its_budget(self):
         # The lab answers every temperature read after 90 s and reports 85 C. The budget is 60 s here (420 s

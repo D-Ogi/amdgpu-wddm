@@ -134,9 +134,26 @@ def fill_operator_values(records: list[ArmRecord], operator_values: dict) -> lis
     return notes
 
 
+def latest_attempts(records: list[ArmRecord]) -> tuple[list[ArmRecord], list[ArmRecord]]:
+    """Split the records into the last attempt of each arm and the attempts it superseded.
+
+    A `--resume` run appends a new record for every arm it runs again, so an arm that failed, was repaired
+    and then passed holds two records. The last one is the arm's verdict; the earlier ones are its history
+    and are reported as such. Without this, a repaired arm kept its old FAIL in the table, in the gates and
+    in the exit code (b28 validation, 2026-10-10).
+    """
+    last: dict[str, int] = {}
+    for index, record in enumerate(records):
+        last[record.id] = index
+    latest = [r for i, r in enumerate(records) if last[r.id] == i]
+    earlier = [r for i, r in enumerate(records) if last[r.id] != i]
+    return latest, earlier
+
+
 def write(plan, records: list[ArmRecord], out_dir: Path, texts: dict | None = None,
           operator_values: dict | None = None, train: str = "") -> str:
     texts = texts or {}
+    records, superseded = latest_attempts(records)
     fill_operator_values(records, operator_values or {})
     package = plan.package
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
@@ -206,6 +223,13 @@ def write(plan, records: list[ArmRecord], out_dir: Path, texts: dict | None = No
                      + ("" if record.value_read or not record.value_name else
                         f" Fill it in with `validate.py summary --out <dir> --package <dir> "
                         f"--set {record.id}=<{record.value_name}>`."))
+    if superseded:
+        lines += ["", "## Earlier attempts of an arm that ran again", "",
+                  "Each row is a record of this same directory that a later attempt of its arm superseded. "
+                  "They are the history of the round, not its verdict.", "",
+                  "| Arm | Verdict | What ended it |", "|---|---|---|"]
+        for record in superseded:
+            lines.append(f"| `{record.id}` | {record.verdict} | {record.reason or 'see the raw log'} |")
     lines += ["", "## Evidence", "",
               f"All raw logs are under `{out_dir.as_posix()}`, one directory per arm, with the arm's own "
               f"output in `arm.txt`, each step in `step-NN-<phase>.txt`, the health gate in `gate.txt` and "
