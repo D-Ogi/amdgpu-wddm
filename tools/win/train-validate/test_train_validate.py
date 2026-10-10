@@ -34,6 +34,7 @@ counters: faults=0 fence_timeouts=0 reset_engine=0 hang_recovery=0
 display: events=0 id4101=0
 bugchecks: 0
 appcrashes: 0
+hangrecord: absent
 dpm: dpm 500 MHz 820 mV (SMU 500 MHz VID 116) 63.4 C busy 0.0%
 fan: state=curve controlling=1 rpm=2100
 tctl: 63.4
@@ -257,6 +258,88 @@ class GateParsing(unittest.TestCase):
     def test_a_gate_that_ends_early_is_critical(self):
         gate = runner_module.parse_gate("label x\nhealth: flags=15\n")
         self.assertTrue(gate.critical)
+
+    def test_a_stage_one_recovery_is_a_warning_and_is_read(self):
+        text = GATE_OK.replace("hang_recovery=0", "hang_recovery=2").replace(
+            "hangrecord: absent", "hangrecord: attempts=2 recovered=1 not_drained=1 refused=0 last_verdict=2")
+        gate = runner_module.parse_gate(text)
+        self.assertEqual(gate.facts["hang_recovery"], 2)
+        self.assertEqual(gate.facts["hangrecord"],
+                         "attempts=2 recovered=1 not_drained=1 refused=0 last_verdict=2")
+        self.assertFalse(gate.ok)
+        self.assertFalse(gate.critical)
+        self.assertTrue(any(v.startswith("warn") and "hang_recovery=2" in v for v in gate.violations),
+                        gate.violations)
+
+    def test_a_clean_gate_reads_no_recovery(self):
+        gate = runner_module.parse_gate(GATE_OK)
+        self.assertEqual(gate.facts["hang_recovery"], 0)
+        self.assertEqual(gate.facts["hangrecord"], "absent")
+
+
+class HangRecoveryCount(unittest.TestCase):
+    """The pattern gate.ps1 counts stage-1 hang recoveries with, read out of the script itself.
+
+    The gate counted every log line that held the words "hang recovery" or "HangRecovery". Every boot writes
+    'wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in
+    Parameters\\HangRecovery' (driver/kmd/wddm.c), so the gate reported one attempt on a machine that had never
+    hung, and it reported one again when two real attempts had happened: the lines a real attempt writes say
+    "soft recovery", not "hang recovery", so the old pattern never matched one of them. The fixtures below are
+    the driver's own format strings. Select-String matches without regard to case, so the test does too.
+    """
+
+    # driver/kmd/wddm.c, the start of every device: the switch, not an attempt.
+    MODE_ON = (r"  37      1.158 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, "
+               r"verdicts in Parameters\HangRecovery")
+    MODE_OFF = "  37      1.158 wddm: HangRecoveryMode 0: ResetEngine refuses every engine reset, as before 0.7.216.13"
+    # One stage-1 attempt that drained, with the line that says why, and the record guard.c flushed for it.
+    RECOVERED = ("  412     88.700 wddm: *** ResetEngine node 0: SOFT RECOVERED, aborted fence 1186, "
+                 "node 0 reopened ***")
+    RECOVERED_WHY = "  413     88.701 wddm: soft recovery: verdict 1 seq 4211 vmid 3, 7 kill(s) in 902 us"
+    RECORD = "  414     88.702 hang record: verdict 1 seq 4211 fence 1186 kills 7 902 us, persisted 0x00000000"
+    # One stage-1 attempt that did not drain: refused, then the adapter-wide reset and 0x116.
+    REFUSED = "  520    120.300 wddm: ResetEngine node 0: soft recovery verdict 2, refusing as before"
+    REFUSED_WHY = ("  521    120.301 wddm: soft recovery refused: seq 4300 fence 1190 vmid 3, "
+                   "95 kill(s) in 10002 us")
+    # The answer of a node this stage never touches: not a stage-1 attempt.
+    NO_ENGINE_RESET = ("  522    120.400 wddm: *** ResetEngine node 1 engine 0: refused, this part has no "
+                       "engine reset ***")
+
+    @staticmethod
+    def pattern() -> str:
+        text = (LAB / "gate.ps1").read_text(encoding="utf-8")
+        found = re.search(r"^\$HangRecoveryLine = '(.+)'$", text, re.M)
+        assert found, "gate.ps1 no longer declares $HangRecoveryLine on a line of its own"
+        return found.group(1)
+
+    def count(self, lines) -> int:
+        rule = re.compile(self.pattern(), re.I)
+        return sum(1 for line in lines if rule.search(line))
+
+    def test_the_old_pattern_is_gone(self):
+        self.assertNotIn("hang recovery|HangRecovery", (LAB / "gate.ps1").read_text(encoding="utf-8"))
+
+    def test_the_start_up_line_is_not_an_attempt(self):
+        self.assertEqual(self.count([self.MODE_ON]), 0)
+        self.assertEqual(self.count([self.MODE_OFF]), 0)
+
+    def test_one_recovery_counts_once(self):
+        self.assertEqual(self.count([self.MODE_ON, self.RECOVERED, self.RECOVERED_WHY, self.RECORD]), 1)
+
+    def test_one_refusal_counts_once(self):
+        self.assertEqual(self.count([self.MODE_ON, self.REFUSED, self.REFUSED_WHY]), 1)
+
+    def test_two_attempts_count_twice(self):
+        self.assertEqual(self.count([self.MODE_ON, self.RECOVERED, self.RECOVERED_WHY, self.RECORD,
+                                     self.REFUSED, self.REFUSED_WHY]), 2)
+
+    def test_the_node_one_refusal_is_not_an_attempt(self):
+        self.assertEqual(self.count([self.MODE_ON, self.NO_ENGINE_RESET]), 0)
+
+    def test_the_gate_reads_the_drivers_own_record(self):
+        text = (LAB / "gate.ps1").read_text(encoding="utf-8")
+        self.assertIn(r"Services\bc250kmd\Parameters\HangRecovery", text)
+        self.assertIn("hangrecord:", text)
 
 
 class ArmLoop(unittest.TestCase):

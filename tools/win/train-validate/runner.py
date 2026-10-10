@@ -146,6 +146,7 @@ def parse_gate(text: str) -> GateResult:
         (r"faults=(\d+)", "faults", int),
         (r"fence_timeouts=(\d+)", "fence_timeouts", int),
         (r"reset_engine=(\d+)", "reset_engine", int),
+        (r"hang_recovery=(\d+)", "hang_recovery", int),
         (r"id4101=(\d+)", "id4101", int),
         (r"^bugchecks:\s*(\d+)", "bugchecks", int),
         (r"^appcrashes:\s*(\d+)", "appcrashes", int),
@@ -159,6 +160,8 @@ def parse_gate(text: str) -> GateResult:
     facts["fan"] = fan.group(1).strip() if fan else ""
     dpm = re.search(r"^dpm:\s*(.+)$", text, re.M)
     facts["dpm"] = dpm.group(1).strip() if dpm else ""
+    record = re.search(r"^hangrecord:\s*(.+)$", text, re.M)
+    facts["hangrecord"] = record.group(1).strip() if record else ""
 
     def violate(message: str, severity: str) -> None:
         result.violations.append(f"{severity}: {message}")
@@ -176,6 +179,12 @@ def parse_gate(text: str) -> GateResult:
             violate(f"{key} is unreadable", "fail")
         elif value > 0:
             violate(f"{key}={value}, wanted 0", "critical" if key == "bugchecks" else "fail")
+    # A stage-1 soft recovery is a recovery, so an arm that took one can still be a pass; an operator has to
+    # see it all the same. The count is of the ResetEngine verdict lines alone, never of the start-up line that
+    # names the HangRecoveryMode switch, which every boot writes.
+    if facts.get("hang_recovery"):
+        violate(f"hang_recovery={facts['hang_recovery']}: the driver took a stage-1 soft recovery in this arm "
+                f"(record: {facts.get('hangrecord') or 'unread'})", "warn")
     if facts.get("TdrDelay") != 10:
         violate(f"TdrDelay={facts.get('TdrDelay', 'unreadable')}, wanted 10", "warn")
     if not re.search(r"state=curve\b.*controlling=1", facts.get("fan", "")):
