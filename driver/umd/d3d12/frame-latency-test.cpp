@@ -1,7 +1,24 @@
 // SPDX-License-Identifier: MIT
 // Host gate of the D3D12 shell's MaxFrameLatency gate (frame-latency.h): the ring, the poll loop and the
 // counters. No GPU and no runtime: a substitute progress source answers the gate.
+#include <windows.h>
+// Deterministically model a concurrent caller replacing/consuming the one timer signal.
+// Bound the old implementation too, so a regression reports failure instead of hanging the host gate.
+namespace {
+bool cancel_test_timer=false;
+unsigned cancelled_timer_waits=0,unbounded_timer_waits=0;
+DWORD WINAPI checked_timer_wait(HANDLE timer,DWORD timeout) {
+    if(!cancel_test_timer)return ::WaitForSingleObject(timer,timeout);
+    ++cancelled_timer_waits;
+    if(timeout==INFINITE)++unbounded_timer_waits;
+    CancelWaitableTimer(timer);
+    return ::WaitForSingleObject(timer,timeout==INFINITE?100:timeout);
+}
+}
+#define WaitForSingleObject checked_timer_wait
 #include "frame-latency.h"
+#include "../app-settings/app-settings.h"
+#undef WaitForSingleObject
 #include <cstdio>
 #include <cstring>
 #include <share.h>
@@ -48,6 +65,30 @@ struct FakeProgress {
     }
     native12::ProgressSource source() noexcept {return {this,snapshot,retired};}
 };
+
+void test_cancelled_timer_wait() {
+    HANDLE timer=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS);
+    if(!timer)timer=CreateWaitableTimerExW(nullptr,nullptr,0,TIMER_ALL_ACCESS);
+    check(timer!=nullptr,"timer interruption: control timer created");
+    if(!timer)return;
+    cancel_test_timer=true;
+    const uint64_t before=native12::latency_now_us();
+    native12::latency_idle(native12::kFrameLatencySpins,timer);
+    const unsigned latency_calls=cancelled_timer_waits;
+    amdgpu_wddm::app_settings::FrameLimiter limiter;
+    const uint64_t limit_before=native12::latency_now_us();
+    limiter.frame(30);
+    limiter.frame(30);
+    const uint64_t limit_elapsed=native12::latency_now_us()-limit_before;
+    const uint64_t elapsed=native12::latency_now_us()-before;
+    cancel_test_timer=false;
+    CloseHandle(timer);
+    check(latency_calls>0,"timer interruption: latency wait reached the cancelled timer");
+    check(cancelled_timer_waits>latency_calls,"timer interruption: rate limiter reached the cancelled timer");
+    check(unbounded_timer_waits==0,"timer interruption: neither limiter requests an infinite wait");
+    check(limit_elapsed>=30000,"timer interruption: 30 fps pacing still waits for the target");
+    check(elapsed<500000,"timer interruption: both limiters return despite missing timer signals");
+}
 
 void test_slot() {
     using native12::latency_slot;
@@ -237,6 +278,7 @@ int main() {
     const std::string sink=std::string("file:")+kLogName;
     if(!SetEnvironmentVariableA("AMDGPU_WDDM_LOG",sink.c_str()))
         check(false,"witness: the log switch is set for this process");
+    test_cancelled_timer_wait();
     test_slot();
     test_wait_loop();
     test_ring();

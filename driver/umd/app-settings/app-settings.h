@@ -222,7 +222,9 @@ private:
             const uint64_t left=(target-at)*10000000ull/frequency;   // 100 ns units
             if(left>20000){
                 LARGE_INTEGER due{};due.QuadPart=-static_cast<LONGLONG>(left-10000);
-                if(timer && SetWaitableTimerEx(timer,&due,0,nullptr,nullptr,nullptr,0))WaitForSingleObject(timer,INFINITE);
+                // Concurrent Presents share this synchronization timer. A rearm or another waiter can
+                // consume its only signal, so never wait indefinitely: the target clock below is authoritative.
+                if(timer && SetWaitableTimerEx(timer,&due,0,nullptr,nullptr,nullptr,0))WaitForSingleObject(timer,1);
                 else Sleep(1);
             } else if(left>2000)Sleep(0);
             else YieldProcessor();
