@@ -334,7 +334,7 @@
       "pre": [["python", "{repo}/tools/win/train-validate/adapter-check.py", "{pkg}", "{ws}/scratch/m15/{adapter_dir}"],
               ["python", "{target}", "ps", "{caps}/lab/rottr-vsync.ps1", "-Value", "0"],
               {"argv": ["python", "{mon}", "action", "overlay.hide"], "optional": true}],
-      "run": [["bash", "{caps}/run-game.sh", "{attempt_n}", "rottr", "{bound}"]],
+      "run": [["{bash}", "{caps}/run-game.sh", "{attempt_n}", "rottr", "{bound}"]],
       "env": {
         "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
         "M157_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
@@ -361,7 +361,7 @@
       "attempt": "native-caps",
       "profile": "witcher3",
       "pre": [["python", "{repo}/tools/win/train-validate/adapter-check.py", "{pkg}", "{ws}/scratch/m15/{adapter_dir}"]],
-      "run": [["bash", "{caps}/run-m157.sh", "{attempt_n}", "high-rt", "{bound}"]],
+      "run": [["{bash}", "{caps}/run-m157.sh", "{attempt_n}", "high-rt", "{bound}"]],
       "env": {
         "SESSION_ADAPTER": "{adapter_dir}",
         "SESSION_ACCEPTED": "1",

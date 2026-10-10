@@ -154,6 +154,18 @@ class ShippedManifest(unittest.TestCase):
     def setUp(self):
         self.data = manifest.load_manifest()
 
+    def test_a_session_script_is_never_run_by_the_wsl_launcher(self):
+        # `bash` on PATH is System32\bash.exe, which only starts WSL. The manifest says {bash} and the value
+        # is a Git bash, or the bare name when this machine has none.
+        for arm in self.data["arms"]:
+            for step in arm.get("run", ()):
+                argv = step["argv"] if isinstance(step, dict) else step
+                if str(argv[1]).endswith(".sh"):
+                    self.assertEqual("{bash}", argv[0], arm["id"])
+        found = manifest.find_bash()
+        self.assertNotIn("system32", found.lower())
+        self.assertTrue(found == "bash" or Path(found).is_file(), found)
+
     def test_bounds_per_kind(self):
         for arm in self.data["arms"]:
             if arm["kind"] in TRIAL_KINDS:

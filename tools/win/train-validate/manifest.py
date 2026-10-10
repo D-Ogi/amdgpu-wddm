@@ -27,6 +27,22 @@ class ManifestError(Exception):
     """The manifest, the package or the request is wrong. It is raised before anything runs."""
 
 
+def find_bash() -> str:
+    """The POSIX shell that runs a session script, named by its own path.
+
+    On Windows `bash` on PATH is `C:\\Windows\\System32\\bash.exe`, the WSL launcher: it tries to mount this
+    machine's WSL disk and ends rc 1 in two seconds without starting anything. The game arms need the Git
+    shell, so this returns the first Git `bash.exe` that exists and falls back to the bare name.
+    """
+    for candidate in (os.environ.get("TRAIN_VALIDATE_BASH", ""),
+                      r"C:\Program Files\Git\bin\bash.exe",
+                      r"C:\Program Files\Git\usr\bin\bash.exe",
+                      r"C:\Program Files (x86)\Git\bin\bash.exe"):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return "bash"
+
+
 def find_roots(tool: Path | None = None) -> tuple[Path, Path]:
     """(repo root, workspace root) from this file's place on disk.
 
@@ -308,6 +324,7 @@ def build(package: Package, data: dict | None = None, arm_ids: list[str] | None 
         "pkg": package.directory.as_posix(), "pkg_name": package.name, "release": package.release,
         "zip": package.zip_path.as_posix() if package.zip_path else "", "zip_sha256": package.zip_sha256,
         "kmd_build": package.kmd_build, "out": (out_dir or Path(".")).as_posix(),
+        "bash": find_bash(),
     }
     for key, template in data["config"].items():
         values[key] = expand(template, values)
