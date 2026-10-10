@@ -13,6 +13,10 @@ path, and comes on its own branch.
 |---|---|
 | `include/bc250hsa.h` | the frozen interface of layer 1. Section 3.9 of the design holds the same text, and `build.ps1 -CheckDoc` compares them byte for byte |
 | `include/hip/hip_runtime.h` | the minimal HIP header of section 4.4. Layer 2 owns it, on branch `m16/hip-runtime`, and layer 1 does not include it |
+| `include/hip/hip_version.h`, `hip_vector_types.h`, `hip_fp16.h`, `hip_bf16.h`, `hip_cooperative_groups.h` | the device-side header set that llama.cpp's `ggml-hip` backend includes. Section 4.12 of the design says what each one answers and which failed build asked for it |
+| `include/hipblas/hipblas.h` | the ten BLAS entry points the backend links against. The route and the missing implementation are in `compute/hipblas/README.md` |
+| `cmake/` | our own `find_package` answer for `hip`, `hipblas` and `rocblas`, with `hip::host` and `hip::device` |
+| `tools/make-rocm-root.py` | assembles the include tree, the CMake packages, the import library and the device library bitcode into one ROCm-shaped root, which `--rocm-path` and `CMAKE_PREFIX_PATH` then name |
 | `bc250hsa/` | the library. The table below gives its file-by-file shape |
 | `tests/host/` | five tests that need no GPU and no BC-250 adapter |
 | `tests/data/` | the committed code object, fat binary, metadata dumps and the golden PM4 stream, with `PROVENANCE.txt` |
@@ -24,21 +28,21 @@ path, and comes on its own branch.
 
 ```
 bc250hsa.h                 the only header a caller needs
-  status.c                 status names, the log hook, twelve process counters
+  status.c                 status names, the log hook, fourteen process counters
   co_msgpack.c             a MessagePack reader that refuses what it does not know
   co_metadata.c            NT_AMDGPU_METADATA to bc250hsa_kernel; the 64-byte descriptor
   co_loader.c              the clang offload bundle, then the ELF code object
   kernarg.c                the kernel argument buffer, from the metadata list only
-  pm4_dispatch.c           the 19 packets of one gfx1013 compute dispatch
+  pm4_dispatch.c           the 19 packets of one gfx1013 compute dispatch, and the batch of several
   kmt_device.c             the adapter, the device, the node-0 context, the fence
   kmt_memory.c             allocate, map a GPU address, make resident, wait for the paging fence
-  submit.c                 the command ring, D3DKMTSubmitCommand, the sliced bounded wait
+  submit.c                 the command ring, D3DKMTSubmitCommand, the batch, the sliced bounded wait
 ```
 
 The first six files touch no operating system call, so every host test links them and runs anywhere.
 The last three are the Windows half. The split is why `tests/host/` needs no adapter.
 
-Three rules the library keeps, because each one is a measured trap:
+Four rules the library keeps, because each one is a measured trap:
 
 1. **The packer never computes an offset.** It walks the `.args` list of the metadata. In a measured
    kernel two hidden fields meet at one byte boundary, and a kernel gets an implicit argument block
@@ -46,9 +50,70 @@ Three rules the library keeps, because each one is a measured trap:
 2. **The host writes `COMPUTE_PGM_RSRC2.LDS_SIZE`.** The command processor normally takes that field
    from the AQL packet. A PM4 dispatch has no AQL packet, and the kernel descriptor holds 0 even for
    a kernel with 1024 bytes of local memory (measured on `reduce256`).
-3. **No wait is unbounded, and no wait is one long sleep.** A wait runs in slices and asks the
+3. **A kernel that reads its own `blockDim` needs an AQL dispatch packet.**
+   `__builtin_amdgcn_workgroup_size_x` is a 16-bit load from the AQL kernel dispatch packet, so the
+   compiler enables `ENABLE_SGPR_DISPATCH_PTR` for such a kernel, and a PM4 dispatch has no packet
+   of its own. `bc250hsa_kernarg_requirements` therefore adds 64 bytes behind the kernel arguments,
+   `bc250hsa_kernarg_pack` writes a packet that states this launch and nothing else, and
+   `bc250hsa_plan_user_sgprs` programs the two registers from its address (header section 7.1).
+   MEASURED on llama.cpp's built `ggml-hip.dll`: 1752 of its 7105 gfx1013 kernels enable the bit,
+   among them every `k_get_rows`. Without the packet all 1752 were refused by name, which is the
+   whole of defect BD-110.
+4. **No wait is unbounded, and no wait is one long sleep.** A wait runs in slices and asks the
    operating system between two of them whether the device still runs. One long wait turned a healthy
    14.6-second wait behind another process's engine reset into a lost device (defect K225).
+
+## Batching, and the barrier between dispatches
+
+Build 1 sent one kernel dispatch as one indirect buffer and one `D3DKMTSubmitCommand`. Right, and
+expensive: a kernel that runs for two microseconds paid for a call into the kernel driver, a ring
+slot, a fence and a completion write. Section 8 of the design is the answer, and section 8.1 of
+`bc250hsa.h` is its interface: consecutive dispatches go into one larger indirect buffer, and one
+submission carries them all.
+
+The whole mechanism is here in layer 1, because layer 1 owns the wait. `bc250hsa_wait` submits an
+open buffer as soon as a caller asks for a fence value that was promised but not yet sent to the
+device, so a program cannot look at work that is still waiting to be submitted. The other flush
+points are the map, the unmap, the copy, the free, the code object load and the device closing: in
+each one the caller is about to read bytes or addresses that open work owns.
+
+| Knob | What it does | Default |
+|---|---|---|
+| `bc250hsa_batch_policy.enabled` | one buffer per batch instead of one per dispatch | 0, which is build 1 |
+| `max_dispatches` | the dispatch cap of one buffer, at most 256 | 32 |
+| `max_ib_dwords` | the dword cap | one ring slot, less the completion write |
+| `max_hold_us` | how long an open buffer may hold a dispatch | 1000 |
+| `light_barrier` | the level-0 and level-1 invalidate between two dispatches of one buffer, in place of the full acquire | 0 |
+
+The library's own defaults stay the conservative ones, because the library has no policy of its
+own (rule 6 of the header): a caller that says nothing gets the behaviour of build 1. The policy
+of the product comes from `runtime/`, which reads `BC250_HIP_BATCH`, `BC250_HIP_BATCH_MAX`,
+`BC250_HIP_BATCH_HOLD_US`, `BC250_HIP_BARRIER` and `BC250_HIP_PM4_STATE_CACHE` and sets it. Since
+the lab session of 2026-10-09 (`evidence/m16/perf-2026-10-09`) those defaults are batching on, a
+cap of 32 and the light barrier.
+
+Inside one buffer, a dispatch writes only the compute state that differs from the one before it:
+72 dwords a dispatch become 23 for the shape a real launch has. The first dispatch of every buffer
+is complete, because another context's buffer runs between two of ours, and
+`BC250HSA_DISPATCH_FULL_STATE` turns the whole mechanism off for a comparison. Design section 8.8
+holds the rules. `test_pm4` section 2c states the dwords of each case and carries the negative
+control that a field which did change is written.
+
+`BC250HSA_ACQUIRE_GCR_CNTL_LIGHT` in `bc250hsa/pm4_regs.h` names the bits of the light barrier and
+the Mesa file and line each one comes from, with the bits it drops stated: `GL2_INV`, `GL2_WB`,
+`GLM_INV`, `GLM_WB`, `GLI_INV`. The instruction invalidate stays at the head of the buffer, because
+a code object load is a flush point. `test_pm4` checks the dwords of both values, and the dropped
+bits are its negative control.
+
+What a launch costs the caller is measured by `samples/hipbench.hip`, which reads the submission
+counters through the two vendor calls of layer 2 and prints submissions per dispatch beside its
+timings. Its two kernel figures are enqueue-loop wall time with backpressure: a launch inside the
+timed loop can wait for the kernel argument pool or for a free ring slot, and the `waits` and
+`waits_fast` counters printed next to the figure say how often it did. They are therefore not a
+processor-only cost, which would need the active and the blocked time of the thread measured apart
+(audit finding HIP-F3, 2026-10-10). The lab arms are in `scratch/m16-hip/lab/perf-README.md`, which
+is local, and the wrappers that run one arm are `lab/`, whose rules and exit statuses are in
+`lab/README.md`.
 
 ## Build
 
@@ -117,7 +182,7 @@ under a 150-second bound, and writes `result.json`, the driver log tail and the 
 it. The bound covers the whole session, from the first call of the release client to the last line of
 the driver log tail: every single call is bounded by the time that is left, so the printed bound is
 the real one. The record ends with the seven pass criteria of section 6.3, each one `pass`, `FAIL` or
-`unknown`, so a reader does not have to judge. It refuses to start at or above 87 C and when it
+`unknown`, so a reader does not have to judge. It refuses to run at or above 87 C and when it
 cannot read Tctl at all, and after a timeout or a lost device it stops the session and submits
 nothing again. The kit that drives it, the
 push list and the evidence to pull are in `scratch/m16-hip/lab/` of the workspace, which stays

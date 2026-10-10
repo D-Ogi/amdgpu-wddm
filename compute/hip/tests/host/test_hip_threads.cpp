@@ -195,6 +195,11 @@ int main(int argc, char** argv) {
 
     bc250hipthreads::Options options = bc250hipthreads::default_options(launch_vadd, nullptr);
     options.negative_control = negative_control;
+    // This test links the mock backend, which retires every dispatch on a timer of its own and
+    // therefore has as many in flight as the threads give it. That is what makes phase B's "four
+    // times" verdict a test of the process lock here, and it is also why the hardware does not
+    // meet it: the ring runs one indirect buffer at a time (defect BD-111).
+    options.device_overlaps_dispatches = 1;
     bc250hipthreads::Result result;
     (void)bc250hipthreads::run(options, &result);
     check(result.api_failures == 0, "every HIP call of the client answered hipSuccess");

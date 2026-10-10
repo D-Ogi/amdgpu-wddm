@@ -203,6 +203,9 @@ hipError_t copy_now(void* dst, const void* src, size_t bytes, hipMemcpyKind kind
         }
         if (dst_device->mem.host == nullptr || src_device->mem.host == nullptr) {
             // A copy kernel and the copy engine are later work, named in the design.
+            bc250hip::log_line(BC250HSA_LOG_ERROR,
+                               "hipMemcpy device to device refuses: one of the two allocations"
+                               " has no host mapping, and a copy kernel is later work");
             return hipErrorNotSupported;
         }
         std::memcpy(static_cast<unsigned char*>(dst_device->mem.host) + dst_offset,
@@ -230,6 +233,9 @@ hipError_t fill_now(void* dst, int value, size_t bytes) {
         }
         if (allocation->mem.host == nullptr) {
             // A fill kernel is later work, named in the design.
+            bc250hip::log_line(BC250HSA_LOG_ERROR,
+                               "hipMemset refuses: the allocation has no host mapping, and a"
+                               " fill kernel is later work");
             return hipErrorNotSupported;
         }
     }
@@ -494,6 +500,152 @@ hipError_t hipMemsetAsync(void* dst, int value, size_t sizeBytes, hipStream_t st
     }
     const hipError_t filled = fill_now(dst, value, sizeBytes);
     return filled == hipSuccess ? hipSuccess : fail(filled);
+}
+
+// A two-dimensional copy, row by row. ggml-hip uses it for a tensor whose rows are contiguous
+// but whose row stride is not the row length, so it is on the ordinary path of a run and not a
+// corner. Build 1 has no two-dimensional copy in layer 1 and no copy engine, so this is a loop
+// of one-dimensional copies under one wait, which is what the one-dimensional entry points do
+// as well.
+hipError_t hipMemcpy2DAsync(void* dst, size_t dpitch, const void* src, size_t spitch,
+                            size_t width, size_t height, hipMemcpyKind kind,
+                            hipStream_t stream) {
+    if (dst == nullptr || src == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (width == 0 || height == 0) {
+        return hipSuccess;
+    }
+    // A row must fit in its pitch, or the copy would read or write outside the rows it was
+    // given. HIP reports this as an invalid value.
+    if (width > dpitch || width > spitch) {
+        return fail(hipErrorInvalidValue);
+    }
+    bc250hip::Guard guard;
+    bc250hip::StreamRef held;
+    ihipStream_t* target = bc250hip::resolve_stream(stream);
+    if (target == nullptr) {
+        return fail(hipErrorInvalidHandle);
+    }
+    held.attach(target);
+    const hipError_t err = wait_for_stream(guard, target);
+    if (err != hipSuccess) {
+        return fail(err);
+    }
+    // One lookup per row, which also means one bounds check per row: a height that runs past
+    // the end of either allocation is answered on the row that does it, and the rows before it
+    // are already copied. HIP gives the same partial result for the same mistake.
+    for (size_t row = 0; row < height; ++row) {
+        void* row_dst = static_cast<char*>(dst) + row * dpitch;
+        const void* row_src = static_cast<const char*>(src) + row * spitch;
+        const hipError_t copied = copy_now(row_dst, row_src, width, kind);
+        if (copied != hipSuccess) {
+            return fail(copied);
+        }
+    }
+    return hipSuccess;
+}
+
+// A copy between two devices. This process has one device, so the only legal call names device
+// 0 on both sides, and that call is an ordinary device-to-device copy. llama.cpp reaches this
+// entry point when a tensor moves between two of its backend buffers.
+hipError_t hipMemcpyPeerAsync(void* dst, int dstDeviceId, const void* src, int srcDeviceId,
+                              size_t sizeBytes, hipStream_t stream) {
+    if (dst == nullptr || src == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (dstDeviceId != 0 || srcDeviceId != 0) {
+        return fail(hipErrorInvalidDevice);
+    }
+    if (sizeBytes == 0) {
+        return hipSuccess;
+    }
+    return hipMemcpyAsync(dst, src, sizeBytes, hipMemcpyDeviceToDevice, stream);
+}
+
+// The device address of memory hipHostMalloc returned. Every allocation of this runtime is one
+// allocation with one GPU virtual address, and a host-visible one carries a host mapping of the
+// same memory, so the answer is the address of the allocation plus the offset the caller is
+// pointing at. An interior pointer is therefore legal, as it is for a copy.
+hipError_t hipHostGetDevicePointer(void** devPtr, void* hstPtr, unsigned int flags) {
+    if (devPtr == nullptr || hstPtr == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (flags != 0) {
+        return fail(hipErrorInvalidValue);
+    }
+    bc250hip::Guard guard;
+    uint64_t offset = 0;
+    const Allocation* allocation = find_host_allocation(hstPtr, 0, &offset);
+    if (allocation == nullptr) {
+        // Not memory of this runtime. hipHostRegister is the entry point that would make a
+        // program's own memory reachable, and it says no in this build.
+        return fail(hipErrorInvalidValue);
+    }
+    *devPtr = reinterpret_cast<void*>(static_cast<uintptr_t>(allocation->mem.va + offset));
+    return hipSuccess;
+}
+
+// Page-locking a program's own memory and giving the GPU an address for it is not in layer 1:
+// bc250hsa.h allocates and maps its own memory and has no entry point that takes an existing
+// host range. The honest answer is therefore no, and not a pretended success that would hand
+// the GPU an address the hardware cannot translate.
+//
+// llama.cpp calls this only when GGML_CUDA_REGISTER_HOST is in the environment. It clears the
+// error and runs without registered host memory, which costs one copy through a staging buffer
+// per upload (ggml-cuda.cu, ggml_backend_cuda_register_host_buffer).
+hipError_t hipHostRegister(void* hostPtr, size_t sizeBytes, unsigned int flags) {
+    (void)sizeBytes;
+    (void)flags;
+    if (hostPtr == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    return bc250hip::refuse("hipHostRegister", nullptr,
+                            "layer 1 has no entry point that maps an existing host range",
+                            hipErrorNotSupported);
+}
+
+hipError_t hipHostUnregister(void* hostPtr) {
+    if (hostPtr == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    // Nothing can be registered, so nothing can be unregistered.
+    return fail(hipErrorHostMemoryNotRegistered);
+}
+
+// Managed memory, which the hardware would have to fault on and migrate page by page. This
+// driver has no page fault handler for a compute queue, so there is no managed memory.
+//
+// hipErrorNotSupported is the exact answer llama.cpp tests for: with it,
+// ggml_cuda_device_malloc falls back to hipMalloc and says so one time
+// ("hipMallocManaged unsupported, falling back to hipMalloc"). Any other error code would
+// become an abort of the program.
+hipError_t hipMallocManaged(void** ptr, size_t size, unsigned int flags) {
+    (void)size;
+    (void)flags;
+    if (ptr == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    *ptr = nullptr;
+    return bc250hip::refuse("hipMallocManaged", nullptr,
+                            "no page fault handler for a compute queue, so no managed memory",
+                            hipErrorNotSupported);
+}
+
+// Advice about managed memory, which this build does not have. llama.cpp ignores the result of
+// this call and clears the error afterwards.
+hipError_t hipMemAdvise(const void* devPtr, size_t count, hipMemoryAdvise advice, int deviceId) {
+    (void)count;
+    (void)advice;
+    if (devPtr == nullptr) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (deviceId != 0) {
+        return fail(hipErrorInvalidDevice);
+    }
+    return bc250hip::refuse("hipMemAdvise", nullptr,
+                            "advice about managed memory, which this build does not have",
+                            hipErrorNotSupported);
 }
 
 hipError_t hipMemGetInfo(size_t* freeBytes, size_t* totalBytes) {

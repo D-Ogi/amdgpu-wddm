@@ -1,0 +1,9 @@
+0.00.008.492 I llama_completion: llama backend init
+0.00.008.498 I llama_completion: load the model and apply lora adapter, if any
+0.00.530.170 W resolve_fused_ops: layer 0 is assigned to device ROCm0 but Flash Attention is assigned to device CPU (usually due to missing support)
+0.00.530.177 W resolve_fused_ops: Flash Attention not supported, set to disabled
+0.00.579.686 I cmn          init: llama threadpool init, n_threads = 6
+0.00.581.349 E ROCm error: this build does not support the operation
+0.00.581.355 E   current device: 0, in function ggml_cuda_kernel_launch at P:/BC-250/scratch/m16-hip/step3/llama/ggml/src/ggml-cuda/common.cuh:1721
+0.00.581.355 E   hipGetLastError()
+P:/BC-250/scratch/m16-hip/step3/llama/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error

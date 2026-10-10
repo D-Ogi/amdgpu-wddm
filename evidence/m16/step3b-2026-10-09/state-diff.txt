@@ -1,0 +1,4 @@
+Installed state, before (19:30:58Z) against after (19:49:46Z), the tag line excluded.
+Lines compared: 24. Differences ignoring trailing whitespace: 0.
+(The raw comparison shows one difference only: trailing whitespace on the empty 'kmdver' value,
+ which is how the two captures were written down, not a change of state.)

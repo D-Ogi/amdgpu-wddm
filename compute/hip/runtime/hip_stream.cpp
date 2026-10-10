@@ -16,8 +16,15 @@ bool stream_valid(const ihipStream_t* stream) {
 }
 
 ihipStream_t* resolve_stream(hipStream_t stream) {
-    if (stream == nullptr) {
+    if (stream == nullptr || stream == hipStreamLegacy || stream == hipStreamPerThread) {
         // The default stream of the process. The device open fills its fields.
+        //
+        // HIP reserves two handle values for a stream that no program created: the legacy
+        // default stream and the per-thread default stream. No stream object can live at
+        // address 1 or 2, so the values are safe to test for. This runtime has one process
+        // default stream and no per-thread one, which is legal and stricter than HIP asks:
+        // work of the per-thread stream then also orders against the legacy one. llama.cpp
+        // passes hipStreamPerThread to hipMemcpyPeerAsync.
         return &state().null_stream;
     }
     return stream_valid(stream) ? stream : nullptr;
@@ -189,6 +196,24 @@ hipError_t hipStreamWaitEvent(hipStream_t stream, hipEvent_t event, unsigned int
         target->pending_wait = event->fence_value;
     }
     return hipSuccess;
+}
+
+// The start of a stream capture, which this runtime does not have: there is no graph object, no
+// replay and nothing to record into. It says no.
+//
+// Why the entry point exists at all. llama.cpp's ggml-cuda keeps every graph call inside its own
+// USE_CUDA_GRAPH guard except one: ggml-cuda.cu:4598 calls cudaStreamBeginCapture outside that
+// guard, under a run-time condition (`use_cuda_graph`) that is always false when the guard is
+// off. A ROCm build does not notice, because its header declares the name whatever the options
+// say. Ours has to declare it too, and then something has to be behind the name at link time.
+// The call is unreachable; if a future ggml ever reaches it, hipErrorNotSupported travels back
+// through that backend's CUDA_CHECK as a stated abort.
+hipError_t hipStreamBeginCapture(hipStream_t stream, hipStreamCaptureMode mode) {
+    (void)stream;
+    (void)mode;
+    return bc250hip::refuse("hipStreamBeginCapture", nullptr,
+                            "no graph object, no replay and nothing to record into",
+                            hipErrorNotSupported);
 }
 
 }  // extern "C"

@@ -59,6 +59,16 @@ struct Options {
     size_t   buffer_bytes;     // the device buffer of each thread
     size_t   worker_alloc_bytes;  // what a worker allocates per operation in phase A
     int      negative_control; // 1: this build waits with the process lock held
+    // 1: the backend behind this runtime can have several dispatches in flight at the same
+    // time, so phase B's wall time may fall below the serialised one. The mock backend does,
+    // because it retires each dispatch on a timer of its own. The hardware does not: one
+    // node-0 context, one indirect buffer in the ring at a time (bc250hsa.h rule 5), and a
+    // barrier between two dispatches of one batch, so sixteen compute-bound dispatches cost
+    // sixteen times their own device time whatever the thread count. Phase B's verdict follows
+    // this flag; what it checks on the hardware is that threads cost nothing on top of the
+    // serialised device time, and phase A is what proves the lock is open during a wait
+    // (defect BD-111).
+    int      device_overlaps_dispatches;
     int      verbose;
     LaunchFn launch;
     void*    launch_ctx;
@@ -88,6 +98,7 @@ inline Options default_options(LaunchFn launch, void* ctx) {
     options.buffer_bytes = 65536;
     options.worker_alloc_bytes = 4096;
     options.negative_control = 0;
+    options.device_overlaps_dispatches = 0;
     options.verbose = 1;
     options.launch = launch;
     options.launch_ctx = ctx;
@@ -234,7 +245,14 @@ inline int run(const Options& options, Result* result) {
     if (options.negative_control) {
         // The control build holds the process lock over its wait, so no other thread can reach
         // the runtime at all while thread 0 waits.
-        if (out.ops_in_window_total != 0) {
+        //
+        // One straggler is allowed, and this is why. The lock goes back inside the wait, before
+        // the wait returns to the waiter thread, and the window closes one statement later. A
+        // worker that is blocked on the lock at that moment therefore gets its malloc and its
+        // launch through and still reads the window as open. MEASURED 2026-10-09: 1 operation in
+        // one run of several, and 0 in the next three. The verdict keeps its force either way:
+        // the real build finishes 48 operations in the same window.
+        if (out.ops_in_window_total > 1) {
             std::printf("hipthreads: FAIL the control build let %d operations through a held "
                         "lock\n",
                         out.ops_in_window_total);
@@ -308,6 +326,14 @@ inline int run(const Options& options, Result* result) {
     }
     // The comparison means something only when a wait really waits. Against a backend that
     // retires a dispatch at once, both numbers are noise.
+    //
+    // Which verdict applies depends on what the backend can do, and that is the caller's word
+    // (device_overlaps_dispatches), not something this phase can measure: a parallel time equal
+    // to the serialised one means "the device ran them one after the other" on hardware with one
+    // queue and "the lock serialised the threads" on a backend that could have overlapped them.
+    // MEASURED, unit A, 2026-10-09: 578.9 to 585.5 ms against a serialised 591.0 to 592.1 ms,
+    // which is the device time of sixteen dispatches and about 1 % of host cost on top of it,
+    // while the mock backend measures 812 ms against 3239 ms (defect BD-111).
     if (out.one_wait_ms >= 20.0) {
         if (options.negative_control) {
             if (out.parallel_ms < 0.6 * out.serial_estimate_ms) {
@@ -315,10 +341,26 @@ inline int run(const Options& options, Result* result) {
                             "runtime\n");
                 out.verdict_failures++;
             }
-        } else if (out.parallel_ms > 0.8 * out.serial_estimate_ms) {
-            std::printf("hipthreads: FAIL %d threads took as long as one thread would have\n",
-                        threads);
-            out.verdict_failures++;
+        } else if (options.device_overlaps_dispatches) {
+            if (out.parallel_ms > 0.8 * out.serial_estimate_ms) {
+                std::printf("hipthreads: FAIL %d threads took as long as one thread would have, "
+                            "against a backend that overlaps dispatches\n", threads);
+                out.verdict_failures++;
+            }
+        } else {
+            // One dispatch at a time, so the serialised time is the floor. What the threads must
+            // not do is cost anything on top of it.
+            if (out.parallel_ms > 1.1 * out.serial_estimate_ms) {
+                std::printf("hipthreads: FAIL %d threads cost %.1f %% on top of the serialised "
+                            "device time, which one queue already explains\n", threads,
+                            100.0 * (out.parallel_ms / out.serial_estimate_ms - 1.0));
+                out.verdict_failures++;
+            } else if (options.verbose) {
+                std::printf("hipthreads: phase B, one dispatch at a time in the ring, so %.1f ms "
+                            "against a serialised %.1f ms is the device's own time plus %.1f %% "
+                            "of host cost\n", out.parallel_ms, out.serial_estimate_ms,
+                            100.0 * (out.parallel_ms / out.serial_estimate_ms - 1.0));
+            }
         }
     }
 

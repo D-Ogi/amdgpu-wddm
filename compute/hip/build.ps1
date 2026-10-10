@@ -277,8 +277,11 @@ Write-Host '  tests\host\bc250hsa_mock.c compiles against the frozen interface'
 # The host tests link the host half only, plus the vendored Linux headers for the PM4 gate.
 $hostObjects = @()
 foreach ($s in $hostSources) { $hostObjects += (Join-Path $objDir ([IO.Path]::ChangeExtension($s, 'obj'))) }
-$testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')")
-$tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c')
+# /I$here as well: test_vadd_oracle.c includes samples\vadd_expect.h, the oracle the HIP sample
+# of layer 2 uses, so the criterion and the sample cannot drift apart.
+$testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')", "/I$here")
+$tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c',
+    'test_vadd_oracle.c')
 foreach ($t in $tests) {
     $exe = Join-Path $Out ([IO.Path]::ChangeExtension($t, 'exe'))
     Invoke-Cl (@('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',
@@ -300,8 +303,30 @@ if (-not $SkipTests) {
     & "$Out\hipprobe.exe" --selftest $dataDir
     if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL hipprobe --selftest ($LASTEXITCODE)"; $failures++ }
     & "$Out\hipprobe.exe" --help | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+
+    # ------------------------------------------------------------------------------------------
+    # The lab wrappers of lab\ and their failure paths (audit finding HIP-F2, 2026-10-10). No
+    # GPU, no lab and no driver: each case replaces the sampler, the launcher or the terminator
+    # with a fake, among them a helper that hangs, a sampler that answers nothing and a child
+    # that never stops by itself. It runs under Windows PowerShell, which is the shell of the
+    # lab, so the scripts are exercised by the shell that will run them.
+    # ------------------------------------------------------------------------------------------
+    $labTest = Join-Path $here 'tests\lab\test-arm-bounds.ps1'
+    $labWork = Join-Path $Out 'lab-tests'
+    $labLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $labTest -WorkDir $labWork 2>&1
+    $labExit = $LASTEXITCODE
+    $labLines | ForEach-Object { if ($_ -match 'FAIL|checks,') { Write-Host "  $_" } }
+    if ($labExit -ne 0) { Write-Host "  FAIL test-arm-bounds ($labExit)"; $failures++ }
+
+    $stopTest = Join-Path $here 'tests\lab\test-arm-stop-bound.ps1'
+    $stopLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopTest `
+        -Library (Join-Path $here 'lab\armlib.ps1') -WorkDir (Join-Path $Out 'stop-bound-tests') 2>&1
+    $stopExit = $LASTEXITCODE
+    $stopLines | ForEach-Object { Write-Host "  $_" }
+    if ($stopExit -ne 0) { Write-Host "  FAIL test-arm-stop-bound ($stopExit)"; $failures++ }
+
     if ($failures -gt 0) { throw "$failures host check(s) failed" }
-    Write-Host '  every host test and hipprobe --selftest passed'
+    Write-Host '  every host test, hipprobe --selftest and the lab wrapper tests passed'
 }
 
 Write-Host "  artifacts in $Out (bc250hsa.lib's hash belongs to this directory, see above)"

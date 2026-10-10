@@ -343,6 +343,9 @@ bc250hsa_status bc250hsa_free(struct bc250hsa_device* dev, bc250hsa_mem* mem)
         return BC250HSA_EINVAL;
     }
     EnterCriticalSection(&dev->lock);
+    /* A dispatch of an open batch may name this range. Section 8.1 of the interface
+     * makes every call that changes such memory a flush point. */
+    (void)bc250hsa_batch_submit_locked(dev);
     record_remove(dev, record);
     LeaveCriticalSection(&dev->lock);
     destroy_allocation(dev, record);
@@ -367,6 +370,9 @@ bc250hsa_status bc250hsa_map(struct bc250hsa_device* dev, bc250hsa_mem* mem, voi
     if (is_device_local(mem->flags) && (mem->flags & BC250HSA_MEM_MAPPABLE) == 0u) {
         return BC250HSA_EUNSUPPORTED;
     }
+    /* A flush point of section 8.1: a caller that maps a range reads or writes it next,
+     * and a dispatch of the open batch may name it. */
+    (void)bc250hsa_flush(dev, NULL);
     status = map_host(dev, record, &host);
     if (status != BC250HSA_OK) {
         return status;
@@ -392,6 +398,9 @@ bc250hsa_status bc250hsa_unmap(struct bc250hsa_device* dev, bc250hsa_mem* mem)
     if (record->host == NULL) {
         return BC250HSA_OK;
     }
+    /* The same flush point: the mapping a dispatch of the open batch may still need
+     * goes away here. */
+    (void)bc250hsa_flush(dev, NULL);
     memset(&unlock, 0, sizeof(unlock));
     unlock.hDevice = dev->device;
     unlock.hAllocation = record->handle;
@@ -425,6 +434,11 @@ bc250hsa_status bc250hsa_copy_to_device(struct bc250hsa_device* dev, const bc250
     if (dst_offset > dst->bytes || bytes > dst->bytes - dst_offset) {
         return BC250HSA_EINVAL;
     }
+    /* A flush point: a dispatch of an open batch may read this range, and in the order
+     * of the caller it reads what was there before this copy (section 8.1). The caller
+     * still owns the wait; this call only makes sure the work it asked for first is on
+     * its way to the device. */
+    (void)bc250hsa_flush(dev, NULL);
     memcpy((uint8_t*)dst->host + dst_offset, src, (size_t)bytes);
     bc250hsa_write_barrier();
     return BC250HSA_OK;
@@ -443,6 +457,9 @@ bc250hsa_status bc250hsa_copy_from_device(struct bc250hsa_device* dev, void* dst
     if (src_offset > src->bytes || bytes > src->bytes - src_offset) {
         return BC250HSA_EINVAL;
     }
+    /* The same flush point in the other direction: this copy reads what the work the
+     * caller already asked for wrote. The wait stays the caller's. */
+    (void)bc250hsa_flush(dev, NULL);
     memcpy(dst, (const uint8_t*)src->host + src_offset, (size_t)bytes);
     return BC250HSA_OK;
 }
@@ -483,5 +500,10 @@ bc250hsa_status bc250hsa_module_load(struct bc250hsa_device* dev, const void* im
     if (status != BC250HSA_OK) {
         return status;
     }
+    /* A flush point, and the reason the light barrier may leave the instruction cache
+     * alone: no code object is loaded while one indirect buffer is being built, so the
+     * acquire at the head of that buffer is the only instruction cache invalidate it
+     * needs (section 8.1 and pm4_regs.h). */
+    (void)bc250hsa_flush(dev, NULL);
     return bc250hsa_module_load_alloc(&alloc, image, image_bytes, out);
 }

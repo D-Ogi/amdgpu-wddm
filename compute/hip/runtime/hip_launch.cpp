@@ -154,11 +154,16 @@ static hipError_t resolve_kernel(const void* function, const bc250hsa_kernel** o
     if (entry.kernel == nullptr) {
         const bc250hsa_status load = module_ensure_loaded(entry.module);
         if (load != BC250HSA_OK) {
+            log_line(BC250HSA_LOG_ERROR, "the code object of kernel '%s' does not load: %s",
+                     entry.device_name.c_str(), bc250hsa_status_string(load));
             return translate(load);
         }
         entry.kernel =
             bc250hsa_module_kernel_by_name(entry.module->loaded, entry.device_name.c_str());
         if (entry.kernel == nullptr) {
+            log_line(BC250HSA_LOG_ERROR,
+                     "the code object loaded, and it holds no kernel named '%s'",
+                     entry.device_name.c_str());
             return hipErrorInvalidDeviceFunction;
         }
     }
@@ -242,7 +247,8 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     const bc250hsa_kernel* kernel = nullptr;
     err = bc250hip::resolve_kernel(function, &kernel);
     if (err != hipSuccess) {
-        return fail(err);
+        return bc250hip::refuse("hipLaunchKernel", nullptr,
+                                "the host stub names no kernel of a loaded code object", err);
     }
 
     // The stream is held for the whole launch: the two waits below open the lock, and another
@@ -270,13 +276,15 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     bc250hsa_status status =
         bc250hsa_kernarg_requirements(kernel, &kernarg_bytes, &kernarg_align);
     if (status != BC250HSA_OK) {
-        return fail(bc250hip::translate(status));
+        return bc250hip::refuse_status("hipLaunchKernel/kernarg_requirements", kernel->name,
+                                       status);
     }
 
     bc250hip::KernargBuffer* buffer = nullptr;
     err = bc250hip::kernarg_acquire(guard, kernarg_bytes, kernarg_align, &buffer);
     if (err != hipSuccess) {
-        return fail(err);
+        return bc250hip::refuse("hipLaunchKernel", kernel->name,
+                                "no kernel argument buffer of the pool", err);
     }
     // A full pool waited, and a wait opens the lock.
     err = bc250hip::same_kernel_after_wait(function, kernel);
@@ -293,10 +301,10 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     std::memset(&packed, 0, sizeof(packed));
     packed.struct_bytes = static_cast<uint32_t>(sizeof(packed));
     status = bc250hsa_kernarg_pack(kernel, &launch, args, kernel->explicit_arg_count,
-                                   buffer->mem.host, kernarg_bytes, &packed);
+                                   buffer->mem.host, kernarg_bytes, buffer->mem.va, &packed);
     if (status != BC250HSA_OK) {
         bc250hip::kernarg_release(buffer, 0);
-        return fail(bc250hip::translate(status));
+        return bc250hip::refuse_status("hipLaunchKernel/kernarg_pack", kernel->name, status);
     }
     if (packed.hostcall_buffer_requested != 0) {
         // Device-side printf needs a host call service, which this build does not have. The
@@ -306,7 +314,9 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
                              "which this build does not support\n",
                      kernel->name != nullptr ? kernel->name : "<unnamed>");
         bc250hip::kernarg_release(buffer, 0);
-        return fail(hipErrorNotSupported);
+        return bc250hip::refuse("hipLaunchKernel", kernel->name,
+                                "the kernel asks for a host call buffer (device printf)",
+                                hipErrorNotSupported);
     }
     bc250hsa_write_barrier();
 
@@ -326,20 +336,98 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     bc250hsa_dispatch dispatch;
     std::memset(&dispatch, 0, sizeof(dispatch));
     dispatch.struct_bytes = static_cast<uint32_t>(sizeof(dispatch));
-    dispatch.flags = 0;
+    dispatch.flags = bc250hip::state().dispatch_flags;
     dispatch.kernel = kernel;
     dispatch.kernarg_va = buffer->mem.va;
+    // The AQL dispatch packet of section 7.1 of bc250hsa.h, which a kernel that reads its own
+    // blockDim needs. It sits inside this same kernel argument buffer, so it retires with the
+    // dispatch that reads it and the pool owns its lifetime.
+    if (packed.dispatch_packet_requested != 0 && !BC250_HIP_NO_DISPATCH_PACKET_BUILD) {
+        dispatch.dispatch_packet_va = buffer->mem.va + packed.dispatch_packet_offset;
+    }
     dispatch.launch = launch;
 
     uint64_t fence = 0;
     status = bc250hsa_dispatch_submit(dev, &dispatch, &fence);
     if (status != BC250HSA_OK) {
         bc250hip::kernarg_release(buffer, 0);
-        return fail(bc250hip::translate(status));
+        return bc250hip::refuse_status("hipLaunchKernel/dispatch_submit", kernel->name, status);
     }
     bc250hip::kernarg_release(buffer, fence);
     target->last_fence = fence;
     return hipSuccess;
+}
+
+// The dynamic group memory ceiling of one kernel. On a CUDA part a kernel may not ask for more
+// than 48 KiB of dynamic shared memory until a program lifts the ceiling with this call, and
+// llama.cpp lifts it for every kernel that needs more (CUDA_SET_SHARED_MEMORY_LIMIT in
+// common.cuh). This part has no such ceiling: the hardware gives 64 KiB of group memory per
+// workgroup and layer 1 checks each dispatch against it.
+//
+// So the call records the value and refuses one that the hardware could never give. That is
+// worth more than a plain success: a program learns about an impossible request at the call
+// that makes it.
+// The process lock is not recursive, so the group memory limit is read before the lock is
+// taken: hipGetDeviceProperties takes the lock itself.
+hipError_t hipFuncSetAttribute(const void* func, hipFuncAttribute attr, int value) {
+    if (func == nullptr) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+    size_t group_limit = 0;
+    if (attr == hipFuncAttributeMaxDynamicSharedMemorySize) {
+        hipDeviceProp_t prop;
+        const hipError_t err = hipGetDeviceProperties(&prop, 0);
+        if (err != hipSuccess) {
+            return err;  // hipGetDeviceProperties already recorded it
+        }
+        group_limit = prop.sharedMemPerBlock;
+    }
+
+    bc250hip::Guard guard;
+    bc250hip::State& s = state();
+    const auto found = s.functions.find(func);
+    if (found == s.functions.end()) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+    switch (attr) {
+        case hipFuncAttributeMaxDynamicSharedMemorySize:
+            if (value < 0 || static_cast<size_t>(value) > group_limit) {
+                return bc250hip::refuse("hipFuncSetAttribute", found->second.device_name.c_str(),
+                                        "the dynamic group memory asked for is above the"
+                                        " hardware limit of this part", hipErrorInvalidValue);
+            }
+            found->second.dynamic_group_max = value;
+            return hipSuccess;
+        case hipFuncAttributePreferredSharedMemoryCarveout:
+            // This part has no cache that group memory is carved out of, so there is nothing to
+            // prefer. The request is legal and has no effect.
+            return hipSuccess;
+        default:
+            return fail(hipErrorInvalidValue);
+    }
+}
+
+// A cooperative start, which guarantees that every workgroup of the grid runs at the same time
+// so that the grid can synchronise inside itself. This build cannot promise it: one hardware
+// queue, no cooperative dispatch packet and no reserved occupancy.
+//
+// hipDeviceGetAttribute answers 0 for hipDeviceAttributeCooperativeLaunch, and llama.cpp reads
+// that attribute at start-up and keeps the plain path (softmax.cu). The entry point exists
+// because the backend links against it, and it says no instead of starting a grid that would
+// deadlock inside its own barrier.
+hipError_t hipLaunchCooperativeKernel(const void* function, dim3 gridDim, dim3 blockDim,
+                                      void** args, size_t sharedMemBytes, hipStream_t stream) {
+    (void)gridDim;
+    (void)blockDim;
+    (void)args;
+    (void)sharedMemBytes;
+    (void)stream;
+    if (function == nullptr) {
+        return fail(hipErrorInvalidDeviceFunction);
+    }
+    return bc250hip::refuse("hipLaunchCooperativeKernel", nullptr,
+                            "one hardware queue, no cooperative dispatch packet and no reserved"
+                            " occupancy", hipErrorNotSupported);
 }
 
 }  // extern "C"

@@ -250,6 +250,16 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
     dev->ring_slot_bytes = ring_slot_bytes;
     dev->va_window_start = BC250HSA_VA_WINDOW_START;
     dev->va_window_end = BC250HSA_VA_WINDOW_START + ((uint64_t)va_window_gib << 30);
+    /* Batching is off until the caller asks for it, which keeps the behaviour of
+     * build 1 for a caller that does not know section 8.1 exists. The two numbers are
+     * the defaults a caller gets when it passes 0. */
+    dev->batch.struct_bytes = (uint32_t)sizeof(dev->batch);
+    dev->batch.enabled = 0u;
+    dev->batch.max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
+    dev->batch.max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
+    /* The local memory limit of this part, which bc250hsa_props_read also reports. One
+     * read at open in place of one property structure per dispatch. */
+    dev->lds_bytes_per_workgroup = BC250HSA_LDS_BYTES_PER_WORKGROUP;
 
     result = find_adapter(params, dev);
     if (result != BC250HSA_OK) {
@@ -365,7 +375,10 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
             goto failed;
         }
         dev->slot_fence = (uint64_t*)calloc(ring_slots, sizeof(uint64_t));
-        dev->last_ib = (uint32_t*)calloc(BC250HSA_PM4_MAX_DWORDS, sizeof(uint32_t));
+        /* One whole slot, because a batched buffer carries many dispatches and the
+         * failure report must hold all of it (section 8.1). */
+        dev->last_ib_capacity = ring_slot_bytes / 4u;
+        dev->last_ib = (uint32_t*)calloc(dev->last_ib_capacity, sizeof(uint32_t));
         if (dev->slot_fence == NULL || dev->last_ib == NULL) {
             result = BC250HSA_ENOMEM;
             goto failed;
@@ -387,6 +400,9 @@ void bc250hsa_close(struct bc250hsa_device* dev)
     if (dev == NULL) {
         return;
     }
+    /* The open batch goes out first, so that a program which closed the device without
+     * a synchronisation does not lose the work it asked for (section 8.1). */
+    (void)bc250hsa_flush(dev, NULL);
     if (dev->submit_capable && !dev->device_lost && dev->fence_last_submitted != 0u) {
         (void)bc250hsa_wait(dev, dev->fence_last_submitted, 0u, 0u);
     }
@@ -421,8 +437,9 @@ bc250hsa_status bc250hsa_props_read(struct bc250hsa_device* dev, bc250hsa_props*
     out->max_workgroup_size = 1024u;
     out->max_workgroups_per_dim = 0xFFFFFFFFu;
     /* The local memory a workgroup may ask for on this part. It is a property of
-     * gfx10.1 and not of the capability blob, which carries no local memory size. */
-    out->lds_bytes_per_workgroup = 65536u;
+     * gfx10.1 and not of the capability blob, which carries no local memory size. The
+     * dispatch path reads dev->lds_bytes_per_workgroup, which is this same number. */
+    out->lds_bytes_per_workgroup = dev->lds_bytes_per_workgroup;
     /* A property of gfx10.1 and not of the capability blob, which carries no wave
      * slot count: 32 wave32 slots per compute unit (16 per SIMD, two SIMDs). */
     out->waves_per_cu = 32u;

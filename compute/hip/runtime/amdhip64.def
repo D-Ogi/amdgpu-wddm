@@ -2,12 +2,25 @@
 ; section 4.1). One name per line, no decoration: every HIP entry point is extern "C", so the
 ; exported name equals the C name on x64 Windows.
 ;
-; 38 names. build-runtime.ps1 counts them, and it compares this list with the exports of the
-; built DLL. The import library amdhip64.lib comes from this file through llvm-dlltool, and its
-; name must be exactly amdhip64.lib, because clang's HIP driver appends that name to the
-; Windows link line by itself.
+; 55 names in three groups:
+;   38 HIP entry points of step 2;
+;   13 more that llama.cpp's ggml-hip backend adds (step 3, design section 4.9), plus two that the
+;     first inventory of step 3 counted among the CUDA-only names by mistake, both found by
+;     building that backend:
+;       hipOccupancyMaxActiveBlocksPerMultiprocessor - the flash attention path reaches it through
+;         a rename (ggml/src/ggml-cuda/fattn-common.cuh:1137), and that file is compiled even when
+;         GGML_CUDA_FA is off;
+;       hipStreamBeginCapture - ggml-cuda.cu:4598 calls it outside that file's own USE_CUDA_GRAPH
+;         guard, so the name has to exist even in a build with no graph support. It says no;
+;   2 counter calls of hip_perf.cpp, which are ours and not HIP (hip/hip_runtime.h says why).
+; build-runtime.ps1 counts them, and it compares this list with the exports of the built DLL. The
+; import library amdhip64.lib comes from this file through llvm-dlltool, and its name must be
+; exactly amdhip64.lib, because clang's HIP driver appends that name to the Windows link line by
+; itself.
 LIBRARY amdhip64.dll
 EXPORTS
+bc250hipGetCounters
+bc250hipResetCounters
 __hipPopCallConfiguration
 __hipPushCallConfiguration
 __hipRegisterFatBinary
@@ -15,6 +28,10 @@ __hipRegisterFunction
 __hipRegisterManagedVar
 __hipRegisterVar
 __hipUnregisterFatBinary
+hipDeviceCanAccessPeer
+hipDeviceEnablePeerAccess
+hipDeviceGetAttribute
+hipDeviceGetPCIBusId
 hipDeviceSynchronize
 hipEventCreate
 hipEventCreateWithFlags
@@ -23,6 +40,7 @@ hipEventElapsedTime
 hipEventRecord
 hipEventSynchronize
 hipFree
+hipFuncSetAttribute
 hipGetDevice
 hipGetDeviceCount
 hipGetDeviceProperties
@@ -30,17 +48,27 @@ hipGetErrorName
 hipGetErrorString
 hipGetLastError
 hipHostFree
+hipHostGetDevicePointer
 hipHostMalloc
+hipHostRegister
+hipHostUnregister
 hipInit
+hipLaunchCooperativeKernel
 hipLaunchKernel
 hipMalloc
+hipMallocManaged
+hipMemAdvise
 hipMemGetInfo
 hipMemcpy
+hipMemcpy2DAsync
 hipMemcpyAsync
+hipMemcpyPeerAsync
 hipMemset
 hipMemsetAsync
+hipOccupancyMaxActiveBlocksPerMultiprocessor
 hipPeekAtLastError
 hipSetDevice
+hipStreamBeginCapture
 hipStreamCreate
 hipStreamCreateWithFlags
 hipStreamDestroy

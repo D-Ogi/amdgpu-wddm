@@ -1,0 +1,25 @@
+state tag before-step3b utc 2026-10-09T19:30:58Z
+file C:\Program Files\amdgpu-wddm\vulkan\amdgpu_wddm_radv.dll ABSENT
+file C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_radv.dll 22387712 20A593DC 20A593DC77482425C91EBF288441E9C58A47215C2A36D69D65B3E7E85215A531
+file C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_radv.dll 22387712 20A593DC 20A593DC77482425C91EBF288441E9C58A47215C2A36D69D65B3E7E85215A531
+file C:\Program Files\amdgpu-wddm\desktop\amdgpu_wddm_radv.dll 21509120 CD360941 CD36094171E91104405239FF7C6F99FCAC921D779AE2B67979AF3E5F7E6FF1C6
+file C:\Windows\System32\DriverStore\FileRepository\__kmd__ ABSENT
+icdreg HKLM:\SOFTWARE\Khronos\Vulkan\Drivers C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json = 0
+icdreg HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers C:\Program Files\amdgpu-wddm\wow64\vulkan\radeon_icd.json = 0
+icdlib C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json -> C:\Program Files\amdgpu-wddm\vulkan\.\vulkan_radeon.dll 21914112 4E3F393F 4E3F393F9761CB53BDE8F5EBE5CFB04D4A62C9E6DCB8A101778CF664B4C72A04
+icdlib C:\Program Files\amdgpu-wddm\wow64\vulkan\radeon_icd.json -> C:\Program Files\amdgpu-wddm\wow64\vulkan\.\vulkan_radeon.dll 20151296 887A08E5 887A08E5A6D6F923411579F3FDDE157CA635570B88FC476AED2A956FDCF7CADF
+kmd C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_030b5c614d4ea45c\bc250kmd.sys 675256 181C3E31 181C3E319F92867E63C6010498CD51E21D88A1056536477FE75C20CD8BAAFD9E
+kmdver
+param EnableRingVmFlush ABSENT
+param EnableDpAudioContainerId = 1
+param CuMode = 40
+param DpmMaxMHz = 1500
+param DpmIdleMHz = 500
+param ReportAmdDriverVersion ABSENT
+param HangRecoveryMode = 1
+tdr TdrDelay = 10
+cli C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe
+boot 2026-10-09T16:12:09Z
+task running BC250 monitor overlay
+task running BC250 net watchdog
+state end

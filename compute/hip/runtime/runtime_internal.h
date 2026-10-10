@@ -93,6 +93,12 @@ struct Function {
     Module*                 module = nullptr;
     std::string             device_name;
     const bc250hsa_kernel*  kernel = nullptr;
+    // The largest dynamic group memory this kernel may ask for, as hipFuncSetAttribute set it.
+    // -1 means that no program set it. The value is advice on this part: there is no 48 KiB
+    // default ceiling to lift, and layer 1 checks the real dispatch against the hardware. It is
+    // kept and reported, so that a program which sets a value above the hardware limit learns
+    // it at the call that sets it and not at the launch.
+    int                     dynamic_group_max = -1;
 };
 
 struct Allocation {
@@ -140,6 +146,13 @@ struct State {
     // two minutes per wait (design decision 10).
     uint32_t                                wait_slice_ms = 0;
     uint32_t                                wait_total_ms = 0;
+    // The BC250HSA_DISPATCH_* bits every launch of this process carries. It is 0 for a product
+    // build; BC250_HIP_PM4_STATE_CACHE=0 adds BC250HSA_DISPATCH_FULL_STATE, which writes the
+    // whole compute state for every dispatch of a batch (section 8.8 of the design). The
+    // switch exists so that a lab arm can measure the state cache against the build without
+    // it, and so that a wrong assumption about persistent register state can be turned off in
+    // one environment variable instead of a new build.
+    uint32_t                                dispatch_flags = 0;
     // Streams and events that exist now, the null stream apart. A host test reads them to see
     // that an object destroyed while another thread waited on it is freed one time and not
     // twice, which a reference count that counted wrong would show here as a number that never
@@ -161,6 +174,17 @@ State& state();
 #define BC250_HIP_WAIT_UNDER_LOCK_BUILD 0
 #endif
 bool waits_under_lock();
+
+// The negative control of the dispatch packet (section 7.1 of bc250hsa.h, defect BD-110). A
+// build with BC250_HIP_NO_DISPATCH_PACKET=1 passes no packet address, so every kernel that
+// reads its own blockDim is refused exactly as the build of 2026-10-09 refused it. It exists
+// so that the fix can be shown to be the fix, offline, against the mock backend, and nothing
+// but that control build defines the macro.
+#if defined(BC250_HIP_NO_DISPATCH_PACKET) && BC250_HIP_NO_DISPATCH_PACKET
+#define BC250_HIP_NO_DISPATCH_PACKET_BUILD 1
+#else
+#define BC250_HIP_NO_DISPATCH_PACKET_BUILD 0
+#endif
 
 // The process lock, and the only way to wait for the device.
 //
@@ -195,6 +219,13 @@ hipError_t last_error_peek();
 hipError_t last_error_take();
 void       last_error_set(hipError_t err);
 
+// The diagnostic log of this runtime (hip_log.cpp). BC250_HIP_LOG turns it on, and with it on
+// every refusal of this runtime and every bc250hsa_log line of layer 1 names itself. It is off
+// by default and then costs one read of a local static per call.
+void log_start();
+bool log_on();
+void log_line(uint32_t level, const char* format, ...);
+
 // Records an error and returns it, so that an entry point can write `return fail(...)`.
 inline hipError_t fail(hipError_t err) {
     if (err != hipSuccess) {
@@ -203,6 +234,13 @@ inline hipError_t fail(hipError_t err) {
     return err;
 }
 inline hipError_t fail_status(bc250hsa_status status) { return fail(translate(status)); }
+
+// A refusal that says which call refused what and why. It records the error exactly as fail()
+// does, and with the log off it costs the same. Every path of this runtime that answers "this
+// build cannot do that" goes through one of the two, so that a lab session never again has to
+// guess which of them spoke (defect BD-110).
+hipError_t refuse(const char* call, const char* kernel, const char* why, hipError_t err);
+hipError_t refuse_status(const char* call, const char* kernel, bc250hsa_status status);
 
 // The allocation table. find_allocation accepts an interior pointer, because a HIP program
 // passes `buffer + offset` to hipMemcpy.

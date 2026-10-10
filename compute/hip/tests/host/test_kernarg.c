@@ -13,6 +13,11 @@
  */
 #include "test_common.h"
 
+/* ENABLE_SGPR_DISPATCH_PTR of the kernel descriptor. The library keeps the name in its
+ * own private header, which a host test does not include, so the bit is written down
+ * here with the field it belongs to (AMDGPUUsage.rst, the kernel descriptor table). */
+#define TEST_KCP_DISPATCH_PTR 0x0002u
+
 #define KERNARG_MAX 512u
 
 static uint8_t g_buffer[KERNARG_MAX];
@@ -83,7 +88,7 @@ static void check_vadd(const struct bc250hsa_module* mod)
     launch_of(&launch, 4096u, 1u, 1u, 256u, 1u, 1u);
     zero_result(&result);
     memset(g_buffer, 0xEE, sizeof(g_buffer));
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(result.bytes_written, 28u);
     CHECK_U64(result.explicit_args_written, 4u);
@@ -101,39 +106,39 @@ static void check_vadd(const struct bc250hsa_module* mod)
 
     /* The wrong number of arguments is refused, in both directions. */
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 3u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 3u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 5u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 5u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
     /* A buffer smaller than kernarg_segment_size is refused before any write. */
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, 27u, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, 27u, 0u, &result),
                  BC250HSA_EINVAL);
     /* A null argument pointer in the array is refused, not read. */
     zero_result(&result);
     args[2] = NULL;
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
     args[2] = &c;
     /* An unknown result size, and the null parameters. */
     zero_result(&result);
     result.struct_bytes = (uint32_t)sizeof(result) - 4u;
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
     zero_result(&result);
     launch.struct_bytes = 0u;
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
     launch_of(&launch, 4096u, 1u, 1u, 256u, 1u, 1u);
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(NULL, &launch, args, 4u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(NULL, &launch, args, 4u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, NULL, args, 4u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, NULL, args, 4u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, NULL, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, NULL, KERNARG_MAX, 0u, &result),
                  BC250HSA_EINVAL);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, NULL),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 4u, g_buffer, KERNARG_MAX, 0u, NULL),
                  BC250HSA_EINVAL);
     CHECK_STATUS(bc250hsa_kernarg_requirements(NULL, &bytes, &alignment), BC250HSA_EINVAL);
     CHECK_STATUS(bc250hsa_kernarg_requirements(k, NULL, &alignment), BC250HSA_EINVAL);
@@ -161,7 +166,7 @@ static void check_reduce256(const struct bc250hsa_module* mod)
     launch_of(&launch, 64u, 1u, 1u, 256u, 1u, 1u);
     zero_result(&result);
     memset(g_buffer, 0xEE, sizeof(g_buffer));
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 2u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 2u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(result.bytes_written, 16u);
     CHECK_U64(result.explicit_args_written, 2u);
@@ -200,7 +205,7 @@ static void check_write_grid_size(const struct bc250hsa_module* mod)
     launch_of(&launch, 7u, 3u, 2u, 64u, 2u, 1u);
     zero_result(&result);
     memset(g_buffer, 0xEE, sizeof(g_buffer));
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(result.bytes_written, 264u);
     CHECK_U64(result.explicit_args_written, 1u);
@@ -242,17 +247,17 @@ static void check_write_grid_size(const struct bc250hsa_module* mod)
     /* The number of dimensions follows the launch, from the grid or from the block. */
     launch_of(&launch, 4096u, 1u, 1u, 256u, 1u, 1u);
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(read_u16(72u), 1u);
     launch_of(&launch, 4096u, 2u, 1u, 256u, 1u, 1u);
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(read_u16(72u), 2u);
     launch_of(&launch, 4096u, 1u, 1u, 256u, 1u, 2u);
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(read_u16(72u), 3u);
 }
@@ -301,7 +306,7 @@ static void check_hidden_fields(void)
     launch.dynamic_group_bytes = 2048u;
     zero_result(&result);
     memset(g_buffer, 0xEE, sizeof(g_buffer));
-    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_OK);
     CHECK_U64(result.bytes_written, 48u);
     CHECK_U64(result.explicit_args_written, 1u);
@@ -328,13 +333,153 @@ static void check_hidden_fields(void)
      * packer says so instead of writing outside the buffer. */
     k.kernarg_bytes = 44u;
     zero_result(&result);
-    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, KERNARG_MAX, &result),
+    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u, &result),
                  BC250HSA_EBADMETADATA);
 
     /* A counters structure of an unknown size is refused. */
     after.struct_bytes = 0u;
     CHECK_STATUS(bc250hsa_counters_read(&after), BC250HSA_EINVAL);
     CHECK_STATUS(bc250hsa_counters_read(NULL), BC250HSA_EINVAL);
+}
+
+/* ------------------------------------------------------------------------------
+ * The AQL dispatch packet of section 7.1
+ *
+ * A kernel that reads its own blockDim enables ENABLE_SGPR_DISPATCH_PTR, and a PM4
+ * path has to write the packet that register points at. MEASURED on the ggml-hip
+ * backend: 1752 of its 7105 gfx1013 kernels enable the bit (defect BD-110). This
+ * checks the size the caller must allocate and every field the packet holds.
+ * ------------------------------------------------------------------------------ */
+
+static void check_dispatch_packet(void)
+{
+    static const bc250hsa_arg args_list[] = {
+        { 0u, 8u, (uint16_t)BC250HSA_ARG_GLOBAL_BUFFER, BC250HSA_AS_GLOBAL, 8u }
+    };
+    bc250hsa_kernel      k;
+    bc250hsa_launch      launch;
+    bc250hsa_pack_result result;
+    uint64_t             buffer_va = 0x0000004000070000ull;
+    void*                args[1];
+    uint32_t             bytes = 0;
+    uint32_t             alignment = 0;
+    const uint64_t       kernarg_va = 0x0000004000080000ull;
+    uint32_t             at;
+
+    memset(&k, 0, sizeof(k));
+    k.name = "reads_blockdim";
+    k.descriptor_va = 0x00000040000A0000ull;
+    k.kernarg_bytes = 24u;
+    k.kernarg_align = 16u;
+    k.group_segment_bytes = 1024u;
+    k.max_flat_workgroup_size = 1024u;
+    k.arg_count = TEST_COUNT(args_list);
+    k.explicit_arg_count = 1u;
+    k.args = args_list;
+    args[0] = &buffer_va;
+
+    /* Without the bit the requirement is the kernel argument block alone. */
+    CHECK_STATUS(bc250hsa_kernarg_requirements(&k, &bytes, &alignment), BC250HSA_OK);
+    CHECK_U64(bytes, 24u);
+    CHECK_U64(alignment, 16u);
+
+    /* With it the buffer grows by the packet, at the packet's own alignment. */
+    k.kernel_code_properties = (uint16_t)TEST_KCP_DISPATCH_PTR;
+    CHECK_STATUS(bc250hsa_kernarg_requirements(&k, &bytes, &alignment), BC250HSA_OK);
+    CHECK_U64(bytes, BC250HSA_AQL_PACKET_ALIGN + BC250HSA_AQL_PACKET_BYTES);
+    CHECK_U64(alignment, BC250HSA_AQL_PACKET_ALIGN);
+
+    /* A buffer that holds the arguments but not the packet is refused. */
+    launch_of(&launch, 7u, 3u, 2u, 64u, 4u, 1u);
+    launch.dynamic_group_bytes = 512u;
+    zero_result(&result);
+    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, 24u, kernarg_va,
+                                       &result),
+                 BC250HSA_EINVAL);
+
+    zero_result(&result);
+    memset(g_buffer, 0xEE, sizeof(g_buffer));
+    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, KERNARG_MAX, kernarg_va,
+                                       &result),
+                 BC250HSA_OK);
+    CHECK_U64(result.dispatch_packet_requested, 1u);
+    CHECK_U64(result.dispatch_packet_offset, BC250HSA_AQL_PACKET_ALIGN);
+    CHECK_U64(result.bytes_written, BC250HSA_AQL_PACKET_ALIGN + BC250HSA_AQL_PACKET_BYTES);
+    CHECK_U64(read_u64(0u), buffer_va);
+    /* The gap between the arguments and the packet is zero and not what the last
+     * launch out of a pooled buffer left there. */
+    for (at = 24u; at < BC250HSA_AQL_PACKET_ALIGN; at++) {
+        CHECK_U64(g_buffer[at], 0u);
+    }
+    {
+        const uint32_t p = BC250HSA_AQL_PACKET_ALIGN;
+        /* header: a kernel dispatch packet, the barrier bit, both fences at system
+         * scope. setup: three dimensions, because block.y and grid.z are above 1. */
+        CHECK_U64(read_u16(p + 0u), 2u | (1u << 8) | (2u << 9) | (2u << 11));
+        CHECK_U64(read_u16(p + 2u), 3u);
+        CHECK_U64(read_u16(p + 4u), 64u);
+        CHECK_U64(read_u16(p + 6u), 4u);
+        CHECK_U64(read_u16(p + 8u), 1u);
+        CHECK_U64(read_u16(p + 10u), 0u);         /* reserved0 */
+        /* The grid in work items, where bc250hsa_launch states it in workgroups. */
+        CHECK_U64(read_u32(p + 12u), 7u * 64u);
+        CHECK_U64(read_u32(p + 16u), 3u * 4u);
+        CHECK_U64(read_u32(p + 20u), 2u * 1u);
+        CHECK_U64(read_u32(p + 24u), 0u);         /* private segment, no scratch here */
+        CHECK_U64(read_u32(p + 28u), 1024u + 512u);
+        CHECK_U64(read_u64(p + 32u), k.descriptor_va);
+        CHECK_U64(read_u64(p + 40u), kernarg_va);
+        CHECK_U64(read_u64(p + 48u), 0u);         /* reserved2 */
+        CHECK_U64(read_u64(p + 56u), 0u);         /* completion_signal: our own fence */
+    }
+
+    /* A one-dimensional launch says one dimension, and the packet is written again
+     * from the new launch and not left as it was. */
+    launch_of(&launch, 5u, 1u, 1u, 32u, 1u, 1u);
+    zero_result(&result);
+    CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, args, 1u, g_buffer, KERNARG_MAX, 0u,
+                                       &result),
+                 BC250HSA_OK);
+    {
+        const uint32_t p = BC250HSA_AQL_PACKET_ALIGN;
+        CHECK_U64(read_u16(p + 2u), 1u);
+        CHECK_U64(read_u32(p + 12u), 5u * 32u);
+        CHECK_U64(read_u32(p + 16u), 1u);
+        CHECK_U64(read_u32(p + 28u), 1024u);
+        CHECK_U64(read_u64(p + 40u), 0u);   /* a plain host buffer has no GPU address */
+    }
+}
+
+static void check_requirement_bounds(void)
+{
+    const uint32_t sizes[] = {UINT32_MAX - 126u, UINT32_MAX - 63u, UINT32_MAX};
+    bc250hsa_kernel k;
+    bc250hsa_launch launch;
+    bc250hsa_pack_result result;
+    uint32_t i, j, bytes, align;
+    memset(&k, 0, sizeof(k));
+    k.name = "checked_requirements";
+    k.kernarg_align = 16u;
+    k.kernel_code_properties = TEST_KCP_DISPATCH_PTR;
+    k.kernarg_bytes = UINT32_MAX - 127u;
+    CHECK_STATUS(bc250hsa_kernarg_requirements(&k, &bytes, &align), BC250HSA_OK);
+    CHECK_U64(bytes, UINT32_MAX - 63u);
+    CHECK_U64(align, 64u);
+    launch_of(&launch, 1u, 1u, 1u, 1u, 1u, 1u);
+    for (i = 0; i < TEST_COUNT(sizes); ++i) {
+        bc250hsa_status status;
+        k.kernarg_bytes = sizes[i];
+        status = bc250hsa_kernarg_requirements(&k, &bytes, &align);
+        CHECK_STATUS(status, BC250HSA_EINVAL);
+        /* Never exercise an admitted invalid size, even in a negative control. */
+        if (status != BC250HSA_EINVAL) continue;
+        CHECK_U64(bytes, 0u);
+        memset(g_buffer, 0xA5, sizeof(g_buffer));
+        zero_result(&result);
+        CHECK_STATUS(bc250hsa_kernarg_pack(&k, &launch, NULL, 0u, g_buffer,
+                     sizeof(g_buffer), 0u, &result), BC250HSA_EINVAL);
+        for (j = 0; j < sizeof(g_buffer); ++j) CHECK_U64(g_buffer[j], 0xA5u);
+    }
 }
 
 int main(int argc, char** argv)
@@ -359,5 +504,7 @@ int main(int argc, char** argv)
         free(image);
     }
     check_hidden_fields();
+    check_dispatch_packet();
+    check_requirement_bounds();
     return test_report("test_kernarg");
 }

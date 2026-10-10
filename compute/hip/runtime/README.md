@@ -14,8 +14,10 @@ calls `__hipRegisterFatBinary` and `__hipRegisterFunction` before `main()`, and 
 call of `hipLaunchKernel`. This DLL answers those calls. No AMD user-mode component is
 involved, and no part of this work uses PAL (owner decision D015).
 
-38 exported names, which [`amdhip64.def`](amdhip64.def) lists. A plain HIP vector addition
-links against exactly that set.
+55 exported names, which [`amdhip64.def`](amdhip64.def) lists: the 38 of step 2, against which a
+plain HIP vector addition links, the 15 that llama.cpp's ggml-hip backend adds in step 3 (design
+section 4.9), and two of ours that are not HIP (`bc250hipGetCounters` and
+`bc250hipResetCounters`, see Measurement below).
 
 | File | What it holds |
 |---|---|
@@ -26,6 +28,7 @@ links against exactly that set.
 | `hip_event.cpp` | events over the stream fence values |
 | `hip_device.cpp` | the process state, the lazy device, the device properties |
 | `hip_error.cpp` | the per-thread error state and the status translation |
+| `hip_perf.cpp` | the two counter calls, which are ours and not HIP |
 | `dllmain.cpp` | the entry point, which does nothing on purpose |
 
 ## How to build it
@@ -47,7 +50,7 @@ product DLL needs that library.
 
 ## What the build gates
 
-1. `amdhip64.def` holds exactly 38 names, and every one of them is declared in
+1. `amdhip64.def` holds exactly 55 names, and every one of them is declared in
    `hip_runtime.h`.
 2. Every undefined symbol of the runtime objects that belongs to our own stack is declared in
    `bc250hsa.h`. A new call into layer 1 that the contract does not carry is a build failure.
@@ -55,7 +58,8 @@ product DLL needs that library.
 4. `test_hip_mock.exe` passes: registration, argument packing, stream order across an event
    wait, event timing, no allocation leak on a second run, the fixed properties of the design,
    the memory entry points with an explicit kind and with `hipMemcpyDefault`, the null stream,
-   the per-thread error state, and a second fat binary in one process.
+   the per-thread error state, a second fat binary in one process, and the 15 step-3 entry
+   points: 232 checks in all, measured by this build.
 5. A real HIP program, compiled by clang against `hip_runtime.h` and linked against
    `amdhip64.lib`, imports `amdhip64.dll`, runs against the mock build, and records the
    dispatches that its two `<<<>>>` calls asked for, with the measured grid, block and kernel
@@ -64,6 +68,107 @@ product DLL needs that library.
    and the host test run against the result. The fixture is not reproducible byte for byte,
    because clang writes a unique `__hip_cuid_*` symbol into every compilation
    (`tests/data/PROVENANCE-runtime.txt`).
+7. `test_hip_batch.exe` passes, and `test_hip_mock.exe` and `test_hip_threads.exe` pass a
+   second time with `BC250_HIP_BATCH=1` and `BC250_HIP_BARRIER=light`. Those are the defaults
+   of this build, and the second pass stays because it names them.
+8. `hipbench.exe`, against the mock DLL, measures under 0.1 submissions per launch with no
+   environment at all (the default batches) and exactly 1.000 with `--batch 0 --barrier full`,
+   which is build 1. The number comes from the counters of the DLL itself, so this also gates
+   the two counter calls, and the second arm gates the switches.
+
+## Batching, and the switches
+
+Section 8 of the design is the off-GPU cost of a launch, and the mechanism is in layer 1
+(`compute/hip/README.md` has the shape of it). This runtime needed two insertions for it:
+`hip_device.cpp` reads five environment variables once, at its first call, and gives layer 1 a
+policy. `hipEventRecord` submits an open buffer before it stamps the event, so an event covers
+the work the stream had asked for. Every other path is right without a change, because
+`bc250hsa_wait` submits an open buffer itself when a caller asks for a value the device has not
+been given.
+
+| Variable | Values | Default |
+|---|---|---|
+| `BC250_HIP_BATCH` | `0`, `1` | `1`, several launches in one indirect buffer |
+| `BC250_HIP_BATCH_MAX` | 1 to 256 dispatches per buffer | 32 |
+| `BC250_HIP_BATCH_HOLD_US` | microseconds a buffer may hold a dispatch | 1000 |
+| `BC250_HIP_BARRIER` | `full`, `light` | `light` |
+| `BC250_HIP_PM4_STATE_CACHE` | `0`, `1` | `1`, write only the state that changed |
+
+The first two defaults were the conservative value until the lab said otherwise. It did, on
+2026-10-09: `evidence/m16/perf-2026-10-09` and facts M853 to M857. Batching with the light
+barrier is exact over two chains of 1000 dependent kernels, 2.2 times faster on the launch line
+and 3.8 times faster on the chain line, and 0.032 submissions per dispatch against 1.000. One
+line is slower, a 4 KB device-to-host copy by about 9.5 us, which the second launch after it
+repays. Section 8.6a of the design has the whole of that and the arm that will settle its cause.
+
+`BC250_HIP_BATCH=0` with `BC250_HIP_BARRIER=full` is exactly build 1. A value the backend
+refuses gets one line on the standard error stream and the device's own default, which is one
+submission per launch, never a failed `hipInit`.
+
+`BC250_HIP_PM4_STATE_CACHE=0` is the other control arm. By default a launch that follows another
+one in the same indirect buffer writes only the compute state that changed, 23 dwords instead of
+72 (design section 8.8). This variable makes every launch write the whole state, as build 1 did.
+
+## The log, and why it exists
+
+| Variable | Values | Default |
+|---|---|---|
+| `BC250_HIP_LOG` | `0` or absent, `1`, `stderr`, or a file path | off |
+| `BC250_HIP_LOG_LEVEL` | `0` error, `1` warning, `2` information, `3` trace | `2` |
+
+With it on, every refusal of this runtime names the call, the kernel and the reason, and every
+`bc250hsa_log` line of layer 1 arrives on the same stream. The sink goes in where the device
+opens, before the first call into layer 1, and not at the first refusal of this runtime: a sink
+installed at the first refusal would miss the `bc250hsa_log` line that the same refusal had
+already written, which is the one line that states which of the rules of `pm4_dispatch.c` spoke.
+A file path is appended to, so several runs of one trial keep their order, and a path that cannot
+be opened gets one line on the error stream instead of silence. Each line carries the process and
+the thread identifier. The log holds call names, kernel names and status names, and no
+application data.
+
+The reason it exists is a lab session. On 2026-10-09 all three llama.cpp arms of M16 step 3B died
+at `CUDA_CHECK(cudaGetLastError())` right after a `<<<>>>` call, with our own text for
+`hipErrorNotSupported` and nothing else: layer 1 wrote its reason through `bc250hsa_log`, this
+runtime installed no sink, and the refusal counters of layer 1 are not among the two counter
+exports. The session had to end with "the next step is a build whose refusals say which call and
+which kernel they refuse" (defect BD-110). With the switch the same run says, in one line:
+
+```
+amdhip64 [78528:109128] error hipLaunchKernel/dispatch_submit refuses kernel
+  _ZL12rms_norm_f32ILi1024ELb1ELb0ELb0E...: not supported by this build (hipErrorNotSupported)
+```
+
+`hipLaunchKernel` reports through it at six points (the host stub, the code object load, the
+kernel lookup, the kernel argument requirements, the packing and the submission), and so do
+`hipHostRegister`, `hipMallocManaged`, `hipMemAdvise`, `hipStreamBeginCapture`,
+`hipLaunchCooperativeKernel`, `hipFuncSetAttribute`, `__hipRegisterManagedVar`, the
+device-to-device copy and the fill of an allocation with no host mapping.
+
+## The AQL dispatch packet
+
+A kernel that reads its own `blockDim` enables `ENABLE_SGPR_DISPATCH_PTR`:
+`__builtin_amdgcn_workgroup_size_x`, which is what `blockDim.x` becomes, is a 16-bit load from
+the AQL kernel dispatch packet and not an implicit kernel argument. A PM4 dispatch has no packet,
+so layer 1 writes one at the end of the same kernel argument buffer this runtime takes from its
+pool, and `hipLaunchKernel` passes its address in `bc250hsa_dispatch` (section 7.1 of
+`bc250hsa.h`). One allocation, one lifetime: the packet retires with the dispatch that reads it.
+
+MEASURED on the built `ggml-hip.dll` of llama.cpp: 1752 of its 7105 gfx1013 kernels enable the
+bit, among them every `k_get_rows`, every `soft_max_f32` and half of the `k_bin_bcast` and
+`mul_mat_q` sets. Without the packet layer 1 refused all 1752 by name, which is defect BD-110 and
+the reason no model ran on 2026-10-09. The negative control is a build of this DLL with
+`BC250_HIP_NO_DISPATCH_PACKET=1`, which `build-runtime.ps1` writes to
+`mock-no-dispatch-packet\amdhip64.dll` and nothing else defines.
+
+## Measurement
+
+`bc250hipGetCounters` and `bc250hipResetCounters` are not HIP. They report what the submission
+layer did, and above all how many times one kernel launch entered the kernel driver, which no
+HIP entry point answers. `samples/hipbench.hip` is their named user: launch rate, a dependent
+chain in the shape of a decode step, host copies at 4 KB, 1 MiB and 64 MiB, the cost of
+synchronising a retired stream, an event round, and submissions per launch beside each one. The
+The mock DLL proves the harness. The numbers that mean anything come from the lab arms in
+`scratch/m16-hip/lab/perf-README.md`, which is local.
 
 ## Threads
 
@@ -132,5 +237,11 @@ have their own tests against the same code objects.
 - `__hipRegisterManagedVar` reports a missing capability. Managed memory needs page migration.
 - A kernel that asks for a host call buffer (device-side `printf`) is refused by name. The
   counter of layer 1 answers kill criterion K4 of the route document.
-- Step 3 adds 14 more names for llama.cpp, five of them honest stubs, and the device-side math,
-  atomic and shuffle sets in the header.
+- The device-side header set that llama.cpp's kernels need is not written. Design section 4.10
+  measures it: about 100 names, which are the half and bfloat16 types, the vector types, the
+  cross-lane functions, the atomics and the cached loads. The mathematics of those kernels is no
+  longer work, because clang's own HIP math headers and the device library of section 4.6 carry
+  all 48 names a probe asked for.
+- There is no hipBLAS. The backend needs 11 entry points of `hipblas` and `rocblas`, and its
+  CMake file requires all three packages. A shim over our own matrix multiply kernels is the
+  open work, and `GGML_CUDA_FORCE_MMQ=ON` keeps the quantised multiplies out of it.
