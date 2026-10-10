@@ -530,7 +530,8 @@ class Runner:
                                      "seconds": round(done.seconds, 1), "timed_out": done.timed_out,
                                      "optional": step.optional, "raw": path.as_posix()})
                 texts.append(done.text)
-                bad = done.timed_out or done.rc != 0
+                allowed = step.phase == "run" and done.rc in arm.allow_rc
+                bad = done.timed_out or (done.rc != 0 and not allowed)
                 if not bad:
                     continue
                 if step.optional:

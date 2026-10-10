@@ -269,7 +269,7 @@
       "kill": ["DXRPathTracer"],
       "run": [["python", "{target}", "ps", "{pathtrace}/lab/pt-run.ps1", "-Demo", "dxrpt", "-AlwaysReset",
                "-Seconds", "90", "-Width", "1536", "-Height", "864"]],
-      "result": {"regex": "([\\d.]+) fps, ([\\d.]+) Mrays/s", "group": 1, "name": "steady path tracing", "unit": "fps"},
+      "result": {"regex": "t=[\\d.]+ s frames=\\d+ fps=([\\d.]+)", "group": 1, "name": "steady path tracing", "unit": "fps"},
       "baseline": {"value": 19.13, "tolerance_pct": 10, "source": "b26 (tester.24) 20261009T140217Z-dxrpt: 436 frames in 30.0 s, 19.13 fps, 126.9 Mrays/s"},
       "depends_on": ["preflight"],
       "failure_classes": ["BD-102"]
@@ -284,11 +284,12 @@
                "-Route", "direct", "-IcdPath", "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
                "-BoundSeconds", "150"]],
       "expect": "complete=True",
+      "allow_rc": [1],
       "result": {"regex": "Pass=(\\d+)", "name": "CTS ray tracing cases passed", "unit": "cases"},
       "baseline": {"value": 137, "tolerance_abs": 0, "source": "b27 (tester.25) cts-rt-k97.txt: 137 Pass and 3 NotRun of 140, case for case the same as b25 and b26"},
       "depends_on": ["preflight"],
       "failure_classes": ["BD-102"],
-      "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision. The lab needs the CTS package at C:\\BC250\\cts."
+      "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision, and the batch runner ends rc 1 because of them, which is why this arm names 1 among the exit codes it reads as an answer; the case count and 'complete=True' decide. The lab needs the CTS package at C:\\BC250\\cts."
     },
     {
       "id": "llm-dense",
@@ -369,7 +370,7 @@
         "SESSION_EXPERIMENT": "none",
         "SESSION_VSYNC": "false",
         "SESSION_LIMIT_FPS": "240",
-        "SESSION_ETW_ARGS": "-Seconds 40 -LatestB 447 -FpsSeconds 90"
+        "SESSION_ETW_ARGS": "-Seconds 40 -LatestB 900 -FpsSeconds 120"
       },
       "result": {"operator": true, "name": "world average", "unit": "fps",
                  "how": "the session sampler's own rate line, with the operator driving the game from half-scale shots"},

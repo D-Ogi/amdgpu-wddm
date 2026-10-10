@@ -150,6 +150,15 @@ class PlannedArm:
     def depends_on(self) -> list[str]:
         return list(self.arm.get("depends_on", ()))
 
+    @property
+    def allow_rc(self) -> list[int]:
+        """Exit codes of a run step that this arm's own question treats as an answer, not a failure.
+
+        One harness on the lab says 'some of my cases did not run' with an exit code and says which ones in
+        its output. The manifest names those codes, and the arm's `expect` lines then decide.
+        """
+        return [int(code) for code in self.arm.get("allow_rc", ())]
+
 
 @dataclass
 class Plan:

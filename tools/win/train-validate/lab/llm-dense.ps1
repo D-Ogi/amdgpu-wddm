@@ -41,7 +41,11 @@ $manifest = Join-Path $kit 'seg0-kit-manifest.json'
 if (Test-Path -LiteralPath $manifest) {
     "kit manifest sha256 $((Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash)"
 }
-$pins = Get-Content -LiteralPath (Join-Path $Root $Pins) -Raw | ConvertFrom-Json
+# Not `$pins`: PowerShell variable names are case-insensitive, so that name is the `[string]$Pins`
+# parameter, and an object assigned to it is coerced to its string form. The supervisor then gets a string
+# where it wants the pin map and refuses with 'workload hash pin missing'.
+$pinMap = Get-Content -LiteralPath (Join-Path $Root $Pins) -Raw | ConvertFrom-Json
+if ($pinMap -isnot [psobject] -or -not $pinMap.PSObject.Properties[$Exe]) { "MISSING pin for $Exe in $Pins"; exit 2 }
 $modelPin = ((Get-Content -LiteralPath (Join-Path $Root $ModelPins) -Raw | ConvertFrom-Json).PSObject.Properties[$Model]).Value
 if (-not $modelPin) { "MISSING pin for $Model in $ModelPins"; exit 2 }
 $started = Get-Date
@@ -58,7 +62,7 @@ if (Test-Path -LiteralPath $cli) {
 '--- ARM ---'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $supervisor `
     -Tag $Tag -ExePath $Exe -ArgsB64 (Encode $arguments) -ProcPattern 'llama-*' `
-    -ExpectedHashesB64 (Encode ($pins | ConvertTo-Json -Compress)) `
+    -ExpectedHashesB64 (Encode ($pinMap | ConvertTo-Json -Compress)) `
     -EnvB64 (Encode 'MESA_SHADER_CACHE_DISABLE=false') -StdoutName 'stdout.json' `
     -RunRoot $Root -Deadline $Deadline -WorkloadStop $WorkloadStop -OperationCapMs 15000
 $armExit = $LASTEXITCODE
