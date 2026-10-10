@@ -1,0 +1,12 @@
+# The ratchet of tools/quality/claim_shares.py, rule clock-model-label only.
+# Each line is a facts row that already held a clock normalisation without a modelled label
+# when this gate landed, by rule and fact ID. The gate fails on any row outside this file,
+# and no run adds a line by itself.
+#
+# M842 is deliberately not here. It is the row the audit of 2026-10-10 (A19) corrected: it
+# read "spends 76 % of its frame in RT" for a share of two frame times that the fitted
+# rate x (1.5 / GHz)^0.75 produced. The gate fails on that wording, which is the point.
+#
+# M799 states no normalised share. Its "Read a rate per GHz or not at all" refuses the
+# comparison, because the two sessions ran at 1430 and 1107 MHz. The row needs no rewrite.
+clock-model-label	M799
