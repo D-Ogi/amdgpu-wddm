@@ -67,6 +67,85 @@ bc250hsa_status bc250hsa_buffer_resource(uint64_t va, uint64_t bytes, uint32_t o
     return BC250HSA_OK;
 }
 
+/* LLVM AMDGPUUsage: private segment size is DWORD-rounded per work item.
+ * Mesa ac_shader_util.c: GFX10 WAVESIZE is in 1024-byte units, WAVES is global.
+ * Keep this pure so range and retirement controls need no adapter. */
+bc250hsa_status bc250hsa_plan_scratch(uint32_t private_bytes, uint32_t wave_size,
+                                      bc250hsa_scratch_plan* out)
+{
+    uint64_t thread_bytes, wave_bytes;
+    if (out == NULL || (wave_size != 32u && wave_size != 64u)) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    if (private_bytes == 0u) { return BC250HSA_OK; }
+    thread_bytes = ((uint64_t)private_bytes + 3u) & ~(uint64_t)3u;
+    wave_bytes = (thread_bytes * wave_size + 1023u) & ~(uint64_t)1023u;
+    if (thread_bytes > UINT32_MAX ||
+        wave_bytes / BC250HSA_SCRATCH_WAVESIZE_GRANULE > BC250HSA_SCRATCH_WAVESIZE_MASK) {
+        return BC250HSA_EUNSUPPORTED;
+    }
+    out->bytes_per_thread = (uint32_t)thread_bytes;
+    out->bytes_per_wave = (uint32_t)wave_bytes;
+    out->bytes = wave_bytes * BC250HSA_SCRATCH_WAVES;
+    out->tmpring_size = BC250HSA_SCRATCH_WAVES |
+        ((uint32_t)(wave_bytes / BC250HSA_SCRATCH_WAVESIZE_GRANULE)
+         << BC250HSA_SCRATCH_WAVESIZE_SHIFT);
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_scratch_resource(uint64_t va, uint64_t bytes,
+                                          const bc250hsa_scratch_plan* plan,
+                                          uint32_t wave_size, uint32_t out[4])
+{
+    if (plan == NULL || out == NULL || (wave_size != 32u && wave_size != 64u) ||
+        plan->bytes == 0u || bytes < plan->bytes || va == 0u ||
+        (va & (BC250HSA_SCRATCH_ALIGNMENT - 1u)) != 0u || va >= (1ull << 48) ||
+        bytes > (1ull << 48) - va) {
+        return BC250HSA_EINVAL;
+    }
+    /* HSA preloads these four SGPRs; the prologue adds the SPI per-wave offset.
+     * NUM_RECORDS is the compiler's unbounded scratch descriptor, not BO bytes.
+     * TMPRING_SIZE bounds the ring allocation independently. */
+    out[0] = (uint32_t)va;
+    out[1] = (uint32_t)(va >> 32) | BC250HSA_SCRATCH_SWIZZLE_ENABLE;
+    out[2] = UINT32_MAX;
+    out[3] = (BC250HSA_SCRATCH_FORMAT_32_FLOAT << BC250HSA_SCRATCH_FORMAT_SHIFT) |
+        ((wave_size == 32u ? 2u : 3u) << BC250HSA_SCRATCH_INDEX_STRIDE_SHIFT) |
+        BC250HSA_SCRATCH_ADD_TID_ENABLE | BC250HSA_SCRATCH_RESOURCE_LEVEL |
+        BC250HSA_SCRATCH_OOB_SELECT;
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_prepare_scratch(bc250hsa_mem* slot, uint64_t required_fence,
+                                         uint64_t observed_fence,
+                                         const bc250hsa_scratch_plan* plan,
+                                         const bc250hsa_allocator* allocator)
+{
+    bc250hsa_mem replacement;
+    bc250hsa_status status;
+    if (slot == NULL || plan == NULL || allocator == NULL ||
+        allocator->alloc == NULL || allocator->free == NULL || plan->bytes == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    if (observed_fence == UINT64_MAX) { return BC250HSA_EDEVICELOST; }
+    if (observed_fence < required_fence) { return BC250HSA_EBUSY; }
+    if (slot->opaque != NULL && slot->bytes >= plan->bytes) { return BC250HSA_OK; }
+    memset(&replacement, 0, sizeof(replacement));
+    status = allocator->alloc(allocator->ctx, plan->bytes, BC250HSA_SCRATCH_ALIGNMENT,
+                                BC250HSA_MEM_DEVICE, &replacement);
+    if (status != BC250HSA_OK) { return status; }
+    if (replacement.bytes < plan->bytes || replacement.va == 0u ||
+        (replacement.va & (BC250HSA_SCRATCH_ALIGNMENT - 1u)) != 0u ||
+        replacement.va >= (1ull << 48) || replacement.bytes > (1ull << 48) - replacement.va) {
+        allocator->free(allocator->ctx, &replacement);
+        return BC250HSA_EINVAL;
+    }
+    if (slot->opaque != NULL) { allocator->free(allocator->ctx, slot); }
+    *slot = replacement;
+    return BC250HSA_OK;
+}
+
 bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t kernarg_va,
                                          uint64_t dispatch_packet_va,
                                          const uint32_t private_segment_rsrc[4],
@@ -81,13 +160,9 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
         return BC250HSA_EINVAL;
     }
     properties = kernel->kernel_code_properties;
-    /* Only the three items this build programs may be enabled. Everything else the
-     * compiler can ask for (queue pointer, dispatch id, flat scratch init, private
-     * segment size) needs a value this build does not have, so it is refused by name
-     * instead of programmed with a wrong one. */
-    if ((properties & (uint16_t)(BC250HSA_KCP_QUEUE_PTR | BC250HSA_KCP_DISPATCH_ID |
-                                 BC250HSA_KCP_FLAT_SCRATCH_INIT |
-                                 BC250HSA_KCP_PRIVATE_SEGMENT_SIZE)) != 0u) {
+    /* Queue pointers and dispatch IDs need an HSA queue contract this PM4 path
+     * does not expose. Fixed scratch values are supplied below in ABI order. */
+    if ((properties & (uint16_t)(BC250HSA_KCP_QUEUE_PTR | BC250HSA_KCP_DISPATCH_ID)) != 0u) {
         bc250hsa_log(BC250HSA_LOG_ERROR,
                      "kernel %s enables a user SGPR item this build does not program (0x%04x)",
                      kernel->name, (unsigned)properties);
@@ -131,6 +206,18 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
         out->value[out->count++] = (uint32_t)kernarg_va;
         out->value[out->count++] = (uint32_t)(kernarg_va >> 32);
     }
+    if ((properties & BC250HSA_KCP_FLAT_SCRATCH_INIT) != 0u) {
+        if (out->count + 2u > BC250HSA_MAX_USER_SGPR) { return BC250HSA_EUNSUPPORTED; }
+        out->value[out->count++] = private_segment_rsrc[0];
+        out->value[out->count++] = private_segment_rsrc[1] & 0xFFFFu;
+    }
+    if ((properties & BC250HSA_KCP_PRIVATE_SEGMENT_SIZE) != 0u) {
+        const uint64_t bytes = ((uint64_t)kernel->private_segment_bytes + 3u) & ~(uint64_t)3u;
+        if (out->count == BC250HSA_MAX_USER_SGPR || bytes > UINT32_MAX) {
+            return BC250HSA_EUNSUPPORTED;
+        }
+        out->value[out->count++] = (uint32_t)bytes;
+    }
     /* COMPUTE_PGM_RSRC2.USER_SGPR tells the hardware how many registers the
      * prologue reads. A plan that does not fill exactly that many would leave the
      * kernel reading an undefined register. */
@@ -160,12 +247,13 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
     }
     k = dispatch->kernel;
     for (i = 0; i < 3u; i++) {
-        if (dispatch->launch.grid[i] == 0u || dispatch->launch.block[i] == 0u) {
+        if (dispatch->launch.grid[i] == 0u || dispatch->launch.block[i] == 0u || dispatch->launch.block[i] > 1024u) {
             return BC250HSA_EINVAL;
         }
     }
     block_product = (uint64_t)dispatch->launch.block[0] * dispatch->launch.block[1] *
                     dispatch->launch.block[2];
+    if (block_product > 1024u) { return BC250HSA_EINVAL; }
     if (k->max_flat_workgroup_size != 0u && block_product > (uint64_t)k->max_flat_workgroup_size) {
         return BC250HSA_EINVAL;
     }
@@ -193,16 +281,19 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
                      " descriptor", k->name, (unsigned)k->wave_size);
         return BC250HSA_EUNSUPPORTED;
     }
-    /* A kernel that spills needs a scratch ring, the waves and wave size encoding of
-     * COMPUTE_TMPRING_SIZE at this part's 1024-byte granularity, and a private
-     * segment buffer with the right stride and swizzle bits. None of that is
-     * measured on this silicon yet (open question 4 of the design), so a spilling
-     * kernel is refused by name instead of dispatched with a guess. */
-    if (k->uses_dynamic_stack != 0u || k->private_segment_bytes != 0u) {
+    /* A fixed frame has a bounded ring. A dynamic stack needs a separate policy
+     * and remains refused instead of pretending the fixed metadata is a bound. */
+    if (k->uses_dynamic_stack != 0u) {
         bc250hsa_count_add(BC250HSA_C_DYNAMIC_STACK_REFUSALS, 1u);
-        bc250hsa_log(BC250HSA_LOG_ERROR, "kernel %s needs scratch, which this build does not program",
-                     k->name);
         return BC250HSA_EUNSUPPORTED;
+    }
+    if (k->private_segment_bytes != 0u) {
+        bc250hsa_scratch_plan scratch;
+        bc250hsa_status status = bc250hsa_plan_scratch(k->private_segment_bytes, k->wave_size, &scratch);
+        if (status != BC250HSA_OK) { return status; }
+        if ((k->compute_pgm_rsrc2 & BC250HSA_SCRATCH_EN) == 0u) {
+            return BC250HSA_EUNSUPPORTED;
+        }
     }
     if (dispatch->kernarg_va != 0u && k->kernarg_align != 0u &&
         (dispatch->kernarg_va % (uint64_t)k->kernarg_align) != 0u) {
@@ -342,6 +433,8 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
     const uint32_t          zero[6] = { 0, 0, 0, 0, 0, 0 };
     uint32_t                values[4];
     uint32_t                rsrc2;
+    uint32_t                scratch_rsrc[4];
+    uint32_t                tmpring_size = 0u;
     uint32_t                initiator;
     uint32_t                pgm_lo;
     uint32_t                pgm_hi;
@@ -357,9 +450,23 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
     }
     k = dispatch->kernel;
 
+    memcpy(scratch_rsrc, env->private_segment_rsrc, sizeof(scratch_rsrc));
+    if (k->private_segment_bytes != 0u) {
+        bc250hsa_scratch_plan scratch;
+        if (env->struct_bytes != sizeof(*env)) { return BC250HSA_EINVAL; }
+        status = bc250hsa_plan_scratch(k->private_segment_bytes, k->wave_size, &scratch);
+        if (status != BC250HSA_OK) { return status; }
+        status = bc250hsa_scratch_resource(env->scratch_va, env->scratch_bytes,
+                                             &scratch, k->wave_size, scratch_rsrc);
+        if (status != BC250HSA_OK) { return status; }
+        tmpring_size = scratch.tmpring_size;
+        /* Different fixed frames may not reinterpret one live scratch BO's stride.
+         * Production submits scratch alone; the public batch builder rejects it. */
+        if (!first) { return BC250HSA_EUNSUPPORTED; }
+    }
     plan.struct_bytes = (uint32_t)sizeof(plan);
     status = bc250hsa_plan_user_sgprs(k, dispatch->kernarg_va, dispatch->dispatch_packet_va,
-                                      env->private_segment_rsrc, &plan);
+                                      scratch_rsrc, &plan);
     if (status != BC250HSA_OK) {
         return status;
     }
@@ -438,10 +545,9 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
         set_sh1(w, BC250HSA_REG_COMPUTE_PGM_RSRC3, k->compute_pgm_rsrc3);
     }
 
-    /* 12. No scratch in this build, so COMPUTE_TMPRING_SIZE is 0. A spilling kernel
-     *     was already refused by bc250hsa_pm4_check_dispatch. Constant, as 3 to 8 are. */
-    if (full) {
-        set_sh1(w, BC250HSA_REG_COMPUTE_TMPRING_SIZE, 0u);
+    /* Each IB writes its ring size, and the cache tracks transitions explicitly. */
+    if (full || state->tmpring_size != tmpring_size) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_TMPRING_SIZE, tmpring_size);
     }
 
     /* 13. The workgroup size in work items. */
@@ -503,6 +609,7 @@ bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispa
         state->rsrc1 = k->compute_pgm_rsrc1;
         state->rsrc2 = rsrc2;
         state->rsrc3 = k->compute_pgm_rsrc3;
+        state->tmpring_size = tmpring_size;
         state->block[0] = dispatch->launch.block[0];
         state->block[1] = dispatch->launch.block[1];
         state->block[2] = dispatch->launch.block[2];
@@ -532,7 +639,7 @@ bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, ui
     if (count > BC250HSA_BATCH_DISPATCHES_MAX) {
         return BC250HSA_EINVAL;
     }
-    if (!bc250hsa_struct_bytes_ok(env->struct_bytes, sizeof(*env))) {
+    if (env->struct_bytes != sizeof(*env) && env->struct_bytes != offsetof(bc250hsa_pm4_env, scratch_va)) {
         return BC250HSA_EINVAL;
     }
     if ((env->flags & BC250HSA_DISPATCH_NO_FENCE) == 0u &&
@@ -540,6 +647,13 @@ bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, ui
         return BC250HSA_EINVAL;
     }
 
+    if (count > 1u) {
+        for (i = 0; i < count; i++) {
+            if (dispatches[i].kernel != NULL && dispatches[i].kernel->private_segment_bytes != 0u) {
+                return BC250HSA_EUNSUPPORTED;
+            }
+        }
+    }
     bc250hsa_pm4_writer_init(&w, dwords, dword_capacity, 0u);
     memset(&state, 0, sizeof(state));
 

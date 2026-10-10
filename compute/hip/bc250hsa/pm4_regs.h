@@ -191,6 +191,21 @@
  * (buffer). driver/shim/bc250_dispatch.c, BC250_DISPATCH_VDESC_W3. */
 #define BC250HSA_BUFFER_RSRC_W3 0x1104BFACu
 
+/* LLVM SIInstrInfo::getScratchRsrcWords23, GFX10.1 descriptor format.
+ * FORMAT is BUF_FMT_32_FLOAT from navi10_enum.h, not pre-GFX10 DATA_FORMAT.
+ * Mesa gfx10-rsrc.json SQ_BUF_RSRC_WORD1/3 and LLVM SIInstrInfo.h define the shifts. */
+#define BC250HSA_SCRATCH_SWIZZLE_ENABLE (1u << 31)
+#define BC250HSA_SCRATCH_FORMAT_32_FLOAT 22u
+#define BC250HSA_SCRATCH_FORMAT_SHIFT 12u
+#define BC250HSA_SCRATCH_INDEX_STRIDE_SHIFT 21u
+#define BC250HSA_SCRATCH_ADD_TID_ENABLE (1u << 23)
+#define BC250HSA_SCRATCH_RESOURCE_LEVEL (1u << 24)
+#define BC250HSA_SCRATCH_OOB_SELECT (3u << 28)
+#define BC250HSA_SCRATCH_EN 1u
+#define BC250HSA_SCRATCH_WAVESIZE_SHIFT 12u
+#define BC250HSA_SCRATCH_WAVESIZE_MASK 8191u
+#define BC250HSA_SCRATCH_WAVESIZE_GRANULE 1024u
+
 /* ---- CONTEXT_CONTROL -------------------------------------------------------- */
 /* The graphics ring needs it in front of the first state write of an indirect
  * buffer; it is a no-operation on a compute ring. Both dwords are libdrm's and

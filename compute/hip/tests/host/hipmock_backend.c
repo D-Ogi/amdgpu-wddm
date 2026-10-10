@@ -37,6 +37,10 @@
 
 #include "bc250hsa.h"
 #include "hipmock_backend.h"
+#if defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
+#include "internal.h"
+#define BC250HSA_MOCK_KCP_DISPATCH_PTR BC250HSA_KCP_DISPATCH_PTR
+#endif
 
 #if defined(_MSC_VER)
 #include <malloc.h>
@@ -107,6 +111,7 @@ struct bc250hsa_device {
     uint64_t        live_bytes;
 };
 
+#if !defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
 typedef struct mock_symbol {
     char     name[MOCK_NAME_MAX];
     uint64_t va;
@@ -126,6 +131,8 @@ struct bc250hsa_module {
     uint32_t           symbol_count;
     mock_symbol        symbol_table[MOCK_MAX_SYMBOLS];
 };
+
+#endif /* legacy mock module representation */
 
 #define MOCK_DEVICE_MAGIC 0x4D4F434Bu /* 'MOCK' */
 
@@ -195,6 +202,7 @@ static uint64_t align_up(uint64_t value, uint64_t alignment) {
     return (value + alignment - 1u) / alignment * alignment;
 }
 
+#if !defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
 static uint16_t rd16(const unsigned char* p) {
     return (uint16_t)((uint16_t)p[0] | (uint16_t)((uint16_t)p[1] << 8));
 }
@@ -207,6 +215,8 @@ static uint32_t rd32(const unsigned char* p) {
 static uint64_t rd64(const unsigned char* p) {
     return (uint64_t)rd32(p) | ((uint64_t)rd32(p + 4) << 32);
 }
+
+#endif /* legacy mock ELF readers */
 
 static void copy_name(char* dst, size_t dst_bytes, const char* src, size_t src_bytes) {
     size_t n = src_bytes;
@@ -769,6 +779,7 @@ bc250hsa_status bc250hsa_device_allocator(bc250hsa_device* dev, bc250hsa_allocat
  * The offload bundle reader
  * ---------------------------------------------------------------------------------------- */
 
+#if !defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
 static const char kBundleMagic[] = "__CLANG_OFFLOAD_BUNDLE__";
 static const char kCompressedMagic[] = "CCOB";
 
@@ -1808,14 +1819,49 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
     return BC250HSA_OK;
 }
 
+#else
+/* The real loader and packer, with host-only allocation and submission. No KMT code is linked.
+ * This mode lets real clients test layer 1 intake instead of the legacy mock's parallel parser. */
+void bc250hsa_log(uint32_t level, const char* format, ...) {
+    char text[2048];
+    va_list args;
+    va_start(args, format);
+    (void)vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    log_line(level, text);
+}
+void bc250hsa_count_add(bc250hsa_counter which, uint64_t delta) {
+    mock_lock();
+    switch (which) {
+    case BC250HSA_C_MODULES_LOADED: g_counters.modules_loaded += delta; break;
+    case BC250HSA_C_HIDDEN_ARGS_ZEROED: g_counters.hidden_args_zeroed += delta; break;
+    case BC250HSA_C_UNKNOWN_ARG_KINDS: g_counters.unknown_arg_kinds += delta; break;
+    case BC250HSA_C_HOSTCALL_BUFFER_REQUESTS: g_counters.hostcall_buffer_requests += delta; break;
+    default: break;
+    }
+    mock_unlock();
+}
+bc250hsa_status bc250hsa_module_load(bc250hsa_device* dev, const void* image, size_t image_bytes,
+                                    bc250hsa_module** out) {
+    bc250hsa_allocator allocator;
+    bc250hsa_status result = bc250hsa_device_allocator(dev, &allocator);
+    if (result != BC250HSA_OK) return result;
+    (void)bc250hsa_flush(dev, NULL);
+    return bc250hsa_module_load_alloc(&allocator, image, image_bytes, out);
+}
+#endif /* BC250_HIP_MOCK_PRODUCTION_LOADER */
+
 /* ------------------------------------------------------------------------------------------
  * Dispatch, fence and wait
  * ---------------------------------------------------------------------------------------- */
 
+#if !defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
 uint32_t bc250hsa_lds_size_field(uint32_t group_segment_bytes, uint32_t dynamic_group_bytes) {
     const uint64_t total = (uint64_t)group_segment_bytes + (uint64_t)dynamic_group_bytes;
     return (uint32_t)(align_up(total, 512u) / 512u);
 }
+
+#endif
 
 bc250hsa_status bc250hsa_buffer_resource(uint64_t va, uint64_t bytes, uint32_t out_dwords[4]) {
     (void)va;
