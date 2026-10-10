@@ -266,13 +266,15 @@ class Runner:
         argv = [part.replace("{label}", label) for part in self.plan.gate_step.argv]
         return self.shell.run(PlannedStep(argv, self.plan.gate_step.timeout_s, "gate")).text
 
-    def wait_for_boot(self, arm: PlannedArm, before: str) -> tuple[bool, str]:
+    def wait_for_boot(self, arm: PlannedArm, before: str, need_health: bool = False) -> tuple[bool, str, str]:
         """After a planned restart, wait for a boot time that differs from the one before it.
 
         A restart is not over when port 22 answers: the machine is still up for a few seconds after
         `shutdown /r` and answers the first probe. The gate prints the boot time, so the wait is over the
         boot time itself and not over a guess (BD-059 is the other side of this: a planned restart must not
-        be read as an unclean one). The poll is slow on purpose, because the lab sshd penalises fast probes.
+        be read as an unclean one). With `need_health` the wait also holds until the driver reports
+        `flags=15`, because a gate read 35 s into a boot would otherwise fail an arm for being early. The
+        poll is slow on purpose, because the lab sshd penalises fast probes.
         """
         limits = self.plan.limits
         was = re.search(r"^boot (\S+)", before, re.M)
@@ -280,16 +282,20 @@ class Runner:
         poll = max(int(limits.get("restart_poll_s", 30)), int(limits["min_poll_s"]))
         self.writer(f"  restart: waiting {settle} s before the first probe")
         self.clock.sleep(settle)
-        waited, text = settle, ""
+        waited, text, new_boot = settle, "", False
         while waited < arm.bound_s:
             self.shell.run(PlannedStep([self.python, self.plan.values["target"], "forget"], 60, "gate"))
             text = self._gate_text("after-restart")
             now = re.search(r"^boot (\S+)", text, re.M)
-            if "gate end" in text and now and (was is None or now.group(1) != was.group(1)):
-                return True, text
+            new_boot = bool("gate end" in text and now and (was is None or now.group(1) != was.group(1)))
+            if new_boot and (not need_health or "flags=15" in text):
+                return True, text, f"the machine is back after {waited} s"
             self.clock.sleep(poll)
             waited += poll
-        return False, text
+        if new_boot:
+            return False, text, (f"the machine came back but the driver did not report flags=15 within "
+                                 f"{arm.bound_s} s")
+        return False, text, f"no new boot time within {arm.bound_s} s of the restart"
 
     def health_gate(self, arm_id: str, directory: Path) -> GateResult:
         argv = [part.replace("{label}", arm_id) for part in self.plan.gate_step.argv]
@@ -385,13 +391,13 @@ class Runner:
                 sampler.join(timeout=40)
         gate_done = False
         if arm.kind == "restart" and not failed:
-            came_back, boot_text = self.wait_for_boot(arm, "\n".join(texts))
+            came_back, boot_text, why = self.wait_for_boot(arm, "\n".join(texts), need_health=arm.gate_after)
             self._write(directory / "after-restart.txt", boot_text)
             record.raw_paths.append((directory / "after-restart.txt").as_posix())
             texts.append(boot_text)
             if not came_back:
                 record.verdict = FAIL
-                record.reason = f"no new boot time within {arm.bound_s} s of the restart"
+                record.reason = why
             elif arm.gate_after:
                 # The gate that proved the new boot is the health gate of this arm: it does not run twice.
                 gate = parse_gate(boot_text)
@@ -456,6 +462,10 @@ class Runner:
 
     def run(self, arms: list[PlannedArm] | None = None) -> list[ArmRecord]:
         arms = arms or self.plan.arms
+        # Only a dependency inside this run can hold an arm back. A subset (--arms gates) or a resumed run
+        # names the arms it wants, and an arm that ran in an earlier session is not run again to satisfy a
+        # dependency on it.
+        selected = {arm.id for arm in arms}
         done_well: set[str] = set()
         for arm in arms:
             if self.halted:
@@ -463,7 +473,7 @@ class Runner:
                                    verdict=SKIPPED, reason="the run halted: " + self.halted)
                 self.records.append(record)
                 continue
-            missing = [d for d in arm.depends_on if d not in done_well]
+            missing = [d for d in arm.depends_on if d in selected and d not in done_well]
             if missing:
                 self.writer(f"[skip] {arm.id}: waits on {', '.join(missing)}")
                 self.records.append(ArmRecord(id=arm.id, kind=arm.kind, title=arm.arm.get("title", ""),

@@ -27,11 +27,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import manifest  # noqa: E402
 import promote  # noqa: E402
 import summary as summary_module  # noqa: E402
-from runner import ArmRecord, GOOD, Runner, Shell  # noqa: E402
+from runner import ArmRecord, Clock, GOOD, Runner, Shell  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-# The host tests replace this with a fake target, so the whole command runs with no lab.
+# The host tests replace these two with a fake target and a fake clock, so the whole command runs with no
+# lab and no waiting.
 make_shell = Shell
+make_clock = Clock
 
 
 def utc_tag() -> str:
@@ -182,7 +184,7 @@ def command_run(args: argparse.Namespace) -> int:
     if done:
         print("[resume] already good: " + ", ".join(sorted(done)))
     shell = make_shell(Path(plan.values["ws"]), base_env={"BC250_ROOT": plan.values["ws"]})
-    runner = Runner(plan, shell, out_dir, python=sys.executable)
+    runner = Runner(plan, shell, out_dir, clock=make_clock(), python=sys.executable)
     records = runner.run(todo)
     records = load_records(out_dir) + records if args.resume else records
     (out_dir / "records.json").write_text(json.dumps([asdict(r) for r in records], indent=2),

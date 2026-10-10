@@ -46,7 +46,7 @@ remembering them.
 | A trial arm lasts at most 170 s, including its cleanup. A game session lasts at most 1200 s | `arms.json` limits, held for every arm by `test_train_validate.py` |
 | The thermal stop is Tctl 87 C held for 10 s, or 89 C at once | the lab runners (`pt-run.ps1`, `game-runtime.ps1`) end their own run. The suite reads the stop and marks the arm `THERMAL` |
 | The machine cools before the next arm starts | `Runner.cool_down`, with the start line at 80 C |
-| A planned restart is over when the boot time differs, not when port 22 answers | `Runner.wait_for_boot`, after a 30 s wait and then one probe every 30 s |
+| A planned restart is over when the boot time differs and the driver reports `flags=15`, not when port 22 answers | `Runner.wait_for_boot`, after a 30 s wait and then one probe every 30 s |
 | The temperature is never polled faster than 10 s | `arms.json` limits, held by the tests. The lab sshd penalises fast probes |
 | No ssh session is held open before a trial runs | one call at a time, and the only sampler is the smart plug over the LAN (BD-051) |
 | The overlay STOP flag ends the run | `Runner.stop_flag_set`, read before every arm |

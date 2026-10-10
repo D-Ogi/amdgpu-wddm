@@ -277,6 +277,16 @@ class ArmLoop(unittest.TestCase):
         self.assertIn("depends on smoke", records["demo"].reason)
         self.assertFalse(run.halted, "one failed arm does not stop the run")
 
+    def test_a_subset_runs_although_its_dependency_is_not_in_it(self):
+        _, shell, records = self.run_with([
+            ("mon.py stop?", Completed(0, "")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("pt-run.ps1", Completed(0, "631 frames, 10.45 seconds: 60.40 fps")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ], arms=[self.plan.by_id("demo")])
+        self.assertEqual(records["demo"].verdict, PASS, "demo depends on smoke, which was not asked for")
+        self.assertEqual(shell.said("vk-smoke.ps1"), [], "the dependency was not run either")
+
     def test_a_thermal_stop_is_its_own_verdict(self):
         _, _, records = self.run_with([
             ("mon.py stop?", Completed(0, "")),
@@ -414,6 +424,21 @@ class Restart(unittest.TestCase):
         self.assertEqual(len(shell.said("gate.ps1")), 3, "it probed until the boot time changed")
         self.assertTrue((self.tmp / "out" / "restart-1" / "after-restart.txt").is_file())
         self.assertFalse(run.halted)
+
+    def test_the_wait_holds_until_the_driver_reports_flags_15(self):
+        # The arm's gate is judged, so an early probe must not fail it: the boot is new 35 s in, and the
+        # driver needs about 80 s to report flags=15.
+        texts = iter([GATE_OK.replace("2026-10-10T07:47:40Z", "2026-10-10T09:00:00Z").replace("flags=15",
+                                                                                              "flags=7"),
+                      GATE_OK.replace("2026-10-10T07:47:40Z", "2026-10-10T09:00:00Z")])
+        run, shell, records = self.run_with([
+            ("mon.py stop?", Completed(0, "")),
+            ("restart-now.ps1", Completed(0, "boot 2026-10-10T07:47:40Z\nrestart in 5 s: test")),
+            ("gate.ps1", lambda step: Completed(0, next(texts, GATE_OK))),
+        ])
+        self.assertEqual(records["restart-1"].verdict, PASS)
+        self.assertEqual(len(shell.said("gate.ps1")), 2)
+        self.assertFalse(run.halted, "an early flags=7 is not a critical gate")
 
     def test_a_machine_that_never_comes_back_fails_the_arm(self):
         run, _, records = self.run_with([
@@ -605,6 +630,7 @@ class OneCommand(unittest.TestCase):
             return shell
 
         self.enterContext(unittest.mock.patch.object(validate, "make_shell", factory))
+        self.enterContext(unittest.mock.patch.object(validate, "make_clock", FakeClock))
 
     def test_the_one_command_writes_the_plan_the_records_and_the_results(self):
         out = self.tmp / "out"
@@ -639,6 +665,82 @@ class OneCommand(unittest.TestCase):
                                    "--out", str(self.tmp / "out-bad"), "--attempt-base", "600",
                                    "--no-hash"])
         self.assertEqual(code, 1)
+
+
+class ShippedSetEndToEnd(unittest.TestCase):
+    """The shipped arms.json, every arm of it, against the fake target."""
+
+    def setUp(self):
+        import os
+        import validate
+        self.validate = validate
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.enterContext(unittest.mock.patch.dict(os.environ, {"BC250_ROOT": str(self.tmp)}))
+        self.package = fake_package(self.tmp)
+        payload = self.package.directory / "payload" / "d3d12"
+        payload.mkdir(parents=True, exist_ok=True)
+        for name in promote.NAMES:
+            (payload / name).write_bytes(name.encode())
+        self.booted = ["2026-10-10T07:47:40Z"]
+
+        def gate(step):
+            return Completed(0, GATE_OK.replace("2026-10-10T07:47:40Z", self.booted[-1]))
+
+        def restart(step):
+            self.booted.append(f"2026-10-10T0{len(self.booted) + 7}:00:00Z")
+            return Completed(0, f"boot {self.booted[-2]}\nrestart in 5 s")
+
+        replies = [
+            ("mon.py", Completed(0, "")),
+            ("temp.py", Completed(0, "Tctl 58.0 C")),
+            ("target.py forget", Completed(0, "")),
+            ("gate.ps1", gate),
+            ("restart-now.ps1", restart),
+            ("target.py run", Completed(0, "ready")),
+            ("target.py push", Completed(0, "pushed 95244264 bytes")),
+            ("zipcheck.ps1", Completed(0, "zip OK (matches the development PC)")),
+            ("clean-slate.ps1 -Step uninstall", Completed(0, "driver store bc250kmd packages: 0\n"
+                                                              "uninstall exit 0")),
+            ("clean-slate.ps1 -Step install", Completed(0, "install exit 0")),
+            ("slots.ps1", Completed(0, "slot check: 36 match, 0 differ, 1 absent (of 37 payload files)")),
+            ("kmdver.ps1", Completed(0, "install root C:\\Program Files\\amdgpu-wddm")),
+            ("preflight.ps1", Completed(0, "preflight: ok")),
+            ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
+            ("vk-smoke.ps1", Completed(0, "driverInfo = Mesa 26.3.0-devel (git-18e0f56be7)")),
+            ("x86-d3d11-smoke.ps1", Completed(0, "exit 0 after 12.0 s")),
+            ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi pipeline",
+             Completed(0, "Using VK_KHR_ray_tracing_pipeline\n631 frames, 10.45 seconds: 60.40 fps")),
+            ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi query",
+             Completed(0, "Using VK_KHR_ray_query\n631 frames, 10.37 seconds: 60.86 fps")),
+            ("pt-run.ps1 -Demo q2rtx-loop", Completed(0, "end: reason bound, elapsed 163.5 s")),
+            ("pt-run.ps1 -Demo dxrpt", Completed(0, "436 frames in 30.0 s, 19.13 fps, 126.9 Mrays/s")),
+            ("promote-d3d12.py stage ", Completed(0, "plan written")),
+            ("promote-d3d12.py stage-check", Completed(0, "plan written")),
+            ("run-slot.py", Completed(0, "Start Running")),
+            ("close-attempt.py native-caps001", Completed(0, '"status": "promoted-retained"')),
+            ("close-attempt.py", Completed(0, '"status": "functional-restored"')),
+            ("promote-d3d12.py accept", Completed(0, "d3d12 block written")),
+            ("run-game.sh", Completed(0, '"status": "ok"')),
+        ]
+        self.shell = FakeShell(replies, default=Completed(0, "ok"))
+        self.enterContext(unittest.mock.patch.object(
+            validate, "make_shell", lambda cwd, base_env=None, writer=print: self.shell))
+        self.enterContext(unittest.mock.patch.object(validate, "make_clock", FakeClock))
+
+    def test_every_arm_of_the_standard_set_passes_against_the_fake_target(self):
+        out = self.tmp / "out"
+        code = self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
+                                   "--train", "b99", "--attempt-base", "1", "--no-hash"])
+        records = json.loads((out / "records.json").read_text(encoding="utf-8"))
+        bad = [(row["id"], row["verdict"], row["reason"]) for row in records
+               if row["verdict"] not in ("PASS", "OPERATOR")]
+        self.assertEqual(bad, [])
+        self.assertEqual(code, 0)
+        results = (out / "RESULTS.md").read_text(encoding="utf-8")
+        self.assertIn("**Rise of the Tomb Raider**: MET", results)
+        self.assertIn("**Quake II RTX with ray tracing**: MET", results)
+        self.assertIn("`w3-high-rt`", results)
+        self.assertEqual(len(records), 19)
 
 
 class PlanText(unittest.TestCase):
