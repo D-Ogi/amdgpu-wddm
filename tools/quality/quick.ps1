@@ -34,6 +34,8 @@ try {
  # A named early gate makes a regression in link input order fail before builds.
  # quality-controls also discovers the positive and negative package unit controls.
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
+ # One namespace spans all KMD headers, including optional diagnostic commands.
+ Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
@@ -115,6 +117,7 @@ try {
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
  Check 'wave-reader' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_wave.ps1" -Kits $Kits -Out "$Out\wave-reader" }
  Check 'wave-access' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_access.ps1" -Kits $Kits -Out "$Out\wave-access" }
+ Check 'wave-recovery' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_recovery.ps1" -Kits $Kits -Out "$Out\wave-recovery" }
  # BD-114: the private submit watchdog's budget, its progress window, its head stamp and the aborted-fence
  # answer, with the source checks that hold wddm.c to the same decisions (the host test cannot compile it).
  Check 'recovery-protocol' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_recovery_protocol.ps1" -Root $Workspace -Out "$Out\recovery-protocol" }
@@ -194,6 +197,9 @@ try {
  # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
  $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
  $suites=@(
+  @{n='wave-recovery-pending-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-NoPendingMarker');Fails=$true}
+  @{n='wave-recovery-order-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-ClearBeforeData');Fails=$true}
+  @{n='wave-recovery-delete-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-AdminReadOnly');Fails=$true}
   @{n='display-visibility';s='driver\kmd\test\run_display_visibility.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-stop';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace)}
   @{n='scanout-geometry';s='driver\kmd\test\run_scanout_geometry.ps1';a=@('-Root',$Workspace)}

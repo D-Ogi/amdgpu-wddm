@@ -43,7 +43,7 @@ int main(int argc,char** argv)
     query(&device,&caps);CHECK(caps.Flags==31 && caps.ProviderId==1);
     CHECK(caps.GpuPointCount==16 && caps.GpuMinMHz==500 && caps.GpuMaxMHz==2000);
     CHECK(caps.GpuPoints[5].MHz==1000 && caps.GpuPoints[5].Mv==820 && caps.GpuPoints[5].Vid==116);
-    CHECK(caps.GpuPoints[15].Mv==1000 && caps.GpuDefaultMaxMHz==1500);
+    CHECK(caps.GpuPoints[15].Mv==1000 && caps.GpuDefaultMaxMHz==2000);
     CHECK(caps.CpuStockCoreCount==6 && caps.CpuCoreCount==8 && caps.CpuRefuseMv==1300);
     CHECK(caps.FanPresetCounts[0]==5 && caps.FanPresetCounts[1]==5 && caps.FanPresetCounts[2]==4);
     CHECK(caps.FanPresets[0][3].TempC==76 && caps.FanPresets[0][3].DutyPct==95);

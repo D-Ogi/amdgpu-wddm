@@ -231,8 +231,11 @@ bc250kmd_cli waves --expect-idle
 bc250kmd_cli waves --expect-pc 0xSTART 0xEND
 ```
 
-`waves` takes a live snapshot through command 33, ABI 1.
-It sets both `HardwareAccess` and `NoAdapterSynchronization`.
+`waves` takes a live snapshot through command 34, ABI 1.
+It sets only `NoAdapterSynchronization`, with value 8.
+The driver serializes the read without requesting GPU idle.
+The scan holds `GartLock` for up to about 250 ms and delays node-0 submission.
+It can cause a visible hitch in a game. Never poll it from an overlay or GUI.
 The KMD owns the register lock. Run the known-spin control below to measure live delivery.
 There is no fallback to other escape flags.
 

@@ -84,9 +84,10 @@ SEQUENCES = [
       # reached only from DxgkDdiResetEngine under the HangRecoveryMode switch. Already on the escape read list.
       ("GC", "mmSQ_CMD", "not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery"),
       # Wave observations use only selector writes and data reads. This legacy GFX table is mixed;
-      # the dedicated wave backend further restricts writes to GRBM_GFX_INDEX and SQ_IND_INDEX.
+      # MmioGfxWrite refuses SQ_IND_DATA for every GFX sequence; the dedicated wave
+      # backend further restricts writes to GRBM_GFX_INDEX and SQ_IND_INDEX.
       ("GC", "mmSQ_IND_INDEX", "not traced: amdgpu gfx_v10_0 wave_read_ind selector"),
-      ("GC", "mmSQ_IND_DATA", "not traced: amdgpu gfx_v10_0 wave_read_ind, read only in wave backend"),
+      ("GC", "mmSQ_IND_DATA", "not traced: amdgpu gfx_v10_0 wave_read_ind, MmioGfxWrite read-only filter"),
       ("GC", "mmGRBM_STATUS2", "read observation for opt-in RLC reload reset, M349"),
       ("GC", "mmGRBM_SOFT_RESET", "not traced: AMD RLC reset callback, opt-in M349"),
       ("GC", "mmRLC_SAFE_MODE", "not traced: AMD paired safe-mode scope, M370"),

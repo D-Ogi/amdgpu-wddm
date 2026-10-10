@@ -79,8 +79,9 @@ Ordered (Body $wddm 'static void WddmGfxHeadLocked(') 'WddmGfxHeadLocked' @(
 # 7.2 and the lock: the token is read, the window judges, and the re-arm is INSIDE the critical section. A
 # KeSetTimer after the release can arm a timer that WddmStop has already cancelled and is about to free.
 Ordered $dpc 'the submit watchdog DPC' @(
-    'progress = WddmSubmitProgress(device);',
+    'progressAvailable = WddmSubmitProgress(device, &progress);',
     'KeAcquireSpinLock(&wddm->Lock, &irql);',
+    'if (progressAvailable)',
     'Bc250SubmitWatchdogCheck(&wddm->SubmitWatchdog, progress, now,',
     'switch (wddm->SubmitWatchdog.LastObservation)',
     'case BC250_SUBMIT_OBSERVATION_PRIME: wddm->SubmitPrimes++; break;',

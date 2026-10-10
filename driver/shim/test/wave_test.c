@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /* CPU-only model of GFX10 bank and wave selection. No lab or host MMIO. */
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include "bc250_wave.h"
 #include "nv.h"
@@ -25,12 +26,14 @@ static struct amdgpu_device device;
 static unsigned int checks, failures;
 #define CHECK(x) do { checks++; if (!(x)) { failures++; fprintf(stderr, "FAIL %u: %s\n", __LINE__, #x); } } while (0)
 static struct {
-    u32 grbm, index, cc[2][2], user[2][2];
+    u32 grbm, index, cc[2][2], user[2][2], spi[2][2], valid_wgps[2][2];
     u32 operations, fail_at, poison_at, fault, forbidden, restore_attempts;
     u32 stop_calls, budget_at, max_slot, data_reads, status_reads, identity_reads;
     u32 full, active, retire, identity_change;
+    u32 mask_logs;
+    char masks[4][160];
 } m;
-static u32 ix_grbm, ix_index, ix_data, ix_cc, ix_user;
+static u32 ix_grbm, ix_index, ix_data, ix_cc, ix_user, ix_spi;
 
 static u32 broadcast(void)
 {
@@ -68,6 +71,7 @@ unsigned int bc250_shim_rreg(struct amdgpu_device *adev, unsigned int index)
     if (se >= 2 || sh >= 2) { m.forbidden++; return 0xffffffffu; }
     if (index == ix_cc) return m.cc[se][sh];
     if (index == ix_user) return m.user[se][sh];
+    if (index == ix_spi) return m.spi[se][sh];
     if (index != ix_data) { m.forbidden++; return 0xffffffffu; }
     m.data_reads++;
     instance = REG_GET_FIELD(m.grbm, GRBM_GFX_INDEX, INSTANCE_INDEX);
@@ -76,8 +80,7 @@ unsigned int bc250_shim_rreg(struct amdgpu_device *adev, unsigned int index)
     slot = REG_GET_FIELD(m.index, SQ_IND_INDEX, WAVE_ID);
     address = REG_GET_FIELD(m.index, SQ_IND_INDEX, INDEX);
     if (wgp >= 5 || slot >= 20 ||
-        (REG_GET_FIELD(m.cc[se][sh], CC_GC_SHADER_ARRAY_CONFIG, INACTIVE_WGPS) & (1u << wgp)) ||
-        (REG_GET_FIELD(m.user[se][sh], GC_USER_SHADER_ARRAY_CONFIG, INACTIVE_WGPS) & (1u << wgp)) ||
+        !(m.valid_wgps[se][sh] & (1u << wgp)) ||
         (m.grbm & broadcast())) { m.forbidden++; return 0xffffffffu; }
     if (slot > m.max_slot) m.max_slot = slot;
     if (address == ixSQ_WAVE_STATUS) {
@@ -118,7 +121,16 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int index, unsigned in
 }
 
 void bc250_shim_udelay(unsigned int usec) { (void)usec; }
-void bc250_shim_log(int level, void *dev, const char *fmt, ...) { (void)level; (void)dev; (void)fmt; }
+void bc250_shim_log(int level, void *dev, const char *fmt, ...)
+{
+    va_list args;
+    (void)level; (void)dev;
+    if (strncmp(fmt, "waves mask ", 11)) return;
+    CHECK(m.mask_logs < 4);
+    va_start(args, fmt);
+    vsnprintf(m.masks[m.mask_logs++], sizeof(m.masks[0]), fmt, args);
+    va_end(args);
+}
 void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsigned long long value)
 { (void)adev; (void)index; (void)value; m.forbidden++; }
 int bc250_shim_mem_alloc(struct amdgpu_device *adev, enum bc250_mem_domain domain,
@@ -145,8 +157,11 @@ static void reset(u32 active)
     snapshot.Header.Kind = BC250_WAVE_KIND_PRE_KILL;
     m.grbm = broadcast();
     for (se = 0; se < 2; se++)
-        for (sh = 0; sh < 2; sh++)
+        for (sh = 0; sh < 2; sh++) {
             m.cc[se][sh] = REG_SET_FIELD(0, CC_GC_SHADER_ARRAY_CONFIG, INACTIVE_WGPS, ~active & 31u);
+            m.spi[se][sh] = REG_SET_FIELD(0, SPI_PG_ENABLE_STATIC_WGP_MASK, WGP_MASK, active);
+            m.valid_wgps[se][sh] = active;
+        }
     device.ip_versions[GC_HWIP][0] = IP_VERSION(10, 1, 3);
     device.gfx.config.max_shader_engines = 2;
     device.gfx.config.max_sh_per_se = 2;
@@ -165,6 +180,7 @@ int main(void)
     ix_data = SOC15_REG_OFFSET(GC, 0, mmSQ_IND_DATA);
     ix_cc = SOC15_REG_OFFSET(GC, 0, mmCC_GC_SHADER_ARRAY_CONFIG);
     ix_user = SOC15_REG_OFFSET(GC, 0, mmGC_USER_SHADER_ARRAY_CONFIG);
+    ix_spi = SOC15_REG_OFFSET(GC, 0, mmSPI_PG_ENABLE_STATIC_WGP_MASK);
     CHECK(bc250_gfx_wave_broadcast_value() == broadcast());
 
     reset(31);
@@ -173,6 +189,7 @@ int main(void)
     CHECK(snapshot.Header.Flags == BC250_WAVE_COMPLETE); CHECK(m.max_slot == 19);
     CHECK(m.forbidden == 0); CHECK(m.grbm == broadcast()); CHECK(m.restore_attempts == 1);
     CHECK(snapshot.Header.Seq == 77); CHECK(snapshot.Header.Kind == BC250_WAVE_KIND_PRE_KILL);
+    CHECK(m.mask_logs == 4 && strstr(m.masks[0], "cc_active1f spi_active1f used1f user_ignored0") != NULL);
 
     reset(0);
     CHECK(run() == -1); CHECK(snapshot.Header.WaveCount == 0);
@@ -193,10 +210,33 @@ int main(void)
 
     reset(0x15); m.full = 1;
     m.user[1][0] = REG_SET_FIELD(0, GC_USER_SHADER_ARRAY_CONFIG, INACTIVE_WGPS, 4);
+    m.spi[1][0] = REG_SET_FIELD(0, SPI_PG_ENABLE_STATIC_WGP_MASK, WGP_MASK, 0x11);
+    m.valid_wgps[1][0] = 0x11;
     CHECK(run() == 0); CHECK(snapshot.Header.WaveCount == 880);
     CHECK(snapshot.Header.WgpMask[1][0] == 0x11); CHECK(m.forbidden == 0);
     for (i = 0; i < snapshot.Header.WaveCount; i++)
         CHECK(snapshot.Waves[i].Wgp == 0 || snapshot.Waves[i].Wgp == 2 || snapshot.Waves[i].Wgp == 4);
+
+    /* USER can be all ones without a backend error, as UMR documents. Retain
+     * CC holes, and record the mask choice rather than certifying empty GPU. */
+    reset(0x15); m.full = 1; m.user[0][0] = 0xffffffffu;
+    m.spi[0][0] = 0; /* This bank must use CC even without the SPI fallback. */
+    CHECK(run() == 0); CHECK(snapshot.Header.WaveCount == 960);
+    CHECK(snapshot.Header.WgpMask[0][0] == 0x15 && m.forbidden == 0);
+    CHECK(strstr(m.masks[0], "userffffffff") != NULL);
+    CHECK(strstr(m.masks[0], "used15 user_ignored1") != NULL);
+
+    /* A dispatch-enabled WGP is not hidden by the enumeration view. */
+    reset(1); m.full = 1;
+    m.spi[0][0] = REG_SET_FIELD(0, SPI_PG_ENABLE_STATIC_WGP_MASK, WGP_MASK, 3);
+    m.valid_wgps[0][0] = 3;
+    CHECK(run() == 0); CHECK(snapshot.Header.WaveCount == 400);
+    CHECK(snapshot.Header.WgpMask[0][0] == 3 && m.forbidden == 0);
+    CHECK(strstr(m.masks[0], "cc_active1 spi_active3 used3") != NULL);
+
+    reset(1); m.spi[0][0] = 0xffffffffu;
+    CHECK(run() == -1); CHECK(snapshot.Header.InvalidReads == 1);
+    CHECK(snapshot.Header.WaveCount == 0 && m.mask_logs == 0 && m.grbm == broadcast());
 
     reset(1); m.active = 1; m.retire = 1; m.identity_change = 1;
     CHECK(run() == 0); CHECK(snapshot.Header.WaveCount == 1);
@@ -221,7 +261,7 @@ int main(void)
     reset(1); m.poison_at = 2;
     CHECK(run() == -1); CHECK(snapshot.Header.InvalidReads == 1); CHECK(snapshot.Header.WaveCount == 0);
     CHECK(m.grbm == broadcast());
-    reset(1); m.poison_at = 6;
+    reset(1); m.poison_at = 7;
     CHECK(run() == -1); CHECK(snapshot.Header.InvalidReads == 1); CHECK(snapshot.Header.WaveCount == 0);
     CHECK(m.grbm == broadcast());
 

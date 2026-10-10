@@ -393,6 +393,7 @@ static void WaveEscape(BC250_DEVICE* Device, BC250_ESCAPE_WAVES* Data, ULONG Fla
     C_ASSERT(sizeof(BC250_WAVE_RECORD) == 96);
     C_ASSERT(sizeof(BC250_WAVE_HEADER) == 128);
     C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Snapshot) == 32);
+    C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Status) == FIELD_OFFSET(BC250_ESCAPE, Status));
 
     // Capture inputs once, then work only on private storage. No caller-controlled
     // count, pointer, register offset or write value enters the hardware loop.
@@ -406,7 +407,8 @@ static void WaveEscape(BC250_DEVICE* Device, BC250_ESCAPE_WAVES* Data, ULONG Fla
     Data->Snapshot.Header.DriverVersion = BC250_KMD_VERSION;
     Data->Snapshot.Header.Bytes = sizeof(BC250_WAVE_HEADER);
     Data->Snapshot.Header.Flags = BC250_WAVE_READ_ERROR;
-    required.HardwareAccess = 1;
+    // HardwareAccess asks dxgkrnl for GPU idle, which defeats a live wave read.
+    // Own locks protect selectors and lifetime without requesting that idle wait.
     required.NoAdapterSynchronization = 1;
     if (!WaveCallerIsAdmin()) {
         status = STATUS_ACCESS_DENIED;

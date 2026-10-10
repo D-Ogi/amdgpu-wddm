@@ -1,6 +1,6 @@
 {
-  "revision": "9f5c7d59",
-  "scope": "Generated offline by compiling this exact baseline source and headers. Constants, GPU points and fan profile values; native mailbox writes start/floor/raise/idle/restore/stop. No hardware proof. Golden files are not rewritten by tests. Optional -Baseline regenerates independent old arm under output only.",
+  "revision": "1f0c6e09783e26f3d78e490347803ec1a242f004",
+  "scope": "Generated offline by compiling this exact main source and headers independently of the candidate. The b30 reconciliation retains main commit 9e313fe9: default DPM ceiling 2000 MHz; default mode remains FIXED and its point remains 1000 MHz at 820 mV. All 113 compiled constants and complete GPU/fan tables match the candidate; the only change from the prior frozen policy is the default ceiling. No hardware proof. Golden files are not rewritten by tests. Optional -Baseline regenerates the independent old arm under output only.",
   "source_sha256": {
     "driver\\shim\\bc250_clock.c": "4f8245130ec611dc8b7bb3a4dd73c539d7af8f6e00561042c58a5ef468e3ff9a",
     "driver\\shim\\bc250_fan.c": "6b73b3d8f835e5f00db33107ea47b8b0d3c18e88b8226a3b94e5884e83710540",
@@ -16,7 +16,7 @@
     "driver\\shim\\include\\bc250_cpu.h": "e83e9b0c42afca1f5adaac280082a3bfdb4a3f47a44514c404c476acbfd1b166",
     "driver\\shim\\include\\bc250_cu_mode.h": "f7e1e981f81589b12d6db0ecc1819744b3ec1e2676e97330f38c55e3bbb54930",
     "driver\\shim\\include\\bc250_dispatch.h": "fe590de651528c90fddc8ac0ecd2b07f039ad91b7e39b91ff72c54e75cad403c",
-    "driver\\shim\\include\\bc250_dpm.h": "2738e996c3318b097cc729ad75cdeb071a9847cdcc22c36519539a1c436d663c",
+    "driver\\shim\\include\\bc250_dpm.h": "bb0c5b4dffc2efce1526fe835b636c0e3912a87508e092c339e4c974c1be1a85",
     "driver\\shim\\include\\bc250_fan.h": "38c3fca3957fe06bdc8424af43abae9c5387de59f8031243448d9811480f8ab1",
     "driver\\shim\\include\\bc250_fence_order.h": "c029453acb3caa148bcecc16f17cfeef9da6e827e8ea30fc3dd39ec6f908d487",
     "driver\\shim\\include\\bc250_gart.h": "b9d90d1d7b112c91d915cac75d0f033bfb0e315a0c10607c4e5712e255e0596d",
@@ -48,7 +48,15 @@
   },
   "golden_sha256": {
     "board_policy_snapshot.c": "2882972c426b0adec24edecbe1e4083f33ae95b25c6f256ec4f8af61249aaedc",
-    "board_policy_baseline.txt": "66ac40b92ebf6946f9eb7d68652d6b810e40a186d024ad79041d94ddc727f7e3",
+    "board_policy_baseline.txt": "cb4fa2f235f881409f79d53cc71ed060dfe8b0b515e3e1eaa04c84a78e4a85b4",
     "board_sequence_baseline.txt": "a755c596d37997aad2209912dfc68d6af1b0af58c64bc5af5234f7853c31b236"
+  },
+  "source_materialization": "run_board_sequence.ps1 materializes git-show lines joined with LF and no final newline. source_sha256 hashes those exact compilation inputs, with paths relative to the source repository.",
+  "mailbox_sequence": {
+    "golden_revision": "9f5c7d59",
+    "validation_revision": "1f0c6e09783e26f3d78e490347803ec1a242f004",
+    "scope": "The existing golden is unchanged. All 81 native mailbox writes match main and candidate for start, prepare floor, raise 1500/900, idle 500/820, restore 1000/820 and stop.",
+    "main_smu_source_sha256": "fe3b2a719ce3ada74047a908b724dadecc23ba6b225d6a3ffc8d6940d612b7d7",
+    "fixture_sha256": "3b8f5443c060d7425960a8ca38c1c76a99b41a4f6d41e2d163aab87ab48654df"
   }
 }

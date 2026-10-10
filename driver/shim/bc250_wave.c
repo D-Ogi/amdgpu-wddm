@@ -87,7 +87,7 @@ int bc250_gfx_read_waves(struct amdgpu_device *adev, BC250_WAVE_SNAPSHOT *snapsh
                         bc250_wave_stop_fn stop, void *context)
 {
     BC250_WAVE_HEADER *h;
-    u32 se, sh, wgp, simd, slot, cc, user, status, field;
+    u32 se, sh, wgp, simd, slot, cc, user, spi, by_cc, by_spi, status, field;
     int result = -1;
     if (!snapshot) return -1;
     h = &snapshot->Header;
@@ -114,11 +114,22 @@ int bc250_gfx_read_waves(struct amdgpu_device *adev, BC250_WAVE_SNAPSHOT *snapsh
             if (stopped(h, stop, context)) goto cleanup;
             user = RREG32_SOC15(GC, 0, mmGC_USER_SHADER_ARRAY_CONFIG);
             if (stopped(h, stop, context)) goto cleanup;
-            if (cc == 0xffffffffu || user == 0xffffffffu) {
+            spi = RREG32_SOC15(GC, 0, mmSPI_PG_ENABLE_STATIC_WGP_MASK);
+            if (stopped(h, stop, context)) goto cleanup;
+            if (cc == 0xffffffffu || spi == 0xffffffffu) {
                 (void)invalid_read(h);
                 goto cleanup;
             }
-            h->WgpMask[se][sh] = bc250_cu_active_wgps_cc(cc, user, WAVE_WGPS);
+            /* cu_mode publishes the union of enumeration and dispatch masks.
+             * UMR ignores USER because some ASICs initialize it to all ones;
+             * keep CC's physical holes in that case, rather than hiding waves.
+             * A backend fault was already rejected above. */
+            by_cc = bc250_cu_active_wgps_cc(cc, user == 0xffffffffu ? 0 : user, WAVE_WGPS);
+            by_spi = bc250_cu_active_wgps_spi(spi, WAVE_WGPS);
+            h->WgpMask[se][sh] = by_cc | by_spi;
+            dev_info(adev->dev,
+                "waves mask se%u sa%u cc%08x user%08x spi%08x cc_active%x spi_active%x used%x user_ignored%u\n",
+                se, sh, cc, user, spi, by_cc, by_spi, h->WgpMask[se][sh], user == 0xffffffffu);
             for (wgp = 0; wgp < WAVE_WGPS; wgp++) {
                 if (!(h->WgpMask[se][sh] & (1u << wgp))) continue;
                 h->WgpVisited++;

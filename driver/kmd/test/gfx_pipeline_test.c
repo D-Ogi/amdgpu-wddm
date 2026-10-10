@@ -157,7 +157,9 @@ static void WddmTimeoutSnapshot(const BC250_DEVICE* d,ULONG seq,UINT fence,UINT 
  * (it reads the fence slot and the command processor's fetch registers), so it is modeled here. A case that wants
  * the watchdog to fire leaves it alone; one that wants a long healthy job moves it. */
 static ULONGLONG mock_progress = 0x9E3779B97F4A7C15ull;
-static ULONGLONG WddmSubmitProgress(BC250_DEVICE* d) { (void)d; return mock_progress; }
+static BOOLEAN mock_progress_available = TRUE;
+static BOOLEAN WddmSubmitProgress(BC250_DEVICE* d, ULONGLONG* token)
+{ (void)d; if (!mock_progress_available) return FALSE; *token=mock_progress; return TRUE; }
 static int GfxSubmitReady(BC250_DEVICE* d) { (void)d; return armed && completed==mock_seq; }
 static int GfxSubmitBusy(BC250_DEVICE* d) { (void)d; return armed && completed!=mock_seq; }
 /* No KeDelayExecutionThread: KMD196 removed the bare 1 ms sleep from both hold phases, and a return of it fails
@@ -298,6 +300,25 @@ int main(void)
     CHECK(steps==i && reported==23 && dispatches==30);
     // Every hold is counted once, in one bucket; every retirement signalled the waiters.
     CHECK(HistogramTotal(&w)==w.SubmitHolds && d.GfxRetireGeneration!=0);
+    /* An exclusive wave read is not a token observation. The real DPC must
+     * preserve the last sample/counters, rearm, and never timeout on it. */
+    memset(&w,0,sizeof(w)); w.FenceLedger[0].Epoch=1;
+    mock_seq=completed=reported=dispatches=failures=0; mock_now=100;
+    armed=1; refuse=0; root_wait=0;
+    w.SubmitBudgetMs=12000; w.SubmitTickMs=250;
+    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,1,0));
+    mock_now+=2500000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
+    { BC250_SUBMIT_WATCHDOG saved=w.SubmitWatchdog;
+      LONG primes=w.SubmitPrimes,activity=w.SubmitActivityChanges,gaps=w.SubmitGapResets;
+      LONG rearms=w.SubmitRearms;
+      mock_progress_available=FALSE; mock_progress++;
+      mock_now+=130000000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
+      CHECK(memcmp(&saved,&w.SubmitWatchdog,sizeof(saved))==0);
+      CHECK(w.SubmitPrimes==primes && w.SubmitActivityChanges==activity && w.SubmitGapResets==gaps);
+      CHECK(w.SubmitRearms==rearms+1 && failures==0 && !w.WatchdogFaulted[0]);
+      mock_progress_available=TRUE;
+      mock_now+=2500000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
+      CHECK(w.SubmitGapResets==gaps+1 && failures==0 && !w.WatchdogFaulted[0]); }
     printf("GFX WDDM actual submit/completion/watchdog: %u checks, %u failures\n",checks,bad);
     return bad ? 1:0;
 }

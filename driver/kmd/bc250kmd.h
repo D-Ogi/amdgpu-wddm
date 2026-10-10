@@ -180,6 +180,9 @@ typedef struct _BC250_DEVICE {
     DXGK_DEVICE_INFO DeviceInfo;
 
     BOOLEAN Started;
+    // >= 0 counts watchdog MMIO samplers; -1 owns the wave selectors or retains
+    // failed-restore quarantine until a new device start.
+    volatile LONG WaveRegisterAccess;
     BOOLEAN SourceVisible;
     BOOLEAN ModeActive;         // a commit has validated that the source surface is exactly the firmware's mode
     BOOLEAN PresentSeen;
@@ -553,11 +556,14 @@ NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULON
 NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
-void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros);
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
 struct BC250_WAVE_HEADER;
 struct BC250_WAVE_SNAPSHOT;
 NTSTATUS GuardRecordWaveSnapshot(const struct BC250_WAVE_HEADER* Header);
 NTSTATUS GfxCaptureWaves(BC250_DEVICE* Device, struct BC250_WAVE_SNAPSHOT* Snapshot);
+BOOLEAN GfxWaveSampleBegin(BC250_DEVICE* Device);
+void GfxWaveSampleEnd(BC250_DEVICE* Device);
+BOOLEAN GfxWaveCaptureActive(const BC250_DEVICE* Device);
 void GfxRecordWavesBeforeKill(BC250_DEVICE* Device, ULONG Seq, ULONG Fence, ULONG Vmid);
 
 // The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only

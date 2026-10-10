@@ -241,7 +241,7 @@ $record = (Function-Body $source 'WddmRecordCompletionLocked').Text
 if ($record.IndexOf('Bc250HangObserveCompleted(') -lt 0 -or
     $record.IndexOf('Bc250HangObserveCompleted(') -gt $record.IndexOf('Wddm->CompletionPending[NodeOrdinal] = 1;')) { $sourceOk = $false }
 $admissionOk=$true
-if (!$reset.Contains('GuardRecordHangRecovery(BC250_HANG_VERDICT_ADMISSION_GUARD, reasons, 0, 0, 0);')) { $admissionOk=$false }
+if (!$reset.Contains('GuardRecordHangRecovery(BC250_HANG_VERDICT_ADMISSION_GUARD, reasons, 0, 0, 0, FALSE);')) { $admissionOk=$false }
 if (!$reset.Contains('reasons = WddmResetAdmit(device, wddm, node, &irql);')) { $admissionOk=$false }
 foreach($name in @('Bc250WddmSubmitCommand','Bc250WddmSubmitCommandVirtual')) {
     $wrapper=(Function-Body $source $name).Text

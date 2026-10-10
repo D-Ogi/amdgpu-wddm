@@ -350,10 +350,11 @@ typedef struct _BC250_WDDM {
                                          // one node's fences. "The last completed fence ID" dxgkrnl checks against
                                          // is per node: LastReportedFence[node] (hang-recovery.md, 0.7.216.16)
     UINT NodeCount;                     // 1 with EnablePagingNode closed, 2 open; read once in WddmStart
-    // M15.12 (docs/design/hang-recovery.md): the hang-recovery switch, read once. 0 or absent = today's behaviour
-    // (ResetEngine refuses, ResetFromTimeout fails, 0x116). 1 = DxgkDdiResetEngine attempts a node-0 soft
+    // M15.12 (docs/design/hang-recovery.md): the hang-recovery switch, read once. 0 = refusal
+    // (ResetEngine refuses, ResetFromTimeout fails, 0x116). 1 or absent = a node-0 soft
     // recovery (kill the hung job's VMID waves, wait for the fence). Start-latched like EnablePagingNode.
     BOOLEAN HangRecoveryMode;
+    BOOLEAN HangRecoveryWaves;          // independent start-latched diagnostic capture; absent = on
     volatile LONG SoftRecoveries;       // ResetEngine soft recoveries that drained the ring (reported as aborted)
 
     // Preemption goes through the same DPC, and after the completion, so that the fence it reports as last
@@ -1131,12 +1132,11 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
 // DPC, outside wddm->Lock, once per timeout.
 //
 // Two honest limits of these reads, stated here so that nobody reads the line as more than it is:
-//   - GRBM_STATUS_SE0 and the CP_IB*/CP_STAT family are banked by GRBM_GFX_INDEX, which this driver must not
-//     write (no new register writes): they are whatever bank was selected last, which on the submit path is
-//     the one the shim left behind.
+//   - GRBM_STATUS_SE0 and the CP_IB*/CP_STAT family are banked by GRBM_GFX_INDEX. Reader admission excludes
+//     a wave capture's bank selection; these reads use the bank the shim left behind.
 //   - CP_IB1/CP_IB2 are the command processor's live fetch registers, so they describe where the CP is now,
 //     not necessarily the timed-out job; the journal's BC250_PJ_GFX_SUBMIT record is what names the job.
-static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT Fence, UINT Node)
+static void WddmTimeoutSnapshot(_Inout_ BC250_DEVICE* Device, ULONG Seq, UINT Fence, UINT Node)
 {
     static const struct { const char* Name; ULONG Offset; } registers[] = {
         { "CP_RB0_RPTR", BC250_REG_GC_CP_RB0_RPTR }, { "CP_RB0_WPTR", BC250_REG_GC_CP_RB0_WPTR },
@@ -1163,8 +1163,13 @@ static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT
 
     C_ASSERT(RTL_NUMBER_OF(registers) == RTL_NUMBER_OF(values));
     C_ASSERT(RTL_NUMBER_OF(values) % 3 == 0);
+    if (!GfxWaveSampleBegin(Device)) {
+        GuardLog("wddm: timeout seq %lu register snapshot skipped during wave capture", Seq);
+        return;
+    }
     for (i = 0; i < RTL_NUMBER_OF(values); i++)
         if (!NT_SUCCESS(MmioRead(Device, registers[i].Offset, &values[i]))) { values[i] = 0; refused++; }
+    GfxWaveSampleEnd(Device);
     for (i = 0; i < RTL_NUMBER_OF(values); i += 3)
         GuardLog("wddm: timeout seq %lu fence %u node %u %s 0x%08X %s 0x%08X %s 0x%08X", Seq, Fence, Node,
                  registers[i].Name, values[i], registers[i + 1].Name, values[i + 1],
@@ -1194,7 +1199,7 @@ static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT
 //     the g12 arm of the two dumps, where SubmitSeq equalled the timed-out head's sequence - retires no fence
 //     for hundreds of milliseconds, so the fence slot alone would say nothing about it.
 // The honest limits of the second source are the ones WddmTimeoutSnapshot states above: the CP_IB* family is
-// banked by GRBM_GFX_INDEX, which this driver must not write, and those registers describe where the CP is now
+// banked by GRBM_GFX_INDEX, so the sampler excludes wave capture, and those registers describe where the CP is now
 // rather than the head job. Token changes reset our inactivity window without
 // proving head progress; A/B/A/B activity can postpone this watchdog indefinitely.
 // A healthy long shader can also keep a constant token. Windows' independent
@@ -1202,7 +1207,7 @@ static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT
 //
 // A register the path refuses contributes its zero, and a mix collision is read as no progress, which is the
 // behaviour of every build before this one.
-static ULONGLONG WddmSubmitProgress(_Inout_ BC250_DEVICE* Device)
+static BOOLEAN WddmSubmitProgress(_Inout_ BC250_DEVICE* Device, _Out_ ULONGLONG* Token)
 {
     static const ULONG registers[] = {
         BC250_REG_GC_CP_RB0_RPTR,
@@ -1212,13 +1217,18 @@ static ULONGLONG WddmSubmitProgress(_Inout_ BC250_DEVICE* Device)
     ULONGLONG token = BC250_SUBMIT_PROGRESS_SEED;
     ULONG value, i;
 
+    // No waiting in the DPC. Leave the previous watchdog observation unchanged
+    // if the capture owns the bank; its cleanup restores the bank before release.
+    if (!GfxWaveSampleBegin(Device)) return FALSE;
     if (GfxFenceObserved(Device, &value)) token = Bc250SubmitProgressMix(token, value);
     for (i = 0; i < RTL_NUMBER_OF(registers); i++)
     {
         if (!NT_SUCCESS(MmioRead(Device, registers[i], &value))) value = 0;
         token = Bc250SubmitProgressMix(token, value);
     }
-    return token;
+    GfxWaveSampleEnd(Device);
+    *Token = token;
+    return TRUE;
 }
 
 // ---- C48/C49: the two edges of a node's busy state ---------------------------------------------------------
@@ -1369,7 +1379,7 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
 {
     BC250_DEVICE* device = (BC250_DEVICE*)Context;
     BC250_WDDM* wddm;
-    BOOLEAN timedOut = FALSE, rearm = FALSE;
+    BOOLEAN timedOut = FALSE, rearm = FALSE, progressAvailable;
     UINT fence = 0, node = 0;
     ULONG seq = 0, process = 0, contextFlags = 0, vmid = 0;
     ULONG headMs = 0, queuedMs = 0, staleMs = 0, budgetMs = 0, tick = 0;
@@ -1395,7 +1405,7 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     // the only input that can. The token is read as "progress observed" whenever it changes at all, which is the
     // conservative direction. Token activity can belong to other work; it does not
     // prove head-job progress. This clock and Windows' preemption clock differ.
-    progress = WddmSubmitProgress(device);
+    progressAvailable = WddmSubmitProgress(device, &progress);
     now = KeQueryInterruptTime();
     KeAcquireSpinLock(&wddm->Lock, &irql);
     if (wddm->Stopping || sampledSeq != wddm->HwSeq ||
@@ -1407,13 +1417,16 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     if (wddm->HwPending && !wddm->WatchdogFaulted[wddm->HwNode])
     {
         const BC250_GFX_COMPLETION* head = Bc250GfxQueueHead(&wddm->GfxPending);
-        int stale = Bc250SubmitWatchdogCheck(&wddm->SubmitWatchdog, progress, now,
-                                             10000ull * (ULONGLONG)budgetMs, &age);
-        switch (wddm->SubmitWatchdog.LastObservation) {
-        case BC250_SUBMIT_OBSERVATION_PRIME: wddm->SubmitPrimes++; break;
-        case BC250_SUBMIT_OBSERVATION_ACTIVITY: wddm->SubmitActivityChanges++; break;
-        case BC250_SUBMIT_OBSERVATION_GAP_RESET: wddm->SubmitGapResets++; break;
-        default: break;
+        int stale = 0;
+        if (progressAvailable) {
+            stale = Bc250SubmitWatchdogCheck(&wddm->SubmitWatchdog, progress, now,
+                                            10000ull * (ULONGLONG)budgetMs, &age);
+            switch (wddm->SubmitWatchdog.LastObservation) {
+            case BC250_SUBMIT_OBSERVATION_PRIME: wddm->SubmitPrimes++; break;
+            case BC250_SUBMIT_OBSERVATION_ACTIVITY: wddm->SubmitActivityChanges++; break;
+            case BC250_SUBMIT_OBSERVATION_GAP_RESET: wddm->SubmitGapResets++; break;
+            default: break;
+            }
         }
 
         // Both, not either: the staleness window alone already implies the deadline (the window opens no earlier
@@ -3166,6 +3179,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // (absent = 1, lab-proven in trial D1 of 0.7.216.17); 0 is the switch-off and leaves every TDR DDI exactly as
     // it was before 0.7.216.13. Any other value is on, as for the other finished features (EnableVmidPool).
     wddm->HangRecoveryMode = (GuardReadSetting(L"HangRecoveryMode", 1) != 0);
+    wddm->HangRecoveryWaves = (GuardReadSetting(L"HangRecoveryWaves", 1) != 0);
+    GuardLog("wddm: pre-kill wave capture %s", wddm->HangRecoveryWaves ? "on" : "off");
     if (wddm->HangRecoveryMode)
         GuardLog("wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in "
                  "Parameters\\HangRecovery");
@@ -6489,7 +6504,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         BOOLEAN onRing;
         int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0;
         unsigned node = pResetEngine->NodeOrdinal;
-        ULONGLONG epoch;
+        ULONGLONG epoch, admittedAt;
         BC250_HANG_NODE_STATE snapshot;
         KIRQL irql;
 
@@ -6499,11 +6514,12 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             GuardLog("wddm: ResetEngine node %u admission refused, reasons 0x%02lX", node, reasons);
             // Persist every failed gate from the same observation, even if a
             // later adapter reset/0x116 destroys the volatile log ring.
-            GuardRecordHangRecovery(BC250_HANG_VERDICT_ADMISSION_GUARD, reasons, 0, 0, 0);
+            GuardRecordHangRecovery(BC250_HANG_VERDICT_ADMISSION_GUARD, reasons, 0, 0, 0, FALSE);
             goto refuseReset;
         }
         // WddmResetAdmit returned with Lock held and both gates closed. No
         // callback is in flight, no new submit Impl or retirement can start.
+        admittedAt = KeQueryInterruptTime();
         epoch = wddm->Recovery[node].Epoch;
         snapshot = wddm->Recovery[node];
         head = Bc250GfxQueueHead(&wddm->GfxPending);
@@ -6553,9 +6569,11 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         {
             // On the disk before the first SQ_CMD write: should the kill itself take the machine down, the record
             // read after the reboot still says an attempt was under way (LastVerdict 0, Attempts one ahead).
-            GuardRecordHangRecovery(BC250_HANG_VERDICT_PENDING, seq, hungFence, 0, 0);
+            GuardRecordHangRecovery(BC250_HANG_VERDICT_PENDING, seq, hungFence, 0, 0, wddm->HangRecoveryWaves);
             // Capture and flush before the first destructive recovery write. Failure is diagnostic only.
-            GfxRecordWavesBeforeKill(device, seq, hungFence, vmid);
+            if (wddm->HangRecoveryWaves) GfxRecordWavesBeforeKill(device, seq, hungFence, vmid);
+            GuardLog("wddm: soft recovery admit-to-kill %llu us, waves %u",
+                     (KeQueryInterruptTime() - admittedAt) / 10ull, (ULONG)wddm->HangRecoveryWaves);
             // Kill the waves of the hung job's VMID until the newest sequence retires, for at most 10 ms. A
             // recovered verdict means the end-of-pipe behind the killed waves fired and the ring drained to idle.
             verdict = GfxSoftRecover(device, vmid, &seq, &kills, &micros);
@@ -6572,7 +6590,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
                 // The empty-queue path has not written PENDING (which counts an
                 // attempt); retain its refusal class so the counters stay balanced.
                 verdict = abortReported ? BC250_HANG_VERDICT_NOTHING_ON_RING : BC250_HANG_VERDICT_NOT_DRAINED;
-                GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
+                GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros, FALSE);
                 goto refuseReset;
             }
             // Drop the hung job (and anything queued behind it on this node) so no stale entry double-reports;
@@ -6606,7 +6624,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // this line. GfxSoftRecover only drains; it never opens or signals either gate.
             GfxRetireSignal(device);
             InterlockedIncrement(&wddm->SoftRecoveries);
-            GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
+            GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros, FALSE);
             // Valid by construction, by one of two arguments. Verdicts 1 and 5: hungFence was submitted and, when
             // read, still the unreported head of the queue, so it is in [LastCompletedFenceId, last submitted].
             // Verdict 7: hungFence is this node's observed completion and its validity comes from the range
@@ -6633,7 +6651,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         KeAcquireSpinLock(&wddm->Lock, &irql);
         Bc250HangResetEnd(&wddm->Recovery[node], FALSE, 0);
         KeReleaseSpinLock(&wddm->Lock, irql);
-        GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
+        GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros, FALSE);
         // Not recovered (verdict 2, 3, 4 or 6): retain both closed gates
         // and fall through to today's refusal (then 0x116).
         GuardLog("wddm: ResetEngine node %u: soft recovery verdict %lu, refusing as before",

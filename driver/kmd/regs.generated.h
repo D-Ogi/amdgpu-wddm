@@ -1323,7 +1323,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x08C30ul,   // GC.SQ_ARB_CONFIG
     0x08C34ul,   // GC.SH_MEM_CONFIG
     0x08DE0ul,   // GC.SQ_IND_INDEX (not traced: amdgpu gfx_v10_0 wave_read_ind selector)
-    0x08DE4ul,   // GC.SQ_IND_DATA (not traced: amdgpu gfx_v10_0 wave_read_ind, read only in wave backend)
+    0x08DE4ul,   // GC.SQ_IND_DATA (not traced: amdgpu gfx_v10_0 wave_read_ind, MmioGfxWrite read-only filter)
     0x08DECul,   // GC.SQ_CMD (not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery)
     0x0935Cul,   // GC.SPI_PG_ENABLE_STATIC_WGP_MASK (not traced: CU mode dispatch gate, docs/design/cu-mode.md)
     0x09508ul,   // GC.TA_CNTL_AUX

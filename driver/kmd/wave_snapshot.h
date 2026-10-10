@@ -49,9 +49,9 @@ typedef struct BC250_WAVE_SNAPSHOT {
 
 /* Complete response, always initialized by the miniport. Op=0 takes a live
  * snapshot. Saved recovery snapshots are read from HangRecovery in the registry. */
-#define BC250_ESCAPE_GET_WAVES 33u
+#define BC250_ESCAPE_GET_WAVES 34u
 typedef struct BC250_ESCAPE_WAVES {
-    BC250_WAVE_U32 Magic, Command, Version, Status;
+    BC250_WAVE_U32 Magic, Command, Status, Version;
     BC250_WAVE_I32 NtStatus;
     BC250_WAVE_U32 AbiVersion, Op, Reserved;
     BC250_WAVE_SNAPSHOT Snapshot;

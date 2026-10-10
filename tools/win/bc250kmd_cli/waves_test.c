@@ -11,6 +11,9 @@
 #include <wchar.h>
 #include "../../../driver/kmd/bc250kmd_escape.h"
 #include "../../../driver/kmd/wave_snapshot.h"
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Status) == 8);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Version) == 12);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Snapshot) == 32);
 
 #define BC250_DEFAULT_HWID L"fake-adapter"
 #define BC250_PARAMETERS L"fake-parameters"
@@ -20,6 +23,7 @@ static int OpenFail;
 static NTSTATUS EscapeResult;
 static uint32_t ReplyStatus = BC250_ESCAPE_STATUS_DONE, ReplyAbi = BC250_WAVE_ABI_VERSION;
 static int Oversized;
+static int OldDriver;
 static LSTATUS ReadResult;
 static DWORD ReadType = REG_BINARY, ReadBytes;
 static BC250_WAVE_SNAPSHOT Fixture;
@@ -54,7 +58,6 @@ static NTSTATUS APIENTRY FakeEscape(const D3DKMT_ESCAPE *escape)
 {
     BC250_ESCAPE_WAVES *r = (BC250_ESCAPE_WAVES *)escape->pPrivateDriverData;
     D3DDDI_ESCAPEFLAGS expected = { 0 };
-    expected.HardwareAccess = 1;
     expected.NoAdapterSynchronization = 1;
     ++Escapes;
     CHECK(escape->hAdapter == 17);
@@ -63,6 +66,11 @@ static NTSTATUS APIENTRY FakeEscape(const D3DKMT_ESCAPE *escape)
     CHECK(escape->PrivateDriverDataSize == sizeof(*r));
     CHECK(r->Magic == BC250_ESCAPE_MAGIC && r->Command == BC250_ESCAPE_GET_WAVES);
     CHECK(r->AbiVersion == BC250_WAVE_ABI_VERSION && r->Op == 0 && r->Reserved == 0);
+    if (OldDriver) {
+        /* The old driver's generic refusal writes the common prefix only. */
+        ((BC250_ESCAPE *)r)->Status = BC250_ESCAPE_STATUS_REFUSED;
+        return 0;
+    }
     r->Status = ReplyStatus;
     r->AbiVersion = ReplyAbi;
     r->Version = 0x00070001;
@@ -270,6 +278,10 @@ static void CommandTests(void)
     WCHAR *pc[] = { L"cli", L"waves", L"--expect-pc", L"0x200001200", L"0x200001300" };
     WCHAR *extra[] = { L"cli", L"waves", L"saved", L"--expect-idle", L"extra" };
     uint64_t address;
+    Reset(0);
+    OldDriver = 1;
+    CHECK(WavesCommand(2, plain) == 1 && Escapes == 1 && Closes == 1);
+    OldDriver = 0;
     Reset(0);
     CHECK(WavesCommand(3, idle) == 0 && Escapes == 1 && Closes == 1);
     CHECK(strstr(Output, "expect-idle: PASS") != NULL);

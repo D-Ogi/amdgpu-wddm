@@ -1,22 +1,31 @@
 /* The generated translation unit contains the real GfxCaptureWaves and its
  * helpers. This model exercises lifetime admission and cleanup, not Windows
- * scheduling or the undocumented admission of Escape flags=9 during a hang. */
+ * scheduling or hardware behavior during a hang. Escape flags are exactly 8. */
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include "wave_snapshot.h"
+typedef struct { const char* Name; unsigned long Offset; } BC250_DCN_REG_INFO;
+#define BC250_REGS_WITH_TABLES
 #include "regs.generated.h"
 #include "gc_10_1_0_sh_mask.h"
 
 typedef int NTSTATUS, BOOLEAN;
 typedef long LONG;
 typedef unsigned long ULONG;
+typedef ULONG* PULONG;
 typedef unsigned long long ULONGLONG;
 typedef struct { long long QuadPart; } LARGE_INTEGER;
 #define TRUE 1
 #define FALSE 0
 #define PASSIVE_LEVEL 0
 #define MAXULONG 0xfffffffful
+#define MAXLONG 0x7fffffffl
+#define UNREFERENCED_PARAMETER(x) ((void)(x))
+#ifndef _In_
+#define _In_
+#endif
 #define STATUS_SUCCESS 0
 #define STATUS_ACCESS_DENIED (-1)
 #define STATUS_DEVICE_DATA_ERROR (-2)
@@ -41,6 +50,10 @@ typedef struct BC250_DEVICE {
     void* Gfx;
     void* GpuMem;
     volatile LONG RetainedPowerPhase;
+    volatile LONG WaveRegisterAccess;
+    void* PhysicalDeviceObject;
+    volatile ULONG* Mmio;
+    int MmioGfxEnabled;
     int GfxPagingLock, GartLock;
 } BC250_DEVICE;
 typedef struct BC250_SEQUENCE {
@@ -56,13 +69,15 @@ enum { ShimComplete, ShimFault, ShimBudget, ShimTruncated, ShimPartial };
 typedef struct { char Kind; ULONG Offset, Value; } MMIO_EVENT;
 static struct {
     unsigned Accesses, FailAt, MismatchAt, PoisonAt;
-    int Irql, Critical, Shared, Mutex, GartCalls, ShimCalls, ShimMode, Enabled;
+    int Irql, Critical, Shared, Mutex, GartCalls, ShimCalls, ShimMode, Enabled, Owner;
     NTSTATUS GartResult;
     ULONG Grbm, SqIndex;
     ULONGLONG InterruptTime, SystemTime;
     MMIO_EVENT Events[32];
     char Locks[16];
     unsigned LockCount;
+    unsigned StallCalls, ReleaseSamplerAt, LogCount, HardwareWrites;
+    char Logs[16][180];
 } model;
 static BC250_DEVICE device;
 static BC250_GFX testGfx;
@@ -70,8 +85,21 @@ static struct amdgpu_device testAdev;
 static BC250_WAVE_SNAPSHOT testSnapshot;
 static unsigned checks, failures;
 static int oldBackend;
+static int pdoIdentity;
 static const ULONG entryIndex = 0x13579u;
 #define CHECK(x) do { checks++; if (!(x)) { failures++; printf("FAIL %u: %s\n", __LINE__, #x); } } while (0)
+#define NT_ASSERT(x) CHECK(x)
+BOOLEAN GfxWaveSampleBegin(BC250_DEVICE* Device);
+void GfxWaveSampleEnd(BC250_DEVICE* Device);
+BOOLEAN GfxWaveCaptureActive(const BC250_DEVICE* Device);
+static void GuardLog(const char* format, ...)
+{
+    va_list args;
+    CHECK(model.LogCount < 16);
+    va_start(args, format);
+    vsnprintf(model.Logs[model.LogCount++], sizeof(model.Logs[0]), format, args);
+    va_end(args);
+}
 
 static unsigned int bc250_gfx_wave_broadcast_value(void)
 {
@@ -99,10 +127,22 @@ static void ExReleasePushLockShared(int* lock)
 static void KeLeaveCriticalRegion(void)
 { CHECK(model.Critical && !model.Shared && !model.Mutex); model.Critical = 0; lock_event('c'); }
 static int KeGetCurrentIrql(void) { return model.Irql; }
-static ULONGLONG KeQueryInterruptTime(void) { return model.InterruptTime; }
-static void KeQuerySystemTime(LARGE_INTEGER* now) { now->QuadPart = ++model.SystemTime; }
+static ULONGLONG KeQueryInterruptTime(void) { return model.InterruptTime++; }
+/* Any production use of wall time for capture duration is a test failure. */
+#define KeQuerySystemTime(now) do { CHECK(0); (now)->QuadPart = model.SystemTime; } while (0)
+static void KeStallExecutionProcessor(unsigned usec)
+{
+    CHECK(usec == 1 && device.WaveRegisterAccess > 0);
+    model.StallCalls++; model.InterruptTime += 10000;
+    if (model.StallCalls == model.ReleaseSamplerAt) GfxWaveSampleEnd(&device);
+}
 static LONG InterlockedCompareExchange(volatile LONG* p, LONG value, LONG match)
 { LONG old = *p; if (old == match) *p = value; return old; }
+static LONG InterlockedExchange(volatile LONG* p, LONG value)
+{ LONG old = *p; *p = value; return old; }
+static LONG InterlockedDecrement(volatile LONG* p) { return --*p; }
+static int AdapterOwnerIs(void* pdo)
+{ CHECK(model.Shared && model.Mutex); return model.Owner && pdo == &pdoIdentity; }
 
 static NTSTATUS GartDevice(BC250_DEVICE* d, struct amdgpu_device** out, BOOLEAN* enabled)
 {
@@ -116,6 +156,7 @@ static NTSTATUS mmio_event(const BC250_DEVICE* d, char kind, ULONG offset, ULONG
 {
     MMIO_EVENT* event;
     CHECK(d == &device && model.Shared && model.Mutex);
+    CHECK(GfxWaveCaptureActive(&device) && !GfxWaveSampleBegin(&device));
     CHECK(offset == BC250_REG_GC_GRBM_GFX_INDEX || offset == BC250_REG_GC_SQ_IND_INDEX);
     CHECK(model.Accesses < sizeof(model.Events) / sizeof(model.Events[0]));
     event = &model.Events[model.Accesses++];
@@ -158,6 +199,8 @@ static int bc250_gfx_read_waves(struct amdgpu_device* a, BC250_WAVE_SNAPSHOT* re
     CHECK(model.Shared && model.Mutex && stop(context) == 0);
     model.ShimCalls++;
     result->Header.Flags = 0;
+    /* A wall-clock correction during capture cannot invalidate its duration. */
+    model.SystemTime = 0;
     result->Header.WaveCount = 1;
     result->Header.SlotsVisited = 80;
     result->Waves[0].Raw[Bc250WavePcLo] = 0x123400u;
@@ -184,6 +227,20 @@ static int bc250_gfx_read_waves(struct amdgpu_device* a, BC250_WAVE_SNAPSHOT* re
 
 /* ACTUAL_SOURCE */
 
+/* Check the actual shared GFX write filter, beyond the wave-only backend. */
+#define BC250_BAR5_LENGTH 0x80000ul
+static ULONG fakeBar[BC250_BAR5_LENGTH / sizeof(ULONG)];
+static BOOLEAN InTable(const unsigned long* table, ULONG count, ULONG offset)
+{
+    ULONG i;
+    for (i = 0; i < count; i++) if (table[i] == offset) return TRUE;
+    return FALSE;
+}
+static void HardwareWrite(PULONG pointer, ULONG value)
+{ model.HardwareWrites++; *pointer = value; }
+#define WRITE_REGISTER_ULONG(pointer, value) HardwareWrite(pointer, value)
+/* ACTUAL_MMIO */
+
 /* The first four WDK 10.0.26100 d3dukmdt.h escape flag positions (lines 600-606).
  * The host model does not establish dxgkrnl admission for their combination. */
 typedef union {
@@ -196,6 +253,8 @@ typedef union {
     };
     unsigned Value;
 } D3DDDI_ESCAPEFLAGS;
+/* Common escape prefix, independently checked against waves by production. */
+typedef struct { ULONG Magic, Command, Status; } BC250_ESCAPE;
 #define BC250_ESCAPE_MAGIC 0x30353242u
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_REFUSED 2u
@@ -204,6 +263,7 @@ typedef union {
 #define RtlCopyMemory(d, s, n) memcpy(d, s, n)
 #define C_ASSERT(x) _Static_assert(x, #x)
 #define FIELD_OFFSET(t, f) offsetof(t, f)
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Status) == 8);
 #define POOL_FLAG_NON_PAGED 1
 typedef struct { int Primary, Client, HasClient; } SECURITY_SUBJECT_CONTEXT;
 static int primaryAdmin, clientAdmin, hasClient, subjectLive, subjectLocked;
@@ -251,6 +311,7 @@ static void reset(void)
     memset(&model, 0, sizeof(model)); memset(&device, 0, sizeof(device));
     memset(&testGfx, 0, sizeof(testGfx)); memset(&testSnapshot, 0, sizeof(testSnapshot));
     model.Enabled = 1; model.Grbm = bc250_gfx_wave_broadcast_value(); model.SqIndex = entryIndex;
+    model.Owner = 1; device.PhysicalDeviceObject = &pdoIdentity;
     model.InterruptTime = 1000; model.SystemTime = 2000;
     device.Started = 1; device.Gfx = &testGfx; device.GpuMem = &testGfx;
     testGfx.SetUp = 1; testGfx.StagesDone = BC250_GFX_STAGE_INTERRUPTS;
@@ -273,6 +334,7 @@ static NTSTATUS capture(void)
     CHECK(testSnapshot.Header.AbiVersion == BC250_WAVE_ABI_VERSION);
     CHECK(testSnapshot.Header.DriverVersion == BC250_KMD_VERSION);
     CHECK(testSnapshot.Header.EndTime100ns >= testSnapshot.Header.StartTime100ns);
+    CHECK(testSnapshot.Header.StartTime100ns == 1000);
     CHECK(testSnapshot.Header.Kind == BC250_WAVE_KIND_PRE_KILL);
     CHECK(testSnapshot.Header.Seq == 19 && testSnapshot.Header.Fence == 29 && testSnapshot.Header.Vmid == 3);
     CHECK(testSnapshot.Header.Bytes == sizeof(BC250_WAVE_HEADER) + testSnapshot.Header.WaveCount * sizeof(BC250_WAVE_RECORD));
@@ -311,26 +373,26 @@ static void test_escape(void)
 {
     unsigned i;
     reset(); primaryAdmin = 1; hasClient = 1; clientAdmin = 0;
-    escape(9);
+    escape(8);
     CHECK(response.NtStatus == STATUS_ACCESS_DENIED && response.Status == BC250_ESCAPE_STATUS_NOT_ADMIN);
     CHECK(!model.Accesses && !poolAllocCalls && !model.GartCalls);
     reset(); primaryAdmin = 0; hasClient = 1; clientAdmin = 1;
-    escape(9);
+    escape(8);
     CHECK(response.NtStatus == STATUS_SUCCESS && response.Status == BC250_ESCAPE_STATUS_DONE);
     CHECK(model.ShimCalls == 1 && poolAllocCalls == 1 && poolFreeCalls == 1);
     CHECK(response.Snapshot.Header.WaveCount == 2 && response.Snapshot.Header.Kind == BC250_WAVE_KIND_LIVE);
     CHECK(response.Snapshot.Header.Seq == 0 && response.Snapshot.Header.Fence == 0);
     reset(); primaryAdmin = 0;
-    escape(9); CHECK(response.NtStatus == STATUS_ACCESS_DENIED && !model.Accesses);
+    escape(8); CHECK(response.NtStatus == STATUS_ACCESS_DENIED && !model.Accesses);
 
     /* Every other low-bit combination and every extra bit is refused. */
     for (i = 0; i < 32; i++) {
-        if (i == 9) continue;
+        if (i == 8) continue;
         reset(); escape(i);
         CHECK(response.NtStatus == STATUS_INVALID_PARAMETER && !model.Accesses && !poolAllocCalls);
     }
     for (i = 5; i < 32; i++) {
-        reset(); escape(9ul | (1ul << i));
+        reset(); escape(8ul | (1ul << i));
         CHECK(response.NtStatus == STATUS_INVALID_PARAMETER && !model.Accesses && !poolAllocCalls);
     }
     for (i = 0; i < 5; i++) {
@@ -342,7 +404,7 @@ static void test_escape(void)
         case 3: model.Irql = 2; break;
         case 4: failPool = 1; break;
         }
-        escape(9);
+        escape(8);
         CHECK(!model.Accesses && !model.ShimCalls && !poolFreeCalls);
         CHECK(response.Status == BC250_ESCAPE_STATUS_REFUSED);
         CHECK(response.NtStatus == (i == 4 ? STATUS_INSUFFICIENT_RESOURCES :
@@ -350,10 +412,68 @@ static void test_escape(void)
         CHECK(response.Snapshot.Header.Bytes == sizeof(BC250_WAVE_HEADER));
     }
     reset(); model.ShimMode = ShimBudget;
-    escape(9);
+    escape(8);
     CHECK(response.NtStatus == STATUS_IO_TIMEOUT && response.Status == BC250_ESCAPE_STATUS_REFUSED);
     CHECK(response.Snapshot.Header.WaveCount == 1 && poolFreeCalls == 1);
     CHECK(response.Snapshot.Header.Flags == BC250_WAVE_BUDGET_EXPIRED);
+}
+
+static void test_sampling_admission(void)
+{
+    unsigned accesses;
+    reset();
+    CHECK(GfxWaveSampleBegin(&device) && device.WaveRegisterAccess == 1);
+    CHECK(GfxWaveSampleBegin(&device) && device.WaveRegisterAccess == 2);
+    CHECK(!GfxWaveCaptureActive(&device));
+    GfxWaveSampleEnd(&device); CHECK(device.WaveRegisterAccess == 1);
+    GfxWaveSampleEnd(&device); CHECK(device.WaveRegisterAccess == 0);
+    device.WaveRegisterAccess = MAXLONG;
+    CHECK(!GfxWaveSampleBegin(&device) && device.WaveRegisterAccess == MAXLONG);
+    device.WaveRegisterAccess = -1;
+    CHECK(GfxWaveCaptureActive(&device) && !GfxWaveSampleBegin(&device));
+    GfxWaveSamplingReset(&device);
+    CHECK(GfxWaveSampleBegin(&device)); GfxWaveSampleEnd(&device);
+
+    /* The old reader retires before the first selector access. New readers are
+     * rejected at every MMIO event while the capture owns the selectors. */
+    reset(); CHECK(GfxWaveSampleBegin(&device)); model.ReleaseSamplerAt = 2;
+    CHECK(capture() == STATUS_SUCCESS && model.StallCalls == 2);
+    CHECK(device.WaveRegisterAccess == 0);
+    reset(); CHECK(GfxWaveSampleBegin(&device));
+    CHECK(capture() == STATUS_IO_TIMEOUT);
+    CHECK(testSnapshot.Header.Flags & BC250_WAVE_BUDGET_EXPIRED);
+    CHECK(!model.Accesses && !model.ShimCalls && device.WaveRegisterAccess == 1);
+    GfxWaveSampleEnd(&device);
+
+    /* A failed GRBM restore quarantines banked sampling until a new start.
+     * A verified GRBM restore plus SQ-index failure does not poison sampling. */
+    reset(); model.MismatchAt = 4;
+    CHECK(capture() == STATUS_DEVICE_DATA_ERROR);
+    CHECK(device.WaveRegisterAccess == -1 && !GfxWaveSampleBegin(&device));
+    CHECK(strstr(model.Logs[0], "requested") != NULL && strstr(model.Logs[0], "read 1 value") != NULL);
+    accesses = model.Accesses;
+    model.LockCount = 0;
+    CHECK(GfxCaptureWaves(&device, &testSnapshot) == STATUS_DEVICE_DATA_ERROR);
+    CHECK(model.Accesses == accesses && device.WaveRegisterAccess == -1);
+    CHECK(!model.Shared && !model.Mutex && testAdev.backend == &oldBackend);
+    GfxWaveSamplingReset(&device);
+    CHECK(GfxWaveSampleBegin(&device)); GfxWaveSampleEnd(&device);
+    reset(); model.MismatchAt = 6;
+    CHECK(capture() == STATUS_DEVICE_DATA_ERROR && device.WaveRegisterAccess == 0);
+    CHECK(GfxWaveSampleBegin(&device)); GfxWaveSampleEnd(&device);
+}
+
+static void test_global_write_filter(void)
+{
+    reset(); memset(fakeBar, 0, sizeof(fakeBar));
+    device.Mmio = fakeBar; device.MmioGfxEnabled = TRUE;
+    CHECK(ProductionMmioGfxWrite(&device, BC250_REG_GC_SQ_IND_DATA, 7) == STATUS_ACCESS_DENIED);
+    CHECK(model.HardwareWrites == 0);
+    CHECK(ProductionMmioGfxWrite(&device, BC250_REG_GC_SQ_IND_INDEX, 7) == STATUS_SUCCESS);
+    CHECK(model.HardwareWrites == 1 && fakeBar[BC250_REG_GC_SQ_IND_INDEX / sizeof(ULONG)] == 7);
+    device.Mmio = NULL; device.MmioGfxEnabled = FALSE;
+    CHECK(ProductionMmioGfxWrite(&device, BC250_REG_GC_SQ_IND_DATA, 7) == STATUS_ACCESS_DENIED);
+    CHECK(model.HardwareWrites == 1);
 }
 
 int main(void)
@@ -371,6 +491,7 @@ int main(void)
         reset(); model.FailAt = i;
         CHECK(capture() == STATUS_MOCK_FAULT);
         CHECK(testSnapshot.Header.Flags & BC250_WAVE_READ_ERROR);
+        CHECK(device.WaveRegisterAccess == ((i == 3 || i == 4) ? -1 : 0));
         if (i == 1) {
             CHECK(model.ShimCalls == 0 && testSnapshot.Header.WaveCount == 0);
             CHECK(model.Accesses == 3);
@@ -423,12 +544,18 @@ int main(void)
     reset(); model.Irql = 2;
     CHECK(capture() == STATUS_INVALID_DEVICE_STATE);
     CHECK(!model.Accesses && !model.GartCalls && !model.ShimCalls && !model.LockCount);
+    reset(); model.Owner = 0;
+    CHECK(capture() == STATUS_DEVICE_NOT_READY && !model.GartCalls && !model.Accesses);
+    reset(); device.PhysicalDeviceObject = &oldBackend;
+    CHECK(capture() == STATUS_DEVICE_NOT_READY && !model.GartCalls && !model.Accesses);
 
     /* Register data and SQ_CMD are never admitted as a write destination. */
     reset();
     CHECK(GfxWaveWrite(&device, BC250_REG_GC_SQ_IND_DATA, 1) == STATUS_ACCESS_DENIED);
     CHECK(GfxWaveWrite(&device, BC250_REG_GC_SQ_CMD, 1) == STATUS_ACCESS_DENIED);
     CHECK(model.Accesses == 0);
+    test_sampling_admission();
+    test_global_write_filter();
     test_escape();
     printf("wave access tests: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;

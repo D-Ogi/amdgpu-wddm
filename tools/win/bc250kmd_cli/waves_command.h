@@ -77,10 +77,9 @@ static int WavesCommand(int argc, WCHAR **argv)
         if (OpenAdapterById(BC250_DEFAULT_HWID, &adapter, &status)) goto out;
         escape.hAdapter = adapter;
         escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
-        /* The KMD serializes register access. These exact flags request no
-         * adapter synchronization; measured scheduler behavior remains a lab gate.
+        /* The KMD serializes register access. NoAdapterSynchronization alone
+         * avoids the Level Two GPU-idle request made by HardwareAccess.
          * Never fall back to flags which request adapter synchronization. */
-        escape.Flags.HardwareAccess = 1;
         escape.Flags.NoAdapterSynchronization = 1;
         escape.pPrivateDriverData = request;
         escape.PrivateDriverDataSize = sizeof(*request);

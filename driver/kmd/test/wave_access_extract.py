@@ -10,7 +10,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     source = args.source.read_text(encoding="utf-8")
-    start = "typedef struct GFX_WAVE_CONTEXT {"
+    start = "static void GfxWaveSamplingReset(BC250_DEVICE* Device)"
     end = "void GfxRecordWavesBeforeKill("
     if source.count(start) != 1 or source.count(end) != 1:
         raise SystemExit("Wave wrapper extraction anchors changed")
@@ -28,7 +28,18 @@ def main():
     escape_marker = "/* ACTUAL_ESCAPE */"
     if template.count(escape_marker) != 1:
         raise SystemExit("Test template must have one escape-source marker")
-    args.out.write_text(template.replace(marker, body).replace(escape_marker, escape_body), encoding="utf-8")
+    mmio = args.source.with_name("mmio.c").read_text(encoding="utf-8")
+    mmio_start = "NTSTATUS MmioGfxWrite("
+    if mmio.count(mmio_start) != 1:
+        raise SystemExit("MMIO write extraction anchor changed")
+    offset = mmio.index(mmio_start)
+    mmio_body = mmio[offset:mmio.index("\n}\n", offset) + 3]
+    mmio_body = mmio_body.replace("MmioGfxWrite(", "ProductionMmioGfxWrite(", 1)
+    mmio_marker = "/* ACTUAL_MMIO */"
+    if template.count(mmio_marker) != 1:
+        raise SystemExit("Test template must have one MMIO-source marker")
+    args.out.write_text(template.replace(marker, body).replace(escape_marker, escape_body)
+                        .replace(mmio_marker, mmio_body), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -109,7 +109,8 @@ static __inline unsigned long Bc250SubmitTickMs(unsigned long BudgetMs)
  * snapshot. Only equality matters; the value is never read as a number.
  *
  * Two honest limits, the same two the snapshot's comment states. The CP_IB* family is banked by GRBM_GFX_INDEX,
- * which this driver must not write, so the bank is whatever the shim left selected; and those registers describe
+ * whose bank the wave reader can change. The sampler excludes that reader and otherwise uses the shim's bank.
+ * Those registers describe
  * where the CP is now, not necessarily the head job. These limits can make the token change when the head
  * made no progress. A/B/A/B changes can postpone expiration forever without useful forward progress. A
  * mix collision or a long shader with stationary fetch registers can hide useful work and permit expiration. */

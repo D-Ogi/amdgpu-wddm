@@ -54,6 +54,9 @@ partial class UnitTests
         Check(!BoardCapabilities.Parse(inactive).Allows(BoardCapabilities.Gpu), "inactive board cannot mutate");
         BoardCapabilities.Replace(valid);
         Check(valid.Allows(30), "actual provider fixture allows supported controls");
+        Equal(1000u, DpmSettings.MinMHz, "provider keeps the fixed-start operating floor at 1000 MHz");
+        Equal(2000u, DpmSettings.DefaultMaxMHz, "provider advertises a 2000 MHz automatic ceiling");
+        Equal(500u, valid[8], "provider includes the 500 MHz idle operating point");
         Check(Tuner.Table().Length == valid.GpuClocks.Length && Tuner.FloorMv == valid[13], "curve uses provider");
         Check(CpuTuning.MinMHz == valid[17] && FanCurves.FloorPct == valid[30], "CPU/fan use provider");
     }

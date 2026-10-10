@@ -875,6 +875,7 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 //     LastKills, LastMicros                     REG_DWORD  SQ_CMD writes issued, time spent in the kill loop
 //     LastTime                                  REG_QWORD  KeQuerySystemTime of this write (UTC FILETIME)
 //     LastVersion                               REG_DWORD  BC250_KMD_VERSION of the writer
+//     WavesPending                              REG_DWORD  capture admitted, no snapshot persisted yet
 //
 // The log ring tells the same story in prose, but it is about 1024 lines in memory and does not outlive the 0x116
 // that a refusal leads to; this does, because every write is flushed before the caller goes on (the pending one
@@ -891,7 +892,7 @@ static NTSTATUS AddOne(HANDLE Key, PCWSTR Name)
     return WriteDword(Key, Name, value + 1);
 }
 
-void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros)
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending)
 {
     HANDLE parameters, key;
     UNICODE_STRING name;
@@ -924,6 +925,10 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastKills", Kills);
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastMicros", Micros);
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastVersion", BC250_KMD_VERSION);
+    // A new attempt replaces the marker, including when capture is disabled.
+    // Final verdicts do not hide a failed or interrupted snapshot write.
+    if (NT_SUCCESS(status) && Verdict == BC250_HANG_VERDICT_PENDING)
+        status = WriteDword(key, L"WavesPending", WavesPending ? 1u : 0u);
     if (NT_SUCCESS(status)) {
         KeQuerySystemTime(&now);
         RtlInitUnicodeString(&name, L"LastTime");
@@ -938,7 +943,7 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
 // failure header too: an empty partial read must not leave an old success visible.
 NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
 {
-    HANDLE parameters, key;
+    HANDLE parameters, recovery, key;
     UNICODE_STRING name;
     OBJECT_ATTRIBUTES attributes;
     SECURITY_DESCRIPTOR descriptor;
@@ -960,25 +965,33 @@ NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
     status = RtlCreateSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION);
     if (NT_SUCCESS(status)) status = RtlCreateAcl(acl, sizeof(aclStorage.Bytes), ACL_REVISION);
     if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_ALL_ACCESS, (PSID)systemSid);
-    if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_READ, (PSID)adminSid);
+    if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_READ | DELETE, (PSID)adminSid);
     if (NT_SUCCESS(status)) status = RtlSetDaclSecurityDescriptor(&descriptor, TRUE, acl, FALSE);
     if (NT_SUCCESS(status)) status = RtlSetOwnerSecurityDescriptor(&descriptor, (PSID)systemSid, FALSE);
     if (!NT_SUCCESS(status)) return status;
     descriptor.Control |= SE_DACL_PROTECTED;
     status = OpenParameters(&parameters);
     if (!NT_SUCCESS(status)) return status;
-    RtlInitUnicodeString(&name, L"HangRecovery\\Waves");
-    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, &descriptor);
-    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE | WRITE_DAC | WRITE_OWNER, &attributes, 0, NULL,
-                         REG_OPTION_NON_VOLATILE, NULL);
+    RtlInitUnicodeString(&name, L"HangRecovery");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, NULL);
+    status = ZwCreateKey(&recovery, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
     ZwClose(parameters);
     if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name, L"Waves");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, recovery, &descriptor);
+    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE | WRITE_DAC | WRITE_OWNER, &attributes, 0, NULL,
+                         REG_OPTION_NON_VOLATILE, NULL);
+    if (!NT_SUCCESS(status)) { ZwClose(recovery); return status; }
     status = ZwSetSecurityObject(key, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
                                 PROTECTED_DACL_SECURITY_INFORMATION, &descriptor);
     RtlInitUnicodeString(&name, L"Snapshot");
     if (NT_SUCCESS(status)) status = ZwSetValueKey(key, &name, 0, REG_BINARY, (PVOID)Header, Header->Bytes);
+    // Data first: a failed write must retain the pending marker. One SYSTEM
+    // hive flush then persists both the snapshot and its completion marker.
+    if (NT_SUCCESS(status)) status = WriteDword(recovery, L"WavesPending", 0);
     if (NT_SUCCESS(status)) status = ZwFlushKey(key);
     ZwClose(key);
+    ZwClose(recovery);
     return status;
 }
 
