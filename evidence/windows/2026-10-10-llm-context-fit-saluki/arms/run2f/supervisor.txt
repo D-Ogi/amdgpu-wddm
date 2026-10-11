@@ -1,0 +1,117 @@
+thermal_gate=C:\BC250\seg0\thermal.ps1
+thermal_gate_sha256=AEA3543BF91C2E432C0978566923B006CC0D799FD0B912FB91F004C1E49F0E22
+out=C:\BC250\perf\runs\run2f-20261010T180647Z
+tag=run2f
+start_utc=2026-10-10T18:06:47Z
+boot_utc=2026-10-10T17:23:27Z
+deadline_s=72
+workload_stop_s=60
+server_ready_bound_s=52
+port=8780
+server_args=-m "C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf" -ngl 99 -fa on -np 1 --jinja -c 196608 --cache-type-k q8_0 --cache-type-v q8_0
+client=client-fit.ps1
+client_args=
+child_env=
+server=C:\BC250\llmvram\bin-upstream\llama-server.exe
+server_sha256=5B92164B26A620B56D38470D29FF9B36390B87EE19BC21F25B487D61482F6723
+client_sha256=36BC08BC8214F04A04B913AD6912A7FDBE9A6852668EEF3F19571603AFE2B6FF
+extra_sha256=F8AED9FB4C978510462709891CE2A1218FDF2E3CDAD65421D71F76D4A235BD04 bytes=45382656 path=C:\BC250\llmvram\bin-upstream\ggml-vulkan.dll
+extra_sha256=4A673518B11B1C4445F9B9A9D3C40356F5BA39F6A6260DCB25F3FBFD475D9EFB bytes=7898369152 path=C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+extra_sha256=1D4DAD41AF930EE6A8324C6E26AE680871AE095620930D6CB2669369C579CE0E bytes=21916160 path=C:\Program Files\amdgpu-wddm\vulkan\vulkan_radeon.dll
+gpu_status=OK
+driver_version=0.7.216.100
+system_icd_sha256=1D4DAD41AF930EE6A8324C6E26AE680871AE095620930D6CB2669369C579CE0E
+cu_mode=40 cu_last_applied=40
+dpm_mode=1 dpm_max_mhz=2000 dpm_idle_mhz=500
+cooldown_wait_s=0
+tctl_before=62.4
+vram_before:
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 240992256 committed 187895808 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 3149824 committed 3149824 limit 401276928
+segment 3 aperture resident 169644032 committed 169644032 limit 18446744073709551615
+memory   resident 244142080 committed 191045632 limit 12842106880
+aperture resident 169644032 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+avail_phys_mib_before=2,262
+command_line=C:\BC250\llmvram\bin-upstream\llama-server.exe -m "C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf" -ngl 99 -fa on -np 1 --jinja -c 196608 --cache-type-k q8_0 --cache-type-v q8_0 --host 127.0.0.1 --port 8780
+client_done_sentinel=
+vram_while_server_alive:
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 240992256 committed 187895808 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 3158016 committed 3158016 limit 401276928
+segment 3 aperture resident 173379584 committed 173379584 limit 18446744073709551615
+memory   resident 244150272 committed 191053824 limit 12842106880
+aperture resident 173379584 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+llama_lifetime_s=30.4
+STOPPED SERVER-EXITED before /health was ok
+leftover_workload_processes=0
+end_utc=2026-10-10T18:07:37Z
+total_elapsed_after_cleanup_s=31.1
+supervisor_outcome=STOPPED SERVER-EXITED before /health was ok
+server_ready_s=never
+server_exit=1
+tctl_after=64.6
+tctl_max_probed=64.6
+tctl_probes=6 stale=0
+client_out_bytes=0
+server_err_bytes=4650
+avail_phys_mib_after=2,365
+health_after:
+health abi=1 version=0x000700D8 flags=15 generation=27787407 epoch=5 completed=5015 age_ms=157 ready_ms=2636470
+dpm_samples=30 gfx_mhz min/avg/max=500/950/1000
+gfx_mhz_at_2000=0
+dpm_tctl_max=64.9
+--- server.err buffer and offload lines
+0.01.526.974 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+MakeResident failed
+ggml_vulkan: Device memory allocation of size 1069547520 failed.
+ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory
+0.19.504.219 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate Vulkan0 buffer of size 1069547520
+0.23.657.730 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.23.658.752 E cmn  common_init_: failed to create context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.057 E cmn  common_init_: failed to create context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.173 E srv    load_model: failed to create_context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.686.475 E srv  llama_server: exiting due to model loading error
+--- server.err tail
+allocation handle=0x80001d80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001e00
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001e80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001740
+MakeResident failed
+destroy allocation
+free va
+ggml_vulkan: Device memory allocation of size 1069547520 failed.
+ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory
+0.19.504.219 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate Vulkan0 buffer of size 1069547520
+0.23.657.730 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.23.658.752 E cmn  common_init_: failed to create context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.057 E cmn  common_init_: failed to create context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.173 E srv    load_model: failed to create_context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.454 I srv    operator(): operator(): cleaning up before exit...
+0.23.686.475 E srv  llama_server: exiting due to model loading error
+--- client.out
+--- client.err

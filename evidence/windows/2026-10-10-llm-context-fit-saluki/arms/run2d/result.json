@@ -1,0 +1,14 @@
+﻿{
+    "client":  "client-fit",
+    "n_ctx_served":  61440,
+    "request_ok":  true,
+    "timings":  {
+                    "prompt_n":  7,
+                    "prompt_ms":  265.636,
+                    "prompt_per_second":  26.351849899862966,
+                    "predicted_n":  16,
+                    "predicted_ms":  652.471,
+                    "predicted_per_second":  22.989527503904387
+                },
+    "client_elapsed_s":  1.2
+}

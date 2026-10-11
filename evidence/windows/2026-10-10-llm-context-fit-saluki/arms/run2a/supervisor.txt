@@ -1,0 +1,107 @@
+thermal_gate=C:\BC250\seg0\thermal.ps1
+thermal_gate_sha256=AEA3543BF91C2E432C0978566923B006CC0D799FD0B912FB91F004C1E49F0E22
+out=C:\BC250\perf\runs\run2a-20261010T175905Z
+tag=run2a
+start_utc=2026-10-10T17:59:05Z
+boot_utc=2026-10-10T17:23:27Z
+deadline_s=82
+workload_stop_s=70
+server_ready_bound_s=62
+port=8780
+server_args=-m "C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf" -ngl 99 -fa on -np 1 --jinja -c 196608 --cache-type-k q4_0 --cache-type-v q4_0
+client=client-fit.ps1
+client_args=
+child_env=
+server=C:\BC250\llmvram\bin-upstream\llama-server.exe
+server_sha256=5B92164B26A620B56D38470D29FF9B36390B87EE19BC21F25B487D61482F6723
+client_sha256=36BC08BC8214F04A04B913AD6912A7FDBE9A6852668EEF3F19571603AFE2B6FF
+extra_sha256=F8AED9FB4C978510462709891CE2A1218FDF2E3CDAD65421D71F76D4A235BD04 bytes=45382656 path=C:\BC250\llmvram\bin-upstream\ggml-vulkan.dll
+extra_sha256=4A673518B11B1C4445F9B9A9D3C40356F5BA39F6A6260DCB25F3FBFD475D9EFB bytes=7898369152 path=C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+extra_sha256=1D4DAD41AF930EE6A8324C6E26AE680871AE095620930D6CB2669369C579CE0E bytes=21916160 path=C:\Program Files\amdgpu-wddm\vulkan\vulkan_radeon.dll
+gpu_status=OK
+driver_version=0.7.216.100
+system_icd_sha256=1D4DAD41AF930EE6A8324C6E26AE680871AE095620930D6CB2669369C579CE0E
+cu_mode=40 cu_last_applied=40
+dpm_mode=1 dpm_max_mhz=2000 dpm_idle_mhz=500
+cooldown_wait_s=0
+tctl_before=68.2
+vram_before:
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 240992256 committed 187895808 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 3153920 committed 3153920 limit 401276928
+segment 3 aperture resident 171741184 committed 171741184 limit 18446744073709551615
+memory   resident 244146176 committed 191049728 limit 12842106880
+aperture resident 171741184 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+avail_phys_mib_before=2,059
+command_line=C:\BC250\llmvram\bin-upstream\llama-server.exe -m "C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf" -ngl 99 -fa on -np 1 --jinja -c 196608 --cache-type-k q4_0 --cache-type-v q4_0 --host 127.0.0.1 --port 8780
+server_ready_s=21.6
+client_pid_from_process_object=
+client_pid=3172
+client_done_sentinel=exit=0
+vram_while_server_alive:
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 11996393472 committed 11943297024 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 27234304 committed 27234304 limit 401276928
+segment 3 aperture resident 708730880 committed 708730880 limit 18446744073709551615
+memory   resident 12023627776 committed 11970531328 limit 12842106880
+aperture resident 708730880 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+llama_lifetime_s=27.3
+leftover_workload_processes=0
+end_utc=2026-10-10T17:59:50Z
+total_elapsed_after_cleanup_s=28.1
+supervisor_outcome=client_finished
+server_ready_s=21.6
+server_exit=-1
+tctl_after=73.1
+tctl_max_probed=69.1
+tctl_probes=6 stale=0
+client_out_bytes=224
+server_err_bytes=7244
+avail_phys_mib_after=2,090
+health_after:
+health abi=1 version=0x000700D8 flags=15 generation=27787407 epoch=5 completed=4259 age_ms=904 ready_ms=2169112
+dpm_samples=14 gfx_mhz min/avg/max=500/893/1000
+gfx_mhz_at_2000=0
+dpm_tctl_max=68.2
+--- server.err buffer and offload lines
+0.01.547.339 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.20.151.780 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 196608, kv_unified = 'false'
+0.25.267.527 I slot print_timing: id  0 | task 0 |    graphs reused =         15
+--- server.err tail
+allocation handle=0x40003f00
+allocation handle=0x40003f80
+allocation handle=0x40004000
+allocation handle=0x40004080
+allocation handle=0x40004100
+allocation handle=0x40004180
+allocation handle=0x400041c0
+allocation handle=0x40004240
+allocation handle=0x400042c0
+allocation handle=0x40004340
+allocation handle=0x400043c0
+allocation handle=0x40004400
+allocation handle=0x40004480
+allocation handle=0x40004500
+allocation handle=0x40004540
+allocation handle=0x400045c0
+allocation handle=0x40004640
+allocation handle=0x400046c0
+allocation handle=0x40004700
+allocation handle=0x40004780
+0.25.267.518 I slot print_timing: id  0 | task 0 | prompt eval time =    2876.13 ms /     7 tokens (  410.88 ms per token,     2.43 tokens per second)
+0.25.267.523 I slot print_timing: id  0 | task 0 |        eval time =     653.84 ms /    16 tokens (   43.59 ms per token,    22.94 tokens per second)
+0.25.267.525 I slot print_timing: id  0 | task 0 |       total time =    3529.97 ms /    23 tokens
+0.25.267.527 I slot print_timing: id  0 | task 0 |    graphs reused =         15
+0.25.267.554 I slot      release: id  0 | task 0 | stop processing: n_tokens = 22, truncated = 0
+--- client.out
+client=client-fit remaining_s=36
+props_n_ctx=196608
+props_model=C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+request_ok predicted_n=16 tg=22.94 tok/s pp=2.43 tok/s
+client_elapsed_s=3.9
+result_written=1
+--- client.err

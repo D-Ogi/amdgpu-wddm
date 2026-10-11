@@ -1,0 +1,127 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f4f
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+0.00.216.284 I srv  llama_server: initializing ...
+0.00.216.295 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.220.892 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.236.618 I srv    load_model: loading model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+radv_wddm2_winsys_create
+allocation handle=0x40001300
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001740
+allocation handle=0x400017c0
+0.01.526.974 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+allocation handle=0x40001f40
+allocation handle=0x40001fc0
+allocation handle=0x40002040
+allocation handle=0x400020c0
+allocation handle=0x40002140
+allocation handle=0x400021c0
+allocation handle=0x80000180
+allocation handle=0x40002240
+allocation handle=0x40002340
+allocation handle=0x40002440
+allocation handle=0x40002500
+allocation handle=0x400025c0
+allocation handle=0x800007c0
+allocation handle=0x400026c0
+allocation handle=0x40002740
+allocation handle=0x400027c0
+allocation handle=0x80000800
+allocation handle=0x80000a80
+allocation handle=0x80000b00
+allocation handle=0x80000b80
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x80000c00
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000c80
+allocation handle=0x80000d00
+allocation handle=0x80000d80
+allocation handle=0x80000e00
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000e80
+allocation handle=0x80000f00
+allocation handle=0x80000f80
+allocation handle=0x80001000
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80001080
+allocation handle=0x80001100
+allocation handle=0x80001180
+allocation handle=0x80000880
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x40002840
+allocation handle=0x400028c0
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80001380
+allocation handle=0x80001400
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80001480
+allocation handle=0x80001500
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80001580
+allocation handle=0x40002940
+allocation handle=0x400029c0
+allocation handle=0x40002a40
+allocation handle=0x80001800
+allocation handle=0x80001880
+allocation handle=0x80001900
+allocation handle=0x800016c0
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001a00
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001a80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001b00
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001b80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001c00
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001c80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001d00
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001d80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001e00
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001e80
+MakeResident failed
+destroy allocation
+free va
+allocation handle=0x80001740
+MakeResident failed
+destroy allocation
+free va
+ggml_vulkan: Device memory allocation of size 1069547520 failed.
+ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory
+0.19.504.219 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate Vulkan0 buffer of size 1069547520
+0.23.657.730 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.23.658.752 E cmn  common_init_: failed to create context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.057 E cmn  common_init_: failed to create context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.173 E srv    load_model: failed to create_context with model 'C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf'
+0.23.659.454 I srv    operator(): operator(): cleaning up before exit...
+0.23.686.475 E srv  llama_server: exiting due to model loading error

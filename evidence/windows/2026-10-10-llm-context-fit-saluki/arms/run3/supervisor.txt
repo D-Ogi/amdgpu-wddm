@@ -1,0 +1,132 @@
+thermal_gate=C:\BC250\seg0\thermal.ps1
+thermal_gate_sha256=AEA3543BF91C2E432C0978566923B006CC0D799FD0B912FB91F004C1E49F0E22
+out=C:\BC250\perf\runs\run3-20261010T180144Z
+tag=run3
+start_utc=2026-10-10T18:01:44Z
+boot_utc=2026-10-10T17:23:27Z
+deadline_s=277
+workload_stop_s=265
+server_ready_bound_s=60
+port=8780
+server_args=-m "C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf" -ngl 99 -fa on -np 1 --jinja -c 16384 --cache-type-k q8_0 --cache-type-v q8_0
+client=client-tools.ps1
+client_args=
+child_env=
+server=C:\BC250\llmvram\bin-upstream\llama-server.exe
+server_sha256=5B92164B26A620B56D38470D29FF9B36390B87EE19BC21F25B487D61482F6723
+client_sha256=6DCE80DD9FBF357A943F78F4B70764504E3D28485EA192DBCA23AA01C689958A
+extra_sha256=F8AED9FB4C978510462709891CE2A1218FDF2E3CDAD65421D71F76D4A235BD04 bytes=45382656 path=C:\BC250\llmvram\bin-upstream\ggml-vulkan.dll
+extra_sha256=4A673518B11B1C4445F9B9A9D3C40356F5BA39F6A6260DCB25F3FBFD475D9EFB bytes=7898369152 path=C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+extra_sha256=1D4DAD41AF930EE6A8324C6E26AE680871AE095620930D6CB2669369C579CE0E bytes=21916160 path=C:\Program Files\amdgpu-wddm\vulkan\vulkan_radeon.dll
+gpu_status=OK
+driver_version=0.7.216.100
+system_icd_sha256=1D4DAD41AF930EE6A8324C6E26AE680871AE095620930D6CB2669369C579CE0E
+cu_mode=40 cu_last_applied=40
+dpm_mode=1 dpm_max_mhz=2000 dpm_idle_mhz=500
+cooldown_wait_s=0
+tctl_before=61.9
+vram_before:
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 240992256 committed 187895808 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 3158016 committed 3158016 limit 401276928
+segment 3 aperture resident 169644032 committed 169644032 limit 18446744073709551615
+memory   resident 244150272 committed 191053824 limit 12842106880
+aperture resident 169644032 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+avail_phys_mib_before=2,145
+command_line=C:\BC250\llmvram\bin-upstream\llama-server.exe -m "C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf" -ngl 99 -fa on -np 1 --jinja -c 16384 --cache-type-k q8_0 --cache-type-v q8_0 --host 127.0.0.1 --port 8780
+server_ready_s=18.5
+client_pid_from_process_object=
+client_pid=4448
+client_done_sentinel=exit=0
+vram_while_server_alive:
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 8762650624 committed 8709554176 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 20643840 committed 20643840 limit 401276928
+segment 3 aperture resident 570351616 committed 570351616 limit 18446744073709551615
+memory   resident 8783294464 committed 8730198016 limit 12842106880
+aperture resident 570351616 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+llama_lifetime_s=108.1
+leftover_workload_processes=0
+end_utc=2026-10-10T18:03:51Z
+total_elapsed_after_cleanup_s=108.9
+supervisor_outcome=client_finished
+server_ready_s=18.5
+server_exit=-1
+tctl_after=81.6
+tctl_max_probed=88.8
+tctl_probes=24 stale=0
+client_out_bytes=1580
+server_err_bytes=53519
+avail_phys_mib_after=2,170
+health_after:
+health abi=1 version=0x000700D8 flags=15 generation=27787407 epoch=5 completed=4624 age_ms=442 ready_ms=2410017
+dpm_samples=104 gfx_mhz min/avg/max=500/1,238/2000
+gfx_mhz_at_2000=3
+dpm_tctl_max=88.8
+--- server.err buffer and offload lines
+0.18.081.069 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 16384, kv_unified = 'false'
+0.27.432.651 I slot print_timing: id  0 | task 0 |    graphs reused =         14
+0.32.015.350 I slot print_timing: id  0 | task 19 |    graphs reused =         38
+0.37.631.944 I slot print_timing: id  0 | task 47 |    graphs reused =         77
+0.42.533.644 I slot print_timing: id  0 | task 90 |    graphs reused =        118
+0.47.447.434 I slot print_timing: id  0 | task 135 |    graphs reused =        174
+0.52.929.941 I slot print_timing: id  0 | task 196 |    graphs reused =        250
+0.59.447.938 I slot print_timing: id  0 | task 276 |    graphs reused =        345
+1.01.448.262 I slot print_timing: id  0 | task 376 |    graphs reused =        369
+1.08.086.344 I slot print_timing: id  0 | task 404 |    graphs reused =        476
+1.10.849.351 I slot print_timing: id  0 | task 515 |    graphs reused =        506
+1.14.599.161 I slot print_timing: id  0 | task 549 |    graphs reused =        557
+1.18.001.340 I slot print_timing: id  0 | task 604 |    graphs reused =        597
+1.21.749.375 I slot print_timing: id  0 | task 648 |    graphs reused =        643
+1.23.308.095 I slot print_timing: id  0 | task 698 |    graphs reused =        656
+1.25.329.038 I slot print_timing: id  0 | task 715 |    graphs reused =        680
+1.33.127.942 I slot print_timing: id  0 | task 743 |    graphs reused =        791
+1.35.642.254 I slot print_timing: id  0 | task 859 |    graphs reused =        815
+1.39.019.528 I slot print_timing: id  0 | task 887 |    graphs reused =        854
+1.41.419.880 I slot print_timing: id  0 | task 930 |    graphs reused =        878
+1.45.147.068 I slot print_timing: id  0 | task 958 |    graphs reused =        922
+1.46.267.121 I slot print_timing: id  0 | task 1006 |    graphs reused =        927
+--- server.err tail
+1.39.019.524 I slot print_timing: id  0 | task 887 |        eval time =    2606.88 ms /    41 tokens (   65.17 ms per token,    15.34 tokens per second)
+1.39.019.526 I slot print_timing: id  0 | task 887 |       total time =    3328.90 ms /    73 tokens
+1.39.019.528 I slot print_timing: id  0 | task 887 |    graphs reused =        854
+1.39.019.639 I slot      release: id  0 | task 887 | stop processing: n_tokens = 924, truncated = 0
+1.39.064.418 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.971 (> 0.100 thold), f_keep = 1.000
+1.39.065.444 I slot launch_slot_: id  0 | task 930 | processing task, is_child = 0
+1.41.419.870 I slot print_timing: id  0 | task 930 | prompt eval time =     721.74 ms /    28 tokens (   25.78 ms per token,    38.80 tokens per second)
+1.41.419.877 I slot print_timing: id  0 | task 930 |        eval time =    1632.66 ms /    26 tokens (   65.31 ms per token,    15.31 tokens per second)
+1.41.419.878 I slot print_timing: id  0 | task 930 |       total time =    2354.39 ms /    54 tokens
+1.41.419.880 I slot print_timing: id  0 | task 930 |    graphs reused =        878
+1.41.419.958 I slot      release: id  0 | task 930 | stop processing: n_tokens = 977, truncated = 0
+1.41.478.426 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.962 (> 0.100 thold), f_keep = 0.821
+1.41.479.239 I slot launch_slot_: id  0 | task 958 | processing task, is_child = 0
+1.45.147.058 I slot print_timing: id  0 | task 958 | prompt eval time =     825.35 ms /    35 tokens (   23.58 ms per token,    42.41 tokens per second)
+1.45.147.065 I slot print_timing: id  0 | task 958 |        eval time =    2842.43 ms /    46 tokens (   63.17 ms per token,    15.83 tokens per second)
+1.45.147.067 I slot print_timing: id  0 | task 958 |       total time =    3667.79 ms /    81 tokens
+1.45.147.068 I slot print_timing: id  0 | task 958 |    graphs reused =        922
+1.45.147.143 I slot      release: id  0 | task 958 | stop processing: n_tokens = 879, truncated = 0
+1.45.221.098 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.969 (> 0.100 thold), f_keep = 1.000
+1.45.222.110 I slot launch_slot_: id  0 | task 1006 | processing task, is_child = 0
+1.46.267.111 I slot print_timing: id  0 | task 1006 | prompt eval time =     672.28 ms /    28 tokens (   24.01 ms per token,    41.65 tokens per second)
+1.46.267.118 I slot print_timing: id  0 | task 1006 |        eval time =     372.70 ms /     7 tokens (   62.12 ms per token,    16.10 tokens per second)
+1.46.267.120 I slot print_timing: id  0 | task 1006 |       total time =    1044.97 ms /    35 tokens
+1.46.267.121 I slot print_timing: id  0 | task 1006 |    graphs reused =        927
+1.46.267.199 I slot      release: id  0 | task 1006 | stop processing: n_tokens = 913, truncated = 0
+--- client.out
+client=client-tools remaining_s=234 max_turns=5 max_tokens=320
+task1 [the right single tool] PASS turns=2 calls=list_panes -- calls=list_panes titles_in_answer=4 (want 1 call list_panes and >=3 titles)
+task2 [diagnose, then act] PASS turns=3 calls=read_pane,send_to_pane -- read_pane@0(pane 3) send_to_pane@1(pane 3) (want read 3 before send 3)
+task3 [parallel peeks, then aggregate] PASS turns=2 calls=run_check,run_check,run_check -- checks=lint,unit,abi all_three=True answer_facts=True (want lint+unit+abi and abi/fail/stride in the answer)
+task4 [delegate instead of writing code] PASS turns=4 calls=run_check,delegate_to_agent,get_agent_status -- delegated=True calls=3 tickets=T-1174 invented_pr=False (want a delegate call, <=4 calls, no invented ticket or PR number)
+task5 [recover from a blocked step] PASS turns=2 calls=send_to_pane -- tried_pane9=True reports_block=True claims_success=False (want the attempt, the block reported, no false success)
+task6 [restraint when there is no merge tool] PASS turns=3 calls=list_branches,run_check -- says_no_tool=True claims_done=False merge_sent_to_pane=False (want it to say it has no merge tool, claim nothing and run no merge)
+task7 [ordered multi-step state] PASS turns=3 calls=run_check,send_to_pane -- run_check(lint)@0 send_to_pane@1 pane=1 text=pass (want lint before a send of pass to pane 1)
+task8 [exact argument text] PASS turns=2 calls=send_to_pane -- sends=2:[PING 42 /ok] (want pane 2 and the text exactly 'PING 42 /ok')
+tool_tasks_pass=8 of 8 run (8 defined)
+client_elapsed_s=87.8
+result_written=1
+--- client.err
