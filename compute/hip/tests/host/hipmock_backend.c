@@ -24,6 +24,9 @@
  *                                 submission instead of at once, so that a wait really waits.
  *                                 It is how a program measures what its other threads can do
  *                                 while one of them waits for the device.
+ *   BC250_HIP_MOCK_HOST_ARENA_MB=<MiB>  at the first open, bc250hsa_mock_set_host_arena of this
+ *                                 many MiB, so the host views of a separate process lie back to
+ *                                 back as they can on unit A (DEFECTS BD-123)
  */
 
 #include <stdio.h>
@@ -78,11 +81,20 @@
  * counts it (bc250hsa_mock_free_violations). */
 typedef struct mock_allocation {
     int          live;
+    int          arena;     /* raw lies in the arena of bc250hsa_mock_set_host_arena */
     void*        raw;
     bc250hsa_mem mem;
     uint32_t     in_use;
     uint64_t     busy_fence;
 } mock_allocation;
+
+/* The arena of bc250hsa_mock_set_host_arena. While g_arena is set, every allocation takes its
+ * memory from it in order, so the host view of one allocation starts at the first byte after
+ * the view before it whenever the sizes keep the alignment (DEFECTS BD-123). */
+static unsigned char* g_arena;
+static uint64_t       g_arena_bytes;
+static uint64_t       g_arena_used;
+static uint32_t       g_arena_live;
 
 /* A dispatch that has not retired yet, when a hold time is in effect. The values retire in the
  * order they were submitted, so the list is a queue. */
@@ -481,6 +493,13 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_devic
         /* A synthetic GPU address window, far from any host pointer. */
         g_device.next_va = 0x0000400000000000ull;
         g_device.hold_ms = mock_env_ms("BC250_HIP_MOCK_HOLD_MS");
+        /* The value is a number of MiB and not of milliseconds; the reader is the same. */
+        if (g_arena == NULL) {
+            const uint32_t arena_mib = mock_env_ms("BC250_HIP_MOCK_HOST_ARENA_MB");
+            if (arena_mib != 0u) {
+                (void)bc250hsa_mock_set_host_arena((uint64_t)arena_mib << 20);
+            }
+        }
     }
     g_device.opens++;
     *out = &g_device;
@@ -503,7 +522,12 @@ void bc250hsa_close(bc250hsa_device* dev) {
     }
     for (i = 0; i < MOCK_MAX_ALLOCATIONS; ++i) {
         if (dev->allocations[i].live) {
-            MOCK_ALIGNED_FREE(dev->allocations[i].raw);
+            if (dev->allocations[i].arena) {
+                g_arena_live--;
+                dev->allocations[i].arena = 0;
+            } else {
+                MOCK_ALIGNED_FREE(dev->allocations[i].raw);
+            }
             dev->allocations[i].live = 0;
         }
     }
@@ -605,9 +629,19 @@ static bc250hsa_status alloc_locked(bc250hsa_device* dev, uint64_t bytes, uint64
         return BC250HSA_ENOMEM;
     }
     aligned_bytes = align_up(bytes, alignment);
-    raw = MOCK_ALIGNED_ALLOC((size_t)aligned_bytes, (size_t)alignment);
-    if (raw == NULL) {
-        return BC250HSA_ENOMEM;
+    if (g_arena != NULL) {
+        const uint64_t at = align_up(g_arena_used, alignment);
+        if (at > g_arena_bytes || aligned_bytes > g_arena_bytes - at) {
+            return BC250HSA_ENOMEM;
+        }
+        raw = g_arena + at;
+        g_arena_used = at + aligned_bytes;
+        g_arena_live++;
+    } else {
+        raw = MOCK_ALIGNED_ALLOC((size_t)aligned_bytes, (size_t)alignment);
+        if (raw == NULL) {
+            return BC250HSA_ENOMEM;
+        }
     }
     if ((flags & BC250HSA_MEM_ZERO) != 0u || (flags & BC250HSA_MEM_EXEC) != 0u) {
         memset(raw, 0, (size_t)aligned_bytes);
@@ -625,6 +659,7 @@ static bc250hsa_status alloc_locked(bc250hsa_device* dev, uint64_t bytes, uint64
     out->opaque = &dev->allocations[slot];
 
     dev->allocations[slot].live = 1;
+    dev->allocations[slot].arena = g_arena != NULL;
     dev->allocations[slot].raw = raw;
     dev->allocations[slot].mem = *out;
     dev->allocations[slot].in_use = 0u;
@@ -674,7 +709,12 @@ static bc250hsa_status free_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
             record_line(record);
         }
     }
-    MOCK_ALIGNED_FREE(allocation->raw);
+    if (allocation->arena) {
+        g_arena_live--;   /* the arena keeps its bytes until bc250hsa_mock_set_host_arena(0) */
+        allocation->arena = 0;
+    } else {
+        MOCK_ALIGNED_FREE(allocation->raw);
+    }
     dev->live_allocations--;
     dev->live_bytes -= allocation->mem.bytes;
     allocation->live = 0;
@@ -901,6 +941,27 @@ void bc250hsa_mock_set_lost(int lost) {
     mock_lock();
     g_lost = lost;
     mock_unlock();
+}
+
+int bc250hsa_mock_set_host_arena(uint64_t bytes) {
+    int done = 0;
+    mock_lock();
+    if (g_arena_live == 0u) {
+        /* 64 KiB, the granularity at which Windows places a view. */
+        unsigned char* fresh =
+            bytes != 0u ? (unsigned char*)MOCK_ALIGNED_ALLOC((size_t)bytes, (size_t)0x10000u) : NULL;
+        if (bytes == 0u || fresh != NULL) {
+            if (g_arena != NULL) {
+                MOCK_ALIGNED_FREE(g_arena);
+            }
+            g_arena = fresh;
+            g_arena_bytes = fresh != NULL ? bytes : 0u;
+            g_arena_used = 0u;
+            done = 1;
+        }
+    }
+    mock_unlock();
+    return done;
 }
 
 bc250hsa_status bc250hsa_copy_unretired(bc250hsa_device* dev, uint64_t* pending) {

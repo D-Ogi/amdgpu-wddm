@@ -136,6 +136,18 @@ void bc250hsa_mock_retire_unretired(void);
  * on as before, so a test sees which layer-2 path asks. bc250hsa_mock_reset clears it. */
 void bc250hsa_mock_set_lost(int lost);
 
+/* Host views back to back (DEFECTS BD-123). With bytes above 0, every later allocation takes its
+ * memory from one arena of that size, in order. The host view of an allocation then starts at the
+ * first byte after the view of the allocation before it, whenever the earlier size is a multiple
+ * of the later alignment (256 bytes unless the caller asks for more), as two views on unit A can
+ * lie. The GPU addresses are not changed. 0 releases the arena and returns to the heap. The call
+ * answers 1 when it did so, and 0 when an allocation of the old arena is still live or the
+ * arena could not be allocated; then nothing changes. bc250hsa_mock_reset leaves the arena as
+ * it is. BC250_HIP_MOCK_HOST_ARENA_MB sets the same arena, in MiB, at the first open of a
+ * separate process, such as hipbench against the mock build of the DLL. The arena is a bump
+ * allocator: a freed allocation gives its bytes back only with the whole arena. */
+int bc250hsa_mock_set_host_arena(uint64_t bytes);
+
 /* A delay between the start of a GPU call and its submission, with the lock of the mock
  * released, which bc250hsa_mock_reset clears. It holds the window open in which another thread
  * could free memory the call is about to name. */

@@ -33,6 +33,10 @@
 //      point moves a byte with the host processor, neither as the configured route nor as the
 //      fallback after a refusal: each answers the copy's error, and after the late retirement
 //      the same calls succeed with the copy's bytes. On a device marked lost, none does either.
+//  16. a host pointer at the first byte of a hipHostMalloc view that starts right after another
+//      view names its own allocation (DEFECTS BD-123): a device-to-host copy into it takes the
+//      direct route, hipMemset fills it and only it, and hipHostGetDevicePointer answers its
+//      own GPU address.
 //
 // It needs no GPU and no AMDGPU compiler: the code object comes from the committed fixture
 // compute/hip/tests/data/hip_test_kernels.gfx1013.fatbin.
@@ -1853,7 +1857,176 @@ int main(int argc, char** argv) {
     }
 
     // ---------------------------------------------------------------------------------------
-    std::printf("test_hip_mock: 16. the module unregisters\n");
+    // DEFECTS BD-123. On unit A the host view of a hipHostMalloc buffer can start at the first
+    // byte after the view of another allocation: in lab round 2 of scratch/hip-gpu-copy the two
+    // read-backs into hipHostMalloc memory at offset 0 took the staging ring. The lookup of a
+    // host pointer must then find the view that starts at that byte and not the view that ends
+    // there, for each of its three callers: the direct device-to-host route, hipMemset and
+    // hipHostGetDevicePointer. The mock places the views back to back from one arena, once
+    // after a hipHostMalloc view and once after a hipMalloc view. 65792 bytes is a multiple of
+    // the 256-byte host alignment and not of the 4096-byte GPU page, so the GPU ranges are not
+    // adjacent, and the end of the earlier view is a wrong device address here.
+    std::printf("test_hip_mock: 16. host views back to back (BD-123)\n");
+    {
+        const size_t span = 65536u + 256u;
+        std::vector<unsigned char> seed(span);
+        std::vector<unsigned char> readback(span, 0u);
+        for (size_t i = 0; i < span; ++i) {
+            seed[i] = static_cast<unsigned char>(i * 13u + 5u);
+        }
+        bc250hsa_mock_reset();
+        bc250hsa_counters_reset();
+        check(bc250hsa_mock_set_host_arena(1u << 20) == 1, "BD-123 setup: the mock arena");
+        unsigned char* view_a = nullptr;   // hipHostMalloc
+        unsigned char* view_b = nullptr;   // hipHostMalloc, its view right after view_a
+        unsigned char* device = nullptr;   // hipMalloc
+        unsigned char* view_c = nullptr;   // hipHostMalloc, its view right after the hipMalloc view
+        unsigned char* src = nullptr;      // hipMalloc, the source of the copies
+        check(hipHostMalloc(reinterpret_cast<void**>(&view_a), span, hipHostMallocDefault) ==
+                  hipSuccess,
+              "BD-123 setup: hipHostMalloc the first view");
+        check(hipHostMalloc(reinterpret_cast<void**>(&view_b), span, hipHostMallocDefault) ==
+                  hipSuccess,
+              "BD-123 setup: hipHostMalloc the second view");
+        check(hipMalloc(reinterpret_cast<void**>(&device), span) == hipSuccess,
+              "BD-123 setup: hipMalloc the device buffer");
+        check(hipHostMalloc(reinterpret_cast<void**>(&view_c), span, hipHostMallocDefault) ==
+                  hipSuccess,
+              "BD-123 setup: hipHostMalloc the third view");
+        check(hipMalloc(reinterpret_cast<void**>(&src), span) == hipSuccess,
+              "BD-123 setup: hipMalloc the source");
+        check(view_a != nullptr && view_b == view_a + span,
+              "BD-123 setup: the second view starts at the first byte after the first view");
+        // The view of a hipMalloc buffer is the runtime's own, so the test reads it from the
+        // allocation table.
+        const unsigned char* device_view = nullptr;
+        uint64_t device_view_bytes = 0;
+        {
+            const auto it = bc250hip::state().by_va.find(
+                static_cast<uint64_t>(reinterpret_cast<uintptr_t>(device)));
+            if (it != bc250hip::state().by_va.end()) {
+                device_view = static_cast<const unsigned char*>(it->second.mem.host);
+                device_view_bytes = it->second.mem.bytes;
+            }
+        }
+        check(device_view != nullptr && device_view + device_view_bytes == view_c,
+              "BD-123 setup: the third view starts at the first byte after the hipMalloc view");
+        check(hipMemcpy(src, seed.data(), span, hipMemcpyHostToDevice) == hipSuccess,
+              "BD-123 setup: the source holds the pattern");
+        check(hipMemset(device, 0x22, span) == hipSuccess, "BD-123 setup: the device buffer");
+        std::memset(view_a, 0x11, span);
+
+        struct Neighbour {
+            unsigned char*       view;
+            const unsigned char* before;   // the view that ends where this one starts
+            unsigned char        before_byte;
+            const char*          name;
+        };
+        const Neighbour cases[2] = { { view_b, view_a, 0x11, "after a hipHostMalloc view" },
+                                     { view_c, device_view, 0x22, "after a hipMalloc view" } };
+        for (const Neighbour& c : cases) {
+            char what[192];
+            if (c.view == nullptr || c.before == nullptr) {
+                continue;   // the setup checks above have failed already
+            }
+            const uint64_t own = [&] {
+                const auto it = bc250hip::state().va_by_host.find(c.view);
+                return it == bc250hip::state().va_by_host.end() ? 0u : it->second;
+            }();
+
+            // The direct route: a copy into the first byte of the view is one packet into it,
+            // as into any other hipHostMalloc buffer, and nothing goes through the staging ring.
+            bc250hsa_counters counters;
+            std::memset(c.view, 0xEE, span);
+            bc250hsa_mock_reset();
+            bc250hsa_counters_reset();
+            std::snprintf(what, sizeof(what), "BD-123 direct: a device-to-host copy into the view %s",
+                          c.name);
+            check(hipMemcpy(c.view, src, span, hipMemcpyDeviceToHost) == hipSuccess, what);
+            std::snprintf(what, sizeof(what), "BD-123 direct: the copy into the view %s moved the bytes",
+                          c.name);
+            check(std::memcmp(c.view, seed.data(), span) == 0, what);
+            check(read_counters(&counters), "BD-123 direct: the counters are readable");
+            std::snprintf(what, sizeof(what),
+                          "BD-123 direct: the copy into the first byte of the view %s takes the "
+                          "direct route (gpu d2h %llu, staged %llu)",
+                          c.name, (unsigned long long)counters.gpu_copy_d2h,
+                          (unsigned long long)counters.gpu_copy_d2h_staged);
+            check(counters.gpu_copy_d2h == 1u && counters.gpu_copy_d2h_staged == 0u &&
+                      counters.cpu_copy_fallback == 0u,
+                  what);
+
+            // hipMemset of the view: the host pointer is found, the fill lands in this view
+            // and in no byte of the view before it.
+            const hipError_t filled = hipMemset(c.view, 0x5A, span);
+            (void)hipGetLastError();
+            std::snprintf(what, sizeof(what),
+                          "BD-123 memset: hipMemset of the first byte of the view %s answers %d",
+                          c.name, static_cast<int>(filled));
+            check(filled == hipSuccess, what);
+            bool fill_ok = true;
+            for (size_t i = 0; i < span; ++i) {
+                fill_ok = fill_ok && c.view[i] == 0x5A;
+            }
+            std::snprintf(what, sizeof(what), "BD-123 memset: every byte of the view %s holds the fill",
+                          c.name);
+            check(fill_ok, what);
+            bool before_ok = true;
+            for (size_t i = 0; i < span; ++i) {
+                before_ok = before_ok && c.before[i] == c.before_byte;
+            }
+            std::snprintf(what, sizeof(what), "BD-123 memset: the view before the view %s is unchanged",
+                          c.name);
+            check(before_ok, what);
+
+            // hipHostGetDevicePointer: the GPU address of this view, not the end of the view
+            // before it, and a read through that address returns this view's bytes.
+            void* answered = nullptr;
+            const hipError_t asked = hipHostGetDevicePointer(&answered, c.view, 0);
+            (void)hipGetLastError();
+            std::snprintf(what, sizeof(what),
+                          "BD-123 device pointer: hipHostGetDevicePointer of the view %s answers "
+                          "0x%llx, its own GPU address is 0x%llx",
+                          c.name,
+                          (unsigned long long)static_cast<uint64_t>(reinterpret_cast<uintptr_t>(answered)),
+                          (unsigned long long)own);
+            check(asked == hipSuccess && own != 0u &&
+                      static_cast<uint64_t>(reinterpret_cast<uintptr_t>(answered)) == own,
+                  what);
+            void* interior = nullptr;
+            std::snprintf(what, sizeof(what),
+                          "BD-123 device pointer: an interior pointer of the view %s keeps its offset",
+                          c.name);
+            check(hipHostGetDevicePointer(&interior, c.view + 100, 0) == hipSuccess &&
+                      static_cast<uint64_t>(reinterpret_cast<uintptr_t>(interior)) == own + 100u,
+                  what);
+            (void)hipGetLastError();
+            std::memset(readback.data(), 0, span);
+            const hipError_t read = answered == nullptr
+                                        ? hipErrorInvalidValue
+                                        : hipMemcpy(readback.data(), answered, span,
+                                                    hipMemcpyDeviceToHost);
+            (void)hipGetLastError();
+            std::snprintf(what, sizeof(what),
+                          "BD-123 device pointer: a read through the answered address of the view "
+                          "%s answers %d and returns the view's bytes",
+                          c.name, static_cast<int>(read));
+            check(read == hipSuccess && std::memcmp(readback.data(), c.view, span) == 0, what);
+        }
+
+        check(hipFree(src) == hipSuccess, "BD-123: hipFree the source");
+        check(hipHostFree(view_c) == hipSuccess, "BD-123: hipHostFree the third view");
+        check(hipFree(device) == hipSuccess, "BD-123: hipFree the device buffer");
+        check(hipHostFree(view_b) == hipSuccess, "BD-123: hipHostFree the second view");
+        check(hipHostFree(view_a) == hipSuccess, "BD-123: hipHostFree the first view");
+        check(bc250hsa_mock_set_host_arena(0) == 1,
+              "BD-123: the arena is released once its allocations are freed");
+        bc250hsa_mock_reset();
+        bc250hsa_counters_reset();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 17. the module unregisters\n");
     const uint32_t live_before_unregister = bc250hsa_mock_live_allocations();
     __hipUnregisterFatBinary(handle);
     check(bc250hsa_mock_live_allocations() < live_before_unregister,

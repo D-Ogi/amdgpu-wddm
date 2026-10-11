@@ -33,6 +33,9 @@
 //   3a. verify  the copy routes, byte for byte and untimed, before any rate is measured: the
 //               staging ring, the direct route, device to device and pitched copies, at their
 //               edges (measurement 3a below). --verify-fault is its positive control.
+//   3b.         the same for hipHostMalloc buffers at the first byte of their host view, where a
+//               view can start right after another (DEFECTS BD-123): the direct route,
+//               hipMemset and hipHostGetDevicePointer (measurement 3b below).
 //   3. copy     hipMemcpy host to device and device to host at 4 KB, 64 KB, 1 MB and 64 MB,
 //               into pageable memory and into memory this program asked hipHostMalloc for.
 //               Build 1 copied through the host mapping, so the line was a memory bandwidth
@@ -600,6 +603,208 @@ static void verify_copies(int fault) {
     free(source);
 }
 
+// Measurement 3b: host views back to back (DEFECTS BD-123).
+//
+// The operating system can place the host view of a hipHostMalloc buffer at the first byte after
+// the view of another allocation. Up to e8be31bf the runtime looked up such a pointer with a host
+// range closed at its end, so it named the allocation whose view ends there: in lab round 2 the
+// two read-backs of measurement 3a into hipHostMalloc memory at offset 0 took the staging ring.
+// The same lookup serves hipMemset and hipHostGetDevicePointer. This pass allocates one hipMalloc
+// buffer and then ADJACENT_VIEWS hipHostMalloc buffers of one size, says which of them start at
+// the end of another of them (the view of the hipMalloc buffer is the runtime's own and cannot
+// be seen here), and checks each one at its first byte:
+//   - a device-to-host copy into it lands, and takes the route that a copy into byte 4096 of the
+//     same buffer took just before it: the direct route when the runtime has one, and the same
+//     route as an interior pointer otherwise, so the pass also runs with the route off or
+//     against a runtime without it;
+//   - hipMemset of it fills it, and a buffer whose view ends where it starts keeps its bytes;
+//   - hipHostGetDevicePointer of it is the address of byte 4096 less 4096, and a read through
+//     that address returns the buffer's bytes.
+// The routes are reported on their own line, so the routes line of measurement 3a stays
+// comparable with earlier rounds. --verify-fault applies here as well.
+#define ADJACENT_VIEWS 4
+#define ADJACENT_BYTES (1024u * 1024u)
+#define ADJACENT_FILL 0x5A
+#define ADJACENT_KEEP 0x3C
+
+static unsigned char want_byte(size_t i, const void* ctx) {
+    (void)i;
+    return *(const unsigned char*)ctx;
+}
+
+static void verify_adjacent(int fault) {
+    const size_t size = ADJACENT_BYTES;
+    const size_t tail = fault == kFaultOmitTail ? 32u : 0u;
+    verify_tally tally = { 0, 0, 0 };
+    unsigned char* views[ADJACENT_VIEWS] = { NULL };
+    int after[ADJACENT_VIEWS];   // the view whose host range ends where this one starts, or -1
+    unsigned char* device = NULL;
+    unsigned char* pattern = (unsigned char*)malloc(size);
+    unsigned char* readback = (unsigned char*)malloc(size);
+    if (pattern == NULL || readback == NULL) {
+        printf("hipbench: verify: out of host memory for %zu bytes\n", size);
+        g_failures++;
+        free(pattern);
+        free(readback);
+        return;
+    }
+    for (size_t i = 0; i < size; ++i) {
+        pattern[i] = pattern_at(i);
+    }
+    check(hipMalloc((void**)&device, size), "verify: adjacent hipMalloc");
+    for (int k = 0; k < ADJACENT_VIEWS; ++k) {
+        if (hipHostMalloc((void**)&views[k], size, hipHostMallocDefault) != hipSuccess) {
+            views[k] = NULL;
+            (void)hipGetLastError();
+        }
+    }
+    if (device != NULL) {
+        check(hipMemcpy(device, pattern, size, hipMemcpyHostToDevice), "verify: adjacent source");
+    }
+    int pairs = 0;
+    for (int k = 0; k < ADJACENT_VIEWS; ++k) {
+        after[k] = -1;
+        for (int j = 0; j < ADJACENT_VIEWS; ++j) {
+            if (j != k && views[j] != NULL && views[k] != NULL && views[j] + size == views[k]) {
+                after[k] = j;
+                ++pairs;
+            }
+        }
+    }
+    printf("hipbench: verify   adjacent: %d hipHostMalloc views of %zu bytes after one hipMalloc"
+           " view; %d start at the end of another of them",
+           ADJACENT_VIEWS, size, pairs);
+    for (int k = 0; k < ADJACENT_VIEWS; ++k) {
+        if (after[k] >= 0) {
+            printf(", view %d after view %d", k, after[k]);
+        }
+    }
+    printf("\n");
+    const bc250hipCounters before = read_counters();
+
+    for (int k = 0; k < ADJACENT_VIEWS; ++k) {
+        char name[64];
+        unsigned char* view = views[k];
+        snprintf(name, sizeof(name), "adjacent view %d, direct at byte 0", k);
+        if (view == NULL || device == NULL) {
+            verify_skip(&tally, name, "no hipHostMalloc or hipMalloc buffer");
+            snprintf(name, sizeof(name), "adjacent view %d, hipMemset", k);
+            verify_skip(&tally, name, "no hipHostMalloc or hipMalloc buffer");
+            snprintf(name, sizeof(name), "adjacent view %d, device pointer", k);
+            verify_skip(&tally, name, "no hipHostMalloc or hipMalloc buffer");
+            continue;
+        }
+
+        // The device-to-host copy: an interior pointer first, as the route reference.
+        memset(view, VERIFY_DIRTY, size);
+        const bc250hipCounters ref0 = read_counters();
+        check(hipMemcpy(view + 4096u, device, size - 4096u, hipMemcpyDeviceToHost),
+              "verify: adjacent copy into byte 4096");
+        const counters_delta ref = counters_since(ref0);
+        memset(view, VERIFY_DIRTY, size);
+        const bc250hipCounters at0 = read_counters();
+        check(hipMemcpy(view, device, size - tail, hipMemcpyDeviceToHost),
+              "verify: adjacent copy into byte 0");
+        const counters_delta got = counters_since(at0);
+        if (fault == kFaultCorruptTail) {
+            view[size - 1u] ^= 0xFF;
+        }
+        if (got.gpu_copy_d2h != ref.gpu_copy_d2h ||
+            got.gpu_copy_d2h_staged != ref.gpu_copy_d2h_staged ||
+            got.cpu_copy_fallback != ref.cpu_copy_fallback) {
+            tally.failed++;
+            g_failures++;
+            printf("hipbench: verify   %-44s WRONG route: gpu d2h %llu, staged %llu, cpu fallback"
+                   " %llu; byte 4096 took %llu, %llu, %llu\n",
+                   name, got.gpu_copy_d2h, got.gpu_copy_d2h_staged, got.cpu_copy_fallback,
+                   ref.gpu_copy_d2h, ref.gpu_copy_d2h_staged, ref.cpu_copy_fallback);
+        } else {
+            const linear_case c = { 0u, 0u, size };
+            verify_report(&tally, name, view, size, want_linear, &c);
+        }
+
+        // hipMemset of the whole buffer from its first byte.
+        snprintf(name, sizeof(name), "adjacent view %d, hipMemset", k);
+        unsigned char* before_view = after[k] >= 0 ? views[after[k]] : NULL;
+        if (before_view != NULL) {
+            memset(before_view, ADJACENT_KEEP, size);
+        }
+        memset(view, VERIFY_DIRTY, size);
+        check(hipMemset(view, ADJACENT_FILL, size - tail), "verify: adjacent hipMemset");
+        if (fault == kFaultCorruptTail) {
+            view[size - 1u] ^= 0xFF;
+        }
+        const unsigned char fill = ADJACENT_FILL;
+        verify_report(&tally, name, view, size, want_byte, &fill);
+        if (before_view != NULL) {
+            const unsigned char keep = ADJACENT_KEEP;
+            // Neither fault touches this buffer, so both change its last byte here: a fault
+            // control must turn every case that runs into WRONG.
+            if (fault != kFaultNone) {
+                before_view[size - 1u] ^= 0xFF;
+            }
+            snprintf(name, sizeof(name), "adjacent view %d, the view before it", after[k]);
+            verify_report(&tally, name, before_view, size, want_byte, &keep);
+        }
+
+        // hipHostGetDevicePointer of the first byte, and a read through it.
+        snprintf(name, sizeof(name), "adjacent view %d, device pointer", k);
+        void* first = NULL;
+        void* interior = NULL;
+        check(hipHostGetDevicePointer(&first, view, 0), "verify: adjacent device pointer");
+        check(hipHostGetDevicePointer(&interior, view + 4096u, 0),
+              "verify: adjacent device pointer of byte 4096");
+        if (first == NULL || (unsigned char*)interior - (unsigned char*)first != 4096) {
+            tally.failed++;
+            g_failures++;
+            printf("hipbench: verify   %-44s WRONG: byte 0 at 0x%llx, byte 4096 at 0x%llx\n", name,
+                   (unsigned long long)(uintptr_t)first, (unsigned long long)(uintptr_t)interior);
+            continue;
+        }
+        memcpy(view, pattern, size);
+        memset(readback, VERIFY_DIRTY, size);
+        check(hipMemcpy(readback, first, size - tail, hipMemcpyDeviceToHost),
+              "verify: adjacent read through the device pointer");
+        if (fault == kFaultCorruptTail) {
+            readback[size - 1u] ^= 0xFF;
+        }
+        const linear_case c = { 0u, 0u, size };
+        verify_report(&tally, name, readback, size, want_linear, &c);
+    }
+
+    const counters_delta d = counters_since(before);
+    printf("hipbench: verify   adjacent %d cases: %d passed, %d failed, %d skipped%s\n",
+           tally.passed + tally.failed + tally.skipped, tally.passed, tally.failed, tally.skipped,
+           fault == kFaultNone ? ""
+                               : (fault == kFaultOmitTail ? " (fault control: omit-tail)"
+                                                          : " (fault control: corrupt-tail)"));
+    printf("hipbench: verify   adjacent routes: gpu d2h %llu, staged %llu, d2d %llu, fill %llu,"
+           " cpu fallback %llu\n",
+           d.gpu_copy_d2h, d.gpu_copy_d2h_staged, d.gpu_copy_d2d, d.gpu_fill, d.cpu_copy_fallback);
+    if (g_json) {
+        printf("{\"tool\":\"hipbench\",\"measurement\":\"verify-adjacent\",\"fault\":\"%s\","
+               "\"views\":%d,\"pairs\":%d,\"cases\":%d,\"passed\":%d,\"failed\":%d,\"skipped\":%d,"
+               "\"gpu_copy_d2h\":%llu,\"gpu_copy_d2h_staged\":%llu,\"gpu_copy_d2d\":%llu,"
+               "\"gpu_fill\":%llu,\"cpu_copy_fallback\":%llu}\n",
+               fault == kFaultNone ? "none"
+                                   : (fault == kFaultOmitTail ? "omit-tail" : "corrupt-tail"),
+               ADJACENT_VIEWS, pairs, tally.passed + tally.failed + tally.skipped, tally.passed,
+               tally.failed, tally.skipped, d.gpu_copy_d2h, d.gpu_copy_d2h_staged, d.gpu_copy_d2d,
+               d.gpu_fill, d.cpu_copy_fallback);
+    }
+
+    for (int k = ADJACENT_VIEWS - 1; k >= 0; --k) {
+        if (views[k] != NULL) {
+            check(hipHostFree(views[k]), "verify: adjacent hipHostFree");
+        }
+    }
+    if (device != NULL) {
+        check(hipFree(device), "verify: adjacent hipFree");
+    }
+    free(readback);
+    free(pattern);
+}
+
 // Measurement 3: one copy size, both directions.
 // The copy arms. Three destinations, because the three routes of the GPU copy are chosen by
 // what the destination is (scratch/hip-gpu-copy/CONTRACT.md sections 5a and 5b):
@@ -847,6 +1052,7 @@ static void usage() {
     printf("                             [--barrier full|light] [--wait-total <ms>]\n");
     printf("                             [--budget-ms <ms>] [--expect-compute] [--json]\n");
     printf("                             [--verify 0|1] [--verify-fault omit-tail|corrupt-tail]\n");
+    printf("                             [--verify-only]\n");
 }
 
 int main(int argc, char** argv) {
@@ -858,6 +1064,7 @@ int main(int argc, char** argv) {
     const char* batch = NULL;
     const char* barrier = NULL;
     int verify = 1;
+    int verify_only = 0;
     int fault = kFaultNone;
 
     g_started_ms = now_ms();
@@ -868,6 +1075,8 @@ int main(int argc, char** argv) {
             g_expect_compute = 1;
         } else if (strcmp(arg, "--json") == 0) {
             g_json = 1;
+        } else if (strcmp(arg, "--verify-only") == 0) {
+            verify_only = 1;
         } else if (strcmp(arg, "--help") == 0) {
             usage();
             return 0;
@@ -978,6 +1187,7 @@ int main(int argc, char** argv) {
     // injected would be a rate of a copy this program broke on purpose.
     if (fault != kFaultNone) {
         verify_copies(fault);
+        verify_adjacent(fault);
         check(hipFree(values), "hipFree chain");
         check(hipStreamDestroy(stream), "hipStreamDestroy");
         printf("hipbench: the fault control ran alone; %d failures, which must not be 0\n",
@@ -985,8 +1195,20 @@ int main(int argc, char** argv) {
         printf("hipbench: %s\n", g_failures == 0 ? "ok" : "FAILED");
         return g_failures == 0 ? 0 : 1;
     }
+    if (verify_only) {
+        // Measurements 3a and 3b and nothing timed: the copy routes alone, for a build gate or
+        // a lab control that needs the routes and not the rates.
+        verify_copies(kFaultNone);
+        verify_adjacent(kFaultNone);
+        check(hipFree(values), "hipFree chain");
+        check(hipStreamDestroy(stream), "hipStreamDestroy");
+        printf("hipbench: %.0f ms in all, api failures %d\n", now_ms() - g_started_ms, g_failures);
+        printf("hipbench: %s\n", g_failures == 0 ? "ok" : "FAILED");
+        return g_failures == 0 ? 0 : 1;
+    }
     if (verify && budget_left("verify")) {
         verify_copies(kFaultNone);
+        verify_adjacent(kFaultNone);
     }
     if (budget_left("launch")) {
         measure_launch(stream, launches);

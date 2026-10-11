@@ -65,6 +65,10 @@ using bc250hip::Allocation;
 using bc250hip::state;
 
 // An allocation that a host pointer points into, for a pointer that hipHostMalloc returned.
+// A host range is half-open: the first byte after one view can be the first byte of the next,
+// because the operating system may place two views back to back (unit A did, DEFECTS BD-123).
+// A closed end let the earlier view claim that byte, so the direct copy route, hipMemset and
+// hipHostGetDevicePointer missed the view that starts there.
 const Allocation* find_host_allocation(const void* ptr, uint64_t bytes, uint64_t* offset) {
     if (ptr == nullptr) {
         return nullptr;
@@ -76,7 +80,7 @@ const Allocation* find_host_allocation(const void* ptr, uint64_t bytes, uint64_t
             continue;
         }
         const unsigned char* base = static_cast<const unsigned char*>(allocation.mem.host);
-        if (want < base || want > base + allocation.mem.bytes) {
+        if (want < base || want >= base + allocation.mem.bytes) {
             continue;
         }
         const uint64_t start = static_cast<uint64_t>(want - base);

@@ -564,6 +564,12 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     if (-not $verifyLine -or $verifyLine.Line -notmatch 'verify\s+7 cases: 7 passed, 0 failed, 0 skipped') {
         throw "hipbench verify did not pass all seven copy cases: '$verifyLine'"
     }
+    # Measurement 3b, the first byte of each hipHostMalloc view (DEFECTS BD-123): every case runs
+    # and passes.
+    $adjacentLine = $benchOut | Select-String -Pattern 'verify\s+adjacent \d+ cases:' | Select-Object -First 1
+    if (-not $adjacentLine -or $adjacentLine.Line -notmatch 'adjacent (\d+) cases: \1 passed, 0 failed, 0 skipped') {
+        throw "hipbench verify did not pass every case of the adjacent views: '$adjacentLine'"
+    }
     # Its positive control: with the final chunk left out, or the last byte changed, every case
     # must turn WRONG and the program must fail. An oracle that passes a broken copy is no oracle.
     foreach ($fault in @('omit-tail', 'corrupt-tail')) {
@@ -571,11 +577,40 @@ if ($SkipClang -or -not (Test-Path $clang)) {
         $faultOut = & $benchExe '--wait-total' '20000' '--verify-fault' $fault 2>&1
         $faultExit = $LASTEXITCODE
         $faultLine = $faultOut | Select-String -Pattern 'verify\s+\d+ cases:' | Select-Object -First 1
-        Write-Host "  hipbench --verify-fault ${fault}: exit $faultExit, $($faultLine.Line)"
+        $faultAdjacent = $faultOut | Select-String -Pattern 'verify\s+adjacent \d+ cases:' | Select-Object -First 1
+        Write-Host "  hipbench --verify-fault ${fault}: exit $faultExit, $($faultLine.Line); $($faultAdjacent.Line)"
         if ($faultExit -ne 1 -or -not $faultLine -or
-            $faultLine.Line -notmatch 'verify\s+7 cases: 0 passed, 7 failed, 0 skipped') {
+            $faultLine.Line -notmatch 'verify\s+7 cases: 0 passed, 7 failed, 0 skipped' -or
+            -not $faultAdjacent -or
+            $faultAdjacent.Line -notmatch 'adjacent (\d+) cases: 0 passed, \1 failed, 0 skipped') {
             throw "the verify fault control '$fault' was not caught by every case"
         }
+    }
+    # The views back to back, as unit A placed them in lab round 2 of scratch/hip-gpu-copy: the
+    # mock takes every allocation from one arena (BC250_HIP_MOCK_HOST_ARENA_MB), so the pinned
+    # destination of measurement 3a starts at the end of the view of a hipMalloc buffer and the
+    # views of 3b start at the end of each other. Every case must pass, at least one pair of 3b
+    # must be adjacent, and the routes of 3a must be the four direct copies and the six staged
+    # ones that the lab plan expects; with the closed range of DEFECTS BD-123 the two read-backs
+    # at offset 0 were staged (2 and 8).
+    $env:BC250_HIP_MOCK_RECORD = Join-Path $Out 'mock\record-bench-arena.txt'
+    $env:BC250_HIP_MOCK_HOST_ARENA_MB = '512'
+    try {
+        $arenaOut = & $benchExe '--wait-total' '20000' '--verify-only' 2>&1
+        $arenaExit = $LASTEXITCODE
+    } finally {
+        Remove-Item env:BC250_HIP_MOCK_HOST_ARENA_MB -ErrorAction SilentlyContinue
+    }
+    $arenaLines = @($arenaOut | Select-String -Pattern 'verify\s+(\d+ cases:|routes:|adjacent)' |
+        ForEach-Object { $_.Line })
+    $arenaLines | ForEach-Object { Write-Host "  arena: $_" }
+    $arenaText = $arenaLines -join "`n"
+    if ($arenaExit -ne 0 -or
+        $arenaText -notmatch 'verify\s+7 cases: 7 passed, 0 failed, 0 skipped' -or
+        $arenaText -notmatch 'verify\s+routes: gpu d2h 4, staged 6,' -or
+        $arenaText -notmatch 'adjacent: \d+ hipHostMalloc views of \d+ bytes after one hipMalloc view; [1-9]\d* start' -or
+        $arenaText -notmatch 'adjacent (\d+) cases: \1 passed, 0 failed, 0 skipped') {
+        throw "hipbench with the views back to back did not pass (exit $arenaExit)"
     }
 
     # The same arm with the two switches turned off, which is exactly build 1: one launch, one
