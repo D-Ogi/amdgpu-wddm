@@ -56,6 +56,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include "child-process.h"
 
 #define BC250_VENDOR_ID 0x1002u
 #define BC250_DEVICE_ID 0x13FEu
@@ -471,11 +472,14 @@ static int Parent(unsigned cells, const wchar_t *childLog)
     swprintf(line, 2048, L"\"%ls\" --child%ls --cells %u --handle 0x%llx --name %ls --t0 %llu --wait-ms %llu --log \"%ls\"",
              self, g_any_device ? L" --any-device" : L"", cells, (unsigned long long)(uintptr_t)h1child, name, (unsigned long long)g_t0,
              (unsigned long long)(g_wait_ns / 1000000), childLog);
-    STARTUPINFOW si = { sizeof si };
     PROCESS_INFORMATION pi;
-    memset(&pi, 0, sizeof pi);
-    BOOL started = CreateProcessW(self, line, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+    BOOL started = StartChildWithStandardHandles(self, line, &pi);
     if (!Check(started, "the importing child process starts (error %lu)", started ? 0ul : GetLastError())) {
+        if (h1child) CloseHandle(h1child);
+        if (h1) CloseHandle(h1);
+        if (h2) CloseHandle(h2);
+        if (s1) vkDestroySemaphore(g.device, s1, NULL);
+        if (s2) vkDestroySemaphore(g.device, s2, NULL);
         GpuClose(&g);
         return 1;
     }
