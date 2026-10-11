@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "native-tables.h"
+#include "adapter-caps.h"
 #include "device-state.h"
 #include "device-engine.h"
 #include "device-table.h"
@@ -398,6 +399,22 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
 #undef WRAP_QUEUE
         if(engine_ddi::entry_stats_on())time_queue(wrapped);
         *static_cast<Queue*>(output)=wrapped;return S_OK;
+    }
+    // The render pass table (H:2507), two engine-ddi slots at 0053. It is filled only while GetCaps 1006 reports a
+    // render pass tier, the engine's own answer: with no tier the runtime emulates render passes and never asks
+    // for the table, so the cap and the table cannot disagree. The slots are engine-ddi's own, as the direct
+    // entries of the graphics table are, so no entry thunk wraps them. Render pass is also an extended feature
+    // (D3D12DDI_FEATURE_0043_RENDER_PASS), which extended_features (native-queue-ddi.cpp) does not advertise yet;
+    // SLOTS.md carries that open step.
+    case D3D12DDI_TABLE_TYPE_0043_RENDER_PASS:{
+        using Pass=D3D12DDI_RENDER_PASS_FUNCS_0053;
+        if(number || size!=sizeof(Pass))return E_INVALIDARG;
+        bool supported=false;
+        HRESULT hr=adapter_render_pass_supported(adapter,&supported);if(hr!=S_OK)return hr;
+        if(!supported)return E_NOTIMPL;
+        Pass table{};
+        hr=engine_ddi::fill_render_pass(&table,sizeof(table),&fill);if(hr!=S_OK)return hr;
+        *static_cast<Pass*>(output)=table;return S_OK;
     }
     case D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES:{
         if(number || size!=sizeof(Extended))return E_INVALIDARG;

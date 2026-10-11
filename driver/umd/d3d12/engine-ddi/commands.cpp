@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: command pools (D29-D32), command recorders (D92-D95), command lists (D36-D38) and the list slots
-// that open and close recording (L0, L1); the acceleration structure slots (D108, L60-L62) and the ray dispatch
-// slots (L63, L64).
+// that open and close recording (L0, L1); the acceleration structure slots (D108, L60-L62), the ray dispatch
+// slots (L63, L64) and the mesh dispatch slot (L67).
 //
 // DDI 0040 splits the API's allocator and list: a pool is the API allocator, a recorder names the pool a list
 // records into, and ResetCommandList names the recorder. A pool therefore does not know its list type at
 // creation; it creates one engine allocator per list type on first use.
+#include <array>
 #include <atomic>
+#include <cstring>
 #include <memory>
 #include <type_traits>
 #include "internal.h"
@@ -258,15 +260,8 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
 // ---- List state the runtime sets on every list ---------------------------------------------------------------------
 // The runtime writes default state into a list it has reset. SetPredication was seen there; the others are
 // answered ahead of need. Each forwards to the engine list, which owns the feature check. Forwarding is
-// not support: the caps of these features stay as they are.
-template <class I> I* list_as(CommandListRecord* l) noexcept {
-    I* out = nullptr;
-    if (FAILED(l->list()->QueryInterface(__uuidof(I), reinterpret_cast<void**>(&out)))) {
-        l->h.device->report_list(l->rt, E_NOINTERFACE);
-        return nullptr;
-    }
-    return out;
-}
+// not support: the caps of these features stay as they are. list_as (internal.h) is the interface query they and
+// the slots further down share.
 
 void APIENTRY set_predication(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOURCE hres, UINT64 offset,
                               D3D12DDI_PREDICATION_OP op) {
@@ -316,6 +311,47 @@ void APIENTRY set_view_instance_mask(D3D12DDI_HCOMMANDLIST h, UINT mask) {
             l1->SetViewInstanceMask(mask);
             l1->Release();
         });
+}
+
+// ---- L56 pfnWriteBufferImmediate --------------------------------------------------------------------------------
+// Count writes of one UINT32 each to a GPU virtual address, on the list's own timeline, with an optional mode per
+// write (H:6177-6182). The DDI parameter and the API parameter have one layout, and the three modes one set of
+// values, so both arrays pass as they are; the engine reads both at the call (vkd3d-proton command.c,
+// d3d12_command_list_WriteBufferImmediate), so a deferred entry carries copies of both, as the sample positions
+// array does. The slot is in both command list tables: the engine admits the write on every queue type it has
+// (device.c, d3d12_device_caps_init_feature_options3), and 1006 WriteBufferImmediateQueueFlags reports those
+// queues (caps.cpp).
+static_assert(sizeof(D3D12DDI_WRITEBUFFERIMMEDIATE_PARAMETER_0032) ==
+                      sizeof(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER) &&
+                  offsetof(D3D12DDI_WRITEBUFFERIMMEDIATE_PARAMETER_0032, Dst) ==
+                      offsetof(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER, Dest) &&
+                  offsetof(D3D12DDI_WRITEBUFFERIMMEDIATE_PARAMETER_0032, Value) ==
+                      offsetof(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER, Value),
+              "write buffer immediate parameter");
+static_assert(sizeof(D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_0032) == sizeof(D3D12_WRITEBUFFERIMMEDIATE_MODE) &&
+                  D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_DEFAULT ==
+                      static_cast<int>(D3D12_WRITEBUFFERIMMEDIATE_MODE_DEFAULT) &&
+                  D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN ==
+                      static_cast<int>(D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN) &&
+                  D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT ==
+                      static_cast<int>(D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT),
+              "write buffer immediate modes");
+
+void APIENTRY write_buffer_immediate(D3D12DDI_HCOMMANDLIST h, UINT count,
+                                     const D3D12DDI_WRITEBUFFERIMMEDIATE_PARAMETER_0032* params,
+                                     const D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_0032* modes) {
+    CommandListRecord* l = list_of(h, "WriteBufferImmediate");
+    if (!l) return;
+    if (count && !params) return l->h.device->report_list(l->rt, E_INVALIDARG);
+    if (auto* l2 = list_as<ID3D12GraphicsCommandList2>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER* p,
+                   const D3D12_WRITEBUFFERIMMEDIATE_MODE* m) {
+                   l2->WriteBufferImmediate(count, p, m);
+                   l2->Release();
+               },
+               in(reinterpret_cast<const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER*>(params), params ? count : 0),
+               in(reinterpret_cast<const D3D12_WRITEBUFFERIMMEDIATE_MODE*>(modes), modes ? count : 0));
 }
 
 // ---- L15 pfnExecuteBundle ---------------------------------------------------------------------------------------
@@ -976,6 +1012,268 @@ void APIENTRY dispatch_rays(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_DISPATCH_
                },
                in(reinterpret_cast<const ApiDispatchRays*>(args), 1));
 }
+
+// L67. The thread group counts of one mesh dispatch, which the engine's ID3D12GraphicsCommandList6 takes
+// unchanged. The runtime sends the slot only when 1006 reports a mesh shader tier (caps.cpp, fill_options), and
+// bounds the counts itself; the engine owns the per-dimension limits of its Vulkan device. Indirect mesh dispatch
+// is ExecuteIndirect with a DISPATCH_MESH command signature, which create_command_signature already translates.
+void APIENTRY dispatch_mesh(D3D12DDI_HCOMMANDLIST h, UINT x, UINT y, UINT z) {
+    CommandListRecord* l = list_of(h, "DispatchMesh");
+    if (!l) return;
+    if (auto* l6 = list_as<ID3D12GraphicsCommandList6>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l6->DispatchMesh(x, y, z);
+            l6->Release();
+        });
+}
+
+// ---- The render pass table (D3D12DDI_TABLE_TYPE_0043_RENDER_PASS, H:2507) ----------------------------------------
+// Its two slots at 0053, D3D12DDI_RENDER_PASS_FUNCS_0053 (H:18254-18259), onto ID3D12GraphicsCommandList4. The
+// runtime asks for the table only while 1006 reports a render pass tier, which is the engine's own answer
+// (caps.cpp, render_pass_tier); without it the runtime emulates render passes and never calls either slot.
+//
+// The DDI descriptions and the API's differ in three places and nowhere else: a render target and the depth
+// stencil name their view by a CPU descriptor handle, a RESOLVE ending access names its two resources by DDI
+// handles, and that access points at its own array of subresource parameters. The two access type
+// enumerations, the clear value, the subresource parameters and the pass flags share their values and their
+// layout, asserted below.
+//
+// The engine reads the view descriptors and every array at the call (vkd3d-proton command.c,
+// d3d12_command_list_BeginRenderPass), so a deferred entry carries copies of all of them: the views through the
+// ring's own heaps (replay.h, Snap - one RTV snapshot for the render targets, one DSV snapshot for the depth
+// stencil), the two descriptions and the resolve subresource parameters through in() buffers. The parameters of
+// every resolve go into one flat buffer, because an in() copy cannot hold a pointer into another copy; the lambda
+// rebuilds the descriptions on its own stack and points each resolve back into that buffer by the offsets this
+// slot recorded. Neither slot checks where a render pass is allowed: the engine owns that
+// (d3d12_command_list_check_render_pass_validation).
+static_assert(D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_DISCARD ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD) &&
+                  D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_PRESERVE ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE) &&
+                  D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_CLEAR ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR) &&
+                  D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_NO_ACCESS ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS) &&
+                  D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_RENDER ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE_LOCAL_RENDER) &&
+                  D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_SRV ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE_LOCAL_SRV) &&
+                  D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_UAV ==
+                      static_cast<int>(D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE_LOCAL_UAV),
+              "render pass beginning access types");
+static_assert(D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_DISCARD ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD) &&
+                  D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_PRESERVE ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE) &&
+                  D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_RESOLVE ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE) &&
+                  D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_NO_ACCESS ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS) &&
+                  D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0101_PRESERVE_LOCAL_RENDER ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE_LOCAL_RENDER) &&
+                  D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0101_PRESERVE_LOCAL_SRV ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE_LOCAL_SRV) &&
+                  D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0101_PRESERVE_LOCAL_UAV ==
+                      static_cast<int>(D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE_LOCAL_UAV),
+              "render pass ending access types");
+static_assert(D3D12DDI_RENDER_PASS_FLAG_0053_NONE == static_cast<int>(D3D12_RENDER_PASS_FLAG_NONE) &&
+                  D3D12DDI_RENDER_PASS_FLAG_0053_ALLOW_UAV_WRITES ==
+                      static_cast<int>(D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES) &&
+                  D3D12DDI_RENDER_PASS_FLAG_0053_SUSPENDING_PASS ==
+                      static_cast<int>(D3D12_RENDER_PASS_FLAG_SUSPENDING_PASS) &&
+                  D3D12DDI_RENDER_PASS_FLAG_0053_RESUMING_PASS ==
+                      static_cast<int>(D3D12_RENDER_PASS_FLAG_RESUMING_PASS) &&
+                  D3D12DDI_RENDER_PASS_FLAG_0101_BIND_READ_ONLY_DEPTH ==
+                      static_cast<int>(D3D12_RENDER_PASS_FLAG_BIND_READ_ONLY_DEPTH) &&
+                  D3D12DDI_RENDER_PASS_FLAG_0101_BIND_READ_ONLY_STENCIL ==
+                      static_cast<int>(D3D12_RENDER_PASS_FLAG_BIND_READ_ONLY_STENCIL),
+              "render pass flags");
+static_assert(sizeof(D3D12DDI_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS_0053) ==
+                      sizeof(D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS) &&
+                  offsetof(D3D12DDI_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS_0053, SrcRect) ==
+                      offsetof(D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, SrcRect),
+              "render pass resolve subresource parameters");
+// A CLEAR beginning access carries its clear value, which begin_access below copies out of the DDI union member
+// by the length of the API's own. The equality is pinned in resources.cpp as well, for the create's clear value;
+// it is repeated here because this translation unit is where the copy is, and a reader of this section has to be
+// able to check the contract it states (H:474-482).
+static_assert(sizeof(D3D12DDI_CLEAR_VALUES) == sizeof(D3D12_CLEAR_VALUE) &&
+                  offsetof(D3D12DDI_CLEAR_VALUES, Color) == offsetof(D3D12_CLEAR_VALUE, Color) &&
+                  sizeof(D3D12DDI_CLEAR_VALUES::Color) == sizeof(D3D12_CLEAR_VALUE::Color),
+              "render pass clear value layout");
+
+using ApiResolveSubresource = D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS;
+constexpr UINT kRenderPassTargets = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
+// One resolve subresource array may come with each render target's ending access and with the depth and the
+// stencil ending access of the depth-stencil description.
+constexpr UINT kRenderPassResolves = kRenderPassTargets + 2;
+constexpr UINT kNoResolve = 0xFFFFFFFFu;            // an ending access with no subresource array of its own
+// The ceiling of the one flat buffer those arrays are copied into. Every SubresourceCount is an unvalidated UINT
+// of the runtime's payload, and up to kRenderPassResolves of them are summed, so the sum is kept in 64 bits and
+// refused above this: the buffer is indexed with a UINT (kNoResolve stays above every index) and addressed with a
+// size_t, which is 32 bits in the x86 (WoW64) build of this file (tools\build\build-umd-d3d12.ps1,
+// UserModeDriverNameWow), where a truncated sum would reserve less room than the copies write.
+constexpr uint64_t kMaxResolveParams = SIZE_MAX / sizeof(ApiResolveSubresource) < kNoResolve
+                                           ? SIZE_MAX / sizeof(ApiResolveSubresource)
+                                           : kNoResolve - 1;
+
+D3D12_RENDER_PASS_BEGINNING_ACCESS begin_access(const D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_0053& in) noexcept {
+    D3D12_RENDER_PASS_BEGINNING_ACCESS out{};
+    out.Type = static_cast<D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE>(in.Type);
+    switch (in.Type) {
+    case D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_CLEAR:
+        std::memcpy(&out.Clear.ClearValue, &in.Clear.ClearValue, sizeof(out.Clear.ClearValue));
+        break;
+    case D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_RENDER:
+    case D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_SRV:
+    case D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_UAV:
+        out.PreserveLocal.AdditionalWidth = in.PreserveLocal.AdditionalWidth;
+        out.PreserveLocal.AdditionalHeight = in.PreserveLocal.AdditionalHeight;
+        break;
+    default:
+        break;                                      // DISCARD, PRESERVE and NO_ACCESS carry no parameters
+    }
+    return out;
+}
+
+// How many resolve subresource parameters one ending access carries.
+UINT resolve_count(const D3D12DDI_RENDER_PASS_ENDING_ACCESS_0053& in) noexcept {
+    return in.Type == D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_RESOLVE ? in.Resolve.SubresourceCount : 0;
+}
+
+// One ending access, translated into out. A resolve's subresource parameters are appended to flat at used, and
+// *at becomes their index there; pSubresourceParameters stays null for the lambda to fill. room is how many
+// elements flat holds, the sum the caller reserved, and it is checked here as well: the copy below is the one
+// write into that buffer, so its bound belongs next to it. False for a resolve whose resources this device does
+// not know, whose array is missing, or whose count no longer fits the room the caller reserved.
+bool ending_access(CommandListRecord* l, const D3D12DDI_RENDER_PASS_ENDING_ACCESS_0053& in,
+                   D3D12_RENDER_PASS_ENDING_ACCESS& out, ApiResolveSubresource* flat, UINT room, UINT& used,
+                   UINT* at) noexcept {
+    out = D3D12_RENDER_PASS_ENDING_ACCESS{};
+    out.Type = static_cast<D3D12_RENDER_PASS_ENDING_ACCESS_TYPE>(in.Type);
+    *at = kNoResolve;
+    switch (in.Type) {
+    case D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_RESOLVE: {
+        const D3D12DDI_RENDER_PASS_ENDING_ACCESS_RESOLVE_PARAMETERS_0053& r = in.Resolve;
+        auto* src = record_of<ResourceRecord>(r.hSrcResource.pDrvPrivate, Tag::Resource, l->h.device);
+        auto* dst = record_of<ResourceRecord>(r.hDstResource.pDrvPrivate, Tag::Resource, l->h.device);
+        if (!src || !dst || (r.SubresourceCount && !r.pSubresourceParameters)) return false;
+        if (r.SubresourceCount > room - used) return false;     // used <= room, so this cannot wrap
+        out.Resolve.pSrcResource = static_cast<ID3D12Resource*>(src->h.engine);
+        out.Resolve.pDstResource = static_cast<ID3D12Resource*>(dst->h.engine);
+        out.Resolve.SubresourceCount = r.SubresourceCount;
+        out.Resolve.pSubresourceParameters = nullptr;
+        out.Resolve.Format = r.Format;
+        out.Resolve.ResolveMode = static_cast<D3D12_RESOLVE_MODE>(r.ResolveMode);
+        out.Resolve.PreserveResolveSource = r.PreserveResolveSource;
+        if (r.SubresourceCount) {
+            *at = used;
+            std::memcpy(flat + used, r.pSubresourceParameters, size_t{r.SubresourceCount} * sizeof(*flat));
+            used += r.SubresourceCount;
+        }
+        break;
+    }
+    case D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0101_PRESERVE_LOCAL_RENDER:
+    case D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0101_PRESERVE_LOCAL_SRV:
+    case D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0101_PRESERVE_LOCAL_UAV:
+        out.PreserveLocal.AdditionalWidth = in.PreserveLocal.AdditionalWidth;
+        out.PreserveLocal.AdditionalHeight = in.PreserveLocal.AdditionalHeight;
+        break;
+    default:
+        break;                                      // DISCARD, PRESERVE and NO_ACCESS carry no parameters
+    }
+    return true;
+}
+
+void APIENTRY begin_render_pass(D3D12DDI_HCOMMANDLIST h, UINT count,
+                                const D3D12DDIARG_RENDER_PASS_RENDER_TARGET_DESC_0053* targets,
+                                const D3D12DDIARG_RENDER_PASS_DEPTH_STENCIL_DESC_0053* depth_stencil,
+                                D3D12DDIARG_RENDER_PASS_FLAGS_0053 flags) {
+    CommandListRecord* l = list_of(h, "BeginRenderPass");
+    if (!l) return;
+    if (count > kRenderPassTargets || (count && !targets)) {
+        log_line("BeginRenderPass: refused (%u render targets, %s)", static_cast<unsigned>(count),
+                 targets ? "given" : "no array");
+        return l->h.device->report_list(l->rt, E_INVALIDARG);
+    }
+    const UINT n = count < kRenderPassTargets ? count : kRenderPassTargets;   // the bound above, for the copies
+    const bool has_depth = depth_stencil != nullptr;
+    uint64_t total = 0;
+    for (UINT i = 0; i < n; ++i) total += resolve_count(targets[i].EndingAccess);
+    if (has_depth)
+        total += uint64_t{resolve_count(depth_stencil->DepthEndingAccess)} +
+                 resolve_count(depth_stencil->StencilEndingAccess);
+    if (total > kMaxResolveParams) {
+        log_line("BeginRenderPass: refused (%llu resolve subresource parameters over %llu)",
+                 static_cast<unsigned long long>(total), static_cast<unsigned long long>(kMaxResolveParams));
+        return l->h.device->report_list(l->rt, E_INVALIDARG);
+    }
+    const UINT room = static_cast<UINT>(total);      // bounded above, so neither cast loses anything
+    InlineArray<ApiResolveSubresource, 16> flat;
+    if (!flat.reserve(static_cast<size_t>(total))) return l->h.device->report_list(l->rt, E_OUTOFMEMORY);
+
+    D3D12_RENDER_PASS_RENDER_TARGET_DESC rts[kRenderPassTargets]{};
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvs[kRenderPassTargets]{};
+    D3D12_RENDER_PASS_DEPTH_STENCIL_DESC depth{};
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
+    std::array<UINT, kRenderPassResolves> at{};
+    at.fill(kNoResolve);
+    UINT used = 0;
+    for (UINT i = 0; i < n; ++i) {
+        rtvs[i].ptr = targets[i].cpuDescriptor.ptr;
+        rts[i].BeginningAccess = begin_access(targets[i].BeginningAccess);
+        if (!ending_access(l, targets[i].EndingAccess, rts[i].EndingAccess, flat.data(), room, used, &at[i]))
+            return l->h.device->report_list(l->rt, E_INVALIDARG);
+    }
+    if (has_depth) {
+        dsv.ptr = depth_stencil->cpuDescriptor.ptr;
+        depth.DepthBeginningAccess = begin_access(depth_stencil->DepthBeginningAccess);
+        depth.StencilBeginningAccess = begin_access(depth_stencil->StencilBeginningAccess);
+        if (!ending_access(l, depth_stencil->DepthEndingAccess, depth.DepthEndingAccess, flat.data(), room, used,
+                           &at[kRenderPassTargets]) ||
+            !ending_access(l, depth_stencil->StencilEndingAccess, depth.StencilEndingAccess, flat.data(), room,
+                           used, &at[kRenderPassTargets + 1]))
+            return l->h.device->report_list(l->rt, E_INVALIDARG);
+    }
+    const auto api_flags = static_cast<D3D12_RENDER_PASS_FLAGS>(flags);
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const D3D12_RENDER_PASS_RENDER_TARGET_DESC* t,
+                   const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC* d, const D3D12_CPU_DESCRIPTOR_HANDLE* rv,
+                   const D3D12_CPU_DESCRIPTOR_HANDLE* dv, const ApiResolveSubresource* f) {
+                   D3D12_RENDER_PASS_RENDER_TARGET_DESC pass[kRenderPassTargets]{};
+                   for (UINT i = 0; i < n; ++i) {
+                       pass[i] = t[i];
+                       pass[i].cpuDescriptor = rv[i];
+                       if (at[i] != kNoResolve) pass[i].EndingAccess.Resolve.pSubresourceParameters = f + at[i];
+                   }
+                   D3D12_RENDER_PASS_DEPTH_STENCIL_DESC ds{};
+                   if (d && dv) {
+                       ds = *d;
+                       ds.cpuDescriptor = *dv;
+                       if (at[kRenderPassTargets] != kNoResolve)
+                           ds.DepthEndingAccess.Resolve.pSubresourceParameters = f + at[kRenderPassTargets];
+                       if (at[kRenderPassTargets + 1] != kNoResolve)
+                           ds.StencilEndingAccess.Resolve.pSubresourceParameters = f + at[kRenderPassTargets + 1];
+                   }
+                   l4->BeginRenderPass(n, n ? pass : nullptr, d && dv ? &ds : nullptr, api_flags);
+                   l4->Release();
+               },
+               in(n ? rts : nullptr, n), in(has_depth ? &depth : nullptr, has_depth ? 1u : 0u),
+               Snap{n ? rtvs : nullptr, n, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, FALSE},
+               Snap{has_depth ? &dsv : nullptr, has_depth ? 1u : 0u, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, FALSE},
+               in(total ? flat.data() : nullptr, static_cast<size_t>(total)));
+}
+
+void APIENTRY end_render_pass(D3D12DDI_HCOMMANDLIST h) {
+    CommandListRecord* l = list_of(h, "EndRenderPass");
+    if (!l) return;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l4->EndRenderPass();
+            l4->Release();
+        });
+}
 } // namespace
 
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
@@ -1010,6 +1308,9 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnCopyRaytracingAccelerationStructure = copy_acceleration_structure;
     t->pfnSetPipelineState1 = set_pipeline_state1;
     t->pfnDispatchRays = dispatch_rays;
+    // L56 is in both tables: the engine admits the immediate write on every queue type it creates, and 1006
+    // WriteBufferImmediateQueueFlags reports exactly those queues.
+    t->pfnWriteBufferImmediate = write_buffer_immediate;
     if (table_index != 1) return;                      // the compute table keeps its rejections
     t->pfnResourceResolveSubresource = resolve_subresource;
     t->pfnResourceResolveSubresourceRegion = resolve_subresource_region;
@@ -1018,7 +1319,13 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnSetViewInstanceMask = set_view_instance_mask;
     t->pfnRSSetShadingRate = rs_set_shading_rate;
     t->pfnRSSetShadingRateImage = rs_set_shading_rate_image;
+    t->pfnDispatchMesh = dispatch_mesh;
     t->pfnOmSetAlphaBlendFactor = om_set_alpha_blend_factor;
+}
+
+void fill_render_pass_commands(D3D12DDI_RENDER_PASS_FUNCS_0053* t) noexcept {
+    t->pfnBeginRenderPass = begin_render_pass;
+    t->pfnEndRenderPass = end_render_pass;
 }
 
 } // namespace engine_ddi

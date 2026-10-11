@@ -22,8 +22,8 @@ vkd3d-proton compiles DXBC and DXIL alike through dxil-spirv (`libs/vkd3d-shader
 
 ## What it does
 
-`BuildContainer` validates the program and its entries, then writes `ISG1`, `OSG1`, `PSG1` (hull and domain) and
-the program part (`SHEX`/`SHDR`, or `DXIL`) copied unchanged, with the checksum computed as fxc computes it (dxc's
+`BuildContainer` validates the program and its entries, then writes `ISG1`, `OSG1`, `PSG1` (hull, domain and mesh)
+and the program part (`SHEX`/`SHDR`, or `DXIL`) copied unchanged, with the checksum computed as fxc computes it (dxc's
 signed digest is the same function: the test recomputes both). Names are a pure function of the entry, so a vertex
 output, the pixel input it feeds and an input layout agree without seeing each other:
 
@@ -33,6 +33,16 @@ output, the pixel input it feeds and an input layout agree without seeing each o
 | pixel output without a system value | `SV_Target<register>` |
 | anything else | `BC250_R`, index `register * 4 + first component` |
 | the same on gs_5 output streams 1 to 3 | `BC250_S<stream>R`, same index |
+
+`ProgramDesc::slot` says which program kind the entries belong to: `Slot::Standard` is the vertex, hull, domain,
+geometry, pixel and compute path above, `Slot::Mesh` a mesh program (DXIL kind 13, vertex outputs in `output` and
+primitive outputs in `patchConstant`) and `Slot::Amplification` an amplification program (kind 14). A mesh pipeline
+cannot use the synthetic names: dxc gives a mesh program's primitive outputs a register space of their own, which
+starts again at register 0, while the pixel input signature is one flat space ordered by the pixel program's
+parameter declarations, so two different outputs would get one name. For both mesh slots, and for the pixel program
+of a mesh pipeline (`BuildMeshLinkContainer`), every entry therefore takes the name and index of the program's own
+`dx.entryPoints` metadata, matched to the entry by register row, first component and stream. An entry with no
+element in the metadata keeps its synthetic name. The vertex path is untouched.
 
 `InputLayoutSemantic` and `StreamOutputSemantic` turn the DDI's input elements and stream-output entries back into
 semantics. For a DXIL program `StreamOutputSemantic` returns the program's own names, read from the `dx.entryPoints`
@@ -53,7 +63,7 @@ Citations are vkd3d-proton fork 7bfcd7f0 and its dxil-spirv c5e5522a, unless mar
 | header | yes | `DXBC` magic, version 1, size, part offsets (`libs/vkd3d-shader/dxbc.c:118-133`, `dxil_parser.cpp:443-453`); the checksum is ignored (`dxbc.c:124-125`) but written anyway |
 | `DXIL` | yes | the program: dxil-spirv reads only this part's bitcode (`dxil_parser.cpp:482-494`, `76-99`; `dxil_spirv_c.cpp:440, 448`) |
 | `ISG1`, `OSG1` | yes | vkd3d-proton reads them for DXIL too (`dxbc.c:249-277`): stage linkage by name, index, stream and register (`libs/vkd3d/state.c:5810-5843`, `5185-5259`), input layout validation and attribute location = `ISG1` register (`state.c:5848-5858`, `5299-5328`, `5944-5948`), blend validation against `OSG1` (`state.c:5877`). dxil-spirv parses them strictly (`dxil_parser.cpp:101-146, 500-514`) but compiles from the metadata |
-| `PSG1` | hull, domain | patch-constant linkage (`state.c:5795-5808`, `dxbc.c:283`); dxil-spirv skips it (`dxil_parser.cpp:516-517`) |
+| `PSG1` | hull, domain, mesh | patch-constant linkage (`state.c:5795-5808`, `dxbc.c:283`); dxil-spirv skips it (`dxil_parser.cpp:516-517`). A mesh program's primitive outputs are the same part. vkd3d-proton links them to the pixel inputs by name and index (`state.c`, `vkd3d_validate_mesh_shader_io_signatures`). dxil-spirv remaps the pixel inputs by semantic (`stage_io_map_ms_ps`) |
 | `SFI0`, `PSV0`, `STAT`, `HASH`, `RDEF`, `RTS0`, `PRIV` | no | skipped by dxil-spirv (`dxil_parser.cpp:497-532`; `STAT` only for reflection, `:483-487`); root signatures come from their own DDI |
 | `RDAT` | no | libraries only (`dxil_parser.cpp:534-540`), out of scope |
 
@@ -122,11 +132,13 @@ Mismatch controls, detected for both builds: M1 puts COLOR3 and TEXCOORD2 of vsp
 ## Unsupported, and refused
 
 - `Unsupported`: class linkage (no DDI field for `IFCE`, none in D3D12); DXIL libraries (kind 6) through
-  `BuildContainer` (they go through `BuildLibraryContainer`, below), ray tracing, mesh, amplification and node
-  programs (kinds 7 and up), shader models other than 4.0-5.1 and 6.x; DXIL-only system
+  `BuildContainer` (they go through `BuildLibraryContainer`, below), ray tracing and node programs, any kind above
+  the slot the caller asked for (a `Slot::Mesh` program that is not kind 13, a `Slot::Amplification` program that is
+  not kind 14, a `Slot::Standard` program above compute), a `BuildMeshLinkContainer` program that is not a pixel
+  program, DXBC in a mesh slot, shader models other than 4.0-5.1 and 6.x; DXIL-only system
   values and component types in DXBC; a DXIL stream-output lookup whose metadata does not parse.
 - `InvalidArgument`: unknown system value, a stream outside a geometry output or above 3, two entries on the same
-  components, a minimum precision that does not fit the type, patch constants outside hull and domain programs,
+  components, a minimum precision that does not fit the type, patch constants outside hull, domain and mesh programs,
   signatures on a compute program, an instruction of length 0, LenTok below 2 or past the readable DWORDs (guard
   page), a DXIL header without its magic or with bitcode outside SizeInUint32.
 - Not represented: application names (reflection is gone; use the two helpers), fxc's output "never written"
@@ -156,6 +168,13 @@ capacity is LenTok or SizeInUint32 itself, which the runtime has validated. The 
 `Container` and the vertex input entries: `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` of the
 last pre-rasterization stage names stream-output entries (NULL `SemanticName` for `element.gap`, which the pinned
 r4 engine takes), and `InputLayoutSemantic(input, InputRegister, &semantic)` names input elements.
+
+`pfnCreateMeshShader` and `pfnCreateAmplificationShader` use the same call with `slot` set, the mesh program's
+`IOSignatures.Mesh.pVertexOutputSignature` as `output` and `pPrimitiveOutputSignature` as `patchConstant` (which
+union member the runtime fills for an amplification program is not measured, so that slot passes no signature).
+`mesh_pipeline` then rebuilds the pixel program of the pipeline with `BuildMeshLinkContainer`, so that its input
+names are the metadata names the mesh program's outputs carry, and hands the engine a subobject stream through
+`ID3D12Device2::CreatePipelineState` (the only path on which the engine reads the AS and MS subobjects).
 
 `../state-objects.cpp`, in `pfnCreateStateObject`, for each DXIL_LIBRARY subobject:
 `LibraryPayloadDwords(pDXILLibrary)` is the length the payload claims (SizeInUint32 of a DXIL part, or the container

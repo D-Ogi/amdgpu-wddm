@@ -55,9 +55,12 @@ struct Answers {
     D3D12_FEATURE_DATA_GPU_VIRTUAL_ADDRESS_SUPPORT gpu_va;
     D3D12_FEATURE_DATA_D3D12_OPTIONS options;
     D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS2 options2;
     D3D12_FEATURE_DATA_D3D12_OPTIONS3 options3;
+    BC250_VKD3D_VIEW_INSTANCING_CONTRACT view_contract;
     D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4;
     D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7;
     D3D12_FEATURE_DATA_D3D12_OPTIONS9 options9;
     D3D12_FEATURE_DATA_D3D12_OPTIONS11 options11;
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
@@ -69,8 +72,13 @@ struct Answers {
     int unsupported;                            // a D3D12_FEATURE answered DXGI_ERROR_UNSUPPORTED; -1 for none
 };
 
-// An FL12_0 engine that also claims what engine-ddi must clamp (raytracing 1.1, enhanced barriers, mesh
-// derivatives, VRS). Values are arbitrary but valid.
+// An FL12_0 engine that also claims what engine-ddi must clamp (mesh derivatives, VRS) and what it maps through
+// to a cap of its own (raytracing 1.1, enhanced barriers, relaxed format casting). Values are arbitrary but
+// valid. Its OPTIONS7 stays zeroed: a Vulkan device without
+// VK_EXT_mesh_shader, so the mesh shader tier and the mesh derivatives of OPTIONS9 are both clamped off. Its
+// OPTIONS2 DepthBoundsTestSupported and its OPTIONS3 ViewInstancingTier stay at the floor as well, so the 1006
+// checks below read what an engine without either feature answers; test_depth_bounds and test_view_instancing
+// raise each of them in turn.
 Answers fl12_0() {
     Answers a{};
     a.unsupported = -1;
@@ -142,6 +150,10 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
             continue;
         }
         if (static_cast<int>(feature) == a.unsupported) continue;
+        if (q.Feature == BC250_VKD3D_FEATURE_VIEW_INSTANCING_CONTRACT) {
+            if (a.view_contract.Revision) answer(q, a.view_contract);
+            continue;
+        }
         switch (feature) {
         case D3D12_FEATURE_FEATURE_LEVELS: {
             if (q.DataSize != sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)) { q.Result = E_INVALIDARG; break; }
@@ -167,9 +179,11 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
         case D3D12_FEATURE_GPU_VIRTUAL_ADDRESS_SUPPORT: answer(q, a.gpu_va); break;
         case D3D12_FEATURE_D3D12_OPTIONS: answer(q, a.options); break;
         case D3D12_FEATURE_D3D12_OPTIONS1: answer(q, a.options1); break;
+        case D3D12_FEATURE_D3D12_OPTIONS2: answer(q, a.options2); break;
         case D3D12_FEATURE_D3D12_OPTIONS3: answer(q, a.options3); break;
         case D3D12_FEATURE_D3D12_OPTIONS4: answer(q, a.options4); break;
         case D3D12_FEATURE_D3D12_OPTIONS5: answer(q, a.options5); break;
+        case D3D12_FEATURE_D3D12_OPTIONS7: answer(q, a.options7); break;
         case D3D12_FEATURE_D3D12_OPTIONS9: answer(q, a.options9); break;
         case D3D12_FEATURE_D3D12_OPTIONS11: answer(q, a.options11); break;
         case D3D12_FEATURE_D3D12_OPTIONS12: answer(q, a.options12); break;
@@ -288,7 +302,7 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     const Answers a12_0 = fl12_0();
     engine_ddi::AdapterCaps* caps = query_stub(a12_0, info, "FL12_0 engine");
     if (!caps) return;
-    check(g_queries == 16, "one batch of 16 features (%u)", g_queries);
+    check(g_queries == 19, "one batch of 19 features including the optional view contract (%u)", g_queries);
     check(g_model_asked == D3D_SHADER_MODEL_6_8, "SHADER_MODEL is asked with 6_8 as the highest model (%x)",
           static_cast<unsigned>(g_model_asked));
 
@@ -374,14 +388,19 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               o.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation &&
               o.CopyQueueTimestampQueriesSupported && !o.BarycentricsSupported && o.ReservedBufferPlacementSupported,
           "1006 D3D12_OPTIONS, 124 bytes: tiers and flags from OPTIONS, OPTIONS3 and OPTIONS4");
-    check(o.RaytracingTier == D3D12DDI_RAYTRACING_TIER_1_1 && !o.EnhancedBarriersSupported &&
+    check(o.RaytracingTier == D3D12DDI_RAYTRACING_TIER_1_1 && o.EnhancedBarriersSupported &&
               o.MeshShaderTier == D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED &&
               o.VariableShadingRateTier == D3D12DDI_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED &&
               o.SamplerFeedbackTier == D3D12DDI_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED &&
               o.RenderPassTier == D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED && !o.DepthBoundsTestSupported &&
               o.WriteBufferImmediateQueueFlags == D3D12DDI_COMMAND_QUEUE_FLAG_NONE && !o.DriverManagedShaderCachePresent,
-          "1006: the engine's raytracing 1.1 is reported by default, while enhanced barriers and the other "
-          "fail-safe slots are not");
+          "1006: the engine's raytracing 1.1 and its enhanced barriers are reported, the fields whose slots are "
+          "still fail-safes are not, an engine at render pass tier 0 and with no immediate-write list type gets "
+          "neither, and an engine without VK_EXT_mesh_shader gets no mesh shader tier");
+    check(o.ViewInstancingTier == D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED &&
+              o.ProgrammableSamplePositionsTier == D3D12DDI_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED,
+          "1006: an engine that reports no depth bounds test and no view instancing gets neither, and sample "
+          "positions stay off whatever the engine says (tier %d)", static_cast<int>(o.ViewInstancingTier));
 
     D3D12DDI_SHADER_CAPS_0084 s;
     std::memset(&s, 0xEE, sizeof(s));
@@ -541,6 +560,414 @@ void test_raytracing_tier_reporting(const BC250_VKD3D_DEVICE_CREATE_INFO& info) 
     tier_with(D3D12_RAYTRACING_TIER_NOT_SUPPORTED, "engine without", D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED);
     check(engine_ddi::set_raytracing_tier_reporting(nullptr, true) == E_INVALIDARG,
           "raytracing tier reporting refused: null caps");
+}
+
+// The three answers the mesh shader tier decides, read in one go: 1006's tier and full range render target array
+// index, 1004's mesh derivatives, and the driver maximum feature level, which the tier must not move.
+struct MeshAnswer {
+    HRESULT hr;
+    D3D12DDI_MESH_SHADER_TIER tier;
+    BOOL full_range;
+    BOOL culled_primitives;
+    BOOL derivatives;
+    D3D12DDI_3DPIPELINELEVEL level;
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 options;
+};
+MeshAnswer mesh_answer(const engine_ddi::AdapterCaps* caps) {
+    MeshAnswer m;
+    std::memset(&m, 0xEE, sizeof(m));
+    D3D12DDI_SHADER_CAPS_0084 s;
+    std::memset(&s, 0xEE, sizeof(s));
+    m.hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, m.options);
+    const HRESULT hr_shader = get(caps, D3D12DDICAPS_TYPE_SHADER, s);
+    HRESULT hr_level = E_FAIL;
+    m.level = level_1074(caps, D3D12DDI_3DPIPELINELEVEL_12_2, hr_level);
+    if (m.hr == S_OK) m.hr = hr_shader;
+    if (m.hr == S_OK) m.hr = hr_level;
+    m.tier = m.options.MeshShaderTier;
+    m.full_range = m.options.MeshShaderSupportsFullRangeRenderTargetArrayIndex;
+    m.culled_primitives = m.options.MSPrimitivesPipelineStatisticIncludesCulledPrimitives;
+    m.derivatives = s.DerivativesInMeshAndAmplificationShaders;
+    return m;
+}
+
+// The same answer with the three mesh fields back at the floor: everything else of 1006 must be what an engine
+// without mesh shaders answers.
+bool rest_of_1006_unchanged(const MeshAnswer& m, const MeshAnswer& floor) {
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 rest = m.options;
+    rest.MeshShaderTier = D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED;
+    rest.MeshShaderSupportsFullRangeRenderTargetArrayIndex = FALSE;
+    return !std::memcmp(&rest, &floor.options, sizeof(rest));
+}
+
+// The mesh shader tier: 1006 reports tier 1 exactly when the engine's OPTIONS7 answers tier 1 or higher and the
+// reported shader model reaches 6_5, with 1006's full range render target array index and 1004's mesh derivatives
+// behind the same condition. A higher tier of a later engine is reported as 1 (the only tier at 0092), an
+// unanswered OPTIONS7 is NOT_SUPPORTED, and the tier moves neither the rest of 1006 nor the feature level.
+void test_mesh_shader_tier(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    const auto engine_with = [](D3D12_MESH_SHADER_TIER tier) {
+        Answers a = fl12_0();                 // OPTIONS9 derivatives are already TRUE there
+        a.options7.MeshShaderTier = tier;
+        a.options9.MeshShaderSupportsFullRangeRenderTargetArrayIndex = TRUE;
+        return a;
+    };
+
+    // The floor: an engine whose Vulkan device has no VK_EXT_mesh_shader. The rest of this test compares with it.
+    MeshAnswer floor{};
+    {
+        engine_ddi::AdapterCaps* caps =
+            query_stub(engine_with(D3D12_MESH_SHADER_TIER_NOT_SUPPORTED), info, "engine without mesh shaders");
+        if (!caps) return;
+        floor = mesh_answer(caps);
+        check(floor.hr == S_OK && floor.tier == D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED && !floor.full_range &&
+                  !floor.culled_primitives && !floor.derivatives && floor.level == D3D12DDI_3DPIPELINELEVEL_12_0,
+              "mesh shaders, engine at NOT_SUPPORTED: 1006 reports no tier and no full range render target array "
+              "index, 1004 no derivatives, 1074 still 12_0 (tier %d)", static_cast<int>(floor.tier));
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // The engine's tier 1, and a later engine's higher tier, both reported as tier 1.
+    const auto reports_tier_1 = [&](D3D12_MESH_SHADER_TIER engine, const char* what) {
+        engine_ddi::AdapterCaps* caps = query_stub(engine_with(engine), info, what);
+        if (!caps) return;
+        const MeshAnswer m = mesh_answer(caps);
+        check(m.hr == S_OK && m.tier == D3D12DDI_MESH_SHADER_TIER_1 && m.full_range && !m.culled_primitives &&
+                  m.derivatives && m.level == D3D12DDI_3DPIPELINELEVEL_12_0 && rest_of_1006_unchanged(m, floor),
+              "mesh shaders, %s: 1006 reports tier 1 with the full range render target array index of OPTIONS9 and "
+              "nothing else of 1006 moved, 1004 reports the derivatives of OPTIONS9, 1074 stays 12_0 (tier %d)",
+              what, static_cast<int>(m.tier));
+        engine_ddi::free_adapter_caps(caps);
+    };
+    reports_tier_1(D3D12_MESH_SHADER_TIER_1, "engine at tier 1");
+    reports_tier_1(static_cast<D3D12_MESH_SHADER_TIER>(20), "engine at a tier above 1");
+
+    // An engine that does not answer OPTIONS7 at all: the zeroed structure, which is NOT_SUPPORTED.
+    {
+        Answers a = engine_with(D3D12_MESH_SHADER_TIER_1);
+        a.unsupported = D3D12_FEATURE_D3D12_OPTIONS7;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without an OPTIONS7 answer");
+        if (!caps) return;
+        const MeshAnswer m = mesh_answer(caps);
+        check(m.hr == S_OK && m.tier == D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED && !m.full_range && !m.derivatives &&
+                  rest_of_1006_unchanged(m, floor),
+              "mesh shaders, engine without an OPTIONS7 answer: no tier, no full range render target array index, "
+              "no derivatives (tier %d)", static_cast<int>(m.tier));
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // A mesh or an amplification program is a DXIL program of shader model 6.5, so a reported model below 6_5
+    // takes the tier away whatever the engine answers, and restoring the model brings it back.
+    {
+        engine_ddi::AdapterCaps* caps =
+            query_stub(engine_with(D3D12_MESH_SHADER_TIER_1), info, "engine at tier 1, shader model ceiling");
+        if (!caps) return;
+        const HRESULT h64 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_4);
+        const MeshAnswer below = mesh_answer(caps);
+        const HRESULT h65 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_5);
+        const MeshAnswer at = mesh_answer(caps);
+        check(h64 == S_OK && h65 == S_OK && below.hr == S_OK && at.hr == S_OK &&
+                  below.tier == D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED && !below.full_range && !below.derivatives &&
+                  rest_of_1006_unchanged(below, floor) && at.tier == D3D12DDI_MESH_SHADER_TIER_1 && at.full_range &&
+                  at.derivatives,
+              "mesh shaders, ceiling 6_4 on an engine at tier 1: no tier, no full range render target array index "
+              "and no derivatives; a ceiling of 6_5 reports tier 1 again (tiers %d then %d)",
+              static_cast<int>(below.tier), static_cast<int>(at.tier));
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
+// The two 1006 answers the engine decides for the depth bounds test (L52) and view instancing (L57), read in one
+// go, with the sample position tier and the driver maximum feature level beside them: sample positions must stay
+// off whatever the engine answers (its own entry is a stub), and neither feature may move the level, because 12_2
+// also needs VRS tier 2 and sampler feedback.
+struct PipelineCapAnswer {
+    HRESULT hr;
+    BOOL depth_bounds;
+    D3D12DDI_VIEW_INSTANCING_TIER view_instancing;
+    D3D12DDI_PROGRAMMABLE_SAMPLE_POSITIONS_TIER sample_positions;
+    D3D12DDI_3DPIPELINELEVEL level;
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 options;
+};
+PipelineCapAnswer pipeline_cap_answer(const engine_ddi::AdapterCaps* caps) {
+    PipelineCapAnswer p;
+    std::memset(&p, 0xEE, sizeof(p));
+    p.hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, p.options);
+    HRESULT hr_level = E_FAIL;
+    p.level = level_1074(caps, D3D12DDI_3DPIPELINELEVEL_12_2, hr_level);
+    if (p.hr == S_OK) p.hr = hr_level;
+    p.depth_bounds = p.options.DepthBoundsTestSupported;
+    p.view_instancing = p.options.ViewInstancingTier;
+    p.sample_positions = p.options.ProgrammableSamplePositionsTier;
+    return p;
+}
+// The same answer with the two fields back at the floor: everything else of 1006 must be what an engine with
+// neither feature answers.
+bool rest_of_1006_same(const PipelineCapAnswer& p, const PipelineCapAnswer& floor) {
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 rest = p.options;
+    rest.DepthBoundsTestSupported = FALSE;
+    rest.ViewInstancingTier = D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED;
+    return !std::memcmp(&rest, &floor.options, sizeof(rest));
+}
+
+// 1006 DepthBoundsTestSupported is the engine's OPTIONS2 answer and nothing else: TRUE when the engine says so,
+// FALSE when it says so, FALSE when it does not answer OPTIONS2 at all, and in no case does it move the rest of
+// 1006 or the feature level.
+void test_depth_bounds(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    PipelineCapAnswer floor{};
+    {
+        engine_ddi::AdapterCaps* caps = query_stub(fl12_0(), info, "engine without a depth bounds test");
+        if (!caps) return;
+        floor = pipeline_cap_answer(caps);
+        check(floor.hr == S_OK && !floor.depth_bounds &&
+                  floor.sample_positions == D3D12DDI_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED &&
+                  floor.level == D3D12DDI_3DPIPELINELEVEL_12_0,
+              "depth bounds, engine at FALSE: 1006 reports FALSE, 1074 still 12_0 (hr %08lx)",
+              static_cast<unsigned long>(floor.hr));
+        engine_ddi::free_adapter_caps(caps);
+    }
+    {
+        Answers a = fl12_0();
+        a.options2.DepthBoundsTestSupported = TRUE;
+        // The engine's sample position tier is raised at the same time, to show that engine-ddi reports the one
+        // field of OPTIONS2 it has implemented and not the other.
+        a.options2.ProgrammableSamplePositionsTier = D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_2;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine with a depth bounds test");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.depth_bounds &&
+                  p.sample_positions == D3D12DDI_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED &&
+                  p.level == D3D12DDI_3DPIPELINELEVEL_12_0 && rest_of_1006_same(p, floor),
+              "depth bounds, engine at TRUE: 1006 reports TRUE and nothing else of 1006 moved, the engine's "
+              "sample position tier 2 is still not reported, 1074 stays 12_0");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    {
+        Answers a = fl12_0();
+        a.options2.DepthBoundsTestSupported = TRUE;
+        a.unsupported = D3D12_FEATURE_D3D12_OPTIONS2;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without an OPTIONS2 answer");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && !p.depth_bounds && rest_of_1006_same(p, floor),
+              "depth bounds, engine without an OPTIONS2 answer: the zeroed structure is FALSE");
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
+// Legacy partial multiview is never enough. The full-domain contract enables only Tier 2.
+void test_view_instancing(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    PipelineCapAnswer floor{};
+    {
+        engine_ddi::AdapterCaps* caps = query_stub(fl12_0(), info, "engine without view instancing");
+        if (!caps) return;
+        floor = pipeline_cap_answer(caps);
+        check(floor.hr == S_OK && floor.view_instancing == D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED &&
+                  floor.level == D3D12DDI_3DPIPELINELEVEL_12_0,
+              "view instancing, engine at NOT_SUPPORTED: 1006 reports no tier, 1074 still 12_0 (tier %d)",
+              static_cast<int>(floor.view_instancing));
+        engine_ddi::free_adapter_caps(caps);
+    }
+    const auto reports = [&](D3D12_VIEW_INSTANCING_TIER engine, D3D12DDI_VIEW_INSTANCING_TIER want,
+                             const char* what, UINT revision = 0, UINT contract_tier = 0) {
+        Answers a = fl12_0();
+        a.options3.ViewInstancingTier = engine;
+        a.view_contract = {revision, contract_tier};
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, what);
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.view_instancing == want && p.level == D3D12DDI_3DPIPELINELEVEL_12_0 &&
+                  rest_of_1006_same(p, floor),
+              "view instancing, %s: 1006 reports tier %d and nothing else of 1006 moved, 1074 stays 12_0 (tier %d)",
+              what, static_cast<int>(want), static_cast<int>(p.view_instancing));
+        engine_ddi::free_adapter_caps(caps);
+    };
+    reports(D3D12_VIEW_INSTANCING_TIER_1, D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED, "engine at tier 1");
+    reports(D3D12_VIEW_INSTANCING_TIER_2, D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED, "engine at tier 2");
+    reports(D3D12_VIEW_INSTANCING_TIER_3, D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED, "engine at tier 3");
+    reports(static_cast<D3D12_VIEW_INSTANCING_TIER>(9), D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED,
+            "engine at a tier above 3");
+    reports(D3D12_VIEW_INSTANCING_TIER_2, D3D12DDI_VIEW_INSTANCING_TIER_2, "full-domain tier 2", 1, 2);
+    reports(D3D12_VIEW_INSTANCING_TIER_3, D3D12DDI_VIEW_INSTANCING_TIER_2, "full-domain tier capped at 2", 1, 2);
+    reports(D3D12_VIEW_INSTANCING_TIER_1, D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED, "insufficient adapter tier", 1, 2);
+    reports(D3D12_VIEW_INSTANCING_TIER_2, D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED, "unknown contract revision", 2, 2);
+    reports(D3D12_VIEW_INSTANCING_TIER_2, D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED, "unknown contract tier", 1, 9);
+    {
+        Answers a = fl12_0();
+        a.options3.ViewInstancingTier = D3D12_VIEW_INSTANCING_TIER_2;
+        a.unsupported = D3D12_FEATURE_D3D12_OPTIONS3;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without an OPTIONS3 answer");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.view_instancing == D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED,
+              "view instancing, engine without an OPTIONS3 answer: the zeroed structure is NOT_SUPPORTED (tier %d)",
+              static_cast<int>(p.view_instancing));
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
+// 1006 with one field of p back at the floor: everything else of 1006 must be what the floor engine answered.
+bool rest_of_1006_same_but(const D3D12DDI_D3D12_OPTIONS_DATA_0089& p, const D3D12DDI_D3D12_OPTIONS_DATA_0089& floor,
+                           bool render_pass, bool write_buffer_immediate, bool enhanced_barriers = false) {
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 rest = p;
+    if (render_pass) rest.RenderPassTier = D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED;
+    if (write_buffer_immediate) rest.WriteBufferImmediateQueueFlags = D3D12DDI_COMMAND_QUEUE_FLAG_NONE;
+    if (enhanced_barriers) rest.EnhancedBarriersSupported = FALSE;
+    return !std::memcmp(&rest, &floor, sizeof(rest));
+}
+
+// 1006 RenderPassTier is the engine's own OPTIONS5 answer, clamped to tier 2, the last tier the DDI defines at
+// 0092, and render_pass_supported is that same answer: the shell fills the render pass table from it, so the cap
+// and the table cannot disagree. The pinned engine answers tier 0, so nothing is reported today although both
+// slots are filled (commands.cpp, begin_render_pass and end_render_pass).
+void test_render_pass(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    check(!engine_ddi::render_pass_supported(nullptr), "render pass: null caps publish no table");
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 floor{};
+    {
+        engine_ddi::AdapterCaps* caps = query_stub(fl12_0(), info, "engine at render pass tier 0");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        floor = p.options;
+        check(p.hr == S_OK && p.options.RenderPassTier == D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED &&
+                  !engine_ddi::render_pass_supported(caps) && p.level == D3D12DDI_3DPIPELINELEVEL_12_0,
+              "render pass, engine at tier 0: 1006 reports NOT_SUPPORTED, no table is published, 1074 still 12_0");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    const auto reports = [&](D3D12_RENDER_PASS_TIER engine, D3D12DDI_RENDER_PASS_TIER want, const char* what) {
+        Answers a = fl12_0();
+        a.options5.RenderPassesTier = engine;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, what);
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.options.RenderPassTier == want && engine_ddi::render_pass_supported(caps) &&
+                  p.level == D3D12DDI_3DPIPELINELEVEL_12_0 &&
+                  rest_of_1006_same_but(p.options, floor, true, false),
+              "render pass, %s: 1006 reports tier %d, the table is published, nothing else of 1006 moved, 1074 "
+              "stays 12_0 (tier %d)", what, static_cast<int>(want), static_cast<int>(p.options.RenderPassTier));
+        engine_ddi::free_adapter_caps(caps);
+    };
+    reports(D3D12_RENDER_PASS_TIER_1, D3D12DDI_RENDER_PASS_TIER_1, "engine at tier 1");
+    reports(D3D12_RENDER_PASS_TIER_2, D3D12DDI_RENDER_PASS_TIER_2, "engine at tier 2");
+    reports(static_cast<D3D12_RENDER_PASS_TIER>(7), D3D12DDI_RENDER_PASS_TIER_2, "engine at a tier above 2");
+    {
+        Answers a = fl12_0();
+        a.options5.RenderPassesTier = D3D12_RENDER_PASS_TIER_2;
+        a.unsupported = D3D12_FEATURE_D3D12_OPTIONS5;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without an OPTIONS5 answer");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.options.RenderPassTier == D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED &&
+                  !engine_ddi::render_pass_supported(caps),
+              "render pass, engine without an OPTIONS5 answer: the zeroed structure is NOT_SUPPORTED and no table "
+              "is published (tier %d)", static_cast<int>(p.options.RenderPassTier));
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
+// 1006 WriteBufferImmediateQueueFlags: the engine's OPTIONS3 answer, a mask of D3D12_COMMAND_LIST_TYPE bits,
+// mapped to the DDI's queue flags. The three list types that have a queue of their own map one by one; the
+// engine's BUNDLE bit and its video bits have no queue flag to go to. L56 is filled in both command list tables
+// (commands.cpp), so every flag reported has a slot behind it.
+void test_write_buffer_immediate(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 floor{};
+    {
+        engine_ddi::AdapterCaps* caps = query_stub(fl12_0(), info, "engine with no immediate-write list type");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        floor = p.options;
+        check(p.hr == S_OK && p.options.WriteBufferImmediateQueueFlags == D3D12DDI_COMMAND_QUEUE_FLAG_NONE,
+              "write buffer immediate, engine at no list type: 1006 reports no queue flag");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    const auto reports = [&](UINT engine, UINT want, const char* what) {
+        Answers a = fl12_0();
+        a.options3.WriteBufferImmediateSupportFlags = static_cast<D3D12_COMMAND_LIST_SUPPORT_FLAGS>(engine);
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, what);
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && static_cast<UINT>(p.options.WriteBufferImmediateQueueFlags) == want &&
+                  rest_of_1006_same_but(p.options, floor, false, true),
+              "write buffer immediate, %s: 1006 reports queue flags 0x%x and nothing else of 1006 moved (0x%x)",
+              what, want, static_cast<unsigned>(p.options.WriteBufferImmediateQueueFlags));
+        engine_ddi::free_adapter_caps(caps);
+    };
+    // The pinned engine's own answer (device.c, d3d12_device_caps_init_feature_options3).
+    reports(D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT | D3D12_COMMAND_LIST_SUPPORT_FLAG_COMPUTE |
+                D3D12_COMMAND_LIST_SUPPORT_FLAG_COPY | D3D12_COMMAND_LIST_SUPPORT_FLAG_BUNDLE,
+            D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE | D3D12DDI_COMMAND_QUEUE_FLAG_COPY,
+            "engine at direct, compute, copy and bundle");
+    reports(D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT, D3D12DDI_COMMAND_QUEUE_FLAG_3D, "engine at direct alone");
+    reports(D3D12_COMMAND_LIST_SUPPORT_FLAG_COMPUTE | D3D12_COMMAND_LIST_SUPPORT_FLAG_COPY,
+            D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE | D3D12DDI_COMMAND_QUEUE_FLAG_COPY,
+            "engine at compute and copy");
+    reports(D3D12_COMMAND_LIST_SUPPORT_FLAG_BUNDLE, D3D12DDI_COMMAND_QUEUE_FLAG_NONE, "engine at bundle alone");
+    reports(D3D12_COMMAND_LIST_SUPPORT_FLAG_VIDEO_DECODE | D3D12_COMMAND_LIST_SUPPORT_FLAG_VIDEO_PROCESS |
+                D3D12_COMMAND_LIST_SUPPORT_FLAG_VIDEO_ENCODE,
+            D3D12DDI_COMMAND_QUEUE_FLAG_NONE, "engine at the video list types alone");
+    {
+        Answers a = fl12_0();
+        a.options3.WriteBufferImmediateSupportFlags = D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT;
+        a.unsupported = D3D12_FEATURE_D3D12_OPTIONS3;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without an OPTIONS3 answer");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.options.WriteBufferImmediateQueueFlags == D3D12DDI_COMMAND_QUEUE_FLAG_NONE,
+              "write buffer immediate, engine without an OPTIONS3 answer: the zeroed structure is no queue flag "
+              "(0x%x)", static_cast<unsigned>(p.options.WriteBufferImmediateQueueFlags));
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
+// 1006 EnhancedBarriersSupported is the engine's OPTIONS12 answer and nothing else: FALSE when the engine says so,
+// TRUE when it says so, FALSE when it does not answer OPTIONS12 at all, and in no case does it move the rest of
+// 1006 or the feature level. L68 pfnBarrier is filled in both command list tables (resources.cpp), so the report
+// has a slot behind it. The other field of OPTIONS12 engine-ddi maps, RelaxedFormatCastingSupported in 1077, is
+// read at every step: it stays TRUE while enhanced barriers is cleared on its own, so the two fields are shown to
+// be read independently, and it falls with enhanced barriers only when the whole structure goes unanswered.
+void test_enhanced_barriers(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    // The floor engine of this test is the shared one with enhanced barriers cleared, so the two cases below can
+    // be compared field by field against an otherwise identical answer.
+    const auto relaxed_casting = [](const engine_ddi::AdapterCaps* caps) {
+        D3D12DDI_OPTIONS_DATA_0090 o90;
+        std::memset(&o90, 0xEE, sizeof(o90));
+        return get(caps, D3D12DDICAPS_TYPE_OPTIONS_0090, o90) == S_OK && o90.RelaxedFormatCastingSupported;
+    };
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 floor{};
+    {
+        Answers a = fl12_0();
+        a.options12.EnhancedBarriersSupported = FALSE;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without enhanced barriers");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        floor = p.options;
+        check(p.hr == S_OK && !p.options.EnhancedBarriersSupported && relaxed_casting(caps) &&
+                  p.level == D3D12DDI_3DPIPELINELEVEL_12_0,
+              "enhanced barriers, engine at FALSE: 1006 reports FALSE, 1077 still reports relaxed format casting, "
+              "1074 still 12_0 (hr %08lx)", static_cast<unsigned long>(p.hr));
+        engine_ddi::free_adapter_caps(caps);
+    }
+    {
+        engine_ddi::AdapterCaps* caps = query_stub(fl12_0(), info, "engine with enhanced barriers");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && p.options.EnhancedBarriersSupported && relaxed_casting(caps) &&
+                  p.level == D3D12DDI_3DPIPELINELEVEL_12_0 &&
+                  rest_of_1006_same_but(p.options, floor, false, false, true),
+              "enhanced barriers, engine at TRUE: 1006 reports TRUE, 1077 still reports relaxed format casting, "
+              "nothing else of 1006 moved, 1074 stays 12_0");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    {
+        Answers a = fl12_0();
+        a.unsupported = D3D12_FEATURE_D3D12_OPTIONS12;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, "engine without an OPTIONS12 answer");
+        if (!caps) return;
+        const PipelineCapAnswer p = pipeline_cap_answer(caps);
+        check(p.hr == S_OK && !p.options.EnhancedBarriersSupported && !relaxed_casting(caps) &&
+                  rest_of_1006_same_but(p.options, floor, false, false, false),
+              "enhanced barriers, engine without an OPTIONS12 answer: the zeroed structure is FALSE in 1006 and in "
+              "1077, and the rest of 1006 is the floor engine's answer");
+        engine_ddi::free_adapter_caps(caps);
+    }
 }
 
 // 1012 as a list, read into a buffer of 12 entries: S_OK, the count, and the entries in order.
@@ -977,6 +1404,12 @@ int wmain(int argc, wchar_t** argv) {
         test_stub(info);
         test_policy_stub(info);
         test_raytracing_tier_reporting(info);
+        test_mesh_shader_tier(info);
+        test_depth_bounds(info);
+        test_view_instancing(info);
+        test_render_pass(info);
+        test_write_buffer_immediate(info);
+        test_enhanced_barriers(info);
         test_shader_model(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

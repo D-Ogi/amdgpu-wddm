@@ -2,6 +2,7 @@
 #include "adapter-caps.h"
 #include "device-state.h"
 #include "adapter-query-scope.h"
+#include "host-contract.h"
 #include "memory-policy.h"
 #include "instance-policy.h"
 #include "ddi-trace.h"
@@ -110,6 +111,13 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     auto getter=reinterpret_cast<PFN_BC250_VKD3D_ENGINE_GET_FUNCS>(GetProcAddress(owner.engine,BC250_VKD3D_ENGINE_GET_FUNCS_NAME));
     auto get=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(owner.icd,"vk_icdGetInstanceProcAddr"));
     if(!getter || !get)return E_NOINTERFACE;
+    const char* contract_reason{};
+    HRESULT contract_hr=check_host_contract(get,&contract_reason);
+    if(FAILED(contract_hr)){
+        amdgpu_wddm_log::print("d3d12-host-contract mismatch reason=%s result=%08lx\n",
+            contract_reason,static_cast<unsigned long>(contract_hr));amdgpu_wddm_log::flush();
+        return contract_hr;
+    }
     BC250_VKD3D_ENGINE_FUNCS funcs{};funcs.Size=sizeof(funcs);
     constexpr UINT32 abi=BC250_VKD3D_ENGINE_ABI_VERSION;
     HRESULT hr=getter(abi,&funcs);if(FAILED(hr))return hr;
@@ -181,6 +189,15 @@ HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) no
     HRESULT hr=ensure_caps(adapter,&owner);
     if(FAILED(hr))return hr;
     return engine_ddi::build_caps(owner->caps,D3D12DDI_BUILD_VERSION_0092,request);
+}
+HRESULT adapter_render_pass_supported(Adapter& adapter,bool* supported) noexcept {
+    if(!supported)return E_INVALIDARG;
+    *supported=false;
+    AdapterCapsOwner* owner{};
+    HRESULT hr=ensure_caps(adapter,&owner);
+    if(FAILED(hr))return hr;
+    *supported=engine_ddi::render_pass_supported(owner->caps);
+    return S_OK;
 }
 HRESULT get_adapter_engine(Adapter& adapter, AdapterEngineAccess* access) noexcept {
     if(!access)return E_INVALIDARG;

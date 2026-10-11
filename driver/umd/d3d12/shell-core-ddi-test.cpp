@@ -110,6 +110,10 @@ int main() {
         assert(f.errors == 2);
         for (auto byte : storage) assert(byte == 0x5a);
     }
+    // D91 and D114 are void slots with no error channel: each answers its output and the
+    // device survives. A removed device here was the defect, not the refusal: the debug
+    // layer and a profiler call these, and the application would see
+    // DXGI_ERROR_DRIVER_INTERNAL_ERROR instead of an answer.
     {
         Fixture f;
         UINT va_count = 1, kmt_count = 1;
@@ -119,17 +123,26 @@ int main() {
         const auto va_before = va; const auto kmt_before = kmt;
         table.pfnGetDebugAllocationInfo(f.handle(), {}, &va_count, &va, &kmt_count, &kmt);
         assert(!va_count && !kmt_count && equal(va, va_before) && equal(kmt, kmt_before));
-        assert(f.device.lost && f.errors == 1);
-        native12::debug_allocation_info(f.handle(), {}, nullptr, nullptr, nullptr, nullptr);
-        assert(f.errors == 2);
+        assert(!f.device.lost && !f.errors);
+        // Called again, and with a device handle of nothing: no output, no report, no loss.
+        va_count = 7; kmt_count = 9;
+        table.pfnGetDebugAllocationInfo(f.handle(), {}, &va_count, nullptr, &kmt_count, nullptr);
+        assert(!va_count && !kmt_count && !f.device.lost && !f.errors);
+        native12::debug_allocation_info({}, {}, nullptr, nullptr, nullptr, nullptr);
+        assert(!f.device.lost && !f.errors);
     }
     {
         Fixture f;
         BOOL more = TRUE;
+        table.pfnSetBackgroundProcessingMode(f.handle(),
+            D3D12DDI_BACKGROUND_PROCESSING_MODE_0062_DISABLE_BACKGROUND_WORK,
+            D3D12DDI_MEASUREMENTS_ACTION_0062_COMMIT_RESULTS, &more);
+        assert(more == FALSE && !f.device.lost && !f.errors);
+        more = TRUE;
         table.pfnSetBackgroundProcessingMode(f.handle(), {}, {}, &more);
-        assert(more == FALSE && f.device.lost && f.errors == 1);
-        native12::background_processing_mode(f.handle(), {}, {}, nullptr);
-        assert(f.errors == 2);
+        assert(more == FALSE && !f.device.lost && !f.errors);
+        native12::background_processing_mode({}, {}, {}, nullptr);
+        assert(!f.device.lost && !f.errors);
     }
-    std::puts("PASSED: nine shell slots, single-node identity, typed refusals, guarded outputs and sticky device loss; no runtime/GPU");
+    std::puts("PASSED: nine shell slots, single-node identity, typed refusals, guarded outputs, sticky device loss, and the two tool slots that answer without losing the device; no runtime/GPU");
 }
