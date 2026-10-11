@@ -7,6 +7,7 @@
 #include "paging_journal.h"
 #include "log_rate.h"
 #include "display_timing.h"
+#include "display_timing_refused.h"   // BD-122: the registers of a refused inherited timing, for #38
 #include "display_modes.h"
 #include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
 
@@ -765,6 +766,7 @@ NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
     D3DKMDT_VIDEO_SIGNAL_INFO* Signal=&signal;
     NTSTATUS status=STATUS_SUCCESS;
     Device->InheritedSignalValid=FALSE;
+    Device->InheritedTmds=FALSE;
     RtlZeroMemory(Signal, sizeof(*Signal));
     Signal->VideoStandard = D3DKMDT_VSS_OTHER;
     Signal->TotalSize.cx = Device->Post.Width;
@@ -780,7 +782,7 @@ NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
     // Full WDDM must provide the actual inherited timing or refuse the mode;
     // nominal60Hz and zero blanking are not hardware measurements.
     if (Device->FullWddm) status=DisplayReadInheritedTiming(Device,Signal);
-    if (!NT_SUCCESS(status)) return status;
+    if (!NT_SUCCESS(status)) { DisplayLogRefusedTiming(Device,status); return status; }
     Device->InheritedSignal=*Signal;
     Device->InheritedSignalValid=TRUE;
     return STATUS_SUCCESS;

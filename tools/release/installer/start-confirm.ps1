@@ -43,7 +43,7 @@ $script:lastReason = $null
 if (-not $Probe) {
     try {
         [void][IO.Directory]::CreateDirectory((Split-Path $log))
-        if (Test-Path -LiteralPath $log) { $keep = @(Get-Content -LiteralPath $log -Tail 200); [IO.File]::WriteAllLines($log, [string[]]$keep) }
+        if (Test-Path -LiteralPath $log) { $keep = @(Get-Content -LiteralPath $log -Tail 400); [IO.File]::WriteAllLines($log, [string[]]$keep) }
     } catch { }
 }
 function Write-StartConfirmLog([string]$Text) {
@@ -68,6 +68,24 @@ function Read-Parameter([string]$Name) {
     $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($parametersKey)
     if (!$k) { return 'no key' }
     try { $v = $k.GetValue($Name, $null); if ($null -eq $v) { return 'absent' }; return [string]$v } finally { $k.Dispose() }
+}
+# BD-122: the KMD's record of the last start that did not reach a started device (Parameters\StartRecord,
+# guard.c). Read with no gate and without the driver, which is the point: a device with Code 43 answers no escape.
+# The record's own values only; the rule that makes them current is in start-confirm-core.ps1.
+function Read-StartRecord {
+    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("$parametersKey\$script:StartRecordKey")
+    if (!$k) { return $null }
+    try { return Read-StartRecordFromKey $k } finally { $k.Dispose() }
+}
+# One line for the log, and the kept ring lines under it when the record is a reason for this start. -Probe prints
+# every kept line; the task's own log keeps the last $Lines of them, so one logon cannot push the file out.
+# This boot's start time goes into both calls: a record older than this boot says so and keeps its lines to itself.
+$script:bootUtc = Get-StartRecordBootUtc
+function Write-StartRecordLog([int]$Lines = 24) {
+    $record = Read-StartRecord
+    Write-StartConfirmLog ('start record: ' + (Format-StartRecord -Record $record -BootUtc $script:bootUtc))
+    if (-not (Test-StartRecordIsReason -Record $record -BootUtc $script:bootUtc)) { return }
+    foreach ($line in (Get-StartRecordLogLines -Record $record -Max $Lines)) { Write-StartConfirmLog "start record log: $line" }
 }
 function Format-Dpm { return "DpmMode $(Read-Parameter 'DpmMode') DpmMaxMHz $(Read-Parameter 'DpmMaxMHz') DpmPending $(Read-Parameter 'DpmPending') DpmConfirmed $(Read-Parameter 'DpmConfirmed') DpmLastMode $(Read-Parameter 'DpmLastMode') DpmLastReason $(Read-Parameter 'DpmLastReason')" }
 # A native program's stdout and stderr as one text, and its exit code (stderr stays text under Stop in 5.1).
@@ -122,11 +140,13 @@ if ($Probe) {
     Write-StartConfirmLog "probe: UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts')"
     Write-StartConfirmLog "probe: $(Format-Dpm)"
     Write-StartConfirmLog ('probe: fallback view: ' + (Get-FallbackView).text)
+    Write-StartRecordLog -Lines $script:StartRecordMaxLogLines
     try { Write-StartConfirmLog ('probe: start health ' + (Format-Reading (Read-Health))); exit 0 }
     catch { Write-StartConfirmLog "probe: start health no reading: $($_.Exception.Message)"; exit 5 }
 }
 
 Write-StartConfirmLog "start: bound $Seconds s, UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'), $(Format-Dpm)"
+Write-StartRecordLog
 $state = New-StartConfirmState $Seconds
 $pollEvery = 5.0
 $script:nextPoll = 0.0
@@ -204,7 +224,7 @@ $timer.Add_Tick({
 $timer.Start()
 [void]$form.ShowDialog()
 $timer.Dispose(); $form.Dispose()
-Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms)"
+Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc)"
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
 # whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
 # installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.

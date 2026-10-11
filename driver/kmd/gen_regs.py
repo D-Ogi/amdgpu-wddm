@@ -215,6 +215,9 @@ DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
 # BD-018: reference-derived readback; no timing/modeset writes.
 DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", "mmDP_DTO0_MODULO",
     "mmOTG0_PIXEL_RATE_CNTL", "mmOTG0_OTG_INTERLACE_CONTROL", "mmOTG0_OTG_V_TOTAL_CONTROL"]
+# BD-124: read the OTG-to-stream-to-enabled-backend route; no new write permission.
+DCN_TIMING_READ_REGISTERS += [f"mmDIG{n}_{r}" for n in range(2)
+    for r in ("DIG_FE_CNTL", "DIG_BE_CNTL", "DIG_BE_EN_CNTL")]
 DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
 # M15.14 (0.7.216.20): the plane's pixel format registers (plane_format.h), read at start to decode the firmware's
 # format and on restore to verify it; MPCC0_MPCC_CONTROL, CNVC_CFG0_FORMAT_CONTROL and CNVC_CFG0_ALPHA_2BIT_LUT
@@ -225,6 +228,9 @@ DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBP
     "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
 NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
+# BD-122 (GitHub #38): a refused inherited timing logs whether the firmware drove OTG1 instead of OTG0. Read only,
+# and already on the 75-register dump list, so the DCN read allow-list does not change.
+NAMED += [("DMU", "mmOTG1_OTG_CONTROL")]
 
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 

@@ -502,11 +502,22 @@ function Invoke-Verify {
     $probe = ''
     if (Test-Path -LiteralPath $sc) { $probe = (Invoke-Native powershell.exe @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $sc, '-Probe')).text }
     Write-Log $probe
-    $view = $null; if ($probe -match 'fallback view: (.+)') { $view = $Matches[1].Trim() }
+    # Each reading is taken from one whole line of the probe's log, it keeps the 'probe: ' prefix the probe writes,
+    # and it refuses any line that carries driver log text. BD-122 puts up to 64 raw driver log lines in this
+    # output, every one of them prefixed 'start record log: ', and a pattern that matched anywhere in the text
+    # could otherwise take its answer from a line the driver wrote (start-confirm.ps1 Write-StartRecordLog).
+    $view = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: fallback view: (.+)$') { $view = $Matches[1].Trim() }
+    # BD-122: the KMD's own reason for a start that did not reach a started device, which the probe reads from
+    # Parameters\StartRecord with no gate and without the driver. It names the step, the NTSTATUS and the last
+    # driver log lines, which a device with Code 43 can no longer answer for itself. The verdict below is the one
+    # it always was: this is the detail a tester sends us, not a new gate.
+    $record = $null; if ($probe -match '(?m)^(?!.*start record log: ).*\bstart record: (.+)$') { $record = $Matches[1].Trim() }
     $want = [string]$script:Manifest.kmd_abi
     $driverOk = ($null -ne $view) -and ($view -match 'device problem 0,') -and ($view -match 'LastStage 50$') -and ($view -match "driver version $want ")
-    Add-Result 'driver start' $driverOk $(if ($view) { $view } else { "no reading from $sc" })
-    $health = $null; if ($probe -match 'start health (.+)') { $health = $Matches[1].Trim() }
+    $detail = $(if ($view) { $view } else { "no reading from $sc" })
+    if (-not $driverOk -and $record) { $detail = "$detail; $record" }
+    Add-Result 'driver start' $driverOk $detail
+    $health = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: start health (.+)$') { $health = $Matches[1].Trim() }
     $hflags = $null; if ($health -match 'flags (\d+)') { $hflags = [int]$Matches[1] }
     Add-Result 'start health' (($null -ne $hflags) -and (($hflags -band 7) -eq 7)) $(if ($health) { "$health (15 = confirmed; 7 = full, ready, visible)" } else { 'no reading' })
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts

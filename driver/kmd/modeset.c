@@ -148,7 +148,9 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
     InterlockedExchange(&m->SourceWidth, (LONG)Device->Post.Width);
     InterlockedExchange(&m->SourceHeight, (LONG)Device->Post.Height);
 
-    if (m->Requested == BC250_DISPLAY_MODES_OFF)
+    if (Device->InheritedTmds)
+        GuardLog("display modes: TMDS inherited mode only; DP AUX and scaler programming skipped");
+    else if (m->Requested == BC250_DISPLAY_MODES_OFF)
         GuardLog("display modes: off (EnableDisplayModes %lu): no AUX access, no descriptor, one mode", requested);
     else if (Device->Mmio == NULL || !Device->DcnWriteEnabled)
         GuardLog("display modes: no EDID: EnableMmio and EnableDcnWrite must both be 1 (BAR5 %u, DCN write %u)",

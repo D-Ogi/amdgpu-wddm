@@ -93,6 +93,9 @@ try {
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
+ # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
+ # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
+ Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
@@ -227,6 +230,13 @@ try {
   @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
+  # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
+  @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
+  @{n='start-record-keeplog-gate';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-GateOnKeepLog');Fails=$true}
+  @{n='start-record-no-attempt';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoAttemptRecord');Fails=$true}
+  @{n='start-record-before-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordBeforeCleanup');Fails=$true}
+  @{n='start-record-any-irql';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordAtAnyIrql');Fails=$true}
+  @{n='start-record-log-after-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-LogAfterCleanup');Fails=$true}
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}

@@ -105,6 +105,12 @@ $rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-In
 $rr.text
 Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-owned: exit $($rr.code)"
 
+# BD-122: the readers of the KMD's start record, against the packaged installer (test-start-record.ps1 under 5.1,
+# HKCU scratch key). The driver's own half is the host test driver\kmd\test\run_start_record.ps1.
+$sr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-start-record.ps1'), '-Installer', (Join-Path $Package 'installer'))
+$sr.text
+Check ($sr.code -eq 0) "start record: step failure / guard refusal / started after a failure / absent: exit $($sr.code)"
+
 # D3D9 goes through D3D9On12: the D3D9 slot is empty in both views, and no stub is copied.
 Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
 Check ($r.text -match "would: .+ UserModeDriverName = '' \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot empty (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
@@ -372,6 +378,9 @@ Check ($r.code -eq 5) "probe on a PC without the driver: exit $($r.code) (5 = no
 Check ($r.text -match "probe: fallback view: device problem -1, driver version  \(expected $($m.kmd_abi)\), LastStage ") "probe: fallback view runs bc250kmd_cli info/stages; the built-in expected version is this release's kmd_abi $($m.kmd_abi)"
 Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
 Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
+# BD-122: the probe says why the last start failed, read from Parameters\StartRecord with no gate and without the
+# driver. This PC has no such key, so the probe must say that in plain words rather than print nothing.
+Check ($r.text -match 'start record: no record: this driver version does not keep one') 'probe: the start record is read and named, absent on a PC without the driver'
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
 Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm reads the start health through bc250control.dll, not the CLI'
 $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $Package 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json'))

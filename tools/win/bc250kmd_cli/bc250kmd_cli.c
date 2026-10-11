@@ -6,7 +6,9 @@
 //                                     hardware id (default PCI\VEN_1002&DEV_13FE, matched case-insensitively
 //                                     as a prefix); prints the reply, or exactly which call failed and its NTSTATUS
 //   bc250kmd_cli list                 every display adapter dxgkrnl knows, with its hardware id and LUID
-//   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
+//   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names,
+//                                     and the start record (BD-122): why the last start failed, which step, with
+//                                     the NTSTATUS and the driver log lines that ran up to it
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
 //   bc250kmd_cli health read|confirm  the cached start-health witness, and its checked confirmation
 //   bc250kmd_cli clock read|set       one KMD clock sample, or a complete operating-point transaction
@@ -103,6 +105,12 @@ static const char *StatusName(NTSTATUS s)
     case 0xC00000E5ul: return "STATUS_INTERNAL_ERROR";
     case 0xC01E0102ul: return "STATUS_GRAPHICS_DRIVER_MISMATCH";
     case 0xC01E0200ul: return "STATUS_GRAPHICS_ADAPTER_WAS_RESET";
+    // BD-122: what a step of the KMD's start path answers with, for the start record below.
+    case 0xC000009Aul: return "STATUS_INSUFFICIENT_RESOURCES";
+    case 0xC0000182ul: return "STATUS_DEVICE_CONFIGURATION_ERROR";
+    case 0xC0000184ul: return "STATUS_INVALID_DEVICE_STATE";
+    case 0xC0000483ul: return "STATUS_DEVICE_HARDWARE_ERROR";
+    case 0xC01E0100ul: return "STATUS_GRAPHICS_NO_VIDEO_MEMORY";
     default:           return "";
     }
 }
@@ -2524,6 +2532,62 @@ static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
     return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_DWORD, &type, value, &size) == ERROR_SUCCESS;
 }
 
+// BD-122: the KMD's reason for the last start that did not reach a started device, from
+// Parameters\StartRecord. LastStage 91 says only that a step of the start failed; this names the step, the
+// NTSTATUS, the time and the driver log lines that ran up to it. It is a registry read, so it answers on a
+// device with Code 43, which cannot answer an escape at all - that is the whole point of the record. Read only.
+static int ReadString(const WCHAR *key, const WCHAR *name, WCHAR *buffer, DWORD bytes)
+{
+    DWORD size = bytes, type = 0;
+    buffer[0] = 0;
+    return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_SZ, &type, buffer, &size) == ERROR_SUCCESS;
+}
+
+static void StartRecord(void)
+{
+    static const WCHAR *record = BC250_PARAMETERS L"\\StartRecord";
+    WCHAR result[32], step[96], sub[96], when[40], detail[400];
+    DWORD status = 0, stage = 0, starts = 0, version = 0;
+    int failure;
+
+    if (!ReadString(record, L"Result", result, sizeof(result))) {
+        printf("StartRecord  -  (no record: a KMD before 0.7.216.30, or no start has written one)\n");
+        return;
+    }
+    if (!ReadString(record, L"Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
+    if (!ReadString(record, L"SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
+    if (!ReadString(record, L"TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
+    (void)ReadDword(record, L"Status", &status);
+    (void)ReadDword(record, L"Stage", &stage);
+    (void)ReadDword(record, L"UnconfirmedStarts", &starts);
+    (void)ReadDword(record, L"Version", &version);
+    printf("StartRecord  %ls, step %ls / %ls, status 0x%08lX%s%s\n", result, step, sub, (unsigned long)status,
+           StatusName((NTSTATUS)status)[0] ? " " : "", StatusName((NTSTATUS)status));
+    printf("             stage %lu %s, at %ls, UnconfirmedStarts %lu, written by 0x%08lX\n", stage,
+           StageName(stage), when, starts, (unsigned long)version);
+    // Only a failure or a refusal carries a reason; the other results say so in one word and keep no lines.
+    failure = (_wcsicmp(result, L"failed") == 0 || _wcsicmp(result, L"guard") == 0);
+    if (!failure) {
+        printf("             %s\n", _wcsicmp(result, L"started") == 0
+               ? "the last start reached a started device: this is not a reason for anything"
+               : "the last start neither failed nor finished: see LastStage and StageHistory above");
+        return;
+    }
+    if (ReadString(record, L"Detail", detail, sizeof(detail)) && detail[0])
+        printf("             detail %ls\n", detail);
+    // The kept ring lines, oldest first, as one REG_MULTI_SZ. Bounded by the driver to 64 lines of 159
+    // characters; the buffer here holds more than that, and a longer value is simply read short.
+    {
+        WCHAR lines[64 * 160 + 2];
+        DWORD size = sizeof(lines), type = 0;
+        const WCHAR *p;
+
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, record, L"Log", RRF_RT_REG_MULTI_SZ, &type, lines, &size) != ERROR_SUCCESS)
+            return;
+        for (p = lines; *p; p += wcslen(p) + 1) printf("  log        %ls\n", p);
+    }
+}
+
 static int Stages(void)
 {
     HKEY key;
@@ -2552,6 +2616,10 @@ static int Stages(void)
         printf("StageHistory %ls\n", history);
     else
         printf("StageHistory -\n");
+
+    // BD-122: why the last start did not reach a started device, which the two lines above cannot say. Printed
+    // before the counter below, because that one decides this command's exit code and returns.
+    StartRecord();
 
     if (ReadDword(BC250_PARAMETERS, L"UnconfirmedStarts", &starts)) {
         printf("starts       %lu unconfirmed%s\n", starts,
