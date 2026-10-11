@@ -48,6 +48,8 @@ try {
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
  Check 'lab-runner-etw' { & pwsh -NoProfile -File "$repo\tools\win\lab-runner\etw\host-checks.ps1" }
+ # Windows PowerShell 5.1, the shell game-runtime.ps1 runs in on the lab: the channel before readiness, the intro skip.
+ Check 'lab-runner-intro' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-runner\intro-skip-check.ps1" }
  # The present-mode analyser of M15.14. Its fixtures are a kept excerpt of the composed baseline and dumper
  # texts the test writes itself; no .etl and no lab are needed. BC250_ETW_TEST_ETL adds the xperf path.
  Check 'present-mode' { & python "$repo\tools\win\etw\etw-present-mode-test.py" }

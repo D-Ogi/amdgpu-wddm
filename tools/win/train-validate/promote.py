@@ -12,6 +12,15 @@ two things that cost a round in train b27:
   is not a failure of the train: the step reports that the registered triplet is already this package's and
   runs the acceptance session only.
 
+and the one that cost a round in train b29, the first train of the suite with a new triplet: the install puts the
+package's files in `<InstallRoot>\\d3d12`, and the attempt's Capture verifies the ACCEPTED triplet there before it
+swaps the candidate in (train b27 met that refusal by hand). The documented route is a putback: the accepted
+files go back in place first, the attempt swaps the package files in and retains them. The accepted files come
+from the local package of the attempt that promoted them (`lab-baseline.json` d3d12.source_attempt), or from any
+other attempt package that holds the accepted bytes; `stage.py` sends them and proves the copy, and
+`lab/d3d12-putback.ps1` keeps the release file as `<name>.release`, puts the accepted file in place, and after
+the promotion deletes the `.release` copy that the attempt made redundant.
+
 After the acceptance the lab baseline must name this package. `release-baseline.py --keep-accepted-d3d12`
 re-pins it without touching the triplet block the promotion just wrote.
 """
@@ -40,6 +49,33 @@ class Prepared:
     accepted: dict
     candidate: dict
     note: str
+    # name -> the local copy of the accepted file that the putback sends; names with no copy are in `missing`
+    putback: dict | None = None
+    missing: list | None = None
+
+
+# The fallback search for an accepted file reads this many of the newest attempt packages, so that a plan stays
+# fast on a workspace with hundreds of attempts.
+SEARCH_ATTEMPTS = 60
+
+
+def accepted_copies(directory: Path, accepted: dict, candidate: dict, source_attempt: str) -> tuple[dict, list]:
+    """The local file of each accepted name that the package replaces, by its bytes, and the names with none."""
+    wanted = {name: accepted[name].upper() for name in NAMES
+              if accepted.get(name) and accepted.get(name, "").upper() != candidate.get(name, "").upper()}
+    found: dict[str, str] = {}
+    numbered = sorted((int(m.group(1)), child) for child in (directory.iterdir() if directory.is_dir() else ())
+                      if child.is_dir() and (m := ATTEMPT.match(child.name)))
+    order = [directory / source_attempt] if source_attempt else []
+    order += [child for _, child in reversed(numbered[-SEARCH_ATTEMPTS:]) if child.name != source_attempt]
+    for attempt in order:
+        for name, sha in wanted.items():
+            path = attempt / "package" / name
+            if name not in found and path.is_file() and sha256(path) == sha:
+                found[name] = path.as_posix()
+        if len(found) == len(wanted):
+            break
+    return found, [name for name in wanted if name not in found]
 
 
 def attempts_dir(plan: Plan) -> Path:
@@ -76,10 +112,13 @@ def prepare(plan: Plan, arm: dict, clean: bool = True) -> Prepared:
             path = Path(template)
         candidate[name] = sha256(path) if path.is_file() else ""
     accepted = {}
+    block = {}
     if baseline_path(plan).is_file():
         block = json.loads(baseline_path(plan).read_text(encoding="utf-8")).get("d3d12") or {}
         accepted = dict(block.get("accepted") or {})
     already = bool(accepted) and all(accepted.get(name) == candidate.get(name) for name in NAMES)
+    putback, missing = ({}, []) if already or not accepted else \
+        accepted_copies(directory, accepted, candidate, str(block.get("source_attempt") or ""))
     wanted = [arm.get("attempt_name"), arm.get("check_attempt_name")]
     if not all(wanted):
         wanted = next_attempt(directory)
@@ -104,9 +143,16 @@ def prepare(plan: Plan, arm: dict, clean: bool = True) -> Prepared:
         path.rename(spare / f"{name}-{stamp}")
         moved.append((spare / f"{name}-{stamp}").as_posix())
     notes.insert(0, "the package triplet is the accepted triplet: only the acceptance session runs"
-                 if already else "the package triplet differs from the accepted one: stage, session, accept")
+                 if already else "the package triplet differs from the accepted one: putback, stage, session, accept")
+    if putback:
+        notes.append("putback of " + ", ".join(f"{name} {accepted[name][:8]} from {path}"
+                                               for name, path in putback.items()))
+    if missing:
+        notes.append("NO local copy of the accepted " + ", ".join(f"{name} {accepted[name][:8]}" for name in missing)
+                     + ": the putback fails until one is in an attempt package")
     return Prepared(attempt=wanted[0], check_attempt=wanted[1], moved_aside=moved, already_accepted=already,
-                    accepted=accepted, candidate=candidate, note="; ".join(notes))
+                    accepted=accepted, candidate=candidate, note="; ".join(notes), putback=putback,
+                    missing=missing)
 
 
 def steps(plan: Plan, arm: dict, prepared: Prepared, python: str) -> list[PlannedStep]:
@@ -122,6 +168,18 @@ def steps(plan: Plan, arm: dict, prepared: Prepared, python: str) -> list[Planne
     def lab(argv, timeout=bound + grace):
         out.append(PlannedStep([python, *argv], timeout, "run"))
 
+    putback = prepared.putback or {}
+    missing = prepared.missing or []
+    if not prepared.already_accepted and (putback or missing):
+        staged = plan.values["lab_root"].rstrip("\\") + "\\d3d12-accepted"
+        script = f"{plan.values['kit']}/d3d12-putback.ps1"
+        expect = ";".join(f"{name}={prepared.accepted[name].upper()}" for name in NAMES if name in putback or
+                          name in missing)
+        # A missing copy is named as a path that does not exist, so `stage.py` stops the arm with the name in it
+        # and nothing on the lab changes.
+        sources = list(putback.values()) + [f"{caps}/attempts/NO-LOCAL-COPY-OF-ACCEPTED-{name}" for name in missing]
+        host([f"{plan.values['repo']}/tools/win/train-validate/stage.py", "--to", staged, *sources], 1200)
+        lab([plan.values["target"], "ps", script, "-Step", "putback", "-Source", staged, "-Expect", expect], 120)
     if not prepared.already_accepted:
         triplet = []
         for key in ("shell", "engine", "icd"):
@@ -134,6 +192,8 @@ def steps(plan: Plan, arm: dict, prepared: Prepared, python: str) -> list[Planne
         lab([f"{caps}/close-attempt.py", prepared.attempt], 300)
         host([f"{caps}/promote-d3d12.py", "accept", "--attempt", prepared.attempt])
         host([f"{caps}/promote-d3d12.py", "accept", "--attempt", prepared.attempt, "--apply"])
+        if putback:
+            lab([plan.values["target"], "ps", f"{plan.values['kit']}/d3d12-putback.ps1", "-Step", "clean"], 120)
     host([f"{caps}/promote-d3d12.py", "stage-check", "--attempt", prepared.check_attempt])
     lab([f"{caps}/run-slot.py", prepared.check_attempt])
     lab([f"{caps}/close-attempt.py", prepared.check_attempt], 300)
@@ -156,5 +216,9 @@ def attach(plan: Plan, arm, python: str, clean: bool = True) -> Prepared:
     wanted = ["functional-restored", "files verified"]
     if not prepared.already_accepted:
         wanted = ["promoted-retained", *wanted]
+    if not prepared.already_accepted and (prepared.putback or prepared.missing):
+        wanted = ["stage OK", "d3d12 putback OK", *wanted]
+        if prepared.putback:
+            wanted.append("d3d12 clean OK")
     arm.arm["expect_all"] = wanted
     return prepared

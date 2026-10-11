@@ -583,6 +583,15 @@ class Runner:
                     where = "" if step.phase == "run" else f" of the {step.phase} step"
                     record.reason = (f"no end within {step.timeout_s} s (bound {arm.bound_s} s){where}"
                                      if done.timed_out else f"rc {done.rc}{where}")
+                    said = [line.strip() for line in done.text.splitlines() if line.strip()]
+                    if step.phase == "pre" and not done.timed_out and said:
+                        # A pre step that refuses the arm says why in its last line (the memory admission of
+                        # a game arm: 'carve-out too large for games'). The reader gets it without the file.
+                        record.reason += ": " + said[-1]
+                    drive = [line for line in said if line.startswith("[drive] FAILED")]
+                    if step.phase == "run" and drive:
+                        # game-drive.py says why it ended the session ('menu not left').
+                        record.reason += ": " + drive[-1][len("[drive] "):]
                     failed = True
         finally:
             if sampler:
@@ -722,6 +731,9 @@ class Runner:
                     self.writer(f"[arm ] {arm.id} ({arm.bound_s} s bound, {why})")
                 else:
                     self.writer(f"[arm ] {arm.id} ({arm.bound_s} s bound)")
+                if arm.arm.get("operator_line"):
+                    # What the operator watches or reads while this arm runs (the RotTR score, b29 548).
+                    self.writer(f"[oper] {arm.id}: {arm.arm['operator_line']}")
                 if self._stalled():
                     self.records.append(self._skip(arm, "the run halted: " + self.halted))
                     continue

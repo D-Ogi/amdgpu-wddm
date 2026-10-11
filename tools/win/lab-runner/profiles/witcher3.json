@@ -32,7 +32,7 @@
     "counters": ["witcher3"],
     "etw": ["witcher3"]
   },
-  "readiness": {"mode": "witcher3-menu"},
+  "readiness": {"mode": "witcher3-menu", "intro_skip": {"key": "39", "every_seconds": 4, "after_window_seconds": 10, "max_presses": 40}},
   "modules": ["d3d12.dll", "d3d12core.dll", "dxgi.dll", "d3d11.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll",
               "amdgpu_wddm_radv.dll", "bc250d3d.dll", "bc250umd.dll", "vulkan-1.dll", "vulkan_radeon.dll",
               "sl.interposer.dll", "libxess.dll", "amd_fidelityfx_dx12.dll"],
@@ -51,6 +51,7 @@
   "session": {"default_seconds": 420, "entry": "run-m157.sh N low|high|high-rt [SECONDS] (presets, settings checks); run-game.sh refuses this profile"},
   "notes": [
     "Every value here is what game-runtime.ps1, watch.ps1 and kmdlog-stream.ps1 hardcoded before the game runner (native-caps001 templates of 2026-10-01 17:44Z).",
-    "readiness witcher3-menu: the settings-write cue, the E menu pass, the grid transition, the scripted walk without interactive control, and the control channel only after the transition."
+    "readiness witcher3-menu: the settings-write cue, the E menu pass, the grid transition, the scripted walk without interactive control, and the control channel only after the transition, with intro keys only (Space, Esc, Enter) before it.",
+    "readiness.intro_skip: Space every 4 s from 10 s after the first window until the menu cue or readiness, at most 40 presses; in 549 the intro video waited for Space from about 78 s to 183 s."
   ]
 }

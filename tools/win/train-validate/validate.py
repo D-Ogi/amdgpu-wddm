@@ -295,13 +295,18 @@ def command_summary(args: argparse.Namespace) -> int:
         return 2
     plan = manifest.build(package, data, out_dir=out_dir, attempt_base=attempt_base(args, data),
                           python=sys.executable, for_run=False)
-    values = {}
+    # Operator values persist in the out directory, so that a later --set for one arm does not drop the value
+    # an earlier call recorded for another.
+    values_path = out_dir / "operator-values.json"
+    values = json.loads(values_path.read_text(encoding="utf-8")) if values_path.exists() else {}
     for pair in args.set or ():
         key, _, value = pair.partition("=")
         try:
             values[key] = float(value)
         except ValueError:
             values[key] = value
+    if args.set:
+        values_path.write_text(json.dumps(values, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     text = summary_module.write(plan, records, out_dir, operator_values=values, train=args.train)
     (out_dir / "RESULTS.md").write_text(text, encoding="utf-8", newline="\n")
     print(text)
