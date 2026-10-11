@@ -326,7 +326,7 @@ int main(void)
     mock_seq=completed=reported=dispatches=failures=0; mock_now=100;
     armed=1; refuse=0; root_wait=0;
     w.SubmitBudgetMs=12000; w.SubmitTickMs=250;
-    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,1,0));
+    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,1,0,0));
     mock_now+=2500000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
     { BC250_SUBMIT_WATCHDOG saved=w.SubmitWatchdog;
       LONG primes=w.SubmitPrimes,activity=w.SubmitActivityChanges,gaps=w.SubmitGapResets;

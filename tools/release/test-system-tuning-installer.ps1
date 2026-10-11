@@ -107,7 +107,7 @@ Assert ($clock.Elapsed.TotalSeconds -lt 8) 'Child timeout or drain exceeded its 
 # Run the actual uninstall script with a fake host. A declined removal must stop before every mutation.
 $decline = Join-Path $outRoot ('decline-' + [Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory((Join-Path $decline 'installer'))
-foreach ($name in 'uninstall.ps1','system-tuning.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "installer\$name") -Destination (Join-Path $decline "installer\$name") }
+foreach ($name in 'uninstall.ps1','system-tuning.ps1','components.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "installer\$name") -Destination (Join-Path $decline "installer\$name") }
 [IO.File]::WriteAllText((Join-Path $decline 'installer\mft-h264.ps1'), '# empty fixture')
 $fakeCommon = @'
 $script:SoftwareKey='HKLM:\SOFTWARE\unused-test-key'
