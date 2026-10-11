@@ -6,7 +6,9 @@
 #                      (<InstallRoot>\installer\uninstall.ps1, -Yes -KeepTestSigning -NoReboot -Force), then the
 #                      inventory
 #   -Step inventory  : what of ours is still on the machine (files, registry, driver store, tasks, certificates)
-#   -Step install    : install.ps1 of the package, fresh (-Force -AcceptTestSigning -NoReboot -CuMode 40);
+#   -Step install    : install.ps1 of the package, fresh (-Force -AcceptTestSigning -NoReboot -NoComponents -NoModels
+#                      -CuMode 40). Without the two "No" switches a non-interactive run takes the extras question's
+#                      default, yes, and downloads llama.cpp and Ollama (tester.28 and later);
 #                      -Repair installs the same version again over itself (the update/in-use replace path)
 # The restarts between the steps are separate calls (restart-now.ps1).
 param([Parameter(Mandatory = $true)][ValidateSet('uninstall', 'inventory', 'install')][string]$Step,
@@ -104,7 +106,7 @@ switch ($Step) {
         if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
         Expand-Archive "$pkg.zip" -DestinationPath $root -Force
         $extra = @(); if ($Repair) { $extra += '-Repair' }
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkg\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-Object -Last 30
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkg\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -NoComponents -NoModels -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-Object -Last 30
         "install exit $LASTEXITCODE"
         '--- after install'
         Inventory
