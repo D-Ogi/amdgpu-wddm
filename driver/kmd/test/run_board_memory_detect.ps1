@@ -1,5 +1,5 @@
 param([Parameter(Mandatory=$true)][string]$Root,[Parameter(Mandatory=$true)][string]$Out,
- [ValidateSet('none','ambiguous','rtc','checksum')][string]$Mutation='none')
+ [ValidateSet('none','legacy','rtc','checksum')][string]$Mutation='none')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot/../../..").Path
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -8,9 +8,9 @@ $env:TEMP=$Out;$env:TMP=$Out
 $detector=Get-Content -Raw "$repo/driver/kmd/board_memory_detect.c"
 $anchor='';$replacement=''
 switch($Mutation) {
- 'ambiguous' {$anchor='if (passes != 1)';$replacement='if (passes == 0)'}
- 'rtc' {$anchor='if (!rtc_progress(mapping)) continue;';$replacement='(void)rtc_progress(mapping);'}
- 'checksum' {$anchor='!bc250_uma_validate(candidate)) continue;';$replacement='0) continue;'}
+ 'legacy' {$anchor='{BC250_UMA_MAPPING_EXTENDED_PORT}';$replacement='{BC250_UMA_MAPPING_SLOT}'}
+ 'rtc' {$anchor='if (!rtc_progress()) return 0;';$replacement='(void)rtc_progress();'}
+ 'checksum' {$anchor='!bc250_uma_validate(candidate)) return 0;';$replacement='0) return 0;'}
 }
 if($Mutation -ne 'none') {
  if($detector.Split(@($anchor),[StringSplitOptions]::None).Count -ne 2){throw 'Mutation anchor changed'}
