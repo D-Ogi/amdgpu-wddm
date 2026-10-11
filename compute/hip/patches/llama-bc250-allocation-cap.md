@@ -10,4 +10,10 @@ Run test-llama-allocation-cap.ps1 -Source <patched-source> -Out <host-output> fo
 
 The cap is the largest 256 KiB-aligned value below 4 GiB. It preserves placement and allocation flags. Other resource pressure can still cause allocation failure below it.
 
-Unit A completes Gemma 12B with this candidate. See the [measured record](../../../evidence/m16/hip-allocation-cap-2026-10-11/README.md). The current HIP build disables GPU Flash Attention. Use `-fa off` or allow automatic selection. Forcing `-fa on` can retain unsupported operations and add CPU fallback. The benchmark's requested FA column does not certify GPU execution.
+Unit A completes Gemma 12B with backend FB0E315E. See the [measured record](../../../evidence/m16/hip-allocation-cap-2026-10-11/README.md). That measured backend disables GPU Flash Attention. Use `-fa off` or automatic selection with that artifact. Forcing `-fa on` can retain unsupported operations and add CPU fallback. The benchmark's requested FA column does not certify GPU execution.
+
+New builds enable Flash Attention and use the source's default quant types. The build script overrides the old cache's FA exclusion. It refuses compiler flags that disable FA. Add `-ValidationTools` to build `test-backend-ops`, `llama-completion`, `llama-bench` and `llama-perplexity`. Run `test-llama-build-options.ps1 -Out <host-output>` for the build-option controls. They invoke the builder with a recording CMake fixture and make no compiler or GPU call.
+
+The FA candidate now has measured operation, timing and templated-answer controls. See the [FA record](../../../evidence/m16/hip-allocation-cap-2026-10-11/fa-addendum.md) for exact scope and artifact hashes. TinyLlama passes the bounded whole-model comparison in both FA modes. Gemma remains unsuitable as this comparison's correctness gate because the reference backends also disagree. That observation does not exclude a HIP defect.
+
+The broad `FLASH_ATTN_EXT`, `MUL_MAT` and `SOFT_MAX` inventories remain unrun. Unsupported and skipped cases are not passes. Use each instruction model's chat template for text acceptance. Distinguish the final response from thought text. The [independent reference](../../../evidence/m16/hip-allocation-cap-2026-10-11/oracle-addendum.md) retains the earlier raw-prompt results as history.

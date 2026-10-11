@@ -1,0 +1,38 @@
+{
+  "scope": "Actual builder with recording CMake shim; no compiler or GPU executed",
+  "builder_sha256": "079C29AA941F5A625A52B441F1658CAF0BF7E259F25DF6D53E95328CB9AE15F2",
+  "cases": [
+    {
+      "message": "",
+      "refused": false,
+      "name": "normal",
+      "passed": true
+    },
+    {
+      "message": "",
+      "refused": false,
+      "name": "cap",
+      "passed": true
+    },
+    {
+      "message": "The input cache disables Flash Attention in compiler flags. Remove GGML_CUDA_NO_FA from the build configuration.",
+      "refused": true,
+      "name": "input-no-fa",
+      "passed": true
+    },
+    {
+      "message": "Configured cache does not enable Flash Attention. No build was started.",
+      "refused": true,
+      "name": "existing-no-fa",
+      "passed": true
+    },
+    {
+      "message": "Use an original cache without BC250_HIP_MAX_ALLOC_BYTES. Enable the cap only with -Bc250AllocationCap.",
+      "refused": true,
+      "name": "input-cap",
+      "passed": true
+    }
+  ],
+  "test_script_sha256": "c78a262337cced6943602d8626447a6ddd10b8a7dc5300d7ae642a810d5dfbdb",
+  "source_sha256": "e8aa8a321a4afcedc14dc50521a82fec1389023957fb24506bef7cf7fefa05e0"
+}
