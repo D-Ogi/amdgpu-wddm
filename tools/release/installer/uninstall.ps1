@@ -4,13 +4,16 @@
 # the installer turned it on). A restart finishes the removal of files that DWM still has loaded.
 # -Force removes the release also from a development-lab machine (as install.ps1 -Force installs on one); the lab's
 # own folders (C:\BC250\m10, m14, m15) are not ours to remove and stay.
+# The extras (llama.cpp, Ollama) go with the install root, and every registration they made is removed. The models
+# that were downloaded are the user's own data and stay: -RemoveModels deletes them too.
 [CmdletBinding()]
-param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force)
+param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force, [switch]$RemoveModels)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 . (Join-Path $here 'mft-h264.ps1')
+. (Join-Path $here 'components.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -51,6 +54,14 @@ if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not $pkgs.Count) 
     Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0
 }
 if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
+
+Write-Step 'Extras: llama.cpp, Ollama'
+# First, while its own folder is still there, each extra undoes what it registered itself; then the registrations the
+# installer made for it. Its files go with the install root further down.
+$componentManifest = $null
+try { $componentManifest = Read-ComponentsManifest $here } catch { Write-Log "   components.json: $($_.Exception.Message)" }
+Invoke-ComponentUnregister $state $componentManifest
+Remove-ComponentRegistrations $state
 
 Write-Step 'Scheduled task, RunOnce entry, shortcut'
 # Every task of ours, not only the one this release registers: a task that an older release named differently would
@@ -250,6 +261,9 @@ if (-not $fwExisted) {
     }
 } else { Write-Info "$($script:FirmwareInstallDir) was there before the install: kept" }
 
+Write-Step 'Downloaded models'
+Remove-ComponentModels $state ([bool]$RemoveModels)
+
 Write-Step 'Certificate'
 $thumb = $null
 if ($state -and $state.cert_thumbprint) { $thumb = $state.cert_thumbprint }
@@ -311,6 +325,7 @@ if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the c
 # support report reads it from. Reads only, and a probe that cannot read says so instead of claiming the item is gone.
 Write-Step 'What is left of this release'
 $footprint = @(Get-ReleaseFootprint -InstallRoot $root -State $state -MftKeys @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey))
+$footprint += @(Get-ComponentFootprint $state ([bool]$RemoveModels))
 foreach ($f in $footprint) {
     $mark = 'gone'
     if (-not $f.known) { $mark = 'UNKNOWN' } elseif ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }

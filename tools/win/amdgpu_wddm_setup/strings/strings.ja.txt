@@ -168,6 +168,8 @@ stage.firmware|mt-safe|46d4dd63|GPU ファームウェア
 stage.files|mt-safe|3ffd2d35|ドライバー ファイル
 stage.driver|mt-safe|fc465aa6|グラフィックス ドライバー
 stage.settings|mt-safe|74a883a0|設定
+stage.extras|mt-safe|800ae5e9|追加プログラム
+stage.components|mt-safe|5f69dcb7|追加プログラムのインストール
 stage.finish|mt-safe|0052205c|仕上げ
 stage.verify|mt|11d4d5ab|ドライバーの確認
 stage.prepare-check|mt|0f35d10d|セットアップ ファイルとフォルダー

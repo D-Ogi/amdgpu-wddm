@@ -399,7 +399,19 @@ namespace AmdgpuWddmSetup
             var mode = run != null && run.Mode != null ? run.Mode : (_flow == "prepare" ? "prepare-offline" : "run");
             var action = run != null && run.Decision != null ? run.Decision.Action : null;
             var expected = EngineRun.ExpectedStages(mode, action).ToList();
-            foreach (var s in run == null ? new List<string>() : run.Stages) if (!expected.Contains(s)) expected.Add(s);
+            // A stage the fixed list does not know (an optional one, such as the extras of install.cmd) goes where the
+            // run actually reached it: right after the stage before it. Appending it at the end would put the current
+            // stage last and mark every real stage as finished (the index arithmetic below reads the order).
+            int at = -1;
+            foreach (var s in run == null ? new List<string>() : run.Stages)
+            {
+                int known = expected.IndexOf(s);
+                if (known >= 0) { at = known; continue; }
+                at = at + 1;
+                if (at < 0) at = 0;
+                if (at > expected.Count) at = expected.Count;
+                expected.Insert(at, s);
+            }
             int current = run == null || run.CurrentStage == null ? -1 : expected.IndexOf(run.CurrentStage);
             for (int i = 0; i < expected.Count; i++)
             {

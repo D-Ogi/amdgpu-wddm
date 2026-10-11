@@ -168,6 +168,8 @@ stage.firmware|mt-safe|46d4dd63|GPU 펌웨어
 stage.files|mt-safe|3ffd2d35|드라이버 파일
 stage.driver|mt-safe|fc465aa6|그래픽 드라이버
 stage.settings|mt-safe|74a883a0|설정
+stage.extras|mt-safe|800ae5e9|추가 프로그램
+stage.components|mt-safe|5f69dcb7|추가 프로그램 설치
 stage.finish|mt-safe|0052205c|마무리
 stage.verify|mt|11d4d5ab|드라이버 확인
 stage.prepare-check|mt|0f35d10d|설치 파일과 폴더

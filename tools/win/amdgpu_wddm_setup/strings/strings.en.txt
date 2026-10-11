@@ -170,6 +170,8 @@ stage.firmware|src|-|GPU firmware
 stage.files|src|-|Driver files
 stage.driver|src|-|Graphics driver
 stage.settings|src|-|Settings
+stage.extras|src|-|Extra programs
+stage.components|src|-|Installing the extra programs
 stage.finish|src|-|Finishing
 stage.verify|src|-|Checking the driver
 stage.prepare-check|src|-|Setup files and folder

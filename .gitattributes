@@ -52,3 +52,7 @@ tools/win/etw/testdata/*.txt -text
 # byte. Line-ending normalization would break those sums on checkout. This rule is the last
 # match, so it also holds the .hip fixtures of that directory byte for byte.
 compute/hip/tests/data/** -text
+
+# The Ollama patches are applied with git apply to an upstream tree whose CMakeLists.txt has CRLF lines, and
+# compute/ollama/build-ollama.ps1 records the SHA-256 of each patch: they are stored byte for byte.
+compute/ollama/patches/** -text

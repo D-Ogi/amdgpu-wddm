@@ -64,7 +64,10 @@ else { $r = Invoke-Ps51 @((Join-Path $download 'installer\prepare-offline.ps1'),
 $j = Get-Content -LiteralPath $res1 -Raw | ConvertFrom-Json
 $ev = @(Get-Content -LiteralPath $ev1 | ForEach-Object { $_ | ConvertFrom-Json })
 Check (($r.code -eq 0) -and ($j.outcome -eq 'prepared') -and ($j.invocation -eq 'prepare-1') -and ($j.mode -eq 'prepare-offline') -and -not $j.mutated) "prepared ($($j.message_id)); not an install action"
-Check ((($ev | Where-Object { $_.type -eq 'stage' } | ForEach-Object { $_.id }) -join ',') -eq 'prepare-check,firmware,copy,finish') 'stages: prepare-check, firmware, copy, finish'
+# The extras stage (installer\components.ps1) appears only when this release has an extra with a pinned download or
+# the run asked for one; a release whose component zips are not yet release assets has the four stages it always had.
+$stageIds = (($ev | Where-Object { $_.type -eq 'stage' } | ForEach-Object { $_.id }) -join ',')
+Check ($stageIds -in @('prepare-check,firmware,copy,finish', 'prepare-check,firmware,components,copy,finish')) "stages: $stageIds"
 $set = Get-Content -LiteralPath (Join-Path $prepared 'offline-set.json') -Raw | ConvertFrom-Json
 Check (($set.schema -eq 'amdgpu-wddm.offline-set/1') -and ($set.version -eq $ver) -and (@($set.firmware.files).Count -eq @($m.firmware.files).Count)) "offline-set.json: $($set.schema), $($set.version), $(@($set.firmware.files).Count) firmware files"
 $okFiles = @($m.files | Where-Object { (Get-FileHash -LiteralPath (Join-Path $prepared ($_.path -replace '/', '\')) -Algorithm SHA256).Hash -eq $_.sha256 }).Count
@@ -74,7 +77,9 @@ Remove-Item -LiteralPath (Split-Path $download) -Recurse -Force
 Check (-not (Test-Path -LiteralPath $download)) 'the original download is removed'
 
 '[G-OFF] install from the prepared folder, network unavailable'
-$r = Invoke-Ps51 @((Join-Path $prepared 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') -Offline
+# -NoComponents: the extras of a folder prepared without a network were not prepared either (the stage above says
+# so), and their licence and download addresses would break the "no address is tried" check below.
+$r = Invoke-Ps51 @((Join-Path $prepared 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents') -Offline
 Check ($r.code -eq 0) "dry run from the prepared folder: exit $($r.code)"
 Check (($r.text -match [regex]::Escape("firmware: the folder of this package, $prepared\firmware (no download)")) -and ($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256')) 'the firmware comes from the folder''s own firmware\, every SHA256 checked in the preflight'
 Check (($r.text -match [regex]::Escape("would: stage the continuation closure: every file of this package and the firmware folder $prepared\firmware")) -and ($r.text -notmatch 'https://') -and ($r.text -notmatch 'network unavailable')) 'the folder and its firmware are staged into the closure; no address is tried'
@@ -105,7 +110,8 @@ Remove-Item -LiteralPath (Join-Path $kept 'offline-set.json')
 [IO.File]::WriteAllText((Join-Path $state 'packages\index.json'), ([ordered]@{ schema = 'amdgpu-wddm.repair-sets/1'; active = [ordered]@{ version = $ver; dir = $kept; firmware_complete = $true } } | ConvertTo-Json))
 [IO.File]::WriteAllText((Join-Path $state 'state.json'), ([ordered]@{ schema = 1; phase = 'verified'; package_version = $ver; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z' } | ConvertTo-Json))
 Remove-Item -LiteralPath $prepared -Recurse -Force
-$r = Invoke-Ps51 @((Join-Path $kept 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair') -Offline -StateDir $state
+# -NoComponents: as above, this case is about the kept set's own firmware and its closure.
+$r = Invoke-Ps51 @((Join-Path $kept 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair', '-NoComponents') -Offline -StateDir $state
 Check ($r.code -eq 0) "repair dry run from the kept set: exit $($r.code)"
 Check (($r.text -match "repairing $([regex]::Escape($ver)) \(-Repair, phase verified\)") -and ($r.text -match 'this run starts from its continuation closure') -and ($r.text -match [regex]::Escape("firmware: the folder of this package, $kept\firmware (no download)"))) 'repair: the kept set is its own closure and carries the firmware'
 Check (($r.text -notmatch 'https://') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit')) 'repair: phase 2 again, no download, no test-signing change'

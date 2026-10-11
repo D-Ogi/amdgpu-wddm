@@ -72,6 +72,26 @@ installer always writes its own values: the file paths, the graphics registratio
 
 "Test Mode" is shown in the lower-right corner of the desktop while test signing is on. This is normal.
 
+## The extras: llama.cpp, Ollama and the models
+
+Before phase 1 the installer asks whether it shall also install the two programs that run language models on the
+board: our build of llama.cpp and our build of Ollama. The answer `yes` is the default, so Enter is enough. After
+the two questions it shows a short list of models with their size and their licence. The answer for the models is
+none.
+
+Both programs go into `C:\Program Files\amdgpu-wddm\tools`. The model files go into
+`C:\Users\Public\Documents\amdgpu-wddm\models`. Every download is checked against the SHA-256 in this package. A
+download that does not match is refused, and the driver installation goes on without it.
+
+Ollama keeps models in its own format, in `%LOCALAPPDATA%\bc250-ollama\models`, so a model chosen while both
+programs are installed is downloaded twice and kept twice. The question gives both numbers and the sum. Use
+`bc250-ollama.cmd` in the Ollama folder to talk to our Ollama server. A bare `ollama.exe` uses the Ollama
+defaults.
+
+An installation without a window uses `-Components llama,ollama` or `-NoComponents`, and `-Models gemma12b` or
+`-NoModels`. `uninstall.cmd` removes the programs and keeps the models. `uninstall.cmd -RemoveModels` removes the
+models as well. The page `docs/testing/llm-components.md` of the project has the whole list of switches.
+
 ## GPU firmware
 
 The driver loads eight AMD firmware files from `C:\BC250\firmware`. This package does not contain them. The

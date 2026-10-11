@@ -157,7 +157,11 @@ namespace AmdgpuWddmSetup
         // Whether the run may have changed this PC, as far as the events tell (a missing result cannot say more).
         public bool MayHaveChanged { get { return InstallActionSeen || RealSteps > 0; } }
 
-        // The stages a run of this mode goes through, in order, for the progress list.
+        // The stages a run of this mode goes through, in order, for the progress list. The optional stages are not
+        // here: 'extras' and 'components' (the llama.cpp and Ollama extras of install.cmd) happen only when a run can
+        // choose an extra, which this window's own runs cannot - it has no control for them and consents to nothing
+        // its command line did not name. A run that does reach them (a command line with -Components) reports them as
+        // stage events, and SetupForm puts such a stage into the list where the run reached it.
         public static string[] ExpectedStages(string mode, string action)
         {
             if (mode == "prepare-offline") return new[] { "prepare-check", "firmware", "copy", "finish" };
