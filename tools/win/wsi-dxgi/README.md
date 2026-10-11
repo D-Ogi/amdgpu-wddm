@@ -82,7 +82,7 @@ the loader behaviour.
 | Policy | What it does |
 |---|---|
 | `plain` | The route as the DXGI WSI would run it. System32 modules by full path and an explicit adapter |
-| `seal` | `plain` plus the proposed seal. It rebinds the import tables of the System32 graphics modules to System32 modules that are already loaded, and it redirects bare-name loader calls made from those modules. It loads nothing itself |
+| `seal` | `plain` plus the proposed seal. It rebinds the graphics import tables to System32 modules that are already loaded. It redirects bare-name loader calls from those modules. It loads nothing itself |
 
 The route is one System32 `CreateDXGIFactory2`, `EnumAdapterByLuid` on the wanted LUID, a presenter and a
 producer D3D11 device on that adapter, an NT shared texture, a cross-device shared fence, a DirectComposition
