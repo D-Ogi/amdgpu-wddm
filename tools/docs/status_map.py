@@ -823,6 +823,7 @@ def umd_metric(kits: Path | None, prior: dict | None) -> dict:
             ("Device core", "D3D12DDI_TABLE_TYPE_DEVICE_CORE"),
             ("Command list", "D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D"),
             ("Command queue", "D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D"),
+            ("Render pass", "D3D12DDI_TABLE_TYPE_0043_RENDER_PASS"),
             ("Extended features", "D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES"))]
     missing = sorted(set(case_type) - {t for _, _, t in tables})
     if missing:
@@ -908,6 +909,10 @@ def umd_metric(kits: Path | None, prior: dict | None) -> dict:
     # Command queue and extended features: the shell's fill functions behind the wrapping thunks.
     queue_fill = body_of(index, "fill_native_queue_table", "driver/umd/d3d12/native-queue-ddi.cpp")
     per_table["Command queue"] = {m: (rhs_function(r), f) for m, r, f in scan(queue_fill, "candidate")}
+    # Render pass: engine-ddi's own two slots, behind no entry thunk. The shell fills this table only while the
+    # engine reports a render pass tier; the map judges the functions the table holds when it is filled.
+    pass_fill = body_of(index, "fill_render_pass", "driver/umd/d3d12/engine-ddi/context.cpp")
+    per_table["Render pass"] = {m: (rhs_function(r), f) for m, r, f in scan(pass_fill, "table")}
     ext_fill = body_of(index, "fill_native_extended_table", "driver/umd/d3d12/native-queue-ddi.cpp")
     ext_agg = re.search(r"\*\s*output\s*=\s*\{([^{}]+)\}", ext_fill.body).group(1)
     per_table["Extended features"] = {}
