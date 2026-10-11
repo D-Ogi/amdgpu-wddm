@@ -1,0 +1,32 @@
+utc 2026-10-11T08:10:19Z
+exe sha256 CD1BBE921CAF4CF3283D181B1CB5FEE06FD02A67772A45F86A78CBB6AAA40E4E
+exe signature Valid CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US
+== DeviceGuard state
+VirtualizationBasedSecurityStatus 0
+SecurityServicesConfigured 0
+SecurityServicesRunning 0
+AvailableSecurityProperties 4,5,7,8
+RequiredSecurityProperties 0
+== our kernel driver
+path C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_810db37880a25e66\bc250kmd.sys state Running
+sys sha256 8A873F3204C3F519477DAB39F5C33209023773EE296EF564617FC690EE7E565B
+== hvciscan
+exit 0
+VbsGetIssues: 0x0000048C
+
+    Secure boot capability required
+
+    IOMMU required
+
+    ACPI WSMT table required
+
+    Hardware virtualization required
+
+VbsIsRecommended: 0
+
+HVCI incompatible driver scan start...
+
+HVCI: Driver scanning complete
+
+HVCI incompatible driver scan passed!
+
