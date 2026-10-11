@@ -4,7 +4,7 @@
 //   amdgpu_wddm_control.exe --smoke <file>           no window: build the pages once, write what they show, exit
 //   amdgpu_wddm_control.exe --smoke-report <zip>    no window: a bug report without dxdiag, the capability tools and
 //                                                    the event logs, written to <zip> (the build's check of that path)
-//   amdgpu_wddm_control.exe --smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--nagi] [--switch-to xx]
+//   amdgpu_wddm_control.exe --smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi] [--switch-to xx]
 //                                [--fixture <snapshot.json>]
 //                                                    no window: every page drawn to <dir>\<page>.png as a screen at
 //                                                    <scale> x 96 DPI shows it; layout.txt lists what the render gates
@@ -204,7 +204,8 @@ namespace AmdgpuWddmControl
                 {
                     if (args[i] == "--lang" && i + 1 < args.Length) lang = args[++i];
                     else if (args[i] == "--text-scale" && i + 1 < args.Length) textScale = float.Parse(args[++i], inv);
-                    else if (args[i] == "--nagi") o.Nagi = true;
+                    else if (args[i] == "--nagi") o.Nagi = true;                  // the default; kept for older callers
+                    else if (args[i] == "--no-nagi") o.Nagi = false;
                     else if (args[i] == "--switch-to" && i + 1 < args.Length) o.SwitchTo = args[++i];
                     else if (args[i] == "--fixture" && i + 1 < args.Length) fixture = args[++i];
                     else if (args[i] == "--board-fixture" && i + 1 < args.Length) boardFixture = args[++i];

@@ -119,6 +119,13 @@ namespace AmdgpuWddmControl
     // The widgets. Every interactive control gets an accessible name (G-A11Y) and a visible focus border.
     static class Ui
     {
+        // Control.Visible reads false for every control of a form that was never shown, which is every form of a
+        // headless gate, so a check of what the window puts on the screen asks the control's own visible flag
+        // (STATE_VISIBLE) instead. A gate that read Control.Visible would pass whatever the window did.
+        static readonly System.Reflection.MethodInfo GetStateMethod =
+            typeof(Control).GetMethod("GetState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        public static bool HasVisibleFlag(Control c) { return (bool)GetStateMethod.Invoke(c, new object[] { 2 }); }
+
         public static Label Label(string text, Font font = null, Color? color = null, int width = 0)
         {
             var l = new Label { Text = text, AutoSize = true, Font = font ?? Theme.Body, ForeColor = color ?? Theme.Text, Margin = Theme.Pad(0, 3, 0, 3), UseMnemonic = false, BackColor = Color.Transparent };

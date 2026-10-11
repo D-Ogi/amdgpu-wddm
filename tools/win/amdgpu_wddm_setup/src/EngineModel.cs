@@ -319,6 +319,18 @@ namespace AmdgpuWddmSetup
             return c == SetupCause.Welcome ? "01-wave" : "02-curious";
         }
 
+        // The art of an expression in the exe, embedded by build.ps1 from the control application's art directory
+        // under the same names it uses (Guide.Resource): one map of expression to file, one set of resources.
+        // @128 up to a 125 % screen, @256 from 150 % up, drawn scaled into the slot.
+        public static string Resource(string expression, int size) { return "nagi." + expression + "@" + size + ".png"; }
+        public static int ArtSize(float scale) { return scale >= 1.5f ? 256 : 128; }
+
+        // Every expression a screen of this window can ask for: Expression() of every cause there is. The build
+        // embeds these and no more, so the exe carries no picture it could never draw (the control application
+        // embeds all nine, because its verdicts reach all nine). The unit tests print this list for the build.
+        public static readonly string[] ArtExpressions = Enum.GetValues(typeof(SetupCause)).Cast<SetupCause>()
+            .Select(Expression).Distinct().OrderBy(e => e, StringComparer.Ordinal).ToArray();
+
         public static SetupCause Pick(IEnumerable<SetupCause> active)
         {
             var list = active.ToList();

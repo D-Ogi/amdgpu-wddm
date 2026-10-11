@@ -48,6 +48,7 @@ namespace AmdgpuWddmSetup
         Panel _header, _rail, _guide, _column;
         FlowLayoutPanel _content, _buttons;
         Label _guideTitle, _guideText;
+        PictureBox _guideArt;
         int _contentWidth;
 
         public SetupForm(SetupArgs args, bool smoke)
@@ -57,7 +58,9 @@ namespace AmdgpuWddmSetup
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
-            _showNagi = !smoke && Native.ShowNagi();
+            // On unless the control app's setting says 0 (Native.ShowNagi). A headless render asks nothing of this
+            // PC's registry, so it takes the same default and --no-nagi draws the panel without her.
+            _showNagi = smoke ? !args.NoNagi : Native.ShowNagi();
             Text = "amdgpu-wddm Setup";
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -187,8 +190,17 @@ namespace AmdgpuWddmSetup
             _guide.Controls.Clear();
             var card = new CardPanel(null, Theme.S(GuideWidth - 20), Theme.GuideBack);
             _guideTitle = Ui.Label("", Theme.CardTitle, Theme.Teal, card.Inner);
+            // The picture is decorative: the guide text beneath it carries the meaning, and a screen reader is given
+            // the text, never the picture.
+            int slot = Math.Min(Theme.S(128), card.Inner);
+            _guideArt = new PictureBox
+            {
+                Size = new Size(slot, slot), SizeMode = PictureBoxSizeMode.Zoom, Visible = false, BackColor = Theme.GuideBack,
+                Margin = Theme.Pad(0, 6, 0, 6), AccessibleRole = AccessibleRole.None, AccessibleName = "", TabStop = false,
+            };
             _guideText = Ui.Label("", Theme.Body, Theme.Text, card.Inner);
             card.Add(_guideTitle);
+            card.Add(_guideArt);
             card.Add(_guideText);
             card.Location = new Point(0, _guide.Padding.Top);
             _guide.Controls.Add(card);
@@ -821,12 +833,29 @@ namespace AmdgpuWddmSetup
             }
             var cause = SetupGuide.Pick(causes);
             _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
+            ShowGuideArt(cause);
             // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
             _guideText.Text = Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause));
             GuideCause = cause;
         }
 
         public SetupCause GuideCause { get; private set; }
+
+        // The still picture of this screen's cause, with "Show Nagi" on and its resource in the exe. Without either
+        // one the slot is empty and the panel is the text-only panel.
+        void ShowGuideArt(SetupCause cause)
+        {
+            if (_guideArt == null) return;
+            int size = SetupGuide.ArtSize(Theme.Scale);
+            var expression = SetupGuide.Expression(cause);
+            var img = _showNagi && NagiArt.Has(expression, size) ? NagiArt.Load(expression, size) : null;
+            _guideArt.Image = img;
+            _guideArt.Visible = img != null;
+        }
+
+        // For the render gate: whether the guide panel drew the picture, and whether it was meant to.
+        public bool GuideArtShown { get { return _guideArt != null && HasVisibleFlag(_guideArt) && _guideArt.Image != null; } }
+        public bool GuideArtWanted { get { return _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
 
         void SetGuideNote(string text) { if (_guideText != null) _guideText.Text = text; }
 

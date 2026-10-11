@@ -9,7 +9,10 @@
 #      tools/release/installer (every check id, stage and message id has words), the event model and result binding
 #      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting, and the
 #      native TOKEN_PRIVILEGES layout of the planned restart;
-#   2. the compile with warnings as errors, and the .NET 4.8 target in the image;
+#   2. the compile with warnings as errors, the .NET 4.8 target in the image, and the guide character's art: the
+#      expressions this window's causes reach (SetupGuide.ArtExpressions, printed by the tests of step 1) at @128
+#      and @256 from tools\win\amdgpu_wddm_control\art\nagi, under the names that application's Guide.ArtFile map
+#      gives them, with the bytes its PROVENANCE.md records, every one of them in the built image;
 #   3. --smoke-engine against a scripted fake engine (test/fake-engine.ps1): plan, noise, cancel, stale result, crash
 #      without a result, restart, refusal; the screen in four languages without internals; the support file without
 #      this PC's user or computer name; then --smoke-start-failure: plan, install and prepare with an engine that
@@ -42,19 +45,42 @@ $pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs'
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
     "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
-& "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { Write-Host "  $_" }
-if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
+$unit = @(& "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { [string]$_ })
+$unitFailed = $LASTEXITCODE -ne 0
+$unit | ForEach-Object { Write-Host "  $_" }
+if ($unitFailed) { throw 'unit tests failed' }
+# The expressions the window can ask for, from the program's own code: SetupGuide.ArtExpressions, printed by the
+# tests that also check it against every SetupCause. The build embeds these and no more.
+$expressionLine = @($unit | Where-Object { $_ -match '^guide art expressions: ' })
+if ($expressionLine.Count -ne 1) { throw 'the unit tests did not print the one line with the guide art expressions' }
+$setupExpressions = @(($expressionLine[0] -replace '^guide art expressions: ', '').Trim() -split '\s+' | Where-Object { $_ })
+if (-not $setupExpressions.Count) { throw 'the guide art expressions line is empty' }
 
 # 2. The application, with the string tables embedded.
 # Both lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
 # the file system, which the recipe does not own.
 $resources = @(Get-ChildItem "$here\strings\strings.*.txt" | Sort-Object Name | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+# The guide character: the same art directory, the same expression map and the same byte check as the control
+# application (its art\check-art.ps1), so one map serves both programs and the setup window shows her on its own
+# first screen. Only the expressions this window's causes reach are embedded; the built image is refused below
+# unless it carries every one of them.
+$artDir = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\nagi'
+$artResourceNames = @()
+foreach ($a in & (Join-Path $repo 'tools\win\amdgpu_wddm_control\art\check-art.ps1') -ArtDir $artDir `
+        -GuideSource (Join-Path $repo 'tools\win\amdgpu_wddm_control\src\Guide.cs') -Expressions $setupExpressions) {
+    $resources += "/resource:$($a.Path),$($a.Resource)"
+    $artResourceNames += $a.Resource
+}
+Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpressions -join ', ')) x 2 sizes embedded from $artDir"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_setup.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
 Write-Host '  target framework: .NETFramework,Version=v4.8 declared'
+$missingArt = @($artResourceNames | Where-Object { -not $image.Contains($_) })
+if ($missingArt.Count) { throw "guide art: the built exe has no resource $($missingArt -join ', ')" }
+Write-Host "  guide art: $($artResourceNames.Count) resources in the image"
 
 if (-not $NoSmoke) {
     # A package folder for the headless runs: the fake engine as installer\install.ps1, a manifest and the newest notes.
@@ -121,18 +147,22 @@ if (-not $NoSmoke) {
     if ($code -ne 0 -or $summary -notmatch '(?m)^ok\r?$' -or ([regex]::Matches($summary, '(?m)^\w+ [\w-]+: Result Problem\r?$')).Count -ne 6) { throw "smoke-start-failure (exit $code):`n$summary" }
     Write-Host '  start failure: plan, install and prepare with a run folder or a package folder that cannot be used end on the result screen (6 cases)'
 
-    # 4. Every screen at four DPIs and four languages, and at a 150 % text size.
-    $renders = @(foreach ($scale in '1', '1.25', '1.5', '2') { foreach ($lang in 'en', 'pl', 'ja', 'ko') { , @($scale, $lang, '1') } })
-    $renders += , @('1', 'en', '1.5')
-    $renders += , @('1', 'ja', '1.5')
+    # 4. Every screen at four DPIs and four languages, and at a 150 % text size. Every run draws the guide character,
+    # because she is on unless the control app's setting says 0; the two last runs draw the panel without her.
+    $renders = @(foreach ($scale in '1', '1.25', '1.5', '2') { foreach ($lang in 'en', 'pl', 'ja', 'ko') { , @($scale, $lang, '1', '') } })
+    $renders += , @('1', 'en', '1.5', '')
+    $renders += , @('1', 'ja', '1.5', '')
+    $renders += , @('1', 'en', '1', '--no-nagi')
+    $renders += , @('2', 'ko', '1', '--no-nagi')
     foreach ($r in $renders) {
-        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])"
+        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($r[3]) { '-no-nagi' })"
         Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
-        $code = Invoke-Exe @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2], '--package', $fake) 300
+        $renderArgs = @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2]) + @(if ($r[3]) { $r[3] }) + @('--package', $fake)
+        $code = Invoke-Exe $renderArgs 300
         $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
-        if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) (exit $code):`n$layout" }
+        if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($r[3]) (exit $code):`n$layout" }
     }
-    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text), no overlap or overflow, G-A11Y and G-NOINT clean ($obj\render-*)"
+    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character), no overlap or overflow, the guide art where it belongs, G-A11Y and G-NOINT clean ($obj\render-*)"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

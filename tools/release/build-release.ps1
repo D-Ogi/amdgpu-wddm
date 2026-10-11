@@ -16,7 +16,9 @@
 # (provenance.py: a published commit and a recipe, or a download record; -RebuildCheck also rebuilds the files with
 # rebuild-check.ps1 and compares the bytes), signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
-# packaged CLI, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
+# packaged CLI, the guide character's art in the packaged control application (nine expressions at both sizes) and in
+# the setup window where it ships (the expressions its own screens reach), under the names of the repository's own
+# map, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
 # kernel compile (driver\kmd and driver\shim build with the WDK of this workspace: test-kmd-compile.ps1). Nothing here
 # opens a window: child processes run with CreateNoWindow and redirected output.
 [CmdletBinding()]
@@ -252,6 +254,45 @@ if ($installText -notmatch $firmware.commit) { throw "INSTALL.md (GPU firmware) 
 foreach ($f in Get-ChildItem -LiteralPath $lic -File) {
     if ((Get-Content -LiteralPath $f.FullName -TotalCount 3) -match '(?i)<!DOCTYPE|<html') { throw "licenses\$($f.Name) is a web page, not a licence text" }
 }
+
+# The guide character has to be in the shipped programs. Every package up to 0.7.216.100-tester.21 was built by a
+# recipe that passed no art directory at all, so the guide panel was the text-only panel on every install: the
+# expressions are named in the exe only when the art was embedded. The names come from the repository's own map, so
+# a renamed expression is a finding here and not a silent text-only panel on a tester's PC.
+$guideMap = [regex]::Matches((Get-Content -LiteralPath (Join-Path $repo 'tools\win\amdgpu_wddm_control\src\Guide.cs') -Raw),
+    '\{ "(?<expr>\d\d-[a-z-]+)", "(?<file>[a-z-]+)" \}')
+if ($guideMap.Count -ne 9) { throw "Guide.ArtFile: $($guideMap.Count) expressions found, 9 expected" }
+$guideResources = @(foreach ($m in $guideMap) { foreach ($size in 128, 256) { "nagi.$($m.Groups['expr'].Value)@$size.png" } })
+# The setup window embeds only the expressions its own causes reach (SetupGuide.ArtExpressions), so this gate asks it
+# for the expression ids its source names and for nothing more. A new expression there is covered by that alone.
+$setupExpressions = @([regex]::Matches((Get-Content -LiteralPath (Join-Path $repo 'tools\win\amdgpu_wddm_setup\src\EngineModel.cs') -Raw),
+        '"(?<expr>\d\d-[a-z-]+)"') | ForEach-Object { $_.Groups['expr'].Value } | Sort-Object -Unique)
+if (-not $setupExpressions.Count) { throw 'SetupGuide: no guide expression found in EngineModel.cs' }
+$unknown = @($setupExpressions | Where-Object { $e = $_; -not ($guideMap | Where-Object { $_.Groups['expr'].Value -eq $e }) })
+if ($unknown.Count) { throw "SetupGuide names the expression $($unknown -join ', '), which Guide.ArtFile does not have" }
+$setupResources = @(foreach ($e in $setupExpressions) { foreach ($size in 128, 256) { "nagi.$e@$size.png" } })
+# The control application is a component of every package: its path comes from release-sources.json, so a renamed
+# payload path cannot make this gate match nothing. The setup window is optional until it ships (-SetupApp).
+$controlFiles = @($sources.files | Where-Object { $_.component -eq 'control' -and $_.path -like '*amdgpu_wddm_control.exe' })
+if ($controlFiles.Count -ne 1) { throw "release-sources.json: $($controlFiles.Count) control-application exe entries, 1 expected" }
+$checkedPrograms = 0
+foreach ($program in @(
+        @{ name = 'control application'; path = (Join-Path $pkg ($controlFiles[0].path -replace '/', '\')); want = $guideResources; required = $true },
+        @{ name = 'setup window'; path = (Join-Path $pkg 'setup\amdgpu_wddm_setup.exe'); want = $setupResources; required = $false })) {
+    if (-not (Test-Path -LiteralPath $program.path)) {
+        if ($program.required) { throw "guide art: the package has no $($program.name) at $($program.path)" }
+        continue
+    }
+    $exeText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($program.path))
+    $missingArt = @($program.want | Where-Object { -not $exeText.Contains($_) })
+    if ($missingArt.Count) {
+        throw ("guide art: the packaged $($program.name) has no resource $($missingArt -join ', '). " +
+               'Build it with tools\win\amdgpu_wddm_control\build.ps1 (the art of tools\win\amdgpu_wddm_control\art\nagi is embedded by default).')
+    }
+    $checkedPrograms++
+    '  guide art: {0} resources in the {1}' -f @($program.want).Count, $program.name
+}
+if ($checkedPrograms -eq 0) { throw 'guide art: no packaged program was checked' }
 
 Write-Host 'driver version'
 # Two changes to the packaged INF, nothing else; the catalog below is made from this INF.

@@ -14,20 +14,26 @@
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
 # the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
 # the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
-# languages, at text scale 150 %, with Nagi shown and hidden, and a language switch at run time; every page is drawn to
-# PNG without a window and checked for overlap, overflow, internals in the text and accessible names.
+# languages, at text scale 150 %, with the guide character on (the default of an installed application) and two runs
+# with her off, and a language switch at run time; every page is drawn to PNG without a window and checked for
+# overlap, overflow, internals in the text and accessible names. The guide panel must draw her picture wherever the
+# side panel is in the window, and must not draw it with "Show Nagi" off.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 #
-# -NagiArt <dir>: embeds the guide character (plan v7 section 6) from the owner's art directory as resources
-# nagi.<expression>@128.png and @256.png (the map is Guide.ArtFile). The art is never committed; without -NagiArt the
-# guide panel is text only, which is also what "Show Nagi" unchecked (the default) shows.
+# The guide character (plan v7 section 6) is embedded by default from art\nagi of this directory, as the resources
+# nagi.<expression>@128.png and @256.png (the map is Guide.ArtFile, the art's own PROVENANCE.md is beside it), and the
+# built exe is refused unless it carries all 18. Every file is compared against the byte list of the art's own
+# PROVENANCE.md (art\check-art.ps1). "Show Nagi" is on unless the user turns it off, so an installed application
+# shows her without a setting change. -NagiArt <dir> embeds another directory in place of the repository's;
+# -NagiArt '' embeds none, which leaves the text-only panel, and every render run of such a build uses --no-nagi,
+# because a build that can draw no picture would otherwise fail its own art gate on every page.
 
 param(
     [Parameter(Mandatory)][string]$Kits,
     [Parameter(Mandatory)][string]$Out,
     [string]$KitVersion = '10.0.26100.0',
     [string]$StartConfirmCore,
-    [string]$NagiArt,
+    [string]$NagiArt = (Join-Path $PSScriptRoot 'art\nagi'),   # '' embeds no art
     [string]$Oracle,
     [switch]$NoSmoke
 )
@@ -116,18 +122,18 @@ Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
 # The lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
 # the file system, which the recipe does not own.
 $resources = @(Get-ChildItem "$here\strings\strings.*.txt" | Sort-Object Name | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+# The guide art of the repository (art\nagi) is embedded by default: an installed application shows the guide
+# character without the tester finding a setting first. The names of the resources are checked in the built image
+# below, so a renamed or lost file stops the build instead of shipping a text-only panel.
+$artResourceNames = @()
 if ($NagiArt) {
-    $guide = Get-Content (Join-Path $here 'src\Guide.cs') -Raw
-    $map = [regex]::Matches($guide, '\{ "(?<expr>\d\d-[a-z-]+)", "(?<file>[a-z-]+)" \}')
-    if ($map.Count -ne 9) { throw "Guide.ArtFile: $($map.Count) expressions found, 9 expected" }
-    foreach ($m in $map) {
-        foreach ($size in 128, 256) {
-            $file = Join-Path $NagiArt "$($m.Groups['file'].Value)@$size.png"
-            if (-not (Test-Path $file)) { throw "-NagiArt: $file missing" }
-            $resources += "/resource:$file,nagi.$($m.Groups['expr'].Value)@$size.png"
-        }
+    # art\check-art.ps1 reads the expression map, refuses a missing file and compares every file against the byte
+    # list of the art's own PROVENANCE.md, so a substituted or truncated picture stops the build here. The setup
+    # window runs the same check on the same directory.
+    foreach ($a in & (Join-Path $here 'art\check-art.ps1') -ArtDir $NagiArt -GuideSource (Join-Path $here 'src\Guide.cs')) {
+        $resources += "/resource:$($a.Path),$($a.Resource)"
+        $artResourceNames += $a.Resource
     }
-    Write-Host "  guide art: 9 expressions x 2 sizes embedded from -NagiArt"
 }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
@@ -141,6 +147,13 @@ foreach ($part in 'system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.N
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe"))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_control.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
 Write-Host '  target framework: .NETFramework,Version=v4.8 declared'
+# Every expression the guide panel can ask for must be in the image under the name Guide.Resource builds, at both
+# sizes. The names live in the assembly's string heap, so the image carries them literally.
+if ($artResourceNames.Count) {
+    $missing = @($artResourceNames | Where-Object { -not $image.Contains($_) })
+    if ($missing.Count) { throw "guide art: the built exe has no resource $($missing -join ', ')" }
+    Write-Host "  guide art: $($artResourceNames.Count) resources in the image ($(($artResourceNames | Sort-Object)[0]) .. $(($artResourceNames | Sort-Object)[-1]))"
+}
 
 # 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
 $env:AMDGPU_WDDM_CONTROL_STATE = Join-Path $obj 'state'
@@ -476,8 +489,9 @@ if (-not $NoSmoke) {
     $runs += , @('en-1-pc', '1')
     $runs += , @('pl-1-text150', '1', '--lang', 'pl', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
     $runs += , @('ja-1.5-text150', '1.5', '--lang', 'ja', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
-    $runs += , @('en-1-nagi', '1', '--nagi', '--fixture', "`"$fixture`"")
-    $runs += , @('ko-2-nagi', '2', '--lang', 'ko', '--nagi', '--fixture', "`"$fixture`"")
+    # Every run above draws the guide character, because she is on by default; these two draw the panel with her off.
+    $runs += , @('en-1-no-nagi', '1', '--no-nagi', '--fixture', "`"$fixture`"")
+    $runs += , @('ko-2-no-nagi', '2', '--lang', 'ko', '--no-nagi', '--fixture', "`"$fixture`"")
     $runs += , @('en-1-switch-ja', '1', '--switch-to', 'ja', '--fixture', "`"$fixture`"")
     $runs += , @('ja-1-switch-pl', '1', '--lang', 'ja', '--switch-to', 'pl', '--fixture', "`"$fixture`"")
     # The tuning cards in their other states (docs/design/tuner.md): the BD-059 runs above draw a curve test and saved
@@ -497,12 +511,15 @@ if (-not $NoSmoke) {
         if ($renderArgs -contains '--fixture' -and $renderArgs -notcontains '--board-fixture') {
             $renderArgs += @('--board-fixture', "`"$env:AMDGPU_WDDM_BOARD_FIXTURE`"")
         }
+        # A build without art (-NagiArt '') cannot draw her, so every run of it renders the text-only panel: the
+        # guide character is on by default, and a run with her on and no picture is a finding, by design.
+        if (-not $artResourceNames.Count -and $renderArgs -notcontains '--no-nagi') { $renderArgs += '--no-nagi' }
         $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList $renderArgs -PassThru -WindowStyle Hidden
         if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "render $($r[0]) did not exit within 120 s" }
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch, tuning states): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
