@@ -83,6 +83,11 @@ SEQUENCES = [
       # CHECK_VMID, VM_ID). Writable through the GFX table so the shim's bc250_gfx_soft_recover_vmid can issue it;
       # reached only from DxgkDdiResetEngine under the HangRecoveryMode switch. Already on the escape read list.
       ("GC", "mmSQ_CMD", "not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery"),
+      # Wave observations use only selector writes and data reads. This legacy GFX table is mixed;
+      # MmioGfxWrite refuses SQ_IND_DATA for every GFX sequence; the dedicated wave
+      # backend further restricts writes to GRBM_GFX_INDEX and SQ_IND_INDEX.
+      ("GC", "mmSQ_IND_INDEX", "not traced: amdgpu gfx_v10_0 wave_read_ind selector"),
+      ("GC", "mmSQ_IND_DATA", "not traced: amdgpu gfx_v10_0 wave_read_ind, MmioGfxWrite read-only filter"),
       ("GC", "mmGRBM_STATUS2", "read observation for opt-in RLC reload reset, M349"),
       ("GC", "mmGRBM_SOFT_RESET", "not traced: AMD RLC reset callback, opt-in M349"),
       ("GC", "mmRLC_SAFE_MODE", "not traced: AMD paired safe-mode scope, M370"),
@@ -129,6 +134,8 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmGRBM_GFX_CNTL"),
          # test/hang_recovery_test.c: the M15.12 wave kill's register, to check which sequence table holds it
          ("GC", "mmSQ_CMD"),
+         # The bounded live wave reader and its unconditional selector cleanup.
+         ("GC", "mmGRBM_GFX_INDEX"), ("GC", "mmSQ_IND_INDEX"), ("GC", "mmSQ_IND_DATA"),
          # gfx.c: the one write that passes a stopped sequence (gpumem.c flushes the TLB after its binds)
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
@@ -208,6 +215,9 @@ DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
 # BD-018: reference-derived readback; no timing/modeset writes.
 DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", "mmDP_DTO0_MODULO",
     "mmOTG0_PIXEL_RATE_CNTL", "mmOTG0_OTG_INTERLACE_CONTROL", "mmOTG0_OTG_V_TOTAL_CONTROL"]
+# BD-124: read the OTG-to-stream-to-enabled-backend route; no new write permission.
+DCN_TIMING_READ_REGISTERS += [f"mmDIG{n}_{r}" for n in range(2)
+    for r in ("DIG_FE_CNTL", "DIG_BE_CNTL", "DIG_BE_EN_CNTL")]
 DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
 # M15.14 (0.7.216.20): the plane's pixel format registers (plane_format.h), read at start to decode the firmware's
 # format and on restore to verify it; MPCC0_MPCC_CONTROL, CNVC_CFG0_FORMAT_CONTROL and CNVC_CFG0_ALPHA_2BIT_LUT
@@ -218,6 +228,9 @@ DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBP
     "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
 NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
+# BD-122 (GitHub #38): a refused inherited timing logs whether the firmware drove OTG1 instead of OTG0. Read only,
+# and already on the 75-register dump list, so the DCN read allow-list does not change.
+NAMED += [("DMU", "mmOTG1_OTG_CONTROL")]
 
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 

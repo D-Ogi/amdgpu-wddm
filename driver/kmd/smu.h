@@ -9,6 +9,7 @@ typedef struct _BC250_SMU_OWNER {
     EX_PUSH_LOCK Lock;
     PETHREAD Caller;
     BOOLEAN Online;
+    BOOLEAN BoardAllowed; // Latched by BoardProviderBind before the first mailbox access.
     // The firmware's queue 3 (0.7.210, the CPU surface): a second transport instance over the same BAR mapping
     // and the same owner lock, with its own firmware_state, because "check and drain the previous response before
     // the first write" must run once per queue. CpuOnline says the instance exists; it never means queue 3 has

@@ -1006,3 +1006,150 @@ uma.fallback.title|mt|6be52e48|ビデオメモリ
 uma.fallback.size|mt|2c73531b|Windowsが報告する専用メモリ
 uma.fallback.readonly|mt|0042c9fe|これは読み取り専用のメモリ容量です。このデバイスはBC-250ボードのメモリ予約設定に対応していません。
 uma.unknown-state|mt|76c05f2a|保存されたバックアップ、または最後の書き込みを確認できませんでした。以降の変更はロックされています。この設定を適用するために再起動せず、サポートに連絡してください。
+
+board.unsupported|mt|bdd30095|このボードでは設定を変更できません。ドライバーが提供する値は引き続き確認できます。
+nav.system|mt|d598026a|Windows
+page.system.title|mt|78ecd832|Windows の設定
+page.system.intro|mt|743deb73|バックグラウンドの動作を選べます。すべての変更は任意で、元に戻せます。
+help.page.system|mt|fb622a5a|グラフィックスカードに関係なく使える Windows の設定です。変更前に各項目の影響を確認してください。復元は保存された設定に戻す操作で、Windows の構成要素は削除しません。
+system.overview|mt|67e610e8|バックグラウンドの動作
+system.backup|mt|db982ac0|変更前の設定は保存され、アプリを更新しても保持されます。このツールで保存した設定だけを復元します。
+system.read-failed|mt|28e2faa8|現在の設定を読み取れませんでした。変更する前に再読み込みしてください。
+system.reading|mt|296c909a|Windows の設定を読み込み中...
+system.refresh|mt|0e916101|再読み込み
+system.recommended|mt|7c59956a|推奨設定を適用
+system.restore-all|mt|01d04991|保存した設定をすべて復元
+system.current|mt|e9f9320d|現在の設定
+system.managed|mt|b93f9481|変更前の設定が保存されています。
+system.unmanaged|mt|6aa491ee|保存された変更前の設定はありません。
+system.apply|mt|31e392d1|適用
+system.restore|mt|a76e13b9|復元
+system.days|mt|52fe4b04|一時停止する日数 (1-35)
+system.pause|mt|28fdf83b|更新を一時停止
+system.resume|mt|adcaa107|更新を再開
+system.pause-policy|mt|afd58f7a|一時停止を要求する設定です。Windows での適用に時間がかかる場合があるため、報告された状態は別に表示します。非対応の Windows エディションには適用できません。
+system.requested-until|mt|9257abb6|一時停止の要求期限
+system.observed|mt|4fa86770|Windows の報告
+system.observed.paused|mt|e159b061|一時停止中
+system.observed.resumed|mt|1cfd0052|一時停止していません
+system.observed.mixed|mt|e29a44d0|機能更新と品質更新で状態が異なります
+system.observed.unknown|mt|67a926f7|確認できません
+system.scope.machine|mt|102db83e|すべての Windows アカウント
+system.scope.user|mt|f5ad11e3|この Windows アカウントのスタートアップ
+system.plan.title|mt|f482ec59|Windows の設定を変更
+system.plan.apply|mt|f3954418|説明にある変更を適用: {0}
+system.plan.restore|mt|2083b0f3|保存した設定を復元: {0}
+system.plan.pause|mt|47735b56|更新の一時停止を {0} 日間要求します。
+system.plan.resume|mt|2a631fe8|このツールによる一時停止を解除し、保存した更新設定に戻します。
+system.plan.restore-all|mt|4ec97464|以下の保存済み設定を復元します。このアカウントのスタートアップ設定が保存されていれば、それも復元します。
+system.plan.recommended|mt|55d2022a|以下のバックグラウンド動作を減らします。ドライブの最適化、アプリの起動、更新設定は含みません。
+system.plan.recheck|mt|f35e7163|書き込み前に設定を再確認します。状態が変わった項目や読み取れない項目は拒否される場合があります。セキュリティ、ネットワーク、更新サービスは有効のままです。
+system.working|mt|6349602b|要求された設定を適用中...
+system.done|mt|6e604bdb|操作が完了しました。現在の設定を再読み込みしています。
+system.cancelled|mt|8758b752|管理者の許可が得られなかったため、この操作は開始していません。
+system.timeout|mt|1ff9b40f|操作が制限時間内に完了しませんでした。一部の設定は変更された可能性があります。再試行前に状態を再読み込みしてください。
+system.failed|mt|d2d04724|操作が完全には終わりませんでした。一部の設定は変更された可能性があります。再読み込みした状態を確認し、必要に応じて保存した設定を復元してください。
+system.state.unknown|mt|63977a32|未読み込み
+system.state.absent|mt|3372d1ec|存在しません
+system.state.unavailable|mt|2e4a0a37|この Windows では利用できません
+system.state.enabled|mt|92c1cdfd|有効
+system.state.disabled|mt|75081b59|無効
+system.state.mixed|mt|5f56858c|一部が設定済み
+system.state.configured|mt|84aebc69|設定済み
+system.state.not-configured|mt|dd1841d2|未設定
+system.item.sysmain|mt|e8c3a42c|アプリの先読み
+system.item.sysmain.description|mt|139310b7|バックグラウンドでのアプリの先読みを無効にします。メモリ使用量が減る場合がありますが、アプリの起動が遅くなることがあります。
+system.item.search|mt|25aa964c|ファイル検索の索引作成
+system.item.search.description|mt|82e0e975|バックグラウンドの索引作成を無効にします。ファイルやメールの検索が遅くなったり、結果が不完全になったりする場合があります。
+system.item.diagnostics|mt|89414c70|バックグラウンド診断
+system.item.diagnostics.description|mt|a0f40177|接続されたユーザー環境と診断のサービスを無効にします。
+system.item.maps|mt|65354f53|ダウンロードした地図
+system.item.maps.description|mt|55498afa|ダウンロードした地図のバックグラウンド管理を無効にします。オフライン地図が更新されなくなる場合があります。
+system.item.drive|mt|2620764b|スケジュールされたドライブの最適化
+system.item.drive.description|mt|a942887e|SSD の保守を含む定期的な最適化を無効にします。手動の最適化は利用できます。自分で保守しない場合は有効のままにしてください。
+system.item.compatibility|mt|8a1113d8|アップグレードの互換性確認
+system.item.compatibility.description|mt|5b28cbd9|定期的な互換性評価を無効にします。大規模なアップグレードの準備状況を確認する情報が減る場合があります。
+system.item.program-data|mt|f772ca9f|アプリ使用情報のタスク
+system.item.program-data.description|mt|d489b1a1|アプリの利用状況に関する定期的なデータ収集タスクを無効にします。
+system.item.experience|mt|0c03e40b|ユーザー体験向上のタスク
+system.item.experience.description|mt|c6cf5ace|ユーザー体験データをまとめる定期タスクを無効にします。
+system.item.usb|mt|b041ca28|USB 利用状況のタスク
+system.item.usb.description|mt|ef62167a|USB の利用状況に関する定期タスクを無効にします。USB デバイスは引き続き使えます。
+system.item.teams|mt|69e79a08|従来版 Teams のコンピューター起動項目
+system.item.teams.description|mt|051d9751|すべてのアカウントに適用される従来版 Teams インストーラーの起動項目を削除します。Teams 自体は削除しません。新しい Teams の起動設定は別です。
+system.item.onedrive|mt|5c1ab86d|OneDrive の起動
+system.item.onedrive.description|mt|166cbdd5|このアカウントのサインイン時に OneDrive を起動しません。自分で OneDrive を開くまでファイルは同期されません。
+system.item.teams-user|mt|5ce9ebb4|このアカウントの従来版 Teams の起動
+system.item.teams-user.description|mt|1e25b15f|このアカウントの従来版 Teams の起動項目を削除します。新しい Teams やストア版の起動設定は別です。
+system.item.drivers|mt|ebb42406|インストール済みのドライバーを維持
+system.item.drivers.description|mt|03ed5ef4|すべてのデバイスのドライバーを通常の Windows 品質更新から除外します。Windows に含まれる重要なドライバーや機能更新のドライバーは引き続き置き換わる場合があります。
+system.item.updates|mt|b94adecb|Windows Update の一時停止
+system.item.updates.description|mt|1fc64af6|セキュリティ更新を含む機能更新と品質更新を一時停止します。更新サービスは有効のままです。再開すると保存した一時停止設定に戻します。
+search.system.background|mt|67e610e8|バックグラウンドの動作
+search.system.background.terms|mt|c6d2c919|サービス タスク 起動 メモリ
+search.system.updates|mt|a7059736|Windows Update を一時停止
+search.system.updates.terms|mt|7d884345|更新 停止 再開
+search.system.drivers|mt|ebb42406|インストール済みのドライバーを維持
+search.system.drivers.terms|mt|fb85e197|ドライバー 自動更新 置換
+search.system.drive|mt|8c2c1356|ドライブ最適化の予定
+search.system.drive.terms|mt|cc085891|ディスク ssd 最適化 デフラグ
+help.setting.background|mt|013bf8ab|各項目で影響を説明しています。推奨設定は診断とダウンロードした地図のバックグラウンド動作だけを変更し、セキュリティや Windows Update は変更しません。
+help.setting.updates|mt|5062c6b1|1-35 日を選べます。要求した終了日と Windows が報告する状態は別です。復元は以前の設定に戻すため、以前から一時停止していた場合はその設定に戻ります。
+help.setting.drivers|mt|d355e59e|このグラフィックスドライバーだけでなく、すべてのデバイスの通常の品質更新に適用します。あらゆるドライバーの置き換えを防ぐ設定ではありません。
+help.setting.drive|mt|9bc0a9f6|定期的な最適化には SSD の保守も含まれます。無効化は任意で、推奨設定には含みません。復元すると保存したスケジュールの状態に戻ります。
+bench.title|mt-safe|0cc4b592|レイトレーシング ベンチマーク
+bench.intro|mt|e05a3369|このテストは、お使いのカードが光をどれだけ速く追跡できるかを測ります。無料のゲーム Quake II RTX の短い場面を 2 回実行し、1 秒あたり何枚の画を描けたかを表示します。ドライバー パッケージにゲームは入っておらず、ダウンロードもしません。
+bench.two-ways|mt|280d28a7|お使いのカードは光を 2 通りの方法で追跡できます。このテストは両方を測ります。どちらでも画は同じで、速度だけが変わることがあります。
+bench.pass.pipeline|mt-safe|963af524|1 つめの方法
+bench.pass.query|mt-safe|21418945|2 つめの方法
+bench.pass.pipeline.note|mt|aaa9f3a1|ゲーム開発者はレイ トレーシング パイプラインと呼びます
+bench.pass.query.note|mt|d989b1f9|ゲーム開発者はレイ クエリと呼びます
+bench.game|mt-safe|5ba13e9b|ゲームのフォルダー
+bench.game.none|mt|4cc45c0a|このコンピューターに Quake II RTX が見つかりませんでした。
+bench.game.get|mt|4f79de90|テストにはゲームが必要です。Quake II RTX は無料で、Steam または開発元のページから入手できます。
+bench.open.steam|mt-safe|63e6be11|Steam のページを開く
+bench.open.nvidia|mt-safe|57f27fb0|開発元のページを開く
+bench.choose|mt-safe|0aab38df|ゲームのフォルダーを選ぶ...
+bench.choose.again|mt-safe|0bef7b55|別のフォルダーを選ぶ...
+bench.choose.title|mt|a72b4119|ゲームのプログラム q2rtx.exe があるフォルダーを選んでください
+bench.bad.folder|mt|302a9c1c|そのフォルダーはもうありません。
+bench.bad.program|mt|fdbc015e|そのフォルダーにゲームのプログラムがありません。
+bench.bad.data|mt|da3cb445|そのフォルダーにゲームのデータがありません。
+bench.bad.demo|mt|ab772e08|このゲームにはテスト用の場面が入っていないため、テストを実行できません。無料版の Quake II RTX には入っています。
+bench.start|mt-safe|56381b85|テストを始める
+bench.cancel|mt-safe|1317e849|テストを止める
+bench.size|mt-safe|28a0f429|画の大きさ
+bench.size.value|mt-safe|e137b45b|{0} x {1}
+bench.result|mt-safe|6e7d50e8|結果
+bench.state.idle|mt|dedd1400|このコンピューターでは、まだテストを実行していません。
+bench.state.starting|mt-safe|84ce0a62|ゲームを起動しています...
+bench.state.running|mt|e13f4a7a|測定中: {0}、ここまで {1} 秒。
+bench.state.reading|mt-safe|65a88114|結果を読み取っています...
+bench.state.done|mt-safe|a44047b4|テストが終わりました。
+bench.state.stopped|mt|afcd9e6a|あなたがテストを止めました。
+bench.state.saved|mt|536107a7|このコンピューターに保存された最新の実行を下に示します。
+bench.result.fps|mt-safe|42b2f533|1 秒あたり {0} 枚
+bench.result.detail|mt-safe|6554b9d5|{1} 秒で {0} 枚
+bench.result.none|mt|a82cd647|結果なし: 場面が終わる前にゲームが閉じました。
+bench.result.timeout|mt|e866995b|結果なし: 場面に 3 分以上かかったため、テストが止めました。
+bench.result.hot|mt|de80c33a|チップが熱くなりすぎたため止めました。
+bench.result.cancelled|mt-safe|ce2e1c7c|あなたが止めました。
+bench.result.failed|mt|388150f9|ゲームが起動しませんでした。
+bench.temp.max|mt-safe|251b0a10|最高温度
+bench.temp.value|mt-safe|aa6b1ef9|{0} °C
+bench.clock.mean|mt-safe|437b3dc8|平均クロック
+bench.clock.value|mt-safe|65d8ea4f|{0} MHz
+bench.notavailable|mt-safe|67a926f7|利用できません
+bench.when|mt-safe|9298c8f4|測定日時
+bench.driver|mt-safe|5f4b1e9d|ドライバーのリリース
+bench.reference|mt|d66823aa|私たちのボードはドライバーのリリース {4} で、{2} x {3} で 1 秒あたり {0} 枚から {1} 枚を描きました。画面やドライバーのリリース、ゲームのコピーが違えば、結果も変わります。
+bench.reference.why|mt|6893bd0d|シーンの実行中にチップが速度を上げ、シーンは 10 秒ほどで終わるので、結果は実行ごとにこの範囲の中で変わります。
+bench.history|mt-safe|04ab162c|これまでの実行
+bench.history.none|mt|d590dba0|このコンピューターにこれまでの実行はありません。
+bench.history.line|mt|afe87a67|{0}  -  1 つめの方法: {1}  -  2 つめの方法: {2}
+bench.busy|mt-safe|3a08423a|テストはすでに実行中です。
+bench.note|mt|a3725789|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。チップが 87 °C のままだったとき、また各方法で 3 分が過ぎたとき、テストは自分で止まります。
+bench.note.notemp|mt|a2b8397f|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。このカードは温度を知らせないため、テストは各方法で 3 分が過ぎたときにだけ止まります。
+search.perf.benchmark|mt-safe|0cc4b592|レイトレーシング ベンチマーク
+search.perf.benchmark.terms|mt|8e2c7bdd|ベンチマーク|fps|フレームレート|速度|スコア|測定|レイトレーシング|パストレーシング|クエイク|quake|q2rtx|どれくらい速い
+help.setting.benchmark|mt|6a6a4b69|お使いのカード自身を測るテストです。無料のゲーム Quake II RTX の短いレイトレーシングの場面を、カードが光を追跡する 2 つの方法それぞれで 1 回ずつ実行し、1 秒あたり何枚の画を描けたかを表示します。ゲームはこのコンピューターに必要です。ドライバー パッケージには入っていません。テストは私たちのボードでは各方法で 20 秒ほどかかり、ゲームを小さな窓で開いてまた閉じます。チップが熱くなりすぎたときは自分で止まります。最後の 10 回分はこのコンピューターに残るので、新しいドライバーのリリースで数値が変わったかどうかを見られます。

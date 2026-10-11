@@ -328,10 +328,22 @@ static class UnitTests
         Equal("07-hopeful", SetupGuide.Expression(SetupCause.PendingRestart), "guide: expression of a pending restart");
         foreach (SetupCause c in Enum.GetValues(typeof(SetupCause))) Check(Strings.Has(SetupGuide.TextId(c)), "guide: " + c + " has words");
         Check(Strings.In("en", "checking.body").Contains("up to a minute") && Strings.In("en", "guide.checking").Contains("up to a minute"), "guide: the Checking page and its tip give the same time");
+        // The art the build embeds: every expression a cause can ask for, and nothing else. build.ps1 reads the line
+        // below and embeds exactly these, so an expression that a new cause introduces is embedded by that alone.
+        foreach (SetupCause c in Enum.GetValues(typeof(SetupCause)))
+            Check(SetupGuide.ArtExpressions.Contains(SetupGuide.Expression(c)), "guide: the art of " + c + " (" + SetupGuide.Expression(c) + ") is embedded");
+        foreach (var e in SetupGuide.ArtExpressions)
+            Check(Enum.GetValues(typeof(SetupCause)).Cast<SetupCause>().Any(c => SetupGuide.Expression(c) == e), "guide: no expression is embedded that no cause asks for (" + e + ")");
+        Console.WriteLine("guide art expressions: " + string.Join(" ", SetupGuide.ArtExpressions));
     }
 
     static void Arguments()
     {
+        Check(!SetupArgs.Parse(new string[0]).ApplySystemTuning, "tuning: absent is not consent");
+        Check(SetupArgs.Parse(new[] { "--apply-system-tuning" }).ApplySystemTuning, "tuning: explicit opt-in");
+        Equal(0, SetupArgs.TuningArguments(null).Length, "tuning: continuation retains saved choice");
+        Equal("-ApplySystemTuning", SetupArgs.TuningArguments(true)[0], "tuning: selected argument");
+        Equal("-SkipSystemTuning", SetupArgs.TuningArguments(false)[0], "tuning: explicit deselection overrides resume");
         Equal("welcome", SetupArgs.Parse(new string[0]).Mode, "args: none = welcome");
         Equal("continue", SetupArgs.Parse(new[] { "--continue" }).Mode, "args: --continue");
         var a = SetupArgs.Parse(new[] { "--repair", "--package", @"C:\x y" });

@@ -449,6 +449,14 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
 // the shell overrides it with its own Present, which calls resource_allocation.
 HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T table_size, uint32_t table_index,
                           const FillInfo* info) noexcept;
+// Fills both slots of the render pass table (D3D12DDI_TABLE_TYPE_0043_RENDER_PASS, H:2507) at 0053,
+// D3D12DDI_RENDER_PASS_FUNCS_0053 (H:18254-18259): pfnBeginRenderPass and pfnEndRenderPass onto the engine's
+// ID3D12GraphicsCommandList4. There is no fail-safe form of this table. The shell publishes it only while
+// render_pass_supported says so; without that the runtime emulates render passes and never calls either slot. The
+// render pass table is also an extended feature (D3D12DDI_FEATURE_0043_RENDER_PASS, H:4069, versions 1 at 0043 and
+// 2 at 0053, H:17978 and H:18119), which the shell does not advertise yet (SLOTS.md). It fails with E_INVALIDARG if
+// table_size is not sizeof(D3D12DDI_RENDER_PASS_FUNCS_0053).
+HRESULT fill_render_pass(D3D12DDI_RENDER_PASS_FUNCS_0053* table, SIZE_T table_size, const FillInfo* info) noexcept;
 
 // The owner of a command list, for the shell's own command-list slots (whose first argument is the list, not the
 // device): ShellHooks::shell of the device context that created the list. Null for storage that holds no live
@@ -475,11 +483,17 @@ void* state_object_shell(D3D12DDI_HSTATEOBJECT_0054 state_object) noexcept;
 // (shader-container/README.md), which reads no further than that length; hull and domain programs take the
 // Tessellation signatures, the others Standard. The container lives in engine-ddi's own allocation until
 // DestroyShader; the record holds no engine object. A failure is logged and reported through
-// report_device_error (E_NOTIMPL for an unsupported program, E_INVALIDARG for a malformed one, E_OUTOFMEMORY);
-// mesh and amplification programs are E_NOTIMPL. CreatePipelineState passes the container bytes to the engine,
+// report_device_error (E_NOTIMPL for an unsupported program, E_INVALIDARG for a malformed one, E_OUTOFMEMORY).
+// CreatePipelineState passes the container bytes to the engine,
 // names input elements from the vertex program's input signature and stream-output entries from the last stage
 // before rasterization. A gap in a stream-output declaration goes to the engine as an entry with a NULL
 // SemanticName, which the pinned r4 engine takes (INTEGRATION.md, "Shaders and pipelines").
+// A mesh and an amplification program take the same route through their own slots (DXIL program kinds 13 and 14),
+// with their signature entries named from the program's own metadata, because the engine links a mesh pipeline's
+// stages by semantic name; CreatePipelineState then builds a subobject stream for the engine's
+// ID3D12Device2::CreatePipelineState, the only entry that takes those two stages. 1006 reports a mesh shader tier
+// only when the engine's own OPTIONS7 answer does (caps.cpp), so on a Vulkan device without VK_EXT_mesh_shader
+// nothing of this is reachable from an application.
 
 // ---- Engine parts of shell-owned MIXED slots ---------------------------------------------------------------------
 // Queue (CreateCommandQueue/DestroyCommandQueue are the shell's). The shell creates the WDDM context first. The
@@ -592,6 +606,13 @@ void free_adapter_caps(AdapterCaps* caps) noexcept;
 // answer is E_NOTIMPL. Both are logged with the type and the size. Thread-safe: it only reads caps.
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
 
+// Whether this adapter's render pass table may be published: the same answer 1006 RenderPassTier reports, which is
+// the engine's own OPTIONS5 answer (the pinned engine says tier 0, "Currently not supported", although it
+// implements both calls). The shell asks before it advertises D3D12DDI_FEATURE_0043_RENDER_PASS and before it
+// fills D3D12DDI_TABLE_TYPE_0043_RENDER_PASS, so the cap and the table can never disagree. False for null caps.
+// Thread-safe: it only reads caps.
+bool render_pass_supported(const AdapterCaps* caps) noexcept;
+
 // Memory architecture policy of GetCaps 1002 (INTEGRATION.md, "Memory architecture policy"). Whether the GPU's
 // accesses to system memory are I/O coherent is host and kernel-driver policy the engine cannot see; so may be UMA,
 // CacheCoherent and the serialization tiers. The shell states that policy per adapter, field by field: Default
@@ -647,7 +668,7 @@ enum class Tag : uint32_t {
     Shader = 0x31524853u, ElementLayout = 0x31594C45u, StateBlend = 0x31444C42u, StateDepth = 0x31505444u,
     StateRaster = 0x31535352u, PipelineState = 0x314F5350u, CommandPool = 0x314C4F50u,
     CommandRecorder = 0x31434552u, CommandList = 0x3154534Cu, QueryHeap = 0x31485951u,
-    CommandSignature = 0x31474953u, StateObject = 0x314A4253u,
+    CommandSignature = 0x31474953u, StateObject = 0x314A4253u, PipelineLibrary = 0x31424C50u,
 };
 struct RecordHeader {
     Tag tag;

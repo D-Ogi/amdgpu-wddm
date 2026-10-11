@@ -43,6 +43,25 @@ The installer does not change BIOS or firmware settings.
 
 ## Install
 
+The usual way is the setup window:
+
+1. In the unpacked folder, open the folder `setup` and double-click `amdgpu_wddm_setup.exe`. The window asks for
+   administrator rights itself: accept the prompt.
+2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
+   attention, what it will change, the restarts and the release notes.
+3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
+   recovery key or whether setup must pause BitLocker for two restarts.
+4. The window installs the driver and shows each stage. Before each restart of Windows it asks "Restart now" or
+   "Later", so you can save your work first. After you log on again, the window starts by itself and continues
+   (accept the administrator prompt).
+5. At the end the window shows the result. On a problem it offers to try again or to repair, and it can save a
+   support file for your report.
+
+The setup window installs the driver only. It does not install llama.cpp, Ollama or a model. For these, install
+with `install.cmd` (see "The extras" below).
+
+On the command line, `install.cmd` installs the same release, with all its switches:
+
 1. In the unpacked folder, right-click `install.cmd` and select "Run as administrator".
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
@@ -58,9 +77,9 @@ The installer does not change BIOS or firmware settings.
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
 
-To install a newer package, unpack it to a new folder and run its `install.cmd`. You do not have to uninstall
-first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change, replaces the others and
-restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
+To install a newer package, unpack it to a new folder and start its setup window or its `install.cmd`. You do not
+have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change,
+replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
 use `install.cmd -Repair` to install it again.
 
 An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz`), `DwmForceCpu`, the D3D11
@@ -71,6 +90,26 @@ installer always writes its own values: the file paths, the graphics registratio
 `UnconfirmedStarts`. The Control application can set the defaults again.
 
 "Test Mode" is shown in the lower-right corner of the desktop while test signing is on. This is normal.
+
+## The extras: llama.cpp, Ollama and the models
+
+Before phase 1 the installer asks whether it shall also install the two programs that run language models on the
+board: our build of llama.cpp and our build of Ollama. The answer `yes` is the default, so Enter is enough. After
+the two questions it shows a short list of models with their size and their licence. The answer for the models is
+none.
+
+Both programs go into `C:\Program Files\amdgpu-wddm\tools`. The model files go into
+`C:\Users\Public\Documents\amdgpu-wddm\models`. Every download is checked against the SHA-256 in this package. A
+download that does not match is refused, and the driver installation goes on without it.
+
+Ollama keeps models in its own format, in `%LOCALAPPDATA%\bc250-ollama\models`, so a model chosen while both
+programs are installed is downloaded twice and kept twice. The question gives both numbers and the sum. Use
+`bc250-ollama.cmd` in the Ollama folder to talk to our Ollama server. A bare `ollama.exe` uses the Ollama
+defaults.
+
+An installation without a window uses `-Components llama,ollama` or `-NoComponents`, and `-Models gemma12b` or
+`-NoModels`. `uninstall.cmd` removes the programs and keeps the models. `uninstall.cmd -RemoveModels` removes the
+models as well. The page `docs/testing/llm-components.md` of the project has the whole list of switches.
 
 ## GPU firmware
 
@@ -241,3 +280,31 @@ Before the preview, the application removes from every file: your user name, you
 number, machine ID, product ID or UUID. Versions, hashes and hardware IDs stay, because we need them.
 If you find personal data in the preview, do not send the file, and tell us in the bug report so that we can
 correct the application.
+
+## Optional Windows tuning
+
+The setup window offers Windows tuning. This option starts unchecked.
+Select it to apply the control application's recommended background settings through its shared backend.
+The package manifest and command-line plan list the choices from that application's catalog.
+Use the control application's Windows settings page for individual changes and recovery.
+
+For a command-line installation, add `-ApplySystemTuning` to `install.cmd`.
+The choice survives an installation restart or a failed attempt.
+Use `-SkipSystemTuning` to cancel a saved choice when retrying.
+The setup executable accepts `--apply-system-tuning`.
+Plan and dry-run modes show the choice without running the tuning backend.
+
+The uninstaller offers to restore machine-wide settings before removal.
+Use `uninstall.cmd -RestoreSystemTuning` to select this action or `-KeepSystemTuning` to keep the settings.
+A failed restoration stops removal.
+The uninstaller preserves machine and user recovery records, including those belonging to other accounts.
+It also keeps verified recovery scripts under `%ProgramData%\amdgpu-wddm\system-tuning-recovery`.
+
+After removal, restore each account's settings from that account:
+
+```powershell
+powershell -NoProfile -File "$env:ProgramData\amdgpu-wddm\system-tuning-recovery\system-tuning.ps1" -Action RestoreAll -Scope User
+```
+
+Elevation with another account does not restore the original account's settings.
+Machine-wide recovery uses the same command with `-Scope Machine` from an administrator terminal.

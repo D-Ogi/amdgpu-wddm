@@ -1,11 +1,8 @@
 // The tuning model: the GPU voltage curve and the processor settings, as plain data and pure functions. No
 // P/Invoke and no WinForms here, so test/UnitTests.cs runs all of it on any PC.
 //
-// The rules below are the driver's rules, mirrored so that the window can refuse a value before it asks and can
-// say why in plain words (driver/shim/bc250_clock.c bc250_clock_curve_check, driver/shim/include/bc250_cpu.h,
-// docs/design/tuner.md). The driver checks again and is the authority: this copy exists for the message, never as
-// permission. Where the driver sends its own vectors (the table's line and the lowest voltage per clock), the
-// window draws those and not the numbers here; the table below is for a window that cannot reach the driver.
+// The board capability query supplies the envelope and default vectors. The driver remains the
+// authority. A missing or malformed query supplies no tuning range and grants no mutation.
 using System;
 using System.Globalization;
 using System.Linq;
@@ -20,12 +17,13 @@ namespace AmdgpuWddmControl
 
     public static class Tuner
     {
-        public const int Points = 11;                   // BC250_CURVE_POINTS: 1000 MHz to 2000 MHz
-        public const uint FirstMHz = 1000, StepMHz = 100, FloorMv = 820, CeilingMv = 1000, BandMv = 25;
-
-        // The table's own line from 1000 MHz up (docs/design/dpm.md). The driver sends the same values in every
-        // reply; this copy keeps the chart honest when there is no driver to ask.
-        public static readonly uint[] TableMv = { 820, 840, 860, 880, 899, 919, 935, 952, 968, 984, 1000 };
+        public static int Points { get { return BoardCapabilities.Current.GpuVoltages.Length; } }
+        public static uint FirstMHz { get { return BoardCapabilities.Current[9]; } }
+        public static uint StepMHz { get { return BoardCapabilities.Current[11]; } }
+        public static uint FloorMv { get { return BoardCapabilities.Current[13]; } }
+        public static uint CeilingMv { get { return BoardCapabilities.Current[14]; } }
+        public static uint BandMv { get { return BoardCapabilities.Current[15]; } }
+        public static uint[] TableMv { get { return BoardCapabilities.Current.GpuVoltages; } }
 
         public static uint MHzAt(int index) { return FirstMHz + (uint)index * StepMHz; }
 
@@ -53,7 +51,7 @@ namespace AmdgpuWddmControl
         public static CurveError Check(uint[] mv, uint[] floor, out int level)
         {
             level = -1;
-            if (mv == null || mv.Length != Points) return CurveError.None;
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Gpu) || mv == null || mv.Length != Points) return CurveError.None;
             floor = floor != null && floor.Length == Points ? floor : Floors();
             for (int i = 0; i < Points; i++)
             {
@@ -198,17 +196,22 @@ namespace AmdgpuWddmControl
         // BC250_CPU_MIN_MHZ, BC250_CPU_MAX_MHZ, BC250_CPU_UV_MAX_STEPS, BC250_CPU_TEMP_MIN_C and
         // BC250_CPU_TEMP_MAX_C of driver/shim/include/bc250_cpu.h. MaxMHz is the highest limit the release build
         // of the driver takes, not a stock clock: nobody has measured this part's own boost ceiling.
-        public const uint MinMHz = 2800, MaxMHz = 3500, MaxSteps = 16, MinTempC = 85, MaxTempC = 100;
+        public static uint MinMHz { get { return BoardCapabilities.Current[17]; } }
+        public static uint MaxMHz { get { return BoardCapabilities.Current[18]; } }
+        public static uint MaxSteps { get { return BoardCapabilities.Current[21]; } }
+        public static uint MinTempC { get { return BoardCapabilities.Current[22]; } }
+        public static uint MaxTempC { get { return BoardCapabilities.Current[23]; } }
+        public static uint MaskStock { get { return BoardCapabilities.Current[25]; } }
+        public static uint MaskFull { get { return BoardCapabilities.Current[26]; } }
+        public static uint StockCores { get { return BoardCapabilities.Current[138]; } }
+        public static uint FullCores { get { return BoardCapabilities.Current[27]; } }
+        public static uint RefuseMv { get { return BoardCapabilities.Current[24]; } }
 
-        public const uint MaskStock = 0x77, MaskFull = 0xFF;
-        public const uint StockCores = 6, FullCores = 8;
-        public const uint RefuseMv = 1300;
-
-        public static bool ValidClock(uint mhz) { return mhz >= MinMHz && mhz <= MaxMHz && mhz % 100 == 0; }
-        public static bool ValidSteps(uint steps) { return steps <= MaxSteps; }
-        public static bool ValidTemp(uint c) { return c >= MinTempC && c <= MaxTempC; }
-        public static bool ValidMask(uint mask) { return mask == MaskStock || mask == MaskFull; }
-        public static bool ValidCores(uint cores) { return cores == StockCores || cores == FullCores; }
+        public static bool ValidClock(uint mhz) { return BoardCapabilities.Current.Allows(BoardCapabilities.Cpu) && mhz >= MinMHz && mhz <= MaxMHz && mhz % 100 == 0; }
+        public static bool ValidSteps(uint steps) { return BoardCapabilities.Current.Allows(BoardCapabilities.Cpu) && steps <= MaxSteps; }
+        public static bool ValidTemp(uint c) { return BoardCapabilities.Current.Allows(BoardCapabilities.Cpu) && c >= MinTempC && c <= MaxTempC; }
+        public static bool ValidMask(uint mask) { return BoardCapabilities.Current.Allows(BoardCapabilities.Cpu) && (mask == MaskStock || mask == MaskFull); }
+        public static bool ValidCores(uint cores) { return BoardCapabilities.Current.Allows(BoardCapabilities.Cpu) && (cores == StockCores || cores == FullCores); }
 
         public static uint MaskFor(uint cores) { return cores == FullCores ? MaskFull : MaskStock; }
         public static uint CoresFor(uint mask) { return mask == MaskFull ? FullCores : StockCores; }
@@ -216,6 +219,7 @@ namespace AmdgpuWddmControl
         // The clock choices the window offers: the whole admitted band on the 100 MHz grid, highest first.
         public static uint[] ClockChoices()
         {
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Cpu)) return new uint[0];
             int count = (int)((MaxMHz - MinMHz) / 100) + 1;
             var v = new uint[count];
             for (int i = 0; i < count; i++) v[i] = MaxMHz - (uint)i * 100;

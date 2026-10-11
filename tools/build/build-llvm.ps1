@@ -37,6 +37,7 @@ param(
     [string]$Ninja,
     # Visual Studio installation root; default: vswhere -latest with the x64 C++ tools.
     [string]$VsInstall,
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
     # TEMP and TMP for the build (default <BC250_ROOT>\scratch\tmp), so that nothing lands on drive C:.
     [string]$Temp,
     # The version CMake must report for the source (CMAKE_PROJECT_VERSION); '' skips the check.
@@ -80,8 +81,12 @@ $ExpectedDefaults = [ordered]@{
     LLVM_ENABLE_EH          = 'OFF'
     LLVM_OPTIMIZED_TABLEGEN = 'OFF'
     LLVM_ENABLE_PROJECTS    = ''
-    LLVM_HOST_TRIPLE        = 'x86_64-pc-windows-msvc'
+    LLVM_HOST_TRIPLE        = $(if ($Arch -eq 'x86') { 'i686-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' })
     CMAKE_GENERATOR         = 'Ninja'
+}
+if ($Arch -eq 'x86') {
+    $LlvmOptions.CMAKE_C_FLAGS = '/external:W1 /we4229 /we4440'
+    $LlvmOptions.CMAKE_CXX_FLAGS += ' /external:W1 /we4229 /we4440'
 }
 $NinjaTargets = @('llvm-config', 'install')
 
@@ -124,7 +129,7 @@ if (-not $ConfigureOnly -and -not $AllowExistingPrefix -and (Test-Path -LiteralP
 $recipePath = Join-Path $Build 'recipe.json'
 $savedEnv = Save-ProcessEnvironment
 try {
-    $vs = Import-VsDevEnvironment $VsInstall $Temp
+    $vs = Import-VsDevEnvironment $VsInstall $Temp -Arch $Arch
     New-Item -ItemType Directory -Force $Temp, $Build | Out-Null
     $env:TEMP = $Temp
     $env:TMP = $Temp
@@ -151,6 +156,7 @@ try {
         cmake_arguments   = $cmakeArgs
         ninja_targets     = $NinjaTargets
         environment       = [ordered]@{
+            arch                = $Arch
             vs_install          = $vs
             vc_tools_version    = $env:VCToolsVersion
             windows_sdk_version = if ($env:WindowsSDKVersion) { $env:WindowsSDKVersion.TrimEnd('\') } else { $null }

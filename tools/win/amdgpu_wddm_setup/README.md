@@ -49,7 +49,16 @@ pwsh tools\release\build-release.ps1 ... -SetupApp P:\BC-250\scratch\build\gui-s
 The build is the gate (its header lists the four steps): unit tests, the compile, the engine client against a
 scripted fake engine (`test/fake-engine.ps1`) and every screen drawn headless at 96, 120, 144 and 192 DPI in four
 languages and at a 150 % text size. No step shows a window. `tools/release/test-dryrun.ps1` also runs the built window
-against the real engine (plan and dry run) when the package carries it.
+against the real engine (plan and dry run). Every release package carries the window from 0.7.216.100-tester.28 on:
+`build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it.
+
+The guide panel on the right shows the guide character, from the art of
+`tools/win/amdgpu_wddm_control/art/nagi`: the build embeds the expressions this window's causes can ask for
+(`SetupGuide.ArtExpressions`, which its unit tests check against every `SetupCause` and print for the build) at
+`@128` and `@256`, under the names that application's `Guide.ArtFile` map gives them, and refuses an exe that lacks
+one. Her pictures are stills, and the setup window never animates her. She is on unless the control application's
+`ShowNagi` is the DWORD 0, so she is on the Welcome screen of a first install. Two render runs use `--no-nagi`, and
+every other run must draw her picture.
 
 Translations: `strings/strings.<lang>.txt`. A new or redone translation gets `?` as its hash and `strings/stamp.ps1`
 stamps it; a line whose English text changed fails G-STR until it is retranslated. Polish, Japanese and Korean are

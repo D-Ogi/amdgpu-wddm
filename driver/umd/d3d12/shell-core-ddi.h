@@ -74,23 +74,41 @@ inline void APIENTRY scheduling_group_destroy(D3D12DDI_HDEVICE h,
     shell_core_detail::reject_void(h);
 }
 
+// D91 and D114 are void slots with no error channel at all: the only thing either can
+// hand back is its output (WDK10.0.26100 d3d12umddi.h:3898-3904 and :8828-8833). A
+// removed device was therefore the wrong answer for both, and the most expensive one.
+// Both are debug-layer and tool calls: the debug layer asks for allocation info per
+// object, and a profiler sets the background processing mode. Removing the device there
+// turns a tool's question into DXGI_ERROR_DRIVER_INTERNAL_ERROR for the application,
+// which is the BD-075 class of defect (DEFECTS.md), not a refusal. Each answers its
+// output completely, applies nothing, and writes one line per process.
+inline std::atomic<bool> debug_allocation_noted{false};
 inline void APIENTRY debug_allocation_info(D3D12DDI_HDEVICE h,
     D3D12DDI_HANDLE_AND_TYPE, UINT* va_count,
     D3D12DDI_DEBUG_VIRTUAL_ADDRESS_ALLOCATION_INFO_0012*, UINT* kmt_count,
     D3D12DDI_DEBUG_KMT_ALLOCATION_INFO_0014*) {
-    // Zero records are returned because this call fails, not as an assertion
-    // that the object has no allocations. Never invent a resource mapping.
+    // This driver publishes no allocation inventory to the debug layer, so zero records
+    // of each kind is the whole answer. Never invent a resource mapping: the arrays stay
+    // untouched, because a count of zero says nothing was written into them.
     if (va_count) *va_count = 0;
     if (kmt_count) *kmt_count = 0;
-    shell_core_detail::reject_void(h);
+    if (!shell_core_detail::device(h)) return;
+    if (!debug_allocation_noted.exchange(true, std::memory_order_relaxed))
+        ddi_refusal("GetDebugAllocationInfo: no allocation info is published; zero records");
 }
+inline std::atomic<bool> background_processing_noted{false};
 inline void APIENTRY background_processing_mode(D3D12DDI_HDEVICE h,
-    D3D12DDI_BACKGROUND_PROCESSING_MODE_0062,
+    D3D12DDI_BACKGROUND_PROCESSING_MODE_0062 mode,
     D3D12DDI_MEASUREMENTS_ACTION_0062, BOOL* further_measurements) {
-    // BackgroundProcessingSupported is FALSE in the advertised options.
-    // The output has a defined failure value; no optimization mode is applied.
+    // BackgroundProcessingSupported is FALSE in the advertised options, which is the
+    // statement that no mode is applied; the engine answers that field FALSE itself and
+    // its own SetBackgroundProcessingMode is a stub. The call is accepted and dropped,
+    // as pfnSetMarker is, and no further measurements are desired.
     if (further_measurements) *further_measurements = FALSE;
-    shell_core_detail::reject_void(h);
+    if (!shell_core_detail::device(h)) return;
+    if (!background_processing_noted.exchange(true, std::memory_order_relaxed))
+        ddi_refusal("SetBackgroundProcessingMode: mode %u accepted and dropped; "
+            "BackgroundProcessingSupported is FALSE", static_cast<unsigned>(mode));
 }
 
 // Install only these nine slots. Residency and Present private data remain

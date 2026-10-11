@@ -1,16 +1,23 @@
 // Device life cycle, the one child (the monitor output), power. M3: no MMIO, no interrupt (ADR 0006).
 #include "bc250kmd.h"
+#include "adapter_owner.h"
 
 NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_ PVOID* MiniportDeviceContext)
 {
     BC250_DEVICE* device;
 
-    GuardStage(StageAddDevice);
+    *MiniportDeviceContext = NULL;
+    if (!AdapterOwnerClaim(PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
     device = (BC250_DEVICE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*device), BC250_TAG);
-    if (device == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    if (device == NULL) {
+        AdapterOwnerRelease(PhysicalDeviceObject, 0);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    GuardStage(StageAddDevice);
     BoardMemoryInitialize(device);
     BoardMemoryIdentityClear(device);
     device->PhysicalDeviceObject = PhysicalDeviceObject;
+    device->StopDone = TRUE; // No hardware start has been attempted yet.
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
     StartHealthInitialize(device);
     CuModeInitialize(device);
@@ -38,6 +45,9 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_SUCCESS;
+    // Remove may follow a failed start without an ordinary StopDevice.
+    if (!device->StopDone) (void)Bc250StopDevice(device);
     BoardMemoryStop(device);
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
     CpuStop(device);        // before DpmStop: a trial's revert still needs the mailbox and the governor's busy share
@@ -48,6 +58,8 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     InteropRemove(device);  // the power callback must not find the device once its memory goes
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
+    // Keep admission closed until every cleanup above has completed.
+    AdapterOwnerRelease(device->PhysicalDeviceObject, device->GpuStopUnconfirmed);
     ExFreePoolWithTag(device, BC250_TAG);
     return STATUS_SUCCESS;
 }
@@ -61,17 +73,27 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     NTSTATUS status;
 
-    BoardMemoryIdentityClear(device);
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
+    BoardMemoryIdentityClear(device);
     GuardStage(StageStartEnter);
     // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does
     // nothing unless Parameters\KeepLog is set.
     GuardLogKeepEpisode(L"start");
+    // BD-122: from here on the registry record belongs to THIS attempt, whatever an earlier boot left behind, and
+    // every exit below that does not reach a started device writes its reason into it (guard.c, StartRecord). The
+    // refusal above this line is not one: it is a foreign or absent device object, which this driver does not own
+    // and must leave no trace for.
+    GuardRecordStartAttempt();
     device->InheritedSignalValid=FALSE;
-    device->StopDone=FALSE;     // a PnP stop and start without a remove reuses this context
     if (device->GpuStopUnconfirmed) {
         GuardLog("start refused: previous GPU stop is unconfirmed for this device object");
+        GuardStartStep(L"PreviousStopUnconfirmed");
+        // This exit fails the start as surely as the goto failed paths do, so it leaves the stage every reader of
+        // LastStage and StageHistory keys off, and the record's documented "Stage 91 for a failure" holds here too.
+        GuardStage(StageStartFailed);
+        GuardRecordStartFailed(STATUS_DEVICE_HARDWARE_ERROR);
         return STATUS_DEVICE_HARDWARE_ERROR;
     }
 
@@ -79,9 +101,12 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     if (!NT_SUCCESS(status))
     {
         GuardStage(StageRefusedByGuard);
+        GuardStartStep(L"BootLoopGuard");
+        GuardRecordStartRefused(status);
         return status;
     }
     GuardStage(StageStartGuardPassed);
+    device->StopDone=FALSE; // Only an admitted start may require hardware unwind.
 
     StartHealthBegin(device,WddmFullTableSelected());
     CuModeBegin(device);
@@ -91,14 +116,20 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     RtlZeroMemory(&device->Dxgk, sizeof(device->Dxgk));
     RtlCopyMemory(&device->Dxgk, DxgkInterface, min((SIZE_T)DxgkInterface->Size, sizeof(device->Dxgk)));
 
+    GuardStartStep(L"DxgkCbGetDeviceInformation");
     status = device->Dxgk.DxgkCbGetDeviceInformation(device->Dxgk.DeviceHandle, &device->DeviceInfo);
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartDeviceInfo);
     BoardMemoryIdentityCapture(device);
+    BoardProviderBind(device);
 
     // The firmware's mode and framebuffer. Without it there is nothing this driver could show: M3 sets no mode.
+    GuardStartStep(L"AcquirePostDisplayOwnership");
     status = device->Dxgk.DxgkCbAcquirePostDisplayOwnership(device->Dxgk.DeviceHandle, &device->Post);
     if (!NT_SUCCESS(status)) goto failed;
+    // Its own step: the firmware answered, and what it answered has no display in it. That is a BIOS or
+    // seamless-boot question, not a driver one, and the two must not read the same in the record.
+    GuardStartStep(L"PostDisplayGeometry");
     if (device->Post.Width == 0 || device->Post.Height == 0 || device->Post.PhysicAddress.QuadPart == 0)
     {
         status = STATUS_GRAPHICS_NO_VIDEO_MEMORY;       // honest: no firmware display to take over
@@ -108,6 +139,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
              device->Post.Pitch, (ULONG)device->Post.ColorFormat, device->Post.TargetId);
     GuardStage(StageStartPostDisplayAcquired);
 
+    GuardStartStep(L"DisplayMapFramebuffer");
     status = DisplayMapFramebuffer(device);
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartFramebufferMapped);
@@ -126,9 +158,11 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         if (device->Mmio==NULL)
             GuardLog("smu: native owner start skipped, EnableNativeSmu 1 with EnableMmio 0 (no BAR5 mapping)");
         else {
+            GuardStartStep(L"SmuOwnerStart");
             status=SmuOwnerStart(&device->Smu,device->Mmio);
             GuardLog("smu: native owner start status 0x%08X",status);
             if (!NT_SUCCESS(status)) {
+                GuardStartFailureMark();        // BD-122: the record's log lines end here, not after the cleanup
                 MmioStop(device);
                 DisplayUnmapFramebuffer(device);
                 goto failed;
@@ -142,8 +176,13 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
     IhStart(device);        // same rule
+    // WddmStart and GpuStartupInitialize name their own sub-steps inside this one (GuardStartSubStep).
+    GuardStartStep(L"WddmStart");
     status = WddmStart(device);
     if (!NT_SUCCESS(status)) {
+        // BD-122: the failure point, before the whole device is torn down below. The stop of a GPU that got this
+        // far writes dozens of its own log lines, and the record keeps the 64 that lead up to here.
+        GuardStartFailureMark();
         // Full WDDM may have attempted hardware initialization. Preserve dependency
         // ordering and retained/quarantined ownership during remaining cleanup.
         (void)Bc250StopDevice(device);
@@ -151,8 +190,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     }
     // Capture once before dxgkrnl can enumerate modes or describe a primary.
     // A single immutable signal keeps those two contracts exactly consistent.
+    GuardStartStep(L"DisplayPrepareInheritedTiming");
     status=DisplayPrepareInheritedTiming(device);
     if (!NT_SUCCESS(status)) {
+        GuardStartFailureMark();        // BD-122: before the teardown of a GPU that started, as above
         (void)Bc250StopDevice(device);
         goto failed;
     }
@@ -186,14 +227,21 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     DriverVersionStart(device);
     BoardMemoryStart(device); // Read-only self-check; never fails display start.
     GuardStage(StageStartDone);
+    GuardRecordStartStarted();      // BD-122: this start is not a reason for anything
     return STATUS_SUCCESS;
 
 failed:
+    // BD-122, first of all and before the cleanup: the failure point of every step that did not mark one itself.
+    GuardStartFailureMark();
+    if (!device->StopDone) (void)Bc250StopDevice(device);
     BoardMemoryStop(device);
     BoardMemoryIdentityClear(device);
     StartHealthClose(device);
     GuardLog("start failed 0x%08X", status);
     GuardStage(StageStartFailed);
+    // BD-122, last and after the existing cleanup, which is unchanged: Stage is then the 91 a tester's
+    // start-confirm.log already prints, and the kept ring lines are the ones up to the mark taken above.
+    GuardRecordStartFailed(status);
     return status;
 }
 
@@ -202,8 +250,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     BOOLEAN wasStarted;
 
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_SUCCESS;
     BoardMemoryStop(device);
-    BoardMemoryIdentityClear(device);
 
     // BD-090. When DxgkDdiStopDeviceAndReleasePostDisplayOwnership fails, dxgkrnl calls DxgkDdiStopDevice after it
     // (plug-and-play--pnp--start-and-stop-cases.md, "or after a call to DxgkDdiStopDeviceAndReleasePostDisplay-
@@ -228,6 +276,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
     DpAudioStop(device);        // before WddmStop/DcnStop, with BAR5 mapped: the next owner inherits AUDIO_ENABLED 0
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
+    BoardProviderUnbind(device); // Only after fan hand-back and the final mailbox client.
+    BoardMemoryIdentityClear(device);
     device->SystemDisplayReady=FALSE;
     device->PostDisplayStopAttempted=FALSE;
     device->PostDisplayStopStatus=STATUS_DEVICE_NOT_READY;
@@ -275,6 +325,7 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
     NTSTATUS status;
     UNREFERENCED_PARAMETER(TargetId); // one active output; return its actual id below
     RtlZeroMemory(DisplayInfo,sizeof(*DisplayInfo));
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_NOT_READY;
     // WDDM 1.2 (plug-and-play--pnp--start-and-stop-cases.md): the surface the pipe scans out when this call returns
     // must be filled with black before source visibility goes TRUE. That surface is the POST framebuffer
     // (DcnRestorePostDisplay below puts the scanout back on it), which the memory segment is carved clear of
@@ -301,7 +352,7 @@ void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
     // this driver takes from the board, so it goes back here too, with port writes only (fan.c).
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
-    if (device == NULL) return;
+    if (device == NULL || !AdapterOwnerIs(device->PhysicalDeviceObject)) return;
     if (device->Modeset.PipeChanged)
     {
         (void)DcnRestorePostDisplay(device);
@@ -453,6 +504,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
                             _In_ DEVICE_POWER_STATE DevicePowerState, _In_ POWER_ACTION ActionType)
 {
     BC250_DEVICE* device=(BC250_DEVICE*)MiniportDeviceContext;
+    if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_NOT_READY;
     // BD-059: down for a system sleep or shutdown ends the GPU DWM session while the registry is still up (registry
     // only, before any hardware step); the way back to D0 marks it again if devices still use the path.
     if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0)

@@ -141,6 +141,9 @@ function Remove-PathOrSchedule { param($Path) $script:filesRemoved += $Path }
 function Get-MftRegistrationKeysPresent { param($ClassesKey) return @() }
 function Read-Confirmation { throw 'No interactive prompt is allowed in this test' }
 function Get-ReleaseFootprint { param($InstallRoot, $State, $MftKeys) return $script:footprintRows }
+# The rows of the optional components (installer\components.ps1) are their own source. This test is about the
+# decision the footprint list makes, so the fixture gives it no component row; test-components.ps1 has those.
+function Get-ComponentFootprint { param($State, $RemoveModels) return @() }
 function Reset-UninstallFixture {
     $script:fixtureRows = @($script:originalRows)
     $script:inventoryError = $null; $script:inventoryFailAt = 0; $script:inventoryCalls = 0

@@ -23,6 +23,7 @@ namespace AmdgpuWddmControl
 
         public void UseFixture(RecoverySnapshot s)
         {
+            if (!_smoke) throw new InvalidOperationException("fixtures require a smoke form");
             _fixture = true;
             _snap = s ?? new RecoverySnapshot();
             if (_snap.GameProfiles == null) _snap.GameProfiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -39,9 +40,29 @@ namespace AmdgpuWddmControl
                 new RecentLaunch { Image = "ROTTR.exe", Path = @"D:\Games\Rise of the Tomb Raider\ROTTR.exe", LastLaunchUtc = now.AddDays(-1), Apis = 1, Launches = 3 },
                 new RecentLaunch { Image = "factorio.exe", Path = @"D:\Games\Factorio\bin\x64\factorio.exe", LastLaunchUtc = now.AddDays(-3), Apis = 2, Launches = 40 },
             };
-            _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v1.0.1.0-tester.12", CandidateVersion = "1.0.1.0-tester.12" };
-            _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "1.0.0.0-tester.11", DriverDate = "10-3-2026" });
+            _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v0.7.216.101-tester.29", CandidateVersion = "0.7.216.101-tester.29" };
+            _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "0.7.216.100-tester.28", DriverDate = "10-3-2026" });
             _vram = new VideoMemoryState { Segments = 1, LocalResident = 3L << 30, Dedicated = 8L << 30, LocalLimit = 8L << 30 };
+            // The board memory card as a BC-250 answers it: 8 GiB reserved and in use, 12 GiB the other choice,
+            // nothing pending and no backup to restore. Without this a render on a PC without the board falls back
+            // to the read-only video memory card, so the control the board really has is never drawn by a gate.
+            // A board whose capabilities do not allow the setting keeps that fallback, which is what it must show.
+            if (_uma == null && BoardCapabilities.Current.Allows(BoardCapabilities.Memory))
+            {
+                const uint inUseMiB = 8192;
+                var block = new byte[28];
+                Array.Copy(BitConverter.GetBytes(0x4c424124u), 0, block, 0, 4);       // the ABL block signature
+                Array.Copy(BitConverter.GetBytes((ushort)inUseMiB), 0, block, 26, 2);
+                uint sum = 0;
+                for (int i = 6; i < block.Length; i++) sum += block[i];
+                Array.Copy(BitConverter.GetBytes((ushort)sum), 0, block, 4, 2);
+                _uma = new UmaState
+                {
+                    Supported = true, ProviderId = 1, AllowedFirstMiB = 8192, AllowedSecondMiB = 12288, NeedsRestart = 1,
+                    ActiveValid = true, ReadValid = true, WriteAllowed = true, BackupAvailable = false,
+                    ActiveBytes = (ulong)inUseMiB << 20, RequestedMiB = inUseMiB, ObservedBlock = block,
+                };
+            }
             // The "Now" card with every row filled: a recorded snapshot keeps its mode, reason and ceiling, and gets the
             // live readings it never recorded (37 % load, 62 C, the clock of its mode, 78 W from the SMU metrics table).
             if (_snap.Dpm == null) _snap.Dpm = new DpmState { Version = 0x000700D7, Mode = 1, Requested = 1, MaxMHz = DpmSettings.DefaultMaxMHz };
@@ -107,14 +128,14 @@ namespace AmdgpuWddmControl
             // the one in force), and processor tuning on with one readback and saved settings. A fixture that brings
             // its own readings (test/snapshot-tuner.json) keeps them.
             _tuningOpen = true;
-            if (_snap.Curve == null)
+            if (_snap.Curve == null && BoardCapabilities.Current.Allows(BoardCapabilities.Gpu))
             {
                 var line = Tuner.Table(); var floor = Tuner.Floors();
                 var trial = Tuner.Preset("medium", line, floor);
                 _snap.Curve = new CurveState
                 {
                     Version = 0x000700D5, Flags = CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagOnTrial | CurveState.FlagApplied | CurveState.FlagStored,
-                    TrialMs = 120000, TrialRemainingMs = 87000, Serial = 4, Applied = 4, FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = Tuner.Points,
+                    TrialMs = 120000, TrialRemainingMs = 87000, Serial = 4, Applied = 4, FirstMHz = Tuner.FirstMHz, StepMHz = Tuner.StepMHz, Points = (uint)Tuner.Points,
                     Candidate = trial, Active = (uint[])trial.Clone(), Stored = Tuner.Preset("mild", line, floor), Default = line, Floor = floor,
                     Level = 5, LevelMHz = 1500, LevelMv = trial[5], CeilingMHz = 1500, Mode = 1, TemperatureMc = 64000, Sets = 2, Keeps = 1, Generation = 5,
                 };
@@ -134,6 +155,32 @@ namespace AmdgpuWddmControl
             _fanEditC = new uint[] { 35, 50, 60, 70, 80, 85 };
             _fanEditPct = new uint[] { 30, 40, 55, 70, 90, 100 };
             _fanChoice = "custom";
+            // The ray tracing benchmark card at its widest: a copy of the game found, both passes measured, and a
+            // history of three runs in which every reason a pass can have for no number appears once. The fixture
+            // searches no disk of this PC (MainForm.Bench.cs ReadBenchmark says why).
+            _bench = new InstallState { Folder = @"D:\Games\Quake II RTX", ExePath = @"D:\Games\Quake II RTX\q2rtx.exe", PakPath = @"D:\Games\Quake II RTX\baseq2\pak0.pak", Verdict = InstallVerdict.Ready, FromSteam = true };
+            _benchHistory = new List<RunRecord>
+            {
+                new RunRecord { Utc = Recovery.Stamp(now.AddMinutes(-20)), Driver = "0.7.216.100-tester.28", Passes = new List<PassRecord>
+                {
+                    new PassRecord { Api = "pipeline", Outcome = PassOutcome.Done, Fps = 60.94, Frames = 1550, Seconds = 25.43, MaxTempC = 79, MeanClockMHz = 1948 },
+                    new PassRecord { Api = "query", Outcome = PassOutcome.Done, Fps = 66.39, Frames = 1550, Seconds = 23.35, MaxTempC = 81, MeanClockMHz = 1951 },
+                } },
+                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-1)), Driver = "0.7.216.100-tester.28", Passes = new List<PassRecord>
+                {
+                    new PassRecord { Api = "pipeline", Outcome = PassOutcome.TooHot, MaxTempC = 89, MeanClockMHz = 1700 },
+                    new PassRecord { Api = "query", Outcome = PassOutcome.TooHot },
+                } },
+                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-3)), Driver = "0.7.216.99-tester.27", Passes = new List<PassRecord>
+                {
+                    new PassRecord { Api = "pipeline", Outcome = PassOutcome.TimedOut, MaxTempC = 74 },
+                    new PassRecord { Api = "query", Outcome = PassOutcome.NoResult, MaxTempC = 73 },
+                } },
+            };
+            // No run of this session: the card then shows the newest saved run and the state line says so, which is
+            // what a person sees who opens the application again (b23 lab round, F2). The card is as wide as with a
+            // run of this session, because it shows the same run.
+            _benchRun = null;
             ComputeStatus();
             ShowPage(_page, null, false);
         }
@@ -164,7 +211,7 @@ namespace AmdgpuWddmControl
         public sealed class RenderOptions
         {
             public string Directory, SwitchTo;
-            public bool Nagi;
+            public bool Nagi = true;        // the default of an installed application; --no-nagi turns it off
         }
 
         public string RenderPages(RenderOptions o)
@@ -201,9 +248,36 @@ namespace AmdgpuWddmControl
                     foreach (var p in Overflows(this)) w.AppendLine(where + ": " + p);
                     foreach (var p in NoInternals(Texts(this, true))) w.AppendLine(where + ": G-NOINT " + p);
                     foreach (var p in Accessibility(this)) w.AppendLine(where + ": G-A11Y " + p);
+                    if (_fixture && page == "graphics")
+                    {
+                        bool admitted = BoardCapabilities.Current.Allows(BoardCapabilities.Gpu | BoardCapabilities.Cpu);
+                        if (_anchors.ContainsKey("graphics.tuning") != admitted)
+                            w.AppendLine(where + ": board capability admission does not match the tuning controls");
+                        if (!admitted && !Texts(built, false).Contains(Strings.T("board.unsupported")))
+                            w.AppendLine(where + ": the unsupported board has no explanation");
+                    }
+                    if (_fixture && page == "system")
+                        foreach (var anchor in new[] { "system.background", "system.updates", "system.drivers", "system.drive" })
+                            if (!_anchors.ContainsKey(anchor)) w.AppendLine(where + ": Windows setting missing for this board: " + anchor);
                     if (_guide == null || string.IsNullOrEmpty(_guide.Text2)) w.AppendLine(where + ": the guide panel has no text");
                     if (_guide != null && _guide.ArtShown && !_prefs.ShowNagi) w.AppendLine(where + ": G-ART art shown with Show Nagi unchecked");
+                    // The other direction, which no gate held before: with Show Nagi on, the art embedded and the
+                    // side panel in the window, the guide panel must draw the picture of its own verdict. Every
+                    // reason it could stay hidden (no resource, no verdict, a slot the layout dropped) is a finding.
+                    if (_guide != null && _prefs.ShowNagi && _side != null && HasVisibleFlag(_side) && !_guide.ArtShown)
+                        w.AppendLine(where + ": G-ART no art with Show Nagi on (verdict " + (_verdict != null ? _verdict.Expression : "none") +
+                            ", resource " + (_verdict != null && NagiArt.Has(_verdict.Expression, Guide.ArtSize(Theme.Scale)) ? "present" : "absent") + ")");
                     if (_guide != null && _guide.Playing) w.AppendLine(where + ": G-PERF a frame sequence plays in a window that is not shown");
+                    // "Show Nagi" turned off and on again on this page, with the verdict unchanged: the slot must
+                    // hold her picture again. It runs where the side panel is in the window, so the minimum size
+                    // (which has no side panel) is not measured and does not make this check pass by itself.
+                    if (_guide != null && _side != null && HasVisibleFlag(_side) && _prefs.ShowNagi)
+                    {
+                        _prefs.ShowNagi = false; UpdateGuide();
+                        if (_guide.ArtShown) w.AppendLine(where + ": G-ART the art stays in the panel after Show Nagi was turned off");
+                        _prefs.ShowNagi = true; UpdateGuide();
+                        if (!_guide.ArtShown) w.AppendLine(where + ": G-ART the art does not come back when Show Nagi is turned on again");
+                    }
                 }
             }
             if (!ThreeWayDialog.EscapeKeepsEditing()) w.AppendLine("G-A11Y: Escape in Save / Discard / Keep editing does not keep editing");
@@ -233,8 +307,7 @@ namespace AmdgpuWddmControl
 
         // Control.Visible reads false for every control of a form that was never shown, so the checks use the control's
         // own visible flag (STATE_VISIBLE).
-        static readonly System.Reflection.MethodInfo GetState = typeof(Control).GetMethod("GetState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        static bool HasVisibleFlag(Control c) { return (bool)GetState.Invoke(c, new object[] { 2 }); }
+        static bool HasVisibleFlag(Control c) { return Ui.HasVisibleFlag(c); }
 
         static void CreateHandles(Control c)
         {
@@ -318,5 +391,192 @@ namespace AmdgpuWddmControl
         // ---- --smoke-perf (G-PERF) ---------------------------------------------------------------------------------
 
         public bool ReadOnlyProbe;
+
+        // ---- --smoke-scroll (the place a rebuild keeps) -------------------------------------------------------------
+        //
+        // A page is rebuilt under the person's hands whenever a card gets a new reading, and the place the person
+        // scrolled to must survive that. It did not: a page built into a panel that was still scrolled came out with
+        // a scroll range too large by the scroll offset, and the view then stood past the end of the new content
+        // (b23 lab round, F1). The card of a run that has just started is shorter than the card of a finished one,
+        // and the person who presses Start is at the end of the page, where that card is.
+        //
+        // The gate needs no window. The controls of a window that was never shown are not "created" in the sense of
+        // WinForms, and the setter of AutoScrollPosition does nothing on a control that is not created, so the gate
+        // creates the control tree the way Show() would (Control.CreateControl(true)). After that the panel scrolls
+        // exactly as the window's panel does. What the focus does after a rebuild needs a real window, so the rule
+        // of that is a pure function with its own host tests (PageFocus.After).
+        public string ScrollKeeping()
+        {
+            var w = new StringBuilder();
+            ShowPage("performance", null, false);
+            CreateTree();
+
+            int at = -_content.AutoScrollPosition.Y;
+            if (at != 0) w.AppendLine("the page is not built at its top: " + at + " px");
+            int end = PageEnd();
+            if (end < 800)
+            {
+                w.AppendLine("the performance page of this fixture is only " + end + " px longer than the window, too short for this check");
+                return w.ToString();
+            }
+
+            // In the middle of the page: a rebuild keeps the place and leaves the scroll range as it was.
+            _content.AutoScrollPosition = new Point(0, 600);
+            int before = -_content.AutoScrollPosition.Y, range = _content.DisplayRectangle.Height;
+            if (before != 600) w.AppendLine("a scroll to 600 px gave " + before + " px");
+            ShowPage("performance", null, false);
+            int after = -_content.AutoScrollPosition.Y;
+            if (after != before) w.AppendLine("a rebuild moved the page from " + before + " px to " + after + " px");
+            if (_content.DisplayRectangle.Height != range)
+                w.AppendLine("a rebuild changed the scroll range from " + range + " px to " + _content.DisplayRectangle.Height + " px");
+
+            // Another page opens at its top, never where the page before it stood.
+            _content.AutoScrollPosition = new Point(0, 600);
+            ShowPage("driver", null, false);
+            int other = -_content.AutoScrollPosition.Y;
+            if (other != 0) w.AppendLine("another page opened " + other + " px down, where the page before it stood");
+            ShowPage("performance", null, false);
+
+            // At the end of the page, where the benchmark card is, with a rebuild that makes that card shorter: the
+            // view belongs at the end of the new content, never past it and never back at the top.
+            _content.AutoScrollPosition = new Point(0, end);
+            int atEnd = -_content.AutoScrollPosition.Y;
+            _benchRun = new BenchProgress
+            {
+                Stage = BenchProgress.Starting, Busy = true,
+                Run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "0.7.216.100-tester.28" },
+            };
+            ShowPage("performance", null, false);
+            int shorter = PageEnd(), now = -_content.AutoScrollPosition.Y;
+            if (shorter >= atEnd)
+                w.AppendLine("the card of a run that has just started is not shorter than the card of a finished one, so this check measures nothing");
+            else if (now > shorter) w.AppendLine("after a rebuild that made the page shorter the view stands " + (now - shorter) + " px past its end");
+            else if (now == 0) w.AppendLine("a rebuild that made the page shorter put the page back at its top");
+            return w.ToString();
+        }
+
+
+        // ---- --smoke-scroll, part two: the card of a run that is going on keeps its place ---------------------------
+        //
+        // While a benchmark run goes on, "Start the test" and "Stop the test" must stay where they are. They did
+        // not: the case fan card above gets the line "The fan is at full speed now, because the graphics are working
+        // hard." as soon as the game loads the chip, and the whole benchmark card moved 23 px down with it, 9 to 18 s
+        // into the run, under the pointer of a person who was aiming at Stop (b23 lab round 2, F7). This gate builds
+        // every state of a run in the control tree and measures where the two buttons sit in the view.
+        //
+        // The measure is the place of a control in the page less the scroll offset, not the control bounds: a page
+        // built without a window is laid out, but its controls are not moved by the panel the way a shown window
+        // moves them, and the place in the page is what the person sees against the window.
+        public string RunStateLayout()
+        {
+            var w = new StringBuilder();
+            ShowPage("performance", null, false);
+            CreateTree();
+            Control card;
+            if (!_anchors.TryGetValue("perf.benchmark", out card)) { w.AppendLine("the performance page has no benchmark card"); return w.ToString(); }
+
+            // Where the person stands when they press Start: at the card, as the search leaves the page, with the
+            // card as far up as it goes (a card taller than the view then has its top edge above it).
+            int view = _content.ClientSize.Height;
+            _content.AutoScrollPosition = new Point(0, ContentTop(card) + Math.Max(0, card.Height - view));
+            int ready = ViewY(Strings.T("bench.start"));
+            int above = CardTop();
+            Check(w, "before the run", ready, ready);
+
+            // Start: the page does not move, because the buttons are in reach already.
+            var run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "0.7.216.100-tester.28" };
+            _benchRun = new BenchProgress { Stage = BenchProgress.Starting, Busy = true, Run = run };
+            ShowPage(_page, null, false);
+            BringIntoView("perf.benchmark", "perf.benchmark.buttons");
+            Check(w, "the run starts", ready, ViewY(Strings.T("bench.start")));
+
+            _benchRun = new BenchProgress { Stage = BenchProgress.Running, Busy = true, Pass = "pipeline", ElapsedMs = 9000, Run = run };
+            ShowPage(_page, null, false);
+            Check(w, "the first way runs", ready, ViewY(Strings.T("bench.start")));
+
+            // The fan card above gets its line while the game loads the chip. Everything under it moves, which is
+            // what this gate is for; without that line it would measure nothing.
+            if (_snap != null && _snap.Fan != null) _snap.Fan.Flags |= FanState.FlagBoost;
+            ShowPage(_page, null, false);
+            if (CardTop() == above)
+                w.AppendLine("the card above the benchmark card did not change height at full fan speed, so this check measures nothing");
+            Check(w, "the fan goes to full speed", ready, ViewY(Strings.T("bench.start")));
+
+            run.Passes.Add(new PassRecord { Api = "pipeline", Outcome = PassOutcome.Done, Fps = 64.05, Frames = 631, Seconds = 9.85, MaxTempC = 72, MeanClockMHz = 1227 });
+            _benchRun = new BenchProgress { Stage = BenchProgress.Reading, Busy = true, Pass = "pipeline", ElapsedMs = 18000, Run = run };
+            ShowPage(_page, null, false);
+            Check(w, "the first way has its numbers", ready, ViewY(Strings.T("bench.start")));
+
+            _benchRun = new BenchProgress { Stage = BenchProgress.Running, Busy = true, Pass = "query", ElapsedMs = 9000, Run = run };
+            ShowPage(_page, null, false);
+            Check(w, "the second way runs", ready, ViewY(Strings.T("bench.start")));
+
+            run.Passes.Add(new PassRecord { Api = "query", Outcome = PassOutcome.Done, Fps = 65.10, Frames = 631, Seconds = 9.69, MaxTempC = 74, MeanClockMHz = 1270 });
+            _benchRun = new BenchProgress { Stage = BenchProgress.Finished, Run = run };
+            if (_snap != null && _snap.Fan != null) _snap.Fan.Flags &= ~FanState.FlagBoost;
+            ShowPage(_page, null, false);
+            Check(w, "the run is finished", ready, ViewY(Strings.T("bench.start")));
+
+            var stopped = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "0.7.216.100-tester.28" };
+            stopped.Passes.Add(new PassRecord { Api = "pipeline", Outcome = PassOutcome.Cancelled });
+            stopped.Passes.Add(new PassRecord { Api = "query", Outcome = PassOutcome.Cancelled });
+            _benchRun = new BenchProgress { Stage = BenchProgress.Finished, Run = stopped };
+            ShowPage(_page, null, false);
+            Check(w, "the person stopped the run", ready, ViewY(Strings.T("bench.start")));
+            return w.ToString();
+        }
+
+        // The two buttons of the card in one state of a run: at the place they had before, and both inside the view.
+        void Check(StringBuilder w, string state, int ready, int now)
+        {
+            if (now != ready) w.AppendLine("\"Start the test\" stands " + (now - ready) + " px from where it was when " + state + ": " + ready + " px against " + now);
+            foreach (var id in new[] { "bench.start", "bench.cancel" })
+            {
+                var b = Named(Strings.T(id));
+                if (b == null) { w.AppendLine("the card has no " + Strings.T(id) + " button when " + state); continue; }
+                int top = ViewY(Strings.T(id));
+                if (top < 0 || top + b.Height > _content.ClientSize.Height)
+                    w.AppendLine("\"" + b.AccessibleName + "\" is outside the view when " + state + ": " + top + " px to " + (top + b.Height) + " px of " + _content.ClientSize.Height);
+            }
+        }
+
+        // The benchmark card of the page as it stands now: every rebuild makes a new one, so the gate asks again.
+        int CardTop()
+        {
+            Control card;
+            return _anchors.TryGetValue("perf.benchmark", out card) ? ContentTop(card) : int.MinValue;
+        }
+
+        Control Named(string text)
+        {
+            string name = text.TrimEnd('.', '\u2026');
+            return All(_content).FirstOrDefault(c => c is Button && c.AccessibleName == name);
+        }
+
+        // Where a control of the page stands in the view: its place in the page less the scroll offset.
+        int ViewY(string text)
+        {
+            var c = Named(text);
+            return c == null ? int.MinValue : ContentTop(c) + _content.AutoScrollPosition.Y;
+        }
+
+        // The control tree of a window that is never shown. The setter of AutoScrollPosition does nothing on a
+        // control that is not created, so the gate creates the tree the way Show() would.
+        void CreateTree()
+        {
+            PerformLayout();
+            CreateHandles(this);
+            var create = typeof(Control).GetMethod("CreateControl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+                null, new[] { typeof(bool) }, null);
+            foreach (var c in new[] { (Control)this }.Concat(All(this))) create.Invoke(c, new object[] { true });
+            PerformLayout();
+        }
+
+        // How far the page can be scrolled: what its content has above the window.
+        int PageEnd()
+        {
+            int content = _content.Controls.Count > 0 ? _content.Controls[0].Height + _content.Padding.Vertical : 0;
+            return Math.Max(0, content - _content.ClientSize.Height);
+        }
     }
 }

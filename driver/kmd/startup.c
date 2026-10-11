@@ -19,6 +19,8 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     BOOLEAN enabled=FALSE, synchronized=FALSE;
     NTSTATUS status=STATUS_DEVICE_NOT_READY;
 
+    // BD-122: the sub-steps of this function inside the start record's WddmStart step (guard.c StartRecord).
+    GuardStartSubStep(L"startup-preconditions");
     if (!Report) return STATUS_INVALID_PARAMETER;
     RtlZeroMemory(Report,sizeof(*Report));
     if (!Device) { status=STATUS_INVALID_PARAMETER; goto Done; }
@@ -37,6 +39,7 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
 
     // A non-NULL interface pointer does not prove the interrupt is connected.
     // MS documents STATUS_UNSUCCESSFUL when synchronization is unavailable.
+    GuardStartSubStep(L"interrupt-connect");
     GuardLog("startup: entering interrupt connection");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
     status=Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle,
@@ -48,6 +51,7 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     }
 
     // Planning only: refuse to re-enable/zero an already live GART, PSP or IH.
+    GuardStartSubStep(L"gart-plan");
     ExAcquireFastMutex(&Device->GartLock);
     status=GartDevice(Device,&adev,&enabled);
     if (NT_SUCCESS(status) && (enabled || PspIsLoaded(Device) || IhIsActive(Device)))
@@ -63,6 +67,7 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
         goto Done;
     }
 
+    GuardStartSubStep(L"psp-firmware");
     GuardLog("startup: entering firmware preparation");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
     status=PspPrepareFirmware(Device,&Report->Psp,&firmware);
@@ -71,6 +76,7 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     // Before any translation/firmware/engine activation, never a later CLI.
     // The single native owner serializes this complete transaction with clients.
     Report->Attempted |= BC250_START_CLOCK;
+    GuardStartSubStep(L"clock-prepare");
     GuardLog("startup: entering native clock preparation");
     GuardLogKeep();
     status=SmuPrepareClock(&Device->Smu,&Report->Clock);
@@ -83,11 +89,13 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     if (!Report->Clock.ready) { status=STATUS_DEVICE_NOT_READY;goto Done; }
     Report->Completed |= BC250_START_CLOCK;
 
+    GuardStartSubStep(L"translation-bootstrap");
     status=GfxBeginTranslationBootstrap(Device);
     if (!NT_SUCCESS(status)) goto Done;
 
     Report->Attempted |= BC250_START_GART;
     GfxTraceRlcState(Device,"before-gart-initialization");
+    GuardStartSubStep(L"gart-initialize");
     GuardLog("startup: entering GART initialization");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
     status=GartInitializeHardware(Device,&Report->Gart);
@@ -96,17 +104,20 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
 
     Report->Attempted |= BC250_START_PSP;
     GfxTraceRlcState(Device,"before-psp");
+    GuardStartSubStep(L"psp-reset");
     GuardLog("startup: entering PSP initialization");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
     status=GfxPreparePspReload(Device);
     if (!NT_SUCCESS(status)) goto Unwind;
     GuardLogKeep(); // Persist the opt-in reset result before firmware loading.
+    GuardStartSubStep(L"psp-initialize");
     status=PspInitializePrepared(Device,firmware,&Report->Psp);
     if (!NT_SUCCESS(status)) goto Unwind;
     Report->Completed |= BC250_START_PSP;
     GfxTraceRlcState(Device,"after-psp");
 
     Report->Attempted |= BC250_START_IH;
+    GuardStartSubStep(L"ih-initialize");
     GuardLog("startup: entering IH initialization");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
     status=IhInitializeHardware(Device,&Report->Ih);
@@ -114,6 +125,7 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     Report->Completed |= BC250_START_IH;
 
     Report->Attempted |= BC250_START_GFX;
+    GuardStartSubStep(L"gfx-initialize");
     GuardLog("startup: entering GFX initialization");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
     // The CU mode's registry work brackets the stages: inside them GartLock holds APC_LEVEL.
@@ -123,6 +135,7 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     if (!NT_SUCCESS(status)) goto Unwind;
     Report->Completed |= BC250_START_GFX;
 
+    GuardStartSubStep(L"aperture-recheck");
     status=GartCaptureAperture(Device,&aperture);
     if (!NT_SUCCESS(status)) goto Unwind;
     if (aperture.mc!=Device->WddmAperture.mc || aperture.table!=Device->WddmAperture.table ||

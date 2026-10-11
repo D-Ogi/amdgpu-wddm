@@ -1,6 +1,6 @@
 # CPU-only tests; callbacks operate on an in-memory block, never hardware.
 param([Parameter(Mandatory)][string]$Root, [string]$Out = "$Root\scratch\uma-windows\host",
-      [ValidateSet("none","count","mapping")][string]$Mutation = "none")
+      [ValidateSet("none","write-range","mapping")][string]$Mutation = "none")
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
@@ -13,17 +13,18 @@ $env:TEMP = "$Root\scratch\tmp"; $env:TMP = $env:TEMP
 $policySource = "$repo\driver\shim\bc250_uma.c"
 [IO.File]::WriteAllText("$Out\ntddk.h", '#pragma once
 typedef unsigned long ULONG;
-#define Cmos 0u
+typedef unsigned __int64 ULONG_PTR;
+typedef unsigned char* PUCHAR;
 #define PASSIVE_LEVEL 0u
 unsigned char KeGetCurrentIrql(void);
-ULONG HalGetBusDataByOffset(unsigned,ULONG,ULONG,void*,ULONG,ULONG);
-ULONG HalSetBusDataByOffset(unsigned,ULONG,ULONG,void*,ULONG,ULONG);
+void WRITE_PORT_UCHAR(PUCHAR,unsigned char);
+unsigned char READ_PORT_UCHAR(PUCHAR);
 ')
 $transportSource = "$repo\driver\kmd\uma_transport.c"
 if ($Mutation -ne 'none') {
     $text = [IO.File]::ReadAllText($transportSource)
-    $old = if ($Mutation -eq 'count') { 'return transfer(context, offset, &value, 1, 1) == 1;' } else { 'slot = transport->mapping == BC250_UMA_MAPPING_SLOT ? 0x90u + offset : 0;' }
-    $new = if ($Mutation -eq 'count') { 'return transfer(context, offset, &value, 1, 1) != 0;' } else { 'slot = 0x90u + offset;' }
+    $old = if ($Mutation -eq 'write-range') { 'if (offset >= 6 && offset != 26 && offset != 27) return 0;' } else { '#define BC250_ABL_CMOS_INDEX_PORT 0x72u' }
+    $new = if ($Mutation -eq 'write-range') { '/* injected missing write-range guard */' } else { '#define BC250_ABL_CMOS_INDEX_PORT 0x70u' }
     if ($text.Split(@($old), [StringSplitOptions]::None).Count -ne 2) { throw 'Mutation anchor changed' }
     $transportSource = "$Out\uma_transport_mutated.c"
     [IO.File]::WriteAllText($transportSource, $text.Replace($old, $new))

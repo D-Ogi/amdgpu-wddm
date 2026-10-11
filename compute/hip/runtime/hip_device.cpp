@@ -4,6 +4,7 @@
 // device once per process, lazily, and there is one device. A machine with no BC-250 adapter
 // answers at once, because the first open records its status.
 
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -117,7 +118,62 @@ void apply_batch_policy(bc250hsa_device* dev) {
     }
 }
 
+// The GPU copy policy of the process (scratch/hip-gpu-copy/CONTRACT.md section 10). The
+// three names are documented beside the fields they set, in runtime_internal.h. The
+// defaults are the route on, 4096 bytes, and the host-processor fill kept for an
+// allocation that has a host mapping.
+void apply_gpu_copy_policy(bc250hsa_device* dev) {
+    char text[32];
+    State& s = state();
+    if (read_text("BC250_HIP_GPU_COPY", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
+        s.gpu_copy_enabled = false;
+    }
+    if (read_text("BC250_HIP_GPU_FILL", text, sizeof(text)) && std::strcmp(text, "1") == 0) {
+        s.gpu_fill_mapped = true;
+    }
+    // 0 is a value of this one and not an absent variable: it puts every copy on the GPU
+    // route, which is the arm that measures the threshold instead of assuming it. read_ms
+    // cannot say the two apart, so the text is read and parsed here.
+    if (read_text("BC250_HIP_GPU_COPY_MIN", text, sizeof(text))) {
+        uint32_t value = 0;
+        if (parse_copy_min(text, &value)) {
+            s.gpu_copy_min_bytes = value;
+        } else {
+            std::fprintf(stderr, "amdhip64: BC250_HIP_GPU_COPY_MIN is not a number of bytes;"
+                                 " the default %u stands\n",
+                         s.gpu_copy_min_bytes);
+        }
+    }
+    // A GPU copy waits for its own fence inside layer 1, so layer 1 needs the wait bound
+    // this process uses everywhere else. Without it a copy of a short lab trial could
+    // wait the library's 120 s default (bc250hsa.h rule 6).
+    const bc250hsa_status status =
+        bc250hsa_wait_policy_set(dev, s.wait_slice_ms, s.wait_total_ms);
+    if (status != BC250HSA_OK) {
+        std::fprintf(stderr, "amdhip64: the backend refused the wait policy (%s); a GPU copy"
+                             " waits under the library default\n",
+                     bc250hsa_status_string(status));
+    }
+}
+
 }  // namespace
+
+// strtoul alone is not enough here: it skips leading spaces, takes a sign, and turns "-1" into
+// the largest unsigned long, which on Windows is 4294967295 and passes a range test. Only
+// digits are a number of bytes, and a value it cannot hold is ERANGE and refused.
+bool parse_copy_min(const char* text, uint32_t* out) {
+    if (text == nullptr || out == nullptr || text[0] < '0' || text[0] > '9') {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long long value = std::strtoull(text, &end, 10);
+    if (errno == ERANGE || end == text || *end != '\0' || value > 0xFFFFFFFFull) {
+        return false;
+    }
+    *out = static_cast<uint32_t>(value);
+    return true;
+}
 
 double host_now_ms() {
     using clock = std::chrono::steady_clock;
@@ -165,6 +221,7 @@ hipError_t device(bc250hsa_device** out) {
             s.props.struct_bytes = static_cast<uint32_t>(sizeof(s.props));
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
             apply_batch_policy(s.dev);
+            apply_gpu_copy_policy(s.dev);
         }
     }
     if (s.dev == nullptr) {

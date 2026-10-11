@@ -52,11 +52,8 @@ static int smu_cmn_send_smc_msg(struct smu_context *smu,unsigned int msg,unsigne
 // The five rows below the floor keep the floor's 820 mV / VID 116: a lower clock at the same voltage, no
 // undervolt and no extrapolation under the lowest anchor. 900 and 800 MHz are the thermal cap's (0.7.205),
 // 500 MHz is the idle point (0.7.207); 700 and 600 MHz only keep the 100 MHz grid whole.
-const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS]={
-    {500,820,116},{600,820,116},{700,820,116},{800,820,116},{900,820,116},
-    {1000,820,116},{1100,840,113},{1200,860,110},{1300,880,107},{1400,899,104},{1500,919,100},
-    {1600,935,98},{1700,952,95},{1800,968,93},{1900,984,90},{2000,1000,88}
-};
+#include "bc250_board_gpu_points.inc"
+
 unsigned int bc250_clock_min_mv(unsigned int mhz)
 {
     if(mhz<BC250_CLOCK_MIN_MHZ || mhz>BC250_CLOCK_CEILING_MHZ || (mhz-BC250_CLOCK_MIN_MHZ)%BC250_CLOCK_STEP_MHZ)

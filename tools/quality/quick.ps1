@@ -33,7 +33,10 @@ function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
 try {
  # A named early gate makes a regression in link input order fail before builds.
  # quality-controls also discovers the positive and negative package unit controls.
+ Check 'x86-callconv' { & pwsh -NoProfile -File "$repo/tools/build/test-x86-callconv.ps1" -OutputDir "$Out/x86-callconv" }
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
+ # One namespace spans all KMD headers, including optional diagnostic commands.
+ Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
@@ -47,6 +50,11 @@ try {
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
+ # Settings apply/restore runs against a fake system. Never change this PC's services, tasks or registry.
+ Check 'system-tuning' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning.ps1" -Out "$Out\system-tuning" }
+ Check 'system-tuning-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-system-tuning-installer.ps1" -Out "$Out\system-tuning-installer" }
+ # This gate uses real ACL/DPAPI storage below Out, with no service, task or registry changes.
+ Check 'system-tuning-journal' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning-journal.ps1" -Out "$Out\system-tuning-journal" }
  Check 'lab-runner-etw' { & pwsh -NoProfile -File "$repo\tools\win\lab-runner\etw\host-checks.ps1" }
  # Windows PowerShell 5.1, the shell game-runtime.ps1 runs in on the lab: the channel before readiness, the intro skip.
  Check 'lab-runner-intro' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-runner\intro-skip-check.ps1" }
@@ -85,6 +93,9 @@ try {
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
+ # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
+ # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
+ Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
@@ -104,7 +115,16 @@ try {
  Check 'board-memory-service' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_service.ps1" -Root $Workspace -Out "$Out\board-memory-service" }
  Check 'board-memory-store' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_store.ps1" -Root $Workspace -Out "$Out\board-memory-store" }
  Check 'board-memory-write' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_write.ps1" -Root $Workspace -Out "$Out\board-memory-write" }
+ Check 'board-provider' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Workspace -Out "$Out\board-provider" }
+ Check 'board-provider-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Workspace -Out "$Out\board-provider-admission-control" -Mutation admission }
+ Check 'adapter-owner' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner" }
+ Check 'adapter-owner-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-admission-control" -Mutation admission }
+ Check 'adapter-owner-cleanup-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-cleanup-control" -Mutation cleanup }
+ Check 'adapter-owner-quarantine-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-quarantine-control" -Mutation poison }
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
+ Check 'wave-reader' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_wave.ps1" -Kits $Kits -Out "$Out\wave-reader" }
+ Check 'wave-access' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_access.ps1" -Kits $Kits -Out "$Out\wave-access" }
+ Check 'wave-recovery' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_recovery.ps1" -Kits $Kits -Out "$Out\wave-recovery" }
  # Compile the retained HIP journal with host kernel primitives; the ownership mutation must fail an assertion.
  Check 'hip-journal' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hip_journal.ps1" -Kits "$Kits" -Out "$Out\hip-journal" }
  Check 'hip-journal-owner-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hip_journal.ps1" -Kits "$Kits" -Out "$Out\hip-journal-owner-control" -OmitProcessCheck -ExpectFailure }
@@ -187,6 +207,9 @@ try {
  # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
  $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
  $suites=@(
+  @{n='wave-recovery-pending-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-NoPendingMarker');Fails=$true}
+  @{n='wave-recovery-order-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-ClearBeforeData');Fails=$true}
+  @{n='wave-recovery-delete-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-AdminReadOnly');Fails=$true}
   @{n='display-visibility';s='driver\kmd\test\run_display_visibility.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-stop';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace)}
   @{n='scanout-geometry';s='driver\kmd\test\run_scanout_geometry.ps1';a=@('-Root',$Workspace)}
@@ -207,6 +230,13 @@ try {
   @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
+  # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
+  @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
+  @{n='start-record-keeplog-gate';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-GateOnKeepLog');Fails=$true}
+  @{n='start-record-no-attempt';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoAttemptRecord');Fails=$true}
+  @{n='start-record-before-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordBeforeCleanup');Fails=$true}
+  @{n='start-record-any-irql';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordAtAnyIrql');Fails=$true}
+  @{n='start-record-log-after-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-LogAfterCleanup');Fails=$true}
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}
@@ -284,7 +314,11 @@ try {
   @{n='sdma-copy-no-vm-flush';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits,'-OmitVmFlush');Fails=$true}
   @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$kits)}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
+  @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
+  @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
+  @{n='smu-native-board-admission';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','board-admission');Fails=$true}
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits)}
+  @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
   # the fan suite, because this is the rule that writes 255 to the chip by itself. Each -Mutation changes one line
   # of a copy of the file under test and the suite must then fail by a check.

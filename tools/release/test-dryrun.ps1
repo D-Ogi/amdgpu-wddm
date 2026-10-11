@@ -105,6 +105,12 @@ $rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-In
 $rr.text
 Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-owned: exit $($rr.code)"
 
+# BD-122: the readers of the KMD's start record, against the packaged installer (test-start-record.ps1 under 5.1,
+# HKCU scratch key). The driver's own half is the host test driver\kmd\test\run_start_record.ps1.
+$sr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-start-record.ps1'), '-Installer', (Join-Path $Package 'installer'))
+$sr.text
+Check ($sr.code -eq 0) "start record: step failure / guard refusal / started after a failure / absent: exit $($sr.code)"
+
 # D3D9 goes through D3D9On12: the D3D9 slot is empty in both views, and no stub is copied.
 Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
 Check ($r.text -match "would: .+ UserModeDriverName = '' \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot empty (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
@@ -218,7 +224,7 @@ Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the wal
 # BD-069: the installer tells the driver's own safety closure from a setting of the tester, and only a repair reopens
 # one. The records belong to the KMD (driver/kmd/interop.c, driver/kmd/dpm.c); the installer reads them.
 Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record) and both decisions'
-Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
+Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
 Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; remedy: run install\.cmd -Repair") -and ($src -notmatch "if \(\`$ioClosed\) \{ \`$ioClosed \+= '; remedy")) 'every reason the DPM guard persists is a closure (3, 4, 8), and verify names the repair only where the driver left a record'
 Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
@@ -372,6 +378,9 @@ Check ($r.code -eq 5) "probe on a PC without the driver: exit $($r.code) (5 = no
 Check ($r.text -match "probe: fallback view: device problem -1, driver version  \(expected $($m.kmd_abi)\), LastStage ") "probe: fallback view runs bc250kmd_cli info/stages; the built-in expected version is this release's kmd_abi $($m.kmd_abi)"
 Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
 Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
+# BD-122: the probe says why the last start failed, read from Parameters\StartRecord with no gate and without the
+# driver. This PC has no such key, so the probe must say that in plain words rather than print nothing.
+Check ($r.text -match 'start record: no record: this driver version does not keep one') 'probe: the start record is read and named, absent on a PC without the driver'
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
 Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm reads the start health through bc250control.dll, not the CLI'
 $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $Package 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json'))
@@ -392,8 +401,48 @@ $r.text
 Check ($r.code -eq 0) "firmware download, fallback, offline folder and wrong-hash refusal: exit $($r.code)"
 Check (([regex]::Matches($r.text, 'SHA256 [0-9A-F]{64} ok  https://git\.kernel\.org/')).Count -eq 9) 'all 9 files came from the first address (git.kernel.org), not only from the fallback'
 
+'the extras: llama.cpp, Ollama and the models (test-components.ps1 under 5.1, HKCU scratch key, no network)'
+$cmPath = Join-Path $Package 'installer\components.json'
+if (-not (Test-Path -LiteralPath $cmPath -PathType Leaf)) {
+    Check ($null -eq $m.optional_components) 'this package offers no extras, and manifest.json says so'
+} else {
+    Check ($null -ne $m.optional_components -and [string]$m.optional_components.file -eq 'installer/components.json') 'manifest.json names installer/components.json under optional_components'
+    Check (@($m.files | Where-Object { $_.path -eq 'installer/components.json' }).Count -eq 1) 'manifest files: installer/components.json is pinned like every other package file'
+    Check (-not @(Get-ChildItem -LiteralPath $Package -Recurse -File -Filter '*.gguf').Count) 'no model file in the package'
+    $cmWork = Join-Path $WorkBase ('components-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+    $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-components.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Source', (Join-Path $PSScriptRoot 'components.json'), '-WorkRoot', $cmWork)
+    $r.text
+    Check ($r.code -eq 0) "manifest checks, switch combinations, offline folder, hash refusal, install, hooks and uninstall cleanup: exit $($r.code)"
+    Remove-Item -LiteralPath $cmWork -Recurse -Force -ErrorAction SilentlyContinue
+    'install -DryRun -DryRunIgnoreBoard: the extras are offered and nothing is downloaded'
+    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard')
+    Check ($r.text -match '\[dry run\] would ask: Install llama\.cpp for this board\?') 'the llama.cpp question is asked, with its default'
+    Check ($r.text -match '\[dry run\] would ask which models to download') 'the model question comes after the components'
+    Check ($r.text -match 'models: none') 'no model is chosen by itself'
+    Check ($r.text -notmatch 'doing: get .+\.zip') 'a dry run downloads no component'
+    'install -DryRun -NoComponents: no question at all'
+    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents')
+    Check ($r.code -eq 0) "-NoComponents exit $($r.code)"
+    Check ($r.text -notmatch 'would ask: Install llama') '-NoComponents asks nothing'
+    Check ($r.text -match 'extras: none') '-NoComponents installs nothing'
+    'install -DryRun -Components llama -Models gemma12b: the chosen ones, no question'
+    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Components', 'llama', '-Models', 'gemma12b')
+    # Only the extras' questions: the test-signing and BitLocker questions of the computer that runs this test are
+    # not the components' business.
+    Check ($r.text -notmatch 'would ask: Install |would ask which models') 'with both switches nothing is asked'
+    $unpinned = @($m.optional_components.unpinned)
+    if ($unpinned -contains 'llama') {
+        Check ($r.text -match 'cannot be installed from this package') 'a component without a SHA-256 pin in this package is refused, not installed unchecked'
+    } else {
+        Check ($r.text -match 'extras to install: llama') 'the component named on the command line is the one installed'
+        Check ($r.text -match 'models to download into .+gemma') 'the model named on the command line is the one downloaded'
+    }
+}
+
 'install -DryRun -DryRunIgnoreBoard -FirmwareDir (offline): a good folder, then a folder with a changed file'
-$r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', (Join-Path $fwWork 'download'))
+# -NoComponents: this case is about the firmware folder, and the extras would print the licence and the
+# download address of a component zip, which the "no address" check below would read as a download.
+$r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents', '-FirmwareDir', (Join-Path $fwWork 'download'))
 Check ($r.code -eq 0) "good folder: exit $($r.code)"
 Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') 'good folder: preflight checks every SHA256'
 Check ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') 'good folder: phase 2 takes the files from the folder'
@@ -425,9 +474,11 @@ foreach ($c in @(
     foreach ($k in $c.st.Keys) { $st[$k] = $c.st[$k] }
     [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json -Depth 4))
     $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
-    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
     Check ($r.code -eq 0) "$($c.name): exit $($r.code)"
     Check ($r.text -match "from the first run of this install \(driver-pending-restart\): -FirmwareDir $([regex]::Escape($goodDir)) -DpmMaxMHz 1200 -NoControlApp") "$($c.name): the folder, the setting and the switch come from the state"
+    # -NoComponents above, so no licence or component address is in this text: every https:// here would be a
+    # firmware download, which this case must not make.
     Check (($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') -and ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') -and ($r.text -notmatch 'https://')) "$($c.name): the firmware comes from the first run's folder, no download"
     Check ($r.text -match 'DpmMaxMHz=1200 \(command line\)') "$($c.name): the first run's -DpmMaxMHz is written"
     Check (($r.text -match 'control application: not in this package \(or -NoControlApp\); skipped') -and ($r.text -notmatch 'would: copy payload\\control')) "$($c.name): -NoControlApp still holds"
@@ -487,9 +538,11 @@ Check ($r.code -eq 0) "G-EVT, G-STAGE: exit $($r.code)"
 $r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-offline.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1800
 $r.text
 Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
-# The setup window, when the package carries it, against this package's real engine: a plan run and a dry run through
-# the window's own engine client, each screen in four languages without internals (--smoke-engine shows no window).
+# The setup window against this package's real engine: a plan run and a dry run through the window's own engine client,
+# each screen in four languages without internals (--smoke-engine shows no window). Every package carries the window
+# from 0.7.216.100-tester.28 on (build-release.ps1 -SetupApp), so a package without it fails here.
 $setupExe = Join-Path $Package 'setup\amdgpu_wddm_setup.exe'
+Check (Test-Path -LiteralPath $setupExe) 'the package carries the setup window (setup\amdgpu_wddm_setup.exe)'
 if (Test-Path -LiteralPath $setupExe) {
     'setup window against the real engine (--smoke-engine: plan and dry run, no window)'
     foreach ($c in @(
@@ -512,7 +565,7 @@ if (Test-Path -LiteralPath $setupExe) {
     }
     $cr0 = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
     Check (($cr0.continuation.setup_exe -eq 'setup/amdgpu_wddm_setup.exe') -and (@($m.files | Where-Object { $_.path -eq 'setup/amdgpu_wddm_setup.exe' }).Count -eq 1)) 'the compatibility record names the setup window as the continuation, manifest.json lists it'
-} else { '  (no setup window in this package: skipped)' }
+}
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 
 'package records: compatibility, release notes, witness writer, planned restarts only'

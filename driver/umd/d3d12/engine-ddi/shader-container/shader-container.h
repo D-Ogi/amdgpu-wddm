@@ -5,7 +5,7 @@
 // engine-ddi's native shader intake: every engine-ddi create-shader slot calls BuildContainer, and
 // CreatePipelineState names input elements and stream-output entries with the two helpers (../pipelines.cpp,
 // engine-ddi.h "Shaders"). DXBC (shader model 4.x and 5.x) and DXIL (shader model 6.x vertex, hull, domain,
-// geometry, pixel and compute programs); mesh and amplification programs are out of scope and refused. DXIL
+// geometry, pixel and compute programs, and mesh and amplification programs through their own slots). DXIL
 // libraries of state objects go through BuildLibraryContainer (../state-objects.cpp).
 //
 // Input, as read from WDK 10.0.26100 d3d12umddi.h:
@@ -79,14 +79,40 @@ struct SignatureView
     UINT count = 0;
 };
 
+// DXIL program kinds beyond the six the tokenized format shares (DirectXShaderCompiler
+// include/dxc/DxilContainer/DxilContainer.h, DXIL::ShaderKind). These two are what Container::programType holds
+// for a mesh and an amplification program.
+constexpr uint32_t kDxilProgramKindMesh = 13;
+constexpr uint32_t kDxilProgramKindAmplification = 14;
+
+// Which create-shader slot the program came from. Mesh and amplification programs are DXIL program kinds 13 and
+// 14, which no other slot admits. The slot is also the one place that decides where the container's signature
+// names come from, so no second field can disagree with it:
+//   - Standard names them synthetically, by the scheme of the table in README.md, a pure function of the entry.
+//   - Mesh and Amplification name them from the program's own metadata: the semantic name and index of its
+//     dx.entryPoints element on that register and component, which is what dxc wrote into the original container.
+//     A mesh pipeline needs those names, because the engine checks its stage linkage by semantic name and index
+//     alone (vkd3d-proton state.c, vkd3d_validate_mesh_shader_io_signatures) and a mesh shader's primitive
+//     outputs have a register space of their own, which no synthetic name over registers can keep apart from the
+//     vertex outputs. Metadata naming is DXIL only, and BuildMeshLinkContainer below applies it to a program of
+//     any slot, for the other stages of a mesh pipeline.
+enum class Slot : uint32_t
+{
+    Standard = 0,       // vertex, pixel, geometry, compute, hull, domain
+    Mesh = 1,           // pfnCreateMeshShader: DXIL kind 13; the primitive output signature goes to PSG1
+    Amplification = 2,  // pfnCreateAmplificationShader: DXIL kind 14
+};
+
 // What the DDI gives for one shader.
 struct ProgramDesc
 {
     const UINT* code = nullptr;     // pShaderCode
     size_t codeCapacity = 0;        // DWORDs readable at code; LenTok (SizeInUint32) must not exceed it (two minimum)
     SignatureView input;            // STAGE_IO_SIGNATURES or TESSELLATION_IO_SIGNATURES input
-    SignatureView output;           // ... output
-    SignatureView patchConstant;    // TESSELLATION_IO_SIGNATURES patch constants: hull output, domain input
+    SignatureView output;           // ... output, or MESH_IO_SIGNATURES vertex output
+    SignatureView patchConstant;    // TESSELLATION_IO_SIGNATURES patch constants (hull output, domain input), or
+                                    // MESH_IO_SIGNATURES primitive output
+    Slot slot = Slot::Standard;     // the create-shader slot; Mesh and Amplification always name from the metadata
 };
 
 struct Container
@@ -100,6 +126,15 @@ struct Container
 
 // Builds the container. On failure the container is left empty.
 Result BuildContainer(const ProgramDesc& desc, Container* container);
+
+// The same program, rebuilt with the metadata naming of Slot above, for a pipeline that has a mesh shader. `source` is a DXIL
+// container BuildContainer wrote (its DXIL part is copied unchanged), `input` the signature entries the DDI
+// passed for that program and `output` the named output entries of `source` (Container::output). Unsupported for
+// a DXBC program, whose DDI payload carries no names of its own: a mesh pipeline then cannot be formed, and
+// shader model 6.5 makes that case unreachable from the API. `container` must not be `source`. On failure the
+// container is left empty.
+Result BuildMeshLinkContainer(const Container& source, const SignatureView& input, const SignatureView& output,
+        Container* container);
 
 // DXIL libraries of state objects (D3D12DDI_DXIL_LIBRARY_DESC_0054::pDXILLibrary, which has no size). The payload is
 // taken as a DXIL part (DxilProgramHeader, program kind 6) or as a whole DXBC container; which one the runtime passes

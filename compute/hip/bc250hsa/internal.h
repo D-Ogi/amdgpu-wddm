@@ -80,10 +80,55 @@ typedef enum bc250hsa_counter {
     BC250HSA_C_DYNAMIC_STACK_REFUSALS,
     BC250HSA_C_BATCHES_SUBMITTED,
     BC250HSA_C_DISPATCHES_BATCHED,
+    /* The GPU copy route of scratch/hip-gpu-copy/CONTRACT.md section 9. Every copy and
+     * every fill is counted on exactly one of the three lines (GPU, staged GPU, CPU
+     * fallback), so the three sums are the whole traffic and a fallback cannot hide. */
+    BC250HSA_C_GPU_COPY_D2H,
+    BC250HSA_C_GPU_COPY_D2H_BYTES,
+    BC250HSA_C_GPU_COPY_D2H_STAGED,
+    BC250HSA_C_GPU_COPY_D2H_STAGED_BYTES,
+    BC250HSA_C_GPU_COPY_D2D,
+    BC250HSA_C_GPU_COPY_D2D_BYTES,
+    BC250HSA_C_GPU_FILL,
+    BC250HSA_C_GPU_FILL_BYTES,
+    BC250HSA_C_CPU_COPY_FALLBACK,
+    BC250HSA_C_CPU_COPY_FALLBACK_BYTES,
+    BC250HSA_C_GPU_COPY_PACKETS,
+    BC250HSA_C_GPU_COPY_FORCED_FLUSHES,
+    BC250HSA_C_GPU_COPY_CONTROL_FAILED,
+    /* Durations, in ticks of bc250hsa_ticks (bc250hsa.h section 3). A total is added with
+     * bc250hsa_count_add; a _MAX field only ever rises, through bc250hsa_count_max. */
+    BC250HSA_C_WAITS_FAST_TICKS,
+    BC250HSA_C_WAITS_FAST_TICKS_MAX,
+    BC250HSA_C_WAITS_OTHER_TICKS,
+    BC250HSA_C_WAITS_OTHER_TICKS_MAX,
+    BC250HSA_C_SUBMIT_CALLS,
+    BC250HSA_C_SUBMIT_TICKS,
+    BC250HSA_C_GPU_COPY_D2H_TICKS,
+    BC250HSA_C_GPU_COPY_D2H_STAGED_TICKS,
+    BC250HSA_C_GPU_COPY_D2D_TICKS,
+    BC250HSA_C_GPU_FILL_TICKS,
+    BC250HSA_C_CPU_COPY_FALLBACK_TICKS,
+    /* The device lock and the GPU copy (CONTRACT.md deviation 13.23), and the journal guard
+     * of submit_ib. */
+    BC250HSA_C_GPU_COPY_LOCK_HOLDS,
+    BC250HSA_C_GPU_COPY_LOCK_TICKS,
+    BC250HSA_C_GPU_COPY_LOCK_TICKS_MAX,
+    BC250HSA_C_GPU_COPY_LOCK_WAITS,
+    BC250HSA_C_GPU_COPY_LOCK_WAIT_TICKS,
+    BC250HSA_C_GPU_COPY_LOCK_WAIT_TICKS_MAX,
+    BC250HSA_C_JOURNAL_GUARD_REFUSALS,
+    BC250HSA_C_GPU_COPY_UNRETIRED,
+    BC250HSA_C_GPU_COPY_EXCLUSION_REFUSALS,
+    BC250HSA_C_GPU_COPY_LATE_RETIREMENTS,
+    BC250HSA_C_CPU_COPY_EXCLUSION_REFUSALS,
     BC250HSA_C_COUNT
 } bc250hsa_counter;
 
 void bc250hsa_count_add(bc250hsa_counter which, uint64_t delta);
+/* Raises the counter to value when value is larger, with a compare-and-swap loop and no
+ * lock, so that two threads that finish a wait at once both get their say. */
+void bc250hsa_count_max(bc250hsa_counter which, uint64_t value);
 
 /* The last failed Windows call of this thread, for bc250hsa_last_os_status(). */
 void bc250hsa_set_os_status(int32_t status);
@@ -278,5 +323,89 @@ bc250hsa_status bc250hsa_pm4_ib_append(bc250hsa_pm4_writer* w, const bc250hsa_di
                                        const bc250hsa_pm4_env* env, int first,
                                        bc250hsa_pm4_state* state);
 bc250hsa_status bc250hsa_pm4_ib_tail(bc250hsa_pm4_writer* w, const bc250hsa_pm4_env* env);
+
+/* --------------------------------------------------------------------------
+ * The GPU copy and fill: PM4 DMA_DATA in an indirect buffer of its own on the copy
+ * context (scratch/hip-gpu-copy/CONTRACT.md sections 4 and 7, deviation 13.23)
+ * ------------------------------------------------------------------------ */
+
+/* One copy or fill the caller wants done. A list of them goes into one indirect buffer
+ * under one fence. The longest list this build produces is a fill's three parts
+ * (kmt_memory.c, bc250hsa_fill_device); a row-by-row two-dimensional copy is still one
+ * call per row and therefore one submission per row, which CONTRACT.md deviation 13.10
+ * states and costs. */
+#define BC250HSA_COPY_OP_COPY 0u
+#define BC250HSA_COPY_OP_FILL 1u
+typedef struct bc250hsa_copy_op {
+    uint32_t kind;      /* BC250HSA_COPY_OP_COPY or BC250HSA_COPY_OP_FILL */
+    uint32_t pattern;   /* the fill's dword pattern; unused by a copy */
+    uint64_t src_va;    /* the copy's source; unused by a fill */
+    uint64_t dst_va;
+    uint64_t bytes;
+} bc250hsa_copy_op;
+
+/* The dwords one operation needs, chunk count included. 0 for 0 bytes, which no caller
+ * may append: a DMA_DATA of 0 bytes is not a no-operation this build relies on. */
+uint32_t bc250hsa_pm4_copy_dwords(uint64_t bytes);
+
+/* The pure emitters. They touch no device, so tests/host/test_pm4.c compares their
+ * dwords with the encoding of pm4_regs.h and with driver/kmd/gfx_copy.c.
+ *
+ * wait_before sets RAW_WAIT on the first chunk, which orders this operation behind an
+ * earlier CP DMA of the same buffer. sync_after sets CP_SYNC on the last chunk, which
+ * makes the command processor wait for the copy before it runs the next packet. A caller
+ * that appends several operations under one fence sets sync_after on the last one only
+ * when nothing after it in the buffer reads the destination; this build sets both on
+ * every operation, as it did when a batch could carry a dispatch after a copy. */
+bc250hsa_status bc250hsa_pm4_append_copy(bc250hsa_pm4_writer* w, uint64_t dst_va,
+                                         uint64_t src_va, uint64_t bytes, int wait_before,
+                                         int sync_after);
+bc250hsa_status bc250hsa_pm4_append_fill(bc250hsa_pm4_writer* w, uint64_t dst_va,
+                                         uint32_t pattern, uint64_t bytes, int wait_before,
+                                         int sync_after);
+/* One list of operations, in order. It is what submit.c writes into a copy buffer. */
+bc250hsa_status bc250hsa_pm4_append_ops(bc250hsa_pm4_writer* w, const bc250hsa_copy_op* ops,
+                                        uint32_t count);
+
+/* Do the two ranges overlap? A DMA_DATA over an overlap is undefined, and
+ * driver/kmd/gfx_copy.c refuses one, so the caller answers this before it appends. */
+int bc250hsa_ranges_overlap(uint64_t a, uint64_t b, uint64_t bytes);
+
+/* The staging ring of CONTRACT.md section 5b, as two pure decisions:
+ *
+ *   bc250hsa_stage_pick: which slot may be written now. A slot is free when the fence
+ *     value of the copy that last wrote it has retired, which is take_slot's own rule
+ *     (submit.c:187-216). It answers the slot index, or BC250HSA_EBUSY when every slot
+ *     is still in flight and the caller must wait for one.
+ *   bc250hsa_stage_round: how many bytes the next round moves.
+ *
+ * They are separate from the device so that the wrap and the multi-round split are
+ * tested with no adapter. */
+bc250hsa_status bc250hsa_stage_pick(const uint64_t* slot_fence, uint32_t slot_count,
+                                    uint64_t observed_fence, uint32_t next_slot,
+                                    uint32_t* slot_out);
+uint64_t bc250hsa_stage_round(uint64_t remaining, uint64_t slot_bytes);
+
+/* The three parts of a fill, as a third pure decision. bc250hsa_pm4_append_fill needs a
+ * 4-byte aligned address and size (radv_cp_dma.c:334), so a range that starts or ends
+ * between two dword boundaries has one to three bytes at that end which the fill packet
+ * cannot carry. This splits the range into the head bytes, the 4-byte aligned interior and
+ * the tail bytes; kmt_memory.c fills the interior with one packet and copies each edge out
+ * of a staging slot. The three parts tile the range in address order, head_bytes and
+ * tail_bytes are each 0 to 3, and interior_bytes is a multiple of 4. A part with 0 bytes
+ * is simply not appended, and the interior and the tail start on a dword boundary
+ * whenever their own byte count is not 0, which is what the fill packet needs. A range
+ * that holds no whole dword is the head alone: the other two are then 0 bytes and their
+ * addresses mean nothing. */
+typedef struct bc250hsa_fill_plan {
+    uint64_t head_va;
+    uint32_t head_bytes;      /* 0 to 3 */
+    uint64_t interior_va;     /* a multiple of 4 when interior_bytes is not 0 */
+    uint64_t interior_bytes;  /* a multiple of 4 */
+    uint64_t tail_va;         /* a multiple of 4 when tail_bytes is not 0 */
+    uint32_t tail_bytes;      /* 0 to 3 */
+} bc250hsa_fill_plan;
+
+bc250hsa_status bc250hsa_fill_split(uint64_t va, uint64_t bytes, bc250hsa_fill_plan* out);
 
 #endif /* BC250HSA_INTERNAL_H */

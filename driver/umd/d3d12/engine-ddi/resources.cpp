@@ -23,12 +23,10 @@ static_assert(D3D12DDI_TL_UNDEFINED == static_cast<int>(D3D12_TEXTURE_LAYOUT_UNK
               D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE == static_cast<int>(D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE) &&
               D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE == static_cast<int>(D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE),
               "texture layout");
-static_assert(static_cast<unsigned>(D3D12DDI_BARRIER_LAYOUT_UNDEFINED) == static_cast<unsigned>(D3D12_BARRIER_LAYOUT_UNDEFINED) &&
-              D3D12DDI_BARRIER_LAYOUT_COMMON == static_cast<int>(D3D12_BARRIER_LAYOUT_COMMON) &&
-              D3D12DDI_BARRIER_LAYOUT_RENDER_TARGET == static_cast<int>(D3D12_BARRIER_LAYOUT_RENDER_TARGET) &&
-              D3D12DDI_BARRIER_LAYOUT_COPY_DEST == static_cast<int>(D3D12_BARRIER_LAYOUT_COPY_DEST) &&
-              D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON == static_cast<int>(D3D12_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON),
-              "barrier layout");
+// The barrier layouts are swept value by value in the L68 section below (kBarrierLayouts), over the whole range
+// UNDEFINED and COMMON to VIDEO_QUEUE_COMMON, which is the range initial_layout below hands to a create as an API
+// layout: the static_cast<D3D12_BARRIER_LAYOUT> of a create is therefore an identity the sweep covers, and every
+// DDI-only value above that range leaves initial_layout as a legacy state or as E_INVALIDARG, never as a cast.
 static_assert(D3D12DDI_RESOURCE_STATE_COMMON == static_cast<int>(D3D12_RESOURCE_STATE_COMMON) &&
               D3D12DDI_RESOURCE_STATE_RENDER_TARGET == static_cast<int>(D3D12_RESOURCE_STATE_RENDER_TARGET) &&
               D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS == static_cast<int>(D3D12_RESOURCE_STATE_UNORDERED_ACCESS) &&
@@ -136,24 +134,14 @@ HRESULT heap_desc_of(const D3D12DDIARG_CREATEHEAP_0001& in, D3D12_HEAP_DESC& out
     return S_OK;
 }
 
-// The initial layout of a create: a buffer's is UNDEFINED. The DDI-only LEGACY_* layouts name a legacy initial state:
-// S_OK and *state for one of them, S_FALSE for a barrier layout the engine takes as it is, E_INVALIDARG for an
-// unknown DDI-only layout.
+// The initial layout of a create: a buffer's is UNDEFINED, whatever the runtime passed, and the rest is the
+// shared rule (internal.h, legacy_initial_state): S_OK and *state for one of the five DDI-only layouts, S_FALSE
+// for a layout the engine takes as it is, E_INVALIDARG for a value the DDI does not define. The S_FALSE range is
+// the one kBarrierLayouts sweeps, so the caller's static_cast to the API layout is an identity there.
 HRESULT initial_layout(const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BARRIER_LAYOUT* layout,
                        D3D12_RESOURCE_STATES* state) noexcept {
     if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) *layout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
-    if (static_cast<uint32_t>(*layout) < 0x80000000u || *layout == D3D12DDI_BARRIER_LAYOUT_UNDEFINED) return S_FALSE;
-    switch (*layout) {
-    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_SOURCE: *state = D3D12_RESOURCE_STATE_COPY_SOURCE; return S_OK;
-    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST: *state = D3D12_RESOURCE_STATE_COPY_DEST; return S_OK;
-    case D3D12DDI_BARRIER_LAYOUT_LEGACY_SHADER_RESOURCE:
-        *state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        return S_OK;
-    case D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE:
-        *state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        return S_OK;
-    default: return E_INVALIDARG;
-    }
+    return legacy_initial_state(*layout, state);
 }
 
 const D3D12_CLEAR_VALUE* clear_value(const D3D12_RESOURCE_DESC1& desc, const D3D12DDI_CLEAR_VALUES* clear) noexcept {
@@ -1127,6 +1115,8 @@ void unsized(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12DDI_RESOURCE_ALLOCA
 // The first refusal of each format, with its description and why it was refused. Once per format, at most 257 lines
 // a process.
 FormatSet g_allocation_refusals;
+// The first image of each format whose memory layout check_subresource_info does not know. The same bound.
+FormatSet g_subresource_info_refusals;
 
 void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
                                              D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS optimization,
@@ -1164,10 +1154,30 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     }
 }
 
-// Where a subresource lies in its resource's memory, asked after MapHeap. A buffer is one row from the
-// resource's first byte: offset 0, both strides its width, nothing swizzled. The strides are inferred,
-// the header does not define them for a buffer. A texture is not answered yet: no CPU-visible heap
-// holds one here.
+// D76. Where a subresource lies in its resource's own memory, asked after MapHeap. The answer comes from the
+// description the resource was created with (the record's desc) and, for an image, from the row pitch its linear
+// surface was created with; no engine call is made, because this slot is a query and the engine has no entry that
+// describes an image's memory layout.
+//
+// Two shapes are answered, the two that can reach a CPU-visible heap here:
+//   - a buffer, which is one row from its first byte: offset 0, both strides its width, nothing swizzled. The
+//     strides are inferred; the header does not define them for a buffer (H:603-611).
+//   - the linear primary, the one image whose layout is known: offset 0, the row pitch of its linear surface as
+//     the row stride, a plane of Height rows as the depth stride, nothing swizzled. linear_surface_shape admits
+//     one mip, one array slice and one sample, so it too has exactly one subresource.
+// Any other image gets the zeroed answer and one log line, and no error code. The rule this slot follows is to
+// report only when it has no answer to give, because the reference documents no error category for it
+// (ref\ddi-display, PFND3D12DDI_CHECK_SUBRESOURCE_INFO: a declaration and one line of description) and the
+// runtime takes an error a function does not allow as critical and removes the device ("Handling Errors"), which
+// is what BD-075 measured on pfnOpenHeapAndResource. An image whose layout is not known has an answer - zeros,
+// the honest form of "nothing is known", not a layout claim - so the former E_NOTIMPL there was a device the slot
+// could lose for nothing. The engine creates no ROW_MAJOR image (INTEGRATION.md, 1060) and the swizzle of a 64 KiB
+// image is not described anywhere here, so the case is unreachable through the heaps this driver creates.
+// A malformed call is the other half of the rule and keeps E_INVALIDARG - an unknown handle, no out structure, or
+// a subresource index the resource does not have - because there is no answer to give for it and because the
+// runtime makes no such call: it owns the handle it passes and knows the resource's subresource count. The same
+// E_INVALIDARG stands in the neighbouring void query of this module (check_existing_resource_allocation_info) and
+// is what the debug layer reads; native-policy-test holds every one of these shapes as a host witness.
 void APIENTRY check_subresource_info(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE hres, UINT subresource,
                                      D3D12DDI_SUBRESOURCE_INFO* out) {
     if (out) *out = D3D12DDI_SUBRESOURCE_INFO{};
@@ -1175,10 +1185,26 @@ void APIENTRY check_subresource_info(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE
     if (!c) return;
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
     if (!r || !out) return c->report(E_INVALIDARG);
-    if (r->desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) return c->report(E_NOTIMPL);
+    const bool buffer = r->desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
+    const bool linear = !buffer && r->linear_row_pitch != 0;
+    if (!buffer && !linear) {
+        if (g_subresource_info_refusals.insert(static_cast<uint32_t>(r->desc.Format)))
+            log_refusal("CheckSubresourceInfo: the zeroed answer for the first image of format %u with no known "
+                        "layout: dimension %u, %llu x %u, depth or array %u, mips %u, samples %u, layout %u",
+                        static_cast<unsigned>(r->desc.Format), static_cast<unsigned>(r->desc.Dimension),
+                        static_cast<unsigned long long>(r->desc.Width), r->desc.Height,
+                        static_cast<unsigned>(r->desc.DepthOrArraySize), static_cast<unsigned>(r->desc.MipLevels),
+                        r->desc.SampleDesc.Count, static_cast<unsigned>(r->desc.Layout));
+        return;
+    }
     if (subresource != 0) return c->report(E_INVALIDARG);
-    out->RowStride = r->desc.Width;
-    out->DepthStride = r->desc.Width;
+    if (buffer) {
+        out->RowStride = r->desc.Width;
+        out->DepthStride = r->desc.Width;
+        return;
+    }
+    out->RowStride = r->linear_row_pitch;
+    out->DepthStride = uint64_t{r->linear_row_pitch} * r->desc.Height;
 }
 
 // The same answer for a resource that exists, from the description it was created with (the record's desc,
@@ -1792,6 +1818,415 @@ void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3
         record(l, [=](ID3D12GraphicsCommandList* e, const D3D12_RESOURCE_BARRIER* b) { e->ResourceBarrier(count, b); },
                in(out.data(), count));
 }
+
+// ---- L68 pfnBarrier: enhanced barriers --------------------------------------------------------------------------
+// PFND3D12DDI_BARRIER_0088 (H:10785-10788; the slot of the 0092 command list table at H:11241) takes one flat array
+// of tagged barriers, D3D12DDIARG_BARRIER_0088 (H:10772-10783). The engine's
+// ID3D12GraphicsCommandList7::Barrier takes groups instead, each group one type with an array of its own (d3d12.h,
+// D3D12_BARRIER_GROUP), so this slot has to group what the runtime flattened. The order of the DDI array is the
+// order the barriers must be queued in: "Barriers are queued in forward order (API-call order,
+// barrier-group-index, barrier-array-index). Multiple barriers on the same subresource must function as though the
+// barriers complete in queued order" (DirectX-Specs d3d/D3D12EnhancedBarriers.md, "Barrier Ordering"). Each
+// maximal run of one type therefore becomes one group, in place, so a call whose barriers are all of one type -
+// the common shape - is one group and one engine call. A call with more runs than kBarrierGroups is split into
+// several Barrier calls in order, which the same rule admits: API-call order is its outermost key.
+//
+// Why the slot is filled now: 1006 EnhancedBarriersSupported (caps.cpp) reports the engine's own OPTIONS12 answer,
+// and the reference states that "drivers that report support for enhanced barriers must implement this function",
+// and that such a driver "must expect that legacy ResourceBarrier calls will also use the pfnBarrier function"
+// (ref\ddi-display d3d12umddi.md, PFND3D12DDI_BARRIER_0088 Remarks). pfnResourceBarrier above stays filled; which
+// of the two the runtime uses is the runtime's decision, and both reach the engine's own implementation of that
+// barrier model (vkd3d-proton command.c, d3d12_command_list_ResourceBarrier and d3d12_command_list_Barrier). The
+// three other callbacks the feature asks for - CreateHeapAndResource, CalcPrivateHeapAndResourceSizes and
+// CheckResourceAllocationInfo at 0088 (windows-driver-docs display\enhanced-barriers.md) - are this module's slots
+// already, with the initial barrier layout each of them takes.
+//
+// The engine owns every rule about a barrier's contents: a split barrier, a texture barrier naming a buffer, a
+// layout a queue type may not use. This slot translates and refuses only what it cannot express at all.
+constexpr EnumPair kBarrierLayouts[] = {
+    {D3D12DDI_BARRIER_LAYOUT_UNDEFINED, D3D12_BARRIER_LAYOUT_UNDEFINED},
+    {D3D12DDI_BARRIER_LAYOUT_COMMON, D3D12_BARRIER_LAYOUT_COMMON},
+    {D3D12DDI_BARRIER_LAYOUT_PRESENT, D3D12_BARRIER_LAYOUT_PRESENT},
+    {D3D12DDI_BARRIER_LAYOUT_GENERIC_READ, D3D12_BARRIER_LAYOUT_GENERIC_READ},
+    {D3D12DDI_BARRIER_LAYOUT_RENDER_TARGET, D3D12_BARRIER_LAYOUT_RENDER_TARGET},
+    {D3D12DDI_BARRIER_LAYOUT_UNORDERED_ACCESS, D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS},
+    {D3D12DDI_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE, D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE},
+    {D3D12DDI_BARRIER_LAYOUT_DEPTH_STENCIL_READ, D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_READ},
+    {D3D12DDI_BARRIER_LAYOUT_SHADER_RESOURCE, D3D12_BARRIER_LAYOUT_SHADER_RESOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_COPY_SOURCE, D3D12_BARRIER_LAYOUT_COPY_SOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_COPY_DEST, D3D12_BARRIER_LAYOUT_COPY_DEST},
+    {D3D12DDI_BARRIER_LAYOUT_RESOLVE_SOURCE, D3D12_BARRIER_LAYOUT_RESOLVE_SOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_RESOLVE_DEST, D3D12_BARRIER_LAYOUT_RESOLVE_DEST},
+    {D3D12DDI_BARRIER_LAYOUT_SHADING_RATE_SOURCE, D3D12_BARRIER_LAYOUT_SHADING_RATE_SOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_DECODE_READ, D3D12_BARRIER_LAYOUT_VIDEO_DECODE_READ},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_DECODE_WRITE, D3D12_BARRIER_LAYOUT_VIDEO_DECODE_WRITE},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_PROCESS_READ, D3D12_BARRIER_LAYOUT_VIDEO_PROCESS_READ},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_PROCESS_WRITE, D3D12_BARRIER_LAYOUT_VIDEO_PROCESS_WRITE},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_ENCODE_READ, D3D12_BARRIER_LAYOUT_VIDEO_ENCODE_READ},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_ENCODE_WRITE, D3D12_BARRIER_LAYOUT_VIDEO_ENCODE_WRITE},
+    {D3D12DDI_BARRIER_LAYOUT_DIRECT_QUEUE_COMMON, D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_COMMON},
+    {D3D12DDI_BARRIER_LAYOUT_DIRECT_QUEUE_GENERIC_READ, D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_GENERIC_READ},
+    {D3D12DDI_BARRIER_LAYOUT_DIRECT_QUEUE_UNORDERED_ACCESS, D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_UNORDERED_ACCESS},
+    {D3D12DDI_BARRIER_LAYOUT_DIRECT_QUEUE_SHADER_RESOURCE, D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_SHADER_RESOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_DIRECT_QUEUE_COPY_SOURCE, D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_COPY_SOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_DIRECT_QUEUE_COPY_DEST, D3D12_BARRIER_LAYOUT_DIRECT_QUEUE_COPY_DEST},
+    {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_COMMON, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COMMON},
+    {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_GENERIC_READ, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_GENERIC_READ},
+    {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_UNORDERED_ACCESS, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_UNORDERED_ACCESS},
+    {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_SHADER_RESOURCE, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_SHADER_RESOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_SOURCE, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_SOURCE},
+    {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_DEST, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_DEST},
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON, D3D12_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON},
+};
+static_assert(agree(kBarrierLayouts), "barrier layouts");
+// VIDEO_QUEUE_COMMON is the last layout the API has, and the DDI's first own layout is the next value
+// (H:10629-10630). api_barrier_layout below passes everything up to that boundary through and maps the five DDI
+// layouts above it, which have no API value at all.
+static_assert(static_cast<unsigned>(D3D12DDI_BARRIER_LAYOUT_LEGACY_DIRECT_QUEUE_GENERIC_READ_COMPUTE_QUEUE_ACCESSIBLE) ==
+                  static_cast<unsigned>(D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON) + 1,
+              "the DDI-only barrier layouts start one past the last shared layout");
+// The sweep leaves no value of that range unchecked: one row per value from COMMON to VIDEO_QUEUE_COMMON, plus
+// UNDEFINED and the PRESENT second name of COMMON. initial_layout hands exactly this range to a create as an API
+// layout, and this count is what says the cast there is covered value by value.
+static_assert(std::size(kBarrierLayouts) == static_cast<size_t>(D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON) + 3,
+              "the barrier layout sweep covers every value a create may cast");
+
+// The synchronisation scopes (H:10638-10665) and the access types (H:10668-10696), bit for bit the API's, so both
+// pass by value. The DDI's INPUT_ASSEMBLER and PREDICATION are second names of INDEX_INPUT and EXECUTE_INDIRECT,
+// as they are in the API.
+constexpr EnumPair kBarrierSync[] = {
+    {D3D12DDI_BARRIER_SYNC_NONE, D3D12_BARRIER_SYNC_NONE},
+    {D3D12DDI_BARRIER_SYNC_ALL, D3D12_BARRIER_SYNC_ALL},
+    {D3D12DDI_BARRIER_SYNC_DRAW, D3D12_BARRIER_SYNC_DRAW},
+    {D3D12DDI_BARRIER_SYNC_INPUT_ASSEMBLER, D3D12_BARRIER_SYNC_INDEX_INPUT},
+    {D3D12DDI_BARRIER_SYNC_INDEX_INPUT, D3D12_BARRIER_SYNC_INDEX_INPUT},
+    {D3D12DDI_BARRIER_SYNC_VERTEX_SHADING, D3D12_BARRIER_SYNC_VERTEX_SHADING},
+    {D3D12DDI_BARRIER_SYNC_PIXEL_SHADING, D3D12_BARRIER_SYNC_PIXEL_SHADING},
+    {D3D12DDI_BARRIER_SYNC_DEPTH_STENCIL, D3D12_BARRIER_SYNC_DEPTH_STENCIL},
+    {D3D12DDI_BARRIER_SYNC_RENDER_TARGET, D3D12_BARRIER_SYNC_RENDER_TARGET},
+    {D3D12DDI_BARRIER_SYNC_COMPUTE_SHADING, D3D12_BARRIER_SYNC_COMPUTE_SHADING},
+    {D3D12DDI_BARRIER_SYNC_RAYTRACING, D3D12_BARRIER_SYNC_RAYTRACING},
+    {D3D12DDI_BARRIER_SYNC_COPY, D3D12_BARRIER_SYNC_COPY},
+    {D3D12DDI_BARRIER_SYNC_RESOLVE, D3D12_BARRIER_SYNC_RESOLVE},
+    {D3D12DDI_BARRIER_SYNC_EXECUTE_INDIRECT, D3D12_BARRIER_SYNC_EXECUTE_INDIRECT},
+    {D3D12DDI_BARRIER_SYNC_PREDICATION, D3D12_BARRIER_SYNC_PREDICATION},
+    {D3D12DDI_BARRIER_SYNC_ALL_SHADING, D3D12_BARRIER_SYNC_ALL_SHADING},
+    {D3D12DDI_BARRIER_SYNC_NON_PIXEL_SHADING, D3D12_BARRIER_SYNC_NON_PIXEL_SHADING},
+    {D3D12DDI_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
+     D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO},
+    {D3D12DDI_BARRIER_SYNC_CLEAR_UNORDERED_ACCESS_VIEW, D3D12_BARRIER_SYNC_CLEAR_UNORDERED_ACCESS_VIEW},
+    {D3D12DDI_BARRIER_SYNC_VIDEO_DECODE, D3D12_BARRIER_SYNC_VIDEO_DECODE},
+    {D3D12DDI_BARRIER_SYNC_VIDEO_PROCESS, D3D12_BARRIER_SYNC_VIDEO_PROCESS},
+    {D3D12DDI_BARRIER_SYNC_VIDEO_ENCODE, D3D12_BARRIER_SYNC_VIDEO_ENCODE},
+    {D3D12DDI_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+     D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE},
+    {D3D12DDI_BARRIER_SYNC_COPY_RAYTRACING_ACCELERATION_STRUCTURE,
+     D3D12_BARRIER_SYNC_COPY_RAYTRACING_ACCELERATION_STRUCTURE},
+    {D3D12DDI_BARRIER_SYNC_SPLIT, D3D12_BARRIER_SYNC_SPLIT},
+};
+static_assert(agree(kBarrierSync), "barrier synchronisation scopes");
+constexpr EnumPair kBarrierAccess[] = {
+    {D3D12DDI_BARRIER_ACCESS_COMMON, D3D12_BARRIER_ACCESS_COMMON},
+    {D3D12DDI_BARRIER_ACCESS_VERTEX_BUFFER, D3D12_BARRIER_ACCESS_VERTEX_BUFFER},
+    {D3D12DDI_BARRIER_ACCESS_CONSTANT_BUFFER, D3D12_BARRIER_ACCESS_CONSTANT_BUFFER},
+    {D3D12DDI_BARRIER_ACCESS_INDEX_BUFFER, D3D12_BARRIER_ACCESS_INDEX_BUFFER},
+    {D3D12DDI_BARRIER_ACCESS_RENDER_TARGET, D3D12_BARRIER_ACCESS_RENDER_TARGET},
+    {D3D12DDI_BARRIER_ACCESS_UNORDERED_ACCESS, D3D12_BARRIER_ACCESS_UNORDERED_ACCESS},
+    {D3D12DDI_BARRIER_ACCESS_DEPTH_STENCIL_WRITE, D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE},
+    {D3D12DDI_BARRIER_ACCESS_DEPTH_STENCIL_READ, D3D12_BARRIER_ACCESS_DEPTH_STENCIL_READ},
+    {D3D12DDI_BARRIER_ACCESS_SHADER_RESOURCE, D3D12_BARRIER_ACCESS_SHADER_RESOURCE},
+    {D3D12DDI_BARRIER_ACCESS_STREAM_OUTPUT, D3D12_BARRIER_ACCESS_STREAM_OUTPUT},
+    {D3D12DDI_BARRIER_ACCESS_INDIRECT_ARGUMENT, D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT},
+    {D3D12DDI_BARRIER_ACCESS_PREDICATION, D3D12_BARRIER_ACCESS_PREDICATION},
+    {D3D12DDI_BARRIER_ACCESS_COPY_DEST, D3D12_BARRIER_ACCESS_COPY_DEST},
+    {D3D12DDI_BARRIER_ACCESS_COPY_SOURCE, D3D12_BARRIER_ACCESS_COPY_SOURCE},
+    {D3D12DDI_BARRIER_ACCESS_RESOLVE_DEST, D3D12_BARRIER_ACCESS_RESOLVE_DEST},
+    {D3D12DDI_BARRIER_ACCESS_RESOLVE_SOURCE, D3D12_BARRIER_ACCESS_RESOLVE_SOURCE},
+    {D3D12DDI_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+     D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ},
+    {D3D12DDI_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
+     D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE},
+    {D3D12DDI_BARRIER_ACCESS_SHADING_RATE_SOURCE, D3D12_BARRIER_ACCESS_SHADING_RATE_SOURCE},
+    {D3D12DDI_BARRIER_ACCESS_VIDEO_DECODE_READ, D3D12_BARRIER_ACCESS_VIDEO_DECODE_READ},
+    {D3D12DDI_BARRIER_ACCESS_VIDEO_DECODE_WRITE, D3D12_BARRIER_ACCESS_VIDEO_DECODE_WRITE},
+    {D3D12DDI_BARRIER_ACCESS_VIDEO_PROCESS_READ, D3D12_BARRIER_ACCESS_VIDEO_PROCESS_READ},
+    {D3D12DDI_BARRIER_ACCESS_VIDEO_PROCESS_WRITE, D3D12_BARRIER_ACCESS_VIDEO_PROCESS_WRITE},
+    {D3D12DDI_BARRIER_ACCESS_VIDEO_ENCODE_READ, D3D12_BARRIER_ACCESS_VIDEO_ENCODE_READ},
+    {D3D12DDI_BARRIER_ACCESS_VIDEO_ENCODE_WRITE, D3D12_BARRIER_ACCESS_VIDEO_ENCODE_WRITE},
+    {D3D12DDI_BARRIER_ACCESS_NO_ACCESS, D3D12_BARRIER_ACCESS_NO_ACCESS},
+};
+static_assert(agree(kBarrierAccess), "barrier access types");
+// The three barrier types the API has (H:10709-10715; d3d12.h, D3D12_BARRIER_TYPE). RANGED is the DDI's fourth and
+// has no API value, which is why api_barrier_type maps it instead of passing it through.
+constexpr EnumPair kBarrierTypes[] = {
+    {D3D12DDI_BARRIER_TYPE_GLOBAL, D3D12_BARRIER_TYPE_GLOBAL},
+    {D3D12DDI_BARRIER_TYPE_TEXTURE, D3D12_BARRIER_TYPE_TEXTURE},
+    {D3D12DDI_BARRIER_TYPE_BUFFER, D3D12_BARRIER_TYPE_BUFFER},
+};
+static_assert(agree(kBarrierTypes), "barrier types");
+constexpr EnumPair kTextureBarrierFlags[] = {
+    {D3D12DDI_TEXTURE_BARRIER_FLAG_NONE, D3D12_TEXTURE_BARRIER_FLAG_NONE},
+    {D3D12DDI_TEXTURE_BARRIER_FLAG_DISCARD, D3D12_TEXTURE_BARRIER_FLAG_DISCARD},
+};
+static_assert(agree(kTextureBarrierFlags), "texture barrier flags");
+// The subresource range (H:10699-10707) is the API's structure, so it is copied whole. The global barrier is the
+// API's structure as well. The texture barrier shares the API's layout, the resource field included, because a DDI
+// handle and a resource pointer are both one pointer - the fields are still assigned one by one below, since the
+// handle has to be resolved. The buffer barrier is the API's first five fields and nothing else: the API's Offset
+// and Size have no DDI counterpart.
+static_assert(sizeof(D3D12DDI_BARRIER_SUBRESOURCE_RANGE_0088) == sizeof(D3D12_BARRIER_SUBRESOURCE_RANGE) &&
+                  offsetof(D3D12DDI_BARRIER_SUBRESOURCE_RANGE_0088, NumMipLevels) ==
+                      offsetof(D3D12_BARRIER_SUBRESOURCE_RANGE, NumMipLevels) &&
+                  offsetof(D3D12DDI_BARRIER_SUBRESOURCE_RANGE_0088, FirstArraySlice) ==
+                      offsetof(D3D12_BARRIER_SUBRESOURCE_RANGE, FirstArraySlice) &&
+                  offsetof(D3D12DDI_BARRIER_SUBRESOURCE_RANGE_0088, NumArraySlices) ==
+                      offsetof(D3D12_BARRIER_SUBRESOURCE_RANGE, NumArraySlices) &&
+                  offsetof(D3D12DDI_BARRIER_SUBRESOURCE_RANGE_0088, FirstPlane) ==
+                      offsetof(D3D12_BARRIER_SUBRESOURCE_RANGE, FirstPlane) &&
+                  offsetof(D3D12DDI_BARRIER_SUBRESOURCE_RANGE_0088, NumPlanes) ==
+                      offsetof(D3D12_BARRIER_SUBRESOURCE_RANGE, NumPlanes),
+              "barrier subresource range layout");
+static_assert(sizeof(D3D12DDI_GLOBAL_BARRIER_0088) == sizeof(D3D12_GLOBAL_BARRIER) &&
+                  offsetof(D3D12DDI_GLOBAL_BARRIER_0088, SyncAfter) == offsetof(D3D12_GLOBAL_BARRIER, SyncAfter) &&
+                  offsetof(D3D12DDI_GLOBAL_BARRIER_0088, AccessBefore) ==
+                      offsetof(D3D12_GLOBAL_BARRIER, AccessBefore) &&
+                  offsetof(D3D12DDI_GLOBAL_BARRIER_0088, AccessAfter) == offsetof(D3D12_GLOBAL_BARRIER, AccessAfter),
+              "global barrier layout");
+static_assert(sizeof(D3D12DDI_TEXTURE_BARRIER_0088) == sizeof(D3D12_TEXTURE_BARRIER) &&
+                  offsetof(D3D12DDI_TEXTURE_BARRIER_0088, LayoutBefore) ==
+                      offsetof(D3D12_TEXTURE_BARRIER, LayoutBefore) &&
+                  offsetof(D3D12DDI_TEXTURE_BARRIER_0088, LayoutAfter) ==
+                      offsetof(D3D12_TEXTURE_BARRIER, LayoutAfter) &&
+                  offsetof(D3D12DDI_TEXTURE_BARRIER_0088, hResource) == offsetof(D3D12_TEXTURE_BARRIER, pResource) &&
+                  offsetof(D3D12DDI_TEXTURE_BARRIER_0088, Subresources) ==
+                      offsetof(D3D12_TEXTURE_BARRIER, Subresources) &&
+                  offsetof(D3D12DDI_TEXTURE_BARRIER_0088, Flags) == offsetof(D3D12_TEXTURE_BARRIER, Flags),
+              "texture barrier layout");
+static_assert(offsetof(D3D12DDI_BUFFER_BARRIER_0088, SyncAfter) == offsetof(D3D12_BUFFER_BARRIER, SyncAfter) &&
+                  offsetof(D3D12DDI_BUFFER_BARRIER_0088, AccessBefore) ==
+                      offsetof(D3D12_BUFFER_BARRIER, AccessBefore) &&
+                  offsetof(D3D12DDI_BUFFER_BARRIER_0088, AccessAfter) == offsetof(D3D12_BUFFER_BARRIER, AccessAfter) &&
+                  offsetof(D3D12DDI_BUFFER_BARRIER_0088, hResource) == offsetof(D3D12_BUFFER_BARRIER, pResource) &&
+                  sizeof(D3D12DDI_BUFFER_BARRIER_0088) < sizeof(D3D12_BUFFER_BARRIER),
+              "buffer barrier layout");
+
+// Barriers of one type, before the heap. A call with more of a type than this allocates once for that type, as
+// resource_barrier does.
+constexpr size_t kInlineBarriers = 32;
+// Groups per engine call. The groups are rebuilt on the worker's own stack, so their number is bounded there; a
+// call with more runs than this is split into several Barrier calls in order.
+constexpr UINT32 kBarrierGroups = 64;
+
+// One run of barriers of one type in the DDI array: where its API barriers start in that type's array, and how
+// many. The group the lambda builds from it points into the entry's copy of that array.
+struct BarrierRun {
+    D3D12_BARRIER_TYPE type;
+    UINT32 first;
+    UINT32 count;
+};
+
+// The API layout of a DDI barrier layout. Everything up to VIDEO_QUEUE_COMMON, and UNDEFINED, is the API's own
+// value (kBarrierLayouts). The five DDI-only layouts above that boundary (H:10630-10635) name a layout a legacy
+// resource state asked for, and each maps to the queue-agnostic API layout that admits the same access: the
+// queue-specific API layouts would be refused on a command list of another type, so they are not used here.
+// false for a value the DDI does not define at all.
+bool api_barrier_layout(D3D12DDI_BARRIER_LAYOUT in, D3D12_BARRIER_LAYOUT* out) noexcept {
+    if (in == D3D12DDI_BARRIER_LAYOUT_UNDEFINED ||
+        static_cast<unsigned>(in) <= static_cast<unsigned>(D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON)) {
+        *out = static_cast<D3D12_BARRIER_LAYOUT>(in);
+        return true;
+    }
+    switch (in) {
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_DIRECT_QUEUE_GENERIC_READ_COMPUTE_QUEUE_ACCESSIBLE:
+        *out = D3D12_BARRIER_LAYOUT_GENERIC_READ;
+        return true;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_SOURCE:
+        *out = D3D12_BARRIER_LAYOUT_COPY_SOURCE;
+        return true;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST:
+        *out = D3D12_BARRIER_LAYOUT_COPY_DEST;
+        return true;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_SHADER_RESOURCE:
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE:
+        *out = D3D12_BARRIER_LAYOUT_SHADER_RESOURCE;
+        return true;
+    default:
+        return false;
+    }
+}
+
+// The API barrier type a DDI barrier becomes. A RANGED barrier becomes a global barrier: the API has no ranged
+// barrier, and at 0088 a ranged barrier carries no layout and only the ATOMIC_COPY flag (H:10753-10770), so it
+// names a cache flush and a synchronisation over one memory range of one resource. A global barrier is the same
+// flush and synchronisation at the scope of the whole queue, a superset of that range, and it changes no layout
+// either. It is therefore a conservative answer and not a refusal, which matters because this slot also receives
+// the runtime's translation of legacy ResourceBarrier calls: refusing would cost an application its device the
+// first time a ranged barrier arrived. Nothing here claims atomic copy support - L51 pfnAtomicCopyBufferRegion is
+// still a fail-safe and 1006 reports no such capability. false for a type the DDI does not define.
+bool api_barrier_type(D3D12DDI_BARRIER_TYPE in, D3D12_BARRIER_TYPE* out) noexcept {
+    switch (in) {
+    case D3D12DDI_BARRIER_TYPE_GLOBAL:
+    case D3D12DDI_BARRIER_TYPE_RANGED:
+        *out = D3D12_BARRIER_TYPE_GLOBAL;
+        return true;
+    case D3D12DDI_BARRIER_TYPE_TEXTURE:
+        *out = D3D12_BARRIER_TYPE_TEXTURE;
+        return true;
+    case D3D12DDI_BARRIER_TYPE_BUFFER:
+        *out = D3D12_BARRIER_TYPE_BUFFER;
+        return true;
+    default:
+        return false;
+    }
+}
+
+void APIENTRY barrier(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIARG_BARRIER_0088* ddi) {
+    CommandListRecord* l = list_of(hlist, "Barrier");
+    if (!l) return;
+    if (count && !ddi) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    if (!count) return;                 // no barrier, no engine call: what the engine answers to no groups
+    // First pass: the API type of each barrier, how many of each type, and how many runs the array falls into.
+    // Each array is then reserved for exactly what it holds.
+    UINT32 per_type[3] = {0, 0, 0};     // by D3D12_BARRIER_TYPE
+    UINT32 runs = 0;
+    int last = -1;
+    for (UINT32 i = 0; i < count; ++i) {
+        D3D12_BARRIER_TYPE type{};
+        if (!api_barrier_type(ddi[i].Type, &type)) {
+            log_refusal("Barrier: barrier %u of %u has type %u", i, count, static_cast<unsigned>(ddi[i].Type));
+            l->h.device->report_list(l->rt, E_INVALIDARG);
+            return;
+        }
+        ++per_type[static_cast<size_t>(type)];
+        if (static_cast<int>(type) != last) ++runs;
+        last = static_cast<int>(type);
+    }
+    InlineArray<D3D12_GLOBAL_BARRIER, kInlineBarriers> globals;
+    InlineArray<D3D12_TEXTURE_BARRIER, kInlineBarriers> textures;
+    InlineArray<D3D12_BUFFER_BARRIER, kInlineBarriers> buffers;
+    InlineArray<BarrierRun, kInlineBarriers> table;
+    const UINT32 global_count = per_type[static_cast<size_t>(D3D12_BARRIER_TYPE_GLOBAL)];
+    const UINT32 texture_count = per_type[static_cast<size_t>(D3D12_BARRIER_TYPE_TEXTURE)];
+    const UINT32 buffer_count = per_type[static_cast<size_t>(D3D12_BARRIER_TYPE_BUFFER)];
+    if (!globals.reserve(global_count) || !textures.reserve(texture_count) || !buffers.reserve(buffer_count) ||
+        !table.reserve(runs)) {
+        l->h.device->report_list(l->rt, E_OUTOFMEMORY);
+        return;
+    }
+    D3D12_GLOBAL_BARRIER* global = globals.data();
+    D3D12_TEXTURE_BARRIER* texture = textures.data();
+    D3D12_BUFFER_BARRIER* buffer = buffers.data();
+    BarrierRun* run = table.data();
+    UINT32 filled[3] = {0, 0, 0};
+    UINT32 groups = 0;
+    // Second pass: translate in place, and start a new run wherever the type changes.
+    for (UINT32 i = 0; i < count; ++i) {
+        const D3D12DDIARG_BARRIER_0088& b = ddi[i];
+        D3D12_BARRIER_TYPE type{};
+        api_barrier_type(b.Type, &type);                // checked in the first pass
+        const auto kind = static_cast<size_t>(type);
+        if (!groups || run[groups - 1].type != type) {
+            run[groups] = BarrierRun{type, filled[kind], 0};
+            ++groups;
+        }
+        ++run[groups - 1].count;
+        ++filled[kind];
+        switch (type) {
+        case D3D12_BARRIER_TYPE_GLOBAL: {
+            // A global barrier, or the four scopes of a ranged one, which are the same four values under another
+            // member of the union.
+            const bool ranged = b.Type == D3D12DDI_BARRIER_TYPE_RANGED;
+            D3D12_GLOBAL_BARRIER& out = *global++;
+            out.SyncBefore =
+                static_cast<D3D12_BARRIER_SYNC>(ranged ? b.RangedBarrier.SyncBefore : b.GlobalBarrier.SyncBefore);
+            out.SyncAfter =
+                static_cast<D3D12_BARRIER_SYNC>(ranged ? b.RangedBarrier.SyncAfter : b.GlobalBarrier.SyncAfter);
+            out.AccessBefore = static_cast<D3D12_BARRIER_ACCESS>(ranged ? b.RangedBarrier.AccessBefore
+                                                                        : b.GlobalBarrier.AccessBefore);
+            out.AccessAfter =
+                static_cast<D3D12_BARRIER_ACCESS>(ranged ? b.RangedBarrier.AccessAfter : b.GlobalBarrier.AccessAfter);
+            if (ranged) {
+                static std::atomic<bool> once{false};
+                if (!once.exchange(true))
+                    log_line("Barrier: a ranged barrier (flags %#x) is made a global barrier of the same scopes",
+                             static_cast<unsigned>(b.RangedBarrier.Flags));
+            }
+            break;
+        }
+        case D3D12_BARRIER_TYPE_TEXTURE: {
+            const D3D12DDI_TEXTURE_BARRIER_0088& t = b.TextureBarrier;
+            D3D12_TEXTURE_BARRIER& out = *texture++;
+            out.SyncBefore = static_cast<D3D12_BARRIER_SYNC>(t.SyncBefore);
+            out.SyncAfter = static_cast<D3D12_BARRIER_SYNC>(t.SyncAfter);
+            out.AccessBefore = static_cast<D3D12_BARRIER_ACCESS>(t.AccessBefore);
+            out.AccessAfter = static_cast<D3D12_BARRIER_ACCESS>(t.AccessAfter);
+            out.pResource = engine_resource(l, t.hResource);
+            std::memcpy(&out.Subresources, &t.Subresources, sizeof(out.Subresources));
+            out.Flags = static_cast<D3D12_TEXTURE_BARRIER_FLAGS>(t.Flags);
+            // "Must provide a valid, non-NULL resource pointer" (windows-driver-docs display\enhanced-barriers.md,
+            // texture barriers), so an unresolvable or absent handle is this slot's refusal, not the engine's.
+            if (!out.pResource || !api_barrier_layout(t.LayoutBefore, &out.LayoutBefore) ||
+                !api_barrier_layout(t.LayoutAfter, &out.LayoutAfter)) {
+                log_refusal("Barrier: texture barrier %u of %u, resource %p, layouts %#x to %#x", i, count,
+                            t.hResource.pDrvPrivate, static_cast<unsigned>(t.LayoutBefore),
+                            static_cast<unsigned>(t.LayoutAfter));
+                l->h.device->report_list(l->rt, E_INVALIDARG);
+                return;
+            }
+            break;
+        }
+        default: {
+            const D3D12DDI_BUFFER_BARRIER_0088& f = b.BufferBarrier;
+            D3D12_BUFFER_BARRIER& out = *buffer++;
+            out.SyncBefore = static_cast<D3D12_BARRIER_SYNC>(f.SyncBefore);
+            out.SyncAfter = static_cast<D3D12_BARRIER_SYNC>(f.SyncAfter);
+            out.AccessBefore = static_cast<D3D12_BARRIER_ACCESS>(f.AccessBefore);
+            out.AccessAfter = static_cast<D3D12_BARRIER_ACCESS>(f.AccessAfter);
+            out.pResource = engine_resource(l, f.hResource);
+            // The DDI has no Offset and no Size, and the API reserves both: "Offset must be zero and Size must be
+            // either the buffer size in bytes or UINT64_MAX ... The current enhanced buffer barrier DDI's do not
+            // use Offset or Size" (DirectX-Specs d3d/D3D12EnhancedBarriers.md). The engine reads neither
+            // (vkd3d-proton command.c, d3d12_command_list_process_enhanced_barrier_buffer).
+            out.Offset = 0;
+            out.Size = UINT64_MAX;
+            if (!out.pResource) {
+                log_refusal("Barrier: buffer barrier %u of %u, resource %p", i, count, f.hResource.pDrvPrivate);
+                l->h.device->report_list(l->rt, E_INVALIDARG);
+                return;
+            }
+            break;
+        }
+        }
+    }
+    auto* l7 = list_as<ID3D12GraphicsCommandList7>(l);
+    if (!l7) return;                                    // reported as E_NOINTERFACE by list_as
+    record(l,
+           [=](ID3D12GraphicsCommandList*, const BarrierRun* r, const D3D12_GLOBAL_BARRIER* g,
+               const D3D12_TEXTURE_BARRIER* t, const D3D12_BUFFER_BARRIER* f) {
+               D3D12_BARRIER_GROUP group[kBarrierGroups];
+               for (UINT32 done = 0; done < groups;) {
+                   const UINT32 n = groups - done < kBarrierGroups ? groups - done : kBarrierGroups;
+                   for (UINT32 k = 0; k < n; ++k) {
+                       const BarrierRun& one = r[done + k];
+                       group[k].Type = one.type;
+                       group[k].NumBarriers = one.count;
+                       switch (one.type) {
+                       case D3D12_BARRIER_TYPE_GLOBAL: group[k].pGlobalBarriers = g + one.first; break;
+                       case D3D12_BARRIER_TYPE_TEXTURE: group[k].pTextureBarriers = t + one.first; break;
+                       default: group[k].pBufferBarriers = f + one.first; break;
+                       }
+                   }
+                   l7->Barrier(n, group);
+                   done += n;
+               }
+               l7->Release();
+           },
+           in(table.data(), groups), in(globals.data(), global_count), in(textures.data(), texture_count),
+           in(buffers.data(), buffer_count));
+}
 } // namespace
 
 // ---- Backing lifetime -------------------------------------------------------------------------------------------
@@ -1962,6 +2397,11 @@ void fill_list_resources(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexc
     t->pfnResourceCopy = resource_copy;
     t->pfnDiscardResource = discard_resource;
     t->pfnResourceBarrier = resource_barrier;
+    // L68 is in both tables: a compute list needs barriers as much as a 3D list does, and the runtime may send
+    // legacy ResourceBarrier calls through this slot on either (ref\ddi-display d3d12umddi.md,
+    // PFND3D12DDI_BARRIER_0088 Remarks). A bundle reaches it too; the engine drops a barrier recorded in a bundle,
+    // which is what D3D12 says of one (vkd3d-proton bundle.c, d3d12_bundle_Barrier).
+    t->pfnBarrier = barrier;
 }
 
 } // namespace engine_ddi

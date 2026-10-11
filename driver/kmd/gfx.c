@@ -44,6 +44,7 @@
 #include "regs.generated.h"
 #include "bc250_gmc.h"
 #include "bc250_gfx.h"
+#include "bc250_wave.h"
 #include "bc250_sdma.h"
 #include "bc250_sdma_paging.h"
 #include "bc250_pte.h"
@@ -55,6 +56,7 @@
 #include "bc250_dispatch.h"
 #include "bc250_nbio.h"
 #include "bc250_irq.h"
+#include "adapter_owner.h"
 
 #define BC250_GFX_TAG 'xG2B'
 
@@ -1231,6 +1233,223 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
                  *Seq, *Kills, Vmid, *Micros);
     return verdict;
+}
+
+// Wave observation never uses the live submission sequence: a refused debug read
+// must not poison later GPU work. The only writes select registers, not wave state.
+// A counted reader gate protects the watchdog's lockless samples against bank
+// changes. Samplers never wait. The capture takes the writer only after readers
+// drain, and releases it only after both selector restoration attempts.
+static void GfxWaveSamplingReset(BC250_DEVICE* Device)
+{
+    // Only a new device start, after prior consumers have drained, may clear a
+    // failed-restore quarantine. A later diagnostic request cannot clear it.
+    InterlockedExchange(&Device->WaveRegisterAccess, 0);
+}
+
+BOOLEAN GfxWaveSampleBegin(BC250_DEVICE* Device)
+{
+    LONG readers = InterlockedCompareExchange(&Device->WaveRegisterAccess, 0, 0);
+    for (;;) {
+        LONG observed;
+        if (readers < 0 || readers == MAXLONG) return FALSE;
+        observed = InterlockedCompareExchange(&Device->WaveRegisterAccess, readers + 1, readers);
+        if (observed == readers) return TRUE;
+        readers = observed;
+    }
+}
+
+void GfxWaveSampleEnd(BC250_DEVICE* Device)
+{
+    LONG remaining = InterlockedDecrement(&Device->WaveRegisterAccess);
+    NT_ASSERT(remaining >= 0);
+    UNREFERENCED_PARAMETER(remaining);
+}
+
+BOOLEAN GfxWaveCaptureActive(const BC250_DEVICE* Device)
+{
+    return InterlockedCompareExchange((volatile LONG*)&Device->WaveRegisterAccess, 0, 0) < 0;
+}
+
+typedef struct GFX_WAVE_CONTEXT {
+    BC250_SEQUENCE Sequence;
+    ULONGLONG Deadline;
+} GFX_WAVE_CONTEXT;
+
+static NTSTATUS GfxWaveWrite(const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    if (Offset != BC250_REG_GC_GRBM_GFX_INDEX && Offset != BC250_REG_GC_SQ_IND_INDEX)
+        return STATUS_ACCESS_DENIED;
+    return MmioGfxWrite(Device, Offset, Value);
+}
+
+static unsigned int GfxWaveStop(void* Context)
+{
+    GFX_WAVE_CONTEXT* c = (GFX_WAVE_CONTEXT*)Context;
+    if (!NT_SUCCESS(c->Sequence.Fault)) return BC250_WAVE_READ_ERROR;
+    if (KeQueryInterruptTime() >= c->Deadline) return BC250_WAVE_BUDGET_EXPIRED;
+    return 0;
+}
+
+static NTSTATUS GfxWaveRestore(BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    ULONG readback = 0;
+    BOOLEAN read = FALSE;
+    NTSTATUS status = GfxWaveWrite(Device, Offset, Value);
+    if (NT_SUCCESS(status)) {
+        status = MmioGfxRead(Device, Offset, &readback);
+        read = NT_SUCCESS(status);
+    }
+    if (NT_SUCCESS(status) && readback != Value) status = STATUS_DEVICE_DATA_ERROR;
+    GuardLog("waves: restore reg 0x%05lX requested 0x%08lX read %u value 0x%08lX status 0x%08lX",
+             Offset, Value, (ULONG)read, readback, (ULONG)status);
+    return status;
+}
+
+NTSTATUS GfxCaptureWaves(BC250_DEVICE* Device, BC250_WAVE_SNAPSHOT* Snapshot)
+{
+    GFX_WAVE_CONTEXT context = {0};
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    void* backend;
+    BOOLEAN enabled = FALSE;
+    ULONG savedIndex = 0;
+    BOOLEAN indexSaved = FALSE, captureOwned = FALSE, broadcastRestored = TRUE;
+    NTSTATUS status = STATUS_DEVICE_NOT_READY, cleanup;
+    BC250_WAVE_HEADER* h = &Snapshot->Header;
+
+    h->AbiVersion = BC250_WAVE_ABI_VERSION;
+    h->DriverVersion = BC250_KMD_VERSION;
+    h->Bytes = sizeof(*h);
+    h->Flags = BC250_WAVE_READ_ERROR;
+    h->StartTime100ns = KeQueryInterruptTime();
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        h->EndTime100ns = h->StartTime100ns;
+        h->Result = STATUS_INVALID_DEVICE_STATE;
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+    // Lifecycle takes these in this order, exclusively for GFX teardown. GartLock
+    // also excludes the SQ_CMD kill, the other shim sequences and selector users.
+    // Do not acquire GfxAccess here: its holder may never wait for GartLock.
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (!AdapterOwnerIs(Device->PhysicalDeviceObject) || !Device->Started ||
+        gfx == NULL || Device->GpuMem == NULL ||
+        InterlockedCompareExchange(&Device->RetainedPowerPhase, 0, 0) != 0)
+        goto Unlock;
+    status = GartDevice(Device, &adev, &enabled);
+    if (!NT_SUCCESS(status)) goto Unlock;
+    if (!enabled || !gfx->SetUp || gfx->PowerSuspended || gfx->Failed ||
+        gfx->StagesDone < BC250_GFX_STAGE_INTERRUPTS) {
+        status = STATUS_DEVICE_NOT_READY; goto Unlock;
+    }
+
+    context.Sequence.Name = "waves";
+    context.Sequence.Read = MmioGfxRead;
+    context.Sequence.Write = GfxWaveWrite;
+    SequenceBegin(&context.Sequence, Device, FALSE, NULL, 0);
+    // The deadline includes sampler drain and the register loop, not mutex
+    // admission or registry I/O. Readers never acquire GartLock while admitted.
+    context.Deadline = KeQueryInterruptTime() + 250ull * 10000ull;
+    while (InterlockedCompareExchange(&Device->WaveRegisterAccess, -1, 0) != 0) {
+        // GartLock excludes another capture here: a negative state belongs to
+        // a prior failed restore, and remains quarantined until a new start.
+        if (GfxWaveCaptureActive(Device)) {
+            status = STATUS_DEVICE_DATA_ERROR;
+            GuardLog("waves: refused after failed bank restore; device restart required");
+            goto Unlock;
+        }
+        if (KeQueryInterruptTime() >= context.Deadline) {
+            h->Flags = BC250_WAVE_BUDGET_EXPIRED;
+            status = STATUS_IO_TIMEOUT;
+            goto Unlock;
+        }
+        KeStallExecutionProcessor(1);
+    }
+    captureOwned = TRUE;
+    backend = adev->backend;
+    adev->backend = &context.Sequence;
+    status = MmioGfxRead(Device, BC250_REG_GC_SQ_IND_INDEX, &savedIndex);
+    if (NT_SUCCESS(status) && savedIndex == MAXULONG) status = STATUS_DEVICE_DATA_ERROR;
+    if (NT_SUCCESS(status)) {
+        indexSaved = TRUE;
+        status = bc250_gfx_read_waves(adev, Snapshot, GfxWaveStop, &context) == 0
+                     ? STATUS_SUCCESS : STATUS_DEVICE_DATA_ERROR;
+        if (!NT_SUCCESS(context.Sequence.Fault)) status = context.Sequence.Fault;
+        else if (h->Flags & BC250_WAVE_BUDGET_EXPIRED) status = STATUS_IO_TIMEOUT;
+        h->FaultOffset = context.Sequence.FaultOffset;
+    }
+    // Sequence writes stop after a fault. Cleanup therefore uses the same checked
+    // MMIO backend directly. Restore the bank before the indirect selector:
+    // the saved selector was read at entry, when the driver owned broadcast.
+    cleanup = GfxWaveRestore(Device, BC250_REG_GC_GRBM_GFX_INDEX, bc250_gfx_wave_broadcast_value());
+    if (!NT_SUCCESS(cleanup)) {
+        broadcastRestored = FALSE;
+        h->Flags |= BC250_WAVE_READ_ERROR;
+        if (NT_SUCCESS(status)) { status = cleanup; h->FaultOffset = BC250_REG_GC_GRBM_GFX_INDEX; }
+    }
+    if (indexSaved) {
+        cleanup = GfxWaveRestore(Device, BC250_REG_GC_SQ_IND_INDEX, savedIndex);
+        if (!NT_SUCCESS(cleanup)) {
+            h->Flags |= BC250_WAVE_READ_ERROR;
+            if (NT_SUCCESS(status)) { status = cleanup; h->FaultOffset = BC250_REG_GC_SQ_IND_INDEX; }
+        }
+    }
+    adev->backend = backend;
+Unlock:
+    if (captureOwned) {
+        if (broadcastRestored) InterlockedExchange(&Device->WaveRegisterAccess, 0);
+        else GuardLog("waves: bank restore failed; sampler admission retained until device restart");
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    if (!NT_SUCCESS(status)) {
+        h->Flags &= ~BC250_WAVE_COMPLETE;
+        if (!(h->Flags & (BC250_WAVE_TRUNCATED | BC250_WAVE_BUDGET_EXPIRED)))
+            h->Flags |= BC250_WAVE_READ_ERROR;
+    }
+    h->Result = status;
+    h->Bytes = (ULONG)(sizeof(*h) + h->WaveCount * sizeof(Snapshot->Waves[0]));
+    h->EndTime100ns = KeQueryInterruptTime();
+    return status;
+}
+
+void GfxRecordWavesBeforeKill(BC250_DEVICE* Device, ULONG Seq, ULONG Fence, ULONG Vmid)
+{
+    BC250_WAVE_SNAPSHOT* snapshot;
+    BC250_WAVE_HEADER failure = {0};
+    ULONGLONG now;
+    NTSTATUS status;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    snapshot = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*snapshot), BC250_GFX_TAG);
+    if (snapshot != NULL) {
+        snapshot->Header.Kind = BC250_WAVE_KIND_PRE_KILL;
+        snapshot->Header.Seq = Seq;
+        snapshot->Header.Fence = Fence;
+        snapshot->Header.Vmid = Vmid;
+        (void)GfxCaptureWaves(Device, snapshot);
+        status = GuardRecordWaveSnapshot(&snapshot->Header);
+        GuardLog("waves: pre-kill seq %lu vmid %lu count %u flags 0x%X read 0x%08X persisted 0x%08X",
+                 Seq, Vmid, snapshot->Header.WaveCount, snapshot->Header.Flags,
+                 snapshot->Header.Result, status);
+        ExFreePoolWithTag(snapshot, BC250_GFX_TAG);
+        return;
+    }
+    // A fresh error record replaces the last successful dump on allocation failure.
+    failure.AbiVersion = BC250_WAVE_ABI_VERSION;
+    failure.Bytes = sizeof(failure);
+    failure.DriverVersion = BC250_KMD_VERSION;
+    failure.Kind = BC250_WAVE_KIND_PRE_KILL;
+    failure.Result = STATUS_INSUFFICIENT_RESOURCES;
+    failure.Flags = BC250_WAVE_READ_ERROR;
+    failure.Seq = Seq; failure.Fence = Fence; failure.Vmid = Vmid;
+    now = KeQueryInterruptTime();
+    failure.StartTime100ns = failure.EndTime100ns = now;
+    status = GuardRecordWaveSnapshot(&failure);
+    GuardLog("waves: allocation failed for pre-kill seq %lu; error persisted 0x%08X", Seq, status);
 }
 
 static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
@@ -4086,6 +4305,7 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GFX* gfx;
 
+    GfxWaveSamplingReset(Device);
     Device->Gfx = NULL;
     Device->GfxStopQuiet = TRUE;
     Device->GfxStopPrepared = FALSE;

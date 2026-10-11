@@ -33,7 +33,7 @@ param(
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
     [ValidateSet('', 'no-boost-raise', 'boost-held-back', 'step-pays-all', 'telemetry-always', 'boost-claims-fixed',
-                 'rise-outlives-doubt')][string]$Mutation = ''
+                 'rise-outlives-doubt', 'board-admission', 'board-port')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,6 +49,12 @@ if ($Mutation -and -not $PSBoundParameters.ContainsKey('Out')) { $Out = "$Out-$M
 # one line it changes (a regular expression that must match exactly once), what takes its place, and which test
 # must then report a FAIL.
 $mutations = @{
+    'board-port' = @{ file = 'hwmon'; find = 'if \(!ports->Owner->BoardAllowed\) return;(\s+)WRITE_PORT_UCHAR\(HwmonPort\(ports, Index\), Value\);'
+                     with = 'WRITE_PORT_UCHAR(HwmonPort(ports, Index), Value);'
+                     why = 'unknown board reaches an EC latch: denied port checks must fail' }
+    'board-admission' = @{ file = 'hwmon'; find = 'owner->Enabled = owner->BoardAllowed && GuardReadSetting'
+                          with = 'owner->Enabled = GuardReadSetting'
+                          why = 'unknown board attempts EC access: denied binding checks must fail' }
     # "> BC250_FAN_FULL_PCT" and not "0 &&": a condition that is never true, and not one the compiler calls a
     # constant expression (/W4 /WX refuses C4127, and a control that cannot compile proves nothing).
     'no-boost-raise'   = @{ file = 'policy'; find = 'if \(target < BC250_FAN_FULL_PCT\)'
@@ -107,7 +113,7 @@ $env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $policy = Join-Path $shim 'bc250_hwmon.c'
-$incUser = @("/I$shim\include",
+$incUser = @("/I$shim", "/I$shim\include",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 
@@ -132,13 +138,13 @@ Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '
 Write-Host 'compile (policy and fan control, kernel flags)'
 Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zp8', '/TC',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DBC250_SHIM_KERNEL', '/wd4201', '/wd4214',
-    "/I$shim\include", "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt",
+    "/I$shim", "/I$shim\include", "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt",
     "/I$wdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\shared", "/Fo$objKern\", $policy, $fan))
 
 # The shipping binding, with its one kernel include swapped for the mock. Nothing else in the file is touched,
 # and the generated copy is read back into the compiler so a diff of it is the whole difference under test.
 Write-Host 'generate (the binding, with the kernel primitives mocked)'
-$source = Get-Content -LiteralPath (Join-Path $kmd 'hwmon.c') -Raw
+$source = Use-Mutation (Get-Content -LiteralPath (Join-Path $kmd 'hwmon.c') -Raw) 'hwmon'
 $needle = '#include "bc250kmd.h"'
 if (-not $source.Contains($needle)) { throw "driver\kmd\hwmon.c no longer includes the miniport header: the mock cannot replace it" }
 $native = $source.Replace($needle, '#include "hwmon_native_mock.h"')

@@ -6,7 +6,9 @@
 //                                     hardware id (default PCI\VEN_1002&DEV_13FE, matched case-insensitively
 //                                     as a prefix); prints the reply, or exactly which call failed and its NTSTATUS
 //   bc250kmd_cli list                 every display adapter dxgkrnl knows, with its hardware id and LUID
-//   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
+//   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names,
+//                                     and the start record (BD-122): why the last start failed, which step, with
+//                                     the NTSTATUS and the driver log lines that ran up to it
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
 //   bc250kmd_cli health read|confirm  the cached start-health witness, and its checked confirmation
 //   bc250kmd_cli clock read|set       one KMD clock sample, or a complete operating-point transaction
@@ -103,6 +105,12 @@ static const char *StatusName(NTSTATUS s)
     case 0xC00000E5ul: return "STATUS_INTERNAL_ERROR";
     case 0xC01E0102ul: return "STATUS_GRAPHICS_DRIVER_MISMATCH";
     case 0xC01E0200ul: return "STATUS_GRAPHICS_ADAPTER_WAS_RESET";
+    // BD-122: what a step of the KMD's start path answers with, for the start record below.
+    case 0xC000009Aul: return "STATUS_INSUFFICIENT_RESOURCES";
+    case 0xC0000182ul: return "STATUS_DEVICE_CONFIGURATION_ERROR";
+    case 0xC0000184ul: return "STATUS_INVALID_DEVICE_STATE";
+    case 0xC0000483ul: return "STATUS_DEVICE_HARDWARE_ERROR";
+    case 0xC01E0100ul: return "STATUS_GRAPHICS_NO_VIDEO_MEMORY";
     default:           return "";
     }
 }
@@ -434,12 +442,16 @@ static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS
 #endif
 // Shared implementation for CLI and direct monitor P/Invoke, no subprocess or
 // raw bc250rd fallback. A new adapter handle each call survives PnP replacement.
+static NTSTATUS BoardCapabilityRequired(ULONG flag);
+
 BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
     BC250_ESCAPE_CLOCK* data,ULONG bytes)
 {
     NTSTATUS status=(NTSTATUS)0xC000000E; // STATUS_NO_SUCH_DEVICE before adapter lookup
     if(!data || bytes!=sizeof(*data) || (op!=BC250_CLOCK_OP_READ && op!=BC250_CLOCK_OP_SET))
         return (LONG)0xC000000D; // STATUS_INVALID_PARAMETER
+    if(op != BC250_CLOCK_OP_READ && !NT_SUCCESS(status = BoardCapabilityRequired(BC250_BOARD_CAPS_GPU)))
+        return status;
     memset(data,0,sizeof(*data));
     data->Magic=BC250_ESCAPE_MAGIC;data->Command=BC250_ESCAPE_RUN_CLOCK;
     data->AbiVersion=BC250_CLOCK_ABI;data->Op=op;
@@ -693,6 +705,85 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
 
+// Query-only provider envelope. No old-driver fallback and no hardware escape.
+static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
+{
+    ULONG i, j;
+    const ULONG *words = (const ULONG *)c;
+    if (c->Magic != BC250_ESCAPE_MAGIC || c->Command != BC250_ESCAPE_RUN_BOARD_CAPS ||
+        c->Status != BC250_ESCAPE_STATUS_DONE || c->NtStatus || c->AbiVersion != BC250_BOARD_CAPS_ABI ||
+        (c->Flags & ~31u) || c->Reason > BC250_BOARD_CAPS_REASON_INACTIVE) return 0;
+    for (i = 0; i < ARRAYSIZE(c->Reserved); ++i) if (c->Reserved[i]) return 0;
+    if (!c->ProviderId) {
+        if (c->Flags || c->Reason != BC250_BOARD_CAPS_REASON_BOARD) return 0;
+        for (i = 8; i < sizeof(*c) / sizeof(ULONG); ++i) if (words[i]) return 0;
+        return 1;
+    }
+    if (c->ProviderId != 1 || !(c->Flags & BC250_BOARD_CAPS_SUPPORTED) ||
+        c->Reason == BC250_BOARD_CAPS_REASON_BOARD ||
+        (c->Reason == BC250_BOARD_CAPS_REASON_INACTIVE && c->Flags != BC250_BOARD_CAPS_SUPPORTED)) return 0;
+    if (!c->GpuMinMHz || c->GpuMinMHz > c->GpuFloorMHz || c->GpuFloorMHz > c->GpuMaxMHz ||
+        !c->GpuStepMHz || !c->GpuPointCount || c->GpuPointCount > ARRAYSIZE(c->GpuPoints) ||
+        !c->GpuMinMv || c->GpuMinMv > c->GpuMaxMv || c->GpuMaxMv > 1550 || c->GpuUndervoltMv > c->GpuMaxMv || !c->GpuHotMc ||
+        c->GpuDefaultMaxMHz < c->GpuFloorMHz || c->GpuDefaultMaxMHz > c->GpuMaxMHz ||
+        (c->GpuDefaultMaxMHz - c->GpuMinMHz) % c->GpuStepMHz ||
+        (c->GpuFloorMHz - c->GpuMinMHz) % c->GpuStepMHz) return 0;
+    if (c->CpuMaxMHz > MAXLONG || c->CpuMaxMHz - c->CpuMinMHz > 102400 ||
+        c->CpuTempMaxC > MAXLONG || c->CpuTempMaxC - c->CpuTempMinC > 256 ||
+        c->FanMaxC > MAXLONG || c->FanMaxC - c->FanMinC > 256) return 0;
+    if (!c->CpuMinMHz || c->CpuMinMHz > c->CpuMaxMHz || c->CpuMaxMHz > c->CpuLabMaxMHz ||
+        !c->CpuStepMHz || c->CpuTempMinC > c->CpuTempMaxC || !c->CpuRefuseMv ||
+        !c->CpuStockMask || (c->CpuStockMask & ~c->CpuFullMask) || !c->CpuCoreCount || c->CpuCoreCount > 32 ||
+        !c->CpuStockCoreCount || c->CpuStockCoreCount > c->CpuCoreCount) return 0;
+    if (c->FanMinC >= c->FanMaxC || c->FanFloorPct > c->FanFullPct || c->FanFullPct > 100 ||
+        !c->FanEmergencyMc || c->FanPointMin < 2 || c->FanPointMin > c->FanPointMax || c->FanPointMax > 8 ||
+        !c->FanLeaseMinMs || c->FanLeaseMinMs > c->FanLeaseDefaultMs || c->FanLeaseDefaultMs > c->FanLeaseMaxMs) return 0;
+    for (i = 0; i < ARRAYSIZE(c->GpuPoints); ++i) {
+        const BC250_BOARD_GPU_POINT *p = &c->GpuPoints[i];
+        if (i >= c->GpuPointCount) { if (p->MHz || p->Mv || p->Vid) return 0; continue; }
+        if (p->MHz != (ULONGLONG)c->GpuMinMHz + (ULONGLONG)i * c->GpuStepMHz || p->MHz > c->GpuMaxMHz ||
+            p->Mv < c->GpuMinMv || p->Mv > c->GpuMaxMv || p->Vid != (1550u - p->Mv) * 160u / 1000u || (i && p->Mv < c->GpuPoints[i-1].Mv)) return 0;
+    }
+    if (c->GpuPoints[c->GpuPointCount-1].MHz != c->GpuMaxMHz) return 0;
+    for (i = 0; i < 3; ++i) {
+        if (c->FanPresetCounts[i] < c->FanPointMin || c->FanPresetCounts[i] > c->FanPointMax) return 0;
+        for (j = 0; j < 8; ++j) {
+            const BC250_BOARD_FAN_POINT *p = &c->FanPresets[i][j];
+            if (j >= c->FanPresetCounts[i]) { if (p->TempC || p->DutyPct) return 0; continue; }
+            if (p->TempC < c->FanMinC || p->TempC > c->FanMaxC || p->DutyPct < c->FanFloorPct || p->DutyPct > c->FanFullPct ||
+                (j && (p->TempC <= c->FanPresets[i][j-1].TempC || p->DutyPct < c->FanPresets[i][j-1].DutyPct))) return 0;
+        }
+    }
+    return 1;
+}
+BC250_CONTROL_API LONG WINAPI Bc250BoardCapabilities(BC250_ESCAPE_BOARD_CAPS *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char BoardCapsAbiSizeCheck[(sizeof(BC250_ESCAPE_BOARD_CAPS) == 768) ? 1 : -1];
+    (void)sizeof(BoardCapsAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_BOARD_CAPS;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_BOARD_CAPS_ABI;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
+        return (LONG)data->NtStatus < 0 ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    return BoardCapabilitiesValid(data) ? 0 : (LONG)0xC000000D;
+}
+static NTSTATUS BoardCapabilityRequired(ULONG flag)
+{
+    BC250_ESCAPE_BOARD_CAPS caps;
+    NTSTATUS status = Bc250BoardCapabilities(&caps, sizeof(caps));
+    if (!NT_SUCCESS(status)) return status;
+    return caps.Reason == BC250_BOARD_CAPS_REASON_NONE &&
+        (caps.Flags & (BC250_BOARD_CAPS_SUPPORTED | flag)) == (BC250_BOARD_CAPS_SUPPORTED | flag)
+        ? 0 : (NTSTATUS)0xC00000BB;
+}
+
 // Same fixed block validation as driver/shim/bc250_uma.c; no hardware access.
 static int BoardMemoryBlockValid(const unsigned char *block, ULONG requested)
 {
@@ -732,6 +823,8 @@ BC250_CONTROL_API LONG WINAPI Bc250BoardMemory(BC250_ESCAPE_BOARD_MEMORY *data, 
         BC250_CONTROL_BOARD_MEMORY_REQUEST query;
         memset(&query, 0, sizeof(query));
         query.Size = sizeof(query);
+        status = BoardCapabilityRequired(BC250_BOARD_CAPS_MEMORY);
+        if (!NT_SUCCESS(status)) return status;
         status = Bc250BoardMemory(&capability, sizeof(capability), &query);
         if (!NT_SUCCESS(status)) return status;
         if ((capability.Flags & (BC250_BOARD_MEMORY_SUPPORTED | BC250_BOARD_MEMORY_READ_VALID | BC250_BOARD_MEMORY_WRITE_ALLOWED)) !=
@@ -917,6 +1010,7 @@ BC250_CONTROL_API LONG WINAPI Bc250Fan(const BC250_FAN_REQUEST *request, BC250_E
     op = request->Op;
     if (op > BC250_FAN_OP_RENEW || request->Points > BC250_FAN_CURVE_SLOTS || request->Reserved)
         return (LONG)0xC000000D;
+    if (op != 0 && !NT_SUCCESS(status = BoardCapabilityRequired(BC250_BOARD_CAPS_FAN))) return status;
     memset(data, 0, sizeof(*data));
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_FAN;
@@ -956,6 +1050,7 @@ BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration
     (void)sizeof(CuModeAbiSizeCheck);
     if (!data || bytes != sizeof(*data) || (op != BC250_CU_MODE_OP_READ && op != BC250_CU_MODE_OP_CONFIRM))
         return (LONG)0xC000000D;
+    if (op != 0 && !NT_SUCCESS(status = BoardCapabilityRequired(BC250_BOARD_CAPS_GPU))) return status;
     memset(data, 0, sizeof(*data));
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_CU_MODE;
@@ -991,6 +1086,7 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
     (void)sizeof(CurveAbiSizeCheck);
     if (!data || bytes != sizeof(*data) || op > BC250_DPM_CURVE_OP_RESET) return (LONG)0xC000000D;
     if (op == BC250_DPM_CURVE_OP_SET && (!mv || points != BC250_DPM_CURVE_POINTS)) return (LONG)0xC000000D;
+    if (op != 0 && !NT_SUCCESS(status = BoardCapabilityRequired(BC250_BOARD_CAPS_GPU))) return status;
     memset(data, 0, sizeof(*data));
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_DPM_CURVE;
@@ -1031,6 +1127,7 @@ BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_E
     if (!request || !data || bytes != sizeof(*data) || request->Size != sizeof(*request)) return (LONG)0xC000000D;
     op = request->Op;
     if (op > BC250_CPU_OP_SEARCH_STEP) return (LONG)0xC000000D;
+    if (op != 0 && !NT_SUCCESS(status = BoardCapabilityRequired(BC250_BOARD_CAPS_CPU))) return status;
     memset(data, 0, sizeof(*data));
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_CPU;
@@ -1406,6 +1503,9 @@ static int FanControl(int argc, WCHAR **argv)
     LONG status;
     int next = 3;
 
+    status = BoardCapabilityRequired(BC250_BOARD_CAPS_FAN);
+    if (status < 0) { PrintStatus("board fan capability", status); return 1; }
+
     memset(&r, 0, sizeof(r));
     r.Size = sizeof(r);
     r.Op = BC250_FAN_OP_READ;
@@ -1425,13 +1525,13 @@ static int FanControl(int argc, WCHAR **argv)
             next++;
         }
     } else if (!_wcsicmp(verb, L"set")) {
-        if (argc != 5) { fprintf(stderr, "usage: fan set <percent 20..100> <seconds 5..300>\n"); return 2; }
+        if (argc != 5) { fprintf(stderr, "usage: fan set <percent> <seconds> (limits: board-caps)\n"); return 2; }
         r.Op = BC250_FAN_OP_FIXED;
         r.FixedPct = wcstoul(argv[3], NULL, 10);
         r.LeaseMs = wcstoul(argv[4], NULL, 10) * 1000u;
         next = 5;
     } else if (!_wcsicmp(verb, L"renew")) {
-        if (argc != 4) { fprintf(stderr, "usage: fan renew <seconds 5..300>\n"); return 2; }
+        if (argc != 4) { fprintf(stderr, "usage: fan renew <seconds> (limits: board-caps)\n"); return 2; }
         r.Op = BC250_FAN_OP_RENEW;
         r.LeaseMs = wcstoul(argv[3], NULL, 10) * 1000u;
         next = 4;
@@ -2432,6 +2532,62 @@ static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
     return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_DWORD, &type, value, &size) == ERROR_SUCCESS;
 }
 
+// BD-122: the KMD's reason for the last start that did not reach a started device, from
+// Parameters\StartRecord. LastStage 91 says only that a step of the start failed; this names the step, the
+// NTSTATUS, the time and the driver log lines that ran up to it. It is a registry read, so it answers on a
+// device with Code 43, which cannot answer an escape at all - that is the whole point of the record. Read only.
+static int ReadString(const WCHAR *key, const WCHAR *name, WCHAR *buffer, DWORD bytes)
+{
+    DWORD size = bytes, type = 0;
+    buffer[0] = 0;
+    return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_SZ, &type, buffer, &size) == ERROR_SUCCESS;
+}
+
+static void StartRecord(void)
+{
+    static const WCHAR *record = BC250_PARAMETERS L"\\StartRecord";
+    WCHAR result[32], step[96], sub[96], when[40], detail[400];
+    DWORD status = 0, stage = 0, starts = 0, version = 0;
+    int failure;
+
+    if (!ReadString(record, L"Result", result, sizeof(result))) {
+        printf("StartRecord  -  (no record: a KMD before 0.7.216.30, or no start has written one)\n");
+        return;
+    }
+    if (!ReadString(record, L"Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
+    if (!ReadString(record, L"SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
+    if (!ReadString(record, L"TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
+    (void)ReadDword(record, L"Status", &status);
+    (void)ReadDword(record, L"Stage", &stage);
+    (void)ReadDword(record, L"UnconfirmedStarts", &starts);
+    (void)ReadDword(record, L"Version", &version);
+    printf("StartRecord  %ls, step %ls / %ls, status 0x%08lX%s%s\n", result, step, sub, (unsigned long)status,
+           StatusName((NTSTATUS)status)[0] ? " " : "", StatusName((NTSTATUS)status));
+    printf("             stage %lu %s, at %ls, UnconfirmedStarts %lu, written by 0x%08lX\n", stage,
+           StageName(stage), when, starts, (unsigned long)version);
+    // Only a failure or a refusal carries a reason; the other results say so in one word and keep no lines.
+    failure = (_wcsicmp(result, L"failed") == 0 || _wcsicmp(result, L"guard") == 0);
+    if (!failure) {
+        printf("             %s\n", _wcsicmp(result, L"started") == 0
+               ? "the last start reached a started device: this is not a reason for anything"
+               : "the last start neither failed nor finished: see LastStage and StageHistory above");
+        return;
+    }
+    if (ReadString(record, L"Detail", detail, sizeof(detail)) && detail[0])
+        printf("             detail %ls\n", detail);
+    // The kept ring lines, oldest first, as one REG_MULTI_SZ. Bounded by the driver to 64 lines of 159
+    // characters; the buffer here holds more than that, and a longer value is simply read short.
+    {
+        WCHAR lines[64 * 160 + 2];
+        DWORD size = sizeof(lines), type = 0;
+        const WCHAR *p;
+
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, record, L"Log", RRF_RT_REG_MULTI_SZ, &type, lines, &size) != ERROR_SUCCESS)
+            return;
+        for (p = lines; *p; p += wcslen(p) + 1) printf("  log        %ls\n", p);
+    }
+}
+
 static int Stages(void)
 {
     HKEY key;
@@ -2460,6 +2616,10 @@ static int Stages(void)
         printf("StageHistory %ls\n", history);
     else
         printf("StageHistory -\n");
+
+    // BD-122: why the last start did not reach a started device, which the two lines above cannot say. Printed
+    // before the counter below, because that one decides this command's exit code and returns.
+    StartRecord();
 
     if (ReadDword(BC250_PARAMETERS, L"UnconfirmedStarts", &starts)) {
         printf("starts       %lu unconfirmed%s\n", starts,
@@ -3049,7 +3209,12 @@ static void TuneFloorText(char *text, size_t size, unsigned long mhz)
 static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs)
 {
     if (deltaMc) {
-        long below = BC250_DPM_TUNE_HOT_MC - (long)deltaMc;
+        BC250_ESCAPE_BOARD_CAPS caps;
+        if (Bc250BoardCapabilities(&caps, sizeof(caps)) < 0 || !(caps.Flags & BC250_BOARD_CAPS_SUPPORTED)) {
+            _snprintf_s(text, size, _TRUNCATE, "temperature limit unavailable");
+            return;
+        }
+        long below = (long)caps.GpuHotMc - (long)deltaMc;
         _snprintf_s(text, size, _TRUNCATE, "below %ld.%ld C for %lu ms", below / 1000l, (below % 1000l) / 100l, stepMs);
     } else _snprintf_s(text, size, _TRUNCATE, "off");
 }
@@ -3059,7 +3224,12 @@ static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigne
 static void TuneZoneText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs, unsigned long leadMs)
 {
     if (deltaMc) {
-        long from = BC250_DPM_TUNE_HOT_MC - (long)deltaMc;
+        BC250_ESCAPE_BOARD_CAPS caps;
+        if (Bc250BoardCapabilities(&caps, sizeof(caps)) < 0 || !(caps.Flags & BC250_BOARD_CAPS_SUPPORTED)) {
+            _snprintf_s(text, size, _TRUNCATE, "temperature limit unavailable");
+            return;
+        }
+        long from = (long)caps.GpuHotMc - (long)deltaMc;
         _snprintf_s(text, size, _TRUNCATE, "from %ld.%ld C per %lu ms, lead %lu ms", from / 1000l,
                     (from % 1000l) / 100l, stepMs, leadMs);
     } else _snprintf_s(text, size, _TRUNCATE, "off");
@@ -3101,9 +3271,9 @@ static void TuneExplain(const BC250_ESCAPE_DPM_TUNE *t, unsigned long up)
                    "down at most %lu\n", up, up * 10ul / 11ul >= 1 ? up * 10ul / 11ul - 1ul : 0ul); break;
     case 4: printf("  invariant 2: a raise from some clock would land below down; raise target or lower down\n"); break;
     case 5: printf("  the hold is 100..5000 ms\n"); break;
-    case 6: printf("  the floor is a clock of the table (1000..2000 in 100 MHz steps) at or below this start's ceiling, %lu MHz\n",
+    case 6: printf("  the floor must be on the board clock grid (board-caps), at or below this start's ceiling, %lu MHz\n",
                    t->MaxMHz); break;
-    case 7: printf("  hot step 250..10000 ms, soft delta off or 500..4500 mC (between 82 and 87 C), soft step 2000..30000 ms\n");
+    case 7: printf("  hot step 250..10000 ms, soft delta off or 500..4500 mC below the board hot limit, soft step 2000..30000 ms\n");
             break;
     case 8: printf("  zone delta off or 500..4000 mC and at least 500 mC above the soft delta (so the zone steps the cap "
                    "down above where it raises it again), zone step 250..30000 ms, zone lead at most 60000 ms; a zone "
@@ -3130,6 +3300,8 @@ static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const ch
 {
     BC250_ESCAPE_DPM_TUNE before, t;
     char floorBefore[32], floorAfter[32];
+    NTSTATUS status = BoardCapabilityRequired(BC250_BOARD_CAPS_GPU);
+    if (status < 0) { PrintStatus("board governor capability", status); return 1; }
     if (TuneRead(&before, 0)) return 1;
     t = *in;
     if (op == BC250_DPM_TUNE_OP_THRESHOLDS && t.DownHoldMs == 0) t.DownHoldMs = before.DownHoldMs;
@@ -3245,7 +3417,7 @@ static int DpmFloor(int argc, WCHAR **argv)
     BC250_ESCAPE_DPM_TUNE t;
     memset(&t, 0, sizeof(t));
     if (argc != 4 || (_wcsicmp(argv[3], L"off") && ParseNumber(argv[3], &t.FloorMHz))) {
-        fprintf(stderr, "usage: bc250kmd_cli dpm floor <MHz|off>   (MHz: 1000..2000 in 100 MHz steps, at most DpmMaxMHz)\n");
+        fprintf(stderr, "usage: bc250kmd_cli dpm floor <MHz|off>   (clock grid: board-caps, at most DpmMaxMHz)\n");
         return 2;
     }
     if (!_wcsicmp(argv[3], L"off")) t.FloorMHz = 0;
@@ -3265,8 +3437,8 @@ static int DpmFloor(int argc, WCHAR **argv)
 // back. Nothing reaches the registry before a keep.
 #define CURVE_ERRORS 7
 static const char *const g_CurveError[CURVE_ERRORS] = {
-    "none", "a value outside 820..1000 mV", "deeper than the band allows at that clock",
-    "the voltage falls as the clock rises", "1000 MHz must stay at 820 mV", "no curve given",
+    "none", "a value outside the board voltage range", "deeper than the band allows at that clock",
+    "the voltage falls as the clock rises", "the floor clock must retain its board voltage", "no curve given",
     "the governor has not put the candidate into the chip yet"
 };
 
@@ -3330,6 +3502,8 @@ static int CurveWrite(unsigned long op, const unsigned long *mv, unsigned long w
 {
     BC250_ESCAPE_DPM_CURVE before, c;
     unsigned long i;
+    NTSTATUS status = BoardCapabilityRequired(BC250_BOARD_CAPS_GPU);
+    if (status < 0) { PrintStatus("board curve capability", status); return 1; }
     if (CurveRead(&before, 0)) return 1;
     memset(&c, 0, sizeof(c));
     if (mv != NULL) for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) c.CandidateMv[i] = mv[i];
@@ -3338,7 +3512,11 @@ static int CurveWrite(unsigned long op, const unsigned long *mv, unsigned long w
     if (c.Status != BC250_ESCAPE_STATUS_DONE) {
         printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s", name, c.Status, c.NtStatus,
                c.Error < CURVE_ERRORS ? g_CurveError[c.Error] : "?");
-        if (c.Error) printf(" at %lu MHz", c.ErrorLevel ? c.FirstMHz + (c.ErrorLevel - 5) * 100 : c.FirstMHz);
+        if (c.Error) {
+            BC250_ESCAPE_BOARD_CAPS caps;
+            if (Bc250BoardCapabilities(&caps, sizeof(caps)) >= 0 && c.ErrorLevel < caps.GpuPointCount)
+                printf(" at %lu MHz", caps.GpuPoints[c.ErrorLevel].MHz);
+        }
         printf("\n");
         if (c.NtStatus == 0xC0000184ul)
             printf("# STATUS_INVALID_DEVICE_STATE: a curve needs a DPM start whose governor runs, and a keep or a "
@@ -3401,7 +3579,7 @@ static int DpmCurve(int argc, WCHAR **argv)
     }
     if (!_wcsicmp(argv[3], L"set")) {
         if (argc != 4 + (int)BC250_DPM_CURVE_POINTS && argc != 5 + (int)BC250_DPM_CURVE_POINTS) {
-            fprintf(stderr, "usage: bc250kmd_cli dpm curve set <mV at 1000> ... <mV at 2000> [window ms]   "
+            fprintf(stderr, "usage: bc250kmd_cli dpm curve set <mV in ascending clock order>... [window ms]   "
                             "(%lu values)\n", (unsigned long)BC250_DPM_CURVE_POINTS);
             return 2;
         }
@@ -3566,6 +3744,8 @@ static int CpuSample(int argc, WCHAR **argv, int first, BC250_ESCAPE_CPU *c)
 static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *name)
 {
     BC250_ESCAPE_CPU before, c;
+    NTSTATUS status = BoardCapabilityRequired(BC250_BOARD_CAPS_CPU);
+    if (status < 0) { PrintStatus("board CPU capability", status); return 1; }
     if (CpuRead(&before, 0)) return 1;
     c = *in;
     if (CpuQuery(&c, op, before.Generation, 0)) return 1;
@@ -4035,6 +4215,33 @@ static int DpAudio(int argc, WCHAR **argv)
 #undef DPA_OK
 #undef FIELD
 
+static int BoardCapsCommand(void)
+{
+    BC250_ESCAPE_BOARD_CAPS c;
+    NTSTATUS status = Bc250BoardCapabilities(&c, sizeof(c));
+    if (!NT_SUCCESS(status)) { PrintStatus("board capabilities", status); return 1; }
+    printf("board-caps abi=%lu provider=%lu flags=%lu reason=%lu\n", c.AbiVersion, c.ProviderId, c.Flags, c.Reason);
+    if (!(c.Flags & BC250_BOARD_CAPS_SUPPORTED)) {
+        printf("board controls: not supported\n");
+        return 0;
+    }
+    printf("gpu min_mhz=%lu floor_mhz=%lu max_mhz=%lu step_mhz=%lu default_max_mhz=%lu min_mv=%lu max_mv=%lu hot_mc=%lu undervolt_mv=%lu\n",
+        c.GpuMinMHz, c.GpuFloorMHz, c.GpuMaxMHz, c.GpuStepMHz, c.GpuDefaultMaxMHz,
+        c.GpuMinMv, c.GpuMaxMv, c.GpuHotMc, c.GpuUndervoltMv);
+    for (ULONG i = 0; i < c.GpuPointCount; ++i)
+        printf("gpu-point index=%lu mhz=%lu mv=%lu vid=%lu\n", i, c.GpuPoints[i].MHz, c.GpuPoints[i].Mv, c.GpuPoints[i].Vid);
+    printf("cpu min_mhz=%lu max_mhz=%lu lab_max_mhz=%lu step_mhz=%lu uv_max_steps=%lu temp_min_c=%lu temp_max_c=%lu refuse_mv=%lu stock_mask=0x%lX full_mask=0x%lX\n",
+        c.CpuMinMHz, c.CpuMaxMHz, c.CpuLabMaxMHz, c.CpuStepMHz, c.CpuUvMaxSteps,
+        c.CpuTempMinC, c.CpuTempMaxC, c.CpuRefuseMv, c.CpuStockMask, c.CpuFullMask);
+    printf("fan min_c=%lu max_c=%lu min_pct=%lu max_pct=%lu emergency_mc=%lu lease_min_ms=%lu lease_max_ms=%lu lease_default_ms=%lu\n",
+        c.FanMinC, c.FanMaxC, c.FanFloorPct, c.FanFullPct, c.FanEmergencyMc, c.FanLeaseMinMs, c.FanLeaseMaxMs, c.FanLeaseDefaultMs);
+    for (ULONG profile = 0; profile < 3; ++profile)
+        for (ULONG i = 0; i < c.FanPresetCounts[profile]; ++i)
+            printf("fan-point profile=%lu index=%lu temp_c=%lu pct=%lu\n", profile+1, i,
+                c.FanPresets[profile][i].TempC, c.FanPresets[profile][i].DutyPct);
+    return 0;
+}
+
 static int Bc250BoardMemoryProbeCommand(void)
 {
     static const unsigned int rtc[] = {0, 2, 4, 13};
@@ -4054,11 +4261,14 @@ static int Bc250BoardMemoryProbeCommand(void)
     return status < 0 ? 1 : 0;
 }
 
+#include "waves_command.h"
+
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
                         "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
+                        "       bc250kmd_cli waves [saved] [--expect-idle | --expect-pc <hex-start> <hex-end>]\n"
                         "       bc250kmd_cli bc250-board-memory-probe                    (admin; fixed HAL reads only, no CMOS write)\n"
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
@@ -4096,7 +4306,9 @@ int wmain(int argc, wchar_t **argv)
         return 2;
     }
     if (!_wcsicmp(argv[1], L"cpu")) return Cpu(argc,argv);
+    if (!_wcsicmp(argv[1], L"waves")) return WavesCommand(argc,argv);
     if (!_wcsicmp(argv[1], L"bc250-board-memory-probe") && argc == 2) return Bc250BoardMemoryProbeCommand();
+    if (!_wcsicmp(argv[1], L"board-caps") && argc == 2) return BoardCapsCommand();
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);

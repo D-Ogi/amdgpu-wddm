@@ -1006,3 +1006,150 @@ uma.fallback.title|mt|6be52e48|비디오 메모리
 uma.fallback.size|mt|2c73531b|Windows에서 보고한 전용 메모리
 uma.fallback.readonly|mt|0042c9fe|이 메모리 크기는 읽기 전용입니다. 이 장치는 BC-250 보드 메모리 예약 설정을 제공하지 않습니다.
 uma.unknown-state|mt|76c05f2a|저장된 백업 또는 마지막 쓰기를 확인하지 못했습니다. 추가 변경이 잠겼습니다. 이 설정을 적용하려고 다시 시작하지 말고 지원팀에 문의하세요.
+
+board.unsupported|mt|bdd30095|이 보드에서는 설정 변경이 지원되지 않습니다. 드라이버가 제공하는 현재 값은 계속 확인할 수 있습니다.
+nav.system|mt|d598026a|Windows
+page.system.title|mt|78ecd832|Windows 설정
+page.system.intro|mt|743deb73|백그라운드 작업을 선택하세요. 모든 변경은 선택 사항이며 되돌릴 수 있습니다.
+help.page.system|mt|fb622a5a|이 설정은 모든 그래픽 카드에서 사용할 수 있습니다. 변경 전에 각 항목의 영향을 확인하세요. 복원은 저장된 설정으로 되돌리며 Windows 구성 요소를 제거하지 않습니다.
+system.overview|mt|67e610e8|백그라운드 작업
+system.backup|mt|db982ac0|변경 전에 이전 설정을 저장하며 앱 업데이트 후에도 유지합니다. 이 도구가 저장한 설정만 복원합니다.
+system.read-failed|mt|28e2faa8|현재 설정을 읽지 못했습니다. 변경 전에 새로 고침하세요.
+system.reading|mt|296c909a|Windows 설정을 읽는 중...
+system.refresh|mt|0e916101|새로 고침
+system.recommended|mt|7c59956a|권장 설정 적용
+system.restore-all|mt|01d04991|저장된 설정 모두 복원
+system.current|mt|e9f9320d|현재 설정
+system.managed|mt|b93f9481|이전 설정이 저장되어 있습니다.
+system.unmanaged|mt|6aa491ee|저장된 이전 설정이 없습니다.
+system.apply|mt|31e392d1|적용
+system.restore|mt|a76e13b9|복원
+system.days|mt|52fe4b04|일시 중지 기간(1-35일)
+system.pause|mt|28fdf83b|업데이트 일시 중지
+system.resume|mt|adcaa107|업데이트 다시 시작
+system.pause-policy|mt|afd58f7a|일시 중지를 요청하는 설정입니다. Windows가 나중에 적용할 수 있으며 보고된 상태는 별도로 표시됩니다. 지원하지 않는 Windows 에디션에서는 적용할 수 없습니다.
+system.requested-until|mt|9257abb6|요청한 중지 종료일
+system.observed|mt|4fa86770|Windows 보고 상태
+system.observed.paused|mt|e159b061|일시 중지됨
+system.observed.resumed|mt|1cfd0052|일시 중지되지 않음
+system.observed.mixed|mt|e29a44d0|기능 및 품질 업데이트 상태가 다름
+system.observed.unknown|mt|67a926f7|확인할 수 없음
+system.scope.machine|mt|102db83e|모든 Windows 계정
+system.scope.user|mt|f5ad11e3|현재 Windows 계정의 시작 프로그램
+system.plan.title|mt|f482ec59|Windows 설정 변경
+system.plan.apply|mt|f3954418|설명된 변경 적용: {0}
+system.plan.restore|mt|2083b0f3|저장된 설정 복원: {0}
+system.plan.pause|mt|47735b56|업데이트를 {0}일 동안 일시 중지하도록 요청합니다.
+system.plan.resume|mt|2a631fe8|이 도구의 업데이트 일시 중지를 해제하고 저장된 업데이트 설정으로 되돌립니다.
+system.plan.restore-all|mt|4ec97464|아래 저장된 설정을 복원합니다. 현재 계정의 시작 설정이 저장되어 있으면 함께 복원합니다.
+system.plan.recommended|mt|55d2022a|아래 백그라운드 작업을 줄입니다. 드라이브 최적화, 앱 시작 및 업데이트 설정은 포함되지 않습니다.
+system.plan.recheck|mt|f35e7163|쓰기 전에 설정을 다시 확인합니다. 변경되었거나 읽을 수 없는 항목은 거부될 수 있습니다. 보안, 네트워크 및 업데이트 서비스는 계속 켜져 있습니다.
+system.working|mt|6349602b|요청한 설정을 적용하는 중...
+system.done|mt|6e604bdb|작업이 완료되었습니다. 현재 설정을 다시 읽고 있습니다.
+system.cancelled|mt|8758b752|관리자 권한이 허용되지 않아 이 작업을 시작하지 않았습니다.
+system.timeout|mt|1ff9b40f|작업이 제한 시간 안에 끝나지 않았습니다. 일부 설정은 변경되었을 수 있습니다. 다시 시도하기 전에 상태를 새로 고침하세요.
+system.failed|mt|d2d04724|작업이 완전히 끝나지 않았습니다. 일부 설정은 변경되었을 수 있습니다. 새로 읽은 상태를 확인하고 필요하면 저장된 설정을 복원하세요.
+system.state.unknown|mt|63977a32|아직 읽지 않음
+system.state.absent|mt|3372d1ec|없음
+system.state.unavailable|mt|2e4a0a37|이 Windows 설치에서 사용할 수 없음
+system.state.enabled|mt|92c1cdfd|사용
+system.state.disabled|mt|75081b59|사용 안 함
+system.state.mixed|mt|5f56858c|일부 설정됨
+system.state.configured|mt|84aebc69|설정됨
+system.state.not-configured|mt|dd1841d2|설정되지 않음
+system.item.sysmain|mt|e8c3a42c|앱 미리 로드
+system.item.sysmain.description|mt|139310b7|백그라운드 앱 미리 로드를 끕니다. 메모리 사용이 줄 수 있지만 앱 시작이 느려질 수 있습니다.
+system.item.search|mt|25aa964c|파일 검색 인덱싱
+system.item.search.description|mt|82e0e975|백그라운드 파일 인덱싱을 끕니다. 파일 및 메일 검색이 느려지거나 일부 결과가 누락될 수 있습니다.
+system.item.diagnostics|mt|89414c70|백그라운드 진단
+system.item.diagnostics.description|mt|a0f40177|연결된 사용자 환경 및 진단 서비스를 끕니다.
+system.item.maps|mt|65354f53|다운로드한 지도
+system.item.maps.description|mt|55498afa|다운로드한 지도의 백그라운드 관리를 끕니다. 오프라인 지도가 업데이트되지 않을 수 있습니다.
+system.item.drive|mt|2620764b|예약된 드라이브 최적화
+system.item.drive.description|mt|a942887e|SSD 유지 관리를 포함한 예약 최적화를 끕니다. 수동 최적화는 계속 사용할 수 있습니다. 직접 관리하지 않는다면 켜 두세요.
+system.item.compatibility|mt|8a1113d8|업그레이드 호환성 확인
+system.item.compatibility.description|mt|5b28cbd9|예약된 호환성 평가를 끕니다. Windows가 주요 업그레이드 준비 상태를 확인할 정보가 줄어들 수 있습니다.
+system.item.program-data|mt|f772ca9f|앱 사용 정보 작업
+system.item.program-data.description|mt|d489b1a1|예약된 애플리케이션 경험 데이터 작업을 끕니다.
+system.item.experience|mt|0c03e40b|사용자 환경 개선 작업
+system.item.experience.description|mt|c6cf5ace|사용자 환경 데이터 통합 예약 작업을 끕니다.
+system.item.usb|mt|b041ca28|USB 환경 개선 작업
+system.item.usb.description|mt|ef62167a|예약된 USB 환경 데이터 작업을 끕니다. USB 장치는 계속 작동합니다.
+system.item.teams|mt|69e79a08|기존 Teams의 컴퓨터 시작 항목
+system.item.teams.description|mt|051d9751|모든 계정의 기존 Teams 설치 프로그램 시작 항목을 제거합니다. Teams 자체는 제거하지 않습니다. 새 Teams의 시작 설정은 별도입니다.
+system.item.onedrive|mt|5c1ab86d|OneDrive 시작
+system.item.onedrive.description|mt|166cbdd5|현재 계정의 로그인 시 OneDrive 시작을 끕니다. OneDrive를 직접 열 때까지 파일이 동기화되지 않습니다.
+system.item.teams-user|mt|5ce9ebb4|기존 Teams의 계정 시작 항목
+system.item.teams-user.description|mt|1e25b15f|현재 계정의 기존 Teams 시작 항목을 제거합니다. 새 Teams 및 스토어 앱의 시작 설정은 별도입니다.
+system.item.drivers|mt|ebb42406|설치된 드라이버 유지
+system.item.drivers.description|mt|03ed5ef4|모든 장치의 드라이버를 일반 Windows 품질 업데이트에서 제외합니다. Windows에 포함된 중요 드라이버와 기능 업그레이드의 드라이버는 여전히 교체될 수 있습니다.
+system.item.updates|mt|b94adecb|Windows 업데이트 일시 중지
+system.item.updates.description|mt|1fc64af6|보안 업데이트를 포함한 기능 및 품질 업데이트를 잠시 중지합니다. 업데이트 서비스는 켜 둡니다. 다시 시작하면 저장된 일시 중지 설정을 복원합니다.
+search.system.background|mt|67e610e8|백그라운드 작업
+search.system.background.terms|mt|c6d2c919|서비스 작업 시작 메모리
+search.system.updates|mt|a7059736|Windows 업데이트 일시 중지
+search.system.updates.terms|mt|7d884345|업데이트 일시 중지 다시 시작
+search.system.drivers|mt|ebb42406|설치된 드라이버 유지
+search.system.drivers.terms|mt|fb85e197|드라이버 자동 업데이트 교체
+search.system.drive|mt|8c2c1356|드라이브 최적화 일정
+search.system.drive.terms|mt|cc085891|디스크 ssd 조각 모음 최적화
+help.setting.background|mt|013bf8ab|각 선택 항목에 영향을 설명합니다. 권장 설정은 진단과 다운로드한 지도 관련 백그라운드 작업만 바꾸며 보안이나 Windows 업데이트는 바꾸지 않습니다.
+help.setting.updates|mt|5062c6b1|1-35일을 선택하세요. 요청 종료일과 Windows가 보고한 상태는 별개입니다. 복원하면 이전 설정으로 돌아가며 이전에도 일시 중지 상태였을 수 있습니다.
+help.setting.drivers|mt|d355e59e|이 그래픽 드라이버뿐 아니라 모든 장치의 일반 품질 업데이트 드라이버에 적용됩니다. 가능한 모든 드라이버 교체를 차단하지는 않습니다.
+help.setting.drive|mt|9bc0a9f6|예약 최적화는 SSD도 유지 관리합니다. 끄기는 선택 사항이며 권장 설정에 포함되지 않습니다. 복원하면 저장된 일정 상태로 되돌립니다.
+bench.title|mt-safe|0cc4b592|레이 트레이싱 벤치마크
+bench.intro|mt|e05a3369|이 테스트는 그래픽 카드가 빛을 얼마나 빠르게 추적하는지 측정합니다. 무료 게임 Quake II RTX의 짧은 장면을 두 번 실행하고, 1초에 몇 장을 그렸는지 보여 줍니다. 드라이버 패키지에는 게임이 들어 있지 않으며, 게임을 내려받지도 않습니다.
+bench.two-ways|mt|280d28a7|그래픽 카드는 빛을 두 가지 방식으로 추적할 수 있고, 이 테스트는 두 방식을 모두 측정합니다. 어느 방식이든 화면은 같고 속도만 달라질 수 있습니다.
+bench.pass.pipeline|mt-safe|963af524|첫 번째 방식
+bench.pass.query|mt-safe|21418945|두 번째 방식
+bench.pass.pipeline.note|mt|aaa9f3a1|게임 개발자는 레이 트레이싱 파이프라인이라고 부릅니다
+bench.pass.query.note|mt|d989b1f9|게임 개발자는 레이 쿼리라고 부릅니다
+bench.game|mt-safe|5ba13e9b|게임 폴더
+bench.game.none|mt|4cc45c0a|이 컴퓨터에서 Quake II RTX를 찾지 못했습니다.
+bench.game.get|mt|4f79de90|테스트에는 게임이 필요합니다. Quake II RTX는 무료이며 Steam이나 제작사 페이지에서 받을 수 있습니다.
+bench.open.steam|mt-safe|63e6be11|Steam 페이지 열기
+bench.open.nvidia|mt-safe|57f27fb0|제작사 페이지 열기
+bench.choose|mt-safe|0aab38df|게임 폴더 선택...
+bench.choose.again|mt-safe|0bef7b55|다른 폴더 선택...
+bench.choose.title|mt|a72b4119|게임 프로그램 q2rtx.exe가 있는 폴더를 선택하세요
+bench.bad.folder|mt|302a9c1c|그 폴더가 더 이상 없습니다.
+bench.bad.program|mt|fdbc015e|그 폴더에 게임 프로그램이 없습니다.
+bench.bad.data|mt|da3cb445|그 폴더에 게임 데이터가 없습니다.
+bench.bad.demo|mt|ab772e08|이 게임 사본에는 테스트 장면이 없어서 테스트를 실행할 수 없습니다. 무료 버전 Quake II RTX에는 들어 있습니다.
+bench.start|mt-safe|56381b85|테스트 시작
+bench.cancel|mt-safe|1317e849|테스트 중지
+bench.size|mt-safe|28a0f429|화면 크기
+bench.size.value|mt-safe|e137b45b|{0} x {1}
+bench.result|mt-safe|6e7d50e8|결과
+bench.state.idle|mt|dedd1400|이 컴퓨터에서는 아직 테스트를 실행하지 않았습니다.
+bench.state.starting|mt-safe|84ce0a62|게임을 시작하고 있습니다...
+bench.state.running|mt|e13f4a7a|측정 중: {0}, 지금까지 {1}초.
+bench.state.reading|mt-safe|65a88114|결과를 읽고 있습니다...
+bench.state.done|mt-safe|a44047b4|테스트가 끝났습니다.
+bench.state.stopped|mt|afcd9e6a|사용자가 테스트를 멈췄습니다.
+bench.state.saved|mt|536107a7|이 컴퓨터에 저장된 가장 최근 실행이 아래에 있습니다.
+bench.result.fps|mt-safe|42b2f533|1초에 {0}장
+bench.result.detail|mt-safe|6554b9d5|{1}초에 {0}장
+bench.result.none|mt|a82cd647|결과 없음: 장면이 끝나기 전에 게임이 닫혔습니다.
+bench.result.timeout|mt|e866995b|결과 없음: 장면이 3분을 넘겨서 테스트가 멈췄습니다.
+bench.result.hot|mt|de80c33a|칩이 너무 뜨거워져서 멈췄습니다.
+bench.result.cancelled|mt-safe|ce2e1c7c|사용자가 멈췄습니다.
+bench.result.failed|mt|388150f9|게임이 시작되지 않았습니다.
+bench.temp.max|mt-safe|251b0a10|최고 온도
+bench.temp.value|mt-safe|aa6b1ef9|{0} °C
+bench.clock.mean|mt-safe|437b3dc8|평균 클럭
+bench.clock.value|mt-safe|65d8ea4f|{0} MHz
+bench.notavailable|mt-safe|67a926f7|사용할 수 없음
+bench.when|mt-safe|9298c8f4|측정 시각
+bench.driver|mt-safe|5f4b1e9d|드라이버 릴리스
+bench.reference|mt|d66823aa|우리 보드는 드라이버 릴리스 {4}에서 {2} x {3}로 1초에 {0}장에서 {1}장을 그렸습니다. 화면, 드라이버 릴리스, 게임 사본이 다르면 결과도 달라질 수 있습니다.
+bench.reference.why|mt|6893bd0d|장면이 실행되는 동안 칩이 속도를 올리고 장면은 10초 남짓이라 결과는 실행마다 이 범위 안에서 달라집니다.
+bench.history|mt-safe|04ab162c|이전 실행
+bench.history.none|mt|d590dba0|이 컴퓨터에 이전 실행이 없습니다.
+bench.history.line|mt|afe87a67|{0}  -  첫 번째 방식: {1}  -  두 번째 방식: {2}
+bench.busy|mt-safe|3a08423a|테스트가 이미 실행 중입니다.
+bench.note|mt|a3725789|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 칩이 87 °C를 유지하면, 그리고 각 방식마다 3분이 지나면 테스트는 스스로 멈춥니다.
+bench.note.notemp|mt|a2b8397f|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 이 카드는 자기 온도를 알려 주지 않아서, 테스트는 각 방식마다 3분이 지난 뒤에만 멈춥니다.
+search.perf.benchmark|mt-safe|0cc4b592|레이 트레이싱 벤치마크
+search.perf.benchmark.terms|mt|8e2c7bdd|벤치마크|fps|초당 프레임|속도|점수|측정|레이 트레이싱|패스 트레이싱|퀘이크|quake|q2rtx|얼마나 빠른가
+help.setting.benchmark|mt|6a6a4b69|그래픽 카드 자체를 재는 테스트입니다. 무료 게임 Quake II RTX의 짧은 레이 트레이싱 장면을, 카드가 빛을 추적하는 두 방식마다 한 번씩 실행하고 1초에 몇 장을 그렸는지 보여 줍니다. 게임은 이 컴퓨터에 있어야 하며, 드라이버 패키지에는 들어 있지 않습니다. 테스트는 우리 보드에서 방식마다 20초쯤 걸리고, 게임을 작은 창으로 열었다가 다시 닫습니다. 칩이 너무 뜨거워지면 스스로 멈춥니다. 최근 10회가 이 컴퓨터에 남아 있어서 새 드라이버 릴리스가 수치를 바꿨는지 볼 수 있습니다.

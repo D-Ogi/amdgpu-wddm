@@ -168,6 +168,8 @@ stage.firmware|mt-safe|46d4dd63|Firmware GPU
 stage.files|mt-safe|3ffd2d35|Pliki sterownika
 stage.driver|mt-safe|fc465aa6|Sterownik grafiki
 stage.settings|mt-safe|74a883a0|Ustawienia
+stage.extras|mt-safe|800ae5e9|Programy dodatkowe
+stage.components|mt-safe|5f69dcb7|Instalowanie programów dodatkowych
 stage.finish|mt-safe|0052205c|Kończenie
 stage.verify|mt|11d4d5ab|Sprawdzanie sterownika
 stage.prepare-check|mt|0f35d10d|Pliki instalatora i folder
@@ -281,3 +283,8 @@ guide.pending-restart|mt|d31250df|Twoje zmiany są zapisane. Instalator będzie 
 guide.install-stopped|mt|47319a31|Instalator nie dokończył pracy. Strona mówi, co zrobić dalej.
 guide.verification-failed|mt|1abe91c5|Sterownik nie przeszedł sprawdzeń. Naprawa zwykle pomaga.
 guide.upgrade-done|mt|7ed192a1|Gotowe! Sterownik jest zainstalowany i sprawdzony. Miłej zabawy!
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Ustawienia Windows
+tuning.opt-in|mt|d229d14d|Zastosuj opcjonalne zmiany ustawień Windows
+tuning.details|mt|36ae26fb|Zastosuj zalecane ustawienia, aby ograniczyć aktywność Windows w tle.
+tuning.restore|mt|387d1d61|Przejrzyj poszczególne ustawienia i przywróć zapisane wartości w aplikacji sterownika. Deinstalator oferuje też przywracanie ustawień całego komputera.

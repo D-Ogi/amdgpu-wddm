@@ -1,5 +1,6 @@
-param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\smu-native',[string]$Source='')
+param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\smu-native',[string]$Source='', [ValidateSet('', 'board-admission')][string]$Mutation='', [string]$Fixture='')
 $ErrorActionPreference='Stop'
+if (-not $Fixture) { $Fixture="$PSScriptRoot\smu_native_test.c" }
 $repo=(Resolve-Path "$PSScriptRoot\..\..\..").Path # the tree this script lives in; -Root only locates the toolchain
 if(-not $Source){$Source="$repo\driver\kmd\smu.c"}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
@@ -16,8 +17,13 @@ if($LASTEXITCODE -ne 0){throw 'AMD mailbox source/register drift'}
 & python "$PSScriptRoot\extract_clock.py" --check
 if($LASTEXITCODE -ne 0){throw 'AMD source drift'}
 $native=(Get-Content -LiteralPath $Source -Raw).Replace('#include "bc250kmd.h"','#include "smu_native_mock.h"').Replace('../shim/generated/','generated/')
+if ($Mutation -eq 'board-admission') {
+    $needle = 'if(!owner->BoardAllowed)return STATUS_NOT_SUPPORTED;'
+    if ($native.Split(@($needle), [StringSplitOptions]::None).Count -ne 2) { throw 'Board mutation anchor changed' }
+    $native = $native.Replace($needle, '/* Deliberate missing board startup admission. */')
+}
 [IO.File]::WriteAllText("$Out\smu-native.inc",$native,[Text.UTF8Encoding]::new($false))
-& $cl /nologo /TC /W4 /WX /O2 /MT @inc "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\smu_test.exe" "$repo\driver\shim\bc250_smu.c" "$repo\driver\shim\bc250_clock.c" "$repo\driver\shim\bc250_cpu.c" "$repo\driver\shim\bc250_smu_metrics.c" "$PSScriptRoot\smu_native_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+& $cl /nologo /TC /W4 /WX /wd4505 /O2 /MT @inc "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\smu_test.exe" "$repo\driver\shim\bc250_smu.c" "$repo\driver\shim\bc250_clock.c" "$repo\driver\shim\bc250_cpu.c" "$repo\driver\shim\bc250_smu_metrics.c" $Fixture /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}
 & "$Out\smu_test.exe"
 exit $LASTEXITCODE

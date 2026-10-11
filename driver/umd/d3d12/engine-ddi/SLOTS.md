@@ -5,13 +5,88 @@ by the native12 shell. A mixed slot names the owner and the boundary call it mak
 rendering, P2 FL 12_0/12_1 (tiled, conservative raster, ROV), P3 DXR, P4 other (fail-safe until needed). Until a slot
 is implemented, its entry is the fail-safe of `engine-ddi.h`; no slot is left NULL once the table is published.
 
+A creation slot's fail-safe answers `E_OUTOFMEMORY`, not `E_NOTIMPL`. The runtime holds every creation function of
+a user-mode display driver in its AllowOutOfMemory category. Any other status is a critical driver failure, so the
+runtime removes the device and reports `DXGI_ERROR_DRIVER_INTERNAL_ERROR` over the real reason, which BD-075
+measured on `pfnOpenHeapAndResource`. The creation slots D86, D88, D90, D102 and D117 answer that way, and the
+implemented three of them clamp their own refusals through the same `admitted_create_failure`, with no exception:
+`D3D12_ERROR_DRIVER_VERSION_MISMATCH` and `D3D12_ERROR_ADAPTER_NOT_FOUND`, which the API defines for a blob this
+driver can no longer read, become `E_OUTOFMEMORY` out of D86 like every other status, because no document says
+this slot admits them and a stale blob is the ordinary case after a driver update. The application's answer to
+either is the same: create a fresh empty library. A lab trial of the runtime's reaction is what would lift that
+clamp (`pipelines.cpp`, above `create_pipeline_library`). D89 `pfnCalcSerializedLibrarySize` is a
+size query that returns a `SIZE_T` and keeps the plain fail-safe. Its implementation answers 0 and reports nothing,
+because a status out of a query is the same BD-075 signature. D91 and D114 return nothing at all, so each answers
+its output and leaves the device alone. D83 `pfnRetrieveShaderComment` has an `HRESULT` and uses it only for a
+caller's mistake.
+
+The phase of a slot says which milestone made it necessary, not whether it is filled. These slots at P4 carry an
+implementation today: D64, D65, D83, D85, D86, D87, D88, D89, D90, D91, D114, D118, D119, L49, L53, L54, L55, L57,
+L65, L66 and L69. L52 is filled as well, and
+1006 reports `DepthBoundsTestSupported` from the engine's answer. `ViewInstancingTier` is 2 only when the
+engine reports full-domain contract revision 1 and OPTIONS3 tier 2 or 3. Older engines report 0 (INTEGRATION.md).
+L56 `pfnWriteBufferImmediate` is filled in both
+command list tables, and 1006 reports `WriteBufferImmediateQueueFlags` from the engine's own list-type answer. L68
+`pfnBarrier` is filled in both tables as well, at P1, and 1006 reports `EnhancedBarriersSupported` from the
+engine's own OPTIONS12 answer.
+
+L68 `pfnBarrier` takes one flat array of tagged barriers, while `ID3D12GraphicsCommandList7::Barrier` takes groups
+of one type each. The slot therefore walks the array once to count the barriers of each type and the number of
+maximal runs of one type, translates each barrier into the array of its own type, and builds one group per run.
+Order is a contract, not a convenience: D3D12 defines barrier order by API-call order, then barrier-group index,
+then barrier-array index, and two barriers on the same memory must complete in that order, so the runs keep the
+DDI array's order and nothing is coalesced across a change of type. A call with more runs than one engine `Barrier`
+takes is split into consecutive calls of at most 64 groups, which keeps that order as well. Two DDI shapes have no
+API form: the `LEGACY_*` barrier layouts become the queue-agnostic API layout of the same access, and a
+`D3D12DDI_BARRIER_TYPE_RANGED` barrier becomes a global barrier of the same scopes, which is the conservative
+reading of a range. Neither is refused, because reporting `EnhancedBarriersSupported` makes the runtime route a
+legacy `ResourceBarrier` call through this slot too, and a refusal there would cost the device on the first one.
+
+D76 `pfnCheckSubresourceInfo` answers the two shapes whose memory layout is known here, a buffer and the linear
+primary, from the description the resource was created with and the row pitch of its linear surface. Any other
+image gets the zeroed answer and a log line, with no error code at all: the DDI reference allows this void query
+none, and an `E_NOTIMPL` from it would be the BD-075 signature again. The engine creates no `ROW_MAJOR` image and
+no swizzle of a 64 KiB image is described anywhere here, so that third case is unreachable through the heaps this
+driver creates.
+
+D85 to D90 carry an `ID3D12PipelineLibrary` as the engine's own, and two things had to be decided for that. The
+DDI names a pipeline inside a library by a `UINT` index, while the engine's interface names one by a string, so
+this module writes the index as eight upper-case hexadecimal digits: defined for every index, different for every
+index, and the same mapping on both sides of a serialize and a reload. That the index itself survives a reload is
+an inference, because the DDI gives the runtime no other key for a pipeline it added. The blob is the engine's own
+shape, with its table of contents and its pipeline-cache check, because `pfnCreatePipelineLibrary` hands
+`pInitialData` to the engine unchanged and `pfnSerializeLibrary` writes what the engine's `Serialize` writes. What
+the DDI needs is only that this driver can read what this driver wrote. `pfnSerializeLibrary` carries no buffer
+size of its own, so the library remembers what D89 answered to each calling thread, a store forgets every one of
+them, and a serialize with no size of its own thread behind it is refused rather than guessed. The size is held
+per thread and not per library because `ID3D12PipelineLibrary` is free-threaded: one value per library would let
+one thread's serialize be handed a size another thread's query had made larger. A `LibraryReference` in a create payload turns
+`pfnCreatePipelineState` into a load out of that library under the index's name, which is where a library saves an
+application its compile. None of this is a reported capability: the 0092 capability structures carry no pipeline
+library field, and `DriverManagedShaderCachePresent` stays FALSE, because an application's library is the
+application's cache and not a cache of this driver's that D121 could clear.
+
+The render pass table (`D3D12DDI_TABLE_TYPE_0043_RENDER_PASS`, 20) is not in the slot tables below: it is a table
+of its own with two slots at 0053, `pfnBeginRenderPass` and `pfnEndRenderPass`. Both are filled, onto the engine's
+`ID3D12GraphicsCommandList4`, and `fill_render_pass` publishes them. The shell fills the table only while 1006
+reports a render pass tier, which is the engine's own `OPTIONS5` answer. The pinned engine answers tier 0 with the
+comment "Currently not supported" although it implements both calls, so nothing is reported today and the runtime
+keeps emulating render passes. **Open:** render pass is also an extended feature
+(`D3D12DDI_FEATURE_0043_RENDER_PASS`, versions 1 at 0043 and 2 at 0053), and the shell's `extended_features` still
+advertises none. Which of the two routes the runtime takes to ask for the table is unmeasured, so the
+advertisement belongs with the first engine that answers a tier.
+
 "native via shader-container" marks the shader slots. The payload shape is known from the WDK header: a bare
 program with its length in DWORD 1, plus register-only signature entries. That the buffer holds exactly that many
 DWORDs is an inference from the SAL annotation `_In_reads_(pShaderCode[1])`, not a measurement. Each create
 rebuilds the container the engine compiles with [shader-container](shader-container/README.md), within that
 length; pipelines name input elements and stream-output entries from the rebuilt signatures, a gap in a
-stream-output declaration as a NULL SemanticName, which the pinned r4 engine takes. Mesh and amplification programs
-are refused with E_NOTIMPL.
+stream-output declaration as a NULL SemanticName, which the pinned r4 engine takes. A mesh and an amplification
+program take the same route, with their signature entries named from the program's own DXIL metadata, because the
+engine links a mesh pipeline's stages by semantic name. `pfnCreatePipelineState` then writes a subobject stream
+for the engine's `ID3D12Device2::CreatePipelineState`. `pfnDispatchMesh` (L67) forwards to the engine's
+`ID3D12GraphicsCommandList6`. None of it is reachable unless 1006 reports a mesh shader tier, which it does only
+when the engine's own `D3D12_FEATURE_D3D12_OPTIONS7` answer does.
 
 `pfnCreateHeapAndResource` (D60):
 - A heap, or a committed resource (dedicated allocation, heap from it, resource placed at 0), makes exactly one
@@ -64,7 +139,7 @@ runs only after GPU retirement, on a DDI thread.
 | D31 | 0x0F8 | `pfnDestroyCommandPool` | engine-ddi | P0 |
 | D32 | 0x100 | `pfnResetCommandPool` | engine-ddi | P0 |
 | D33 | 0x108 | `pfnCalcPrivatePipelineStateSize` | engine-ddi | P1 |
-| D34 | 0x110 | `pfnCreatePipelineState` | engine-ddi | P1 |
+| D34 | 0x110 | `pfnCreatePipelineState` | engine-ddi (compute, graphics, or a mesh pipeline when the mesh handle is set) | P1 |
 | D35 | 0x118 | `pfnDestroyPipelineState` | engine-ddi | P1 |
 | D36 | 0x120 | `pfnCalcPrivateCommandListSize` | engine-ddi | P0 |
 | D37 | 0x128 | `pfnCreateCommandList` | engine-ddi; calls bind_list_table | P0 |
@@ -113,15 +188,15 @@ runs only after GPU retirement, on a DDI thread.
 | D80 | 0x280 | `pfnGetImplicitPhysicalAdapterMask` | shell | P0 |
 | D81 | 0x288 | `pfnGetPresentPrivateDriverDataSize` | shell | P0 |
 | D82 | 0x290 | `pfnQueryNodeMap` | shell | P0 |
-| D83 | 0x298 | `pfnRetrieveShaderComment` | engine-ddi | P4 |
+| D83 | 0x298 | `pfnRetrieveShaderComment` | engine-ddi, the empty comment: one terminator, no status out of a query | P4 |
 | D84 | 0x2A0 | `pfnCheckResourceAllocationHandle` | engine-ddi; from the RuntimeBacked record | P0 |
-| D85 | 0x2A8 | `pfnCalcPrivatePipelineLibrarySize` | engine-ddi | P4 |
-| D86 | 0x2B0 | `pfnCreatePipelineLibrary` | engine-ddi | P4 |
+| D85 | 0x2A8 | `pfnCalcPrivatePipelineLibrarySize` | engine-ddi, the library record | P4 |
+| D86 | 0x2B0 | `pfnCreatePipelineLibrary` | engine-ddi, the engine's `ID3D12PipelineLibrary1` over `pInitialData` | P4 |
 | D87 | 0x2B8 | `pfnDestroyPipelineLibrary` | engine-ddi | P4 |
-| D88 | 0x2C0 | `pfnAddPipelineStateToLibrary` | engine-ddi | P4 |
-| D89 | 0x2C8 | `pfnCalcSerializedLibrarySize` | engine-ddi | P4 |
-| D90 | 0x2D0 | `pfnSerializeLibrary` | engine-ddi | P4 |
-| D91 | 0x2D8 | `pfnGetDebugAllocationInfo` | shell | P4 |
+| D88 | 0x2C0 | `pfnAddPipelineStateToLibrary` | engine-ddi, `StorePipeline` under the index's name | P4 |
+| D89 | 0x2C8 | `pfnCalcSerializedLibrarySize` | engine-ddi, the engine's size, remembered per thread as the blob's capacity | P4 |
+| D90 | 0x2D0 | `pfnSerializeLibrary` | engine-ddi, `Serialize` into this thread's remembered capacity | P4 |
+| D91 | 0x2D8 | `pfnGetDebugAllocationInfo` | shell, zero records of each kind, the device untouched | P4 |
 | D92 | 0x2E0 | `pfnCalcPrivateCommandRecorderSize` | engine-ddi | P0 |
 | D93 | 0x2E8 | `pfnCreateCommandRecorder` | engine-ddi | P0 |
 | D94 | 0x2F0 | `pfnDestroyCommandRecorder` | engine-ddi | P0 |
@@ -144,12 +219,12 @@ runs only after GPU retirement, on a DDI thread.
 | D111 | 0x378 | `pfnGetShaderStackSize` | engine-ddi | P3 |
 | D112 | 0x380 | `pfnGetPipelineStackSize` | engine-ddi | P3 |
 | D113 | 0x388 | `pfnSetPipelineStackSize` | engine-ddi | P3 |
-| D114 | 0x390 | `pfnSetBackgroundProcessingMode` | shell | P4 |
+| D114 | 0x390 | `pfnSetBackgroundProcessingMode` | shell, accepted and dropped, no further measurements wanted | P4 |
 | D115 | 0x398 | `pfnCalcPrivateAddToStateObjectSize` | engine-ddi | P3 |
 | D116 | 0x3A0 | `pfnAddToStateObject` | engine-ddi; E_NOTIMPL without the engine's ID3D12Device7 | P3 |
 | D117 | 0x3A8 | `pfnCreateSamplerFeedbackUnorderedAccessView` | engine-ddi | P4 |
-| D118 | 0x3B0 | `pfnCreateAmplificationShader` | engine-ddi; E_NOTIMPL (mesh) | P4 |
-| D119 | 0x3B8 | `pfnCreateMeshShader` | engine-ddi; E_NOTIMPL (mesh) | P4 |
+| D118 | 0x3B0 | `pfnCreateAmplificationShader` | engine-ddi; native via shader-container (DXIL kind 14) | P4 |
+| D119 | 0x3B8 | `pfnCreateMeshShader` | engine-ddi; native via shader-container (DXIL kind 13) | P4 |
 | D120 | 0x3C0 | `pfnCalcPrivateMeshShaderSize` | engine-ddi | P4 |
 | D121 | 0x3C8 | `pfnImplicitShaderCacheControl` | engine-ddi | P4 |
 
@@ -224,7 +299,7 @@ runs only after GPU retirement, on a DDI thread.
 | L64 | 0x200 | `pfnDispatchRays` | engine-ddi | P3 |
 | L65 | 0x208 | `pfnRSSetShadingRate` | engine-ddi | P4 |
 | L66 | 0x210 | `pfnRSSetShadingRateImage` | engine-ddi | P4 |
-| L67 | 0x218 | `pfnDispatchMesh` | engine-ddi | P4 |
+| L67 | 0x218 | `pfnDispatchMesh` | engine-ddi (graphics table only) | P4 |
 | L68 | 0x220 | `pfnBarrier` | engine-ddi | P1 |
 | L69 | 0x228 | `pfnOmSetAlphaBlendFactor` | engine-ddi | P4 |
 

@@ -1,11 +1,12 @@
-# conformance-clients - ROV, conservative rasterization and indirect DispatchRays
+# conformance-clients - ROV, conservative rasterization, indirect DispatchRays and mesh shaders
 
 `amdgpu_wddm_conformance.exe` is a native D3D12 client for two M15 criteria. M15.3 asks for a functional ROV test
 and a conservative rasterization test with image oracles. M15.5 asks for indirect `DispatchRays`. The criteria are
-in `docs/m15-reconciliation.md`.
+in `docs/m15-reconciliation.md`. `amdgpu_wddm_mesh.exe` is the mesh shader witness of the same kind, for the D3D12
+mesh shader path of the UMD (`driver/umd/d3d12/engine-ddi`).
 
-The client is x64 and offscreen. It opens no window and it creates no swap chain. It loads `d3d12.dll` from
-System32 and carries no application-local runtime DLL. Each subtest has an exact CPU oracle. Each subtest also has
+Both clients are x64 and offscreen. They open no window and they create no swap chain. They load `d3d12.dll` from
+System32 and carry no application-local runtime DLL. Each subtest has an exact CPU oracle. Each subtest also has
 negative controls, which show that the comparison can fail.
 
 ## Files
@@ -17,9 +18,12 @@ negative controls, which show that the comparison can fail.
 | `shaders\raster.hlsl` | Vertex program and the pixel programs of the ROV and conservative passes |
 | `shaders\dxr.hlsl` | Ray pipeline: two ray generation shaders, a miss shader and a triangle hit group |
 | `shaders\dxr_args.hlsl` | Compute program that writes the indirect arguments on the GPU |
+| `mesh.cpp` | The mesh shader witness: its command line, its oracle, its comparator and `--selftest` |
+| `shaders\mesh.hlsl` | Vertex, pixel, mesh and amplification programs of the witness, all shader model 6.5 |
 | `gen\*.h` | The dxc output of those shaders, one header per program |
-| `gen\dxc.txt` | The dxc path, version, hash and command lines behind those headers |
-| `build.ps1` | The build and the CPU-only gates after the link |
+| `gen\dxc.txt`, `gen\dxc-mesh.txt` | The dxc path, version, hash and command lines behind those headers |
+| `build.ps1`, `build-mesh.ps1` | The builds and the CPU-only gates after each link |
+| `check-shaders.ps1` | The `conformance-shaders` gate: every header reproduces from its record |
 | `interactive-check.ps1` | Host check of the lab protocol through the `d3d12queue` controller |
 
 `conformance.h` is the conformance variant of the copy verb of `tools\win\d3d12queue`.
@@ -193,6 +197,75 @@ the pixels in order.
 
 `--selftest` prints `SELFTEST PASS failures=0`.
 
+## The mesh shader witness
+
+`amdgpu_wddm_mesh.exe` draws the same eight triangles three times and compares the read-backs word for word:
+
+| Pass | Pipeline | Draw |
+|---|---|---|
+| `reference` | a vertex program and a pixel program | `DrawInstanced(24, 1, 0, 0)` |
+| `mesh-ms` | a mesh program and the same pixel program | `DispatchMesh(8, 1, 1)` |
+| `mesh-as` | an amplification program, the mesh program and the same pixel program | `DispatchMesh(1, 1, 1)` |
+
+Each triangle sits in its own 16x16 cell of a 64x64 `R8G8B8A8_UNORM` target, so a wrong triangle is a wrong cell.
+The pixel program writes a vertex tag and a primitive tag, both `nointerpolation`, so a pixel takes them from the
+first vertex of its triangle. The vertex program carries both tags per vertex. The mesh program carries the vertex
+tag on its vertex output and the primitive tag on its primitive output. A mesh pipeline whose primitive output does
+not reach the pixel input therefore writes the wrong primitive tag and fails on every covered pixel, instead of
+passing with a plausible picture. The amplification program dispatches the eight mesh groups and gives each one its
+triangle in the payload, so a payload that does not arrive draws the wrong cells.
+
+The vertex program reads `SV_VertexID` and the pipelines have no input layout and no vertex buffer, which a mesh
+pipeline must not have either. The root signature holds no parameters. The mesh pipelines are created through the
+subobject stream of `ID3D12Device2::CreatePipelineState`, which is the only path on which the engine reads the AS
+and MS subobjects.
+
+Before any comparison the reference itself is checked: every word of it is the clear value or one of the eight
+expected words, every expected word lies inside its own triangle's 16x16 cell, and every triangle covers at least
+50 pixels (the geometry covers 70 pixel centres). A reference that fails that oracle is an ERROR, not a pass. The
+positional rule is what makes the comparison a statement about the geometry: `corner()` insets each triangle by two
+pixels, so no expected word can legitimately fall outside its cell, and without that rule a reference that drew the
+eight words in the wrong cells passes the oracle and a mesh image wrong in the same way compares byte-equal to it
+and reports PASS. The run-time negative control compares each mesh image with the
+reference whose primitive tags are moved to the next triangle. That count must equal the covered pixel count, so
+a blank-against-blank comparison cannot pass. Each read-back region starts at `0x5A5A5A5A`, which no pass can write,
+so a pass that never ran cannot compare equal.
+
+```
+pwsh tools\win\conformance-clients\build-mesh.ps1 -Kits P:\BC-250\toolchain\nuget
+amdgpu_wddm_mesh --adapter warp|bc250|hw|index:N [--out DIR] [--deadline S] [--debug-layer] [--only ms,as]
+amdgpu_wddm_mesh --selftest
+```
+
+The build, the flags and the shader record follow `build.ps1` above, with the record `gen\dxc-mesh.txt`. The three
+gates after the link are the same: `--help` exits 0, `--invalid` exits 2 and `--selftest` exits 0. `--selftest`
+checks the oracle and the comparator on ideal, unknown-word, exchanged-cell, missing-triangle, thin-triangle,
+flipped, permuted-tag and never-run images, in ten checks. `-TestForceTier0` is a host arm that reads the tier as 0 on
+every adapter, so the skip path can be checked where no tier-0 adapter is at hand. It is never a lab artifact.
+
+Output: the `FEATURES` line carries `MeshShaderTier`, then a `REFERENCE` line, then one `CONFORMANCE` line per
+subtest and `CONFORMANCE overall`. Exit codes are the same as the conformance client's: 0 all pass, 1 a failure or
+an error, 4 skip only, 2 bad usage, 3 no device or GPU work that did not retire. A tier of 0, or a highest shader
+model below 6_5, is a SKIP with a `reason=` and exit code 4: a mesh or an amplification program is a DXIL program
+of shader model 6.5. `--out` writes `mesh.json` and `mesh.bin`, which holds the three images as 12288
+little-endian UINT32 words.
+
+Host controls, runtime 10.0.26100.9278, exe SHA256 6570A0C5:
+
+```
+WARP        FEATURES MeshShaderTier=10 ... HighestShaderModel=6_8 MaxSupportedFeatureLevel=12_1 device=12_1
+RTX 4090    FEATURES MeshShaderTier=10 ... HighestShaderModel=6_8 MaxSupportedFeatureLevel=12_2 device=12_1
+both        REFERENCE covered=520 least_per_triangle=65 invalid=0
+both        CONFORMANCE mesh-ms PASS mismatches=0 checked=4096 control_permuted_ptag=520
+both        CONFORMANCE mesh-as PASS mismatches=0 checked=4096 control_permuted_ptag=520
+both        CONFORMANCE overall PASS, exit 0, DEBUGLAYER errors=0 warnings=6
+```
+
+The two `mesh.bin` dumps are byte-identical (SHA256 7A279529), so the three images agree across a software and a
+hardware implementation. The six debug layer warnings are 929, the complement prefill written by the CPU into
+READBACK memory, and 820, a clear without a clear value in the resource description. The `-TestForceTier0` arm
+reports `CONFORMANCE overall SKIP` with `reason=MeshShaderTier=0,HighestShaderModel=6_8` and exits 4.
+
 ## Caveats
 
 - WARP 10.0.26100.9278 sets `SV_InnerCoverage` bit 0 on every conservatively covered pixel of a back-facing
@@ -208,3 +281,6 @@ the pixels in order.
 - The ray hit and miss oracle keeps every ray at least 0.05 units from each triangle edge, which the client checks
   at run time. The scene is small, with 12 hits and 52 misses. It exercises the dispatch path and not the quality
   of traversal.
+- The mesh witness exercises one mesh group of one triangle per group, the primitive output linkage and the
+  amplification payload. It is a witness of the path, not a measurement of mesh shader throughput, and it says
+  nothing about per-primitive culling or about the group sizes a game uses.

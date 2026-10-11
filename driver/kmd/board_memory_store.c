@@ -3,6 +3,7 @@
 #include <ntifs.h>
 #include "bc250kmd.h"
 #include "board_memory_store.h"
+#include "uma_transport.h"
 
 #define BOARD_STORE_MAGIC 0x314d4241u
 #define BOARD_STORE_VERSION 1u
@@ -39,7 +40,7 @@ static BOOLEAN StoreIdentity(const BC250_DEVICE* device)
 {
     ULONG i;
     UCHAR any = 0;
-    if (!device || device->BoardMemoryMapping < 1 || device->BoardMemoryMapping > 2 ||
+    if (!device || device->BoardMemoryMapping != BC250_UMA_MAPPING_EXTENDED_PORT ||
         device->BoardMemoryBiosId == 0) return FALSE;
     for (i = 0; i < 16; ++i) any |= device->BoardMemoryMachineId[i];
     return any != 0;

@@ -26,7 +26,7 @@ share, a normalisation or a cause went wrong in this project's write-ups:
     ("relative to", "against the", "share of", "overhead"), so the fix is one phrase.
 
 `count-order`
-    `N of M` with N greater than M is a swapped pair.
+    Whole counts `N of M` with N greater than M are a swapped pair.
 
 `clock-model-label`
     A row that normalises a rate to an equivalent clock, or fits an exponent to one, states
@@ -63,16 +63,17 @@ import sys
 # population out: in M798 "112 of 113 VSync-ended ones fell inside those six spans (14.2 % of
 # the window)" the 14.2 % is the share of the window, seven words away, and does not match.
 #
+# Match complete numeric tokens, never a decimal's fractional digits or its integer prefix.
+# Counts remain integers; the percentage rule also accepts decimal measurements.
 # A number followed by "'s" is a possessive, not a denominator: in M800 "6420 of 416's counted
 # gaps" the 416 is the session, so the pattern refuses that form.
-#
-# Both counts are whole numbers. A decimal is a measurement, and its digits are not a count: in
-# M862 "(0.836 of 4.641 us)" the pattern without these guards read "836 of 4".
-COUNT_A = r"(?<!\d)(?<!\d\.)(\d+)(?!\.?\d)"
-COUNT_B = r"(\d+)(?!\.?\d)(?!'s)\b"
-PAIR_PCT = re.compile(COUNT_A + r" of (?:the )?" + COUNT_B + r"(?:[ ,]+[A-Za-z][\w./-]*){0,3}[ ,]*"
+TOKEN_START = r"(?<![\w.,+-])"
+TOKEN_END = r"(?!\w|[.,]\d|'s)"
+AMOUNT = TOKEN_START + r"(\d+(?:\.\d+)?)" + TOKEN_END
+COUNT = TOKEN_START + r"(\d+)" + TOKEN_END
+PAIR_PCT = re.compile(AMOUNT + r" of (?:the )?" + AMOUNT + r"(?:[ ,]+[A-Za-z][\w./-]*){0,3}[ ,]*"
                       r'\(?(\d+(?:\.\d+)?) ?%')
-PAIR = re.compile(COUNT_A + r" of (?:the )?" + COUNT_B)
+PAIR = re.compile(COUNT + r" of (?:the )?" + COUNT)
 
 # A difference with its own percentage: "0.836 us (22.0 %)" on a line that also holds the two
 # measurements it is the difference of. A reduction is a share of the value it came down from.
@@ -179,13 +180,13 @@ def check_row(fid, text):
     """[(rule, fact id, message)] for one row."""
     found = []
     for a, b, p in PAIR_PCT.findall(text):
-        a, b, p = int(a), int(b), float(p)
-        if b == 0:
+        numerator, denominator, p = float(a), float(b), float(p)
+        if denominator == 0:
             continue
-        exact = 100.0 * a / b
+        exact = 100.0 * numerator / denominator
         if abs(exact - p) > TOLERANCE:
             found.append(('share-arithmetic', fid,
-                          '%s: "%d of %d" next to "%s %%" - %d/%d is %.2f %%, and %s %% is '
+                          '%s: "%s of %s" next to "%s %%" - %s/%s is %.2f %%, and %s %% is '
                           'the share of another number'
                           % (fid, a, b, ('%g' % p), a, b, exact, ('%g' % p))))
     for a, b in PAIR.findall(text):

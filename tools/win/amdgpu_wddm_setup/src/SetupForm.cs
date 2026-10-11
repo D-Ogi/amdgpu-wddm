@@ -37,6 +37,7 @@ namespace AmdgpuWddmSetup
         EngineResult _planResult, _result;
         ResultView _view;
         bool _consentTestSigning;
+        bool? _systemTuningChoice;
         string _bitLocker = "";
         bool _restartLater;
         string _restartError, _supportSaved, _supportError;
@@ -47,15 +48,19 @@ namespace AmdgpuWddmSetup
         Panel _header, _rail, _guide, _column;
         FlowLayoutPanel _content, _buttons;
         Label _guideTitle, _guideText;
+        PictureBox _guideArt;
         int _contentWidth;
 
         public SetupForm(SetupArgs args, bool smoke)
         {
             _args = args;
+            _systemTuningChoice = args.ApplySystemTuning ? (bool?)true : null;
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
-            _showNagi = !smoke && Native.ShowNagi();
+            // On unless the control app's setting says 0 (Native.ShowNagi). A headless render asks nothing of this
+            // PC's registry, so it takes the same default and --no-nagi draws the panel without her.
+            _showNagi = smoke ? !args.NoNagi : Native.ShowNagi();
             Text = "amdgpu-wddm Setup";
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -185,8 +190,17 @@ namespace AmdgpuWddmSetup
             _guide.Controls.Clear();
             var card = new CardPanel(null, Theme.S(GuideWidth - 20), Theme.GuideBack);
             _guideTitle = Ui.Label("", Theme.CardTitle, Theme.Teal, card.Inner);
+            // The picture is decorative: the guide text beneath it carries the meaning, and a screen reader is given
+            // the text, never the picture.
+            int slot = Math.Min(Theme.S(128), card.Inner);
+            _guideArt = new PictureBox
+            {
+                Size = new Size(slot, slot), SizeMode = PictureBoxSizeMode.Zoom, Visible = false, BackColor = Theme.GuideBack,
+                Margin = Theme.Pad(0, 6, 0, 6), AccessibleRole = AccessibleRole.None, AccessibleName = "", TabStop = false,
+            };
             _guideText = Ui.Label("", Theme.Body, Theme.Text, card.Inner);
             card.Add(_guideTitle);
+            card.Add(_guideArt);
             card.Add(_guideText);
             card.Location = new Point(0, _guide.Padding.Top);
             _guide.Controls.Add(card);
@@ -399,7 +413,19 @@ namespace AmdgpuWddmSetup
             var mode = run != null && run.Mode != null ? run.Mode : (_flow == "prepare" ? "prepare-offline" : "run");
             var action = run != null && run.Decision != null ? run.Decision.Action : null;
             var expected = EngineRun.ExpectedStages(mode, action).ToList();
-            foreach (var s in run == null ? new List<string>() : run.Stages) if (!expected.Contains(s)) expected.Add(s);
+            // A stage the fixed list does not know (an optional one, such as the extras of install.cmd) goes where the
+            // run actually reached it: right after the stage before it. Appending it at the end would put the current
+            // stage last and mark every real stage as finished (the index arithmetic below reads the order).
+            int at = -1;
+            foreach (var s in run == null ? new List<string>() : run.Stages)
+            {
+                int known = expected.IndexOf(s);
+                if (known >= 0) { at = known; continue; }
+                at = at + 1;
+                if (at < 0) at = 0;
+                if (at > expected.Count) at = expected.Count;
+                expected.Insert(at, s);
+            }
             int current = run == null || run.CurrentStage == null ? -1 : expected.IndexOf(run.CurrentStage);
             for (int i = 0; i < expected.Count; i++)
             {
@@ -508,6 +534,14 @@ namespace AmdgpuWddmSetup
                 }
                 sc.Add(Ui.Label(Strings.T("plan.settings.note"), Theme.Small, Theme.Dim, sc.Inner));
             }
+
+            var tuning = Card(Strings.T("tuning.title"));
+            var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
+            tune.Checked = _systemTuningChoice ?? (d != null && d.SystemTuning);
+            tune.CheckedChanged += (s, e) => { _systemTuningChoice = tune.Checked; };
+            tuning.Add(tune);
+            tuning.Add(Ui.Label(Strings.T("tuning.details"), Theme.Small, Theme.Dim, tuning.Inner));
+            tuning.Add(Ui.Label(Strings.T("tuning.restore"), Theme.Small, Theme.Dim, tuning.Inner));
 
             var consents = d != null ? d.Consents : new string[0];
             if (_planResult != null && _planResult.ConsentsNeeded.Length > 0) consents = consents.Union(_planResult.ConsentsNeeded).ToArray();
@@ -669,6 +703,7 @@ namespace AmdgpuWddmSetup
         void RunPlan()
         {
             var args = new List<string> { "-Plan" };
+            args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             if (_flow == "repair") args.Add("-Repair");
             args.AddRange(_args.EngineArgs);
             StartRun("plan", Path.Combine(_package, "installer", "install.ps1"), args, Screen.Checking);
@@ -677,6 +712,7 @@ namespace AmdgpuWddmSetup
         void RunInstall()
         {
             var args = new List<string>();
+            args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             if (_flow == "repair") args.Add("-Repair");
             if (_consentTestSigning) args.Add("-AcceptTestSigning");
             if (_bitLocker.Length > 0) { args.Add("-BitLocker"); args.Add(_bitLocker); }
@@ -758,6 +794,7 @@ namespace AmdgpuWddmSetup
             _active = run;
             _result = result;
             _view = ResultView.For(result, run);
+            if (!_systemTuningChoice.HasValue && run.Decision != null) _systemTuningChoice = run.Decision.SystemTuning;
             if (_runKind == "plan")
             {
                 _plan = run;
@@ -796,12 +833,29 @@ namespace AmdgpuWddmSetup
             }
             var cause = SetupGuide.Pick(causes);
             _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
+            ShowGuideArt(cause);
             // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
             _guideText.Text = Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause));
             GuideCause = cause;
         }
 
         public SetupCause GuideCause { get; private set; }
+
+        // The still picture of this screen's cause, with "Show Nagi" on and its resource in the exe. Without either
+        // one the slot is empty and the panel is the text-only panel.
+        void ShowGuideArt(SetupCause cause)
+        {
+            if (_guideArt == null) return;
+            int size = SetupGuide.ArtSize(Theme.Scale);
+            var expression = SetupGuide.Expression(cause);
+            var img = _showNagi && NagiArt.Has(expression, size) ? NagiArt.Load(expression, size) : null;
+            _guideArt.Image = img;
+            _guideArt.Visible = img != null;
+        }
+
+        // For the render gate: whether the guide panel drew the picture, and whether it was meant to.
+        public bool GuideArtShown { get { return _guideArt != null && HasVisibleFlag(_guideArt) && _guideArt.Image != null; } }
+        public bool GuideArtWanted { get { return _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
 
         void SetGuideNote(string text) { if (_guideText != null) _guideText.Text = text; }
 

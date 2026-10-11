@@ -688,3 +688,244 @@ bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
      * refactoring changed no dword of it. */
     return bc250hsa_pm4_build_batch(dispatch, 1u, env, dwords, dword_capacity, dwords_written);
 }
+
+/* --------------------------------------------------------------------------------
+ * The GPU copy and fill (scratch/hip-gpu-copy/CONTRACT.md sections 4 and 7)
+ *
+ * One PM4 DMA_DATA packet per chunk, through the level-2 cache. Nothing here touches a
+ * device: the three functions write dwords into a writer, so test_pm4.c compares the
+ * result with the encoding of pm4_regs.h and with the stream driver/kmd/gfx_copy.c
+ * builds for the same arguments.
+ * ------------------------------------------------------------------------------ */
+
+/* The level-2 path for both sides, which is the right one on gfx10.1:
+ * ac_gpu_info.c:1145-1146 of scratch/mesa-wddm2 sets cp_sdma_ge_use_system_memory_scope
+ * for GFX12 alone, so cp_dma_use_L2 is true here, and radv_cp_dma.c:249-251 emits the
+ * explicit level-2 invalidate only when that path is not used. */
+#define COPY_CONTROL_L2                                                                \
+    (BC250HSA_DMA_DST_SEL(BC250HSA_DMA_DST_ADDR_USING_L2) |                            \
+     BC250HSA_DMA_SRC_SEL(BC250HSA_DMA_SRC_ADDR_USING_L2))
+#define FILL_CONTROL_L2                                                                \
+    (BC250HSA_DMA_DST_SEL(BC250HSA_DMA_DST_ADDR_USING_L2) |                            \
+     BC250HSA_DMA_SRC_SEL(BC250HSA_DMA_SRC_DATA))
+
+uint32_t bc250hsa_pm4_copy_dwords(uint64_t bytes)
+{
+    uint64_t chunks;
+
+    if (bytes == 0u) {
+        return 0u;
+    }
+    chunks = bytes / BC250HSA_DMA_MAX_BYTES + ((bytes % BC250HSA_DMA_MAX_BYTES != 0u) ? 1u : 0u);
+    if (chunks > 0xFFFFFFFFu / BC250HSA_DMA_DATA_DWORDS) {
+        return 0u;
+    }
+    return (uint32_t)chunks * BC250HSA_DMA_DATA_DWORDS;
+}
+
+int bc250hsa_ranges_overlap(uint64_t a, uint64_t b, uint64_t bytes)
+{
+    if (bytes == 0u) {
+        return 0;
+    }
+    return (a <= b) ? (b - a < bytes) : (a - b < bytes);
+}
+
+/* The one address rule of this packet. Dword 6 carries the high half of the destination
+ * address; nvd.h:403 names it DST_ADDR_HI [7:0], so an address at or above 2^40 is not
+ * expressible, and bc250hsa_buffer_resource already refuses one at or above 2^48
+ * (pm4_dispatch.c, the private segment resource). This library's address window starts
+ * at 0x0000004000000000 and is 64 GiB wide (kmt_blobs.h), so the high half of every
+ * address it produces is at most 0x4F and both bounds hold. The check is here anyway,
+ * because a truncated address is a write into another process's pages. */
+static bc250hsa_status check_dma_address(uint64_t va, uint64_t bytes)
+{
+    if (bytes == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    if (va == 0u || va > UINT64_MAX - (bytes - 1u)) {
+        return BC250HSA_EINVAL;
+    }
+    if (((va + bytes - 1u) >> 40) != 0u) {
+        return BC250HSA_EINVAL;
+    }
+    return BC250HSA_OK;
+}
+
+/* One operation, chunked. RAW_WAIT goes on the first chunk and CP_SYNC on the last, as
+ * radv_cp_dma_prepare does (radv_cp_dma.c:201-217) and as Bc250EmitGfxCopySpan of
+ * driver/kmd/gfx_copy.c does. A chunk that is not the last carries neither. */
+static bc250hsa_status append_dma(writer* w, uint32_t control, uint64_t src_or_pattern,
+                                 uint64_t dst_va, uint64_t bytes, int wait_before,
+                                 int sync_after, int is_fill)
+{
+    uint64_t remaining = bytes;
+    uint64_t src = src_or_pattern;
+    uint64_t dst = dst_va;
+    uint32_t packets = 0u;
+
+    if (w == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (bc250hsa_pm4_copy_dwords(bytes) == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    while (remaining != 0u) {
+        const uint64_t count =
+            (remaining > BC250HSA_DMA_MAX_BYTES) ? BC250HSA_DMA_MAX_BYTES : remaining;
+        uint32_t       header = control;
+        uint32_t       command = BC250HSA_DMA_BYTE_COUNT((uint32_t)count);
+
+        if (count == remaining && sync_after) {
+            header |= BC250HSA_DMA_CP_SYNC;
+        }
+        if (packets == 0u && wait_before) {
+            command |= BC250HSA_DMA_CMD_RAW_WAIT;
+        }
+        put(w, BC250HSA_PACKET3(BC250HSA_PKT3_DMA_DATA, 5u));
+        put(w, header);
+        put(w, (uint32_t)src);
+        put(w, (uint32_t)(src >> 32));
+        put(w, (uint32_t)dst);
+        put(w, (uint32_t)(dst >> 32));
+        put(w, command);
+        packets++;
+        remaining -= count;
+        if (remaining != 0u) {
+            dst += count;
+            if (!is_fill) {
+                src += count;
+            }
+        }
+    }
+    /* The packets are not counted here. An overflow makes the caller submit the open
+     * buffer and append the whole list again, so a count taken per emission would count
+     * the retried operations twice; submit.c counts them once, after the list fits. */
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_pm4_append_copy(writer* w, uint64_t dst_va, uint64_t src_va,
+                                         uint64_t bytes, int wait_before, int sync_after)
+{
+    bc250hsa_status status = check_dma_address(dst_va, bytes);
+
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    status = check_dma_address(src_va, bytes);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    if (bc250hsa_ranges_overlap(src_va, dst_va, bytes)) {
+        return BC250HSA_EINVAL;
+    }
+    return append_dma(w, COPY_CONTROL_L2, src_va, dst_va, bytes, wait_before, sync_after, 0);
+}
+
+bc250hsa_status bc250hsa_pm4_append_fill(writer* w, uint64_t dst_va, uint32_t pattern,
+                                         uint64_t bytes, int wait_before, int sync_after)
+{
+    const bc250hsa_status status = check_dma_address(dst_va, bytes);
+
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    /* radv_cp_dma_fill_memory asserts both of these (radv_cp_dma.c:334). The caller
+     * handles the leading and trailing partial dwords; a fill that silently dropped
+     * them would leave the destination half written. */
+    if ((dst_va % 4u) != 0u || (bytes % 4u) != 0u) {
+        return BC250HSA_EINVAL;
+    }
+    return append_dma(w, FILL_CONTROL_L2, pattern, dst_va, bytes, wait_before, sync_after, 1);
+}
+
+bc250hsa_status bc250hsa_pm4_append_ops(writer* w, const bc250hsa_copy_op* ops, uint32_t count)
+{
+    uint32_t i;
+
+    if (w == NULL || ops == NULL || count == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    for (i = 0; i < count; i++) {
+        bc250hsa_status status;
+        if (ops[i].kind == BC250HSA_COPY_OP_FILL) {
+            status = bc250hsa_pm4_append_fill(w, ops[i].dst_va, ops[i].pattern, ops[i].bytes,
+                                              1, 1);
+        } else if (ops[i].kind == BC250HSA_COPY_OP_COPY) {
+            status = bc250hsa_pm4_append_copy(w, ops[i].dst_va, ops[i].src_va, ops[i].bytes,
+                                              1, 1);
+        } else {
+            status = BC250HSA_EINVAL;
+        }
+        if (status != BC250HSA_OK) {
+            return status;
+        }
+        if (w->overflow) {
+            /* The buffer is full. The caller submits it and appends the whole list
+             * again, so a partly written list is never submitted. */
+            return BC250HSA_OK;
+        }
+    }
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_stage_pick(const uint64_t* slot_fence, uint32_t slot_count,
+                                   uint64_t observed_fence, uint32_t next_slot,
+                                   uint32_t* slot_out)
+{
+    uint32_t tried;
+
+    if (slot_fence == NULL || slot_out == NULL || slot_count == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    if (observed_fence == UINT64_MAX) {
+        return BC250HSA_EDEVICELOST;
+    }
+    for (tried = 0; tried < slot_count; tried++) {
+        const uint32_t slot = (next_slot + tried) % slot_count;
+        if (slot_fence[slot] == 0u || observed_fence >= slot_fence[slot]) {
+            *slot_out = slot;
+            return BC250HSA_OK;
+        }
+    }
+    *slot_out = next_slot % slot_count;
+    return BC250HSA_EBUSY;
+}
+
+bc250hsa_status bc250hsa_fill_split(uint64_t va, uint64_t bytes, bc250hsa_fill_plan* out)
+{
+    uint64_t head;
+    uint64_t rest;
+
+    if (out == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    if (bytes == 0u || va == 0u || va > UINT64_MAX - (bytes - 1u)) {
+        return BC250HSA_EINVAL;
+    }
+    /* The bytes between the start and the next dword boundary, and never more than the
+     * range holds. The remainder then starts on a dword boundary, so its whole dwords are
+     * the interior and its last one, two or three bytes are the tail. The three parts tile
+     * the range in address order and no two of them share a byte. */
+    head = (4u - (va % 4u)) % 4u;
+    if (head > bytes) {
+        head = bytes;
+    }
+    rest = bytes - head;
+    out->head_va = va;
+    out->head_bytes = (uint32_t)head;
+    out->interior_va = va + head;
+    out->interior_bytes = rest & ~(uint64_t)3u;
+    out->tail_va = out->interior_va + out->interior_bytes;
+    out->tail_bytes = (uint32_t)(rest - out->interior_bytes);
+    return BC250HSA_OK;
+}
+
+uint64_t bc250hsa_stage_round(uint64_t remaining, uint64_t slot_bytes)
+{
+    if (slot_bytes == 0u) {
+        return 0u;
+    }
+    return (remaining > slot_bytes) ? slot_bytes : remaining;
+}

@@ -4,6 +4,7 @@
 #include <string.h>
 #include "regs.generated.h"
 #include "bc250kmd_escape.h"
+#include "wave_snapshot.h"
 #include "../shim/include/bc250_hip_journal.h"
 #define C_ASSERT(x) _Static_assert(x,#x)
 #define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
@@ -59,6 +60,9 @@ static void DpAudioRequest(BC250_DEVICE*d,BC250_ESCAPE_DPAUDIO*p,ULONG n,BOOLEAN
    never reached by an observe request. */
 static void BoardMemoryRequest(BC250_DEVICE*d,BC250_ESCAPE_BOARD_MEMORY*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
 static void BoardMemoryProbeRequest(BC250_DEVICE*d,BC250_ESCAPE_BOARD_MEMORY_PROBE*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
+/* These separate diagnostics share the dispatcher prefix, but an observer request must never call them. */
+static void BoardProviderCaps(BC250_DEVICE*d,BC250_ESCAPE_BOARD_CAPS*p,ULONG f){(void)d;(void)p;(void)f;others++;}
+static void WaveEscape(BC250_DEVICE*d,BC250_ESCAPE_WAVES*p,ULONG f){(void)d;(void)p;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
 static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)

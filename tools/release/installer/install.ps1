@@ -39,8 +39,15 @@ param(
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
+    [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
+    [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
     [string]$FirmwareDir,                   # offline: the 9 firmware files (INSTALL.md, "GPU firmware") instead of a download
+    [string[]]$Components,                  # unattended: exactly these optional components (ids of components.json)
+    [switch]$NoComponents,                  # unattended: no optional component, and no question about one
+    [string[]]$Models,                      # unattended: exactly these models (ids of components.json)
+    [switch]$NoModels,                      # unattended: no model, and no question about one
+    [string]$ComponentDir,                  # offline: the component and model files from that folder instead of a download
     [switch]$DryRunIgnoreBoard             # host test only, honoured with -DryRun: walk all phases on a PC without a BC-250
 )
 $ErrorActionPreference = 'Stop'
@@ -52,6 +59,8 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'release-witness.ps1')
 . (Join-Path $here 'compatibility.ps1')
 . (Join-Path $here 'mft-h264.ps1')
+. (Join-Path $here 'system-tuning.ps1')
+. (Join-Path $here 'components.ps1')
 if ($Plan) { $DryRun = [Management.Automation.SwitchParameter]$true }
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
@@ -79,6 +88,10 @@ Initialize-Engine -Gui ([bool]$Gui) -InvocationId $InvocationId -EventsFile $Eve
 if ($FirmwareDir) {
     $FirmwareDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FirmwareDir)
     $PSBoundParameters['FirmwareDir'] = $FirmwareDir
+}
+if ($ComponentDir) {
+    $ComponentDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ComponentDir)
+    $PSBoundParameters['ComponentDir'] = $ComponentDir
 }
 $script:HoldWindow = [bool]$HoldWindow
 # A setup-window run that may change the system needs its kill-on-close job (interfaces-setup.md section 10): without
@@ -300,11 +313,39 @@ if (-not $installInputs.firmware_dir) {
     if ($own) { $installInputs.firmware_dir = $own; Write-Info "firmware: the folder of this package, $own (no download)" }
 }
 $FirmwareDir = $installInputs.firmware_dir
+# The optional components (components.ps1): this release's pinned list, and a prepared offline folder or a repair set
+# that carries the files already.
+$script:ComponentsManifest = $null
+$script:ComponentProblems = @()
+try {
+    $script:ComponentsManifest = Read-ComponentsManifest $here
+    if ($null -ne $script:ComponentsManifest) {
+        $script:ComponentProblems = @(Test-ComponentsManifest $script:ComponentsManifest)
+        if ($script:ComponentProblems.Count) { $script:ComponentsManifest = $null }
+    }
+} catch { $script:ComponentProblems = @("installer\components.json does not parse: $($_.Exception.Message)") }
+$ComponentDir = $installInputs.component_dir
+if (-not $ComponentDir) {
+    $own = Get-PackageComponentDir $package
+    if ($own) { $installInputs.component_dir = $own; $ComponentDir = $own; Write-Info "components: the folder of this package, $own (no download)" }
+} else {
+    # -ComponentDir may name a prepared folder, whose zips are in its own components\ subfolder, or a folder that
+    # holds the zips themselves.
+    $ComponentDir = Get-ComponentSourceDir $ComponentDir
+    Write-Info "components: the folder $ComponentDir (no download for a file that is there)"
+}
+# The model files are not in the folder the component zips come from: a prepared folder keeps components\ and
+# models\ side by side (prepare-offline.ps1). A folder given by hand may hold both together. Both spellings work.
+$ModelDir = $null
+if ($ComponentDir) { $ModelDir = Get-ModelSourceDir $ComponentDir }
+if (-not $ModelDir) { $ModelDir = Get-PackageModelDir $package }
+if ($ModelDir -and $ModelDir -ne $ComponentDir) { Write-Info "models: the folder $ModelDir (no download for a model that is there)" }
 $commandLineParameters = $installInputs.parameters
 $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
 $Repair = [switch](@($installInputs.switches) -contains 'Repair')
+$ApplySystemTuning = [switch](@($installInputs.switches) -contains 'ApplySystemTuning')
 # BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
 # itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
 # keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
@@ -461,11 +502,22 @@ function Invoke-Verify {
     $probe = ''
     if (Test-Path -LiteralPath $sc) { $probe = (Invoke-Native powershell.exe @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $sc, '-Probe')).text }
     Write-Log $probe
-    $view = $null; if ($probe -match 'fallback view: (.+)') { $view = $Matches[1].Trim() }
+    # Each reading is taken from one whole line of the probe's log, it keeps the 'probe: ' prefix the probe writes,
+    # and it refuses any line that carries driver log text. BD-122 puts up to 64 raw driver log lines in this
+    # output, every one of them prefixed 'start record log: ', and a pattern that matched anywhere in the text
+    # could otherwise take its answer from a line the driver wrote (start-confirm.ps1 Write-StartRecordLog).
+    $view = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: fallback view: (.+)$') { $view = $Matches[1].Trim() }
+    # BD-122: the KMD's own reason for a start that did not reach a started device, which the probe reads from
+    # Parameters\StartRecord with no gate and without the driver. It names the step, the NTSTATUS and the last
+    # driver log lines, which a device with Code 43 can no longer answer for itself. The verdict below is the one
+    # it always was: this is the detail a tester sends us, not a new gate.
+    $record = $null; if ($probe -match '(?m)^(?!.*start record log: ).*\bstart record: (.+)$') { $record = $Matches[1].Trim() }
     $want = [string]$script:Manifest.kmd_abi
     $driverOk = ($null -ne $view) -and ($view -match 'device problem 0,') -and ($view -match 'LastStage 50$') -and ($view -match "driver version $want ")
-    Add-Result 'driver start' $driverOk $(if ($view) { $view } else { "no reading from $sc" })
-    $health = $null; if ($probe -match 'start health (.+)') { $health = $Matches[1].Trim() }
+    $detail = $(if ($view) { $view } else { "no reading from $sc" })
+    if (-not $driverOk -and $record) { $detail = "$detail; $record" }
+    Add-Result 'driver start' $driverOk $detail
+    $health = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: start health (.+)$') { $health = $Matches[1].Trim() }
     $hflags = $null; if ($health -match 'flags (\d+)') { $hflags = [int]$Matches[1] }
     Add-Result 'start health' (($null -ne $hflags) -and (($hflags -band 7) -eq 7)) $(if ($health) { "$health (15 = confirmed; 7 = full, ready, visible)" } else { 'no reading' })
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
@@ -711,7 +763,8 @@ if ($action.action -ne 'verify' -and $script:Manifest) {
 Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $action.message; installed_version = $installedVersion; package_version = $packageVersion; phase = [string]$state.phase
     consents = @($consents); consents_given = [ordered]@{ test_signing = [bool]$AcceptTestSigning; bitlocker = $BitLocker }; restarts = $restarts
     firmware_source = $firmwareSource; firmware_dir = $FirmwareDir; notes = @($notes); secure_boot = $script:SecureBoot; bitlocker = $script:BitLockerState
-    compatibility = $compat })
+    compatibility = $compat; system_tuning = [bool]$ApplySystemTuning })
+Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
     Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line, {5} reopened after the driver closed them, {6} left closed by the driver" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command, $impact.summary.reopened, $impact.summary.driver_closed)
@@ -760,6 +813,74 @@ if ($script:GuiMode) {
     if ($consents -contains 'bitlocker' -and -not $BitLocker) { $missing += 'bitlocker' }
     $script:EngineConsents = $missing
     if ($missing.Count) { Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail "missing: $($missing -join ', ')" }
+}
+# ---- the extras: llama.cpp, Ollama, and the models -------------------------------------------------------------
+# The questions are asked here, before any change, and the answers are saved with the install inputs: the run after a
+# restart starts from RunOnce without a console and takes them from the state. Nothing is downloaded yet; the
+# components stage at the end of phase 2 gets the files, after the driver is in place.
+if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
+    if ($script:ComponentProblems.Count) {
+        Write-Warn2 "the extras of this package cannot be read ($($script:ComponentProblems -join '; ')): none of them is offered. The driver installs as usual."
+    }
+    # A run that can neither ask nor install an extra does not open the stage at all: the setup window has no control
+    # for the extras, and what its command line did not name is not consented (components.ps1, Resolve-*Request).
+    # An unbound [string[]] parameter of a script is $null, and @($null) has one element, so the ids are counted
+    # after the empty ones are dropped.
+    $namedExtras = @(@(@($Components) + @($Models)) | Where-Object { [string]$_ })
+    $mayChooseExtras = (-not $script:GuiMode) -or ($namedExtras.Count -gt 0)
+    if ($null -ne $script:ComponentsManifest -and $null -eq $installInputs.components -and $mayChooseExtras) {
+        Enter-Stage 'extras' 'Extras: llama.cpp, Ollama, models'
+        $rows = @(Get-ComponentRows $script:ComponentsManifest)
+        $req = Resolve-ComponentRequest -Manifest $script:ComponentsManifest -Requested $Components -NoComponents ([bool]$NoComponents) -CanAsk (-not $script:GuiMode) -DefaultsWithoutAsking $false
+        foreach ($u in @($req.unknown)) { Write-Warn2 "-Components names '$u', which this release does not have: it is not installed" }
+        $chosen = @()
+        if ($req.mode -eq 'ask') { $chosen = @(Read-ComponentChoice -Manifest $script:ComponentsManifest -Rows $rows) }
+        else { $chosen = @($req.ids) }
+        # A component without a usable pin in this package is never installed, whatever the switch asked for.
+        $refused = @($rows | Where-Object { $_.refused -and (@($chosen) -contains $_.id) })
+        foreach ($r in $refused) { Write-Warn2 "$([string]$r.component.title) cannot be installed from this package: $($r.refused). It is skipped." }
+        $refusedIds = @($refused | ForEach-Object { $_.id })
+        $chosen = @($chosen | Where-Object { $refusedIds -notcontains $_ })
+        $installInputs.components = @($chosen)
+        if (@($chosen).Count) { Write-Info "extras to install: $(@($chosen) -join ', ')" } else { Write-Info 'extras: none' }
+        $offered = @()
+        foreach ($id2 in @($chosen)) {
+            $c2 = Get-ComponentById $script:ComponentsManifest $id2
+            if ($null -eq $c2) { continue }
+            foreach ($m2 in @($c2.models)) { if (@($offered) -notcontains [string]$m2) { $offered += [string]$m2 } }
+        }
+        $mreq = Resolve-ModelRequest -Manifest $script:ComponentsManifest -Requested $Models -NoModels ([bool]$NoModels) -CanAsk (-not $script:GuiMode) -ComponentIds @($chosen)
+        foreach ($u in @($mreq.unknown)) { Write-Warn2 "-Models names '$u', which this release does not offer: it is skipped" }
+        foreach ($u in @($mreq.unusable)) { Write-Warn2 "-Models names '$u', which none of the chosen extras can use: it is skipped" }
+        $modelsChosen = @()
+        $chosenComponents = @(foreach ($id3 in @($chosen)) { Get-ComponentById $script:ComponentsManifest $id3 })
+        if ($mreq.mode -eq 'ask') { $modelsChosen = @(Read-ModelChoice -Manifest $script:ComponentsManifest -Offered $offered -Components $chosenComponents) }
+        else { $modelsChosen = @($mreq.ids) }
+        $installInputs.models = @($modelsChosen)
+        if (@($modelsChosen).Count) {
+            $modelsDir = [string]$script:ComponentsManifest.models_dir
+            Write-Info "models to download into $modelsDir`: $(@($modelsChosen) -join ', ')"
+            foreach ($id4 in @($modelsChosen)) {
+                $m4 = Get-ComponentModelById $script:ComponentsManifest $id4
+                if ($null -eq $m4) { continue }
+                $cost = Get-ModelCostText $m4 @(@($chosenComponents) | Where-Object { (Get-ComponentModelRoute $_) -eq 'gguf' }) `
+                                              @(@($chosenComponents) | Where-Object { (Get-ComponentModelRoute $_) -eq 'pull' })
+                if ($cost) { Write-Info "    $([string]$m4.title): $cost" }
+            }
+        } else { Write-Info 'models: none (you can download one later; the documents say how)' }
+        # The component zips and the model files may come from two different folders (a prepared folder keeps them
+        # in components\ and models\), so each is checked against the folder it is actually read from.
+        if ($ComponentDir -or $ModelDir) {
+            $bad = @()
+            if ($ComponentDir) { $bad += @(Test-ComponentSetDir $script:ComponentsManifest @($chosen) $ComponentDir) }
+            if ($ModelDir) { $bad += @(Test-ModelSetDir $script:ComponentsManifest @($modelsChosen) $ModelDir) }
+            elseif (@($modelsChosen).Count) { $bad += "no prepared folder holds the models: they are downloaded" }
+            $where = @(@($ComponentDir, $ModelDir) | Where-Object { $_ } | Select-Object -Unique) -join ' and '
+            if ($bad.Count) { Write-Warn2 "$where`: $($bad -join '; '). What is missing there is downloaded instead." }
+        }
+    } elseif ($null -ne $script:ComponentsManifest -and $null -ne $installInputs.components) {
+        Write-Info "extras from the first run of this install: $(if (@($installInputs.components).Count) { @($installInputs.components) -join ', ' } else { 'none' }); models: $(if (@($installInputs.models).Count) { @($installInputs.models) -join ', ' } else { 'none' })"
+    }
 }
 Set-CancelAvailable $true 'before-changes'
 Invoke-CancelPoint 'before-changes'
@@ -919,6 +1040,7 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
 $dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
+if (Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning')) { $dirs += 'system-tuning' }
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
 # The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
 # it is installed at all (manifest.json "mft_h264"). The decision is taken here, before the first change of this
@@ -1350,7 +1472,63 @@ if ($controlExe -and $dirs -contains 'control') {
     } | Out-Null
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
-Clear-InstallInputs $state
+# ---- the extras ------------------------------------------------------------------------------------------------
+# After the driver, and last of all the changes of phase 2: an extra is optional, its download is large, and nothing
+# here may put the driver installation at risk. Every failure is a warning, and the stage ends with the install
+# complete either way.
+# The ids the questions or the command line settled on. A run that never opened the extras stage has $null there, and
+# @($null) has one element, so the empty ids are dropped before they are counted.
+$componentsChosen = @(@($installInputs.components) | Where-Object { [string]$_ })
+$modelsChosenNow = @(@($installInputs.models) | Where-Object { [string]$_ })
+if ($null -ne $script:ComponentsManifest -and $componentsChosen.Count) {
+    Enter-Stage 'components' 'Extras: llama.cpp, Ollama, models'
+    $modelsDir = [string]$script:ComponentsManifest.models_dir
+    if (-not $modelsDir) { $modelsDir = $script:ModelsDirDefault }
+    $staging = Join-Path $script:StateDir 'component-staging'
+    $installedComponents = @()
+    $componentRecords = @()
+    foreach ($cid in $componentsChosen) {
+        $c = Get-ComponentById $script:ComponentsManifest $cid
+        if ($null -eq $c) { Write-Warn2 "extra '$cid' is not in this package: skipped"; continue }
+        try {
+            $from = 'the release assets of this version'
+            if ($ComponentDir) { $from = $ComponentDir }
+            $zip = Invoke-Change "get $([string]$c.asset.name) ($(Format-ComponentSize ([long]$c.asset.size)), $([string]$c.title)) from $from into $staging and check its SHA256" {
+                Get-ComponentAssetStaged -Manifest $script:ComponentsManifest -Component $c -Staging $staging -FromDir $ComponentDir
+            }
+            if ($script:DryRunMode) {
+                if ($ComponentDir) { Write-Info "    $(Join-Path $ComponentDir ([string]$c.asset.name))" }
+                else { foreach ($u in Get-ComponentAssetUrls $script:ComponentsManifest $c) { Write-Info "    $u" } }
+                Write-Info "    SHA256 $(([string]$c.asset.sha256).ToUpperInvariant())"
+                $zip = Join-Path $staging ([string]$c.asset.name)
+            }
+            $componentRecord = Install-ComponentFiles -Manifest $script:ComponentsManifest -Component $c -Zip $zip -InstallRoot $InstallRoot -Staging $staging -ModelsDir $modelsDir
+            $componentRecords += $componentRecord
+            $installedComponents += $c
+            Write-Info "$([string]$c.title): in $($componentRecord.dir), licence $([string]$c.licence) ($([string]$c.licence_url))"
+            # A component that keeps the models in its own format has its own folder for them: say where, because the
+            # one in the manifest holds the GGUF files only.
+            if ([string]$componentRecord.user_models_dir) { Write-Info "    its own models go into $([string]$componentRecord.user_models_dir)" }
+            if ([string]$componentRecord.hooks) { Write-Info "    it is registered for the account that runs this installation; another account runs '$([string]$componentRecord.hooks) register' once" }
+        } catch {
+            Write-Warn2 "$([string]$c.title) was not installed: $($_.Exception.Message). The driver installation is not affected; run install.cmd again, or install it later."
+        }
+    }
+    if (@($componentRecords).Count) { Set-StateValue $state 'components_installed' @($componentRecords) }
+    Set-StateValue $state 'models_dir' $modelsDir
+    if ($modelsChosenNow.Count -and @($installedComponents).Count) {
+        try {
+            $modelRecords = @(Install-ComponentModels -Manifest $script:ComponentsManifest -Components @($installedComponents) -ModelIds $modelsChosenNow -InstallRoot $InstallRoot -ModelsDir $modelsDir -FromDir $ModelDir)
+            if (@($modelRecords).Count) { Set-StateValue $state 'models_installed' @($modelRecords) }
+            Write-Info "models in $modelsDir"
+        } catch {
+            Write-Warn2 "a model was not downloaded: $($_.Exception.Message). The driver and the extras stay installed; download it later (the documents say how)."
+        }
+    }
+    if (-not $script:DryRunMode) { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+    if (-not $script:DryRunMode) { Save-InstallState $state }
+}
+
 Set-StateValue $state 'parameters_before_install' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 if ($dwmSession) {
@@ -1391,6 +1569,8 @@ if ($storePlan) {
         } | Out-Null
     }
 }
+Invoke-SelectedSystemTuning -Selected ([bool]$ApplySystemTuning) -Action ApplyRecommended -PackageRoot $package
+Clear-InstallInputs $state
 Save-Phase 'installed'
 Set-ResumeAtLogon 'verify'
 Write-Host ''

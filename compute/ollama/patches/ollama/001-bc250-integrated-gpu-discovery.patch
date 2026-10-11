@@ -1,0 +1,40 @@
+Subject: admit the BC-250 board in GPU discovery
+
+Two defaults in upstream discovery drop this board, and both are about integrated
+GPUs on a machine that has a discrete one as well. The BC-250 has one GPU, it is
+the board's own, and it reports itself integrated.
+
+1. gfx1013 is absent from the list of AMD targets admitted by default. The list
+   exists for exactly this case and names one part. Measured on gfx1013 silicon:
+   the omission is a missing entry, not a hardware limit.
+2. A device the list does not name falls through to the per-library default,
+   which admits CUDA, admits a named ROCm target, and drops everything else. A
+   Vulkan device on this board has no gfx target to match on, so it is dropped
+   and the processor backend is all that is left.
+
+The second change keeps OLLAMA_IGPU_ENABLE=0 working: the branch above returns
+early whenever the user set the variable either way.
+
+--- a/discover/runner.go
++++ b/discover/runner.go
+@@ -30,6 +30,8 @@
+ var defaultIntegratedROCmGFXTargets = map[string]struct{}{
+ 	// AMD Radeon 8060S / Ryzen AI Max+ 395.
+ 	"gfx1151": {},
++	// ASRock BC-250, gfx1013, behind the bc250 WDDM display driver.
++	"gfx1013": {},
+ }
+
+ func GPUDevices(ctx context.Context, runners []ml.FilteredRunnerDiscovery) []ml.DeviceInfo {
+@@ -420,7 +422,10 @@
+ 	if enabledWithTrueDefault == enabledWithFalseDefault {
+ 		return enabledWithTrueDefault, true
+ 	}
+-	return false, false
++	// This build targets a board whose only GPU reports itself integrated.
++	// Admit integrated GPUs unless the user set OLLAMA_IGPU_ENABLE, which the
++	// branch above answers.
++	return true, true
+ }
+
+ func integratedGPUAllowedByDefault(device ml.DeviceInfo) bool {

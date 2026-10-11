@@ -25,7 +25,7 @@ namespace AmdgpuWddmSetup
         public string Action, InstalledVersion, PackageVersion, Phase, FirmwareSource, FirmwareDir, SecureBoot, BitLocker;
         public string[] Consents = new string[0], Notes = new string[0], CompatibilityReasons = new string[0];
         public int Restarts;
-        public bool CompatibilityOk;
+        public bool CompatibilityOk, SystemTuning;
     }
 
     public sealed class SettingsPlan
@@ -119,6 +119,7 @@ namespace AmdgpuWddmSetup
                         Phase = Json.Str(e, "phase"), Consents = Json.Strs(e, "consents"), Restarts = Json.Int(e, "restarts"),
                         FirmwareSource = Json.Str(e, "firmware_source"), FirmwareDir = Json.Str(e, "firmware_dir"), Notes = Json.Strs(e, "notes"),
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
+                        SystemTuning = Json.Bool(e, "system_tuning"),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;
@@ -157,7 +158,11 @@ namespace AmdgpuWddmSetup
         // Whether the run may have changed this PC, as far as the events tell (a missing result cannot say more).
         public bool MayHaveChanged { get { return InstallActionSeen || RealSteps > 0; } }
 
-        // The stages a run of this mode goes through, in order, for the progress list.
+        // The stages a run of this mode goes through, in order, for the progress list. The optional stages are not
+        // here: 'extras' and 'components' (the llama.cpp and Ollama extras of install.cmd) happen only when a run can
+        // choose an extra, which this window's own runs cannot - it has no control for them and consents to nothing
+        // its command line did not name. A run that does reach them (a command line with -Components) reports them as
+        // stage events, and SetupForm puts such a stage into the list where the run reached it.
         public static string[] ExpectedStages(string mode, string action)
         {
             if (mode == "prepare-offline") return new[] { "prepare-check", "firmware", "copy", "finish" };
@@ -313,6 +318,18 @@ namespace AmdgpuWddmSetup
             switch (Rank(c)) { case 1: return "03-surprised"; case 3: return "07-hopeful"; case 4: return "05-thinking"; case 5: return "04-wink"; }
             return c == SetupCause.Welcome ? "01-wave" : "02-curious";
         }
+
+        // The art of an expression in the exe, embedded by build.ps1 from the control application's art directory
+        // under the same names it uses (Guide.Resource): one map of expression to file, one set of resources.
+        // @128 up to a 125 % screen, @256 from 150 % up, drawn scaled into the slot.
+        public static string Resource(string expression, int size) { return "nagi." + expression + "@" + size + ".png"; }
+        public static int ArtSize(float scale) { return scale >= 1.5f ? 256 : 128; }
+
+        // Every expression a screen of this window can ask for: Expression() of every cause there is. The build
+        // embeds these and no more, so the exe carries no picture it could never draw (the control application
+        // embeds all nine, because its verdicts reach all nine). The unit tests print this list for the build.
+        public static readonly string[] ArtExpressions = Enum.GetValues(typeof(SetupCause)).Cast<SetupCause>()
+            .Select(Expression).Distinct().OrderBy(e => e, StringComparer.Ordinal).ToArray();
 
         public static SetupCause Pick(IEnumerable<SetupCause> active)
         {

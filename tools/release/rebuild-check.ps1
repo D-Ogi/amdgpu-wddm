@@ -96,12 +96,15 @@ function Initialize-Submodules([string]$Tree, [string]$ModuleBase) {
         Initialize-Submodules (Join-Path $Tree $sub) (Join-Path $module 'modules')
     }
 }
-# The listed paths of a commit, as plain files (an input is read, never built in place).
+# The listed paths of a commit, as plain files (an input is read, never built in place). The export is the committed
+# bytes: core.autocrlf=false, because the checkout's own setting must not change an input. A checkout with
+# core.autocrlf=true gave the CRLF form of a header whose LF blob a recipe pins (the engine header of the D3D12 shell,
+# train b30), so the same commit gave two inputs on two checkouts.
 function Export-Input([string]$Name, [string]$Commit, [string[]]$Paths, [string]$Dest) {
     $checkout = Get-Checkout $Name $Commit
     New-Item -ItemType Directory -Force $Dest | Out-Null
     $tar = Join-Path $Dest '..\input.tar'
-    & git -C $checkout archive --format=tar -o $tar $Commit @Paths
+    & git -C $checkout -c core.autocrlf=false archive --format=tar -o $tar $Commit @Paths
     if ($LASTEXITCODE -ne 0) { throw "git archive $Commit $($Paths -join ' ') in $checkout failed" }
     & "$env:SystemRoot\System32\tar.exe" -x -f $tar -C $Dest
     if ($LASTEXITCODE -ne 0) { throw "tar -x $tar failed" }

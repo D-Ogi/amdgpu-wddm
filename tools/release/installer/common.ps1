@@ -269,25 +269,48 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning')
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
+    if ($Bound.ContainsKey('ApplySystemTuning') -and [bool]$Bound['ApplySystemTuning'] -and
+        $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) {
+        throw '-ApplySystemTuning and -SkipSystemTuning cannot be used together'
+    }
     $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
-    $in = [pscustomobject]@{ firmware_dir = $null; parameters = @{}; switches = @(); restored = @() }
+    $resumeTuning = $State -and ([string]$State.package_version -eq $PackageVersion) -and
+        ([string]$State.phase -in @('new', 'testsigning-pending', 'testsigning-active', 'files-copied',
+            'driver-pending-restart', 'driver-installed', 'install-incomplete'))
+    $in = [pscustomobject]@{ firmware_dir = $null; component_dir = $null; components = $null; models = $null; parameters = @{}; switches = @(); restored = @() }
     if ($Bound.ContainsKey('FirmwareDir') -and $Bound['FirmwareDir']) { $in.firmware_dir = [string]$Bound['FirmwareDir'] }
     elseif ($resume -and $State.firmware_source_dir) { $in.firmware_dir = [string]$State.firmware_source_dir; $in.restored += "-FirmwareDir $($in.firmware_dir)" }
+    if ($Bound.ContainsKey('ComponentDir') -and $Bound['ComponentDir']) { $in.component_dir = [string]$Bound['ComponentDir'] }
+    elseif ($resume -and $State.component_source_dir) { $in.component_dir = [string]$State.component_source_dir; $in.restored += "-ComponentDir $($in.component_dir)" }
+    # The component and model answers of the first run: the questions are asked once, before any change, and the
+    # argument-free continuation after a restart takes them from the state. $null means "not answered yet".
+    if ($resume -and $null -ne $State.PSObject.Properties['components_chosen'] -and $null -ne $State.components_chosen) {
+        $in.components = @($State.components_chosen)
+        $in.restored += "components: $(if (@($in.components).Count) { @($in.components) -join ',' } else { 'none' })"
+    }
+    if ($resume -and $null -ne $State.PSObject.Properties['models_chosen'] -and $null -ne $State.models_chosen) {
+        $in.models = @($State.models_chosen)
+        $in.restored += "models: $(if (@($in.models).Count) { @($in.models) -join ',' } else { 'none' })"
+    }
     if ($Bound.ContainsKey('DpmMaxMHz')) { $in.parameters['DpmMaxMHz'] = [int]$Bound['DpmMaxMHz'] }
     if ($Bound.ContainsKey('CuMode') -and [int]$Bound['CuMode']) { $in.parameters['CuMode'] = [int]$Bound['CuMode'] }
     if (-not $in.parameters.Count -and $resume -and $State.command_line_parameters) {
         foreach ($p in $State.command_line_parameters.PSObject.Properties) { $in.parameters[$p.Name] = [int]$p.Value; $in.restored += "-$($p.Name) $([int]$p.Value)" }
     }
     foreach ($s in $script:InstallSwitches) {
+        if ($s -eq 'ApplySystemTuning' -and $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) { continue }
         if ($Bound.ContainsKey($s)) { if ([bool]$Bound[$s]) { $in.switches += $s } }
-        elseif ($resume -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
+        elseif (($resume -or ($s -eq 'ApplySystemTuning' -and $resumeTuning)) -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
     }
     return $in
 }
 function Save-InstallInputs($State, $Inputs) {
     Set-StateValue $State 'firmware_source_dir' $Inputs.firmware_dir
+    Set-StateValue $State 'component_source_dir' $Inputs.component_dir
+    if ($null -ne $Inputs.components) { Set-StateValue $State 'components_chosen' @($Inputs.components) }
+    if ($null -ne $Inputs.models) { Set-StateValue $State 'models_chosen' @($Inputs.models) }
     Set-StateValue $State 'command_line_parameters' $(if ($Inputs.parameters.Count) { [pscustomobject]$Inputs.parameters } else { $null })
     Set-StateValue $State 'install_switches' $(if (@($Inputs.switches).Count) { @($Inputs.switches) } else { $null })
 }
@@ -303,7 +326,7 @@ function Set-InstallPackage($State, [string]$PackageVersion) {
     return $was
 }
 function Clear-InstallInputs($State) {
-    foreach ($n in 'firmware_source_dir', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
+    foreach ($n in 'firmware_source_dir', 'component_source_dir', 'components_chosen', 'models_chosen', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
 }
 
 # A fact about the computer before the install (did this file exist?): the first run records it, a re-run over a
@@ -319,6 +342,13 @@ function Set-StateValueOnce($State, [string]$Name, $Value) {
 # uninstall.ps1 removes that one entry and no other. The value is read and written as Windows stores it (REG_EXPAND_SZ,
 # %SystemRoot% not expanded). A new process sees the entry after the restart that the install asks for.
 $script:EnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+# Host tests only: the hive the two functions below open. A test points it at HKEY_CURRENT_USER with a scratch
+# $script:EnvironmentKey, so no test of ours can write the machine PATH of the computer it runs on.
+$script:EnvironmentHive = $null
+function Get-EnvironmentHive {
+    if ($null -ne $script:EnvironmentHive) { return $script:EnvironmentHive }
+    return [Microsoft.Win32.Registry]::LocalMachine
+}
 function Get-HipPathEntry([string]$Root) { return (Join-Path $Root 'tools\hip') }
 # Pure: is $Entry one of the entries of $PathValue (case and a trailing backslash do not count)?
 function Test-PathEntry([string]$PathValue, [string]$Entry) {
@@ -339,7 +369,7 @@ function Remove-PathEntry([string]$PathValue, [string]$Entry) {
     return ((@($PathValue -split ';') | Where-Object { $_.Trim().TrimEnd('\') -ine $want }) -join ';')
 }
 function Get-MachinePath {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($script:EnvironmentKey, $false)
+    $k = (Get-EnvironmentHive).OpenSubKey($script:EnvironmentKey, $false)
     try {
         $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
         if ($k.GetValueNames() -contains 'Path') { $kind = $k.GetValueKind('Path') }
@@ -347,7 +377,7 @@ function Get-MachinePath {
     } finally { $k.Close() }
 }
 function Set-MachinePath([string]$Value, $Kind) {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($script:EnvironmentKey, $true)
+    $k = (Get-EnvironmentHive).OpenSubKey($script:EnvironmentKey, $true)
     try { $k.SetValue('Path', $Value, $Kind) } finally { $k.Close() }
 }
 
@@ -1300,13 +1330,23 @@ function Get-ReleaseFootprint {
         @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
-    & $probe 'per-user data' { $u = @(Get-OurUserDataDirs); @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no %LOCALAPPDATA%\amdgpu-wddm in any profile' }) } }
+    & $probe 'per-user data' {
+        $u = @(Get-OurUserDataDirs | Where-Object { @(Get-ChildItem -LiteralPath $_ -Force | Where-Object { $_.Name -ine 'system-tuning' }).Count -gt 0 })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no per-user release data other than retained tuning recovery journals' }) }
+    }
+    & $probe 'per-user tuning recovery' {
+        $u = @(Get-OurUserDataDirs | ForEach-Object { Join-Path $_ 'system-tuning' } | Where-Object { Test-Path -LiteralPath $_ })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'per-user tuning journals retained for their owners' } else { 'no per-user tuning journal' }) }
+    } $true
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
     # application's own files (the tester's setting backups and action log).
     $fwKept = [bool]($State -and $State.firmware_dir_existed)
     & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
     & $probe 'control application data' { $d = Join-Path (Split-Path $script:StateDir) 'control'; $p = (Test-Path -LiteralPath $d); @{ present = $p; detail = "$d$(if ($p) { ' is there (the tester''s setting backups and action log)' } else { ' is gone' })" } } $true
+    foreach ($name in 'system-tuning','system-tuning-recovery') {
+        & $probe $name { $d = Join-Path (Split-Path $script:StateDir) $name; @{ present = (Test-Path -LiteralPath $d); detail = "$d is retained when present for optional Windows settings recovery" } } $true
+    }
     return $rows.ToArray()
 }
 

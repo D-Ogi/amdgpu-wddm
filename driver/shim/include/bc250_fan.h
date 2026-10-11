@@ -1,3 +1,4 @@
+#include "bc250_board_envelope.h"
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * BC-250 case fan control (Part B of bc250-win docs/design/fan.md). Pure policy: no OS call, no lock of its own,
@@ -48,18 +49,9 @@
 
 /* ---- bounds -------------------------------------------------------------------------------------------------- */
 
-#define BC250_FAN_POINTS_MIN		2u
-#define BC250_FAN_POINTS_MAX		8u
-#define BC250_FAN_FLOOR_PCT		20u	/* a three-wire fan can stall below this and not restart by itself */
-#define BC250_FAN_FULL_PCT		100u
-#define BC250_FAN_TEMP_MIN_C		20u	/* curve point temperatures, the range of the BIOS Customize page */
-#define BC250_FAN_TEMP_MAX_C		95u
 
 /* Emergency: the fan tries before the clock pays. The DPM's hot step is 87 C as well, and the curve of every
  * preset reaches 100 % at or below 85 C, so this is the backstop for a quiet custom curve. */
-#define BC250_FAN_EMERGENCY_ON_MC	87000
-#define BC250_FAN_EMERGENCY_OFF_MC	82000	/* the DPM's own release temperature */
-#define BC250_FAN_EMERGENCY_HOLD_MS	10000u
 
 #define BC250_FAN_HYSTERESIS_MC		3000	/* the curve's input falls only once it is 3 C under its peak */
 #define BC250_FAN_FALL_HOLD_MS		10000u	/* the output falls only after this long below */
@@ -125,15 +117,6 @@
  * ends only when the curve itself asks for less than the duty in force. The ordinary slope rule (rule 7) then
  * takes the duty down, 10 points at most every 2 s, so the fan never drops in one step.
  */
-#define BC250_FAN_BOOST_BUSY_PERMILLE	850u	/* the GPU busy share of the whole step */
-#define BC250_FAN_BOOST_MHZ		1000u	/* and the GFX clock at or above the lab floor */
-#define BC250_FAN_BOOST_POWER_MW	85000u	/* or the socket power: idle 41 to 56 W, the LLM arm 107 to 122 W */
-#define BC250_FAN_BOOST_RISE_MS		3000u	/* or the guard temperature over this window */
-#define BC250_FAN_BOOST_RISE_MC		3000	/* rising by this much, which is 1 C a second */
-#define BC250_FAN_BOOST_ARM_MS		2000u	/* heavy for this long: the boost engages */
-#define BC250_FAN_BOOST_LOAD_MAX_MS	4000u	/* and the heavy-time account stops here */
-#define BC250_FAN_BOOST_STEP_MAX_MS	1500u	/* one step pays at most this much in, so one late step arms nothing */
-#define BC250_FAN_BOOST_HOLD_MS		30000u	/* after the load: the boost holds at least this long */
 
 /* Why the boost is on, the bits of the last heavy step. */
 #define BC250_FAN_BOOST_WHY_BUSY	1u
@@ -141,9 +124,6 @@
 #define BC250_FAN_BOOST_WHY_RISE	4u
 #define BC250_FAN_BOOST_WHY_ALL		7u
 
-#define BC250_FAN_LEASE_MIN_MS		5000u
-#define BC250_FAN_LEASE_MAX_MS		300000u
-#define BC250_FAN_LEASE_DEFAULT_MS	30000u
 
 /* The handshake polls. One poll is one register read, then delay_us. M803 saw the open answer within one 1 ms poll
  * and the close within four, so 50 ms is a wide bound that a working chip never reaches. */

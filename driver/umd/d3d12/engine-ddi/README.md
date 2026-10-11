@@ -19,7 +19,9 @@ The work is split between engine-ddi and the native12 shell in this directory's 
   allocation and residency callbacks, the DXGI table, present and registration.
 
 [SLOTS.md](SLOTS.md) lists the owner and phase of every slot: 173 engine-ddi, 30 shell, including the shell's
-override of `pfnPresent`.
+override of `pfnPresent`. Beside those tables engine-ddi fills one optional table, the two-slot render pass table
+`D3D12DDI_TABLE_TYPE_0043_RENDER_PASS`, which the shell publishes only while the adapter reports a render pass
+tier (SLOTS.md, "The render pass table").
 
 ## The boundary, in `engine-ddi.h`
 
@@ -68,6 +70,9 @@ override of `pfnPresent`.
   - in RuntimeBacked, the size and alignment of the import. The engine's `CreateHeapFromMemory` (ABI 1.2 V10)
     checks the Vulkan memory type and refuses one it would not pick for the heap.
 - Aliasing follows D3D12, and aliasing barriers go to the engine unchanged.
+- Enhanced barriers are reported from the engine's own answer and reach it through L68 `pfnBarrier`, which
+  regroups the DDI's one flat tagged array into the API's groups of one type, in the order the DDI array gave
+  them, and splits a call with more groups than the engine takes at once (SLOTS.md).
 - A reserved resource (neither a heap description nor a base resource) is the engine's CreateReservedResource1
   or 2 and has no memory of its own: `object_allocation` answers S_FALSE for it. `tiles.cpp` binds its tiles to
   heap records through the engine queue (`update_tile_mappings`, `copy_tile_mappings`) and fills GetMipPacking
@@ -139,15 +144,35 @@ Nothing waits on the CPU: both phases read the queues' state words and fences at
   annotation `_In_reads_(pShaderCode[1])`; no runtime payload has been measured.
 - Every create-shader slot rebuilds the container the engine compiles with
   [shader-container](shader-container/README.md) `BuildContainer`, which reads no further than that length:
-  hull and domain programs with the Tessellation signatures, the others with Standard. The container stays in
+  hull and domain programs with the Tessellation signatures, a mesh program with the Mesh signatures (vertex
+  outputs and primitive outputs), an amplification program with none, the others with Standard. A mesh or an
+  amplification container takes its names from the program's own DXIL metadata, because the engine links a mesh
+  pipeline by semantic name. The container stays in
   engine-ddi's own allocation until DestroyShader. A failure is logged and reported through
   `report_device_error`: E_NOTIMPL for a program the reconstruction cannot represent, E_INVALIDARG for a broken
-  payload, E_OUTOFMEMORY. Mesh and amplification programs are E_NOTIMPL.
+  payload, E_OUTOFMEMORY.
+- Every rasterizing pipeline, graphics or mesh, goes to `ID3D12Device2::CreatePipelineState` as a subobject
+  stream. That entry is the only one that carries the AS and MS stages of a mesh pipeline, the
+  `DepthBoundsTestEnable` of the depth-stencil state (L52) and the view instancing description (L57). A compute
+  pipeline keeps `CreateComputePipelineState`. A mesh pipeline also has the pixel program's container rebuilt for
+  the mesh program's names, and `pfnDispatchMesh` forwards to `ID3D12GraphicsCommandList6`. 1006 reports a mesh
+  shader tier only when the engine's OPTIONS7 answer does, a depth bounds test only when its OPTIONS2 answer
+  does. ViewInstancingTier stays at 0: the backend cannot represent repeated render-target layers with distinct
+  viewports, which every supported tier admits.
 - CreatePipelineState gives the engine the container bytes, names input elements from the vertex program's
   rebuilt input signature (`InputLayoutSemantic`) and stream-output entries from the last stage before
   rasterization (`StreamOutputSemantic`). The element layout, blend, rasterizer and depth-stencil states keep
   their descriptions until then. A gap in a stream-output declaration reaches the engine as a NULL
   SemanticName, which the pinned r4 engine takes (INTEGRATION.md).
+- A pipeline library (D85 to D90) is the engine's own `ID3D12PipelineLibrary1`, created from the blob the runtime
+  hands in and serialized back in the engine's shape. The DDI's `UINT` pipeline index travels to the engine's
+  string names as eight upper-case hexadecimal digits, so a create payload that names a library loads the stored
+  pipeline instead of compiling one. `pfnSerializeLibrary` is given no buffer size, so the library remembers what
+  the last size query answered to each calling thread and refuses a serialize that has none of its own behind it.
+  Every refusal of these creation slots is clamped to a code the runtime admits, the two codes of a stale blob
+  included. No capability reports any of this,
+  and `DriverManagedShaderCachePresent` stays FALSE: an application's library is the application's cache
+  (INTEGRATION.md, SLOTS.md).
 - The harness creates a DXIL compute program (dxc) and a DXBC vertex and pixel program (fxc) through these slots,
   from containers reduced to the DDI form, and checks the dispatch and the draw word for word. The reduction is
   the harness's model of the runtime, not a measurement.
@@ -210,6 +235,14 @@ and no GPU. Without `-NativeOnly` it also builds the harness and runs against th
    `free_memory`, the caps functions, the tile mapping calls against the Q3 and Q4 slot types and
    `pfnCreateHeapAndResource`, and the ABI 1.2 header.
 3. `engine-ddi.lib` compiled with `/analyze` under the same `/WX`, with no `harness_` symbol in it.
-4. `tests/native-policy-test.cpp`: EnginePrivateTest refused, both tables filled.
+4. `tests/native-policy-test.cpp`: EnginePrivateTest refused, both tables filled, the render pass table filled and
+   a null or short render pass table refused with nothing written, the answers of `pfnCheckSubresourceInfo`
+   for a buffer, a linear primary, an image of unknown layout, a bad subresource index and an unknown handle, the
+   private sizes and the refusal codes of the pipeline library slots, and the empty answer of
+   `pfnRetrieveShaderComment`.
 5. `tests/caps-test.cpp` against a stub engine: GetCaps 1074 with 8 bytes and 1007 with 4 bytes, and every
    other answered type at its exact size. With `--engine` it runs `query_adapter_caps` on the real DLL.
+6. `tests/pipeline-stream-test.cpp` against a fake engine device: a rasterizing pipeline takes
+   `ID3D12Device2::CreatePipelineState`, the stream it writes is one the engine can read, every state of the
+   DDI payload arrives, DEPTH_STENCIL1 and VIEW_INSTANCING included, and a pipeline library round-trips through
+   create, store, size, serialize and load with the index's name on both sides.

@@ -37,6 +37,17 @@
 #include "gc_10_1_0_sh_mask.h"
 #include "navi10_enum.h"
 
+/* The Mesa generated field macros of the DMA_DATA packet, as driver/kmd/gfx_copy_fields.h
+ * already carries them for the kernel-mode emitter (provenance:
+ * driver/kmd/gfx-copy-provenance.md). They are the second, independent statement of the
+ * encoding that bc250hsa/pm4_regs.h restates.
+ *
+ * gfx_copy.h declares that emitter itself. The build compiles driver/kmd/gfx_copy.c into
+ * this test, so the two dword streams are compared and not only the two sets of field
+ * macros (check_against_kernel_emitter). */
+#include "gfx_copy_fields.h"
+#include "gfx_copy.h"
+
 /* --------------------------------------------------------------------------------
  * 1. Restate-and-compare
  * ------------------------------------------------------------------------------ */
@@ -85,6 +96,47 @@ static void check_against_linux_headers(void)
 #undef CHECK_SH_REG
     CHECK_U64(BC250HSA_REG_CP_COHER_START_DELAY,
               mmCP_COHER_START_DELAY - BC250HSA_UCONFIG_REG_BIAS);
+
+    /* DMA_DATA, the copy and fill packet of the GPU copy route
+     * (scratch/hip-gpu-copy/CONTRACT.md section 4). Every field is checked twice: against
+     * nvd.h, which this library restates, and against the Mesa generated field macros
+     * that driver/kmd/gfx_copy_fields.h already holds for the kernel-mode emitter. Two
+     * independent statements of one encoding that agree is the whole point of the gate. */
+    CHECK_U64(BC250HSA_PKT3_DMA_DATA, PACKET3_DMA_DATA);
+    CHECK_U64(BC250HSA_DMA_DST_SEL(3u), (uint32_t)PACKET3_DMA_DATA_DST_SEL(3));
+    CHECK_U64(BC250HSA_DMA_DST_SEL(3u), (uint32_t)S_501_DST_SEL(3));
+    CHECK_U64(BC250HSA_DMA_SRC_SEL(3u), (uint32_t)PACKET3_DMA_DATA_SRC_SEL(3));
+    CHECK_U64(BC250HSA_DMA_SRC_SEL(3u), (uint32_t)S_501_SRC_SEL(3));
+    CHECK_U64(BC250HSA_DMA_SRC_SEL(2u), (uint32_t)PACKET3_DMA_DATA_SRC_SEL(2));
+    CHECK_U64(BC250HSA_DMA_CP_SYNC, (uint32_t)PACKET3_DMA_DATA_CP_SYNC);
+    CHECK_U64(BC250HSA_DMA_CP_SYNC, (uint32_t)S_501_CP_SYNC(1));
+    CHECK_U64(BC250HSA_DMA_ENGINE(1u), (uint32_t)PACKET3_DMA_DATA_ENGINE(1));
+    CHECK_U64(BC250HSA_DMA_SRC_CACHE_POLICY(1u),
+              (uint32_t)PACKET3_DMA_DATA_SRC_CACHE_POLICY(1));
+    CHECK_U64(BC250HSA_DMA_DST_CACHE_POLICY(1u),
+              (uint32_t)PACKET3_DMA_DATA_DST_CACHE_POLICY(1));
+    CHECK_U64(BC250HSA_DMA_CMD_SAS, (uint32_t)PACKET3_DMA_DATA_CMD_SAS);
+    CHECK_U64(BC250HSA_DMA_CMD_DAS, (uint32_t)PACKET3_DMA_DATA_CMD_DAS);
+    CHECK_U64(BC250HSA_DMA_CMD_SAIC, (uint32_t)PACKET3_DMA_DATA_CMD_SAIC);
+    CHECK_U64(BC250HSA_DMA_CMD_DAIC, (uint32_t)PACKET3_DMA_DATA_CMD_DAIC);
+    CHECK_U64(BC250HSA_DMA_CMD_RAW_WAIT, (uint32_t)PACKET3_DMA_DATA_CMD_RAW_WAIT);
+    CHECK_U64(BC250HSA_DMA_CMD_RAW_WAIT, (uint32_t)S_506_RAW_WAIT(1));
+    /* DIS_WC is bit 31 of COMMAND, which nvd.h does not name and the Mesa register
+     * table does (CP_DMA_ME_COMMAND). It is the one field of the packet whose only
+     * statement in this repository is this one, so the value is stated here as well. */
+    CHECK_U64(BC250HSA_DMA_CMD_DIS_WC, 0x80000000u);
+    CHECK_U64(BC250HSA_DMA_BYTE_COUNT(~0u), (uint32_t)S_506_BYTE_COUNT(~0u));
+    CHECK_U64(BC250HSA_DMA_BYTE_COUNT(~0u), 0x03FFFFFFu);
+    CHECK_U64(BC250HSA_DMA_DST_ADDR_USING_L2, V_501_DST_ADDR_USING_L2);
+    CHECK_U64(BC250HSA_DMA_SRC_ADDR_USING_L2, V_501_SRC_ADDR_USING_L2);
+    /* cp_dma_max_byte_count(GFX10) of radv_cp_dma.c:34-41, which is also COPY_MAX of
+     * driver/kmd/gfx_copy.c. */
+    CHECK_U64(BC250HSA_DMA_MAX_BYTES, (uint32_t)(S_506_BYTE_COUNT(~0u) & ~31u));
+    CHECK_U64(BC250HSA_DMA_MAX_BYTES, 67108832u);
+    CHECK_U64(BC250HSA_GPU_COPY_MAX_BYTES, BC250HSA_DMA_MAX_BYTES);
+    /* The seven dwords are header plus six, so the header count field is 5. */
+    CHECK_U64(BC250HSA_PACKET3(BC250HSA_PKT3_DMA_DATA, 5u),
+              (uint32_t)PACKET3(PACKET3_DMA_DATA, 5));
 
     /* The two event types, from the VGT event enumeration. */
     CHECK_U64(BC250HSA_EVENT_CS_PARTIAL_FLUSH, CS_PARTIAL_FLUSH);
@@ -1412,11 +1464,314 @@ static void check_helpers(void)
     CHECK_U64(bc250hsa_abi_version_minor(), BC250HSA_ABI_VERSION_MINOR);
 }
 
+/* --------------------------------------------------------------------------------
+ * The GPU copy and fill (scratch/hip-gpu-copy/CONTRACT.md)
+ * ------------------------------------------------------------------------------ */
+
+/* The source address and the destination address of every case below. They are far
+ * apart, so no case overlaps by accident, and both are inside the address window of
+ * this library (kmt_blobs.h, 0x0000004000000000 and 64 GiB). */
+#define COPY_SRC 0x0000004010000000ull
+#define COPY_DST 0x0000004020000000ull
+
+static void check_copy_packet(const uint32_t* dwords, uint64_t src, uint64_t dst,
+                              uint32_t bytes, int raw_wait, int cp_sync, int is_fill)
+{
+    uint32_t control = is_fill ? (uint32_t)(S_501_DST_SEL(V_501_DST_ADDR_USING_L2) |
+                                            S_501_SRC_SEL(2))
+                               : (uint32_t)(S_501_DST_SEL(V_501_DST_ADDR_USING_L2) |
+                                            S_501_SRC_SEL(V_501_SRC_ADDR_USING_L2));
+    uint32_t command = (uint32_t)S_506_BYTE_COUNT(bytes);
+
+    if (cp_sync) { control |= (uint32_t)S_501_CP_SYNC(1); }
+    if (raw_wait) { command |= (uint32_t)S_506_RAW_WAIT(1); }
+    CHECK_U64(dwords[0], (uint32_t)PACKET3(PACKET3_DMA_DATA, 5));
+    CHECK_U64(dwords[1], control);
+    CHECK_U64(dwords[2], (uint32_t)src);
+    CHECK_U64(dwords[3], (uint32_t)(src >> 32));
+    CHECK_U64(dwords[4], (uint32_t)dst);
+    CHECK_U64(dwords[5], (uint32_t)(dst >> 32));
+    CHECK_U64(dwords[6], command);
+}
+
+static void check_gpu_copy(void)
+{
+    uint32_t            buffer[64];
+    bc250hsa_pm4_writer w;
+    bc250hsa_copy_op    ops[2];
+    uint64_t            fences[4];
+    uint32_t            slot = 0u;
+
+    /* The dword count: one packet up to the maximum, two above it. */
+    CHECK_U64(bc250hsa_pm4_copy_dwords(0u), 0u);
+    CHECK_U64(bc250hsa_pm4_copy_dwords(1u), 7u);
+    CHECK_U64(bc250hsa_pm4_copy_dwords(BC250HSA_DMA_MAX_BYTES), 7u);
+    CHECK_U64(bc250hsa_pm4_copy_dwords(BC250HSA_DMA_MAX_BYTES + 1u), 14u);
+    CHECK_U64(bc250hsa_pm4_copy_dwords(2u * BC250HSA_DMA_MAX_BYTES), 14u);
+    CHECK_U64(bc250hsa_pm4_copy_dwords(2u * BC250HSA_DMA_MAX_BYTES + 1u), 21u);
+    /* The per-token logits copy of Gemma 12B is one packet. */
+    CHECK_U64(bc250hsa_pm4_copy_dwords(1048576u), 7u);
+
+    /* One copy of 1 MiB: seven dwords, RAW_WAIT on the first chunk, CP_SYNC on the
+     * last, both addresses as given. */
+    memset(buffer, 0xCC, sizeof(buffer));
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, COPY_SRC, 1048576u, 1, 1),
+                 BC250HSA_OK);
+    CHECK_U64(w.count, 7u);
+    CHECK_U64((uint64_t)w.overflow, 0u);
+    check_copy_packet(buffer, COPY_SRC, COPY_DST, 1048576u, 1, 1, 0);
+
+    /* A copy one byte above the packet maximum: two packets, the first with RAW_WAIT
+     * and no CP_SYNC, the second with CP_SYNC and no RAW_WAIT, and both addresses
+     * advanced by the bytes the first packet moved. */
+    memset(buffer, 0xCC, sizeof(buffer));
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, COPY_SRC,
+                                          BC250HSA_DMA_MAX_BYTES + 1u, 1, 1),
+                 BC250HSA_OK);
+    CHECK_U64(w.count, 14u);
+    check_copy_packet(buffer, COPY_SRC, COPY_DST, BC250HSA_DMA_MAX_BYTES, 1, 0, 0);
+    check_copy_packet(buffer + 7, COPY_SRC + BC250HSA_DMA_MAX_BYTES,
+                      COPY_DST + BC250HSA_DMA_MAX_BYTES, 1u, 0, 1, 0);
+
+    /* A fill: the same packet with SRC_SEL DATA, the pattern in dword 3 and zero in
+     * dword 4. The destination of a fill advances and the pattern does not. */
+    memset(buffer, 0xCC, sizeof(buffer));
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_fill(&w, COPY_DST, 0xA5A5A5A5u,
+                                          BC250HSA_DMA_MAX_BYTES + 4u, 1, 1),
+                 BC250HSA_OK);
+    CHECK_U64(w.count, 14u);
+    check_copy_packet(buffer, 0xA5A5A5A5u, COPY_DST, BC250HSA_DMA_MAX_BYTES, 1, 0, 1);
+    check_copy_packet(buffer + 7, 0xA5A5A5A5u, COPY_DST + BC250HSA_DMA_MAX_BYTES, 4u, 0, 1,
+                      1);
+
+    /* Without the two flags neither bit is set, which is what a copy in the middle of
+     * a list of spans needs. */
+    memset(buffer, 0xCC, sizeof(buffer));
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, COPY_SRC, 64u, 0, 0), BC250HSA_OK);
+    check_copy_packet(buffer, COPY_SRC, COPY_DST, 64u, 0, 0, 0);
+
+    /* The refusals. Every one of them leaves the writer untouched. */
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, COPY_SRC, 0u, 1, 1), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, 0u, COPY_SRC, 64u, 1, 1), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, 0u, 64u, 1, 1), BC250HSA_EINVAL);
+    /* An address at or above 2^40, which dword 6 of the packet cannot carry. */
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, 0x0000010000000000ull, COPY_SRC, 64u, 1, 1),
+                 BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, 0x0000010000000000ull, 64u, 1, 1),
+                 BC250HSA_EINVAL);
+    /* Overlapping ranges, in both directions and touching by one byte. */
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_SRC + 32u, COPY_SRC, 64u, 1, 1),
+                 BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_SRC, COPY_SRC + 32u, 64u, 1, 1),
+                 BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_SRC + 64u, COPY_SRC, 64u, 1, 1),
+                 BC250HSA_OK);
+    /* A fill that is not 4-byte aligned in address or in size. */
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_fill(&w, COPY_DST + 1u, 0u, 16u, 1, 1), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_fill(&w, COPY_DST, 0u, 15u, 1, 1), BC250HSA_EINVAL);
+    CHECK_U64(w.count, 0u);
+    CHECK_U64((uint64_t)w.overflow, 0u);
+
+    /* A buffer with no room writes nothing and says overflow, which is how submit.c
+     * learns to submit the open indirect buffer and append the list again. */
+    bc250hsa_pm4_writer_init(&w, buffer, 6u, 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, COPY_SRC, 64u, 1, 1), BC250HSA_OK);
+    CHECK_U64((uint64_t)w.overflow, 1u);
+
+    /* A list of operations in order, which is what a row-by-row copy becomes. */
+    ops[0].kind = BC250HSA_COPY_OP_COPY;
+    ops[0].pattern = 0u;
+    ops[0].src_va = COPY_SRC;
+    ops[0].dst_va = COPY_DST;
+    ops[0].bytes = 128u;
+    ops[1].kind = BC250HSA_COPY_OP_FILL;
+    ops[1].pattern = 0x01010101u;
+    ops[1].src_va = 0u;
+    ops[1].dst_va = COPY_DST + 4096u;
+    ops[1].bytes = 256u;
+    memset(buffer, 0xCC, sizeof(buffer));
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_ops(&w, ops, 2u), BC250HSA_OK);
+    CHECK_U64(w.count, 14u);
+    check_copy_packet(buffer, COPY_SRC, COPY_DST, 128u, 1, 1, 0);
+    check_copy_packet(buffer + 7, 0x01010101u, COPY_DST + 4096u, 256u, 1, 1, 1);
+    /* An unknown kind is a refusal and not a packet. */
+    ops[1].kind = 7u;
+    bc250hsa_pm4_writer_init(&w, buffer, TEST_COUNT(buffer), 0u);
+    CHECK_STATUS(bc250hsa_pm4_append_ops(&w, ops, 2u), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_ops(&w, ops, 0u), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_pm4_append_ops(&w, NULL, 1u), BC250HSA_EINVAL);
+
+    /* The overlap test itself. */
+    CHECK_U64((uint64_t)bc250hsa_ranges_overlap(100u, 100u, 0u), 0u);
+    CHECK_U64((uint64_t)bc250hsa_ranges_overlap(100u, 100u, 1u), 1u);
+    CHECK_U64((uint64_t)bc250hsa_ranges_overlap(100u, 164u, 64u), 0u);
+    CHECK_U64((uint64_t)bc250hsa_ranges_overlap(100u, 163u, 64u), 1u);
+    CHECK_U64((uint64_t)bc250hsa_ranges_overlap(164u, 100u, 64u), 0u);
+    CHECK_U64((uint64_t)bc250hsa_ranges_overlap(163u, 100u, 64u), 1u);
+
+    /* The staging ring: the round size, the wrap, and the state in which every slot is
+     * still in flight. */
+    CHECK_U64(bc250hsa_stage_round(0u, 1024u), 0u);
+    CHECK_U64(bc250hsa_stage_round(1u, 1024u), 1u);
+    CHECK_U64(bc250hsa_stage_round(1024u, 1024u), 1024u);
+    CHECK_U64(bc250hsa_stage_round(1025u, 1024u), 1024u);
+    CHECK_U64(bc250hsa_stage_round(1025u, 0u), 0u);
+
+    /* Nothing has been written yet: slot 0. */
+    fences[0] = 0u; fences[1] = 0u; fences[2] = 0u; fences[3] = 0u;
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 4u, 0u, 0u, &slot), BC250HSA_OK);
+    CHECK_U64(slot, 0u);
+    /* Slot 2 is next in turn and its fence retired. */
+    fences[0] = 10u; fences[1] = 11u; fences[2] = 12u; fences[3] = 13u;
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 4u, 12u, 2u, &slot), BC250HSA_OK);
+    CHECK_U64(slot, 2u);
+    /* Slot 2 and slot 3 are still in flight, so the search wraps to slot 0. */
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 4u, 11u, 2u, &slot), BC250HSA_OK);
+    CHECK_U64(slot, 0u);
+    /* Every slot is in flight: the caller is told to wait, and the slot it is given is
+     * the one whose fence it must wait for. */
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 4u, 9u, 1u, &slot), BC250HSA_EBUSY);
+    CHECK_U64(slot, 1u);
+    /* A removed device never hands out a slot. */
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 4u, UINT64_MAX, 0u, &slot),
+                 BC250HSA_EDEVICELOST);
+    CHECK_STATUS(bc250hsa_stage_pick(NULL, 4u, 0u, 0u, &slot), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 0u, 0u, 0u, &slot), BC250HSA_EINVAL);
+    /* A ring of one slot is legal: every round waits for the round before it. */
+    fences[0] = 5u;
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 1u, 5u, 0u, &slot), BC250HSA_OK);
+    CHECK_U64(slot, 0u);
+    CHECK_STATUS(bc250hsa_stage_pick(fences, 1u, 4u, 0u, &slot), BC250HSA_EBUSY);
+}
+
+/* The split a fill is built from, against a memset oracle.
+ *
+ * This is the arithmetic that decides which bytes a fill packet carries and which bytes a
+ * copy packet out of a staging slot carries, and it is the part of kmt_memory.c that a host
+ * test can reach: an edge off by one byte would leave a hipMemset short or write past its
+ * range, on a part where no allocation with a host mapping would show it. Every start
+ * offset in a dword and every size up to six dwords is compared with what memset does to
+ * the same range. */
+static void check_fill_split(void)
+{
+    unsigned char      want[64];
+    unsigned char      got[64];
+    bc250hsa_fill_plan plan;
+    uint32_t           offset;
+    uint32_t           bytes;
+
+    CHECK_STATUS(bc250hsa_fill_split(COPY_DST, 0u, &plan), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_fill_split(0u, 16u, &plan), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_fill_split(COPY_DST, 16u, NULL), BC250HSA_EINVAL);
+    CHECK_STATUS(bc250hsa_fill_split(UINT64_MAX, 2u, &plan), BC250HSA_EINVAL);
+
+    for (offset = 0u; offset < 8u; offset++) {
+        for (bytes = 1u; bytes <= 24u; bytes++) {
+            const uint64_t va = COPY_DST + offset;
+
+            CHECK_STATUS(bc250hsa_fill_split(va, bytes, &plan), BC250HSA_OK);
+            /* The three parts tile the range in address order, with no gap between two of
+             * them and no byte in two of them. */
+            CHECK_U64(plan.head_va, va);
+            CHECK_U64(plan.interior_va, plan.head_va + plan.head_bytes);
+            CHECK_U64(plan.tail_va, plan.interior_va + plan.interior_bytes);
+            CHECK_U64(plan.tail_va + plan.tail_bytes, va + bytes);
+            /* What each packet can carry: an edge is under one dword, and the interior is
+             * 4-byte aligned in address and in size (bc250hsa_pm4_append_fill). A part of
+             * 0 bytes is never appended, so only a part with bytes must be aligned. */
+            CHECK_U64((uint64_t)(plan.head_bytes < 4u), 1u);
+            CHECK_U64((uint64_t)(plan.tail_bytes < 4u), 1u);
+            CHECK_U64(plan.interior_bytes % 4u, 0u);
+            if (plan.interior_bytes != 0u) {
+                CHECK_U64(plan.interior_va % 4u, 0u);
+            }
+            if (plan.tail_bytes != 0u) {
+                CHECK_U64(plan.tail_va % 4u, 0u);
+            }
+            /* And the bytes themselves: filling the three parts equals one memset of the
+             * whole range, and touches nothing outside it. */
+            memset(want, 0x11, sizeof(want));
+            memset(got, 0x11, sizeof(got));
+            memset(want + offset, 0xA7, (size_t)bytes);
+            memset(got + (size_t)(plan.head_va - COPY_DST), 0xA7, (size_t)plan.head_bytes);
+            memset(got + (size_t)(plan.interior_va - COPY_DST), 0xA7,
+                   (size_t)plan.interior_bytes);
+            memset(got + (size_t)(plan.tail_va - COPY_DST), 0xA7, (size_t)plan.tail_bytes);
+            CHECK_U64((uint64_t)memcmp(want, got, sizeof(want)), 0u);
+        }
+    }
+
+    /* The hipMemset of a tensor: aligned in both, so the interior alone and no slot. */
+    CHECK_STATUS(bc250hsa_fill_split(COPY_DST, 1048576u, &plan), BC250HSA_OK);
+    CHECK_U64(plan.head_bytes, 0u);
+    CHECK_U64(plan.interior_bytes, 1048576u);
+    CHECK_U64(plan.tail_bytes, 0u);
+    /* A range that holds no whole dword is one edge and no fill packet at all. */
+    CHECK_STATUS(bc250hsa_fill_split(COPY_DST + 1u, 2u, &plan), BC250HSA_OK);
+    CHECK_U64(plan.head_bytes, 2u);
+    CHECK_U64(plan.interior_bytes, 0u);
+    CHECK_U64(plan.tail_bytes, 0u);
+}
+
+/* The restatement gate of pm4_regs.h, carried as far as the stream.
+ *
+ * driver/kmd/gfx_copy.c emits the same packet for the kernel-mode path, from the same Mesa
+ * field macros, and it is the one other place in this repository that holds this encoding.
+ * The field macros are compared above; this compares the dwords, so that a divergence in
+ * the chunking, in the address advance or in which chunk carries RAW_WAIT and CP_SYNC is a
+ * build failure. The fill has no counterpart there: that emitter copies only. */
+static void check_against_kernel_emitter(void)
+{
+    static const uint32_t sizes[] = { 1u, 4u, 64u, 4096u, 1048576u,
+                                      BC250HSA_DMA_MAX_BYTES,
+                                      BC250HSA_DMA_MAX_BYTES + 1u,
+                                      2u * BC250HSA_DMA_MAX_BYTES + 17u };
+    uint32_t            ours[32];
+    uint32_t            theirs[32];
+    bc250hsa_pm4_writer w;
+    size_t              i;
+    int                 wait_before;
+    int                 sync_after;
+
+    CHECK_U64(Bc250GfxCopyMaxBytes(), BC250HSA_DMA_MAX_BYTES);
+    for (i = 0; i < TEST_COUNT(sizes); i++) {
+        CHECK_U64(Bc250GfxCopyDwords(sizes[i]), bc250hsa_pm4_copy_dwords(sizes[i]));
+        for (wait_before = 0; wait_before < 2; wait_before++) {
+            for (sync_after = 0; sync_after < 2; sync_after++) {
+                unsigned int wrote;
+
+                memset(theirs, 0xCC, sizeof(theirs));
+                memset(ours, 0xCC, sizeof(ours));
+                wrote = Bc250EmitGfxCopySpan(theirs, (unsigned int)TEST_COUNT(theirs),
+                                             COPY_SRC, COPY_DST, sizes[i], wait_before,
+                                             sync_after);
+                CHECK_U64(wrote, bc250hsa_pm4_copy_dwords(sizes[i]));
+                bc250hsa_pm4_writer_init(&w, ours, TEST_COUNT(ours), 0u);
+                CHECK_STATUS(bc250hsa_pm4_append_copy(&w, COPY_DST, COPY_SRC, sizes[i],
+                                                      wait_before, sync_after),
+                             BC250HSA_OK);
+                CHECK_U64(w.count, wrote);
+                CHECK_U64((uint64_t)memcmp(ours, theirs, (size_t)wrote * 4u), 0u);
+            }
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     const char* dir = test_data_dir(argc, argv);
 
     check_against_linux_headers();
+    check_against_kernel_emitter();
+    check_gpu_copy();
+    check_fill_split();
     if (read_golden(dir)) {
         check_golden();
     }
