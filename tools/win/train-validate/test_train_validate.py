@@ -10,7 +10,9 @@ calls, so a renamed parameter fails here and not in the middle of a validation.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import re
 import unittest
@@ -1660,6 +1662,24 @@ class ShippedSetEndToEnd(unittest.TestCase):
         self.assertTrue((plans / "plan-003.md").is_file(), "the plan file of the rottr arm")
         self.assertTrue((plans / "plan-004.md").is_file(),
                         "the operator's own game arm got its plan file too: run-m157.sh refuses without it")
+
+    def test_operator_values_given_in_separate_summary_calls_are_all_kept(self):
+        # r10 on 2026-10-11: the RotTR score went in first and the Witcher 3 rate later, in a second call.
+        # The second call must not drop the first value and reopen the owner's gate.
+        out = self.tmp / "out"
+        self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
+                            "--train", "b99", "--attempt-base", "1"])
+        base = ["summary", "--package", str(self.package.directory), "--out", str(out), "--train", "b99",
+                "--no-hash"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.validate.main(base + ["--set", "rottr=59.10"]), 0)
+            self.assertEqual(self.validate.main(base + ["--set", "w3-high-rt=12.0"]), 0)
+        results = (out / "RESULTS.md").read_text(encoding="utf-8")
+        self.assertIn("**Rise of the Tomb Raider**: MET", results)
+        self.assertIn("59.1 fps", results)
+        self.assertIn("12.0 present/s", results)
+        kept = json.loads((out / "operator-values.json").read_text(encoding="utf-8"))
+        self.assertEqual(kept, {"rottr": 59.1, "w3-high-rt": 12.0})
 
     def test_a_game_alone_at_the_large_carve_out_fails_at_once(self):
         # `--arms rottr` on a lab left at 12288 MiB: no window in the plan, and the admission step says why.
