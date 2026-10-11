@@ -6,8 +6,9 @@
 #   1. Header gate: engine-ddi-header-test.cpp (static layout checks of the boundary), built and run.
 #   2. Native library engine-ddi.lib, as the shell's DLL links it: no harness macro, /analyze. Its symbols must contain
 #      no harness_ entry point; native-policy-test.exe must see EnginePrivateTest refused and both tables filled,
-#      caps-test.exe must pass the GetCaps checks against its stub engine, and release-gate-test.exe and
-#      replay-test.exe the release gate and the deferred command-list replay against fake engine objects.
+#      caps-test.exe must pass the GetCaps checks against its stub engine, and pipeline-stream-test.exe,
+#      release-gate-test.exe and replay-test.exe the pipeline subobject stream, the release gate and the deferred
+#      command-list replay against fake engine objects.
 #   With -NativeOnly the script stops here, and it needs no engine DLL and no GPU.
 #   3. Harness library (AMDGPU_WDDM_ENGINE_DDI_HARNESS) and engine-ddi-harness.exe, which plays the runtime and the
 #      shell against the real engine DLL on this PC's GPU (Vulkan loader, first hardware adapter unless -Adapter).
@@ -125,6 +126,8 @@ try {
         Invoke-Step 'native policy test' { & .\native-policy-test.exe }
         Invoke-Step 'caps test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:caps-test.exe (Join-Path $src 'tests\caps-test.cpp') engine-ddi.lib dxgi.lib }
         Invoke-Step 'caps test (stub engine)' { & .\caps-test.exe }
+        Invoke-Step 'pipeline stream test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:pipeline-stream-test.exe (Join-Path $src 'tests\pipeline-stream-test.cpp') engine-ddi.lib }
+        Invoke-Step 'pipeline stream test' { & .\pipeline-stream-test.exe }
         Invoke-Step 'release gate test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:release-gate-test.exe (Join-Path $src 'tests\release-gate-test.cpp') engine-ddi.lib }
         Invoke-Step 'release gate test' { & .\release-gate-test.exe }
         Invoke-Step 'replay test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:replay-test.exe (Join-Path $src 'tests\replay-test.cpp') engine-ddi.lib }

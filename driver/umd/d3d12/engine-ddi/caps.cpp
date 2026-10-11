@@ -48,6 +48,29 @@ static_assert(D3D12DDI_RESOURCE_HEAP_TIER_1 == static_cast<int>(D3D12_RESOURCE_H
 static_assert(D3D12DDI_SHADER_MIN_PRECISION_10_BIT == static_cast<int>(D3D12_SHADER_MIN_PRECISION_SUPPORT_10_BIT) &&
               D3D12DDI_SHADER_MIN_PRECISION_16_BIT == static_cast<int>(D3D12_SHADER_MIN_PRECISION_SUPPORT_16_BIT),
               "min precision");
+// Tier 1 is the only mesh shader tier at 0092 (H:9353-9357), and the DDI and API values are equal.
+static_assert(D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED == static_cast<int>(D3D12_MESH_SHADER_TIER_NOT_SUPPORTED) &&
+              D3D12DDI_MESH_SHADER_TIER_1 == static_cast<int>(D3D12_MESH_SHADER_TIER_1), "mesh shader tier");
+// The view instancing tiers at 0092 are NOT_SUPPORTED to 3 (H:6370-6376), the same four values as the API's.
+static_assert(D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED ==
+                  static_cast<int>(D3D12_VIEW_INSTANCING_TIER_NOT_SUPPORTED) &&
+              D3D12DDI_VIEW_INSTANCING_TIER_1 == static_cast<int>(D3D12_VIEW_INSTANCING_TIER_1) &&
+              D3D12DDI_VIEW_INSTANCING_TIER_2 == static_cast<int>(D3D12_VIEW_INSTANCING_TIER_2) &&
+              D3D12DDI_VIEW_INSTANCING_TIER_3 == static_cast<int>(D3D12_VIEW_INSTANCING_TIER_3),
+              "view instancing tier");
+// The render pass tiers at 0092 are NOT_SUPPORTED, 1 and 2 (H:7645-7652); the API's three values are equal to
+// them. The DDI's NOT_SUPPORTED and the API's TIER_0 are the same thing: the runtime emulates render passes.
+static_assert(D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED == static_cast<int>(D3D12_RENDER_PASS_TIER_0) &&
+                  D3D12DDI_RENDER_PASS_TIER_1 == static_cast<int>(D3D12_RENDER_PASS_TIER_1) &&
+                  D3D12DDI_RENDER_PASS_TIER_2 == static_cast<int>(D3D12_RENDER_PASS_TIER_2),
+              "render pass tier");
+// The engine answers which list types take an immediate write as a D3D12_COMMAND_LIST_SUPPORT_FLAGS mask, one bit
+// per D3D12_COMMAND_LIST_TYPE; the DDI field is a queue-flag mask (H:11091, values H:1435-1445), so the two are
+// mapped bit by bit in write_buffer_immediate_queues below.
+static_assert(D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT == (1 << D3D12_COMMAND_LIST_TYPE_DIRECT) &&
+                  D3D12_COMMAND_LIST_SUPPORT_FLAG_COMPUTE == (1 << D3D12_COMMAND_LIST_TYPE_COMPUTE) &&
+                  D3D12_COMMAND_LIST_SUPPORT_FLAG_COPY == (1 << D3D12_COMMAND_LIST_TYPE_COPY),
+              "command list support flags");
 
 class AdapterCaps {
 public:
@@ -57,9 +80,12 @@ public:
     D3D12_FEATURE_DATA_GPU_VIRTUAL_ADDRESS_SUPPORT gpu_va;
     D3D12_FEATURE_DATA_D3D12_OPTIONS options;
     D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS2 options2;   // DepthBoundsTestSupported (ProgrammableSamplePositionsTier: E)
     D3D12_FEATURE_DATA_D3D12_OPTIONS3 options3;
+    BC250_VKD3D_VIEW_INSTANCING_CONTRACT view_contract;
     D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4;
     D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7;   // MeshShaderTier, SamplerFeedbackTier
     D3D12_FEATURE_DATA_D3D12_OPTIONS9 options9;
     D3D12_FEATURE_DATA_D3D12_OPTIONS11 options11;
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
@@ -108,9 +134,22 @@ D3D_SHADER_MODEL reported_shader_model(const AdapterCaps& c) noexcept {
                                                                       : c.shader_model_ceiling;
 }
 
+// Whether 1006 and 1004 report mesh shaders. Two conditions, both of them the engine's own answer:
+//   - the engine's mesh shader tier, which is tier 1 exactly when its Vulkan device has VK_EXT_mesh_shader with
+//     both meshShader and taskShader (vkd3d-proton device.c, d3d12_device_determine_mesh_shader_tier); an engine
+//     that does not answer OPTIONS7 leaves the zeroed structure, which is NOT_SUPPORTED;
+//   - a reported shader model of 6_5 or higher, because a mesh or amplification program is a DXIL program of
+//     shader model 6.5 (DirectX-Specs MeshShader.md). Below that no application can make one, so the tier would
+//     name a path that cannot be taken.
+bool mesh_shaders(const AdapterCaps& c) noexcept {
+    return c.options7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1 &&
+           reported_shader_model(c) >= D3D_SHADER_MODEL_6_5;
+}
+
 // Feature level 12_2 needs raytracing tier 1.1, mesh shaders, VRS tier 2 and sampler feedback (DirectX-Specs
-// D3D12_FeatureLevel12_2.md). build_caps reports none of them while their DDI slots are fail-safes (SLOTS.md), so
-// its ceiling is 12_1; 3DPIPELINESUPPORT has the same ceiling by contract (H:10368-10373).
+// D3D12_FeatureLevel12_2.md). build_caps reports no VRS and no sampler feedback while their DDI slots are
+// fail-safes (SLOTS.md), so its ceiling is 12_1 whatever the mesh shader tier says; 3DPIPELINESUPPORT has the
+// same ceiling by contract (H:10368-10373).
 constexpr D3D12DDI_3DPIPELINELEVEL kLevelCeiling = D3D12DDI_3DPIPELINELEVEL_12_1;
 
 D3D12DDI_3DPIPELINELEVEL pipeline_level(D3D_FEATURE_LEVEL level) noexcept {
@@ -158,9 +197,11 @@ const char* feature_name(D3D12_FEATURE f) noexcept {
     case D3D12_FEATURE_GPU_VIRTUAL_ADDRESS_SUPPORT: return "GPU_VIRTUAL_ADDRESS_SUPPORT";
     case D3D12_FEATURE_D3D12_OPTIONS: return "D3D12_OPTIONS";
     case D3D12_FEATURE_D3D12_OPTIONS1: return "D3D12_OPTIONS1";
+    case D3D12_FEATURE_D3D12_OPTIONS2: return "D3D12_OPTIONS2";
     case D3D12_FEATURE_D3D12_OPTIONS3: return "D3D12_OPTIONS3";
     case D3D12_FEATURE_D3D12_OPTIONS4: return "D3D12_OPTIONS4";
     case D3D12_FEATURE_D3D12_OPTIONS5: return "D3D12_OPTIONS5";
+    case D3D12_FEATURE_D3D12_OPTIONS7: return "D3D12_OPTIONS7";
     case D3D12_FEATURE_D3D12_OPTIONS9: return "D3D12_OPTIONS9";
     case D3D12_FEATURE_D3D12_OPTIONS11: return "D3D12_OPTIONS11";
     case D3D12_FEATURE_D3D12_OPTIONS12: return "D3D12_OPTIONS12";
@@ -170,6 +211,35 @@ const char* feature_name(D3D12_FEATURE f) noexcept {
     case D3D12_FEATURE_SERIALIZATION: return "SERIALIZATION";
     default: return "?";
     }
+}
+
+// 1006 RenderPassTier: the engine's own OPTIONS5 answer (vkd3d-proton device.c,
+// d3d12_device_caps_init_feature_options5), clamped to tier 2, the last tier the DDI defines at 0092. The pinned
+// engine answers tier 0 with the comment "Currently not supported" although it implements both calls, so nothing
+// is reported today; an engine that answers a tier turns the feature on by itself, because the two slots
+// (commands.cpp, begin_render_pass and end_render_pass) and the table (fill_render_pass) are in place and the
+// shell publishes them from this same answer (render_pass_supported). An engine that does not answer OPTIONS5
+// leaves the zeroed structure, which is NOT_SUPPORTED.
+D3D12DDI_RENDER_PASS_TIER render_pass_tier(const AdapterCaps& c) noexcept {
+    return static_cast<D3D12DDI_RENDER_PASS_TIER>(c.options5.RenderPassesTier > D3D12_RENDER_PASS_TIER_2
+                                                      ? D3D12_RENDER_PASS_TIER_2
+                                                      : c.options5.RenderPassesTier);
+}
+
+// 1006 WriteBufferImmediateQueueFlags: the queue types whose command lists take pfnWriteBufferImmediate (L56,
+// commands.cpp). The engine's OPTIONS3 answer is a list-type mask (vkd3d-proton device.c,
+// d3d12_device_caps_init_feature_options3: DIRECT, COMPUTE, COPY and BUNDLE, with no condition); the DDI field is
+// a queue-flag mask, so the three list types that have a queue of their own are mapped one by one and the engine's
+// BUNDLE bit has no queue flag to go to. The result is narrowed to the queues engine-ddi creates
+// (kEngineQueueFlags, queue.cpp), and the slot sits in both command list tables, so every queue flag reported has
+// a filled slot behind it. An engine that does not answer OPTIONS3 leaves the zeroed structure, which is NONE.
+D3D12DDI_COMMAND_QUEUE_FLAGS write_buffer_immediate_queues(const AdapterCaps& c) noexcept {
+    const auto engine = static_cast<UINT>(c.options3.WriteBufferImmediateSupportFlags);
+    UINT flags = 0;
+    if (engine & D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT) flags |= D3D12DDI_COMMAND_QUEUE_FLAG_3D;
+    if (engine & D3D12_COMMAND_LIST_SUPPORT_FLAG_COMPUTE) flags |= D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE;
+    if (engine & D3D12_COMMAND_LIST_SUPPORT_FLAG_COPY) flags |= D3D12DDI_COMMAND_QUEUE_FLAG_COPY;
+    return static_cast<D3D12DDI_COMMAND_QUEUE_FLAGS>(flags & static_cast<UINT>(kEngineQueueFlags));
 }
 
 void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noexcept {
@@ -190,18 +260,29 @@ void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noe
     o.BarycentricsSupported = c.options3.BarycentricsSupported;
     o.ReservedBufferPlacementSupported = c.options4.MSAA64KBAlignedTextureSupported;   // "just 64KB aligned MSAA", H:11094
     o.SRVOnlyTiledResourceTier3 = c.options5.SRVOnlyTiledResourceTier3;
+    // Depth bounds test: the engine's own OPTIONS2 answer, which is its Vulkan device's depthBounds feature
+    // (vkd3d-proton device.c, d3d12_device_caps_init_feature_options2). Both halves of the feature are
+    // implemented: pfnOMSetDepthBounds (L52, commands.cpp) and DepthBoundsTestEnable in the pipeline's
+    // DEPTH_STENCIL1 subobject (pipelines.cpp). An engine that does not answer OPTIONS2 leaves the zeroed
+    // structure, which is FALSE.
+    o.DepthBoundsTestSupported = c.options2.DepthBoundsTestSupported;
     // Documented constants (INTEGRATION.md, "GetCaps"). Gated while the DDI slots behind them are fail-safes:
-    //   DepthBoundsTestSupported (pfnOMSetDepthBounds), ProgrammableSamplePositionsTier (pfnSetSamplePositions),
-    //   WriteBufferImmediateQueueFlags (pfnWriteBufferImmediate), ViewInstancingTier (pfnSetViewInstanceMask and
-    //   graphics pipelines), RaytracingTier (restricted collection imports refuse, indirect DispatchRays needs the
+    //   ProgrammableSamplePositionsTier (pfnSetSamplePositions forwards, but the engine behind it is a stub),
+    //   RaytracingTier (restricted collection imports
+    //   refuse, indirect DispatchRays needs the
     //   fork's engine fix; the state object description is unmeasured, INTEGRATION.md "Ray tracing state objects"), the VRS fields
-    //   (pfnRSSetShadingRate, pfnRSSetShadingRateImage), MeshShaderTier and the mesh fields (pfnDispatchMesh), SamplerFeedbackTier
-    //   (pfnCreateSamplerFeedbackUnorderedAccessView), EnhancedBarriersSupported (pfnBarrier).
-    //   RenderPassTier 0: engine-ddi fills no render pass table; the runtime then emulates render passes.
-    //   BackgroundProcessingSupported: pfnSetBackgroundProcessingMode is the shell's slot.
-    //   DriverManagedShaderCachePresent: engine-ddi keeps no driver-managed shader cache.
+    //   (pfnRSSetShadingRate, pfnRSSetShadingRateImage), SamplerFeedbackTier
+    //   (pfnCreateSamplerFeedbackUnorderedAccessView).
+    //   BackgroundProcessingSupported: the engine answers FALSE itself and its SetBackgroundProcessingMode is a
+    //   stub that returns E_NOTIMPL (vkd3d-proton device.c, d3d12_device_SetBackgroundProcessingMode and
+    //   d3d12_device_caps_init_feature_options6), so there is no mode to apply; D114 is the shell's slot and
+    //   accepts the call without applying one.
+    //   DriverManagedShaderCachePresent: engine-ddi keeps no driver-managed shader cache. The pipeline libraries
+    //   of D85-D90 are not one: a library is the application's cache, which the application creates and
+    //   serializes itself, while this field says that the driver has a cache of its own which D121
+    //   pfnImplicitShaderCacheControl can disable, enable and clear (context.cpp, no_implicit_shader_cache).
     //   Deterministic64KBUndefinedSwizzle: no engine answer exists; not claimed.
-    o.RenderPassTier = D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED;
+    o.RenderPassTier = render_pass_tier(c);
     // The engine's 1_1 or higher as 1_1, never more than the engine says, and NOT_SUPPORTED below that
     // (tier 1_0 demands acceleration structure copy modes the engine drops). set_raytracing_tier_reporting
     // takes the whole answer back to NOT_SUPPORTED.
@@ -209,11 +290,38 @@ void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noe
                            ? D3D12DDI_RAYTRACING_TIER_1_1
                            : D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
     o.VariableShadingRateTier = D3D12DDI_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
-    o.MeshShaderTier = D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED;
+    // Mesh shaders: the engine's own tier, which it derives from VK_EXT_mesh_shader and the two features it needs
+    // (vkd3d-proton device.c, d3d12_device_determine_mesh_shader_tier: meshShader and taskShader both VK_TRUE, else
+    // NOT_SUPPORTED). The only tier at 0092 is 1 (H:9353-9357), so a higher answer of a later engine is reported as
+    // 1, and an engine that does not answer OPTIONS7 leaves the zeroed structure, which is NOT_SUPPORTED.
+    // pfnDispatchMesh, the mesh and amplification shader slots and mesh pipelines are implemented
+    // (pipelines.cpp, commands.cpp; SLOTS.md L67, D118-D120).
+    o.MeshShaderTier = mesh_shaders(c) ? D3D12DDI_MESH_SHADER_TIER_1 : D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED;
+    // Both fields are only meaningful with mesh shaders. The first is the engine's OPTIONS9 answer; the second has
+    // no engine answer at all (no D3D12_FEATURE field carries it) and stays FALSE.
+    o.MeshShaderSupportsFullRangeRenderTargetArrayIndex =
+        mesh_shaders(c) && c.options9.MeshShaderSupportsFullRangeRenderTargetArrayIndex;
     o.SamplerFeedbackTier = D3D12DDI_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
     o.ProgrammableSamplePositionsTier = D3D12DDI_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED;
-    o.ViewInstancingTier = D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED;
-    o.WriteBufferImmediateQueueFlags = D3D12DDI_COMMAND_QUEUE_FLAG_NONE;
+    // Older engines report a tier despite rejecting valid repeated-layer PSOs.
+    // Require the optional full-domain contract as well as this adapter's OPTIONS3.
+    // The draw fallback implements Tier 2; it does not promise Tier 3's work sharing.
+    o.ViewInstancingTier = c.view_contract.Revision == BC250_VKD3D_VIEW_INSTANCING_CONTRACT_REVISION &&
+        c.view_contract.ViewInstancingTier == D3D12_VIEW_INSTANCING_TIER_2 &&
+        c.options3.ViewInstancingTier >= D3D12_VIEW_INSTANCING_TIER_2 &&
+        c.options3.ViewInstancingTier <= D3D12_VIEW_INSTANCING_TIER_3
+        ? D3D12DDI_VIEW_INSTANCING_TIER_2 : D3D12DDI_VIEW_INSTANCING_TIER_NOT_SUPPORTED;
+    o.WriteBufferImmediateQueueFlags = write_buffer_immediate_queues(c);
+    // Enhanced barriers (H:11111): the engine's own OPTIONS12 answer (vkd3d-proton device.c,
+    // d3d12_device_caps_init_feature_options12), which is unconditional in the pinned engine because its enhanced
+    // barrier implementation needs no optional Vulkan feature. L68 pfnBarrier is filled in both command list
+    // tables (resources.cpp) and the three resource-creation callbacks the feature also asks for
+    // (CreateHeapAndResource, CalcPrivateHeapAndResourceSizes and CheckResourceAllocationInfo at 0088,
+    // windows-driver-docs display\enhanced-barriers.md) are this module's slots with the initial barrier layout.
+    // Reporting it also hands L68 the runtime's translation of legacy ResourceBarrier calls, which is why that
+    // slot accepts every barrier type the DDI defines. An engine that does not answer OPTIONS12 leaves the zeroed
+    // structure, which is FALSE.
+    o.EnhancedBarriersSupported = c.options12.EnhancedBarriersSupported;
 }
 
 void fill_shader(const AdapterCaps& c, D3D12DDI_SHADER_CAPS_0084& s) noexcept {
@@ -232,9 +340,11 @@ void fill_shader(const AdapterCaps& c, D3D12DDI_SHADER_CAPS_0084& s) noexcept {
     s.AtomicInt64OnTypedResource = c.options9.AtomicInt64OnTypedResourceSupported;
     s.AtomicInt64OnGroupShared = c.options9.AtomicInt64OnGroupSharedSupported;
     s.AtomicInt64OnDescriptorHeapResource = c.options11.AtomicInt64OnDescriptorHeapResourceSupported;
-    // Constants: mesh and amplification shaders are gated (see fill_options); the only wave MMA tier at 0092 is
-    // experimental (H:10436-10439).
-    s.DerivativesInMeshAndAmplificationShaders = FALSE;
+    // Derivatives in mesh and amplification programs: the engine's OPTIONS9 answer, and only with mesh shaders
+    // reported (fill_options). The only wave MMA tier at 0092 is experimental (H:10436-10439), so that stays a
+    // constant.
+    s.DerivativesInMeshAndAmplificationShaders =
+        mesh_shaders(c) && c.options9.DerivativesInMeshAndAmplificationShadersSupported;
     s.WaveMMATier = D3D12DDI_WAVE_MMA_TIER_NOT_SUPPORTED;
 }
 
@@ -297,9 +407,13 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         {D3D12_FEATURE_GPU_VIRTUAL_ADDRESS_SUPPORT, &c->gpu_va, sizeof(c->gpu_va), true},
         {D3D12_FEATURE_D3D12_OPTIONS, &c->options, sizeof(c->options), true},
         {D3D12_FEATURE_D3D12_OPTIONS1, &c->options1, sizeof(c->options1), true},
+        {D3D12_FEATURE_D3D12_OPTIONS2, &c->options2, sizeof(c->options2), false},
         {D3D12_FEATURE_D3D12_OPTIONS3, &c->options3, sizeof(c->options3), false},
+        {static_cast<D3D12_FEATURE>(BC250_VKD3D_FEATURE_VIEW_INSTANCING_CONTRACT), &c->view_contract,
+            sizeof(c->view_contract), false},
         {D3D12_FEATURE_D3D12_OPTIONS4, &c->options4, sizeof(c->options4), false},
         {D3D12_FEATURE_D3D12_OPTIONS5, &c->options5, sizeof(c->options5), false},
+        {D3D12_FEATURE_D3D12_OPTIONS7, &c->options7, sizeof(c->options7), false},
         {D3D12_FEATURE_D3D12_OPTIONS9, &c->options9, sizeof(c->options9), false},
         {D3D12_FEATURE_D3D12_OPTIONS11, &c->options11, sizeof(c->options11), false},
         {D3D12_FEATURE_D3D12_OPTIONS12, &c->options12, sizeof(c->options12), false},
@@ -353,6 +467,10 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
 }
 
 void free_adapter_caps(AdapterCaps* caps) noexcept { delete caps; }
+
+bool render_pass_supported(const AdapterCaps* caps) noexcept {
+    return caps && render_pass_tier(*caps) != D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED;
+}
 
 HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept {
     if (!caps) return E_INVALIDARG;

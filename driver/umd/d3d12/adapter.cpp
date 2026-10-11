@@ -93,6 +93,13 @@ HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
     HRESULT hr=native12::get_adapter_caps(*static_cast<Adapter*>(h.pDrvPrivate),a);
     if(hr==S_OK && a->pData && native12::ddi_trace_enabled()){
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        if(a->Type==D3D12DDICAPS_TYPE_D3D12_OPTIONS && a->DataSize==sizeof(D3D12DDI_D3D12_OPTIONS_DATA_0089)){
+            const auto& value=*static_cast<const D3D12DDI_D3D12_OPTIONS_DATA_0089*>(a->pData);
+            amdgpu_wddm_log::print("{\"event\":\"ddi-caps-options\",\"type\":1006,\"data_size\":%u,\"enhanced_barriers\":%u,\"view_instancing_tier\":%u,\"depth_bounds\":%u,\"write_buffer_immediate_queues\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+                a->DataSize,unsigned(value.EnhancedBarriersSupported),unsigned(value.ViewInstancingTier),
+                unsigned(value.DepthBoundsTestSupported),unsigned(value.WriteBufferImmediateQueueFlags),
+                now.QuadPart,GetCurrentThreadId());
+        }
         if(a->Type==D3D12DDICAPS_TYPE_MEMORY_ARCHITECTURE && a->DataSize==sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041)){
             const auto& value=*static_cast<const D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041*>(a->pData);
             UINT node=0;if(a->pInfo)std::memcpy(&node,a->pInfo,sizeof(node));

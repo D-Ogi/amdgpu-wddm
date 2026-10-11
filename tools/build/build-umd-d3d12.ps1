@@ -135,6 +135,10 @@ try {
   if($LASTEXITCODE){throw 'Adapter query scope test build failed'}
   & .\adapter-query-scope-test.exe
   if($LASTEXITCODE){throw 'Adapter query scope tests failed'}
+  & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" /Fe:host-contract-test.exe "$repo\driver\umd\d3d12\host-contract-test.cpp"
+  if($LASTEXITCODE){throw 'Host contract test build failed'}
+  & .\host-contract-test.exe
+  if($LASTEXITCODE){throw 'Host contract tests failed'}
   & cl.exe @flags /Fe:hosted-instance-test.exe "$repo\driver\umd\d3d12\hosted-instance-test.cpp"
   if($LASTEXITCODE){throw 'Hosted instance test build failed'}
   & .\hosted-instance-test.exe

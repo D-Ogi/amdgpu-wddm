@@ -215,6 +215,44 @@ inline bool retire_defers(bool handoff, uint32_t pending, uint32_t backlog_bound
     return now >= resource_tick && now - resource_tick < age_bound_ms;
 }
 
+// The legacy initial resource state a barrier layout of a create names (resources.cpp, initial_layout). The DDI
+// has five layouts the API does not, all of them above VIDEO_QUEUE_COMMON, the last layout the two share
+// (H:10629-10635), and each of the five names the legacy state the runtime created the resource with:
+//   - S_OK and *state for one of those five;
+//   - S_FALSE for a layout the API has as well, which the create hands to the engine as an API layout of the same
+//     value (the range resources.cpp sweeps pair by pair in kBarrierLayouts);
+//   - E_INVALIDARG for a value the DDI does not define at all.
+// UNDEFINED is 0xffffffff and is a value both sides have, so it belongs to S_FALSE and not to the range test.
+// This is a pure rule with no device in it, so native-policy-test holds it value by value.
+inline HRESULT legacy_initial_state(D3D12DDI_BARRIER_LAYOUT layout, D3D12_RESOURCE_STATES* state) noexcept {
+    if (layout == D3D12DDI_BARRIER_LAYOUT_UNDEFINED ||
+        static_cast<uint32_t>(layout) <= static_cast<uint32_t>(D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON))
+        return S_FALSE;
+    switch (layout) {
+    // One past the last shared layout, and the only DDI-only layout that is not a 0x80000000 special: a legacy
+    // create with D3D12_RESOURCE_STATE_GENERIC_READ. The barrier path maps the same value to the API's
+    // queue-agnostic GENERIC_READ layout (resources.cpp, api_barrier_layout), which the engine turns back into
+    // this state (vkd3d-1.3-src libs/vkd3d/device.c, vkd3d_barrier_layout_to_resource_state).
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_DIRECT_QUEUE_GENERIC_READ_COMPUTE_QUEUE_ACCESSIBLE:
+        *state = D3D12_RESOURCE_STATE_GENERIC_READ;
+        return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_SOURCE:
+        *state = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST:
+        *state = D3D12_RESOURCE_STATE_COPY_DEST;
+        return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_SHADER_RESOURCE:
+        *state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE:
+        *state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        return S_OK;
+    default:
+        return E_INVALIDARG;
+    }
+}
+
 class DeviceContext {
 public:
     ID3D12Device* device = nullptr;             // one reference each
@@ -501,7 +539,7 @@ struct BlendStateRecord {
 struct DepthStencilStateRecord {
     RecordHeader h;
     D3D12_DEPTH_STENCIL_DESC desc;
-    BOOL depth_bounds;                          // DepthBoundsTestEnable (0025): pipelines refuse it, no DDI support
+    BOOL depth_bounds;                          // DepthBoundsTestEnable (0025): the pipeline's DEPTH_STENCIL1 (L52)
 };
 struct RasterizerStateRecord {
     RecordHeader h;
@@ -512,6 +550,29 @@ struct PipelineRecord {
     RecordHeader h;                             // engine: ID3D12PipelineState
     D3D12DDI_HRTPIPELINESTATE rt;
     bool compute;
+};
+
+// What pfnCalcSerializedLibrarySize last answered to one thread, and therefore the number of bytes that thread's
+// runtime call allocated for the blob. pfnSerializeLibrary carries no size of its own (H:3343-3348), so this is
+// the only knowledge of the buffer's extent, and the engine's Serialize is given this many bytes and no more.
+// The size belongs to the calling thread and not to the library, because ID3D12PipelineLibrary is free-threaded:
+// one value per library would let one thread's serialize read a size another thread's query had made larger
+// (pipelines.cpp, remember_serialized_size). thread 0 is a free slot; bytes 0 means no size was asked, or that
+// the library grew since, and that serialize is refused rather than guessed.
+struct SerializedSize {
+    std::atomic<uint32_t> thread{0};            // GetCurrentThreadId of the thread the size was answered to
+    std::atomic<uint64_t> bytes{0};
+};
+// Threads that may hold a size of one library at the same time. One per thread that serializes the same library
+// at the same moment; a serialize with no slot of its own is refused, never guessed.
+inline constexpr uint32_t kSerializedSizeSlots = 8;
+
+// A pipeline library (D85-D90, pipelines.cpp). The engine object is its ID3D12PipelineLibrary1, which holds the
+// pipelines the runtime added and writes the serialized blob.
+struct PipelineLibraryRecord {
+    RecordHeader h;                             // engine: ID3D12PipelineLibrary1
+    SerializedSize sizes[kSerializedSizeSlots];
+    std::atomic<uint32_t> stored{0};            // pipelines added, for the log line only
 };
 
 struct CommandPoolRecord {
@@ -582,6 +643,7 @@ void fill_core_graphics(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_graphics(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+void fill_render_pass_commands(D3D12DDI_RENDER_PASS_FUNCS_0053* table) noexcept;
 void fill_core_queries(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_queries(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_tiles(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
@@ -592,6 +654,30 @@ void fill_list_tiles(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_
 bool reject_in_compute_table(const CommandListRecord* list) noexcept;
 // Resolves a command list handle; logs and returns null for a record that is not a live command list.
 CommandListRecord* list_of(D3D12DDI_HCOMMANDLIST list, const char* slot) noexcept;
+
+// One DDI value and the API value it is passed as. A sweep over a whole enumeration is a table of these plus one
+// static_assert, so a build against a header that renumbers either side fails there instead of translating in
+// silence. The values are kept as long long: the enumerations are int-backed, and a value with the sign bit set
+// (UNDEFINED, SPLIT, NO_ACCESS) must compare as the same number on both sides without a signedness conversion.
+struct EnumPair { long long ddi; long long api; };
+template <size_t N> constexpr bool agree(const EnumPair (&pairs)[N]) noexcept {
+    for (size_t i = 0; i < N; ++i)
+        if (pairs[i].ddi != pairs[i].api) return false;
+    return true;
+}
+
+// A later interface of the engine's command list, for a slot whose engine method is not on
+// ID3D12GraphicsCommandList. One reference is taken here, on the calling thread; the slot's call releases it,
+// which with deferred replay on happens on the worker (replay.h, R2). Null, with E_NOINTERFACE reported, for an
+// engine list that does not have the interface.
+template <class I> I* list_as(CommandListRecord* l) noexcept {
+    I* out = nullptr;
+    if (FAILED(l->list()->QueryInterface(__uuidof(I), reinterpret_cast<void**>(&out)))) {
+        l->h.device->report_list(l->rt, E_NOINTERFACE);
+        return nullptr;
+    }
+    return out;
+}
 
 // Root signature serialization (root-signature.cpp): a DXBC container with one RTS0 part, version 1.1.
 HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* desc, std::vector<uint8_t>& out) noexcept;

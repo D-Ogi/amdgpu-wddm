@@ -55,6 +55,12 @@ static_assert(sizeof(D3D12DDI_VERTEX_BUFFER_VIEW) == sizeof(D3D12_VERTEX_BUFFER_
 
 namespace {
 // ---- State objects ------------------------------------------------------------------------------------------------
+bool valid_library_reference(DeviceContext* c, const D3D12DDI_LIBRARY_REFERENCE_0010& reference) noexcept {
+    if (!reference.hLibrary.pDrvPrivate) return true;
+    const auto* library = record_of<PipelineLibraryRecord>(reference.hLibrary.pDrvPrivate, Tag::PipelineLibrary, c);
+    return library && library->h.engine && !(library->h.flags & kRecordInvalid);
+}
+
 // Every create constructs its record first, marked invalid, so that the destroy is valid whatever happens; it
 // clears the mark only when the description was taken.
 
@@ -79,8 +85,8 @@ void APIENTRY create_element_layout(D3D12DDI_HDEVICE device, const D3D12DDIARG_C
         c->report(E_INVALIDARG);
         return;
     }
-    if (args->LibraryReference.hLibrary.pDrvPrivate) {
-        c->report(E_NOTIMPL);                           // pipeline libraries (P4)
+    if (!valid_library_reference(c, args->LibraryReference)) {
+        c->report(E_INVALIDARG);
         return;
     }
     if (args->NumElements)
@@ -114,8 +120,8 @@ void APIENTRY create_blend(D3D12DDI_HDEVICE device, const D3D12DDI_BLEND_DESC_00
         c->report(E_INVALIDARG);
         return;
     }
-    if (in->LibraryReference.hLibrary.pDrvPrivate) {
-        c->report(E_NOTIMPL);
+    if (!valid_library_reference(c, in->LibraryReference)) {
+        c->report(E_INVALIDARG);
         return;
     }
     D3D12_BLEND_DESC& d = r->desc;
@@ -173,8 +179,8 @@ void APIENTRY create_depth_stencil(D3D12DDI_HDEVICE device, const D3D12DDI_DEPTH
         c->report(E_INVALIDARG);
         return;
     }
-    if (in->LibraryReference.hLibrary.pDrvPrivate) {
-        c->report(E_NOTIMPL);
+    if (!valid_library_reference(c, in->LibraryReference)) {
+        c->report(E_INVALIDARG);
         return;
     }
     D3D12_DEPTH_STENCIL_DESC& d = r->desc;
@@ -220,8 +226,8 @@ void APIENTRY create_rasterizer(D3D12DDI_HDEVICE device, const D3D12DDI_RASTERIZ
         c->report(E_INVALIDARG);
         return;
     }
-    if (in->LibraryReference.hLibrary.pDrvPrivate) {
-        c->report(E_NOTIMPL);
+    if (!valid_library_reference(c, in->LibraryReference)) {
+        c->report(E_INVALIDARG);
         return;
     }
     r->desc = {static_cast<D3D12_FILL_MODE>(in->FillMode),
