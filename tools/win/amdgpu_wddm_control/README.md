@@ -360,20 +360,42 @@ the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or re
 refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
-5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--nagi]
-[--switch-to xx] [--fixture <snapshot.json>]` in 29 runs: four languages at 1, 1.25, 1.5 and 2, with
-`test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, Nagi shown, and two language
+5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
+[--switch-to xx] [--fixture <snapshot.json>]` in 33 runs: four languages at 1, 1.25, 1.5 and 2, with
+`test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
+character off (she is on in every other run, as she is after an install), and two language
 switches. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
 page as `<page>-full.png`. The build fails when two sibling controls overlap, a text is cut, a page is wider than
 the page column it was built at (`LayoutRules.PageWidthFinding`: the column width of this moment is not the measure,
 because the window manager clamps a client size larger than the desktop), its last control
 lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
-stop, the art shows while "Show Nagi" is off, or a language switch leaves old texts behind. The unit tests also check
+stop, the art shows while "Show Nagi" is off, the guide panel draws no picture while "Show Nagi" is on and the side
+panel is in the window, or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
 
-`-NagiArt <dir>` embeds the guide character's art (`nagi.<expression>@128.png` and `@256.png`, from the files that
-`Guide.ArtFile` names) as resources. The art is not part of this repository; without `-NagiArt` the guide panel shows
-text only.
+### The guide character
+
+`art/nagi` holds her art: nine expressions at `@128` and `@256`, the files that `Guide.ArtFile` names, with their
+`PROVENANCE.md`, which records the bytes of every file. `build.ps1` embeds that directory by default as the
+resources `nagi.<expression>@128.png` and `@256.png`, compares every file against that byte list
+(`art/check-art.ps1`), and refuses the built exe unless all 18 are in it. The unit tests also decode each file at
+its named size, so a truncated picture is a failure and not a text-only panel. `tools/win/amdgpu_wddm_setup` embeds
+the same files under the same names, reading the same map and the same byte list, for the expressions its own
+screens reach. `tools/release/build-release.ps1` refuses a package whose control application lacks one of the 18, or
+whose setup window, where it ships, lacks one of its own.
+
+"Show Nagi" in Settings is on unless the user turns it off (`ShowNagi` absent or any value but the DWORD 0), so an
+installed application shows her without a setting change. With her off, or with no art embedded
+(`build.ps1 -NagiArt ''`, whose render runs therefore all use `--no-nagi`), the panel is the text-only panel and
+says the same words.
+
+The art that ships is stills: it holds no `-fNN` frame files, so no release animates her. `GuidePanel` plays a frame
+sequence when a set has frames, and `Guide.MayAnimate` then still asks "Reduce animations" and Windows' own
+animation setting first.
+
+Her picture lives in the side panel, which the window drops below a client width of 1000 logical pixels
+(`MainForm.SideShown`), as the nav bar and the page column need that room. A narrower window therefore has no guide
+panel at all, with her picture and its text, and the pages carry that help in their own cards and dialogs instead.
 
 The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
 as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release

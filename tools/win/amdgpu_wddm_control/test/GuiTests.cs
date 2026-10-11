@@ -40,12 +40,16 @@ static partial class UnitTests
     {
         var store = new MemoryPrefStore();
         var p = new AppPrefs(store);
-        Check(!p.ShowNagi && !p.ShowTipsAutomatically && !p.ReduceAnimations && !p.ShowSupportOptions && !p.GettingStartedDismissed, "R4: off by default");
+        Check(!p.ShowTipsAutomatically && !p.ReduceAnimations && !p.ShowSupportOptions && !p.GettingStartedDismissed, "R4: off by default");
         Check(p.UpdateCheckAtStart && p.RecordRecentLaunches, "R4: D2 and D3 are on while absent");
+        Check(p.ShowNagi, "R4: the guide character is on while absent (owner, 2026-10-11)");
         Equal(0, store.Writes, "R4: reading writes nothing");
-        p.ShowNagi = false; p.UpdateCheckAtStart = true; p.RecordRecentLaunches = true; p.HiddenGames = new HashSet<string>();
+        p.ShowNagi = true; p.UpdateCheckAtStart = true; p.RecordRecentLaunches = true; p.HiddenGames = new HashSet<string>();
         Equal(0, store.Writes, "R4: setting a default writes nothing");
-        p.ShowNagi = true; p.ShowNagi = false;
+        p.ShowNagi = false;
+        Equal(0u, (uint)store.Values["ShowNagi"], "R4: the guide character turned off is written as 0");
+        Check(!p.ShowNagi, "R4: 0 reads as off");
+        p.ShowNagi = true;
         p.UpdateCheckAtStart = false; p.UpdateCheckAtStart = true;
         p.RecordRecentLaunches = false;
         Equal(0u, (uint)store.Values[RecentLaunches.SwitchName], "D3: off is written as 0 (read by the shells)");
@@ -665,6 +669,29 @@ static partial class UnitTests
         var files = Directory.GetFiles(dir, "*.cs").ToDictionary(Path.GetFileName, File.ReadAllText);
         string[] window = files.Keys.Where(k => k.StartsWith("MainForm", StringComparison.Ordinal) || k == "Dialogs.cs" || k == "GuidePanel.cs" || k == "RecoveryView.cs" || k == "Ui.cs" || k == "Hints.cs" || k == "DisplayInfo.cs").ToArray();
         Check(window.Length >= 8, "G-SRC: window files found: " + window.Length);
+        // The guide character is a part of this application: every file her map names is in the repository at both
+        // sizes and decodes as a picture of that size with an alpha channel, so a build never falls back to the
+        // text-only panel without anyone noticing. A file that is present but truncated passed a check of its name
+        // alone and then loaded as null in the window. build.ps1 also compares every file against the byte list of
+        // the art's PROVENANCE.md and refuses a built exe whose resources are missing.
+        var artDir = Path.Combine(root, @"tools\win\amdgpu_wddm_control\art\nagi");
+        foreach (var file in Guide.ArtFile.Values.Distinct().OrderBy(f => f, StringComparer.Ordinal))
+            foreach (var size in new[] { 128, 256 })
+            {
+                var path = Path.Combine(artDir, file + "@" + size + ".png");
+                bool there = File.Exists(path);
+                Check(there, "G-ART: the art file " + file + "@" + size + ".png is in the repository");
+                if (!there) continue;
+                string shape = "unreadable";
+                try
+                {
+                    using (var s = File.OpenRead(path))
+                    using (var img = Image.FromStream(s))
+                        shape = img.Width + "x" + img.Height + (Image.IsAlphaPixelFormat(img.PixelFormat) ? " with alpha" : " without alpha");
+                }
+                catch (Exception e) { shape = e.GetType().Name; }
+                Equal(size + "x" + size + " with alpha", shape, "G-ART: " + file + "@" + size + ".png decodes as a picture of its named size");
+            }
         Func<string, string[], IEnumerable<string>> where = (pattern, except) => files.Where(kv => (except == null || !except.Contains(kv.Key)) && Regex.IsMatch(Regex.Replace(kv.Value, @"//[^\n]*", ""), pattern)).Select(kv => kv.Key);
         Equal("", string.Join(",", where(@"\b(WebRequest|HttpWebRequest|HttpClient|WebClient|TcpClient|UdpClient|Socket|ServicePointManager)\b", new[] { "UpdateCheck.cs" })), "G-SRC: network code only in UpdateCheck.cs");
         Equal("", string.Join(",", where(@"\b(ChangeDisplaySettings\w*|SetDisplayConfig)\b", new[] { "DisplayModes.cs" })), "G-SRC: display-mode writes only in DisplayModes.cs");

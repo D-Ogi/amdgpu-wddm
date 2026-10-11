@@ -161,7 +161,7 @@ is merged). The app follows its reader, Clear and switch rules; in short:
 | `Language` (REG_SZ `en`/`pl`/`ja`/`ko`) | Windows UI language, else `en` | on a language choice |
 | `UpdateCheckAtStart` | on (D2) | 0 when unchecked; removed when checked |
 | `RecordRecentLaunches` | on (D3) | 1 when checked, 0 when unchecked (read by the shells, section 3). Any value other than DWORD 0 or 1 records nothing; the app shows it as off and "not valid" until the user sets it |
-| `ShowNagi` | off | 1 when checked; removed when unchecked |
+| `ShowNagi` | on: the guide character's art ships in the application, so a fresh install shows her. The setup window reads this value by the same rule | 0 when unchecked; removed when checked |
 | `ShowTipsAutomatically` | off | 1 when checked; removed when unchecked |
 | `ReduceAnimations` | off (Windows "Animation effects" off also reduces) | 1 when checked; removed when unchecked |
 | `ShowSupportOptions` | off (D5) | 1 when checked; removed when unchecked |

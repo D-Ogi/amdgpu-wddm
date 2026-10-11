@@ -40,9 +40,29 @@ namespace AmdgpuWddmControl
                 new RecentLaunch { Image = "ROTTR.exe", Path = @"D:\Games\Rise of the Tomb Raider\ROTTR.exe", LastLaunchUtc = now.AddDays(-1), Apis = 1, Launches = 3 },
                 new RecentLaunch { Image = "factorio.exe", Path = @"D:\Games\Factorio\bin\x64\factorio.exe", LastLaunchUtc = now.AddDays(-3), Apis = 2, Launches = 40 },
             };
-            _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v1.0.1.0-tester.12", CandidateVersion = "1.0.1.0-tester.12" };
-            _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "1.0.0.0-tester.11", DriverDate = "10-3-2026" });
+            _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v0.7.216.101-tester.29", CandidateVersion = "0.7.216.101-tester.29" };
+            _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "0.7.216.100-tester.28", DriverDate = "10-3-2026" });
             _vram = new VideoMemoryState { Segments = 1, LocalResident = 3L << 30, Dedicated = 8L << 30, LocalLimit = 8L << 30 };
+            // The board memory card as a BC-250 answers it: 8 GiB reserved and in use, 12 GiB the other choice,
+            // nothing pending and no backup to restore. Without this a render on a PC without the board falls back
+            // to the read-only video memory card, so the control the board really has is never drawn by a gate.
+            // A board whose capabilities do not allow the setting keeps that fallback, which is what it must show.
+            if (_uma == null && BoardCapabilities.Current.Allows(BoardCapabilities.Memory))
+            {
+                const uint inUseMiB = 8192;
+                var block = new byte[28];
+                Array.Copy(BitConverter.GetBytes(0x4c424124u), 0, block, 0, 4);       // the ABL block signature
+                Array.Copy(BitConverter.GetBytes((ushort)inUseMiB), 0, block, 26, 2);
+                uint sum = 0;
+                for (int i = 6; i < block.Length; i++) sum += block[i];
+                Array.Copy(BitConverter.GetBytes((ushort)sum), 0, block, 4, 2);
+                _uma = new UmaState
+                {
+                    Supported = true, ProviderId = 1, AllowedFirstMiB = 8192, AllowedSecondMiB = 12288, NeedsRestart = 1,
+                    ActiveValid = true, ReadValid = true, WriteAllowed = true, BackupAvailable = false,
+                    ActiveBytes = (ulong)inUseMiB << 20, RequestedMiB = inUseMiB, ObservedBlock = block,
+                };
+            }
             // The "Now" card with every row filled: a recorded snapshot keeps its mode, reason and ceiling, and gets the
             // live readings it never recorded (37 % load, 62 C, the clock of its mode, 78 W from the SMU metrics table).
             if (_snap.Dpm == null) _snap.Dpm = new DpmState { Version = 0x000700D7, Mode = 1, Requested = 1, MaxMHz = DpmSettings.DefaultMaxMHz };
@@ -141,17 +161,17 @@ namespace AmdgpuWddmControl
             _bench = new InstallState { Folder = @"D:\Games\Quake II RTX", ExePath = @"D:\Games\Quake II RTX\q2rtx.exe", PakPath = @"D:\Games\Quake II RTX\baseq2\pak0.pak", Verdict = InstallVerdict.Ready, FromSteam = true };
             _benchHistory = new List<RunRecord>
             {
-                new RunRecord { Utc = Recovery.Stamp(now.AddMinutes(-20)), Driver = "1.0.0.0-tester.11", Passes = new List<PassRecord>
+                new RunRecord { Utc = Recovery.Stamp(now.AddMinutes(-20)), Driver = "0.7.216.100-tester.28", Passes = new List<PassRecord>
                 {
                     new PassRecord { Api = "pipeline", Outcome = PassOutcome.Done, Fps = 60.94, Frames = 1550, Seconds = 25.43, MaxTempC = 79, MeanClockMHz = 1948 },
                     new PassRecord { Api = "query", Outcome = PassOutcome.Done, Fps = 66.39, Frames = 1550, Seconds = 23.35, MaxTempC = 81, MeanClockMHz = 1951 },
                 } },
-                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-1)), Driver = "1.0.0.0-tester.11", Passes = new List<PassRecord>
+                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-1)), Driver = "0.7.216.100-tester.28", Passes = new List<PassRecord>
                 {
                     new PassRecord { Api = "pipeline", Outcome = PassOutcome.TooHot, MaxTempC = 89, MeanClockMHz = 1700 },
                     new PassRecord { Api = "query", Outcome = PassOutcome.TooHot },
                 } },
-                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-3)), Driver = "1.0.0.0-tester.10", Passes = new List<PassRecord>
+                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-3)), Driver = "0.7.216.99-tester.27", Passes = new List<PassRecord>
                 {
                     new PassRecord { Api = "pipeline", Outcome = PassOutcome.TimedOut, MaxTempC = 74 },
                     new PassRecord { Api = "query", Outcome = PassOutcome.NoResult, MaxTempC = 73 },
@@ -191,7 +211,7 @@ namespace AmdgpuWddmControl
         public sealed class RenderOptions
         {
             public string Directory, SwitchTo;
-            public bool Nagi;
+            public bool Nagi = true;        // the default of an installed application; --no-nagi turns it off
         }
 
         public string RenderPages(RenderOptions o)
@@ -241,7 +261,23 @@ namespace AmdgpuWddmControl
                             if (!_anchors.ContainsKey(anchor)) w.AppendLine(where + ": Windows setting missing for this board: " + anchor);
                     if (_guide == null || string.IsNullOrEmpty(_guide.Text2)) w.AppendLine(where + ": the guide panel has no text");
                     if (_guide != null && _guide.ArtShown && !_prefs.ShowNagi) w.AppendLine(where + ": G-ART art shown with Show Nagi unchecked");
+                    // The other direction, which no gate held before: with Show Nagi on, the art embedded and the
+                    // side panel in the window, the guide panel must draw the picture of its own verdict. Every
+                    // reason it could stay hidden (no resource, no verdict, a slot the layout dropped) is a finding.
+                    if (_guide != null && _prefs.ShowNagi && _side != null && HasVisibleFlag(_side) && !_guide.ArtShown)
+                        w.AppendLine(where + ": G-ART no art with Show Nagi on (verdict " + (_verdict != null ? _verdict.Expression : "none") +
+                            ", resource " + (_verdict != null && NagiArt.Has(_verdict.Expression, Guide.ArtSize(Theme.Scale)) ? "present" : "absent") + ")");
                     if (_guide != null && _guide.Playing) w.AppendLine(where + ": G-PERF a frame sequence plays in a window that is not shown");
+                    // "Show Nagi" turned off and on again on this page, with the verdict unchanged: the slot must
+                    // hold her picture again. It runs where the side panel is in the window, so the minimum size
+                    // (which has no side panel) is not measured and does not make this check pass by itself.
+                    if (_guide != null && _side != null && HasVisibleFlag(_side) && _prefs.ShowNagi)
+                    {
+                        _prefs.ShowNagi = false; UpdateGuide();
+                        if (_guide.ArtShown) w.AppendLine(where + ": G-ART the art stays in the panel after Show Nagi was turned off");
+                        _prefs.ShowNagi = true; UpdateGuide();
+                        if (!_guide.ArtShown) w.AppendLine(where + ": G-ART the art does not come back when Show Nagi is turned on again");
+                    }
                 }
             }
             if (!ThreeWayDialog.EscapeKeepsEditing()) w.AppendLine("G-A11Y: Escape in Save / Discard / Keep editing does not keep editing");
@@ -271,8 +307,7 @@ namespace AmdgpuWddmControl
 
         // Control.Visible reads false for every control of a form that was never shown, so the checks use the control's
         // own visible flag (STATE_VISIBLE).
-        static readonly System.Reflection.MethodInfo GetState = typeof(Control).GetMethod("GetState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        static bool HasVisibleFlag(Control c) { return (bool)GetState.Invoke(c, new object[] { 2 }); }
+        static bool HasVisibleFlag(Control c) { return Ui.HasVisibleFlag(c); }
 
         static void CreateHandles(Control c)
         {
@@ -409,7 +444,7 @@ namespace AmdgpuWddmControl
             _benchRun = new BenchProgress
             {
                 Stage = BenchProgress.Starting, Busy = true,
-                Run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "1.0.0.0-tester.11" },
+                Run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "0.7.216.100-tester.28" },
             };
             ShowPage("performance", null, false);
             int shorter = PageEnd(), now = -_content.AutoScrollPosition.Y;
@@ -449,7 +484,7 @@ namespace AmdgpuWddmControl
             Check(w, "before the run", ready, ready);
 
             // Start: the page does not move, because the buttons are in reach already.
-            var run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "1.0.0.0-tester.11" };
+            var run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "0.7.216.100-tester.28" };
             _benchRun = new BenchProgress { Stage = BenchProgress.Starting, Busy = true, Run = run };
             ShowPage(_page, null, false);
             BringIntoView("perf.benchmark", "perf.benchmark.buttons");
@@ -482,7 +517,7 @@ namespace AmdgpuWddmControl
             ShowPage(_page, null, false);
             Check(w, "the run is finished", ready, ViewY(Strings.T("bench.start")));
 
-            var stopped = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "1.0.0.0-tester.11" };
+            var stopped = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "0.7.216.100-tester.28" };
             stopped.Passes.Add(new PassRecord { Api = "pipeline", Outcome = PassOutcome.Cancelled });
             stopped.Passes.Add(new PassRecord { Api = "query", Outcome = PassOutcome.Cancelled });
             _benchRun = new BenchProgress { Stage = BenchProgress.Finished, Run = stopped };

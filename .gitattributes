@@ -42,6 +42,14 @@ tools/win/etw/testdata/*.txt -text
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary
 
+# The guide character art is embedded in the application byte for byte. The SHA-256 of every file is listed in
+# PROVENANCE.md beside it and the build compares the files against that list, so no checkout may rewrite a byte.
+tools/win/amdgpu_wddm_control/art/nagi/*.png binary
+
+# The pictures of the README are stored byte for byte. The animation is an animated WebP, which no checkout
+# may normalize.
+docs/media/** binary
+
 # HIP device sources are stored with LF line endings, so that a rebuild of a committed
 # code object compiles the same bytes on every checkout.
 *.hip text eol=lf

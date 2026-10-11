@@ -60,6 +60,12 @@ namespace AmdgpuWddmSetup
                         form.ShowFixture(f);
                         foreach (var line in form.Render(Path.Combine(a.SmokeDir, f.Name + ".png")).Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)) w.AppendLine(f.Name + ": " + line);
                         foreach (var p in form.Accessibility()) w.AppendLine(f.Name + ": G-A11Y " + p);
+                        // The guide character: her picture shows on every screen unless --no-nagi, and never with it.
+                        if (form.GuideArtWanted != form.GuideArtShown)
+                            w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows but was not wanted" : "is wanted but does not show") +
+                                " (cause " + form.GuideCause + ", expression " + SetupGuide.Expression(form.GuideCause) + ")");
+                        if (a.NoNagi == form.GuideArtShown)
+                            w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows with --no-nagi" : "does not show although the guide character is on"));
                         var text = form.VisibleText(false);
                         foreach (var hit in NoInternals.Find(text)) w.AppendLine(f.Name + ": G-NOINT \"" + hit + "\"");
                         if (text.Contains("[")) foreach (var m in System.Text.RegularExpressions.Regex.Matches(text, @"\[[a-z0-9.-]+\]")) w.AppendLine(f.Name + ": missing string " + m);

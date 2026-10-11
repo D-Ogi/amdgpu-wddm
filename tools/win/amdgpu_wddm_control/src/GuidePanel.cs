@@ -1,8 +1,9 @@
 // The guide panel (section 6): a fixed reserved area in the side panel, never over settings, warnings or content.
-// Its text always shows; Nagi's image only with "Show Nagi" checked and the art embedded in the exe (build.ps1
-// -NagiArt; the owner's art is never committed). Without art it is the text-only panel. A frame sequence plays once
-// when the verdict changes, only when Guide.Present allows it, on a timer that exists only while it plays. The
-// image is decorative: screen readers get the text, not the picture.
+// Its text always shows; Nagi's image only with "Show Nagi" checked (on unless the user turns it off) and the art
+// embedded in the exe (build.ps1, from the art\nagi directory of this application). Without art it is the text-only
+// panel. A frame sequence plays once when the verdict changes, only when Guide.Present allows it, on a timer that
+// exists only while it plays; the art that ships (art\nagi) is stills, so no release animates her and the sequence
+// code waits for a set with -fNN frames. The image is decorative: screen readers get the text, not the picture.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -77,6 +78,7 @@ namespace AmdgpuWddmControl
         List<Image> _sequence;
         int _frame;
         string _shownExpression;
+        int _shownSize;
         public bool Paused;
 
         public GuidePanel(int width, AppPrefs prefs)
@@ -100,7 +102,10 @@ namespace AmdgpuWddmControl
             AccessibleName = Strings.T("guide.title.plain");
         }
 
-        public bool ArtShown { get { return _art.Visible; } }
+        // What the panel actually put in the slot. Not _art.Visible: a form that was never shown reports every
+        // control as not visible, so the headless gates read the control's own visible flag (Ui.HasVisibleFlag).
+        // Reading _art.Visible here made both art gates pass whatever the panel did.
+        public bool ArtShown { get { return Ui.HasVisibleFlag(_art) && _art.Image != null; } }
         public string Text2 { get { return _text.Text; } }
         public bool Playing { get { return _frames != null; } }
 
@@ -121,9 +126,12 @@ namespace AmdgpuWddmControl
             _title.Text = Strings.T(show ? "guide.title" : "guide.title.plain");
             _text.Text = text;
             _art.Visible = show;
-            if (!show) { Stop(); _art.Image = null; _shownExpression = null; return; }
-            if (!changed) return;
+            if (!show) { Stop(); _art.Image = null; _shownExpression = null; _shownSize = 0; return; }
+            // The slot is redrawn for a new expression, for a new size (the screen changed its scale), and whenever
+            // it is empty: "Show Nagi" turned off and on again leaves the same verdict, which left the slot blank.
+            if (!changed && _shownSize == size && _art.Image != null) return;
             _shownExpression = d.Figure;
+            _shownSize = size;
             Stop();
             _art.Image = NagiArt.Load(Guide.Resource(d.Figure, size));
             if (_art.Image == null) { _art.Visible = false; return; }
