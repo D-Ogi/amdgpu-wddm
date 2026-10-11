@@ -21,7 +21,7 @@
 # rebuild-check.ps1 and compares the bytes), signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
 # packaged CLI, the guide character's art in the packaged control application (nine expressions at both sizes) and in
-# the setup window where it ships (the expressions its own screens reach), under the names of the repository's own
+# the setup window (the expressions its own screens reach), under the names of the repository's own
 # map, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
 # kernel compile (driver\kmd and driver\shim build with the WDK of this workspace: test-kmd-compile.ps1). Nothing here
 # opens a window: child processes run with CreateNoWindow and redirected output.
@@ -276,13 +276,13 @@ $unknown = @($setupExpressions | Where-Object { $e = $_; -not ($guideMap | Where
 if ($unknown.Count) { throw "SetupGuide names the expression $($unknown -join ', '), which Guide.ArtFile does not have" }
 $setupResources = @(foreach ($e in $setupExpressions) { foreach ($size in 128, 256) { "nagi.$e@$size.png" } })
 # The control application is a component of every package: its path comes from release-sources.json, so a renamed
-# payload path cannot make this gate match nothing. The setup window is optional until it ships (-SetupApp).
+# payload path cannot make this gate match nothing. The setup window is required too (-SetupApp, checked at the start).
 $controlFiles = @($sources.files | Where-Object { $_.component -eq 'control' -and $_.path -like '*amdgpu_wddm_control.exe' })
 if ($controlFiles.Count -ne 1) { throw "release-sources.json: $($controlFiles.Count) control-application exe entries, 1 expected" }
 $checkedPrograms = 0
 foreach ($program in @(
         @{ name = 'control application'; path = (Join-Path $pkg ($controlFiles[0].path -replace '/', '\')); want = $guideResources; required = $true },
-        @{ name = 'setup window'; path = (Join-Path $pkg 'setup\amdgpu_wddm_setup.exe'); want = $setupResources; required = $false })) {
+        @{ name = 'setup window'; path = (Join-Path $pkg 'setup\amdgpu_wddm_setup.exe'); want = $setupResources; required = $true })) {
     if (-not (Test-Path -LiteralPath $program.path)) {
         if ($program.required) { throw "guide art: the package has no $($program.name) at $($program.path)" }
         continue
