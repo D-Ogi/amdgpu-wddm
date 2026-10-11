@@ -43,11 +43,13 @@ if($a[0] -eq '--build') {
 $global:LASTEXITCODE=0
 '@ | Set-Content $shim
 $cases=@(
-    @{name='normal';extra='';existing='';cap=$false;validation=$true;refuse=$false},
-    @{name='cap';extra='';existing='';cap=$true;validation=$false;refuse=$false},
-    @{name='input-no-fa';extra='CMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DGGML_CUDA_NO_FA';existing='';cap=$false;validation=$false;refuse=$true},
-    @{name='existing-no-fa';extra='';existing='CMAKE_HIP_FLAGS_RELEASE:STRING=-DGGML_CUDA_NO_FA';cap=$false;validation=$false;refuse=$true},
-    @{name='input-cap';extra='CMAKE_CXX_FLAGS:STRING=-DBC250_HIP_MAX_ALLOC_BYTES=7';existing='';cap=$false;validation=$false;refuse=$true}
+    @{name='normal';extra='';existing='';cap=$false;validation=$true;asset=$false;nolto=$false;refuse=$false},
+    @{name='cap';extra='';existing='';cap=$true;validation=$false;asset=$false;nolto=$false;refuse=$false},
+    @{name='asset';extra='';existing='';cap=$true;validation=$false;asset=$true;nolto=$false;refuse=$false},
+    @{name='asset-validation-no-lto';extra='';existing='';cap=$true;validation=$true;asset=$true;nolto=$true;refuse=$false},
+    @{name='input-no-fa';extra='CMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DGGML_CUDA_NO_FA';existing='';cap=$false;validation=$false;asset=$false;nolto=$false;refuse=$true},
+    @{name='existing-no-fa';extra='';existing='CMAKE_HIP_FLAGS_RELEASE:STRING=-DGGML_CUDA_NO_FA';cap=$false;validation=$false;asset=$false;nolto=$false;refuse=$true},
+    @{name='input-cap';extra='CMAKE_CXX_FLAGS:STRING=-DBC250_HIP_MAX_ALLOC_BYTES=7';existing='';cap=$false;validation=$false;asset=$false;nolto=$false;refuse=$true}
 )
 $results=@()
 foreach($case in $cases){
@@ -58,7 +60,7 @@ foreach($case in $cases){
     @('GGML_CUDA_FA:BOOL=OFF','GGML_CUDA_FA_QUANTS:STRING=q4_0','GGML_CUDA_FA_ALL_QUANTS:BOOL=OFF','GGML_HIP:BOOL=ON','GGML_NATIVE:BOOL=OFF','LLAMA_BUILD_COMMON:BOOL=OFF','LLAMA_BUILD_TESTS:BOOL=OFF','LLAMA_BUILD_TOOLS:BOOL=OFF','CMAKE_CXX_FLAGS:STRING=-O2 -DKEEP=123','CMAKE_CXX_FLAGS_RELEASE:STRING=-O3','CMAKE_C_FLAGS:STRING=-DKEEP_C=7','CMAKE_CXX_COMPILER:FILEPATH=X:/compiler.exe',$case.extra)|Set-Content $cache
     $old=$env:ROCM_PATH;$env:ROCM_PATH='host-test-prior'
     $refused=$false;$message=''
-    try {& $Builder -Source $source -Build $build -RocmRoot 'fixture-rocm' -OriginalCache $cache -CMake $shim -Bc250AllocationCap:$case.cap -ValidationTools:$case.validation | Out-Null}
+    try {& $Builder -Source $source -Build $build -RocmRoot 'fixture-rocm' -OriginalCache $cache -CMake $shim -Bc250AllocationCap:$case.cap -ValidationTools:$case.validation -AssetTools:$case.asset -NoLto:$case.nolto | Out-Null}
     catch {$refused=$true;$message=$_.Exception.Message}
     if($env:ROCM_PATH -ne 'host-test-prior'){throw "environment restoration: $($case.name)"}
     $env:ROCM_PATH=$old
@@ -78,6 +80,14 @@ foreach($case in $cases){
             foreach($target in @('test-backend-ops','llama-completion','llama-bench','llama-perplexity')){if($targets -notcontains $target){throw "missing target $target"}}
             foreach($option in @('LLAMA_BUILD_COMMON:BOOL=ON','LLAMA_BUILD_TESTS:BOOL=ON','LLAMA_BUILD_TOOLS:BOOL=ON')){if($final -notcontains $option){throw "missing option $option"}}
         }
+        if($case.asset){
+            foreach($target in @('llama-server','llama-cli','llama-completion','llama-bench')){if($targets -notcontains $target){throw "missing target $target"}}
+            foreach($option in @('LLAMA_BUILD_COMMON:BOOL=ON','LLAMA_BUILD_TOOLS:BOOL=ON','LLAMA_BUILD_SERVER:BOOL=ON','LLAMA_BUILD_UI:BOOL=OFF','LLAMA_USE_PREBUILT_UI:BOOL=OFF')){if($final -notcontains $option){throw "missing option $option"}}
+        } elseif(($targets -contains 'llama-server') -or ($targets -contains 'llama-cli')){throw 'asset targets without -AssetTools'}
+        $first=[Array]::IndexOf($targets,'--target')+1;$last=[Array]::IndexOf($targets,'-j')-1
+        $named=@($targets[$first..$last])
+        if(@($named|Select-Object -Unique).Count -ne $named.Count){throw 'a target is named twice'}
+        if(($final -contains 'GGML_LTO:BOOL=ON') -eq $case.nolto){throw 'LTO default changed'}
     }
     $results+=@{name=$case.name;passed=$true;refused=$refused;message=$message}
 }
