@@ -545,22 +545,21 @@ inline bool create_d3d12_origin(vk_api& api, VkDevice vk_device, ID3D12Device* d
         created->Release();
         return false;
     }
-    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(shared));
-    check_hr(hr, "D3D12 reopened its own exported fence on the same device");
+    ID3D12Fence* reopened = nullptr;
+    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(&reopened));
+    std::printf("INFO D3D12 self-reopen diagnostic hr=0x%08lx object=%p\n",
+                static_cast<unsigned long>(hr), static_cast<void*>(reopened));
+    if (SUCCEEDED(hr) && reopened)
+        observe_completed(reopened, "D3D12 self-reopen diagnostic before Vulkan import");
+    if (reopened) reopened->Release();
     const HRESULT reason = observe_device_reason(device, "device after D3D12-origin reopen");
-    if (FAILED(hr) || FAILED(reason)) {
+    if (FAILED(reason)) {
         CloseHandle(handle);
         created->Release();
         return false;
     }
-    const bool opened_flags = observe_fence_flags(*shared, "D3D12 reopened fence before Vulkan import");
-    const bool opened_zero = observe_completed(*shared, "D3D12 reopened initial fence before Vulkan import") == 0;
-    check(opened_zero, "the reopened D3D12 fence reads zero before Vulkan import");
-    if (!opened_flags || !opened_zero) {
-        CloseHandle(handle);
-        created->Release();
-        return false;
-    }
+    // Match the presenter: retain the runtime-created object. Self-reopen is a diagnostic,
+    // not a dependency of this route. The independent RADV-origin cell still tests OpenSharedHandle.
 
     VkSemaphoreTypeCreateInfo type{};
     type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
@@ -581,9 +580,11 @@ inline bool create_d3d12_origin(vk_api& api, VkDevice vk_device, ID3D12Device* d
             return api.ImportSemaphoreWin32HandleKHR(vk_device, import_info);
         }, [](HANDLE owned) { CloseHandle(owned); });
     check_vk(result, "RADV permanently imported the D3D12-created fence");
-    created->Release(); // The reopened fence and imported semaphore retain their own references.
-    if (result != VK_SUCCESS)
+    if (result != VK_SUCCESS) {
+        created->Release();
         return false;
+    }
+    *shared = created;
     uint64_t value = UINT64_MAX;
     result = api.GetSemaphoreCounterValue(vk_device, *timeline, &value);
     check_vk(result, "RADV reads the imported D3D12-origin timeline");
@@ -600,6 +601,16 @@ inline int run_selftest(const options& o)
 {
     negative_control = o.negative_control;
     step("selftest: the pattern, the fence schedule and the comparison, with no device");
+
+    alignas(8) const UINT64 mapped_value = 0x123456789abcdef0ULL;
+    const auto sample = read_cpu_fence(&mapped_value);
+    check(sample.valid && sample.value == mapped_value, "CPU fence reader returns the mapped 64-bit value");
+    check(!read_cpu_fence(nullptr).valid, "a null CPU mapping is unknown, not zero");
+    check(!read_cpu_fence(reinterpret_cast<const char*>(&mapped_value) + 1).valid,
+          "unaligned CPU mapping is refused without dereference");
+    void* inaccessible = VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_NOACCESS);
+    check(inaccessible && !read_cpu_fence(inaccessible).valid, "inaccessible CPU mapping is refused without a fault");
+    if (inaccessible) VirtualFree(inaccessible, 0, MEM_RELEASE);
 
     std::vector<uint32_t> rows(size_t(o.width) * o.height);
     const uint32_t pitch = o.width * 4u;

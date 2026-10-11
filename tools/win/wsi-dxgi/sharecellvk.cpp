@@ -467,6 +467,10 @@ int run(const options& o)
             observe_loaded_core("early-exit");
             return kExitNoDevice;
         }
+        if (!probe_native_feature(d3d.device->GetAdapterLuid())) {
+            exit_code = kExitFailed;
+            goto done;
+        }
         D3D12_COMMAND_QUEUE_DESC queue_desc{};
         queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         if (!check_hr(d3d.device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&d3d.queue)),
@@ -659,7 +663,7 @@ int run(const options& o)
     observe_loaded_core("before-fence-open");
     {
         if (o.origin == fence_origin::d3d12) {
-            if (!create_d3d12_origin(vk.api, vk.device, d3d.device, &vk.timeline, &d3d.shared)) {
+            if (!create_d3d12_origin(vk.api, vk.device, d3d.device, &vk.timeline, &d3d.shared, true)) {
                 exit_code = kExitFailed;
                 goto done;
             }

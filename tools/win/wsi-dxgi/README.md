@@ -130,20 +130,21 @@ repository.
 Both cells accept `--fence-origin radv|d3d12`. The `radv` option remains the default and preserves the
 RADV-export baseline. With `d3d12`, the cell creates a D3D12 fence with initial value 0 and
 `D3D12_FENCE_FLAG_SHARED`, exports an unnamed NT handle with `GENERIC_ALL`, and opens that
-same handle on the same D3D12 device. It records the created and reopened fence flags and
-values before Vulkan import. This is a separate D3D12-to-D3D12 classification control even
-if the subsequent Vulkan import fails. This adapter control expects `SHARED` on both fences.
+same handle on the same D3D12 device as a diagnostic. The cell retains the created object
+for synchronization, as the presenter does. The self-reopen result and value are recorded
+separately and do not gate the created-object route. Device loss still ends the cell.
+The created object must report `SHARED` and initial value zero.
 A successful control does not by itself prove the cause of the RADV-export failure.
 
 RADV then imports that handle permanently as `D3D12_FENCE` into a timeline semaphore. The
 application closes its NT handle after import on both success and failure. Import does not
-transfer ownership. The reopened D3D12 fence and the Vulkan semaphore remain alive through
+transfer ownership. The created D3D12 fence and the Vulkan semaphore remain alive through
 the existing odd/even signal, wait and image checks. The texture path and wait bounds stay
 unchanged. Use a semaphore implementation with the owned-import fix from Mesa fork commit
 `50787ae9` or its descendant. The old importer retained the caller's handle without a duplicate.
 that known defect can invalidate this control after the application correctly closes its handle.
 
-The host selftest has 61 checks at default dimensions. It covers both origin options,
+The host selftest has 65 checks at default dimensions. It covers both origin options,
 refuses missing/unknown origins, and invokes the production import wrapper with mocked
 callbacks. Both successful and failed imports must preserve the result, use a permanent
 handle-based D3D12 import, and close the caller handle exactly once after the import call.
@@ -176,8 +177,8 @@ Unconfirmed synchronization-object, device or adapter cleanup also emits `UNSAFE
 Setup and cleanup failures fail the cell. Negative open statuses alone are diagnostic data.
 `sharecellvk` retains the ordinary cross-API test without this extra KMT device.
 
-Both clients identify the core module after device creation, before fence open and at exit.
-`GetModuleHandleW` and `GetModuleFileNameW` select the actual loaded `d3d12core.dll`.
+Both clients identify the runtime modules after device creation, before fence open and at exit.
+`GetModuleHandleW` and `GetModuleFileNameW` select the loaded `d3d12core.dll` and `d3d12.dll`.
 The witness prints its UTF-8 path and a streaming BCrypt SHA-256 of the backing file.
 It does not load a missing module. `identity=absent` or `identity=unavailable` prevents
 attribution to a particular runtime listing, but does not change the functional test result.

@@ -11,6 +11,38 @@ static_assert(offsetof(D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2, Flags) == 0xc);
 static_assert(offsetof(D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2, MonitoredFence.FenceValueCPUVirtualAddress) == 0x18);
 static_assert(offsetof(D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2, MonitoredFence.FenceValueGPUVirtualAddress) == 0x20);
 
+struct cpu_fence_sample {
+    bool valid = false;
+    const char* reason = "null";
+    DWORD protection = 0, error = 0;
+    UINT64 value = 0;
+};
+inline cpu_fence_sample read_cpu_fence(const void* address)
+{
+    cpu_fence_sample sample;
+    const uintptr_t va = reinterpret_cast<uintptr_t>(address);
+    if (!va) return sample;
+    if (va % sizeof(UINT64)) { sample.reason = "unaligned"; return sample; }
+    MEMORY_BASIC_INFORMATION region{};
+    if (!VirtualQuery(address, &region, sizeof(region))) {
+        sample.reason = "query-failed"; sample.error = GetLastError(); return sample;
+    }
+    sample.protection = region.Protect;
+    const uintptr_t base = reinterpret_cast<uintptr_t>(region.BaseAddress);
+    if (region.State != MEM_COMMIT || (region.Protect & (PAGE_NOACCESS | PAGE_GUARD)) ||
+        va < base || va - base > region.RegionSize || region.RegionSize - (va - base) < sizeof(UINT64)) {
+        sample.reason = "not-readable-span"; return sample;
+    }
+    // Copy only while the KMT handle owns this mapping. No direct dereference of untrusted output.
+    SIZE_T got = 0;
+    if (!ReadProcessMemory(GetCurrentProcess(), address, &sample.value, sizeof(sample.value), &got) ||
+        got != sizeof(sample.value)) {
+        sample.reason = "read-failed"; sample.error = GetLastError(); return sample;
+    }
+    sample.valid = true; sample.reason = "read";
+    return sample;
+}
+
 // Diagnostic only: force every flag value, irrespective of status. This is NOT the runtime's
 // conditional retry policy. The NT handle is borrowed; successful KMT handles are owned here.
 template<typename Open, typename Destroy>
@@ -46,6 +78,12 @@ inline bool replay_fence_patterns(HANDLE nt, D3DKMT_HANDLE device, Open open, De
             const NTSTATUS status = open(&args);
             fields("after", status);
             if (status >= 0) {
+                if (!quiet) {
+                    const auto sample = read_cpu_fence(args.MonitoredFence.FenceValueCPUVirtualAddress);
+                    std::printf("INFO KMT cpu-sample valid=%u reason=%s protection=0x%lx error=%lu value=0x%016llx\n",
+                                unsigned(sample.valid), sample.reason, sample.protection, sample.error,
+                                static_cast<unsigned long long>(sample.value));
+                }
                 bool duplicate = false;
                 for (unsigned n = 0; n != count; ++n) duplicate |= owned[n] == args.hSyncObject;
                 if (!args.hSyncObject || duplicate) {
@@ -244,9 +282,10 @@ inline bool path_to_utf8(const wchar_t* path, std::string* out)
     out->pop_back();
     return true;
 }
-inline void observe_loaded_core(const char* stage)
+inline void observe_loaded_module(const char* stage, const wchar_t* name)
 {
-    const HMODULE module = GetModuleHandleW(L"d3d12core.dll");
+    std::printf("INFO module-identity stage=%s module=%ls private-native-selector=not-publicly-observable\n", stage, name);
+    const HMODULE module = GetModuleHandleW(name);
     if (!module) { std::printf("INFO loaded-core stage=%s identity=absent (not loaded for this probe)\n", stage); return; }
     wchar_t path[32768]{};
     const DWORD length = GetModuleFileNameW(module, path, DWORD(std::size(path)));
@@ -280,5 +319,10 @@ inline void observe_loaded_core(const char* stage)
     std::printf("INFO loaded-core stage=%s identity=ok backing-file-bytes=%llu SHA256=", stage, static_cast<unsigned long long>(size.QuadPart));
     for (UCHAR byte : digest) std::printf("%02X", byte);
     std::printf("\n");
+}
+inline void observe_loaded_core(const char* stage)
+{
+    observe_loaded_module(stage, L"d3d12core.dll");
+    observe_loaded_module(stage, L"d3d12.dll");
 }
 } // namespace sharecell
