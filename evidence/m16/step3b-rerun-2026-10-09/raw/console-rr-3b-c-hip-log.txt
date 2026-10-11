@@ -1,0 +1,24 @@
+arm rr-3b-c-hip-log clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60625 ready=1
+arm rr-3b-c-hip-log env BC250_HIP_LOG=1
+arm rr-3b-c-hip-log start utc 2026-10-09T22:41:16Z
+arm rr-3b-c-hip-log dir C:\BC250\tmp\m16-hip3b
+arm rr-3b-c-hip-log command llama-completion.exe -m C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -ngl 99 -s 1234 --temp 0 -n 64 -no-cnv
+arm rr-3b-c-hip-log bound 170 s
+arm rr-3b-c-hip-log argv -m | C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf | -ngl | 99 | -s | 1234 | --temp | 0 | -n | 64 | -no-cnv | -p | "The capital of Poland is"
+arm rr-3b-c-hip-log redirect hip-64.txt sha256 F1945CD6C19E56B3C1C78943EF5EC18116907A4CA1EFC40A57D48AB1DB7ADFC5
+! amdhip64 [6808:11348] info log on, level 2 (info), interface 1.2
+! 0.00.008.460 I llama_completion: llama backend init
+! 0.00.008.465 I llama_completion: load the model and apply lora adapter, if any
+! 0.00.533.149 W resolve_fused_ops: layer 0 is assigned to device ROCm0 but Flash Attention is assigned to device CPU (usually due to missing support)
+! 0.00.533.156 W resolve_fused_ops: Flash Attention not supported, set to disabled
+! 0.00.580.309 I cmn          init: llama threadpool init, n_threads = 6
+! amdhip64 [6808:11348] error the code object of kernel '_ZL10k_set_rowsIfx6__halfEvPKT_PKT0_PT1_xxxxxxxxxxxxxx5uint3S9_S9_S9_S9_' does not load: metadata note absent or unreadable
+! amdhip64 [6808:11348] error hipLaunchKernel refuses: the host stub names no kernel of a loaded code object (hipErrorInvalidImage)
+! <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
+! 0.00.590.733 E ROCm error: the device code object cannot be used
+! 0.00.590.741 E   current device: 0, in function ggml_cuda_kernel_launch at <llama-source>/ggml/src/ggml-cuda/common.cuh:1721
+! 0.00.590.742 E   hipGetLastError()
+arm rr-3b-c-hip-log exit -1073740791 after 3.1 s
+arm rr-3b-c-hip-log stdout C:\BC250\tmp\m16-hip3b\rr-3b-c-hip-log-20261009T224116Z.out.txt (0 lines), stderr C:\BC250\tmp\m16-hip3b\rr-3b-c-hip-log-20261009T224116Z.err.txt (12 lines)
+arm rr-3b-c-hip-log clock after : clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=60750 ready=1
+arm rr-3b-c-hip-log end

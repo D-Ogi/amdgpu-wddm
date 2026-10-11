@@ -1,0 +1,22 @@
+arm rr-3a-threads-def clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=59500 ready=1
+arm rr-3a-threads-def start utc 2026-10-09T22:39:44Z
+arm rr-3a-threads-def dir C:\BC250\tmp\m16-hip3
+arm rr-3a-threads-def command hipthreads.exe --wait-total 20000 --threads 4 --iterations 4 --spin 2000000 --grid 256
+arm rr-3a-threads-def bound 170 s
+arm rr-3a-threads-def argv --wait-total | 20000 | --threads | 4 | --iterations | 4 | --spin | 2000000 | --grid | 256
+| hipthreads: every wait of the runtime is bounded to 20000 ms in all
+| hipthreads: device 'AMD BC-250' arch 'gfx1013', 4 threads, 4 iterations, spin 2000000, grid 256
+| hipthreads: phase A, the wait of thread 0 took 255.3 ms
+| hipthreads:   thread 1 finished 0 operations inside that wait
+| hipthreads:   thread 2 finished 0 operations inside that wait
+| hipthreads:   thread 3 finished 13 operations inside that wait
+| hipthreads:   13 operations in all
+| hipthreads: phase B, one wait 35.7 ms, 4 threads x 4 waits took 587.1 ms, serialised that is 570.7 ms
+| hipthreads: phase B, one dispatch at a time in the ring, so 587.1 ms against a serialised 570.7 ms is the device's own time plus 2.9 % of host cost
+| hipthreads: phase C, 6 rounds of a stream and an event destroyed inside a wait
+| hipthreads: 0 API failures, 0 verdicts failed
+| hipthreads: ok
+arm rr-3a-threads-def exit 0 after 3.5 s
+arm rr-3a-threads-def stdout C:\BC250\tmp\m16-hip3\rr-3a-threads-def-20261009T223944Z.out.txt (12 lines), stderr C:\BC250\tmp\m16-hip3\rr-3a-threads-def-20261009T223944Z.err.txt (0 lines)
+arm rr-3a-threads-def clock after : clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=61375 ready=1
+arm rr-3a-threads-def end

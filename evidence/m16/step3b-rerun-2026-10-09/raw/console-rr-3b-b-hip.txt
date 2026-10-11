@@ -1,0 +1,18 @@
+arm rr-3b-b-hip clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60625 ready=1
+arm rr-3b-b-hip start utc 2026-10-09T22:41:59Z
+arm rr-3b-b-hip dir C:\BC250\tmp\m16-hip3b
+arm rr-3b-b-hip command llama-bench.exe -m C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4
+arm rr-3b-b-hip bound 170 s
+arm rr-3b-b-hip argv -m | C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf | -p | 512 | -n | 128 | -ngl | 99 | -r | 1 | -t | 4
+| | model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| | ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+! ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+!   Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+! ROCm error: the device code object cannot be used
+!   current device: 0, in function ggml_cuda_kernel_launch at <llama-source>/ggml/src/ggml-cuda/common.cuh:1721
+!   hipGetLastError()
+! <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
+arm rr-3b-b-hip exit -1073740791 after 3.1 s
+arm rr-3b-b-hip stdout C:\BC250\tmp\m16-hip3b\rr-3b-b-hip-20261009T224159Z.out.txt (2 lines), stderr C:\BC250\tmp\m16-hip3b\rr-3b-b-hip-20261009T224159Z.err.txt (6 lines)
+arm rr-3b-b-hip clock after : clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=60875 ready=1
+arm rr-3b-b-hip end

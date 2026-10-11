@@ -1,0 +1,6 @@
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+ROCm error: the device code object cannot be used
+  current device: 0, in function ggml_cuda_kernel_launch at <llama-source>/ggml/src/ggml-cuda/common.cuh:1721
+  hipGetLastError()
+<llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
