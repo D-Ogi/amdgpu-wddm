@@ -1097,3 +1097,59 @@ help.setting.background|mt|013bf8ab|各項目で影響を説明しています�
 help.setting.updates|mt|5062c6b1|1-35 日を選べます。要求した終了日と Windows が報告する状態は別です。復元は以前の設定に戻すため、以前から一時停止していた場合はその設定に戻ります。
 help.setting.drivers|mt|d355e59e|このグラフィックスドライバーだけでなく、すべてのデバイスの通常の品質更新に適用します。あらゆるドライバーの置き換えを防ぐ設定ではありません。
 help.setting.drive|mt|9bc0a9f6|定期的な最適化には SSD の保守も含まれます。無効化は任意で、推奨設定には含みません。復元すると保存したスケジュールの状態に戻ります。
+bench.title|mt-safe|0cc4b592|レイトレーシング ベンチマーク
+bench.intro|mt|e05a3369|このテストは、お使いのカードが光をどれだけ速く追跡できるかを測ります。無料のゲーム Quake II RTX の短い場面を 2 回実行し、1 秒あたり何枚の画を描けたかを表示します。ドライバー パッケージにゲームは入っておらず、ダウンロードもしません。
+bench.two-ways|mt|280d28a7|お使いのカードは光を 2 通りの方法で追跡できます。このテストは両方を測ります。どちらでも画は同じで、速度だけが変わることがあります。
+bench.pass.pipeline|mt-safe|963af524|1 つめの方法
+bench.pass.query|mt-safe|21418945|2 つめの方法
+bench.pass.pipeline.note|mt|aaa9f3a1|ゲーム開発者はレイ トレーシング パイプラインと呼びます
+bench.pass.query.note|mt|d989b1f9|ゲーム開発者はレイ クエリと呼びます
+bench.game|mt-safe|5ba13e9b|ゲームのフォルダー
+bench.game.none|mt|4cc45c0a|このコンピューターに Quake II RTX が見つかりませんでした。
+bench.game.get|mt|4f79de90|テストにはゲームが必要です。Quake II RTX は無料で、Steam または開発元のページから入手できます。
+bench.open.steam|mt-safe|63e6be11|Steam のページを開く
+bench.open.nvidia|mt-safe|57f27fb0|開発元のページを開く
+bench.choose|mt-safe|0aab38df|ゲームのフォルダーを選ぶ...
+bench.choose.again|mt-safe|0bef7b55|別のフォルダーを選ぶ...
+bench.choose.title|mt|a72b4119|ゲームのプログラム q2rtx.exe があるフォルダーを選んでください
+bench.bad.folder|mt|302a9c1c|そのフォルダーはもうありません。
+bench.bad.program|mt|fdbc015e|そのフォルダーにゲームのプログラムがありません。
+bench.bad.data|mt|da3cb445|そのフォルダーにゲームのデータがありません。
+bench.bad.demo|mt|ab772e08|このゲームにはテスト用の場面が入っていないため、テストを実行できません。無料版の Quake II RTX には入っています。
+bench.start|mt-safe|56381b85|テストを始める
+bench.cancel|mt-safe|1317e849|テストを止める
+bench.size|mt-safe|28a0f429|画の大きさ
+bench.size.value|mt-safe|e137b45b|{0} x {1}
+bench.result|mt-safe|6e7d50e8|結果
+bench.state.idle|mt|dedd1400|このコンピューターでは、まだテストを実行していません。
+bench.state.starting|mt-safe|84ce0a62|ゲームを起動しています...
+bench.state.running|mt|e13f4a7a|測定中: {0}、ここまで {1} 秒。
+bench.state.reading|mt-safe|65a88114|結果を読み取っています...
+bench.state.done|mt-safe|a44047b4|テストが終わりました。
+bench.state.stopped|mt|afcd9e6a|あなたがテストを止めました。
+bench.state.saved|mt|536107a7|このコンピューターに保存された最新の実行を下に示します。
+bench.result.fps|mt-safe|42b2f533|1 秒あたり {0} 枚
+bench.result.detail|mt-safe|6554b9d5|{1} 秒で {0} 枚
+bench.result.none|mt|a82cd647|結果なし: 場面が終わる前にゲームが閉じました。
+bench.result.timeout|mt|e866995b|結果なし: 場面に 3 分以上かかったため、テストが止めました。
+bench.result.hot|mt|de80c33a|チップが熱くなりすぎたため止めました。
+bench.result.cancelled|mt-safe|ce2e1c7c|あなたが止めました。
+bench.result.failed|mt|388150f9|ゲームが起動しませんでした。
+bench.temp.max|mt-safe|251b0a10|最高温度
+bench.temp.value|mt-safe|aa6b1ef9|{0} °C
+bench.clock.mean|mt-safe|437b3dc8|平均クロック
+bench.clock.value|mt-safe|65d8ea4f|{0} MHz
+bench.notavailable|mt-safe|67a926f7|利用できません
+bench.when|mt-safe|9298c8f4|測定日時
+bench.driver|mt-safe|5f4b1e9d|ドライバーのリリース
+bench.reference|mt|d66823aa|私たちのボードはドライバーのリリース {4} で、{2} x {3} で 1 秒あたり {0} 枚から {1} 枚を描きました。画面やドライバーのリリース、ゲームのコピーが違えば、結果も変わります。
+bench.reference.why|mt|6893bd0d|シーンの実行中にチップが速度を上げ、シーンは 10 秒ほどで終わるので、結果は実行ごとにこの範囲の中で変わります。
+bench.history|mt-safe|04ab162c|これまでの実行
+bench.history.none|mt|d590dba0|このコンピューターにこれまでの実行はありません。
+bench.history.line|mt|afe87a67|{0}  -  1 つめの方法: {1}  -  2 つめの方法: {2}
+bench.busy|mt-safe|3a08423a|テストはすでに実行中です。
+bench.note|mt|a3725789|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。チップが 87 °C のままだったとき、また各方法で 3 分が過ぎたとき、テストは自分で止まります。
+bench.note.notemp|mt|a2b8397f|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。このカードは温度を知らせないため、テストは各方法で 3 分が過ぎたときにだけ止まります。
+search.perf.benchmark|mt-safe|0cc4b592|レイトレーシング ベンチマーク
+search.perf.benchmark.terms|mt|8e2c7bdd|ベンチマーク|fps|フレームレート|速度|スコア|測定|レイトレーシング|パストレーシング|クエイク|quake|q2rtx|どれくらい速い
+help.setting.benchmark|mt|6a6a4b69|お使いのカード自身を測るテストです。無料のゲーム Quake II RTX の短いレイトレーシングの場面を、カードが光を追跡する 2 つの方法それぞれで 1 回ずつ実行し、1 秒あたり何枚の画を描けたかを表示します。ゲームはこのコンピューターに必要です。ドライバー パッケージには入っていません。テストは私たちのボードでは各方法で 20 秒ほどかかり、ゲームを小さな窓で開いてまた閉じます。チップが熱くなりすぎたときは自分で止まります。最後の 10 回分はこのコンピューターに残るので、新しいドライバーのリリースで数値が変わったかどうかを見られます。

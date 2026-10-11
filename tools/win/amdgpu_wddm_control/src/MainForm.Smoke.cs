@@ -135,6 +135,32 @@ namespace AmdgpuWddmControl
             _fanEditC = new uint[] { 35, 50, 60, 70, 80, 85 };
             _fanEditPct = new uint[] { 30, 40, 55, 70, 90, 100 };
             _fanChoice = "custom";
+            // The ray tracing benchmark card at its widest: a copy of the game found, both passes measured, and a
+            // history of three runs in which every reason a pass can have for no number appears once. The fixture
+            // searches no disk of this PC (MainForm.Bench.cs ReadBenchmark says why).
+            _bench = new InstallState { Folder = @"D:\Games\Quake II RTX", ExePath = @"D:\Games\Quake II RTX\q2rtx.exe", PakPath = @"D:\Games\Quake II RTX\baseq2\pak0.pak", Verdict = InstallVerdict.Ready, FromSteam = true };
+            _benchHistory = new List<RunRecord>
+            {
+                new RunRecord { Utc = Recovery.Stamp(now.AddMinutes(-20)), Driver = "1.0.0.0-tester.11", Passes = new List<PassRecord>
+                {
+                    new PassRecord { Api = "pipeline", Outcome = PassOutcome.Done, Fps = 60.94, Frames = 1550, Seconds = 25.43, MaxTempC = 79, MeanClockMHz = 1948 },
+                    new PassRecord { Api = "query", Outcome = PassOutcome.Done, Fps = 66.39, Frames = 1550, Seconds = 23.35, MaxTempC = 81, MeanClockMHz = 1951 },
+                } },
+                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-1)), Driver = "1.0.0.0-tester.11", Passes = new List<PassRecord>
+                {
+                    new PassRecord { Api = "pipeline", Outcome = PassOutcome.TooHot, MaxTempC = 89, MeanClockMHz = 1700 },
+                    new PassRecord { Api = "query", Outcome = PassOutcome.TooHot },
+                } },
+                new RunRecord { Utc = Recovery.Stamp(now.AddDays(-3)), Driver = "1.0.0.0-tester.10", Passes = new List<PassRecord>
+                {
+                    new PassRecord { Api = "pipeline", Outcome = PassOutcome.TimedOut, MaxTempC = 74 },
+                    new PassRecord { Api = "query", Outcome = PassOutcome.NoResult, MaxTempC = 73 },
+                } },
+            };
+            // No run of this session: the card then shows the newest saved run and the state line says so, which is
+            // what a person sees who opens the application again (b23 lab round, F2). The card is as wide as with a
+            // run of this session, because it shows the same run.
+            _benchRun = null;
             ComputeStatus();
             ShowPage(_page, null, false);
         }
@@ -330,5 +356,192 @@ namespace AmdgpuWddmControl
         // ---- --smoke-perf (G-PERF) ---------------------------------------------------------------------------------
 
         public bool ReadOnlyProbe;
+
+        // ---- --smoke-scroll (the place a rebuild keeps) -------------------------------------------------------------
+        //
+        // A page is rebuilt under the person's hands whenever a card gets a new reading, and the place the person
+        // scrolled to must survive that. It did not: a page built into a panel that was still scrolled came out with
+        // a scroll range too large by the scroll offset, and the view then stood past the end of the new content
+        // (b23 lab round, F1). The card of a run that has just started is shorter than the card of a finished one,
+        // and the person who presses Start is at the end of the page, where that card is.
+        //
+        // The gate needs no window. The controls of a window that was never shown are not "created" in the sense of
+        // WinForms, and the setter of AutoScrollPosition does nothing on a control that is not created, so the gate
+        // creates the control tree the way Show() would (Control.CreateControl(true)). After that the panel scrolls
+        // exactly as the window's panel does. What the focus does after a rebuild needs a real window, so the rule
+        // of that is a pure function with its own host tests (PageFocus.After).
+        public string ScrollKeeping()
+        {
+            var w = new StringBuilder();
+            ShowPage("performance", null, false);
+            CreateTree();
+
+            int at = -_content.AutoScrollPosition.Y;
+            if (at != 0) w.AppendLine("the page is not built at its top: " + at + " px");
+            int end = PageEnd();
+            if (end < 800)
+            {
+                w.AppendLine("the performance page of this fixture is only " + end + " px longer than the window, too short for this check");
+                return w.ToString();
+            }
+
+            // In the middle of the page: a rebuild keeps the place and leaves the scroll range as it was.
+            _content.AutoScrollPosition = new Point(0, 600);
+            int before = -_content.AutoScrollPosition.Y, range = _content.DisplayRectangle.Height;
+            if (before != 600) w.AppendLine("a scroll to 600 px gave " + before + " px");
+            ShowPage("performance", null, false);
+            int after = -_content.AutoScrollPosition.Y;
+            if (after != before) w.AppendLine("a rebuild moved the page from " + before + " px to " + after + " px");
+            if (_content.DisplayRectangle.Height != range)
+                w.AppendLine("a rebuild changed the scroll range from " + range + " px to " + _content.DisplayRectangle.Height + " px");
+
+            // Another page opens at its top, never where the page before it stood.
+            _content.AutoScrollPosition = new Point(0, 600);
+            ShowPage("driver", null, false);
+            int other = -_content.AutoScrollPosition.Y;
+            if (other != 0) w.AppendLine("another page opened " + other + " px down, where the page before it stood");
+            ShowPage("performance", null, false);
+
+            // At the end of the page, where the benchmark card is, with a rebuild that makes that card shorter: the
+            // view belongs at the end of the new content, never past it and never back at the top.
+            _content.AutoScrollPosition = new Point(0, end);
+            int atEnd = -_content.AutoScrollPosition.Y;
+            _benchRun = new BenchProgress
+            {
+                Stage = BenchProgress.Starting, Busy = true,
+                Run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "1.0.0.0-tester.11" },
+            };
+            ShowPage("performance", null, false);
+            int shorter = PageEnd(), now = -_content.AutoScrollPosition.Y;
+            if (shorter >= atEnd)
+                w.AppendLine("the card of a run that has just started is not shorter than the card of a finished one, so this check measures nothing");
+            else if (now > shorter) w.AppendLine("after a rebuild that made the page shorter the view stands " + (now - shorter) + " px past its end");
+            else if (now == 0) w.AppendLine("a rebuild that made the page shorter put the page back at its top");
+            return w.ToString();
+        }
+
+
+        // ---- --smoke-scroll, part two: the card of a run that is going on keeps its place ---------------------------
+        //
+        // While a benchmark run goes on, "Start the test" and "Stop the test" must stay where they are. They did
+        // not: the case fan card above gets the line "The fan is at full speed now, because the graphics are working
+        // hard." as soon as the game loads the chip, and the whole benchmark card moved 23 px down with it, 9 to 18 s
+        // into the run, under the pointer of a person who was aiming at Stop (b23 lab round 2, F7). This gate builds
+        // every state of a run in the control tree and measures where the two buttons sit in the view.
+        //
+        // The measure is the place of a control in the page less the scroll offset, not the control bounds: a page
+        // built without a window is laid out, but its controls are not moved by the panel the way a shown window
+        // moves them, and the place in the page is what the person sees against the window.
+        public string RunStateLayout()
+        {
+            var w = new StringBuilder();
+            ShowPage("performance", null, false);
+            CreateTree();
+            Control card;
+            if (!_anchors.TryGetValue("perf.benchmark", out card)) { w.AppendLine("the performance page has no benchmark card"); return w.ToString(); }
+
+            // Where the person stands when they press Start: at the card, as the search leaves the page, with the
+            // card as far up as it goes (a card taller than the view then has its top edge above it).
+            int view = _content.ClientSize.Height;
+            _content.AutoScrollPosition = new Point(0, ContentTop(card) + Math.Max(0, card.Height - view));
+            int ready = ViewY(Strings.T("bench.start"));
+            int above = CardTop();
+            Check(w, "before the run", ready, ready);
+
+            // Start: the page does not move, because the buttons are in reach already.
+            var run = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "1.0.0.0-tester.11" };
+            _benchRun = new BenchProgress { Stage = BenchProgress.Starting, Busy = true, Run = run };
+            ShowPage(_page, null, false);
+            BringIntoView("perf.benchmark", "perf.benchmark.buttons");
+            Check(w, "the run starts", ready, ViewY(Strings.T("bench.start")));
+
+            _benchRun = new BenchProgress { Stage = BenchProgress.Running, Busy = true, Pass = "pipeline", ElapsedMs = 9000, Run = run };
+            ShowPage(_page, null, false);
+            Check(w, "the first way runs", ready, ViewY(Strings.T("bench.start")));
+
+            // The fan card above gets its line while the game loads the chip. Everything under it moves, which is
+            // what this gate is for; without that line it would measure nothing.
+            if (_snap != null && _snap.Fan != null) _snap.Fan.Flags |= FanState.FlagBoost;
+            ShowPage(_page, null, false);
+            if (CardTop() == above)
+                w.AppendLine("the card above the benchmark card did not change height at full fan speed, so this check measures nothing");
+            Check(w, "the fan goes to full speed", ready, ViewY(Strings.T("bench.start")));
+
+            run.Passes.Add(new PassRecord { Api = "pipeline", Outcome = PassOutcome.Done, Fps = 64.05, Frames = 631, Seconds = 9.85, MaxTempC = 72, MeanClockMHz = 1227 });
+            _benchRun = new BenchProgress { Stage = BenchProgress.Reading, Busy = true, Pass = "pipeline", ElapsedMs = 18000, Run = run };
+            ShowPage(_page, null, false);
+            Check(w, "the first way has its numbers", ready, ViewY(Strings.T("bench.start")));
+
+            _benchRun = new BenchProgress { Stage = BenchProgress.Running, Busy = true, Pass = "query", ElapsedMs = 9000, Run = run };
+            ShowPage(_page, null, false);
+            Check(w, "the second way runs", ready, ViewY(Strings.T("bench.start")));
+
+            run.Passes.Add(new PassRecord { Api = "query", Outcome = PassOutcome.Done, Fps = 65.10, Frames = 631, Seconds = 9.69, MaxTempC = 74, MeanClockMHz = 1270 });
+            _benchRun = new BenchProgress { Stage = BenchProgress.Finished, Run = run };
+            if (_snap != null && _snap.Fan != null) _snap.Fan.Flags &= ~FanState.FlagBoost;
+            ShowPage(_page, null, false);
+            Check(w, "the run is finished", ready, ViewY(Strings.T("bench.start")));
+
+            var stopped = new RunRecord { Utc = Recovery.Stamp(DateTime.UtcNow), Driver = "1.0.0.0-tester.11" };
+            stopped.Passes.Add(new PassRecord { Api = "pipeline", Outcome = PassOutcome.Cancelled });
+            stopped.Passes.Add(new PassRecord { Api = "query", Outcome = PassOutcome.Cancelled });
+            _benchRun = new BenchProgress { Stage = BenchProgress.Finished, Run = stopped };
+            ShowPage(_page, null, false);
+            Check(w, "the person stopped the run", ready, ViewY(Strings.T("bench.start")));
+            return w.ToString();
+        }
+
+        // The two buttons of the card in one state of a run: at the place they had before, and both inside the view.
+        void Check(StringBuilder w, string state, int ready, int now)
+        {
+            if (now != ready) w.AppendLine("\"Start the test\" stands " + (now - ready) + " px from where it was when " + state + ": " + ready + " px against " + now);
+            foreach (var id in new[] { "bench.start", "bench.cancel" })
+            {
+                var b = Named(Strings.T(id));
+                if (b == null) { w.AppendLine("the card has no " + Strings.T(id) + " button when " + state); continue; }
+                int top = ViewY(Strings.T(id));
+                if (top < 0 || top + b.Height > _content.ClientSize.Height)
+                    w.AppendLine("\"" + b.AccessibleName + "\" is outside the view when " + state + ": " + top + " px to " + (top + b.Height) + " px of " + _content.ClientSize.Height);
+            }
+        }
+
+        // The benchmark card of the page as it stands now: every rebuild makes a new one, so the gate asks again.
+        int CardTop()
+        {
+            Control card;
+            return _anchors.TryGetValue("perf.benchmark", out card) ? ContentTop(card) : int.MinValue;
+        }
+
+        Control Named(string text)
+        {
+            string name = text.TrimEnd('.', '\u2026');
+            return All(_content).FirstOrDefault(c => c is Button && c.AccessibleName == name);
+        }
+
+        // Where a control of the page stands in the view: its place in the page less the scroll offset.
+        int ViewY(string text)
+        {
+            var c = Named(text);
+            return c == null ? int.MinValue : ContentTop(c) + _content.AutoScrollPosition.Y;
+        }
+
+        // The control tree of a window that is never shown. The setter of AutoScrollPosition does nothing on a
+        // control that is not created, so the gate creates the tree the way Show() would.
+        void CreateTree()
+        {
+            PerformLayout();
+            CreateHandles(this);
+            var create = typeof(Control).GetMethod("CreateControl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+                null, new[] { typeof(bool) }, null);
+            foreach (var c in new[] { (Control)this }.Concat(All(this))) create.Invoke(c, new object[] { true });
+            PerformLayout();
+        }
+
+        // How far the page can be scrolled: what its content has above the window.
+        int PageEnd()
+        {
+            int content = _content.Controls.Count > 0 ? _content.Controls[0].Height + _content.Padding.Vertical : 0;
+            return Math.Max(0, content - _content.ClientSize.Height);
+        }
     }
 }

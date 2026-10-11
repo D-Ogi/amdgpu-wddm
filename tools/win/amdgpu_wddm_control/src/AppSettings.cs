@@ -120,6 +120,15 @@ namespace AmdgpuWddmControl
             set { if (value == null) _store.Delete("LastSeenRelease"); else if (LastSeenRelease != value) _store.SetString("LastSeenRelease", value); }
         }
 
+        // The game folder the person chose for the ray tracing benchmark (REG_SZ). Absent: the card looks for the
+        // Steam copy itself. Written only on a choice the card accepted; an empty value removes it again, which no
+        // control of this release sets.
+        public string BenchmarkFolder
+        {
+            get { return _store.Get("BenchmarkFolder") as string; }
+            set { if (string.IsNullOrEmpty(value)) { if (_store.Get("BenchmarkFolder") != null) _store.Delete("BenchmarkFolder"); } else if (BenchmarkFolder != value) _store.SetString("BenchmarkFolder", value); }
+        }
+
         // Hidden entries of the Games list (WU-013): their keys; hiding never touches a game's files or saves.
         public HashSet<string> HiddenGames
         {

@@ -1095,8 +1095,9 @@ static partial class UnitTests
 
     // BD-060, statically: no source stops, kills or signals DWM except the operator escape, and none restarts Windows
     // other than through WindowsRestart (ExitWindowsEx without force). The Kill() calls allowed: the bug report's own
-    // timed-out child tool, and StopCompositor of the escape, reached only from a plan with RestartCompositor, which
-    // only restart-compositor with --accept-bd060 gives and the window never asks for.
+    // timed-out child tool, the benchmark game that could not be put into its job object, and StopCompositor of the
+    // escape, reached only from a plan with RestartCompositor, which only restart-compositor with --accept-bd060
+    // gives and the window never asks for.
     static void NoDwmRestart(string root)
     {
         var dir = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src");
@@ -1121,6 +1122,15 @@ static partial class UnitTests
                 Equal(1, k, "static check: Windows tuning kills only its bounded child");
                 Check(text.Contains("using (var process = Process.Start(start))") && text.Contains("try { process.Kill(); }") &&
                     !text.Contains("GetProcessById") && !text.Contains("GetProcesses"), "static check: Windows tuning child handle belongs to this invocation");
+            }
+            // BenchmarkRun.cs ends one process: the benchmark game this app started itself, and only when that game
+            // could not be put into the job object that would otherwise have ended it. Without that one ending the
+            // game would outlive the pass, with the path tracing load and no thermal stop behind it.
+            else if (name == "BenchmarkRun.cs")
+            {
+                Equal(1, k, "static check: BenchmarkRun.cs kills only the benchmark game it started itself");
+                Check(System.Text.RegularExpressions.Regex.IsMatch(text, @"if \(!job\.Take\(game\)\)\s*\{\s*try \{ game\.Kill\(\); \}"),
+                    "static check: the benchmark's Kill() is the game that could not join its job object");
             }
             else Equal(0, k, "static check: " + name + " calls no Kill()");
             if (name == "RecoveryActions.cs")
@@ -1148,7 +1158,7 @@ static partial class UnitTests
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(2, kills, "static check: two Kill() calls, each for the helper's own bounded child");
+        Equal(3, kills, "static check: three Kill() calls: the bug report's and the Windows tuning's own bounded children, and the benchmark's own game");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
@@ -1191,6 +1201,7 @@ static partial class UnitTests
         TunerViewTests();
         FanTests(args[0], header);
         DriverCardTests();
+        BenchmarkTests(args[0]);
         UpdateTests(args[0]);
         GuiTests(args[0]);
         OracleTests();

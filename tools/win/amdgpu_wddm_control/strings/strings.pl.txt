@@ -1097,3 +1097,59 @@ help.setting.background|mt|013bf8ab|Każdy opcjonalny element opisuje swój wpł
 help.setting.updates|mt|5062c6b1|Wybierz od 1 do 35 dni. Żądana data końcowa i stan zgłaszany przez Windows są osobne. Przywrócenie odtwarza poprzednie ustawienia, które też mogły wstrzymywać aktualizacje.
 help.setting.drivers|mt|d355e59e|Dotyczy ofert sterowników w zwykłych aktualizacjach jakości dla każdego urządzenia, nie tylko tej karty graficznej. Nie blokuje wszystkich możliwych sposobów zastąpienia sterownika.
 help.setting.drive|mt|9bc0a9f6|Zaplanowana optymalizacja obejmuje też konserwację SSD. Jej wyłączenie jest opcjonalne i nie należy do zalecanego zestawu. Przywracanie odtwarza zapisany stan harmonogramu.
+bench.title|mt|0cc4b592|Test ray tracingu
+bench.intro|mt|e05a3369|Ten test mierzy, jak szybko Twoja karta śledzi promienie światła. Dwa razy uruchamia krótką scenę z darmowej gry Quake II RTX i pokazuje, ile obrazów na sekundę narysowała. Pakiet sterownika nie zawiera gry i nigdy jej nie pobiera.
+bench.two-ways|mt|280d28a7|Twoja karta potrafi śledzić światło na dwa sposoby, a test mierzy oba. Obraz jest w obu przypadkach taki sam; różnić się może tylko szybkość.
+bench.pass.pipeline|mt-safe|963af524|Pierwszy sposób
+bench.pass.query|mt-safe|21418945|Drugi sposób
+bench.pass.pipeline.note|mt|aaa9f3a1|twórcy gier nazywają to potokiem ray tracingu
+bench.pass.query.note|mt|d989b1f9|twórcy gier nazywają to zapytaniem o promień
+bench.game|mt-safe|5ba13e9b|Folder gry
+bench.game.none|mt|4cc45c0a|Nie znaleziono Quake II RTX na tym komputerze.
+bench.game.get|mt|4f79de90|Test potrzebuje gry. Quake II RTX jest darmowy, na Steamie albo na stronie producenta.
+bench.open.steam|mt-safe|63e6be11|Otwórz stronę Steam
+bench.open.nvidia|mt-safe|57f27fb0|Otwórz stronę producenta
+bench.choose|mt-safe|0aab38df|Wybierz folder gry...
+bench.choose.again|mt-safe|0bef7b55|Wybierz inny folder...
+bench.choose.title|mt|a72b4119|Wybierz folder, w którym jest program gry q2rtx.exe
+bench.bad.folder|mt|302a9c1c|Tego folderu już nie ma.
+bench.bad.program|mt|fdbc015e|W tym folderze nie ma programu gry.
+bench.bad.data|mt|da3cb445|W tym folderze nie ma danych gry.
+bench.bad.demo|mt|ab772e08|Ta kopia gry nie zawiera scenki testowej, więc testu nie da się uruchomić. Darmowa wersja Quake II RTX ją zawiera.
+bench.start|mt-safe|56381b85|Uruchom test
+bench.cancel|mt-safe|1317e849|Zatrzymaj test
+bench.size|mt-safe|28a0f429|Rozmiar obrazu
+bench.size.value|mt-safe|e137b45b|{0} na {1}
+bench.result|mt-safe|6e7d50e8|Wynik
+bench.state.idle|mt|dedd1400|Test jeszcze nie był uruchamiany na tym komputerze.
+bench.state.starting|mt-safe|84ce0a62|Uruchamianie gry...
+bench.state.running|mt|e13f4a7a|Pomiar: {0}, do tej pory {1} s.
+bench.state.reading|mt-safe|65a88114|Odczytywanie wyniku...
+bench.state.done|mt-safe|a44047b4|Test zakończony.
+bench.state.stopped|mt|afcd9e6a|Test zatrzymany przez Ciebie.
+bench.state.saved|mt|536107a7|Poniżej najnowszy przebieg zapisany na tym komputerze.
+bench.result.fps|mt-safe|42b2f533|{0} obrazów na sekundę
+bench.result.detail|mt-safe|6554b9d5|{0} obrazów w {1} s
+bench.result.none|mt|a82cd647|Brak wyniku: gra zamknęła się przed końcem scenki.
+bench.result.timeout|mt|e866995b|Brak wyniku: scenka trwała dłużej niż trzy minuty, więc test ją zatrzymał.
+bench.result.hot|mt|de80c33a|Zatrzymano, bo układ zrobił się za gorący.
+bench.result.cancelled|mt-safe|ce2e1c7c|Zatrzymane przez Ciebie.
+bench.result.failed|mt|388150f9|Gra się nie uruchomiła.
+bench.temp.max|mt-safe|251b0a10|Najwyższa temperatura
+bench.temp.value|mt-safe|aa6b1ef9|{0} °C
+bench.clock.mean|mt-safe|437b3dc8|Średnie taktowanie
+bench.clock.value|mt-safe|65d8ea4f|{0} MHz
+bench.notavailable|mt-safe|67a926f7|Niedostępne
+bench.when|mt-safe|9298c8f4|Zmierzono
+bench.driver|mt-safe|5f4b1e9d|Wydanie sterownika
+bench.reference|mt|d66823aa|Nasza własna płyta narysowała od {0} do {1} obrazów na sekundę przy {2} na {3}, z wydaniem sterownika {4}. Twój wynik może być inny przy innym ekranie, innym wydaniu sterownika i innej kopii gry.
+bench.reference.why|mt|6893bd0d|Wynik zmienia się w tym zakresie z przebiegu na przebieg, bo układ podnosi swoją prędkość w trakcie sceny, a scena trwa około dziesięciu sekund.
+bench.history|mt-safe|04ab162c|Wcześniejsze przebiegi
+bench.history.none|mt|d590dba0|Brak wcześniejszych przebiegów na tym komputerze.
+bench.history.line|mt|afe87a67|{0}  -  pierwszy sposób: {1}  -  drugi sposób: {2}
+bench.busy|mt-safe|3a08423a|Test już trwa.
+bench.note|mt|a3725789|Gra otwiera się we własnym okienku i sama się zamyka. Nie przeszkadzaj jej w czasie pomiaru i nie uruchamiaj gry po raz drugi. Test zatrzymuje się sam, gdy układ utrzyma 87 °C, oraz po trzech minutach na każdy sposób.
+bench.note.notemp|mt|a2b8397f|Gra otwiera się we własnym okienku i sama się zamyka. Nie przeszkadzaj jej w czasie pomiaru i nie uruchamiaj gry po raz drugi. Ta karta nie podaje swojej temperatury, więc test zatrzymuje się dopiero po trzech minutach na każdy sposób.
+search.perf.benchmark|mt-safe|0cc4b592|Test ray tracingu
+search.perf.benchmark.terms|mt|8e2c7bdd|benchmark|fps|klatki na sekundę|obrazy na sekundę|szybkość|wynik|pomiar|ray tracing|path tracing|quake|quake 2|q2rtx|jak szybko
+help.setting.benchmark|mt|6a6a4b69|Test Twojej własnej karty. Dwa razy uruchamia krótką scenę z ray tracingiem z darmowej gry Quake II RTX, raz dla każdego sposobu śledzenia światła, i pokazuje, ile obrazów na sekundę narysowała Twoja karta. Potrzebujesz gry na tym komputerze; pakiet sterownika jej nie zawiera. Test potrzebuje około dwudziestu sekund na każdy sposób na naszej własnej płycie, otwiera grę w małym okienku i znów ją zamyka, a zatrzymuje się sam, gdy układ zrobi się za gorący. Dziesięć ostatnich przebiegów zostaje na tym komputerze, żeby zobaczyć, czy nowe wydanie sterownika zmieniło wynik.

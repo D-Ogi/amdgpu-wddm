@@ -1097,3 +1097,59 @@ help.setting.background|mt|013bf8ab|각 선택 항목에 영향을 설명합니�
 help.setting.updates|mt|5062c6b1|1-35일을 선택하세요. 요청 종료일과 Windows가 보고한 상태는 별개입니다. 복원하면 이전 설정으로 돌아가며 이전에도 일시 중지 상태였을 수 있습니다.
 help.setting.drivers|mt|d355e59e|이 그래픽 드라이버뿐 아니라 모든 장치의 일반 품질 업데이트 드라이버에 적용됩니다. 가능한 모든 드라이버 교체를 차단하지는 않습니다.
 help.setting.drive|mt|9bc0a9f6|예약 최적화는 SSD도 유지 관리합니다. 끄기는 선택 사항이며 권장 설정에 포함되지 않습니다. 복원하면 저장된 일정 상태로 되돌립니다.
+bench.title|mt-safe|0cc4b592|레이 트레이싱 벤치마크
+bench.intro|mt|e05a3369|이 테스트는 그래픽 카드가 빛을 얼마나 빠르게 추적하는지 측정합니다. 무료 게임 Quake II RTX의 짧은 장면을 두 번 실행하고, 1초에 몇 장을 그렸는지 보여 줍니다. 드라이버 패키지에는 게임이 들어 있지 않으며, 게임을 내려받지도 않습니다.
+bench.two-ways|mt|280d28a7|그래픽 카드는 빛을 두 가지 방식으로 추적할 수 있고, 이 테스트는 두 방식을 모두 측정합니다. 어느 방식이든 화면은 같고 속도만 달라질 수 있습니다.
+bench.pass.pipeline|mt-safe|963af524|첫 번째 방식
+bench.pass.query|mt-safe|21418945|두 번째 방식
+bench.pass.pipeline.note|mt|aaa9f3a1|게임 개발자는 레이 트레이싱 파이프라인이라고 부릅니다
+bench.pass.query.note|mt|d989b1f9|게임 개발자는 레이 쿼리라고 부릅니다
+bench.game|mt-safe|5ba13e9b|게임 폴더
+bench.game.none|mt|4cc45c0a|이 컴퓨터에서 Quake II RTX를 찾지 못했습니다.
+bench.game.get|mt|4f79de90|테스트에는 게임이 필요합니다. Quake II RTX는 무료이며 Steam이나 제작사 페이지에서 받을 수 있습니다.
+bench.open.steam|mt-safe|63e6be11|Steam 페이지 열기
+bench.open.nvidia|mt-safe|57f27fb0|제작사 페이지 열기
+bench.choose|mt-safe|0aab38df|게임 폴더 선택...
+bench.choose.again|mt-safe|0bef7b55|다른 폴더 선택...
+bench.choose.title|mt|a72b4119|게임 프로그램 q2rtx.exe가 있는 폴더를 선택하세요
+bench.bad.folder|mt|302a9c1c|그 폴더가 더 이상 없습니다.
+bench.bad.program|mt|fdbc015e|그 폴더에 게임 프로그램이 없습니다.
+bench.bad.data|mt|da3cb445|그 폴더에 게임 데이터가 없습니다.
+bench.bad.demo|mt|ab772e08|이 게임 사본에는 테스트 장면이 없어서 테스트를 실행할 수 없습니다. 무료 버전 Quake II RTX에는 들어 있습니다.
+bench.start|mt-safe|56381b85|테스트 시작
+bench.cancel|mt-safe|1317e849|테스트 중지
+bench.size|mt-safe|28a0f429|화면 크기
+bench.size.value|mt-safe|e137b45b|{0} x {1}
+bench.result|mt-safe|6e7d50e8|결과
+bench.state.idle|mt|dedd1400|이 컴퓨터에서는 아직 테스트를 실행하지 않았습니다.
+bench.state.starting|mt-safe|84ce0a62|게임을 시작하고 있습니다...
+bench.state.running|mt|e13f4a7a|측정 중: {0}, 지금까지 {1}초.
+bench.state.reading|mt-safe|65a88114|결과를 읽고 있습니다...
+bench.state.done|mt-safe|a44047b4|테스트가 끝났습니다.
+bench.state.stopped|mt|afcd9e6a|사용자가 테스트를 멈췄습니다.
+bench.state.saved|mt|536107a7|이 컴퓨터에 저장된 가장 최근 실행이 아래에 있습니다.
+bench.result.fps|mt-safe|42b2f533|1초에 {0}장
+bench.result.detail|mt-safe|6554b9d5|{1}초에 {0}장
+bench.result.none|mt|a82cd647|결과 없음: 장면이 끝나기 전에 게임이 닫혔습니다.
+bench.result.timeout|mt|e866995b|결과 없음: 장면이 3분을 넘겨서 테스트가 멈췄습니다.
+bench.result.hot|mt|de80c33a|칩이 너무 뜨거워져서 멈췄습니다.
+bench.result.cancelled|mt-safe|ce2e1c7c|사용자가 멈췄습니다.
+bench.result.failed|mt|388150f9|게임이 시작되지 않았습니다.
+bench.temp.max|mt-safe|251b0a10|최고 온도
+bench.temp.value|mt-safe|aa6b1ef9|{0} °C
+bench.clock.mean|mt-safe|437b3dc8|평균 클럭
+bench.clock.value|mt-safe|65d8ea4f|{0} MHz
+bench.notavailable|mt-safe|67a926f7|사용할 수 없음
+bench.when|mt-safe|9298c8f4|측정 시각
+bench.driver|mt-safe|5f4b1e9d|드라이버 릴리스
+bench.reference|mt|d66823aa|우리 보드는 드라이버 릴리스 {4}에서 {2} x {3}로 1초에 {0}장에서 {1}장을 그렸습니다. 화면, 드라이버 릴리스, 게임 사본이 다르면 결과도 달라질 수 있습니다.
+bench.reference.why|mt|6893bd0d|장면이 실행되는 동안 칩이 속도를 올리고 장면은 10초 남짓이라 결과는 실행마다 이 범위 안에서 달라집니다.
+bench.history|mt-safe|04ab162c|이전 실행
+bench.history.none|mt|d590dba0|이 컴퓨터에 이전 실행이 없습니다.
+bench.history.line|mt|afe87a67|{0}  -  첫 번째 방식: {1}  -  두 번째 방식: {2}
+bench.busy|mt-safe|3a08423a|테스트가 이미 실행 중입니다.
+bench.note|mt|a3725789|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 칩이 87 °C를 유지하면, 그리고 각 방식마다 3분이 지나면 테스트는 스스로 멈춥니다.
+bench.note.notemp|mt|a2b8397f|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 이 카드는 자기 온도를 알려 주지 않아서, 테스트는 각 방식마다 3분이 지난 뒤에만 멈춥니다.
+search.perf.benchmark|mt-safe|0cc4b592|레이 트레이싱 벤치마크
+search.perf.benchmark.terms|mt|8e2c7bdd|벤치마크|fps|초당 프레임|속도|점수|측정|레이 트레이싱|패스 트레이싱|퀘이크|quake|q2rtx|얼마나 빠른가
+help.setting.benchmark|mt|6a6a4b69|그래픽 카드 자체를 재는 테스트입니다. 무료 게임 Quake II RTX의 짧은 레이 트레이싱 장면을, 카드가 빛을 추적하는 두 방식마다 한 번씩 실행하고 1초에 몇 장을 그렸는지 보여 줍니다. 게임은 이 컴퓨터에 있어야 하며, 드라이버 패키지에는 들어 있지 않습니다. 테스트는 우리 보드에서 방식마다 20초쯤 걸리고, 게임을 작은 창으로 열었다가 다시 닫습니다. 칩이 너무 뜨거워지면 스스로 멈춥니다. 최근 10회가 이 컴퓨터에 남아 있어서 새 드라이버 릴리스가 수치를 바꿨는지 볼 수 있습니다.

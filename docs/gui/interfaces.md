@@ -168,6 +168,7 @@ is merged). The app follows its reader, Clear and switch rules; in short:
 | `GettingStartedDismissed` | the card shows | 1 on "Dismiss"; removed by Help -> "Getting started" |
 | `HiddenGames` (REG_MULTI_SZ) | nothing hidden | the file names (`witcher3.exe`) of the hidden entries; the Games list has one entry per file name, as the profiles do (B3) |
 | `LastSeenRelease` (REG_SZ) | - | the release the app last showed as "upgrade done", for the one-time verdict |
+| `BenchmarkFolder` (REG_SZ) | the ray tracing benchmark looks for the Steam copy of the game itself (section 7) | the folder the person chose, written only when that folder held a usable copy. This release has no control that clears it again |
 
 Update check cache: `HKCU\Software\amdgpu-wddm\Control\Update` (REG_SZ values; times ISO 8601 UTC):
 
@@ -216,3 +217,30 @@ and 60. A stored number outside that list stays as it is until the person makes 
 written. The app never removes the value. An absent value would get the release default again at the next
 installation, against the release-notes rule "The installation keeps the settings that you changed". The app writes
 no other value of that key.
+
+## 7. Ray tracing benchmark results (control app only, per user)
+
+The ray tracing benchmark card of the Performance page keeps what this computer measured, and nothing else keeps or
+reads it. Both paths are below `%LOCALAPPDATA%\amdgpu-wddm\benchmarks` (the app's state directory, which
+`AMDGPU_WDDM_CONTROL_STATE` moves for a build gate, so a build writes nothing into a profile):
+
+| Path | What it holds |
+|---|---|
+| `q2rtx-history.json` | the newest ten runs, newest first |
+| `q2rtx-home\` | the game's one writable directory while a pass runs (`+set homedir`), where it writes `baseq2\logs\q2rtx-bench-pipeline.log` and `q2rtx-bench-query.log` |
+
+The file is UTF-8 JSON, `{"schema": 1, "runs": [...]}`. A run holds `utc` (ISO 8601 UTC, as every other time of this
+app), `driver` (the installed release, empty when it could not be read), `width`, `height` and `passes`. A pass holds
+`api` (`pipeline` or `query`), `outcome`, and the numbers it has: `fps`, `frames`, `seconds`, `max_temp_c`,
+`mean_clock_mhz`. An outcome is one of `done`, `no-result` (the game closed before the scene ended), `timeout` (over
+three minutes), `hot` (the thermal stop), `cancelled` and `failed` (the game did not start, or the pass refused to
+start it). Only `done` carries `fps`.
+
+The reader rule: a missing file, a file above 1 MB, a file that is not this JSON, another `schema`, and a run without
+a readable time, without a picture size, without passes, with an unknown `api` or `outcome`, or marked `done` without
+a number, are all "no history". A damaged run between sound ones is dropped and the sound ones are still shown. No
+damaged file ever becomes a result and none of them stops the next run from being saved: a save writes a temporary
+file next to the history and replaces it. A failed write loses the history and nothing else.
+
+`src/Benchmark.cs` (`BenchHistory`, `BenchPaths`) holds the format and the rule. `test/BenchmarkTests.cs` decides
+every case above.

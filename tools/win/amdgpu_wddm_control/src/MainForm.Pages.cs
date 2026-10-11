@@ -209,6 +209,7 @@ namespace AmdgpuWddmControl
             now.Add(Ui.Dim(Strings.T("perf.now.note"), now.Inner));
             p.Controls.Add(now);
             p.Controls.Add(BuildFanCard(width));
+            p.Controls.Add(BuildBenchmarkCard(width));
 
             var caches = new CardPanel(Strings.T("perf.cache.title"), width);
             Mark("perf.cache", caches);
