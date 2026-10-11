@@ -130,6 +130,9 @@ $r = Invoke-Engine 'dry run' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSign
 Test-Stream $r 'dry run'
 Check (($r.code -eq 0) -and ($r.result.outcome -eq 'completed') -and ($r.result.message_id -eq 'result.dry-run-complete') -and $r.result.dry_run -and -not $r.result.mutated) 'completed (dry run), nothing changed'
 $stages = @(Get-Events $r 'stage' | ForEach-Object { $_.id })
+# The optional stages of the extras ('extras' and 'components', installer\components.ps1) are not here: a run this
+# window drives can neither ask for an extra nor take one by default, so it opens neither stage. The case below
+# checks exactly that, and the one after it checks where the two stages go in a run that names an extra.
 $want = @('preflight') + $(if ($tsActive) { @() } else { @('test-signing') }) + @('install', 'firmware', 'files', 'driver', 'settings', 'finish')
 Check ((($stages -join ',') -eq ($want -join ','))) "stages: $($stages -join ', ')"
 Check ((Get-Seq $r 'settings-plan') -lt (Get-Seq $r 'step')) 'the settings-impact plan comes before the first step'
@@ -151,6 +154,25 @@ if (-not $tsActive) {
 }
 Check ($r.text -notmatch 'Restart now\?|would ask: Restart') 'the engine never asks for the restart'
 Check (-not (Get-Events $r 'install-action').Count) 'a dry run records no install action'
+
+'[G-EVT] the extras of this package (installer\components.json): the window consents to none, a command line that names one gets the two stages in their places'
+$cmFile = Join-Path $Package 'installer\components.json'
+$cm = $null
+if (Test-Path -LiteralPath $cmFile -PathType Leaf) { $cm = Get-Content -LiteralPath $cmFile -Raw | ConvertFrom-Json }
+if ($null -eq $cm) { '  (skipped: this package offers no extra)' } else {
+    Check (($stages -notcontains 'extras') -and ($stages -notcontains 'components') -and ($r.text -notmatch 'would ask: Install')) 'a window run that was given no extra neither asks for one nor installs one'
+    $pinned = @(@($cm.components) | Where-Object { (([string]$_.asset.sha256) -match '^[0-9A-Fa-f]{64}$') -and [long]$_.asset.size -gt 0 } | ForEach-Object { [string]$_.id })
+    if (-not $pinned.Count) { '  (skipped: no extra of this package has a pinned download)' } else {
+        $r2 = Invoke-Engine 'dry run with an extra' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey', '-Components', $pinned[0], '-NoModels')
+        Test-Stream $r2 'dry run with an extra'
+        $s2 = @(Get-Events $r2 'stage' | ForEach-Object { $_.id })
+        $want2 = @('preflight', 'extras') + $(if ($tsActive) { @() } else { @('test-signing') }) + @('install', 'firmware', 'files', 'driver', 'settings', 'components', 'finish')
+        Check ((($s2 -join ',') -eq ($want2 -join ','))) "stages with -Components $($pinned[0]): $($s2 -join ', ')"
+        Check (($r2.code -eq 0) -and ($r2.result.outcome -eq 'completed') -and -not $r2.result.mutated) 'the extra changes nothing of the run''s outcome, and nothing on this PC'
+        Check ($r2.text -match [regex]::Escape("tools\$($pinned[0])")) "the dry run names the folder the extra would go into (tools\$($pinned[0]))"
+        Check ($r2.text -notmatch 'would ask') 'and asks nothing: the command line named the extra'
+    }
+}
 
 '[G-EVT] invocation binding: a stale result is removed, a generated id is used throughout'
 $r = Invoke-Engine 'stale result' @('-Plan', '-DryRunIgnoreBoard') -StaleResult

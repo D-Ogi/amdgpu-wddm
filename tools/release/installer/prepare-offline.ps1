@@ -9,11 +9,20 @@
 # always complete. An existing prepared folder (offline-set.json) is replaced; any other non-empty folder is refused.
 # Layout (docs/gui/interfaces-setup.md, "Offline set"): the package files as manifest.json lists them, firmware\ with
 # the files of manifest.json "firmware", and offline-set.json. A kept repair set has the same layout without the last.
+# The extras of the release (installer\components.json: our llama.cpp build, our Ollama build, and the models offered
+# with them) go into components\ and models\ of the same folder, each SHA256 checked: an install from that folder
+# needs no internet for them either. Without -Components the extras the installer offers by default are fetched;
+# without -Models no model is.
 # Windows PowerShell 5.1 syntax only.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Destination,
     [string]$FirmwareDir,                   # the firmware files from a folder instead of a download
+    [string[]]$Components,                  # the extras to fetch as well (ids of components.json); default: the default ones
+    [switch]$NoComponents,                  # no extra at all
+    [string[]]$Models,                      # the models to fetch as well (ids of components.json); default: none
+    [switch]$NoModels,                      # no model at all
+    [string]$ComponentDir,                  # the extras and the models from a folder instead of a download
     [switch]$Gui,
     [string]$InvocationId,
     [string]$EventsFile,
@@ -26,6 +35,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 . (Join-Path $here 'engine.ps1')
 . (Join-Path $here 'release-witness.ps1')
+. (Join-Path $here 'components.ps1')
 $script:OfflineSetSchema = 'amdgpu-wddm.offline-set/1'
 $script:OfflineSetFile = 'offline-set.json'
 $script:Partial = $null
@@ -58,6 +68,7 @@ function Stop-Refused([string]$CheckId, [string]$MessageId, [string]$Detail) {
 
 $Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination).TrimEnd('\')
 if ($FirmwareDir) { $FirmwareDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FirmwareDir) }
+if ($ComponentDir) { $ComponentDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ComponentDir) }
 Write-Host 'amdgpu-wddm: prepare a folder for an installation without internet' -ForegroundColor White
 Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = [bool]$Gui; dry_run = $false; package = $package; contract = $script:EngineContract; destination = $Destination; deadline_utc = $script:EngineDeadlineText; job = $script:EngineJob })
 
@@ -93,6 +104,65 @@ if ($FirmwareDir) {
     try { [void](Get-FirmwareStaged -Firmware $fw -Staging $fwSource) }
     catch { Stop-Refused 'firmware.unreachable' 'result.firmware-unreachable' $_.Exception.Message }
 }
+# The extras (components.ps1) go into <destination>\components and <destination>\models, each SHA256 checked, so an
+# install from this folder needs no internet for them either. Without -Components the extras that the installer offers
+# by default are fetched; without -Models no model is (a model is gigabytes, and nobody chose one here). A release
+# whose extras have no pin yet, and a run that asked for none, add no stage at all.
+$componentSet = @()
+$modelSet = @()
+$cm = $null
+$cmProblems = @()
+try {
+    $cm = Read-ComponentsManifest $here
+    if ($null -ne $cm) {
+        $cmProblems = @(Test-ComponentsManifest $cm)
+        if ($cmProblems.Count) { $cm = $null }
+    }
+} catch { $cmProblems = @("installer\components.json does not parse: $($_.Exception.Message)") }
+$wantComponents = @()
+$wantModels = @()
+$skipped = @()
+if ($null -ne $cm) {
+    $req = Resolve-ComponentRequest -Manifest $cm -Requested $Components -NoComponents ([bool]$NoComponents) -CanAsk $false -DefaultsWithoutAsking $true
+    foreach ($u in @($req.unknown)) { $skipped += "-Components names '$u', which this release does not have" }
+    foreach ($id in @($req.ids)) {
+        $c = Get-ComponentById $cm $id
+        $problem = Get-ComponentPinProblem $c
+        if ($problem) { $skipped += "$([string]$c.title): $problem"; continue }
+        $wantComponents += $id
+    }
+    $mreq = Resolve-ModelRequest -Manifest $cm -Requested $Models -NoModels ([bool]$NoModels) -CanAsk $false -ComponentIds $wantComponents
+    foreach ($u in @($mreq.unknown)) { $skipped += "-Models names '$u', which this release does not offer" }
+    foreach ($u in @($mreq.unusable)) { $skipped += "-Models names '$u', which none of the prepared extras can use" }
+    $wantModels = @($mreq.ids)
+}
+if ($cmProblems.Count -or @($wantComponents).Count -or @($wantModels).Count -or @($skipped).Count) {
+    Enter-Stage 'components' 'Extras: llama.cpp, Ollama, models'
+    if ($cmProblems.Count) { Write-Warn2 "the extras of this package cannot be read ($($cmProblems -join '; ')): none of them is prepared" }
+    foreach ($one in $skipped) { Write-Warn2 "$one`: it is not prepared" }
+    foreach ($id in $wantComponents) {
+        $c = Get-ComponentById $cm $id
+        try {
+            # The zips of a folder that was itself prepared are in its components\ subfolder.
+            [void](Get-ComponentAssetStaged -Manifest $cm -Component $c -Staging (Get-SetComponentDir $script:Partial) -FromDir (Get-ComponentSourceDir $ComponentDir))
+            $componentSet += [ordered]@{ id = $id; name = [string]$c.asset.name; sha256 = ([string]$c.asset.sha256).ToUpperInvariant() }
+        } catch { Write-Warn2 "$([string]$c.title) is not prepared: $($_.Exception.Message)" }
+    }
+    foreach ($id in $wantModels) {
+        $mdl = Get-ComponentModelById $cm $id
+        Write-Info "$([string]$mdl.file) ($(Format-ComponentSize ([long]$mdl.size)), licence $([string]$mdl.licence): $([string]$mdl.licence_url))"
+        try {
+            # The model files of a folder that was itself prepared are in its models\ subfolder, not next to the zips.
+            [void](Get-ModelFile -Model $mdl -ModelsDir (Get-SetModelDir $script:Partial) -FromDir (Get-ModelSourceDir $ComponentDir))
+            $modelSet += [ordered]@{ id = $id; file = [string]$mdl.file; sha256 = ([string]$mdl.sha256).ToUpperInvariant() }
+        } catch { Write-Warn2 "$([string]$mdl.file) is not prepared: $($_.Exception.Message)" }
+    }
+    Write-Info "prepared: $(@($componentSet).Count) extra(s), $(@($modelSet).Count) model(s)"
+    # A folder that nothing could be put into is not left behind: an install reads a folder only when it has files.
+    foreach ($d in @((Get-SetComponentDir $script:Partial), (Get-SetModelDir $script:Partial))) {
+        if ((Test-Path -LiteralPath $d -PathType Container) -and -not @(Get-ChildItem -LiteralPath $d -Force).Count) { Remove-Item -LiteralPath $d -Force }
+    }
+}
 Set-CancelAvailable $true 'before-copy'
 Invoke-CancelPoint 'before-copy'
 
@@ -108,6 +178,8 @@ $set = [ordered]@{
     prepared_utc = [DateTime]::UtcNow.ToString('o')
     firmware = [ordered]@{ commit = [string]$fw.commit; dir = 'firmware'; source = $(if ($FirmwareDir) { 'folder' } else { 'download' })
         files = @(@($fw.files) | ForEach-Object { [ordered]@{ name = [string]$_.name; sha256 = ([string]$_.sha256).ToUpperInvariant() } }) }
+    components = [ordered]@{ dir = $script:ComponentSetDir; source = $(if ($ComponentDir) { 'folder' } else { 'download' }); files = @($componentSet) }
+    models = [ordered]@{ dir = $script:ModelSetDir; source = $(if ($ComponentDir) { 'folder' } else { 'download' }); files = @($modelSet) }
 }
 [IO.File]::WriteAllText((Join-Path $script:Partial $script:OfflineSetFile), ($set | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
 # The whole folder once more, as install.cmd will see it.
@@ -131,6 +203,6 @@ if ($replace) {
 }
 $script:Partial = $null
 Write-Host ''
-Write-Host "Prepared: $Destination ($($m.version), $(@($m.files).Count) package files and $(@($fw.files).Count) firmware files checked)." -ForegroundColor Green
+Write-Host "Prepared: $Destination ($($m.version), $(@($m.files).Count) package files and $(@($fw.files).Count) firmware files checked; $(@($componentSet).Count) extra(s) and $(@($modelSet).Count) model(s))." -ForegroundColor Green
 Write-Host 'On the BC-250, run install.cmd from that folder. It needs no internet.' -ForegroundColor Green
 Exit-Engine -Code 0 -Outcome 'prepared' -MessageId 'result.offline-prepared' -Detail $Destination

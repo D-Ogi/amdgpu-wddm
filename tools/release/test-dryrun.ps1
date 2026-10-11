@@ -392,8 +392,46 @@ $r.text
 Check ($r.code -eq 0) "firmware download, fallback, offline folder and wrong-hash refusal: exit $($r.code)"
 Check (([regex]::Matches($r.text, 'SHA256 [0-9A-F]{64} ok  https://git\.kernel\.org/')).Count -eq 9) 'all 9 files came from the first address (git.kernel.org), not only from the fallback'
 
+'the extras: llama.cpp, Ollama and the models (test-components.ps1 under 5.1, HKCU scratch key, no network)'
+$cmPath = Join-Path $Package 'installer\components.json'
+if (-not (Test-Path -LiteralPath $cmPath -PathType Leaf)) {
+    Check ($null -eq $m.optional_components) 'this package offers no extras, and manifest.json says so'
+} else {
+    Check ($null -ne $m.optional_components -and [string]$m.optional_components.file -eq 'installer/components.json') 'manifest.json names installer/components.json under optional_components'
+    Check (@($m.files | Where-Object { $_.path -eq 'installer/components.json' }).Count -eq 1) 'manifest files: installer/components.json is pinned like every other package file'
+    Check (-not @(Get-ChildItem -LiteralPath $Package -Recurse -File -Filter '*.gguf').Count) 'no model file in the package'
+    $cmWork = Join-Path $WorkBase ('components-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+    $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-components.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Source', (Join-Path $PSScriptRoot 'components.json'), '-WorkRoot', $cmWork)
+    $r.text
+    Check ($r.code -eq 0) "manifest checks, switch combinations, offline folder, hash refusal, install, hooks and uninstall cleanup: exit $($r.code)"
+    Remove-Item -LiteralPath $cmWork -Recurse -Force -ErrorAction SilentlyContinue
+    'install -DryRun -DryRunIgnoreBoard: the extras are offered and nothing is downloaded'
+    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard')
+    Check ($r.text -match '\[dry run\] would ask: Install llama\.cpp for this board\?') 'the llama.cpp question is asked, with its default'
+    Check ($r.text -match '\[dry run\] would ask which models to download') 'the model question comes after the components'
+    Check ($r.text -match 'models: none') 'no model is chosen by itself'
+    Check ($r.text -notmatch 'doing: get .+\.zip') 'a dry run downloads no component'
+    'install -DryRun -NoComponents: no question at all'
+    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents')
+    Check ($r.code -eq 0) "-NoComponents exit $($r.code)"
+    Check ($r.text -notmatch 'would ask: Install llama') '-NoComponents asks nothing'
+    Check ($r.text -match 'extras: none') '-NoComponents installs nothing'
+    'install -DryRun -Components llama -Models gemma12b: the chosen ones, no question'
+    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Components', 'llama', '-Models', 'gemma12b')
+    Check ($r.text -notmatch 'would ask') 'with both switches nothing is asked'
+    $unpinned = @($m.optional_components.unpinned)
+    if ($unpinned -contains 'llama') {
+        Check ($r.text -match 'cannot be installed from this package') 'a component without a SHA-256 pin in this package is refused, not installed unchecked'
+    } else {
+        Check ($r.text -match 'extras to install: llama') 'the component named on the command line is the one installed'
+        Check ($r.text -match 'models to download into .+gemma') 'the model named on the command line is the one downloaded'
+    }
+}
+
 'install -DryRun -DryRunIgnoreBoard -FirmwareDir (offline): a good folder, then a folder with a changed file'
-$r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', (Join-Path $fwWork 'download'))
+# -NoComponents: this case is about the firmware folder, and the extras would print the licence and the
+# download address of a component zip, which the "no address" check below would read as a download.
+$r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents', '-FirmwareDir', (Join-Path $fwWork 'download'))
 Check ($r.code -eq 0) "good folder: exit $($r.code)"
 Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') 'good folder: preflight checks every SHA256'
 Check ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') 'good folder: phase 2 takes the files from the folder'
@@ -425,9 +463,11 @@ foreach ($c in @(
     foreach ($k in $c.st.Keys) { $st[$k] = $c.st[$k] }
     [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json -Depth 4))
     $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
-    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
     Check ($r.code -eq 0) "$($c.name): exit $($r.code)"
     Check ($r.text -match "from the first run of this install \(driver-pending-restart\): -FirmwareDir $([regex]::Escape($goodDir)) -DpmMaxMHz 1200 -NoControlApp") "$($c.name): the folder, the setting and the switch come from the state"
+    # -NoComponents above, so no licence or component address is in this text: every https:// here would be a
+    # firmware download, which this case must not make.
     Check (($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') -and ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') -and ($r.text -notmatch 'https://')) "$($c.name): the firmware comes from the first run's folder, no download"
     Check ($r.text -match 'DpmMaxMHz=1200 \(command line\)') "$($c.name): the first run's -DpmMaxMHz is written"
     Check (($r.text -match 'control application: not in this package \(or -NoControlApp\); skipped') -and ($r.text -notmatch 'would: copy payload\\control')) "$($c.name): -NoControlApp still holds"

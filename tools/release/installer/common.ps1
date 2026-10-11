@@ -279,9 +279,21 @@ function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
     $resumeTuning = $State -and ([string]$State.package_version -eq $PackageVersion) -and
         ([string]$State.phase -in @('new', 'testsigning-pending', 'testsigning-active', 'files-copied',
             'driver-pending-restart', 'driver-installed', 'install-incomplete'))
-    $in = [pscustomobject]@{ firmware_dir = $null; parameters = @{}; switches = @(); restored = @() }
+    $in = [pscustomobject]@{ firmware_dir = $null; component_dir = $null; components = $null; models = $null; parameters = @{}; switches = @(); restored = @() }
     if ($Bound.ContainsKey('FirmwareDir') -and $Bound['FirmwareDir']) { $in.firmware_dir = [string]$Bound['FirmwareDir'] }
     elseif ($resume -and $State.firmware_source_dir) { $in.firmware_dir = [string]$State.firmware_source_dir; $in.restored += "-FirmwareDir $($in.firmware_dir)" }
+    if ($Bound.ContainsKey('ComponentDir') -and $Bound['ComponentDir']) { $in.component_dir = [string]$Bound['ComponentDir'] }
+    elseif ($resume -and $State.component_source_dir) { $in.component_dir = [string]$State.component_source_dir; $in.restored += "-ComponentDir $($in.component_dir)" }
+    # The component and model answers of the first run: the questions are asked once, before any change, and the
+    # argument-free continuation after a restart takes them from the state. $null means "not answered yet".
+    if ($resume -and $null -ne $State.PSObject.Properties['components_chosen'] -and $null -ne $State.components_chosen) {
+        $in.components = @($State.components_chosen)
+        $in.restored += "components: $(if (@($in.components).Count) { @($in.components) -join ',' } else { 'none' })"
+    }
+    if ($resume -and $null -ne $State.PSObject.Properties['models_chosen'] -and $null -ne $State.models_chosen) {
+        $in.models = @($State.models_chosen)
+        $in.restored += "models: $(if (@($in.models).Count) { @($in.models) -join ',' } else { 'none' })"
+    }
     if ($Bound.ContainsKey('DpmMaxMHz')) { $in.parameters['DpmMaxMHz'] = [int]$Bound['DpmMaxMHz'] }
     if ($Bound.ContainsKey('CuMode') -and [int]$Bound['CuMode']) { $in.parameters['CuMode'] = [int]$Bound['CuMode'] }
     if (-not $in.parameters.Count -and $resume -and $State.command_line_parameters) {
@@ -296,6 +308,9 @@ function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
 }
 function Save-InstallInputs($State, $Inputs) {
     Set-StateValue $State 'firmware_source_dir' $Inputs.firmware_dir
+    Set-StateValue $State 'component_source_dir' $Inputs.component_dir
+    if ($null -ne $Inputs.components) { Set-StateValue $State 'components_chosen' @($Inputs.components) }
+    if ($null -ne $Inputs.models) { Set-StateValue $State 'models_chosen' @($Inputs.models) }
     Set-StateValue $State 'command_line_parameters' $(if ($Inputs.parameters.Count) { [pscustomobject]$Inputs.parameters } else { $null })
     Set-StateValue $State 'install_switches' $(if (@($Inputs.switches).Count) { @($Inputs.switches) } else { $null })
 }
@@ -311,7 +326,7 @@ function Set-InstallPackage($State, [string]$PackageVersion) {
     return $was
 }
 function Clear-InstallInputs($State) {
-    foreach ($n in 'firmware_source_dir', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
+    foreach ($n in 'firmware_source_dir', 'component_source_dir', 'components_chosen', 'models_chosen', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
 }
 
 # A fact about the computer before the install (did this file exist?): the first run records it, a re-run over a
@@ -327,6 +342,13 @@ function Set-StateValueOnce($State, [string]$Name, $Value) {
 # uninstall.ps1 removes that one entry and no other. The value is read and written as Windows stores it (REG_EXPAND_SZ,
 # %SystemRoot% not expanded). A new process sees the entry after the restart that the install asks for.
 $script:EnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+# Host tests only: the hive the two functions below open. A test points it at HKEY_CURRENT_USER with a scratch
+# $script:EnvironmentKey, so no test of ours can write the machine PATH of the computer it runs on.
+$script:EnvironmentHive = $null
+function Get-EnvironmentHive {
+    if ($null -ne $script:EnvironmentHive) { return $script:EnvironmentHive }
+    return [Microsoft.Win32.Registry]::LocalMachine
+}
 function Get-HipPathEntry([string]$Root) { return (Join-Path $Root 'tools\hip') }
 # Pure: is $Entry one of the entries of $PathValue (case and a trailing backslash do not count)?
 function Test-PathEntry([string]$PathValue, [string]$Entry) {
@@ -347,7 +369,7 @@ function Remove-PathEntry([string]$PathValue, [string]$Entry) {
     return ((@($PathValue -split ';') | Where-Object { $_.Trim().TrimEnd('\') -ine $want }) -join ';')
 }
 function Get-MachinePath {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($script:EnvironmentKey, $false)
+    $k = (Get-EnvironmentHive).OpenSubKey($script:EnvironmentKey, $false)
     try {
         $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
         if ($k.GetValueNames() -contains 'Path') { $kind = $k.GetValueKind('Path') }
@@ -355,7 +377,7 @@ function Get-MachinePath {
     } finally { $k.Close() }
 }
 function Set-MachinePath([string]$Value, $Kind) {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($script:EnvironmentKey, $true)
+    $k = (Get-EnvironmentHive).OpenSubKey($script:EnvironmentKey, $true)
     try { $k.SetValue('Path', $Value, $Kind) } finally { $k.Close() }
 }
 

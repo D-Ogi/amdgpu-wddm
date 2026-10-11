@@ -363,6 +363,53 @@ foreach ($f in $sources.files + $extra) {
 }
 # Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
 foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
+# The optional components of this release (installer\components.ps1): our llama.cpp build and our Ollama build are
+# release assets, not package files. tools\release\components.json is the pinned list; this writes it into the package
+# as installer\components.json with {release} expanded, and manifest.json names it under optional_components, so the
+# existing package-integrity check covers it like every other file. A component whose asset SHA-256 is not filled in
+# has no pin: it stays in the list, the installer refuses it with a plain message and downloads nothing. A package can
+# therefore be built before its component zips are uploaded, and it will not install one unchecked.
+. (Join-Path $PSScriptRoot 'installer\components.ps1')
+$optionalComponents = $null
+$componentSource = Join-Path $PSScriptRoot 'components.json'
+if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
+    $cmJson = Get-Content -LiteralPath $componentSource -Raw | ConvertFrom-Json
+    $cmJson.release = $Version
+    if ($cmJson.PSObject.Properties['comment']) { $cmJson.PSObject.Properties.Remove('comment') }
+    foreach ($c in @($cmJson.components)) {
+        if ($c.PSObject.Properties['comment']) { $c.PSObject.Properties.Remove('comment') }
+        $c.asset.name = ([string]$c.asset.name).Replace('{release}', $Version)
+        $c.asset.url_templates = @(@($c.asset.url_templates) | ForEach-Object { ([string]$_).Replace('{release}', $Version) })
+    }
+    $cmProblems = @(Test-ComponentsManifest $cmJson)
+    if ($cmProblems.Count) { throw "tools\release\components.json: $($cmProblems -join '; ')" }
+    # An asset name that carries no {release} is the literal name of one release's asset. When it names another
+    # release's train than this build, its address is a 404 at install time, and only a tester would find out. The
+    # asset is downloaded by its SHA-256, so the name is the one thing nothing else checks.
+    if ($Version -match 'tester\.(\d+)') {
+        $thisTrain = $Matches[1]
+        foreach ($c in @($cmJson.components)) {
+            $name = [string]$c.asset.name
+            if ($name -match 'tester\.(\d+)' -and $Matches[1] -ne $thisTrain) {
+                "  WARNING: component '$([string]$c.id)' names the asset $name, which carries tester.$($Matches[1]) while this release is tester.$thisTrain. Upload the asset under that name, or write the new name, size and sha256 into tools\release\components.json."
+            }
+        }
+    }
+    [IO.File]::WriteAllText((Join-Path $pkg 'installer\components.json'), ($cmJson | ConvertTo-Json -Depth 8))
+    $cmPinned = @(@($cmJson.components) | Where-Object { -not (Get-ComponentPinProblem $_) } | ForEach-Object { [string]$_.id })
+    $cmUnpinned = @(@($cmJson.components) | Where-Object { Get-ComponentPinProblem $_ } | ForEach-Object { [string]$_.id })
+    $optionalComponents = [ordered]@{
+        file = 'installer/components.json'
+        models_dir = [string]$cmJson.models_dir
+        offered = @(@($cmJson.components) | ForEach-Object { [string]$_.id })
+        pinned = $cmPinned
+        unpinned = $cmUnpinned
+        models = @(@($cmJson.models) | ForEach-Object { [string]$_.id })
+    }
+    '  components: {0} offered ({1}), {2} with a pinned download, {3} models offered' -f @($cmJson.components).Count, (@($optionalComponents.offered) -join ', '), $cmPinned.Count, @($cmJson.models).Count
+    foreach ($id in $cmUnpinned) { "  WARNING: component '$id' has no SHA-256 in tools\release\components.json: this package will refuse it. Upload its zip as a release asset and fill size and sha256." }
+} else { '  components: tools\release\components.json is not in this workspace: this package offers no optional component' }
+
 # The compatibility record (installer\compatibility.ps1, GUI plan C7): written from the final INF, installer and payload,
 # listed in manifest.json like every other file, and verified below once the manifest exists.
 . (Join-Path $PSScriptRoot 'installer\engine.ps1')
@@ -422,6 +469,7 @@ $manifest = [ordered]@{
     control_app_exe = $sources.control_app_exe
     system_tuning = $tuningManifest
     mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
+    optional_components = $optionalComponents   # the extras (installer/components.json); $null in a release without any
     sources = $sources.sources
     firmware = $firmware
     defaults = $regDefaults.defaults
