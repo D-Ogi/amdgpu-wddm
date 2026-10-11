@@ -554,8 +554,18 @@ facts:
     claim: "The HIP gridDim mapping caused the recorded softmax GPUVM fault on unit A. It returned AQL work-item extents instead of block counts. The retained dispatch predicts the first fault page exactly: input 0x4027F84000 plus an erroneous 512 MiB stride equals 0x4047F84000. After the header correction and consumer rebuild, TinyLlama completes pp512/tg128 and its 16-token greedy output matches the CPU reference byte for byte."
     status_text: "CONFIRMED (unit A, compiled negative and positive geometry controls, CPU text reference)"
     detail: "Journal batch 27 identifies soft_max_f32<true,512,512,float>, GFX sequence 11695 and OS fence 1842. The read fault precedes the watchdog timeout by 12314 ms. Old-header geometry gives 11130 incorrect records across three cases. The final control covers five cases, 11410 physical threads and 1436 logical-tail threads, with zero mismatches or damaged canaries. Final backend 4928C0DD, enabled runtime B0FEB14B and journal KMD BCB36A1B pass vadd, live builtins, hipbench, HIPBLAS (532 checks), and half/block (117 device checks). TinyLlama records pp512 1868.00 and tg128 122.31 tokens/s in one repetition, not a performance comparison. Gemma 12B at ub512 and ub128 fails before dispatch because CreateAllocation2 refuses its 6960120064-byte buffer with C000000D. Those failures do not establish a physical-memory shortage or a passing dense-model gate. Artifact hashes and health results are in the record. The old-header mapping cannot be detected generically from current code-object metadata."
-    evidence: "[HIP device-contract record](../evidence/m16/hip-device-contract-2026-10-11/README.md)"
+    evidence: "[HIP device-contract record](../evidence/m16/hip-device-contract-2026-10-11/README.md), [strict CPU reference correction](../evidence/m16/hip-allocation-cap-2026-10-11/README.md)"
     edges:
       - {"type": "uses", "to": "M858"}
       - {"type": "uses", "to": "M860"}
       - {"type": "supersedes", "to": "M859", "scope": "partial"}
+  - id: M869
+    status: CONFIRMED
+    date: "2026-10-11"
+    claim: "On unit A, the measured Windows allocation gate refuses ordinary HIP requests above 0xffff0000 rounded bytes. Ten device and mappable controls straddle the boundary. Six refused controls have PID-matched DxgKrnl event 494 witnesses. A consumer cap of 0xfffc0000 bytes lets the tensor planner split Gemma 12B into admissible allocations and complete inference at UMA 8192 MiB."
+    status_text: "CONFIRMED (allocation boundary and inference controls; performance remains a measured stack result)"
+    detail: "The private exception bit traces to standard VGPU allocation type 5, not CPU visibility. This finding applies to the recorded Windows images 10.0.22621.6199. Capped HIP and upstream Vulkan give identical 16-token greedy output. Strict CPU matches two tokens but reaches the cleanup bound. Strict CPU TinyLlama matches the earlier corrected HIP output, replacing the insufficient ngl0-only reference in M868. In a profiled A/B, FA on gives pp512 69.17 and tg128 2.04 tokens/s; FA off gives 209.59 and 19.20. The HIP build lacks GPU Flash Attention. DPM clocks differ, and the Vulkan comparison uses another consumer revision. Both HIP arms have 49 non-fast waits per generated token. Exact placement of each model buffer and per-kernel GPU duration remain unmeasured. Arbitrary contiguous HIP allocations above the gate remain unsupported. All final health gates pass."
+    evidence: "[HIP allocation-cap controls and profile](../evidence/m16/hip-allocation-cap-2026-10-11/README.md)"
+    edges:
+      - {"type": "uses", "to": "M868"}
+      - {"type": "supports", "to": "M868", "scope": "partial"}

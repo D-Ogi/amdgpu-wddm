@@ -1,0 +1,49 @@
+{
+  "pid": 6416,
+  "successful_identical_budget_samples": 25,
+  "successful_vram_samples": 23,
+  "local_requested": 7190900736,
+  "local_usage": 7206666240,
+  "nonlocal_requested": 845393920,
+  "nonlocal_usage": 845393920,
+  "segment_committed": {
+    "0_memory": 7190900736,
+    "1_aperture": 0,
+    "2_memory": 15765504,
+    "3_aperture": 845393920
+  },
+  "all_demotion_buckets_zero": true,
+  "all_eviction_counts_zero": true,
+  "owned_large_allocations": [
+    {
+      "destroy_record": 259210,
+      "bytes": 4289200128
+    },
+    {
+      "destroy_record": 259220,
+      "bytes": 2671247360
+    }
+  ],
+  "large_allocation_placement": "Initial valid mappings absent; exact placement not established.",
+  "observation_started_after_process_seconds": 33.3798355,
+  "journal_snapshot_range": [
+    252169,
+    253197
+  ],
+  "journal_follow_range": [
+    253292,
+    259229
+  ],
+  "gap_records": 94,
+  "follow_final_footer_absent": true,
+  "missing_queries": [
+    "vram-005",
+    "vram-016",
+    "budget-022",
+    "vram-022",
+    "budget-026"
+  ],
+  "last_query_cancelled_on_process_exit": true,
+  "all_helpers_closed": true,
+  "statistics_segment_numbering": "Zero based; not interchangeable with one-based KMD PTE segment IDs."
+}

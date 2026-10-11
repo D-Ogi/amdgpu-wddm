@@ -1,0 +1,11 @@
+generated actual-source planner, callback, allocation guard and guard mutant
+planner-test.cpp
+failures=0
+planner-test.cpp
+failures=0
+planner-mutant.cpp
+FAIL CHECK calls==0
+FAIL CHECK device_calls==0
+FAIL CHECK calls==1
+FAIL CHECK calls==1
+failures=4

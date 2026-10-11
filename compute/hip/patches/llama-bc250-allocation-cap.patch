@@ -1,0 +1,40 @@
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -876,8 +876,28 @@
+     return buft->iface.get_name == ggml_backend_cuda_buffer_type_get_name;
+ }
+ 
++// Explicit opt-in for this HIP runtime's measured per-allocation limit.
++#if defined(BC250_HIP_MAX_ALLOC_BYTES) && !defined(GGML_USE_HIP)
++#error BC250_HIP_MAX_ALLOC_BYTES requires GGML_USE_HIP
++#endif
++static size_t ggml_backend_cuda_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
++    GGML_UNUSED(buft);
++#ifdef BC250_HIP_MAX_ALLOC_BYTES
++    static_assert(BC250_HIP_MAX_ALLOC_BYTES > 0, "allocation cap must be positive");
++    return (size_t) BC250_HIP_MAX_ALLOC_BYTES;
++#else
++    return SIZE_MAX;
++#endif
++}
++
+ static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+     ggml_backend_cuda_buffer_type_context * buft_ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
++
++    if (size > ggml_backend_cuda_buffer_type_get_max_size(buft)) {
++        GGML_LOG_ERROR("%s: single allocation %zu exceeds configured HIP limit %zu\n",
++                       __func__, size, ggml_backend_cuda_buffer_type_get_max_size(buft));
++        return nullptr;
++    }
+ 
+     ggml_cuda_set_device(buft_ctx->device);
+ 
+@@ -925,7 +945,7 @@
+     /* .alloc_buffer        = */ ggml_backend_cuda_buffer_type_alloc_buffer,
+     /* .alloc_buffer_n      = */ NULL,
+     /* .get_alignment       = */ ggml_backend_cuda_buffer_type_get_alignment,
+-    /* .get_max_size        = */ NULL, // defaults to SIZE_MAX
++    /* .get_max_size        = */ ggml_backend_cuda_buffer_type_get_max_size,
+     /* .get_alloc_size      = */ ggml_backend_cuda_buffer_type_get_alloc_size,
+     /* .get_alloc_size_n    = */ NULL,
+     /* .is_host             = */ NULL,

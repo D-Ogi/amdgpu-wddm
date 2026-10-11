@@ -7,7 +7,8 @@ param(
     [Parameter(Mandatory=$true)][string]$RocmRoot,
     [Parameter(Mandatory=$true)][string]$OriginalCache,
     [Parameter(Mandatory=$true)][string]$CMake,
-    [ValidateRange(1,4)][int]$Jobs = 4
+    [ValidateRange(1,4)][int]$Jobs = 4,
+    [switch]$Bc250AllocationCap
 )
 $ErrorActionPreference = 'Stop'
 $sourceText = Get-Content (Join-Path $Source 'ggml/src/ggml-cuda/common.cuh') -Raw
@@ -23,8 +24,16 @@ foreach ($line in Get-Content $OriginalCache) {
         $options += "-D$($Matches[1]):$($Matches[2])=$($Matches[3])"
     }
 }
+if ($originalCxxFlags -match 'BC250_HIP_MAX_ALLOC_BYTES') { throw 'Use an original cache without BC250_HIP_MAX_ALLOC_BYTES. Enable the cap only with -Bc250AllocationCap.' }
 $options += "-DCMAKE_PREFIX_PATH=$RocmRoot"
 $options += "-DCMAKE_CXX_FLAGS=$originalCxxFlags -DBC250_HIP_NO_DEVICE_PRINTF=1"
+if ($Bc250AllocationCap) {
+    $allocationSource = Get-Content (Join-Path $Source 'ggml/src/ggml-cuda/ggml-cuda.cu') -Raw
+    if ($allocationSource -notmatch 'BC250_HIP_MAX_ALLOC_BYTES') {
+        throw 'Apply llama-bc250-allocation-cap.patch before enabling the measured allocation cap.'
+    }
+    $options += "-DCMAKE_CXX_FLAGS=$originalCxxFlags -DBC250_HIP_NO_DEVICE_PRINTF=1 -DBC250_HIP_MAX_ALLOC_BYTES=0xfffc0000ULL"
+}
 $previousRocm = $env:ROCM_PATH
 try {
     $env:ROCM_PATH = $RocmRoot

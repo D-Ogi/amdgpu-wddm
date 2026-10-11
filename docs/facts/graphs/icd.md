@@ -20,10 +20,12 @@ flowchart LR
   M859["M859"]
   M864["M864"]
   M868["M868"]
+  M869["M869"]
   M253 ==>|supersedes| M251
   M849 ==>|supersedes| M847
   M864 ==>|supersedes| M857
   M868 ==>|supersedes| M859
+  M869 ==>|supports| M868
   M816 ==>|supersedes| M166
   M510 ==>|supports| M509
   classDef other stroke-dasharray:4 3
@@ -74,6 +76,7 @@ flowchart LR
   M863["M863"]
   M865["M865<br/>hardware"]
   M868["M868"]
+  M869["M869"]
   M865 --> M847
   M139 --> M50
   M252 --> M253
@@ -102,6 +105,7 @@ flowchart LR
   M863 --> M856
   M868 --> M858
   M868 --> M860
+  M869 --> M868
   M842 --> M795
   M510 --> M508
   M516 --> M515

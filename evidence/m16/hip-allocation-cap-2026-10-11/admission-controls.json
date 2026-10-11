@@ -1,0 +1,182 @@
+[
+  {
+    "control": "dsmall-map-r2",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "65536",
+      "Elapsed": 0.47244319999999995,
+      "Exit": 0,
+      "Reason": "",
+      "Mode": "mappable"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:36:37.7692280Z",
+      "Pid": 1948,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=65536 flags=0x8 open_flags=0x1\nstage=open_begin qpc=45146086879 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=0 va=0x0\nstage=open_end qpc=45146088494 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=0 va=0x0\nstage=alloc_begin qpc=45146088541 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=0 va=0x0\nstage=alloc_end qpc=45146094487 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=65536 va=0x4000000000\nstage=map_begin qpc=45146094575 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=65536 va=0x4000000000\nstage=map_end qpc=45146094842 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=65536 va=0x4000000000\nmapping_nonnull=1\nstage=unmap_end qpc=45146094907 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=65536 va=0x4000000000\nstage=free_begin qpc=45146094935 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=65536 va=0x4000000000\nstage=free_end qpc=45146096717 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=0 va=0x0\nstage=close_begin qpc=45146096770 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=0 va=0x0\nstage=close_returned qpc=45146097724 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x8 bytes=0 va=0x0\n",
+    "matching_etw494": false
+  },
+  {
+    "control": "dcap-map-r2",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "4294705152",
+      "Elapsed": 1.6820606999999999,
+      "Exit": 0,
+      "Reason": "",
+      "Mode": "mappable"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:34:23.1195594Z",
+      "Pid": 6596,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=4294705152 flags=0x8 open_flags=0x1\nstage=open_begin qpc=43799584984 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=0 va=0x0\nstage=open_end qpc=43799586635 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=0 va=0x0\nstage=alloc_begin qpc=43799586684 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=0 va=0x0\nstage=alloc_end qpc=43806862962 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=4294705152 va=0x4000000000\nstage=map_begin qpc=43806863264 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=4294705152 va=0x4000000000\nstage=map_end qpc=43810369050 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=4294705152 va=0x4000000000\nmapping_nonnull=1\nstage=unmap_end qpc=43810369422 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=4294705152 va=0x4000000000\nstage=free_begin qpc=43810369461 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=4294705152 va=0x4000000000\nstage=free_end qpc=43811339607 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=0 va=0x0\nstage=close_begin qpc=43811339897 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=0 va=0x0\nstage=close_returned qpc=43811341800 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x8 bytes=0 va=0x0\n",
+    "matching_etw494": false
+  },
+  {
+    "control": "dcap-plus1-map",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "4294705153",
+      "Elapsed": 0.4623847,
+      "Exit": 1,
+      "Reason": "",
+      "Mode": "mappable"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:34:39.0975855Z",
+      "Pid": 6848,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=4294705153 flags=0x8 open_flags=0x1\nstage=open_begin qpc=43959357558 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x8 bytes=0 va=0x0\nstage=open_end qpc=43959359089 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x8 bytes=0 va=0x0\nstage=alloc_begin qpc=43959359138 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x8 bytes=0 va=0x0\nstage=alloc_end qpc=43959359847 status=-7 status_name=windows call failed os_valid=1 os_status=0xC000000D requested=4294705153 flags=0x8 bytes=0 va=0x0\nstage=close_begin qpc=43959359883 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x8 bytes=0 va=0x0\nstage=close_returned qpc=43959360514 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x8 bytes=0 va=0x0\n",
+    "matching_etw494": true
+  },
+  {
+    "control": "d4g-map",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "4294967296",
+      "Elapsed": 0.5137714,
+      "Exit": 1,
+      "Reason": "",
+      "Mode": "mappable"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:30:34.5765377Z",
+      "Pid": 5200,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=4294967296 flags=0x8 open_flags=0x1\nstage=open_begin qpc=41514150427 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x8 bytes=0 va=0x0\nstage=open_end qpc=41514152250 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x8 bytes=0 va=0x0\nstage=alloc_begin qpc=41514152301 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x8 bytes=0 va=0x0\nstage=alloc_end qpc=41514153017 status=-7 status_name=windows call failed os_valid=1 os_status=0xC000000D requested=4294967296 flags=0x8 bytes=0 va=0x0\nstage=close_begin qpc=41514153107 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x8 bytes=0 va=0x0\nstage=close_returned qpc=41514153835 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x8 bytes=0 va=0x0\n",
+    "matching_etw494": true
+  },
+  {
+    "control": "d696-map",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "6960120064",
+      "Elapsed": 0.4596878,
+      "Exit": 1,
+      "Reason": "",
+      "Mode": "mappable"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:31:14.4752647Z",
+      "Pid": 10696,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=6960120064 flags=0x8 open_flags=0x1\nstage=open_begin qpc=41913162644 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x8 bytes=0 va=0x0\nstage=open_end qpc=41913164290 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x8 bytes=0 va=0x0\nstage=alloc_begin qpc=41913164339 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x8 bytes=0 va=0x0\nstage=alloc_end qpc=41913165186 status=-7 status_name=windows call failed os_valid=1 os_status=0xC000000D requested=6960120064 flags=0x8 bytes=0 va=0x0\nstage=close_begin qpc=41913165228 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x8 bytes=0 va=0x0\nstage=close_returned qpc=41913166299 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x8 bytes=0 va=0x0\n",
+    "matching_etw494": true
+  },
+  {
+    "control": "dsmall-device",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "65536",
+      "Elapsed": 0.4793887,
+      "Exit": 0,
+      "Reason": "",
+      "Mode": "device"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:31:31.5079502Z",
+      "Pid": 2316,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=65536 flags=0x0 open_flags=0x1\nstage=open_begin qpc=42083470316 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=0 va=0x0\nstage=open_end qpc=42083471851 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=0 va=0x0\nstage=alloc_begin qpc=42083471897 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=0 va=0x0\nstage=alloc_end qpc=42083479163 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=65536 va=0x4000000000\nstage=free_begin qpc=42083479421 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=65536 va=0x4000000000\nstage=free_end qpc=42083481621 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=0 va=0x0\nstage=close_begin qpc=42083481698 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=0 va=0x0\nstage=close_returned qpc=42083482770 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=65536 flags=0x0 bytes=0 va=0x0\n",
+    "matching_etw494": false
+  },
+  {
+    "control": "dcap-device",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "4294705152",
+      "Elapsed": 1.1336787,
+      "Exit": 0,
+      "Reason": "",
+      "Mode": "device"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:31:36.6033860Z",
+      "Pid": 6336,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=4294705152 flags=0x0 open_flags=0x1\nstage=open_begin qpc=42134426326 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=0 va=0x0\nstage=open_end qpc=42134427876 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=0 va=0x0\nstage=alloc_begin qpc=42134427933 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=0 va=0x0\nstage=alloc_end qpc=42141581442 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=4294705152 va=0x4000000000\nstage=free_begin qpc=42141581693 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=4294705152 va=0x4000000000\nstage=free_end qpc=42141868451 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=0 va=0x0\nstage=close_begin qpc=42141868699 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=0 va=0x0\nstage=close_returned qpc=42141872356 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705152 flags=0x0 bytes=0 va=0x0\n",
+    "matching_etw494": false
+  },
+  {
+    "control": "dcap-plus1-device",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "4294705153",
+      "Elapsed": 0.4631963,
+      "Exit": 1,
+      "Reason": "",
+      "Mode": "device"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:34:43.9847814Z",
+      "Pid": 1944,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=4294705153 flags=0x0 open_flags=0x1\nstage=open_begin qpc=44008223447 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x0 bytes=0 va=0x0\nstage=open_end qpc=44008225018 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x0 bytes=0 va=0x0\nstage=alloc_begin qpc=44008225074 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x0 bytes=0 va=0x0\nstage=alloc_end qpc=44008225841 status=-7 status_name=windows call failed os_valid=1 os_status=0xC000000D requested=4294705153 flags=0x0 bytes=0 va=0x0\nstage=close_begin qpc=44008225884 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x0 bytes=0 va=0x0\nstage=close_returned qpc=44008226680 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294705153 flags=0x0 bytes=0 va=0x0\n",
+    "matching_etw494": true
+  },
+  {
+    "control": "d4g-device",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "4294967296",
+      "Elapsed": 0.4527425,
+      "Exit": 1,
+      "Reason": "",
+      "Mode": "device"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:31:44.2975419Z",
+      "Pid": 1964,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=4294967296 flags=0x0 open_flags=0x1\nstage=open_begin qpc=42211363380 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x0 bytes=0 va=0x0\nstage=open_end qpc=42211364974 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x0 bytes=0 va=0x0\nstage=alloc_begin qpc=42211365025 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x0 bytes=0 va=0x0\nstage=alloc_end qpc=42211365739 status=-7 status_name=windows call failed os_valid=1 os_status=0xC000000D requested=4294967296 flags=0x0 bytes=0 va=0x0\nstage=close_begin qpc=42211365768 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x0 bytes=0 va=0x0\nstage=close_returned qpc=42211366477 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=4294967296 flags=0x0 bytes=0 va=0x0\n",
+    "matching_etw494": true
+  },
+  {
+    "control": "d696-device",
+    "supervisor": {
+      "EtwStopExit": 0,
+      "Bytes": "6960120064",
+      "Elapsed": 0.44224749999999996,
+      "Exit": 1,
+      "Reason": "",
+      "Mode": "device"
+    },
+    "identity": {
+      "StartUtc": "2026-10-11T02:31:50.1732974Z",
+      "Pid": 9900,
+      "SessionId": 0
+    },
+    "stdout": "qpc_frequency=10000000 requested=6960120064 flags=0x0 open_flags=0x1\nstage=open_begin qpc=42270127038 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x0 bytes=0 va=0x0\nstage=open_end qpc=42270128588 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x0 bytes=0 va=0x0\nstage=alloc_begin qpc=42270128635 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x0 bytes=0 va=0x0\nstage=alloc_end qpc=42270129350 status=-7 status_name=windows call failed os_valid=1 os_status=0xC000000D requested=6960120064 flags=0x0 bytes=0 va=0x0\nstage=close_begin qpc=42270129385 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x0 bytes=0 va=0x0\nstage=close_returned qpc=42270130032 status=0 status_name=ok os_valid=0 os_status=0x00000000 requested=6960120064 flags=0x0 bytes=0 va=0x0\n",
+    "matching_etw494": true
+  }
+]
