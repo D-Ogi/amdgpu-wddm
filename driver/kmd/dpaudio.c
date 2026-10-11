@@ -318,12 +318,17 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
 
 void DpAudioStart(_Inout_ BC250_DEVICE* Device)
 {
+    if (Device->InheritedTmds) {
+        GuardLog("dpaudio: TMDS inherited link; DP audio start, requests and path power skipped");
+        return;
+    }
     StartCore(Device, FALSE);
 }
 
 // Nothing of the endpoint or the stream is assumed to survive D3: the whole start runs again, preconditions included.
 void DpAudioResume(_Inout_ BC250_DEVICE* Device)
 {
+    if (Device->InheritedTmds) return;
     StartCore(Device, TRUE);
 }
 
@@ -390,6 +395,7 @@ void DpAudioPathPower(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     ULONG stream, endpoint;
     KIRQL irql;
 
+    if (Device->InheritedTmds) return;
     IoOpen(Device, &io);
     KeAcquireSpinLock(&audio->Lock, &irql);
     stream = audio->Stream;
@@ -511,6 +517,7 @@ void DpAudioRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DPAUDIO* 
         return;
     }
     Data->Flags = Device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0;
+    if (Device->InheritedTmds) { Data->NtStatus = (ULONG)STATUS_NOT_SUPPORTED; return; }
     if (op == BC250_DPAUDIO_OP_OBSERVE) {
         if (Device->Mmio == NULL) status = STATUS_DEVICE_NOT_READY;
         else {

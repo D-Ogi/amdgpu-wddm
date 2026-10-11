@@ -6,16 +6,14 @@
 #include "dcn_2_0_1_sh_mask.h"
 
 #include "display_timing_snapshot.h"
+#include "display_tmds.h"
 
-static NTSTATUS DisplayDecodeTiming(const ULONG Values[TimingCount], ULONG Width, ULONG Height,
+static NTSTATUS DisplayDecodeGeometry(const ULONG Values[TimingCount], ULONG Width, ULONG Height,
                                     D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
 {
     ULONG htotal,vtotal,hstart,hend,vstart,vend;
-    ULONGLONG referenceHz,pixel;
-    // This inherited path supports the fixed progressive DP DTO mode only.
-    // Other clock/interlace/DRR programming needs a separately validated decoder.
+    // Both clock paths retain the same fixed progressive geometry contract.
     if(!(Values[TimingControl]&OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) ||
-       !(Values[TimingPixelControl]&OTG0_PIXEL_RATE_CNTL__DP_DTO0_ENABLE_MASK) ||
        (Values[TimingPixelControl]&(OTG0_PIXEL_RATE_CNTL__OTG0_DISPOUT_HALF_RATE_EN_MASK |
            OTG0_PIXEL_RATE_CNTL__OTG0_ADD_PIXEL_MASK | OTG0_PIXEL_RATE_CNTL__OTG0_DROP_PIXEL_MASK)) ||
        (Values[TimingInterlace]&OTG0_OTG_INTERLACE_CONTROL__OTG_INTERLACE_ENABLE_MASK) ||
@@ -33,6 +31,19 @@ static NTSTATUS DisplayDecodeTiming(const ULONG Values[TimingCount], ULONG Width
     if(hstart>=htotal || hend>=hstart || vstart>=vtotal || vend>=vstart ||
        hstart-hend!=Width || vstart-vend!=Height || !Width || !Height)
         return STATUS_DEVICE_DATA_ERROR;
+    Signal->TotalSize.cx=htotal;Signal->TotalSize.cy=vtotal;
+    Signal->ActiveSize.cx=Width;Signal->ActiveSize.cy=Height;
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS DisplayDecodeTiming(const ULONG Values[TimingCount], ULONG Width, ULONG Height,
+                                    D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
+{
+    ULONGLONG referenceHz,pixel;
+    NTSTATUS status;
+    if(!(Values[TimingPixelControl]&OTG0_PIXEL_RATE_CNTL__DP_DTO0_ENABLE_MASK))return STATUS_NOT_SUPPORTED;
+    status=DisplayDecodeGeometry(Values,Width,Height,Signal);
+    if(!NT_SUCCESS(status))return status;
     // DCN201's reference counter is in 100 kHz units. Unlike assuming PHASE is
     // Hz, the ratio also handles a MODULO different from the reference clock.
     // Do not inherit Linux's nominal600MHz fallback if the counter reads zero.
@@ -43,17 +54,16 @@ static NTSTATUS DisplayDecodeTiming(const ULONG Values[TimingCount], ULONG Width
     // PixelRate is integral Hz. Round the DTO ratio to nearest Hz (<0.5 Hz error)
     // and express both scan frequencies as ratios using that same pixel rate.
     if(!pixel || pixel>=D3DKMDT_FREQUENCY_NOTSPECIFIED)return STATUS_DEVICE_DATA_ERROR;
-    Signal->TotalSize.cx=htotal;Signal->TotalSize.cy=vtotal;
-    Signal->ActiveSize.cx=Width;Signal->ActiveSize.cy=Height;
     Signal->PixelRate=(SIZE_T)pixel;
-    Signal->HSyncFreq.Numerator=(UINT)pixel;Signal->HSyncFreq.Denominator=htotal;
-    Signal->VSyncFreq.Numerator=(UINT)pixel;Signal->VSyncFreq.Denominator=htotal*vtotal;
+    Signal->HSyncFreq.Numerator=(UINT)pixel;Signal->HSyncFreq.Denominator=Signal->TotalSize.cx;
+    Signal->VSyncFreq.Numerator=(UINT)pixel;Signal->VSyncFreq.Denominator=Signal->TotalSize.cx*Signal->TotalSize.cy;
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS DisplayReadInheritedTiming(const BC250_DEVICE* Device, D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
+static NTSTATUS DisplayReadInheritedTiming(BC250_DEVICE* Device, D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
 {
     ULONG first[TimingCount],second[TimingCount],i;
+    ULONG route[TmdsRouteCount],routeAfter[TmdsRouteCount],pixel,refresh;
     NTSTATUS status;
     // VidPn mode queries are PASSIVE_LEVEL; PnP owns the MMIO mapping lifetime.
     // This driver preserves firmware timing. Refuse a changed snapshot rather
@@ -65,5 +75,30 @@ static NTSTATUS DisplayReadInheritedTiming(const BC250_DEVICE* Device, D3DKMDT_V
     status=DisplayTimingSnapshot(Device,second);
     if(!NT_SUCCESS(status))return status;
     for(i=0;i<TimingCount;i++)if(first[i]!=second[i])return STATUS_DEVICE_BUSY;
-    return DisplayDecodeTiming(first,Device->Post.Width,Device->Post.Height,Signal);
+    if(first[TimingPixelControl]&OTG0_PIXEL_RATE_CNTL__DP_DTO0_ENABLE_MASK)
+        return DisplayDecodeTiming(first,Device->Post.Width,Device->Post.Height,Signal);
+    status=DisplayDecodeGeometry(first,Device->Post.Width,Device->Post.Height,Signal);
+    if(!NT_SUCCESS(status))return status;
+    status=DisplayTmdsRoute(Device,route);
+    if(!NT_SUCCESS(status))return status;
+    status=DisplayMeasureTmds(Device,Signal->TotalSize.cx,Signal->TotalSize.cy,&pixel,&refresh);
+    if(!NT_SUCCESS(status))return status;
+    // The measurement must still describe the same mode and physical route.
+    status=DisplayTimingSnapshot(Device,second);
+    if(!NT_SUCCESS(status))return status;
+    for(i=0;i<TimingCount;i++)if(first[i]!=second[i])return STATUS_DEVICE_BUSY;
+    status=DisplayTmdsRoute(Device,routeAfter);
+    if(!NT_SUCCESS(status))return status;
+    for(i=0;i<TmdsRouteCount;i++)if(route[i]!=routeAfter[i])return STATUS_DEVICE_BUSY;
+    pixel=DisplayTmdsPixel(pixel,Device->Post.Width,Device->Post.Height,
+                           Signal->TotalSize.cx,Signal->TotalSize.cy,NULL); // no DDC in this stage
+    if(!pixel)return STATUS_DEVICE_DATA_ERROR;
+    Signal->PixelRate=pixel;
+    Signal->HSyncFreq.Numerator=pixel;Signal->HSyncFreq.Denominator=Signal->TotalSize.cx;
+    Signal->VSyncFreq.Numerator=pixel;Signal->VSyncFreq.Denominator=Signal->TotalSize.cx*Signal->TotalSize.cy;
+    Device->InheritedTmds=TRUE;
+    GuardLog("display: TMDS inherited %ux%u total %ux%u measured %lu.%03lu Hz over 8 frames, pixel %lu Hz, source measured",
+             Device->Post.Width,Device->Post.Height,Signal->TotalSize.cx,Signal->TotalSize.cy,
+             refresh/1000u,refresh%1000u,pixel);
+    return STATUS_SUCCESS;
 }

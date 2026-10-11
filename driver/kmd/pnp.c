@@ -81,9 +81,19 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does
     // nothing unless Parameters\KeepLog is set.
     GuardLogKeepEpisode(L"start");
+    // BD-122: from here on the registry record belongs to THIS attempt, whatever an earlier boot left behind, and
+    // every exit below that does not reach a started device writes its reason into it (guard.c, StartRecord). The
+    // refusal above this line is not one: it is a foreign or absent device object, which this driver does not own
+    // and must leave no trace for.
+    GuardRecordStartAttempt();
     device->InheritedSignalValid=FALSE;
     if (device->GpuStopUnconfirmed) {
         GuardLog("start refused: previous GPU stop is unconfirmed for this device object");
+        GuardStartStep(L"PreviousStopUnconfirmed");
+        // This exit fails the start as surely as the goto failed paths do, so it leaves the stage every reader of
+        // LastStage and StageHistory keys off, and the record's documented "Stage 91 for a failure" holds here too.
+        GuardStage(StageStartFailed);
+        GuardRecordStartFailed(STATUS_DEVICE_HARDWARE_ERROR);
         return STATUS_DEVICE_HARDWARE_ERROR;
     }
 
@@ -91,6 +101,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     if (!NT_SUCCESS(status))
     {
         GuardStage(StageRefusedByGuard);
+        GuardStartStep(L"BootLoopGuard");
+        GuardRecordStartRefused(status);
         return status;
     }
     GuardStage(StageStartGuardPassed);
@@ -104,6 +116,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     RtlZeroMemory(&device->Dxgk, sizeof(device->Dxgk));
     RtlCopyMemory(&device->Dxgk, DxgkInterface, min((SIZE_T)DxgkInterface->Size, sizeof(device->Dxgk)));
 
+    GuardStartStep(L"DxgkCbGetDeviceInformation");
     status = device->Dxgk.DxgkCbGetDeviceInformation(device->Dxgk.DeviceHandle, &device->DeviceInfo);
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartDeviceInfo);
@@ -111,8 +124,12 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     BoardProviderBind(device);
 
     // The firmware's mode and framebuffer. Without it there is nothing this driver could show: M3 sets no mode.
+    GuardStartStep(L"AcquirePostDisplayOwnership");
     status = device->Dxgk.DxgkCbAcquirePostDisplayOwnership(device->Dxgk.DeviceHandle, &device->Post);
     if (!NT_SUCCESS(status)) goto failed;
+    // Its own step: the firmware answered, and what it answered has no display in it. That is a BIOS or
+    // seamless-boot question, not a driver one, and the two must not read the same in the record.
+    GuardStartStep(L"PostDisplayGeometry");
     if (device->Post.Width == 0 || device->Post.Height == 0 || device->Post.PhysicAddress.QuadPart == 0)
     {
         status = STATUS_GRAPHICS_NO_VIDEO_MEMORY;       // honest: no firmware display to take over
@@ -122,6 +139,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
              device->Post.Pitch, (ULONG)device->Post.ColorFormat, device->Post.TargetId);
     GuardStage(StageStartPostDisplayAcquired);
 
+    GuardStartStep(L"DisplayMapFramebuffer");
     status = DisplayMapFramebuffer(device);
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartFramebufferMapped);
@@ -140,9 +158,11 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         if (device->Mmio==NULL)
             GuardLog("smu: native owner start skipped, EnableNativeSmu 1 with EnableMmio 0 (no BAR5 mapping)");
         else {
+            GuardStartStep(L"SmuOwnerStart");
             status=SmuOwnerStart(&device->Smu,device->Mmio);
             GuardLog("smu: native owner start status 0x%08X",status);
             if (!NT_SUCCESS(status)) {
+                GuardStartFailureMark();        // BD-122: the record's log lines end here, not after the cleanup
                 MmioStop(device);
                 DisplayUnmapFramebuffer(device);
                 goto failed;
@@ -156,8 +176,13 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
     IhStart(device);        // same rule
+    // WddmStart and GpuStartupInitialize name their own sub-steps inside this one (GuardStartSubStep).
+    GuardStartStep(L"WddmStart");
     status = WddmStart(device);
     if (!NT_SUCCESS(status)) {
+        // BD-122: the failure point, before the whole device is torn down below. The stop of a GPU that got this
+        // far writes dozens of its own log lines, and the record keeps the 64 that lead up to here.
+        GuardStartFailureMark();
         // Full WDDM may have attempted hardware initialization. Preserve dependency
         // ordering and retained/quarantined ownership during remaining cleanup.
         (void)Bc250StopDevice(device);
@@ -165,8 +190,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     }
     // Capture once before dxgkrnl can enumerate modes or describe a primary.
     // A single immutable signal keeps those two contracts exactly consistent.
+    GuardStartStep(L"DisplayPrepareInheritedTiming");
     status=DisplayPrepareInheritedTiming(device);
     if (!NT_SUCCESS(status)) {
+        GuardStartFailureMark();        // BD-122: before the teardown of a GPU that started, as above
         (void)Bc250StopDevice(device);
         goto failed;
     }
@@ -200,15 +227,21 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     DriverVersionStart(device);
     BoardMemoryStart(device); // Read-only self-check; never fails display start.
     GuardStage(StageStartDone);
+    GuardRecordStartStarted();      // BD-122: this start is not a reason for anything
     return STATUS_SUCCESS;
 
 failed:
+    // BD-122, first of all and before the cleanup: the failure point of every step that did not mark one itself.
+    GuardStartFailureMark();
     if (!device->StopDone) (void)Bc250StopDevice(device);
     BoardMemoryStop(device);
     BoardMemoryIdentityClear(device);
     StartHealthClose(device);
     GuardLog("start failed 0x%08X", status);
     GuardStage(StageStartFailed);
+    // BD-122, last and after the existing cleanup, which is unchanged: Stage is then the 91 a tester's
+    // start-confirm.log already prints, and the kept ring lines are the ones up to the mark taken above.
+    GuardRecordStartFailed(status);
     return status;
 }
 

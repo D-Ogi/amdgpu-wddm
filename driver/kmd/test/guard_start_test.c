@@ -27,6 +27,7 @@ typedef const wchar_t* PCWSTR;
 #define StageStartEnter 30u
 #define StageStartGuardPassed 31u
 #define StageRefusedByGuard 90u
+#define StageStartFailed 91u    /* BD-122: an unconfirmed previous stop fails the start and leaves this stage */
 typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone;void* PhysicalDeviceObject;} BC250_DEVICE;
 typedef void* PDXGK_START_INFO;
 typedef void* PDXGKRNL_INTERFACE;
@@ -59,6 +60,15 @@ static NTSTATUS GuardVolatileStore(PCWSTR k,PCWSTR n,ULONG v){(void)n;if(wcscmp(
 static BOOLEAN g_StartCounted;
 // One kept log file per device start: the start names its episode before anything else can log.
 static void GuardLogKeepEpisode(PCWSTR label){if(!wcscmp(label,L"start"))episodes++;}
+/* BD-122: the start record (guard.c StartRecord) has a test of its own, start_record_test.c, which runs the real
+ * writer against a registry model. Here it is only counted: this test measures the guard's budget writes, so a
+ * record that opened the key would change every opens/writes/flushes/closes count below. */
+static unsigned records,recordAttempts,recordRefusals,recordFailures;
+static PCWSTR recordStep;
+static void GuardStartStep(PCWSTR step){recordStep=step;}
+static void GuardRecordStartAttempt(void){records++;recordAttempts++;recordStep=NULL;}
+static void GuardRecordStartRefused(NTSTATUS s){(void)s;records++;recordRefusals++;}
+static void GuardRecordStartFailed(NTSTATUS s){(void)s;records++;recordFailures++;}
 #include "guard_actual.inc"
 #include "release_actual.inc"
 #include "gate_actual.inc"
@@ -74,7 +84,8 @@ static void BoardMemoryStop(BC250_DEVICE* d){(void)d;}
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)
 {settingGate=cached=durable=0;openStatus=readStatus=writeStatus=flushStatus=0;opens=writes=flushes=closes=admissions=logs=episodes=0;g_FullWddm=FALSE;lastLog[0]=0;
- bootMark=0;volatileStatus=0;g_StartCounted=FALSE;ownerIdentity=&ownedPdo;}
+ bootMark=0;volatileStatus=0;g_StartCounted=FALSE;ownerIdentity=&ownedPdo;
+ records=recordAttempts=recordRefusals=recordFailures=0;recordStep=NULL;}
 /* The confirmation GuardConfirmStartDurable performs after its durable zero (start_health.c's CONFIRM). */
 static void Confirm(void){cached=durable=0;GuardStartConfirmed();}
 /* One episode per start, also for the BD-090 cases that start twice in one scenario without a Reset. */
@@ -92,6 +103,8 @@ int main(void)
         if(i==2)ownerIdentity=NULL;
         CHECK(Bc250StartDevice(i==3?NULL:&d,NULL,NULL,&src,&children)==STATUS_DEVICE_BUSY);
         CHECK(src==0&&children==0&&episodes==0&&admissions==0&&opens==0&&writes==0&&flushes==0);
+        /* BD-122: a device object this driver does not own leaves no start record either. */
+        CHECK(records==0);
     }}
     Reset();settingGate=2;
     CHECK(WddmGateOpen() && settingGate==2 && writes==0 && flushes==0);
@@ -112,6 +125,8 @@ int main(void)
     CHECK(strstr(lastLog,"flush")!=NULL);
     Reset();settingGate=2;CHECK(WddmGateOpen());cached=durable=2;
     CHECK(Start()==STATUS_DEVICE_CONFIGURATION_ERROR&&admissions==0&&writes==0);
+    /* BD-122: the guard's refusal is recorded as the guard's, after the attempt record of this start. */
+    CHECK(recordAttempts==1&&recordRefusals==1&&recordFailures==0&&recordStep!=NULL&&!wcscmp(recordStep,L"BootLoopGuard"));
     Reset();settingGate=1;writeStatus=STATUS_ACCESS_DENIED;
     CHECK(!WddmGateOpen()&&settingGate==1&&flushes==0);
     Reset();settingGate=1;flushStatus=STATUS_REGISTRY_IO_FAILED;

@@ -3021,6 +3021,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->ComposedSourceModes = GuardReadSetting(L"OfferComposedSourceModes", 1) != 0;
     GuardLog("wddm: composed source modes %s", Device->ComposedSourceModes ? "offered" : "off");
 
+    // BD-122: the sub-steps of this function inside the start record's WddmStart step (guard.c StartRecord).
+    GuardStartSubStep(L"wddm-pool");
     // Required state must exist before the adapter starts accepting paging work.
     wddm = (BC250_WDDM*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*wddm), BC250_WDDM_TAG);
     if (wddm == NULL) { GuardLog("wddm: no pool for the adapter state"); return STATUS_INSUFFICIENT_RESOURCES; }
@@ -3208,6 +3210,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  (ULONG)Device->Post.TargetId, (ULONG)BC250_CHILD_UID);
     wddm->VSyncLast = KeQueryPerformanceCounter(&wddm->VSyncFrequency);
     // Production full WDDM requires its GPU VA/paging resources at admission.
+    GuardStartSubStep(L"gpu-va-layout");
     if (GuardReadSetting(L"EnableGpuVa",0)!=1 ||
         !WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength)) {
         status=STATUS_DEVICE_NOT_READY;
@@ -3233,6 +3236,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         GuardLog("wddm: OS aperture asked %lu MiB, using %llu MiB%s (only MAP_APERTURE_SEGMENT uses it)",asked,
                  Device->WddmApertureRequest/PAGING_APERTURE_MIB,clamped?" (clamped to 256..447)":"");
     }
+    GuardStartSubStep(L"os-aperture");
     status=GartCaptureAperture(Device,&Device->WddmAperture);
     if (!NT_SUCCESS(status) && Device->WddmApertureRequest!=PAGING_APERTURE_MIN_BYTES) {
         GuardLog("wddm: GART refused a %llu MiB OS aperture (0x%08X), retrying at 256 MiB",
@@ -3244,9 +3248,11 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     GuardLog("wddm: OS aperture %llu MiB at gpu 0x%llX, PTE slice 0x%llX",
              Device->WddmAperture.bytes/PAGING_APERTURE_MIB,Device->WddmAperture.mc,Device->WddmAperture.table);
     vidmmPrepared=TRUE; // VidMmStartLayout initializes its lock even on failure.
+    GuardStartSubStep(L"vidmm-layout");
     status=VidMmStartLayout(Device,segmentOffset,segmentLength,BC250_WDDM_SEGMENT_VRAM,
                            tableOffset,tableLength,BC250_WDDM_SEGMENT_TABLES);
     if (!NT_SUCCESS(status)) goto Failed;
+    GuardStartSubStep(L"gpu-startup");     // startup.c names a step of its own at each phase
     status=GpuStartupInitialize(Device,startup);
     if (!NT_SUCCESS(status)) goto Failed;
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);

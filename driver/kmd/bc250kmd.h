@@ -203,6 +203,7 @@ typedef struct _BC250_DEVICE {
     DXGK_DISPLAY_INFORMATION Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
+    BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start
     PVOID Framebuffer;                  // mapping of Post.PhysicAddress
     SIZE_T FramebufferLength;
     BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
@@ -554,6 +555,23 @@ NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written a
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
 NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
 NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
+// BD-122: why a start failed, in Parameters\StartRecord, with no gate at all - a device with Code 43 answers no
+// escape, so the log ring is unreadable exactly when the reason is wanted. GuardStartStep names the step of
+// Bc250StartDevice that is about to run and GuardStartSubStep the step inside WddmStart / GpuStartupInitialize
+// (both take a literal of this image, take no lock and are safe at any IRQL). The four recorders write the record
+// at PASSIVE_LEVEL and never return a failure: see the rule above GuardRecordStartAttempt in guard.c, which also
+// lists the value names. Call order of one start: Attempt, then Refused or Failed or Started.
+void GuardStartStep(_In_opt_z_ PCWSTR Step);
+void GuardStartSubStep(_In_opt_z_ PCWSTR SubStep);
+// The earliest point of a failure path, before its cleanup runs: the ring lines the record keeps end there, so the
+// teardown's own lines cannot push the refusing step's out. The first call of a start wins; any IRQL.
+void GuardStartFailureMark(void);
+// GitHub #38: one line of measured values kept as Detail with a failure (integer conversions only, any IRQL).
+void GuardStartDetail(_In_z_ _Printf_format_string_ PCWSTR Format, ...);
+void GuardRecordStartAttempt(void);
+void GuardRecordStartRefused(NTSTATUS Status);
+void GuardRecordStartFailed(NTSTATUS Status);
+void GuardRecordStartStarted(void);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
 void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
