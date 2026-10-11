@@ -326,6 +326,18 @@ bool run_round(d3d12_side& d3d, vk_side& vk, const options& o, uint32_t round)
     const HRESULT waited = d3d.queue->Wait(d3d.shared, odd);
     observe_device_reason(d3d.device, "device after queue Wait");
     observe_completed(d3d.shared, "D3D12 fence after queue Wait");
+    if (FAILED(waited)) {
+        // The r6 refusal must still leave a sample after the Vulkan producer completed.
+        // This bounded diagnostic runs only on the failure path, not in the normal queue handoff.
+        VkSemaphoreWaitInfo witness{};
+        witness.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+        witness.semaphoreCount = 1;
+        witness.pSemaphores = &vk.timeline;
+        witness.pValues = signal_values;
+        if (check_vk(vk.api.WaitSemaphores(vk.device, &witness, 2000000000ull),
+                     "diagnostic: RADV odd signal completed after D3D12 queue refusal"))
+            observe_completed(d3d.shared, "D3D12 fence after confirmed RADV signal (queue refused)");
+    }
     if (!check_hr(waited, "D3D12 queue waits the producer's odd value") ||
         !check_hr(d3d.allocator->Reset(), "D3D12 allocator reset") ||
         !check_hr(d3d.list->Reset(d3d.allocator, nullptr), "D3D12 command list reset"))
@@ -700,6 +712,11 @@ int run(const options& o)
             if (!check_vk(vk.api.GetSemaphoreWin32HandleKHR(vk.device, &get, &fence_handle),
                           "RADV exported it as a D3D12_FENCE handle") ||
                 !check(fence_handle != nullptr, "the exported handle is not null")) {
+                exit_code = kExitFailed;
+                goto done;
+            }
+            if (!replay_exported_fence(fence_handle, d3d.device->GetAdapterLuid())) {
+                CloseHandle(fence_handle);
                 exit_code = kExitFailed;
                 goto done;
             }
