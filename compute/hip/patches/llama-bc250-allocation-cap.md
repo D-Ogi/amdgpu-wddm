@@ -1,0 +1,19 @@
+# BC250 HIP consumer allocation cap
+
+PROVENANCE: llama.cpp, MIT, upstream base b86d2f07542b29ab099aed34fd6b6d1b2fd4b81c with the existing HIP consumer patches.
+
+Apply llama-bc250-allocation-cap.patch to the reviewed consumer source copy. Run build-llama-patched.ps1 with -Bc250AllocationCap to enable the measured cap of 0xfffc0000 bytes. This switch is specific to this Windows HIP route. CUDA builds reject the define, and ordinary builds without it retain SIZE_MAX behavior.
+
+The existing tensor-list planner splits model buffers at tensor boundaries. The callback supplies its cap. The allocation guard rejects an oversized request before device selection or allocation because a single tensor and graph planner fallback can exceed the planning hint. Individual tensors are not split. Quantized padding and alignment count toward the cap. Multi-device split buffers and internal pool allocations are not covered by this ordinary-buffer interface change.
+
+Run test-llama-allocation-cap.ps1 -Source <patched-source> -Out <host-output> for compiled offline controls against the actual planner, callback and allocation function. The tests make no GPU call and allocate no multi-GiB host buffers. Both opt-in and ordinary behavior must pass. The guard-deleted mutant must compile and fail CHECK assertions. This gate tests planning and early refusal, not OS allocation or model inference.
+
+The cap is the largest 256 KiB-aligned value below 4 GiB. It preserves placement and allocation flags. Other resource pressure can still cause allocation failure below it.
+
+Unit A completes Gemma 12B with backend FB0E315E. See the [measured record](../../../evidence/m16/hip-allocation-cap-2026-10-11/README.md). That measured backend disables GPU Flash Attention. Use `-fa off` or automatic selection with that artifact. Forcing `-fa on` can retain unsupported operations and add CPU fallback. The benchmark's requested FA column does not certify GPU execution.
+
+New builds enable Flash Attention and use the source's default quant types. The build script overrides the old cache's FA exclusion. It refuses compiler flags that disable FA. Add `-ValidationTools` to build `test-backend-ops`, `llama-completion`, `llama-bench` and `llama-perplexity`. Run `test-llama-build-options.ps1 -Out <host-output>` for the build-option controls. They invoke the builder with a recording CMake fixture and make no compiler or GPU call.
+
+The FA candidate now has measured operation, timing and templated-answer controls. See the [FA record](../../../evidence/m16/hip-allocation-cap-2026-10-11/fa-addendum.md) for exact scope and artifact hashes. TinyLlama passes the bounded whole-model comparison in both FA modes. Gemma remains unsuitable as this comparison's correctness gate because the reference backends also disagree. That observation does not exclude a HIP defect.
+
+The broad `FLASH_ATTN_EXT`, `MUL_MAT` and `SOFT_MAX` inventories remain unrun. Unsupported and skipped cases are not passes. Use each instruction model's chat template for text acceptance. Distinguish the final response from thought text. The [independent reference](../../../evidence/m16/hip-allocation-cap-2026-10-11/oracle-addendum.md) retains the earlier raw-prompt results as history.

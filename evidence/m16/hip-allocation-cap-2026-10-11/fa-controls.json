@@ -1,0 +1,1257 @@
+{
+  "date": "2026-10-11",
+  "selection": "Numeric results, artifact hashes and bounded cleanup fields only. Absolute paths, account/machine identities and run UUIDs omitted. Original files retained locally and identified by SHA-256.",
+  "candidate": {
+    "manifest_sha256": "77a69d773fe52c48624bb5b2f4b748fc29030dee90187f704921e8678eed455c",
+    "source_snapshot": "consumer/source: b86d2f07542b29ab099aed34fd6b6d1b2fd4b81c-derived snapshot with reviewed HIP and allocation-cap patches",
+    "input_manifest_sha256": "5d54d58229e65a497fb8a1cde39abb97eedf50d4f818292728901e9ad7631ec4",
+    "hip_translation_units": 144,
+    "all_hip_commands_without_NO_FA": true,
+    "artifacts": {
+      "ggml-base.dll": "5d98b45e565126b479a0c3fd840329e296b52290b74af6de9d09de2d6961c294",
+      "ggml-cpu.dll": "decc84f02fd513903aa6ba2c76bdc88eaaa2e93e1488706b5a708128f945ff49",
+      "ggml-hip.dll": "fc5b2d6586b5c402e646fd2f64cb6ce97cb863b4fb3ae68f361def1df799c814",
+      "ggml.dll": "72846969d5cc1d86268e944da4122cab80892b16ab35c49f39297edd56f434c1",
+      "llama-bench-impl.dll": "6f06b9a33ce2d7d066d2db1613c81019a2415770bb7326db9b2515ee53a66a77",
+      "llama-bench.exe": "ceef618b217059bd0ab7cbf8c73c468d31219b0c3291f1aa2ecb2a97acfe4771",
+      "llama-common.dll": "b1adafe95ec5399a2cee8dec0baf91124c17486bc123b01427bceeb8e9b07d55",
+      "llama-completion-impl.dll": "974001f067dd07562c0fb288184464f58af68f57509f12f464d8d01863552739",
+      "llama-completion.exe": "8ffcbe1f0948648ae9c5d1bad3ae9b3cde5cbbf430e0a1c6d19c1a808bd5602d",
+      "llama.dll": "1a6eba55b8ce36d8d652e830522d063be641b3a8d1da4aa78b67173b960deb73",
+      "test-backend-ops-bd117.exe": "7f6543a56769e1dc4a5099cb8642335ec5398762d7650da41f6deb5fe9133fe6",
+      "test-backend-ops.exe": "181c1ed6df87fc5ae0d539e415e8c4711ef4584940405bc38fc2388a54121377",
+      "amdhip64.dll": "b0feb14bd34797dfbb866b504c13859ad0bd15935c62d3126af019ca3311f106",
+      "bc250hipblas.dll": "3e8ab7df04b819ae8599facc5cfd63a1cb9fc5607e56312b69b1e287305274e9",
+      "llama-perplexity.exe": "18f2549148a59d7d3c24e2ae2d8853fe515a0e7e92fe88d64f6a56c18661dd6b",
+      "llama-perplexity-impl.dll": "1c1bcbe01ec0efa97cadca73655301943a35b5e3072a3655b02f327898fcbca8"
+    }
+  },
+  "runs": [
+    {
+      "arm": "bench-gemma-off-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "3240a60e5606217821bdfd24bb1cae6964a58783a3b5134a517734a2dc5aa3e6",
+        "supervisor.json": "1c3edf2eea9fd3c2aca9a248a6f7bdae4d97f2b8e3ba892d6057bfd1c499f475",
+        "stdout.txt": "ebcf3cf671238daf5f32aab640ebc82f26fc1ecf62605136217cb6f95523b2e3",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 59.215350199999996,
+        "TctlMax": 87.5,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "off",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 210.304078,
+        "samples_ts": [
+          210.304
+        ]
+      }
+    },
+    {
+      "arm": "bench-gemma-off-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "INVALID_RUN",
+      "source_sha256": {
+        "analysis.json": "2493c236bc44511862bd3142735abf84e488977cc741a3cb3c346af2d174ded2",
+        "supervisor.json": "2be9518179b69acf53feebf5cf8b31f2f085350e5375873dfee98b80aca55de8",
+        "stdout.txt": "fb7ead976365aa70036c6d59c647ef737aec5204a4db678d7df593e12f597df5",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "FAILED",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 57.6493094,
+        "TctlMax": 88.1,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "off",
+        "phase": "pp512"
+      }
+    },
+    {
+      "arm": "bench-gemma-off-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "e184606000b93103bfa0fb6612d924f74dbafd3f58849924e85da4a02e5d35eb",
+        "supervisor.json": "de0490b5d53b1cfbb06d1b0eaa13aeb3ba7cab79a4626cfc5e768047d0eb40b6",
+        "stdout.txt": "ec51ce40d550bdbe286081d7175e4f5c8ab37f32d789d8249d64f92f7620a09b",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 59.2323173,
+        "TctlMax": 64.6,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "off",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 18.470915,
+        "samples_ts": [
+          18.4709
+        ]
+      }
+    },
+    {
+      "arm": null,
+      "kind": null,
+      "original_analysis_verdict": "INVALID_RUN",
+      "source_sha256": {
+        "analysis.json": "4e97b0cd3f672a6dcc52d5c31372c238ca6a5dad2eb4120445304a1bf4cbe9fa",
+        "supervisor.json": "452f4bf0910627289c23fa4a7281da3111c27bdd57f464c96eabab640eeca44a"
+      },
+      "supervisor": {
+        "Verdict": "FAILED",
+        "ChildExit": null,
+        "Finished": false,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 31.4027055,
+        "TctlMax": null,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": null,
+      "kind": null,
+      "original_analysis_verdict": "INVALID_RUN",
+      "source_sha256": {
+        "analysis.json": "da7586f3d450075b6e72d168dc339a46016c74e66ed552f2d35d416eddd8c178",
+        "supervisor.json": "437b7c436b764c94bfe9d44489455047c96fbc2ebf70a528966d720e9318d73e"
+      },
+      "supervisor": {
+        "Verdict": "FAILED",
+        "ChildExit": null,
+        "Finished": false,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 31.5663055,
+        "TctlMax": null,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": "bench-gemma-on-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "e1f8d954b2cf23706a3fb24ef7ff3200c26932d30eb1214d642088201d6a8f57",
+        "supervisor.json": "5c81508c6235e268d3d9eb8a1d4db620dfd5b61e30b39d903a0970597c35c27c",
+        "stdout.txt": "86f603cc02db0ddbfaf5b11efa03029d649701bbe827e7e34ef1cf8c75fe0272",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 56.4600113,
+        "TctlMax": 71.4,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "on",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 204.256791,
+        "samples_ts": [
+          204.257
+        ]
+      }
+    },
+    {
+      "arm": "bench-gemma-on-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "6903c8c01331ab9273315bd5a47556c458a6e86a31e69515513ade518dc5219d",
+        "supervisor.json": "70de6bfbf2ae9a6726e9533bcf93e95e505b5a1ba6d6c9483ba11bfacffacdf5",
+        "stdout.txt": "cda05c26357015b5bcdd7bed5e1c4e773cdbe7f0354f7c9c5c049f924f15e836",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 57.0626052,
+        "TctlMax": 65.4,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "on",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 31.336985,
+        "samples_ts": [
+          31.337
+        ]
+      }
+    },
+    {
+      "arm": "bench-tiny-off-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "1ec0b5af8f2dbda8cc81f13e2631846e8e6532f9b10ccf94525f92f8371ef806",
+        "supervisor.json": "8a9dc5772b3edc4377dbf02e30e9d528a4c5b36f0a9335c08c4ed656ceed5755",
+        "stdout.txt": "665b95c97b6000be1bdd047ea9b7591a9453fd0c042347054bdf7fd4ffd447d3",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 14.7361559,
+        "TctlMax": 63,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "off",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 1862.431768,
+        "samples_ts": [
+          1862.43
+        ]
+      }
+    },
+    {
+      "arm": "bench-tiny-off-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "e1c18807c5ca4fbae6310a4a954b13ecb6d1a21c5ab8e5527947a8907635496b",
+        "supervisor.json": "fcc0e853a4e08d2a4a6fd2ba010bc5c9b46a3ec292545d4ea3b88d45c8783e0d",
+        "stdout.txt": "8d68b2f45bd7cb0b568eb02fc1c51133019e98fc303eb4771c258d37b25720b3",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 15.769778599999999,
+        "TctlMax": 60.2,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "off",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 98.796626,
+        "samples_ts": [
+          98.7966
+        ]
+      }
+    },
+    {
+      "arm": "bench-tiny-on-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "dd3d2411395a0fa855efb3f82356c7089ba5348276e572d5176dc272c61b9dd0",
+        "supervisor.json": "9ad941bbb2a24e514e49693910f9f5f507e443b484e58aecad8649aa6cd5a9ec",
+        "stdout.txt": "4ead01ab3b88666bf7acec16ed39f1c434ca42d830452747ca5cddd290762c00",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 16.7030265,
+        "TctlMax": 61.9,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "on",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 2215.877542,
+        "samples_ts": [
+          2215.88
+        ]
+      }
+    },
+    {
+      "arm": "bench-tiny-on-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "bc6e6d32be12a3f881c6eaec1ca997ade1a3ed480131293b5bf9fb59bd33f661",
+        "supervisor.json": "80af55a9e957bc869c502fd93c86f3fc813de8b26958a701618179af80eb40ae",
+        "stdout.txt": "fa1b8a5287ec8bfdfccd3421df09cad7cad2349d51b8349d819e1fb941c78479",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 15.2315443,
+        "TctlMax": 61.8,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "on",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "ROCm",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 173.531369,
+        "samples_ts": [
+          173.531
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-gemma-off-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "eee7725493174c2c04feb84b3f2e7b0a35420a9e6145aa4707b54e394dbd3454",
+        "supervisor.json": "ad5f29e09bf97d22915006739b434895cd25ab4529dbf565538d17f34f68b956",
+        "stdout.txt": "31e76664ff153f20f5cc4ee0ee06578efe044bc9ae01b01c541d4a5f6c16254a",
+        "stderr.txt": "f14e95ff136853ffe35db0eefaa0f5d232c7ebdbb9f0f37196ff983985c93c38"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 64.4560346,
+        "TctlMax": 84.2,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "off",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 256.806011,
+        "samples_ts": [
+          256.806
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-gemma-off-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "cf79e3c02f3492a06486dcab5c1e8bca03aa14e8f90161c609c39ed960ad5680",
+        "supervisor.json": "1a56c7ca9972c1a3c3987ecc897ea0f4cf9bcad17d5f2c6cea0336162f7050ce",
+        "stdout.txt": "2cece8d3f079b759291b7f1f078fc82bd12c3b58c2ee78fd99c92a0254be3ebf",
+        "stderr.txt": "e5f7d28c6c5a9ea768a2b70d0bf7b329887a68c83cef613fdebd1a0fcec84714"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 64.40018719999999,
+        "TctlMax": 78,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "off",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 38.921984,
+        "samples_ts": [
+          38.922
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-gemma-on-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "63d7311edf7a0ad8b04a2284e086738318a861e83456afe225633617d99dd666",
+        "supervisor.json": "1687f3296a47015ec287dfee25a12f54b54e5ab39727d79e6738aa6f06a6ba85",
+        "stdout.txt": "32d58f1d0fbd89278489b5b8e0decd276f8f8254ec181e97451694e6290327fa",
+        "stderr.txt": "f747ec5370d98cb60215808c8e27e2d125219ca92591ba27089a367f181d505c"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 63.8343668,
+        "TctlMax": 83.1,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "on",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 256.380905,
+        "samples_ts": [
+          256.381
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-gemma-on-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "1ec1c40718fff6da57a16063644d89cb45b90f92f70901d3d1850cf42c48cbaa",
+        "supervisor.json": "e322e486e7c0c31209b273b08d91aa9ffc157d55014c5a27d1a7113b6e4f8997",
+        "stdout.txt": "e66b7e711aa1beeb3a7e6f48dd5dacaf001df68dabff5cc13bcb318cb16c247b",
+        "stderr.txt": "958597e2be6c091cbe887797a582fb9d63b08b121f1b5350d39b7048da096975"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 62.8351166,
+        "TctlMax": 78.2,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "on",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 39.673112,
+        "samples_ts": [
+          39.6731
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-tiny-off-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "d8c54d6537bbf2bf57e54b45826bcd78e2b77ec9918665c8a3279c823225d092",
+        "supervisor.json": "98e93bb9596e1884d86fcdaab558282379f726afde87a8b6d2df6becb87dd565",
+        "stdout.txt": "0876d1b95d70a1ddceb397e99a7fab1146af882556760e37985adeec324cfd09",
+        "stderr.txt": "3c9568cad28fc20c969292676babdb20f6e0a715272028c6eee0a0b532604105"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 15.959724699999999,
+        "TctlMax": 63,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "off",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 3118.084035,
+        "samples_ts": [
+          3118.08
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-tiny-off-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "65b360c31e9933dfcdc96b4deb6473c049e17fd90449b3aedb69309a464e70d6",
+        "supervisor.json": "424e1e773eba8a65037cffb4d72f053ccaebf2fd99af36b7338e12b33242703a",
+        "stdout.txt": "df6fefa75cfbacb483122fb114f31ce025cd4b2a8addffbc21a182a812855562",
+        "stderr.txt": "a18c5663a152561efa46d11b281c03c44460d8fa109656b561a5a42a0dfe2080"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 16.013032199999998,
+        "TctlMax": 61.9,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "off",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 0,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 294.126636,
+        "samples_ts": [
+          294.127
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-tiny-on-pp512",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "dc0d0e2ef127a8ab8abd9152127ed2bc903e1da18ab1f90bb6a2c3480e7a0c5a",
+        "supervisor.json": "66e06a6e8b553f93489cc17eb7560d325e3067b2a483b48ea18aa140e38d5a0d",
+        "stdout.txt": "d540688de0ec11c8af1ec709f3b5e31e77e1c596d1b13a42938516bb7cae7363",
+        "stderr.txt": "274a9718a7d147e7004c454361b1aa15c997ef607cdb96409d2915c1dc0941cc"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 25.9718503,
+        "TctlMax": 63.8,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "on",
+        "phase": "pp512"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 512,
+        "n_gen": 0,
+        "avg_ts": 3417.794695,
+        "samples_ts": [
+          3417.79
+        ]
+      }
+    },
+    {
+      "arm": "bench-vulkan-tiny-on-tg128",
+      "kind": "bench",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "f2538f8aa729a5a91199037c941a2320cea913f5cedb7a02cd124291b078ae62",
+        "supervisor.json": "1b067ef428e3c56d0b6e84f06c97d3be24b2255f09d66c262737962bef8bd607",
+        "stdout.txt": "1817e39fd7c84d224fc19608c57e99177ec2c855cfe5d1b23b15d7bc0e9971ea",
+        "stderr.txt": "aed1e08c4af3512bea351eb50d83f9da234952e343942de47de0a5d921493c52"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 16.0937521,
+        "TctlMax": 62.2,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "on",
+        "phase": "tg128"
+      },
+      "measurement": {
+        "backends": "Vulkan",
+        "n_batch": 512,
+        "n_ubatch": 512,
+        "n_threads": 6,
+        "n_gpu_layers": 99,
+        "flash_attn": 1,
+        "n_prompt": 0,
+        "n_gen": 128,
+        "avg_ts": 305.517843,
+        "samples_ts": [
+          305.518
+        ]
+      }
+    },
+    {
+      "arm": "chat-gemma-off",
+      "kind": "chat",
+      "original_analysis_verdict": "PASS",
+      "source_sha256": {
+        "analysis.json": "dfa85122381aabb6492bef7bfa97d819579612be1e50a98e96631036ddd9fca4",
+        "supervisor.json": "500c21d37e3dcfcf93cc6d65124b264831cf6593fd818ed927db8cef7a26006c",
+        "stdout.txt": "e3d8d0bef1e672ad40b40572ad0275de925d3b5ad6e85d54c89b3694a263340d",
+        "stderr.txt": "eee1c0f847f3578027fd3e897360c703d4e4958e4f218dda1f30292a5976c4d5"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 56.5913237,
+        "TctlMax": 63.1,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "off"
+      },
+      "answer_analysis": {
+        "verdict": "PASS",
+        "answer": "Paris",
+        "mode": "gemma-closed-thinking",
+        "reason": "Exact final answer"
+      }
+    },
+    {
+      "arm": "chat-gemma-on",
+      "kind": "chat",
+      "original_analysis_verdict": "PASS",
+      "source_sha256": {
+        "analysis.json": "7b76315f887ae7f48734486e28e04594c2ed89806dbb99555e5dbea13fa846b3",
+        "supervisor.json": "a4a8ce179d87d9366c84c624ac1c26cf86e9fe83cba849b660d2a107c06ac5df",
+        "stdout.txt": "e3d8d0bef1e672ad40b40572ad0275de925d3b5ad6e85d54c89b3694a263340d",
+        "stderr.txt": "e65f3c88ad1e9ee972e79359e85d09ea6af6f5e5dcebebe6cb8e2e2385d5c757"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 58.1668844,
+        "TctlMax": 63.4,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "on"
+      },
+      "answer_analysis": {
+        "verdict": "PASS",
+        "answer": "Paris",
+        "mode": "gemma-closed-thinking",
+        "reason": "Exact final answer"
+      }
+    },
+    {
+      "arm": "chat-tiny-off",
+      "kind": "chat",
+      "original_analysis_verdict": "REVIEW",
+      "source_sha256": {
+        "analysis.json": "509109ebdce80cdceeb4d040d78a77dae0eb16bd18b39a64720e1bdd6cda4c9f",
+        "supervisor.json": "e60d24c52beca2f4feb78f0adabe10f89c3de62b408e28deb79d5105d8589a83",
+        "stdout.txt": "4cb2dee276c5bb74cb34f5d3766c836da5301a528444ea3f30cb3812e3053348",
+        "stderr.txt": "266a988ee7223146c2af326ebbf6717e6e9734c987eb9091e435a674ed71b8de"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 14.5254496,
+        "TctlMax": 61.5,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "off"
+      },
+      "answer_analysis": {
+        "verdict": "REVIEW",
+        "answer": "Capital: Paris",
+        "mode": "unstructured",
+        "reason": "No exact standalone final answer; never credit Paris inside thought"
+      }
+    },
+    {
+      "arm": "chat-tiny-on",
+      "kind": "chat",
+      "original_analysis_verdict": "REVIEW",
+      "source_sha256": {
+        "analysis.json": "6c70d53404812f4cd80d6f8f4dc32e4231aacb0ea0c7f543ee95c91a1d1ff3cb",
+        "supervisor.json": "38129693678e7ca9fc382a66235c536b5f012ec629c547288b7dd4ee3603f51e",
+        "stdout.txt": "4cb2dee276c5bb74cb34f5d3766c836da5301a528444ea3f30cb3812e3053348",
+        "stderr.txt": "8697174e1b28cd566bd1da4dbf4e6bc95fa15cc315fcc7492a0105ed04d93f26"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 15.067771599999999,
+        "TctlMax": 61.6,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "tiny",
+        "model_sha256": "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556",
+        "fa": "on"
+      },
+      "answer_analysis": {
+        "verdict": "REVIEW",
+        "answer": "Capital: Paris",
+        "mode": "unstructured",
+        "reason": "No exact standalone final answer; never credit Paris inside thought"
+      }
+    },
+    {
+      "arm": null,
+      "kind": "kld-base",
+      "original_analysis_verdict": "INVALID_RUN",
+      "source_sha256": {
+        "analysis.json": "20050b6075ae4932271969ca3e5222fe7b0a31b21390b11faa71c23867531ac4",
+        "supervisor.json": "1d9ef6a1b28a5c25c61a839a0a6674a7830c0b2d835cdfb7f1f75f6cc902751a",
+        "stdout.txt": "6edbb99ff1a064d8f9921dfdfdba617a72be74c697f91b726c988ecf790d76d0",
+        "stderr.txt": "daccb4333eda138ef33f5844768f8238d50b206ea646f090c1222bcfa4fbbd41"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 94.61367,
+        "TctlMax": 86.1,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": null,
+      "kind": "kld-base",
+      "original_analysis_verdict": "BASELINE_VERIFIED",
+      "source_sha256": {
+        "analysis.json": "3daa44417bd58e6480f655c9dd396d4bd893d3239351d4b49a6c14574be5cdbd",
+        "supervisor.json": "46a2b769fae69c523ba022033611a098096bba8faf4cb5f2590582c2f2a1e31e",
+        "stdout.txt": "6edbb99ff1a064d8f9921dfdfdba617a72be74c697f91b726c988ecf790d76d0",
+        "stderr.txt": "1b46fad67b2ce2bf97fa564bd505c37c8403578680f61f36a80b6d0532078baa"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 90.9790013,
+        "TctlMax": 87.1,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": null,
+      "kind": "kld",
+      "original_analysis_verdict": "INVALID_RUN",
+      "source_sha256": {
+        "analysis.json": "fe8d061eab2b0c5aec454c7547024407fae52cee89989de35e719faee005fc1b",
+        "supervisor.json": "af20d27673e7c65780f3f99706aa721fef99a0476107de3f384ed58c8be7066d",
+        "stdout.txt": "7efc216b5154fffa2cc853a9c91cd6f906b1dfb417dd27573cada1442797ff51",
+        "stderr.txt": "385e7e331f23fa0b94cef9be45b48a7736420607029f6c5303bbc8d66ecde916"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 121.1849491,
+        "TctlMax": 79.8,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": null,
+      "kind": "kld",
+      "original_analysis_verdict": "INVALID_RUN",
+      "source_sha256": {
+        "analysis.json": "03b003f2050c68a05705363eae058c0ff69931cbd983d3374dea59b8e8540209",
+        "supervisor.json": "dbdb779d6f261942d8fb0a3737f77f1bba341b7ed5ea6984c5fc01c1f8bc3846",
+        "stdout.txt": "0bcede1e49c22d4578e5e4c213d7b552f325770bc7857d5a2d51fac441da267e",
+        "stderr.txt": "1f68bcb88cc5a6a7195d1ba63d840d3ef5a38e6271a339d8665257695bbb84d8"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 116.2605473,
+        "TctlMax": 77.6,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": null,
+      "kind": "kld",
+      "original_analysis_verdict": "MEASURED",
+      "source_sha256": {
+        "analysis.json": "bb305605e22a46bcecd0908bfdafd989c03c460eaa73c8817a8012b46341f261",
+        "supervisor.json": "08d31a454f83fe51b58076053de995506ea84e69de54da89a68b5d4eb2b650ab",
+        "stdout.txt": "75552c181f8c705e83a491652be7e1e28308e920f67dbfa77ba59eadeb6e916a",
+        "stderr.txt": "76847539fea3de09f6906379b1799c25ac94f5abcd3829d6d0e3cf5d7e26ff5a"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 96.82090509999999,
+        "TctlMax": 84.8,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {}
+    },
+    {
+      "arm": "ops-00000",
+      "kind": "ops",
+      "original_analysis_verdict": "PASS",
+      "source_sha256": {
+        "analysis.json": "2755605949bb14054f6b6d105b815e8cf9beda9d020ecf8253f05238f1b68358",
+        "supervisor.json": "36476c46d0f3c3de0304bffa1e232761df9b091e5b7210a179e04b02d8cab087",
+        "stdout.txt": "d1a840c421eb55004a4ea8aa6fe9512c4321233f53b76cb59256d02ab484f675",
+        "stderr.txt": "73cdd943c771f1d0a44e8ce1b4592dbb05b421997a7b00f6140dd9a71a9112f2"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 34.4633142,
+        "TctlMax": 63.2,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {},
+      "operation_cases": [
+        {
+          "ordinal": 19571,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=64,hsv=64,nh=4,nr23=[1,1],kv=512,nb=1,mask=0,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 21622,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=128,hsv=128,nh=4,nr23=[1,1],kv=512,nb=1,mask=0,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 24809,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=256,hsv=256,nh=8,nr23=[2,1],kv=512,nb=1,mask=1,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 24810,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=512,hsv=512,nh=1,nr23=[16,1],kv=512,nb=1,mask=1,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 24811,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=256,hsv=256,nh=8,nr23=[2,1],kv=512,nb=512,mask=1,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 24812,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=512,hsv=512,nh=1,nr23=[16,1],kv=512,nb=512,mask=1,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 24813,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=64,hsv=64,nh=4,nr23=[1,1],kv=512,nb=1,mask=0,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        },
+        {
+          "ordinal": 24814,
+          "op": "FLASH_ATTN_EXT",
+          "params": "hsk=128,hsv=128,nh=4,nr23=[1,1],kv=512,nb=1,mask=0,sinks=0,max_bias=0.000000,logit_softcap=0.000000,prec=f32,type_K=f16,type_V=f16,permute=[0,1,2,3],kv_view=1,v_is_view_of_k=0,n_kv_max=0",
+          "status": "PASS",
+          "detail": "OK"
+        }
+      ]
+    },
+    {
+      "arm": "trace-gemma-on",
+      "kind": "trace",
+      "original_analysis_verdict": "ASSIGNMENT_OBSERVED",
+      "source_sha256": {
+        "analysis.json": "4a2804dfb35cbd422b490a474d5c2b8fe44ae60dbe8b80197527e79bc73462d6",
+        "supervisor.json": "0208d599d954c3bd83455ba883dfb712f275c44c69eb6b9a2b27a321cc8bb5dc",
+        "stdout.txt": "5717d0113ace5900f3e4d2b9322e7f5c579c892bcc04564753894557801f440e",
+        "stderr.txt": "9389fa64d612e257c07e9b805a4287baa097c3f22d87422c619d69a586c976a6"
+      },
+      "supervisor": {
+        "Verdict": "PASS",
+        "ChildExit": 0,
+        "Finished": true,
+        "CleanupKnown": true,
+        "Leftovers": 0,
+        "TaskAbsent": true,
+        "ProfileClosed": true,
+        "HelpersClosed": true,
+        "ElapsedSeconds": 86.23985569999999,
+        "TctlMax": 63.2,
+        "DeadlineSeconds": 170,
+        "WorkloadStopSeconds": 125
+      },
+      "config": {
+        "model": "gemma",
+        "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+        "fa": "on"
+      },
+      "fa_assignment": {
+        "rows_per_graph": [
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48
+        ],
+        "backends": [
+          "ROCm0"
+        ],
+        "scope": "Graph assignment includes reserve graphs, not a kernel execution count"
+      }
+    }
+  ],
+  "final_closure": {
+    "source_sha256": "a006150ccb5ba1d392fdbb2ab4c9a6256dd7c38d6a59c12908950e482abde067",
+    "Utc": "2026-10-11T05:01:44.5617520Z",
+    "EventsSince": "2026-10-11T04:08:56.0000000Z",
+    "Health": [
+      "health abi=1 version=0x000700D8 flags=15 generation=28244872 epoch=5 completed=17256 age_ms=295 ready_ms=4168786"
+    ],
+    "workloads": 0,
+    "tasks": 0,
+    "queried_events": 0,
+    "installed_artifact_sha256": {
+      "bc250kmd_cli.exe": "B8FA9EECA8DEA43C8E36C1EE749D1DD7D98140EFB0A79BA5F9AAA7546F2517E9",
+      "amdhip64.dll": "B0FEB14BD34797DFBB866B504C13859AD0BD15935C62D3126AF019CA3311F106",
+      "bc250kmd.sys": "8A873F3204C3F519477DAB39F5C33209023773EE296EF564617FC690EE7E565B",
+      "vulkan_radeon.dll": "90515C36843DC22A242D34450E5D070E0F671B6D7203B7943A3104578EC0EA4A"
+    }
+  }
+}
