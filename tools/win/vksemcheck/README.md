@@ -1,6 +1,6 @@
 # vksemcheck
 
-A two-process check of `VK_KHR_external_semaphore_win32` on a timeline semaphore. One C file over core
+A two-process check of `VK_KHR_external_semaphore_win32` on a timeline semaphore. A C client over core
 Vulkan 1.2, no shaders of its own, no window. It runs from an SSH session 0 shell and from the interactive
 session.
 
@@ -30,6 +30,10 @@ architecture, and runs `--help` and a usage check. Then it runs the whole check 
 first Vulkan device of the build PC. That run is the positive control of the client: a driver of another
 vendor must pass every check. Exit 3 (no device with timeline semaphores and the extension) skips the run.
 At the end the build prints the SHA-256 of each artifact. A lab runner pins these values.
+
+Use `-SkipSelfTest` to skip the GPU run on the build PC. CPU tests still run for each architecture.
+They check child stdout and stderr, absent standard handles, handle cleanup, and an inherited event.
+The old start call is a negative control: it must lose redirected stderr.
 
 ## What it does
 
@@ -80,6 +84,9 @@ Every line is `PASS`, `FAIL` or `INFO`, with the milliseconds since the parent s
 child have the prefix `[child] `. The parent prints the log of the child after the child ends. The last line
 is `vksemcheck PASS|FAIL <bits>-bit: <n> checks, <n> failed`. That count is for the parent only: count the
 `FAIL` lines for the total.
+
+The child inherits copies of the parent's standard handles. Driver stderr from both processes goes
+to the parent's stderr destination. Missing standard handles use `NUL`. The child check log is separate.
 
 | exit | meaning |
 |---|---|

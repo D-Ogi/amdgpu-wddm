@@ -67,6 +67,27 @@ foreach ($a in $targets) {
         ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "    $_" } }
     if ($LASTEXITCODE -ne 0) { throw "cl failed for $a ($LASTEXITCODE)" }
     $built += $exe
+
+    # Both controls use the same child code. The negative control keeps the old
+    # STARTUPINFO call and must lose the redirected stderr. Neither loads Vulkan.
+    foreach ($variant in @('fixed', 'legacy')) {
+        $testExe = Join-Path $Out "test-child-process-$variant-$a.exe"
+        [string[]]$extra = if ($variant -eq 'legacy') { @('/DTEST_LEGACY_STARTUP') } else { @() }
+        & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/TC', '/std:c11', '/D_CRT_SECURE_NO_WARNINGS',
+            '/DUNICODE', '/D_UNICODE', "/I$(Join-Path $msvc.FullName 'include')",
+            "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
+            "/Fo$Out\test-child-process-$variant-$a.obj", "/Fe$testExe") @extra (Join-Path $here 'test-child-process.c') `
+            /link "/LIBPATH:$(Join-Path $msvc.FullName "lib\$a")" "/LIBPATH:$sdkLib\ucrt\$a" "/LIBPATH:$sdkLib\um\$a" kernel32.lib
+        if ($LASTEXITCODE -ne 0) { throw "child-process test build failed: $variant $a" }
+        $testOutput = & $testExe
+        $testCode = $LASTEXITCODE
+        $testOutput | Set-Content -LiteralPath (Join-Path $Out "test-child-process-$variant-$a.txt")
+        if ($variant -eq 'fixed' -and $testCode -ne 0) { throw "child stderr regression: $a" }
+        if ($variant -eq 'legacy' -and ($testCode -ne 1 -or "$testOutput" -notmatch 'FAIL.*strstr\(errText')) {
+            throw "negative control did not detect lost stderr: $a"
+        }
+        Write-Host "  CPU child-process $variant $a : exit $testCode (expected)"
+    }
 }
 
 # Each artifact must be the architecture it was asked for: the x86 program is the control of the 32-bit ICD
