@@ -110,6 +110,16 @@ class ClaimShares(unittest.TestCase):
         rows = [('M903', 'the sweep holds the context in 419 of 418 stalls')]
         self.assertEqual(self.rules(rows), ['count-order'])
 
+    def test_decimal_measurements_are_not_counts(self):
+        """M862: "(0.836 of 4.641 us)" is a share of two times, not "836 of 4"."""
+        rows = [('M862', 'it is worth 0.836 us, which is 18.0 % of what that dispatch costs '
+                         'without the cache (0.836 of 4.641 us)')]
+        self.assertEqual(self.rules(rows), [])
+
+    def test_swapped_counts_at_the_end_of_a_sentence_fail(self):
+        rows = [('M904', 'the sweep holds the context in 419 of 418. The rest wait')]
+        self.assertEqual(self.rules(rows), ['count-order'])
+
     def test_unlabelled_clock_model_fails(self):
         self.assertEqual(self.rules([('M842', M842_ORIGINAL)]), ['clock-model-label'])
 
