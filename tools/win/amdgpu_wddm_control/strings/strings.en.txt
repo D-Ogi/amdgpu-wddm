@@ -1024,3 +1024,61 @@ uma.fallback.title|src|-|Video memory
 uma.fallback.size|src|-|Dedicated memory reported by Windows
 uma.fallback.readonly|src|-|This is a read-only memory size. This device does not offer the BC-250 board memory reservation control.
 uma.unknown-state|src|-|The saved backup or the last write could not be verified. Further changes are locked. Do not restart to apply this setting; contact support.
+
+# The ray tracing benchmark card on the Performance page (src/Benchmark.cs, src/MainForm.Bench.cs).
+bench.title|src|-|Ray tracing benchmark
+bench.intro|src|-|This test measures how fast your card traces light. It runs a short scene of the free game Quake II RTX twice and shows how many pictures a second it drew. The driver package does not hold the game and never downloads it.
+bench.two-ways|src|-|Your card can trace light in two ways, and the test measures both. The picture is the same either way; only the speed can differ.
+bench.pass.pipeline|src|-|First way
+bench.pass.query|src|-|Second way
+bench.pass.pipeline.note|src|-|known to game makers as a ray tracing pipeline
+bench.pass.query.note|src|-|known to game makers as a ray query
+bench.game|src|-|Game folder
+bench.game.none|src|-|Quake II RTX was not found on this computer.
+bench.game.get|src|-|The test needs the game. Quake II RTX is free, from Steam or from the maker's own page.
+bench.open.steam|src|-|Open the Steam page
+bench.open.nvidia|src|-|Open the maker's page
+bench.choose|src|-|Choose the game folder...
+bench.choose.again|src|-|Choose another folder...
+bench.choose.title|src|-|Choose the folder that holds the game program q2rtx.exe
+bench.bad.folder|src|-|That folder is no longer there.
+bench.bad.program|src|-|That folder does not hold the game program.
+bench.bad.data|src|-|That folder holds no game data.
+bench.bad.demo|src|-|This copy of the game does not hold the test scene, so the test cannot run. The free version of Quake II RTX holds it.
+bench.start|src|-|Start the test
+bench.cancel|src|-|Stop the test
+bench.size|src|-|Picture size
+bench.size.value|src|-|{0} by {1}
+bench.result|src|-|Result
+bench.state.idle|src|-|The test has not run on this computer yet.
+bench.state.starting|src|-|Starting the game...
+bench.state.running|src|-|Measuring: {0}, {1} seconds so far.
+bench.state.reading|src|-|Reading the result...
+bench.state.done|src|-|The test is finished.
+bench.state.stopped|src|-|You stopped the test.
+bench.state.saved|src|-|The newest run saved on this computer is below.
+bench.result.fps|src|-|{0} pictures a second
+bench.result.detail|src|-|{0} pictures in {1} seconds
+bench.result.none|src|-|No result: the game closed before it finished the scene.
+bench.result.timeout|src|-|No result: the scene took longer than three minutes, so the test stopped it.
+bench.result.hot|src|-|Stopped because the chip got too hot.
+bench.result.cancelled|src|-|Stopped by you.
+bench.result.failed|src|-|The game did not start.
+bench.temp.max|src|-|Highest temperature
+bench.temp.value|src|-|{0} °C
+bench.clock.mean|src|-|Average clock
+bench.clock.value|src|-|{0} MHz
+bench.notavailable|src|-|Not available
+bench.when|src|-|Measured
+bench.driver|src|-|Driver release
+bench.reference|src|-|Our own board drew {0} to {1} pictures a second at {2} by {3}, with driver release {4}. Yours can differ with another screen, another driver release and another copy of the game.
+bench.reference.why|src|-|The number moves inside that band from one run to the next, because the chip raises its speed while the scene runs and the scene takes about ten seconds.
+bench.history|src|-|Earlier runs
+bench.history.none|src|-|No earlier run on this computer.
+bench.history.line|src|-|{0}  -  first way: {1}  -  second way: {2}
+bench.busy|src|-|The test is already running.
+bench.note|src|-|The game opens in a window of its own and closes by itself. Leave it alone while it measures, and do not start the game a second time. The test stops by itself when the chip stays at 87 °C, and after three minutes for each way.
+bench.note.notemp|src|-|The game opens in a window of its own and closes by itself. Leave it alone while it measures, and do not start the game a second time. This card does not report its temperature, so the test only stops after three minutes for each way.
+search.perf.benchmark|src|-|Ray tracing benchmark
+search.perf.benchmark.terms|src|-|benchmark|fps|frames per second|speed|score|measure|ray tracing|path tracing|quake|quake 2|q2rtx|how fast
+help.setting.benchmark|src|-|A test of your own card. It runs a short ray traced scene of the free game Quake II RTX twice, once for each way a card can trace light, and shows how many pictures a second your card drew. You need the game on this computer; the driver package does not hold it. The test needs about twenty seconds for each way on our own board, opens the game in a small window and closes it again, and stops by itself when the chip gets too hot. The last ten runs stay on this computer so you can see whether a new driver release changed the number.

@@ -11,7 +11,8 @@
 # confirmation rule), the DLL and app compiles with warnings as errors, a smoke run of the exe with --smoke (no
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
-# the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF), and
+# the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
+# the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
 # the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 8 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with Nagi shown and hidden, and a language switch at run time; every page is drawn to
 # PNG without a window and checked for overlap, overflow, internals in the text and accessible names.
@@ -49,7 +50,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs' |
+    'LayoutRules.cs', 'UmaSetting.cs', 'Benchmark.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
@@ -418,6 +419,16 @@ if (-not $NoSmoke) {
     $perf = Get-Content $file -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -ne 0) { throw "perf smoke (exit $($p.ExitCode)): $perf" }
     Write-Host "  hidden window: $((($perf -split "`r?`n") | Where-Object { $_ }) -join ', ')"
+
+    # A rebuilt page keeps the place the person scrolled to (F1 of the b23 lab round) and the card the person reads
+    # keeps its place while a card above it grows (F7 of the second round): the Performance page of the recorded
+    # fixture, scrolled, then rebuilt as a progress report rebuilds it, and every state of a benchmark run with the
+    # buttons measured against the view.
+    $file = Join-Path $obj 'smoke-scroll.txt'
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-scroll', "`"$file`"", '--fixture', "`"$(Join-Path $here 'test\snapshot-bd059.json')`"" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'scroll smoke did not exit within 60 s' }
+    if ($p.ExitCode -ne 0) { throw "scroll smoke (exit $($p.ExitCode)): $(Get-Content $file -Raw -ErrorAction SilentlyContinue)" }
+    Write-Host '  rebuilt page: the place is kept, and the buttons of a run stay where they are'
 
     # G-RENDER matrix: this PC's state and the recorded fixture (warnings, games, the CU section).
     $fixture = Join-Path $here 'test\snapshot-bd059.json'

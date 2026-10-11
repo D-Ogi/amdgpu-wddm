@@ -29,6 +29,9 @@ static partial class UnitTests
                 var utc = new DateTime(2026, 10, 10, 12, 34, 56, DateTimeKind.Utc);
                 Equal((DateTime?)utc, Recovery.Utc("2026-10-10T12:34:56Z"), name + ": persisted UTC reading");
                 Check(ReleaseVersion.Parse("0.7.216.100-tester.26").CompareTo(ReleaseVersion.Parse("0.7.216.100-tester.25")) > 0, name + ": version ordering");
+                // The benchmark reads the game's own result line, which a C program always writes with a dot.
+                var pass = BenchLog.Parse("1550 frames, 25.43 seconds: 60.940002 fps");
+                Check(pass != null && pass.Frames == 1550 && Math.Abs(pass.Fps - 60.940002) < 1e-6, name + ": benchmark result line");
             }
         }
         finally { Thread.CurrentThread.CurrentCulture = before; Thread.CurrentThread.CurrentUICulture = beforeUi; }

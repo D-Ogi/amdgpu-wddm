@@ -14,7 +14,7 @@ goes only into the support report and the Support page (shown when "Show support
 | Games | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
 | Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
 | Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
-| Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report |
+| Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
 | Settings | Language, update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
 | Help | Four symptom guides, one explanation per setting (through search), Repair, Restart Windows, the support report, About |
@@ -101,6 +101,76 @@ Windows set it", and the page never writes it. Apply works as the display settin
 change (`CDS_UPDATEREGISTRY`, `SDC_SAVE_TO_DATABASE`). Revert, closing the question or the end of the countdown puts back
 the display configuration from before the change. These are per-user settings: no elevation, no backup and no Recovery
 action. `src/DisplayModes.cs` is the only file that changes a display setting (G-SRC).
+
+## Ray tracing benchmark
+
+The Performance page carries a card that measures how fast the card traces light (owner, 2026-10-11). It measures a
+copy of Quake II RTX that the person already has. The package never holds the game and never downloads it.
+
+Where the game is. The card takes the folder the person chose (`BenchmarkFolder`, section 5 of
+`docs/gui/interfaces.md`) when there is one. Otherwise it reads `SteamPath` of `HKCU\Software\Valve\Steam`, every
+library of `steamapps\libraryfolders.vdf`, and the manifest `steamapps\appmanifest_440900.acf` of each library, and
+takes `steamapps\common\<installdir>` of the first library whose manifest names application 440900. The app parses
+that Valve key-value text itself (`Vdf` in `src/Benchmark.cs`). It never reads text that Windows translated. A folder
+counts as a usable copy only with `q2rtx.exe` in it and `demos/q2demo1.dm2` in the directory of `baseq2\pak0.pak`,
+which is the scene the test runs. Without the scene the card says so and offers nothing to measure. With no copy at
+all the card offers the game's Steam page and the maker's own release page, and nothing else can be opened from it.
+
+One run, two passes. Quake II RTX traces its rays through one of two Vulkan contracts, its own `ray_tracing_api`:
+`pipeline` and `query`. A run measures both, in that order, and the card names them "First way" and "Second way" with
+the technical name under each. Each pass starts `q2rtx.exe` once with the settings of the lab harness
+(`scratch/pathtrace/lab/pt-run.ps1`, outside this repository) on the command line only: windowed 1280x720, no dynamic
+resolution, no upscaler, full view, no sound, no vertical sync, one timed run of the demo, then quit. The game's own
+files are never written: `+set basedir` points at the game folder, which is only read, and `+set homedir` points at
+`%LOCALAPPDATA%\amdgpu-wddm\benchmarks\q2rtx-home`, the game's one writable directory, where its log is written as
+`baseq2\logs\q2rtx-bench-<pass>.log`. The result comes from that log's own line `<N> frames, <S> seconds: <F> fps`,
+which the game writes with C's `printf`, so the number is read with a dot whatever the language of Windows.
+
+What stops a pass. Each pass is bounded to three minutes. The chip's temperature and clock come from the driver
+snapshot the Performance page already polls, every 2 s. A pass stops at 89 C at once, or at 87 C held for 10 s (the
+rule of the lab trials, owner 2026-10-04). The card then says the chip got too hot. "Stop the test" ends it as well.
+Where that snapshot carries no temperature, the card says so instead of promising a stop it cannot make, and the
+three minutes of each pass are the whole bound.
+
+A pass ends through a Win32 job object created for it, with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: the game and
+anything it started die with that handle, and a run can never outlive the window. Because that job is the pass's only
+way to end the game, it is built before the game is started: a pass that cannot get one never starts the game, and a
+game that could not be put into it is ended at once by the handle this app started it with. That one ending is why
+`BenchmarkRun.cs` stands beside `RecoveryActions.cs` and `BugReport.cs` in the G-SRC list of files that may end a
+process. No process this app did not start is ever touched. After the job is ended the pass waits up to 5 s for the
+game to be gone. A game still there ends the run, and so does a pass that ran out of time. Two copies of the game
+must never trace at once. One run at a time, on a worker thread. The window only reports.
+
+What is never measured. A result is read only from a log this pass itself wrote: the pass removes the log of the
+previous run first, refuses to start when that log cannot be removed (another copy of the game holds it open), and
+rejects a log older than the start of the pass. A number that was measured elsewhere is worse than no number.
+
+What it shows. Each pass gives its pictures a second, its highest temperature and its average clock, with "Not
+available" where the driver gave no reading, and the date and driver release of the run. A pass that was stopped
+before its game ran has no reading of its own: the one sample taken before a start belongs to the decision to start,
+and only the pass that was refused because the chip was too hot keeps it (`PassTelemetry.Keep`). The card shows one run in
+full: the run of this session while there is one, otherwise the newest saved run. The state line above it follows
+that run (`BenchState.Id`): the way that measures now, "You stopped the test." for a run the person ended, "The test
+is finished." for a run of this session, and the saved line for a run read back from the history after a new start of
+the application. "Earlier runs" lists the saved runs before the run above it (`BenchHistory.Earlier`), so no run
+appears twice. The newest ten runs are kept
+in `%LOCALAPPDATA%\amdgpu-wddm\benchmarks\q2rtx-history.json` (section 7 of `docs/gui/interfaces.md`). On a board the
+app has positively identified as a BC-250 (the identification of the board memory card) the card also shows what this
+release measured on the project's own board, for comparison: 57.8 to 69.7 pictures a second at 1280x720, with the
+release those numbers were measured with named in the same sentence. The number is a band because twenty passes of
+the two ways over two lab rounds landed inside it, with the two samples of the validation suite, and a pass follows
+the clock the chip reached in a scene of about ten seconds. The card says that in one line under the band.
+
+The card holds still while a run goes on. A rebuilt page keeps the card the person reads at the same place, not its
+own scroll offset (`PagePlace.Keep`), because a card above can get a line at any moment: the case fan card does when
+the game loads the chip, and "Start the test" and "Stop the test" moved 23 px down under the pointer of a person who
+was aiming at Stop. "Start the test" brings the buttons of the card into reach by the same arithmetic
+(`PagePlace.Bring`), and a page that shows them already does not move at all. The gate `--smoke-scroll` builds every
+state of a run without a window and measures the two buttons against the view.
+
+`src/Benchmark.cs` holds every rule as pure functions over text, bytes and streams, which the host tests decide
+without a game, a driver or a process (`test/BenchmarkTests.cs`). `src/BenchmarkRun.cs` runs the passes and
+`src/MainForm.Bench.cs` draws the card.
 
 ## Settings rule
 

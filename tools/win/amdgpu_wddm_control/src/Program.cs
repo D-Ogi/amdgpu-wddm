@@ -13,6 +13,10 @@
 //   amdgpu_wddm_control.exe --smoke-recovery <file>  no window: the recovery view built; fails when the DLL got loaded
 //   amdgpu_wddm_control.exe --smoke-perf <file>      no window: start time, timer and frame ticks of a hidden window,
 //                                                    memory (G-PERF)
+//   amdgpu_wddm_control.exe --smoke-scroll <file> --fixture <snapshot.json>
+//                                                    no window: a rebuilt page keeps the place the person scrolled
+//                                                    to, and the buttons of a benchmark run stay where they are in
+//                                                    every state of the run; findings go to <file>
 //   amdgpu_wddm_control.exe --action <name> [--ceiling MHz] --dry-run [--snapshot <json>] [--out <file>]
 //                                                    no window: the Recovery states and the plan of one action, nothing
 //                                                    written (RecoveryActions.cs)
@@ -60,6 +64,7 @@ namespace AmdgpuWddmControl
             if (args.Length >= 3 && args[0] == "--smoke-render") return SmokeRender(args);
             if (args.Length == 2 && args[0] == "--smoke-recovery") return SmokeRecovery(args[1]);
             if (args.Length == 2 && args[0] == "--smoke-perf") return SmokePerf(args[1]);
+            if (args.Length == 4 && args[0] == "--smoke-scroll" && args[2] == "--fixture") return SmokeScroll(args[1], args[3]);
             if (args.Length == 1 && args[0] == "--recovery")
             {
                 Kmd.Blocked = true;
@@ -135,6 +140,29 @@ namespace AmdgpuWddmControl
             catch (Exception e)
             {
                 try { File.WriteAllText(path, "smoke perf failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
+        // The place a rebuild of the same page keeps (F1 of the b23 lab round), without a window. Findings go to
+        // <file>; an empty file is a pass.
+        static int SmokeScroll(string path, string fixture)
+        {
+            try
+            {
+                string findings;
+                using (var form = new MainForm(true, new AppPrefs(new MemoryPrefStore())))
+                {
+                    form.CreateControlTree();
+                    form.UseFixture(new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(fixture)));
+                    findings = form.ScrollKeeping() + form.RunStateLayout();
+                }
+                File.WriteAllText(path, findings.Length == 0 ? "no findings" + Environment.NewLine : findings);
+                return findings.Length == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(path, "smoke scroll failed: " + e); } catch (Exception) { }
                 return 1;
             }
         }

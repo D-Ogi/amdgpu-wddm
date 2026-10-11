@@ -21,6 +21,8 @@ static partial class UnitTests
         Search();
         WindowFit();
         PageWidthRule(root);
+        RebuiltPageFocus(root);
+        RebuiltPagePlace(root);
         Caches();
         SensorRows();
         GroupsAndOrigins();
@@ -314,6 +316,101 @@ static partial class UnitTests
         Check(!Regex.IsMatch(smoke, @"built\.Width\s*>\s*ColumnWidth"), "G-RENDER: the render gate no longer measures the page against the live column width");
     }
 
+    // F1 of the b23 lab round: where the keyboard focus goes when a card rebuilds itself under the person's hands.
+    // The page below is the benchmark card as it stands while a run goes on: "Start the test" is disabled, so it
+    // cannot take the focus back, and the focus must stay on that card instead of leaving for the navigation bar.
+    static void RebuiltPageFocus(string root)
+    {
+        const string card = "perf.benchmark";
+        var running = new List<FocusCandidate>
+        {
+            new FocusCandidate("Button|Home", null, true, true),                      // the navigation bar
+            new FocusCandidate("Label|Ray tracing benchmark", card, false, false),
+            new FocusCandidate("Button|Start the test", card, false, false),           // disabled while the run goes on
+            new FocusCandidate("Button|Stop the test", card, true, true),
+            new FocusCandidate("Button|Choose another folder...", card, false, false),
+            new FocusCandidate("CardPanel|", card, true, false),                       // a panel: focusable, never a tab stop
+        };
+        Equal(3, PageFocus.After("Button|Start the test", card, running),
+            "F1: the focus of a disabled Start goes to Stop the test, the next control of its own card");
+        Equal(3, PageFocus.After("Button|Stop the test", card, running), "F1: a control that is still there takes the focus back");
+        Equal(0, PageFocus.After("Button|Home", null, running), "F1: a control outside every card takes its own focus back");
+        Equal(-1, PageFocus.After("Button|Start the test", null, running), "F1: without a card there is nothing to fall back to");
+        Equal(-1, PageFocus.After(null, card, running), "F1: a page that had no focus asks for none");
+        Equal(-1, PageFocus.After("Button|Start the test", "perf.fan", running), "F1: the fallback stays inside the card that had the focus");
+        var gone = new List<FocusCandidate> { new FocusCandidate("Button|Home", null, true, true), new FocusCandidate("Label|Only text", card, false, false) };
+        Equal(-1, PageFocus.After("Button|Start the test", card, gone), "F1: a card with nothing to focus hands the focus to nobody");
+        Throws<ArgumentNullException>(() => PageFocus.After("Button|Home", null, null), "F1: a rule without a page is refused");
+
+        // The window puts the focus back before it puts the place back: a control that takes the focus is scrolled
+        // into view, which would move a view that had just been put back (the page then moved by its own offset).
+        var form = Regex.Replace(File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\MainForm.cs")), @"//[^\n]*", "");
+        int focusAt = form.IndexOf("KeepFocus(focusName", StringComparison.Ordinal);
+        int scrollAt = form.IndexOf("PagePlace.Keep(scroll, cards, Cards())", StringComparison.Ordinal);
+        Check(focusAt > 0 && scrollAt > 0 && focusAt < scrollAt, "F1: ShowPage puts the focus back before the place");
+        Check(form.Contains("AutoScrollPosition = Point.Empty"), "F1: ShowPage builds the page with the panel at its top");
+    }
+
+    // F7: where a rebuilt page stands, and where it goes when a card must come into reach. The numbers are the ones
+    // the lab measured: the case fan card above the benchmark card is 1287 px tall and gets a line of 23 px while
+    // the game loads the chip, and the benchmark card sits at 1659 px in the page with its buttons at 1847 px.
+    static void RebuiltPagePlace(string root)
+    {
+        var before = new List<CardBox>
+        {
+            new CardBox("perf.sensors", 70, 290),
+            new CardBox("perf.fan", 372, 1287),
+            new CardBox("perf.fan.chart", 800, 190),
+            new CardBox("perf.benchmark", 1659, 514),
+            new CardBox("perf.benchmark.buttons", 1847, 39),
+        };
+        var grown = new List<CardBox>
+        {
+            new CardBox("perf.sensors", 70, 290),
+            new CardBox("perf.fan", 372, 1310),
+            new CardBox("perf.fan.chart", 823, 190),
+            new CardBox("perf.benchmark", 1682, 514),
+            new CardBox("perf.benchmark.buttons", 1870, 39),
+        };
+        Equal(1682, PagePlace.Keep(1659, before, grown), "F7: a card that grows above the one in the view moves the page with it");
+        Equal(1700, PagePlace.Keep(1677, before, grown), "F7: the card keeps its distance from the top of the view");
+        Equal(1659, PagePlace.Keep(1659, before, before), "F7: a rebuild that changes no height keeps the offset");
+        Equal(0, PagePlace.Keep(0, before, grown), "F7: a page at its top stays at its top");
+        Equal(-200, PagePlace.Keep(-200, before, grown), "F7: an offset that is no offset is handed back as it is");
+        // The outermost card wins: a page marks sections inside cards as well, and the chart inside the fan card
+        // would keep a place of its own (it moved by 23 px, the fan card did not).
+        Equal(850, PagePlace.Keep(850, before, grown), "F7: the card at the top of the view is the outermost one");
+        // The top edge of the view in the gap between two cards: the first card below it keeps the place.
+        var gap = new List<CardBox> { new CardBox("a", 0, 100), new CardBox("b", 200, 100) };
+        Equal(180, PagePlace.Keep(150, gap, new List<CardBox> { new CardBox("a", 0, 100), new CardBox("b", 230, 100) }),
+            "F7: in a gap between cards the card below keeps the place");
+        Equal(0, PagePlace.Keep(150, gap, new List<CardBox> { new CardBox("a", 0, 100), new CardBox("b", 30, 100) }),
+            "F7: the page never goes above its own top");
+        Equal(150, PagePlace.Keep(150, gap, new List<CardBox> { new CardBox("a", 0, 100) }),
+            "F7: a card that is gone from the rebuilt page leaves the offset alone");
+        Throws<ArgumentNullException>(() => PagePlace.Keep(100, null, grown), "F7: a rule without the page before it is refused");
+        Throws<ArgumentNullException>(() => PagePlace.Keep(100, before, null), "F7: a rule without the rebuilt page is refused");
+
+        // Bringing the buttons of the card into reach: a page that shows them already does not move at all, which
+        // is why pressing Start moves nothing under the pointer.
+        Equal(1659, PagePlace.Bring(1659, 700, 1659, 1847, 39), "F7: the page stays where it is while the buttons are in the view");
+        Equal(1682, PagePlace.Bring(1682, 700, 1659, 1870, 39), "F7: a card whose top edge is above the view stays there while its buttons are in reach");
+        Equal(1659, PagePlace.Bring(0, 700, 1659, 1847, 39), "F7: a page that shows neither goes to the top of the card");
+        Equal(1659, PagePlace.Bring(3000, 700, 1659, 1847, 39), "F7: the card comes back from below as well");
+        Equal(1686, PagePlace.Bring(0, 200, 1659, 1847, 39), "F7: a view too short for the whole card shows the buttons");
+        Equal(0, PagePlace.Bring(400, 700, -50, 10, 39), "F7: a card above the top of the page brings the page to its top");
+        Throws<ArgumentOutOfRangeException>(() => PagePlace.Bring(0, 0, 100, 200, 39), "F7: a view with no height is refused");
+        Throws<ArgumentOutOfRangeException>(() => PagePlace.Bring(0, 700, 100, 200, -1), "F7: a row shorter than nothing is refused");
+
+        // The window asks the rule, and the card of a run that starts brings its own buttons into reach.
+        var form = Regex.Replace(File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\MainForm.cs")), @"//[^\n]*", "");
+        Check(form.Contains("PagePlace.Keep(scroll, cards, Cards())"), "F7: ShowPage puts the rebuilt page where the card the person reads is");
+        Check(form.Contains("PagePlace.Bring("), "F7: a card is brought into reach by arithmetic the gates can measure");
+        var bench = Regex.Replace(File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\MainForm.Bench.cs")), @"//[^\n]*", "");
+        Check(bench.Contains("Mark(\"perf.benchmark.buttons\"") && bench.Contains("BringIntoView(\"perf.benchmark\", \"perf.benchmark.buttons\")"),
+            "F7: Start brings the buttons of the card into reach, not the card alone");
+    }
+
     // F-CACHE: the D3D12 engine cache counted from a directory; the other caches honestly unknown.
     static void Caches()
     {
@@ -572,7 +669,9 @@ static partial class UnitTests
         Equal("", string.Join(",", where(@"\b(WebRequest|HttpWebRequest|HttpClient|WebClient|TcpClient|UdpClient|Socket|ServicePointManager)\b", new[] { "UpdateCheck.cs" })), "G-SRC: network code only in UpdateCheck.cs");
         Equal("", string.Join(",", where(@"\b(ChangeDisplaySettings\w*|SetDisplayConfig)\b", new[] { "DisplayModes.cs" })), "G-SRC: display-mode writes only in DisplayModes.cs");
         Check(Regex.IsMatch(files["DisplayModes.cs"], @"CdsTest") && Regex.IsMatch(files["MainForm.Display.cs"], @"KeepDisplayDialog\.Ask"), "G-SRC: a mode is tested first and kept only on the person's word");
-        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape and the report's own timed-out child");
+        // BenchmarkRun.cs ends one process: the game it started itself, and only when that game could not be put
+        // into the job object that would otherwise have ended it (test/BenchmarkTests.cs decides that exact shape).
+        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "BenchmarkRun.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, the report's own timed-out child and the benchmark's own game");
         Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", null)), "G-SRC: no PnP disable or enable");
         Equal("", string.Join(",", where(@"\b(EWX_FORCE\w*|Restart-Computer|shutdown(\.exe)?\s+/r)\b", null)), "G-SRC: no forced restart");
         Equal("", string.Join(",", where(@"(?i)\b(oauth|access_token|Authorization)\b", null)), "G-SRC: no sign-in or token code");
