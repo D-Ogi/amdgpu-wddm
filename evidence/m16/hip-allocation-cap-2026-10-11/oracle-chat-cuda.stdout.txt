@@ -1,0 +1,12 @@
+system
+
+
+user
+What is the capital of France? Answer in one word.
+model
+<|channel>thought
+The user is asking for the capital of France.
+The user requested a one-word answer.
+The capital of France is Paris.
+
+
