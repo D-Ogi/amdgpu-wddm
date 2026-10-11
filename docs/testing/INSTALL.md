@@ -43,6 +43,25 @@ The installer does not change BIOS or firmware settings.
 
 ## Install
 
+The usual way is the setup window:
+
+1. In the unpacked folder, open the folder `setup` and double-click `amdgpu_wddm_setup.exe`. The window asks for
+   administrator rights itself: accept the prompt.
+2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
+   attention, what it will change, the restarts and the release notes.
+3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
+   recovery key or whether setup must pause BitLocker for two restarts.
+4. The window installs the driver and shows each stage. Before each restart of Windows it asks "Restart now" or
+   "Later", so you can save your work first. After you log on again, the window starts by itself and continues
+   (accept the administrator prompt).
+5. At the end the window shows the result. On a problem it offers to try again or to repair, and it can save a
+   support file for your report.
+
+The setup window installs the driver only. It does not install llama.cpp, Ollama or a model. For these, install
+with `install.cmd` (see "The extras" below).
+
+On the command line, `install.cmd` installs the same release, with all its switches:
+
 1. In the unpacked folder, right-click `install.cmd` and select "Run as administrator".
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
@@ -58,9 +77,9 @@ The installer does not change BIOS or firmware settings.
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
 
-To install a newer package, unpack it to a new folder and run its `install.cmd`. You do not have to uninstall
-first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change, replaces the others and
-restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
+To install a newer package, unpack it to a new folder and start its setup window or its `install.cmd`. You do not
+have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change,
+replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
 use `install.cmd -Repair` to install it again.
 
 An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz`), `DwmForceCpu`, the D3D11

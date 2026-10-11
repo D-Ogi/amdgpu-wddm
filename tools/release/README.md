@@ -13,7 +13,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `rebuild-check.ps1` | Builds payload files again from their commits in temporary work trees and compares the hashes. `build-release.ps1 -RebuildCheck` runs it. |
 | `test_provenance.py` | Host test of `provenance.py` in temporary repositories. It is the `release-provenance` check of `tools\quality\quick.ps1`. |
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
-| `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts; with `-SetupApp`, also the setup window `setup\amdgpu_wddm_setup.exe` (`tools/win/amdgpu_wddm_setup`). |
+| `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts, and the setup window `setup\amdgpu_wddm_setup.exe` (`tools/win/amdgpu_wddm_setup`), the default entry of an ordinary user. `build-release.ps1` refuses to build without `-SetupApp` (from 0.7.216.100-tester.28 on). |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
 | `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call), and it and both copies of `bc250control.dll` come from one control-app build folder. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase; an install over an older release names the files of that release that this package does not install and removes nothing else, and the uninstall takes every item of ours and ends with the list of what is left (BD-089). Never run the real install on a development PC. |
@@ -32,7 +32,8 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once
-pwsh -File tools\release\build-release.ps1 [-SetupApp <setup build folder>] [-RebuildCheck]   # the control app comes from its release-sources.json rows
+pwsh -File tools\win\amdgpu_wddm_setup\build.ps1 -Out <setup build folder>   # the setup window; its build is its gate
+pwsh -File tools\release\build-release.ps1 -SetupApp <setup build folder> [-RebuildCheck]   # the control app comes from its release-sources.json rows
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 

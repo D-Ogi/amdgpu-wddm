@@ -529,9 +529,11 @@ Check ($r.code -eq 0) "G-EVT, G-STAGE: exit $($r.code)"
 $r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-offline.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1800
 $r.text
 Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
-# The setup window, when the package carries it, against this package's real engine: a plan run and a dry run through
-# the window's own engine client, each screen in four languages without internals (--smoke-engine shows no window).
+# The setup window against this package's real engine: a plan run and a dry run through the window's own engine client,
+# each screen in four languages without internals (--smoke-engine shows no window). Every package carries the window
+# from 0.7.216.100-tester.28 on (build-release.ps1 -SetupApp), so a package without it fails here.
 $setupExe = Join-Path $Package 'setup\amdgpu_wddm_setup.exe'
+Check (Test-Path -LiteralPath $setupExe) 'the package carries the setup window (setup\amdgpu_wddm_setup.exe)'
 if (Test-Path -LiteralPath $setupExe) {
     'setup window against the real engine (--smoke-engine: plan and dry run, no window)'
     foreach ($c in @(
@@ -554,7 +556,7 @@ if (Test-Path -LiteralPath $setupExe) {
     }
     $cr0 = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
     Check (($cr0.continuation.setup_exe -eq 'setup/amdgpu_wddm_setup.exe') -and (@($m.files | Where-Object { $_.path -eq 'setup/amdgpu_wddm_setup.exe' }).Count -eq 1)) 'the compatibility record names the setup window as the continuation, manifest.json lists it'
-} else { '  (no setup window in this package: skipped)' }
+}
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 
 'package records: compatibility, release notes, witness writer, planned restarts only'

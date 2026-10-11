@@ -1,6 +1,10 @@
-# Builds the tester release package: one folder and its zip that a tester unpacks and runs (install.cmd).
+# Builds the tester release package: one folder and its zip that a tester unpacks and runs (the setup window
+# setup\amdgpu_wddm_setup.exe, or install.cmd on the command line).
 #
-#   pwsh -File tools\release\build-release.ps1 [-Root <BC250_ROOT>] [-Out <dir>] [-Version <v>]
+#   pwsh -File tools\release\build-release.ps1 -SetupApp <dir> [-Root <BC250_ROOT>] [-Out <dir>] [-Version <v>]
+#
+# -SetupApp is required from 0.7.216.100-tester.28 on: the output folder of tools\win\amdgpu_wddm_setup\build.ps1,
+# whose own gates (unit tests, compile, fake-engine and render smokes) must have passed.
 #
 # Inputs are the artifacts listed in release-sources.json (registered lab drivers, control application, tools,
 # licence texts), each refused unless its SHA256 matches. The AMD GPU firmware is not packaged: manifest.json carries
@@ -26,7 +30,7 @@ param(
     [string]$DriverVer = '0.7.216.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
     [string]$Version = '0.7.216.100-tester.21',
     [string]$KitVersion = '10.0.26100.0',
-    [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [string]$SetupApp,                           # required: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
     [switch]$NoLedger,                           # build in a workspace that has no work ledger at all
@@ -35,6 +39,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
+# The setup window is the default entry of an ordinary user, so a package without it is not a release.
+if (-not $SetupApp) { throw '-SetupApp is required: build the setup window with tools\win\amdgpu_wddm_setup\build.ps1 -Out <dir> and pass that folder' }
+if (-not (Test-Path -LiteralPath (Join-Path $SetupApp 'amdgpu_wddm_setup.exe'))) { throw "-SetupApp ${SetupApp}: no amdgpu_wddm_setup.exe" }
 if (-not $Out) { $Out = Join-Path $Root 'scratch\release\out' }
 $repo = Split-Path (Split-Path $PSScriptRoot)
 $name = "amdgpu-wddm-tester-$Version"
@@ -191,16 +198,13 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
-# The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The installer's
-# continuation runs it from the staged closure after each restart that a setup-window run asked for.
-if ($SetupApp) {
-    $setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
-    if (-not (Test-Path -LiteralPath $setupExe)) { throw "-SetupApp ${SetupApp}: no amdgpu_wddm_setup.exe" }
-    $setupDst = Join-Path $pkg 'setup'
-    [void][IO.Directory]::CreateDirectory($setupDst)
-    foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File | Where-Object { $_.Extension -in '.exe', '.config' }) { Copy-Item -LiteralPath $f.FullName -Destination $setupDst }
-    '  setup window: {0} ({1})' -f $setupExe, (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.Substring(0, 8)
-}
+# The setup window (required, checked at the start): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The
+# installer's continuation runs it from the staged closure after each restart that a setup-window run asked for.
+$setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
+$setupDst = Join-Path $pkg 'setup'
+[void][IO.Directory]::CreateDirectory($setupDst)
+foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File | Where-Object { $_.Extension -in '.exe', '.config' }) { Copy-Item -LiteralPath $f.FullName -Destination $setupDst }
+'  setup window: {0} ({1})' -f $setupExe, (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.Substring(0, 8)
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
 # The release's own third-party list (each bundled file and its licence file) and the licence texts, each from the
 # source that release-sources.json records (repository, path, commit) and refused unless its SHA256 matches.
