@@ -297,6 +297,8 @@ int main(void)
     FillSubmit(&submit, 1);
     CHECK(UmdBlobParseSubmit(&submit, SubmitWire(1), &sv) == UMD_BLOB_OK);
     CHECK(sv.single_ib == 1 && sv.num_ibs == 1 && sv.ib_va == 0x8000ull && sv.ib_bytes == 256);
+    CHECK(offsetof(struct bc250_umd_submit_private, fence_va) == 24 && offsetof(struct bc250_umd_submit_private, fence_value) == 32);
+    CHECK(sv.fence_va == submit.fence_va && sv.fence_value == submit.fence_value);
     // A longer buffer than the size word is fine: the KMD's private-data slot is the whole struct.
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_OK);
     FillSubmit(&submit, 2);
@@ -307,6 +309,7 @@ int main(void)
     submit.size = SubmitWire(0);
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_SIZE);
     CHECK(sv.num_ibs == 0 && sv.ib_va == 0);
+    CHECK(sv.fence_va == 0 && sv.fence_value == 0);
     FillSubmit(&submit, 1);
     submit.num_ibs = BC250_UMD_SUBMIT_MAX_IBS + 1;
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_SIZE);

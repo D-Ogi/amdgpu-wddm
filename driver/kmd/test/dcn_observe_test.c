@@ -4,6 +4,7 @@
 #include <string.h>
 #include "regs.generated.h"
 #include "bc250kmd_escape.h"
+#include "../shim/include/bc250_hip_journal.h"
 #define C_ASSERT(x) _Static_assert(x,#x)
 #define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
 #define RtlZeroMemory(p,n) memset(p,0,n)
@@ -37,7 +38,8 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
 }
 static NTSTATUS MmioRead(const BC250_DEVICE*d,ULONG reg,ULONG*out){return MmioDcnRead(d,reg,out);}
 /* The escapes the dispatcher answers ahead of the DCN observer: counted, never reached by an observe request. */
-static unsigned logs,journals,others;
+static unsigned logs,journals,others,hipUploads;
+static NTSTATUS HipJournalEscape(void*d,const DXGKARG_ESCAPE*e){(void)d;(void)e;hipUploads++;return STATUS_ACCESS_DENIED;}
 static NTSTATUS LogEscape(BC250_DEVICE*d,const DXGKARG_ESCAPE*e,BOOLEAN summary){(void)d;(void)e;CHECK(!summary);logs++;return STATUS_SUCCESS;}
 static NTSTATUS PagingJournalEscape(const BC250_DEVICE*d,const DXGKARG_ESCAPE*e){(void)d;(void)e;journals++;return STATUS_SUCCESS;}
 static void StartHealthRequest(BC250_DEVICE*d,BC250_ESCAPE_START_HEALTH*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
@@ -136,6 +138,17 @@ int main(void)
         he.PrivateDriverDataSize--;
         CHECK(Bc250Escape(&d,&he)==STATUS_INVALID_PARAMETER);CHECK(others==1);
         d.RetainedPowerPhase=0;
+    }
+    /* A HIP upload is software-only and dispatches to its own full validator,
+       even with the adapter suspended. Its refusal status must propagate. */
+    CHECK(hipUploads==0);
+    {
+        BC250_HIP_JOURNAL_UPLOAD h={0};DXGKARG_ESCAPE he={&h,sizeof(h),{8}};
+        h.Magic=BC250_HIP_JOURNAL_MAGIC;h.Command=BC250_HIP_JOURNAL_COMMAND;
+        reads=0;d.RetainedPowerPhase=2;
+        CHECK(Bc250Escape(&d,&he)==STATUS_ACCESS_DENIED);CHECK(hipUploads==1 && reads==0);
+        he.PrivateDriverDataSize=7;
+        CHECK(Bc250Escape(&d,&he)==STATUS_INVALID_PARAMETER);CHECK(hipUploads==1 && reads==0);
     }
     printf("DCN observer: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

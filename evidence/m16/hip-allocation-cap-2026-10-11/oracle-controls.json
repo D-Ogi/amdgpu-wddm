@@ -1,0 +1,59 @@
+{
+  "scope": "Independent existing CPU/CUDA controls, inspected offline. No new host or lab execution.",
+  "source_script_sha256": "65107f8d94bf601c2812e70dec6a15660ec62d2f50b37874715b3b86f0934431",
+  "source_report_sha256": "4a10d094c60d8567462bc7ffcd1a4402220804367ecb0072fbe38ca2eb70761e",
+  "source_receipt_sha256": "e500ca724c84bf9c79c94d78d924be3847588ebc183efb406977be1747e59ca1",
+  "upstream_revision": "10a60cf30",
+  "upstream_build": 11539,
+  "model_sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+  "model_bytes": 6975879296,
+  "executable_sha256": "fa3fbd925e91448e451bf06e1e67d37b26659d0a9968e43ce92b28717b1c421e",
+  "comparison": "Decode UTF-8 and normalize CRLF to LF only. Raw stdout files remain unmodified.",
+  "arms": [
+    {
+      "name": "text-cuda",
+      "arguments_after_model": "-p \"The capital of France is\" -n 16 --temp 0 --seed 1234 -t 4 -ngl 99 --no-warmup -c 512 -b 32 -ub 32 --no-display-prompt --no-conversation --simple-io",
+      "receipt_rows": [
+        "text-cuda\texit=0\t5,4s"
+      ],
+      "stdout": "oracle-text-cuda.stdout.txt",
+      "stdout_sha256": "dd60126255b3e0841aa798d21901f2cd65d5bae012c5bb213c45d1e851bdfb07",
+      "source_stderr_sha256": "6c1cfb0c9be74df923fc57bb731634d6105f7f06f98ffb719e37cd6582ae0d32",
+      "matches_lab_raw_prompt": true
+    },
+    {
+      "name": "text-cuda-faoff",
+      "arguments_after_model": "-p \"The capital of France is\" -n 16 --temp 0 --seed 1234 -t 4 -ngl 99 --no-warmup -c 512 -b 32 -ub 32 --no-display-prompt --no-conversation --simple-io -fa off",
+      "receipt_rows": [
+        "text-cuda-faoff\texit=0\t5,6s"
+      ],
+      "stdout": "oracle-text-cuda-faoff.stdout.txt",
+      "stdout_sha256": "dd60126255b3e0841aa798d21901f2cd65d5bae012c5bb213c45d1e851bdfb07",
+      "source_stderr_sha256": "dea51c879652921ef56c1acc80c8c17b9bb9f2cf7dd087c6e24f11b88b7c70ea",
+      "matches_lab_raw_prompt": true
+    },
+    {
+      "name": "text-cpu-strict",
+      "arguments_after_model": "-p \"The capital of France is\" -n 16 --temp 0 --seed 1234 -t 4 -ngl 0 --no-warmup -c 512 -b 32 -ub 32 --no-display-prompt --no-conversation --simple-io --device none --no-op-offload --no-kv-offload -fa off",
+      "receipt_rows": [
+        "text-cpu-strict\texit=0\t7,4s"
+      ],
+      "stdout": "oracle-text-cpu-strict.stdout.txt",
+      "stdout_sha256": "dd60126255b3e0841aa798d21901f2cd65d5bae012c5bb213c45d1e851bdfb07",
+      "source_stderr_sha256": "8876aee075ab16fba1b1df5753a0871fcab89f3675e44132e1a7a15bf3dc8753",
+      "matches_lab_raw_prompt": true
+    },
+    {
+      "name": "chat-cuda",
+      "arguments_after_model": "-p \"What is the capital of France? Answer in one word.\" -n 32 --temp 0 --seed 1234 -ngl 99 -c 2048 --jinja -cnv -st --simple-io",
+      "receipt_rows": [
+        "chat-cuda\texit=1\t0s",
+        "chat-cuda\texit=0\t10,6s"
+      ],
+      "stdout": "oracle-chat-cuda.stdout.txt",
+      "stdout_sha256": "b2a305788149fe59f3882bab53eb15e141f75d0b5b330ccb5b0dbcec64d7fa2a",
+      "source_stderr_sha256": "498693f18e78850ec4f8bd3ceb4cf481837868786d9dcabc57a61675001b597d",
+      "matches_lab_raw_prompt": false
+    }
+  ]
+}

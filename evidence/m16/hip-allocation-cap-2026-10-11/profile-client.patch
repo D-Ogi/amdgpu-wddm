@@ -1,0 +1,46 @@
+--- original/llama-bench.cpp
++++ profile/llama-bench.cpp
+@@ -2159,6 +2159,8 @@
+     }
+ };
+ 
++#include "decode-profile.h"
++
+ struct ctx_state {
+     int depth = 0; // in tokens
+ 
+@@ -2183,7 +2185,9 @@
+             tokens[i] = std::rand() % n_vocab;
+         }
+         common_batch batch = common_batch_get_one(ctx, tokens.data(), n_tokens);
++        DecodeProfile profile("prompt-decode", n_tokens);
+         int res = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
++        profile.finish(res);
+         if (res != 0) {
+             fprintf(stderr, "%s: failed to decode prompt batch, res = %d\n", __func__, res);
+             return false;
+@@ -2191,7 +2195,8 @@
+         n_processed += n_tokens;
+     }
+ 
+-    llama_synchronize(ctx);
++    { DecodeProfile profile("prompt-final-existing-sync", 0);
++      llama_synchronize(ctx); profile.finish(0); }
+     return true;
+ }
+ 
+@@ -2210,12 +2215,14 @@
+     for (int i = 0; i < n_gen; i++) {
+         batch.clear();
+         batch.add(token, pos++, 0, true);
++        DecodeProfile profile("generation-decode-and-existing-sync", 1);
+         int res = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
+         if (res != 0) {
+             fprintf(stderr, "%s: failed to decode generation batch, res = %d\n", __func__, res);
+             return false;
+         }
+         llama_synchronize(ctx);
++        profile.finish(res);
+         token = std::rand() % n_vocab;
+     }
+     return true;

@@ -158,6 +158,15 @@ static void WddmTimeoutSnapshot(const BC250_DEVICE* d,ULONG seq,UINT fence,UINT 
  * the watchdog to fire leaves it alone; one that wants a long healthy job moves it. */
 static ULONGLONG mock_progress = 0x9E3779B97F4A7C15ull;
 static ULONGLONG WddmSubmitProgress(BC250_DEVICE* d) { (void)d; return mock_progress; }
+/* The HIP dispatch journal (hip_journal.c): WddmSubmitHardware names the dispatch to it after the ring write, and
+ * WddmGpuFence retires it with its job. Both are defined outside the extracted region, so they are counted here,
+ * with the last identity kept. Untagged work carries ID zero. */
+static unsigned int journalSubmitted, journalCompleted;
+static ULONGLONG lastJournalSubmitted, lastJournalCompleted;
+static ULONG lastJournalSeq;
+static void HipJournalSubmitted(ULONGLONG id,ULONG seq,ULONG vmid,ULONGLONG root)
+{ (void)vmid; (void)root; ++journalSubmitted; lastJournalSubmitted=id; lastJournalSeq=seq; }
+static void HipJournalComplete(ULONGLONG id) { ++journalCompleted; lastJournalCompleted=id; }
 static int GfxSubmitReady(BC250_DEVICE* d) { (void)d; return armed && completed==mock_seq; }
 static int GfxSubmitBusy(BC250_DEVICE* d) { (void)d; return armed && completed!=mock_seq; }
 /* No KeDelayExecutionThread: KMD196 removed the bare 1 ms sleep from both hold phases, and a return of it fails
@@ -179,8 +188,9 @@ int main(void)
       w.SubmitTickMs=Bc250SubmitTickMs(w.SubmitBudgetMs);
       CHECK(defaulted==1 && !raised && w.SubmitBudgetMs==12000 && w.SubmitTickMs==250); }
     w.FenceLedger[0].Epoch=1; mock_now=100;
-    for(i=1;i<=7;i++) CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,i,0));
+    for(i=1;i<=7;i++) CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,i,0,0));
     CHECK(w.GfxPending.Count==7 && w.HwFence==1 && w.HwPending && dispatches==7);
+    CHECK(journalSubmitted==7 && lastJournalSubmitted==0 && lastJournalSeq==mock_seq);   /* untagged: ID zero */
     /* KMD193: gfx.c is told who submitted, and the queue entry keeps it for the watchdog and for a dump. */
     CHECK(last_identity.Context!=0 && last_identity.ProcessId==4242);
     CHECK(last_identity.ContextFlags==BC250_PJ_CTX_UMD && last_identity.Fence==7 && last_identity.Node==0);
@@ -189,13 +199,13 @@ int main(void)
     CHECK(w.GfxPending.Items[w.GfxPending.Head].Context==last_identity.Context);
     { unsigned k; for(k=0;k<w.GfxPending.Count;k++){ const BC250_GFX_COMPLETION* j=&w.GfxPending.Items[(w.GfxPending.Head+k)%BC250_GFX_PENDING_MAX];
       CHECK(j->Vmid==ModelVmid(j->Seq)); } }
-    CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,8,0));
+    CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,8,0,0));
     CHECK(dispatches==7 && reported==0 && ledger==0);
     completed=2; WddmGpuFence(&d); // coalesced interrupt must retire both 1 and 2
     CHECK(w.GfxPending.Count==5 && reported==2 && w.HwFence==3 && EXPECT_LEDGER(2));
     // Software fence after current tail must never be reported for the head.
     w.DeferredValid=1; w.DeferredFence=8; mock_now=200;
-    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,9,0));
+    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,9,0,0));
     /* BD-114: the timer is armed for the next LOOK, one tick away, and not for the head's own deadline. A push
      * behind a running head leaves that head's deadline alone (checked below) and only moves the next look. */
     CHECK(!w.DeferredValid && w.HwFence==3 && due_time==-10000LL*250);
@@ -210,9 +220,9 @@ int main(void)
     completed=mock_seq; WddmGpuFence(&d);
     CHECK(reported==9 && !w.HwPending && !timer);
     // No fake completion when dispatch refuses, or when the watchdog expires.
-    refuse=1; CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,10,0));
+    refuse=1; CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,10,0,0));
     CHECK(reported==9 && w.GfxPending.Count==0); refuse=0;
-    mock_now=6000000; CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,10,0));
+    mock_now=6000000; CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,10,0,0));
     /* BD-114: the watchdog judges OBSERVED PROGRESS over the budget now, not wall clock since the ring write, so
      * it fires only after the DPC has WATCHED the token stand still for the whole budget. The first look reads
      * the token and opens the window; a gap of a budget or more between two looks starts a new window instead of
@@ -229,13 +239,23 @@ int main(void)
     CHECK(w.SubmitChecks==50 && w.SubmitRearms==49);
     CHECK(snapshots==1);    /* KMD193: one register snapshot per timeout, no more */
     CHECK(vmidReports==1 && lastReportedVmid==ModelVmid(mock_seq));   /* KMD214: the timed-out job's VMID */
-    CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,11,0));
+    CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,11,0,0));
     CHECK(reported==9);
     // Recovery epoch mismatch may not retire stale hardware work.
 #ifndef NO_RECOVERY_LEDGER
     w.FenceLedger[0].Epoch=2; completed=mock_seq; WddmGpuFence(&d);
     CHECK(reported==9 && w.HwPending);
 #endif
+    // The HIP dispatch journal: a tagged dispatch carries its ID from the ring write to its own retirement.
+    memset(&w,0,sizeof(w)); w.FenceLedger[0].Epoch=1;
+    mock_seq=completed=reported=dispatches=failures=0; mock_now=0;
+    { unsigned int s0=journalSubmitted, c0=journalCompleted;
+      CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,1,0,0x51));
+      CHECK(journalSubmitted==s0+1 && lastJournalSubmitted==0x51 && lastJournalSeq==mock_seq);
+      CHECK(w.GfxPending.Count==1 && w.GfxPending.Items[w.GfxPending.Head].HipJournalId==0x51);
+      CHECK(journalCompleted==c0);                     /* not retired before its fence arrives */
+      completed=mock_seq; WddmGpuFence(&d);
+      CHECK(journalCompleted==c0+1 && lastJournalCompleted==0x51 && reported==1 && w.GfxPending.Count==0); }
     // BGP1 burst: the second job must enter while the first is outstanding.
     memset(&w,0,sizeof(w)); w.FenceLedger[0].Epoch=1;
     mock_seq=completed=reported=dispatches=failures=0; mock_now=0;

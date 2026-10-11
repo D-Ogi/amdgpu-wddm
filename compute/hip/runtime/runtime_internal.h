@@ -127,6 +127,7 @@ struct KernargBuffer {
 struct State {
     std::mutex                              lock;
     bc250hsa_device*                        dev = nullptr;
+    uint64_t                                journal_dispatch_id = 0;
     bool                                    open_tried = false;
     bc250hsa_status                         open_status = BC250HSA_OK;
     bc250hsa_props                          props{};
@@ -332,6 +333,13 @@ void       kernarg_release(KernargBuffer* buffer, uint64_t fence);
 
 // Loads the code object of a module, once. The caller holds the lock.
 bc250hsa_status module_ensure_loaded(Module* module);
+
+// Caller holds state lock; output owns every byte through recorded submit.
+hipError_t prepare_dispatch_record(const bc250hsa_dispatch& dispatch,
+                                  const void* packed, uint32_t packed_bytes,
+                                  uint64_t dispatch_id,
+                                  const std::map<uint64_t, Allocation>& allocations,
+                                  std::vector<unsigned char>& output);
 
 // A monotonic host clock in milliseconds, for hipEventElapsedTime.
 double host_now_ms();

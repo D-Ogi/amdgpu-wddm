@@ -348,7 +348,21 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     dispatch.launch = launch;
 
     uint64_t fence = 0;
-    status = bc250hsa_dispatch_submit(dev, &dispatch, &fence);
+    auto& runtime = bc250hip::state();
+    if (runtime.journal_dispatch_id == UINT64_MAX) {
+        bc250hip::kernarg_release(buffer, 0);
+        return fail(hipErrorNotSupported);
+    }
+    std::vector<unsigned char> record;
+    err = bc250hip::prepare_dispatch_record(dispatch, buffer->mem.host, kernarg_bytes,
+                                            ++runtime.journal_dispatch_id, runtime.by_va, record);
+    if (err != hipSuccess) {
+        bc250hip::kernarg_release(buffer, 0);
+        return bc250hip::refuse("hipLaunchKernel/journal", kernel->name,
+                                "cannot preserve complete dispatch diagnostics", err);
+    }
+    status = bc250hsa_dispatch_submit_recorded(dev, &dispatch, record.data(),
+                                               static_cast<uint32_t>(record.size()), &fence);
     if (status != BC250HSA_OK) {
         bc250hip::kernarg_release(buffer, 0);
         return bc250hip::refuse_status("hipLaunchKernel/dispatch_submit", kernel->name, status);

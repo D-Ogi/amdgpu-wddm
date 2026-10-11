@@ -1,0 +1,9 @@
+{
+  "bytes_equal": true,
+  "bytes": 54,
+  "sha256": "9815043DFC2FDA44C09BB776EF8D04A802E9718A7B664E18EE0179E0F4C489E9",
+  "generated_tokens": 16,
+  "prompt": "The capital of France is",
+  "temperature": 0,
+  "seed": 1234
+}

@@ -72,7 +72,15 @@ class thread_block : public thread_group {
 class grid_group : public thread_group {
  public:
   __device__ grid_group()
-      : thread_group((unsigned int)gridDim.x * (unsigned int)blockDim.x, 0) {}
+      : thread_group((unsigned int)gridDim.x * (unsigned int)gridDim.y * (unsigned int)gridDim.z *
+                         (unsigned int)blockDim.x * (unsigned int)blockDim.y * (unsigned int)blockDim.z,
+                     (((unsigned int)blockIdx.z * (unsigned int)gridDim.y + (unsigned int)blockIdx.y) *
+                          (unsigned int)gridDim.x + (unsigned int)blockIdx.x) *
+                         ((unsigned int)blockDim.x * (unsigned int)blockDim.y * (unsigned int)blockDim.z) +
+                         (unsigned int)threadIdx.x + (unsigned int)blockDim.x *
+                             ((unsigned int)threadIdx.y + (unsigned int)blockDim.y * (unsigned int)threadIdx.z)) {}
+  // The runtime refuses cooperative launch, so a usable grid-wide barrier never exists.
+  __device__ bool is_valid() const { return false; }
 
   // See the header comment: this part gives no grid-wide residency guarantee, so there is no
   // barrier to stand here. A kernel that reaches it was launched through a path that must not

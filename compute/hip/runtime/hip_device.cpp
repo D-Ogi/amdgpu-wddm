@@ -143,7 +143,13 @@ hipError_t device(bc250hsa_device** out) {
         if (bc250hsa_abi_version_major() != BC250HSA_ABI_VERSION_MAJOR) {
             s.open_status = BC250HSA_EUNSUPPORTED;
         } else {
+#if defined(BC250_HIP_GPU_DISABLED) && BC250_HIP_GPU_DISABLED
+            // Optional containment artifact. No environment option can reopen the device.
+            s.open_status = BC250HSA_EUNSUPPORTED;
+            std::fprintf(stderr, "amdhip64: GPU execution disabled in this build\n");
+#else
             s.open_status = bc250hsa_open(nullptr, &s.dev);
+#endif
             if (s.open_status != BC250HSA_OK) {
                 s.dev = nullptr;
             }

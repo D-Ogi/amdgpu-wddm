@@ -65,9 +65,14 @@ import sys
 #
 # A number followed by "'s" is a possessive, not a denominator: in M800 "6420 of 416's counted
 # gaps" the 416 is the session, so the pattern refuses that form.
-PAIR_PCT = re.compile(r"(\d+) of (?:the )?(\d+)(?!'s)\b(?:[ ,]+[A-Za-z][\w./-]*){0,3}[ ,]*"
+#
+# Both counts are whole numbers. A decimal is a measurement, and its digits are not a count: in
+# M862 "(0.836 of 4.641 us)" the pattern without these guards read "836 of 4".
+COUNT_A = r"(?<!\d)(?<!\d\.)(\d+)(?!\.?\d)"
+COUNT_B = r"(\d+)(?!\.?\d)(?!'s)\b"
+PAIR_PCT = re.compile(COUNT_A + r" of (?:the )?" + COUNT_B + r"(?:[ ,]+[A-Za-z][\w./-]*){0,3}[ ,]*"
                       r'\(?(\d+(?:\.\d+)?) ?%')
-PAIR = re.compile(r"(\d+) of (?:the )?(\d+)(?!'s)\b")
+PAIR = re.compile(COUNT_A + r" of (?:the )?" + COUNT_B)
 
 # A difference with its own percentage: "0.836 us (22.0 %)" on a line that also holds the two
 # measurements it is the difference of. A reduction is a share of the value it came down from.

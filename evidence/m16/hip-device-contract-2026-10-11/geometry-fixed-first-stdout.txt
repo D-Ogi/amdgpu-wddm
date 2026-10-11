@@ -1,0 +1,4 @@
+geometry: grid=3,5,7 block=8,4,2 records=6720 mismatches=0
+geometry: grid=7,3,5 block=3,5,2 records=3150 mismatches=0
+geometry: grid=5,2,3 block=7,3,2 records=1260 mismatches=0
+geometry: PASS (0 failed cases)

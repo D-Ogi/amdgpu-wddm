@@ -234,6 +234,88 @@ static void fill_env(struct bc250hsa_device* dev, bc250hsa_pm4_env* env, uint32_
     env->ib_pad_dwords = BC250HSA_IB_PAD_DWORDS;
 }
 
+static void journal_reset(struct bc250hsa_device* dev)
+{
+    dev->journal_count = 0u;
+    dev->journal_bytes = (uint32_t)sizeof(BC250_HIP_JOURNAL_UPLOAD);
+}
+
+static void journal_append(struct bc250hsa_device* dev, const void* record, uint32_t bytes)
+{
+    if (record == NULL) { return; }
+    memcpy(dev->journal_upload + dev->journal_bytes, record, bytes);
+    dev->journal_bytes += bytes;
+    dev->journal_count++;
+}
+
+/* This is a software-only context escape. The kernel validates and copies the
+ * complete batch before SubmitCommand can make any of its dispatches runnable. */
+static bc250hsa_status journal_upload(struct bc250hsa_device* dev, uint64_t ib_va,
+                                       uint64_t fence_value, uint64_t* upload_id)
+{
+    BC250_HIP_JOURNAL_UPLOAD* header = (BC250_HIP_JOURNAL_UPLOAD*)dev->journal_upload;
+    D3DKMT_ESCAPE escape;
+    NTSTATUS status;
+    *upload_id = 0u;
+    if (dev->journal_count == 0u) { return BC250HSA_OK; }
+    memset(header, 0, sizeof(*header));
+    header->Magic = BC250_HIP_JOURNAL_MAGIC;
+    header->Command = BC250_HIP_JOURNAL_COMMAND;
+    header->Status = UINT32_MAX;
+    header->AbiVersion = BC250_HIP_JOURNAL_ABI;
+    header->TotalBytes = dev->journal_bytes;
+    header->RecordCount = dev->journal_count;
+    header->IbVa = ib_va;
+    header->FenceVa = dev->fence_gpu_va;
+    header->FenceValue = fence_value;
+    memset(&escape, 0, sizeof(escape));
+    escape.hAdapter = dev->adapter;
+    escape.hDevice = dev->device;
+    escape.hContext = dev->context;
+    escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
+    escape.Flags.NoAdapterSynchronization = 1;
+    escape.pPrivateDriverData = header;
+    escape.PrivateDriverDataSize = dev->journal_bytes;
+    status = D3DKMTEscape(&escape);
+    if (!NT_SUCCESS(status)) { return bc250hsa_os_status("HIP journal upload", status); }
+    if (header->Status != 0u || header->NtStatus != 0u || header->UploadId == 0u ||
+        header->AbiVersion != BC250_HIP_JOURNAL_ABI) {
+        bc250hsa_log(BC250HSA_LOG_ERROR, "HIP journal refused: status=%u ntstatus=0x%x",
+                       header->Status, header->NtStatus);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    *upload_id = header->UploadId;
+    return BC250HSA_OK;
+}
+
+static void journal_cancel(struct bc250hsa_device* dev, uint64_t upload_id)
+{
+    BC250_HIP_JOURNAL_UPLOAD header;
+    D3DKMT_ESCAPE escape;
+    NTSTATUS status;
+    if (upload_id == 0u) { return; }
+    memset(&header, 0, sizeof(header));
+    header.Magic = BC250_HIP_JOURNAL_MAGIC;
+    header.Command = BC250_HIP_JOURNAL_COMMAND;
+    header.Status = UINT32_MAX;
+    header.AbiVersion = BC250_HIP_JOURNAL_ABI;
+    header.TotalBytes = sizeof(header);
+    header.Operation = BC250_HIP_JOURNAL_CANCEL_OP;
+    header.UploadId = upload_id;
+    memset(&escape, 0, sizeof(escape));
+    escape.hAdapter = dev->adapter;
+    escape.hDevice = dev->device;
+    escape.hContext = dev->context;
+    escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
+    escape.Flags.NoAdapterSynchronization = 1;
+    escape.pPrivateDriverData = &header;
+    escape.PrivateDriverDataSize = sizeof(header);
+    status = D3DKMTEscape(&escape);
+    if (!NT_SUCCESS(status) || header.Status != 0u || header.NtStatus != 0u) {
+        bc250hsa_mark_lost(dev, "HIP journal could not cancel a refused submission");
+    }
+}
+
 /* Hands one finished indirect buffer to the kernel driver. The caller holds dev->lock
  * and has written dwords dwords into the slot. The private blob names one indirect
  * buffer, which is the one shape the kernel driver runs (driver/kmd/wddm.c refuses a
@@ -244,6 +326,8 @@ static bc250hsa_status submit_ib(struct bc250hsa_device* dev, uint32_t slot, uin
     struct bc250hsa_submit_blob blob;
     D3DKMT_SUBMITCOMMAND        command;
     NTSTATUS                    status;
+    bc250hsa_status              recorded;
+    uint64_t                    upload_id;
     const uint64_t              slot_va = dev->ring.va + (uint64_t)slot * dev->ring_slot_bytes;
     const uint32_t*             slot_host =
         (const uint32_t*)((const uint8_t*)dev->ring.host + (size_t)slot * dev->ring_slot_bytes);
@@ -277,8 +361,14 @@ static bc250hsa_status submit_ib(struct bc250hsa_device* dev, uint32_t slot, uin
     /* Host stores sit in the write buffers until a fence. The system call drains
      * them too; this makes the order obvious. */
     bc250hsa_write_barrier();
+    recorded = journal_upload(dev, slot_va, fence_value, &upload_id);
+    if (recorded != BC250HSA_OK) {
+        bc250hsa_count_add(BC250HSA_C_SUBMISSIONS_REFUSED, 1u);
+        return recorded;
+    }
     status = D3DKMTSubmitCommand(&command);
     if (!NT_SUCCESS(status)) {
+        journal_cancel(dev, upload_id);
         bc250hsa_count_add(BC250HSA_C_SUBMISSIONS_REFUSED, 1u);
         return bc250hsa_os_status("SubmitCommand", status);
     }
@@ -347,6 +437,7 @@ bc250hsa_status bc250hsa_batch_submit_locked(struct bc250hsa_device* dev)
     dev->batch_open = 0;
     dev->batch_count = 0;
     dev->batch_dwords = 0;
+    journal_reset(dev);
     return result;
 }
 
@@ -432,6 +523,7 @@ bc250hsa_status bc250hsa_batch_policy_get(struct bc250hsa_device* dev,
 /* One dispatch, submitted by itself: what build 1 did, and what batching off still
  * does. The caller holds dev->lock. */
 static bc250hsa_status submit_one(struct bc250hsa_device* dev, const bc250hsa_dispatch* dispatch,
+                                  const void* record, uint32_t record_bytes,
                                   uint64_t* fence_value_out)
 {
     bc250hsa_pm4_env env;
@@ -474,7 +566,10 @@ static bc250hsa_status submit_one(struct bc250hsa_device* dev, const bc250hsa_di
     if (dwords_written > BC250HSA_PM4_MAX_DWORDS) {
         return BC250HSA_ENOMEM;
     }
+    journal_reset(dev);
+    journal_append(dev, record, record_bytes);
     result = submit_ib(dev, slot, dwords_written, fence_value);
+    journal_reset(dev);
     if (result != BC250HSA_OK) {
         return result;
     }
@@ -487,6 +582,7 @@ static bc250hsa_status submit_one(struct bc250hsa_device* dev, const bc250hsa_di
  * dev->lock. */
 static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
                                       const bc250hsa_dispatch* dispatch,
+                                      const void* record, uint32_t record_bytes,
                                       uint64_t* fence_value_out)
 {
     bc250hsa_pm4_env    env;
@@ -499,6 +595,13 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
      * submit it and open another, and an empty buffer always has room for one dispatch
      * (bc250hsa_batch_policy_set refused a cap below BC250HSA_PM4_MAX_DWORDS). */
     for (tries = 0; tries < 2u; tries++) {
+        if (dev->batch_open &&
+            ((record != NULL) != (dev->journal_count != 0u) ||
+             (record != NULL && (dev->journal_count >= BC250_HIP_JOURNAL_MAX_RECORDS ||
+               record_bytes > BC250_HIP_JOURNAL_MAX_BYTES - dev->journal_bytes)))) {
+            result = bc250hsa_batch_submit_locked(dev);
+            if (result != BC250HSA_OK) { return result; }
+        }
         if (!dev->batch_open) {
             uint32_t slot = 0;
             result = take_slot(dev, &slot);
@@ -508,6 +611,7 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
             dev->batch_slot = slot;
             dev->batch_fence_value = dev->fence_last_submitted + 1u;
             dev->batch_count = 0;
+            journal_reset(dev);
             dev->batch_opened_us = bc250hsa_now_us();
             /* A new buffer knows nothing about the hardware's register state: another
              * context's work runs between two of our submissions. */
@@ -536,6 +640,7 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
             return result;
         }
         if (!w.overflow) {
+            journal_append(dev, record, record_bytes);
             dev->batch_dwords = w.count;
             dev->batch_count++;
             *fence_value_out = dev->batch_fence_value;
@@ -548,6 +653,7 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
             dev->batch_open = 0;
             dev->slot_fence[dev->batch_slot] = 0u;
             dev->batch_dwords = 0;
+            journal_reset(dev);
             return BC250HSA_ENOMEM;
         }
         result = bc250hsa_batch_submit_locked(dev);
@@ -565,9 +671,10 @@ static bc250hsa_status submit_batched(struct bc250hsa_device* dev,
     return BC250HSA_OK;
 }
 
-bc250hsa_status bc250hsa_dispatch_submit(struct bc250hsa_device* dev,
-                                         const bc250hsa_dispatch* dispatch,
-                                         uint64_t* fence_value_out)
+static bc250hsa_status dispatch_submit(struct bc250hsa_device* dev,
+                                        const bc250hsa_dispatch* dispatch,
+                                        const void* record, uint32_t record_bytes,
+                                        uint64_t* fence_value_out)
 {
     bc250hsa_status result;
 
@@ -596,16 +703,70 @@ bc250hsa_status bc250hsa_dispatch_submit(struct bc250hsa_device* dev,
         LeaveCriticalSection(&dev->lock);
         return BC250HSA_EDEVICELOST;
     }
+    if (record == NULL && dev->journal_required) {
+        LeaveCriticalSection(&dev->lock);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    if (record != NULL && dev->journal_upload == NULL) {
+        dev->journal_upload = (uint8_t*)malloc(BC250_HIP_JOURNAL_MAX_BYTES);
+        if (dev->journal_upload == NULL) {
+            LeaveCriticalSection(&dev->lock);
+            return BC250HSA_ENOMEM;
+        }
+    }
+    if (record != NULL && !dev->journal_required) {
+        result = bc250hsa_batch_submit_locked(dev);
+        if (result != BC250HSA_OK) {
+            LeaveCriticalSection(&dev->lock);
+            return result;
+        }
+        dev->journal_required = 1;
+    }
     if (dispatch->kernel->private_segment_bytes != 0u) {
         /* One fixed ring stride per IB; submit any promised batch first so fence
          * ordering remains monotonic. Scratch-free dispatches retain batching. */
         result = bc250hsa_batch_submit_locked(dev);
-        if (result == BC250HSA_OK) { result = submit_one(dev, dispatch, fence_value_out); }
+        if (result == BC250HSA_OK) {
+            result = submit_one(dev, dispatch, record, record_bytes, fence_value_out);
+        }
     } else if (dev->batch.enabled != 0u) {
-        result = submit_batched(dev, dispatch, fence_value_out);
+        result = submit_batched(dev, dispatch, record, record_bytes, fence_value_out);
     } else {
-        result = submit_one(dev, dispatch, fence_value_out);
+        result = submit_one(dev, dispatch, record, record_bytes, fence_value_out);
     }
+    if (result != BC250HSA_OK) { *fence_value_out = 0u; }
     LeaveCriticalSection(&dev->lock);
     return result;
+}
+
+bc250hsa_status bc250hsa_dispatch_submit(struct bc250hsa_device* dev,
+                                         const bc250hsa_dispatch* dispatch,
+                                         uint64_t* fence_value_out)
+{
+    return dispatch_submit(dev, dispatch, NULL, 0u, fence_value_out);
+}
+
+bc250hsa_status bc250hsa_dispatch_submit_recorded(struct bc250hsa_device* dev,
+                                                  const bc250hsa_dispatch* dispatch,
+                                                  const void* record,
+                                                  uint32_t record_bytes,
+                                                  uint64_t* fence_value_out)
+{
+    BC250_HIP_DISPATCH_RECORD header;
+    if (fence_value_out != NULL) { *fence_value_out = 0u; }
+    if (dispatch == NULL || dispatch->kernel == NULL || record == NULL ||
+        !Bc250HipRecordValid(record, record_bytes))
+        return BC250HSA_EINVAL;
+    memcpy(&header, record, sizeof(header));
+    /* The runtime retains the semantic metadata. This bridge checks that the
+     * record belongs to the exact dispatch whose PM4 it will build. */
+    if (header.Bytes != record_bytes || header.DispatchId == 0u ||
+        header.EntryVa != dispatch->kernel->entry_va ||
+        header.DescriptorVa != dispatch->kernel->descriptor_va ||
+        header.KernargVa != dispatch->kernarg_va ||
+        header.DynamicLdsBytes != dispatch->launch.dynamic_group_bytes ||
+        memcmp(header.Grid, dispatch->launch.grid, sizeof(header.Grid)) != 0 ||
+        memcmp(header.Block, dispatch->launch.block, sizeof(header.Block)) != 0)
+        return BC250HSA_EINVAL;
+    return dispatch_submit(dev, dispatch, record, record_bytes, fence_value_out);
 }
