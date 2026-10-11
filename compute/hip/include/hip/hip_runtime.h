@@ -357,6 +357,13 @@ HIP_PUBLIC_API const char *hipGetErrorName(hipError_t error);
 // no HIP entry point answers it. The named user is compute/hip/samples/hipbench.hip and
 // the lab plan beside it; the numbers come from bc250hsa_counters_read (section 3 of
 // compute/hip/include/bc250hsa.h). A program that does not call them is unaffected.
+//
+// The structure only grows at its end. struct_bytes says which layout the caller was built
+// with, and bc250hipGetCounters fills exactly the fields that layout holds and refuses every
+// other size with hipErrorInvalidValue:
+//    56 bytes  up to waits_fast (the first layout; llama-bench-profile.exe of BD-117 uses it)
+//   160 bytes  up to gpu_copy_control_failed (the GPU copy route)
+//   256 bytes  up to cpu_copy_fallback_ticks (the durations)
 // ---------------------------------------------------------------------------
 
 typedef struct bc250hipCounters {
@@ -367,6 +374,39 @@ typedef struct bc250hipCounters {
   unsigned long long dispatches_batched;  // dispatches that rode in such a submission
   unsigned long long waits;               // waits for the device
   unsigned long long waits_fast;          // waits the fence mapping answered with no sleep
+  // The GPU copy route. A device-to-host copy and a device-to-device copy read device
+  // memory, which the host processor does at a MEASURED 0.21 GB/s, so from a threshold
+  // upwards they are PM4 copy packets instead. Every copy and every fill lands on exactly
+  // one of the five lines below, so the five sums are the whole traffic of a run, and
+  // cpu_copy_fallback above zero says that something took the slow path.
+  unsigned long long gpu_copy_d2h;          // device to host, straight into our own memory
+  unsigned long long gpu_copy_d2h_bytes;
+  unsigned long long gpu_copy_d2h_staged;   // device to host through a staging slot
+  unsigned long long gpu_copy_d2h_staged_bytes;
+  unsigned long long gpu_copy_d2d;          // device to device
+  unsigned long long gpu_copy_d2d_bytes;
+  unsigned long long gpu_fill;              // fills on the GPU route
+  unsigned long long gpu_fill_bytes;
+  unsigned long long cpu_copy_fallback;     // copies and fills the host processor did
+  unsigned long long cpu_copy_fallback_bytes;
+  unsigned long long gpu_copy_packets;      // copy packets emitted, so bytes per packet reads
+  unsigned long long gpu_copy_forced_flushes;
+  unsigned long long gpu_copy_control_failed;  // 0 or 1: the coherence control
+  // Durations, in ticks of QueryPerformanceCounter. ticks_per_second converts them, so one
+  // call is enough to turn every total into time, and a total over its count is the mean of
+  // one call. The meaning of each line is in bc250hsa.h section 3; in short:
+  unsigned long long ticks_per_second;
+  unsigned long long waits_fast_ticks;       // the waits counted in waits_fast
+  unsigned long long waits_fast_ticks_max;   // the longest of them
+  unsigned long long waits_other_ticks;      // every other wait, timed-out ones included
+  unsigned long long waits_other_ticks_max;  // the longest of them
+  unsigned long long submit_calls;           // D3DKMTSubmitCommand calls, refused ones included
+  unsigned long long submit_ticks;           // the time inside those calls and nothing else
+  unsigned long long gpu_copy_d2h_ticks;     // one copy from entry to return, fence wait inside
+  unsigned long long gpu_copy_d2h_staged_ticks;
+  unsigned long long gpu_copy_d2d_ticks;
+  unsigned long long gpu_fill_ticks;
+  unsigned long long cpu_copy_fallback_ticks;  // from the runtime's decision to the last byte
 } bc250hipCounters;
 
 HIP_PUBLIC_API hipError_t bc250hipGetCounters(bc250hipCounters *out);

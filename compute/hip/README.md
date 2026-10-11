@@ -94,6 +94,13 @@ of the product comes from `runtime/`, which reads `BC250_HIP_BATCH`, `BC250_HIP_
 the lab session of 2026-10-09 (`evidence/m16/perf-2026-10-09`) those defaults are batching on, a
 cap of 32 and the light barrier.
 
+Section 5.1 of the header is the other half of the same idea for memory instead of dispatches: a
+copy out of device memory, a copy between two device allocations and a fill of one are packets in
+the same indirect buffer, so that a `hipMemcpy` device to host stops being an uncached CPU read of
+VRAM at 0.21 GB/s. The library emits the packet and counts what it did. Which copies take that
+route is again the product's policy, and `runtime/` reads `BC250_HIP_GPU_COPY`,
+`BC250_HIP_GPU_COPY_MIN` and `BC250_HIP_GPU_FILL` for it.
+
 Inside one buffer, a dispatch writes only the compute state that differs from the one before it:
 72 dwords a dispatch become 23 for the shape a real launch has. The first dispatch of every buffer
 is complete, because another context's buffer runs between two of ours, and

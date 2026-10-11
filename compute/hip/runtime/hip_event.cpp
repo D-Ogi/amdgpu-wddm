@@ -181,7 +181,10 @@ hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream) {
     event->recorded = 1;
     event->host_ms = 0.0;
     event->pending = 0;
-    if (event->fence_value == 0 || event->fence_value <= bc250hsa_fence_read(dev)) {
+    // UINT64_MAX is the removal sentinel and not a retired value (events_stamp_retired above):
+    // the event stays pending, and the wait for it reports the loss.
+    const uint64_t retired = bc250hsa_fence_read(dev);
+    if (event->fence_value == 0 || (retired != UINT64_MAX && event->fence_value <= retired)) {
         // Nothing of this stream is in flight, so the event is complete at once.
         event->host_ms = bc250hip::host_now_ms();
         return hipSuccess;
