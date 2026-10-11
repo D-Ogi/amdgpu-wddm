@@ -40,6 +40,8 @@ foreach ($test in 'test-start-health.ps1', 'test-confirm.ps1', 'test-telemetry.p
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
+# log_test.c: the tool's log paging against a fake driver, i.e. which escapes take the adapter lock (BD-054).
+# Refuse to build a tool whose `log summary` would again idle the GPU once per page.
 # Both tests replace hardware access. The wave test also decodes fixed values
 # and checks damaged saved snapshots. Build no tool past a failing test.
 $testOut = Join-Path $Out 'test'
