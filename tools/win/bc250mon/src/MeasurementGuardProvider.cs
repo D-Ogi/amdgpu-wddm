@@ -151,6 +151,8 @@ namespace Bc250Mon
             { "EnableDpAudio", 1 },             // dpaudio.c: GuardReadSetting(..., 1), DP audio at all (0.7.215)
             { "EnableDpAudioEndpoint", 1 },     // dpaudio.c: GuardReadSetting(..., 1), the Azalia endpoint (step 1)
             { "EnableDpAudioStream", 1 },       // dpaudio.c: GuardReadSetting(..., 1), the DP audio stream (0.7.216)
+            { "EnableDpAudioContainerId", 1 },  // dpaudio.c: GuardReadSetting(DPAUDIO_SETTING_CONTAINER, 1), step 4
+            { "EnableScanoutPlaneFormats", 1 }, // wddm.c: GuardReadSetting(..., 1), the scan-out plane formats
             { "EnableDisplayModes", 2 },        // modeset.c: GuardReadSetting(..., 2), EDID and scaled modes (0.7.216.19)
             { "HangRecoveryMode", 1 },          // wddm.c: GuardReadSetting(..., 1), stage-1 hang recovery (0.7.216.18)
             { "SubmitWatchdogMs", 0 },          // wddm.c: GuardReadSetting(..., 0), and 0 means "price the submit
@@ -159,7 +161,7 @@ namespace Bc250Mon
             { "CpuTune", 0 },                   // cpu.c: absent = 0, read-only; the INF writes 1 from 0.7.216
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
-            { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ
+            { "DpmMaxMHz", 2000 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ (2000 since 2026-10-10)
             { "DpmIdleMHz", 500 },              // dpm.c: BC250_DPM_IDLE_MHZ, the idle point when the name is absent
             { "EnableMmio", 0 }, { "EnableMmioWrite", 0 }, { "EnableVram", 0 }, { "EnableVramWrite", 0 },
             { "EnableGart", 0 }, { "EnablePsp", 0 }, { "EnableGfx", 0 }, { "EnableIh", 0 },

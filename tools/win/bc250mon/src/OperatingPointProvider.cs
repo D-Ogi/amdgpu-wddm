@@ -165,10 +165,22 @@ namespace Bc250Mon
         /// <summary>The device start changed under a running session: every number taken before it is suspect.</summary>
         public bool IdentityChanged
         {
+            get { return Have && FirstGeneration != 0 && Snapshot.Generation != FirstGeneration; }
+        }
+
+        /// <summary>
+        /// Same start, newer epoch. `HealthInvalidate` (driver/kmd/start_health.c) raises the epoch at every
+        /// visibility or mode change and at `StartHealthFault`, so every game that switches the display mode
+        /// raises it. The overlay session lasts from logon to shutdown, so treating this as a new start kept the
+        /// row red until the next boot after the first such game (2026-10-11, W3 at 1920x1080 on a
+        /// 1920x1200 desktop). Faults have their own counters.
+        /// </summary>
+        public ulong EpochsSinceFirst
+        {
             get
             {
-                return Have && FirstGeneration != 0 &&
-                       (Snapshot.Generation != FirstGeneration || Snapshot.Epoch != FirstEpoch);
+                return Have && FirstGeneration != 0 && Snapshot.Generation == FirstGeneration &&
+                       Snapshot.Epoch > FirstEpoch ? Snapshot.Epoch - FirstEpoch : 0;
             }
         }
     }
@@ -414,6 +426,9 @@ namespace Bc250Mon
             // ~0ull for it, and the CPU desktop route, which completes no GPU presentation at all, showed
             // "18446744073709552 s ago" for ever.
             if (v.NothingCompleted) text.Append(", no completed presentation yet");
+            if (v.EpochsSinceFirst > 0)
+                text.Append(", epoch +").Append(v.EpochsSinceFirst.ToString(CultureInfo.InvariantCulture))
+                    .Append(" since logon (mode, visibility or fault)");
             Level level;
             if (v.IdentityChanged) { level = Level.Error; text.Append(", the start changed in this session"); }
             else if ((s.Flags & StartHealthView.FlagFull) != 0 && (s.Flags & StartHealthView.FlagReady) == 0)
