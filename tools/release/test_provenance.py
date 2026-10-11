@@ -9,6 +9,7 @@ of the repository's URL holds, a submodule commit that is not published, a sourc
 "unverified" entry without a reason, a recipe that the recipe commit does not have, an unknown argument placeholder,
 a download that is not https, a packaged copy that is not its source, and a re-signed driver whose Authenticode digest
 changed. The Authenticode digest itself must ignore the checksum, the security directory and the certificate table.
+rebuild-check.ps1 must keep the log of a failed build (with pwsh 7 on PATH; the test is skipped without it).
 BC250_TEST_OUT, when set, holds the temporary trees (quick.ps1 keeps them off drive C:).
 """
 import copy
@@ -369,6 +370,55 @@ class ProvenanceGate(unittest.TestCase):
         # Another image under the release signature fails.
         (package / "payload" / "driver.sys").write_bytes(fake_pe(b"\x02" * 64, b"release signature"))
         self.assertFails(m, "Authenticode digest of", package=package)
+
+
+class RebuildCheckLogs(unittest.TestCase):
+    """rebuild-check.ps1 on two recipes: one gives the recorded bytes, one fails. The failed build keeps its log at
+    the path that its FAIL line names; the work trees of both builds go, and so does the directory of the match."""
+
+    def setUp(self):
+        if not shutil.which("pwsh"):
+            self.skipTest("pwsh 7 is not on PATH")
+        self.tmp = tempfile.mkdtemp(prefix="rebuild-", dir=OUT)
+        self.ws = Workspace(self.tmp)
+
+    def tearDown(self):
+        remove_tree(self.tmp)
+
+    def test_a_failed_build_keeps_its_log(self):
+        ws = self.ws
+        (ws.tool / "fail.ps1").write_bytes(b"Write-Output 'recipe ran: it fails on purpose'\nexit 1\n")
+        (ws.tool / "make.ps1").write_bytes(b"param([string]$Out)\n[IO.File]::WriteAllBytes((Join-Path $Out "
+                                           b"'built.dll'), [Text.Encoding]::ASCII.GetBytes('built bytes'))\n")
+        git(ws.tool, "add", "-A")
+        git(ws.tool, "commit", "-q", "-m", "recipes")
+        commit = git(ws.tool, "rev-parse", "HEAD")
+        m = copy.deepcopy(ws.manifest)
+        # The script passes its own repository for "{repo}", so the test names the checkout.
+        m["repositories"]["tool"]["checkouts"] = [str(ws.tool)]
+        built = next(f for f in m["files"] if f["path"] == "payload/built.dll")
+        built["built_from"] = {"repo": "tool", "commit": commit, "recipe": "make.ps1", "args": ["-Out", "{out}"],
+                               "output": "built.dll"}
+        broken = copy.deepcopy(built)
+        broken["path"] = "payload/broken.dll"
+        broken["built_from"]["recipe"] = "fail.ps1"
+        m["files"].append(broken)
+        ws.manifest_path.write_text(json.dumps(m), encoding="utf-8")
+        work = Path(self.tmp) / "rb"
+        r = subprocess.run(["pwsh", "-NoProfile", "-File", str(Path(__file__).with_name("rebuild-check.ps1")),
+                            "-Sources", str(ws.manifest_path), "-Root", str(ws.root),
+                            "-Path", "payload/built.dll,payload/broken.dll", "-Work", str(work)],
+                           capture_output=True, text=True, timeout=300)
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 1, out)
+        self.assertTrue(any(l.startswith("OK   match") and "payload/built.dll" in l for l in r.stdout.splitlines()), out)
+        fail = [l for l in r.stdout.splitlines() if l.startswith("FAIL build-failed") and "payload/broken.dll" in l]
+        self.assertEqual(len(fail), 1, out)
+        log = Path(fail[0].split("(see ", 1)[1].rstrip(")"))
+        self.assertIn("recipe ran: it fails on purpose", log.read_text(encoding="utf-8-sig", errors="replace"))
+        self.assertEqual([p.name for p in log.parent.iterdir()], ["build-first.log"])
+        self.assertEqual(list(work.iterdir()), [log.parent])
+        self.assertEqual(len(git(ws.tool, "worktree", "list").splitlines()), 1)
 
 
 class AuthenticodeDigest(unittest.TestCase):
