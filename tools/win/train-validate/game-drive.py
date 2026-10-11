@@ -41,8 +41,10 @@ from pathlib import Path
 DRIVES = {
     "rottr": {
         "menu": "START BENCHMARK",
-        # The menu is up while any of these items shows. One alone could be a tip on a loading screen.
-        "menu_items": ("START BENCHMARK", "OPTIONS", "QUIT GAME"),
+        # The menu is up while two of these items show. One alone could be a tip on a loading screen. The list
+        # is the whole column, because one OCR read can drop items (551 read OPTIONS and "GAME" only).
+        "menu_items": ("START BENCHMARK", "OPTIONS", "QUIT GAME", "CONTINUE", "NEW GAME", "EXPEDITIONS",
+                       "LEADERBOARDS", "MARKETPLACE"),
         "result": "Overall score",
         # The profile's apis.d3d12.world_after_confirm_s: the scenes start 46-56 s after the confirm.
         "world_note": "note:world+60",
@@ -58,6 +60,11 @@ FAILED = 5
 # A menu item drawn this much wider per character than the column's median is the highlighted one (550: the
 # highlighted MARKETPLACE and CREDITS read 1.39 and 1.27 times the median).
 HIGHLIGHT_RATIO = 1.18
+# After an arrow key the game animates the highlight. 551 read the screen 300 ms after the key and the read lost
+# two items. Read later, and read again when one read misses the item.
+KEY_SETTLE_MS = 1000
+MENU_READS = 3
+MENU_STILL_SPREAD = 0.02
 
 
 class Channel:
@@ -98,6 +105,17 @@ def find(lines: list[dict], text: str) -> dict | None:
 
 def in_menu(lines: list[dict], drive: dict) -> bool:
     return sum(1 for item in drive["menu_items"] if find(lines, item)) >= 2
+
+
+def still(lines: list[dict], drive: dict) -> bool:
+    """
+    The menu column stands still in the read: the left edges of its items agree within MENU_STILL_SPREAD. A read
+    of a frame in the highlight animation has them skewed (551 ocr-012: the found items spread 0.032), and widths
+    taken from it say nothing about the highlight. Still reads spread up to 0.010 (550 ocr-009/025, 552 ocr-011, the
+    read that confirmed the highlight on START BENCHMARK), because the highlighted item moves its box.
+    """
+    lefts = [line["b"][0] for line in (find(lines, item) for item in drive["menu_items"]) if line is not None]
+    return len(lefts) >= 2 and max(lefts) - min(lefts) <= MENU_STILL_SPREAD
 
 
 def menu_column(lines: list[dict], target: dict) -> list[dict]:
@@ -172,12 +190,29 @@ class Driver:
                 keys = [self.drive["down"] if steps > 0 else self.drive["up"]] * abs(steps)
                 where = f"the highlight is on {lit['t'].strip()}"
             self.say(f"[drive] {where}: {len(keys)} x {keys[0]}")
-            self.channel.call(";".join(f"{key};wait:300" for key in keys))
-            lines, _ = self.channel.look()
-            if not in_menu(lines, self.drive):
-                self.say("[drive] the menu went away under the arrow keys")
+            self.channel.call(";".join(f"{key};wait:{KEY_SETTLE_MS}" for key in keys))
+            lines = self.read_menu()
+            if lines is None:
+                self.say(f"[drive] the menu went away under the arrow keys: {MENU_READS} reads without it")
                 return False
         return False
+
+    def read_menu(self) -> list[dict] | None:
+        """
+        The first of up to MENU_READS reads, 1 s apart, that shows the menu item, or None when none does. One
+        OCR read can drop lines while the menu stands on screen: in b29 native-caps551 the read after the Down
+        arrow lost CREDITS and START BENCHMARK and read QUIT GAME as GAME, while the shot showed the highlight
+        on START BENCHMARK, and the drive ended a good session.
+        """
+        for n in range(MENU_READS):
+            if n:
+                self.sleep(1.0)
+            lines, shot = self.channel.look()
+            if in_menu(lines, self.drive) and find(lines, self.drive["menu"]) is not None and still(lines, self.drive):
+                return lines
+            self.say(f"[drive] {shot or 'no shot'}: read {n + 1} of {MENU_READS} does not show a still "
+                     f"{self.drive['menu']}")
+        return None
 
     def start(self, lines: list[dict]) -> bool:
         if not self.select(lines):
@@ -208,7 +243,8 @@ class Driver:
 
         def menu():
             lines, shot = self.channel.look()
-            found = in_menu(lines, self.drive) and find(lines, self.drive["menu"]) is not None
+            found = (in_menu(lines, self.drive) and find(lines, self.drive["menu"]) is not None
+                     and still(lines, self.drive))
             self.say(f"[drive] {shot or 'no shot'}: {'menu' if found else 'not the menu yet'}")
             return lines if found else None
 

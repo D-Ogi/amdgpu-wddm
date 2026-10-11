@@ -472,7 +472,7 @@ class GameDrive(unittest.TestCase):
         channel = FakeChannel(lit=6)
         driver, said = self.drive(channel)
         self.assertEqual(driver.failed, "")
-        self.assertIn("tapx:50;wait:300;tapx:50;wait:300;tapx:50;wait:300", channel.calls,
+        self.assertIn("tapx:50;wait:1000;tapx:50;wait:1000;tapx:50;wait:1000", channel.calls,
                       "MARKETPLACE to START BENCHMARK is three items down")
         self.assertFalse([call for call in channel.calls if "click" in call or "point" in call], "no mouse")
         enter = channel.calls.index("hold:1C:300")
@@ -487,7 +487,7 @@ class GameDrive(unittest.TestCase):
         channel = FakeChannel(items=items, lit=5)
         driver, said = self.drive(channel)
         self.assertEqual(driver.failed, "")
-        self.assertIn("tapx:48;wait:300;tapx:48;wait:300;tapx:48;wait:300", channel.calls)
+        self.assertIn("tapx:48;wait:1000;tapx:48;wait:1000;tapx:48;wait:1000", channel.calls)
         self.assertNotIn("tapx:50", " ".join(channel.calls))
 
     def test_no_highlight_in_the_read_gets_one_arrow_key_first(self):
@@ -495,8 +495,77 @@ class GameDrive(unittest.TestCase):
         driver, said = self.drive(channel)
         self.assertEqual(driver.failed, "")
         keys = [call for call in channel.calls if call.startswith("tapx:")]
-        self.assertEqual(keys[0], "tapx:50;wait:300", "one key to make the highlight show")
+        self.assertEqual(keys[0], "tapx:50;wait:1000", "one key to make the highlight show")
         self.assertEqual(keys[1].count("tapx:50"), 9, "then CONTINUE to START BENCHMARK")
+
+    def test_a_read_that_drops_the_item_after_a_key_is_read_again(self):
+        # 551: the read after the Down arrow lost CREDITS and START BENCHMARK and read QUIT GAME as GAME, while
+        # the shot showed the highlight on START BENCHMARK. The drive took it for a menu that went away and ended
+        # a good session. One such read must lead to another read, not to a failure.
+        class Dropping(FakeChannel):
+            dropped = False
+
+            def look(self):
+                lines, shot = super().look()
+                if self.state == "menu" and not self.dropped and any(c.startswith("tapx:") for c in self.calls):
+                    self.dropped = True
+                    return [line for line in lines if line["t"] == "OPTIONS"] + [
+                        {"t": "GAME", "b": [0.139, 0.526, 0.176, 0.553]}], shot
+                return lines, shot
+
+        channel = Dropping(lit=8)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertTrue(channel.dropped)
+        self.assertTrue(any("read 1 of 3 does not show a still START BENCHMARK" in line for line in said), said)
+        self.assertIn("[drive] the highlight is on START BENCHMARK", said)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+
+    def test_still_holds_for_the_real_552_read_and_not_for_the_551_frame(self):
+        # The menu is drawn with a slight slant: the still 552 read that confirmed the highlight on START
+        # BENCHMARK spreads 0.010 (0.116 to 0.106). The animation frame of 551 spreads 0.032 the other way.
+        import importlib
+        module = importlib.import_module("game-drive")
+        read_552 = [
+            {"t": "CONTINUE", "b": [0.116, 0.102, 0.183, 0.137]}, {"t": "LOAD GAME", "b": [0.115, 0.142, 0.191, 0.177]},
+            {"t": "NEW GAME", "b": [0.114, 0.182, 0.185, 0.215]}, {"t": "EXPEDITIONS", "b": [0.112, 0.222, 0.199, 0.256]},
+            {"t": "LEADERBOARDS", "b": [0.111, 0.262, 0.216, 0.298]}, {"t": "OPTIONS", "b": [0.11, 0.303, 0.168, 0.329]},
+            {"t": "MARKETPLACE", "b": [0.109, 0.343, 0.207, 0.374]}, {"t": "QUIT GAME", "b": [0.108, 0.384, 0.18, 0.41]},
+            {"t": "CREDITS", "b": [0.107, 0.425, 0.164, 0.448]},
+            {"t": "START BENCHMARK", "b": [0.106, 0.462, 0.274, 0.498]}]
+        frame_551 = [
+            {"t": "CONTINUE", "b": [0.066, 0.26, 0.135, 0.288]}, {"t": "GAME", "b": [0.111, 0.297, 0.149, 0.32]},
+            {"t": "NEW GAME", "b": [0.077, 0.335, 0.15, 0.367]}, {"t": "EXPEDITIONS", "b": [0.082, 0.37, 0.17, 0.407]},
+            {"t": "LEADERBOARDS", "b": [0.087, 0.404, 0.193, 0.446]}, {"t": "OPTIONS", "b": [0.093, 0.453, 0.151, 0.485]},
+            {"t": "MARKETPLACE", "b": [0.098, 0.481, 0.196, 0.525]}, {"t": "GAME", "b": [0.139, 0.526, 0.176, 0.553]}]
+        drive = module.DRIVES["rottr"]
+        self.assertTrue(module.still(read_552, drive))
+        self.assertEqual(module.highlighted(module.menu_column(read_552, module.find(read_552, "START BENCHMARK")))["t"],
+                         "START BENCHMARK")
+        self.assertFalse(module.still(frame_551, drive))
+        self.assertTrue(module.still(OCR_550_FIRST, drive) and module.still(OCR_550_AFTER_CLICK, drive))
+
+    def test_a_skewed_read_with_every_item_is_read_again(self):
+        # 551 ocr-012 was a frame of the highlight animation: the left edges ran 0.066 to 0.139 down the column.
+        # A skewed read that still holds START BENCHMARK gives per-character widths that say nothing about the
+        # highlight, so it is read again, as a read without the item is.
+        class Skewing(FakeChannel):
+            skewed = False
+
+            def look(self):
+                lines, shot = super().look()
+                if self.state == "menu" and not self.skewed and any(c.startswith("tapx:") for c in self.calls):
+                    self.skewed = True
+                    return [dict(line, b=[line["b"][0] - 0.04 + 0.008 * i, line["b"][1], line["b"][2], line["b"][3]])
+                            for i, line in enumerate(lines)], shot
+                return lines, shot
+
+        channel = Skewing(lit=8)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertTrue(channel.skewed)
+        self.assertTrue(any("read 1 of 3 does not show a still START BENCHMARK" in line for line in said), said)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
 
     def test_a_submenu_is_left_with_esc_and_the_drive_tries_again(self):
         # 550: the first Enter opened CREDITS, and a check that only looked for the menu took the credits for
