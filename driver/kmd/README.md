@@ -92,6 +92,21 @@ no code from Microsoft's MS-PL sample.
   control is not supported, and has no board-specific hardware access. A change takes effect at the next
   start. The running segments are not resized. See
   [docs/design/uma-reservation.md](../../docs/design/uma-reservation.md).
+- **Board memory transport** (0.7.216.29, BD-116). The board memory service reads and writes the ABL block
+  through the fixed extended-CMOS index and data ports 0x72/0x73, indices 0x90 to 0xAB, transport
+  identifier 3, after the board and firmware identity checks. The HAL forms of 0.7.216.28 returned no block
+  on the lab, so that driver refused every change. A backup of the legacy identifiers 1 and 2 is refused.
+  See [docs/design/uma-reservation.md](../../docs/design/uma-reservation.md).
+- **Board provider and one adapter owner** (0.7.216.29). Board operations (the EC and fan, the SMU limits, the
+  board memory) need a positive identification of a BC-250 board before the first access, and an unknown
+  board gets none of them. `RUN_BOARD_CAPS`, command 33, gives the control application and the tools one
+  query of the board's limits and capabilities. A second adapter is refused before it changes shared state
+  or touches the hardware. See
+  [docs/adr/0021-board-chip-adapter-separation.md](../../docs/adr/0021-board-chip-adapter-separation.md).
+- **Wave snapshots** (0.7.216.29). `GET_WAVES`, command 34, reads the live GFX10 wave registers for an
+  administrator, and `DxgkDdiResetEngine` saves a snapshot under `Parameters\HangRecovery\Waves` before its
+  first kill (`HangRecoveryWaves`, absent = 1). The reads do not stop a wave and are not atomic. See
+  [docs/design/wave-snapshot.md](../../docs/design/wave-snapshot.md).
 - **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
   observable progress before the driver closes the ring and takes a register snapshot. The INF does not write it.
   Absent means Windows' own `TdrDelay` plus 2 s, which is 12 s on a machine where the control application wrote
