@@ -108,8 +108,9 @@ The difference matters when a number is read out of this table.
 | `dxrpt` | lab | path tracing through D3D12 holds its frame rate |
 | `cts-rt` | lab | the 140 ray tracing cases of the pinned Vulkan CTS, on the installed system driver |
 | `llm-dense` | lab | the dense language model batch that stopped Windows with 0x116 runs to its end (BD-114) |
+| `llm-text-vulkan` | lab | Gemma 12B on the system Vulkan driver answers one question in its own chat template, and the answer names the known fact. A raw prompt to an instruction model proves nothing |
 | `llm-q35` | lab | the 35B-A3B IQ2_M model runs fully offloaded at the 12 GiB carve-out |
-| `hip` | lab | the installed HIP runtime is on the machine PATH, `vadd.exe` computes, and the HIP llama.cpp backend runs `llama-bench` through it (BD-110) |
+| `hip` | lab | the installed HIP runtime is on the machine PATH, `vadd.exe` computes, and the HIP llama.cpp backend runs `llama-bench` through it (BD-110). Then TinyLlama answers one question in its chat template through the same backend. The staged build must equal its `consumer-pins.json` |
 | `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness. For a new triplet it first puts the accepted files back in the install directory, because the attempt verifies them before it swaps (`lab/d3d12-putback.ps1`). The release file waits next to the accepted one as `<name>.release` until the promotion has put it back |
 | `bm-before`, `bm-set-8192`, `bm-restart-1`, `bm-at-8192`, `vkheaps-8192`, `bm-restore`, `bm-restart-2`, `bm-after` | read, lab, restart | the board memory operation of the control application. It sets 8192 MiB and restarts. It reads the active size, Windows RAM and the Vulkan heaps at 8192 MiB. Then Restore and a restart put back the size before the change |
 | `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene. It runs after `vkheaps-8192`, at 8192 MiB |
@@ -121,8 +122,9 @@ Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms c
 Some arms stand on lab staging that is not part of this kit, and each one says so when it is absent:
 `cts-rt` needs the CTS package at `C:\BC250\cts`. `llm-dense` and `llm-q35` need the seg0 supervisor kit, the
 models and the llama.cpp build where the BD-114 round and the LLM work left them, under `C:\BC250\bd114`,
-`C:\BC250\llmvram` and `C:\BC250\strata\models`. `hip` uses the same supervisor kit. The arm `stage-clients`
-sends what the `vk-semaphore` and `hip` arms run.
+`C:\BC250\llmvram` and `C:\BC250\strata\models`. `llm-text-vulkan` needs the same kit, model and build. `hip` uses
+the same supervisor kit. The arm `stage-clients` sends what the `vk-semaphore`, `hip` and `llm-text-vulkan` arms
+run.
 
 ## The next train
 

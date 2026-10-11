@@ -202,8 +202,43 @@ class ShippedManifest(unittest.TestCase):
         self.assertIn("{lab_root}\\hip", staged)
         self.assertIn("{lab_root}\\vksemcheck", " ".join(arms["vk-semaphore"]["run"][0]))
         self.assertIn("{lab_root}\\hip\\bin", " ".join(arms["hip"]["run"][0]))
-        for arm_id in ("vk-semaphore", "hip"):
+        for arm_id in ("vk-semaphore", "hip", "llm-text-vulkan"):
             self.assertIn("stage-clients", arms[arm_id]["depends_on"], arm_id)
+        # The M16 step-3 directory holds the ggml-hip.dll of the BD-110 fault (1102A1DD, the gridDim header).
+        self.assertIn("{ws}/scratch/hip-consumer-b29/bin", staged)
+        self.assertNotIn("m16-hip/step3/out3", staged)
+        self.assertIn("llama-completion.exe", staged)
+
+    def test_every_text_check_asks_in_the_chat_template_and_the_hip_backend_gets_no_flash_attention(self):
+        # Owner, 2026-10-11: a raw prompt to an instruction model proves nothing (Gemma 12B gave the same
+        # 16 digits on HIP, Vulkan, an RTX 4090 and the CPU), and the HIP build of llama.cpp has no FA yet.
+        template = ('-p "\' + $question + \'" -n 64 --temp 0 --seed 1234 -ngl 99 -c 2048 --jinja -cnv -st '
+                    '--simple-io')
+        hip = (LAB / "hip.ps1").read_text(encoding="utf-8")
+        self.assertIn(template, hip)
+        # Gemma answers inside a thought channel first: its arm gives -n 160 so that a final answer can follow.
+        text = (LAB / "llm-text.ps1").read_text(encoding="utf-8")
+        self.assertIn(template.replace("$question", "$Question").replace("-n 64", "-n ' + $Tokens + '"), text)
+        self.assertIn("[int]$Tokens = 160", text)
+        for name in ("hip.ps1", "llm-text.ps1"):
+            self.assertIn("What is the capital of France? Answer in one word.",
+                          (LAB / name).read_text(encoding="utf-8"), name)
+        argument_lines = [line for line in hip.splitlines() if re.match(r"\s*\$(arguments|textArgs) = ", line)]
+        self.assertEqual(len(argument_lines), 2, "the bench and the text step")
+        for line in argument_lines:
+            self.assertNotRegex(line, r"-fa\b", line)
+        arms = {arm["id"]: arm for arm in self.data["arms"]}
+        self.assertEqual(arms["hip"]["expect"], "BD-110 PASS")
+        self.assertIn("hip text PASS", arms["hip"]["expect_all"])
+        self.assertIn("llama-completion", arms["hip"]["kill"])
+        self.assertEqual(arms["llm-text-vulkan"]["expect"], "vulkan text PASS")
+        for arm_id in ("hip", "llm-text-vulkan"):
+            for argv in step_argvs(arms[arm_id]):
+                self.assertNotIn("-fa", argv, arm_id)
+        # BD-110 passes only after the text step: the PASS line comes after the answer check, and a failed
+        # answer is a reason of its own.
+        self.assertIn("elseif ($textWhy) { \"the text step: $textWhy\" }", hip)
+        self.assertIn("'the answer does not name Paris'", hip)
 
     def test_a_session_script_is_never_run_by_the_wsl_launcher(self):
         # `bash` on PATH is System32\bash.exe, which only starts WSL. The manifest says {bash} and the value
@@ -1543,7 +1578,11 @@ class ShippedSetEndToEnd(unittest.TestCase):
                                       "stage OK")),
             ("vk-semaphore.ps1", Completed(0, "vk-semaphore x64 failures 0\nvk-semaphore x64: PASS")),
             ("hip.ps1", Completed(0, "hip result vadd ok verdict PASS arm_exit 0 pp512 1402.5 t/s tg128 "
-                                     "151.2 t/s\nBD-110 PASS exit 0, pp512 and tg128 rows")),
+                                     "151.2 t/s\nhip text PASS Capital: Paris\n"
+                                     "BD-110 PASS exit 0, pp512 and tg128 rows")),
+            ("llm-text.ps1", Completed(0, "vulkan text final answer: yes Paris.\n"
+                                          "vulkan text PASS thought The user is asking for the capital of France. "
+                                          "The user requested a one-w")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi pipeline",
              Completed(0, "Using VK_KHR_ray_tracing_pipeline\n631 frames, 10.45 seconds: 60.40 fps")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi query",
@@ -1610,7 +1649,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 38)
+        self.assertEqual(len(records), 39)
         values = {row["id"]: row["value"] for row in records}
         self.assertEqual((values["bm-before"], values["bm-at-8192"], values["bm-after"]), (12288, 8192, 12288),
                          "the operation moves the board to 8192 MiB and Restore brings it back")

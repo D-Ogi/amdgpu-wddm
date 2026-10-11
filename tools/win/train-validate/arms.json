@@ -56,6 +56,7 @@
       "dxrpt",
       "cts-rt",
       "llm-dense",
+      "llm-text-vulkan",
       "llm-q35",
       "hip",
       "d3d12-promote",
@@ -104,6 +105,7 @@
     ],
     "llm": [
       "llm-dense",
+      "llm-text-vulkan",
       "llm-q35"
     ],
     "hip": [
@@ -374,7 +376,7 @@
     },
     {
       "id": "stage-clients",
-      "title": "Stage the clients that are not in the package: vksemcheck, the HIP llama.cpp build, TinyLlama",
+      "title": "Stage the clients that are not in the package: vksemcheck, the HIP llama.cpp consumer, TinyLlama, the upstream llama-completion",
       "kind": "transfer",
       "bound_s": 900,
       "why_not_a_trial": "File copies over ssh with a hash of every file on both sides, no GPU work and no trial. A file the lab already holds with the same hash is not sent again (the model, 637 MB, was staged by the M16 sessions).",
@@ -392,7 +394,7 @@
           "{repo}/tools/win/train-validate/stage.py",
           "--to",
           "{lab_root}\\hip",
-          "{ws}/scratch/m16-hip/step3/out3/cmake-hip/bin"
+          "{ws}/scratch/hip-consumer-b29/bin"
         ],
         [
           "python",
@@ -400,6 +402,13 @@
           "--to",
           "C:\\BC250\\tmp\\models",
           "{ws}/scratch/m9/models/tinyllama-1.1b-chat-v1.0.Q4_0.gguf"
+        ],
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "C:\\BC250\\llmvram\\bin-upstream",
+          "{ws}/scratch/llm-vram/upstream/b11539-vulkan-x64/llama-completion.exe"
         ]
       ],
       "expect": "stage OK",
@@ -407,7 +416,7 @@
         "preflight"
       ],
       "gate_after": false,
-      "note": "Every step must end with 'stage OK'. The HIP build directory holds no amdhip64.dll on purpose: the benchmark must load the runtime from the installed tools\\hip on PATH, which the hip arm checks."
+      "note": "Every step must end with 'stage OK'. The HIP directory (scratch/hip-consumer-b29/bin) is the llama.cpp consumer that ran on the lab on 2026-10-11 with the rebuilt ggml-hip.dll 4928C0DD, without that run's runtime and test clients; its consumer-pins.json names every file, and the hip arm refuses a directory that differs from it or holds the ggml-hip.dll 1102A1DD of the BD-110 fault. It holds no amdhip64.dll on purpose: the benchmark must load the runtime from the installed tools\\hip on PATH, which the hip arm checks. llama-completion.exe of upstream b11539 joins the rest of that release, which the BD-114 round expanded in C:\\BC250\\llmvram\\bin-upstream; it is sent only when it is absent there or differs."
     },
     {
       "id": "vk-smoke",
@@ -913,6 +922,44 @@
       "note": "The regression of this release's own fix: the same model, batch and repeat count that stopped Windows on 0.7.216.100-tester.25. It runs through the seg0 supervisor kit on the lab, which owns the bound, the thermal rule and the cleanup."
     },
     {
+      "id": "llm-text-vulkan",
+      "title": "Gemma 12B answers one question in its chat template on the Vulkan driver",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-completion"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/llm-text.ps1",
+          "-Tokens",
+          "160",
+          "-Deadline",
+          "100",
+          "-WorkloadStop",
+          "70"
+        ]
+      ],
+      "expect": "vulkan text PASS",
+      "result": {
+        "regex": "^vulkan text final answer: (.+)$",
+        "name": "final answer after the thought channel",
+        "kind": "text"
+      },
+      "depends_on": [
+        "stage-clients",
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-114"
+      ],
+      "note": "Owner, 2026-10-11: a text check uses the model's chat template. A raw prompt to an instruction model proves nothing: Gemma 12B gives 0111111111111111 on HIP, Vulkan, an RTX 4090 and the CPU alike, and with --jinja -cnv -st the 4090 answers 'The capital of France is Paris.' inside its thought channel (scratch/bd117-4090/RESULT.md). The pass is 'Paris' anywhere in the answer. -n 160 leaves room for a final answer after the thought channel; whether one appears is this arm's value (yes, no, or no thought channel), reported and not a gate. Upstream b11539 llama-completion.exe (FA3FBD92, staged by stage-clients) and model 93567E57, -ngl 99, no -fa argument (Vulkan picks Flash Attention itself). The supervisor kit owns the bound, the thermal rule and the cleanup; the model file is hashed against its pin before and after the run, outside the supervisor's 100 s deadline."
+    },
+    {
       "id": "llm-q35",
       "title": "Qwen3.6-35B-A3B IQ2_M fully offloaded at the 12 GiB carve-out",
       "kind": "lab",
@@ -962,12 +1009,13 @@
     },
     {
       "id": "hip",
-      "title": "HIP runtime on PATH: vadd, then llama-bench of the HIP llama.cpp build (BD-110)",
+      "title": "HIP runtime on PATH: vadd, then llama-bench and a chat-template answer of the HIP llama.cpp build (BD-110)",
       "kind": "lab",
       "bound_s": 170,
       "plug": true,
       "kill": [
         "llama-bench",
+        "llama-completion",
         "vadd"
       ],
       "run": [
@@ -981,6 +1029,9 @@
         ]
       ],
       "expect": "BD-110 PASS",
+      "expect_all": [
+        "hip text PASS"
+      ],
       "result": {
         "regex": "pp512 ([\\d.]+) t/s",
         "name": "HIP prompt tokens a second",
@@ -990,7 +1041,7 @@
         "stage-clients",
         "preflight"
       ],
-      "note": "The first run of the HIP llama.cpp backend on a released runtime (amdhip64.dll 80FB9D6B, the BD-110 co-loader fix f183f996). No baseline: no earlier run of this benchmark completed. The arm prints 'BD-110 PASS' or 'BD-110 FAIL' with the first error line of the runtime log (BC250_HIP_LOG=1)."
+      "note": "The HIP llama.cpp backend on the released runtime (tools\\hip\\amdhip64.dll B0FEB14B of tester.27, with the dispatch journal). No baseline: the only completed run of this benchmark is the hand-staged lab run of 2026-10-11 (pp512 1868.00, tg128 122.31 t/s, scratch/hip-dispatch-journal/lab/final-tiny-host.txt), not an install. The text step asks TinyLlama one question in its chat template, and BD-110 passes only when the answer names Paris. Neither step passes -fa: the HIP build has no Flash Attention yet. The arm prints 'hip text PASS|FAIL <answer>' and 'BD-110 PASS' or 'BD-110 FAIL' with the first error line of the runtime log (BC250_HIP_LOG=1)."
     },
     {
       "id": "d3d12-promote",
