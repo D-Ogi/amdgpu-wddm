@@ -1,0 +1,6 @@
+geometry: grid=5,1,1 block=8,1,1 logical=29,1,1 records=40 active=29 tail=11 warp=32 mismatches=0 canaries=0
+geometry: grid=5,4,1 block=4,3,1 logical=17,9,1 records=240 active=153 tail=87 warp=32 mismatches=0 canaries=0
+geometry: grid=3,5,7 block=8,4,2 logical=23,18,13 records=6720 active=5382 tail=1338 warp=32 mismatches=0 canaries=0
+geometry: grid=7,3,5 block=3,5,2 logical=21,15,10 records=3150 active=3150 tail=0 warp=32 mismatches=0 canaries=0
+geometry: grid=5,2,3 block=7,3,2 logical=35,6,6 records=1260 active=1260 tail=0 warp=32 mismatches=0 canaries=0
+geometry: PASS (0 failed cases)

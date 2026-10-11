@@ -1,0 +1,7 @@
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 7896 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 7896 MiB
+ggml_backend_cuda_buffer_type_alloc_buffer: allocating 6637.69 MiB on device 0: cudaMalloc failed: unknown error
+ggml_backend_buft_alloc_buffer_n_default: failed to allocate ROCm0 buffer of size 6960120064
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\gemma-4-12b-it-qat-q4_0.gguf'

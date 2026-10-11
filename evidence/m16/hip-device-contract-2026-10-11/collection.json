@@ -1,0 +1,6 @@
+{
+  "archive_sha256": "29614FC1F0DE199EEA3FDD22035050AD35BA8E3D80254996016A6F291B3FB482",
+  "selection": "Original stdout, stderr and health output of named controls; selected supervisor fields; technical build identifiers.",
+  "excluded": "Private memory dump, full journal and GuardLog, machine inventory, preflight requests, source/build paths and unrelated lab metadata.",
+  "scope": "Only the final candidate trials and explicit old-header/CPU controls are performance or correctness evidence here."
+}

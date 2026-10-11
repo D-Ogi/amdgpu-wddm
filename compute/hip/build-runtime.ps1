@@ -351,6 +351,14 @@ $dlltool = Join-Path $ClangBin 'llvm-dlltool.exe'
 if ($SkipClang -or -not (Test-Path $clang)) {
     Write-Host "  the AMDGPU clang is absent ($clang): the import library and the HIP sample are skipped"
 } else {
+    # Device headers are executable ABI: a runtime DLL rebuild alone cannot
+    # repair device objects compiled with a wrong builtin mapping.
+    if (-not $SkipTests) {
+        & python -B (Join-Path $hip 'tests\host\test_builtin_values.py') `
+            --clang $clang --include (Join-Path $hip 'include') `
+            --out (Join-Path $Out 'builtin-contracts')
+        if ($LASTEXITCODE -ne 0) { throw 'HIP device builtin contract gate failed' }
+    }
     # MEASURED: clang's HIP driver appends a bare amdhip64.lib to the Windows link line, so the
     # import library must carry exactly that name and sit on the library search path. The
     # library must hold the jump thunks as well as the __imp_ symbols, which llvm-dlltool
@@ -567,6 +575,14 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     Write-Host "  hipbench with batching off measured $($plainPerLaunch[0]) submissions per launch"
     if ([math]::Abs($plainPerLaunch[0] - 1.0) -gt 0.01) {
         throw "with batching off one launch must be one submission, and hipbench measured $($plainPerLaunch[0])"
+    }
+    if (-not $SkipTests) {
+        # These scripts run CPU oracles and inspect device metadata. Neither
+        # executes its GPU client on the build machine.
+        & (Join-Path $hip 'build-geometry.ps1') -Root $Root `
+            -Out (Join-Path $Out 'geometry') -ImportLibrary $implib -ClangBin $ClangBin
+        & (Join-Path $hip 'build-device-control.ps1') -Root $Root `
+            -Out (Join-Path $Out 'builtins') -ImportLibrary $implib -ClangBin $ClangBin
     }
 }
 

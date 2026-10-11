@@ -3,6 +3,8 @@
 Milestone M16, gate G5, route B of `docs/design/m16-hip-route-b.md`: our own thin HIP runtime on our
 own kernel driver. No ROCm runtime, no AMD user-mode component, and no PAL.
 
+The [device contract](DEVICE-CONTRACT.md) states the launch geometry, header checks, unsupported operations and rebuild requirements.
+
 The work has two layers. **This directory holds layer 1**, which is the submission layer and the
 step-1 tool. Layer 2 (`runtime/`, `amdhip64.dll`) uses layer 1 and nothing else of the submission
 path, and comes on its own branch.

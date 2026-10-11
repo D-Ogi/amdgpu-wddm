@@ -1,0 +1,7 @@
+  1027     578174  hip: batch 27 pid 10608 seq 11695 fence 1842 vmid 11
+  1028     578174  ih: GPU FAULT va 0x4047F84000 vmid 11 read no-retry ring 0x9B src 0x0 src1 0x40, 0 in the second before, 1 total, burst 1
+  1029     578174  ih: GPU FAULT latch status 0x00B01137 cid 8 TCP vmid 11 rw 0 perm 0x3 walker 0x3 more 1 mapping 1 page 0x4047F84000, 0 register(s) refused
+  1030     578174  ih: GPU FAULT vector vmid 11 now: root 0x46DEEF000 pid 10608 seq 11594-11695
+  1082     590488  wddm: HARDWARE FENCE TIMEOUT seq 11695 fence 1842: pending for OS TDR, ring closed
+  1083     590488  wddm: timeout measured: head 12313 ms, queued 0 ms, stale 12058 ms, budget 12000 ms
+  1106     593530  wddm: ResetFromTimeout failed: GPU memory access not proven stopped

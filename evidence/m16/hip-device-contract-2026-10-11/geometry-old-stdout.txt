@@ -1,0 +1,16 @@
+geometry: index 0 got grid=24,20,14 block=8,4,2 group=0,0,0 thread=0,0,0 linear=0 stamp=706f7365
+geometry: index 1 got grid=24,20,14 block=8,4,2 group=0,0,0 thread=1,0,0 linear=1 stamp=706f7365
+geometry: index 2 got grid=24,20,14 block=8,4,2 group=0,0,0 thread=2,0,0 linear=2 stamp=706f7365
+geometry: index 3 got grid=24,20,14 block=8,4,2 group=0,0,0 thread=3,0,0 linear=3 stamp=706f7365
+geometry: grid=3,5,7 block=8,4,2 records=6720 mismatches=6720
+geometry: index 0 got grid=21,15,10 block=3,5,2 group=0,0,0 thread=0,0,0 linear=0 stamp=706f7365
+geometry: index 1 got grid=21,15,10 block=3,5,2 group=0,0,0 thread=1,0,0 linear=1 stamp=706f7365
+geometry: index 2 got grid=21,15,10 block=3,5,2 group=0,0,0 thread=2,0,0 linear=2 stamp=706f7365
+geometry: index 3 got grid=21,15,10 block=3,5,2 group=0,0,0 thread=0,1,0 linear=3 stamp=706f7365
+geometry: grid=7,3,5 block=3,5,2 records=3150 mismatches=3150
+geometry: index 0 got grid=35,6,6 block=7,3,2 group=0,0,0 thread=0,0,0 linear=0 stamp=706f7365
+geometry: index 1 got grid=35,6,6 block=7,3,2 group=0,0,0 thread=1,0,0 linear=1 stamp=706f7365
+geometry: index 2 got grid=35,6,6 block=7,3,2 group=0,0,0 thread=2,0,0 linear=2 stamp=706f7365
+geometry: index 3 got grid=35,6,6 block=7,3,2 group=0,0,0 thread=3,0,0 linear=3 stamp=706f7365
+geometry: grid=5,2,3 block=7,3,2 records=1260 mismatches=1260
+geometry: FAIL (3 failed cases)

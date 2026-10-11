@@ -1,0 +1,18 @@
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -414,8 +414,15 @@
+     const char * file_name, const int line, const char * function_name, const int arch, const char * arch_list) {
+ 
+ #if defined(GGML_USE_HIP)
++#ifndef BC250_HIP_NO_DEVICE_PRINTF
+     printf("%s:%d: ERROR: HIP kernel %s has no device code compatible with HIP arch %d.\n",
+            file_name, line, function_name, arch);
++#else
++    GGML_UNUSED(file_name);
++    GGML_UNUSED(line);
++    GGML_UNUSED(function_name);
++    GGML_UNUSED(arch);
++#endif
+     GGML_UNUSED(arch_list);
+ #else
+     printf("%s:%d: ERROR: CUDA kernel %s has no device code compatible with CUDA arch %d. ggml-cuda.cu was compiled for: %s\n",

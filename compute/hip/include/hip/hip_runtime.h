@@ -404,10 +404,24 @@ BC250_HIP_COORD(__hip_wg_z, __builtin_amdgcn_workgroup_id_z);
 BC250_HIP_COORD(__hip_ws_x, __builtin_amdgcn_workgroup_size_x);
 BC250_HIP_COORD(__hip_ws_y, __builtin_amdgcn_workgroup_size_y);
 BC250_HIP_COORD(__hip_ws_z, __builtin_amdgcn_workgroup_size_z);
-BC250_HIP_COORD(__hip_gs_x, __builtin_amdgcn_grid_size_x);
-BC250_HIP_COORD(__hip_gs_y, __builtin_amdgcn_grid_size_y);
-BC250_HIP_COORD(__hip_gs_z, __builtin_amdgcn_grid_size_z);
 #undef BC250_HIP_COORD
+
+// AMDGPU grid_size is the AQL grid extent in work-items. HIP gridDim counts
+// workgroups. HIP launches contain only complete groups, so division by the
+// corresponding group size is exact (LLVM AMDGPUUsage, Kernel Dispatch and
+// hidden_block_count_*). Using the raw extent here makes multidimensional
+// indexing run beyond the buffer even when the launch and AQL packet are valid.
+#define BC250_HIP_GRID_COORD(name, axis)                                      \
+  struct name {                                                              \
+    __device__ operator unsigned int() const {                               \
+      return __builtin_amdgcn_grid_size_##axis() /                           \
+             __builtin_amdgcn_workgroup_size_##axis();                       \
+    }                                                                       \
+  }
+BC250_HIP_GRID_COORD(__hip_gs_x, x);
+BC250_HIP_GRID_COORD(__hip_gs_y, y);
+BC250_HIP_GRID_COORD(__hip_gs_z, z);
+#undef BC250_HIP_GRID_COORD
 
 struct __hip_threadIdx_t { __hip_wi_x x; __hip_wi_y y; __hip_wi_z z; };
 struct __hip_blockIdx_t { __hip_wg_x x; __hip_wg_y y; __hip_wg_z z; };
@@ -458,10 +472,10 @@ static constexpr int warpSize = 32;
 // call (MEASURED: ggml-cuda/common.cuh:417, :424, :842).
 // ---------------------------------------------------------------------------
 
-// This route has no hostcall buffer, so a kernel cannot write to the host's console. The call is
-// therefore accepted and discarded, and it returns 0 characters written, which is the truth.
-// Every ggml-cuda use of it sits next to a __trap(), and the trap is not discarded.
-__device__ __forceinline__ int printf(const char *, ...) { return 0; }
+// No hostcall service exists. A reachable call is rejected at compilation rather
+// than silently discarding output or faulting a running shader.
+__device__ __attribute__((error("device printf requires an unsupported hostcall service")))
+int printf(const char *, ...) __asm__("__bc250_device_printf_requires_hostcall_service");
 
 __device__ __forceinline__ void abort() { __builtin_trap(); }
 
@@ -518,24 +532,14 @@ __device__ __forceinline__ void __threadfence_system() {
   __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "");
 }
 
-__device__ __forceinline__ void __syncwarp(unsigned int = 0xffffffffu) {
+__device__ __forceinline__ void __syncwarp(unsigned long long = ~0ULL) {
   __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "wavefront");
   __builtin_amdgcn_wave_barrier();
 }
 
-// s_sleep counts in units of about 64 clocks, and MEASURED: its argument must be a constant
-// integer, so a runtime nanosecond count cannot become one instruction. The wait is therefore
-// the instruction's smallest unit, repeated: one unit is about 64 clocks, which at the lab's
-// 1000 MHz is about 64 ns. A caller that wants a long wait gets a short one, which is the safe
-// direction for a spin loop; the name exists so that code written for CUDA compiles.
-__device__ __forceinline__ void __nanosleep(unsigned int ns) {
-  unsigned int left = ns;
-  while (left > 64u) {
-    __builtin_amdgcn_s_sleep(1);
-    left -= 64u;
-  }
-  __builtin_amdgcn_s_sleep(1);
-}
+// This CUDA extension has no clock-independent implementation in this backend.
+__device__ __attribute__((error("__nanosleep is unsupported by this HIP backend")))
+void __nanosleep(unsigned int) __asm__("__bc250_nanosleep_unsupported");
 
 // The three block collectives of CUDA and HIP. They reduce over the whole workgroup, which is
 // what their names promise and what clang's own CUDA header maps them to: `__nvvm_bar0_popc`,
@@ -583,9 +587,9 @@ __device__ __forceinline__ unsigned long long __ballot(int predicate) {
   return __builtin_amdgcn_uicmp(predicate != 0, 0, 33 /* ne */);
 }
 
-__device__ __forceinline__ unsigned long long __ballot_sync(unsigned long long /*mask*/,
+__device__ __forceinline__ unsigned long long __ballot_sync(unsigned long long mask,
                                                             int predicate) {
-  return __ballot(predicate);
+  return __ballot(predicate) & mask;
 }
 
 __device__ __forceinline__ int __all(int predicate) {
@@ -643,7 +647,11 @@ BC250_HIP_BITCAST(__longlong_as_double, long long, double)
 // The byte selector of CUDA's __byte_perm, which gfx10 has as one instruction.
 __device__ __forceinline__ unsigned int __byte_perm(unsigned int x, unsigned int y,
                                                     unsigned int s) {
-  return __builtin_amdgcn_perm(y, x, s);
+  // HIP selects four source bytes with four low nibbles; AMD perm
+  // takes four byte-wide selectors. Bit 3 of each HIP selector is ignored.
+  const unsigned int selectors = (s & 7u) | ((s & 0x70u) << 4) |
+                                 ((s & 0x700u) << 8) | ((s & 0x7000u) << 12);
+  return __builtin_amdgcn_perm(y, x, selectors);
 }
 
 // A read through the constant cache. This part has no separate non-coherent path a header can
@@ -733,7 +741,7 @@ __device__ __forceinline__ T __shfl_xor(T var, int lane_mask, int width = 0) {
 #define BC250_HIP_ATOMIC_RMW(name, op)                                            \
   template <typename T>                                                           \
   __device__ __forceinline__ T name(T *address, T val) {                          \
-    return __atomic_fetch_##op(address, val, __ATOMIC_RELAXED);                    \
+    return __hip_atomic_fetch_##op(address, val, __ATOMIC_RELAXED, 4);                    \
   }
 
 BC250_HIP_ATOMIC_RMW(atomicAnd, and)
@@ -744,50 +752,50 @@ BC250_HIP_ATOMIC_RMW(atomicSub, sub)
 
 template <typename T>
 __device__ __forceinline__ T atomicExch(T *address, T val) {
-  return __atomic_exchange_n(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_exchange(address, val, __ATOMIC_RELAXED, 4);
 }
 
 template <typename T>
 __device__ __forceinline__ T atomicCAS(T *address, T compare, T val) {
-  __atomic_compare_exchange_n(address, &compare, val, false, __ATOMIC_RELAXED,
-                              __ATOMIC_RELAXED);
+  __hip_atomic_compare_exchange_strong(address, &compare, val, __ATOMIC_RELAXED,
+                                        __ATOMIC_RELAXED, 4);
   return compare;
 }
 
 __device__ __forceinline__ int atomicAdd(int *address, int val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 4);
 }
 __device__ __forceinline__ unsigned int atomicAdd(unsigned int *address, unsigned int val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 4);
 }
 __device__ __forceinline__ unsigned long long atomicAdd(unsigned long long *address,
                                                         unsigned long long val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 4);
 }
 __device__ __forceinline__ float atomicAdd(float *address, float val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 4);
 }
 __device__ __forceinline__ double atomicAdd(double *address, double val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 4);
 }
 __device__ __forceinline__ float atomicAdd_system(float *address, float val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 5);
 }
 __device__ __forceinline__ int atomicAdd_system(int *address, int val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 5);
 }
 __device__ __forceinline__ unsigned int atomicAdd_system(unsigned int *address,
                                                          unsigned int val) {
-  return __atomic_fetch_add(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_add(address, val, __ATOMIC_RELAXED, 5);
 }
 
 template <typename T>
 __device__ __forceinline__ T atomicMax(T *address, T val) {
-  return __atomic_fetch_max(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_max(address, val, __ATOMIC_RELAXED, 4);
 }
 template <typename T>
 __device__ __forceinline__ T atomicMin(T *address, T val) {
-  return __atomic_fetch_min(address, val, __ATOMIC_RELAXED);
+  return __hip_atomic_fetch_min(address, val, __ATOMIC_RELAXED, 4);
 }
 
 #endif  // __HIP__ && __cplusplus

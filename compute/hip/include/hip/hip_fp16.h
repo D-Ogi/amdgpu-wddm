@@ -19,6 +19,7 @@
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_vector_types.h>
+#include <hip/hip_float_conversion.h>
 
 #include <stdint.h>
 
@@ -199,7 +200,11 @@ struct __half {
 
   BC250_HALF_HD __half(_Float16 v) : __x(v) {}
   BC250_HALF_HD __half(float v) : __x(__bc250_float_to_half(v)) {}
-  BC250_HALF_HD __half(double v) : __x(__bc250_float_to_half((float)v)) {}
+  BC250_HALF_HD __half(double v) {
+    __bc250_half_bits bits;
+    bits.u = __bc250_double_to_float16_bits(v, 10u, 15);
+    __x = bits.h;
+  }
   BC250_HALF_HD __half(int v) : __x(__bc250_float_to_half((float)v)) {}
   BC250_HALF_HD __half(unsigned int v) : __x(__bc250_float_to_half((float)v)) {}
   BC250_HALF_HD __half(long long v) : __x(__bc250_float_to_half((float)v)) {}
@@ -352,19 +357,23 @@ BC250_HALF_HD __half __hfma(const __half a, const __half b, const __half c) {
 }
 BC250_HALF_HD __half __hfma_relu(const __half a, const __half b, const __half c) {
   const _Float16 r = __builtin_fmaf16(a.__x, b.__x, c.__x);
-  return __half(r > (_Float16)0 ? r : (_Float16)0);
+  return __half(__builtin_isnan((float)r) ? r : (r > (_Float16)0 ? r : (_Float16)0));
 }
 BC250_HALF_HD __half __hmax(const __half a, const __half b) {
-  return __half(a.__x > b.__x ? a.__x : b.__x);
-}
-BC250_HALF_HD __half __hmin(const __half a, const __half b) {
-  return __half(a.__x < b.__x ? a.__x : b.__x);
-}
-BC250_HALF_HD __half __hmax_nan(const __half a, const __half b) {
   return __half((_Float16)__builtin_fmaxf((float)a.__x, (float)b.__x));
 }
-BC250_HALF_HD __half __hmin_nan(const __half a, const __half b) {
+BC250_HALF_HD __half __hmin(const __half a, const __half b) {
   return __half((_Float16)__builtin_fminf((float)a.__x, (float)b.__x));
+}
+BC250_HALF_HD __half __hmax_nan(const __half a, const __half b) {
+  if (__builtin_isnan((float)a.__x)) return a;
+  if (__builtin_isnan((float)b.__x)) return b;
+  return __hmax(a, b);
+}
+BC250_HALF_HD __half __hmin_nan(const __half a, const __half b) {
+  if (__builtin_isnan((float)a.__x)) return a;
+  if (__builtin_isnan((float)b.__x)) return b;
+  return __hmin(a, b);
 }
 
 BC250_HALF_HD __half2 __hadd2(const __half2 a, const __half2 b) { return __half2(a.__v + b.__v); }
