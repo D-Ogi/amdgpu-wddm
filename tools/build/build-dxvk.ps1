@@ -63,7 +63,7 @@ if (-not $Glslang) { $Glslang = Join-Path $root 'scratch\glslang\bin' }
 if (-not $Temp) { $Temp = Join-Path $root 'scratch\tmp' }
 $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
-$options = Add-ReproducibleMesonOptions $options $Source $Build
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'src\dxvk\dxvk_device.h'))) { throw "$Source is not a DXVK source tree" }
 # An uninitialized submodule is an empty directory; meson would fail much later with a less useful message.

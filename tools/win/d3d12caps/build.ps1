@@ -62,7 +62,7 @@ if ($Tool -eq 'd3d12sm68') {
 }
 # d3d12.dll and dxgi.dll are loaded at run time by name, so that an application-local runtime (the per-application
 # route) is used exactly as the game would use it; neither import library is linked.
-& $cl @repro @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
+& $cl @repro @($variant + '/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
     "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link', '/Brepro',

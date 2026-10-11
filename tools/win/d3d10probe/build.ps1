@@ -45,7 +45,7 @@ if (Test-Path -LiteralPath $previous) {
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE', '/Brepro',
+& $cl @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE', '/Brepro',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/I$wdk\um", "/I$wdk\shared",
     "/Fo$Out\d3d10probe.obj",

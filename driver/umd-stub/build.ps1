@@ -28,7 +28,7 @@ $cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 New-Item -ItemType Directory -Force $Out | Out-Null
 
 $env:INCLUDE = ''; $env:LIB = ''
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/GS-', '/LD', '/DWIN32_LEAN_AND_MEAN',
+& $cl @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/GS-', '/LD', '/DWIN32_LEAN_AND_MEAN',
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers, as in driver\kmd
 
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
