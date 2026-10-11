@@ -90,7 +90,9 @@ class Workspace:
         git(self.engine, "fetch", "-q", "origin")
         self.engine_commit = git(self.engine, "rev-parse", "HEAD")
         # The recipe repository: a recipe, a data file, and the payload's source files under the root.
-        self.tool = self.make_repo("tool", {"build.ps1": b"# recipe\n", "data/icd.json": b'{"icd": 1}\n'})
+        self.tool = self.make_repo("tool", {"build.ps1": b"# recipe\n", "data/icd.json": b'{"icd": 1}\n',
+                                            "driver/kmd/bc250kmd_escape.h":
+                                                b"#define BC250_KMD_VERSION 0x000700D8u   // revision 216\n"})
         self.tool_commit = git(self.tool, "rev-parse", "HEAD")
         (self.root / "scratch").mkdir()
         self.files = {
@@ -311,6 +313,33 @@ class ProvenanceGate(unittest.TestCase):
         self.assertEqual(errors, [])
         b["inputs"]["data"]["commit"] = "1" * 40
         self.assertFails(m, "input data: tool 11111111 is in no checkout")
+
+    def test_the_kmd_source_text_starts_with_its_build_commit(self):
+        # scratch/m15/native-caps001/release-baseline.py reads the commit at the start of sources.kmd with re.match
+        # and the KMD ABI at that commit. Round 9 of tester.27 began the text with a sentence, and the pin-baseline
+        # arm refused the installed package on the lab.
+        m = self.manifest()
+        self.file(m, "payload/driver.sys")["path"] = "payload/kmd/bc250kmd.sys"
+        commit = self.ws.tool_commit
+        m["kmd_abi"] = "0x000700D8"
+        m["sources"] = {"kmd": f"bc250-win {commit} (train/b29), the b29 train driver 0.7.216.28. New in round 9."}
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual(errors, [])
+        m["sources"]["kmd"] = f"bc250-win {commit[:8]} (train/b29), the short form release-baseline.py also reads."
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual(errors, [])
+        m["sources"]["kmd"] = f"New in round 9 of this release, the journal (bc250-win {commit[:8]}): more text."
+        self.assertFails(m, "sources.kmd: must start with 'bc250-win <commit>'")
+        del m["sources"]["kmd"]
+        self.assertFails(m, "sources.kmd: must start with 'bc250-win <commit>'")
+        m["sources"]["kmd"] = "bc250-win 0123abcd (train/b29), a commit that is not the build of the row."
+        self.assertFails(m, "sources.kmd: names bc250-win 0123abcd, but payload/kmd/bc250kmd.sys is built from tool")
+        m["sources"]["kmd"] = f"bc250-win {commit} (train/b29)."
+        m["kmd_abi"] = "0x000700D7"
+        self.assertFails(m, "sources.kmd: kmd_abi 0x000700D7 is not BC250_KMD_VERSION 0x000700D8")
+        # A payload without the row has no text for the lab tool to read.
+        errors, _, _ = self.ws.check(self.manifest())
+        self.assertEqual(errors, [])
 
     def test_third_party_needs_https(self):
         m = self.manifest()
