@@ -91,7 +91,6 @@ flowchart LR
   M31["M31"]
   M33["M33"]
   M34["M34"]
-  M35["M35"]
   M36["M36"]
   M37["M37<br/>kmd"]
   M39["M39"]
@@ -110,7 +109,6 @@ flowchart LR
   M85["M85<br/>display"]
   M117["M117<br/>display"]
   M118["M118<br/>display"]
-  M333["M333<br/>linux"]
   M776["M776<br/>games"]
   M785["M785"]
   M787["M787"]
@@ -133,6 +131,8 @@ flowchart LR
   M865["M865"]
   M866["M866"]
   M867["M867<br/>tooling"]
+  M871["M871<br/>games"]
+  M872["M872"]
   M2 --> M1
   M3 --> M4
   M18 --> M4
@@ -140,7 +140,6 @@ flowchart LR
   M18 --> M6
   M25 --> M18
   M25 --> M19
-  M35 --> M333
   M36 --> M33
   M36 --> M34
   M39 --> M37
@@ -172,6 +171,8 @@ flowchart LR
   M865 --> M847
   M865 --> M867
   M866 --> M865
+  M872 --> M806
+  M872 --> M871
   M37 --> M33
   M37 --> M39
   M81 --> M30
@@ -186,13 +187,14 @@ flowchart LR
   M55 --> M44
   M805 --> M47
   classDef other stroke-dasharray:4 3
-  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M117,M118,M333,M776,M801,M805,M847,M867 other
+  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M117,M118,M776,M801,M805,M847,M867,M871 other
 ```
 
 ### Part 2
 
 ```mermaid
 flowchart LR
+  M35["M35"]
   M40["M40<br/>linux"]
   M43["M43"]
   M52["M52"]
@@ -200,6 +202,7 @@ flowchart LR
   M79["M79"]
   M95["M95"]
   M106["M106<br/>display"]
+  M333["M333<br/>linux"]
   M348["M348<br/>kmd"]
   M349["M349"]
   M429["M429"]
@@ -209,6 +212,7 @@ flowchart LR
   M822["M822<br/>linux"]
   M823["M823"]
   M833["M833<br/>kmd"]
+  M35 --> M333
   M43 --> M40
   M95 --> M53
   M349 --> M348
@@ -218,6 +222,6 @@ flowchart LR
   M106 --> M79
   M816 --> M52
   classDef other stroke-dasharray:4 3
-  class M40,M53,M106,M348,M816,M822,M833 other
+  class M40,M53,M106,M333,M348,M816,M822,M833 other
 ```
 

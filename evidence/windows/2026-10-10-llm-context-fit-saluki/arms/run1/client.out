@@ -1,0 +1,17 @@
+client=client-ladder remaining_s=263 chunk=4096 decode=64 empty=128 empties=2
+prompt_file=C:\BC250\perf\prompt.txt
+props_n_ctx=94208
+props_model=C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+empty1: predicted_n=128 tg=22.88 tok/s  prompt_n=17 pp=3.48 tok/s
+empty2: predicted_n=128 tg=21.45 tok/s  prompt_n=17 pp=36.65 tok/s
+prompt_text_bytes=330077
+prompt_tokens_total=97632
+tokenize_done_at_s=18.0
+step1: depth=0 chunk=4096 prompt_n=4096 pp=88.44 tok/s  tg=15.72 tok/s  wall=50.4s cum_pp=88.44
+step2: depth=4160 chunk=4096 prompt_n=4097 pp=79.16 tok/s  tg=13.17 tok/s  wall=51.9s cum_pp=83.54
+step3: depth=8258 chunk=4096 prompt_n=4097 pp=73.76 tok/s  tg=13.25 tok/s  wall=56.8s cum_pp=80.01
+step4: depth=12370 chunk=4096 prompt_n=4097 pp=69.62 tok/s  tg=13.03 tok/s  wall=60.6s cum_pp=77.13
+ladder_stop_reason=budget: 25 s left, next step needs about 79 s
+ladder_steps=4
+client_elapsed_s=237.7
+result_written=1

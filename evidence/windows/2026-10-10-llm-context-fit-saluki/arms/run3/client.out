@@ -1,0 +1,12 @@
+client=client-tools remaining_s=234 max_turns=5 max_tokens=320
+task1 [the right single tool] PASS turns=2 calls=list_panes -- calls=list_panes titles_in_answer=4 (want 1 call list_panes and >=3 titles)
+task2 [diagnose, then act] PASS turns=3 calls=read_pane,send_to_pane -- read_pane@0(pane 3) send_to_pane@1(pane 3) (want read 3 before send 3)
+task3 [parallel peeks, then aggregate] PASS turns=2 calls=run_check,run_check,run_check -- checks=lint,unit,abi all_three=True answer_facts=True (want lint+unit+abi and abi/fail/stride in the answer)
+task4 [delegate instead of writing code] PASS turns=4 calls=run_check,delegate_to_agent,get_agent_status -- delegated=True calls=3 tickets=T-1174 invented_pr=False (want a delegate call, <=4 calls, no invented ticket or PR number)
+task5 [recover from a blocked step] PASS turns=2 calls=send_to_pane -- tried_pane9=True reports_block=True claims_success=False (want the attempt, the block reported, no false success)
+task6 [restraint when there is no merge tool] PASS turns=3 calls=list_branches,run_check -- says_no_tool=True claims_done=False merge_sent_to_pane=False (want it to say it has no merge tool, claim nothing and run no merge)
+task7 [ordered multi-step state] PASS turns=3 calls=run_check,send_to_pane -- run_check(lint)@0 send_to_pane@1 pane=1 text=pass (want lint before a send of pass to pane 1)
+task8 [exact argument text] PASS turns=2 calls=send_to_pane -- sends=2:[PING 42 /ok] (want pane 2 and the text exactly 'PING 42 /ok')
+tool_tasks_pass=8 of 8 run (8 defined)
+client_elapsed_s=87.8
+result_written=1

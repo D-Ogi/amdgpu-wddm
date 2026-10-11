@@ -1,0 +1,6 @@
+client=client-fit remaining_s=36
+props_n_ctx=196608
+props_model=C:\BC250\llmvram\models\Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+request_ok predicted_n=16 tg=22.94 tok/s pp=2.43 tok/s
+client_elapsed_s=3.9
+result_written=1

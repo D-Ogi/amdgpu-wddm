@@ -802,6 +802,16 @@ facts:
     evidence: "[gfx1013 ISA probe](../evidence/m16/gfx1013-isa-probe-2026-10-10/README.md)"
     edges:
       - {"type": "uses", "to": "M865"}
+  - id: M872
+    status: MEASURED
+    date: "2026-10-10"
+    claim: "At the 2000 MHz DPM ceiling a sustained llama.cpp Vulkan load on unit A drew a plug peak of 273.6 W against the 300 W supply, and reached Tctl 88.8 C, each in a different arm of one session. The 265.4 s prefill arm peaked at 273.6 W with Tctl 86.5 C and 5 of its 254 governor samples at 2000 MHz. The 108.1 s tool-calling arm peaked at Tctl 88.8 C, which is 0.2 C under the stop-at-once rule, with 3 of 104 samples at 2000 MHz and a plug peak of 205.2 W. No reading at or above 87 C held for 10 s, so no arm was stopped, because the governor pulled the clock back within one or two samples each time"
+    status_text: "MEASURED (unit A, two heavy arms of one session)"
+    detail: "2026-10-10, 17:53Z to 18:07Z, the same session as M871: a 27B model on the upstream llama.cpp b11539 Vulkan server, 40 CU, `DpmMode` 1, idle 500 MHz, ceiling 2000 MHz, the fan under the kernel driver's curve. A fail-closed probe read Tctl every 4 s and the development PC sampled the smart plug every 15 s over the LAN. A reading at or above 280 W was armed to stop the arm and never fired. The five light arms of the same session load the model, answer 16 tokens and stop, so the governor stays at the 1000 MHz base and each of them peaks at 93.7 to 94.8 W. Limits: the smart plug reports no measurement age, so a peak is the highest of 15-second samples and not an instantaneous reading, and its scale is the TinyTuya convention for this model and is not calibrated; one arm a load with no repeat; the prefill arm shared the device with two 3-second probes of another trial, which raises its load rather than lowering it; these are the figures that these two loads drew and not a limit of the board, and a prefill longer than 265.4 s at this ceiling is not covered"
+    evidence: "[LLM context fit at 12288 MiB](../evidence/windows/2026-10-10-llm-context-fit-saluki/README.md)"
+    edges:
+      - {"type": "uses", "to": "M806"}
+      - {"type": "uses", "to": "M871"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

@@ -1,0 +1,27 @@
+{
+  "tag": "run1",
+  "model": "C:\\BC250\\llmvram\\models\\Underdog-Saluki-27B-1.0-IQ2-mix.gguf",
+  "server_args": "-m \"C:\\BC250\\llmvram\\models\\Underdog-Saluki-27B-1.0-IQ2-mix.gguf\" -ngl 99 -fa on -np 1 --jinja -c 94208 --cache-type-k q8_0 --cache-type-v q8_0",
+  "client": "client-ladder.ps1",
+  "client_args": "chunk=4096;decode=64;empty=128;empties=2;prompt=C:\\BC250\\perf\\prompt.txt",
+  "deadline_s": 312,
+  "workload_stop_s": 300,
+  "server_ready_bound_s": 140,
+  "supervisor_exit": 0,
+  "dev_pc_started_utc": "20261010T175315Z",
+  "dev_pc_ended_utc": "20261010T175803Z",
+  "remote_dir": "C:\\BC250\\perf\\runs\\run1-20261010T175318Z",
+  "plug_peak_w": 273.6,
+  "plug_cut_fired": false,
+  "kit_sha256": {
+    "client-fit.ps1": "36BC08BC8214F04A04B913AD6912A7FDBE9A6852668EEF3F19571603AFE2B6FF",
+    "client-ladder.ps1": "51895E43E6EA89636509CD6292327C9C4D238C9D48A42E08FC778C0486021422",
+    "client-tools.ps1": "784BC4F11CE72808F3E4B42863AC86CCE329ED2D832E6F5C94C8C398A066C433",
+    "parsecheck.ps1": "46C5E847B267F2F1708892050C6E2E37A74751D63C5A4759EC55439BEC94CF88",
+    "perf-arm.ps1": "22BE4F5D9D81C6A57234AC901868CEEC955EF8B29A0FDB35B61142E9A39CBB4F",
+    "perf-http.ps1": "4B82FD8ED61A54AF927CFA7614F46D29F71A887554ACCE33CD8302C18D2516D3",
+    "selftest.ps1": "58F8B7444D8F581ACC7A41E5598807263C84B205F0BC083CF20F8F14E4107D33",
+    "set-ceiling-2000.ps1": "F2A34BA843430F156634E14A9F73DB2223E621A4A6E5D23E790DCEA301FA3028"
+  },
+  "prompt_sha256": "F0C024EB0C7C878B4A9C5366D1A351FF75DA5D30A3ED59E179ECAC9745A1FCE7"
+}
