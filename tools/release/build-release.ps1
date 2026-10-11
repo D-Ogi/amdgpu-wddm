@@ -174,9 +174,9 @@ $tuningDestinations = @('payload/system-tuning')
 if (Test-Path -LiteralPath (Join-Path $pkg 'payload\control')) { $tuningDestinations += 'payload/control/system-tuning' }
 foreach ($destination in $tuningDestinations) {
     [void][IO.Directory]::CreateDirectory((Join-Path $pkg $destination))
-    foreach ($name in $script:SystemTuningFiles) {
-        Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$name") -Destination (Join-Path $pkg "$destination/$name")
-        $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$name" }
+    foreach ($tuningFile in $script:SystemTuningFiles) {
+        Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$tuningFile") -Destination (Join-Path $pkg "$destination/$tuningFile")
+        $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$tuningFile" }
     }
 }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
@@ -434,9 +434,9 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
     if ($Version -match 'tester\.(\d+)') {
         $thisTrain = $Matches[1]
         foreach ($c in @($cmJson.components)) {
-            $name = [string]$c.asset.name
-            if ($name -match 'tester\.(\d+)' -and $Matches[1] -ne $thisTrain) {
-                "  WARNING: component '$([string]$c.id)' names the asset $name, which carries tester.$($Matches[1]) while this release is tester.$thisTrain. Upload the asset under that name, or write the new name, size and sha256 into tools\release\components.json."
+            $assetName = [string]$c.asset.name
+            if ($assetName -match 'tester\.(\d+)' -and $Matches[1] -ne $thisTrain) {
+                "  WARNING: component '$([string]$c.id)' names the asset $assetName, which carries tester.$($Matches[1]) while this release is tester.$thisTrain. Upload the asset under that name, or write the new name, size and sha256 into tools\release\components.json."
             }
         }
     }
@@ -497,6 +497,9 @@ if ($sources.PSObject.Properties['mft_h264']) {
     }
     '  H.264 encoder MFT: {0} ({1} {2})' -f $(if ($mftRelease.register) { 'registered by the installer' } else { 'not registered by this release' }), $mftRelease.package_path, $mftRelease.clsid
 }
+# The package names itself after its folder. A loop that took $name for its own variable once named tester.28 r1
+# after the Ollama asset, and the validation suite then found no zip beside the folder.
+if ($name -ne (Split-Path -Leaf $pkg)) { throw "build-release: the package name is '$name', its folder is '$(Split-Path -Leaf $pkg)'" }
 $manifest = [ordered]@{
     schema = 1
     name = $name
