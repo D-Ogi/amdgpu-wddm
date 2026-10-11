@@ -13,6 +13,9 @@ documents its shape and the lab's values. Importing this module never touches th
     python target.py addr                      the address that answers right now (or answered recently)
     python target.py info                      address, configuration in use, remote hostname
     python target.py wait [seconds]            block until it answers again after a reboot
+    python target.py boot [--os windows|linux|any] [--bound S] [--first S] [--every S] [--after-now|--after UTC]
+                                               wait for a boot of either OS: a line each round, one verdict
+                                               line at the end (BOOT UP / BOOT WRONG-OS / BOOT TIMEOUT)
     python target.py forget                    drop the cached address (the next call probes again)
     python target.py run '<powershell>'         one inline command (watch the quoting, prefer a script file)
     python target.py ps <file.ps1> [args...]   copy a script over and run it with -File
@@ -37,6 +40,9 @@ from pathlib import Path
 # (this file is tools/win/target.py, so the repository root is two levels up from here).
 ROOT = os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent))
 CONFIG = os.environ.get("BC250_TARGET_CONFIG", os.path.join(ROOT, "secrets", "client", "target.json"))
+# The same unit booted from the diagnostic USB stick: its own user, key and pinned host key.
+LINUX_CONFIG = os.environ.get("BC250_LINUX_TARGET_CONFIG",
+                              os.path.join(ROOT, "secrets", "linux-session", "target.json"))
 
 # Only used when the configuration file leaves a field out. Addresses have no default on purpose: they are the
 # one thing that must come from the file, so that the repository carries no lab address.
@@ -95,14 +101,16 @@ def answers(address, port, timeout):
         return False
 
 
-def cache_path():
+def cache_path(config_path=None):
     """The last answering address, next to the configuration (outside the repository, like the addresses)."""
-    return os.path.splitext(CONFIG)[0] + "-last-address.json"
+    return os.path.splitext(config_path or CONFIG)[0] + "-last-address.json"
 
 
 class Target:
     def __init__(self, config=None):
         self.cfg = config if isinstance(config, dict) else load(config)
+        # Each configuration keeps its own address cache: a Linux session must not overwrite the Windows one.
+        self._cache_file = cache_path(None if isinstance(config, dict) else config)
         self._address = None
         self.answered = None  # set by `address`: True probed, False nothing answered, None not probed
         self.cached_age = None  # seconds, when `address` came from the cache instead of a probe
@@ -110,7 +118,7 @@ class Target:
     def _cached(self):
         """The address a recent probe found, if the cache file is younger than address_cache_seconds."""
         try:
-            with open(cache_path(), "r", encoding="utf-8") as f:
+            with open(self._cache_file, "r", encoding="utf-8") as f:
                 entry = json.load(f)
             age = time.time() - float(entry["time"])
             if entry["address"] in self.cfg["addresses"] and 0 <= age < float(self.cfg["address_cache_seconds"]):
@@ -121,17 +129,17 @@ class Target:
 
     def _remember(self, address):
         try:
-            tmp = cache_path() + ".tmp"
+            tmp = self._cache_file + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({"address": address, "time": time.time()}, f)
-            os.replace(tmp, cache_path())
+            os.replace(tmp, self._cache_file)
         except OSError:
             pass
 
     def forget(self):
         """Drop the cached address: the next `address` probes again."""
         try:
-            os.remove(cache_path())
+            os.remove(self._cache_file)
         except OSError:
             pass
 
@@ -259,6 +267,157 @@ class Target:
         return os.path.abspath(local_path)
 
 
+# --- Waiting for a boot -------------------------------------------------------------------------------------
+#
+# 2026-10-10: an agent waited for a Linux boot through a loop that grepped another background command's output.
+# That command never printed, Linux had been up for eleven minutes, and nothing noticed. `boot` replaces such
+# loops: it asks both operating systems itself, prints a line every round, and always ends with one verdict line.
+# Run it in the background and act on its exit; never wait on another process's text instead.
+
+WINDOWS_BOOT = "(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('s')"
+LINUX_BOOT = "cut -d' ' -f1 /proc/uptime; date -u +%s"
+
+
+def windows_boot_epoch(text):
+    """Boot time in epoch seconds from WINDOWS_BOOT's output ('2026-10-10T22:40:05'), or None."""
+    import calendar
+    for line in text.splitlines():
+        try:
+            return calendar.timegm(time.strptime(line.strip(), "%Y-%m-%dT%H:%M:%S"))
+        except ValueError:
+            continue
+    return None
+
+
+def linux_boot_epoch(text):
+    """Boot time in epoch seconds from LINUX_BOOT's output (uptime seconds, then the epoch now), or None."""
+    try:
+        uptime, now = text.split()[:2]
+        return int(now) - int(float(uptime))
+    except ValueError:
+        return None
+
+
+def boot_probe(name, config_path, connect_timeout=8, timeout=40):
+    """A probe for `boot_wait`: one authenticating command on each configured address, wired one first.
+    No bare port-22 probe (the lab sshd penalises connections closed before authentication). Returns a
+    function giving (boot epoch or None, short reason)."""
+    def probe():
+        try:
+            target = Target(config_path)
+        except TargetError as e:
+            return None, f"no configuration ({e})"
+        if name == "windows":
+            import base64
+            command = "powershell -NoProfile -EncodedCommand " + \
+                base64.b64encode(WINDOWS_BOOT.encode("utf-16-le")).decode()
+            parse = windows_boot_epoch
+        else:
+            command, parse = LINUX_BOOT, linux_boot_epoch
+        # ssh keeps the first value given for an option, so shorten the configuration, not the argv.
+        target.cfg["connect_timeout"], target.cfg["connection_attempts"] = connect_timeout, 1
+        reasons = []
+        for address in target.cfg["addresses"]:
+            target._address = address
+            try:
+                done = target.ssh(command, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                reasons.append("timeout")
+                continue
+            epoch = parse(done.stdout) if done.returncode == 0 else None
+            if epoch is not None:
+                return epoch, "answers"
+            reasons.append(ssh_failure(done))
+        return None, "; ".join(reasons) or "no address"
+    return probe
+
+
+def ssh_failure(done):
+    """A short reason without the address: these lines end up in logs, and lab addresses stay out of them."""
+    text = (done.stderr or "").lower()
+    for needle, reason in (("host key verification failed", "other host key"), ("timed out", "no answer"),
+                           ("refused", "refused"), ("permission denied", "auth refused"),
+                           ("banner exchange", "no ssh banner")):
+        if needle in text:
+            return reason
+    return f"rc {done.returncode}"
+
+
+def utc(epoch):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def boot_wait(probes, want, bound, first=0, every=30, after=None, wrong_rounds=2,
+              clock=time.monotonic, sleep=time.sleep, out=print):
+    """Ask every probe once a round until `want` ("windows", "linux" or "any") is up with a boot later than
+    `after` (epoch seconds; None accepts any boot). Prints one line per round and one verdict line at the end.
+
+    Returns (verdict, name): ("up", name), ("wrong-os", name) when only an OS other than `want` is up with
+    a new boot for `wrong_rounds` rounds in a row, or ("timeout", None) after `bound` seconds. A probe that
+    raises counts as down: the wait itself must never hang or die on one bad round."""
+    start = clock()
+    if first:
+        sleep(first)
+    wrong = 0
+    while True:
+        elapsed = clock() - start
+        states, up = [], []
+        for name, probe in probes:
+            try:
+                epoch, reason = probe()
+            except Exception as e:  # noqa: BLE001 - any probe failure is "down", reported, never fatal
+                epoch, reason = None, f"probe error {type(e).__name__}"
+            if epoch is None:
+                states.append(f"{name} down ({reason})")
+            elif after is not None and epoch <= after:
+                states.append(f"{name} up, old boot {utc(epoch)}")
+            else:
+                states.append(f"{name} up, boot {utc(epoch)}")
+                up.append((name, epoch))
+        out(f"boot-wait {elapsed:.0f}s: " + ", ".join(states), flush=True)
+        for name, epoch in up:
+            if want in ("any", name):
+                out(f"BOOT UP {name} boot {utc(epoch)} after {elapsed:.0f}s", flush=True)
+                return "up", name
+        wrong = wrong + 1 if up else 0
+        if up and wrong >= wrong_rounds:
+            out(f"BOOT WRONG-OS {up[0][0]} is up (boot {utc(up[0][1])}), wanted {want}, after {elapsed:.0f}s",
+                flush=True)
+            return "wrong-os", up[0][0]
+        if clock() - start + every > bound:
+            out(f"BOOT TIMEOUT after {clock() - start:.0f}s, wanted {want}: " + ", ".join(states), flush=True)
+            return "timeout", None
+        sleep(every)
+
+
+def boot_main(args):
+    """`target.py boot` - exit 0 BOOT UP, 1 BOOT TIMEOUT, 3 BOOT WRONG-OS, 2 usage."""
+    import argparse
+    parser = argparse.ArgumentParser(prog="target.py boot")
+    parser.add_argument("--os", choices=("windows", "linux", "any"), default="any")
+    parser.add_argument("--bound", type=int, default=900, help="seconds before BOOT TIMEOUT")
+    parser.add_argument("--first", type=int, default=0, help="seconds to wait before the first round")
+    parser.add_argument("--every", type=int, default=30, help="seconds between rounds (at least 20)")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--after-now", action="store_true", help="accept only a boot that happens from now on")
+    group.add_argument("--after", help="accept only a boot later than this UTC time, 2026-10-10T22:40:00")
+    opts = parser.parse_args(args)
+    if opts.every < 20:
+        parser.error("--every under 20 s: the lab sshd penalises frequent connections")
+    after = time.time() if opts.after_now else None
+    if opts.after:
+        after = windows_boot_epoch(opts.after.rstrip("Z"))
+        if after is None:
+            parser.error("--after needs YYYY-MM-DDTHH:MM:SS")
+    probes = [("windows", boot_probe("windows", CONFIG))]
+    if os.path.exists(LINUX_CONFIG):
+        probes.append(("linux", boot_probe("linux", LINUX_CONFIG)))
+    elif opts.os == "linux":
+        parser.error(f"no Linux session configuration at {LINUX_CONFIG}")
+    verdict, _ = boot_wait(probes, opts.os, opts.bound, opts.first, opts.every, after)
+    sys.exit({"up": 0, "timeout": 1, "wrong-os": 3}[verdict])
+
+
 def main(argv):
     # Remote text may carry characters the console code page cannot show; never die on them.
     for stream in (sys.stdout, sys.stderr):
@@ -267,6 +426,8 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     cmd, args = argv[0], argv[1:]
+    if cmd == "boot":
+        boot_main(args)
     try:
         target = Target()
         if cmd == "addr":

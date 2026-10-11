@@ -8,6 +8,8 @@ Table, with each fact's status: [`../kmd.md`](../kmd.md). Edge types: `supersede
 
 ```mermaid
 flowchart LR
+  M13["M13<br/>hardware"]
+  M14["M14<br/>hardware"]
   M108["M108"]
   M110["M110"]
   M112["M112"]
@@ -31,6 +33,7 @@ flowchart LR
   M456["M456<br/>tooling"]
   M776["M776<br/>games"]
   M834["M834"]
+  M870["M870"]
   M242 ==>|supersedes| M241
   M110 ==>|supersedes| M108
   M112 ==>|supersedes| M110
@@ -41,10 +44,12 @@ flowchart LR
   M306 ==>|supersedes| M303
   M313 ==>|supersedes| M288
   M834 ==>|supports| M776
+  M870 ==>|supports| M13
+  M870 ==>|supports| M14
   M253 ==>|supersedes| M251
   M456 ==>|supersedes| M455
   classDef other stroke-dasharray:4 3
-  class M242,M253,M456,M776 other
+  class M13,M14,M242,M253,M456,M776 other
 ```
 
 ## References

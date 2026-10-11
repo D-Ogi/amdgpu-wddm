@@ -283,7 +283,7 @@ foreach ($s in $hostSources) { $hostObjects += (Join-Path $objDir ([IO.Path]::Ch
 # of layer 2 uses, so the criterion and the sample cannot drift apart.
 $testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')", "/I$here")
 $tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c',
-    'test_vadd_oracle.c')
+    'test_vadd_oracle.c', 'test_submit_journal.c')
 foreach ($t in $tests) {
     $exe = Join-Path $Out ([IO.Path]::ChangeExtension($t, 'exe'))
     Invoke-Cl (@('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',

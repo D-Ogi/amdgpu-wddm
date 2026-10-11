@@ -1,0 +1,372 @@
+{
+  "date": "2026-10-11",
+  "status": "MEASURED",
+  "scope": "Operator-provided follow-up, separate from the 30-run supervised window. Quiet reader logs do not prove exact loaded binaries. Labels and FA selections follow the operator report and script.",
+  "operator_report_sha256": "78d50b4b3e55b14e7ce09167abeeac3dd74a4c323d1e6409a3e21e76155d8855",
+  "runner_sha256": "f26f4726e93db4bedca07e85253cbaaf759f75eaf068f81eb3b5166cc044ed67",
+  "context": 512,
+  "chunks": 8,
+  "scored_positions": 2040,
+  "batch": 512,
+  "microbatch": 512,
+  "text_sha256": "ae9e33f441f09e2f6804b80384bf54d36a3516732270e4a2934dd7ec29466b94",
+  "model_sha256": {
+    "tiny": "da3087fb14aede55fde6eb81a0e55e886810e43509ec82ecdc7aa5d62a03b556",
+    "gemma": "93567e57a8fe10b23569b9d9ec38cd005deedef71e29477c421a4b83f418a538b"
+  },
+  "selection": "Only metric rows, configuration, source basenames and SHA-256. No model weights, baseline binaries, account/device identifiers or absolute paths.",
+  "comparisons": [
+    {
+      "model": "tiny",
+      "baseline": "cuda4090",
+      "reader": "vulkan4090",
+      "fa": "on",
+      "source_name": "tiny-vulkan4090-vs-cuda.txt",
+      "source_sha256": "cef35e35923897a90821345726be4035c01e55c5399f090983f5b1c43ed183e7",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.000648,
+        "p99_kld": 0.005081,
+        "top_token_percent": 98.529,
+        "ppl_q": 23.375504,
+        "ppl_quantized_base": 23.334572
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   :  23.375504 \u00b1   1.838043",
+        "Mean PPL(base)                :  23.334572 \u00b1   1.828345",
+        "Mean    KLD:   0.000648 \u00b1   0.000023",
+        "99.0%   KLD:   0.005081",
+        "Same top p: 98.529 \u00b1 0.267 %"
+      ]
+    },
+    {
+      "model": "tiny",
+      "baseline": "cuda4090",
+      "reader": "hip-lab",
+      "fa": "on",
+      "source_name": "20261011T051934Z-hip-fa-on-tiny-cuda-8chunks.bin.txt",
+      "source_sha256": "e367cc1dfe3b2db8d590414f8321b70a1142b51cbd1a699960fb3ac250f537e9",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.003074,
+        "p99_kld": 0.032378,
+        "top_token_percent": 97.108,
+        "ppl_q": 23.48888,
+        "ppl_quantized_base": 23.334572
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   :  23.488880 \u00b1   1.846748",
+        "Mean PPL(base)                :  23.334572 \u00b1   1.828345",
+        "Mean    KLD:   0.003074 \u00b1   0.000140",
+        "99.0%   KLD:   0.032378",
+        "Same top p: 97.108 \u00b1 0.371 %"
+      ]
+    },
+    {
+      "model": "tiny",
+      "baseline": "cuda4090",
+      "reader": "hip-lab",
+      "fa": "off",
+      "source_name": "20261011T051934Z-hip-fa-off-tiny-cuda-8chunks.bin.txt",
+      "source_sha256": "eaec589c7ddd1ffb6628a40c63e9b0a7b223dad003d84de10a09225a269b420d",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.003252,
+        "p99_kld": 0.026552,
+        "top_token_percent": 96.569,
+        "ppl_q": 23.540657,
+        "ppl_quantized_base": 23.334572
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   :  23.540657 \u00b1   1.852502",
+        "Mean PPL(base)                :  23.334572 \u00b1   1.828345",
+        "Mean    KLD:   0.003252 \u00b1   0.000183",
+        "99.0%   KLD:   0.026552",
+        "Same top p: 96.569 \u00b1 0.403 %"
+      ]
+    },
+    {
+      "model": "tiny",
+      "baseline": "cuda4090",
+      "reader": "vulkan-lab",
+      "fa": "on",
+      "source_name": "20261011T051934Z-vulkan-lab-tiny-cuda-8chunks.bin.txt",
+      "source_sha256": "88fe772c9b31dd7b391f40cb4d9bf68cb4cf4682e65f5dd1ba02b008e5c5c4c1",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.001973,
+        "p99_kld": 0.009585,
+        "top_token_percent": 96.716,
+        "ppl_q": 23.408821,
+        "ppl_quantized_base": 23.334572
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   :  23.408821 \u00b1   1.840100",
+        "Mean PPL(base)                :  23.334572 \u00b1   1.828345",
+        "Mean    KLD:   0.001973 \u00b1   0.000053",
+        "99.0%   KLD:   0.009585",
+        "Same top p: 96.716 \u00b1 0.395 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "cpu",
+      "reader": "cuda4090",
+      "fa": "on",
+      "source_name": "cuda-vs-cpu.txt",
+      "source_sha256": "e02b6a32f7e3d32f420dd778f77aed5ce3035c39a59c592452f40de98178d227",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.152788,
+        "p99_kld": 3.145589,
+        "top_token_percent": 88.676,
+        "ppl_q": 422.601503,
+        "ppl_quantized_base": 312.212282
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 422.601503 \u00b1  54.441456",
+        "Mean PPL(base)                : 312.212282 \u00b1  36.495493",
+        "Mean    KLD:   0.152788 \u00b1   0.015743",
+        "99.0%   KLD:   3.145589",
+        "Same top p: 88.676 \u00b1 0.702 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "cpu",
+      "reader": "vulkan4090",
+      "fa": "on",
+      "source_name": "vulkan4090-vs-cpu.txt",
+      "source_sha256": "2ee6d526b2b4ab787b0a270e470c9f722c78fea963483e6cea9b41eac94c1f7f",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.223034,
+        "p99_kld": 3.703499,
+        "top_token_percent": 84.755,
+        "ppl_q": 386.129072,
+        "ppl_quantized_base": 312.212282
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 386.129072 \u00b1  49.686181",
+        "Mean PPL(base)                : 312.212282 \u00b1  36.495493",
+        "Mean    KLD:   0.223034 \u00b1   0.021044",
+        "99.0%   KLD:   3.703499",
+        "Same top p: 84.755 \u00b1 0.796 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "cpu",
+      "reader": "hip-lab",
+      "fa": "on",
+      "source_name": "20261011T052047Z-hip-fa-on-cpu-8chunks.bin.txt",
+      "source_sha256": "d64504c8110216e44d87a7ed51c02fbec642b1a98f8a8aade71e34653e4bf335",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.262424,
+        "p99_kld": 5.011842,
+        "top_token_percent": 81.716,
+        "ppl_q": 374.791991,
+        "ppl_quantized_base": 312.212282
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 374.791991 \u00b1  47.732657",
+        "Mean PPL(base)                : 312.212282 \u00b1  36.495493",
+        "Mean    KLD:   0.262424 \u00b1   0.020656",
+        "99.0%   KLD:   5.011842",
+        "Same top p: 81.716 \u00b1 0.856 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "cpu",
+      "reader": "vulkan-lab",
+      "fa": "on",
+      "source_name": "20261011T052215Z-vulkan-lab-cpu-8chunks.bin.txt",
+      "source_sha256": "580f98bd0fd8421bd4dc940345f88d7b2bde48987ea47fd31282c1782aad32da",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.382391,
+        "p99_kld": 6.664873,
+        "top_token_percent": 78.382,
+        "ppl_q": 333.345757,
+        "ppl_quantized_base": 312.212282
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 333.345757 \u00b1  42.402001",
+        "Mean PPL(base)                : 312.212282 \u00b1  36.495493",
+        "Mean    KLD:   0.382391 \u00b1   0.026790",
+        "99.0%   KLD:   6.664873",
+        "Same top p: 78.382 \u00b1 0.912 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "cuda4090",
+      "reader": "vulkan4090",
+      "fa": "on",
+      "source_name": "vulkan4090-vs-cuda.txt",
+      "source_sha256": "8fc8e458aa3743a1ec60178f09873632e48823a90bd4a56b0cacf20e6bca33e1",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.186044,
+        "p99_kld": 3.01044,
+        "top_token_percent": 86.127,
+        "ppl_q": 386.129072,
+        "ppl_quantized_base": 342.78628
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 386.129072 \u00b1  49.686181",
+        "Mean PPL(base)                : 342.786280 \u00b1  40.282065",
+        "Mean    KLD:   0.186044 \u00b1   0.020007",
+        "99.0%   KLD:   3.010440",
+        "Same top p: 86.127 \u00b1 0.765 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "vulkan-lab",
+      "reader": "cuda4090",
+      "fa": "on",
+      "source_name": "cuda-b11539-reader.txt",
+      "source_sha256": "1f64d48449d16769b0840dbb34e3872da0674602efcbb1c7233c66a081e51934",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.356532,
+        "p99_kld": 5.643973,
+        "top_token_percent": 79.118,
+        "ppl_q": 422.601503,
+        "ppl_quantized_base": 274.067125
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 422.601503 \u00b1  54.441456",
+        "Mean PPL(base)                : 274.067125 \u00b1  31.891373",
+        "Mean    KLD:   0.356532 \u00b1   0.023361",
+        "99.0%   KLD:   5.643973",
+        "Same top p: 79.118 \u00b1 0.900 %"
+      ]
+    },
+    {
+      "model": "gemma",
+      "baseline": "vulkan-lab",
+      "reader": "vulkan4090",
+      "fa": "on",
+      "source_name": "vulkan4090-b11539-reader.txt",
+      "source_sha256": "df56643b57cf2ea388f335f3813e8fa9c3352c940ba7810c6f432acce643dc54",
+      "chunk_rows": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "metrics": {
+        "mean_kld": 0.330534,
+        "p99_kld": 6.182276,
+        "top_token_percent": 80.392,
+        "ppl_q": 386.129072,
+        "ppl_quantized_base": 274.067125
+      },
+      "raw_statistics": [
+        "Mean PPL(Q)                   : 386.129072 \u00b1  49.686181",
+        "Mean PPL(base)                : 274.067125 \u00b1  31.891373",
+        "Mean    KLD:   0.330534 \u00b1   0.024622",
+        "99.0%   KLD:   6.182276",
+        "Same top p: 80.392 \u00b1 0.879 %"
+      ]
+    }
+  ]
+}

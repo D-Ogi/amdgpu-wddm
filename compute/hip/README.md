@@ -3,6 +3,8 @@
 Milestone M16, gate G5, route B of `docs/design/m16-hip-route-b.md`: our own thin HIP runtime on our
 own kernel driver. No ROCm runtime, no AMD user-mode component, and no PAL.
 
+The [device contract](DEVICE-CONTRACT.md) states the launch geometry, header checks, unsupported operations and rebuild requirements.
+
 The work has two layers. **This directory holds layer 1**, which is the submission layer and the
 step-1 tool. Layer 2 (`runtime/`, `amdhip64.dll`) uses layer 1 and nothing else of the submission
 path, and comes on its own branch.
@@ -190,3 +192,26 @@ outside this repository because it names lab paths.
 
 "Mierz siły na zamiary" - measure your strength against your plans. Layer 1 is the strength. The
 plans are in section 7 of the design, which lists the nine questions only the lab can answer.
+
+## Optional GPU-disabled runtime artifact
+
+`build-runtime.ps1 -DisableGpu -Bc250hsaLib <library> -Out <separate-output>`
+builds the product `amdhip64.dll` with device opening disabled at compile time.
+The default build remains GPU-enabled. This is an optional containment artifact,
+not a diagnosis or a fix for the HIP hang under investigation.
+
+The disabled build returns `hipErrorNotSupported` from initialization and APIs
+that require a device, before `bc250hsa_open`. No environment variable re-enables
+it. Argument validation can still return a more specific error first. Host-only
+registration, error/version queries and other operations which need no device
+retain their existing behavior. The exported ABI remains the same 55 names.
+It does not disable another runtime DLL, Vulkan, D3D or the kernel driver.
+
+The build gate compiles both modes against the in-memory mock. It checks device
+initialization, allocation, synchronization and launch admission, zero backend
+opens and dispatch records in disabled mode, and rejects the enabled binary
+when tested as disabled. The existing enabled suite exercises successful mock
+kernel dispatch. No product runtime or real GPU operation runs in these gates.
+Mock DLLs remain enabled test fixtures even when `-DisableGpu` is selected.
+Only the top-level product DLL is the containment candidate. Use separate output
+directories and preserve the artifact hashes to distinguish the two modes.

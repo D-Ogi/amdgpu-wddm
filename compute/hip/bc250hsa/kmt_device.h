@@ -18,6 +18,7 @@
 
 #include "internal.h"
 #include "kmt_blobs.h"
+#include "../../../driver/shim/include/bc250_hip_journal.h"
 
 /* One allocation this device owns. bc250hsa_mem::opaque points here, and the device
  * keeps every record on a list so that bc250hsa_close() frees what the caller left. */
@@ -104,6 +105,13 @@ struct bc250hsa_device {
      * that the next one writes only what changed (section 8.8). It is cleared when a
      * buffer opens, because another context's buffer runs between two of ours. */
     bc250hsa_pm4_state batch_state;
+
+    /* A bounded host staging buffer; only dev->lock may access it. One record
+     * per HIP dispatch, retained by KMD before the matching IB is submitted. */
+    uint8_t* journal_upload;
+    uint32_t journal_bytes;
+    uint32_t journal_count;
+    int journal_required;
 
     uint8_t caps[BC250HSA_CAPS_BYTES];
     int     caps_valid;

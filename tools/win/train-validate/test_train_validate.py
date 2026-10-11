@@ -10,6 +10,9 @@ calls, so a renamed parameter fails here and not in the middle of a validation.
 """
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
 import json
 import re
 import unittest
@@ -154,6 +157,91 @@ class ShippedManifest(unittest.TestCase):
     def setUp(self):
         self.data = manifest.load_manifest()
 
+    def test_the_board_memory_operation_comes_last_and_ends_where_it_started(self):
+        # The carve-out moves away from the size the language model arms need, so every arm that reads the
+        # lab at its own carve-out runs before the change, and Restore and its restart close the operation.
+        # The games are the other way round: they run at the smaller size, inside the window.
+        ids = [arm["id"] for arm in self.data["arms"]]
+        standard = self.data["sets"]["standard"]
+        for arm_id in ("llm-q35", "llm-dense", "hip", "vkheaps"):
+            self.assertLess(ids.index(arm_id), ids.index("bm-set-8192"), arm_id)
+        for arm_id in ("rottr", "w3-high-rt"):
+            self.assertLess(ids.index("vkheaps-8192"), ids.index(arm_id), arm_id)
+            self.assertLess(ids.index(arm_id), ids.index("bm-restore"), arm_id)
+        board = self.data["sets"]["board-memory"]
+        self.assertEqual([arm_id for arm_id in standard if arm_id in board], board)
+        self.assertEqual(standard[-1], "bm-after")
+        arms = {arm["id"]: arm for arm in self.data["arms"]}
+        self.assertEqual(arms["bm-after"]["baseline"]["value"], 12288)
+        self.assertEqual(arms["bm-at-8192"]["baseline"]["value"], 8192)
+        for arm_id in ("bm-set-8192", "bm-restore"):
+            self.assertIn("{kit}/board-memory-op.ps1", arms[arm_id]["run"][0], arm_id)
+            self.assertEqual(arms[arm_id]["expect"], "verified True", arm_id)
+        self.assertEqual((arms["bm-set-8192"]["board_memory"], arms["bm-restore"]["board_memory"]),
+                         ("set", "restore"), "the plan finds the window by these marks")
+
+    def test_every_game_arm_first_reads_the_memory_its_session_needs(self):
+        # The b29 RotTR arm (native-caps547) at the 12288 MiB carve-out: 1302 MB available against the
+        # harness's 3500 MB, and the run step held the runner until it was stopped by hand.
+        plan = manifest.build(Package(directory=Path("."), release="r", name="n", kmd_build="", kmd_abi="",
+                                      built_utc="", zip_path=None, zip_sha256="", zip_bytes=0), self.data,
+                              arm_ids=["rottr", "w3-high-rt"], attempt_base=700, python="python")
+        for arm in plan.arms:
+            first = arm.steps[0]
+            self.assertEqual(first.phase, "pre", arm.id)
+            self.assertIn("game-memory.ps1", first.text(), arm.id)
+            self.assertEqual(first.argv[-2:], ["-NeedMB", "3500"], arm.id)
+            self.assertFalse(first.optional, "the admission is load-bearing")
+        script = (LAB / "game-memory.ps1").read_text(encoding="utf-8")
+        self.assertIn("$NeedMB", script)
+        self.assertIn("'Memory', 'Available MBytes'", script, "the harness's own counter")
+        self.assertIn("carve-out too large for games", script)
+
+    def test_the_staged_clients_reach_the_arms_that_run_them(self):
+        arms = {arm["id"]: arm for arm in self.data["arms"]}
+        staged = " ".join(" ".join(step) for step in arms["stage-clients"]["run"])
+        self.assertIn("{lab_root}\\vksemcheck", staged)
+        self.assertIn("{lab_root}\\hip", staged)
+        self.assertIn("{lab_root}\\vksemcheck", " ".join(arms["vk-semaphore"]["run"][0]))
+        self.assertIn("{lab_root}\\hip\\bin", " ".join(arms["hip"]["run"][0]))
+        for arm_id in ("vk-semaphore", "hip", "llm-text-vulkan"):
+            self.assertIn("stage-clients", arms[arm_id]["depends_on"], arm_id)
+        # The M16 step-3 directory holds the ggml-hip.dll of the BD-110 fault (1102A1DD, the gridDim header).
+        self.assertIn("{ws}/scratch/hip-consumer-b29/bin", staged)
+        self.assertNotIn("m16-hip/step3/out3", staged)
+        self.assertIn("llama-completion.exe", staged)
+
+    def test_every_text_check_asks_in_the_chat_template_and_the_hip_backend_gets_no_flash_attention(self):
+        # Owner, 2026-10-11: a raw prompt to an instruction model proves nothing (Gemma 12B gave the same
+        # 16 digits on HIP, Vulkan, an RTX 4090 and the CPU), and the HIP build of llama.cpp has no FA yet.
+        template = ('-p "\' + $question + \'" -n 64 --temp 0 --seed 1234 -ngl 99 -c 2048 --jinja -cnv -st '
+                    '--simple-io')
+        hip = (LAB / "hip.ps1").read_text(encoding="utf-8")
+        self.assertIn(template, hip)
+        # Gemma answers inside a thought channel first: its arm gives -n 160 so that a final answer can follow.
+        text = (LAB / "llm-text.ps1").read_text(encoding="utf-8")
+        self.assertIn(template.replace("$question", "$Question").replace("-n 64", "-n ' + $Tokens + '"), text)
+        self.assertIn("[int]$Tokens = 160", text)
+        for name in ("hip.ps1", "llm-text.ps1"):
+            self.assertIn("What is the capital of France? Answer in one word.",
+                          (LAB / name).read_text(encoding="utf-8"), name)
+        argument_lines = [line for line in hip.splitlines() if re.match(r"\s*\$(arguments|textArgs) = ", line)]
+        self.assertEqual(len(argument_lines), 2, "the bench and the text step")
+        for line in argument_lines:
+            self.assertNotRegex(line, r"-fa\b", line)
+        arms = {arm["id"]: arm for arm in self.data["arms"]}
+        self.assertEqual(arms["hip"]["expect"], "BD-110 PASS")
+        self.assertIn("hip text PASS", arms["hip"]["expect_all"])
+        self.assertIn("llama-completion", arms["hip"]["kill"])
+        self.assertEqual(arms["llm-text-vulkan"]["expect"], "vulkan text PASS")
+        for arm_id in ("hip", "llm-text-vulkan"):
+            for argv in step_argvs(arms[arm_id]):
+                self.assertNotIn("-fa", argv, arm_id)
+        # BD-110 passes only after the text step: the PASS line comes after the answer check, and a failed
+        # answer is a reason of its own.
+        self.assertIn("elseif ($textWhy) { \"the text step: $textWhy\" }", hip)
+        self.assertIn("'the answer does not name Paris'", hip)
+
     def test_a_session_script_is_never_run_by_the_wsl_launcher(self):
         # `bash` on PATH is System32\bash.exe, which only starts WSL. The manifest says {bash} and the value
         # is a Git bash, or the bare name when this machine has none.
@@ -233,6 +321,407 @@ class ShippedManifest(unittest.TestCase):
     def test_an_unknown_placeholder_is_refused(self):
         with self.assertRaises(ManifestError):
             manifest.expand("{nothing}", {"repo": "x"})
+
+
+def board_memory_manifest() -> dict:
+    """The small manifest with a board memory window after the game: set, restart, read, restore."""
+    data = small_manifest()
+    data["arms"] += [
+        {"id": "set", "title": "set", "kind": "lab", "bound_s": 150, "board_memory": "set",
+         "run": [["python", "{target}", "ps", "{kit}/board-memory-op.ps1", "-Step", "set", "-Target", "8192"]]},
+        {"id": "boot", "title": "boot", "kind": "restart", "bound_s": 600, "depends_on": ["set"],
+         "run": [["python", "{target}", "ps", "{kit}/restart-now.ps1"]]},
+        {"id": "read", "title": "read", "kind": "lab-read", "bound_s": 150, "depends_on": ["boot"],
+         "run": [["python", "{target}", "ps", "{kit}/board-memory-op.ps1", "-Step", "read"]]},
+        {"id": "restore", "title": "restore", "kind": "lab", "bound_s": 150, "board_memory": "restore",
+         "run": [["python", "{target}", "ps", "{kit}/board-memory-op.ps1", "-Step", "restore"]]},
+    ]
+    data["sets"]["standard"] += ["set", "boot", "read", "restore"]
+    return data
+
+
+class GameWindow(unittest.TestCase):
+    """A game runs at the smaller carve-out: after the board memory set and before Restore (b29 547)."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+
+    def test_a_game_arm_before_the_set_runs_after_the_restart_and_before_the_restore(self):
+        plan = small_plan(self.tmp, board_memory_manifest())
+        self.assertEqual([arm.id for arm in plan.arms], ["smoke", "demo", "set", "boot", "read", "game", "restore"])
+        self.assertEqual(plan.by_id("game").arm["attempt_name"], "native-caps600")
+
+    def test_a_game_arm_after_the_restore_moves_into_the_window_too(self):
+        data = board_memory_manifest()
+        game = data["arms"].pop(2)
+        data["arms"].append(dict(game, id="late", depends_on=["read"]))
+        data["arms"].insert(2, game)
+        data["sets"]["standard"].append("late")
+        plan = small_plan(self.tmp, data)
+        self.assertEqual([arm.id for arm in plan.arms],
+                         ["smoke", "demo", "set", "boot", "read", "game", "late", "restore"])
+
+    def test_a_plan_with_no_set_keeps_the_manifest_order(self):
+        plan = manifest.build(fake_package(self.tmp), board_memory_manifest(),
+                              arm_ids=["smoke", "demo", "game", "restore"], out_dir=self.tmp / "out",
+                              roots=(HERE.parents[2], self.tmp), attempt_base=600, python="python")
+        self.assertEqual([arm.id for arm in plan.arms], ["smoke", "demo", "game", "restore"])
+        self.assertIn("game-memory.ps1", plan.by_id("game").steps[0].text(),
+                      "without the window the admission step still stops a game the carve-out cannot admit")
+
+    def test_an_arm_that_needs_the_game_before_the_set_is_refused(self):
+        data = board_memory_manifest()
+        data["arms"][3]["depends_on"] = ["game"]
+        with self.assertRaises(ManifestError):
+            small_plan(self.tmp, data)
+
+    def test_an_unknown_board_memory_mark_is_refused(self):
+        data = board_memory_manifest()
+        data["arms"][3]["board_memory"] = "grow"
+        with self.assertRaises(ManifestError):
+            manifest.check_manifest(data)
+
+    def test_a_carve_out_too_large_fails_the_game_at_once_and_says_why(self):
+        plan = small_plan(self.tmp)
+        shell = FakeShell([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("game-memory.ps1", Completed(1, "game memory: Windows sees 3816 MB, 1302 MB available, the game "
+                                             "harness needs 3500 MB available\ngame memory FAILED carve-out "
+                                             "too large for games: 3816 MB of RAM cannot hold 3500 MB")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        run = Runner(plan, shell, self.tmp / "out", clock=FakeClock(), writer=lambda *a: None, python="python")
+        record = run.run([plan.by_id("game")])[0]
+        self.assertEqual(record.verdict, FAIL)
+        self.assertIn("of the pre step: game memory FAILED carve-out too large for games", record.reason)
+        self.assertEqual(shell.said("run-game.sh"), [], "the session never starts")
+        self.assertEqual(len(shell.said("vsync.ps1 -Value 1")), 1, "the restore still runs")
+
+
+# The Rise of the Tomb Raider main menu, top to bottom, and two reads of it by the lab's OCR in native-caps550:
+# before any input (MARKETPLACE highlighted) and after a click at the centre of START BENCHMARK (CREDITS highlighted).
+ITEMS = ("CONTINUE", "LOAD GAME", "NEW GAME", "EXPEDITIONS", "LEADERBOARDS", "OPTIONS", "MARKETPLACE", "QUIT GAME",
+         "CREDITS", "START BENCHMARK")
+OCR_550_FIRST = [
+    {"t": "CONTINUE", "b": [0.116, 0.102, 0.183, 0.137]}, {"t": "LOAD GAME", "b": [0.115, 0.142, 0.191, 0.177]},
+    {"t": "NEW GAME", "b": [0.114, 0.182, 0.185, 0.215]}, {"t": "EXPEDITIONS", "b": [0.112, 0.222, 0.199, 0.256]},
+    {"t": "LEADERBOARDS", "b": [0.111, 0.262, 0.216, 0.298]}, {"t": "OPTIONS", "b": [0.11, 0.303, 0.168, 0.33]},
+    {"t": "MARKETPLACE", "b": [0.11, 0.34, 0.238, 0.381]}, {"t": "QUIT GAME", "b": [0.108, 0.384, 0.18, 0.41]},
+    {"t": "CREDITS", "b": [0.107, 0.425, 0.164, 0.448]}, {"t": "START BENCHMARK", "b": [0.106, 0.465, 0.235, 0.492]},
+    {"t": "1/1", "b": [0.151, 0.572, 0.167, 0.591]}]
+OCR_550_AFTER_CLICK = [
+    {"t": "14", "b": [0.068, 0.342, 0.081, 0.361]}, {"t": "CONTINUE", "b": [0.115, 0.104, 0.182, 0.138]},
+    {"t": "LOAD GAME", "b": [0.114, 0.144, 0.19, 0.179]}, {"t": "NEW GAME", "b": [0.113, 0.184, 0.185, 0.217]},
+    {"t": "EXPEDITIONS", "b": [0.112, 0.224, 0.198, 0.258]}, {"t": "LEADERBOARDS", "b": [0.111, 0.265, 0.216, 0.3]},
+    {"t": "OPTIONS", "b": [0.11, 0.305, 0.168, 0.332]}, {"t": "MARKETPLACE", "b": [0.109, 0.346, 0.207, 0.376]},
+    {"t": "QUIT GAME", "b": [0.108, 0.386, 0.18, 0.412]}, {"t": "CREDITS", "b": [0.107, 0.422, 0.182, 0.453]},
+    {"t": "START BENCHMARK", "b": [0.106, 0.468, 0.234, 0.493]}]
+LOADING = [{"t": "GATHERING", "b": [0.8, 0.76, 0.9, 0.78]}]
+CREDITS = [{"t": "EIDOS MONTREAL CORE TEAM", "b": [0.35, 0.44, 0.67, 0.47]}, {"t": "BACK", "b": [0.935, 0.898, 0.966, 0.912]}]
+RESULT = [{"t": "Mountain Peak: 78.67 FPS (min: 11.60, max: 135.43)", "b": [0.36, 0.39, 0.67, 0.41]},
+          {"t": "Overall score: 51.24 FPS", "b": [0.444, 0.472, 0.591, 0.488]}, {"t": "0K", "b": [0.4, 0.54, 0.42, 0.56]}]
+
+
+class FakeChannel:
+    """The control channel of a session with the game's own menu: the arrow keys move a highlight that the OCR
+    sees as a wider box, Enter opens the highlighted item (START BENCHMARK loads the benchmark, any other item a
+    submenu with a BACK button), Esc leaves a submenu, and a mouse click does nothing."""
+
+    def __init__(self, before_menu=1, items=ITEMS, lit=6, scenes=2, keys_work=True, never_leaves=False,
+                 first_enter_opens=None):
+        self.calls: list[str] = []
+        self.before_menu, self.items, self.lit, self.scenes = before_menu, list(items), lit, scenes
+        self.keys_work, self.never_leaves, self.first_enter_opens = keys_work, never_leaves, first_enter_opens
+        self.state, self.shown, self.enters = "black", 0, 0
+
+    def go(self, state):
+        self.state, self.shown = state, 0
+
+    def call(self, actions):
+        self.calls.append(actions)
+        for action in actions.split(";"):
+            if self.state == "menu" and action in ("tapx:50", "tapx:48") and self.keys_work:
+                if self.lit is None:
+                    self.lit = 0
+                else:
+                    self.lit = max(0, min(len(self.items) - 1, self.lit + (1 if action == "tapx:50" else -1)))
+            elif self.state == "menu" and action == "hold:1C:300" and not self.never_leaves:
+                self.enters += 1
+                opens = self.first_enter_opens if self.enters == 1 and self.first_enter_opens else self.items[self.lit]
+                self.go("loading" if opens == "START BENCHMARK" else "submenu")
+            elif self.state == "submenu" and action == "tap:01":
+                self.go("menu")
+        return ""
+
+    def running(self):
+        self.calls.append("peek")
+        return True
+
+    def menu(self):
+        lines = []
+        for i, name in enumerate(self.items):
+            width = 0.0084 * len(name) * (1.35 if i == self.lit else 1.0)
+            lines.append({"t": name, "b": [0.11, 0.10 + 0.04 * i, round(0.11 + width, 3), 0.13 + 0.04 * i]})
+        return lines
+
+    def look(self):
+        self.calls.append("look")
+        self.shown += 1
+        if self.state == "black" and self.shown > self.before_menu:
+            self.go("menu")
+        elif self.state == "loading" and self.shown > 1:
+            self.go("scene")
+        elif self.state == "scene" and self.shown > self.scenes:
+            self.go("result")
+        screens = {"black": [], "menu": self.menu(), "loading": LOADING, "submenu": CREDITS, "scene": [],
+                   "result": RESULT}
+        return list(screens[self.state]), f"shot-{len(self.calls):03d}.jpg"
+
+
+class GameDrive(unittest.TestCase):
+    """game-drive.py: START BENCHMARK selected with the arrow keys, the menu left, the result read (b29 548, 550)."""
+
+    def drive(self, channel, alive=lambda: True):
+        import importlib
+        module = importlib.import_module("game-drive")
+        said: list[str] = []
+        driver = module.Driver(module.DRIVES["rottr"], channel, alive, every=0, peek_every=0, check_after=0,
+                               wait_game=50, wait_menu=50, wait_result=50, sleep=lambda s: None,
+                               clock=FakeClock().now, say=said.append)
+        driver.run()
+        return driver, said
+
+    def test_the_highlight_is_read_from_the_550_menu(self):
+        import importlib
+        module = importlib.import_module("game-drive")
+        for name, lines, lit in (("first read", OCR_550_FIRST, "MARKETPLACE"),
+                                 ("after the click", OCR_550_AFTER_CLICK, "CREDITS")):
+            with self.subTest(read=name):
+                column = module.menu_column(lines, module.find(lines, "START BENCHMARK"))
+                self.assertEqual([line["t"] for line in column], list(ITEMS), "the menu column, without 14 and 1/1")
+                self.assertEqual(module.highlighted(column)["t"], lit)
+        even = [dict(line, b=[line["b"][0], line["b"][1], line["b"][0] + 0.0084 * len(line["t"]), line["b"][3]])
+                for line in OCR_550_FIRST if line["t"] in ITEMS]
+        self.assertIsNone(module.highlighted(even), "no item stands out: no highlight")
+
+    def test_the_arrow_keys_reach_the_benchmark_and_the_result_ends_the_session(self):
+        channel = FakeChannel(lit=6)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertIn("tapx:50;wait:1000;tapx:50;wait:1000;tapx:50;wait:1000", channel.calls,
+                      "MARKETPLACE to START BENCHMARK is three items down")
+        self.assertFalse([call for call in channel.calls if "click" in call or "point" in call], "no mouse")
+        enter = channel.calls.index("hold:1C:300")
+        self.assertEqual(channel.calls[enter - 1], "look", "Enter only after a read showed the highlight there")
+        self.assertIn("[drive] the highlight is on START BENCHMARK", said)
+        self.assertIn("note:world+60", channel.calls)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+        self.assertEqual(channel.calls[-2:], ["hold:1C:300", "quit"], "the dialog confirmed, then the session ends")
+
+    def test_a_highlight_below_the_item_moves_up(self):
+        items = ("CONTINUE", "OPTIONS", "START BENCHMARK", "QUIT GAME", "CREDITS", "EXPEDITIONS")
+        channel = FakeChannel(items=items, lit=5)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertIn("tapx:48;wait:1000;tapx:48;wait:1000;tapx:48;wait:1000", channel.calls)
+        self.assertNotIn("tapx:50", " ".join(channel.calls))
+
+    def test_no_highlight_in_the_read_gets_one_arrow_key_first(self):
+        channel = FakeChannel(lit=None)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        keys = [call for call in channel.calls if call.startswith("tapx:")]
+        self.assertEqual(keys[0], "tapx:50;wait:1000", "one key to make the highlight show")
+        self.assertEqual(keys[1].count("tapx:50"), 9, "then CONTINUE to START BENCHMARK")
+
+    def test_a_read_that_drops_the_item_after_a_key_is_read_again(self):
+        # 551: the read after the Down arrow lost CREDITS and START BENCHMARK and read QUIT GAME as GAME, while
+        # the shot showed the highlight on START BENCHMARK. The drive took it for a menu that went away and ended
+        # a good session. One such read must lead to another read, not to a failure.
+        class Dropping(FakeChannel):
+            dropped = False
+
+            def look(self):
+                lines, shot = super().look()
+                if self.state == "menu" and not self.dropped and any(c.startswith("tapx:") for c in self.calls):
+                    self.dropped = True
+                    return [line for line in lines if line["t"] == "OPTIONS"] + [
+                        {"t": "GAME", "b": [0.139, 0.526, 0.176, 0.553]}], shot
+                return lines, shot
+
+        channel = Dropping(lit=8)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertTrue(channel.dropped)
+        self.assertTrue(any("read 1 of 3 does not show a still START BENCHMARK" in line for line in said), said)
+        self.assertIn("[drive] the highlight is on START BENCHMARK", said)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+
+    def test_still_holds_for_the_real_552_read_and_not_for_the_551_frame(self):
+        # The menu is drawn with a slight slant: the still 552 read that confirmed the highlight on START
+        # BENCHMARK spreads 0.010 (0.116 to 0.106). The animation frame of 551 spreads 0.032 the other way.
+        import importlib
+        module = importlib.import_module("game-drive")
+        read_552 = [
+            {"t": "CONTINUE", "b": [0.116, 0.102, 0.183, 0.137]}, {"t": "LOAD GAME", "b": [0.115, 0.142, 0.191, 0.177]},
+            {"t": "NEW GAME", "b": [0.114, 0.182, 0.185, 0.215]}, {"t": "EXPEDITIONS", "b": [0.112, 0.222, 0.199, 0.256]},
+            {"t": "LEADERBOARDS", "b": [0.111, 0.262, 0.216, 0.298]}, {"t": "OPTIONS", "b": [0.11, 0.303, 0.168, 0.329]},
+            {"t": "MARKETPLACE", "b": [0.109, 0.343, 0.207, 0.374]}, {"t": "QUIT GAME", "b": [0.108, 0.384, 0.18, 0.41]},
+            {"t": "CREDITS", "b": [0.107, 0.425, 0.164, 0.448]},
+            {"t": "START BENCHMARK", "b": [0.106, 0.462, 0.274, 0.498]}]
+        frame_551 = [
+            {"t": "CONTINUE", "b": [0.066, 0.26, 0.135, 0.288]}, {"t": "GAME", "b": [0.111, 0.297, 0.149, 0.32]},
+            {"t": "NEW GAME", "b": [0.077, 0.335, 0.15, 0.367]}, {"t": "EXPEDITIONS", "b": [0.082, 0.37, 0.17, 0.407]},
+            {"t": "LEADERBOARDS", "b": [0.087, 0.404, 0.193, 0.446]}, {"t": "OPTIONS", "b": [0.093, 0.453, 0.151, 0.485]},
+            {"t": "MARKETPLACE", "b": [0.098, 0.481, 0.196, 0.525]}, {"t": "GAME", "b": [0.139, 0.526, 0.176, 0.553]}]
+        drive = module.DRIVES["rottr"]
+        self.assertTrue(module.still(read_552, drive))
+        self.assertEqual(module.highlighted(module.menu_column(read_552, module.find(read_552, "START BENCHMARK")))["t"],
+                         "START BENCHMARK")
+        self.assertFalse(module.still(frame_551, drive))
+        self.assertTrue(module.still(OCR_550_FIRST, drive) and module.still(OCR_550_AFTER_CLICK, drive))
+
+    def test_a_skewed_read_with_every_item_is_read_again(self):
+        # 551 ocr-012 was a frame of the highlight animation: the left edges ran 0.066 to 0.139 down the column.
+        # A skewed read that still holds START BENCHMARK gives per-character widths that say nothing about the
+        # highlight, so it is read again, as a read without the item is.
+        class Skewing(FakeChannel):
+            skewed = False
+
+            def look(self):
+                lines, shot = super().look()
+                if self.state == "menu" and not self.skewed and any(c.startswith("tapx:") for c in self.calls):
+                    self.skewed = True
+                    return [dict(line, b=[line["b"][0] - 0.04 + 0.008 * i, line["b"][1], line["b"][2], line["b"][3]])
+                            for i, line in enumerate(lines)], shot
+                return lines, shot
+
+        channel = Skewing(lit=8)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertTrue(channel.skewed)
+        self.assertTrue(any("read 1 of 3 does not show a still START BENCHMARK" in line for line in said), said)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+
+    def test_a_submenu_is_left_with_esc_and_the_drive_tries_again(self):
+        # 550: the first Enter opened CREDITS, and a check that only looked for the menu took the credits for
+        # the benchmark. A BACK button on the screen is a submenu: Esc, then once more from the menu.
+        channel = FakeChannel(lit=9, first_enter_opens="CREDITS")
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertIn("tap:01;wait:2000", channel.calls)
+        self.assertTrue(any("a submenu (BACK), not the scene" in line for line in said))
+        self.assertEqual(channel.calls.count("hold:1C:300"), 3, "two Enters on the menu, one on the result")
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+
+    def test_a_menu_that_is_never_left_fails_after_one_retry_and_ends_the_session(self):
+        channel = FakeChannel(never_leaves=True)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "menu not left")
+        self.assertEqual(channel.calls.count("hold:1C:300"), 2, "one retry")
+        self.assertIn("[drive] FAILED menu not left", said)
+        self.assertEqual(channel.calls[-1], "quit")
+
+    def test_arrow_keys_that_move_nothing_fail_without_an_enter(self):
+        channel = FakeChannel(keys_work=False)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "the highlight did not reach START BENCHMARK")
+        self.assertNotIn("hold:1C:300", channel.calls, "never Enter on an item the read does not show highlighted")
+        self.assertEqual(channel.calls[-1], "quit")
+
+    def test_no_menu_within_the_wait_fails_and_says_so(self):
+        import importlib
+        module = importlib.import_module("game-drive")
+        channel = FakeChannel(before_menu=10 ** 6)
+        clock = iter(range(0, 10 ** 6, 2))
+        said: list[str] = []
+        driver = module.Driver(module.DRIVES["rottr"], channel, lambda: True, every=0, peek_every=0,
+                               check_after=0, wait_game=5, wait_menu=5, wait_result=5, sleep=lambda s: None,
+                               clock=lambda: float(next(clock)), say=said.append)
+        driver.run()
+        self.assertEqual(driver.failed, "the main menu never showed START BENCHMARK")
+        self.assertNotIn("hold:1C:300", channel.calls)
+
+    def test_a_session_that_ends_by_itself_is_not_a_drive_failure(self):
+        channel = FakeChannel(before_menu=10 ** 6)
+        alive = iter([True, True, True, False])
+        driver, said = self.drive(channel, alive=lambda: next(alive, False))
+        self.assertEqual(driver.failed, "")
+        self.assertNotIn("quit", channel.calls)
+
+    def test_the_command_line_runs_the_session_and_returns_the_drive_failure(self):
+        import importlib
+        import sys
+        module = importlib.import_module("game-drive")
+        tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        control = tmp / "control.py"
+        control.write_text("import sys\nopen(sys.argv[0] + '.log', 'a').write(sys.argv[2] + '\\n')\n"
+                           "print('queue: 0 commands, 0 done, game running: False')\n", encoding="utf-8")
+        rc = module.main(["--profile", "rottr", "--attempt", "native-caps001", "--control", str(control),
+                          "--wait-game", "0", "--peek-every", "0", "--",
+                          sys.executable, "-c", "import time; time.sleep(3)"])
+        self.assertEqual(rc, module.FAILED)
+        self.assertEqual((tmp / "control.py.log").read_text(encoding="utf-8").split(), ["peek", "quit"])
+
+    def test_the_shipped_rottr_arm_runs_its_session_through_the_driver(self):
+        data = manifest.load_manifest()
+        arm = next(a for a in data["arms"] if a["id"] == "rottr")
+        run = arm["run"][0]
+        self.assertIn("{repo}/tools/win/train-validate/game-drive.py", run)
+        self.assertEqual(run[run.index("--attempt") + 1], "{attempt}")
+        self.assertEqual(run[run.index("--") + 1:], ["{bash}", "{caps}/run-game.sh", "{attempt_n}", "rottr", "{bound}"])
+        import importlib
+        self.assertIn(arm["profile"], importlib.import_module("game-drive").DRIVES)
+        plan = manifest.build(Package(directory=Path("."), release="r", name="n", kmd_build="", kmd_abi="",
+                                      built_utc="", zip_path=None, zip_sha256="", zip_bytes=0), data,
+                              arm_ids=["rottr"], attempt_base=700, python="python")
+        self.assertIn("native-caps700", plan.by_id("rottr").arm["operator_line"])
+
+    def test_the_runner_prints_the_operator_line_and_names_a_drive_failure(self):
+        tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        data = small_manifest()
+        data["arms"][2]["operator_line"] = "{attempt}: watch the shots"
+        plan = small_plan(tmp, data)
+        lines: list[str] = []
+        shell = FakeShell([
+            ("mon.py stop?", Completed(0, "no stop request")),
+            ("temp.py", Completed(0, "Tctl 61.5 C")),
+            ("run-game.sh", Completed(5, "[drive] self-check shot-009.jpg: still the menu\n"
+                                         "[drive] FAILED menu not left\nsession closed")),
+            ("gate.ps1", Completed(0, GATE_OK)),
+        ])
+        run = Runner(plan, shell, tmp / "out", clock=FakeClock(), writer=lines.append, python="python")
+        record = run.run([plan.by_id("game")])[0]
+        self.assertIn("[oper] game: native-caps600: watch the shots", lines)
+        self.assertEqual(record.verdict, FAIL)
+        self.assertEqual(record.reason.split(";")[0], "rc 5: FAILED menu not left")
+
+
+class Staging(unittest.TestCase):
+    """stage.py names every file of a staged directory by the path that target.py push gives it on the lab."""
+
+    def test_a_directory_keeps_its_own_name_and_tree_under_the_lab_directory(self):
+        import tempfile
+        import stage
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp) / "bin"
+            (build / "sub").mkdir(parents=True)
+            (build / "llama-bench.exe").write_bytes(b"exe")
+            (build / "sub" / "x.dll").write_bytes(b"dll")
+            model = Path(tmp) / "m.gguf"
+            model.write_bytes(b"model")
+            files = stage.inventory([build, model], "C:\\BC250\\tmp\\train-r\\hip\\")
+            remote = sorted(entry[2] for entry in files)
+            self.assertEqual(remote, ["C:\\BC250\\tmp\\train-r\\hip\\bin\\llama-bench.exe",
+                                      "C:\\BC250\\tmp\\train-r\\hip\\bin\\sub\\x.dll",
+                                      "C:\\BC250\\tmp\\train-r\\hip\\m.gguf"])
+            self.assertEqual(stage.sha256(model), hashlib.sha256(b"model").hexdigest().upper())
+
+    def test_a_missing_source_stops_the_stage_before_any_copy(self):
+        import stage
+        with self.assertRaises(SystemExit):
+            stage.inventory([Path("no-such-directory-here")], "C:\\x")
 
 
 class GateParsing(unittest.TestCase):
@@ -683,6 +1172,105 @@ class Promotion(unittest.TestCase):
                 self.assertLessEqual(step.timeout_s, 170 + self.plan.limits["host_grace_s"])
         self.assertIn("promoted-retained", arm.arm["expect_all"])
 
+    def new_shell_accepted_from(self, attempt: str, with_copy: bool) -> str:
+        """A baseline whose accepted shell is an older file that `attempt` promoted; engine and ICD unchanged."""
+        payload = Path(self.plan.values["pkg"]) / "payload" / "d3d12"
+        old = b"the shell of the train before"
+        block = {name: manifest.sha256(payload / name) for name in promote.NAMES}
+        block["amdgpu_wddm_d3d12.dll"] = hashlib.sha256(old).hexdigest().upper()
+        if with_copy:
+            package = self.caps / "attempts" / attempt / "package"
+            package.mkdir(parents=True)
+            (package / "amdgpu_wddm_d3d12.dll").write_bytes(old)
+        (self.caps / "lab-baseline.json").write_text(
+            json.dumps({"d3d12": {"accepted": block, "source_attempt": attempt}}), encoding="utf-8")
+        return block["amdgpu_wddm_d3d12.dll"]
+
+    def test_a_new_triplet_puts_the_accepted_files_back_before_the_stage(self):
+        # b29: the install laid the package shell down, and the attempt's Capture verifies the accepted one.
+        sha = self.new_shell_accepted_from("native-caps524", with_copy=True)
+        arm = self.plan.by_id("promote")
+        prepared = promote.attach(self.plan, arm, "python", clean=False)
+        self.assertEqual(list(prepared.putback), ["amdgpu_wddm_d3d12.dll"], "only the file the package replaces")
+        self.assertEqual(prepared.missing, [])
+        text = [step.text() for step in arm.steps]
+        at = {key: next(i for i, line in enumerate(text) if key in line)
+              for key in ("stage.py", "-Step putback", "promote-d3d12.py stage ", "--apply", "-Step clean")}
+        self.assertLess(at["stage.py"], at["-Step putback"])
+        self.assertLess(at["-Step putback"], at["promote-d3d12.py stage "])
+        self.assertLess(at["--apply"], at["-Step clean"])
+        self.assertIn("native-caps524/package/amdgpu_wddm_d3d12.dll", text[at["stage.py"]])
+        self.assertIn(f"amdgpu_wddm_d3d12.dll={sha}", text[at["-Step putback"]])
+        self.assertNotIn("amdgpu_wddm_vkd3d.dll=", text[at["-Step putback"]], "an unchanged file stays as it is")
+        for wanted in ("stage OK", "d3d12 putback OK", "d3d12 clean OK", "promoted-retained"):
+            self.assertIn(wanted, arm.arm["expect_all"])
+
+    def test_the_accepted_copy_is_found_by_its_bytes_in_another_attempt(self):
+        self.new_shell_accepted_from("native-caps524", with_copy=False)
+        package = self.caps / "attempts" / "native-caps530" / "package"
+        package.mkdir(parents=True)
+        (package / "amdgpu_wddm_d3d12.dll").write_bytes(b"the shell of the train before")
+        (self.caps / "attempts" / "native-caps531" / "package").mkdir(parents=True)
+        (self.caps / "attempts" / "native-caps531" / "package" / "amdgpu_wddm_d3d12.dll").write_bytes(b"other")
+        prepared = promote.prepare(self.plan, self.plan.by_id("promote").arm, clean=False)
+        self.assertTrue(prepared.putback["amdgpu_wddm_d3d12.dll"].endswith("native-caps530/package/amdgpu_wddm_d3d12.dll"))
+
+    def test_no_local_copy_of_the_accepted_file_stops_the_arm_before_the_lab_changes(self):
+        self.new_shell_accepted_from("native-caps524", with_copy=False)
+        arm = self.plan.by_id("promote")
+        prepared = promote.attach(self.plan, arm, "python", clean=False)
+        self.assertEqual(prepared.missing, ["amdgpu_wddm_d3d12.dll"])
+        self.assertIn("NO local copy of the accepted amdgpu_wddm_d3d12.dll", prepared.note)
+        first_lab_change = next(i for i, step in enumerate(arm.steps) if "-Step putback" in step.text())
+        staging = next(i for i, step in enumerate(arm.steps) if "stage.py" in step.text())
+        self.assertLess(staging, first_lab_change, "the stage of a path that does not exist fails first")
+        self.assertIn("NO-LOCAL-COPY-OF-ACCEPTED-amdgpu_wddm_d3d12.dll", arm.steps[staging].text())
+
+
+class PinBaseline(unittest.TestCase):
+    """pin-baseline.py retries the refusal of a new D3D12 triplet with the flag the promotion route names."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.caps = self.tmp / "caps"
+        self.caps.mkdir()
+        self.pkg = self.tmp / "pkg"
+        self.pkg.mkdir()
+        (self.pkg / "manifest.json").write_text(json.dumps({"release": "0.7.0-tester.2", "files": []}),
+                                                 encoding="utf-8")
+
+    def tool(self, body: str) -> None:
+        (self.caps / "release-baseline.py").write_text("import sys\n" + body, encoding="utf-8")
+
+    def pin(self, *extra: str):
+        import subprocess
+        import sys
+        return subprocess.run([sys.executable, str(Path(__file__).with_name("pin-baseline.py")), str(self.caps),
+                               str(self.pkg), *extra], capture_output=True, text=True)
+
+    def test_a_new_triplet_is_pinned_with_the_accepted_triplet_kept(self):
+        self.tool("if '--keep-accepted-d3d12' in sys.argv:\n"
+                  "    print('release 0.7.0-tester.2: 85 files verified'); sys.exit(0)\n"
+                  "print('REFUSED: the release D3D12 triplet differs from the accepted one: promote it with "
+                  "promote-d3d12.py first'); sys.exit(1)\n")
+        done = self.pin()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("files verified", done.stdout)
+        self.assertIn("the baseline keeps the accepted one", done.stdout)
+
+    def test_any_other_refusal_stands(self):
+        self.tool("print('REFUSED: manifest kmd_version and kmd_abi do not encode one revision'); sys.exit(1)\n")
+        done = self.pin()
+        self.assertEqual(done.returncode, 1)
+        self.assertNotIn("keeps the accepted one", done.stdout)
+
+    def test_the_flag_is_not_added_twice(self):
+        self.tool("print(' '.join(sys.argv[1:])); "
+                  "print('REFUSED: the release D3D12 triplet differs from the accepted one'); sys.exit(1)\n")
+        done = self.pin("--keep-accepted-d3d12")
+        self.assertEqual(done.returncode, 1, "a refusal with the flag already given is final")
+        self.assertEqual(done.stdout.count("--keep-accepted-d3d12"), 1)
+
 
 class Summary(unittest.TestCase):
     def setUp(self):
@@ -949,8 +1537,13 @@ class ShippedSetEndToEnd(unittest.TestCase):
             return Completed(0, GATE_OK.replace("2026-10-10T07:47:40Z", self.booted[-1]))
 
         def restart(step):
-            self.booted.append(f"2026-10-10T0{len(self.booted) + 7}:00:00Z")
+            self.booted.append(f"2026-10-10T{len(self.booted) + 7:02d}:00:00Z")
+            # The board starts with the size its memory block names: a restart applies a pending change.
+            self.carve_out[0] = self.carve_out[1]
             return Completed(0, f"boot {self.booted[-2]}\nrestart in 5 s")
+
+        # The board memory of the fake lab: [active MiB, next start MiB, the backup the first write saved].
+        self.carve_out = [12288, 12288, None]
 
         replies = [
             ("mon.py", Completed(0, "no stop request")),
@@ -975,8 +1568,23 @@ class ShippedSetEndToEnd(unittest.TestCase):
             ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("vk-smoke.ps1", Completed(0, "driverInfo = Mesa 26.3.0-devel (git-18e0f56be7)")),
             ("x86-d3d11-smoke.ps1", Completed(0, "exit 0 after 12.0 s")),
-            ("vkheaps.ps1", Completed(0, "vk heaps: device-local 7897 MiB, host 2672 MiB, total 10569 MiB")),
+            ("vkheaps.ps1 -Out C:\\BC250\\tmp\\train-vkheaps-8192",
+             Completed(0, "vk heaps: device-local 7897 MiB, host 2672 MiB, total 10569 MiB")),
+            ("vkheaps.ps1", Completed(0, "vk heaps: device-local 11865 MiB, host 1908 MiB, total 13773 MiB")),
             ("board-memory.ps1", Completed(0, "probe status 0\nwindows ram 7629 MiB")),
+            ("game-memory.ps1", self.game_memory),
+            ("board-memory-op.ps1 -Step read", self.board_read),
+            ("board-memory-op.ps1 -Step set", self.board_write),
+            ("board-memory-op.ps1 -Step restore", self.board_write),
+            ("stage.py", Completed(0, "stage: 2 files, 0 sent, 2 already there, 0 differ after the copy\n"
+                                      "stage OK")),
+            ("vk-semaphore.ps1", Completed(0, "vk-semaphore x64 failures 0\nvk-semaphore x64: PASS")),
+            ("hip.ps1", Completed(0, "hip result vadd ok verdict PASS arm_exit 0 pp512 1402.5 t/s tg128 "
+                                     "151.2 t/s\nhip text PASS Capital: Paris\n"
+                                     "BD-110 PASS exit 0, pp512 and tg128 rows")),
+            ("llm-text.ps1", Completed(0, "vulkan text final answer: yes Paris.\n"
+                                          "vulkan text PASS thought The user is asking for the capital of France. "
+                                          "The user requested a one-w")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi pipeline",
              Completed(0, "Using VK_KHR_ray_tracing_pipeline\n631 frames, 10.45 seconds: 60.40 fps")),
             ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi query",
@@ -990,6 +1598,8 @@ class ShippedSetEndToEnd(unittest.TestCase):
             ("run-batch.ps1", Completed(1, "list-rt-k97 run=trainr route=direct icd=1D4DAD41 exit=1 "
                                            "complete=True done=140/140 attempts=1 elapsed=8.7s\n"
                                            "counts: Pass=137 NotRun=3")),
+            ("llm-dense.ps1 -Model C:\\BC250\\strata",
+             Completed(0, "llm-dense result verdict PASS arm_exit 0 pp512 491.88 t/s tg128 82.06 t/s")),
             ("llm-dense.ps1", Completed(0, "llm-dense result verdict PASS arm_exit 0 pp512 207.38 t/s "
                                            "tg128 32.94 t/s")),
             ("promote-d3d12.py stage ", Completed(0, "plan written")),
@@ -1005,6 +1615,28 @@ class ShippedSetEndToEnd(unittest.TestCase):
             validate, "make_shell", lambda cwd, base_env=None, writer=print: self.shell))
         self.enterContext(unittest.mock.patch.object(validate, "make_clock", FakeClock))
 
+    def board_read(self, step):
+        active, following, _ = self.carve_out
+        return Completed(0, f"board memory state (before): active {active} MiB, next start {following} MiB, "
+                            f"previous {self.carve_out[2] or 0} MiB, backup False, write True, reason 0, "
+                            f"pending {active != following}\nboard memory done")
+
+    def game_memory(self, step):
+        # The lab's RAM is the board's 16 GiB less the carve-out: 3816 MB at 12288 MiB, 7912 MB at 8192 MiB.
+        visible = 3816 if self.carve_out[0] == 12288 else 7912
+        if visible < 3500 + 2048:
+            return Completed(1, f"game memory: Windows sees {visible} MB\n"
+                                f"game memory FAILED carve-out too large for games")
+        return Completed(0, f"game memory: Windows sees {visible} MB\ngame memory OK")
+
+    def board_write(self, step):
+        restore = "restore" in step.argv
+        if self.carve_out[2] is None:
+            self.carve_out[2] = self.carve_out[1]
+        self.carve_out[1] = self.carve_out[2] if restore else int(step.argv[step.argv.index("-Target") + 1])
+        word = "restore" if restore else "set"
+        return Completed(0, f"board memory {word}: exit 0, next start {self.carve_out[1]} MiB, verified True")
+
     def test_every_arm_of_the_standard_set_passes_against_the_fake_target(self):
         out = self.tmp / "out"
         code = self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
@@ -1019,13 +1651,46 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 27)
+        self.assertEqual(len(records), 39)
+        values = {row["id"]: row["value"] for row in records}
+        self.assertEqual((values["bm-before"], values["bm-at-8192"], values["bm-after"]), (12288, 8192, 12288),
+                         "the operation moves the board to 8192 MiB and Restore brings it back")
+        self.assertEqual(self.carve_out[:2], [12288, 12288], "the lab ends at the size it started with")
         self.assertEqual([row["value"] for row in records if row["id"] == "uninstall"], [0.0],
                          "the number comes from the inventory after the uninstaller, not before it")
         plans = Path(self.tmp) / "scratch" / "m15" / "native-caps001" / "plans"
         self.assertTrue((plans / "plan-003.md").is_file(), "the plan file of the rottr arm")
         self.assertTrue((plans / "plan-004.md").is_file(),
                         "the operator's own game arm got its plan file too: run-m157.sh refuses without it")
+
+    def test_operator_values_given_in_separate_summary_calls_are_all_kept(self):
+        # r10 on 2026-10-11: the RotTR score went in first and the Witcher 3 rate later, in a second call.
+        # The second call must not drop the first value and reopen the owner's gate.
+        out = self.tmp / "out"
+        self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
+                            "--train", "b99", "--attempt-base", "1"])
+        base = ["summary", "--package", str(self.package.directory), "--out", str(out), "--train", "b99",
+                "--no-hash"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.validate.main(base + ["--set", "rottr=59.10"]), 0)
+            self.assertEqual(self.validate.main(base + ["--set", "w3-high-rt=12.0"]), 0)
+        results = (out / "RESULTS.md").read_text(encoding="utf-8")
+        self.assertIn("**Rise of the Tomb Raider**: MET", results)
+        self.assertIn("59.1 fps", results)
+        self.assertIn("12.0 present/s", results)
+        kept = json.loads((out / "operator-values.json").read_text(encoding="utf-8"))
+        self.assertEqual(kept, {"rottr": 59.1, "w3-high-rt": 12.0})
+
+    def test_a_game_alone_at_the_large_carve_out_fails_at_once(self):
+        # `--arms rottr` on a lab left at 12288 MiB: no window in the plan, and the admission step says why.
+        out = self.tmp / "out-rottr"
+        code = self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
+                                   "--train", "b99", "--attempt-base", "1", "--arms", "rottr"])
+        self.assertEqual(code, 1)
+        records = json.loads((out / "records.json").read_text(encoding="utf-8"))
+        self.assertEqual([row["verdict"] for row in records], ["FAIL"])
+        self.assertIn("carve-out too large for games", records[0]["reason"])
+        self.assertEqual(self.shell.said("run-game.sh"), [])
 
     def test_the_push_arm_hands_target_py_the_lab_directory_after_the_to_flag(self):
         out = self.tmp / "out-push"
@@ -1063,7 +1728,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
                             "--train", "b99", "--attempt-base", "1", "--set", "rottr=12.0"])
         results = (out / "RESULTS.md").read_text(encoding="utf-8")
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
-        self.assertIn("12.0 is under 49.63", results)
+        self.assertIn("12.0 is under 50.98", results)
 
     def test_the_whole_set_is_met_once_the_operator_fills_the_benchmark_score_in(self):
         out = self.tmp / "out"

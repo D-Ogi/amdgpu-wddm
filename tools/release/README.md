@@ -192,7 +192,8 @@ a placeholder: `{src}`, `{out}`, `{root}`, `{input:<name>}`, `{payload:<package 
 
 `-RebuildCheck` also runs `rebuild-check.ps1`, which is slow and therefore off by default. That script builds each
 `built_from` entry again from its commit, in temporary work trees under `scratch\repro-builds\rb`. It compares the
-hashes and writes `rebuild-check.json` into the output folder. Run it alone like this:
+hashes and writes `rebuild-check.json` into the output folder. When an entry does not match, its build directory
+keeps the `build-*.log` files, so you can read the log path in the `FAIL` line. Run it alone like this:
 
 ```
 pwsh -File tools\release\rebuild-check.ps1 -Plan                        # the builds and their arguments, no build

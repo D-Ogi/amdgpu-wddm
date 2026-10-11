@@ -1943,3 +1943,13 @@ facts:
     evidence: "[hang recovery b25](../evidence/windows/2026-10-07-hang-recovery-b25/README.md)"
     edges:
       - {"type": "uses", "to": "M835"}
+  - id: M870
+    status: MEASURED
+    date: "2026-10-11"
+    claim: "The Microsoft memory integrity scan tool passes the drivers of unit A with our kernel driver 0.7.216.28 loaded (`bc250kmd.sys` SHA-256 `8A873F32`): `HVCI incompatible driver scan passed!`, exit 0. On the same machine VBS cannot start. The tool names four missing platform requirements: Secure Boot capability, IOMMU, the ACPI WSMT table and hardware virtualization (`VbsGetIssues` `0x0000048C`, `VbsIsRecommended` 0)"
+    status_text: "MEASURED (unit A, n = 1 run)"
+    detail: "Tool `hvciscan_amd64.exe` (Microsoft Download Center item 105217), SHA-256 `CD1BBE92`, Authenticode status Valid, signer Microsoft Corporation. `Win32_DeviceGuard` gives `VirtualizationBasedSecurityStatus` 0, no configured or running security service, and `AvailableSecurityProperties` `4,5,7,8`. Package 0.7.216.100-tester.27, test signing on. This is not a run with memory integrity on, because VBS does not start on unit A. It says nothing about the driver signature, because the driver is test-signed. The output does not list which drivers the tool scanned or which checks it applied"
+    evidence: "[HVCI scan](../evidence/windows/2026-10-11-hvci-scan/README.md)"
+    edges:
+      - {"type": "supports", "to": "M13"}
+      - {"type": "supports", "to": "M14"}

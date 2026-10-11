@@ -28,7 +28,9 @@ The gate (offline, no network, nothing is built):
   - the SHA-256 of each source file is the recorded one, a data file is its blob byte for byte, and a recorded
     Authenticode digest is the digest of the source file;
   - with --package, each packaged copy is its source byte for byte, a re-signed file has the recorded Authenticode
-    digest, and only an entry with "release_edits": "<what the release changes>" may differ otherwise.
+    digest, and only an entry with "release_edits": "<what the release changes>" may differ otherwise;
+  - each text of "sources" that a lab tool reads as data (PARSED_SOURCES) starts with "bc250-win <commit>", that
+    commit is the build commit of its payload row, and the kmd_abi of the KMD is BC250_KMD_VERSION at it.
 
 Usage:
   provenance.py check --sources release-sources.json --root <BC250_ROOT> --repo <recipe repository>
@@ -49,6 +51,14 @@ HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9A-F]{64}$")
 PLACEHOLDER = re.compile(r"\{([a-z_]+)(?::([^}]+))?\}")
 SIMPLE_PLACEHOLDERS = {"src", "out", "root"}
+# The texts of `sources` that a lab tool reads as data, each with the payload row whose build it must name.
+# scratch/m15/native-caps001/release-baseline.py (the pin-baseline arm of the train validation) takes the commit at
+# the start of sources.kmd with re.match(r'bc250-win ([0-9a-f]{8,40})\b'), reads BC250_KMD_VERSION of
+# driver/kmd/bc250kmd_escape.h at that commit, and refuses a manifest whose kmd_abi differs from it. Round 9 of
+# tester.27 put a sentence in front of that commit, and the arm refused the installed package on the lab.
+PARSED_SOURCES = {"kmd": "payload/kmd/bc250kmd.sys"}
+SOURCE_COMMIT = re.compile(r"bc250-win ([0-9a-f]{8,40})\b")
+KMD_VERSION = re.compile(r"^#define BC250_KMD_VERSION (0x[0-9A-Fa-f]{8})u", re.M)
 
 
 def git(cwd, *args, binary=False):
@@ -375,7 +385,43 @@ def check(sources_path, root, repo, package=None):
                 if kind == "tool" and arg:
                     continue
                 errors.append(f"{where}: argument {a!r} has an unknown placeholder {m.group(0)}")
+    sources_ok(sources, recipe_repo, repos, errors)
     return errors, rows, counts
+
+
+def sources_ok(sources, recipe_repo, repos, errors):
+    """Each text of PARSED_SOURCES starts with 'bc250-win <commit>', the commit is the build commit of its payload
+    row, and for the KMD the manifest's kmd_abi is BC250_KMD_VERSION at that commit. A payload without the row
+    has nothing for the lab tool to read."""
+    texts = sources.get("sources") if isinstance(sources.get("sources"), dict) else {}
+    for key, row_path in PARSED_SOURCES.items():
+        row = next((f for f in sources.get("files", []) if f.get("path") == row_path), None)
+        if row is None:
+            continue
+        where = f"sources.{key}"
+        text = texts.get(key)
+        found = SOURCE_COMMIT.match(text) if isinstance(text, str) else None
+        if not found:
+            errors.append(f"{where}: must start with 'bc250-win <commit>' (release-baseline.py reads the commit there "
+                          f"with re.match), and it starts {str(text)[:48]!r}")
+            continue
+        built = row.get("built_from") if isinstance(row.get("built_from"), dict) else {}
+        commit = built.get("commit")
+        if built.get("repo") != recipe_repo or not isinstance(commit, str) or not commit.startswith(found.group(1)):
+            errors.append(f"{where}: names bc250-win {found.group(1)[:8]}, but {row_path} is built from "
+                          f"{built.get('repo')} {str(commit)[:8]}")
+            continue
+        if key != "kmd":
+            continue
+        checkout = repos.find(recipe_repo, commit)
+        if checkout is None:
+            continue  # the built_from check of the row already says that the commit is in no checkout
+        code, header = git(checkout, "show", f"{commit}:driver/kmd/bc250kmd_escape.h")
+        versions = KMD_VERSION.findall(header) if code == 0 else []
+        abi = "0x" + versions[0][2:].upper() if len(versions) == 1 else None
+        if abi is None or abi != str(sources.get("kmd_abi")):
+            errors.append(f"{where}: kmd_abi {sources.get('kmd_abi')} is not BC250_KMD_VERSION {abi} of "
+                          f"driver/kmd/bc250kmd_escape.h at {commit[:8]}")
 
 
 def main():

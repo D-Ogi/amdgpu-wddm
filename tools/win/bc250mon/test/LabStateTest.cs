@@ -539,8 +539,17 @@ static class LabStateTest
         rows = HealthRows(Health(15, 9, 1, 400, 5, 1));
         Check(LevelOf(rows, "Start health") == Level.Error && Value(rows, "Start health").Contains("changed in this session"),
               "a generation change inside a session is red: every number taken before it is suspect");
-        Check(LevelOf(HealthRows(Health(15, 3, 9, 400, 3, 1)), "Start health") == Level.Error,
-              "an epoch change is red as well");
+        // The 2026-10-11 lab: gen 28360456 kept, epoch 5 -> 13 from W3's mode changes, and the row stayed red
+        // until the next boot. A newer epoch of the same start is a note, not an alarm.
+        rows = HealthRows(Health(15, 3, 9, 400, 3, 1));
+        Check(LevelOf(rows, "Start health") == Level.Good &&
+              Value(rows, "Start health").Contains("epoch +8 since logon") &&
+              !Value(rows, "Start health").Contains("changed in this session"),
+              "an epoch change of the same start keeps the level and says the count: " + Value(rows, "Start health"));
+        Check(LevelOf(HealthRows(Health(15, 3, 9, 40000, 3, 1)), "Start health") == Level.Warn,
+              "an epoch change does not hide a stall");
+        Check(Health(15, 9, 4, 400, 5, 1).EpochsSinceFirst == 0,
+              "a new generation is not counted as epochs: it is the red case above");
         Check(!Health(15, 3, 1, 400, 0, 0).IdentityChanged, "before the first identity nothing has changed");
         // start_health.c returns ~0ull while nothing has completed, and HealthInvalidate zeroes the record at
         // every visibility or mode change. Printed as an age that read "18446744073709552 s ago", and on the
@@ -695,7 +704,7 @@ static class LabStateTest
         rows = GuardRows(noDpm, x);
         Check(LevelOf(rows, "Parameters") == Level.Error && Value(rows, "Parameters").Contains("DpmMode absent, so 0"),
               "an absent DpmMode is fixed-lab, which is red for a latched gate: " + Value(rows, "Parameters"));
-        Check(MeasurementGuardRules.AbsentDefault("CuMode") == 24 && MeasurementGuardRules.AbsentDefault("DpmMaxMHz") == 1500 &&
+        Check(MeasurementGuardRules.AbsentDefault("CuMode") == 24 && MeasurementGuardRules.AbsentDefault("DpmMaxMHz") == 2000 &&
               MeasurementGuardRules.AbsentDefault("EnableGpuSubmit") == 0,
               "the absent defaults come from the driver's own readers");
         Check(MeasurementGuardRules.AbsentDefault("SomethingNobodyKnows") == null,

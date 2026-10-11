@@ -1,0 +1,19 @@
+arm rr-3b-d-noasm clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=61000 ready=1
+arm rr-3b-d-noasm start utc 2026-10-09T22:42:35Z
+arm rr-3b-d-noasm dir C:\BC250\tmp\m16-hip3b-noasm
+arm rr-3b-d-noasm command llama-bench.exe -m C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4
+arm rr-3b-d-noasm bound 170 s
+arm rr-3b-d-noasm argv -m | C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf | -p | 512 | -n | 128 | -ngl | 99 | -r | 1 | -t | 4
+| | model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| | ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+! ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+!   Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+! ggml_cuda_compute_forward: MUL_MAT failed
+! ROCm error: this build does not support the operation
+!   current device: 0, in function ggml_cuda_compute_forward at <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:2508
+!   err
+! <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
+arm rr-3b-d-noasm exit -1073740791 after 3.1 s
+arm rr-3b-d-noasm stdout C:\BC250\tmp\m16-hip3b-noasm\rr-3b-d-noasm-20261009T224235Z.out.txt (2 lines), stderr C:\BC250\tmp\m16-hip3b-noasm\rr-3b-d-noasm-20261009T224235Z.err.txt (7 lines)
+arm rr-3b-d-noasm clock after : clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=61125 ready=1
+arm rr-3b-d-noasm end

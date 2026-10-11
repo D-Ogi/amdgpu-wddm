@@ -1,0 +1,403 @@
+{
+  "omitted": [
+    "collect-console.txt",
+    "plug.txt",
+    "probe-before.txt"
+  ],
+  "files": [
+    {
+      "file": "raw/artifact-hashes-after.txt",
+      "source_sha256": "dac7f327e503ef59376858b70022bb502f205da0cb155c387db9e3bea2ade4c2",
+      "export_sha256": "dac7f327e503ef59376858b70022bb502f205da0cb155c387db9e3bea2ade4c2",
+      "bytes": 4622,
+      "redactions": []
+    },
+    {
+      "file": "raw/artifact-hashes-before.txt",
+      "source_sha256": "b0882022d262d2bbccf4a6477ed129eabbe7b616b98988bd67028cb3af7b1ae8",
+      "export_sha256": "b0882022d262d2bbccf4a6477ed129eabbe7b616b98988bd67028cb3af7b1ae8",
+      "bytes": 3230,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3a-threads-batch0.txt",
+      "source_sha256": "af61ce9de0658c3481fe01747cd17012eff787583d9252984af3994dffdbf219",
+      "export_sha256": "af61ce9de0658c3481fe01747cd17012eff787583d9252984af3994dffdbf219",
+      "bytes": 1807,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3a-threads-build1.txt",
+      "source_sha256": "d3d2b83f61bbce3dd9a6f280df78769dbfbf18ddc2edecdf0050df12fb07c0b1",
+      "export_sha256": "d3d2b83f61bbce3dd9a6f280df78769dbfbf18ddc2edecdf0050df12fb07c0b1",
+      "bytes": 1860,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3a-threads-def.txt",
+      "source_sha256": "9a338babe359b20969487ca73d3494e5167454d554b8a10ddab461625ba91f1b",
+      "export_sha256": "9a338babe359b20969487ca73d3494e5167454d554b8a10ddab461625ba91f1b",
+      "bytes": 1722,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3a-vadd.txt",
+      "source_sha256": "81508e354f79b5d324cae8d979a27fe730837aa2b1c0d8193df9ff62a1766197",
+      "export_sha256": "81508e354f79b5d324cae8d979a27fe730837aa2b1c0d8193df9ff62a1766197",
+      "bytes": 1224,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3b-a-gemm.txt",
+      "source_sha256": "21adef7ffa3c558bdaf8aa1786ec67fbf9c42496ba37b10055dcef86ca272209",
+      "export_sha256": "21adef7ffa3c558bdaf8aa1786ec67fbf9c42496ba37b10055dcef86ca272209",
+      "bytes": 3488,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3b-b-hip-log.txt",
+      "source_sha256": "14013696589527033aa548b2a2bb0d0dd038bc5d701c070b6b8d1335c044bff9",
+      "export_sha256": "c128ba68c238b3470e86e0b75fdf3dde9747844b47e831e3ae592a8aa43ff58b",
+      "bytes": 2046,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/console-rr-3b-b-hip.txt",
+      "source_sha256": "a1b2a145cbb1907b5e24a6be06a43f447b757e255857039c581826a6237ab5a9",
+      "export_sha256": "a965874de0c08738e530512f3557c22b3464155f1708826df1e4984053ed2534",
+      "bytes": 1506,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/console-rr-3b-b-vk.txt",
+      "source_sha256": "f9b4604a6e491d7305d8c59aaacd2bb7f6eb023c0363d6b399c0c49aa22220a6",
+      "export_sha256": "f9b4604a6e491d7305d8c59aaacd2bb7f6eb023c0363d6b399c0c49aa22220a6",
+      "bytes": 6053,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3b-c-hip-log.txt",
+      "source_sha256": "039051e5108f68cc9f0b3d9136f0097d7059abc7dadd93b74f9b8c2e3eb59bd9",
+      "export_sha256": "330819f8c74b166e451f34b36fc0a3439e37491c6764df86c43adc603e5e3591",
+      "bytes": 2219,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/console-rr-3b-c-hip.txt",
+      "source_sha256": "1d2d532e0d673be6550936152acaa15be6fc36b515bc1bb048e370111f31de24",
+      "export_sha256": "ce1c4c4365dea4bf0b8b1760e900e92fb73db91ffdd736da8622043ecda012a0",
+      "bytes": 1742,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/console-rr-3b-c-vk.txt",
+      "source_sha256": "e132cc5d7b6daa5e25ba763193d50ebc8a00e0f417556296c9e5682eabf26d3e",
+      "export_sha256": "e132cc5d7b6daa5e25ba763193d50ebc8a00e0f417556296c9e5682eabf26d3e",
+      "bytes": 7712,
+      "redactions": []
+    },
+    {
+      "file": "raw/console-rr-3b-d-noasm-log.txt",
+      "source_sha256": "c376459b672e357afd668d717e32ef2e3a6f5ee0e928a186edf7bd49b266a22c",
+      "export_sha256": "de4a1e02a868fca944c07dc0317c31a6cd915d445936c8cd6334303d82b55b1b",
+      "bytes": 2181,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/console-rr-3b-d-noasm.txt",
+      "source_sha256": "18d470b09160aeae86e2f07fbc9397a98ae642508a91a4ebe11745c5f33b24d9",
+      "export_sha256": "5d8cc91751a5b31f13a18b7519b9ce47b0d9133382726f9a850a8dbc87a1c66b",
+      "bytes": 1587,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/kmdlog-after3a-console.txt",
+      "source_sha256": "61e3d18e90b67e392ad177c1290209b6633b7fe78527437fcd483b41e4cd6291",
+      "export_sha256": "61e3d18e90b67e392ad177c1290209b6633b7fe78527437fcd483b41e4cd6291",
+      "bytes": 2848,
+      "redactions": []
+    },
+    {
+      "file": "raw/kmdlog-before-console.txt",
+      "source_sha256": "3689baf3cd42422df87e4ad4b1aeff32d4d355c650effc9a4f431c14a74d52a4",
+      "export_sha256": "3689baf3cd42422df87e4ad4b1aeff32d4d355c650effc9a4f431c14a74d52a4",
+      "bytes": 2670,
+      "redactions": []
+    },
+    {
+      "file": "raw/kmdlog-final-console.txt",
+      "source_sha256": "de925bee3a111437ae3cb5ee2a73e573de0942ca9878deacc2f98151f36612a6",
+      "export_sha256": "de925bee3a111437ae3cb5ee2a73e573de0942ca9878deacc2f98151f36612a6",
+      "bytes": 2784,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-threads-batch0-20261009T224000Z.err.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-threads-batch0-20261009T224000Z.out.txt",
+      "source_sha256": "ee7bf53a24df7282bc74a65443bb30c0b0c3e0b9546300939b3eca9ab214df20",
+      "export_sha256": "ee7bf53a24df7282bc74a65443bb30c0b0c3e0b9546300939b3eca9ab214df20",
+      "bytes": 845,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-threads-build1-20261009T224014Z.err.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-threads-build1-20261009T224014Z.out.txt",
+      "source_sha256": "ba36cf2746bb710e94ae50b18dd509bd63505d51aee5bf06de80109359bda1c6",
+      "export_sha256": "ba36cf2746bb710e94ae50b18dd509bd63505d51aee5bf06de80109359bda1c6",
+      "bytes": 845,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-threads-def-20261009T223944Z.err.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-threads-def-20261009T223944Z.out.txt",
+      "source_sha256": "ea60adcf49d4f9c1615d26d0e25e10dcfee8542b6672d911edb93ae2cf73a507",
+      "export_sha256": "ea60adcf49d4f9c1615d26d0e25e10dcfee8542b6672d911edb93ae2cf73a507",
+      "bytes": 844,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-vadd-20261009T223929Z.err.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3--rr-3a-vadd-20261009T223929Z.out.txt",
+      "source_sha256": "7681f60d4ea4510d05658cd97bcea3fd6e8f956648fc1d9fd694aa0bff03ee45",
+      "export_sha256": "7681f60d4ea4510d05658cd97bcea3fd6e8f956648fc1d9fd694aa0bff03ee45",
+      "bytes": 523,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--hip-64.txt",
+      "source_sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5",
+      "export_sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5",
+      "bytes": 3,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-a-gemm-20261009T224250Z.err.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-a-gemm-20261009T224250Z.out.txt",
+      "source_sha256": "a763d6735bd1d5b57519e762ee181e4f8b72e1c4be683278280878f0376dfdd8",
+      "export_sha256": "a763d6735bd1d5b57519e762ee181e4f8b72e1c4be683278280878f0376dfdd8",
+      "bytes": 2714,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-b-hip-20261009T224159Z.err.txt",
+      "source_sha256": "04d8e3207c134b4012a7d2f930aafd1400ef5b0e1d4a38b58ee949df59b46f44",
+      "export_sha256": "3342b8307e37d7df7ab63465d3f3c5119d9b57617422bd5097ada1529bf9c621",
+      "bytes": 391,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-b-hip-20261009T224159Z.out.txt",
+      "source_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "export_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "bytes": 264,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-b-hip-log-20261009T224044Z.err.txt",
+      "source_sha256": "d32952989f2d539e8b16a8a74b55f67fbcf8cd167f08db0d332425cfa70ce02d",
+      "export_sha256": "3fb07f9997ffc445a07a11d5149f437cbedf4b0fd714219f347b02f7510c6676",
+      "bytes": 765,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-b-hip-log-20261009T224044Z.out.txt",
+      "source_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "export_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "bytes": 264,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-c-hip-20261009T224220Z.err.txt",
+      "source_sha256": "cd545eb9d40eca8227c62c58d9a152555bd1bff60856709fc040fa12f48561db",
+      "export_sha256": "c68f59da3ac5bfb08d45bd9394e6b3839219430110973b2efdec45182d2cc5ab",
+      "bytes": 729,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-c-hip-20261009T224220Z.out.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-c-hip-log-20261009T224116Z.err.txt",
+      "source_sha256": "6eb4326503235d5501d92021b14d2d08d36ac37ee0ddf65cce5e45f33b014bde",
+      "export_sha256": "940374cd69a12d4346878c4b7fb1d0bc7d70bb4e62330a668d4400eae19579ec",
+      "bytes": 1106,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-hip3b--rr-3b-c-hip-log-20261009T224116Z.out.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b-noasm--rr-3b-d-noasm-20261009T224235Z.err.txt",
+      "source_sha256": "51f664c62c78cf2a352785e49ce3c666ac1c42814869bcefdf77a426ca47b607",
+      "export_sha256": "2d644960b3bdf9c29af1ea0c00cf96b273c94645b6e4e2d6fb767402a6982b4e",
+      "bytes": 428,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-hip3b-noasm--rr-3b-d-noasm-20261009T224235Z.out.txt",
+      "source_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "export_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "bytes": 264,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-hip3b-noasm--rr-3b-d-noasm-log-20261009T224132Z.err.txt",
+      "source_sha256": "50cdcd1e188865aca37b06ea2f4c130ffa23b180e7065dba9c3f1092eea52919",
+      "export_sha256": "7ebf06225332552dc7aed0ebafdf89a802df8634d1625963056ba6c59fec018a",
+      "bytes": 924,
+      "redactions": [
+        "Local compiler source-root path redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-hip3b-noasm--rr-3b-d-noasm-log-20261009T224132Z.out.txt",
+      "source_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "export_sha256": "a9549a66213485523c066ab1d9e9e6b81d5977ad38e2506f19982d65ecc916b6",
+      "bytes": 264,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-perf--kmd-rr-after3a.txt",
+      "source_sha256": "c03ef4664156a7e91f44e6453066404b4b5929ead7f4439bcdae788a30d1d400",
+      "export_sha256": "ce1a143bf187a1524b07c34f087333e837dd951e8a1479ef7528144165a28a7e",
+      "bytes": 169749,
+      "redactions": [
+        "Device interface instance line redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-perf--kmd-rr-before.txt",
+      "source_sha256": "116d5a488b41407fc493d711ecfc8a3b7d8da15965cb4bcdd1a3ec1951da6ecb",
+      "export_sha256": "dc24af2f03398af3d156321fc53d4af15ff1e7a44d340292e8a90f8504cda758",
+      "bytes": 173139,
+      "redactions": [
+        "Device interface instance line redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-perf--kmd-rr-final.txt",
+      "source_sha256": "904fbc800af6ea9691b0ea8ac411ebc8496620bbda58930a8042f191e35959e1",
+      "export_sha256": "8e699647d5fe4062cbe5c5d343f7360ef3892d8d15826a82c7f30f3e950e794e",
+      "bytes": 165016,
+      "redactions": [
+        "Device interface instance line redacted"
+      ]
+    },
+    {
+      "file": "raw/m16-vk--rr-3b-b-vk-20261009T224326Z.err.txt",
+      "source_sha256": "20cd16af53cb62586d41546e8f1eb2b026aa40b8cf65f7a4099efad2e80f8f82",
+      "export_sha256": "20cd16af53cb62586d41546e8f1eb2b026aa40b8cf65f7a4099efad2e80f8f82",
+      "bytes": 4425,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-vk--rr-3b-b-vk-20261009T224326Z.out.txt",
+      "source_sha256": "dc48a9042f700cef5b5a17347f20ce18d8dce2847c95bbd5f5f3e26385c5a482",
+      "export_sha256": "dc48a9042f700cef5b5a17347f20ce18d8dce2847c95bbd5f5f3e26385c5a482",
+      "bytes": 558,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-vk--rr-3b-c-vk-20261009T224348Z.err.txt",
+      "source_sha256": "1c85176ac3902027625a6a9dbf68f2e695fa2c244713207e39c16dd55dee9766",
+      "export_sha256": "1c85176ac3902027625a6a9dbf68f2e695fa2c244713207e39c16dd55dee9766",
+      "bytes": 6187,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-vk--rr-3b-c-vk-20261009T224348Z.out.txt",
+      "source_sha256": "59a108030f1a99f71ba01393c046bd86d0f58ccbdd1580ecf4fd52b7cf0b3cd0",
+      "export_sha256": "59a108030f1a99f71ba01393c046bd86d0f58ccbdd1580ecf4fd52b7cf0b3cd0",
+      "bytes": 248,
+      "redactions": []
+    },
+    {
+      "file": "raw/m16-vk--vk-64.txt",
+      "source_sha256": "00d338aec0070bef86cc8d7d113cbb2d874b8082892e0edf08dc307d3d55100e",
+      "export_sha256": "00d338aec0070bef86cc8d7d113cbb2d874b8082892e0edf08dc307d3d55100e",
+      "bytes": 251,
+      "redactions": []
+    },
+    {
+      "file": "raw/state-00-before.txt",
+      "source_sha256": "dc96d501a72d5161e1bbff79c954c4a4a2010cfc11a12714f32bf7eda684964c",
+      "export_sha256": "dc96d501a72d5161e1bbff79c954c4a4a2010cfc11a12714f32bf7eda684964c",
+      "bytes": 1833,
+      "redactions": []
+    },
+    {
+      "file": "raw/state-99-after.txt",
+      "source_sha256": "f8de0e91e02932d0fcd9c4a8ffced300c2b2d8f15f85885279db87e70be7382d",
+      "export_sha256": "f8de0e91e02932d0fcd9c4a8ffced300c2b2d8f15f85885279db87e70be7382d",
+      "bytes": 1832,
+      "redactions": []
+    },
+    {
+      "file": "raw/state-diff.txt",
+      "source_sha256": "748ebad877dfe656402601bba459c94670c7f89931c3b2d022fa218748490856",
+      "export_sha256": "748ebad877dfe656402601bba459c94670c7f89931c3b2d022fa218748490856",
+      "bytes": 208,
+      "redactions": []
+    }
+  ]
+}

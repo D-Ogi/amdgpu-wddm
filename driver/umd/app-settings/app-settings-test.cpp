@@ -268,7 +268,11 @@ void limiter_tests() {
     CHECK(as::limiter_target(1800,100,last)==0 && last==1800);      // later than an interval: restart at now
     CHECK(as::limiter_target(1850,100,last)==1900 && last==1900);
     CHECK(as::limiter_target(10,100,last)==0 && last==10);          // a clock that went back restarts
-    // The real wait: 30 frames at 100 per second take at least 0.28 s (29 intervals after the first frame).
+    // The real wait: 30 frames at 100 per second take at least 0.28 s (29 intervals after the first frame). The number
+    // of waits depends on the scheduler: a thread that wakes more than one interval late restarts the clock
+    // (limiter_target), and on a loaded host every second frame does that (15 waits in each of 40 runs with 28 busy
+    // threads on 24 logical processors, 2026-10-11; that failed a release rebuild). So the count only shows that the
+    // timer path ran, and the upper bound only catches a wait that does not end.
     as::FrameLimiter limiter;
     LARGE_INTEGER f{},a{},b{};QueryPerformanceFrequency(&f);QueryPerformanceCounter(&a);
     for(int i=0;i<30;++i)limiter.frame(100);
@@ -276,8 +280,8 @@ void limiter_tests() {
     const double seconds=double(b.QuadPart-a.QuadPart)/double(f.QuadPart);
     std::printf("limiter: 30 frames at 100/s in %.3f s, %llu waits\n",seconds,
         static_cast<unsigned long long>(limiter.waits()));
-    CHECK(seconds>=0.28 && seconds<1.5);
-    CHECK(limiter.frames()==30 && limiter.waits()>=25);
+    CHECK(seconds>=0.28 && seconds<5.0);
+    CHECK(limiter.frames()==30 && limiter.waits()>=1);
     as::FrameLimiter off;off.frame(0);CHECK(off.frames()==0);
 }
 

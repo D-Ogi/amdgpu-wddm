@@ -14,6 +14,7 @@
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_vector_types.h>
+#include <hip/hip_float_conversion.h>
 
 #include <stdint.h>
 
@@ -59,7 +60,8 @@ struct __hip_bfloat16 {
   __hip_bfloat16 &operator=(const __hip_bfloat16 &) = default;
 
   BC250_BF16_HD __hip_bfloat16(float v) : data(__bc250_float_to_bf16(v)) {}
-  BC250_BF16_HD __hip_bfloat16(double v) : data(__bc250_float_to_bf16((float)v)) {}
+  BC250_BF16_HD __hip_bfloat16(double v)
+      : data(__bc250_double_to_float16_bits(v, 7u, 127)) {}
   BC250_BF16_HD __hip_bfloat16(const __hip_bfloat16_raw &r) : data(r.x) {}
 
   BC250_BF16_HD operator float() const { return __bc250_bf16_to_float(data); }
@@ -70,11 +72,11 @@ struct __hip_bfloat16 {
   }
 };
 
-struct __hip_bfloat162_raw {
+struct __attribute__((aligned(4))) __hip_bfloat162_raw {
   unsigned short x, y;
 };
 
-struct __hip_bfloat162 {
+struct __attribute__((aligned(4))) __hip_bfloat162 {
   __hip_bfloat16 x, y;
 
   __hip_bfloat162() = default;

@@ -3,6 +3,7 @@
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "wave_snapshot.h"
+#include "hip_journal.h"
 #include "paging_journal.h"
 #include "log_rate.h"
 #include "display_timing.h"
@@ -437,6 +438,9 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     D3DDDI_ESCAPEFLAGS softwareRead = {0};
     ULONG command;
 
+    if (Escape->PrivateDriverDataSize >= 8 && data != NULL && data->Magic == BC250_ESCAPE_MAGIC &&
+        data->Command == BC250_HIP_JOURNAL_COMMAND)
+        return HipJournalEscape(device, Escape);
     if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE) || data == NULL || data->Magic != BC250_ESCAPE_MAGIC)
         return STATUS_INVALID_PARAMETER;
     // GET_LOG and GET_PAGING_JOURNAL with NoAdapterSynchronization alone (0.7.184.1): driver-image state only, so

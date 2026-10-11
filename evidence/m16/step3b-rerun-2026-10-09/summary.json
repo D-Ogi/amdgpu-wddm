@@ -1,0 +1,195 @@
+{
+  "scope": "Historical trial on 2026-10-09; no new lab run",
+  "arms": [
+    {
+      "arm": "rr-3a-threads-batch0",
+      "source": "raw/console-rr-3a-threads-batch0.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [
+        "BC250_HIP_BATCH=0"
+      ],
+      "command": "hipthreads.exe --wait-total 20000 --threads 4 --iterations 4 --spin 2000000 --grid 256",
+      "wait_ms": 256.6,
+      "other_operations": 13,
+      "parallel_ms": 587.1,
+      "serialised_ms": 591.6,
+      "parallel_over_serialised": 0.992393509127789
+    },
+    {
+      "arm": "rr-3a-threads-build1",
+      "source": "raw/console-rr-3a-threads-build1.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [
+        "BC250_HIP_BATCH=0",
+        "BC250_HIP_BARRIER=full"
+      ],
+      "command": "hipthreads.exe --wait-total 20000 --threads 4 --iterations 4 --spin 2000000 --grid 256",
+      "wait_ms": 266.7,
+      "other_operations": 13,
+      "parallel_ms": 583.7,
+      "serialised_ms": 591.8,
+      "parallel_over_serialised": 0.9863129435620144
+    },
+    {
+      "arm": "rr-3a-threads-def",
+      "source": "raw/console-rr-3a-threads-def.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 3.5,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "hipthreads.exe --wait-total 20000 --threads 4 --iterations 4 --spin 2000000 --grid 256",
+      "wait_ms": 255.3,
+      "other_operations": 13,
+      "parallel_ms": 587.1,
+      "serialised_ms": 570.7,
+      "parallel_over_serialised": 1.028736639214999
+    },
+    {
+      "arm": "rr-3a-vadd",
+      "source": "raw/console-rr-3a-vadd.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 3.7,
+      "bound_s": 120,
+      "environment_assignments_logged": [],
+      "command": "vadd.exe --expect-compute --wait-total 10000"
+    },
+    {
+      "arm": "rr-3b-a-gemm",
+      "source": "raw/console-rr-3b-a-gemm.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 8.2,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "gemm_check.exe --wait-total 20000"
+    },
+    {
+      "arm": "rr-3b-b-hip-log",
+      "source": "raw/console-rr-3b-b-hip-log.txt",
+      "exit_code": -1073740791,
+      "wrapper_wall_s": 6.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [
+        "BC250_HIP_LOG=1"
+      ],
+      "command": "llama-bench.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4"
+    },
+    {
+      "arm": "rr-3b-b-hip",
+      "source": "raw/console-rr-3b-b-hip.txt",
+      "exit_code": -1073740791,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "llama-bench.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4"
+    },
+    {
+      "arm": "rr-3b-b-vk",
+      "source": "raw/console-rr-3b-b-vk.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "llama-bench.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4"
+    },
+    {
+      "arm": "rr-3b-c-hip-log",
+      "source": "raw/console-rr-3b-c-hip-log.txt",
+      "exit_code": -1073740791,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [
+        "BC250_HIP_LOG=1"
+      ],
+      "command": "llama-completion.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -ngl 99 -s 1234 --temp 0 -n 64 -no-cnv"
+    },
+    {
+      "arm": "rr-3b-c-hip",
+      "source": "raw/console-rr-3b-c-hip.txt",
+      "exit_code": -1073740791,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "llama-completion.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -ngl 99 -s 1234 --temp 0 -n 64 -no-cnv"
+    },
+    {
+      "arm": "rr-3b-c-vk",
+      "source": "raw/console-rr-3b-c-vk.txt",
+      "exit_code": 0,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "llama-completion.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -ngl 99 -s 1234 --temp 0 -n 64 -no-cnv"
+    },
+    {
+      "arm": "rr-3b-d-noasm-log",
+      "source": "raw/console-rr-3b-d-noasm-log.txt",
+      "exit_code": -1073740791,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [
+        "BC250_HIP_LOG=1"
+      ],
+      "command": "llama-bench.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4"
+    },
+    {
+      "arm": "rr-3b-d-noasm",
+      "source": "raw/console-rr-3b-d-noasm.txt",
+      "exit_code": -1073740791,
+      "wrapper_wall_s": 3.1,
+      "bound_s": 170,
+      "environment_assignments_logged": [],
+      "command": "llama-bench.exe -m C:\\BC250\\tmp\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4"
+    }
+  ],
+  "node0_last_summary": {
+    "before": {
+      "submitted": 1343416,
+      "completed": 1332129,
+      "timeouts": 0,
+      "refused": 0,
+      "soft_recovered": 0,
+      "source": "raw/m16-perf--kmd-rr-before.txt",
+      "lost_to_wrap": 30609,
+      "no_tdr_summary": true
+    },
+    "after3a": {
+      "submitted": 1343675,
+      "completed": 1332388,
+      "timeouts": 0,
+      "refused": 0,
+      "soft_recovered": 0,
+      "source": "raw/m16-perf--kmd-rr-after3a.txt",
+      "lost_to_wrap": 31050,
+      "no_tdr_summary": true
+    },
+    "final": {
+      "submitted": 1347336,
+      "completed": 1335856,
+      "timeouts": 0,
+      "refused": 0,
+      "soft_recovered": 0,
+      "source": "raw/m16-perf--kmd-rr-final.txt",
+      "lost_to_wrap": 31546,
+      "no_tdr_summary": true
+    }
+  },
+  "node0_submitted_delta": 3920,
+  "node0_completed_delta": 3727,
+  "unchanged_installed_state_lines": 24,
+  "hash_verifier_ok_rows": {
+    "before": 39,
+    "after": 39
+  },
+  "limits": [
+    "The wrapper samples every 3 seconds, so short wall times include observation delay.",
+    "Environments show logged assignments, not an exhaustive inherited process environment.",
+    "KMD snapshots contain wrap loss and do not prove a complete absence of transient faults.",
+    "Global node-0 counters are not attributed to a particular process.",
+    "The raw thread-client host-cost label is not a measurement of CPU-active time.",
+    "Artifact verifier rows contain short digest prefixes, not fresh full digests."
+  ]
+}

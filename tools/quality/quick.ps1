@@ -55,6 +55,8 @@ try {
  # This gate uses real ACL/DPAPI storage below Out, with no service, task or registry changes.
  Check 'system-tuning-journal' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning-journal.ps1" -Out "$Out\system-tuning-journal" }
  Check 'lab-runner-etw' { & pwsh -NoProfile -File "$repo\tools\win\lab-runner\etw\host-checks.ps1" }
+ # Windows PowerShell 5.1, the shell game-runtime.ps1 runs in on the lab: the channel before readiness, the intro skip.
+ Check 'lab-runner-intro' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-runner\intro-skip-check.ps1" }
  # The present-mode analyser of M15.14. Its fixtures are a kept excerpt of the composed baseline and dumper
  # texts the test writes itself; no .etl and no lab are needed. BC250_ETW_TEST_ETL adds the xperf path.
  Check 'present-mode' { & python "$repo\tools\win\etw\etw-present-mode-test.py" }
@@ -69,6 +71,7 @@ try {
  Check 'lab-emerg' { & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-emerg\parse-check.ps1" }
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
+ Check 'target-boot' { & python -m unittest discover -s "$repo\tools\win" -p "test_target*.py" }
  Check 'train-validate' { & python -m unittest discover -s "$repo\tools\win\train-validate" }
  Check 'gpu-timeline' { & python -m unittest discover -s "$repo\tools\win\gpu-timeline" -p 'test_*.py' }
  Check 'isa-xml' { & python -m unittest discover -s "$repo\tools\isa" }
@@ -118,6 +121,9 @@ try {
  Check 'wave-reader' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_wave.ps1" -Kits $Kits -Out "$Out\wave-reader" }
  Check 'wave-access' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_access.ps1" -Kits $Kits -Out "$Out\wave-access" }
  Check 'wave-recovery' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_recovery.ps1" -Kits $Kits -Out "$Out\wave-recovery" }
+ # Compile the retained HIP journal with host kernel primitives; the ownership mutation must fail an assertion.
+ Check 'hip-journal' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hip_journal.ps1" -Kits "$Kits" -Out "$Out\hip-journal" }
+ Check 'hip-journal-owner-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hip_journal.ps1" -Kits "$Kits" -Out "$Out\hip-journal-owner-control" -OmitProcessCheck -ExpectFailure }
  # BD-114: the private submit watchdog's budget, its progress window, its head stamp and the aborted-fence
  # answer, with the source checks that hold wddm.c to the same decisions (the host test cannot compile it).
  Check 'recovery-protocol' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_recovery_protocol.ps1" -Root $Workspace -Out "$Out\recovery-protocol" }
