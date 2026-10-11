@@ -1,4 +1,4 @@
-# wsi-dxgi - the two harnesses behind the DLL shadowing and present-route evidence
+# wsi-dxgi - the harnesses behind the DLL shadowing and present-route evidence, and the share cells
 
 A Vulkan WSI on Windows loads `DXGI.DLL`, `DComp.DLL` and `D3D11.DLL` by full System32 path. A game that
 ships DXVK or vkd3d-proton has its own `dxgi.dll` next to the executable. The Windows loader resolves a
@@ -13,7 +13,10 @@ no window, they start nothing resident, and they run on the development PC. The 
 |---|---|
 | `shadowtest.cpp` | The loader experiment: what a shadowed `dxgi.dll` reaches, and three candidate mitigations |
 | `presenttest.cpp` | The present route the WSI needs, run inside three simulated game directories |
-| `build.ps1` | Builds one or both harnesses from the NuGet kits |
+| `sharecell12.cpp` | The b27 cross-stack share cell: a D3D12 producer with a RADV consumer |
+| `sharecellvk.cpp` | The same pair the other way round: a RADV producer with a D3D12 consumer |
+| `sharecell-common.h` | What the two cells have in common: the pattern, the fence schedule, the loaders |
+| `build.ps1` | Builds the harnesses and the cells from the NuGet kits (`-Harness all`) |
 | `run-shadowtest.ps1` | Runs each `shadowtest` mode in its own process and writes a manifest |
 | `run-presenttest.ps1` | Runs each `presenttest` mode in its own process and writes a manifest |
 
@@ -23,6 +26,36 @@ a call reaches.
 
 The source files keep their exact bytes in this repository. `.gitattributes` holds them out of line-ending
 normalization, because the E56 manifests record their SHA-256 sums. `build.ps1` prints those sums.
+
+## The share cells
+
+The DXGI present route of the Vulkan WSI shares two kinds of object between RADV and our D3D12 shell. One is
+a D3D12 committed texture that RADV imports as `VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT`. The other
+is a RADV timeline semaphore that D3D12 opens as an `ID3D12Fence`
+(`VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT`). An audit of 2026-10-10 found that nothing had measured
+either of them in the direction the route uses: M802 measured a D3D12 producer with a D3D12 and a D3D11
+consumer, which is prerequisite coverage of the kernel driver's sharing. These two cells are the smallest
+thing that measures the pair, in both directions, over exactly those handle types.
+
+Each round writes a pattern whose every texel is a function of its own coordinates and of the round. A stride
+misread therefore appears as a diagonal, a channel-order error appears in one byte of four, and a stale image
+appears as the wrong round constant. The producer owns the odd values of the shared timeline and the consumer
+the even ones, so a value that arrives on the wrong side cannot be explained away. The consumer waits on its
+own queue and not on the CPU, because the route waits that way too. The timeline CPU wait is bounded at 2000 ms. The
+same image, allocation and timeline serve every round, which is the image reuse the route does per frame.
+
+For a shared fence, each cell prints the completed value in decimal and hex, the creation flags, and the
+device status before and after the open and after a queue signal. The fresh value is read through both APIs.
+The fence's device and the queue's device must use the same adapter. Every D3D12 HRESULT is printed,
+including enumeration results. An `UNSAFE` line names a timed-out Vulkan wait or a lost device. The lab
+runner owns the process deadline: queue and device idle calls have no timeout argument.
+
+Set `AMDGPU_WDDM_LOG` to a file and `AMDGPU_WDDM_DDI_TRACE=1` for each cell to record entry and exit of
+the shell's bound DDI slots. A missing failure line alone does not locate a refusal above the driver.
+
+`--selftest` drives the pure rules with no device of either stack, and `--negative-control` inverts every
+case. `build.ps1` runs both for each cell. Exit codes: 0 every case passed, 1 a case failed, 2 the arguments
+were wrong, 3 this machine offers no device of one of the two stacks, which is a skip and not a pass.
 
 ## The shadowtest modes
 
@@ -91,3 +124,93 @@ measured here is the vsync pace of that machine. None of it is evidence about ou
 The import and export offsets that M794 records come from Microsoft binaries and can move with a Windows
 update. The WSI gate must read the bindings at run time. The listings behind those offsets stay outside this
 repository.
+
+### Fence origin control (BD-105)
+
+Both cells accept `--fence-origin radv|d3d12`. The `radv` option remains the default and preserves the
+RADV-export baseline. With `d3d12`, the cell creates a D3D12 fence with initial value 0 and
+`D3D12_FENCE_FLAG_SHARED`, exports an unnamed NT handle with `GENERIC_ALL`, and opens that
+same handle on the same D3D12 device. It records the created and reopened fence flags and
+values before Vulkan import. This is a separate D3D12-to-D3D12 classification control even
+if the subsequent Vulkan import fails. This adapter control expects `SHARED` on both fences.
+A successful control does not by itself prove the cause of the RADV-export failure.
+
+RADV then imports that handle permanently as `D3D12_FENCE` into a timeline semaphore. The
+application closes its NT handle after import on both success and failure. Import does not
+transfer ownership. The reopened D3D12 fence and the Vulkan semaphore remain alive through
+the existing odd/even signal, wait and image checks. The texture path and wait bounds stay
+unchanged. Use a semaphore implementation with the owned-import fix from Mesa fork commit
+`50787ae9` or its descendant. The old importer retained the caller's handle without a duplicate.
+that known defect can invalidate this control after the application correctly closes its handle.
+
+The host selftest has 61 checks at default dimensions. It covers both origin options,
+refuses missing/unknown origins, and invokes the production import wrapper with mocked
+callbacks. Both successful and failed imports must preserve the result, use a permanent
+handle-based D3D12 import, and close the caller handle exactly once after the import call.
+These checks do not prove cross-API synchronization. That requires the bounded lab cells.
+
+Contracts: [Vulkan Win32 semaphore import](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#vkImportSemaphoreWin32HandleKHR)
+(local Vulkan-Docs `01aaacd9`, synchronization.adoc 5033-5037 and 5087-5115), and
+[D3D12 CreateSharedHandle](https://learn.microsoft.com/windows/win32/api/d3d12/nf-d3d12-id3d12device-createsharedhandle)
+(local sdk-api-docs `a4fd3f7e`, parameters Access and pAttributes).
+
+### KMT replay and loaded runtime identity (BD-105 r7b)
+
+`sharecell12` automatically runs six diagnostic opens for either fence origin while the
+exporter's NT handle remains alive. It opens the adapter by the D3D12 device's LUID and
+creates a separate diagnostic KMT device. This is the same adapter, not the runtime's
+private KMT device. No diagnostic submission or wait occurs.
+
+The first pattern uses a fresh structure for each flag value: `0x483`, `0x83`, `0x3`.
+The second starts with one zeroed structure and retains its outputs across all three calls.
+Both force all attempts regardless of status. They do not reproduce the runtime's conditional
+retry policy. Each attempt records requested flags and the retained structure Flags field before and after the call.
+Flags is an input field, not a contracted output. Logs also include device, handle, engine affinity,
+raw NTSTATUS, synchronization handle and CPU/GPU mappings. `0x80` is NoGPUAccess.
+`0x400` is UnwaitCpuWaitersOnlyOnDestroy in the SDK 26100 definitions.
+
+Successful synchronization handles remain alive through both patterns, then each distinct
+handle is destroyed once. Failed calls do not grant ownership of their output fields.
+Zero or duplicate successful handles make ownership uncertain and emit `UNSAFE`.
+Unconfirmed synchronization-object, device or adapter cleanup also emits `UNSAFE`.
+Setup and cleanup failures fail the cell. Negative open statuses alone are diagnostic data.
+`sharecellvk` retains the ordinary cross-API test without this extra KMT device.
+
+Both clients identify the core module after device creation, before fence open and at exit.
+`GetModuleHandleW` and `GetModuleFileNameW` select the actual loaded `d3d12core.dll`.
+The witness prints its UTF-8 path and a streaming BCrypt SHA-256 of the backing file.
+It does not load a missing module. `identity=absent` or `identity=unavailable` prevents
+attribution to a particular runtime listing, but does not change the functional test result.
+`identity=ok` requires a complete file hash within the 128 MiB bound. This is not a hash
+of mapped process memory. The operator must compare the complete SHA-256 with the listing's image.
+
+The host controls use mock KMT functions only. They cover stale failure outputs, fresh and
+reused structures, successful zero handles, duplicate success, and setup or cleanup refusal.
+They also check Unicode conversion and the BCrypt SHA-256 known answer for `abc`.
+Module lookup and file-read failure paths have source review, not injected runtime coverage.
+Mock diagnostics are silent inside `--selftest`, which also runs before every GPU cell.
+The build gate rejects any `UNSAFE` or `INFO KMT` marker in that preamble. No real KMT device is opened by that mode.
+
+Contract: [D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmthk/ns-d3dkmthk-_d3dkmt_opensyncobjectfromnthandle2),
+SDK 10.0.26100.0 `d3dkmthk.h` 1695-1715. Compile-time checks pin size `0x58`, flags `+0xC`,
+CPU mapping `+0x18` and GPU mapping `+0x20` used by the exact runtime listing.
+
+### Native-fence feature query (BD-105 r7c)
+
+After successful D3D12 device creation, `sharecell12` opens a separate adapter handle by
+that device's LUID. Before any queue or fence work it optionally calls `D3DKMTIsFeatureEnabled`
+for `DXGK_FEATURE_NATIVE_FENCE` (37), then closes the adapter. No extra KMT device is created.
+The record includes raw NTSTATUS and all SDK result fields: Version, Value, Enabled,
+KnownFeature, SupportedByDriver, SupportedOnCurrentConfig and Reserved.
+
+Only `result_valid=1`, from a nonnegative NTSTATUS, permits interpretation of those fields.
+A failed query can leave dirty fields, which are printed as invalid. A missing export is
+`query=unavailable`, not disabled. Query and adapter-open failures are diagnostic only.
+Unconfirmed cleanup of an acquired adapter emits `UNSAFE` and fails the cell.
+The optional query is not required by the fence replay's export loader.
+
+Host controls cover missing exports, zeroed query inputs, dirty failed output, enabled and
+disabled results, distinct SDK bitfields, and adapter ownership on success or failure.
+The query structure has a compile-time 12-byte ABI check, with Result at offset 8.
+Contract: [D3DKMTIsFeatureEnabled](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmthk/nf-d3dkmthk-d3dkmtisfeatureenabled),
+SDK 10.0.26100.0 `d3dkmthk.h` 945-950 and `d3dukmdt.h` 2232-2247.
