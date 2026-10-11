@@ -502,6 +502,12 @@ before it compiles. The telemetry line needs a `bc250control.dll` that exports `
 `Bc250VideoMemory`, and the `CU` row needs one that also exports `Bc250CuMode`, which the DLL of 2026-09-30
 does not. Deploy the executable and the DLL together.
 
+Before the tests, `test-control-dll.ps1` reads the export table of the `-ControlDll` file and does not load the DLL.
+The build stops when the DLL is not x64, or when an entry point of a `[DllImport("bc250control.dll")]` in
+`src\*.cs` is not exported. The error names each missing entry point. On success the build prints how many
+imports it checked. On 2026-10-11 the lab overlay was built against the lab's DLL of 2026-10-06, and its fan row
+showed "no Bc250Hwmon" until the installed DLL replaced that copy.
+
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
 privileges" that runs it. To replace a running one, stop the process, overwrite the file and start the task
 again, so the new one lands back in the interactive session:
