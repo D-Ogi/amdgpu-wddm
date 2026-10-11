@@ -1,0 +1,29 @@
+Redaction record for this directory.
+
+One edit was made before the commit, and it is the only one:
+
+- identity.json carried the lab host name once, in its "Hostname" field. The name is replaced by
+  the placeholder <LAB-HOST>. Nothing else in that file was touched.
+
+What was left out of the directory, and why:
+
+- The supervisor transcripts (supervisor.json) and the numbered request files of each arm. They
+  repeat the lab host name in every remote call. The verdicts, the elapsed seconds and the
+  thermal samples of those transcripts are in summary.json, which carries no host name.
+- The run plans (cost-profile-plan-r5.json, cost-etw-plan-r5.json), for the same reason. Each is
+  also about 2.3 MB.
+- The ETW trace itself (gpu-B.etl), which is 138412032 bytes of binary. Its SHA-256 is in
+  etw-analysis/result.json and in the README.
+- Every binary: no DLL, no EXE and no model file. They are named by their SHA-256 in each arm's
+  arm.json.
+
+What these files do hold, and why it stays:
+
+- Working directories of the lab under C:\BC250\ and the installed path under
+  C:\Program Files\amdgpu-wddm\, which are paths of this project and carry no user name.
+- Process identifiers and QPC counter values of the measured run, which are per-boot values.
+- The absolute path of the ETL on the development PC, inside etw-analysis/result.json and
+  tracestats.txt, which is a path of this workspace.
+
+No lab network address, no host name, no MAC address, no SSID, no serial number and no secret is
+in this directory.

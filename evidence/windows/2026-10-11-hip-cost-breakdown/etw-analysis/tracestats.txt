@@ -1,0 +1,24 @@
+Number of Processors : 12
+CPU Speed            : 3194 MHz
+OS Version           : 10.00.00.00
+OS Build Number      : 22631
+Clock type           : PerfCounter
+Boot time            : 2026/10/11:05:33:03.5000000
+Native Pointer Size  : 8 (64bit)
+Start time (UTC)     : 2026/10/11:06:47:41.6286212
+End time (UTC)       : 2026/10/11:06:48:05.1145479  (+         0:00:00:23.4859267)
+Total # Lost Buffers : 0
+Total # Lost Events  : 0
+
+Number of Traces     : 1
+
+Trace name: P:\BC-250\scratch\hip-gpu-copy\cost-breakdown\lab-profile-2026-10-11\runs\hipcost-trace-gemma-hip-1dd8d5ee540a4406ab02827fef305588\etw\gpu-B.etl
+    Log file mode        : Circular
+    Pointer size         : 8 (64bit)
+    Start time (UTC)     : 2026/10/11:06:47:41.6286212
+    End time (UTC)       : 2026/10/11:06:48:05.1145479  (+         0:00:00:23.4859267)
+    Start time (Local)   : 2026/10/11:08:47:41.6286212
+    End time (Local)     : 2026/10/11:08:48:05.1145479
+    # Lost Buffers       : 0
+    # Lost Events        : 0
+
