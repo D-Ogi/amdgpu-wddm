@@ -1,0 +1,23 @@
+arm rr-3b-d-noasm-log clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=60750 ready=1
+arm rr-3b-d-noasm-log env BC250_HIP_LOG=1
+arm rr-3b-d-noasm-log start utc 2026-10-09T22:41:32Z
+arm rr-3b-d-noasm-log dir C:\BC250\tmp\m16-hip3b-noasm
+arm rr-3b-d-noasm-log command llama-bench.exe -m C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4
+arm rr-3b-d-noasm-log bound 170 s
+arm rr-3b-d-noasm-log argv -m | C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf | -p | 512 | -n | 128 | -ngl | 99 | -r | 1 | -t | 4
+| | model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| | ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+! amdhip64 [6812:6776] info log on, level 2 (info), interface 1.2
+! ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+!   Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+! amdhip64 [6812:6776] error bc250hsa: kernel _ZL9mul_mat_qIL9ggml_type2ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_ needs scratch, which this build does not program
+! amdhip64 [6812:6776] error hipLaunchKernel/dispatch_submit refuses kernel _ZL9mul_mat_qIL9ggml_type2ELi64ELb0EL9ggml_prec30EEvPKcPKiS5_S5_PfS6_PKf5uint3iiiiiS9_S9_iiiS9_S9_iiiS9_: not supported by this build (hipErrorNotSupported)
+! ggml_cuda_compute_forward: MUL_MAT failed
+! ROCm error: this build does not support the operation
+!   current device: 0, in function ggml_cuda_compute_forward at <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:2508
+!   err
+! <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
+arm rr-3b-d-noasm-log exit -1073740791 after 3.1 s
+arm rr-3b-d-noasm-log stdout C:\BC250\tmp\m16-hip3b-noasm\rr-3b-d-noasm-log-20261009T224132Z.out.txt (2 lines), stderr C:\BC250\tmp\m16-hip3b-noasm\rr-3b-d-noasm-log-20261009T224132Z.err.txt (10 lines)
+arm rr-3b-d-noasm-log clock after : clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=61000 ready=1
+arm rr-3b-d-noasm-log end

@@ -1,0 +1,23 @@
+arm rr-3b-b-hip-log clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=61125 ready=1
+arm rr-3b-b-hip-log env BC250_HIP_LOG=1
+arm rr-3b-b-hip-log start utc 2026-10-09T22:40:44Z
+arm rr-3b-b-hip-log dir C:\BC250\tmp\m16-hip3b
+arm rr-3b-b-hip-log command llama-bench.exe -m C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf -p 512 -n 128 -ngl 99 -r 1 -t 4
+arm rr-3b-b-hip-log bound 170 s
+arm rr-3b-b-hip-log argv -m | C:\BC250\tmp\models\tinyllama-1.1b-chat-v1.0.Q4_0.gguf | -p | 512 | -n | 128 | -ngl | 99 | -r | 1 | -t | 4
+| | model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| | ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+! amdhip64 [7304:5760] info log on, level 2 (info), interface 1.2
+! ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+!   Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+! amdhip64 [7304:5760] error the code object of kernel '_ZL10k_set_rowsIfx6__halfEvPKT_PKT0_PT1_xxxxxxxxxxxxxx5uint3S9_S9_S9_S9_' does not load: metadata note absent or unreadable
+! amdhip64 [7304:5760] error hipLaunchKernel refuses: the host stub names no kernel of a loaded code object (hipErrorInvalidImage)
+! ROCm error: the device code object cannot be used
+!   current device: 0, in function ggml_cuda_kernel_launch at <llama-source>/ggml/src/ggml-cuda/common.cuh:1721
+!   hipGetLastError()
+! <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
+arm rr-3b-b-hip-log exit -1073740791 after 6.1 s
+arm rr-3b-b-hip-log stdout C:\BC250\tmp\m16-hip3b\rr-3b-b-hip-log-20261009T224044Z.out.txt (2 lines), stderr C:\BC250\tmp\m16-hip3b\rr-3b-b-hip-log-20261009T224044Z.err.txt (9 lines)
+arm rr-3b-b-hip-log Tctl during: min 61.25 max 61.25 C over 1 samples
+arm rr-3b-b-hip-log clock after : clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=61125 ready=1
+arm rr-3b-b-hip-log end

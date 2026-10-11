@@ -2242,8 +2242,9 @@ Two numbers of that session are worth carrying in the design, because both are e
   under one microsecond, and that path does not move with the policy. `test_hip_batch` section 5
   asserts the flush, submission and wait counts of a copy are equal under both policies. So the
   difference is a read rate of the write-combining mapping (203 MiB/s against 135 MiB/s at 4 KB),
-  not a fixed host cost, and what sets that rate is not established. The arm that decides it is in
-  `scratch/m16-hip/lab/perf-README.md`: the same copy line with no kernel phase in front of it.
+  not a fixed host cost, and what sets that rate is not established.
+  The [copy-control record](../testing/m16-hip-dispatch-cost.md) links the later measurements and their correction.
+  M864 records that this difference did not reproduce on the merged build. Its cause remains unestablished.
 
 ### 8.7 What is measured, and what the lab must answer
 
@@ -2256,9 +2257,9 @@ answers that question, which is why those two calls exist.
 The host tests prove the harness and the mechanism, and they cannot prove the gain: the mock backend
 runs no instruction. The lab answered it on 2026-10-09 in six arms of 3.4 to 3.8 s each
 (`evidence/m16/perf-2026-10-09`, facts M853 to M857), and section 8.6 states the defaults that
-follow. What is left for the next slot is in `scratch/m16-hip/lab/perf-README.md`: the state cache
-of section 8.8 against the switch that turns it off, a cap of 64 under it, and the copy line of
-section 8.6a with no kernel phase in front of it.
+follow. The [repeat record](../testing/m16-hip-dispatch-cost.md) covers the state cache, cap 64 and copy controls.
+It also preserves the audit's timing limits: elapsed enqueue-loop time does not isolate processor-active time.
+The [step-3 record](../testing/m16-hip-step3.md) covers the thread client and application controls.
 
 ### 8.8 The compute state a dispatch repeats
 

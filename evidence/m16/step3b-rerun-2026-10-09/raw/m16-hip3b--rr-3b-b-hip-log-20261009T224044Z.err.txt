@@ -1,0 +1,9 @@
+amdhip64 [7304:5760] info log on, level 2 (info), interface 1.2
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+amdhip64 [7304:5760] error the code object of kernel '_ZL10k_set_rowsIfx6__halfEvPKT_PKT0_PT1_xxxxxxxxxxxxxx5uint3S9_S9_S9_S9_' does not load: metadata note absent or unreadable
+amdhip64 [7304:5760] error hipLaunchKernel refuses: the host stub names no kernel of a loaded code object (hipErrorInvalidImage)
+ROCm error: the device code object cannot be used
+  current device: 0, in function ggml_cuda_kernel_launch at <llama-source>/ggml/src/ggml-cuda/common.cuh:1721
+  hipGetLastError()
+<llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error
