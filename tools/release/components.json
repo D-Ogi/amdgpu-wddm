@@ -16,7 +16,8 @@
     "That zip was packed again the same day, after the client wrapper bc250-ollama.cmd and the stop of the model",
     "runner went into the component, so size and sha256 are the ones of the 67-entry zip, not of the first one.",
     "The llama pin was read from the published asset on 2026-10-11 (download, Get-FileHash, and the zip's own",
-    "entry list). The model pins were measured in this workspace: scratch\\llm-vram\\results-2026-10-10-newmodels\\",
+    "entry list). That asset of tester.27 is uploaded again to tester.28 under the tester.28 name, with the same",
+    "bytes, so its size and sha256 do not change. The folder in the zip keeps its tester.27 name. The model pins were measured in this workspace: scratch\\llm-vram\\results-2026-10-10-newmodels\\",
     "model-hashes.txt and scratch\\strata\\models\\SHA256SUMS.txt. The sizes match the Hugging Face HEAD",
     "responses of 2026-10-11. The Ollama tags answer HTTP 200 in the registry, checked the same day."
   ],
@@ -32,7 +33,7 @@
       "licence": "MIT",
       "licence_url": "https://github.com/ggml-org/llama.cpp/blob/master/LICENSE",
       "asset": {
-        "name": "llama.cpp-hip-gfx1013-b86d2f07-tester.27.zip",
+        "name": "llama.cpp-hip-gfx1013-b86d2f07-tester.28.zip",
         "size": 20142294,
         "sha256": "196403CE20AD3C90A0B93113A486A67862A22DE93990D68368DCC2545AE601FF",
         "url_templates": [
