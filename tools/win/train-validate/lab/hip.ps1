@@ -16,7 +16,8 @@
 #             template (--jinja -cnv -st), greedy. A raw prompt to an instruction model proves nothing: Gemma
 #             12B gives the same 16 digits on HIP, Vulkan, a CUDA card and the CPU (scratch/bd117-4090).
 #             It runs only when the bench left no new driver fault and its deadline fits in -Budget.
-# Neither step passes -fa: the HIP build of llama.cpp has no Flash Attention yet.
+# Neither step passes -fa: llama.cpp chooses Flash Attention itself (auto), and the HIP build has it since
+# d180f2ab.
 #
 # BD-110 passes when the benchmark ends with exit 0 and both the pp512 and the tg128 rows, the text step ends
 # with exit 0 and its answer names Paris, neither step has an error or warning line of the runtime, no mock
