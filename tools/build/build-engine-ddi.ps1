@@ -81,7 +81,7 @@ try {
     # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol
     # gate below reads the library with dumpbin, which cannot read /GL objects. /FC with /d1trimfile: __FILE__ and
     # the anonymous-namespace names see the path below each tree only, so the place of a tree is not in the image.
-    $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', '/external:W0', '/MT', '/DNOMINMAX', '/Zi',
+    $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', ("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })), '/MT', '/DNOMINMAX', '/Zi',
         '/Brepro', '/FC', "/d1trimfile:$repo", "/d1trimfile:$EngineSource", "/d1trimfile:$VulkanInclude",
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
