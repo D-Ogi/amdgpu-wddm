@@ -72,10 +72,16 @@
  * bc250hsa_module_kernel_by_name cannot find again. */
 #define MOCK_NAME_MAX 256u
 
+/* in_use and busy_fence belong to the GPU copy and fill below: the calls that name this
+ * allocation and have not returned yet, and the last fence value such a call submitted. A free
+ * while either is outstanding is a free of memory the device may still write, and the mock
+ * counts it (bc250hsa_mock_free_violations). */
 typedef struct mock_allocation {
     int          live;
     void*        raw;
     bc250hsa_mem mem;
+    uint32_t     in_use;
+    uint64_t     busy_fence;
 } mock_allocation;
 
 /* A dispatch that has not retired yet, when a hold time is in effect. The values retire in the
@@ -147,6 +153,9 @@ static uint32_t               g_log_level;
 static int32_t                g_os_status;
 static FILE*                  g_record_file;
 static int                    g_record_file_tried;
+/* Frees of memory a GPU copy or fill still named (mock_allocation), for the life of the
+ * process: bc250hsa_mock_reset leaves it, so that a violation between two resets is not lost. */
+static uint32_t               g_free_violations;
 
 /* ------------------------------------------------------------------------------------------
  * The lock of the mock, and the clock
@@ -183,6 +192,17 @@ static void mock_unlock(void) {
 
 static uint64_t mock_now_ms(void) { return (uint64_t)GetTickCount64(); }
 static void     mock_sleep_ms(uint32_t ms) { Sleep(ms); }
+
+uint64_t bc250hsa_ticks(void) {
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return (uint64_t)now.QuadPart;
+}
+
+static uint64_t mock_ticks_per_second(void) {
+    LARGE_INTEGER frequency;
+    return QueryPerformanceFrequency(&frequency) ? (uint64_t)frequency.QuadPart : 0u;
+}
 #else
 /* The host tests of this component build on Windows only. A build elsewhere gets a single
  * threaded mock, which is what it had before. */
@@ -190,7 +210,25 @@ static void     mock_lock(void) {}
 static void     mock_unlock(void) {}
 static uint64_t mock_now_ms(void) { return 0u; }
 static void     mock_sleep_ms(uint32_t ms) { (void)ms; }
+uint64_t        bc250hsa_ticks(void) { return 0u; }
+static uint64_t mock_ticks_per_second(void) { return 0u; }
 #endif
+
+/* The duration counters of bc250hsa.h section 3 use the clock layer 1 uses, around the same
+ * operations: the wait, the emulated submission, and the three GPU copy calls. What the mock
+ * times is host memory and a lock, so an operation can end inside the tick it started in; a
+ * duration is therefore at least one tick here, so that every operation moves its total and a
+ * test can see that it did. None of it says anything about the device. */
+static uint64_t mock_ticks_since(uint64_t start) {
+    const uint64_t now = bc250hsa_ticks();
+    return (now > start) ? now - start : 1u;
+}
+
+static void mock_raise(uint64_t* max, uint64_t ticks) {
+    if (*max < ticks) {
+        *max = ticks;
+    }
+}
 
 /* ------------------------------------------------------------------------------------------
  * Small helpers
@@ -228,8 +266,10 @@ static void copy_name(char* dst, size_t dst_bytes, const char* src, size_t src_b
     dst[n] = '\0';
 }
 
-static const char* record_kind_names[] = {"alloc",    "free", "module_load", "module_unload",
-                                          "dispatch", "wait", "copy_to",     "copy_from"};
+static const char* record_kind_names[] = {"alloc",    "free",      "module_load",
+                                          "module_unload", "dispatch", "wait",
+                                          "copy_to",  "copy_from", "gpu_copy",
+                                          "gpu_copy_staged", "gpu_fill"};
 
 const char* bc250hsa_mock_kind_name(uint32_t kind) {
     if (kind >= sizeof(record_kind_names) / sizeof(record_kind_names[0])) {
@@ -336,9 +376,11 @@ static void mock_retire_due(bc250hsa_device* dev) {
  * of section 8.1 that this file emulates: the value the dispatches of the batch were
  * given becomes a submitted value here, and only here does it retire. */
 static void mock_batch_submit_locked(bc250hsa_device* dev) {
+    uint64_t start;
     if (dev == NULL || !dev->batch_open) {
         return;
     }
+    start = bc250hsa_ticks();
     dev->batch_open = 0;
     dev->submitted = dev->batch_fence;
     g_counters.submissions++;
@@ -354,6 +396,8 @@ static void mock_batch_submit_locked(bc250hsa_device* dev) {
         dev->pending_count++;
     }
     dev->batch_count = 0;
+    g_counters.submit_calls++;
+    g_counters.submit_ticks += mock_ticks_since(start);
 }
 
 static void log_line(uint32_t level, const char* message) {
@@ -407,6 +451,7 @@ bc250hsa_status bc250hsa_counters_read(bc250hsa_counters* out) {
     }
     g_counters.struct_bytes = (uint32_t)sizeof(g_counters);
     memcpy(out, &g_counters, sizeof(*out));
+    out->ticks_per_second = mock_ticks_per_second();
     return BC250HSA_OK;
 }
 
@@ -582,6 +627,8 @@ static bc250hsa_status alloc_locked(bc250hsa_device* dev, uint64_t bytes, uint64
     dev->allocations[slot].live = 1;
     dev->allocations[slot].raw = raw;
     dev->allocations[slot].mem = *out;
+    dev->allocations[slot].in_use = 0u;
+    dev->allocations[slot].busy_fence = 0u;
     dev->live_allocations++;
     dev->live_bytes += aligned_bytes;
 
@@ -614,6 +661,10 @@ static bc250hsa_status free_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
     allocation = allocation_of(dev, mem);
     if (allocation == NULL) {
         return BC250HSA_EINVAL;
+    }
+    mock_retire_due(dev);
+    if (allocation->in_use != 0u || allocation->busy_fence > dev->retired) {
+        g_free_violations++;
     }
     {
         bc250hsa_mock_record* record = record_new(BC250HSA_MOCK_FREE);
@@ -758,6 +809,596 @@ bc250hsa_status bc250hsa_copy_from_device(bc250hsa_device* dev, void* dst,
                                           const bc250hsa_mem* src, uint64_t src_offset,
                                           uint64_t bytes) {
     return mock_copy(dev, src, src_offset, dst, bytes, 0);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * The GPU copy and fill (scratch/hip-gpu-copy/CONTRACT.md section 5.1 of bc250hsa.h)
+ *
+ * The mock has no command processor, so it moves the bytes in host memory and records which
+ * of the three calls layer 2 chose. Each call is one submission with a fence value of its own,
+ * which retires after the hold time as a dispatch does, and the call waits for that value
+ * without the lock of the mock, as layer 1 waits outside its device lock. The knobs let a test
+ * drive the paths that layer 2 has to survive:
+ *
+ *   a coherence control that did not pass, and layer 1 refusing one copy
+ *     (bc250hsa_mock_set_gpu_copy);
+ *   a failure before the submission or after it (bc250hsa_mock_set_gpu_fault). After it, the
+ *     receipt says BC250HSA_OP_SUBMITTED and the bytes never land, so a host-processor copy
+ *     that layer 2 put in its place is visible in the destination;
+ *   a delay between the start of a call and its submission (bc250hsa_mock_set_gpu_delay_ms),
+ *     which is the window in which a hipFree on another thread would free memory the call is
+ *     about to name.
+ *
+ * The coherence gate is the rule of layer 1 (kmt_memory.c, cpu_readable): it follows the
+ * destination allocation and not the name of the operation.
+ * ---------------------------------------------------------------------------------------- */
+
+static int             g_gpu_coherence = 1;
+static int             g_gpu_refuse;
+static int             g_gpu_fault_when = BC250HSA_MOCK_FAULT_NONE;
+static bc250hsa_status g_gpu_fault_status = BC250HSA_OK;
+static uint32_t        g_gpu_delay_ms;
+static uint32_t        g_gpu_in_flight;    /* calls between their start and their return */
+
+/* A copy that BC250HSA_MOCK_FAULT_UNRETIRED left unretired: its fence value, the status its
+ * wait ended with, and the bytes it writes when the test retires it late (g_late_from NULL for
+ * a fill, g_late_bytes 0 for a staged round, whose bytes never reach the caller). */
+static uint64_t             g_unretired;
+static bc250hsa_status      g_unretired_status = BC250HSA_OK;
+static unsigned char*       g_late_to;
+static const unsigned char* g_late_from;
+static uint8_t              g_late_value;
+static uint64_t             g_late_bytes;
+static int                  g_lost;      /* bc250hsa_mock_set_lost */
+
+/* The exclusion of layer 1 (submit.c, copy_exclusion_locked) for every submission of the mock.
+ * Layer 1 waits for the copy under the device's bound first; the mock's copy retires only when
+ * the test says so, so that wait ends at once, the way the copy's own wait ended, and the
+ * submission is refused with that status and nothing submitted. A copy the test has retired
+ * is retired here and the submission goes on. The caller holds the lock. */
+static bc250hsa_status mock_exclusion_locked(bc250hsa_device* dev) {
+    if (g_unretired == 0u) {
+        return BC250HSA_OK;
+    }
+    mock_retire_due(dev);
+    if (dev->retired >= g_unretired) {
+        g_unretired = 0u;
+        g_counters.gpu_copy_late_retirements++;
+        return BC250HSA_OK;
+    }
+    g_counters.submissions_refused++;
+    g_counters.gpu_copy_exclusion_refusals++;
+    return g_unretired_status;
+}
+
+/* The caller holds the lock. land is 0 for a reset, which may come after the memory went. */
+static void mock_retire_unretired_locked(bc250hsa_device* dev, int land) {
+    if (g_unretired == 0u) {
+        return;
+    }
+    if (land && g_late_to != NULL && g_late_bytes != 0u) {
+        if (g_late_from != NULL) {
+            memcpy(g_late_to, g_late_from, (size_t)g_late_bytes);
+        } else {
+            memset(g_late_to, (int)g_late_value, (size_t)g_late_bytes);
+        }
+    }
+    g_late_to = NULL;
+    g_late_from = NULL;
+    g_late_bytes = 0u;
+    if (dev->retired < g_unretired) {
+        dev->retired = g_unretired;
+    }
+}
+
+void bc250hsa_mock_retire_unretired(void) {
+    mock_lock();
+    mock_retire_unretired_locked(&g_device, 1);
+    mock_unlock();
+}
+
+void bc250hsa_mock_set_lost(int lost) {
+    mock_lock();
+    g_lost = lost;
+    mock_unlock();
+}
+
+bc250hsa_status bc250hsa_copy_unretired(bc250hsa_device* dev, uint64_t* pending) {
+    bc250hsa_status status = BC250HSA_OK;
+    if (pending != NULL) {
+        *pending = 0u;
+    }
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || pending == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    if (g_lost) {
+        *pending = g_unretired;
+        status = BC250HSA_EDEVICELOST;
+    } else if (g_unretired != 0u) {
+        mock_retire_due(dev);
+        if (dev->retired >= g_unretired) {
+            g_unretired = 0u;
+            g_counters.gpu_copy_late_retirements++;
+        } else {
+            *pending = g_unretired;
+            status = g_unretired_status;
+        }
+    }
+    mock_unlock();
+    return status;
+}
+
+void bc250hsa_count_cpu_copy_exclusion_refusal(void) {
+    mock_lock();
+#if BC250HSA_ABI_VERSION_MINOR >= 8
+    g_counters.cpu_copy_exclusion_refusals++;
+#endif
+    mock_unlock();
+}
+
+void bc250hsa_mock_set_gpu_copy(int coherence, int refuse) {
+    mock_lock();
+    g_gpu_coherence = coherence;
+    g_gpu_refuse = refuse;
+    mock_unlock();
+}
+
+void bc250hsa_mock_set_gpu_fault(int when, bc250hsa_status status) {
+    mock_lock();
+    g_gpu_fault_when = when;
+    g_gpu_fault_status = status;
+    mock_unlock();
+}
+
+void bc250hsa_mock_set_gpu_delay_ms(uint32_t delay_ms) {
+    mock_lock();
+    g_gpu_delay_ms = delay_ms;
+    mock_unlock();
+}
+
+uint32_t bc250hsa_mock_gpu_in_flight(void) {
+    uint32_t count;
+    mock_lock();
+    count = g_gpu_in_flight;
+    mock_unlock();
+    return count;
+}
+
+uint32_t bc250hsa_mock_free_violations(void) {
+    uint32_t count;
+    mock_lock();
+    count = g_free_violations;
+    mock_unlock();
+    return count;
+}
+
+bc250hsa_status bc250hsa_wait_policy_set(bc250hsa_device* dev, uint32_t slice_ms,
+                                         uint32_t total_ms) {
+    (void)slice_ms;
+    (void)total_ms;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
+        return BC250HSA_EINVAL;
+    }
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_gpu_copy_ready(bc250hsa_device* dev, uint32_t* ready) {
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || ready == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    *ready = g_gpu_coherence ? 1u : 0u;
+    if (!g_gpu_coherence) {
+        g_counters.gpu_copy_control_failed = 1u;
+    }
+    mock_unlock();
+    return BC250HSA_OK;
+}
+
+/* The host address of a range of an allocation, whatever its heap: the mock keeps device
+ * memory in the host heap, so a GPU copy reaches it even with no host mapping. The caller
+ * holds the lock. */
+static unsigned char* gpu_side(bc250hsa_device* dev, const bc250hsa_mem* mem, uint64_t offset,
+                               uint64_t bytes, mock_allocation** owner) {
+    mock_allocation* allocation = allocation_of(dev, mem);
+    if (allocation == NULL || allocation->raw == NULL) {
+        return NULL;
+    }
+    if (offset > allocation->mem.bytes || bytes > allocation->mem.bytes - offset) {
+        return NULL;
+    }
+    if (owner != NULL) {
+        *owner = allocation;
+    }
+    return (unsigned char*)allocation->raw + offset;
+}
+
+static void gpu_record(uint32_t kind, uint64_t va, uint64_t bytes) {
+    bc250hsa_mock_record* record = record_new(kind);
+    if (record != NULL) {
+        record->va = va;
+        record->bytes = bytes;
+        record_line(record);
+    }
+}
+
+/* The receipt of one call: the caller's when its size is right, or a local one for a caller
+ * that passed NULL. NULL refuses the size and leaves the caller's receipt as it was, as
+ * layer 1 does (kmt_memory.c, receipt_open). */
+static bc250hsa_op_receipt* gpu_receipt(bc250hsa_op_receipt* given, bc250hsa_op_receipt* local) {
+    if (given != NULL && given->struct_bytes != (uint32_t)sizeof(*given)) {
+        return NULL;
+    }
+    if (given == NULL) {
+        memset(local, 0, sizeof(*local));
+        local->struct_bytes = (uint32_t)sizeof(*local);
+        given = local;
+    }
+    given->state = BC250HSA_OP_NOT_SUBMITTED;
+    given->fence_value = 0u;
+    return given;
+}
+
+/* The coherence gate of one destination. dst may be NULL when host_reads is set. */
+static bc250hsa_status gpu_gate(bc250hsa_device* dev, const bc250hsa_mem* dst, int host_reads) {
+    uint32_t        ready = 0u;
+    bc250hsa_status status;
+    if (!host_reads) {
+        uint32_t flags = dst->flags;
+        int      readable = dst->host != NULL;
+        mock_lock();
+        {
+            const mock_allocation* allocation = allocation_of(dev, dst);
+            if (allocation != NULL) {
+                flags |= allocation->mem.flags;
+                readable = readable || allocation->mem.host != NULL;
+            }
+        }
+        mock_unlock();
+        readable = readable || (flags & (BC250HSA_MEM_HOST | BC250HSA_MEM_HOST_WC |
+                                         BC250HSA_MEM_EXEC | BC250HSA_MEM_MAPPABLE)) != 0u;
+        if (!readable) {
+            return BC250HSA_OK;
+        }
+    }
+    status = bc250hsa_gpu_copy_ready(dev, &ready);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    return (ready != 0u) ? BC250HSA_OK : BC250HSA_EUNSUPPORTED;
+}
+
+/* The two refusals that come before any submission: the refusal knob and an injected failure
+ * of that kind. */
+static bc250hsa_status gpu_refusal(void) {
+    bc250hsa_status status = BC250HSA_OK;
+    mock_lock();
+    if (g_gpu_refuse) {
+        status = BC250HSA_EUNSUPPORTED;
+    } else if (g_gpu_fault_when == BC250HSA_MOCK_FAULT_BEFORE) {
+        status = g_gpu_fault_status;
+    }
+    mock_unlock();
+    return status;
+}
+
+/* One call between its checks and its return: the allocations it names are in use, so a free
+ * of one of them before the call's fence value retires is counted as a violation. */
+typedef struct gpu_op {
+    mock_allocation* named[2];
+    uint64_t         va[2];
+    uint32_t         count;
+    uint64_t         fence;
+    int              fault_after;
+    int              unretired;    /* BC250HSA_MOCK_FAULT_UNRETIRED took this call */
+} gpu_op;
+
+/* Starts the call: marks what it names, counts it in flight, and runs the delay of
+ * bc250hsa_mock_set_gpu_delay_ms with the lock released. The caller holds the lock and holds
+ * it again when this returns. A named allocation that a free took away during the delay is a
+ * violation already counted by that free, and the call then answers BC250HSA_EINVAL. */
+static bc250hsa_status gpu_start_locked(gpu_op* op, mock_allocation* a, mock_allocation* b) {
+    uint32_t delay_ms;
+    uint32_t i;
+    op->count = 0u;
+    op->fence = 0u;
+    op->fault_after = 0;
+    op->unretired = 0;
+    if (a != NULL) {
+        op->named[op->count++] = a;
+    }
+    if (b != NULL) {
+        op->named[op->count++] = b;
+    }
+    for (i = 0; i < op->count; ++i) {
+        op->named[i]->in_use++;
+        op->va[i] = op->named[i]->mem.va;
+    }
+    g_gpu_in_flight++;
+    delay_ms = g_gpu_delay_ms;
+    if (delay_ms != 0u) {
+        mock_unlock();
+        mock_sleep_ms(delay_ms);
+        mock_lock();
+    }
+    for (i = 0; i < op->count; ++i) {
+        if (!op->named[i]->live || op->named[i]->mem.va != op->va[i]) {
+            return BC250HSA_EINVAL;
+        }
+    }
+    return BC250HSA_OK;
+}
+
+/* Submits the call as a fence value of its own, behind the open batch, as layer 1 appends its
+ * packets behind the work already asked for. The caller holds the lock. */
+static void gpu_submit_locked(bc250hsa_device* dev, gpu_op* op, bc250hsa_op_receipt* receipt) {
+    const uint64_t start = bc250hsa_ticks();
+    uint32_t       i;
+    mock_batch_submit_locked(dev);
+    g_counters.submissions++;
+    dev->fence++;
+    dev->submitted = dev->fence;
+    mock_retire_due(dev);
+    op->unretired = g_gpu_fault_when == BC250HSA_MOCK_FAULT_UNRETIRED;
+    if (op->unretired) {
+        /* Neither retired nor pending: only bc250hsa_mock_retire_unretired retires it. */
+        g_unretired = dev->fence;
+        g_unretired_status = g_gpu_fault_status;
+        g_counters.gpu_copy_unretired++;
+        g_gpu_fault_when = BC250HSA_MOCK_FAULT_NONE;
+    } else if (dev->hold_ms == 0u || dev->pending_count >= MOCK_MAX_PENDING_FENCES) {
+        dev->retired = dev->fence;
+    } else {
+        dev->pending[dev->pending_count].value = dev->fence;
+        dev->pending[dev->pending_count].due_ms = mock_now_ms() + dev->hold_ms;
+        dev->pending_count++;
+    }
+    g_counters.submit_calls++;
+    g_counters.submit_ticks += mock_ticks_since(start);
+    op->fence = dev->fence;
+    for (i = 0; i < op->count; ++i) {
+        op->named[i]->busy_fence = op->fence;
+    }
+    receipt->state = BC250HSA_OP_SUBMITTED;
+    receipt->fence_value = op->fence;
+    op->fault_after = g_gpu_fault_when == BC250HSA_MOCK_FAULT_AFTER || op->unretired;
+}
+
+/* Ends the call. The caller holds the lock, and this releases it. A call that succeeded waits
+ * for its fence value with the lock released, as layer 1 does, and its receipt then says
+ * BC250HSA_OP_RETIRED. A call with an injected failure after its submission returns that
+ * failure with the receipt still at BC250HSA_OP_SUBMITTED. */
+static bc250hsa_status gpu_finish_unlock(bc250hsa_device* dev, gpu_op* op,
+                                         bc250hsa_op_receipt* receipt, bc250hsa_status status) {
+    const bc250hsa_status fault = g_gpu_fault_status;
+    uint32_t              i;
+    mock_unlock();
+    if (status == BC250HSA_OK && op->fence != 0u && !op->fault_after) {
+        for (;;) {
+            uint64_t retired;
+            mock_lock();
+            mock_retire_due(dev);
+            retired = dev->retired;
+            mock_unlock();
+            if (op->fence <= retired) {
+                break;
+            }
+            mock_sleep_ms(1u);
+        }
+        receipt->state = BC250HSA_OP_RETIRED;
+    }
+    mock_lock();
+    for (i = 0; i < op->count; ++i) {
+        /* A slot that a free emptied during the delay may hold another allocation now. */
+        if (op->named[i]->live && op->named[i]->mem.va == op->va[i] &&
+            op->named[i]->in_use != 0u) {
+            op->named[i]->in_use--;
+        }
+    }
+    g_gpu_in_flight--;
+    mock_unlock();
+    if (status == BC250HSA_OK && op->fault_after) {
+        return fault;
+    }
+    return status;
+}
+
+bc250hsa_status bc250hsa_copy_device_to_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                              uint64_t dst_offset, const bc250hsa_mem* src,
+                                              uint64_t src_offset, uint64_t bytes,
+                                              uint32_t flags, bc250hsa_op_receipt* receipt) {
+    const uint64_t      start = bc250hsa_ticks();
+    bc250hsa_op_receipt local;
+    mock_allocation*    to_owner = NULL;
+    mock_allocation*    from_owner = NULL;
+    unsigned char*      to;
+    const unsigned char* from;
+    gpu_op              op;
+    bc250hsa_status     status;
+
+    receipt = gpu_receipt(receipt, &local);
+    if (receipt == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || dst == NULL || src == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (bytes == 0u) {
+        return BC250HSA_OK;
+    }
+    if ((flags & ~BC250HSA_COPY_HOST_READS_DST) != 0u) {
+        return BC250HSA_EINVAL;
+    }
+    status = gpu_gate(dev, dst, (flags & BC250HSA_COPY_HOST_READS_DST) != 0u);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    status = gpu_refusal();
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    mock_lock();
+    to = gpu_side(dev, dst, dst_offset, bytes, &to_owner);
+    from = gpu_side(dev, src, src_offset, bytes, &from_owner);
+    if (to == NULL || from == NULL) {
+        mock_unlock();
+        return BC250HSA_EINVAL;
+    }
+    status = mock_exclusion_locked(dev);
+    if (status != BC250HSA_OK) {
+        mock_unlock();
+        return status;
+    }
+    status = gpu_start_locked(&op, to_owner, from_owner);
+    if (status == BC250HSA_OK) {
+        gpu_submit_locked(dev, &op, receipt);
+        if (!op.fault_after) {
+            memcpy(to, from, (size_t)bytes);
+            if ((flags & BC250HSA_COPY_HOST_READS_DST) != 0u) {
+                g_counters.gpu_copy_d2h++;
+                g_counters.gpu_copy_d2h_bytes += bytes;
+                g_counters.gpu_copy_d2h_ticks += mock_ticks_since(start);
+            } else {
+                g_counters.gpu_copy_d2d++;
+                g_counters.gpu_copy_d2d_bytes += bytes;
+                g_counters.gpu_copy_d2d_ticks += mock_ticks_since(start);
+            }
+            g_counters.gpu_copy_packets +=
+                bytes / BC250HSA_GPU_COPY_MAX_BYTES +
+                ((bytes % BC250HSA_GPU_COPY_MAX_BYTES != 0u) ? 1u : 0u);
+            gpu_record(BC250HSA_MOCK_GPU_COPY, dst->va + dst_offset, bytes);
+        } else if (op.unretired) {
+            g_late_to = to;
+            g_late_from = from;
+            g_late_bytes = bytes;
+        }
+    }
+    return gpu_finish_unlock(dev, &op, receipt, status);
+}
+
+bc250hsa_status bc250hsa_copy_from_device_gpu(bc250hsa_device* dev, void* dst,
+                                              const bc250hsa_mem* src, uint64_t src_offset,
+                                              uint64_t bytes, bc250hsa_op_receipt* receipt) {
+    const uint64_t       start = bc250hsa_ticks();
+    bc250hsa_op_receipt  local;
+    mock_allocation*     from_owner = NULL;
+    const unsigned char* from;
+    gpu_op               op;
+    bc250hsa_status      status;
+
+    receipt = gpu_receipt(receipt, &local);
+    if (receipt == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || dst == NULL || src == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (bytes == 0u) {
+        return BC250HSA_OK;
+    }
+    status = gpu_gate(dev, NULL, 1);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    status = gpu_refusal();
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    mock_lock();
+    from = gpu_side(dev, src, src_offset, bytes, &from_owner);
+    if (from == NULL) {
+        mock_unlock();
+        return BC250HSA_EINVAL;
+    }
+    status = mock_exclusion_locked(dev);
+    if (status != BC250HSA_OK) {
+        mock_unlock();
+        return status;
+    }
+    status = gpu_start_locked(&op, from_owner, NULL);
+    if (status == BC250HSA_OK) {
+        gpu_submit_locked(dev, &op, receipt);
+        if (!op.fault_after) {
+            memcpy(dst, from, (size_t)bytes);
+            g_counters.gpu_copy_d2h_staged++;
+            g_counters.gpu_copy_d2h_staged_bytes += bytes;
+            g_counters.gpu_copy_d2h_staged_ticks += mock_ticks_since(start);
+            /* One packet per staging round, which is what the real ring emits. */
+            g_counters.gpu_copy_packets += bytes / (1024u * 1024u) +
+                                            ((bytes % (1024u * 1024u) != 0u) ? 1u : 0u);
+            gpu_record(BC250HSA_MOCK_GPU_COPY_STAGED, src->va + src_offset, bytes);
+        }
+    }
+    return gpu_finish_unlock(dev, &op, receipt, status);
+}
+
+bc250hsa_status bc250hsa_fill_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                     uint64_t dst_offset, uint8_t value, uint64_t bytes,
+                                     bc250hsa_op_receipt* receipt) {
+    const uint64_t      start = bc250hsa_ticks();
+    bc250hsa_op_receipt local;
+    mock_allocation*    to_owner = NULL;
+    unsigned char*      to;
+    gpu_op              op;
+    bc250hsa_status     status;
+
+    receipt = gpu_receipt(receipt, &local);
+    if (receipt == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || dst == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (bytes == 0u) {
+        return BC250HSA_OK;
+    }
+    status = gpu_gate(dev, dst, 0);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    status = gpu_refusal();
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    mock_lock();
+    to = gpu_side(dev, dst, dst_offset, bytes, &to_owner);
+    if (to == NULL) {
+        mock_unlock();
+        return BC250HSA_EINVAL;
+    }
+    status = mock_exclusion_locked(dev);
+    if (status != BC250HSA_OK) {
+        mock_unlock();
+        return status;
+    }
+    status = gpu_start_locked(&op, to_owner, NULL);
+    if (status == BC250HSA_OK) {
+        gpu_submit_locked(dev, &op, receipt);
+        if (!op.fault_after) {
+            memset(to, (int)value, (size_t)bytes);
+            g_counters.gpu_fill++;
+            g_counters.gpu_fill_bytes += bytes;
+            g_counters.gpu_fill_ticks += mock_ticks_since(start);
+            g_counters.gpu_copy_packets++;
+            gpu_record(BC250HSA_MOCK_GPU_FILL, dst->va + dst_offset, bytes);
+        } else if (op.unretired) {
+            g_late_to = to;
+            g_late_from = NULL;
+            g_late_value = value;
+            g_late_bytes = bytes;
+        }
+    }
+    return gpu_finish_unlock(dev, &op, receipt, status);
+}
+
+void bc250hsa_count_cpu_copy_fallback(uint64_t bytes, uint64_t ticks) {
+    mock_lock();
+    g_counters.cpu_copy_fallback++;
+    g_counters.cpu_copy_fallback_bytes += bytes;
+    /* The caller measured these on the same clock, and the mock keeps them as they are. */
+    g_counters.cpu_copy_fallback_ticks += ticks;
+    mock_unlock();
 }
 
 static bc250hsa_status device_alloc_shim(void* ctx, uint64_t bytes, uint64_t alignment,
@@ -1952,6 +2593,13 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
     }
 
     mock_lock();
+    {
+        const bc250hsa_status held = mock_exclusion_locked(dev);
+        if (held != BC250HSA_OK) {
+            mock_unlock();
+            return held;
+        }
+    }
     g_counters.dispatches_built++;
     if (dev->batch.enabled != 0u) {
         if (!dev->batch_open) {
@@ -1965,6 +2613,7 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
         *fence_value_out = dev->batch_fence;
         mock_retire_due(dev);
     } else {
+        const uint64_t start = bc250hsa_ticks();
         g_counters.submissions++;
         dev->fence++;
         dev->submitted = dev->fence;
@@ -1977,6 +2626,8 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
             dev->pending[dev->pending_count].due_ms = mock_now_ms() + dev->hold_ms;
             dev->pending_count++;
         }
+        g_counters.submit_calls++;
+        g_counters.submit_ticks += mock_ticks_since(start);
     }
 
     {
@@ -2110,15 +2761,12 @@ uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev) {
     return submitted;
 }
 
-bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t slice_ms,
-                              uint32_t total_ms) {
+static bc250hsa_status mock_wait_counted(bc250hsa_device* dev, uint64_t value,
+                                         uint32_t slice_ms, uint32_t total_ms, int* fast) {
     uint64_t deadline_ms;
     uint32_t hold_ms;
     uint64_t submitted;
     uint64_t retired;
-    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
-        return BC250HSA_EINVAL;
-    }
     mock_lock();
     g_counters.waits++;
     /* The flush point of every wait (section 8.1): a value this device promised and has
@@ -2132,6 +2780,7 @@ bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t sli
     hold_ms = dev->hold_ms;
     if (value <= retired) {
         g_counters.waits_fast++;
+        *fast = 1;
     }
     {
         /* The bound is recorded as well as obeyed. A test reads it to see that layer 2 passes
@@ -2179,6 +2828,32 @@ bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t sli
     }
 }
 
+bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value, uint32_t slice_ms,
+                              uint32_t total_ms) {
+    uint64_t        start;
+    uint64_t        ticks;
+    int             fast = 0;
+    bc250hsa_status status;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
+        return BC250HSA_EINVAL;
+    }
+    /* Timed as layer 1 times it: every wait that waits counts, split as waits_fast splits
+     * them, and the lock is taken only to add the result. */
+    start = bc250hsa_ticks();
+    status = mock_wait_counted(dev, value, slice_ms, total_ms, &fast);
+    ticks = mock_ticks_since(start);
+    mock_lock();
+    if (fast) {
+        g_counters.waits_fast_ticks += ticks;
+        mock_raise(&g_counters.waits_fast_ticks_max, ticks);
+    } else {
+        g_counters.waits_other_ticks += ticks;
+        mock_raise(&g_counters.waits_other_ticks_max, ticks);
+    }
+    mock_unlock();
+    return status;
+}
+
 bc250hsa_status bc250hsa_query_fault(bc250hsa_device* dev, bc250hsa_fault* out) {
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || out == NULL) {
         return BC250HSA_EINVAL;
@@ -2186,7 +2861,7 @@ bc250hsa_status bc250hsa_query_fault(bc250hsa_device* dev, bc250hsa_fault* out) 
     if (out->struct_bytes != (uint32_t)sizeof(*out)) {
         return BC250HSA_EINVAL;
     }
-    out->device_lost = 0u;
+    out->device_lost = g_lost ? 1u : 0u;
     out->faulted_va = 0u;
     out->general_error = 0u;
     out->device_error = 0u;
@@ -2214,9 +2889,17 @@ void bc250hsa_mock_reset(void) {
     /* An open batch is submitted and not dropped: its value is already in the hands of
      * whatever ran before this reset, and a dropped value would hang the next wait. */
     mock_batch_submit_locked(&g_device);
+    mock_retire_unretired_locked(&g_device, 0);
+    g_unretired = 0u;
+    g_lost = 0;
     g_record_count = 0u;
     memset(&g_counters, 0, sizeof(g_counters));
     g_counters.struct_bytes = (uint32_t)sizeof(g_counters);
+    g_gpu_coherence = 1;
+    g_gpu_refuse = 0;
+    g_gpu_fault_when = BC250HSA_MOCK_FAULT_NONE;
+    g_gpu_fault_status = BC250HSA_OK;
+    g_gpu_delay_ms = 0u;
     mock_unlock();
 }
 

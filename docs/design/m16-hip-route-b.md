@@ -527,11 +527,28 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 4u   /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 8u   /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
                                          * that ENABLE_SGPR_DISPATCH_PTR needs;
                                          * 1.3 adds fixed-private scratch PM4 environments;
-                                         * 1.4 adds retained dispatch records */
+                                         * 1.4 adds retained dispatch records;
+                                         * 1.5 adds section 5.1, the GPU copy and fill:
+                                         * bc250hsa_copy_device_to_device,
+                                         * bc250hsa_copy_from_device_gpu,
+                                         * bc250hsa_fill_device,
+                                         * bc250hsa_gpu_copy_ready, and the copy
+                                         * counters of bc250hsa_counters;
+                                         * 1.6 adds the duration counters of
+                                         * bc250hsa_counters, bc250hsa_ticks, and the
+                                         * ticks argument of
+                                         * bc250hsa_count_cpu_copy_fallback;
+                                         * 1.7 adds bc250hsa_op_receipt, the last
+                                         * argument of the three calls of section 5.1;
+                                         * 1.8 adds the exclusion of an unretired copy:
+                                         * bc250hsa_copy_unretired,
+                                         * bc250hsa_count_cpu_copy_exclusion_refusal,
+                                         * and the counters after
+                                         * cpu_copy_fallback_ticks */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -614,10 +631,127 @@ typedef struct bc250hsa_counters {
      * dispatch, and dispatches_batched the dispatches that rode in them. */
     uint64_t batches_submitted;
     uint64_t dispatches_batched;
+    /* Section 5.1, the GPU copy and fill. A call of section 5.1 that succeeds lands on
+     * exactly one of gpu_copy_d2h, gpu_copy_d2h_staged, gpu_copy_d2d and gpu_fill.
+     * cpu_copy_fallback is what a caller reports through
+     * bc250hsa_count_cpu_copy_fallback: a device-to-host or device-to-device copy, or a
+     * fill, that the caller did with the host processor. The five lines are not the whole
+     * copy traffic: a host-to-device copy, a host-to-host copy and a host-processor fill
+     * that was never sent to the GPU route are on none of them. A cpu_copy_fallback above
+     * zero is expected below a caller's size threshold and with the route switched off;
+     * the caller's log names the reason one time per reason.
+     *
+     * gpu_copy_packets over the three GPU lines is bytes per packet, which is how a
+     * chunked copy becomes visible. gpu_copy_forced_flushes counts the open batches a
+     * copy submitted before they were full: a copy waits for everything submitted before
+     * it, so a batch still open goes out first. gpu_copy_control_failed is 0 or 1: the
+     * coherence control of bc250hsa_gpu_copy_ready. */
+    uint64_t gpu_copy_d2h;
+    uint64_t gpu_copy_d2h_bytes;
+    uint64_t gpu_copy_d2h_staged;
+    uint64_t gpu_copy_d2h_staged_bytes;
+    uint64_t gpu_copy_d2d;
+    uint64_t gpu_copy_d2d_bytes;
+    uint64_t gpu_fill;
+    uint64_t gpu_fill_bytes;
+    uint64_t cpu_copy_fallback;
+    uint64_t cpu_copy_fallback_bytes;
+    uint64_t gpu_copy_packets;
+    uint64_t gpu_copy_forced_flushes;
+    uint64_t gpu_copy_control_failed;
+    /* Durations, in ticks of bc250hsa_ticks. ticks_per_second converts them, so one read
+     * is enough to turn every total into time. A total divided by its count is the mean
+     * cost of one call.
+     *
+     * The waits are the waits counted in waits, split as waits_fast splits them:
+     * waits_fast_ticks is the time of the waits the fence mapping answered, and
+     * waits_other_ticks the time of every other wait, which includes the timed-out and
+     * the lost ones. A wait that has to submit the open batch first carries that
+     * submission in its own time. Each of the two has its longest single wait beside it.
+     *
+     * submit_calls and submit_ticks are the D3DKMTSubmitCommand calls, the refused ones
+     * included, and the time spent inside them and nothing else: the user-to-kernel
+     * transition and the kernel driver's work for one indirect buffer.
+     *
+     * The five copy totals belong to the five copy counts above and are added where those
+     * are: one call, from its entry to its return, its submission and its fence wait
+     * included. The first call of a process that writes a host-readable destination
+     * carries the coherence control of section 5.1. A call that fails adds nothing; when
+     * layer 2 then
+     * takes the host-processor path, the time of the failed attempt is part of the
+     * cpu_copy_fallback_ticks that bc250hsa_count_cpu_copy_fallback reports. */
+    uint64_t ticks_per_second;
+    uint64_t waits_fast_ticks;
+    uint64_t waits_fast_ticks_max;
+    uint64_t waits_other_ticks;
+    uint64_t waits_other_ticks_max;
+    uint64_t submit_calls;
+    uint64_t submit_ticks;
+    uint64_t gpu_copy_d2h_ticks;
+    uint64_t gpu_copy_d2h_staged_ticks;
+    uint64_t gpu_copy_d2d_ticks;
+    uint64_t gpu_fill_ticks;
+    uint64_t cpu_copy_fallback_ticks;
+    /* What a GPU copy costs the other threads of the process. A copy of section 5.1 holds
+     * the device lock from the submission of the open batch to the retirement of its own
+     * fence value, because both of the device's contexts write one fence. gpu_copy_lock_holds
+     * counts those holds (a staged copy is one hold for all its rounds), and
+     * gpu_copy_lock_ticks is their time, the longest beside it. gpu_copy_lock_waits counts
+     * the calls of another thread that found the lock held by a copy and waited for it, and
+     * gpu_copy_lock_wait_ticks is the time they waited, the longest beside it. A process that
+     * calls layer 1 from one thread only has 0 waits whatever it copies.
+     *
+     * journal_guard_refusals counts the indirect buffers that layer 1 refused itself because
+     * they carry no dispatch record and were meant for the main context while its journal is
+     * on. Each one is also an error line that names the context and the buffer. It is 0 in a
+     * correct build.
+     *
+     * gpu_copy_unretired counts the copies of section 5.1 whose wait ended without
+     * establishing retirement on a device that still lives (receipt SUBMITTED). Each one holds
+     * every later submission of the device until the fence shows that it retired.
+     * gpu_copy_exclusion_refusals counts the dispatches and copies refused because such a copy
+     * still had not retired after a wait for it under the device's bound, and
+     * gpu_copy_late_retirements the unretired copies that a later submission or a
+     * bc250hsa_copy_unretired found retired, after which submissions went on. Each of the
+     * three is also a "copy exclusion:" line.
+     *
+     * cpu_copy_exclusion_refusals counts the host-processor copies and fills that a caller
+     * refused, with no byte moved, because such a copy had not retired or the device was
+     * lost (bc250hsa_copy_unretired, section 5.1). The caller reports each one through
+     * bc250hsa_count_cpu_copy_exclusion_refusal. */
+    uint64_t gpu_copy_lock_holds;
+    uint64_t gpu_copy_lock_ticks;
+    uint64_t gpu_copy_lock_ticks_max;
+    uint64_t gpu_copy_lock_waits;
+    uint64_t gpu_copy_lock_wait_ticks;
+    uint64_t gpu_copy_lock_wait_ticks_max;
+    uint64_t journal_guard_refusals;
+    uint64_t gpu_copy_unretired;
+    uint64_t gpu_copy_exclusion_refusals;
+    uint64_t gpu_copy_late_retirements;
+    uint64_t cpu_copy_exclusion_refusals;
 } bc250hsa_counters;
 
 bc250hsa_status bc250hsa_counters_read(bc250hsa_counters* out);
 void            bc250hsa_counters_reset(void);
+
+/* The clock of every duration counter: QueryPerformanceCounter, in its own ticks.
+ * bc250hsa_counters::ticks_per_second is its frequency. A caller that reports a duration
+ * of its own (bc250hsa_count_cpu_copy_fallback) measures it with this clock. */
+uint64_t bc250hsa_ticks(void);
+
+/* The caller says that a copy or a fill of this many bytes took the host-processor path
+ * of section 5 instead of the command processor of section 5.1, and that it took this
+ * many ticks of bc250hsa_ticks from the caller's decision to its last byte. The choice
+ * belongs to the caller, so the count has to as well; without this call cpu_copy_fallback
+ * could never reach the number of bytes that a run moved slowly. A caller reports a copy
+ * here only after the host processor finished it: a host-processor copy that failed moved
+ * nothing and is not counted. */
+void bc250hsa_count_cpu_copy_fallback(uint64_t bytes, uint64_t ticks);
+
+/* The caller refused a host-processor copy or fill because bc250hsa_copy_unretired did not
+ * return BC250HSA_OK, and moved no byte (section 5.1). */
+void bc250hsa_count_cpu_copy_exclusion_refusal(void);
 
 /* ---------------------------------------------------------------------------------
  * 4. Device
@@ -739,6 +873,196 @@ bc250hsa_status bc250hsa_copy_to_device(bc250hsa_device* dev, const bc250hsa_mem
 bc250hsa_status bc250hsa_copy_from_device(bc250hsa_device* dev, void* dst,
                                           const bc250hsa_mem* src, uint64_t src_offset,
                                           uint64_t bytes);
+
+/* ---------------------------------------------------------------------------------
+ * 5.1 The GPU copy and fill
+ * -------------------------------------------------------------------------------
+ *
+ * The three calls above move bytes with the host processor through a mapping. A read of
+ * device local memory that way is an uncached read stream: MEASURED on unit A,
+ * evidence/m16/perf-rerun-2026-10-09, 0.21 GB/s out of an allocation that takes writes
+ * at 15.6 GB/s. The three calls below move the bytes with the command processor instead,
+ * as one PM4 DMA_DATA packet per 67,108,832 bytes in an indirect buffer of their own,
+ * which goes to a second context of the device. That buffer holds no dispatch and so no
+ * dispatch record, and the kernel driver refuses a buffer without a record on a context
+ * whose dispatch journal is on (driver/kmd/hip_journal.c, HipJournalBind), which the main
+ * context is from its first recorded dispatch; the operating system then puts the whole
+ * device in an error state. Nothing reads or writes the memory with the host processor,
+ * so the direction of the mapping stops mattering.
+ *
+ * All three are ordered and complete: the open batch is submitted, everything this device
+ * submitted retires, the copy's buffer is submitted, and the call returns after the fence
+ * of that submission, all under one hold of the device lock, so that no work of the main
+ * context runs beside it (both contexts write the one fence). A caller therefore needs no
+ * wait of its own, and a program may read the destination the moment the call returns.
+ * Another thread that calls this library on the same device during that hold waits for
+ * it; gpu_copy_lock_waits and gpu_copy_lock_wait_ticks of section 3 count those waits.
+ *
+ * A copy whose wait ends without retirement (receipt SUBMITTED on a device that still lives)
+ * keeps that order after the call returns. Until the fence shows that it retired, every
+ * submission of the device, a dispatch, a batch or another copy, first waits for it under
+ * the device's wait bound (bc250hsa_wait_policy_set). If it still has not retired, the
+ * submission is refused with the status of that wait (BC250HSA_ETIMEOUT, BC250HSA_EOS or
+ * BC250HSA_EDEVICELOST), and nothing is submitted, no fence value is handed out and no batch
+ * is opened. Once it has retired, submissions go on as before. This library holds back only
+ * its own submissions: a caller that moves bytes with the host processor reads the same state
+ * through bc250hsa_copy_unretired (below) and moves nothing while such a copy is unretired.
+ *
+ * Alignment: a copy is byte granular. A fill of a range that starts or ends between two
+ * dword boundaries carries those one to three bytes in a copy packet of their own, out of
+ * a staging slot this library writes, so a caller needs no alignment of its own.
+ *
+ * An allocation needs no host mapping for any of them: the packet needs an address.
+ * That is why a device-to-device copy and a fill of device local memory, which the three
+ * calls above refuse with BC250HSA_EUNSUPPORTED, work here.
+ *
+ * The coherence gate. A destination that the host processor can read is written by the
+ * command processor only after bc250hsa_gpu_copy_ready reported 1. The library decides
+ * that from the destination allocation itself and not from the name of the operation: an
+ * allocation with a host mapping, or one made with BC250HSA_MEM_HOST, BC250HSA_MEM_HOST_WC,
+ * BC250HSA_MEM_EXEC or BC250HSA_MEM_MAPPABLE, is such a destination. A device-to-device
+ * copy into the GPU address of a host allocation is therefore gated exactly as a
+ * device-to-host copy is. While the answer is 0 each of the three calls refuses such a
+ * destination with BC250HSA_EUNSUPPORTED before it submits anything. */
+
+/* The bytes one DMA_DATA packet carries, so that a caller can read bytes per packet off
+ * the counters. Mesa cp_dma_max_byte_count for GFX9 and later. */
+#define BC250HSA_GPU_COPY_MAX_BYTES 67108832u
+
+/* What became of the GPU work of one call of this section. The status of a call says
+ * whether the call did its work; the receipt says whether the device may still be doing
+ * some of it, and a caller needs both. A wait that could not establish retirement is not a
+ * completion (CONTRACT.md section 7), and the memory such work names stays in use until
+ * its fence value retires.
+ *
+ *   BC250HSA_OP_NOT_SUBMITTED  nothing of this call is outstanding: either nothing was
+ *                              submitted, or every submission of it retired before the
+ *                              call stopped. A failed call with this state refused before
+ *                              any outstanding work, and on a device that is not lost
+ *                              (status other than BC250HSA_EDEVICELOST) the caller may do
+ *                              the work another way.
+ *   BC250HSA_OP_SUBMITTED      the device accepted work of this call and its retirement was
+ *                              not established. fence_value is the value to wait for. The
+ *                              caller must not do the work another way, must not report it
+ *                              done, and must not free, reuse or read either range until
+ *                              that value retires.
+ *   BC250HSA_OP_RETIRED        every submission of this call retired. The status is then
+ *                              BC250HSA_OK.
+ *
+ * A failed call on a device this library marked lost always answers BC250HSA_EDEVICELOST,
+ * whatever Windows call failed first; the first failure is in the log. */
+#define BC250HSA_OP_NOT_SUBMITTED 0u
+#define BC250HSA_OP_SUBMITTED     1u
+#define BC250HSA_OP_RETIRED       2u
+
+typedef struct bc250hsa_op_receipt {
+    uint32_t struct_bytes;   /* sizeof(bc250hsa_op_receipt) */
+    uint32_t state;          /* BC250HSA_OP_* */
+    uint64_t fence_value;    /* the last value this call submitted, or 0 */
+} bc250hsa_op_receipt;
+
+/* A copy between two allocations of this device, in either direction and within one
+ * allocation as well, as long as the two ranges do not overlap. An overlapping copy is
+ * BC250HSA_EINVAL and never a half-done packet.
+ *
+ * This is also the call for a device-to-host copy whose destination is one of this
+ * library's own host-visible allocations: that destination has a GPU address, so the
+ * copy needs no staging buffer at all. */
+/* The one flag of bc250hsa_copy_device_to_device: the host processor is going to read the
+ * destination of this copy. It says which counter the bytes go to, gpu_copy_d2h and not
+ * gpu_copy_d2d, and it gates the call as a host-readable destination would. It is not the
+ * only thing that gates it: a destination the host processor can read is gated with or
+ * without the flag (the coherence gate above). */
+#define BC250HSA_COPY_HOST_READS_DST 0x1u
+
+/* receipt: a caller's bc250hsa_op_receipt with struct_bytes set, or NULL for a caller that
+ * waits for everything this device owes before it touches either range again. A receipt
+ * whose struct_bytes this library does not know is BC250HSA_EINVAL and stays untouched;
+ * every other return of the three calls below writes it. */
+bc250hsa_status bc250hsa_copy_device_to_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                              uint64_t dst_offset, const bc250hsa_mem* src,
+                                              uint64_t src_offset, uint64_t bytes,
+                                              uint32_t flags, bc250hsa_op_receipt* receipt);
+
+/* A device-to-host copy into memory that is not this library's: a program's own buffer.
+ * The bytes go through a ring of host-visible staging allocations, one 1 MiB round at a
+ * time: the command processor writes a staging slot, and the host processor copies that
+ * slot into the caller's destination with ordinary cached reads. The ring is allocated
+ * on the first call that needs it and freed with the device.
+ *
+ * It refuses with BC250HSA_EUNSUPPORTED when bc250hsa_gpu_copy_ready reports 0.
+ *
+ * A round whose wait fails keeps its slot until the round's fence value retires, and the
+ * receipt names that value. The rounds before it retired and wrote part of dst; a caller
+ * that sees BC250HSA_OP_NOT_SUBMITTED and does the copy another way writes all of dst
+ * again.
+ *
+ * Concurrency: this call holds the device lock for the whole copy, every round's
+ * submission and every round's wait included. A 64 MiB copy is 64 rounds, so another
+ * thread's bc250hsa_flush or dispatch, and a bc250hsa_wait for a value that is not yet
+ * submitted, waits behind all of them. The call above holds the lock for one packet and
+ * one wait, which is the shorter hold, so a caller that needs a device-to-host copy to
+ * block other threads as briefly as possible keeps its destination in one of this
+ * library's own host-visible allocations and uses that call. */
+bc250hsa_status bc250hsa_copy_from_device_gpu(bc250hsa_device* dev, void* dst,
+                                              const bc250hsa_mem* src, uint64_t src_offset,
+                                              uint64_t bytes, bc250hsa_op_receipt* receipt);
+
+/* A fill of an allocation with one byte value, as memset defines it. The 4-byte aligned
+ * interior is one DMA_DATA per chunk, and the one to three bytes at either end of a range
+ * that does not begin or end on a dword boundary are copied out of a staging slot this
+ * library writes, in the same list and under the same fence, so a fill is never partial
+ * and no byte outside the range is touched.
+ *
+ * A destination the host processor can read is gated as the coherence gate above says. */
+bc250hsa_status bc250hsa_fill_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                     uint64_t dst_offset, uint8_t value, uint64_t bytes,
+                                     bc250hsa_op_receipt* receipt);
+
+/* Is a copy of this device unretired (the exclusion above)? Such a copy may still read its
+ * source and write its destination. A host-processor copy or fill of the caller is no
+ * submission, so this library cannot hold it back: it could read the destination before the
+ * copy's bytes land, or write over the source the copy still reads, and report success with
+ * wrong bytes. A caller asks this before every copy or fill it does with the host processor,
+ * the ones it does after a refusal of the three calls above included, and moves no byte
+ * unless the answer is BC250HSA_OK.
+ *
+ * BC250HSA_EDEVICELOST on a device this library marked lost, whether a copy is unretired or
+ * not and whatever the fence reads: a loss is the end, and no host-processor copy goes on
+ * after it. *pending is then the unretired copy's fence value, or 0 when there is none.
+ * Otherwise BC250HSA_OK with *pending 0: no copy is unretired, or the fence has reached the
+ * one that was, which this call then retires as the next submission would. Otherwise
+ * *pending is the copy's fence value and the status is the one the last wait for it ended
+ * with (BC250HSA_ETIMEOUT or BC250HSA_EOS). The call takes the device lock and reads the
+ * fence. It never waits for a fence and never submits, so it costs one compare while no copy
+ * is unretired; it can wait for the device lock behind a copy in progress. */
+bc250hsa_status bc250hsa_copy_unretired(bc250hsa_device* dev, uint64_t* pending);
+
+/* May the host processor read what the command processor wrote into a host-visible
+ * allocation of this library, with no cache maintenance of its own?
+ *
+ * The page table entry of such an allocation is expected to snoop the host caches, but
+ * the chain that produces it runs through the video memory manager and is not proved by
+ * reading our own source. This call answers the question by measurement, once per device:
+ * it writes a pattern into a device local buffer, reads the host buffer first so that its
+ * lines are in the host cache, copies the one into the other with the command processor,
+ * waits for the fence and compares, and then does it again with a second pattern.
+ *
+ * *ready is 1 on a match and 0 otherwise. A mismatch is the one coherence answer: it writes
+ * one line at BC250HSA_LOG_ERROR naming the first differing offset, raises the counter
+ * gpu_copy_control_failed, keeps the answer for the life of the device, and the call
+ * returns BC250HSA_OK. A caller that sees 0 then keeps the host-processor path for every
+ * host-readable destination, which is correct and slow.
+ *
+ * A control that could not ask the question is not an answer. When an allocation, a
+ * mapping, a submission or a wait of the control fails, the call returns that status with
+ * *ready 0, the counter stays, and the next call tries again. The control's buffers are
+ * freed only once no submission of the control is outstanding; after a wait that could
+ * not establish that, the device keeps them, the next call waits for their fence value
+ * first under the device's wait bound, and bc250hsa_close frees or quarantines them with
+ * every other allocation. A device-to-device copy into memory the host processor cannot
+ * read never asks this question. */
+bc250hsa_status bc250hsa_gpu_copy_ready(bc250hsa_device* dev, uint32_t* ready);
 
 /* An allocator seam, so that the loader runs with no device. The device path passes
  * its own implementation. A host test passes one over malloc with a synthetic base
@@ -986,7 +1310,9 @@ typedef struct bc250hsa_dispatch {
 /* Builds the indirect buffer into a free slot of this device's command ring, submits it
  * on the node-0 context and returns the fence value that this dispatch writes. It does
  * not wait for the dispatch. It may wait for a free ring slot, under the bound of
- * bc250hsa_wait's defaults, and returns BC250HSA_EBUSY if none frees.
+ * bc250hsa_wait's defaults, and returns BC250HSA_EBUSY if none frees. It may also wait for
+ * a GPU copy of section 5.1 whose own wait failed, and refuses as that section says when
+ * the copy still has not retired.
  *
  * With batching on (section 8.1) the dispatch is appended to the indirect buffer this
  * device is building and the submission happens at a flush point. The returned fence
@@ -1167,6 +1493,14 @@ uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev);
  * BC250HSA_EDEVICELOST. */
 bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value,
                               uint32_t slice_ms, uint32_t total_ms);
+
+/* The same two numbers for the waits this library performs for itself. A GPU copy of
+ * section 5.1 returns after its own fence, so that wait is inside the library and the
+ * caller never sees its value. This call tells the library which bound to use, and 0 and
+ * 0 restore the defaults above. Nothing else of this interface waits on its own, so a
+ * caller that never uses section 5.1 never needs it. */
+bc250hsa_status bc250hsa_wait_policy_set(bc250hsa_device* dev, uint32_t slice_ms,
+                                         uint32_t total_ms);
 
 /* ---------------------------------------------------------------------------------
  * 10. Diagnosis
@@ -1472,6 +1806,24 @@ ring slot to read. It happens only with eight dispatches of one process in fligh
 blocks the other threads' submissions in layer 1 anyway. The fix belongs to layer 1: wait for a
 free slot without holding the device lock. It is open work of step 3 and is not needed before a
 multithreaded application queues eight dispatches.
+
+A second wait came with the copy context of the GPU copy (`scratch/hip-gpu-copy` deviation
+13.23). Both contexts of the device signal one fence, so a copy holds layer 1's device lock from
+the submission of the open batch to the retirement of its own value. Layer 2 calls the copy with
+its process lock open, so the copying thread itself blocks nobody in layer 2. A thread that
+submits a kernel, records an event or allocates meanwhile enters layer 1 with the process lock
+held. It waits there for the copy, and a third thread then waits for the process lock. The cost is
+0 for a process that calls the runtime from one thread, as llama.cpp, vadd and hipbench do.
+Otherwise a call waits for the copy in progress, and for more only when several threads copy at
+once. Layer 1 counts each such wait (`gpu_copy_lock_waits`, `gpu_copy_lock_wait_ticks`), and its
+`fence check: copy lock` lines report them. A fence object of the copy context's own would let the
+copy wait with the device lock open. It changes what a receipt's fence value names, so it is open
+work and not part of that fix. A copy whose own wait fails keeps this order after it returns: its
+fence value holds every later submission of the device until the fence reaches it (`bc250hsa.h`
+section 5.1). Until then layer 2 moves no byte with the host processor either. It asks
+`bc250hsa_copy_unretired` before every host-processor copy or fill and fails the call with the
+copy's error. On a device that layer 1 marked lost, the answer is the loss whatever the fence
+reads, so no host-processor copy or fill goes on after a loss either.
 
 The owner's instruction of 2026-09-29 is that multithreading is measured with our own clients
 before an application is asked to exercise it. `compute/hip/tests/host/hip_threads_client.h` is
@@ -2134,6 +2486,7 @@ A buffer is submitted at the first of these:
 | a wait for a value above `fence_last_submitted` | the value cannot retire until the device has the work |
 | an event record | an event answers a question about time, so it must cover the work asked for by then |
 | a copy through the host mapping, a map, an unmap | the bytes the caller reads or writes are the bytes the open work produces |
+| a GPU copy or fill of section 5.1 | its buffer goes to the second context of the device. That context must not run beside the main one, so the open buffer goes out and retires first (counted in `gpu_copy_forced_flushes`) |
 | a free | the range may be named by a dispatch of the open buffer |
 | a code object load | the instruction cache invalidate of the new object must not be behind older work |
 | the device closing | nothing may be left unsubmitted |
@@ -2222,6 +2575,11 @@ times faster on the `chain` line, and it cuts submissions per dispatch from 1.00
 defaults are therefore the measured arm P3 of that session. `BC250_HIP_BATCH=0` with
 `BC250_HIP_BARRIER=full` is exactly build 1, and `hipbench --batch 0 --barrier full` is the control
 arm the build gate runs on every build.
+
+The copy route of header section 5.1 has three switches of its own, `BC250_HIP_GPU_COPY`,
+`BC250_HIP_GPU_COPY_MIN` and `BC250_HIP_GPU_FILL`, read in the same place and for the same reason.
+`compute/hip/runtime/README.md` states their defaults and the two measured rates each default comes
+from.
 
 Layer 1 reads no environment variable: `hip_device.cpp` reads these five and calls
 `bc250hsa_batch_policy_set`, so the policy stays the caller's (header rule 6), and a program that

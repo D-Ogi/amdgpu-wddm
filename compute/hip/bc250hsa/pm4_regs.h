@@ -62,6 +62,60 @@
 #define BC250HSA_PKT3_SET_UCONFIG_REG 0x79u
 #define BC250HSA_PKT3_SET_SH_REG_INDEX 0x9Bu
 
+/* ---- DMA_DATA, the command processor's copy and fill (nvd.h:397-442) --------- */
+/* The seven-dword CP DMA packet. Every field position below is nvd.h, cross-checked
+ * against the Mesa generated table src/amd/packets/cp_pm4_table_data_gfx11.json of
+ * scratch/mesa-wddm2 at 801c9763c6043f0de8408e905a5324eea06d81d7 (entry DMA_DATA) and
+ * against src/amd/registers/gfx10.json (register type CP_DMA_ME_COMMAND: BYTE_COUNT
+ * bits 25:0, SAS 26, DAS 27, SAIC 28, DAIC 29, RAW_WAIT 30, DIS_WC 31). The behaviour
+ * is Mesa's src/amd/vulkan/radv_cp_dma.c of the same revision: radv_cs_emit_cp_dma at
+ * :47-102 emits these seven dwords for GFX7 and later, cp_dma_max_byte_count at :34-41
+ * gives the per-packet maximum, radv_cp_dma_prepare at :201-217 sets RAW_WAIT on the
+ * first chunk and CP_SYNC on the last, and radv_cp_dma_fill_memory at :321-357 turns the
+ * same packet into a fill with SRC_SEL DATA.
+ *
+ * The same encoding already exists once in this repository, in driver/kmd/gfx_copy.c
+ * with driver/kmd/gfx_copy_fields.h, whose provenance note is
+ * driver/kmd/gfx-copy-provenance.md. That one is kernel-mode code and cannot be linked
+ * into a user-mode library, so the restatement here is a second statement of the same
+ * numbers; tests/host/test_pm4.c includes nvd.h and fails the build when any of them
+ * drifts. It also links gfx_copy.c itself (build.ps1) and compares the dwords the two
+ * emitters write for the same arguments, over eight sizes and both flags, so a divergence
+ * in the chunking or in the flag placement fails the build as well. The fill has no
+ * counterpart in gfx_copy.c, which copies only: its encoding is held by the field
+ * comparison and by the golden packets of the same test. */
+#define BC250HSA_PKT3_DMA_DATA 0x50u
+
+/* CONTROL, dword 2. */
+#define BC250HSA_DMA_ENGINE(x)           (((uint32_t)(x) & 0x1u) << 0)
+#define BC250HSA_DMA_SRC_CACHE_POLICY(x) (((uint32_t)(x) & 0x3u) << 13)
+#define BC250HSA_DMA_DST_SEL(x)          (((uint32_t)(x) & 0x3u) << 20)
+#define BC250HSA_DMA_DST_CACHE_POLICY(x) (((uint32_t)(x) & 0x3u) << 25)
+#define BC250HSA_DMA_SRC_SEL(x)          (((uint32_t)(x) & 0x3u) << 29)
+#define BC250HSA_DMA_CP_SYNC             (1u << 31)
+/* DST_SEL 3 and SRC_SEL 3 are "the address, through the level-2 cache". SRC_SEL 2 is
+ * "dword 3 is the pattern", which is what makes the packet a fill. */
+#define BC250HSA_DMA_DST_ADDR_USING_L2 3u
+#define BC250HSA_DMA_SRC_ADDR_USING_L2 3u
+#define BC250HSA_DMA_SRC_DATA          2u
+
+/* COMMAND, dword 7. */
+#define BC250HSA_DMA_BYTE_COUNT(x) (((uint32_t)(x) & 0x3FFFFFFu) << 0)
+#define BC250HSA_DMA_CMD_SAS       (1u << 26)
+#define BC250HSA_DMA_CMD_DAS       (1u << 27)
+#define BC250HSA_DMA_CMD_SAIC      (1u << 28)
+#define BC250HSA_DMA_CMD_DAIC      (1u << 29)
+#define BC250HSA_DMA_CMD_RAW_WAIT  (1u << 30)
+#define BC250HSA_DMA_CMD_DIS_WC    (1u << 31)
+
+#define BC250HSA_DMA_DATA_DWORDS 7u
+/* cp_dma_max_byte_count for GFX9 and later: the whole BYTE_COUNT field, aligned down to
+ * SI_CPDMA_ALIGNMENT, which radv_cp_dma.c:31 states as 32 and calls a performance
+ * alignment. 67,108,832 bytes, so one packet covers the 1 MiB logits copy of a decode
+ * step and a 64 MiB copy needs two. */
+#define BC250HSA_DMA_SI_CPDMA_ALIGNMENT 32u
+#define BC250HSA_DMA_MAX_BYTES (BC250HSA_DMA_BYTE_COUNT(~0u) & ~(BC250HSA_DMA_SI_CPDMA_ALIGNMENT - 1u))
+
 /* ---- register packet offsets ------------------------------------------------- */
 #define BC250HSA_SH_REG_BIAS      0x19A0u  /* 0x2C00 - 0x1260 */
 #define BC250HSA_UCONFIG_REG_BIAS 0x2000u  /* 0xC000 - 0xA000 */

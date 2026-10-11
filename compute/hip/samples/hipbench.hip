@@ -30,15 +30,25 @@
 //               is the number a program sees when it does not wait per kernel.
 //   2. chain    C tiny kernels, each reading what the one before it wrote. This is the shape of
 //               a decode step, and the one the barrier between two dispatches belongs to.
-//   3. copy     hipMemcpy host to device and device to host at 4 KB, 1 MB and 64 MB. Build 1
-//               copies through the host mapping, so this is a memory bandwidth and not a copy
-//               engine.
+//   3a. verify  the copy routes, byte for byte and untimed, before any rate is measured: the
+//               staging ring, the direct route, device to device and pitched copies, at their
+//               edges (measurement 3a below). --verify-fault is its positive control.
+//   3. copy     hipMemcpy host to device and device to host at 4 KB, 64 KB, 1 MB and 64 MB,
+//               into pageable memory and into memory this program asked hipHostMalloc for.
+//               Build 1 copied through the host mapping, so the line was a memory bandwidth
+//               and not a copy engine; with the GPU copy route of
+//               scratch/hip-gpu-copy/CONTRACT.md the two device-to-host arms are the copy
+//               engine, and the counter line below each rate says which route each one took.
 //   4. sync     hipStreamSynchronize on a stream whose work has already retired. It should read
 //               the fence mapping and return, and the counters say whether it did (waits_fast).
 //   5. event    hipEventRecord and hipEventSynchronize on retired work, the same way.
 //
 // Each measurement prints one line of plain text and, with --json, one JSON line as well, which
-// is what the lab record keeps.
+// is what the lab record keeps. A second line, "time:", says where the wall time of the interval
+// went, from the duration counters of the DLL: the time inside D3DKMTSubmitCommand, inside the
+// waits (fast ones and the others), and inside each copy route, in microseconds. The longest
+// wait is the longest since the process started, not of the interval, because a maximum has no
+// difference; the JSON line carries the same fields.
 //
 // Bounds. A lab trial of this program must stay inside three minutes. The program keeps its own
 // budget (--budget-ms, 150000 by default), checks it between measurements and stops when it is
@@ -129,6 +139,30 @@ typedef struct counters_delta {
     unsigned long long dispatches_batched;
     unsigned long long waits;
     unsigned long long waits_fast;
+    unsigned long long gpu_copy_d2h;
+    unsigned long long gpu_copy_d2h_staged;
+    unsigned long long gpu_copy_d2d;
+    unsigned long long gpu_fill;
+    unsigned long long gpu_fill_bytes;
+    unsigned long long cpu_copy_fallback;
+    unsigned long long cpu_copy_fallback_bytes;
+    unsigned long long gpu_copy_packets;
+    unsigned long long gpu_copy_forced_flushes;
+    unsigned long long gpu_copy_control_failed;
+    // The durations, in ticks of ticks_per_second. The two maxima are the values after the
+    // interval, since a maximum has no difference.
+    unsigned long long ticks_per_second;
+    unsigned long long waits_fast_ticks;
+    unsigned long long waits_fast_ticks_max;
+    unsigned long long waits_other_ticks;
+    unsigned long long waits_other_ticks_max;
+    unsigned long long submit_calls;
+    unsigned long long submit_ticks;
+    unsigned long long gpu_copy_d2h_ticks;
+    unsigned long long gpu_copy_d2h_staged_ticks;
+    unsigned long long gpu_copy_d2d_ticks;
+    unsigned long long gpu_fill_ticks;
+    unsigned long long cpu_copy_fallback_ticks;
 } counters_delta;
 
 static bc250hipCounters read_counters() {
@@ -148,7 +182,64 @@ static counters_delta counters_since(const bc250hipCounters& before) {
     d.dispatches_batched = after.dispatches_batched - before.dispatches_batched;
     d.waits = after.waits - before.waits;
     d.waits_fast = after.waits_fast - before.waits_fast;
+    d.gpu_copy_d2h = after.gpu_copy_d2h - before.gpu_copy_d2h;
+    d.gpu_copy_d2h_staged = after.gpu_copy_d2h_staged - before.gpu_copy_d2h_staged;
+    d.gpu_copy_d2d = after.gpu_copy_d2d - before.gpu_copy_d2d;
+    d.gpu_fill = after.gpu_fill - before.gpu_fill;
+    d.gpu_fill_bytes = after.gpu_fill_bytes - before.gpu_fill_bytes;
+    d.cpu_copy_fallback = after.cpu_copy_fallback - before.cpu_copy_fallback;
+    d.cpu_copy_fallback_bytes = after.cpu_copy_fallback_bytes - before.cpu_copy_fallback_bytes;
+    d.gpu_copy_packets = after.gpu_copy_packets - before.gpu_copy_packets;
+    d.gpu_copy_forced_flushes = after.gpu_copy_forced_flushes - before.gpu_copy_forced_flushes;
+    d.gpu_copy_control_failed = after.gpu_copy_control_failed;
+    d.ticks_per_second = after.ticks_per_second;
+    d.waits_fast_ticks = after.waits_fast_ticks - before.waits_fast_ticks;
+    d.waits_fast_ticks_max = after.waits_fast_ticks_max;
+    d.waits_other_ticks = after.waits_other_ticks - before.waits_other_ticks;
+    d.waits_other_ticks_max = after.waits_other_ticks_max;
+    d.submit_calls = after.submit_calls - before.submit_calls;
+    d.submit_ticks = after.submit_ticks - before.submit_ticks;
+    d.gpu_copy_d2h_ticks = after.gpu_copy_d2h_ticks - before.gpu_copy_d2h_ticks;
+    d.gpu_copy_d2h_staged_ticks =
+        after.gpu_copy_d2h_staged_ticks - before.gpu_copy_d2h_staged_ticks;
+    d.gpu_copy_d2d_ticks = after.gpu_copy_d2d_ticks - before.gpu_copy_d2d_ticks;
+    d.gpu_fill_ticks = after.gpu_fill_ticks - before.gpu_fill_ticks;
+    d.cpu_copy_fallback_ticks = after.cpu_copy_fallback_ticks - before.cpu_copy_fallback_ticks;
     return d;
+}
+
+// Ticks of the duration counters in microseconds.
+static double ticks_us(const counters_delta* d, unsigned long long ticks) {
+    return d->ticks_per_second != 0 ? (double)ticks * 1000000.0 / (double)d->ticks_per_second
+                                     : 0.0;
+}
+
+// The "time:" line of one measurement. The same fields for all of them, so that one pattern
+// reads every line of a lab record.
+static void report_time(const char* name, const counters_delta* d) {
+    printf("hipbench: %-8s time: submit %llu calls %.3f us (%.3f us each), waits fast %.3f us,"
+           " other %.3f us, longest wait since start fast %.3f us other %.3f us, gpu d2h"
+           " %.3f us, staged %.3f us, d2d %.3f us, fill %.3f us, cpu fallback %.3f us\n",
+           name, d->submit_calls, ticks_us(d, d->submit_ticks),
+           d->submit_calls != 0 ? ticks_us(d, d->submit_ticks) / (double)d->submit_calls : 0.0,
+           ticks_us(d, d->waits_fast_ticks), ticks_us(d, d->waits_other_ticks),
+           ticks_us(d, d->waits_fast_ticks_max), ticks_us(d, d->waits_other_ticks_max),
+           ticks_us(d, d->gpu_copy_d2h_ticks), ticks_us(d, d->gpu_copy_d2h_staged_ticks),
+           ticks_us(d, d->gpu_copy_d2d_ticks), ticks_us(d, d->gpu_fill_ticks),
+           ticks_us(d, d->cpu_copy_fallback_ticks));
+}
+
+// The same durations as JSON fields, written inside the object a measurement has open.
+static void json_time_fields(const counters_delta* d) {
+    printf(",\"submit_calls\":%llu,\"submit_us\":%.3f,\"waits_fast_us\":%.3f,"
+           "\"waits_other_us\":%.3f,\"waits_fast_max_us\":%.3f,\"waits_other_max_us\":%.3f,"
+           "\"gpu_copy_d2h_us\":%.3f,\"gpu_copy_d2h_staged_us\":%.3f,"
+           "\"gpu_copy_d2d_us\":%.3f,\"gpu_fill_us\":%.3f,\"cpu_copy_fallback_us\":%.3f",
+           d->submit_calls, ticks_us(d, d->submit_ticks), ticks_us(d, d->waits_fast_ticks),
+           ticks_us(d, d->waits_other_ticks), ticks_us(d, d->waits_fast_ticks_max),
+           ticks_us(d, d->waits_other_ticks_max), ticks_us(d, d->gpu_copy_d2h_ticks),
+           ticks_us(d, d->gpu_copy_d2h_staged_ticks), ticks_us(d, d->gpu_copy_d2d_ticks),
+           ticks_us(d, d->gpu_fill_ticks), ticks_us(d, d->cpu_copy_fallback_ticks));
 }
 
 // What the timed interval of this measurement is. The two kernel measurements time a loop of
@@ -169,9 +260,11 @@ static void report_json(const char* name, double us_each, const char* metric, do
     printf("{\"tool\":\"hipbench\",\"measurement\":\"%s\",\"count\":%lld,\"us_each\":%.3f,"
            "\"us_each_metric\":\"%s\",\"wall_ms\":%.3f,\"rate\":%.3f,\"rate_unit\":\"%s\","
            "\"dispatches\":%llu,\"submissions\":%llu,\"batches\":%llu,"
-           "\"dispatches_batched\":%llu,\"waits\":%llu,\"waits_fast\":%llu}\n",
+           "\"dispatches_batched\":%llu,\"waits\":%llu,\"waits_fast\":%llu",
            name, count, us_each, metric, wall_ms, rate, rate_unit, d->dispatches, d->submissions,
            d->batches, d->dispatches_batched, d->waits, d->waits_fast);
+    json_time_fields(d);
+    printf("}\n");
 }
 
 // Measurement 1: the launch rate of an empty kernel.
@@ -192,6 +285,7 @@ static void measure_launch(hipStream_t stream, long long launches) {
     printf("hipbench: launch   %lld empty kernels: %.3f us each of enqueue-loop wall time with"
            " backpressure (%llu waits, %llu fast), wall %.1f ms, %.3f submissions per launch\n",
            launches, us_each, d.waits, d.waits_fast, t2 - t0, per_launch_submissions);
+    report_time("launch", &d);
     report_json("launch", us_each, HIPBENCH_ENQUEUE_METRIC, t2 - t0, per_launch_submissions,
                 "submissions/launch", &d, launches);
 }
@@ -242,14 +336,285 @@ static void measure_chain(hipStream_t stream, int* values, long long links) {
            " %llu submissions, exact %s\n",
            links, us_each, d.waits, d.waits_fast, per_link_ms, t2 - t0, d.submissions,
            g_expect_compute ? (mismatches == 0 ? "yes" : "NO") : "not checked");
+    report_time("chain", &d);
     report_json("chain", us_each, HIPBENCH_ENQUEUE_METRIC, t2 - t0,
                 d.dispatches != 0 ? (double)d.submissions / (double)d.dispatches : 0.0,
                 "submissions/launch", &d, links);
 }
 
+// Measurement 3a: the copy routes, checked byte for byte and not timed.
+//
+// The timed copy loop below measures rate only: it copies back into the buffer it copied from,
+// so a device-to-host copy that wrote nothing would still leave the expected bytes there. This
+// pass is the oracle of the routes the rates are about (the review of 2026-10-11). Every
+// case writes a source whose bytes depend on their position, so a chunk that lands at the
+// wrong offset is wrong and not merely present; makes the whole destination buffer dirty
+// first; copies; and compares every byte of that buffer: the range must hold the source and
+// every byte around it must still be dirty.
+//
+// The cases are the edges of the new code: more than four staging rounds with a ragged last
+// round, the 64 MiB copy whose last 32 bytes travel in a second DMA_DATA packet (67,108,832
+// bytes is one packet), unaligned source and destination offsets, a device-to-device copy, and
+// a pitched two-dimensional copy, once with rows above the threshold and once with short rows.
+// A destination this program could not get from hipHostMalloc is SKIP, and a SKIP cannot
+// accept the direct route: the lab plan counts it as not run.
+//
+// --verify-fault is the positive control of this oracle: omit-tail leaves the final chunk of
+// every case out (32 bytes, or the last row), corrupt-tail changes the last byte of every
+// destination after the copy. Either must turn every case that runs into WRONG and the exit
+// code into 1; a control that passes would mean the oracle cannot see what it is for.
+enum VerifyFault { kFaultNone = 0, kFaultOmitTail, kFaultCorruptTail };
+
+static unsigned char pattern_at(size_t i) {
+    unsigned long long x = (unsigned long long)i * 0x9E3779B97F4A7C15ull;
+    x ^= x >> 29;
+    return (unsigned char)(x >> 32);
+}
+
+#define VERIFY_DIRTY 0xD5
+#define VERIFY_GUARD 256u
+#define VERIFY_BIG (64u * 1024u * 1024u)
+
+typedef struct verify_tally {
+    int passed;
+    int failed;
+    int skipped;
+} verify_tally;
+
+// One verdict line. `got` is the whole destination buffer as it reads back; `want` says what
+// each byte must be.
+typedef unsigned char (*verify_want_fn)(size_t i, const void* ctx);
+
+static void verify_report(verify_tally* tally, const char* name, const unsigned char* got,
+                          size_t size, verify_want_fn want, const void* ctx) {
+    size_t wrong = 0;
+    size_t first = 0;
+    for (size_t i = 0; i < size; ++i) {
+        if (got[i] != want(i, ctx)) {
+            if (wrong == 0) {
+                first = i;
+            }
+            ++wrong;
+        }
+    }
+    if (wrong == 0) {
+        tally->passed++;
+        printf("hipbench: verify   %-44s ok, %zu bytes compared\n", name, size);
+        return;
+    }
+    tally->failed++;
+    g_failures++;
+    printf("hipbench: verify   %-44s WRONG: %zu of %zu bytes, the first at offset %zu"
+           " (0x%02X, expected 0x%02X)\n",
+           name, wrong, size, first, got[first], want(first, ctx));
+}
+
+static void verify_skip(verify_tally* tally, const char* name, const char* why) {
+    tally->skipped++;
+    printf("hipbench: verify   %-44s SKIP: %s\n", name, why);
+}
+
+// A one-dimensional copy of n bytes from source offset src_off into destination offset dst_off.
+typedef struct linear_case {
+    size_t dst_off;
+    size_t src_off;
+    size_t n;
+} linear_case;
+
+static unsigned char want_linear(size_t i, const void* ctx) {
+    const linear_case* c = (const linear_case*)ctx;
+    if (i >= c->dst_off && i - c->dst_off < c->n) {
+        return pattern_at(c->src_off + (i - c->dst_off));
+    }
+    return VERIFY_DIRTY;
+}
+
+// A pitched copy of `height` rows of `width` bytes, read at spitch and written at dpitch.
+typedef struct pitched_case {
+    size_t width;
+    size_t height;
+    size_t spitch;
+    size_t dpitch;
+} pitched_case;
+
+static unsigned char want_pitched(size_t i, const void* ctx) {
+    const pitched_case* c = (const pitched_case*)ctx;
+    const size_t row = i / c->dpitch;
+    const size_t column = i % c->dpitch;
+    if (row < c->height && column < c->width) {
+        return pattern_at(row * c->spitch + column);
+    }
+    return VERIFY_DIRTY;
+}
+
+// The device destination of a device-to-device case, read back through a route that the cases
+// before it have already checked.
+static int read_device(void* host, const void* device, size_t bytes) {
+    const hipError_t err = hipMemcpy(host, device, bytes, hipMemcpyDeviceToHost);
+    check(err, "verify: read the device destination back");
+    return err == hipSuccess;
+}
+
+static void verify_copies(int fault) {
+    const size_t size = (size_t)VERIFY_BIG + 2u * VERIFY_GUARD;
+    const size_t tail = fault == kFaultOmitTail ? 32u : 0u;
+    verify_tally tally = { 0, 0, 0 };
+    unsigned char* source = (unsigned char*)malloc(size);
+    unsigned char* pageable = (unsigned char*)malloc(size);
+    unsigned char* pinned = NULL;
+    unsigned char* device_src = NULL;
+    unsigned char* device_dst = NULL;
+    if (source == NULL || pageable == NULL) {
+        printf("hipbench: verify: out of host memory for %zu bytes\n", size);
+        g_failures++;
+        free(source);
+        free(pageable);
+        return;
+    }
+    for (size_t i = 0; i < size; ++i) {
+        source[i] = pattern_at(i);
+    }
+    check(hipMalloc((void**)&device_src, size), "verify: hipMalloc the source");
+    check(hipMalloc((void**)&device_dst, size), "verify: hipMalloc the destination");
+    if (device_src == NULL || device_dst == NULL) {
+        free(source);
+        free(pageable);
+        return;
+    }
+    if (hipHostMalloc((void**)&pinned, size, hipHostMallocDefault) != hipSuccess) {
+        pinned = NULL;
+        (void)hipGetLastError();
+    }
+    check(hipMemcpy(device_src, source, size, hipMemcpyHostToDevice), "verify: the source");
+    const bc250hipCounters before = read_counters();
+
+    // Device to host into the program's own memory: the staging ring.
+    {
+        const char* name = "staged, 6 rounds, unaligned";
+        const linear_case c = { 5u, 3u, 5u * 1024u * 1024u + 123u };
+        memset(pageable, VERIFY_DIRTY, size);
+        check(hipMemcpy(pageable + c.dst_off, device_src + c.src_off, c.n - tail,
+                        hipMemcpyDeviceToHost),
+              "verify: staged copy");
+        if (fault == kFaultCorruptTail) {
+            pageable[c.dst_off + c.n - 1] ^= 0xFF;
+        }
+        verify_report(&tally, name, pageable, size, want_linear, &c);
+    }
+
+    // Device to host into memory hipHostMalloc returned: one packet, or two at 64 MiB.
+    const linear_case direct_cases[2] = { { VERIFY_GUARD, 0u, VERIFY_BIG },
+                                          { 3u, 1u, 1024u * 1024u + 7u } };
+    const char* const direct_names[2] = { "direct, 64 MiB, split tail",
+                                          "direct, unaligned" };
+    for (int k = 0; k < 2; ++k) {
+        const linear_case* c = &direct_cases[k];
+        if (pinned == NULL) {
+            verify_skip(&tally, direct_names[k], "hipHostMalloc gave no destination");
+            continue;
+        }
+        memset(pinned, VERIFY_DIRTY, size);
+        check(hipMemcpy(pinned + c->dst_off, device_src + c->src_off, c->n - tail,
+                        hipMemcpyDeviceToHost),
+              "verify: direct copy");
+        if (fault == kFaultCorruptTail) {
+            pinned[c->dst_off + c->n - 1] ^= 0xFF;
+        }
+        verify_report(&tally, direct_names[k], pinned, size, want_linear, c);
+    }
+
+    // Device to device, read back through the direct route when there is one and through the
+    // staging ring otherwise.
+    const linear_case d2d_cases[2] = { { VERIFY_GUARD, 0u, VERIFY_BIG },
+                                       { 2u, 5u, 1024u * 1024u + 13u } };
+    const char* const d2d_names[2] = { "device to device, 64 MiB, split tail",
+                                       "device to device, unaligned" };
+    for (int k = 0; k < 2; ++k) {
+        const linear_case* c = &d2d_cases[k];
+        unsigned char* readback = pinned != NULL ? pinned : pageable;
+        check(hipMemset(device_dst, VERIFY_DIRTY, size), "verify: a dirty device destination");
+        check(hipMemcpy(device_dst + c->dst_off, device_src + c->src_off, c->n - tail,
+                        hipMemcpyDeviceToDevice),
+              "verify: device-to-device copy");
+        if (fault == kFaultCorruptTail) {
+            const unsigned char bad = (unsigned char)(pattern_at(c->src_off + c->n - 1) ^ 0xFF);
+            check(hipMemcpy(device_dst + c->dst_off + c->n - 1, &bad, 1, hipMemcpyHostToDevice),
+                  "verify: corrupt the device tail");
+        }
+        if (read_device(readback, device_dst, size)) {
+            verify_report(&tally, d2d_names[k], readback, size, want_linear, c);
+        } else {
+            tally.failed++;
+        }
+    }
+
+    // A pitched copy into the program's own memory, rows above the threshold and short rows.
+    const pitched_case pitched[2] = { { 4100u, 5u, 8192u, 4608u }, { 100u, 4u, 256u, 160u } };
+    const char* const pitched_names[2] = { "pitched 2D, rows above the threshold",
+                                           "pitched 2D, short rows" };
+    for (int k = 0; k < 2; ++k) {
+        const pitched_case* c = &pitched[k];
+        const size_t region = c->dpitch * (c->height + 1u);
+        const size_t rows = fault == kFaultOmitTail ? c->height - 1u : c->height;
+        memset(pageable, VERIFY_DIRTY, region);
+        check(hipMemcpy2DAsync(pageable, c->dpitch, device_src, c->spitch, c->width, rows,
+                               hipMemcpyDeviceToHost, NULL),
+              "verify: pitched copy");
+        check(hipStreamSynchronize(NULL), "verify: the pitched copy retires");
+        if (fault == kFaultCorruptTail) {
+            pageable[(c->height - 1u) * c->dpitch + c->width - 1u] ^= 0xFF;
+        }
+        verify_report(&tally, pitched_names[k], pageable, region, want_pitched, c);
+    }
+
+    const counters_delta d = counters_since(before);
+    printf("hipbench: verify   %d cases: %d passed, %d failed, %d skipped%s\n",
+           tally.passed + tally.failed + tally.skipped, tally.passed, tally.failed, tally.skipped,
+           fault == kFaultNone ? ""
+                               : (fault == kFaultOmitTail ? " (fault control: omit-tail)"
+                                                          : " (fault control: corrupt-tail)"));
+    printf("hipbench: verify   routes: gpu d2h %llu, staged %llu, d2d %llu, cpu fallback %llu"
+           " (%llu bytes), packets %llu, control failed %llu\n",
+           d.gpu_copy_d2h, d.gpu_copy_d2h_staged, d.gpu_copy_d2d, d.cpu_copy_fallback,
+           d.cpu_copy_fallback_bytes, d.gpu_copy_packets, d.gpu_copy_control_failed);
+    if (g_json) {
+        printf("{\"tool\":\"hipbench\",\"measurement\":\"verify\",\"fault\":\"%s\","
+               "\"cases\":%d,\"passed\":%d,\"failed\":%d,\"skipped\":%d,"
+               "\"gpu_copy_d2h\":%llu,\"gpu_copy_d2h_staged\":%llu,\"gpu_copy_d2d\":%llu,"
+               "\"cpu_copy_fallback\":%llu,\"cpu_copy_fallback_bytes\":%llu,"
+               "\"gpu_copy_packets\":%llu,\"gpu_copy_control_failed\":%llu}\n",
+               fault == kFaultNone ? "none"
+                                   : (fault == kFaultOmitTail ? "omit-tail" : "corrupt-tail"),
+               tally.passed + tally.failed + tally.skipped, tally.passed, tally.failed,
+               tally.skipped, d.gpu_copy_d2h, d.gpu_copy_d2h_staged, d.gpu_copy_d2d,
+               d.cpu_copy_fallback, d.cpu_copy_fallback_bytes, d.gpu_copy_packets,
+               d.gpu_copy_control_failed);
+    }
+
+    if (pinned != NULL) {
+        check(hipHostFree(pinned), "verify: hipHostFree");
+    }
+    check(hipFree(device_dst), "verify: hipFree the destination");
+    check(hipFree(device_src), "verify: hipFree the source");
+    free(pageable);
+    free(source);
+}
+
 // Measurement 3: one copy size, both directions.
+// The copy arms. Three destinations, because the three routes of the GPU copy are chosen by
+// what the destination is (scratch/hip-gpu-copy/CONTRACT.md sections 5a and 5b):
+//
+//   to device        a host-processor write of the mapping, MEASURED fast, unchanged;
+//   from device      into memory this program owns, which goes through a staging slot;
+//   from device, own into memory hipHostMalloc returned, which the copy packet writes
+//                    straight into. This is the route llama.cpp takes for its logits, and
+//                    it is the one the Gemma arithmetic of CONTRACT.md section 10 is about.
+//
+// The copy counters are printed beside the rates, so that a line whose rate did not move can
+// be told from a line that never took the GPU route at all.
 static void measure_copy(size_t bytes, int iterations) {
     void* device = NULL;
+    void* pinned = NULL;
     void* host = malloc(bytes);
     if (host == NULL) {
         printf("hipbench: copy: out of host memory for %zu bytes\n", bytes);
@@ -262,10 +627,19 @@ static void measure_copy(size_t bytes, int iterations) {
         free(host);
         return;
     }
+    // A failed hipHostMalloc is not a failure of this measurement: the arm is left out and
+    // the two others still run.
+    if (hipHostMalloc(&pinned, bytes, hipHostMallocDefault) != hipSuccess) {
+        pinned = NULL;
+    }
     // One copy each way first, so that the first-touch cost of the pages is not inside the
     // measurement.
     check(hipMemcpy(device, host, bytes, hipMemcpyHostToDevice), "copy: warm up to device");
     check(hipMemcpy(host, device, bytes, hipMemcpyDeviceToHost), "copy: warm up from device");
+    if (pinned != NULL) {
+        check(hipMemcpy(pinned, device, bytes, hipMemcpyDeviceToHost),
+              "copy: warm up from device into our own memory");
+    }
 
     const bc250hipCounters before = read_counters();
     double t0 = now_ms();
@@ -278,21 +652,58 @@ static void measure_copy(size_t bytes, int iterations) {
         check(hipMemcpy(host, device, bytes, hipMemcpyDeviceToHost), "copy: from device");
     }
     const double d2h_ms = now_ms() - t0;
+    double d2h_own_ms = 0.0;
+    if (pinned != NULL) {
+        t0 = now_ms();
+        for (int i = 0; i < iterations; ++i) {
+            check(hipMemcpy(pinned, device, bytes, hipMemcpyDeviceToHost),
+                  "copy: from device into our own memory");
+        }
+        d2h_own_ms = now_ms() - t0;
+    }
     const counters_delta d = counters_since(before);
 
     const double mib = (double)bytes * (double)iterations / (1024.0 * 1024.0);
     const double h2d = h2d_ms > 0.0 ? mib / (h2d_ms / 1000.0) : 0.0;
     const double d2h = d2h_ms > 0.0 ? mib / (d2h_ms / 1000.0) : 0.0;
+    const double d2h_own = d2h_own_ms > 0.0 ? mib / (d2h_own_ms / 1000.0) : 0.0;
     printf("hipbench: copy     %8zu bytes x %d: to device %.1f MiB/s (%.3f us each), from"
-           " device %.1f MiB/s (%.3f us each)\n",
+           " device %.1f MiB/s (%.3f us each), from device into our own memory %.1f MiB/s"
+           " (%.3f us each)\n",
            bytes, iterations, h2d, h2d_ms * 1000.0 / iterations, d2h,
-           d2h_ms * 1000.0 / iterations);
+           d2h_ms * 1000.0 / iterations, d2h_own,
+           iterations > 0 ? d2h_own_ms * 1000.0 / iterations : 0.0);
+    printf("hipbench: copy     %8zu bytes: gpu d2h %llu, staged %llu, d2d %llu, fill %llu,"
+           " cpu fallback %llu (%llu bytes), packets %llu, forced flushes %llu,"
+           " control failed %llu\n",
+           bytes, d.gpu_copy_d2h, d.gpu_copy_d2h_staged, d.gpu_copy_d2d, d.gpu_fill,
+           d.cpu_copy_fallback, d.cpu_copy_fallback_bytes, d.gpu_copy_packets,
+           d.gpu_copy_forced_flushes, d.gpu_copy_control_failed);
+    {
+        char name[48];
+        snprintf(name, sizeof(name), "copy     %8zu bytes", bytes);
+        report_time(name, &d);
+    }
     if (g_json) {
         printf("{\"tool\":\"hipbench\",\"measurement\":\"copy\",\"bytes\":%zu,"
-               "\"iterations\":%d,\"h2d_mib_s\":%.3f,\"d2h_mib_s\":%.3f,\"h2d_us\":%.3f,"
-               "\"d2h_us\":%.3f,\"waits\":%llu,\"waits_fast\":%llu}\n",
-               bytes, iterations, h2d, d2h, h2d_ms * 1000.0 / iterations,
-               d2h_ms * 1000.0 / iterations, d.waits, d.waits_fast);
+               "\"iterations\":%d,\"h2d_mib_s\":%.3f,\"d2h_mib_s\":%.3f,"
+               "\"d2h_own_mib_s\":%.3f,\"h2d_us\":%.3f,"
+               "\"d2h_us\":%.3f,\"d2h_own_us\":%.3f,\"waits\":%llu,\"waits_fast\":%llu,"
+               "\"gpu_copy_d2h\":%llu,\"gpu_copy_d2h_staged\":%llu,\"gpu_copy_d2d\":%llu,"
+               "\"gpu_fill\":%llu,\"cpu_copy_fallback\":%llu,"
+               "\"cpu_copy_fallback_bytes\":%llu,\"gpu_copy_packets\":%llu,"
+               "\"gpu_copy_forced_flushes\":%llu,\"gpu_copy_control_failed\":%llu",
+               bytes, iterations, h2d, d2h, d2h_own, h2d_ms * 1000.0 / iterations,
+               d2h_ms * 1000.0 / iterations,
+               iterations > 0 ? d2h_own_ms * 1000.0 / iterations : 0.0, d.waits, d.waits_fast,
+               d.gpu_copy_d2h, d.gpu_copy_d2h_staged, d.gpu_copy_d2d, d.gpu_fill,
+               d.cpu_copy_fallback, d.cpu_copy_fallback_bytes, d.gpu_copy_packets,
+               d.gpu_copy_forced_flushes, d.gpu_copy_control_failed);
+        json_time_fields(&d);
+        printf("}\n");
+    }
+    if (pinned != NULL) {
+        check(hipHostFree(pinned), "copy: hipHostFree");
     }
     check(hipFree(device), "copy: hipFree");
     free(host);
@@ -312,11 +723,103 @@ static void measure_sync(hipStream_t stream, long long calls) {
     printf("hipbench: sync     %lld synchronisations of a retired stream: %.3f us each,"
            " %llu of %llu waits answered by the fence mapping\n",
            calls, us_each, d.waits_fast, d.waits);
+    report_time("sync", &d);
     report_json("sync", us_each, HIPBENCH_CALL_METRIC, wall, (double)d.waits_fast, "fast waits",
                 &d, calls);
 }
 
-// Measurement 5: an event recorded on retired work, and the wait for it.
+// Measurement 6: hipMemset, with its bytes checked.
+//
+// Two things are wanted here. The rate answers CONTRACT.md deviation 13.3, which left the GPU
+// fill off for an allocation that has a host mapping on the argument that a host-processor
+// write of that mapping is MEASURED at 15.6 GB/s; with BC250_HIP_GPU_FILL=1 this arm measures
+// the engine against that number instead of arguing about it.
+//
+// The correctness part is the unaligned fill. A fill packet needs a 4-byte aligned address and
+// size, so a range that starts or ends between two dword boundaries has its one to three edge
+// bytes carried by copy packets out of a staging slot and its interior by a fill packet
+// (CONTRACT.md section 5c). Nothing else in this program, in vadd or in llama.cpp asks for an
+// unaligned hipMemset, and no host test can reach that code, so this is where the edges are
+// proved on silicon: one byte before the range and two after it must keep the frame value, and
+// every byte inside it must hold the fill value.
+static void measure_fill(size_t bytes, int iterations) {
+    void* device = NULL;
+    unsigned char* host = (unsigned char*)malloc(bytes);
+    if (host == NULL) {
+        printf("hipbench: fill: out of host memory for %zu bytes\n", bytes);
+        g_failures++;
+        return;
+    }
+    check(hipMalloc(&device, bytes), "fill: hipMalloc");
+    if (device == NULL) {
+        free(host);
+        return;
+    }
+
+    // The frame, then the unaligned range inside it: three head bytes, an interior, and a
+    // tail, whatever the allocation's own alignment is.
+    check(hipMemset(device, 0x11, bytes), "fill: the frame");
+    check(hipMemset((unsigned char*)device + 1, 0xA7, bytes - 3), "fill: an unaligned range");
+    check(hipMemcpy(host, device, bytes, hipMemcpyDeviceToHost), "fill: read the frame back");
+    size_t wrong = 0;
+    size_t first_wrong = 0;
+    for (size_t i = 0; i < bytes; ++i) {
+        const unsigned char want = (i == 0 || i + 2 >= bytes) ? 0x11 : 0xA7;
+        if (host[i] != want) {
+            if (wrong == 0) {
+                first_wrong = i;
+            }
+            ++wrong;
+        }
+    }
+    if (wrong != 0) {
+        printf("hipbench: fill     an unaligned hipMemset of %zu bytes left %zu bytes wrong,"
+               " the first at offset %zu (0x%02X, expected 0x%02X)\n",
+               bytes - 3, wrong, first_wrong, host[first_wrong],
+               (first_wrong == 0 || first_wrong + 2 >= bytes) ? 0x11 : 0xA7);
+        g_failures++;
+    }
+
+    const bc250hipCounters before = read_counters();
+    const double t0 = now_ms();
+    for (int i = 0; i < iterations; ++i) {
+        check(hipMemset(device, 0x5A, bytes), "fill: aligned");
+    }
+    const double wall = now_ms() - t0;
+    const counters_delta d = counters_since(before);
+    const double mib = (double)bytes * (double)iterations / (1024.0 * 1024.0);
+    const double rate = wall > 0.0 ? mib / (wall / 1000.0) : 0.0;
+    printf("hipbench: fill     %8zu bytes x %d: %.1f MiB/s (%.3f us each), unaligned bytes"
+           " wrong %zu\n",
+           bytes, iterations, rate, wall * 1000.0 / iterations, wrong);
+    printf("hipbench: fill     %8zu bytes: gpu fill %llu (%llu bytes), gpu d2h %llu, staged"
+           " %llu, cpu fallback %llu (%llu bytes), packets %llu, control failed %llu\n",
+           bytes, d.gpu_fill, d.gpu_fill_bytes, d.gpu_copy_d2h, d.gpu_copy_d2h_staged,
+           d.cpu_copy_fallback, d.cpu_copy_fallback_bytes, d.gpu_copy_packets,
+           d.gpu_copy_control_failed);
+    {
+        char name[48];
+        snprintf(name, sizeof(name), "fill     %8zu bytes", bytes);
+        report_time(name, &d);
+    }
+    if (g_json) {
+        printf("{\"tool\":\"hipbench\",\"measurement\":\"fill\",\"bytes\":%zu,"
+               "\"iterations\":%d,\"mib_s\":%.3f,\"us\":%.3f,\"unaligned_wrong\":%zu,"
+               "\"gpu_fill\":%llu,\"gpu_fill_bytes\":%llu,\"cpu_copy_fallback\":%llu,"
+               "\"cpu_copy_fallback_bytes\":%llu,\"gpu_copy_packets\":%llu,"
+               "\"gpu_copy_control_failed\":%llu",
+               bytes, iterations, rate, wall * 1000.0 / iterations, wrong, d.gpu_fill,
+               d.gpu_fill_bytes, d.cpu_copy_fallback, d.cpu_copy_fallback_bytes,
+               d.gpu_copy_packets, d.gpu_copy_control_failed);
+        json_time_fields(&d);
+        printf("}\n");
+    }
+
+    check(hipFree(device), "fill: hipFree");
+    free(host);
+}
+
+// Measurement 7: an event recorded on retired work, and the wait for it.
 static void measure_event(hipStream_t stream, long long rounds) {
     hipEvent_t mark = NULL;
     check(hipEventCreate(&mark), "event: hipEventCreate");
@@ -332,6 +835,7 @@ static void measure_event(hipStream_t stream, long long rounds) {
     const double us_each = wall * 1000.0 / (double)rounds;
     printf("hipbench: event    %lld record and wait rounds on retired work: %.3f us each\n",
            rounds, us_each);
+    report_time("event", &d);
     report_json("event", us_each, HIPBENCH_CALL_METRIC, wall, 0.0, "none", &d, rounds);
     check(hipEventDestroy(mark), "event: hipEventDestroy");
 }
@@ -342,6 +846,7 @@ static void usage() {
     printf("                             [--batch 0|1] [--batch-max <n>] [--batch-hold-us <us>]\n");
     printf("                             [--barrier full|light] [--wait-total <ms>]\n");
     printf("                             [--budget-ms <ms>] [--expect-compute] [--json]\n");
+    printf("                             [--verify 0|1] [--verify-fault omit-tail|corrupt-tail]\n");
 }
 
 int main(int argc, char** argv) {
@@ -352,6 +857,8 @@ int main(int argc, char** argv) {
     int copy_iterations = 8;
     const char* batch = NULL;
     const char* barrier = NULL;
+    int verify = 1;
+    int fault = kFaultNone;
 
     g_started_ms = now_ms();
     for (int i = 1; i < argc; ++i) {
@@ -368,6 +875,18 @@ int main(int argc, char** argv) {
             printf("hipbench: '%s' needs a value\n", arg);
             usage();
             return 2;
+        } else if (strcmp(arg, "--verify") == 0) {
+            verify = atoi(argv[++i]) != 0;
+        } else if (strcmp(arg, "--verify-fault") == 0) {
+            const char* kind = argv[++i];
+            if (strcmp(kind, "omit-tail") == 0) {
+                fault = kFaultOmitTail;
+            } else if (strcmp(kind, "corrupt-tail") == 0) {
+                fault = kFaultCorruptTail;
+            } else {
+                printf("hipbench: --verify-fault takes 'omit-tail' or 'corrupt-tail'\n");
+                return 2;
+            }
         } else if (strcmp(arg, "--launches") == 0) {
             launches = atoll(argv[++i]);
         } else if (strcmp(arg, "--chain") == 0) {
@@ -455,6 +974,20 @@ int main(int argc, char** argv) {
                now_ms() - t0);
     }
 
+    // The fault control checks the oracle and measures nothing else: a rate taken with a fault
+    // injected would be a rate of a copy this program broke on purpose.
+    if (fault != kFaultNone) {
+        verify_copies(fault);
+        check(hipFree(values), "hipFree chain");
+        check(hipStreamDestroy(stream), "hipStreamDestroy");
+        printf("hipbench: the fault control ran alone; %d failures, which must not be 0\n",
+               g_failures);
+        printf("hipbench: %s\n", g_failures == 0 ? "ok" : "FAILED");
+        return g_failures == 0 ? 0 : 1;
+    }
+    if (verify && budget_left("verify")) {
+        verify_copies(kFaultNone);
+    }
     if (budget_left("launch")) {
         measure_launch(stream, launches);
     }
@@ -463,8 +996,15 @@ int main(int argc, char** argv) {
     }
     if (budget_left("copy")) {
         measure_copy(4096u, copy_iterations * 32);
+        // 64 KB is the third size the copy question of scratch/hip-gpu-copy/CONTRACT.md
+        // section 11 asks for: it is above the 4096-byte threshold and small enough that the
+        // fixed cost of one submission is still a visible part of the time.
+        measure_copy(65536u, copy_iterations * 8);
         measure_copy(1024u * 1024u, copy_iterations);
         measure_copy(64u * 1024u * 1024u, copy_iterations);
+    }
+    if (budget_left("fill")) {
+        measure_fill(1024u * 1024u, copy_iterations);
     }
     if (budget_left("sync")) {
         measure_sync(stream, syncs);

@@ -558,6 +558,25 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     if ($perLaunch[0] -gt 0.1) {
         throw "the default of the runtime batches, so one launch must be under 0.1 submissions, and hipbench measured $($perLaunch[0])"
     }
+    # The byte-exact pass of the copy routes (hipbench measurement 3a). Against the mock every
+    # case runs, so all seven must pass and none may be skipped.
+    $verifyLine = $benchOut | Select-String -Pattern 'verify\s+\d+ cases:' | Select-Object -First 1
+    if (-not $verifyLine -or $verifyLine.Line -notmatch 'verify\s+7 cases: 7 passed, 0 failed, 0 skipped') {
+        throw "hipbench verify did not pass all seven copy cases: '$verifyLine'"
+    }
+    # Its positive control: with the final chunk left out, or the last byte changed, every case
+    # must turn WRONG and the program must fail. An oracle that passes a broken copy is no oracle.
+    foreach ($fault in @('omit-tail', 'corrupt-tail')) {
+        $env:BC250_HIP_MOCK_RECORD = Join-Path $Out "mock\record-bench-fault-$fault.txt"
+        $faultOut = & $benchExe '--wait-total' '20000' '--verify-fault' $fault 2>&1
+        $faultExit = $LASTEXITCODE
+        $faultLine = $faultOut | Select-String -Pattern 'verify\s+\d+ cases:' | Select-Object -First 1
+        Write-Host "  hipbench --verify-fault ${fault}: exit $faultExit, $($faultLine.Line)"
+        if ($faultExit -ne 1 -or -not $faultLine -or
+            $faultLine.Line -notmatch 'verify\s+7 cases: 0 passed, 7 failed, 0 skipped') {
+            throw "the verify fault control '$fault' was not caught by every case"
+        }
+    }
 
     # The same arm with the two switches turned off, which is exactly build 1: one launch, one
     # submission. The switches are what a lab arm compares against, so a build in which they

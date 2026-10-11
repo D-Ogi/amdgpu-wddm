@@ -15,6 +15,11 @@
 #define BC250HSA_THREAD_LOCAL _Thread_local
 #endif
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 /* --------------------------------------------------------------------------
  * Status names
  * ------------------------------------------------------------------------ */
@@ -109,6 +114,59 @@ void bc250hsa_count_add(bc250hsa_counter which, uint64_t delta)
 #endif
 }
 
+void bc250hsa_count_max(bc250hsa_counter which, uint64_t value)
+{
+    if ((uint32_t)which >= (uint32_t)BC250HSA_C_COUNT) {
+        return;
+    }
+#if defined(_MSC_VER)
+    {
+        int64_t seen = _InterlockedCompareExchange64(&g_counters[which], 0, 0);
+        /* A tick count stays far below 2^63, so the signed slot compares like the unsigned
+         * value. The loop ends when this thread wrote its value or another thread wrote a
+         * larger one. */
+        while ((uint64_t)seen < value) {
+            const int64_t before =
+                _InterlockedCompareExchange64(&g_counters[which], (int64_t)value, seen);
+            if (before == seen) {
+                break;
+            }
+            seen = before;
+        }
+    }
+#else
+    if ((uint64_t)g_counters[which] < value) {
+        g_counters[which] = (int64_t)value;
+    }
+#endif
+}
+
+uint64_t bc250hsa_ticks(void)
+{
+#if defined(_WIN32)
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return (uint64_t)now.QuadPart;
+#else
+    return 0u;
+#endif
+}
+
+/* QueryPerformanceFrequency is fixed at boot, so it is asked once per read and never
+ * stored in a counter that a reset could clear. */
+static uint64_t ticks_per_second(void)
+{
+#if defined(_WIN32)
+    LARGE_INTEGER frequency;
+    if (!QueryPerformanceFrequency(&frequency)) {
+        return 0u;
+    }
+    return (uint64_t)frequency.QuadPart;
+#else
+    return 0u;
+#endif
+}
+
 static uint64_t counter_read(bc250hsa_counter which)
 {
 #if defined(_MSC_VER)
@@ -137,7 +195,55 @@ bc250hsa_status bc250hsa_counters_read(bc250hsa_counters* out)
     out->dynamic_stack_refusals    = counter_read(BC250HSA_C_DYNAMIC_STACK_REFUSALS);
     out->batches_submitted         = counter_read(BC250HSA_C_BATCHES_SUBMITTED);
     out->dispatches_batched        = counter_read(BC250HSA_C_DISPATCHES_BATCHED);
+    out->gpu_copy_d2h              = counter_read(BC250HSA_C_GPU_COPY_D2H);
+    out->gpu_copy_d2h_bytes        = counter_read(BC250HSA_C_GPU_COPY_D2H_BYTES);
+    out->gpu_copy_d2h_staged       = counter_read(BC250HSA_C_GPU_COPY_D2H_STAGED);
+    out->gpu_copy_d2h_staged_bytes = counter_read(BC250HSA_C_GPU_COPY_D2H_STAGED_BYTES);
+    out->gpu_copy_d2d              = counter_read(BC250HSA_C_GPU_COPY_D2D);
+    out->gpu_copy_d2d_bytes        = counter_read(BC250HSA_C_GPU_COPY_D2D_BYTES);
+    out->gpu_fill                  = counter_read(BC250HSA_C_GPU_FILL);
+    out->gpu_fill_bytes            = counter_read(BC250HSA_C_GPU_FILL_BYTES);
+    out->cpu_copy_fallback         = counter_read(BC250HSA_C_CPU_COPY_FALLBACK);
+    out->cpu_copy_fallback_bytes   = counter_read(BC250HSA_C_CPU_COPY_FALLBACK_BYTES);
+    out->gpu_copy_packets          = counter_read(BC250HSA_C_GPU_COPY_PACKETS);
+    out->gpu_copy_forced_flushes   = counter_read(BC250HSA_C_GPU_COPY_FORCED_FLUSHES);
+    out->gpu_copy_control_failed   = counter_read(BC250HSA_C_GPU_COPY_CONTROL_FAILED);
+    out->ticks_per_second          = ticks_per_second();
+    out->waits_fast_ticks          = counter_read(BC250HSA_C_WAITS_FAST_TICKS);
+    out->waits_fast_ticks_max      = counter_read(BC250HSA_C_WAITS_FAST_TICKS_MAX);
+    out->waits_other_ticks         = counter_read(BC250HSA_C_WAITS_OTHER_TICKS);
+    out->waits_other_ticks_max     = counter_read(BC250HSA_C_WAITS_OTHER_TICKS_MAX);
+    out->submit_calls              = counter_read(BC250HSA_C_SUBMIT_CALLS);
+    out->submit_ticks              = counter_read(BC250HSA_C_SUBMIT_TICKS);
+    out->gpu_copy_d2h_ticks        = counter_read(BC250HSA_C_GPU_COPY_D2H_TICKS);
+    out->gpu_copy_d2h_staged_ticks = counter_read(BC250HSA_C_GPU_COPY_D2H_STAGED_TICKS);
+    out->gpu_copy_d2d_ticks        = counter_read(BC250HSA_C_GPU_COPY_D2D_TICKS);
+    out->gpu_fill_ticks            = counter_read(BC250HSA_C_GPU_FILL_TICKS);
+    out->cpu_copy_fallback_ticks   = counter_read(BC250HSA_C_CPU_COPY_FALLBACK_TICKS);
+    out->gpu_copy_lock_holds       = counter_read(BC250HSA_C_GPU_COPY_LOCK_HOLDS);
+    out->gpu_copy_lock_ticks       = counter_read(BC250HSA_C_GPU_COPY_LOCK_TICKS);
+    out->gpu_copy_lock_ticks_max   = counter_read(BC250HSA_C_GPU_COPY_LOCK_TICKS_MAX);
+    out->gpu_copy_lock_waits       = counter_read(BC250HSA_C_GPU_COPY_LOCK_WAITS);
+    out->gpu_copy_lock_wait_ticks  = counter_read(BC250HSA_C_GPU_COPY_LOCK_WAIT_TICKS);
+    out->gpu_copy_lock_wait_ticks_max = counter_read(BC250HSA_C_GPU_COPY_LOCK_WAIT_TICKS_MAX);
+    out->journal_guard_refusals    = counter_read(BC250HSA_C_JOURNAL_GUARD_REFUSALS);
+    out->gpu_copy_unretired        = counter_read(BC250HSA_C_GPU_COPY_UNRETIRED);
+    out->gpu_copy_exclusion_refusals = counter_read(BC250HSA_C_GPU_COPY_EXCLUSION_REFUSALS);
+    out->gpu_copy_late_retirements = counter_read(BC250HSA_C_GPU_COPY_LATE_RETIREMENTS);
+    out->cpu_copy_exclusion_refusals = counter_read(BC250HSA_C_CPU_COPY_EXCLUSION_REFUSALS);
     return BC250HSA_OK;
+}
+
+void bc250hsa_count_cpu_copy_fallback(uint64_t bytes, uint64_t ticks)
+{
+    bc250hsa_count_add(BC250HSA_C_CPU_COPY_FALLBACK, 1u);
+    bc250hsa_count_add(BC250HSA_C_CPU_COPY_FALLBACK_BYTES, bytes);
+    bc250hsa_count_add(BC250HSA_C_CPU_COPY_FALLBACK_TICKS, ticks);
+}
+
+void bc250hsa_count_cpu_copy_exclusion_refusal(void)
+{
+    bc250hsa_count_add(BC250HSA_C_CPU_COPY_EXCLUSION_REFUSALS, 1u);
 }
 
 void bc250hsa_counters_reset(void)
